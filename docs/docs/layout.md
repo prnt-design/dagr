@@ -331,7 +331,7 @@ carry attribute bags since M1.2, so a caller who keeps sizes there can read them
 straight off the node the callback is handed:
 
 ```ts
-layout({ graph, config: { nodeSize: (node) => node.attrs.size as Size } });
+layout({ graph, config: { nodeSize: (node) => node.attrs.size as Size | undefined } });
 ```
 
 That is the caller's convention, though, not this package's. Layout never
