@@ -7,10 +7,20 @@ import {
   InvalidIdError,
   NodeNotFoundError,
 } from '../src/errors.js';
+import type { DagrGraphErrorCode } from '../src/errors.js';
+
+/**
+ * The base class is abstract, so a test that wants a bare family member has to
+ * declare one. Nothing in the package ships a class like this: every real
+ * error is one of the five below.
+ */
+class TestGraphError extends DagrGraphError {
+  readonly code = 'INVALID_ID';
+}
 
 describe('DagrGraphError', () => {
   it('is an Error subclass with a stable name', () => {
-    const error = new DagrGraphError('something went wrong');
+    const error = new TestGraphError('something went wrong');
     expect(error).toBeInstanceOf(Error);
     expect(error).toBeInstanceOf(DagrGraphError);
     expect(error.name).toBe('DagrGraphError');
@@ -20,13 +30,24 @@ describe('DagrGraphError', () => {
 
 describe('InvalidIdError', () => {
   it('carries the INVALID_ID code and an explanatory message', () => {
-    const error = new InvalidIdError('node');
+    const error = new InvalidIdError('node', '');
     expect(error).toBeInstanceOf(Error);
     expect(error).toBeInstanceOf(DagrGraphError);
     expect(error).toBeInstanceOf(InvalidIdError);
     expect(error.name).toBe('InvalidIdError');
     expect(error.code).toBe('INVALID_ID');
     expect(error.message).toContain('node');
+  });
+
+  it('keeps the kind and the offending id as public fields', () => {
+    const error = new InvalidIdError('edge', '');
+    expect(error.kind).toBe('edge');
+    expect(error.id).toBe('');
+  });
+
+  it('promises only what the graph actually enforces', () => {
+    const error = new InvalidIdError('node', '');
+    expect(error.message).toBe('Invalid node id: ids must not be empty');
   });
 });
 
@@ -77,7 +98,7 @@ describe('EdgeNotFoundError', () => {
 describe('error catching', () => {
   it('lets a caller catch every graph error through the base class', () => {
     const errors: DagrGraphError[] = [
-      new InvalidIdError('node'),
+      new InvalidIdError('node', ''),
       new DuplicateNodeError('a'),
       new NodeNotFoundError('a'),
       new DuplicateEdgeError('e1'),
@@ -87,5 +108,57 @@ describe('error catching', () => {
       expect(error).toBeInstanceOf(DagrGraphError);
       expect(error.stack).toContain(error.name);
     }
+  });
+
+  /**
+   * The documented pattern: catch the family, switch on `code`. It has to
+   * compile through a value typed as the base class, not as a subclass, or the
+   * documentation is a lie. The `never` default keeps the switch exhaustive, so
+   * a new code without a new case fails typecheck.
+   */
+  it('lets a caller switch on code through a base-class-typed value', () => {
+    const label = (error: DagrGraphError): string => {
+      switch (error.code) {
+        case 'INVALID_ID':
+          return 'invalid id';
+        case 'DUPLICATE_NODE':
+          return 'duplicate node';
+        case 'NODE_NOT_FOUND':
+          return 'node not found';
+        case 'DUPLICATE_EDGE':
+          return 'duplicate edge';
+        case 'EDGE_NOT_FOUND':
+          return 'edge not found';
+        default: {
+          const unreachable: never = error.code;
+          return unreachable;
+        }
+      }
+    };
+
+    const errors: DagrGraphError[] = [
+      new InvalidIdError('node', ''),
+      new DuplicateNodeError('a'),
+      new NodeNotFoundError('a'),
+      new DuplicateEdgeError('e1'),
+      new EdgeNotFoundError('e1'),
+    ];
+    expect(errors.map(label)).toEqual([
+      'invalid id',
+      'duplicate node',
+      'node not found',
+      'duplicate edge',
+      'edge not found',
+    ]);
+  });
+
+  it('reads code off a caught error with no cast and no narrowing', () => {
+    const codes: DagrGraphErrorCode[] = [];
+    try {
+      throw new NodeNotFoundError('missing');
+    } catch (error) {
+      if (error instanceof DagrGraphError) codes.push(error.code);
+    }
+    expect(codes).toEqual(['NODE_NOT_FOUND']);
   });
 });

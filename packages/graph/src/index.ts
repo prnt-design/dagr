@@ -8,4 +8,5 @@ export {
   InvalidIdError,
   NodeNotFoundError,
 } from './errors.js';
+export type { DagrGraphErrorCode } from './errors.js';
 export type { Edge, EdgeId, Node, NodeId } from './types.js';

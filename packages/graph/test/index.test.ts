@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as api from '../src/index.js';
-import type { Edge, Node } from '../src/index.js';
+import type { DagrGraphErrorCode, Edge, Node } from '../src/index.js';
 
 describe('@dagr/graph public surface', () => {
   it('exports the Graph class', () => {
@@ -27,6 +27,23 @@ describe('@dagr/graph public surface', () => {
       'Graph',
       'InvalidIdError',
       'NodeNotFoundError',
+    ]);
+  });
+
+  it('exports the DagrGraphErrorCode type, and every code is a member of it', () => {
+    const codes: DagrGraphErrorCode[] = [
+      new api.InvalidIdError('node', '').code,
+      new api.DuplicateNodeError('a').code,
+      new api.NodeNotFoundError('a').code,
+      new api.DuplicateEdgeError('e1').code,
+      new api.EdgeNotFoundError('e1').code,
+    ];
+    expect(codes).toEqual([
+      'INVALID_ID',
+      'DUPLICATE_NODE',
+      'NODE_NOT_FOUND',
+      'DUPLICATE_EDGE',
+      'EDGE_NOT_FOUND',
     ]);
   });
 

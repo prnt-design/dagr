@@ -55,7 +55,7 @@ describe('Graph successors and predecessors', () => {
     expect(graph.predecessors('lonely')).toEqual([]);
   });
 
-  it('deduplicates parallel edges and keeps first-connection order', () => {
+  it('deduplicates parallel edges and keeps node insertion order', () => {
     const graph = sample();
     expect(graph.successors('a')).toEqual(['b', 'c']);
     expect(graph.predecessors('a')).toEqual(['c']);
@@ -67,7 +67,7 @@ describe('Graph successors and predecessors', () => {
     expect(graph.predecessors('b')).toEqual(['a', 'b']);
   });
 
-  it('orders by the first connecting edge, not by node insertion', () => {
+  it('orders by node insertion, not by the first connecting edge', () => {
     const graph = new Graph();
     graph.addNode('root');
     graph.addNode('x');
@@ -77,7 +77,60 @@ describe('Graph successors and predecessors', () => {
     graph.addEdge('root', 'x');
     graph.addEdge('root', 'z');
     graph.addEdge('root', 'y');
-    expect(graph.successors('root')).toEqual(['z', 'x', 'y']);
+    expect(graph.successors('root')).toEqual(['x', 'y', 'z']);
+  });
+
+  it('mirrors the node insertion rule for predecessors', () => {
+    const graph = new Graph();
+    graph.addNode('sink');
+    graph.addNode('x');
+    graph.addNode('y');
+    graph.addNode('z');
+    graph.addEdge('z', 'sink');
+    graph.addEdge('x', 'sink');
+    graph.addEdge('z', 'sink');
+    graph.addEdge('y', 'sink');
+    expect(graph.predecessors('sink')).toEqual(['x', 'y', 'z']);
+  });
+
+  it('keeps successor order when a redundant parallel edge is removed', () => {
+    const graph = new Graph();
+    graph.addNode('a');
+    graph.addNode('b');
+    graph.addNode('c');
+    graph.addEdge('a', 'b', 'e_ab1');
+    graph.addEdge('a', 'c', 'e_ac');
+    graph.addEdge('a', 'b', 'e_ab2');
+    expect(graph.successors('a')).toEqual(['b', 'c']);
+    graph.removeEdge('e_ab1');
+    expect(graph.successors('a')).toEqual(['b', 'c']);
+  });
+
+  it('keeps predecessor order when a redundant parallel edge is removed', () => {
+    const graph = new Graph();
+    graph.addNode('a');
+    graph.addNode('b');
+    graph.addNode('c');
+    graph.addEdge('b', 'a', 'e_ba1');
+    graph.addEdge('c', 'a', 'e_ca');
+    graph.addEdge('b', 'a', 'e_ba2');
+    expect(graph.predecessors('a')).toEqual(['b', 'c']);
+    graph.removeEdge('e_ba1');
+    expect(graph.predecessors('a')).toEqual(['b', 'c']);
+  });
+
+  it('moves a removed and re-added neighbour to the end of neighbour order', () => {
+    const graph = new Graph();
+    graph.addNode('a');
+    graph.addNode('b');
+    graph.addNode('c');
+    graph.addEdge('a', 'b');
+    graph.addEdge('a', 'c');
+    expect(graph.successors('a')).toEqual(['b', 'c']);
+    graph.removeNode('b');
+    graph.addNode('b');
+    graph.addEdge('a', 'b');
+    expect(graph.successors('a')).toEqual(['c', 'b']);
   });
 
   it('throws for an unknown node', () => {

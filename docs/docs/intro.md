@@ -22,7 +22,7 @@ now belongs, so a graph that changes reads as a graph that moved.
 
 | Package | What it does |
 | --- | --- |
-| `@dagr/graph` | Typed directed graph model: stable identity, patches, zero dependencies |
+| `@dagr/graph` | Typed directed graph model: stable identity, zero dependencies |
 | `@dagr/layout` | Headless Sugiyama layout pipeline, incremental and animation first |
 | `@dagr/render` | WebGPU renderer: SDF shapes, instancing, spring animation |
 | `@dagr/react` | The `DagrCanvas` component and hooks |

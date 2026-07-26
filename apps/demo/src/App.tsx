@@ -14,14 +14,21 @@ function buildSampleGraph(): Graph {
 }
 
 /**
+ * Built once at module load, not per render. Graph identity has to outlive a
+ * render: rebuilding in the component body would hand every render a fresh
+ * graph with fresh records, which is exactly what defeats the stable identity
+ * the whole library is built on. Real apps will hold the graph in a store or a
+ * ref; a module constant is the honest version of that for a static demo.
+ */
+const graph = buildSampleGraph();
+const successors = graph.successors('layout');
+
+/**
  * Placeholder playground. Its only job today is to prove that the demo app
  * links to `@dagr/graph` across the workspace and can drive the real API:
  * build a graph, count it, and ask it an adjacency question.
  */
 export function App(): JSX.Element {
-  const graph = buildSampleGraph();
-  const successors = graph.successors('layout');
-
   return (
     <main>
       <h1>Dagr demo</h1>

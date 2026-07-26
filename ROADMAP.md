@@ -30,6 +30,15 @@ findings addressed or logged, docs land with the feature.
 - [ ] **M1.2** Attributes and ports: typed attribute bags on nodes, edges,
   and the graph; port declarations on nodes; edges may reference ports.
   Tests for attribute round-trips and port validation.
+  Decided in M1.1 review, to be implemented here: the entry point becomes an
+  object init, `addNode({ id?, attrs? })` and `addEdge({ source, target, id?,
+  attrs? })`, with the plain string forms kept as shorthand. Attributes do not
+  become another positional argument. Nothing is published yet, so the change
+  costs nothing now and is why it was not forced into M1.1.
+  Also decided: node and edge records are frozen at construction, so attribute
+  updates are copy on write. An updated record is a new object and unchanged
+  records keep their identity, which makes `getNode(id) === previousNode` a
+  valid "nothing changed here" test for React memoisation in M5.
 - [ ] **M1.3** Patches: every mutation emits a `Patch`; `apply(graph, patch)`
   reproduces the mutation; inverse patches for undo. Property-based tests
   (fast-check): patch/apply round-trips on random mutation sequences.
@@ -55,7 +64,9 @@ findings addressed or logged, docs land with the feature.
   later stages.
 - [ ] **M2.5** Ordering v1: barycenter sweeps with median fallback, crossing
   counter as the metric. Tests on known small graphs with hand-counted
-  crossings.
+  crossings. Also measure adjacency allocation churn in the sweeps (every
+  `@dagr/graph` adjacency query returns a fresh array) and add a
+  non-allocating traversal form there if it shows up in the profile.
 - [ ] **M2.6** Ordering v2: transpose refinement pass; crossing-count
   regression corpus committed as golden files.
 - [ ] **M2.7** Positioning: Brandes-Koepf horizontal coordinate assignment

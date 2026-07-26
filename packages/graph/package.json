@@ -1,7 +1,7 @@
 {
   "name": "@dagr/graph",
   "version": "0.1.0",
-  "description": "Typed directed graph model for Dagr: stable node identity, patches, zero dependencies.",
+  "description": "Typed directed graph model for Dagr: stable node identity, zero dependencies.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
