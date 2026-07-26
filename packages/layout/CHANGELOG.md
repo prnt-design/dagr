@@ -21,18 +21,6 @@ of doc prose.
   different bounds, and more than one layer.** No type and no exported name
   changed. (M2.2)
 
-### Added
-
-- `InternalLayoutError` (`code: 'INTERNAL'`), thrown where the pipeline's own
-  arithmetic or bookkeeping breaks an invariant it maintains itself. These sites
-  previously threw a bare `Error`, so `catch (e) { if (e instanceof
-  DagrLayoutError) ... }` had a fall-through path. It no longer does. Callers
-  switching exhaustively on `DagrLayoutErrorCode` gain a third case. (M2.2)
-- The route stage contract now checks direction: a polyline whose first point is
-  nearer the target than the source (or whose last point is nearer the source)
-  is rejected with a `StageContractError`. Only third-party route stages can
-  trip this. (M2.2)
-
 ### Notes
 
 - `@dagr/graph` is a peer dependency, not a regular one. Its `#private` fields
