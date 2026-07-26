@@ -45,7 +45,7 @@ pnpm build
   `user.email "agent@prnt.design"` identity, not the human maintainer's.
   This is configured in the repo-local git config. If it is unset in your
   checkout, set it there (repo-local, never global) before committing.
-- Trailer `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` on agent
+- Trailer `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>` on agent
   commits.
 
 ## Writing style
