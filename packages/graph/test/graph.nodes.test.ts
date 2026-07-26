@@ -14,10 +14,10 @@ describe('Graph node basics', () => {
   it('adds a node with an explicit id', () => {
     const graph = new Graph();
     const node = graph.addNode('a');
-    expect(node).toEqual({ id: 'a' });
+    expect(node).toEqual({ id: 'a', attrs: {}, ports: [] });
     expect(graph.nodeCount).toBe(1);
     expect(graph.hasNode('a')).toBe(true);
-    expect(graph.getNode('a')).toEqual({ id: 'a' });
+    expect(graph.getNode('a')).toEqual({ id: 'a', attrs: {}, ports: [] });
   });
 
   it('returns the same node record from addNode and getNode', () => {
@@ -227,7 +227,7 @@ describe('Graph returned array isolation', () => {
     const graph = new Graph();
     graph.addNode('a');
     graph.addNode('b');
-    const listed = graph.nodes() as { id: string }[];
+    const listed = graph.nodes() as unknown[];
     listed.push({ id: 'ghost' });
     listed.shift();
     expect(graph.nodeCount).toBe(2);

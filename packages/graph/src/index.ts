@@ -4,9 +4,28 @@ export {
   DagrGraphError,
   DuplicateEdgeError,
   DuplicateNodeError,
+  DuplicatePortError,
   EdgeNotFoundError,
   InvalidIdError,
   NodeNotFoundError,
+  PortDirectionError,
+  PortInUseError,
+  PortNotFoundError,
+  isDagrGraphError,
 } from './errors.js';
-export type { DagrGraphErrorCode } from './errors.js';
-export type { Edge, EdgeId, Node, NodeId } from './types.js';
+export type { DagrGraphErrorCode, DagrGraphErrorLike } from './errors.js';
+export type {
+  Attrs,
+  AttrsPatch,
+  Edge,
+  EdgeId,
+  EdgeInit,
+  Node,
+  NodeId,
+  NodeInit,
+  Port,
+  PortDirection,
+  PortId,
+  PortInit,
+  ReadAttrs,
+} from './types.js';

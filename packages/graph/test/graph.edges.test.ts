@@ -22,7 +22,7 @@ describe('Graph edge basics', () => {
   it('adds an edge between two nodes', () => {
     const graph = triangle();
     const edge = graph.addEdge('a', 'b', 'ab');
-    expect(edge).toEqual({ id: 'ab', source: 'a', target: 'b' });
+    expect(edge).toEqual({ id: 'ab', source: 'a', target: 'b', attrs: {} });
     expect(graph.edgeCount).toBe(1);
     expect(graph.hasEdge('ab')).toBe(true);
     expect(graph.getEdge('ab')).toBe(edge);
@@ -46,7 +46,7 @@ describe('Graph edge basics', () => {
   it('allows a self loop', () => {
     const graph = triangle();
     const loop = graph.addEdge('a', 'a', 'loop');
-    expect(loop).toEqual({ id: 'loop', source: 'a', target: 'a' });
+    expect(loop).toEqual({ id: 'loop', source: 'a', target: 'a', attrs: {} });
     expect(graph.edgeCount).toBe(1);
   });
 
@@ -311,7 +311,7 @@ describe('Graph returned array isolation', () => {
   it('is unaffected by a caller mutating the array from edges()', () => {
     const graph = triangle();
     graph.addEdge('a', 'b', 'ab');
-    const listed = graph.edges() as { id: string; source: string; target: string }[];
+    const listed = graph.edges() as unknown[];
     listed.length = 0;
     expect(graph.edgeCount).toBe(1);
     expect(graph.edges().map((edge) => edge.id)).toEqual(['ab']);

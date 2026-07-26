@@ -27,7 +27,7 @@ findings addressed or logged, docs land with the feature.
 - [x] **M1.1** Core graph: `Graph` with node/edge add/remove/get, stable
   string IDs, adjacency queries (successors, predecessors, edges between).
   Unit tests for every operation and error case.
-- [ ] **M1.2** Attributes and ports: typed attribute bags on nodes, edges,
+- [x] **M1.2** Attributes and ports: typed attribute bags on nodes, edges,
   and the graph; port declarations on nodes; edges may reference ports.
   Tests for attribute round-trips and port validation.
   Decided in M1.1 review, to be implemented here: the entry point becomes an
@@ -53,6 +53,14 @@ findings addressed or logged, docs land with the feature.
 - [ ] **M2.1** Pipeline skeleton: `LayoutInput`/`LayoutResult` types, stage
   interfaces (rank, order, position, route), a pipeline runner wiring
   pass-through stages, node size/spacing config. Tests for the plumbing.
+  Decide here whether ports get attribute bags. `Port` is the only graph
+  element without one, so port geometry (side, offset, label) has nowhere to
+  live, and M1.2's review deliberately deferred the decision rather than
+  inventing the bag before layout knows what a port needs to carry, which is
+  the mistake M1.1's review avoided with adjacency traversal. The change stays
+  source compatible whenever it lands, so the decision is cheap: `Port<A
+  extends object = Attrs>`, an `attrs?` on `PortInit`, a fourth defaulted
+  `Graph` type parameter, and `updatePortAttrs`.
 - [ ] **M2.2** Cycle breaking + ranking v1: greedy feedback-arc-set cycle
   breaker, longest-path ranking. Invariant tests: every edge points downward
   in rank after reversal bookkeeping.

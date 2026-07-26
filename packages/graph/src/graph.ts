@@ -1,11 +1,28 @@
 import {
   DuplicateEdgeError,
   DuplicateNodeError,
+  DuplicatePortError,
   EdgeNotFoundError,
   InvalidIdError,
   NodeNotFoundError,
+  PortDirectionError,
+  PortInUseError,
+  PortNotFoundError,
 } from './errors.js';
-import type { Edge, EdgeId, Node, NodeId } from './types.js';
+import type {
+  Attrs,
+  AttrsPatch,
+  Edge,
+  EdgeId,
+  EdgeInit,
+  Node,
+  NodeId,
+  NodeInit,
+  Port,
+  PortId,
+  PortInit,
+  ReadAttrs,
+} from './types.js';
 
 /** The exact shape node id generation produces: `n1`, `n2`, ... */
 const GENERATED_NODE_ID = /^n([1-9]\d*)$/;
@@ -33,6 +50,158 @@ function advanceSeq(current: number, id: string, pattern: RegExp): number {
 }
 
 /**
+ * Freezes a bag and hands it back under the caller's attribute type.
+ *
+ * This is the one place the module crosses from its own untyped storage to a
+ * caller's typed view, and it needs an assertion to do it: `ReadAttrs<A>` is a
+ * mapped type over an unresolved type parameter, and TypeScript will not
+ * accept a `Record<string, unknown>` for one however the object was built. The
+ * assertion changes only what the compiler is told, never what is stored:
+ * every value in `bag` arrived through an `AttrsPatch<A>`, so the claim is true
+ * by construction, and keeping the assertion here means no other function in
+ * the module needs one.
+ */
+function sealAttrs<A extends object>(bag: Record<string, unknown>): ReadAttrs<A> {
+  return Object.freeze(bag) as ReadAttrs<A>;
+}
+
+/** A fresh frozen empty bag. */
+function emptyAttrs<A extends object>(): ReadAttrs<A> {
+  return sealAttrs<A>({});
+}
+
+/**
+ * Merges `patch` into `current`, returning a new frozen bag, or `undefined`
+ * when the merge would change nothing.
+ *
+ * Reporting "no change" as `undefined` rather than returning `current` is what
+ * lets every caller keep its record identity with a single comparison: a
+ * record is rebuilt only when there is something to rebuild it for, which is
+ * what makes `getNode(id) === previousNode` a usable "nothing changed here"
+ * test. Values are compared with `Object.is`, so `NaN` matches itself and `0`
+ * does not match `-0`.
+ *
+ * A key whose patch value is `undefined` is deleted rather than stored, so a
+ * bag never holds an `undefined` value and `'k' in attrs` answers honestly.
+ * Freezing is shallow: a nested object value is stored by reference and stays
+ * the caller's to keep immutable.
+ *
+ * O(size of the bag plus size of the patch).
+ */
+function mergeAttrs<A extends object>(
+  current: ReadAttrs<A>,
+  patch: AttrsPatch<A>,
+): ReadAttrs<A> | undefined {
+  // Both listings go through entries rather than a spread so that the generic
+  // bag types widen to plain `unknown` values without an assertion.
+  const held: [string, unknown][] = Object.entries(current);
+  const patched: [string, unknown][] = Object.entries(patch);
+  const merged: Record<string, unknown> = Object.fromEntries(held);
+  let changed = false;
+
+  for (const [key, value] of patched) {
+    if (value === undefined) {
+      if (!Object.hasOwn(merged, key)) continue;
+      delete merged[key];
+      changed = true;
+      continue;
+    }
+    if (Object.hasOwn(merged, key) && Object.is(merged[key], value)) continue;
+    // Defined rather than assigned. A plain `merged[key] = value` is an
+    // ordinary [[Set]], so a key of `__proto__` reaches the accessor on
+    // `Object.prototype` and reassigns the bag's prototype instead of storing
+    // an attribute: the value would vanish from `Object.keys` and
+    // `JSON.stringify`, the caller's own keys would read back through the bag,
+    // and `Object.hasOwn` could never see it, so the no-op detection above
+    // would rebuild the record on every repeat of the same patch. Defining the
+    // property does none of that, and it leaves the delete branch and the
+    // `Object.hasOwn` comparison working unchanged. `Object.fromEntries` above
+    // already defines rather than sets, so this is the only site.
+    Object.defineProperty(merged, key, {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+    changed = true;
+  }
+
+  return changed ? sealAttrs<A>(merged) : undefined;
+}
+
+/** The bag a freshly declared node or edge starts with. */
+function initialAttrs<A extends object>(patch: AttrsPatch<A> | undefined): ReadAttrs<A> {
+  const empty = emptyAttrs<A>();
+  if (patch === undefined) return empty;
+  return mergeAttrs(empty, patch) ?? empty;
+}
+
+/**
+ * A frozen node record.
+ *
+ * `ports` is given either as the per-node port index, which is insertion
+ * ordered, so the materialised array comes out in declaration order, or as an
+ * array a previous record already materialised. The second form is what keeps
+ * an attributes-only rebuild from handing back a new array with provably
+ * identical contents, which would break the record identity rule for `ports`
+ * the way it is already kept for `attrs`. Materialising costs O(port count);
+ * passing an array through costs O(1).
+ */
+function freezeNode<A extends object>(
+  id: NodeId,
+  attrs: ReadAttrs<A>,
+  ports: ReadonlyMap<PortId, Port> | readonly Port[],
+): Node<A> {
+  const frozen = Array.isArray(ports) ? ports : Object.freeze([...ports.values()]);
+  return Object.freeze({ id, attrs, ports: frozen });
+}
+
+/**
+ * A frozen edge record. The port keys are spread in conditionally rather than
+ * assigned `undefined`, because `exactOptionalPropertyTypes` draws a real
+ * distinction between "absent" and "present and undefined" and only the first
+ * one matches `sourcePort?: PortId`.
+ */
+function freezeEdge<A extends object>(
+  id: EdgeId,
+  source: NodeId,
+  target: NodeId,
+  attrs: ReadAttrs<A>,
+  sourcePort: PortId | undefined,
+  targetPort: PortId | undefined,
+): Edge<A> {
+  return Object.freeze({
+    id,
+    source,
+    target,
+    attrs,
+    ...(sourcePort === undefined ? {} : { sourcePort }),
+    ...(targetPort === undefined ? {} : { targetPort }),
+  });
+}
+
+/**
+ * A frozen port record from a declaration. Direction defaults to `'inout'`,
+ * the permissive end of the range: a port only constrains an edge once its
+ * author says it should.
+ *
+ * @throws {InvalidIdError} when the port id is an empty string.
+ */
+function freezePort(init: PortInit): Port {
+  if (init.id === '') throw new InvalidIdError('port', init.id);
+  return Object.freeze({ id: init.id, direction: init.direction ?? 'inout' });
+}
+
+/** The shorthand `addNode(id?)` form, read as the init form. */
+function normaliseNodeInit<A extends object>(
+  idOrInit: NodeId | NodeInit<A> | undefined,
+): NodeInit<A> {
+  if (idOrInit === undefined) return {};
+  if (typeof idOrInit === 'object') return idOrInit;
+  return { id: idOrInit };
+}
+
+/**
  * A mutable multi-digraph with stable string identity.
  *
  * Parallel edges between the same ordered pair are allowed (each edge carries
@@ -51,10 +220,21 @@ function advanceSeq(current: number, id: string, pattern: RegExp): number {
  * Adjacency is indexed per node, so `successors`, `outEdges`, and friends cost
  * O(degree) rather than O(edgeCount), and the degree accessors are O(1)
  * because they read an index size rather than walking it.
+ *
+ * Nodes, edges, and the graph itself carry attribute bags. The three type
+ * parameters name what is in them; all three default to `Attrs`, so `new
+ * Graph()` and a bare `Graph` annotation keep meaning what they always did.
+ * Attribute updates are copy on write: a record that changes is replaced by a
+ * new frozen record, a record that does not change keeps its identity, and
+ * changing one record never touches another.
  */
-export class Graph {
-  readonly #nodes = new Map<NodeId, Node>();
-  readonly #edges = new Map<EdgeId, Edge>();
+export class Graph<
+  NodeAttrs extends object = Attrs,
+  EdgeAttrs extends object = Attrs,
+  GraphAttrs extends object = Attrs,
+> {
+  readonly #nodes = new Map<NodeId, Node<NodeAttrs>>();
+  readonly #edges = new Map<EdgeId, Edge<EdgeAttrs>>();
 
   /** Per-node out-edge ids, in insertion order. Present for every node. */
   readonly #outEdges = new Map<NodeId, Set<EdgeId>>();
@@ -63,11 +243,23 @@ export class Graph {
   readonly #inEdges = new Map<NodeId, Set<EdgeId>>();
 
   /**
+   * Per-node port index, in declaration order. Present for every node, dropped
+   * with the node. A Map is both halves of what ports need: O(1) lookup for
+   * `hasPort` and `getPort`, and insertion order for the declaration-ordered
+   * array on the {@link Node} record, which is materialised from it. A second
+   * array would only be a copy that can fall out of step.
+   */
+  readonly #ports = new Map<NodeId, Map<PortId, Port>>();
+
+  /**
    * Insertion rank per node, used to order neighbour listings. Present for
    * every node, dropped with the node. Kept out of the public {@link Node}
    * record on purpose: it is an index, not part of a node's identity.
    */
   readonly #nodeRank = new Map<NodeId, number>();
+
+  /** Graph-level attributes. Frozen, replaced copy on write. */
+  #attrs: ReadAttrs<GraphAttrs> = emptyAttrs<GraphAttrs>();
 
   /** Rank handed to the next node added. Only ever moves forward. */
   #nextNodeRank = 0;
@@ -89,22 +281,62 @@ export class Graph {
   }
 
   /**
-   * Adds a node and returns it. With no argument an id is generated
-   * (`n1`, `n2`, ...), skipping any suffix already taken by an explicit id. A
-   * single call is worst case O(k) in the taken suffixes it has to skip, and
-   * the counter is monotone, so generation is amortised O(1) over the lifetime
-   * of the graph. The returned record is frozen.
-   *
-   * @throws {InvalidIdError} when `id` is an empty string.
-   * @throws {DuplicateNodeError} when `id` is already in the graph.
+   * Graph-level attributes: the frozen bag, not a copy. Everything the graph
+   * as a whole carries lives here, such as a layout direction, so a caller
+   * does not have to invent a sentinel node to hang it on. O(1).
    */
-  addNode(id?: NodeId): Node {
-    const resolved = id === undefined ? this.#generateNodeId() : id;
+  get attrs(): ReadAttrs<GraphAttrs> {
+    return this.#attrs;
+  }
+
+  /**
+   * Merges rather than replaces: keys the patch does not name are untouched,
+   * and a key whose patch value is `undefined` is deleted rather than stored.
+   *
+   * Applies `patch` to the graph attributes and returns the resulting bag. When
+   * the merge changes nothing the bag that was already held comes back,
+   * identity and all. Freezing is shallow, so a nested object value stays the
+   * caller's to keep immutable. O(size of the bag plus size of the patch).
+   */
+  updateAttrs(patch: AttrsPatch<GraphAttrs>): ReadAttrs<GraphAttrs> {
+    const merged = mergeAttrs(this.#attrs, patch);
+    if (merged !== undefined) this.#attrs = merged;
+    return this.#attrs;
+  }
+
+  /**
+   * Adds a node and returns it.
+   *
+   * The init form is the full one: `addNode({ id, attrs, ports })`, every
+   * field optional. The string form is shorthand for an id and nothing else.
+   * With no id an id is generated (`n1`, `n2`, ...), skipping any suffix
+   * already taken by an explicit id. A single call is worst case O(k) in the
+   * taken suffixes it has to skip, and the counter is monotone, so generation
+   * is amortised O(1) over the lifetime of the graph. The returned record is
+   * frozen.
+   *
+   * Every check runs before anything is written, and the id counter moves only
+   * once the call is certain to succeed, so a rejected call leaves the graph
+   * exactly as it was and does not spend a generated id.
+   *
+   * @throws {InvalidIdError} when the node id or a port id is an empty string.
+   * @throws {DuplicateNodeError} when the id is already in the graph.
+   * @throws {DuplicatePortError} when the port list declares an id twice.
+   */
+  addNode(id?: NodeId): Node<NodeAttrs>;
+  addNode(init: NodeInit<NodeAttrs>): Node<NodeAttrs>;
+  addNode(idOrInit?: NodeId | NodeInit<NodeAttrs>): Node<NodeAttrs> {
+    const init = normaliseNodeInit(idOrInit);
+    const resolved = init.id ?? this.#peekNodeId();
     if (resolved === '') throw new InvalidIdError('node', resolved);
     if (this.#nodes.has(resolved)) throw new DuplicateNodeError(resolved);
+    const ports = this.#declarePorts(resolved, init.ports);
+    const attrs = initialAttrs(init.attrs);
+
     this.#nextNodeSeq = advanceSeq(this.#nextNodeSeq, resolved, GENERATED_NODE_ID);
-    const node: Node = Object.freeze({ id: resolved });
+    const node = freezeNode(resolved, attrs, ports);
     this.#nodes.set(resolved, node);
+    this.#ports.set(resolved, ports);
     this.#outEdges.set(resolved, new Set());
     this.#inEdges.set(resolved, new Set());
     this.#nodeRank.set(resolved, this.#nextNodeRank);
@@ -118,7 +350,7 @@ export class Graph {
   }
 
   /** The node with this id, or `undefined`. O(1). */
-  getNode(id: NodeId): Node | undefined {
+  getNode(id: NodeId): Node<NodeAttrs> | undefined {
     return this.#nodes.get(id);
   }
 
@@ -130,15 +362,50 @@ export class Graph {
    *
    * @throws {NodeNotFoundError} when the node is not in the graph.
    */
-  requireNode(id: NodeId): Node {
+  requireNode(id: NodeId): Node<NodeAttrs> {
     const node = this.#nodes.get(id);
     if (node === undefined) throw new NodeNotFoundError(id);
     return node;
   }
 
   /**
-   * Removes a node and every edge incident to it: out-edges, in-edges, and
-   * self loops. O(degree).
+   * Merges rather than replaces: keys the patch does not name are untouched,
+   * and a key whose patch value is `undefined` is deleted rather than stored.
+   *
+   * Applies `patch` to a node's attributes and returns the node record that now
+   * answers for the id. Copy on write: when the merge changes something the
+   * node is replaced by a new frozen record and the old one is left intact, and
+   * when it changes nothing the record already held comes back unchanged, so
+   * `updateNodeAttrs(id, patch) === previousNode` is a usable "nothing
+   * happened" test. Freezing is shallow, so a nested object value stays the
+   * caller's to keep immutable. Nothing else moves: the node keeps its ports,
+   * down to the identity of the array they are in, its adjacency, its place in
+   * iteration order, and no other record changes identity.
+   * O(size of the bag plus size of the patch).
+   *
+   * @throws {NodeNotFoundError} when the node is not in the graph.
+   */
+  updateNodeAttrs(id: NodeId, patch: AttrsPatch<NodeAttrs>): Node<NodeAttrs> {
+    const node = this.requireNode(id);
+    const attrs = mergeAttrs(node.attrs, patch);
+    if (attrs === undefined) return node;
+    // The frozen array the old record already carries, passed straight through
+    // rather than re-materialised from the port index: the ports did not
+    // change, so the array must not change identity either. A cached array
+    // keyed by node id would reach the same place, but it would be a second
+    // structure that can fall out of step with `#ports`, which is exactly what
+    // the `#ports` comment above argues against. There is no lookup to guard
+    // here either, because `requireNode` already proved the node exists.
+    const next = freezeNode(node.id, attrs, node.ports);
+    // Overwriting an existing key leaves a Map entry where it was, so this
+    // cannot reorder anything a listing depends on.
+    this.#nodes.set(id, next);
+    return next;
+  }
+
+  /**
+   * Removes a node, its ports, and every edge incident to it: out-edges,
+   * in-edges, and self loops. O(degree).
    *
    * @throws {NodeNotFoundError} when the node is not in the graph.
    */
@@ -149,36 +416,159 @@ export class Graph {
     for (const edgeId of [...outgoing, ...incoming]) this.#detachEdge(edgeId);
     this.#outEdges.delete(id);
     this.#inEdges.delete(id);
+    this.#ports.delete(id);
     this.#nodeRank.delete(id);
     this.#nodes.delete(id);
   }
 
   /** Every node, in insertion order, as a fresh array. O(nodeCount). */
-  nodes(): readonly Node[] {
+  nodes(): readonly Node<NodeAttrs>[] {
     return [...this.#nodes.values()];
   }
 
   /**
-   * Adds an edge from `source` to `target` and returns it. With no `id` an id
-   * is generated (`e1`, `e2`, ...), skipping any suffix already taken by an
-   * explicit id. Same cost as {@link addNode}: worst case O(k) skipped
-   * suffixes for one call, amortised O(1) over the lifetime of the graph. The
-   * returned record is frozen.
+   * Declares a port on a node and returns the node record that now answers for
+   * the id. Copy on write, exactly like {@link updateNodeAttrs}: the node is
+   * replaced by a new frozen record and nothing else moves. There is no no-op
+   * case to preserve identity for, because a duplicate id throws instead of
+   * being absorbed. `direction` defaults to `'inout'`. O(port count), the cost
+   * of rebuilding the declaration-ordered array. The new port goes last.
+   *
+   * @throws {NodeNotFoundError} when the node is not in the graph.
+   * @throws {InvalidIdError} when the port id is an empty string.
+   * @throws {DuplicatePortError} when the node already declares that port.
+   */
+  addPort(nodeId: NodeId, init: PortInit): Node<NodeAttrs> {
+    const node = this.requireNode(nodeId);
+    const ports = this.#requirePorts(nodeId);
+    const port = freezePort(init);
+    if (ports.has(port.id)) throw new DuplicatePortError(nodeId, port.id);
+    ports.set(port.id, port);
+    const next = freezeNode(node.id, node.attrs, ports);
+    this.#nodes.set(nodeId, next);
+    return next;
+  }
+
+  /**
+   * Removes a port and returns the node record that now answers for the id.
+   * Copy on write, and again with no no-op case: a missing port throws rather
+   * than being absorbed. O(degree of the node plus its port count).
+   *
+   * A port that live edges still reference is refused rather than taken with
+   * its edges. Silently deleting edges the caller did not name is a bigger
+   * surprise than an error they can act on, and the error carries the edge ids
+   * so they can rewire or remove them and retry. Callers who do want the
+   * cascade already have {@link removeNode}, which takes the node, its ports,
+   * and its incident edges together.
+   *
+   * @throws {NodeNotFoundError} when the node is not in the graph.
+   * @throws {PortNotFoundError} when the node does not declare that port.
+   * @throws {PortInUseError} when a live edge still references the port.
+   */
+  removePort(nodeId: NodeId, portId: PortId): Node<NodeAttrs> {
+    const node = this.requireNode(nodeId);
+    const ports = this.#requirePorts(nodeId);
+    if (!ports.has(portId)) throw new PortNotFoundError(nodeId, portId);
+    const users = this.#edgesUsingPort(nodeId, portId);
+    if (users.length > 0) throw new PortInUseError(nodeId, portId, users);
+    ports.delete(portId);
+    const next = freezeNode(node.id, node.attrs, ports);
+    this.#nodes.set(nodeId, next);
+    return next;
+  }
+
+  /**
+   * Whether a node declares this port. O(1), an index lookup rather than a
+   * scan of the declaration array.
+   *
+   * @throws {NodeNotFoundError} when the node is not in the graph.
+   */
+  hasPort(nodeId: NodeId, portId: PortId): boolean {
+    return this.#requirePorts(nodeId).has(portId);
+  }
+
+  /**
+   * The port record, or `undefined` when the node does not declare it. O(1).
+   * An unknown node is still an error: the node is the context of the
+   * question, not part of the answer.
+   *
+   * @throws {NodeNotFoundError} when the node is not in the graph.
+   */
+  getPort(nodeId: NodeId, portId: PortId): Port | undefined {
+    return this.#requirePorts(nodeId).get(portId);
+  }
+
+  /**
+   * A node's ports, in declaration order. The same frozen array the node
+   * record carries, so it is free to call and safe to keep. O(1).
+   *
+   * @throws {NodeNotFoundError} when the node is not in the graph.
+   */
+  ports(nodeId: NodeId): readonly Port[] {
+    return this.requireNode(nodeId).ports;
+  }
+
+  /**
+   * Adds an edge and returns it.
+   *
+   * The init form is the full one: `addEdge({ source, target, id, attrs,
+   * sourcePort, targetPort })`. The positional form is shorthand for the
+   * endpoints and an id. With no id an id is generated (`e1`, `e2`, ...),
+   * skipping any suffix already taken by an explicit id. Same cost as
+   * {@link addNode}: worst case O(k) skipped suffixes for one call, amortised
+   * O(1) over the lifetime of the graph. The returned record is frozen.
+   *
+   * A named port must be declared on the node it is named for and must face
+   * the right way, since an edge leaves its source and arrives at its target.
+   * A self loop may name a port at each end, either two different ports or the
+   * same `'inout'` port twice, since such a port passes both checks. Every check
+   * runs before anything is written and before the id counter moves, so a
+   * rejected call leaves the graph exactly as it was and does not spend a
+   * generated id.
    *
    * @throws {NodeNotFoundError} when either endpoint is not in the graph.
-   * @throws {InvalidIdError} when `id` is an empty string.
-   * @throws {DuplicateEdgeError} when `id` is already in the graph.
+   * @throws {InvalidIdError} when the edge id or a port id is an empty string.
+   * @throws {DuplicateEdgeError} when the id is already in the graph.
+   * @throws {PortNotFoundError} when a named port is not declared on its node.
+   * @throws {PortDirectionError} when a named port faces the wrong way.
    */
-  addEdge(source: NodeId, target: NodeId, id?: EdgeId): Edge {
-    const outgoing = this.#outEdges.get(source);
-    if (outgoing === undefined) throw new NodeNotFoundError(source);
-    const incoming = this.#inEdges.get(target);
-    if (incoming === undefined) throw new NodeNotFoundError(target);
-    const resolved = id === undefined ? this.#generateEdgeId() : id;
+  addEdge(source: NodeId, target: NodeId, id?: EdgeId): Edge<EdgeAttrs>;
+  addEdge(init: EdgeInit<EdgeAttrs>): Edge<EdgeAttrs>;
+  addEdge(
+    sourceOrInit: NodeId | EdgeInit<EdgeAttrs>,
+    // Only reachable from JavaScript: the overloads make the second argument
+    // required for the positional form. An omitted endpoint then reads as the
+    // empty id and comes back as a NodeNotFoundError rather than a crash.
+    target = '',
+    id?: EdgeId,
+  ): Edge<EdgeAttrs> {
+    const init: EdgeInit<EdgeAttrs> =
+      typeof sourceOrInit === 'object'
+        ? sourceOrInit
+        : { source: sourceOrInit, target, ...(id === undefined ? {} : { id }) };
+
+    const outgoing = this.#outEdges.get(init.source);
+    if (outgoing === undefined) throw new NodeNotFoundError(init.source);
+    const incoming = this.#inEdges.get(init.target);
+    if (incoming === undefined) throw new NodeNotFoundError(init.target);
+
+    this.#requireUsablePort(init.source, init.sourcePort, 'source');
+    this.#requireUsablePort(init.target, init.targetPort, 'target');
+
+    const resolved = init.id ?? this.#peekEdgeId();
     if (resolved === '') throw new InvalidIdError('edge', resolved);
     if (this.#edges.has(resolved)) throw new DuplicateEdgeError(resolved);
+    const attrs = initialAttrs(init.attrs);
+
     this.#nextEdgeSeq = advanceSeq(this.#nextEdgeSeq, resolved, GENERATED_EDGE_ID);
-    const edge: Edge = Object.freeze({ id: resolved, source, target });
+    const edge = freezeEdge(
+      resolved,
+      init.source,
+      init.target,
+      attrs,
+      init.sourcePort,
+      init.targetPort,
+    );
     this.#edges.set(resolved, edge);
     outgoing.add(resolved);
     incoming.add(resolved);
@@ -191,7 +581,7 @@ export class Graph {
   }
 
   /** The edge with this id, or `undefined`. O(1). */
-  getEdge(id: EdgeId): Edge | undefined {
+  getEdge(id: EdgeId): Edge<EdgeAttrs> | undefined {
     return this.#edges.get(id);
   }
 
@@ -202,10 +592,88 @@ export class Graph {
    *
    * @throws {EdgeNotFoundError} when the edge is not in the graph.
    */
-  requireEdge(id: EdgeId): Edge {
+  requireEdge(id: EdgeId): Edge<EdgeAttrs> {
     const edge = this.#edges.get(id);
     if (edge === undefined) throw new EdgeNotFoundError(id);
     return edge;
+  }
+
+  /**
+   * Merges rather than replaces: keys the patch does not name are untouched,
+   * and a key whose patch value is `undefined` is deleted rather than stored.
+   *
+   * Applies `patch` to an edge's attributes and returns the edge record that
+   * now answers for the id. The rest of the {@link updateNodeAttrs} rules apply
+   * unchanged: copy on write with identity preserved when nothing changes, and
+   * a shallow freeze. The adjacency indexes hold edge ids rather than records,
+   * so nothing has to be reindexed and no node record changes identity. The
+   * port bindings ride along untouched; {@link updateEdgePorts} is what moves
+   * those. O(size of the bag plus size of the patch).
+   *
+   * @throws {EdgeNotFoundError} when the edge is not in the graph.
+   */
+  updateEdgeAttrs(id: EdgeId, patch: AttrsPatch<EdgeAttrs>): Edge<EdgeAttrs> {
+    const edge = this.requireEdge(id);
+    const attrs = mergeAttrs(edge.attrs, patch);
+    if (attrs === undefined) return edge;
+    const next = freezeEdge(
+      edge.id,
+      edge.source,
+      edge.target,
+      attrs,
+      edge.sourcePort,
+      edge.targetPort,
+    );
+    this.#edges.set(id, next);
+    return next;
+  }
+
+  /**
+   * Rebinds an edge's port references and returns the edge record that now
+   * answers for the id.
+   *
+   * This is the rewire path {@link PortInUseError} names: dragging an endpoint
+   * from one port to another, or detaching it, without the edge losing
+   * anything. The edge keeps its id, its endpoints, its attributes, and its
+   * place in edge insertion order, which is the whole reason this exists
+   * rather than a remove followed by an add.
+   *
+   * Merge, not replace, exactly like the attribute setters: a key the argument
+   * does not name leaves that end alone, and an explicit `undefined` detaches
+   * that end. Copy on write with identity preserved: rebinding an end to the
+   * port it already names returns the record already held. Every check runs
+   * against the edge's current `source` and `target` before anything is
+   * written, so a rejected call leaves the edge exactly as it was, the valid
+   * half of a patch included. O(1).
+   *
+   * @throws {EdgeNotFoundError} when the edge is not in the graph.
+   * @throws {InvalidIdError} when a port id is an empty string.
+   * @throws {PortNotFoundError} when a named port is not declared on its node.
+   * @throws {PortDirectionError} when a named port faces the wrong way.
+   */
+  updateEdgePorts(
+    id: EdgeId,
+    ports: {
+      readonly sourcePort?: PortId | undefined;
+      readonly targetPort?: PortId | undefined;
+    },
+  ): Edge<EdgeAttrs> {
+    const edge = this.requireEdge(id);
+    // `Object.hasOwn` rather than an `=== undefined` test, because absent and
+    // present-and-undefined are the two different requests this takes.
+    const sourcePort = Object.hasOwn(ports, 'sourcePort') ? ports.sourcePort : edge.sourcePort;
+    const targetPort = Object.hasOwn(ports, 'targetPort') ? ports.targetPort : edge.targetPort;
+
+    this.#requireUsablePort(edge.source, sourcePort, 'source');
+    this.#requireUsablePort(edge.target, targetPort, 'target');
+
+    if (sourcePort === edge.sourcePort && targetPort === edge.targetPort) return edge;
+    const next = freezeEdge(edge.id, edge.source, edge.target, edge.attrs, sourcePort, targetPort);
+    // Overwriting an existing key leaves a Map entry where it was, and the
+    // adjacency indexes hold edge ids rather than records, so neither the edge
+    // listing order nor any node record moves.
+    this.#edges.set(id, next);
+    return next;
   }
 
   /**
@@ -219,7 +687,7 @@ export class Graph {
   }
 
   /** Every edge, in insertion order, as a fresh array. O(edgeCount). */
-  edges(): readonly Edge[] {
+  edges(): readonly Edge<EdgeAttrs>[] {
     return [...this.#edges.values()];
   }
 
@@ -229,7 +697,7 @@ export class Graph {
    *
    * @throws {NodeNotFoundError} when the node is not in the graph.
    */
-  outEdges(id: NodeId): readonly Edge[] {
+  outEdges(id: NodeId): readonly Edge<EdgeAttrs>[] {
     return this.#resolveEdges(this.#requireOut(id));
   }
 
@@ -239,7 +707,7 @@ export class Graph {
    *
    * @throws {NodeNotFoundError} when the node is not in the graph.
    */
-  inEdges(id: NodeId): readonly Edge[] {
+  inEdges(id: NodeId): readonly Edge<EdgeAttrs>[] {
     return this.#resolveEdges(this.#requireIn(id));
   }
 
@@ -273,10 +741,10 @@ export class Graph {
    *
    * @throws {NodeNotFoundError} when either endpoint is not in the graph.
    */
-  edgesBetween(source: NodeId, target: NodeId): readonly Edge[] {
+  edgesBetween(source: NodeId, target: NodeId): readonly Edge<EdgeAttrs>[] {
     const outgoing = this.#requireOut(source);
     this.#requireIn(target);
-    const found: Edge[] = [];
+    const found: Edge<EdgeAttrs>[] = [];
     for (const edgeId of outgoing) {
       const edge = this.#requireIndexedEdge(edgeId);
       if (edge.target === target) found.push(edge);
@@ -328,6 +796,70 @@ export class Graph {
     return incoming;
   }
 
+  /** The port index for a node that must exist. */
+  #requirePorts(id: NodeId): Map<PortId, Port> {
+    const ports = this.#ports.get(id);
+    if (ports === undefined) throw new NodeNotFoundError(id);
+    return ports;
+  }
+
+  /**
+   * The port index a `ports` declaration list builds, validated in full before
+   * any of it is stored. Declaration order is list order.
+   */
+  #declarePorts(nodeId: NodeId, inits: readonly PortInit[] | undefined): Map<PortId, Port> {
+    const ports = new Map<PortId, Port>();
+    if (inits === undefined) return ports;
+    for (const init of inits) {
+      const port = freezePort(init);
+      if (ports.has(port.id)) throw new DuplicatePortError(nodeId, port.id);
+      ports.set(port.id, port);
+    }
+    return ports;
+  }
+
+  /**
+   * Checks that a named port exists on the node an edge names it for and faces
+   * the right way. An unnamed port is always fine: naming one is optional.
+   */
+  #requireUsablePort(
+    nodeId: NodeId,
+    portId: PortId | undefined,
+    end: 'source' | 'target',
+  ): void {
+    if (portId === undefined) return;
+    if (portId === '') throw new InvalidIdError('port', portId);
+    const port = this.#requirePorts(nodeId).get(portId);
+    if (port === undefined) throw new PortNotFoundError(nodeId, portId);
+    const wanted = end === 'source' ? 'out' : 'in';
+    if (port.direction !== wanted && port.direction !== 'inout') {
+      throw new PortDirectionError(nodeId, portId, port.direction, end);
+    }
+  }
+
+  /**
+   * Ids of the live edges still referencing a port, in out-then-in order and
+   * without repeats.
+   *
+   * This walks the node's own adjacency indexes rather than every edge in the
+   * graph, so it costs O(degree) and needs no new state to keep in step. A
+   * per-port reference count would be O(1) here but would have to be
+   * maintained by every edge add and remove, which is more surface for a bug
+   * than a scan of a listing the node already has.
+   */
+  #edgesUsingPort(nodeId: NodeId, portId: PortId): EdgeId[] {
+    // A self loop can name the same port at both ends, so it would otherwise
+    // be reported twice.
+    const users = new Set<EdgeId>();
+    for (const edgeId of this.#requireOut(nodeId)) {
+      if (this.#requireIndexedEdge(edgeId).sourcePort === portId) users.add(edgeId);
+    }
+    for (const edgeId of this.#requireIn(nodeId)) {
+      if (this.#requireIndexedEdge(edgeId).targetPort === portId) users.add(edgeId);
+    }
+    return [...users];
+  }
+
   /**
    * The edge an adjacency index entry names.
    *
@@ -337,7 +869,7 @@ export class Graph {
    * bug in this class, so it fails loudly rather than quietly returning a
    * shorter answer that would look plausible forever.
    */
-  #requireIndexedEdge(edgeId: EdgeId): Edge {
+  #requireIndexedEdge(edgeId: EdgeId): Edge<EdgeAttrs> {
     const edge = this.#edges.get(edgeId);
     if (edge === undefined) {
       throw new Error(`graph invariant: adjacency index holds unknown edge "${edgeId}"`);
@@ -355,8 +887,8 @@ export class Graph {
   }
 
   /** Edge records for an index entry, as a fresh array. */
-  #resolveEdges(edgeIds: ReadonlySet<EdgeId>): readonly Edge[] {
-    const resolved: Edge[] = [];
+  #resolveEdges(edgeIds: ReadonlySet<EdgeId>): readonly Edge<EdgeAttrs>[] {
+    const resolved: Edge<EdgeAttrs>[] = [];
     for (const edgeId of edgeIds) resolved.push(this.#requireIndexedEdge(edgeId));
     return resolved;
   }
@@ -393,28 +925,23 @@ export class Graph {
   }
 
   /**
-   * Next free generated node id. The counter only moves forward and already
-   * sits past every explicit id in generated shape, so a call is worst case
-   * O(k) probes and amortised O(1) over the lifetime of the graph.
+   * Next free generated node id, without spending it. The counter moves in the
+   * commit step of `addNode` instead, so a call that peeks and then rejects
+   * the node for some other reason leaves generation exactly where it was. The
+   * counter only moves forward and already sits past every explicit id in
+   * generated shape, so a call is worst case O(k) probes and amortised O(1)
+   * over the lifetime of the graph.
    */
-  #generateNodeId(): NodeId {
-    let candidate = `n${String(this.#nextNodeSeq)}`;
-    while (this.#nodes.has(candidate)) {
-      this.#nextNodeSeq += 1;
-      candidate = `n${String(this.#nextNodeSeq)}`;
-    }
-    this.#nextNodeSeq += 1;
-    return candidate;
+  #peekNodeId(): NodeId {
+    let seq = this.#nextNodeSeq;
+    while (this.#nodes.has(`n${String(seq)}`)) seq += 1;
+    return `n${String(seq)}`;
   }
 
   /** Next free generated edge id. Same forward-only rule as node ids. */
-  #generateEdgeId(): EdgeId {
-    let candidate = `e${String(this.#nextEdgeSeq)}`;
-    while (this.#edges.has(candidate)) {
-      this.#nextEdgeSeq += 1;
-      candidate = `e${String(this.#nextEdgeSeq)}`;
-    }
-    this.#nextEdgeSeq += 1;
-    return candidate;
+  #peekEdgeId(): EdgeId {
+    let seq = this.#nextEdgeSeq;
+    while (this.#edges.has(`e${String(seq)}`)) seq += 1;
+    return `e${String(seq)}`;
   }
 }

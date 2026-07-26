@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import * as api from '../src/index.js';
-import type { DagrGraphErrorCode, Edge, Node } from '../src/index.js';
+import type {
+  AttrsPatch,
+  DagrGraphErrorCode,
+  DagrGraphErrorLike,
+  Edge,
+  EdgeInit,
+  Node,
+  NodeInit,
+  Port,
+  PortDirection,
+  PortInit,
+  ReadAttrs,
+} from '../src/index.js';
 
 describe('@dagr/graph public surface', () => {
   it('exports the Graph class', () => {
@@ -16,6 +28,16 @@ describe('@dagr/graph public surface', () => {
     expect(typeof api.NodeNotFoundError).toBe('function');
     expect(typeof api.DuplicateEdgeError).toBe('function');
     expect(typeof api.EdgeNotFoundError).toBe('function');
+    expect(typeof api.DuplicatePortError).toBe('function');
+    expect(typeof api.PortNotFoundError).toBe('function');
+    expect(typeof api.PortInUseError).toBe('function');
+    expect(typeof api.PortDirectionError).toBe('function');
+  });
+
+  it('exports the isDagrGraphError guard', () => {
+    expect(typeof api.isDagrGraphError).toBe('function');
+    expect(api.isDagrGraphError(new api.NodeNotFoundError('a'))).toBe(true);
+    expect(api.isDagrGraphError(new Error('plain'))).toBe(false);
   });
 
   it('exports nothing else at runtime', () => {
@@ -23,10 +45,15 @@ describe('@dagr/graph public surface', () => {
       'DagrGraphError',
       'DuplicateEdgeError',
       'DuplicateNodeError',
+      'DuplicatePortError',
       'EdgeNotFoundError',
       'Graph',
       'InvalidIdError',
       'NodeNotFoundError',
+      'PortDirectionError',
+      'PortInUseError',
+      'PortNotFoundError',
+      'isDagrGraphError',
     ]);
   });
 
@@ -37,6 +64,10 @@ describe('@dagr/graph public surface', () => {
       new api.NodeNotFoundError('a').code,
       new api.DuplicateEdgeError('e1').code,
       new api.EdgeNotFoundError('e1').code,
+      new api.DuplicatePortError('a', 'p').code,
+      new api.PortNotFoundError('a', 'p').code,
+      new api.PortInUseError('a', 'p', ['e1']).code,
+      new api.PortDirectionError('a', 'p', 'in', 'source').code,
     ];
     expect(codes).toEqual([
       'INVALID_ID',
@@ -44,7 +75,37 @@ describe('@dagr/graph public surface', () => {
       'NODE_NOT_FOUND',
       'DUPLICATE_EDGE',
       'EDGE_NOT_FOUND',
+      'DUPLICATE_PORT',
+      'PORT_NOT_FOUND',
+      'PORT_IN_USE',
+      'PORT_DIRECTION',
     ]);
+  });
+
+  it('exports the attribute and port types', () => {
+    type NodeAttrs = { label: string };
+    const graph = new api.Graph<NodeAttrs>();
+    const nodeInit: NodeInit<NodeAttrs> = {
+      id: 'a',
+      attrs: { label: 'A' },
+      ports: [{ id: 'p', direction: 'out' } satisfies PortInit],
+    };
+    const node = graph.addNode(nodeInit);
+    graph.addNode('b');
+    const edgeInit: EdgeInit = { source: 'a', target: 'b', id: 'ab', sourcePort: 'p' };
+    const edge = graph.addEdge(edgeInit);
+
+    const attrs: ReadAttrs<NodeAttrs> = node.attrs;
+    const patch: AttrsPatch<NodeAttrs> = { label: undefined };
+    const port: Port | undefined = graph.getPort('a', 'p');
+    const direction: PortDirection | undefined = port?.direction;
+    const family: DagrGraphErrorLike[] = [new api.PortNotFoundError('a', 'p')];
+
+    expect(attrs.label).toBe('A');
+    expect(Object.keys(graph.updateNodeAttrs('a', patch).attrs)).toEqual([]);
+    expect(direction).toBe('out');
+    expect(edge.sourcePort).toBe('p');
+    expect(family[0]?.code).toBe('PORT_NOT_FOUND');
   });
 
   it('exports the Node and Edge types', () => {
