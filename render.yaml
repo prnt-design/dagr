@@ -1,0 +1,58 @@
+# Render blueprint: https://render.com/docs/blueprint-spec
+#
+# Deploys the Docusaurus site in docs/ as a static site at dagr.prnt.design.
+# The build runs from the repo root, not docs/, because docs/ is a pnpm
+# workspace member — its dependencies only resolve against the root lockfile.
+
+services:
+  - type: web
+    name: dagr-docs
+    runtime: static
+    branch: main
+
+    # Wait for the CI workflow to go green before publishing, so a build that
+    # typechecks and lints clean is the only thing that reaches the domain.
+    autoDeployTrigger: checksPass
+
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter docs build
+    staticPublishPath: docs/build
+
+    # Skip deploys for commits that cannot change the site. Paths are globs
+    # relative to the repo root.
+    buildFilter:
+      included:
+        - docs/**
+        - package.json
+        - pnpm-lock.yaml
+        - pnpm-workspace.yaml
+        - render.yaml
+
+    domains:
+      - dagr.prnt.design
+
+    previews:
+      generation: automatic
+
+    envVars:
+      # Match CI (.github/workflows/ci.yml) so a green build there means a
+      # green build here.
+      - key: NODE_VERSION
+        value: '22'
+
+    headers:
+      # Docusaurus fingerprints every file under /assets/, so those are safe to
+      # cache forever. They all live one level deeper (/assets/css/, /assets/js/),
+      # hence `**` — a single `*` does not match across a slash. HTML is left on
+      # Render's default revalidation so a deploy never serves a stale page.
+      - path: /assets/**/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
