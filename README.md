@@ -9,9 +9,8 @@ layout engine designed for *animation* (incremental layout, stable node
 identity, delta output) plus a high-fidelity WebGPU renderer (three.js
 WebGPURenderer, SDF shapes, spring physics) and a React component on top.
 
-> ⚠️ Early days. Dagr is being built in public, one increment per day, by an
-> autonomous engineering loop with human review. Expect rapid change until
-> v0.1. The roadmap lives in [ROADMAP.md](./ROADMAP.md).
+> ⚠️ Early days. Expect rapid change until v0.1. The roadmap lives in
+> [ROADMAP.md](./ROADMAP.md).
 
 ## Planned packages
 
