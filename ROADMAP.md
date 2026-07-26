@@ -24,7 +24,7 @@ findings addressed or logged, docs land with the feature.
 
 ## M1: Graph model (`@dagr/graph`)
 
-- [ ] **M1.1** Core graph: `Graph` with node/edge add/remove/get, stable
+- [x] **M1.1** Core graph: `Graph` with node/edge add/remove/get, stable
   string IDs, adjacency queries (successors, predecessors, edges between).
   Unit tests for every operation and error case.
 - [ ] **M1.2** Attributes and ports: typed attribute bags on nodes, edges,
