@@ -18,6 +18,12 @@
     "dist"
   ],
   "sideEffects": false,
+  "peerDependencies": {
+    "@dagr/graph": "workspace:^"
+  },
+  "devDependencies": {
+    "@dagr/graph": "workspace:^"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/prnt-design/dagr",

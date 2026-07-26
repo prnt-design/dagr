@@ -1,0 +1,442 @@
+import { Graph } from '@dagr/graph';
+import { describe, expect, it } from 'vitest';
+import { StageContractError, defaultStages, layout } from '../src/index.js';
+import type { LayoutResult, Point, PositionedNode, RankStage, RouteStage } from '../src/index.js';
+
+/** `a` fans out to `b` and `c`. Three nodes, two edges, no cycles. */
+function fanOut(): Graph {
+  const graph = new Graph();
+  graph.addNode('a');
+  graph.addNode('b');
+  graph.addNode('c');
+  graph.addEdge('a', 'b', 'ab');
+  graph.addEdge('a', 'c', 'ac');
+  return graph;
+}
+
+/** The axis-aligned box a positioned node occupies, from its centre and size. */
+function box(node: PositionedNode) {
+  return {
+    left: node.x - node.width / 2,
+    right: node.x + node.width / 2,
+    top: node.y - node.height / 2,
+    bottom: node.y + node.height / 2,
+  };
+}
+
+/**
+ * Tolerance for comparing two coordinates, scaled to their magnitude.
+ *
+ * A box edge is recovered here as `x + width / 2`, from an `x` the position
+ * stage computed as `left + width / 2`, and `(l + w / 2) + w / 2` is not always
+ * exactly `l + w`. Widths 0.3, 0.2, 0.2 laid out with `nodeSep: 0` leave a gap
+ * of -2.8e-17 between the second and third box, which is not an overlap, it is
+ * the last bit of a double. So the predicate below asks whether the boxes
+ * overlap by more than rounding at the magnitude of the numbers involved.
+ */
+function epsilonFor(...values: number[]): number {
+  let magnitude = 1;
+  for (const value of values) magnitude = Math.max(magnitude, Math.abs(value));
+  return magnitude * 1e-9;
+}
+
+/** Whether two node boxes share any interior area. Touching edges are fine. */
+function overlaps(left: PositionedNode, right: PositionedNode): boolean {
+  const one = box(left);
+  const other = box(right);
+  const epsX = epsilonFor(one.left, one.right, other.left, other.right);
+  const epsY = epsilonFor(one.top, one.bottom, other.top, other.bottom);
+  return (
+    one.left < other.right - epsX &&
+    other.left < one.right - epsX &&
+    one.top < other.bottom - epsY &&
+    other.top < one.bottom - epsY
+  );
+}
+
+function expectNoOverlaps(result: LayoutResult): void {
+  const nodes = [...result.nodes.values()];
+  for (let i = 0; i < nodes.length; i += 1) {
+    for (let j = i + 1; j < nodes.length; j += 1) {
+      const left = nodes[i];
+      const right = nodes[j];
+      if (left === undefined || right === undefined) throw new Error('unreachable');
+      expect(overlaps(left, right), `${left.id} overlaps ${right.id}`).toBe(false);
+    }
+  }
+}
+
+function expectBoundsEnclose(result: LayoutResult): void {
+  const { x, y, width, height } = result.bounds;
+  for (const node of result.nodes.values()) {
+    const { left, right, top, bottom } = box(node);
+    // `x + width` is not exactly the `maxX` it was derived from, so the same
+    // magnitude-scaled tolerance applies here as in `overlaps`.
+    const epsX = epsilonFor(left, right, x, x + width);
+    const epsY = epsilonFor(top, bottom, y, y + height);
+    expect(left).toBeGreaterThanOrEqual(x - epsX);
+    expect(right).toBeLessThanOrEqual(x + width + epsX);
+    expect(top).toBeGreaterThanOrEqual(y - epsY);
+    expect(bottom).toBeLessThanOrEqual(y + height + epsY);
+  }
+}
+
+/** One node per rank, in graph insertion order. Used to build multi-row cases. */
+const oneNodePerRank: RankStage = {
+  name: 'one-node-per-rank',
+  run(input) {
+    const ranks = new Map(input.graph.nodes().map((node, index) => [node.id, index]));
+    return { ...defaultStages.rank.run(input), ranks };
+  },
+};
+
+/** Puts the first two nodes on rank 0 and everything after them on rank 1. */
+const twoRowRank: RankStage = {
+  name: 'two-row-rank',
+  run(input) {
+    const ranks = new Map(input.graph.nodes().map((node, index) => [node.id, index < 2 ? 0 : 1]));
+    return { ...defaultStages.rank.run(input), ranks };
+  },
+};
+
+/** A graph of `ids`, with no edges, so a case is only about sizes. */
+function nodesOnly(ids: readonly string[]): Graph {
+  const graph = new Graph();
+  for (const id of ids) graph.addNode(id);
+  return graph;
+}
+
+describe('layout result', () => {
+  it('positions every node with its size', () => {
+    const result = layout({ graph: fanOut() });
+    expect([...result.nodes.keys()]).toEqual(['a', 'b', 'c']);
+    for (const node of result.nodes.values()) {
+      expect(node.width).toBe(100);
+      expect(node.height).toBe(40);
+    }
+  });
+
+  it('lays a single rank out left to right, centred on the origin', () => {
+    const result = layout({ graph: fanOut() });
+    expect(result.nodes.get('a')).toEqual({ id: 'a', x: -150, y: 20, width: 100, height: 40 });
+    expect(result.nodes.get('b')).toEqual({ id: 'b', x: 0, y: 20, width: 100, height: 40 });
+    expect(result.nodes.get('c')).toEqual({ id: 'c', x: 150, y: 20, width: 100, height: 40 });
+  });
+
+  it('routes every edge as two points at the endpoint centres', () => {
+    const result = layout({ graph: fanOut() });
+    expect([...result.edges.keys()]).toEqual(['ab', 'ac']);
+    expect(result.edges.get('ab')).toEqual({
+      id: 'ab',
+      source: 'a',
+      target: 'b',
+      points: [
+        { x: -150, y: 20 },
+        { x: 0, y: 20 },
+      ],
+    });
+    expect(result.edges.get('ac')?.points).toEqual([
+      { x: -150, y: 20 },
+      { x: 150, y: 20 },
+    ]);
+  });
+
+  it('encloses every node box in the bounds', () => {
+    const result = layout({ graph: fanOut() });
+    expect(result.bounds).toEqual({ x: -200, y: 0, width: 400, height: 40 });
+    expectBoundsEnclose(result);
+  });
+
+  it('never overlaps two node boxes', () => {
+    expectNoOverlaps(layout({ graph: fanOut() }));
+  });
+
+  it('stacks ranks downward without overlapping them', () => {
+    // The default ranker puts everything on rank 0, so a multi-rank layout
+    // needs a stage of its own. This doubles as a swappability check.
+    const byInsertion: RankStage = {
+      name: 'one-node-per-rank',
+      run(input) {
+        const ranks = new Map(input.graph.nodes().map((node, index) => [node.id, index]));
+        return { ...defaultStages.rank.run(input), ranks };
+      },
+    };
+    const result = layout({ graph: fanOut() }, { rank: byInsertion });
+    expect(result.nodes.get('a')?.y).toBe(20);
+    expect(result.nodes.get('b')?.y).toBe(110);
+    expect(result.nodes.get('c')?.y).toBe(200);
+    expect(result.nodes.get('a')?.x).toBe(0);
+    expect(result.bounds).toEqual({ x: -50, y: 0, width: 100, height: 220 });
+    expectNoOverlaps(result);
+    expectBoundsEnclose(result);
+  });
+
+  it('runs a route from source to target even when the ranker reversed the edge', () => {
+    // `points` runs from `source` to `target` as the caller authored them,
+    // whatever the ranker did to the edge to break a cycle. M4 and M5 draw an
+    // arrowhead at the last point, so a router that emitted target-first would
+    // put arrowheads on the wrong end for exactly the edges that were part of a
+    // cycle. `reversedEdges` is the router's bookkeeping, never the consumer's.
+    //
+    // The endpoint equality asserted below is a property of the DEFAULT router,
+    // which attaches routes at node centres, and it is tested here rather than
+    // checked in the runner for that reason: M2.8 attaches at box borders and
+    // the equality stops being true, while the source-to-target direction does
+    // not. A runner check that has to be deleted a milestone later is the
+    // failure mode this contract keeps having to avoid.
+    const reversingRank: RankStage = {
+      name: 'reversing-rank',
+      run: (input) => ({
+        ...defaultStages.rank.run(input),
+        ranks: new Map([
+          ['a', 1],
+          ['b', 0],
+          ['c', 1],
+        ]),
+        reversedEdges: new Set(['ab']),
+      }),
+    };
+    const result = layout({ graph: fanOut() }, { rank: reversingRank });
+    const a = result.nodes.get('a');
+    const b = result.nodes.get('b');
+    const points = result.edges.get('ab')?.points ?? [];
+    // The ranker really did put the target above the source.
+    expect(b?.y).toBeLessThan(a?.y ?? 0);
+    expect(points[0]).toEqual({ x: a?.x, y: a?.y });
+    expect(points.at(-1)).toEqual({ x: b?.x, y: b?.y });
+  });
+
+  it('lays out an empty graph without throwing', () => {
+    const result = layout({ graph: new Graph() });
+    expect(result.nodes.size).toBe(0);
+    expect(result.edges.size).toBe(0);
+    expect(result.bounds).toEqual({ x: 0, y: 0, width: 0, height: 0 });
+  });
+
+  it('centres a short node in a tall row rather than hanging it from the top', () => {
+    const sizes: Record<string, { width: number; height: number }> = {
+      short: { width: 100, height: 10 },
+      tall: { width: 100, height: 60 },
+      below: { width: 100, height: 40 },
+    };
+    const result = layout(
+      { graph: nodesOnly(['short', 'tall', 'below']), config: { nodeSize: (n) => sizes[n.id] } },
+      { rank: twoRowRank },
+    );
+    const short = result.nodes.get('short');
+    const tall = result.nodes.get('tall');
+    const below = result.nodes.get('below');
+    // One centre line for the row, set by the tallest node in it.
+    expect(short?.y).toBe(30);
+    expect(tall?.y).toBe(30);
+    expect(short?.y).toBe(tall?.y);
+    // Not flush with the row's top, which top-aligning would give as y = 5.
+    expect(short?.y).not.toBe(5);
+    // The next row starts rankSep below the first row's bottom, and the first
+    // row's height is the tallest node's, not the first node's.
+    expect((below?.y ?? 0) - (below?.height ?? 0) / 2).toBe(60 + 50);
+    expect(below?.y).toBe(130);
+    expectNoOverlaps(result);
+    expectBoundsEnclose(result);
+  });
+
+  it('accepts its own bounds when the hull arithmetic rounds', () => {
+    // The runner computes `bounds` and then asserts it encloses every box, so
+    // the tolerance in that assertion is load bearing on the runner's own
+    // output. `bounds.x` is minX and `bounds.width` is maxX - minX, so
+    // `x + width` is not always exactly the maxX it was derived from: these
+    // three widths at the default nodeSep leave the rightmost box 7.1e-15 past
+    // `x + width`. That is one bit of a double, not a node outside its bounds,
+    // and an exact comparison would reject this correct layout.
+    const widths: Record<string, number> = { one: 0.1, two: 0.2, three: 0.2 };
+    const result = layout({
+      graph: nodesOnly(['one', 'two', 'three']),
+      config: { nodeSize: (n) => ({ width: widths[n.id] ?? 0, height: 1 }) },
+    });
+    const right = Math.max(...[...result.nodes.values()].map((n) => n.x + n.width / 2));
+    expect(right).toBeGreaterThan(result.bounds.x + result.bounds.width);
+    expect(right - (result.bounds.x + result.bounds.width)).toBeLessThan(1e-12);
+    expectBoundsEnclose(result);
+  });
+
+  it('never overlaps boxes at sizes and separations that round badly', () => {
+    // The reviewer's counterexample: three boxes packed edge to edge at a scale
+    // where `(left + w / 2) + w / 2` loses the last bit, so box two's right
+    // edge lands 2.8e-17 past box three's left edge.
+    const widths: Record<string, number> = { one: 0.3, two: 0.2, three: 0.2 };
+    const result = layout({
+      graph: nodesOnly(['one', 'two', 'three']),
+      config: {
+        nodeSep: 0,
+        nodeSize: (n) => ({ width: widths[n.id] ?? 0, height: 0.1 }),
+      },
+    });
+    expectNoOverlaps(result);
+    expectBoundsEnclose(result);
+  });
+
+  it('holds the no-overlap and containment guarantees across sizes and separations', () => {
+    const cases: readonly {
+      readonly name: string;
+      readonly nodeSep: number;
+      readonly rankSep: number;
+      readonly sizes: Record<string, { width: number; height: number }>;
+      readonly rank: RankStage;
+    }[] = [
+      {
+        name: 'zero separations, mixed heights, one row',
+        nodeSep: 0,
+        rankSep: 0,
+        sizes: {
+          p: { width: 10, height: 1 },
+          q: { width: 3, height: 90 },
+          r: { width: 7, height: 5 },
+        },
+        rank: defaultStages.rank,
+      },
+      {
+        name: 'zero separations, mixed heights, one node per row',
+        nodeSep: 0,
+        rankSep: 0,
+        sizes: {
+          p: { width: 10, height: 1 },
+          q: { width: 3, height: 90 },
+          r: { width: 7, height: 5 },
+        },
+        rank: oneNodePerRank,
+      },
+      {
+        name: 'zero sizes',
+        nodeSep: 4,
+        rankSep: 4,
+        sizes: {
+          p: { width: 0, height: 0 },
+          q: { width: 0, height: 0 },
+          r: { width: 0, height: 0 },
+        },
+        rank: twoRowRank,
+      },
+      {
+        name: 'zero sizes and zero separations',
+        nodeSep: 0,
+        rankSep: 0,
+        sizes: {
+          p: { width: 0, height: 0 },
+          q: { width: 0, height: 0 },
+          r: { width: 0, height: 0 },
+        },
+        rank: twoRowRank,
+      },
+      {
+        name: 'a separation far below the coordinate scale',
+        nodeSep: 1e-9,
+        rankSep: 1e-9,
+        sizes: {
+          p: { width: 1e9, height: 1e9 },
+          q: { width: 1e9, height: 1e9 },
+          r: { width: 1e9, height: 1e9 },
+        },
+        rank: twoRowRank,
+      },
+      {
+        // The tall node is second in its row on purpose: a row height taken
+        // from the row's first node would put the next row on top of it.
+        name: 'wildly mixed heights over two rows',
+        nodeSep: 13,
+        rankSep: 0.5,
+        sizes: {
+          p: { width: 1, height: 0.5 },
+          q: { width: 500, height: 1000 },
+          r: { width: 2, height: 3 },
+        },
+        rank: twoRowRank,
+      },
+    ];
+    for (const testCase of cases) {
+      const result = layout(
+        {
+          graph: nodesOnly(['p', 'q', 'r']),
+          config: {
+            nodeSep: testCase.nodeSep,
+            rankSep: testCase.rankSep,
+            nodeSize: (n) => testCase.sizes[n.id],
+          },
+        },
+        { rank: testCase.rank },
+      );
+      expect(result.nodes.size, testCase.name).toBe(3);
+      expectNoOverlaps(result);
+      expectBoundsEnclose(result);
+      for (const node of result.nodes.values()) {
+        expect(Number.isFinite(node.x), `${testCase.name}: ${node.id} x`).toBe(true);
+        expect(Number.isFinite(node.y), `${testCase.name}: ${node.id} y`).toBe(true);
+      }
+    }
+  });
+
+  it('labels a routed edge from the graph, whatever the router thinks it routed', () => {
+    // A router doing reversal bookkeeping is the code most likely to hand back
+    // a flipped endpoint pair, and a consumer reading it would get a
+    // self-consistent edge that contradicts the graph it came from. The route
+    // stage's opinion is the polyline; the identity of what was routed is the
+    // graph's, so the runner takes it from there.
+    const confused: RouteStage = {
+      name: 'confused-route',
+      run(input) {
+        // Routes every edge backwards, which is the confusion a router doing
+        // reversal bookkeeping is most likely to have. It can express that in
+        // the polyline, and nowhere else: the labels are not its to write.
+        const routes = new Map<string, readonly Point[]>();
+        for (const edge of input.graph.edges()) {
+          const from = input.positions.get(edge.target);
+          const to = input.positions.get(edge.source);
+          if (from === undefined || to === undefined) throw new Error('unreachable');
+          routes.set(edge.id, [from, to]);
+        }
+        return { ...input, routes };
+      },
+    };
+    const result = layout({ graph: fanOut() }, { route: confused });
+    expect(result.edges.get('ab')).toMatchObject({ id: 'ab', source: 'a', target: 'b' });
+  });
+
+  it('rejects a route point that is not finite, naming the router', () => {
+    const infinite: RouteStage = {
+      name: 'infinite-route',
+      run(input) {
+        const routes = new Map<string, readonly Point[]>();
+        for (const edge of input.graph.edges()) {
+          routes.set(edge.id, [
+            { x: 0, y: 0 },
+            { x: Number.NaN, y: 0 },
+          ]);
+        }
+        return { ...input, routes };
+      },
+    };
+    try {
+      layout({ graph: fanOut() }, { route: infinite });
+    } catch (error) {
+      expect(error).toBeInstanceOf(StageContractError);
+      expect((error as StageContractError).stage).toBe('infinite-route');
+      return;
+    }
+    throw new Error('layout should have rejected the non-finite route point');
+  });
+
+  it('positions isolated nodes with no edges at all', () => {
+    const graph = new Graph();
+    graph.addNode('lonely');
+    graph.addNode('also-lonely');
+    const result = layout({ graph });
+    expect(result.edges.size).toBe(0);
+    expect(result.nodes.get('lonely')).toEqual({
+      id: 'lonely',
+      x: -75,
+      y: 20,
+      width: 100,
+      height: 40,
+    });
+    expectNoOverlaps(result);
+  });
+});

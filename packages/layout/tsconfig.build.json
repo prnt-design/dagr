@@ -6,7 +6,19 @@
     "outDir": "dist",
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    // The build emits from `src` alone, so the source `paths` entry for
+    // @dagr/graph is dropped here: pulling ../graph/src into the program would
+    // put files outside `rootDir`. The build resolves @dagr/graph through
+    // node_modules to its published types instead, which is why @dagr/graph is
+    // a real workspace dependency and pnpm builds it first.
+    // Consequence: @dagr/graph has to be built before this package. The root
+    // `pnpm build` handles that, because `pnpm -r` is topological and the
+    // dependency creates the edge. Building this package alone against a fresh
+    // clone (`pnpm --filter @dagr/layout build`) fails with TS2307 until
+    // @dagr/graph has a dist. TypeScript project references would make that
+    // self-healing and are the fix if per-package builds ever become routine.
+    "paths": {}
   },
   "include": ["src"],
   "exclude": ["test", "dist"]

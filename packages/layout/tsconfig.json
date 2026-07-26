@@ -2,7 +2,14 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
-    "types": ["node"]
+    "types": ["node"],
+    // The Dagr packages publish from dist, which does not exist in a fresh
+    // clone or in CI, where test runs before build. Typecheck therefore reads
+    // @dagr/graph straight from source, mirrored by the alias in
+    // vitest.config.ts.
+    "paths": {
+      "@dagr/graph": ["../graph/src/index.ts"]
+    }
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "vitest.config.ts"]
 }

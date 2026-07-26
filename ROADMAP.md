@@ -46,11 +46,12 @@ findings addressed or logged, docs land with the feature.
   sources/sinks, reachability. Property tests on random DAGs and random
   digraphs with cycles.
 - [ ] **M1.5** Serialization: `toJSON`/`fromJSON` with identity-preserving
-  round-trips, property-tested. Docusaurus API page for `@dagr/graph`.
+  round-trips, property-tested. Serialization section added to the graph model
+  docs page (the page itself shipped with M1.1).
 
 ## M2: Layout core (`@dagr/layout`)
 
-- [ ] **M2.1** Pipeline skeleton: `LayoutInput`/`LayoutResult` types, stage
+- [x] **M2.1** Pipeline skeleton: `LayoutInput`/`LayoutResult` types, stage
   interfaces (rank, order, position, route), a pipeline runner wiring
   pass-through stages, node size/spacing config. Tests for the plumbing.
   Decide here whether ports get attribute bags. `Port` is the only graph
@@ -70,6 +71,13 @@ findings addressed or logged, docs land with the feature.
 - [ ] **M2.4** Dummy-node chains: split long edges across ranks into virtual
   nodes, rejoin on output. Tests: chain integrity, no multi-rank edges reach
   later stages.
+  Prepared in M2.1, so this is a ranker change and not an interface change: the
+  pipeline works over a roster (the graph's nodes plus whatever the rank stage
+  declares in `RankedState.virtualNodes`), a declared dummy is checked exactly
+  as hard as a real node (rank, size, exactly one layer, a position), the
+  default order stage already places roster members, and the runner already
+  refuses to let a dummy reach `LayoutResult`. What is left here is the chain
+  splitting itself and rejoining the chain into a polyline on output.
 - [ ] **M2.5** Ordering v1: barycenter sweeps with median fallback, crossing
   counter as the metric. Tests on known small graphs with hand-counted
   crossings. Also measure adjacency allocation churn in the sweeps (every
@@ -82,13 +90,26 @@ findings addressed or logged, docs land with the feature.
   node overlaps, spacing respected.
 - [ ] **M2.8** Edge routing: polyline routes through dummy-node coordinates,
   monotone in the rank axis. Route invariant tests.
+  From the M2.1 algorithms review: this is where `bounds` stops being the hull
+  of the node boxes, because a route that goes around an obstacle can leave
+  them. The runner contracts containment rather than tightness for exactly that
+  reason. The durable formulation, worth adopting here, is the hull of the node
+  boxes and the route points, which is equivalent today and stays true after
+  this lands.
 - [ ] **M2.9** Golden corpus vs dagre: port a corpus of real graphs
   (including a prnt.design-shaped pattern-generator graph), assert
   structural parity metrics vs dagre output (rank counts, crossing counts
   within tolerance). First layout benchmarks (1k and 10k node graphs) with
   committed baselines.
 - [ ] **M2.10** Worker mode: same layout API sync or in a worker
-  (`layoutAsync`), transferable-friendly data. Docs page for `@dagr/layout`.
+  (`layoutAsync`), transferable-friendly data. Worker mode section added to the
+  layout docs page (the page itself shipped with M2.1).
+  From the M2.1 API review: the async entry point is the same
+  `createLayout({ stages, config })` engine as M3.2's `relayout` (see the note
+  there), as `engine.runAsync(graph)`. Keeping functions out of `LayoutInput` is
+  deliberate and this is why: that object crosses a worker boundary and has to
+  survive structured cloning, so stages and the `nodeSize` callback stay
+  arguments of the call and of the engine, never fields of the input.
 
 ## M3: Incremental layout
 
@@ -98,6 +119,31 @@ findings addressed or logged, docs land with the feature.
 - [ ] **M3.2** Patch-driven relayout: `relayout(prev, patch)` re-runs the
   pipeline warm-started from previous ordering; emits deltas. Stability
   metric (mean node displacement) asserted on a corpus.
+  Decided in the M2.1 API review, to be implemented here. The reviewer's
+  argument: a free `relayout(prev, patch)` can be handed stages or a config that
+  disagree with the run that produced `prev`, and the result is a silently wrong
+  answer rather than an error, because nothing in a `LayoutResult` records what
+  produced it. Separately, `LayoutResult` drops the ranks, layers and
+  `reversedEdges` that a warm start needs. The answer to both is one object
+  rather than two fixes: `relayout` arrives as part of a
+  `createLayout({ stages, config })` engine that binds stages and config once,
+  with `engine.run(graph)`, `engine.runAsync(graph)` (M2.10) and
+  `engine.relayout(patch)` on it. `layout()` stays as sugar for the one-shot
+  case.
+  The engine retains the final `RoutedState` internally, and that is where warm
+  start state comes from. This is exactly why `LayoutResult` was NOT given a
+  `state` carrier field in M2.1: the result stays small, serializable, and free
+  of a required field that every consumer would have to route around, and the
+  pipeline state stays where the thing that can use it lives. M2.1's fix 2 (the
+  route stage returning a `RoutedState`, with the runner assembling the
+  `LayoutResult` from it) is what makes retaining it cost nothing: the runner
+  already holds that record.
+  The engine was deliberately not built in M2.1. Nothing is published, so the
+  shape is not locked in, and a binding object with nothing yet to bind (no
+  `runAsync`, no `relayout`) is the speculative surface this project has twice
+  decided against. What M2.1 does ship is the name: `LayoutStageOverrides` is
+  exported and used in the `layout` signature, so the engine's `stages` argument
+  already has a public type.
 - [ ] **M3.3** Stable positions: untouched-subgraph detection; nodes outside
   the patch's influence keep their exact positions. Property tests: a
   no-op patch yields an empty delta.
@@ -149,6 +195,46 @@ findings addressed or logged, docs land with the feature.
   published maps do not point outside the tarball; per-package README and
   LICENSE so npm pages are not empty; pick a versioning/changelog tool
   (changesets is the default candidate).
+  Added after the M2.1 oss-docs review: pack every package and check the
+  tarballs resolve the way a consumer will, with `publint` and
+  `arethetypeswrong` per tarball, or a scratch project that installs them and
+  typechecks an `import { layout } from '@dagr/layout'`. Nothing in CI does
+  this today: typecheck reads sibling packages through tsconfig `paths`, tests
+  read them through a vitest alias, and the build reads them through the pnpm
+  workspace symlink, so a wrong `exports.types` or a missing `dist` in `files`
+  would pass all four steps. `@dagr/layout` is the first package whose public
+  types depend on another package resolving, which is what makes this real.
+  `@dagr/graph` is a peer dependency of `@dagr/layout` (see the M2.1 note
+  below), so the peer range is now the thing a consumer install can get wrong,
+  and still nothing in CI exercises it. Note also that `^0.1.0` on a 0.x package
+  means `>=0.1.0 <0.2.0`, so M1.2's breaking change to `addNode` and `addEdge`
+  forces a matching `@dagr/layout` release. Lockstep publishing is fine, it just
+  has to be a decision rather than a surprise.
+  Also from the M2.1 API review, and reversing a call the M2.1 oss-docs review
+  made: `@dagr/layout` declares `@dagr/graph` as a `peerDependency` plus a
+  `devDependency`, not a `dependency`. The oss-docs review judged a plain
+  dependency fine because nothing does `instanceof Graph`, which is true and is
+  not the failure mode. `Graph` uses `#private` fields, which makes it
+  nominally typed: two copies of `@dagr/graph` in a consumer's tree are not
+  interchangeable, and passing one copy's `Graph` where the other's is expected
+  fails to compile with "separate declarations of a private property '#nodes'".
+  `@dagr/graph` is all over this package's public surface (`LayoutInput.graph`,
+  `PreparedState.graph`, `LayoutConfig.nodeSize`) and every consumer constructs
+  the `Graph` itself, so the duplicate is reachable, and with a caret dependency
+  it is likely rather than theoretical during 0.x, because a caret does not
+  cross a 0.x minor. The `devDependency` keeps the workspace link and the
+  topological build ordering that `tsconfig.build.json` depends on; verified by
+  a cold `pnpm build` with both dists deleted, which still builds graph before
+  layout. Confirm at publish time that the peer range is right for the versions
+  actually being published.
+  Decide the source-map option and TypeScript project references together, they
+  are coupled: `composite: true` requires `declaration: true` and effectively
+  wants `declarationMap`, so taking the "drop declaration/source maps from
+  builds" option above would close the door on project references. References
+  are the self-healing fix for the fact that
+  `pnpm --filter @dagr/layout build` needs `@dagr/graph` built first (see the
+  comment in `packages/layout/tsconfig.build.json`). Not worth the machinery at
+  two packages, worth knowing about before the other decision is made.
 
 ## M6: VDSL = v0.2 (`@dagr/vdsl`)
 
