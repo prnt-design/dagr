@@ -1,3 +1,5 @@
+<p align="center"><img src="./assets/logo.svg" width="160" alt="Dagr logo"></p>
+
 # Dagr
 
 **Directed graph layout, WebGPU rendering, and visual DSLs.**
