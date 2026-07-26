@@ -10,6 +10,17 @@ import {
   PortNotFoundError,
 } from './errors.js';
 import type {
+  AddEdgeOp,
+  AddNodeOp,
+  AddPortOp,
+  Patch,
+  PatchListener,
+  PatchOp,
+  RemoveEdgeOp,
+  RemoveNodeOp,
+  RemovePortOp,
+} from './patch.js';
+import type {
   Attrs,
   AttrsPatch,
   Edge,
@@ -72,69 +83,115 @@ function emptyAttrs<A extends object>(): ReadAttrs<A> {
 }
 
 /**
- * Merges `patch` into `current`, returning a new frozen bag, or `undefined`
- * when the merge would change nothing.
+ * Freezes a bag and hands it back as a patch over the caller's attribute type.
+ *
+ * The counterpart of {@link sealAttrs}, and it needs an assertion for the same
+ * reason: {@link AttrsPatch} is a mapped type over an unresolved type
+ * parameter. The claim is true by construction here too, since every key came
+ * from an `AttrsPatch<A>` and every value is either one the caller supplied or
+ * one this module read back out of a bag those values built. A patch may hold
+ * an `undefined` value where a stored bag may not, which is why this is a
+ * second function rather than a call to `sealAttrs`.
+ */
+function sealPatch<A extends object>(bag: Record<string, unknown>): AttrsPatch<A> {
+  return Object.freeze(bag) as AttrsPatch<A>;
+}
+
+/**
+ * Stores a key on a bag under construction, defining rather than assigning.
+ *
+ * A plain `bag[key] = value` is an ordinary [[Set]], so a key of `__proto__`
+ * reaches the accessor on `Object.prototype` and reassigns the bag's prototype
+ * instead of storing an attribute: the value would vanish from `Object.keys`
+ * and `JSON.stringify`, the caller's own keys would read back through the bag,
+ * and `Object.hasOwn` could never see it, so no-op detection would rebuild the
+ * record on every repeat of the same patch. Defining the property does none of
+ * that, and it leaves deletes and `Object.hasOwn` comparisons working
+ * unchanged. Every bag built here from caller-supplied keys goes through this
+ * function or through `Object.fromEntries`, which also defines rather than
+ * sets.
+ */
+function define(bag: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(bag, key, { value, writable: true, enumerable: true, configurable: true });
+}
+
+/**
+ * What a merge did: the bag it produced, the keys it actually changed, and
+ * what those keys held before.
+ */
+interface AttrsDiff<A extends object> {
+  /** The new frozen bag. */
+  readonly merged: ReadAttrs<A>;
+  /** Exactly the keys that changed, at their new values. Frozen. */
+  readonly patch: AttrsPatch<A>;
+  /** The same keys at their prior values, `undefined` for absent. Frozen. */
+  readonly before: AttrsPatch<A>;
+}
+
+/**
+ * Merges `patch` into `current` and reports what changed, or `undefined` when
+ * the merge would change nothing.
  *
  * Reporting "no change" as `undefined` rather than returning `current` is what
  * lets every caller keep its record identity with a single comparison: a
  * record is rebuilt only when there is something to rebuild it for, which is
  * what makes `getNode(id) === previousNode` a usable "nothing changed here"
- * test. Values are compared with `Object.is`, so `NaN` matches itself and `0`
- * does not match `-0`.
+ * test. The same comparison decides whether a patch is emitted at all. Values
+ * are compared with `Object.is`, so `NaN` matches itself and `0` does not
+ * match `-0`.
  *
  * A key whose patch value is `undefined` is deleted rather than stored, so a
  * bag never holds an `undefined` value and `'k' in attrs` answers honestly.
- * Freezing is shallow: a nested object value is stored by reference and stays
- * the caller's to keep immutable.
+ * The two reported bags are the normalised description of that: they name only
+ * the keys that moved, and a key present with `undefined` means "absent", in
+ * `patch` a delete and in `before` a key that was not there. That is what makes
+ * swapping them a correct undo. Freezing is shallow: a nested object value is
+ * stored by reference and stays the caller's to keep immutable.
  *
  * O(size of the bag plus size of the patch).
  */
-function mergeAttrs<A extends object>(
+function diffAttrs<A extends object>(
   current: ReadAttrs<A>,
   patch: AttrsPatch<A>,
-): ReadAttrs<A> | undefined {
+): AttrsDiff<A> | undefined {
   // Both listings go through entries rather than a spread so that the generic
   // bag types widen to plain `unknown` values without an assertion.
   const held: [string, unknown][] = Object.entries(current);
   const patched: [string, unknown][] = Object.entries(patch);
   const merged: Record<string, unknown> = Object.fromEntries(held);
+  const effective: Record<string, unknown> = {};
+  const before: Record<string, unknown> = {};
   let changed = false;
 
   for (const [key, value] of patched) {
     if (value === undefined) {
       if (!Object.hasOwn(merged, key)) continue;
+      define(before, key, merged[key]);
+      define(effective, key, undefined);
       delete merged[key];
       changed = true;
       continue;
     }
     if (Object.hasOwn(merged, key) && Object.is(merged[key], value)) continue;
-    // Defined rather than assigned. A plain `merged[key] = value` is an
-    // ordinary [[Set]], so a key of `__proto__` reaches the accessor on
-    // `Object.prototype` and reassigns the bag's prototype instead of storing
-    // an attribute: the value would vanish from `Object.keys` and
-    // `JSON.stringify`, the caller's own keys would read back through the bag,
-    // and `Object.hasOwn` could never see it, so the no-op detection above
-    // would rebuild the record on every repeat of the same patch. Defining the
-    // property does none of that, and it leaves the delete branch and the
-    // `Object.hasOwn` comparison working unchanged. `Object.fromEntries` above
-    // already defines rather than sets, so this is the only site.
-    Object.defineProperty(merged, key, {
-      value,
-      writable: true,
-      enumerable: true,
-      configurable: true,
-    });
+    define(before, key, Object.hasOwn(merged, key) ? merged[key] : undefined);
+    define(effective, key, value);
+    define(merged, key, value);
     changed = true;
   }
 
-  return changed ? sealAttrs<A>(merged) : undefined;
+  if (!changed) return undefined;
+  return {
+    merged: sealAttrs<A>(merged),
+    patch: sealPatch<A>(effective),
+    before: sealPatch<A>(before),
+  };
 }
 
 /** The bag a freshly declared node or edge starts with. */
 function initialAttrs<A extends object>(patch: AttrsPatch<A> | undefined): ReadAttrs<A> {
   const empty = emptyAttrs<A>();
   if (patch === undefined) return empty;
-  return mergeAttrs(empty, patch) ?? empty;
+  return diffAttrs(empty, patch)?.merged ?? empty;
 }
 
 /**
@@ -197,6 +254,45 @@ function freezePort(init: PortInit): Port {
   return Object.freeze({ id: init.id, direction: init.direction ?? 'inout' });
 }
 
+/**
+ * The `add-node` or `remove-node` op for a node record.
+ *
+ * The record is spread rather than copied field by field, so the op carries the
+ * frozen bag and the frozen port array the record already holds: an op costs
+ * one small object and no deep copy, and the payload cannot drift out of step
+ * with the record shape.
+ */
+function nodeOp<A extends object>(
+  op: 'add-node' | 'remove-node',
+  node: Node<A>,
+): AddNodeOp<A> | RemoveNodeOp<A> {
+  return Object.freeze({ ...node, op });
+}
+
+/**
+ * The `add-edge` or `remove-edge` op for an edge record. Spread for the same
+ * reasons as {@link nodeOp}, with one more: an unbound end is an absent key on
+ * the record, and spreading is what keeps it absent rather than present and
+ * `undefined`, which is the distinction `exactOptionalPropertyTypes` draws and
+ * the one `invert` and `apply` both rely on.
+ */
+function edgeOp<A extends object>(
+  op: 'add-edge' | 'remove-edge',
+  edge: Edge<A>,
+): AddEdgeOp<A> | RemoveEdgeOp<A> {
+  return Object.freeze({ ...edge, op });
+}
+
+/** The `add-port` or `remove-port` op for a port at a known position. */
+function portOp(
+  op: 'add-port' | 'remove-port',
+  nodeId: NodeId,
+  port: Port,
+  index: number,
+): AddPortOp | RemovePortOp {
+  return Object.freeze({ op, nodeId, port, index });
+}
+
 /** The shorthand `addNode(id?)` form, read as the init form. */
 function normaliseNodeInit<A extends object>(
   idOrInit: NodeId | NodeInit<A> | undefined,
@@ -232,6 +328,11 @@ function normaliseNodeInit<A extends object>(
  * Attribute updates are copy on write: a record that changes is replaced by a
  * new frozen record, a record that does not change keeps its identity, and
  * changing one record never touches another.
+ *
+ * Every mutation that changes something emits one {@link Patch} to whatever
+ * {@link subscribe} registered, and a mutation that changes nothing emits
+ * none: the emission-side twin of the copy on write rule above. A graph nobody
+ * subscribed to keeps no journal and costs nothing for it.
  */
 export class Graph<
   NodeAttrs extends object = Attrs,
@@ -263,6 +364,14 @@ export class Graph<
    */
   readonly #nodeRank = new Map<NodeId, number>();
 
+  /**
+   * Patch listeners, in subscription order. A Set rather than an array, so
+   * subscribing the same function twice registers it once and unsubscribing is
+   * O(1). Empty on a graph nobody watches, which is what makes emission free
+   * for callers who do not want it: no journal is kept anywhere.
+   */
+  readonly #listeners = new Set<PatchListener<NodeAttrs, EdgeAttrs, GraphAttrs>>();
+
   /** Graph-level attributes. Frozen, replaced copy on write. */
   #attrs: ReadAttrs<GraphAttrs> = emptyAttrs<GraphAttrs>();
 
@@ -286,6 +395,28 @@ export class Graph<
   }
 
   /**
+   * Watches every mutation, and returns the function that stops watching.
+   *
+   * The listener is handed one frozen {@link Patch} per state-changing call,
+   * after that call is committed, so a listener reads a graph that already
+   * shows what the patch describes. A call that changes nothing emits nothing,
+   * so a listener never has to filter empty patches out for itself.
+   *
+   * Listeners run over a snapshot of the listener set, so a listener that
+   * subscribes or unsubscribes during emission changes who is called from the
+   * next patch rather than from the middle of this one. Every listener runs
+   * even if an earlier one throws: one error propagates as itself, several as
+   * an `AggregateError`, and either way the mutation stays committed.
+   * O(listener count) per mutation, and nothing at all with no listeners.
+   */
+  subscribe(listener: PatchListener<NodeAttrs, EdgeAttrs, GraphAttrs>): () => void {
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
+  }
+
+  /**
    * Graph-level attributes: the frozen bag, not a copy. Everything the graph
    * as a whole carries lives here, such as a layout direction, so a caller
    * does not have to invent a sentinel node to hang it on. O(1).
@@ -304,8 +435,14 @@ export class Graph<
    * caller's to keep immutable. O(size of the bag plus size of the patch).
    */
   updateAttrs(patch: AttrsPatch<GraphAttrs>): ReadAttrs<GraphAttrs> {
-    const merged = mergeAttrs(this.#attrs, patch);
-    if (merged !== undefined) this.#attrs = merged;
+    const diff = diffAttrs(this.#attrs, patch);
+    if (diff === undefined) return this.#attrs;
+    this.#attrs = diff.merged;
+    if (this.#observed) {
+      this.#emit([
+        Object.freeze({ op: 'update-graph-attrs', patch: diff.patch, before: diff.before }),
+      ]);
+    }
     return this.#attrs;
   }
 
@@ -346,6 +483,7 @@ export class Graph<
     this.#inEdges.set(resolved, new Set());
     this.#nodeRank.set(resolved, this.#nextNodeRank);
     this.#nextNodeRank += 1;
+    if (this.#observed) this.#emit([nodeOp('add-node', node)]);
     return node;
   }
 
@@ -392,8 +530,8 @@ export class Graph<
    */
   updateNodeAttrs(id: NodeId, patch: AttrsPatch<NodeAttrs>): Node<NodeAttrs> {
     const node = this.requireNode(id);
-    const attrs = mergeAttrs(node.attrs, patch);
-    if (attrs === undefined) return node;
+    const diff = diffAttrs(node.attrs, patch);
+    if (diff === undefined) return node;
     // The frozen array the old record already carries, passed straight through
     // rather than re-materialised from the port index: the ports did not
     // change, so the array must not change identity either. A cached array
@@ -401,10 +539,15 @@ export class Graph<
     // structure that can fall out of step with `#ports`, which is exactly what
     // the `#ports` comment above argues against. There is no lookup to guard
     // here either, because `requireNode` already proved the node exists.
-    const next = freezeNode(node.id, attrs, node.ports);
+    const next = freezeNode(node.id, diff.merged, node.ports);
     // Overwriting an existing key leaves a Map entry where it was, so this
     // cannot reorder anything a listing depends on.
     this.#nodes.set(id, next);
+    if (this.#observed) {
+      this.#emit([
+        Object.freeze({ op: 'update-node-attrs', id, patch: diff.patch, before: diff.before }),
+      ]);
+    }
     return next;
   }
 
@@ -418,12 +561,28 @@ export class Graph<
     const outgoing = this.#outEdges.get(id);
     const incoming = this.#inEdges.get(id);
     if (outgoing === undefined || incoming === undefined) throw new NodeNotFoundError(id);
-    for (const edgeId of [...outgoing, ...incoming]) this.#detachEdge(edgeId);
+    const node = this.requireNode(id);
+    const ops: PatchOp<NodeAttrs, EdgeAttrs, GraphAttrs>[] = [];
+    const observed = this.#observed;
+    for (const edgeId of [...outgoing, ...incoming]) {
+      const detached = this.#detachEdge(edgeId);
+      // A self loop is visited from both sides and detaches on the first, so
+      // the miss on the second is what keeps it out of the patch twice over.
+      if (observed && detached !== undefined) ops.push(edgeOp('remove-edge', detached));
+    }
     this.#outEdges.delete(id);
     this.#inEdges.delete(id);
     this.#ports.delete(id);
     this.#nodeRank.delete(id);
     this.#nodes.delete(id);
+    // The edge ops first, in detachment order, then the node op. Reversing
+    // that array is the undo: the node comes back before the edges that need
+    // it, and replaying it forwards never re-triggers the cascade, because the
+    // edges are already gone by the time the node op runs.
+    if (observed) {
+      ops.push(nodeOp('remove-node', node));
+      this.#emit(ops);
+    }
   }
 
   /** Every node, in insertion order, as a fresh array. O(nodeCount). */
@@ -451,6 +610,9 @@ export class Graph<
     ports.set(port.id, port);
     const next = freezeNode(node.id, node.attrs, ports);
     this.#nodes.set(nodeId, next);
+    // A new port always goes last, so its position is the one past the ports
+    // that were already declared.
+    if (this.#observed) this.#emit([portOp('add-port', nodeId, port, next.ports.length - 1)]);
     return next;
   }
 
@@ -473,12 +635,19 @@ export class Graph<
   removePort(nodeId: NodeId, portId: PortId): Node<NodeAttrs> {
     const node = this.requireNode(nodeId);
     const ports = this.#requirePorts(nodeId);
-    if (!ports.has(portId)) throw new PortNotFoundError(nodeId, portId);
+    const port = ports.get(portId);
+    if (port === undefined) throw new PortNotFoundError(nodeId, portId);
     const users = this.#edgesUsingPort(nodeId, portId);
     if (users.length > 0) throw new PortInUseError(nodeId, portId, users);
     ports.delete(portId);
     const next = freezeNode(node.id, node.attrs, ports);
     this.#nodes.set(nodeId, next);
+    // `node` is the record from before the removal and its port array is a
+    // frozen array of its own, so it still shows the position the port sat at
+    // even though the index it was materialised from has moved on.
+    if (this.#observed) {
+      this.#emit([portOp('remove-port', nodeId, port, node.ports.indexOf(port))]);
+    }
     return next;
   }
 
@@ -577,6 +746,7 @@ export class Graph<
     this.#edges.set(resolved, edge);
     outgoing.add(resolved);
     incoming.add(resolved);
+    if (this.#observed) this.#emit([edgeOp('add-edge', edge)]);
     return edge;
   }
 
@@ -619,17 +789,22 @@ export class Graph<
    */
   updateEdgeAttrs(id: EdgeId, patch: AttrsPatch<EdgeAttrs>): Edge<EdgeAttrs> {
     const edge = this.requireEdge(id);
-    const attrs = mergeAttrs(edge.attrs, patch);
-    if (attrs === undefined) return edge;
+    const diff = diffAttrs(edge.attrs, patch);
+    if (diff === undefined) return edge;
     const next = freezeEdge(
       edge.id,
       edge.source,
       edge.target,
-      attrs,
+      diff.merged,
       edge.sourcePort,
       edge.targetPort,
     );
     this.#edges.set(id, next);
+    if (this.#observed) {
+      this.#emit([
+        Object.freeze({ op: 'update-edge-attrs', id, patch: diff.patch, before: diff.before }),
+      ]);
+    }
     return next;
   }
 
@@ -666,12 +841,35 @@ export class Graph<
     this.#requireUsablePort(edge.source, sourcePort, 'source');
     this.#requireUsablePort(edge.target, targetPort, 'target');
 
-    if (sourcePort === edge.sourcePort && targetPort === edge.targetPort) return edge;
+    const movedSource = sourcePort !== edge.sourcePort;
+    const movedTarget = targetPort !== edge.targetPort;
+    if (!movedSource && !movedTarget) return edge;
     const next = freezeEdge(edge.id, edge.source, edge.target, edge.attrs, sourcePort, targetPort);
     // Overwriting an existing key leaves a Map entry where it was, and the
     // adjacency indexes hold edge ids rather than records, so neither the edge
     // listing order nor any node record moves.
     this.#edges.set(id, next);
+    if (this.#observed) {
+      // Normalised the same way an attribute diff is: an end that did not move
+      // is left out of both bags, and an end that is unbound is named with an
+      // explicit `undefined` rather than left out, so swapping the two bags is
+      // the undo. The keys are literals here, so there is no `__proto__` to
+      // guard against and a spread is enough to build them.
+      this.#emit([
+        Object.freeze({
+          op: 'update-edge-ports',
+          id,
+          patch: Object.freeze({
+            ...(movedSource ? { sourcePort } : {}),
+            ...(movedTarget ? { targetPort } : {}),
+          }),
+          before: Object.freeze({
+            ...(movedSource ? { sourcePort: edge.sourcePort } : {}),
+            ...(movedTarget ? { targetPort: edge.targetPort } : {}),
+          }),
+        }),
+      ]);
+    }
     return next;
   }
 
@@ -682,7 +880,8 @@ export class Graph<
    */
   removeEdge(id: EdgeId): void {
     if (!this.#edges.has(id)) throw new EdgeNotFoundError(id);
-    this.#detachEdge(id);
+    const detached = this.#detachEdge(id);
+    if (this.#observed && detached !== undefined) this.#emit([edgeOp('remove-edge', detached)]);
   }
 
   /** Every edge, in insertion order, as a fresh array. O(edgeCount). */
@@ -779,6 +978,42 @@ export class Graph<
    */
   degree(id: NodeId): number {
     return this.outDegree(id) + this.inDegree(id);
+  }
+
+  /**
+   * Whether anything is watching. Every emission site tests this before it
+   * builds its ops, so an unwatched graph pays one comparison per mutation and
+   * allocates nothing.
+   */
+  get #observed(): boolean {
+    return this.#listeners.size > 0;
+  }
+
+  /**
+   * Freezes the ops into a patch and hands it to every listener.
+   *
+   * The listener set is copied before the walk, so a listener that subscribes
+   * or unsubscribes during emission cannot change who this emission calls. Each
+   * listener is called inside a try, so one that throws does not swallow the
+   * ones after it, and the collected errors are rethrown afterwards: a single
+   * error as itself, so an `instanceof` check on the caller's side still works,
+   * and several as an `AggregateError`.
+   *
+   * Only reached when {@link Graph.#observed} is true, so there is no empty
+   * listener set to check for here.
+   */
+  #emit(ops: PatchOp<NodeAttrs, EdgeAttrs, GraphAttrs>[]): void {
+    const patch: Patch<NodeAttrs, EdgeAttrs, GraphAttrs> = Object.freeze(ops);
+    const failures: unknown[] = [];
+    for (const listener of [...this.#listeners]) {
+      try {
+        listener(patch);
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) throw new AggregateError(failures, 'patch listeners threw');
   }
 
   /** The out-edge index for a node that must exist. */
@@ -904,13 +1139,17 @@ export class Graph<
     return [...seen].sort((left, right) => this.#requireRank(left) - this.#requireRank(right));
   }
 
-  /** Drops an edge from the store and from both adjacency indexes. O(1). */
-  #detachEdge(id: EdgeId): void {
+  /**
+   * Drops an edge from the store and from both adjacency indexes, returning
+   * the record it removed so the caller can describe it in a patch, or
+   * `undefined` when there was nothing to remove. O(1).
+   */
+  #detachEdge(id: EdgeId): Edge<EdgeAttrs> | undefined {
     const edge = this.#edges.get(id);
     // Reachable and legitimate, do not turn this into a throw: removeNode
     // walks the out set and then the in set, so a self loop is visited twice
     // and the second visit correctly finds the edge already gone.
-    if (edge === undefined) return;
+    if (edge === undefined) return undefined;
     const outgoing = this.#outEdges.get(edge.source);
     const incoming = this.#inEdges.get(edge.target);
     // Unreachable: an edge is removed before either endpoint's index entry is,
@@ -921,6 +1160,7 @@ export class Graph<
     outgoing.delete(id);
     incoming.delete(id);
     this.#edges.delete(id);
+    return edge;
   }
 
   /**

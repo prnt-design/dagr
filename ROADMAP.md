@@ -39,9 +39,28 @@ findings addressed or logged, docs land with the feature.
   updates are copy on write. An updated record is a new object and unchanged
   records keep their identity, which makes `getNode(id) === previousNode` a
   valid "nothing changed here" test for React memoisation in M5.
-- [ ] **M1.3** Patches: every mutation emits a `Patch`; `apply(graph, patch)`
+- [x] **M1.3** Patches: every mutation emits a `Patch`; `apply(graph, patch)`
   reproduces the mutation; inverse patches for undo. Property-based tests
   (fast-check): patch/apply round-trips on random mutation sequences.
+  Decided here: `apply` restores content but not insertion order. A replayed
+  element is a new insertion and lands at the end of iteration order, which is
+  the determinism rule M1.1 already set rather than a shortcut taken in replay,
+  so the round-trip properties compare a normalised structural snapshot that
+  deliberately excludes order. `remove-port` records the `index` it was removed
+  from anyway, because that is part of an honest description of the mutation
+  and delta consumers want it even while `apply` appends. The reasoning is in
+  the `apply` docstring in `packages/graph/src/patch.ts`. Whether replay should
+  become order faithful is not decided here: it belongs to the first milestone
+  that needs it, which is M3, and the note is on M3.2 where a patch consumer
+  will find it.
+  Also decided: no batching or transaction API. One state-changing call emits
+  one patch, several mutations cannot be coalesced into one, and no listener
+  can see a half-finished edit. Nothing needs the coalesced form yet, and M3
+  incremental layout is what will say what shape it wants (how a batch
+  interacts with `invert`, whether a batch may span a failed call), so building
+  it now would be the speculative surface this project has twice decided
+  against. The addition is source compatible whenever it lands, so waiting
+  costs nothing.
 - [ ] **M1.4** Traversal and invariants: topological sort, cycle detection,
   sources/sinks, reachability. Property tests on random DAGs and random
   digraphs with cycles.
@@ -144,6 +163,19 @@ findings addressed or logged, docs land with the feature.
   decided against. What M2.1 does ship is the name: `LayoutStageOverrides` is
   exported and used in the `layout` signature, so the engine's `stages` argument
   already has a public type.
+  Order-faithful replay is decided here if anywhere, deferred from M1.3.
+  `apply(graph, patch)` restores a patch's content exactly but not insertion
+  order: a replayed element is a new insertion and lands at the end of
+  iteration order. That is invisible to a warm start driven from the retained
+  `RoutedState` above, and it is not invisible to a consumer that rebuilds a
+  graph by replaying patches into it, because ordering seeds from node
+  insertion order and adjacency, so the same content in a different order is a
+  different layout. If this task or M3.3's untouched-subgraph detection turns
+  out to need a replayed graph to iterate like the original, this is the point
+  to make replay order faithful; `remove-port` already carries the `index` such
+  a change would need, and the add ops would need the equivalent. If nothing
+  here needs it, leave `apply` as it is and say so, rather than carrying the
+  question further.
 - [ ] **M3.3** Stable positions: untouched-subgraph detection; nodes outside
   the patch's influence keep their exact positions. Property tests: a
   no-op patch yields an empty delta.

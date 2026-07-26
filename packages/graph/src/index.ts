@@ -14,6 +14,8 @@ export {
   isDagrGraphError,
 } from './errors.js';
 export type { DagrGraphErrorCode, DagrGraphErrorLike } from './errors.js';
+export { apply, invert } from './patch.js';
+export type { Patch, PatchListener, PatchOp } from './patch.js';
 export type {
   Attrs,
   AttrsPatch,

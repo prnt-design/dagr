@@ -19,7 +19,9 @@ later layout pass say "this is the same node, it moved" instead of handing the
 renderer a fresh set of coordinates.
 
 Nodes, edges, and the graph itself also carry attributes, and nodes may declare
-ports for edges to attach to. Both are described below.
+ports for edges to attach to. Every mutation emits a patch, the flat and
+invertible description of what that call did, so a consumer can follow the
+graph instead of polling it. All three are described below.
 
 ## Usage
 
@@ -318,6 +320,281 @@ port, `removeEdge` to drop it. The cascade already exists where it is
 unambiguous: `removeNode` takes the node, its ports, and every incident edge
 together, because there is no coherent graph left if it does not.
 
+## Patches
+
+Every state-changing call emits exactly one patch: an ordered, flat array of
+ops saying what that call did. A call that changes nothing emits nothing at
+all, not an empty patch.
+
+That second half is the emission-side twin of the copy-on-write identity rule
+the attributes section sets out. There, a merge that changes nothing hands back
+the record already held, so `updateNodeAttrs(id, patch) === previousNode` is a
+real "nothing happened" test. Here, the same comparison decides whether a patch
+is emitted, so a listener never has to filter no-ops out for itself. No change,
+no new record, no patch: one rule, seen from the store and from the wire.
+
+Flat means the array is ops and nothing else, with no nesting and no grouping.
+Cascade-free means an op names one thing and does one thing. `removeNode` takes
+its incident edges with it, so it emits a `remove-edge` op per edge followed by
+the `remove-node` op, rather than one op a consumer would have to expand for
+itself. Two things follow, and both are load bearing. Replaying such a patch
+never re-triggers the cascade, because the edges are already gone by the time
+the node op runs. And reversing the array is the right undo order, because the
+node comes back before the edges that need it to exist.
+
+| Function | Behaviour |
+| --- | --- |
+| `graph.subscribe(listener)` | Registers a patch listener and returns the function that unregisters it. O(1). |
+| `apply(graph, patch)` | Replays a patch onto a graph, op by op, in order. O(op count). |
+| `invert(patch)` | The patch that undoes `patch`. Pure. O(op count). |
+
+```ts
+type Patch<
+  NodeAttrs extends object = Attrs,
+  EdgeAttrs extends object = Attrs,
+  GraphAttrs extends object = Attrs,
+> = readonly PatchOp<NodeAttrs, EdgeAttrs, GraphAttrs>[];
+
+type PatchListener<
+  NodeAttrs extends object = Attrs,
+  EdgeAttrs extends object = Attrs,
+  GraphAttrs extends object = Attrs,
+> = (patch: Patch<NodeAttrs, EdgeAttrs, GraphAttrs>) => void;
+```
+
+`Patch` takes the same three attribute type parameters `Graph` does, in the
+same order and with the same defaults, so a `Graph<NodeAttrs, EdgeAttrs,
+GraphAttrs>` hands its listeners a `Patch<NodeAttrs, EdgeAttrs, GraphAttrs>`
+and the attribute bags inside the ops are typed rather than `unknown`. A patch
+is frozen, ops included, so it can be handed to several listeners and kept by
+any of them.
+
+### Subscribing
+
+`subscribe` returns its own unsubscribe function, so a caller never has to hold
+the listener to stop it. Nothing is journalled: a graph nobody subscribed to
+builds no ops at all, so watching is a cost you opt into.
+
+The clearest use is a second graph kept in step with the first, which is what
+incremental layout will do with the patches it is handed:
+
+```ts
+import { Graph, apply } from '@dagr/graph';
+
+const graph = new Graph();
+const mirror = new Graph();
+
+const stop = graph.subscribe((patch) => {
+  apply(mirror, patch);
+});
+
+graph.addNode({ id: 'ingest', attrs: { label: 'Ingest' } });
+graph.addNode({ id: 'parse', ports: [{ id: 'in', direction: 'in' }] });
+graph.addEdge({ source: 'ingest', target: 'parse', id: 'first', targetPort: 'in' });
+graph.updateNodeAttrs('ingest', { label: 'Ingest v2' });
+
+mirror.nodeCount; // 2
+mirror.edgeCount; // 1
+mirror.requireNode('ingest').attrs.label; // 'Ingest v2'
+mirror.requireNode('parse').ports; // [{ id: 'in', direction: 'in' }]
+
+graph.removeNode('parse'); // one patch: remove-edge, then remove-node
+mirror.nodeCount; // 1
+mirror.edgeCount; // 0
+
+stop(); // the mirror stops tracking here
+```
+
+`apply` is an ordinary caller of the public API, so the mirror emits its own
+patches as it is written to and can be subscribed to in turn. Nothing is
+transactional either: an op the graph rejects throws that graph error out of
+`apply`, with the ops before it already applied.
+
+### The ops
+
+`PatchOp` is a discriminated union on `op`, ten tags in all. Every op object,
+and every bag inside it, is frozen. The bags and port arrays are the same
+frozen references the records already hold, so an op costs one small object and
+no deep copy.
+
+| `op` | Payload | Emitted by |
+| --- | --- | --- |
+| `add-node` | `id`, `attrs`, `ports` | `addNode` |
+| `remove-node` | `id`, `attrs`, `ports` | `removeNode`, last in its patch |
+| `add-edge` | `id`, `source`, `target`, `attrs`, `sourcePort?`, `targetPort?` | `addEdge` |
+| `remove-edge` | `id`, `source`, `target`, `attrs`, `sourcePort?`, `targetPort?` | `removeEdge`, and `removeNode` once per incident edge |
+| `add-port` | `nodeId`, `port`, `index` | `addPort` |
+| `remove-port` | `nodeId`, `port`, `index` | `removePort` |
+| `update-node-attrs` | `id`, `patch`, `before` | `updateNodeAttrs` |
+| `update-edge-attrs` | `id`, `patch`, `before` | `updateEdgeAttrs` |
+| `update-graph-attrs` | `patch`, `before` | `updateAttrs` |
+| `update-edge-ports` | `id`, `patch`, `before` | `updateEdgePorts` |
+
+Each remove op carries everything its matching add op needs, which is what lets
+`invert` swap the tag and keep the payload. An unbound edge end is an absent
+key on `add-edge` and `remove-edge`, never a key present and `undefined`, the
+same distinction the edge records draw.
+
+Ports declared in `addNode({ ports })` ride along on the `add-node` op rather
+than arriving as separate `add-port` ops: one call, one op. `add-port` is what
+`addPort` emits, and its `index` is always the last position, because a new
+port goes last. `remove-port` records the index the port sat at before it went.
+
+Within a `removeNode` patch the edge ops come in detachment order, out-edges
+before in-edges and each group in edge insertion order, and then the node op.
+A self loop is incident to its node twice but is detached once, so it
+contributes one `remove-edge` op, not two.
+
+### Normalisation
+
+The four `update-*` ops carry two bags of the same shape. `patch` names exactly
+the keys that moved and holds their new values; `before` names the same keys
+and holds their prior values. A key present with the value `undefined` means
+"was absent", which is exactly what that value already means to
+`updateNodeAttrs` and friends: setting it deletes the key.
+
+```ts
+graph.updateNodeAttrs('a', { width: 120 });
+// { op: 'update-node-attrs', id: 'a', patch: { width: 120 }, before: { width: undefined } }
+
+graph.updateNodeAttrs('a', { width: 160, label: 'A' });
+// patch: { width: 160, label: 'A' }, before: { width: 120, label: undefined }
+
+graph.updateNodeAttrs('a', { width: undefined });
+// patch: { width: undefined }, before: { width: 160 }
+
+graph.updateNodeAttrs('a', { width: undefined }); // nothing changes, nothing emitted
+```
+
+Two halves matter here and both are enforced. Only keys that actually moved
+appear: a patch key set to the value already stored is left out of both bags,
+and if that leaves nothing, no op and no patch is emitted at all. And absence
+is spelled out rather than left out, so the two bags always name the same keys.
+
+That is what makes `invert` a swap. Exchanging `patch` and `before` gives an op
+that restores the prior state exactly, absences included, without anything
+having to consult the graph. `update-edge-ports` is normalised the same way
+over `sourcePort` and `targetPort`: an end that did not move is in neither bag,
+and an unbound end is named with an explicit `undefined`.
+
+### Inverting
+
+`invert(patch)` reverses the array and inverts each op. Adds and removes swap
+their tag and keep their payload; the four `update-*` ops swap their two bags.
+It is pure: the patch handed in is not touched, and the one handed back is
+frozen, ops included. `invert(invert(patch))` is structurally the patch you
+started with.
+
+The reversal is what makes an undo of a cascade land in the right order.
+`removeNode('b')` on a node with two incident edges emits three ops, the two
+`remove-edge`s first and `remove-node b` last. The inverse leads with
+`add-node b` and puts the two `add-edge`s after it: the node first, then the
+edges that need it to exist. An unreversed inverse would try to add an edge to
+a node that is not there yet.
+
+```ts
+import { apply, invert } from '@dagr/graph';
+import type { Patch } from '@dagr/graph';
+
+const undo: Patch[] = [];
+const stop = graph.subscribe((patch) => {
+  undo.push(invert(patch));
+});
+
+graph.removeNode('parse'); // takes its incident edges with it
+
+stop(); // so that undoing does not record its own undo
+
+const last = undo.pop();
+if (last !== undefined) apply(graph, last); // the node and its edges are back
+```
+
+### Applying, and what replay does not restore
+
+`apply` restores content exactly. Every node, edge, port, and attribute comes
+back with the same ids and the same values, and edges keep their endpoints and
+their port bindings. It does not restore insertion order.
+
+A replayed element takes its place at the end of iteration order, exactly as it
+would if the caller had re-added it by hand, because that is what happened.
+Iteration order is a function of insertion history, the determinism section
+says so already ("a node or edge that is removed and added again counts as a
+new insertion, so it moves to the end of iteration order"), and a replayed or
+inverted patch is new insertion history. Undoing `removeNode('a')` on a graph
+of `a`, `b`, `c` therefore gives you a graph of `b`, `c`, `a`.
+
+```ts
+const patches: Patch[] = [];
+const stop = graph.subscribe((patch) => {
+  patches.push(patch);
+});
+
+graph.nodes().map((node) => node.id); // ['a', 'b', 'c']
+graph.removeNode('a');
+stop();
+
+const removal = patches[0];
+if (removal !== undefined) apply(graph, invert(removal));
+
+graph.nodes().map((node) => node.id); // ['b', 'c', 'a'], same content, new order
+```
+
+`remove-port` records the `index` the port sat at anyway, and that is not an
+oversight. The index is part of an honest description of what the mutation did,
+and a consumer tracking positions (a renderer holding a port row per node, say)
+needs it whether or not `apply` uses it. Today `apply` appends. Whether replay
+should become order faithful is a decision for the first milestone that needs
+it, which is incremental layout, and it is recorded on the roadmap rather than
+guessed at here.
+
+### Listener semantics
+
+**Patches arrive after the call is committed.** A listener reads a graph that
+already shows everything the patch describes, and the ops it is handed describe
+the transition it just missed, not one about to happen.
+
+**Every listener runs, in subscription order, even if one throws.** The errors
+are collected and rethrown after the walk: one error propagates as itself, so
+an `instanceof` check on the caller's side still works, and several as an
+`AggregateError` whose `errors` holds them in listener order. The mutation
+stays committed either way. A throwing listener is a broken listener, not a
+rolled back mutation.
+
+**Emission runs over a snapshot of the listener set.** A listener that
+subscribes or unsubscribes during an emission changes who is called from the
+next patch, not from the middle of this one, so a listener list edited mid
+emission can neither skip a listener nor call one twice. Subscribing the same
+function twice registers it once.
+
+**A listener that mutates the graph is served depth first.** This one is worth
+tracing, because the ordering surprises. A mutation made from inside a listener
+is an ordinary mutation: it commits, and then it emits, immediately, inside the
+call the listener is still sitting in. The nested patch reaches every listener,
+the mutating one included, before the outer emission resumes. So with listeners
+`A` then `B`, where `A` responds to `add-node a` by adding `b`:
+
+```
+A sees add-node a      the outer patch
+A sees add-node b      the nested patch, delivered inside A's own call
+B sees add-node b      the nested patch, still inside A's call
+A returns
+B sees add-node a      the outer patch, last
+```
+
+`B` sees the effect before the cause. Nothing queues, coalesces, or defers, and
+there is no re-entrancy guard, so a listener that mutates on every patch will
+recurse until the stack gives out. Two smaller consequences fall out of the
+same trace: a listener subscribed during the outer emission misses the outer
+patch but does receive the nested one, since the nested emission takes its own
+snapshot, and an error thrown during a nested emission propagates out of the
+mutating call, which means an uncaught one is collected by the outer emission
+and rethrown from the outer mutation.
+
+Mirroring is unaffected by all of this, because the listener mutates a
+different graph. If you do have to mutate the graph you are listening to, and
+the order other listeners observe matters, record the work and do it after the
+emission rather than inline.
+
 ## Methods
 
 ### Counts
@@ -508,11 +785,18 @@ same ids in the same order.
 
 ## Not here yet
 
-Patches and undo, traversal (topological sort, cycle detection, reachability),
-and `toJSON`/`fromJSON` are all separate tasks. See
+Traversal (topological sort, cycle detection, reachability) and
+`toJSON`/`fromJSON` are separate tasks. See
 [ROADMAP.md](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md) for the
 order they arrive in. Until then the graph is identity, shape, adjacency,
-attributes, and ports.
+attributes, ports, and patches.
+
+Patches describe single calls. There is no batching or transaction API, so
+several mutations cannot be coalesced into one patch, and no listener sees a
+half-finished edit: each call commits and emits on its own. That is deliberate
+rather than pending. Nothing needs the coalesced form yet, and incremental
+layout is what will say what shape it wants, so inventing it now would be
+guessing in the same way a port attribute bag would have been.
 
 Ports carry an id and a direction, and nothing else. Port attribute bags are a
 deliberate later decision rather than an omission: layout is what will first

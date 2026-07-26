@@ -8,6 +8,9 @@ import type {
   EdgeInit,
   Node,
   NodeInit,
+  Patch,
+  PatchListener,
+  PatchOp,
   Port,
   PortDirection,
   PortInit,
@@ -53,8 +56,32 @@ describe('@dagr/graph public surface', () => {
       'PortDirectionError',
       'PortInUseError',
       'PortNotFoundError',
+      'apply',
+      'invert',
       'isDagrGraphError',
     ]);
+  });
+
+  it('exports the patch functions and types', () => {
+    expect(typeof api.apply).toBe('function');
+    expect(typeof api.invert).toBe('function');
+
+    const source = new api.Graph();
+    const mirror = new api.Graph();
+    const log: Patch[] = [];
+    const listener: PatchListener = (patch) => {
+      log.push(patch);
+      api.apply(mirror, patch);
+    };
+    const unsubscribe = source.subscribe(listener);
+    source.addNode('a');
+    unsubscribe();
+
+    const ops: PatchOp[] = [...(log[0] ?? [])];
+    expect(ops.map((op) => op.op)).toEqual(['add-node']);
+    expect(mirror.hasNode('a')).toBe(true);
+    api.apply(mirror, api.invert(log[0] ?? []));
+    expect(mirror.hasNode('a')).toBe(false);
   });
 
   it('exports the DagrGraphErrorCode type, and every code is a member of it', () => {
