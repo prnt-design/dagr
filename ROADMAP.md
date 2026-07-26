@@ -111,6 +111,23 @@ findings addressed or logged, docs land with the feature.
   default order stage already places roster members, and the runner already
   refuses to let a dummy reach `LayoutResult`. What is left here is the chain
   splitting itself and rejoining the chain into a polyline on output.
+  Decide here, and no later, whether the four stage interfaces should return
+  only their own contribution rather than the whole next record. Raised by the
+  M2.2 API review against `rank.ts`, which ends
+  `return { ...input, ranks, reversedEdges, virtualNodes: new Set() }`: the
+  spread carries back `graph`, `config` and `sizes` that the stage has no
+  opinion about, and `virtualNodes` is a required field a pre-M2.4 ranker has
+  nothing to say about. The proposal is a `RankOutput` (and three siblings)
+  holding that stage's fields alone, with the runner merging into the `...State`
+  record, which leaves the extends-chain and everything a stage can READ exactly
+  as it is, and makes `checkGraphKept` dead code because replacing the graph
+  stops being representable. It was not done in M2.2 because it is a breaking
+  change to all four public stage interfaces and M2.2's increment was the
+  algorithm; doing both in one run would have made the diff hard to review and
+  neither change would have been judged on its own. The reviewer's timing
+  argument is why it is pinned here rather than left open: M2.4 is the first
+  milestone where a real stage populates `virtualNodes` and `sizes`, and after
+  that the migration stops being mechanical.
 - [ ] **M2.5** Ordering v1: barycenter sweeps with median fallback, crossing
   counter as the metric. Tests on known small graphs with hand-counted
   crossings. Also measure adjacency allocation churn in the sweeps (every

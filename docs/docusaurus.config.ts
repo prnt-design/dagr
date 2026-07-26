@@ -15,6 +15,10 @@ const config: Config = {
   projectName: 'dagr',
 
   onBrokenLinks: 'throw',
+  // Anchors default to `warn`, which passes CI silently. The layout page now
+  // cross-references its own sections heavily enough that a typo'd anchor is a
+  // real risk, and a warning nobody reads is not a check.
+  onBrokenAnchors: 'throw',
   markdown: {
     hooks: {
       onBrokenMarkdownLinks: 'throw',

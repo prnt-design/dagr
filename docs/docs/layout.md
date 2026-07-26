@@ -164,8 +164,11 @@ simple condensation, where every edge from one ordered pair collapses into one
 arc whose weight is how many there were, and the decision is taken per pair.
 Two copies of `a -> b` are therefore never split, one reversed and one not,
 which would put a two-cycle straight back into the view that is supposed to be
-acyclic. The weighting also picks the cheaper cut: three edges one way against
-one the other reverses the one.
+acyclic. The weighting is also what lets the heuristic prefer the cheaper cut:
+three edges one way against one the other reverses the one. Prefer, not
+guarantee. The weights feed the `outdeg - indeg` key the heuristic picks on,
+they do not make it minimise reversed weight, and in a larger graph the cheaper
+direction of a pair can still end up the one running backwards.
 
 ### Ranking
 
@@ -173,17 +176,23 @@ Over that view, a node with nothing pointing at it gets rank 0, and every other
 node sits one rank below the lowest node that points at it. Two properties fall
 out, and both are relied on:
 
-- **Minimum height.** The last rank is the number of edges on the longest path
-  in the acyclic view, which is a lower bound for any ranking that sends every
-  edge down at least one rank. No layering of this graph has fewer layers.
+- **Minimum height, for that view.** The last rank is the number of edges on
+  the longest path in the acyclic view, which is a lower bound for any ranking
+  of that view that sends every edge down at least one rank. No layering of the
+  view has fewer layers. The scope matters as soon as the input has a cycle:
+  the view depends on which edges cycle breaking chose, and the heuristic is
+  bounded on how many it reverses, not on the longest path it leaves behind. A
+  different feedback arc set can leave a shallower drawing, and nothing here
+  optimises for that.
 - **Contiguity.** The ranks used are exactly `0..max`, with no gaps, because a
   node at rank `r` only got there from a predecessor at rank `r - 1`. The order
   stage turns ranks into layers and the runner rejects an empty layer, so a gap
   would surface there.
 
 Every edge that is neither reversed nor a self loop runs **strictly** down:
-`rank(source) < rank(target)`. A reversed edge runs strictly up. The runner's
-own check is the weaker `<=`, because a self loop puts both ends on one rank and
+`rank(source) < rank(target)`. A reversed edge runs strictly up.
+[The runner's own check](#the-stage-contract) is the weaker `<=`, because a self
+loop puts both ends on one rank and
 because M2.4's long edges will legitimately span several, but this stage means
 the strict form and its tests assert it.
 
@@ -192,7 +201,7 @@ What longest path does not give is minimum total edge length. `a -> d` alongside
 pinned as far down as it can go rather than as far up. That is a quality problem
 rather than a correctness one, and it is what M2.3's rank tightening is for.
 
-### What `reversedEdges` means for you
+### What `reversedEdges` means if you are reading a result
 
 Nothing, and that is deliberate. A `RoutedEdge` runs from its `source` to its
 `target` as **you** authored them, whatever the ranker did to break a cycle, so
@@ -202,14 +211,23 @@ the router, it does not appear in a `LayoutResult` at all, and a consumer that
 found itself consulting it would be working around a bug rather than using an
 API.
 
+Writing a stage rather than reading a result puts you on the other side of that
+line, and there `reversedEdges` is yours to honour: it is the only thing that
+tells a router an edge was ranked the other way up, and emitting that route
+target-first is exactly how the guarantee above gets broken. The runner cannot
+check it for you. See
+[Obligations the runner cannot check](#obligations-the-runner-cannot-check).
+
 ### Determinism and cost
 
 Both steps are O(V + E) in time and space. Cycle breaking gets there by keeping
 vertices in degree buckets rather than rescanning what is left each round, and
-ranking is a Kahn-style sweep that visits each node and edge once; a 10k-node,
-40k-edge graph ranks in tens of milliseconds. Both are fully deterministic:
-vertices are numbered in `graph.nodes()` order, edges are walked in
-`graph.edges()` order, and ties fall to whichever node the graph saw first.
+ranking is a Kahn-style sweep that visits each node and edge once. No timing
+figure is quoted here because none is measured yet: M2.9 commits benchmark
+baselines at 1k and 10k nodes, and until it does the complexity is the claim.
+Both steps are fully deterministic: vertices are numbered in `graph.nodes()`
+order, edges are walked in `graph.edges()` order, and a tie is broken by bucket
+arrival order, which is itself fixed by the graph's order.
 Determinism here is load bearing rather than tidy, for the reason in
 [Determinism](#determinism): a ranker that resolved a tie differently on a
 re-run would move nodes the user never touched.
@@ -307,7 +325,7 @@ After the **rank** stage:
   not reversed, `rank(target) <= rank(source)` for one that was. Less-or-equal
   rather than strictly-less, because a self loop puts both endpoints on one
   rank, and after M2.4 a long edge legitimately spans several. The default
-  ranker is strictly stricter than this and its own tests say so, see
+  ranker is strictly stronger than this and its own tests say so, see
   [Ranking](#ranking); the contract stays weak because a third-party ranker with
   a self loop to place has nowhere else to put it.
 
@@ -587,9 +605,9 @@ try {
 One of the four default stages is a layout algorithm. The other three are
 placeholders:
 
-| Stage | `name` | What it does today | What replaces it |
+| Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
-| rank | `longest-path-rank` | Breaks cycles with a greedy feedback arc set, then ranks by longest path. Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). | Rank tightening on top of it, not a replacement (M2.3), and dummy chains for long edges (M2.4). |
+| rank | `longest-path-rank` | Breaks cycles with a greedy feedback arc set, then ranks by longest path. Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). | Rank tightening (M2.3) and dummy chains for long edges (M2.4). |
 | order | `insertion-order` | Groups the roster by rank, orders each layer by graph insertion order. | Barycenter sweeps with a crossing counter (M2.5), then transpose refinement (M2.6). |
 | position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. | Brandes-Koepf horizontal coordinate assignment (M2.7). |
 | route | `straight-route` | A straight two-point line between the endpoint centres. | Polylines through dummy-node coordinates, monotone in the rank axis (M2.8). |
