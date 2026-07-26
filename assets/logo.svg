@@ -2,13 +2,13 @@
   <title id="dagr-logo-title">Dagr</title>
 
   <!--
-    Dagr — the smallest interesting directed acyclic graph, drawn at daybreak.
+    Dagr: the smallest interesting directed acyclic graph, drawn at daybreak.
 
       rank 0   the sun, rising through the horizon: the source node
       rank 1   two nodes, one per path
       rank 2   one sink, where the paths join again
 
-    The horizon is also rank 0's layout line — every edge drops from beneath
+    The horizon is also rank 0's layout line: every edge drops from beneath
     it, the way a Sugiyama layout hangs each rank off the one above. Edges are
     tapered beams, wide at the source and narrow at the target, so direction
     is carried by the geometry itself instead of by arrowheads; they read as
@@ -25,7 +25,7 @@
     and pale toward the horizon (#FFC15C, only 1.61:1 on white), so the lower
     half of its curved edge could not hold itself against a white page. That
     glow is the whole point of the mark on dark, so rather than cool it down,
-    the sun is rimmed in the horizon's own colour — the line it is rising
+    the sun is rimmed in the horizon's own colour: the line it is rising
     through, carried up and around the edge. The rim keeps the interior glow
     untouched and puts a 4.23:1 boundary between the sun and the page.
   -->
@@ -52,7 +52,7 @@
     </linearGradient>
   </defs>
 
-  <!-- ═══ edges — drawn first, so the horizon and the nodes seat on top ═══ -->
+  <!-- ═══ edges, drawn first, so the horizon and the nodes seat on top ═══ -->
   <g fill="url(#dagr-edge) #8C5AD8">
     <!-- source → left node -->
     <path d="M45.97 40.4 28.82 73.24 31.18 74.76 54.03 45.6Z"/>
@@ -64,7 +64,7 @@
     <path d="M94.66 70.84 62.98 109.04 65.02 110.96 101.34 77.16Z"/>
   </g>
 
-  <!-- ═══ rank 0 — the sun, and the horizon it is rising through ═══ -->
+  <!-- ═══ rank 0: the sun, and the horizon it is rising through ═══ -->
   <!-- a disc truncated well below its own equator, so the silhouette turns
        back in at the cut: that is what reads as a sunrise, not as an arch -->
   <path d="M51.15 40a19 19 0 1 1 25.7 0Z" fill="url(#dagr-sun) #F2622E"/>
@@ -75,7 +75,7 @@
   <!-- the horizon, chisel-flared at both ends -->
   <path d="M32 40h64l4 4H28Z" fill="#D94A2B"/>
 
-  <!-- ═══ ranks 1 and 2 — the nodes ═══ -->
+  <!-- ═══ ranks 1 and 2: the nodes ═══ -->
   <g fill="url(#dagr-node) #6E56F0">
     <path d="M30 62 42 74 30 86 18 74Z"/>
     <path d="M98 62 110 74 98 86 86 74Z"/>

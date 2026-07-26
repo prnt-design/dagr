@@ -35,15 +35,25 @@ pnpm build
 - Major-version dependency bumps.
 - Editing `LICENSE`, `AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md`, or
   anything under `.claude/`.
-- Changing `version` or publish config in any `package.json`.
+- Changing `version` or publish config in an existing `package.json`
+  (creating a new package with an initial version is normal work).
 
 ## Commit convention
 
 - Conventional-commit subjects.
-- Author identity is the repo-configured `Dagr Agent` identity, not the
-  human maintainer's.
+- Author identity is the repo-local `user.name "Dagr Agent"`,
+  `user.email "agent@prnt.design"` identity, not the human maintainer's.
+  This is configured in the repo-local git config. If it is unset in your
+  checkout, set it there (repo-local, never global) before committing.
 - Trailer `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` on agent
   commits.
+
+## Writing style
+
+No em-dashes in any prose written for this project: code comments, docs,
+commit messages, notifications, and brain entries all included. Use
+commas, colons, parentheses, or separate sentences instead. This applies
+to every agent working in this repo, including implementation subagents.
 
 ## Cadence
 
