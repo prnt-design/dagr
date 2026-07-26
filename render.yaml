@@ -20,7 +20,7 @@ services:
     # Skip deploys for commits that cannot change the site. Paths are globs
     # relative to the repo root.
     buildFilter:
-      included:
+      paths:
         - docs/**
         - package.json
         - pnpm-lock.yaml
