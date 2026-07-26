@@ -7,8 +7,10 @@ const config: Config = {
   tagline: 'Directed graph layout, WebGPU rendering, and visual DSLs',
   favicon: 'img/favicon.svg',
 
-  url: 'https://prnt-design.github.io',
-  baseUrl: '/dagr/',
+  // Served from its own domain on Render, so the site sits at the root rather
+  // than under a GitHub Pages project subpath.
+  url: 'https://dagr.prnt.design',
+  baseUrl: '/',
   organizationName: 'prnt-design',
   projectName: 'dagr',
 
