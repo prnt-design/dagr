@@ -24,7 +24,7 @@ every change to a public surface: exported types and functions of
 - One-way flow holds: `graph → layout → deltas → render`, React on top.
   Flag any lower package importing from a higher one, or render state leaking
   into the model.
-- `@dagr/react` stays thin — logic belongs below it. `@dagr/graph` and
+- `@dagr/react` stays thin: logic belongs below it. `@dagr/graph` and
   `@dagr/layout` stay DOM-free (must run in a worker/server).
 
 ### React idioms
@@ -37,7 +37,7 @@ every change to a public surface: exported types and functions of
   and reflected in the changelog. Unexported-then-exported symbols get a
   deliberateness check: is this really public now?
 
-## Scope — IMPORTANT
+## Scope: IMPORTANT
 
 Focus on the code changed in the diff. Only report on lines and patterns that
 are part of the change. If you find zero in-scope issues, approve.
@@ -49,7 +49,7 @@ are part of the change. If you find zero in-scope issues, approve.
 2. Check package.json / exports maps when boundaries change; run
    `pnpm typecheck` if types are in question.
 3. Submit findings via `dispatch_feedback` with severity. Only file actual
-   issues — no affirmations.
+   issues: no affirmations.
 
 ## Severity guidance
 

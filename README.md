@@ -16,11 +16,11 @@ WebGPURenderer, SDF shapes, spring physics) and a React component on top.
 
 | Package | What |
 | --- | --- |
-| `@dagr/graph` | Typed directed graph model — patches, stable identity, zero deps |
+| `@dagr/graph` | Typed directed graph model: patches, stable identity, zero deps |
 | `@dagr/layout` | Headless Sugiyama layout engine; incremental, animation-first |
-| `@dagr/render` | WebGPU renderer — SDF shapes, instancing, spring animation |
+| `@dagr/render` | WebGPU renderer: SDF shapes, instancing, spring animation |
 | `@dagr/react` | `<DagrCanvas>` component and hooks |
-| `@dagr/vdsl` | (v0.2) Visual DSL toolkit — node schemas, ports, drag-to-connect |
+| `@dagr/vdsl` | (v0.2) Visual DSL toolkit: node schemas, ports, drag-to-connect |
 
 ## License
 

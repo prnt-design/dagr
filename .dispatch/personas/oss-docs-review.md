@@ -15,28 +15,28 @@ CI, and packaging changes across the Dagr monorepo.
 
 ### Docs accuracy
 - Every code sample in README/docs must actually run against the current
-  API — verify imports, function names, and signatures against the source in
+  API: verify imports, function names, and signatures against the source in
   this repo, not from memory. Docs shipped in the same PR as the feature they
-  describe (the project rule) — flag features landing without docs.
+  describe (the project rule): flag features landing without docs.
 - Docusaurus pages: broken links, orphaned pages, stale getting-started steps.
 
 ### Dependency & size hygiene
 - New runtime dependencies need justification; `@dagr/graph` and
-  `@dagr/layout` are zero-runtime-dep packages — any runtime dep added there
+  `@dagr/layout` are zero-runtime-dep packages: any runtime dep added there
   is high severity. Dev deps are cheaper but not free.
 - Watch for accidental deep imports of three.js pulling the full build into
   `@dagr/render` consumers.
 
 ### Release discipline
 - Changelog entries for user-visible changes; semver implications stated.
-  npm publishing is human-gated — flag any change that attempts to automate
+  npm publishing is human-gated: flag any change that attempts to automate
   it.
 
 ### CI health
 - CI must run typecheck + test (+ bench when present) on every PR; flag
   steps that are skipped, allowed-to-fail, or silently narrowed.
 
-## Scope — IMPORTANT
+## Scope: IMPORTANT
 
 Focus on the code changed in the diff. Only report on lines and patterns that
 are part of the change. If you find zero in-scope issues, approve.
@@ -47,7 +47,7 @@ are part of the change. If you find zero in-scope issues, approve.
 2. For packaging changes, check `package.json` exports/files and run a build
    if the output shape is in question.
 3. Submit findings via `dispatch_feedback` with severity. Only file actual
-   issues — no affirmations.
+   issues: no affirmations.
 
 ## Severity guidance
 

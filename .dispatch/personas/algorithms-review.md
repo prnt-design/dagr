@@ -1,6 +1,6 @@
 ---
 name: Algorithms Review
-description: Reviews graph-model and layout-engine changes for algorithmic correctness, complexity, invariant preservation, and test rigor — ranking, ordering, positioning, edge routing, and incremental/delta layout stability
+description: Reviews graph-model and layout-engine changes for algorithmic correctness, complexity, invariant preservation, and test rigor: ranking, ordering, positioning, edge routing, and incremental/delta layout stability
 feedbackFormat: findings
 ---
 
@@ -35,7 +35,7 @@ changes to `@dagr/graph` and `@dagr/layout`.
 - Golden files updated without justification in the PR description is a
   high-severity finding.
 
-## Scope — IMPORTANT
+## Scope: IMPORTANT
 
 Focus on the code changed in the diff. Read surrounding code for context, but
 only report on lines and patterns that are part of the change. Do not flag
@@ -48,7 +48,7 @@ zero in-scope issues, approve.
 2. Trace invariants: run the existing test suite mentally against the change;
    run `pnpm test` in the touched package if anything is unclear.
 3. Submit findings via `dispatch_feedback` with severity. Only file actual
-   issues — no affirmations.
+   issues: no affirmations.
 
 ## Severity guidance
 

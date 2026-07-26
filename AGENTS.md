@@ -5,7 +5,7 @@
 Dagr is built primarily by an autonomous engineering agent: commits to `main`
 are authored by that agent, running one increment per day, with a human
 maintainer (Nii Yeboah, contact@niiyeboah.com) checking in on progress and
-gating anything irreversible. This file is the agent's own onboarding doc —
+gating anything irreversible. This file is the agent's own onboarding doc:
 keep it short and current.
 
 ## Commands
@@ -24,7 +24,7 @@ pnpm build
 
 - Implementation, tests, docs, and demos.
 - Refactors scoped within a single package.
-- Merge to `main` — but only with a green typecheck and test run, and bench
+- Merge to `main`, but only with a green typecheck and test run, and bench
   results within 10% of baseline.
 
 ## What agents must NOT do (queue for the human instead)
