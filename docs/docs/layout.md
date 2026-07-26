@@ -55,8 +55,8 @@ in graph insertion order, and `bounds` is computed the same way on every run.
 
 Each record extends the one before it and adds that stage's own output, so
 `RoutedState` still carries the graph, the config, the sizes, the ranks, the
-layers, and the positions. A stage can read everything computed upstream of it, and nothing has
-to be threaded around out of band.
+layers, and the positions. A stage can read everything computed upstream of it,
+and nothing has to be threaded around out of band.
 
 **The five records are named `...State`, not `...Layout`.** They are the
 accumulating state that flows between stages, and only a stage author ever names

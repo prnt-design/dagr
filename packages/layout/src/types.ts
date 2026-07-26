@@ -26,10 +26,13 @@ export interface Rect {
  * before any stage sees it.
  *
  * Sizes arrive through the `nodeSize` callback rather than off the node record
- * on purpose. `@dagr/graph` has no attribute bags yet (they land in M1.2), and
- * even once it does, a node's drawn size belongs to whoever is drawing it, not
- * to the graph. Keeping it a callback means layout never reaches into a node
- * for anything but its id.
+ * on purpose. `@dagr/graph` has attribute bags as of M1.2, and a node's drawn
+ * size still does not belong in one: it belongs to whoever is drawing it, not
+ * to the graph. A caller who does keep sizes in attributes reads them straight
+ * off the node the callback is handed, which is their convention rather than
+ * this package's. Keeping it a callback means layout never reaches into a node
+ * for anything but its id, so no attribute key is reserved and no graph has to
+ * be shaped a particular way to be laid out.
  */
 export interface LayoutConfig {
   /** Minimum gap between two node boxes side by side in a layer. Default 50. */
