@@ -10,13 +10,25 @@
  * restores its own prototype explicitly, so `instanceof` stays correct even
  * when the output is downlevelled below the ES2022 target.
  *
- * The two members cover the two ways a layout run can go wrong: the caller
- * handed in nonsense ({@link InvalidConfigError}), or a stage did not hold up
- * its end of the pipeline contract ({@link StageContractError}).
+ * The three members cover the three ways a layout run can go wrong, split by
+ * whose bug each one is: the caller handed in nonsense
+ * ({@link InvalidConfigError}), a stage did not hold up its end of the pipeline
+ * contract ({@link StageContractError}), or this package broke one of its own
+ * invariants ({@link InternalLayoutError}). Sorting them that way is the point
+ * of having three rather than one, because it is the only question a caller
+ * catching one actually has to answer: fix the input, fix the stage, or file
+ * the bug.
  */
 
-/** The `code` of every error the layout pipeline throws. */
-export type DagrLayoutErrorCode = 'INVALID_CONFIG' | 'STAGE_CONTRACT';
+/**
+ * The `code` of every error the layout pipeline throws.
+ *
+ * Widening this union is a breaking change for a caller with an exhaustive
+ * `switch`, which is exactly the caller the `code` discriminant exists to
+ * serve. Adding a member is therefore something to do before v0.1 rather than
+ * after.
+ */
+export type DagrLayoutErrorCode = 'INVALID_CONFIG' | 'STAGE_CONTRACT' | 'INTERNAL';
 
 /**
  * Base class for every error the layout pipeline throws. Abstract on purpose,
@@ -107,5 +119,38 @@ export class StageContractError extends DagrLayoutError {
     super(`Layout stage "${stage}" left work undone for "${id}": ${detail}`);
     this.name = 'StageContractError';
     Object.setPrototypeOf(this, StageContractError.prototype);
+  }
+}
+
+/**
+ * Thrown when the pipeline catches itself breaking one of its own invariants:
+ * an index into one of its internal arrays with nothing at it, a rank sweep
+ * that could not reach every node, `bounds` that do not enclose the drawing it
+ * just computed them from, a cycle breaker with no vertex left to pick.
+ *
+ * This is always a bug in `@dagr/layout`, never in the caller and never in a
+ * caller-supplied stage. That is the whole reason it is not a
+ * {@link StageContractError}: that class names a stage, and naming one here
+ * would pin this package's mistake on whoever happened to be plugged in when it
+ * surfaced. Nothing a caller does to their graph, their config, or their stages
+ * can produce one, so there is nothing for them to fix. Report it.
+ *
+ * It is a member of the family rather than a bare `Error` because a caller
+ * wrapping `layout` wants one `catch` and one `switch`, and an invariant
+ * failure escaping as something outside the union would fall out of the bottom
+ * of that switch silently, which is the shape of bug that gets a crash reported
+ * as "layout returned nothing".
+ *
+ * `detail` is the invariant, phrased as what was observed rather than as what
+ * was expected, because the observation is the part that narrows down where to
+ * look.
+ */
+export class InternalLayoutError extends DagrLayoutError {
+  readonly code = 'INTERNAL';
+
+  constructor(readonly detail: string) {
+    super(`Layout invariant broken: ${detail}. This is a bug in @dagr/layout.`);
+    this.name = 'InternalLayoutError';
+    Object.setPrototypeOf(this, InternalLayoutError.prototype);
   }
 }

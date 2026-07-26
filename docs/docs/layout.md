@@ -140,8 +140,18 @@ other way, using the greedy heuristic of Eades, Lin and Smyth (1993). It builds
 a vertex order by repeatedly moving a sink to the front of a tail sequence, a
 source to the back of a head sequence, and, when it has neither, the vertex
 maximising `outdeg - indeg` to the back of the head sequence. Every edge running
-backwards in the finished order is in the set. On a simple digraph without self
-loops the result is proved to satisfy `|F| <= m/2 - n/6`, which is what makes it
+backwards in the finished order is in the set.
+
+**What the bound actually says.** The paper proves `|F| <= m/2 - n/6` for a
+digraph with **no two-cycles**, which is a stronger hypothesis than being simple
+and self loop free, and Dagr's inputs routinely have two-cycles. Two nodes
+pointing at each other are `n = 2`, `m = 2`, `|F| = 1` against a bound of
+`0.667`. The `n/6` term is earned per vertex removed with arcs still attached,
+so isolated vertices inflate `n` for free and a sparse graph can miss the bound
+with no two-cycle in it either: a 3-cycle plus two lone nodes is `|F| = 1`
+against `0.667`. The term only starts to say anything once `m >= n/3`. What is
+claimed here, and what the tests assert, is the `m/2` half alone, which survives
+every input above and the weighting below. Half a bound is still what makes this
 worth more than the back edges of a depth-first search: DFS reverses whatever
 its traversal order happens to meet, with no bound at all.
 
@@ -192,9 +202,8 @@ out, and both are relied on:
 Every edge that is neither reversed nor a self loop runs **strictly** down:
 `rank(source) < rank(target)`. A reversed edge runs strictly up.
 [The runner's own check](#the-stage-contract) is the weaker `<=`, because a self
-loop puts both ends on one rank and
-because M2.4's long edges will legitimately span several, but this stage means
-the strict form and its tests assert it.
+loop puts both ends on one rank and because M2.4's long edges will legitimately
+span several, but this stage means the strict form and its tests assert it.
 
 What longest path does not give is minimum total edge length. `a -> d` alongside
 `a -> b -> c -> d` leaves `a -> d` spanning three ranks, and a node with slack is
@@ -214,9 +223,9 @@ API.
 Writing a stage rather than reading a result puts you on the other side of that
 line, and there `reversedEdges` is yours to honour: it is the only thing that
 tells a router an edge was ranked the other way up, and emitting that route
-target-first is exactly how the guarantee above gets broken. The runner cannot
-check it for you. See
-[Obligations the runner cannot check](#obligations-the-runner-cannot-check).
+target-first is exactly how the guarantee above gets broken. The runner checks
+the direction for you as of M2.2, in a form that survives M2.8's border
+attachment. See [Route direction](#route-direction).
 
 ### Determinism and cost
 
@@ -353,12 +362,14 @@ After the **route** stage:
   reason the config rejects them: they do not fail, they propagate through every
   later sum and surface as a scene that will not draw, with nothing to say which
   stage minted them. Cheap today, when a polyline is two copied endpoints, and
-  doing real work from M2.8, when it becomes computed geometry.
+  doing real work from M2.8, when it becomes computed geometry;
+- every polyline runs the right way round: its first point is at least as close
+  to its edge's `source` as to its `target`, and its last point at least as
+  close to the `target` as to the `source`. See
+  [Route direction](#route-direction) for why the form is proximity and not
+  equality.
 
-### Obligations the runner cannot check
-
-One rule for route stages is not on the list above, because nothing enforces it.
-It is still a rule, and a third-party router has to follow it:
+### Route direction
 
 **A polyline runs from its edge's `source` to its `target`, as the caller
 authored them, even when the ranker reversed the edge to break a cycle.** A
@@ -368,15 +379,29 @@ M5 both will) then puts arrowheads on the wrong end for exactly the edges that
 were part of a cycle. `reversedEdges` is the router's bookkeeping and never the
 consumer's.
 
-The runner could check the weak form of this today, comparing the first and last
-points against the endpoint positions, because routes still run centre to
-centre. It deliberately does not. M2.8 attaches routes at box borders and routes
-them around obstacles, so that check would have to be relaxed one milestone
-later, and a contract that loses rules is worse than one that never claimed
-them. What the runner does instead is take the identity of the edge out of the
-router's hands entirely: a route stage returns polylines, and `id`, `source` and
-`target` on the finished `RoutedEdge` are copied from the graph. A confused
-router can draw a backwards line. It cannot mislabel one.
+This was an unchecked rule until M2.2, and for a good reason: `reversedEdges`
+was always empty, so no router could get it wrong. Now one can, and the failure
+is silent two packages downstream, so the runner checks it.
+
+**What it checks is proximity, not equality.** Comparing the endpoints of the
+polyline against the two node positions for equality is the obvious form, and it
+is the wrong one: M2.8 attaches routes at box borders and detours them around
+obstacles, so an equality check would have to be relaxed one milestone later,
+and a contract that loses rules is worse than one that never claimed them.
+Proximity survives border attachment and detours alike, because a route that
+leaves its source's border and arrives at its target's is still nearer its own
+node at each end. The comparison is not strict, so a self loop passes: both of
+its ends are the same node and every distance in the comparison is equal.
+
+**What is still not checked is the shape between the endpoints.** A route may
+wander anywhere it likes on the way, and the runner has no opinion about it. Nor
+does it check that a polyline is monotone in the rank axis, which is what M2.8
+will produce and which no rule here demands.
+
+The runner also takes the identity of the edge out of the router's hands
+entirely: a route stage returns polylines, and `id`, `source` and `target` on
+the finished `RoutedEdge` are copied from the graph. A confused router cannot
+mislabel an edge, and as of M2.2 it cannot quietly draw a backwards one either.
 
 Node completeness and `bounds` are not on this list, and stopped being checks
 when the runner took over assembling the result. There is no route stage output
@@ -385,8 +410,8 @@ box, and is still the zero rectangle when there are no nodes, and the runner
 asserts all three over its own output before returning; the containment
 comparison carries a tolerance scaled to the magnitude of the coordinates, for
 the floating point reason in [Overlap, exactly](#overlap-exactly). A failure
-there would be a bug in this package rather than in a stage, so it throws a
-plain `Error` and not a `StageContractError`.
+there would be a bug in this package rather than in a stage, so it throws an
+`InternalLayoutError` and not a `StageContractError`, which names a stage.
 
 ## Usage
 
@@ -582,6 +607,10 @@ the whole thing and every member carries a `code`.
 | `DagrLayoutError` | abstract | Base class, abstract, never thrown directly. |
 | `InvalidConfigError` | `INVALID_CONFIG` | A separation or a size is not a finite number that is zero or greater. Carries `field` (a path such as `nodeSize("n1").width`) and the offending `value`. |
 | `StageContractError` | `STAGE_CONTRACT` | A stage broke one of the rules in [The stage contract](#the-stage-contract). Carries the offending stage's `name`, the `id` it dropped, and a `detail`. A few checks are about the record as a whole rather than one id, and use a plain label instead: `graph`, or `layer 3`. |
+| `InternalLayoutError` | `INTERNAL` | The pipeline caught itself breaking one of its own invariants. Carries a `detail`. Always a bug in `@dagr/layout`, never in your graph, your config, or a stage you supplied, which is why it is not a `StageContractError`: that class names a stage, and naming one here would blame whoever was plugged in. Nothing to fix on your side. Please report it. |
+
+The three sort by whose bug it is, which is the only question a caller catching
+one has to answer: fix the input, fix the stage, or file the bug.
 
 ```ts
 import { DagrLayoutError } from '@dagr/layout';
@@ -594,6 +623,8 @@ try {
       case 'INVALID_CONFIG':
         break;
       case 'STAGE_CONTRACT':
+        break;
+      case 'INTERNAL':
         break;
     }
   }

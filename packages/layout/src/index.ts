@@ -8,7 +8,12 @@ export { DEFAULT_LAYOUT_CONFIG } from './config.js';
 // working when the default behind one of its four properties changes, which is
 // what M2.2 did to `rank`.
 export { defaultStages } from './stages.js';
-export { DagrLayoutError, InvalidConfigError, StageContractError } from './errors.js';
+export {
+  DagrLayoutError,
+  InternalLayoutError,
+  InvalidConfigError,
+  StageContractError,
+} from './errors.js';
 export type { DagrLayoutErrorCode } from './errors.js';
 export type {
   LayoutConfig,

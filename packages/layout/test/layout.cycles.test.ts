@@ -91,6 +91,48 @@ describe('feedbackArcSet', () => {
     expect([...feedbackArcSet(graph)]).toEqual([]);
   });
 
+  // Parallel edges must not fool the breaker into cutting a DAG. The degree
+  // bookkeeping is weighted: removing a vertex drops each neighbour's degree by
+  // the number of arcs between them, not by one. Dropping by one leaves `b`
+  // holding an in-degree of 1 after `a` goes, so `b` is never recognised as a
+  // source, the run falls through to the delta bucket, and the order that comes
+  // out puts `c` before `b`, which reverses `b -> c` in a graph with no cycle in
+  // it at all. The doubled edges at both ends are what make that visible.
+  it('is not fooled into cutting an acyclic graph by parallel edges', () => {
+    const graph = build(
+      ['a', 'b', 'c', 'd'],
+      [
+        ['a', 'b', 'ab1'],
+        ['a', 'b', 'ab2'],
+        ['b', 'c', 'bc'],
+        ['c', 'd', 'cd1'],
+        ['c', 'd', 'cd2'],
+      ],
+    );
+    expect([...feedbackArcSet(graph)]).toEqual([]);
+  });
+
+  // A self loop is skipped when the condensation is built, and not only because
+  // it is never reversed. A loop adds one to BOTH of its vertex's degrees, so it
+  // leaves `outdeg - indeg` alone and still pushes the vertex out of the sink
+  // and source bins into a delta bucket. Counting the loops here would stop `c`
+  // being a source, get it picked late, and put `c` behind `b` in the order,
+  // which reverses `c -> b` in a graph whose only cycles are the loops
+  // themselves.
+  it('is not fooled into cutting an acyclic graph by self loops', () => {
+    const graph = build(
+      ['a', 'b', 'c'],
+      [
+        ['a', 'a', 'aa'],
+        ['b', 'a', 'ba1'],
+        ['b', 'a', 'ba2'],
+        ['c', 'b', 'cb'],
+        ['c', 'c', 'cc'],
+      ],
+    );
+    expect([...feedbackArcSet(graph)]).toEqual([]);
+  });
+
   it('breaks a two-node cycle with exactly one edge', () => {
     const graph = build(
       ['a', 'b'],
@@ -166,6 +208,28 @@ describe('feedbackArcSet', () => {
       ],
     );
     expect([...feedbackArcSet(graph)]).toEqual(['ba']);
+  });
+
+  // The tie-break the module documents, for the one case where a vertex's
+  // degrees change and its bucket does not. Taking the sink drops `early`'s
+  // out-degree from 2 to 1, which leaves it a source, so it keeps its place at
+  // the head of the source queue ahead of `late`. Move it to the back instead
+  // and `late` is taken first, the two delta-bucket vertices arrive in the
+  // other order, and the cycle between `x` and `y` is cut on its other arc.
+  // Both answers break the cycle with one edge; only one of them is the same
+  // answer twice, which is what M3 relayout rests on.
+  it('keeps a vertex in place when its degrees change but its bucket does not', () => {
+    const graph = build(
+      ['early', 'sink', 'x', 'y', 'late'],
+      [
+        ['early', 'sink', 'early-sink'],
+        ['x', 'y', 'xy'],
+        ['y', 'x', 'yx'],
+        ['early', 'y', 'early-y'],
+        ['late', 'x', 'late-x'],
+      ],
+    );
+    expect([...feedbackArcSet(graph)]).toEqual(['xy']);
   });
 
   it('leaves a digraph an independent topological sort can order', () => {

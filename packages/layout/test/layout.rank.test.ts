@@ -281,12 +281,14 @@ describe('longestPathRankStage', () => {
     // The one failure this stage can suffer that is nobody else's fault, so it
     // is unreachable without replacing the cycle breaker: a breaker that
     // reverses nothing leaves the sweep with two nodes that each wait on the
-    // other. It throws a plain `Error` rather than a `StageContractError`,
-    // which would name a stage the caller supplied for a bug in this one.
+    // other. It throws an `InternalLayoutError` rather than a
+    // `StageContractError`, which would name a stage the caller supplied for a
+    // bug in this one.
     vi.resetModules();
     vi.doMock('../src/cycles.js', () => ({ feedbackArcSet: () => new Set<EdgeId>() }));
     try {
       const { longestPathRankStage: stage } = await import('../src/rank.js');
+      const { InternalLayoutError: Internal } = await import('../src/errors.js');
       const graph = build(
         ['a', 'b'],
         [
@@ -294,7 +296,8 @@ describe('longestPathRankStage', () => {
           ['b', 'a', 'ba'],
         ],
       );
-      expect(() => stage.run(prepare(graph))).toThrow(/^layout invariant: 2 of 2 nodes/);
+      expect(() => stage.run(prepare(graph))).toThrow(/2 of 2 nodes could not be ranked/);
+      expect(() => stage.run(prepare(graph))).toThrow(Internal);
       expect(() => stage.run(prepare(graph))).not.toThrow(StageContractError);
     } finally {
       vi.doUnmock('../src/cycles.js');

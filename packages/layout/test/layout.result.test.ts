@@ -378,29 +378,32 @@ describe('layout result', () => {
   });
 
   it('labels a routed edge from the graph, whatever the router thinks it routed', () => {
-    // A router doing reversal bookkeeping is the code most likely to hand back
-    // a flipped endpoint pair, and a consumer reading it would get a
-    // self-consistent edge that contradicts the graph it came from. The route
-    // stage's opinion is the polyline; the identity of what was routed is the
-    // graph's, so the runner takes it from there.
-    const confused: RouteStage = {
-      name: 'confused-route',
+    // The route stage's opinion is the polyline; the identity of what was
+    // routed is the graph's, so the runner takes it from there rather than
+    // letting a router state it and possibly state it wrongly.
+    //
+    // The polyline here wanders a long way off before arriving, which is a
+    // router with opinions rather than a router with a bug: the runner has
+    // nothing to say about the shape between the endpoints. The one route
+    // property it does check is direction, and a router that emits a reversed
+    // edge target-first is rejected at the boundary rather than labelled
+    // helpfully, which is layout.contract.test.ts's business.
+    const scenic: RouteStage = {
+      name: 'scenic-route',
       run(input) {
-        // Routes every edge backwards, which is the confusion a router doing
-        // reversal bookkeeping is most likely to have. It can express that in
-        // the polyline, and nowhere else: the labels are not its to write.
         const routes = new Map<string, readonly Point[]>();
         for (const edge of input.graph.edges()) {
-          const from = input.positions.get(edge.target);
-          const to = input.positions.get(edge.source);
+          const from = input.positions.get(edge.source);
+          const to = input.positions.get(edge.target);
           if (from === undefined || to === undefined) throw new Error('unreachable');
-          routes.set(edge.id, [from, to]);
+          routes.set(edge.id, [from, { x: from.x + 1e4, y: from.y - 1e4 }, to]);
         }
         return { ...input, routes };
       },
     };
-    const result = layout({ graph: fanOut() }, { route: confused });
+    const result = layout({ graph: fanOut() }, { route: scenic });
     expect(result.edges.get('ab')).toMatchObject({ id: 'ab', source: 'a', target: 'b' });
+    expect(result.edges.get('ab')?.points).toHaveLength(3);
   });
 
   it('rejects a route point that is not finite, naming the router', () => {

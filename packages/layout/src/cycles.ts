@@ -1,4 +1,5 @@
 import type { EdgeId, Graph, NodeId } from '@dagr/graph';
+import { InternalLayoutError } from './errors.js';
 
 /**
  * Cycle breaking for the rank stage: the greedy feedback-arc-set heuristic of
@@ -30,7 +31,7 @@ const NONE = -1;
  */
 function at<T>(values: readonly T[], index: number): T {
   const value = values[index];
-  if (value === undefined) throw new Error(`layout invariant: no entry at index ${String(index)}`);
+  if (value === undefined) throw new InternalLayoutError(`no entry at index ${String(index)}`);
   return value;
 }
 
@@ -47,14 +48,27 @@ function at<T>(values: readonly T[], index: number): T {
  * sequence, and when neither exists the vertex maximising `outdeg - indeg` goes
  * to the back of the head sequence. Head then tail is the order.
  *
- * On a simple digraph with no self loops the paper proves the result satisfies
- * `|F| <= m/2 - n/6`, which is why this heuristic is worth preferring to the
- * DFS back-edge set that a naive cycle breaker produces: a DFS reverses
- * whatever its traversal order happens to hit, with no bound at all. The `m/2`
- * half of the bound survives the weighting below, by the argument that carries
- * the proof: the deltas of the remaining vertices always sum to zero, so the
- * greedy pick has `indeg <= outdeg` and adds no more backward arcs than
- * forward ones, and sinks and sources add no backward arcs at all.
+ * ## What is actually guaranteed
+ *
+ * The paper proves `|F| <= m/2 - n/6` for a digraph with NO TWO-CYCLES, an
+ * oriented graph, which is a stronger hypothesis than being simple and self
+ * loop free. A digon breaks it outright, and Dagr's inputs are full of digons:
+ * this module's own `breaks a two-node cycle with exactly one edge` test has
+ * `n = 2`, `m = 2` and `|F| = 1` against a bound of `2/2 - 2/6 = 0.667`. The
+ * `n/6` term is also earned per vertex removed with arcs still attached, so a
+ * vertex with no arcs left inflates `n` for free and a sparse graph can miss
+ * the bound without a digon anywhere: a 3-cycle plus two isolated vertices is
+ * `|F| = 1` against `1.5 - 0.833 = 0.667`. It only starts to say anything once
+ * `m >= n/3`.
+ *
+ * So what is claimed here, and what the tests assert, is the `m/2` half alone.
+ * That half survives both the weighting below and every input above, by the
+ * argument that carries the proof: the deltas of the remaining vertices always
+ * sum to zero, so the greedy pick has `indeg <= outdeg` and adds no more
+ * backward arcs than forward ones, and sinks and sources add no backward arcs
+ * at all. Half is still worth having, and is still the reason to prefer this to
+ * the DFS back-edge set a naive cycle breaker produces: a DFS reverses whatever
+ * its traversal order happens to hit, with no bound at all.
  *
  * ## Complexity
  *
@@ -65,6 +79,15 @@ function at<T>(values: readonly T[], index: number): T {
  * bucket only ever walks down as far as it was pushed up. A rescan per round
  * would be O(V * E), which is the difference between laying out a 10k-node
  * graph and not.
+ *
+ * `graph.edges()` is walked twice per call, once to build the condensation and
+ * once to collect the feedback set, off one materialised array. Taking the
+ * nodes and edges as parameters instead, so that the rank stage could share the
+ * arrays it materialises anyway, was considered and deliberately deferred: it
+ * buys an unmeasured saving and costs a function that can be handed arrays
+ * disagreeing with its own graph, which is the class of bug `checkGraphKept`
+ * exists to prevent elsewhere in this package. M0.2's bench harness is what
+ * should decide it, on a measurement rather than on a count of allocations.
  *
  * ## Self loops
  *
@@ -99,6 +122,11 @@ function at<T>(values: readonly T[], index: number): T {
 export function feedbackArcSet(graph: Graph): ReadonlySet<EdgeId> {
   const nodes = graph.nodes();
   const count = nodes.length;
+  // Materialised once and walked twice below. `graph.edges()` builds a fresh
+  // array on every call, and the second walk wants the same edges in the same
+  // order as the first, so asking twice would pay for a copy to be told the
+  // same thing.
+  const edges = graph.edges();
   const numbers = new Map<NodeId, number>();
   for (const [number, node] of nodes.entries()) numbers.set(node.id, number);
 
@@ -117,11 +145,19 @@ export function feedbackArcSet(graph: Graph): ReadonlySet<EdgeId> {
   // Every arc that is not a self loop, counted once. Bounds how far a delta can
   // travel in either direction, which is what sizes the bucket array.
   let weight = 0;
-  for (const edge of graph.edges()) {
+  for (const edge of edges) {
     const source = numbers.get(edge.source);
     const target = numbers.get(edge.target);
     // Unreachable: an edge's endpoints are always nodes of the graph.
     if (source === undefined || target === undefined) continue;
+    // A self loop is skipped, and not only because it is never reversed. It
+    // adds one to BOTH of its vertex's degrees, so it leaves `outdeg - indeg`
+    // untouched and still pushes the vertex out of SINK_BIN or SOURCE_BIN into
+    // a delta bucket. Counting it would change the vertex's PRIORITY CLASS, not
+    // its key: a source with a loop on it stops being picked early, gets picked
+    // late instead, and drags the arcs around it backwards in the order. That
+    // is how a graph whose only cycles are self loops ends up with a real edge
+    // reversed.
     if (source === target) continue;
     const out = at(outArcs, source);
     out.set(target, (out.get(target) ?? 0) + 1);
@@ -226,7 +262,19 @@ export function feedbackArcSet(graph: Graph): ReadonlySet<EdgeId> {
     while (highest >= DELTA_BASE && at(head, highest) === NONE) highest -= 1;
     // Unreachable: with vertices left and neither a sink nor a source among
     // them, some delta bucket holds one, and `highest` is never below it.
-    if (highest < DELTA_BASE) break;
+    //
+    // It throws rather than breaking out of the loop, because breaking is the
+    // expensive way to be wrong here. Every untaken vertex would keep position
+    // 0, tie with whatever `heads[0]` holds, and leave any two-cycle among them
+    // unreversed, and the first sign of it would be `rank.ts` throwing two
+    // stages later about a cycle the breaker "left", with nothing pointing back
+    // at this line. Failing here costs a run that was already wrong and names
+    // the place that went wrong.
+    if (highest < DELTA_BASE) {
+      throw new InternalLayoutError(
+        `no sink, no source and no delta bucket with ${String(count - taken)} vertices left`,
+      );
+    }
     heads.push(take(highest));
   }
   tails.reverse();
@@ -240,7 +288,7 @@ export function feedbackArcSet(graph: Graph): ReadonlySet<EdgeId> {
   // self loop's endpoints share a position and could not compare as backward
   // anyway. It is here so that the rule survives a change to the comparison.
   const feedback = new Set<EdgeId>();
-  for (const edge of graph.edges()) {
+  for (const edge of edges) {
     const source = numbers.get(edge.source);
     const target = numbers.get(edge.target);
     if (source === undefined || target === undefined) continue;

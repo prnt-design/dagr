@@ -78,12 +78,14 @@ describe('@dagr/layout public surface', () => {
     expect(typeof api.DagrLayoutError).toBe('function');
     expect(typeof api.InvalidConfigError).toBe('function');
     expect(typeof api.StageContractError).toBe('function');
+    expect(typeof api.InternalLayoutError).toBe('function');
   });
 
   it('exports nothing else at runtime', () => {
     expect(Object.keys(api).sort()).toEqual([
       'DEFAULT_LAYOUT_CONFIG',
       'DagrLayoutError',
+      'InternalLayoutError',
       'InvalidConfigError',
       'StageContractError',
       'defaultStages',
@@ -95,8 +97,9 @@ describe('@dagr/layout public surface', () => {
     const codes: DagrLayoutErrorCode[] = [
       new api.InvalidConfigError('nodeSep', -1).code,
       new api.StageContractError('rank', 'a', 'why').code,
+      new api.InternalLayoutError('why').code,
     ];
-    expect(codes).toEqual(['INVALID_CONFIG', 'STAGE_CONTRACT']);
+    expect(codes).toEqual(['INVALID_CONFIG', 'STAGE_CONTRACT', 'INTERNAL']);
   });
 
   it('exports every type the pipeline is described in', () => {

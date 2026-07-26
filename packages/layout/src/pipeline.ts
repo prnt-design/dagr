@@ -1,6 +1,6 @@
 import type { EdgeId, Graph, NodeId } from '@dagr/graph';
 import { measureNodes, resolveConfig } from './config.js';
-import { StageContractError } from './errors.js';
+import { InternalLayoutError, StageContractError } from './errors.js';
 import { defaultStages } from './stages.js';
 import type {
   LayoutInput,
@@ -8,6 +8,7 @@ import type {
   LayoutStageOverrides,
   OrderedState,
   PositionedNode,
+  Point,
   PositionedState,
   PreparedState,
   RankedState,
@@ -254,9 +255,9 @@ function checkPositioned(stage: string, graph: Graph, positioned: PositionedStat
  * rectangle draws perfectly well and only surfaces in M3, as viewport code
  * fitting to a box that does not contain the drawing.
  *
- * It is an assertion rather than a stage contract check, and it throws a plain
- * error rather than a {@link StageContractError}, because the runner computes
- * `bounds` itself now. There is no stage left to name. What it guards is
+ * It is an assertion rather than a stage contract check, and it throws an
+ * {@link InternalLayoutError} rather than a {@link StageContractError}, because
+ * the runner computes `bounds` itself now. There is no stage left to name. What it guards is
  * {@link boundsOf} and the arithmetic around it, which is not nothing: `x` is
  * `minX` and `width` is `maxX - minX`, so the right edge a consumer recovers as
  * `x + width` is not always exactly the `maxX` it came from. That is why the
@@ -266,15 +267,15 @@ function checkPositioned(stage: string, graph: Graph, positioned: PositionedStat
 function assertBounds(result: LayoutResult): void {
   const { x, y, width, height } = result.bounds;
   if (![x, y, width, height].every((value) => Number.isFinite(value))) {
-    throw new Error(
-      `layout invariant: bounds (${String(x)}, ${String(y)}) ${String(width)} by ` +
+    throw new InternalLayoutError(
+      `bounds (${String(x)}, ${String(y)}) ${String(width)} by ` +
         `${String(height)} has a component that is not a finite number`,
     );
   }
   if (result.nodes.size === 0) {
     if (x !== 0 || y !== 0 || width !== 0 || height !== 0) {
-      throw new Error(
-        'layout invariant: a result with no nodes needs the zero rectangle at the origin',
+      throw new InternalLayoutError(
+        'a result with no nodes needs the zero rectangle at the origin',
       );
     }
     return;
@@ -292,8 +293,8 @@ function assertBounds(result: LayoutResult): void {
       top < y - epsY ||
       bottom > y + height + epsY
     ) {
-      throw new Error(
-        `layout invariant: node "${node.id}" box (${String(left)}, ${String(top)}) to ` +
+      throw new InternalLayoutError(
+        `node "${node.id}" box (${String(left)}, ${String(top)}) to ` +
           `(${String(right)}, ${String(bottom)}) falls outside the bounds (${String(x)}, ` +
           `${String(y)}) ${String(width)} by ${String(height)}`,
       );
@@ -315,6 +316,30 @@ function assertBounds(result: LayoutResult): void {
  * here. The matching property for nodes is not checked, because the runner
  * builds the result's node map from the graph itself and a virtual node has no
  * way in.
+ *
+ * Direction is checked as of M2.2, and only became worth checking then:
+ * `reversedEdges` was always empty before it, so no router could get the
+ * direction wrong, and now one can. {@link RoutedEdge.points} promises the
+ * polyline runs source to target as the caller authored them even for an edge
+ * the ranker reversed, and a router that works from the ranked direction
+ * naturally emits its points target-first. Nothing downstream notices: the
+ * arrowheads M4 and M5 draw at the last point land on the wrong end, for
+ * exactly the edges that were in a cycle, two packages from the cause.
+ *
+ * The form is proximity rather than equality: each end has to be at least as
+ * close to its own node as to the other one. Equality of the endpoints against
+ * the node positions is the check this would obviously be, and it is the wrong
+ * one, because it would have to be relaxed in M2.8 as soon as routes attach at
+ * box borders and detour around obstacles, and a contract that loses rules is
+ * worse than one that never claimed them. Proximity survives both: a route that
+ * leaves its source's border and arrives at its target's is still nearer its
+ * own node at each end under any routing scheme planned. What it does not
+ * constrain is the shape between the endpoints, which is the router's business.
+ *
+ * The comparison is deliberately not strict, so a self loop passes: both
+ * endpoints are the same node, every distance in the comparison is equal, and a
+ * strict form would reject the one edge that cannot possibly point the wrong
+ * way.
  */
 function checkRouted(stage: string, graph: Graph, routed: RoutedState): void {
   for (const edge of graph.edges()) {
@@ -338,6 +363,28 @@ function checkRouted(stage: string, graph: Graph, routed: RoutedState): void {
           stage,
           edge.id,
           `route point ${String(index)} (${String(point.x)}, ${String(point.y)}) is not a finite point`,
+        );
+      }
+    }
+    // Squared distances, because only the comparison matters and a square root
+    // would buy nothing but rounding.
+    const sourceAt = routed.positions.get(edge.source);
+    const targetAt = routed.positions.get(edge.target);
+    const first = route[0];
+    const last = route.at(-1);
+    const known =
+      sourceAt !== undefined && targetAt !== undefined && first !== undefined && last !== undefined;
+    if (known) {
+      const near = (from: Point, to: Point): number => (from.x - to.x) ** 2 + (from.y - to.y) ** 2;
+      const startsWrong = near(first, sourceAt) > near(first, targetAt);
+      const endsWrong = near(last, targetAt) > near(last, sourceAt);
+      if (startsWrong || endsWrong) {
+        throw new StageContractError(
+          stage,
+          edge.id,
+          "the route runs the wrong way: a polyline goes from its edge's source to its " +
+            'target as the caller authored them, even when the ranker reversed the edge, ' +
+            'and this one has an end nearer the node it is not attached to',
         );
       }
     }
@@ -367,7 +414,7 @@ function boundsOf(nodes: ReadonlyMap<NodeId, PositionedNode>): Rect {
 
 /** A value the checks above have already guaranteed. Absence is a runner bug. */
 function required<T>(value: T | undefined, what: string, id: NodeId): T {
-  if (value === undefined) throw new Error(`layout invariant: no ${what} for "${id}"`);
+  if (value === undefined) throw new InternalLayoutError(`no ${what} for "${id}"`);
   return value;
 }
 
@@ -446,6 +493,9 @@ function assemble(graph: Graph, routed: RoutedState): LayoutResult {
  * @throws {InvalidConfigError} when a separation or a size is not a finite
  * number that is zero or greater.
  * @throws {StageContractError} when a stage breaks the pipeline contract.
+ * @throws {InternalLayoutError} when the pipeline catches itself breaking one of
+ * its own invariants, which is a bug in this package and nothing the caller can
+ * fix or provoke.
  */
 export function layout(input: LayoutInput, stages?: LayoutStageOverrides): LayoutResult {
   const config = resolveConfig(input.config);

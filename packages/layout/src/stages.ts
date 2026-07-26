@@ -1,4 +1,5 @@
 import type { EdgeId, NodeId } from '@dagr/graph';
+import { InternalLayoutError } from './errors.js';
 import { longestPathRankStage } from './rank.js';
 import type { LayoutStages, OrderStage, Point, PositionStage, RouteStage, Size } from './types.js';
 
@@ -35,21 +36,21 @@ import type { LayoutStages, OrderStage, Point, PositionStage, RouteStage, Size }
 /** A size that must be present. Absence is a runner bug, so it fails loudly. */
 function requireSize(sizes: ReadonlyMap<NodeId, Size>, id: NodeId): Size {
   const size = sizes.get(id);
-  if (size === undefined) throw new Error(`layout invariant: node "${id}" was never sized`);
+  if (size === undefined) throw new InternalLayoutError(`node "${id}" was never sized`);
   return size;
 }
 
 /** A rank that must be present. Absence is a runner bug, see above. */
 function requireRank(ranks: ReadonlyMap<NodeId, number>, id: NodeId): number {
   const rank = ranks.get(id);
-  if (rank === undefined) throw new Error(`layout invariant: node "${id}" was never ranked`);
+  if (rank === undefined) throw new InternalLayoutError(`node "${id}" was never ranked`);
   return rank;
 }
 
 /** A position that must be present. Absence is a runner bug, see above. */
 function requirePoint(positions: ReadonlyMap<NodeId, Point>, id: NodeId): Point {
   const point = positions.get(id);
-  if (point === undefined) throw new Error(`layout invariant: node "${id}" was never positioned`);
+  if (point === undefined) throw new InternalLayoutError(`node "${id}" was never positioned`);
   return point;
 }
 

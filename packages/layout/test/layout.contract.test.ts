@@ -253,6 +253,53 @@ describe('layout stage contract', () => {
     expect(error.message).toContain('at least two');
   });
 
+  // The rule that only became checkable in M2.2. Before it, `reversedEdges` was
+  // always empty and no router could get the direction wrong; now one can, and
+  // the failure is silent all the way to M4's arrowheads.
+  it('catches a route stage that emits a reversed edge target-first', () => {
+    const graph = new Graph();
+    graph.addNode('a');
+    graph.addNode('b');
+    graph.addEdge('a', 'b', 'ab');
+    graph.addEdge('b', 'a', 'ba');
+
+    let reversed = 0;
+    const backwards: RouteStage = {
+      name: 'backwards-route',
+      run(input) {
+        reversed = input.reversedEdges.size;
+        const routes = new Map<string, readonly Point[]>();
+        for (const edge of input.graph.edges()) {
+          const from = input.positions.get(edge.source);
+          const to = input.positions.get(edge.target);
+          if (from === undefined || to === undefined) throw new Error('unpositioned');
+          // The mistake this check exists to catch: a router that works off the
+          // ranked direction emits the polyline the way it ranked it.
+          routes.set(edge.id, input.reversedEdges.has(edge.id) ? [to, from] : [from, to]);
+        }
+        return { ...input, routes };
+      },
+    };
+
+    const error = expectContractError({ route: backwards }, graph);
+    // The default ranker has to have reversed something, or the stage above is
+    // the straight router with extra steps and this test proves nothing.
+    expect(reversed).toBeGreaterThan(0);
+    expect(error.stage).toBe('backwards-route');
+    expect(error.id).toBe('ba');
+    expect(error.message).toContain('source');
+  });
+
+  // The proximity form has to be non-strict, because a self loop puts both
+  // endpoints at the same point and every distance in the comparison is equal.
+  it('lets a self loop through, whose two endpoints are the same point', () => {
+    const graph = new Graph();
+    graph.addNode('a');
+    graph.addEdge('a', 'a', 'aa');
+    const result = layout({ graph });
+    expect(result.edges.get('aa')?.points).toHaveLength(2);
+  });
+
   it('catches a route stage that invents an edge', () => {
     const inventing: RouteStage = {
       name: 'inventing-route',

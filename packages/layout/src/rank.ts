@@ -1,5 +1,6 @@
 import type { NodeId } from '@dagr/graph';
 import { feedbackArcSet } from './cycles.js';
+import { InternalLayoutError } from './errors.js';
 import type { RankStage } from './types.js';
 
 /**
@@ -15,7 +16,7 @@ import type { RankStage } from './types.js';
  */
 function at<T>(values: readonly T[], index: number): T {
   const value = values[index];
-  if (value === undefined) throw new Error(`layout invariant: no entry at index ${String(index)}`);
+  if (value === undefined) throw new InternalLayoutError(`no entry at index ${String(index)}`);
   return value;
 }
 
@@ -61,10 +62,10 @@ function at<T>(values: readonly T[], index: number): T {
  * M2.4, and nothing before then needs a node the caller did not add. `sizes`
  * passes straight through, because nothing has been added to size.
  *
- * @throws {Error} when the sweep cannot reach every node, which means the
- * acyclic view still had a cycle. That is a bug in this stage rather than in
- * the caller, so it is a plain error rather than a `StageContractError`, which
- * names a stage the caller supplied.
+ * @throws {InternalLayoutError} when the sweep cannot reach every node, which
+ * means the acyclic view still had a cycle. That is a bug in this stage rather
+ * than in the caller, so it is an internal error rather than a
+ * `StageContractError`, which names a stage the caller supplied.
  */
 export const longestPathRankStage: RankStage = {
   name: 'longest-path-rank',
@@ -117,8 +118,8 @@ export const longestPathRankStage: RankStage = {
       }
     }
     if (swept !== count) {
-      throw new Error(
-        `layout invariant: ${String(count - swept)} of ${String(count)} nodes could not be ` +
+      throw new InternalLayoutError(
+        `${String(count - swept)} of ${String(count)} nodes could not be ` +
           'ranked, so the cycle breaker left a cycle in the acyclic view',
       );
     }
