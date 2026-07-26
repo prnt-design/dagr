@@ -18,9 +18,16 @@
     straight and on the diagonal, the way a rune is cut.
 
     All geometry sits on a 128 grid so the mark stays crisp down to 64px, and
-    the colours are mid-tone by design: nothing here goes pale enough to
-    disappear on #ffffff or dark enough to disappear on #0d1117. Every
-    gradient declares a solid fallback colour.
+    the colours are mid-tone by design: nothing here goes dark enough to
+    disappear on #0d1117. Every gradient declares a solid fallback colour.
+
+    The sun is the one place where that is not enough. Its gradient runs hot
+    and pale toward the horizon (#FFC15C, only 1.61:1 on white), so the lower
+    half of its curved edge could not hold itself against a white page. That
+    glow is the whole point of the mark on dark, so rather than cool it down,
+    the sun is rimmed in the horizon's own colour — the line it is rising
+    through, carried up and around the edge. The rim keeps the interior glow
+    untouched and puts a 4.23:1 boundary between the sun and the page.
   -->
 
   <defs>
@@ -61,6 +68,10 @@
   <!-- a disc truncated well below its own equator, so the silhouette turns
        back in at the cut: that is what reads as a sunrise, not as an arch -->
   <path d="M51.15 40a19 19 0 1 1 25.7 0Z" fill="url(#dagr-sun) #F2622E"/>
+  <!-- the sun's rim, in the horizon's own colour: this is the edge that has to
+       hold against a white page. It runs on past the cut, down to y=41.5, so
+       both of its ends finish underneath the horizon rather than against it -->
+  <path d="M53.01 41.5a19 19 0 1 1 21.98 0" fill="none" stroke="#D94A2B" stroke-width="3"/>
   <!-- the horizon, chisel-flared at both ends -->
   <path d="M32 40h64l4 4H28Z" fill="#D94A2B"/>
 
