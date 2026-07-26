@@ -89,14 +89,15 @@ export interface RemovePortOp {
 }
 
 /**
- * A node's attributes changed. `patch` names exactly the keys that changed and
- * `before` their prior values, with a key present and `undefined` meaning the
- * key was absent, so swapping the two is the undo.
+ * A node's attributes changed. `after` names exactly the keys that changed and
+ * holds their new values, `before` names the same keys at their prior values,
+ * and a key present with `undefined` means the key was absent, so swapping the
+ * two is the undo.
  */
 export interface UpdateNodeAttrsOp<N extends object = Attrs> {
   readonly op: 'update-node-attrs';
   readonly id: NodeId;
-  readonly patch: AttrsPatch<N>;
+  readonly after: AttrsPatch<N>;
   readonly before: AttrsPatch<N>;
 }
 
@@ -104,26 +105,26 @@ export interface UpdateNodeAttrsOp<N extends object = Attrs> {
 export interface UpdateEdgeAttrsOp<E extends object = Attrs> {
   readonly op: 'update-edge-attrs';
   readonly id: EdgeId;
-  readonly patch: AttrsPatch<E>;
+  readonly after: AttrsPatch<E>;
   readonly before: AttrsPatch<E>;
 }
 
 /** The graph's own attributes changed. Same normalisation again. */
 export interface UpdateGraphAttrsOp<G extends object = Attrs> {
   readonly op: 'update-graph-attrs';
-  readonly patch: AttrsPatch<G>;
+  readonly after: AttrsPatch<G>;
   readonly before: AttrsPatch<G>;
 }
 
 /**
- * An edge's port bindings changed. `patch` names exactly the ends that moved
+ * An edge's port bindings changed. `after` names exactly the ends that moved
  * and `before` where they were, with a key present and `undefined` meaning that
  * end was unbound.
  */
 export interface UpdateEdgePortsOp {
   readonly op: 'update-edge-ports';
   readonly id: EdgeId;
-  readonly patch: EdgePortsPatch;
+  readonly after: EdgePortsPatch;
   readonly before: EdgePortsPatch;
 }
 
@@ -154,7 +155,17 @@ export type Patch<
   GraphAttrs extends object = Attrs,
 > = readonly PatchOp<NodeAttrs, EdgeAttrs, GraphAttrs>[];
 
-/** What `Graph.subscribe` takes. Called once per emitted patch. */
+/**
+ * What `Graph.subscribe` takes. Called once per emitted patch.
+ *
+ * Must be synchronous. The return type is `void`, so an `async` function is
+ * assignable with no cast and nothing complains, but the graph never sees the
+ * promise: a failure inside one becomes an unhandled rejection rather than
+ * being collected into a {@link PatchListenerError}, and anything after the
+ * first `await` runs against a graph that may have moved on several mutations.
+ * Hand the patch to a queue and drain it yourself if the work has to be
+ * asynchronous.
+ */
 export type PatchListener<
   NodeAttrs extends object = Attrs,
   EdgeAttrs extends object = Attrs,
@@ -162,12 +173,44 @@ export type PatchListener<
 > = (patch: Patch<NodeAttrs, EdgeAttrs, GraphAttrs>) => void;
 
 /**
+ * Thrown from a mutating call when one or more patch listeners threw.
+ *
+ * Deliberately not a member of the `DagrGraphError` family, and it lives here
+ * rather than in `errors.ts` for the same reason: that module is the closed set
+ * of ways the graph refuses a call, and this is not one. The mutation was
+ * accepted and committed before any listener ran, so `isDagrGraphError` must
+ * keep meaning "the graph rejected this" and must answer `false` here. Without
+ * the wrapper the two are indistinguishable: mirroring with
+ * `source.subscribe((patch) => apply(mirror, patch))` makes a drifted mirror
+ * throw a `DuplicateNodeError` out of `source.addNode('a')`, a call the source
+ * itself was perfectly happy with.
+ *
+ * One shape at every listener count, so a caller has no second case to write.
+ * `errors` holds what the listeners threw, in listener order, and `cause` is
+ * the first of them, which is the one an `instanceof` check usually wants.
+ */
+export class PatchListenerError extends Error {
+  /** What the listeners threw, in listener order. Never empty. */
+  readonly errors: readonly unknown[];
+
+  constructor(errors: readonly unknown[]) {
+    super(`${String(errors.length)} patch listener(s) threw`, { cause: errors[0] });
+    this.name = 'PatchListenerError';
+    this.errors = errors;
+    // Restored explicitly for the same reason the graph errors restore theirs:
+    // `instanceof` has to stay correct when the output is downlevelled below
+    // the ES2022 target.
+    Object.setPrototypeOf(this, PatchListenerError.prototype);
+  }
+}
+
+/**
  * The op that undoes one op.
  *
  * Adds and removes swap their tag and keep their payload, which works because
  * a remove op carries everything the matching add needs. The four update ops
- * swap `patch` and `before`, which works because an emitted patch is
- * normalised: `patch` names exactly the keys that changed and `before` their
+ * swap `after` and `before`, which works because an emitted patch is
+ * normalised: `after` names exactly the keys that changed and `before` their
  * prior values, with a key present and `undefined` meaning "was absent", which
  * applies as a delete and so restores absence.
  */
@@ -188,17 +231,17 @@ function invertOp<N extends object, E extends object, G extends object>(
     case 'remove-port':
       return Object.freeze({ ...op, op: 'add-port' });
     // One arm each rather than four labels on one, because a shared arm widens
-    // `patch` and `before` to the union of all four bag types and the result no
+    // `after` and `before` to the union of all four bag types and the result no
     // longer matches any single op. Four arms keep each swap typed by the op it
     // belongs to, which is worth more than the three lines it costs.
     case 'update-node-attrs':
-      return Object.freeze({ ...op, patch: op.before, before: op.patch });
+      return Object.freeze({ ...op, after: op.before, before: op.after });
     case 'update-edge-attrs':
-      return Object.freeze({ ...op, patch: op.before, before: op.patch });
+      return Object.freeze({ ...op, after: op.before, before: op.after });
     case 'update-graph-attrs':
-      return Object.freeze({ ...op, patch: op.before, before: op.patch });
+      return Object.freeze({ ...op, after: op.before, before: op.after });
     case 'update-edge-ports':
-      return Object.freeze({ ...op, patch: op.before, before: op.patch });
+      return Object.freeze({ ...op, after: op.before, before: op.after });
   }
 }
 
@@ -260,16 +303,16 @@ function applyOp<N extends object, E extends object, G extends object>(
       graph.removePort(op.nodeId, op.port.id);
       return;
     case 'update-node-attrs':
-      graph.updateNodeAttrs(op.id, op.patch);
+      graph.updateNodeAttrs(op.id, op.after);
       return;
     case 'update-edge-attrs':
-      graph.updateEdgeAttrs(op.id, op.patch);
+      graph.updateEdgeAttrs(op.id, op.after);
       return;
     case 'update-graph-attrs':
-      graph.updateAttrs(op.patch);
+      graph.updateAttrs(op.after);
       return;
     case 'update-edge-ports':
-      graph.updateEdgePorts(op.id, op.patch);
+      graph.updateEdgePorts(op.id, op.after);
       return;
     default: {
       // Unreachable from typed code, so `op` is `never` here. Reachable from

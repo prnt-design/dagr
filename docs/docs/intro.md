@@ -39,6 +39,6 @@ which half is which. `@dagr/render` and `@dagr/react` are still scaffolds.
 
 Nothing is published to npm and there is no released API. Names and signatures
 change when a milestone learns something, without deprecation cycles, because
-there is nobody downstream to break yet. Expect that until v0.1. The
-[roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md) is the
-order things arrive in.
+there is nobody downstream to break yet. Expect that until the first published
+release. The [roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md)
+is the order things arrive in.

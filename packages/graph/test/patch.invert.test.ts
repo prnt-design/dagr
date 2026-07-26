@@ -116,7 +116,7 @@ describe('invert of a single op', () => {
     ]);
   });
 
-  it('swaps patch and before on a node attribute update', () => {
+  it('swaps after and before on a node attribute update', () => {
     const patch = single(
       (graph) => graph.addNode({ id: 'a', attrs: { label: 'A' } }),
       (graph) => {
@@ -127,13 +127,13 @@ describe('invert of a single op', () => {
       {
         op: 'update-node-attrs',
         id: 'a',
-        patch: { label: 'A', width: undefined },
+        after: { label: 'A', width: undefined },
         before: { label: 'B', width: 4 },
       },
     ]);
   });
 
-  it('swaps patch and before on an edge attribute update', () => {
+  it('swaps after and before on an edge attribute update', () => {
     const patch = single(
       (graph) => {
         graph.addNode('a');
@@ -144,20 +144,20 @@ describe('invert of a single op', () => {
       },
     );
     expect(invert(patch)).toStrictEqual([
-      { op: 'update-edge-attrs', id: 'loop', patch: { w: undefined }, before: { w: 1 } },
+      { op: 'update-edge-attrs', id: 'loop', after: { w: undefined }, before: { w: 1 } },
     ]);
   });
 
-  it('swaps patch and before on a graph attribute update', () => {
+  it('swaps after and before on a graph attribute update', () => {
     const patch = single(bare, (graph) => {
       graph.updateAttrs({ rankdir: 'TB' });
     });
     expect(invert(patch)).toStrictEqual([
-      { op: 'update-graph-attrs', patch: { rankdir: undefined }, before: { rankdir: 'TB' } },
+      { op: 'update-graph-attrs', after: { rankdir: undefined }, before: { rankdir: 'TB' } },
     ]);
   });
 
-  it('swaps patch and before on a port rebinding', () => {
+  it('swaps after and before on a port rebinding', () => {
     const patch = single(
       (graph) => {
         graph.addNode({ id: 'a', ports: [{ id: 'p1' }, { id: 'p2' }] });
@@ -171,7 +171,7 @@ describe('invert of a single op', () => {
       {
         op: 'update-edge-ports',
         id: 'loop',
-        patch: { sourcePort: 'p1', targetPort: undefined },
+        after: { sourcePort: 'p1', targetPort: undefined },
         before: { sourcePort: 'p2', targetPort: 'p1' },
       },
     ]);

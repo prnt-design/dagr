@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import * as api from '../src/index.js';
 import type {
+  AddEdgeOp,
+  AddNodeOp,
+  AddPortOp,
   AttrsPatch,
   DagrGraphErrorCode,
   DagrGraphErrorLike,
@@ -15,6 +18,13 @@ import type {
   PortDirection,
   PortInit,
   ReadAttrs,
+  RemoveEdgeOp,
+  RemoveNodeOp,
+  RemovePortOp,
+  UpdateEdgeAttrsOp,
+  UpdateEdgePortsOp,
+  UpdateGraphAttrsOp,
+  UpdateNodeAttrsOp,
 } from '../src/index.js';
 
 describe('@dagr/graph public surface', () => {
@@ -43,6 +53,14 @@ describe('@dagr/graph public surface', () => {
     expect(api.isDagrGraphError(new Error('plain'))).toBe(false);
   });
 
+  it('exports PatchListenerError, which is outside the graph error family', () => {
+    expect(typeof api.PatchListenerError).toBe('function');
+    const failure = new api.PatchListenerError([new api.DuplicateNodeError('a')]);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).not.toBeInstanceOf(api.DagrGraphError);
+    expect(api.isDagrGraphError(failure)).toBe(false);
+  });
+
   it('exports nothing else at runtime', () => {
     expect(Object.keys(api).sort()).toEqual([
       'DagrGraphError',
@@ -53,6 +71,7 @@ describe('@dagr/graph public surface', () => {
       'Graph',
       'InvalidIdError',
       'NodeNotFoundError',
+      'PatchListenerError',
       'PortDirectionError',
       'PortInUseError',
       'PortNotFoundError',
@@ -82,6 +101,78 @@ describe('@dagr/graph public surface', () => {
     expect(mirror.hasNode('a')).toBe(true);
     api.apply(mirror, api.invert(log[0] ?? []));
     expect(mirror.hasNode('a')).toBe(false);
+
+    // Each of the ten per-op interfaces is annotated by hand rather than
+    // narrowed out of the union, so the surface is pinned name by name:
+    // dropping one from the export list fails the typecheck here rather than
+    // going unnoticed until a consumer reaches for it.
+    const port: Port = { id: 'p', direction: 'inout' };
+    const addNode: AddNodeOp = { op: 'add-node', id: 'a', attrs: {}, ports: [] };
+    const removeNode: RemoveNodeOp = { op: 'remove-node', id: 'a', attrs: {}, ports: [port] };
+    const addEdge: AddEdgeOp = { op: 'add-edge', id: 'aa', source: 'a', target: 'a', attrs: {} };
+    const removeEdge: RemoveEdgeOp = {
+      op: 'remove-edge',
+      id: 'aa',
+      source: 'a',
+      target: 'a',
+      attrs: {},
+    };
+    const addPort: AddPortOp = { op: 'add-port', nodeId: 'a', port, index: 0 };
+    const removePort: RemovePortOp = { op: 'remove-port', nodeId: 'a', port, index: 0 };
+    const updateNodeAttrs: UpdateNodeAttrsOp = {
+      op: 'update-node-attrs',
+      id: 'a',
+      after: { label: 'A' },
+      before: { label: undefined },
+    };
+    const updateEdgeAttrs: UpdateEdgeAttrsOp = {
+      op: 'update-edge-attrs',
+      id: 'aa',
+      after: { weight: 1 },
+      before: { weight: undefined },
+    };
+    const updateGraphAttrs: UpdateGraphAttrsOp = {
+      op: 'update-graph-attrs',
+      after: { rankdir: 'TB' },
+      before: { rankdir: undefined },
+    };
+    const updateEdgePorts: UpdateEdgePortsOp = {
+      op: 'update-edge-ports',
+      id: 'aa',
+      after: { sourcePort: 'p' },
+      before: { sourcePort: undefined },
+    };
+
+    // Every one of them is a member of `PatchOp`, so a patch built out of them
+    // replays through `apply` like any other.
+    const built: Patch = [
+      addNode,
+      addEdge,
+      addPort,
+      updateNodeAttrs,
+      updateEdgeAttrs,
+      updateGraphAttrs,
+      updateEdgePorts,
+      removeEdge,
+      removePort,
+      removeNode,
+    ];
+    const replay = new api.Graph();
+    api.apply(replay, built);
+    expect(built.map((op) => op.op)).toEqual([
+      'add-node',
+      'add-edge',
+      'add-port',
+      'update-node-attrs',
+      'update-edge-attrs',
+      'update-graph-attrs',
+      'update-edge-ports',
+      'remove-edge',
+      'remove-port',
+      'remove-node',
+    ]);
+    expect(replay.nodeCount).toBe(0);
+    expect(replay.attrs).toEqual({ rankdir: 'TB' });
   });
 
   it('exports the DagrGraphErrorCode type, and every code is a member of it', () => {

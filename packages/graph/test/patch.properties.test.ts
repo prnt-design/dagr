@@ -328,14 +328,14 @@ function tally(coverage: Coverage, patch: Patch): void {
     if (op.op === 'update-edge-ports') coverage.rebinds += 1;
     if (op.op === 'remove-port') coverage.portRemovals += 1;
     if (op.op === 'update-node-attrs' || op.op === 'update-edge-attrs') {
-      const entries: [string, unknown][] = Object.entries(op.patch);
+      const entries: [string, unknown][] = Object.entries(op.after);
       if (entries.some(([, value]) => value === undefined)) coverage.deletes += 1;
     }
   }
 }
 
 /**
- * The normalisation rule an emitted update op has to keep: `patch` and `before`
+ * The normalisation rule an emitted update op has to keep: `after` and `before`
  * name the same keys, and every one of those keys really moved. This is what
  * makes inverting a swap of the two bags, and it is not something the content
  * properties below can see, since a patch carrying extra unchanged keys applies
@@ -350,14 +350,14 @@ function checkNormalised(op: PatchOp): void {
   ) {
     return;
   }
-  const patched: [string, unknown][] = Object.entries(op.patch);
+  const next: [string, unknown][] = Object.entries(op.after);
   const prior: [string, unknown][] = Object.entries(op.before);
-  const patchedKeys = patched.map(([key]) => key).sort();
-  expect(patchedKeys, `${op.op}: patch and before name different keys`).toEqual(
+  const nextKeys = next.map(([key]) => key).sort();
+  expect(nextKeys, `${op.op}: after and before name different keys`).toEqual(
     prior.map(([key]) => key).sort(),
   );
   const priorByKey = new Map(prior);
-  for (const [key, value] of patched) {
+  for (const [key, value] of next) {
     expect(
       Object.is(value, priorByKey.get(key)),
       `${op.op}: key "${key}" is named but did not change`,

@@ -413,9 +413,11 @@ transactional either: an op the graph rejects throws that graph error out of
 ### The ops
 
 `PatchOp` is a discriminated union on `op`, ten tags in all. Every op object,
-and every bag inside it, is frozen. The bags and port arrays are the same
-frozen references the records already hold, so an op costs one small object and
-no deep copy.
+and every bag inside it, is frozen. On the add and remove ops the bags and port
+arrays are the same frozen references the records already hold; the four
+`update-*` ops carry diff bags built fresh for the emission, holding only the
+keys that moved. Either way an op costs a small object and no deep copy, since
+the values inside are the caller's own references.
 
 | `op` | Payload | Emitted by |
 | --- | --- | --- |
@@ -425,10 +427,10 @@ no deep copy.
 | `remove-edge` | `id`, `source`, `target`, `attrs`, `sourcePort?`, `targetPort?` | `removeEdge`, and `removeNode` once per incident edge |
 | `add-port` | `nodeId`, `port`, `index` | `addPort` |
 | `remove-port` | `nodeId`, `port`, `index` | `removePort` |
-| `update-node-attrs` | `id`, `patch`, `before` | `updateNodeAttrs` |
-| `update-edge-attrs` | `id`, `patch`, `before` | `updateEdgeAttrs` |
-| `update-graph-attrs` | `patch`, `before` | `updateAttrs` |
-| `update-edge-ports` | `id`, `patch`, `before` | `updateEdgePorts` |
+| `update-node-attrs` | `id`, `after`, `before` | `updateNodeAttrs` |
+| `update-edge-attrs` | `id`, `after`, `before` | `updateEdgeAttrs` |
+| `update-graph-attrs` | `after`, `before` | `updateAttrs` |
+| `update-edge-ports` | `id`, `after`, `before` | `updateEdgePorts` |
 
 Each remove op carries everything its matching add op needs, which is what lets
 `invert` swap the tag and keep the payload. An unbound edge end is an absent
@@ -447,21 +449,26 @@ contributes one `remove-edge` op, not two.
 
 ### Normalisation
 
-The four `update-*` ops carry two bags of the same shape. `patch` names exactly
+The four `update-*` ops carry two bags of the same shape. `after` names exactly
 the keys that moved and holds their new values; `before` names the same keys
 and holds their prior values. A key present with the value `undefined` means
 "was absent", which is exactly what that value already means to
 `updateNodeAttrs` and friends: setting it deletes the key.
 
+The pair is named for the states it spans rather than for the argument it came
+from, which is the whole contract in two words: `before` is what those keys held
+going in, `after` is what they hold coming out, and inverting is visibly the
+swap of one for the other.
+
 ```ts
 graph.updateNodeAttrs('a', { width: 120 });
-// { op: 'update-node-attrs', id: 'a', patch: { width: 120 }, before: { width: undefined } }
+// { op: 'update-node-attrs', id: 'a', after: { width: 120 }, before: { width: undefined } }
 
 graph.updateNodeAttrs('a', { width: 160, label: 'A' });
-// patch: { width: 160, label: 'A' }, before: { width: 120, label: undefined }
+// after: { width: 160, label: 'A' }, before: { width: 120, label: undefined }
 
 graph.updateNodeAttrs('a', { width: undefined });
-// patch: { width: undefined }, before: { width: 160 }
+// after: { width: undefined }, before: { width: 160 }
 
 graph.updateNodeAttrs('a', { width: undefined }); // nothing changes, nothing emitted
 ```
@@ -471,7 +478,7 @@ appear: a patch key set to the value already stored is left out of both bags,
 and if that leaves nothing, no op and no patch is emitted at all. And absence
 is spelled out rather than left out, so the two bags always name the same keys.
 
-That is what makes `invert` a swap. Exchanging `patch` and `before` gives an op
+That is what makes `invert` a swap. Exchanging `after` and `before` gives an op
 that restores the prior state exactly, absences included, without anything
 having to consult the graph. `update-edge-ports` is normalised the same way
 over `sourcePort` and `targetPort`: an end that did not move is in neither bag,
@@ -554,11 +561,21 @@ already shows everything the patch describes, and the ops it is handed describe
 the transition it just missed, not one about to happen.
 
 **Every listener runs, in subscription order, even if one throws.** The errors
-are collected and rethrown after the walk: one error propagates as itself, so
-an `instanceof` check on the caller's side still works, and several as an
-`AggregateError` whose `errors` holds them in listener order. The mutation
-stays committed either way. A throwing listener is a broken listener, not a
-rolled back mutation.
+are collected and rethrown after the walk as a single `PatchListenerError`,
+whatever the count: `errors` holds them in listener order and `cause` is the
+first of them. The mutation stays committed either way. A throwing listener is
+a broken listener, not a rolled back mutation.
+
+That wrapper is not decoration, and it is deliberately not a `DagrGraphError`:
+`isDagrGraphError` answers `false` for it. The graph accepted and committed the
+call before any listener ran, so a listener's own error arriving unwrapped from
+the mutating call would be indistinguishable from the graph having refused that
+call. Mirroring makes the collision routine rather than exotic. `apply` is not
+transactional, so a mirror that has drifted throws a `DuplicateNodeError` at the
+listener, and `source.addNode('a')` would report a duplicate for a node the
+source was perfectly happy to take. One wrapper, one meaning: a `DagrGraphError`
+out of a mutation means the graph refused it, a `PatchListenerError` means it
+did not.
 
 **Emission runs over a snapshot of the listener set.** A listener that
 subscribes or unsubscribes during an emission changes who is called from the
@@ -594,6 +611,20 @@ Mirroring is unaffected by all of this, because the listener mutates a
 different graph. If you do have to mutate the graph you are listening to, and
 the order other listeners observe matters, record the work and do it after the
 emission rather than inline.
+
+**A listener must be synchronous, and nothing stops you passing one that is
+not.** `PatchListener` returns `void`, so an `async` function is assignable with
+no cast and no warning, and then the graph never sees the promise it hands back.
+Three things follow, and the first is the one that bites. A failure inside an
+async listener becomes an unhandled rejection rather than being collected: the
+mutation does not throw, `PatchListenerError` never happens, and depending on
+the host the process either logs it somewhere you are not looking or exits.
+Anything after the first `await` runs against a graph that may have moved on by
+several mutations, so the patch in hand no longer describes the transition just
+made. And ordering is gone, since a listener that returns at its first `await`
+has not finished when the next one starts. If the work has to be asynchronous,
+make the listener itself synchronous: push the patch onto a queue and drain the
+queue outside the emission.
 
 ## Methods
 
@@ -674,8 +705,11 @@ purely additive change.
 
 ## Errors
 
-Every error extends `DagrGraphError`, so one `catch` with one `instanceof` test
-covers the family. `DagrGraphError` declares a `code` field, typed as the
+Every error the graph throws to refuse a call extends `DagrGraphError`, so one
+`catch` with one `instanceof` test covers the family. The one exported error
+class outside it is `PatchListenerError`, which is thrown after a call is
+committed rather than instead of committing it, and the listener semantics
+section above says why that distinction is worth a class of its own. `DagrGraphError` declares a `code` field, typed as the
 `DagrGraphErrorCode` union, so callers who would rather switch on a value than
 on a class can do it through the base class and have the switch checked for
 exhaustiveness:

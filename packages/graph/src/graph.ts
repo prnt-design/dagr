@@ -9,6 +9,7 @@ import {
   PortInUseError,
   PortNotFoundError,
 } from './errors.js';
+import { PatchListenerError } from './patch.js';
 import type {
   AddEdgeOp,
   AddNodeOp,
@@ -115,17 +116,31 @@ function define(bag: Record<string, unknown>, key: string, value: unknown): void
   Object.defineProperty(bag, key, { value, writable: true, enumerable: true, configurable: true });
 }
 
+/** The two report bags while they are still being written to. */
+interface DiffBags {
+  readonly after: Record<string, unknown>;
+  readonly before: Record<string, unknown>;
+}
+
 /**
- * What a merge did: the bag it produced, the keys it actually changed, and
- * what those keys held before.
+ * What a merge did: the bag it produced, and, when the caller asked for one,
+ * the description of the keys that moved.
  */
 interface AttrsDiff<A extends object> {
   /** The new frozen bag. */
   readonly merged: ReadAttrs<A>;
-  /** Exactly the keys that changed, at their new values. Frozen. */
-  readonly patch: AttrsPatch<A>;
-  /** The same keys at their prior values, `undefined` for absent. Frozen. */
-  readonly before: AttrsPatch<A>;
+  /**
+   * Present only when the caller asked for it, which is to say only when
+   * something is watching and the emitted op is going to carry it.
+   *
+   * Optional rather than always built, and that is the point of the shape: an
+   * emission site cannot reach for a report that was never allocated, so
+   * "emit only what was built" is enforced by the type rather than by a
+   * second `#observed` test sitting next to the one that decided. `after`
+   * names exactly the keys that changed at their new values, `before` the same
+   * keys at their prior ones. Both frozen.
+   */
+  readonly report?: { readonly after: AttrsPatch<A>; readonly before: AttrsPatch<A> };
 }
 
 /**
@@ -142,56 +157,73 @@ interface AttrsDiff<A extends object> {
  *
  * A key whose patch value is `undefined` is deleted rather than stored, so a
  * bag never holds an `undefined` value and `'k' in attrs` answers honestly.
- * The two reported bags are the normalised description of that: they name only
+ * The two report bags are the normalised description of that: they name only
  * the keys that moved, and a key present with `undefined` means "absent", in
- * `patch` a delete and in `before` a key that was not there. That is what makes
+ * `after` a delete and in `before` a key that was not there. That is what makes
  * swapping them a correct undo. Freezing is shallow: a nested object value is
  * stored by reference and stays the caller's to keep immutable.
+ *
+ * `observed` is the caller's answer to "will anyone read the report", threaded
+ * in rather than asked afterwards. Building two bags and freezing them is most
+ * of the cost of an attribute update, and on an unwatched graph every byte of
+ * it is thrown away: the guard has to sit here, where the allocation is, not at
+ * the emission site the allocation has already happened for.
  *
  * O(size of the bag plus size of the patch).
  */
 function diffAttrs<A extends object>(
   current: ReadAttrs<A>,
   patch: AttrsPatch<A>,
+  observed: boolean,
 ): AttrsDiff<A> | undefined {
   // Both listings go through entries rather than a spread so that the generic
   // bag types widen to plain `unknown` values without an assertion.
   const held: [string, unknown][] = Object.entries(current);
   const patched: [string, unknown][] = Object.entries(patch);
   const merged: Record<string, unknown> = Object.fromEntries(held);
-  const effective: Record<string, unknown> = {};
-  const before: Record<string, unknown> = {};
+  // One holder rather than two locals, so the loop below tests once per key
+  // rather than twice and neither bag can be written without the other.
+  const bags: DiffBags | undefined = observed ? { after: {}, before: {} } : undefined;
   let changed = false;
 
   for (const [key, value] of patched) {
     if (value === undefined) {
       if (!Object.hasOwn(merged, key)) continue;
-      define(before, key, merged[key]);
-      define(effective, key, undefined);
+      if (bags !== undefined) {
+        define(bags.before, key, merged[key]);
+        define(bags.after, key, undefined);
+      }
       delete merged[key];
       changed = true;
       continue;
     }
     if (Object.hasOwn(merged, key) && Object.is(merged[key], value)) continue;
-    define(before, key, Object.hasOwn(merged, key) ? merged[key] : undefined);
-    define(effective, key, value);
+    if (bags !== undefined) {
+      define(bags.before, key, Object.hasOwn(merged, key) ? merged[key] : undefined);
+      define(bags.after, key, value);
+    }
     define(merged, key, value);
     changed = true;
   }
 
   if (!changed) return undefined;
+  const sealed = sealAttrs<A>(merged);
+  if (bags === undefined) return { merged: sealed };
   return {
-    merged: sealAttrs<A>(merged),
-    patch: sealPatch<A>(effective),
-    before: sealPatch<A>(before),
+    merged: sealed,
+    report: { after: sealPatch<A>(bags.after), before: sealPatch<A>(bags.before) },
   };
 }
 
-/** The bag a freshly declared node or edge starts with. */
+/**
+ * The bag a freshly declared node or edge starts with. Never reported on: the
+ * declaration emits an `add-node` or `add-edge` op carrying the whole bag, so
+ * there is no diff for anything to read.
+ */
 function initialAttrs<A extends object>(patch: AttrsPatch<A> | undefined): ReadAttrs<A> {
   const empty = emptyAttrs<A>();
   if (patch === undefined) return empty;
-  return diffAttrs(empty, patch)?.merged ?? empty;
+  return diffAttrs(empty, patch, false)?.merged ?? empty;
 }
 
 /**
@@ -405,8 +437,18 @@ export class Graph<
    * Listeners run over a snapshot of the listener set, so a listener that
    * subscribes or unsubscribes during emission changes who is called from the
    * next patch rather than from the middle of this one. Every listener runs
-   * even if an earlier one throws: one error propagates as itself, several as
-   * an `AggregateError`, and either way the mutation stays committed.
+   * even if an earlier one throws, and what the listeners threw comes back out
+   * of the mutating call as one {@link PatchListenerError} whatever the count.
+   * The mutation stays committed either way, which is why that error is not a
+   * `DagrGraphError`: the graph did not refuse anything.
+   *
+   * A listener that mutates the graph it is watching is served depth first: the
+   * nested patch reaches every listener, the mutating one included, before this
+   * emission resumes, so a later listener sees the effect before the cause.
+   * There is no re-entrancy guard, so a listener that mutates on every patch
+   * recurses until the stack gives out. The graph model guide traces the
+   * ordering in full under "Listener semantics".
+   *
    * O(listener count) per mutation, and nothing at all with no listeners.
    */
   subscribe(listener: PatchListener<NodeAttrs, EdgeAttrs, GraphAttrs>): () => void {
@@ -435,12 +477,19 @@ export class Graph<
    * caller's to keep immutable. O(size of the bag plus size of the patch).
    */
   updateAttrs(patch: AttrsPatch<GraphAttrs>): ReadAttrs<GraphAttrs> {
-    const diff = diffAttrs(this.#attrs, patch);
+    const diff = diffAttrs(this.#attrs, patch, this.#observed);
     if (diff === undefined) return this.#attrs;
     this.#attrs = diff.merged;
-    if (this.#observed) {
+    // The report exists exactly when something is watching, so testing for it
+    // is the emission test: there is no second condition to drift from the one
+    // that decided whether to build it.
+    if (diff.report !== undefined) {
       this.#emit([
-        Object.freeze({ op: 'update-graph-attrs', patch: diff.patch, before: diff.before }),
+        Object.freeze({
+          op: 'update-graph-attrs',
+          after: diff.report.after,
+          before: diff.report.before,
+        }),
       ]);
     }
     return this.#attrs;
@@ -530,7 +579,7 @@ export class Graph<
    */
   updateNodeAttrs(id: NodeId, patch: AttrsPatch<NodeAttrs>): Node<NodeAttrs> {
     const node = this.requireNode(id);
-    const diff = diffAttrs(node.attrs, patch);
+    const diff = diffAttrs(node.attrs, patch, this.#observed);
     if (diff === undefined) return node;
     // The frozen array the old record already carries, passed straight through
     // rather than re-materialised from the port index: the ports did not
@@ -543,9 +592,14 @@ export class Graph<
     // Overwriting an existing key leaves a Map entry where it was, so this
     // cannot reorder anything a listing depends on.
     this.#nodes.set(id, next);
-    if (this.#observed) {
+    if (diff.report !== undefined) {
       this.#emit([
-        Object.freeze({ op: 'update-node-attrs', id, patch: diff.patch, before: diff.before }),
+        Object.freeze({
+          op: 'update-node-attrs',
+          id,
+          after: diff.report.after,
+          before: diff.report.before,
+        }),
       ]);
     }
     return next;
@@ -562,13 +616,18 @@ export class Graph<
     const incoming = this.#inEdges.get(id);
     if (outgoing === undefined || incoming === undefined) throw new NodeNotFoundError(id);
     const node = this.requireNode(id);
-    const ops: PatchOp<NodeAttrs, EdgeAttrs, GraphAttrs>[] = [];
-    const observed = this.#observed;
+    // Allocated only when something is watching, for the same reason the
+    // attribute diff withholds its report bags: an unwatched cascade would
+    // otherwise build an array per removal and drop it unread. Undefined here
+    // is what makes the emission below unable to ask for ops nobody collected.
+    const ops: PatchOp<NodeAttrs, EdgeAttrs, GraphAttrs>[] | undefined = this.#observed
+      ? []
+      : undefined;
     for (const edgeId of [...outgoing, ...incoming]) {
       const detached = this.#detachEdge(edgeId);
       // A self loop is visited from both sides and detaches on the first, so
       // the miss on the second is what keeps it out of the patch twice over.
-      if (observed && detached !== undefined) ops.push(edgeOp('remove-edge', detached));
+      if (ops !== undefined && detached !== undefined) ops.push(edgeOp('remove-edge', detached));
     }
     this.#outEdges.delete(id);
     this.#inEdges.delete(id);
@@ -579,7 +638,7 @@ export class Graph<
     // that array is the undo: the node comes back before the edges that need
     // it, and replaying it forwards never re-triggers the cascade, because the
     // edges are already gone by the time the node op runs.
-    if (observed) {
+    if (ops !== undefined) {
       ops.push(nodeOp('remove-node', node));
       this.#emit(ops);
     }
@@ -789,7 +848,7 @@ export class Graph<
    */
   updateEdgeAttrs(id: EdgeId, patch: AttrsPatch<EdgeAttrs>): Edge<EdgeAttrs> {
     const edge = this.requireEdge(id);
-    const diff = diffAttrs(edge.attrs, patch);
+    const diff = diffAttrs(edge.attrs, patch, this.#observed);
     if (diff === undefined) return edge;
     const next = freezeEdge(
       edge.id,
@@ -800,9 +859,14 @@ export class Graph<
       edge.targetPort,
     );
     this.#edges.set(id, next);
-    if (this.#observed) {
+    if (diff.report !== undefined) {
       this.#emit([
-        Object.freeze({ op: 'update-edge-attrs', id, patch: diff.patch, before: diff.before }),
+        Object.freeze({
+          op: 'update-edge-attrs',
+          id,
+          after: diff.report.after,
+          before: diff.report.before,
+        }),
       ]);
     }
     return next;
@@ -859,7 +923,7 @@ export class Graph<
         Object.freeze({
           op: 'update-edge-ports',
           id,
-          patch: Object.freeze({
+          after: Object.freeze({
             ...(movedSource ? { sourcePort } : {}),
             ...(movedTarget ? { targetPort } : {}),
           }),
@@ -981,9 +1045,14 @@ export class Graph<
   }
 
   /**
-   * Whether anything is watching. Every emission site tests this before it
-   * builds its ops, so an unwatched graph pays one comparison per mutation and
-   * allocates nothing.
+   * Whether anything is watching.
+   *
+   * Read before anything a patch would need is built, never after. The simple
+   * sites test it and then build their one op; the two that would otherwise
+   * allocate on the way to the decision take it as an argument instead, the
+   * attribute diff for its two report bags and the `removeNode` cascade for its
+   * op array. So an unwatched graph pays one comparison per mutation and
+   * allocates nothing towards a patch it is not going to emit.
    */
   get #observed(): boolean {
     return this.#listeners.size > 0;
@@ -995,9 +1064,15 @@ export class Graph<
    * The listener set is copied before the walk, so a listener that subscribes
    * or unsubscribes during emission cannot change who this emission calls. Each
    * listener is called inside a try, so one that throws does not swallow the
-   * ones after it, and the collected errors are rethrown afterwards: a single
-   * error as itself, so an `instanceof` check on the caller's side still works,
-   * and several as an `AggregateError`.
+   * ones after it, and whatever was collected comes back out as a single
+   * {@link PatchListenerError} however many listeners failed.
+   *
+   * One shape at every count, rather than the failure passing through as itself
+   * when exactly one listener threw. The mutation is already committed by the
+   * time any listener runs, so a listener's error surfacing unwrapped from the
+   * mutating call is indistinguishable from the graph having refused that call,
+   * `isDagrGraphError` included, and the mirroring case makes that collision
+   * routine rather than exotic.
    *
    * Only reached when {@link Graph.#observed} is true, so there is no empty
    * listener set to check for here.
@@ -1012,8 +1087,7 @@ export class Graph<
         failures.push(error);
       }
     }
-    if (failures.length === 1) throw failures[0];
-    if (failures.length > 1) throw new AggregateError(failures, 'patch listeners threw');
+    if (failures.length > 0) throw new PatchListenerError(failures);
   }
 
   /** The out-edge index for a node that must exist. */

@@ -13,6 +13,7 @@ import {
   isDagrGraphError,
 } from '../src/errors.js';
 import type { DagrGraphErrorCode, DagrGraphErrorLike } from '../src/errors.js';
+import { PatchListenerError } from '../src/patch.js';
 
 /**
  * The base class is abstract, so a test that wants a bare family member has to
@@ -168,6 +169,19 @@ describe('isDagrGraphError', () => {
     expect(isDagrGraphError(undefined)).toBe(false);
     expect(isDagrGraphError(null)).toBe(false);
     expect(isDagrGraphError('NODE_NOT_FOUND')).toBe(false);
+  });
+
+  /**
+   * This predicate means "the graph rejected this call", and a listener failure
+   * is the opposite: the mutation was accepted and committed, and something
+   * downstream of the commit threw. So {@link PatchListenerError} deliberately
+   * stays outside the family, however plausible it looks wrapping a graph error
+   * of its own.
+   */
+  it('rejects a patch listener failure, even one wrapping a graph error', () => {
+    const rejection = new DuplicateNodeError('a');
+    expect(isDagrGraphError(rejection)).toBe(true);
+    expect(isDagrGraphError(new PatchListenerError([rejection]))).toBe(false);
   });
 
   /**

@@ -248,7 +248,7 @@ describe('Graph patch emission for ports', () => {
 });
 
 describe('Graph patch emission for attribute updates', () => {
-  it('emits an update-node-attrs op with the patch and the prior values', () => {
+  it('emits an update-node-attrs op with the new values and the prior ones', () => {
     const { graph, patches } = watched();
     graph.addNode({ id: 'a', attrs: { label: 'A' } });
     patches.length = 0;
@@ -257,13 +257,13 @@ describe('Graph patch emission for attribute updates', () => {
       {
         op: 'update-node-attrs',
         id: 'a',
-        patch: { label: 'B', width: 4 },
+        after: { label: 'B', width: 4 },
         before: { label: 'A', width: undefined },
       },
     ]);
   });
 
-  it('normalises the patch down to the keys that actually changed', () => {
+  it('normalises both bags down to the keys that actually changed', () => {
     const { graph, patches } = watched();
     graph.addNode({ id: 'a', attrs: { one: 1, two: 2, three: 3, four: 4 } });
     patches.length = 0;
@@ -271,7 +271,7 @@ describe('Graph patch emission for attribute updates', () => {
     // only `three` is a real change.
     graph.updateNodeAttrs('a', { one: 1, two: 2, three: 30, four: 4, five: undefined });
     expect(only(patches)).toStrictEqual([
-      { op: 'update-node-attrs', id: 'a', patch: { three: 30 }, before: { three: 3 } },
+      { op: 'update-node-attrs', id: 'a', after: { three: 30 }, before: { three: 3 } },
     ]);
   });
 
@@ -286,15 +286,15 @@ describe('Graph patch emission for attribute updates', () => {
     expect(op.before.label).toBeUndefined();
   });
 
-  it('spells a delete as a key present and undefined in the patch', () => {
+  it('spells a delete as a key present and undefined in the after bag', () => {
     const { graph, patches } = watched();
     graph.addNode({ id: 'a', attrs: { label: 'A' } });
     patches.length = 0;
     graph.updateNodeAttrs('a', { label: undefined });
     const op = only(patches)[0];
     if (op?.op !== 'update-node-attrs') throw new Error('expected an update-node-attrs op');
-    expect(Object.hasOwn(op.patch, 'label')).toBe(true);
-    expect(op.patch.label).toBeUndefined();
+    expect(Object.hasOwn(op.after, 'label')).toBe(true);
+    expect(op.after.label).toBeUndefined();
     expect(op.before).toStrictEqual({ label: 'A' });
   });
 
@@ -321,7 +321,7 @@ describe('Graph patch emission for attribute updates', () => {
     graph.updateNodeAttrs('a', { label: 'A' });
     const op = only(patches)[0];
     if (op?.op !== 'update-node-attrs') throw new Error('expected an update-node-attrs op');
-    expect(Object.isFrozen(op.patch)).toBe(true);
+    expect(Object.isFrozen(op.after)).toBe(true);
     expect(Object.isFrozen(op.before)).toBe(true);
   });
 
@@ -332,9 +332,9 @@ describe('Graph patch emission for attribute updates', () => {
     graph.updateNodeAttrs('a', { ['__proto__']: 'second' });
     const op = only(patches)[0];
     if (op?.op !== 'update-node-attrs') throw new Error('expected an update-node-attrs op');
-    expect(Object.keys(op.patch)).toEqual(['__proto__']);
+    expect(Object.keys(op.after)).toEqual(['__proto__']);
     expect(Object.keys(op.before)).toEqual(['__proto__']);
-    expect(Object.getPrototypeOf(op.patch)).toBe(Object.prototype);
+    expect(Object.getPrototypeOf(op.after)).toBe(Object.prototype);
     expect(Object.getPrototypeOf(op.before)).toBe(Object.prototype);
   });
 
@@ -349,7 +349,7 @@ describe('Graph patch emission for attribute updates', () => {
       {
         op: 'update-edge-attrs',
         id: 'ab',
-        patch: { dashed: true },
+        after: { dashed: true },
         before: { dashed: undefined },
       },
     ]);
@@ -361,7 +361,7 @@ describe('Graph patch emission for attribute updates', () => {
     const { graph, patches } = watched();
     graph.updateAttrs({ rankdir: 'TB' });
     expect(only(patches)).toStrictEqual([
-      { op: 'update-graph-attrs', patch: { rankdir: 'TB' }, before: { rankdir: undefined } },
+      { op: 'update-graph-attrs', after: { rankdir: 'TB' }, before: { rankdir: undefined } },
     ]);
     graph.updateAttrs({ rankdir: 'TB' });
     expect(patches).toHaveLength(1);
@@ -386,7 +386,7 @@ describe('Graph patch emission for port rebinding', () => {
       {
         op: 'update-edge-ports',
         id: 'ab',
-        patch: { sourcePort: 'p2' },
+        after: { sourcePort: 'p2' },
         before: { sourcePort: 'p1' },
       },
     ]);
@@ -397,8 +397,8 @@ describe('Graph patch emission for port rebinding', () => {
     graph.updateEdgePorts('ab', { sourcePort: undefined });
     const op = only(patches)[0];
     if (op?.op !== 'update-edge-ports') throw new Error('expected an update-edge-ports op');
-    expect(Object.hasOwn(op.patch, 'sourcePort')).toBe(true);
-    expect(op.patch.sourcePort).toBeUndefined();
+    expect(Object.hasOwn(op.after, 'sourcePort')).toBe(true);
+    expect(op.after.sourcePort).toBeUndefined();
     expect(op.before).toStrictEqual({ sourcePort: 'p1' });
   });
 
@@ -409,7 +409,7 @@ describe('Graph patch emission for port rebinding', () => {
     if (op?.op !== 'update-edge-ports') throw new Error('expected an update-edge-ports op');
     expect(Object.hasOwn(op.before, 'targetPort')).toBe(true);
     expect(op.before.targetPort).toBeUndefined();
-    expect(op.patch).toStrictEqual({ targetPort: 'q1' });
+    expect(op.after).toStrictEqual({ targetPort: 'q1' });
   });
 
   it('names both ends when both move', () => {
@@ -419,7 +419,7 @@ describe('Graph patch emission for port rebinding', () => {
       {
         op: 'update-edge-ports',
         id: 'ab',
-        patch: { sourcePort: 'p2', targetPort: 'q1' },
+        after: { sourcePort: 'p2', targetPort: 'q1' },
         before: { sourcePort: 'p1', targetPort: undefined },
       },
     ]);
@@ -446,7 +446,7 @@ describe('Graph patch emission for port rebinding', () => {
     graph.updateEdgePorts('ab', { sourcePort: 'p2' });
     const op = only(patches)[0];
     if (op?.op !== 'update-edge-ports') throw new Error('expected an update-edge-ports op');
-    expect(Object.isFrozen(op.patch)).toBe(true);
+    expect(Object.isFrozen(op.after)).toBe(true);
     expect(Object.isFrozen(op.before)).toBe(true);
   });
 });

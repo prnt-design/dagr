@@ -19,8 +19,13 @@ findings addressed or logged, docs land with the feature.
 - [ ] **M0.2** Benchmark harness: vitest bench setup, a `bench` baseline
   capture script, baseline JSON committed, CI bench step comparing against
   baseline with a 10% tolerance. README development guide section.
-  Deliberately deferred until early M1 lands real code worth benchmarking;
-  scheduled after M1.3 (patches) at the latest.
+  Deliberately deferred until early M1 lands real code worth benchmarking.
+  That trigger has now fired: M1.3 landed patch emission on every mutation,
+  which is the first hot path in the repo that a baseline is meant to protect,
+  and `pnpm bench` is still `pnpm -r --if-present bench` with no package
+  defining one, so it is a silent no-op that would pass forever if CI ran it
+  as it stands. This is the next task off the board, before M1.4 adds more
+  graph surface to measure.
 
 ## M1: Graph model (`@dagr/graph`)
 
@@ -177,8 +182,12 @@ findings addressed or logged, docs land with the feature.
   here needs it, leave `apply` as it is and say so, rather than carrying the
   question further.
 - [ ] **M3.3** Stable positions: untouched-subgraph detection; nodes outside
-  the patch's influence keep their exact positions. Property tests: a
-  no-op patch yields an empty delta.
+  the patch's influence keep their exact positions. Property tests: a patch
+  confined to one subgraph yields a delta that names no node outside it.
+  Phrased in terms of influence rather than emptiness because there is no such
+  thing as a no-op patch: as of M1.3 a call that changes nothing emits nothing
+  at all, so a test written against an empty patch would be testing an input
+  the graph never produces.
 - [ ] **M3.4** Fast paths: add-leaf, remove-leaf, and attribute-only patches
   skip full pipeline stages. Bench: fast path at least 5x full relayout on
   the 1k corpus, baseline committed.
