@@ -709,7 +709,9 @@ Every error the graph throws to refuse a call extends `DagrGraphError`, so one
 `catch` with one `instanceof` test covers the family. The one exported error
 class outside it is `PatchListenerError`, which is thrown after a call is
 committed rather than instead of committing it, and the listener semantics
-section above says why that distinction is worth a class of its own. `DagrGraphError` declares a `code` field, typed as the
+section above says why that distinction is worth a class of its own.
+
+`DagrGraphError` declares a `code` field, typed as the
 `DagrGraphErrorCode` union, so callers who would rather switch on a value than
 on a class can do it through the base class and have the switch checked for
 exhaustiveness:
