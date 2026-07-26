@@ -112,6 +112,56 @@ describe('feedbackArcSet', () => {
     expect([...feedbackArcSet(graph)]).toEqual([]);
   });
 
+  // The case above pins the two weighted decrements as a pair: unweighting both
+  // fails it. Unweighting only the in-degree line survives it, so this one holds
+  // that line alone. There is a real cycle here (`b -> c` doubled against
+  // `c -> b`), and the cheap cut is the single `c -> b`. Dropping `b`'s
+  // in-degree by one rather than by three when `a` goes leaves `b` looking like
+  // it still has an unsatisfied predecessor, which changes which of the two
+  // gets picked first, and the run cuts both copies of `b -> c` instead. So the
+  // symptom here is a worse answer rather than a wrong one, which is exactly
+  // why it needs its own case: nothing about acyclicity catches it.
+  it('weighs the in-degree drop, so a cycle is cut on its cheap side', () => {
+    const graph = build(
+      ['a', 'b', 'c'],
+      [
+        ['a', 'b', 'ab1'],
+        ['a', 'b', 'ab2'],
+        ['a', 'b', 'ab3'],
+        ['b', 'c', 'bc1'],
+        ['b', 'c', 'bc2'],
+        ['c', 'b', 'cb'],
+      ],
+    );
+    expect([...feedbackArcSet(graph)]).toEqual(['cb']);
+  });
+
+  // And this one holds the out-degree line, the other half of the pair. Unlike
+  // the two cases above, the mutant here does not cut more edges, it cuts a
+  // different one, so nothing about size or acyclicity catches it and only the
+  // exact set does. That is still worth pinning: which edge gets reversed is
+  // what the router draws going the other way, and stability across runs is a
+  // stated guarantee of this module rather than an implementation detail.
+  //
+  // The mechanism: `b` is a sink, so it goes first, and taking it drops `a`'s
+  // out-degree by the two arcs into it. That is what lets `a` fall to the same
+  // delta as `c`, where the FIFO bucket puts `c` first (it was seeded there and
+  // `a` only just arrived), and the order c, a, b reverses `a -> c`. Dropping
+  // `a` by one instead leaves it a delta above `c`, so `a` is picked first and
+  // the run reverses `c -> a`.
+  it('weighs the out-degree drop, so the cycle is cut on the same side each run', () => {
+    const graph = build(
+      ['a', 'b', 'c'],
+      [
+        ['a', 'b', 'ab1'],
+        ['a', 'b', 'ab2'],
+        ['a', 'c', 'ac'],
+        ['c', 'a', 'ca'],
+      ],
+    );
+    expect([...feedbackArcSet(graph)]).toEqual(['ac']);
+  });
+
   // A self loop is skipped when the condensation is built, and not only because
   // it is never reversed. A loop adds one to BOTH of its vertex's degrees, so it
   // leaves `outdeg - indeg` alone and still pushes the vertex out of the sink
