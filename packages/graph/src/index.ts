@@ -20,6 +20,7 @@ export type {
   Edge,
   EdgeId,
   EdgeInit,
+  EdgePortsPatch,
   Node,
   NodeId,
   NodeInit,

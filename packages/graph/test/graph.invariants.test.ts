@@ -80,7 +80,12 @@ function applyPatch(
   const next: Record<string, unknown> = { ...current };
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) delete next[key];
-    else next[key] = value;
+    // Defined rather than assigned, for the same reason the graph does it: a
+    // plain assignment of a `__proto__` key hits the inherited accessor and
+    // reassigns this object's prototype instead of storing anything. The
+    // shadow has to store what the graph stores, or the key pool below could
+    // not include `__proto__` at all.
+    else Object.defineProperty(next, key, { value, writable: true, enumerable: true, configurable: true });
   }
   return next;
 }
@@ -325,7 +330,10 @@ const NODE_POOL = ['a', 'b', 'c', 'd', 'e', 'f'] as const;
 const EDGE_POOL = ['x1', 'x2', 'x3'] as const;
 const PORT_POOL = ['p1', 'p2', 'p3'] as const;
 const DIRECTION_POOL = ['in', 'out', 'inout'] as const;
-const ATTR_KEYS = ['label', 'width', 'weight'] as const;
+// `__proto__` is in the pool on purpose. It is the one key where storing and
+// reading a bag can go wrong without any operation failing, so leaving it out
+// made the prototype assertion in `checkInvariants` inert.
+const ATTR_KEYS = ['label', 'width', 'weight', '__proto__'] as const;
 /** `undefined` is in the pool on purpose: it is the delete form of a patch. */
 const ATTR_VALUES = [1, 'x', true, undefined] as const;
 

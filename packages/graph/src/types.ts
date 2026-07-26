@@ -86,6 +86,17 @@ export interface NodeInit<A extends object = Attrs> {
   readonly ports?: readonly PortInit[];
 }
 
+/**
+ * A rebinding of an edge's port ends. An absent key leaves that end alone, an
+ * explicit `undefined` detaches it. Named and exported for the same reason
+ * {@link AttrsPatch} is: a caller building one in a variable needs something
+ * to annotate it with.
+ */
+export interface EdgePortsPatch {
+  readonly sourcePort?: PortId | undefined;
+  readonly targetPort?: PortId | undefined;
+}
+
 /** An edge as a caller declares it. Only the endpoints are required. */
 export interface EdgeInit<A extends object = Attrs> {
   readonly source: NodeId;

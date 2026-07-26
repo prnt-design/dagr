@@ -15,6 +15,7 @@ import type {
   Edge,
   EdgeId,
   EdgeInit,
+  EdgePortsPatch,
   Node,
   NodeId,
   NodeInit,
@@ -152,7 +153,11 @@ function freezeNode<A extends object>(
   attrs: ReadAttrs<A>,
   ports: ReadonlyMap<PortId, Port> | readonly Port[],
 ): Node<A> {
-  const frozen = Array.isArray(ports) ? ports : Object.freeze([...ports.values()]);
+  // Frozen on both branches, so this function guarantees on its own that what
+  // it stores cannot be written to, rather than trusting every array-passing
+  // caller to have done it. Freezing an already-frozen array returns the same
+  // reference, so the identity the pass-through exists to preserve survives.
+  const frozen = Array.isArray(ports) ? Object.freeze(ports) : Object.freeze([...ports.values()]);
   return Object.freeze({ id, attrs, ports: frozen });
 }
 
@@ -651,13 +656,7 @@ export class Graph<
    * @throws {PortNotFoundError} when a named port is not declared on its node.
    * @throws {PortDirectionError} when a named port faces the wrong way.
    */
-  updateEdgePorts(
-    id: EdgeId,
-    ports: {
-      readonly sourcePort?: PortId | undefined;
-      readonly targetPort?: PortId | undefined;
-    },
-  ): Edge<EdgeAttrs> {
+  updateEdgePorts(id: EdgeId, ports: EdgePortsPatch): Edge<EdgeAttrs> {
     const edge = this.requireEdge(id);
     // `Object.hasOwn` rather than an `=== undefined` test, because absent and
     // present-and-undefined are the two different requests this takes.
