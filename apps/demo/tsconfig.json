@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"],
+    // The Dagr packages publish from dist, which does not exist in a fresh
+    // clone. For local typecheck and for vite builds the demo reads package
+    // sources directly, mirrored by the alias in vite.config.ts.
+    "paths": {
+      "@dagr/graph": ["../../packages/graph/src/index.ts"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}

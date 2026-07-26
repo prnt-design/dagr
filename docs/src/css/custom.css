@@ -1,0 +1,23 @@
+/* Minimal theme overrides. Kept small on purpose: the visual identity lands
+   with the renderer work, not with the scaffold. */
+
+:root {
+  --ifm-color-primary: #2a5bd7;
+  --ifm-color-primary-dark: #2652c2;
+  --ifm-color-primary-darker: #244db7;
+  --ifm-color-primary-darkest: #1e4097;
+  --ifm-color-primary-light: #3e6ade;
+  --ifm-color-primary-lighter: #4a73e0;
+  --ifm-color-primary-lightest: #6c8ce7;
+  --ifm-code-font-size: 95%;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #8aa8f5;
+  --ifm-color-primary-dark: #6c92f2;
+  --ifm-color-primary-darker: #5d86f1;
+  --ifm-color-primary-darkest: #3064ec;
+  --ifm-color-primary-light: #a8bef8;
+  --ifm-color-primary-lighter: #b7c9f9;
+  --ifm-color-primary-lightest: #e3eafd;
+}

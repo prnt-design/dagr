@@ -6,3 +6,16 @@ dist/
 coverage/
 .env
 .env.*
+
+# TypeScript incremental build state
+*.tsbuildinfo
+
+# Docusaurus
+.docusaurus/
+docs/build/
+
+# Vite / vitest caches
+.vite/
+**/node_modules/.vite/
+**/node_modules/.vitest/
+vite.config.*.timestamp-*

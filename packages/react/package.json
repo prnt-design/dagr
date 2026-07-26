@@ -1,0 +1,34 @@
+{
+  "name": "@dagr/react",
+  "version": "0.1.0",
+  "description": "React bindings for Dagr: the DagrCanvas component and hooks.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prnt-design/dagr",
+    "directory": "packages/react"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json"
+  }
+}

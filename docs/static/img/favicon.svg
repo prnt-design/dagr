@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-labelledby="dagr-logo-title">
+  <title id="dagr-logo-title">Dagr</title>
+
+  <!--
+    Dagr: the smallest interesting directed acyclic graph, drawn at daybreak.
+
+      rank 0   the sun, rising through the horizon: the source node
+      rank 1   two nodes, one per path
+      rank 2   one sink, where the paths join again
+
+    The horizon is also rank 0's layout line: every edge drops from beneath
+    it, the way a Sugiyama layout hangs each rank off the one above. Edges are
+    tapered beams, wide at the source and narrow at the target, so direction
+    is carried by the geometry itself instead of by arrowheads; they read as
+    first light off the sun as much as they read as arcs.
+
+    The sun's arc is the only curve in the mark. Everything else is cut
+    straight and on the diagonal, the way a rune is cut.
+
+    All geometry sits on a 128 grid so the mark stays crisp down to 64px, and
+    the colours are mid-tone by design: nothing here goes dark enough to
+    disappear on #0d1117. Every gradient declares a solid fallback colour.
+
+    The sun is the one place where that is not enough. Its gradient runs hot
+    and pale toward the horizon (#FFC15C, only 1.61:1 on white), so the lower
+    half of its curved edge could not hold itself against a white page. That
+    glow is the whole point of the mark on dark, so rather than cool it down,
+    the sun is rimmed in the horizon's own colour: the line it is rising
+    through, carried up and around the edge. The rim keeps the interior glow
+    untouched and puts a 4.23:1 boundary between the sun and the page.
+  -->
+
+  <defs>
+    <!-- the sun: deep at the crown, hot where it meets the horizon -->
+    <linearGradient id="dagr-sun" gradientUnits="userSpaceOnUse" x1="64" y1="7" x2="64" y2="41">
+      <stop offset="0" stop-color="#EF5A2B"/>
+      <stop offset="0.55" stop-color="#F8853A"/>
+      <stop offset="1" stop-color="#FFC15C"/>
+    </linearGradient>
+
+    <!-- edges: daylight leaving the source, cooling to night at the sink -->
+    <linearGradient id="dagr-edge" gradientUnits="userSpaceOnUse" x1="64" y1="43" x2="64" y2="114">
+      <stop offset="0" stop-color="#F2622E"/>
+      <stop offset="0.5" stop-color="#B45BC8"/>
+      <stop offset="1" stop-color="#7A5CF0"/>
+    </linearGradient>
+
+    <!-- nodes: lit from the upper left, so each one reads as a cut facet -->
+    <linearGradient id="dagr-node" x1="0" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#9179FF"/>
+      <stop offset="1" stop-color="#5B41E8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ═══ edges, drawn first, so the horizon and the nodes seat on top ═══ -->
+  <g fill="url(#dagr-edge) #8C5AD8">
+    <!-- source → left node -->
+    <path d="M45.97 40.4 28.82 73.24 31.18 74.76 54.03 45.6Z"/>
+    <!-- source → right node -->
+    <path d="M73.97 45.6 96.82 74.76 99.18 73.24 82.03 40.4Z"/>
+    <!-- left node → sink -->
+    <path d="M26.66 77.16 62.98 110.96 65.02 109.04 33.34 70.84Z"/>
+    <!-- right node → sink -->
+    <path d="M94.66 70.84 62.98 109.04 65.02 110.96 101.34 77.16Z"/>
+  </g>
+
+  <!-- ═══ rank 0: the sun, and the horizon it is rising through ═══ -->
+  <!-- a disc truncated well below its own equator, so the silhouette turns
+       back in at the cut: that is what reads as a sunrise, not as an arch -->
+  <path d="M51.15 40a19 19 0 1 1 25.7 0Z" fill="url(#dagr-sun) #F2622E"/>
+  <!-- the sun's rim, in the horizon's own colour: this is the edge that has to
+       hold against a white page. It runs on past the cut, down to y=41.5, so
+       both of its ends finish underneath the horizon rather than against it -->
+  <path d="M53.01 41.5a19 19 0 1 1 21.98 0" fill="none" stroke="#D94A2B" stroke-width="3"/>
+  <!-- the horizon, chisel-flared at both ends -->
+  <path d="M32 40h64l4 4H28Z" fill="#D94A2B"/>
+
+  <!-- ═══ ranks 1 and 2: the nodes ═══ -->
+  <g fill="url(#dagr-node) #6E56F0">
+    <path d="M30 62 42 74 30 86 18 74Z"/>
+    <path d="M98 62 110 74 98 86 86 74Z"/>
+    <path d="M64 97 77 110 64 123 51 110Z"/>
+  </g>
+</svg>
