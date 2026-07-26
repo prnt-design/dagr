@@ -24,14 +24,10 @@ import type {
   RouteStage,
   Size,
 } from '../src/index.js';
-// The four placeholder stages are deliberately not part of the public surface,
-// so the tests that name them reach into the module that defines them.
-import {
-  gridPositionStage,
-  insertionOrderStage,
-  singleRankStage,
-  straightRouteStage,
-} from '../src/stages.js';
+// The default stages are deliberately not part of the public surface, so the
+// tests that name them reach into the modules that define them.
+import { longestPathRankStage } from '../src/rank.js';
+import { gridPositionStage, insertionOrderStage, straightRouteStage } from '../src/stages.js';
 
 describe('@dagr/layout public surface', () => {
   it('exports the entry point', () => {
@@ -39,7 +35,7 @@ describe('@dagr/layout public surface', () => {
   });
 
   it('exports the default stages as a set, which is what they are reachable as', () => {
-    expect(api.defaultStages.rank).toBe(singleRankStage);
+    expect(api.defaultStages.rank).toBe(longestPathRankStage);
     expect(api.defaultStages.order).toBe(insertionOrderStage);
     expect(api.defaultStages.position).toBe(gridPositionStage);
     expect(api.defaultStages.route).toBe(straightRouteStage);

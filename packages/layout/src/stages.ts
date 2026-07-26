@@ -1,38 +1,35 @@
 import type { EdgeId, NodeId } from '@dagr/graph';
-import type {
-  LayoutStages,
-  OrderStage,
-  Point,
-  PositionStage,
-  RankStage,
-  RouteStage,
-  Size,
-} from './types.js';
+import { longestPathRankStage } from './rank.js';
+import type { LayoutStages, OrderStage, Point, PositionStage, RouteStage, Size } from './types.js';
 
 /**
- * The pass-through stages the pipeline uses when the caller supplies none.
+ * The order, position and route stages the pipeline uses when the caller
+ * supplies none, and the stage set that binds them to the rank stage.
  *
- * None of these is a real algorithm. They exist so that M2.1 has an end-to-end
- * pipeline that produces a well formed `LayoutResult` for any graph, and so that
+ * None of the three here is a real algorithm yet. They exist so that the
+ * pipeline produces a well formed `LayoutResult` for any graph, and so that
  * every later milestone can be a one-stage swap against a runner and a test
- * suite that already work: cycle breaking and ranking replace
- * {@link singleRankStage} (M2.2, M2.3), crossing reduction replaces
+ * suite that already work: crossing reduction replaces
  * {@link insertionOrderStage} (M2.5, M2.6), Brandes-Koepf replaces
  * {@link gridPositionStage} (M2.7), and polyline routing replaces
- * {@link straightRouteStage} (M2.8).
+ * {@link straightRouteStage} (M2.8). The rank stage is no longer among them:
+ * M2.2 replaced the single-rank placeholder with `longestPathRankStage`, which
+ * breaks cycles and ranks by longest path, and M2.3 will tighten those ranks
+ * rather than replace the stage wholesale.
  *
  * What they do guarantee, and what their tests hold them to, is the pipeline
- * contract: every node ranked, every node in exactly one layer, every node
- * positioned, every edge routed, and no two node boxes overlapping (up to
- * floating point rounding, see {@link gridPositionStage}).
+ * contract: every node in exactly one layer, every node positioned, every edge
+ * routed, and no two node boxes overlapping (up to floating point rounding, see
+ * {@link gridPositionStage}).
  *
- * Each of the four is exported from this module, for the tests, and none of
- * them is exported from the package: `index.ts` re-exports `defaultStages`
- * alone. Every one of them is scheduled for replacement, and a public name now
- * is a choice later between breaking callers and keeping a dead placeholder
- * exported forever. `defaultStages` covers the use case the individual names
- * would serve, wrapping whatever the current default is, and it keeps working
- * when the default behind one of its properties changes.
+ * Each is exported from this module, for the tests, and none of them is
+ * exported from the package: `index.ts` re-exports `defaultStages` alone. Every
+ * one of them is scheduled for replacement, and a public name now is a choice
+ * later between breaking callers and keeping a dead placeholder exported
+ * forever. `defaultStages` covers the use case the individual names would
+ * serve, wrapping whatever the current default is, and it keeps working when
+ * the default behind one of its properties changes, which is exactly what
+ * happened to `rank` in M2.2.
  */
 
 /** A size that must be present. Absence is a runner bug, so it fails loudly. */
@@ -55,33 +52,6 @@ function requirePoint(positions: ReadonlyMap<NodeId, Point>, id: NodeId): Point 
   if (point === undefined) throw new Error(`layout invariant: node "${id}" was never positioned`);
   return point;
 }
-
-/**
- * Puts every node on rank 0, reverses nothing, and declares no virtual node.
- *
- * Trivially correct for a graph with cycles, which is the point: the pipeline
- * has to produce something for any input before M2.2 teaches it to break cycles
- * and rank by longest path. Every edge runs within one rank, which satisfies
- * the ranking invariant the runner checks without any of the work.
- *
- * `reversedEdges` and `virtualNodes` are both empty and both fill in later:
- * cycle breaking uses the first in M2.2, dummy-node chains use the second in
- * M2.4. They live on the record rather than in the graph because the one thing
- * this pipeline promises is that it never touches the caller's graph.
- */
-export const singleRankStage: RankStage = {
-  name: 'single-rank',
-  run(input) {
-    const ranks = new Map<NodeId, number>();
-    for (const node of input.graph.nodes()) ranks.set(node.id, 0);
-    return {
-      ...input,
-      ranks,
-      reversedEdges: new Set<EdgeId>(),
-      virtualNodes: new Set<NodeId>(),
-    };
-  },
-};
 
 /**
  * Groups the roster by rank and orders each layer by graph insertion order.
@@ -212,7 +182,7 @@ export const straightRouteStage: RouteStage = {
  * because it is shared by every default run in the process.
  */
 export const defaultStages: LayoutStages = Object.freeze({
-  rank: singleRankStage,
+  rank: longestPathRankStage,
   order: insertionOrderStage,
   position: gridPositionStage,
   route: straightRouteStage,

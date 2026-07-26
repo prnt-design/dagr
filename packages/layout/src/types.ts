@@ -125,9 +125,17 @@ export interface RankedState extends PreparedState {
   /**
    * Edges the ranker treated as pointing the other way, so that later stages
    * and the router can put them back. Every id has to be an edge the graph
-   * holds. Empty until cycle breaking lands in M2.2. It exists now because the
-   * alternative, mutating the caller's graph, is the one thing this pipeline
-   * promises not to do.
+   * holds, and a self loop is never one of them: reversing a self loop cannot
+   * make it any less of a cycle.
+   *
+   * Filled in since M2.2, where the default ranker started breaking cycles with
+   * a greedy feedback arc set. It exists rather than the ranker flipping the
+   * edge because the alternative, mutating the caller's graph, is the one thing
+   * this pipeline promises not to do.
+   *
+   * It is bookkeeping between the ranker and the router, and never the
+   * consumer's business: a {@link RoutedEdge} runs from `source` to `target` as
+   * the caller authored them whatever is in here.
    */
   readonly reversedEdges: ReadonlySet<EdgeId>;
 

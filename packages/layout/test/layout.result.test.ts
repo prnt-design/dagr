@@ -116,11 +116,13 @@ describe('layout result', () => {
     }
   });
 
-  it('lays a single rank out left to right, centred on the origin', () => {
+  it('lays each rank out left to right, centred on the origin', () => {
+    // Two rows since M2.2: the ranker puts `a` above the pair it fans out to,
+    // rather than everything on one rank.
     const result = layout({ graph: fanOut() });
-    expect(result.nodes.get('a')).toEqual({ id: 'a', x: -150, y: 20, width: 100, height: 40 });
-    expect(result.nodes.get('b')).toEqual({ id: 'b', x: 0, y: 20, width: 100, height: 40 });
-    expect(result.nodes.get('c')).toEqual({ id: 'c', x: 150, y: 20, width: 100, height: 40 });
+    expect(result.nodes.get('a')).toEqual({ id: 'a', x: 0, y: 20, width: 100, height: 40 });
+    expect(result.nodes.get('b')).toEqual({ id: 'b', x: -75, y: 110, width: 100, height: 40 });
+    expect(result.nodes.get('c')).toEqual({ id: 'c', x: 75, y: 110, width: 100, height: 40 });
   });
 
   it('routes every edge as two points at the endpoint centres', () => {
@@ -131,19 +133,19 @@ describe('layout result', () => {
       source: 'a',
       target: 'b',
       points: [
-        { x: -150, y: 20 },
         { x: 0, y: 20 },
+        { x: -75, y: 110 },
       ],
     });
     expect(result.edges.get('ac')?.points).toEqual([
-      { x: -150, y: 20 },
-      { x: 150, y: 20 },
+      { x: 0, y: 20 },
+      { x: 75, y: 110 },
     ]);
   });
 
   it('encloses every node box in the bounds', () => {
     const result = layout({ graph: fanOut() });
-    expect(result.bounds).toEqual({ x: -200, y: 0, width: 400, height: 40 });
+    expect(result.bounds).toEqual({ x: -125, y: 0, width: 250, height: 130 });
     expectBoundsEnclose(result);
   });
 
@@ -152,8 +154,9 @@ describe('layout result', () => {
   });
 
   it('stacks ranks downward without overlapping them', () => {
-    // The default ranker puts everything on rank 0, so a multi-rank layout
-    // needs a stage of its own. This doubles as a swappability check.
+    // The default ranker would put `b` and `c` on one rank, so a layout with
+    // one node per row needs a stage of its own. This doubles as a
+    // swappability check.
     const byInsertion: RankStage = {
       name: 'one-node-per-rank',
       run(input) {

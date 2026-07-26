@@ -90,7 +90,7 @@ describe('layout stage contract', () => {
   it('catches an order stage that lists a node twice', () => {
     const doubling: OrderStage = {
       name: 'doubling-order',
-      run: (input) => ({ ...input, layers: [['a', 'b'], ['a']] }),
+      run: (input) => ({ ...input, layers: [['a'], ['b'], ['a']] }),
     };
     const error = expectContractError({ order: doubling });
     expect(error.stage).toBe('doubling-order');
@@ -101,7 +101,7 @@ describe('layout stage contract', () => {
   it('catches an order stage that invents a node', () => {
     const inventing: OrderStage = {
       name: 'inventing-order',
-      run: (input) => ({ ...input, layers: [['a', 'b', 'ghost']] }),
+      run: (input) => ({ ...input, layers: [['a', 'ghost'], ['b']] }),
     };
     const error = expectContractError({ order: inventing });
     expect(error.stage).toBe('inventing-order');

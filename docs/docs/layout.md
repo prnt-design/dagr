@@ -11,14 +11,15 @@ sidebar_position: 3
 `LayoutResult`: where every node sits, how every edge runs, and the box around
 the lot.
 
-This page describes M2.1, which is the skeleton. The types, the runner, and the
+This page describes the pipeline as of M2.2. The types, the runner, and the
 stage boundaries are real: they are what every later milestone is built against,
 and the roster below exists so the one boundary that was going to have to move
-(M2.4's dummy nodes) does not. The four algorithms are not real: every default
-stage is a placeholder that produces a well formed but naive result. Expect the
-contract to gain rules as real stages land, rather than to lose them. See
-[What is not here yet](#what-is-not-here-yet) before you reach for this in
-anger.
+(M2.4's dummy nodes) does not. One of the four algorithms is real: the rank
+stage breaks cycles and ranks by longest path, so the layers are the ones the
+graph asks for. The other three are placeholders that produce a well formed but
+naive result. Expect the contract to gain rules as real stages land, rather than
+to lose them. See [What is not here yet](#what-is-not-here-yet) before you reach
+for this in anger.
 
 ## The shape of a run
 
@@ -126,6 +127,93 @@ roster" does not. The default order stage already walks the roster, so M2.4 adds
 to the ranker and the router (splitting a long edge into a chain, rejoining the
 chain into a polyline on output) without touching the contract between them.
 
+## Ranking, and what it does with a cycle
+
+The default rank stage is `longest-path-rank`. It runs in two steps: decide
+which edges have to be treated as running the other way, then rank what is left.
+
+### Cycle breaking
+
+Sugiyama layout wants a DAG, and real graphs have cycles. The stage computes a
+**feedback arc set**, a set of edges that would leave a DAG if they ran the
+other way, using the greedy heuristic of Eades, Lin and Smyth (1993). It builds
+a vertex order by repeatedly moving a sink to the front of a tail sequence, a
+source to the back of a head sequence, and, when it has neither, the vertex
+maximising `outdeg - indeg` to the back of the head sequence. Every edge running
+backwards in the finished order is in the set. On a simple digraph without self
+loops the result is proved to satisfy `|F| <= m/2 - n/6`, which is what makes it
+worth more than the back edges of a depth-first search: DFS reverses whatever
+its traversal order happens to meet, with no bound at all.
+
+**The graph is not mutated.** Nothing is flipped, nothing is added, nothing is
+removed. The set of edge ids lands in `RankedState.reversedEdges` and the rest
+of the pipeline reads the graph through it. That is not a stylistic choice: the
+pipeline's one hard promise is that a `Graph` handed to `layout` comes back
+identical, because M3 re-runs layout on every patch against a graph the caller
+still holds and still edits, and because two runs of the same input have to
+produce the same answer. A ranker that flipped an edge in place would make the
+second run a run of a different graph.
+
+**Self loops are never reversed.** A self loop is a cycle whichever way it
+points, so reversing it buys nothing, and the pipeline already tolerates it: the
+runner compares endpoint ranks with `<=` precisely so both ends of a loop can
+share a rank.
+
+**Parallel edges all go the same way.** The heuristic runs over the weighted
+simple condensation, where every edge from one ordered pair collapses into one
+arc whose weight is how many there were, and the decision is taken per pair.
+Two copies of `a -> b` are therefore never split, one reversed and one not,
+which would put a two-cycle straight back into the view that is supposed to be
+acyclic. The weighting also picks the cheaper cut: three edges one way against
+one the other reverses the one.
+
+### Ranking
+
+Over that view, a node with nothing pointing at it gets rank 0, and every other
+node sits one rank below the lowest node that points at it. Two properties fall
+out, and both are relied on:
+
+- **Minimum height.** The last rank is the number of edges on the longest path
+  in the acyclic view, which is a lower bound for any ranking that sends every
+  edge down at least one rank. No layering of this graph has fewer layers.
+- **Contiguity.** The ranks used are exactly `0..max`, with no gaps, because a
+  node at rank `r` only got there from a predecessor at rank `r - 1`. The order
+  stage turns ranks into layers and the runner rejects an empty layer, so a gap
+  would surface there.
+
+Every edge that is neither reversed nor a self loop runs **strictly** down:
+`rank(source) < rank(target)`. A reversed edge runs strictly up. The runner's
+own check is the weaker `<=`, because a self loop puts both ends on one rank and
+because M2.4's long edges will legitimately span several, but this stage means
+the strict form and its tests assert it.
+
+What longest path does not give is minimum total edge length. `a -> d` alongside
+`a -> b -> c -> d` leaves `a -> d` spanning three ranks, and a node with slack is
+pinned as far down as it can go rather than as far up. That is a quality problem
+rather than a correctness one, and it is what M2.3's rank tightening is for.
+
+### What `reversedEdges` means for you
+
+Nothing, and that is deliberate. A `RoutedEdge` runs from its `source` to its
+`target` as **you** authored them, whatever the ranker did to break a cycle, so
+an arrowhead drawn at the last point lands on the target on every edge. See
+[The result](#the-result). `reversedEdges` is bookkeeping between the ranker and
+the router, it does not appear in a `LayoutResult` at all, and a consumer that
+found itself consulting it would be working around a bug rather than using an
+API.
+
+### Determinism and cost
+
+Both steps are O(V + E) in time and space. Cycle breaking gets there by keeping
+vertices in degree buckets rather than rescanning what is left each round, and
+ranking is a Kahn-style sweep that visits each node and edge once; a 10k-node,
+40k-edge graph ranks in tens of milliseconds. Both are fully deterministic:
+vertices are numbered in `graph.nodes()` order, edges are walked in
+`graph.edges()` order, and ties fall to whichever node the graph saw first.
+Determinism here is load bearing rather than tidy, for the reason in
+[Determinism](#determinism): a ranker that resolved a tie differently on a
+re-run would move nodes the user never touched.
+
 ## Why the stages are swappable
 
 Every stage is an object with a `name` and a `run`:
@@ -150,7 +238,7 @@ layout({ graph }, { position: myPositionStage });
 
 The other three phases fall back to `defaultStages`, and the whole thing still
 typechecks, because a `PositionStage` is a `PositionStage` whoever wrote it.
-That is also how this project ships: M2.2 replaces the ranker, M2.5 replaces the
+That is also how this project ships: M2.2 replaced the ranker, M2.5 replaces the
 orderer, M2.7 replaces the positioner, each against a runner and a test suite
 that already work. The override object has a name of its own,
 `LayoutStageOverrides`, for when you build one separately from the call.
@@ -175,11 +263,12 @@ layout({ graph }, { position: timed });
 ```
 
 The four default stages are reachable only through `defaultStages`, and are not
-exported individually. Every one of them is a placeholder scheduled for
+exported individually. Three of them are still placeholders scheduled for
 replacement, so a name exported today is a name to delete tomorrow. Going
 through `defaultStages.position` also keeps this wrapper working when M2.7
-changes what that property points at, which importing the placeholder by name
-would not.
+changes what that property points at, which importing the stage by name would
+not: M2.2 already changed what `defaultStages.rank` points at, and no wrapper
+written this way noticed.
 
 ## The stage contract
 
@@ -217,7 +306,10 @@ After the **rank** stage:
 - every edge is a ranking: `rank(source) <= rank(target)` for an edge that was
   not reversed, `rank(target) <= rank(source)` for one that was. Less-or-equal
   rather than strictly-less, because a self loop puts both endpoints on one
-  rank, and after M2.4 a long edge legitimately spans several.
+  rank, and after M2.4 a long edge legitimately spans several. The default
+  ranker is strictly stricter than this and its own tests say so, see
+  [Ranking](#ranking); the contract stays weak because a third-party ranker with
+  a self loop to place has nowhere else to put it.
 
 After the **order** stage:
 
@@ -492,28 +584,30 @@ try {
 
 ## What is not here yet
 
-This is a skeleton. All four default stages are placeholders, and none of them
-is a layout algorithm:
+One of the four default stages is a layout algorithm. The other three are
+placeholders:
 
 | Stage | `name` | What it does today | What replaces it |
 | --- | --- | --- | --- |
-| rank | `single-rank` | Puts every node on rank 0. Reverses nothing, declares no virtual node. | Greedy feedback-arc-set cycle breaking and longest-path ranking (M2.2), then rank tightening (M2.3). |
+| rank | `longest-path-rank` | Breaks cycles with a greedy feedback arc set, then ranks by longest path. Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). | Rank tightening on top of it, not a replacement (M2.3), and dummy chains for long edges (M2.4). |
 | order | `insertion-order` | Groups the roster by rank, orders each layer by graph insertion order. | Barycenter sweeps with a crossing counter (M2.5), then transpose refinement (M2.6). |
 | position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. | Brandes-Koepf horizontal coordinate assignment (M2.7). |
 | route | `straight-route` | A straight two-point line between the endpoint centres. | Polylines through dummy-node coordinates, monotone in the rank axis (M2.8). |
 
-So a default run of a real graph gives you one row of boxes, evenly spaced, with
-straight lines crossing it. That is not a drawing anyone wants. What it is, is a
-run that always completes, never overlaps two boxes (see
-[Overlap, exactly](#overlap-exactly)), and satisfies every guarantee this page
-makes about the result, which is what the later milestones are built against.
+So a default run of a real graph gives you the right number of rows with the
+right nodes in them, and then evenly spaces each row in insertion order and
+joins the lot with straight lines. The layers are worth reading; the horizontal
+order and the edges are not yet. What it is, is a run that always completes,
+never overlaps two boxes (see [Overlap, exactly](#overlap-exactly)), and
+satisfies every guarantee this page makes about the result, which is what the
+later milestones are built against.
 
-`RankedState.reversedEdges` and `RankedState.virtualNodes` are both empty for
-the same reason: they are the bookkeeping slots cycle breaking fills in M2.2 and
-dummy-node chains fill in M2.4. They exist now because the alternative, mutating
-the caller's graph to flip an edge or to add a node, is the one thing this
-pipeline promises not to do. Both are checked already, so the stages that fill
-them in are additions rather than rewrites.
+`RankedState.virtualNodes` is still empty: it is the bookkeeping slot dummy-node
+chains fill in M2.4, and it exists now because the alternative, mutating the
+caller's graph to add a node, is the one thing this pipeline promises not to do.
+`RankedState.reversedEdges` was the same kind of slot until M2.2 filled it, and
+it filled without a contract change, which is the argument for having declared
+both early.
 
 Also still to come: a golden corpus compared against dagre with layout
 benchmarks (M2.9), and running the same API in a worker (M2.10). Incremental

@@ -66,7 +66,7 @@ describe('layout pipeline plumbing', () => {
     expect(result.edges.get('ab')?.points).toBe(recorder.outputs.route?.routes.get('ab'));
     expect(result.edges.get('ab')).toMatchObject({ id: 'ab', source: 'a', target: 'b' });
     expect([...result.nodes.keys()]).toEqual(['a', 'b']);
-    expect(result.bounds).toEqual({ x: -125, y: 0, width: 250, height: 40 });
+    expect(result.bounds).toEqual({ x: -50, y: 0, width: 100, height: 130 });
   });
 
   it('lets a later stage read everything computed upstream', () => {
@@ -75,9 +75,10 @@ describe('layout pipeline plumbing', () => {
     const route = recorder.inputs.route;
     expect(route?.sizes.get('a')).toEqual({ width: 100, height: 40 });
     expect(route?.ranks.get('a')).toBe(0);
+    expect(route?.ranks.get('b')).toBe(1);
     expect(route?.reversedEdges.size).toBe(0);
-    expect(route?.layers).toEqual([['a', 'b']]);
-    expect(route?.positions.get('a')).toEqual({ x: -75, y: 20 });
+    expect(route?.layers).toEqual([['a'], ['b']]);
+    expect(route?.positions.get('a')).toEqual({ x: 0, y: 20 });
   });
 
   it('uses the defaults for every phase the caller does not override', () => {
@@ -110,11 +111,18 @@ describe('layout pipeline plumbing', () => {
 
   it('never mutates the graph it was given', () => {
     const graph = chain();
+    // A stage that claims the one edge runs the other way, which means ranking
+    // `b` above `a` as well: the runner rejects a reversal the ranks disagree
+    // with.
     const reversing: RankStage = {
       name: 'reversing',
       run(input) {
         return {
           ...defaultStages.rank.run(input),
+          ranks: new Map([
+            ['a', 1],
+            ['b', 0],
+          ]),
           reversedEdges: new Set(['ab']),
         };
       },
@@ -156,9 +164,9 @@ describe('layout pipeline plumbing', () => {
     };
     const result = layout({ graph: chain() }, { route: routesOnly });
     expect([...result.nodes.keys()]).toEqual(['a', 'b']);
-    expect(result.nodes.get('a')).toEqual({ id: 'a', x: -75, y: 20, width: 100, height: 40 });
-    expect(result.nodes.get('b')).toEqual({ id: 'b', x: 75, y: 20, width: 100, height: 40 });
-    expect(result.bounds).toEqual({ x: -125, y: 0, width: 250, height: 40 });
+    expect(result.nodes.get('a')).toEqual({ id: 'a', x: 0, y: 20, width: 100, height: 40 });
+    expect(result.nodes.get('b')).toEqual({ id: 'b', x: 0, y: 110, width: 100, height: 40 });
+    expect(result.bounds).toEqual({ x: -50, y: 0, width: 100, height: 130 });
     expect(result.edges.get('ab')?.points).toHaveLength(2);
   });
 
@@ -190,7 +198,7 @@ describe('layout pipeline plumbing', () => {
 
   it('exposes the four defaults as a stage set', () => {
     expect(Object.keys(defaultStages).sort()).toEqual(['order', 'position', 'rank', 'route']);
-    expect(defaultStages.rank.name).toBe('single-rank');
+    expect(defaultStages.rank.name).toBe('longest-path-rank');
     expect(defaultStages.order.name).toBe('insertion-order');
     expect(defaultStages.position.name).toBe('grid-position');
     expect(defaultStages.route.name).toBe('straight-route');

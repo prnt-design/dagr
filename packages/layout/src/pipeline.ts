@@ -435,9 +435,13 @@ function assemble(graph: Graph, routed: RoutedState): LayoutResult {
  * rank stage on is checked over that roster, and the result is filtered back
  * down to the caller's own ids, so a declared node never escapes.
  *
- * As of M2.1 all four defaults are placeholders, so the result is a legible
- * grid rather than a drawing anyone would want. The plumbing, the types, and
- * the contract checks are the deliverable; the algorithms land in M2.2 onward.
+ * The default rank stage is real as of M2.2: it breaks cycles with a greedy
+ * feedback arc set and ranks by longest path, so the layers are the ones the
+ * graph asks for. The other three defaults are still placeholders, so within a
+ * layer the order is the graph's insertion order, the coordinates are a grid,
+ * and an edge is a straight line between two centres. Crossing reduction
+ * (M2.5), coordinate assignment (M2.7) and real routing (M2.8) replace them
+ * one at a time, against this runner and its contract checks.
  *
  * @throws {InvalidConfigError} when a separation or a size is not a finite
  * number that is zero or greater.

@@ -86,9 +86,18 @@ findings addressed or logged, docs land with the feature.
   source compatible whenever it lands, so the decision is cheap: `Port<A
   extends object = Attrs>`, an `attrs?` on `PortInit`, a fourth defaulted
   `Graph` type parameter, and `updatePortAttrs`.
-- [ ] **M2.2** Cycle breaking + ranking v1: greedy feedback-arc-set cycle
+- [x] **M2.2** Cycle breaking + ranking v1: greedy feedback-arc-set cycle
   breaker, longest-path ranking. Invariant tests: every edge points downward
   in rank after reversal bookkeeping.
+  Landed as two internal modules, `cycles.ts` (Eades-Lin-Smyth GR over the
+  weighted simple condensation, degree buckets, O(V + E)) and `rank.ts`
+  (`longest-path-rank`, a Kahn sweep over the acyclic view), with the
+  single-rank placeholder deleted rather than left as dead code. Self loops are
+  never reversed and never ranked, all parallel copies of a pair go the same
+  way, and the graph is still never mutated. The descent the stage produces is
+  strictly stronger than the runner's `<=` contract check, which stays weak on
+  purpose for self loops and for M2.4's long edges, so the strict form is
+  asserted in the stage's own tests instead.
 - [ ] **M2.3** Ranking v2: tight-tree / network-simplex rank tightening.
   Golden comparisons against longest-path on a small corpus; rank sum must
   never regress.
