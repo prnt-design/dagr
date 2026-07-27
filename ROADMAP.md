@@ -253,7 +253,7 @@ findings addressed or logged, docs land with the feature.
   strictly stronger than the runner's `<=` contract check, which stays weak on
   purpose for self loops and for M2.4b's long edges, so the strict form is
   asserted in the stage's own tests instead.
-- [ ] **M2.3** Ranking v2: tight-tree / network-simplex rank tightening.
+- [x] **M2.3** Ranking v2: tight-tree / network-simplex rank tightening.
   Golden comparisons against longest-path on a small corpus; rank sum must
   never regress.
   Two requirements added by the M3 planning review, both cheap here and not
@@ -272,6 +272,38 @@ findings addressed or logged, docs land with the feature.
   churn between equal-cost optima, because churn does not change the sum. Add a
   rank-stability check: re-ranking after a trivial perturbation must not move
   ranks that a tight-tree argument says are forced.
+  Landed as `networkSimplexRankStage`, and it does NOT replace the M2.2 ranker
+  the way this entry assumed: `defaultStages.rank` is still `longest-path-rank`
+  and the new stage is selected per run. The reason is the one thing the entry
+  did not price. Minimum total edge length and minimum height are different
+  objectives, and longest path already achieves the second exactly, so this
+  stage can only spend height to buy length. Six nodes are enough to lose a
+  rank of height for a unit of length, and a default that quietly made some
+  drawings taller is not a default. What it buys is large and measured: the 1k
+  bench corpus goes from 40,430 dummy nodes to 17,285, a 57% cut, in about
+  20ms, and the 10k corpus from 1,414,263 to 405,709 inside the default pivot
+  budget. Which of the two a run wants is the caller's call and now has a name.
+  Cut values come from one postorder accumulation of `indegree - outdegree`
+  rather than the textbook's leaf elimination, and a pivot costs the subtree it
+  moves and the edges incident to it rather than the whole graph, which is what
+  makes the 10k corpus a matter of seconds rather than the prototype's minutes.
+  It still does not converge there: 200,000 pivots takes 41 seconds and is
+  still improving, so the default budget of 20,000 is a valve rather than a
+  promise. The remaining O(V) per pivot is the scan for a tree edge with a
+  negative cut value, and a candidate structure for that is the next thing to
+  try if M2.9 says the 10k number matters.
+  Both M3 requirements landed as asked. The warm start is a stage factory
+  taking `initialRanks`, treated as a HINT and repaired into feasibility before
+  use rather than trusted, so a stale or hostile one can only choose between
+  optima. The stability check is beside the sum check, and it fails without the
+  warm start: the perturbed graph re-ranks a node a whole rank away for no
+  reason at all when the previous ranks are not passed in.
+  One thing found by measurement rather than reasoning, recorded because it
+  would be easy to reintroduce: a budget too small to pivot can return a
+  ranking WORSE than longest path. It is the tight tree rather than any pivot
+  that does it, and an eight-node graph in the suite reaches it, so each
+  component keeps the better of the ranking it started with and the one it
+  ended with.
 - [x] **M2.4a** Stage return types: the four stage interfaces return only their
   own contribution rather than the whole next record.
   Decided here, and no later, whether the four stage interfaces should return
@@ -433,12 +465,15 @@ than that: M3.6 needs M2.6's crossing corpus, and M3.9 needs M2.9's 1k and 10k
 benchmark baselines.
 
 M3 also depends on two requirements now recorded upstream, both added by this
-milestone's planning review and both placed on the unbuilt task that owns them:
-M2.4b's dummy ids must be a deterministic function of edge and rank, and M2.3's
-network simplex must be warm-startable. Neither is retrofittable from inside M3.
-If either lands without its requirement, say so here rather than working around
-it, because both defeat stability in ways the node-displacement metrics cannot
-see.
+milestone's planning review and both placed on the task that owns them: M2.4b's
+dummy ids must be a deterministic function of edge and rank, and M2.3's network
+simplex must be warm-startable. Neither is retrofittable from inside M3. If
+either lands without its requirement, say so here rather than working around it,
+because both defeat stability in ways the node-displacement metrics cannot see.
+M2.3 landed with its half: `networkSimplexRank({ initialRanks })` takes the
+previous run's ranks, and a rank-stability test alongside the sum test proves it
+does something, because the same perturbation moves a node a whole rank without
+it.
 
 - [ ] **M3.1** (`@dagr/layout`) Delta model: `LayoutDelta` computed by diffing
   two `LayoutResult`s: nodes added, removed and moved, edges added, removed and
