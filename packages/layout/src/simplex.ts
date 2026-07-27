@@ -138,8 +138,10 @@ function resolveBudget(maxIterations: number | undefined): number {
  * one of its descendants.
  *
  * What that leaves O(V) per pivot is the search for a tree edge with a negative
- * cut value. It resumes where the last one left off and wraps, so the scans
- * amortise far below their bound in practice, but the bound is what it is.
+ * cut value, which is the paper's own weak spot too. It resumes where the last
+ * one left off and wraps rather than restarting at the first node, which is
+ * what the paper recommends, but the bound is the bound: a structure that keeps
+ * the candidates is the next thing to try if a measurement asks for it.
  *
  * ## Determinism
  *
