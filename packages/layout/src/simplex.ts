@@ -256,6 +256,25 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
   let markedCount = 0;
   const order = new Int32Array(count);
   const treeNodes = new Int32Array(count);
+  const saved = new Int32Array(count);
+
+  /**
+   * What a component's edges cost as the ranks stand. Each edge is priced once,
+   * from its source, and both its endpoints are in one component because the
+   * components are the components of the undirected view.
+   */
+  const componentTotal = (base: number, size: number): number => {
+    let total = 0;
+    for (let index = 0; index < size; index += 1) {
+      const node = at(grouped, base + index);
+      for (let slot = at(start, node); slot < at(start, node + 1); slot += 1) {
+        const edge = at(incident, slot);
+        if (at(from, edge) !== node) continue;
+        total += at(rank, at(to, edge)) - at(rank, node);
+      }
+    }
+    return total;
+  };
 
   /**
    * Roots the region marked 1 at `entry`, hanging it under `above` by
@@ -308,7 +327,16 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
     const base = at(componentStart, group);
     const size = at(componentStart, group + 1) - base;
     const root = at(grouped, base);
+    // What the component started at, kept so that the run can be abandoned for
+    // it. See the restore below.
+    let startedAt = 0;
     if (size > 1) {
+      for (let index = 0; index < size; index += 1) {
+        const node = at(grouped, base + index);
+        saved[node] = at(rank, node);
+      }
+      startedAt = componentTotal(base, size);
+
       // A tight tree: a spanning tree of the component using only edges with no
       // slack. Grown from the root over tight edges, and when it stalls, the
       // minimum-slack edge with exactly one endpoint in it is made tight by
@@ -497,6 +525,22 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
       iterations += 1;
     }
 
+    // A run cut short by the budget can be worse than the ranking it was given,
+    // and the culprit is the tight tree rather than any pivot. Growing it
+    // shifts a partly grown tree to close its tightest crossing edge, which
+    // lengthens every edge running into the tree while it shortens every edge
+    // running out, and the arithmetic can come out against it. Every pivot
+    // after that only shortens, so a run with pivots left to take wins it back
+    // and this restore never fires; a run with none is why the promise is
+    // checked here rather than argued for. `test/layout.simplex.test.ts` holds
+    // the eight-node graph that reaches it.
+    if (size > 1 && componentTotal(base, size) > startedAt) {
+      for (let index = 0; index < size; index += 1) {
+        const node = at(grouped, base + index);
+        rank[node] = at(saved, node);
+      }
+    }
+
     let lowest = Number.POSITIVE_INFINITY;
     for (let index = 0; index < size; index += 1) {
       lowest = Math.min(lowest, at(rank, at(grouped, base + index)));
@@ -567,8 +611,15 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  * spending, to about three seconds. Give it more if a run is worth it: the 10k
  * corpus takes 41 seconds and is still improving at 200,000 pivots.
  *
- * Whatever stops it, the ranking returned is feasible, because every step here
- * is a rank shift of one side of a cut, which preserves every edge's descent.
+ * Whatever stops it, the ranking returned is feasible, and never worse than the
+ * ranking it started from. Feasible because every step here is a rank shift of
+ * one side of a cut, which preserves every edge's descent. Never worse because
+ * it is CHECKED, and not because it is obvious: growing the first tight tree
+ * can shift a partly grown tree in a direction that lengthens more edges than
+ * it shortens, and with no pivots left to win that back the run would return
+ * something worse than it was given. Each component therefore keeps the better
+ * of the ranking it started with and the ranking it ended with. Eight nodes are
+ * enough to reach it, and the graph that does is in the test suite.
  *
  * ## The warm start
  *
