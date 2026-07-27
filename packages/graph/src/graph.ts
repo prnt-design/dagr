@@ -1251,10 +1251,11 @@ export class Graph<
   /**
    * A graph from a document {@link Graph.toJSON} wrote, or a refusal.
    *
-   * The input is `unknown` because this is the package's only untrusted-input
-   * door: a file, a message, a hand edit. Shape is validated in full before
-   * anything is constructed, and a document that is not one throws
-   * `InvalidGraphJSONError` naming the path of the offending field.
+   * This is the package's only untrusted-input door: a file, a message, a hand
+   * edit. One of the two signatures below takes `unknown` for exactly that
+   * reason. Shape is validated in full before anything is constructed, and a
+   * document that is not one throws `InvalidGraphJSONError` naming the path of
+   * the offending field.
    * Content is not validated twice. Every element is added through the same
    * public constructor any other caller would use, so this cannot build a graph
    * the public API could not, and a duplicate id, an edge naming an endpoint

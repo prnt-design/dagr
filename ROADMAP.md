@@ -197,23 +197,32 @@ findings addressed or logged, docs land with the feature.
   is what M1.3's suite could not do.
   Also decided: generated-id counters are re-derived from content rather than
   serialised, and that leaves one divergence, stated in the docs rather than
-  left to be found. Re-deriving lands the counter one past the highest SURVIVING
-  id in generated shape, so a suffix above that, spent by an element the
-  original removed, is free again after a round trip and the restored graph can
-  generate an id the original had retired. The first draft of that claim was
-  looser (any removed suffix), and the test disproved it in one run: a removed
-  `n1` under a surviving `n2` is not recovered, because the counter is a
-  maximum. Carrying the counters in the document would close it and was not
-  taken: it puts a private implementation detail into a format other tools have
-  to write, to fix a case where no id can collide and the two graphs merely
-  disagree about which ids are spent. Callers who care should write their own
-  ids, which round trip exactly.
+  left to be found. Re-deriving lands the counter one past the highest
+  SURVIVING id in generated shape that the counter accepts, so a suffix above
+  that, spent by an element the original removed, is free again after a round
+  trip and the restored graph can generate an id the original had retired. The
+  claim was tightened twice, both times by a test rather than by argument. The
+  first draft was looser (any removed suffix) and a removed `n1` under a
+  surviving `n2` disproved it, because the counter is a maximum. The second
+  still overstated it: a survivor at or past `Number.MAX_SAFE_INTEGER` never
+  moves the counter, since arithmetic there is not exact, so it is invisible to
+  the re-derivation and every smaller suffix comes back free however far under
+  it they sit. Carrying the counters in the document would close both and was
+  not taken: it puts a private implementation detail into a format other tools
+  have to write, to fix a case where no id can collide and the two graphs
+  merely disagree about which ids are spent. Callers who care should write
+  their own ids, which round trip exactly.
   Also decided: shape errors get `InvalidGraphJSONError` (the family's eleventh
   member, carrying the `path` of the offending field so a hand-edited file is
   debuggable), and content errors REUSE the family. `fromJSON` builds by calling
   the same public constructors any other caller would, so it cannot construct a
   graph the public API could not, and there is no second dialect of "duplicate
-  node" for the deserialization path. Attribute values pass through by
+  node" for the deserialization path. The line between the two is that shape is
+  what one field decides without reading the rest of the document, which is why
+  an empty id is a shape error here and not the `InvalidIdError` the same value
+  earns from `addNode`: the review found it was the one content error carrying
+  nothing to search a hand-edited file for, and moving it buys the `path` the
+  others get for free. Attribute values pass through by
   reference, unvalidated and uncloned, because the graph never reads one.
   Fifteen defensive branches were each broken on purpose and confirmed to turn
   the suite red, which is how the `__proto__` and empty-omission branches were
