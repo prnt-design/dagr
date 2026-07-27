@@ -15,8 +15,8 @@ import { compareReports } from '../src/gate.mjs';
  * baseline and exits non-zero on a regression. `pnpm bench:baseline` records
  * the run as the new baseline instead.
  *
- * Plain `.mjs` rather than TypeScript because this runs under bare `node` in
- * CI, in a job that has deliberately not built anything yet. `checkJs` in
+ * Plain `.mjs` rather than TypeScript because this runs under bare `node`, in
+ * a job that has deliberately not built anything yet. `checkJs` in
  * `bench/tsconfig.json` keeps it under the same strict compiler as the rest of
  * the workspace.
  */

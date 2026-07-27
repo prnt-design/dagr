@@ -2,7 +2,7 @@
 
 /**
  * The benchmark gate: what "within 10% of baseline" actually means once the
- * numbers are measured on a shared CI runner rather than on a quiet desk.
+ * numbers are measured on a busy machine rather than on a quiet desk.
  *
  * The quality bar in the charter asks for benchmarks within 10% of baseline.
  * Taken literally, against wall-clock milliseconds recorded on one machine and
