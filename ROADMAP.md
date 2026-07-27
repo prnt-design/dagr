@@ -304,6 +304,26 @@ findings addressed or logged, docs land with the feature.
   that does it, and an eight-node graph in the suite reaches it, so each
   component keeps the better of the ranking it started with and the one it
   ended with.
+  THIS TASK DID NOT UNBLOCK M2.4b, and the 57% above is exactly the number that
+  makes it look as though it did. Measured on the 10k corpus: the greedy
+  feedback arc set reverses 6,327 of 40,000 edges, and the acyclic view it
+  hands the ranker is 154 ranks deep. The corpus is generated with 60 layers
+  and a `backEdgeShare` of 0.02, so roughly 800 edges point backwards by
+  construction, reversing those 800 alone leaves a DAG, and that DAG is at most
+  60 ranks deep because every other edge runs from a lower layer to a higher
+  one. So every ranker in this repo is handed a view two and a half times
+  deeper than the graph it came from, before any ranking happens. Every extra
+  rank is one more rank for an edge to span and every rank an edge spans is a
+  dummy node M2.4b has to mint, which is why the simplex still returns 405,709
+  of them at the default budget, after a cut of 71% on that corpus. A RANKER
+  CANNOT REPAIR THIS: it optimises over the view it is handed, and the view is
+  the cycle breaker's output. What sets M2.4b's dummy count is the feedback arc
+  set rather than the choice between longest path and network simplex, and the
+  next real cut in that number comes from a better cycle breaker and not from a
+  better ranking. Do not go looking for a defect in `cycles.ts`. It is a
+  correct Eades-Lin-Smyth implementation and 6,327 is greedy suboptimality, so
+  the work is a better heuristic, or a pass that un-reverses edges the finished
+  order no longer needs, not a bug hunt in there.
 - [x] **M2.4a** Stage return types: the four stage interfaces return only their
   own contribution rather than the whole next record.
   Decided here, and no later, whether the four stage interfaces should return
@@ -403,6 +423,14 @@ findings addressed or logged, docs land with the feature.
   strictly MONOTONIC (increasing normally, decreasing for a reversed edge) and
   not strictly increasing. What is left here is the chain splitting itself and
   rejoining the chain into a polyline on output.
+  Read the last paragraph of M2.3 before pricing this one. How many dummies
+  this milestone mints is set by the cycle breaker and not by the ranker: on
+  the 10k corpus the greedy feedback arc set reverses 6,327 of 40,000 edges
+  where roughly 800 would leave a DAG, and the view it hands the ranker is 154
+  ranks deep against a corpus generated with 60 layers. M2.3's 57% cut is real
+  and does not touch any of that, so the 405,709 dummies still left on that
+  corpus are a cycle-breaking problem arriving at this milestone's door. If the
+  count is what hurts once this lands, the lever is a better feedback arc set.
 - [ ] **M2.5** Ordering v1: barycenter sweeps with median fallback, crossing
   counter as the metric. Tests on known small graphs with hand-counted
   crossings. Also measure adjacency allocation churn in the sweeps (every
