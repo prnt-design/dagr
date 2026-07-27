@@ -2,7 +2,15 @@ import { Graph } from '@dagr/graph';
 import type { EdgeId, NodeId } from '@dagr/graph';
 import { describe, expect, it } from 'vitest';
 import { StageContractError, defaultStages, layout } from '../src/index.js';
-import type { LayoutStages, OrderStage, RankStage, RouteStage, Size } from '../src/index.js';
+import type {
+  LayoutStages,
+  OrderStage,
+  Point,
+  PositionStage,
+  RankStage,
+  RouteStage,
+  Size,
+} from '../src/index.js';
 
 /** `a -> b`, the shortest graph a long edge could later be split across. */
 function chain(): Graph {
@@ -14,34 +22,29 @@ function chain(): Graph {
 }
 
 /**
- * A rank stage that does what M2.4 will do to a long edge: declare a node the
- * caller never added, size it, rank it, and leave the source graph alone.
+ * A rank stage that does what M2.4b will do to a long edge: declare a node the
+ * caller never added, with the size it wants for it, rank it, and leave the
+ * source graph alone.
  */
 function dummyRankStage(size: Size = { width: 1, height: 40 }): RankStage {
   return {
     name: 'dummy-rank',
-    run(input) {
-      const sizes = new Map(input.sizes);
-      sizes.set('ab#1', size);
-      return {
-        ...input,
-        sizes,
-        ranks: new Map<NodeId, number>([
-          ['a', 0],
-          ['ab#1', 1],
-          ['b', 2],
-        ]),
-        reversedEdges: new Set<EdgeId>(),
-        virtualNodes: new Set<NodeId>(['ab#1']),
-      };
-    },
+    run: () => ({
+      ranks: new Map<NodeId, number>([
+        ['a', 0],
+        ['ab#1', 1],
+        ['b', 2],
+      ]),
+      reversedEdges: new Set<EdgeId>(),
+      virtualNodes: new Map<NodeId, Size>([['ab#1', size]]),
+    }),
   };
 }
 
 /** An order stage that lays the roster out one node per layer, ranks ascending. */
 const oneNodePerLayer: OrderStage = {
   name: 'one-node-per-layer',
-  run: (input) => ({ ...input, layers: [['a'], ['ab#1'], ['b']] }),
+  run: () => ({ layers: [['a'], ['ab#1'], ['b']] }),
 };
 
 /** Runs a layout expected to fail, and returns the error for inspection. */
@@ -84,80 +87,143 @@ describe('virtual nodes', () => {
     expect(short.nodes.get('b')?.y).toBe(170);
   });
 
-  it('lets the default order stage place a virtual node, so M2.4 is a ranker change', () => {
+  it('lets the default order stage place a virtual node, so M2.4b is a ranker change', () => {
     const result = layout({ graph: chain() }, { rank: dummyRankStage() });
     expect([...result.nodes.keys()]).toEqual(['a', 'b']);
     expect(result.nodes.get('b')?.y).toBe(200);
   });
 
-  it('rejects a rank stage that declares a virtual node without sizing it', () => {
-    const unsized: RankStage = {
-      name: 'unsized-rank',
-      run: (input) => ({
-        ...defaultStages.rank.run(input),
-        // Ranked, so the rank check passes and the missing size is what is left.
-        ranks: new Map<NodeId, number>([
-          ['a', 0],
-          ['b', 0],
-          ['ghost', 0],
-        ]),
-        virtualNodes: new Set<NodeId>(['ghost']),
-      }),
-    };
-    const error = expectContractError({ rank: unsized });
-    expect(error.stage).toBe('unsized-rank');
-    expect(error.id).toBe('ghost');
-    expect(error.message).toContain('no size');
-  });
+  // Two tests are gone here, and both premises went with M2.4a rather than
+  // being weakened. "A ranker that declares a virtual node without sizing it"
+  // is no longer a program: a declaration IS a size, so the runner has no way
+  // to be handed an id with no measurement behind it, and the check that caught
+  // it was deleted along with the shape that made it possible. "A ranker that
+  // overwrites the size the caller's own node was measured at" went the same
+  // way: `sizes` is the runner's to build now, and a stage can only state a
+  // size for a node it declared itself. What is left of that second test is the
+  // one case still reachable, an unusable size on a node the stage did declare,
+  // which is the test below.
 
-  it('rejects an unusable size from the rank stage, naming the ranker', () => {
-    // `sizes` is roster-wide from the rank stage on, so a ranker can overwrite
-    // the size the caller's own node was measured at. A NaN there survives to
-    // the runner's bounds arithmetic, which would report a runner invariant and
-    // never name the stage that wrote it. Same misattribution the graph
-    // identity check exists to prevent.
+  it('rejects an unusable declared size, naming the ranker', () => {
+    // The one size in a run the config never validated: prepare measured and
+    // checked every node the graph holds, and this one was minted afterwards by
+    // the stage. A NaN here would survive to the runner's bounds arithmetic and
+    // be reported as a runner invariant, naming nobody.
     const badSize: RankStage = {
       name: 'bad-size-rank',
-      run(input) {
-        const sizes = new Map(input.sizes);
-        sizes.set('b', { width: Number.NaN, height: 40 });
-        return { ...defaultStages.rank.run(input), sizes };
-      },
+      run: () => ({
+        ranks: new Map<NodeId, number>([
+          ['a', 0],
+          ['ghost', 0],
+          ['b', 1],
+        ]),
+        reversedEdges: new Set<EdgeId>(),
+        virtualNodes: new Map<NodeId, Size>([['ghost', { width: Number.NaN, height: 40 }]]),
+      }),
     };
     const error = expectContractError({ rank: badSize });
     expect(error.stage).toBe('bad-size-rank');
-    expect(error.id).toBe('b');
+    expect(error.id).toBe('ghost');
     expect(error.message).toContain('size');
   });
 
-  it('rejects a virtual id the graph already holds, blaming the ranker', () => {
-    // A collision silently resizes the caller's node, because `sizes` is
-    // roster-wide and the declaration wins. With the default orderer it does
-    // fail, but as a duplicate against the order stage, which blames the wrong
-    // stage for the ranker's bad declaration.
-    const colliding: RankStage = {
-      name: 'colliding-rank',
+  it('lets a rank stage omit virtualNodes and hands the next stage an empty set', () => {
+    // The field is optional because a ranker with nothing to declare has
+    // nothing to say, and a required field it can only answer with an empty set
+    // is a question that should not have been asked. What the runner supplies in
+    // its place is the empty set, not `undefined`, so no downstream stage and no
+    // check has to handle an absent roster.
+    let seen: ReadonlySet<NodeId> | undefined;
+    const quiet: RankStage = {
+      name: 'quiet-rank',
+      run: () => ({
+        ranks: new Map<NodeId, number>([
+          ['a', 0],
+          ['b', 1],
+        ]),
+        reversedEdges: new Set<EdgeId>(),
+      }),
+    };
+    const watching: OrderStage = {
+      name: 'watching-order',
       run(input) {
-        const sizes = new Map(input.sizes);
-        sizes.set('b', { width: 999, height: 999 });
-        return {
-          ...input,
-          sizes,
-          ranks: new Map<NodeId, number>([
-            ['a', 0],
-            ['b', 1],
-          ]),
-          reversedEdges: new Set<EdgeId>(),
-          virtualNodes: new Set<NodeId>(['b']),
-        };
+        seen = input.virtualNodes;
+        return { layers: [['a'], ['b']] };
       },
     };
-    const walksTheGraph: OrderStage = {
-      name: 'walks-the-graph',
-      run: (input) => ({ ...input, layers: [['a'], ['b']] }),
+    const result = layout({ graph: chain() }, { rank: quiet, order: watching });
+    expect(seen?.size).toBe(0);
+    expect([...result.nodes.keys()]).toEqual(['a', 'b']);
+  });
+
+  it('rosters, orders, positions and sizes two declared virtual nodes from the declaration alone', () => {
+    // Declaring and sizing are one act now, so this stage never copies
+    // `PreparedState.sizes`: it names the two ids it needs and the sizes it
+    // wants for them, and the runner folds them into the roster-wide map. The
+    // heights below are what the rows are made of, so a size the runner dropped
+    // would move `b`.
+    const twoDummies: RankStage = {
+      name: 'two-dummy-rank',
+      run: () => ({
+        ranks: new Map<NodeId, number>([
+          ['a', 0],
+          ['ab#1', 1],
+          ['ab#2', 2],
+          ['b', 3],
+        ]),
+        reversedEdges: new Set<EdgeId>(),
+        virtualNodes: new Map<NodeId, Size>([
+          ['ab#1', { width: 1, height: 10 }],
+          ['ab#2', { width: 1, height: 30 }],
+        ]),
+      }),
     };
-    const error = expectContractError({ rank: colliding, order: walksTheGraph });
-    expect(error.stage).toBe('colliding-rank');
+    let rostered: readonly NodeId[] = [];
+    let placed: ReadonlyMap<NodeId, Point> = new Map();
+    const watching: PositionStage = {
+      name: 'watching-position',
+      run(input) {
+        rostered = [...input.virtualNodes];
+        const output = defaultStages.position.run(input);
+        placed = output.positions;
+        return output;
+      },
+    };
+    const result = layout({ graph: chain() }, { rank: twoDummies, position: watching });
+    expect(rostered).toEqual(['ab#1', 'ab#2']);
+    // Ordered onto their own layers by the default orderer, and positioned by
+    // the default positioner, so a declared node is a full citizen of both.
+    expect(placed.get('ab#1')).toEqual({ x: 0, y: 95 });
+    expect(placed.get('ab#2')).toEqual({ x: 0, y: 165 });
+    // Rows of 40, 10 and 30 with the default rankSep of 50 put `b` here, which
+    // is only true if both declared heights reached the position stage.
+    expect(result.nodes.get('b')?.y).toBe(250);
+    // And they stop at the route stage, as they always have.
+    expect([...result.nodes.keys()]).toEqual(['a', 'b']);
+  });
+
+  it('still rejects a declared id the graph already holds, blaming the ranker', () => {
+    // The one `checkRanked` rule about declarations that the narrowing does not
+    // make unrepresentable, and still the right error: the ids collide, which no
+    // type can see. A collision is not a second node, it is the caller's node
+    // wearing a stage's clothes, and the declaration's size wins in the
+    // roster-wide map, so the caller's own node quietly changes size. With the
+    // default orderer it does eventually fail, but as a duplicate against the
+    // ORDER stage, which blames the wrong stage for the ranker's bad
+    // declaration.
+    const colliding: RankStage = {
+      name: 'colliding-declaration-rank',
+      run: () => ({
+        ranks: new Map<NodeId, number>([
+          ['a', 0],
+          ['b', 1],
+        ]),
+        reversedEdges: new Set<EdgeId>(),
+        virtualNodes: new Map<NodeId, Size>([['b', { width: 999, height: 999 }]]),
+      }),
+    };
+    const error = expectContractError({ rank: colliding });
+    expect(error.stage).toBe('colliding-declaration-rank');
     expect(error.id).toBe('b');
     expect(error.message).toContain('the graph already holds it');
   });
@@ -181,7 +247,7 @@ describe('virtual nodes', () => {
           throw new Error('unreachable');
         }
         routes.set('ab', [from, dummy, to]);
-        return { ...input, routes };
+        return { routes };
       },
     };
     const result = layout(
@@ -190,7 +256,7 @@ describe('virtual nodes', () => {
     );
     expect([...result.nodes.keys()]).toEqual(['a', 'b']);
     expect(result.nodes.has('ab#1')).toBe(false);
-    // The dummy's coordinate still shapes the route, which is the M2.4 shape.
+    // The dummy's coordinate still shapes the route, which is the M2.4b shape.
     expect(result.edges.get('ab')?.points).toHaveLength(3);
     expect(result.bounds.height).toBe(220);
   });

@@ -79,7 +79,7 @@ describe('layout stage contract', () => {
   it('catches an order stage that drops a node from the layers', () => {
     const dropping: OrderStage = {
       name: 'dropping-order',
-      run: (input) => ({ ...input, layers: [['a']] }),
+      run: () => ({ layers: [['a']] }),
     };
     const error = expectContractError({ order: dropping });
     expect(error.stage).toBe('dropping-order');
@@ -90,7 +90,7 @@ describe('layout stage contract', () => {
   it('catches an order stage that lists a node twice', () => {
     const doubling: OrderStage = {
       name: 'doubling-order',
-      run: (input) => ({ ...input, layers: [['a'], ['b'], ['a']] }),
+      run: () => ({ layers: [['a'], ['b'], ['a']] }),
     };
     const error = expectContractError({ order: doubling });
     expect(error.stage).toBe('doubling-order');
@@ -101,7 +101,7 @@ describe('layout stage contract', () => {
   it('catches an order stage that invents a node', () => {
     const inventing: OrderStage = {
       name: 'inventing-order',
-      run: (input) => ({ ...input, layers: [['a', 'ghost'], ['b']] }),
+      run: () => ({ layers: [['a', 'ghost'], ['b']] }),
     };
     const error = expectContractError({ order: inventing });
     expect(error.stage).toBe('inventing-order');
@@ -172,7 +172,7 @@ describe('layout stage contract', () => {
   it('catches an order stage that puts a node in a layer of another rank', () => {
     const mixing: OrderStage = {
       name: 'mixing-order',
-      run: (input) => ({ ...input, layers: [['a', 'b']] }),
+      run: () => ({ layers: [['a', 'b']] }),
     };
     const error = expectContractError({ rank: spreadRank, order: mixing });
     expect(error.stage).toBe('mixing-order');
@@ -183,7 +183,7 @@ describe('layout stage contract', () => {
   it('catches an order stage that emits its layers out of rank order', () => {
     const descending: OrderStage = {
       name: 'descending-order',
-      run: (input) => ({ ...input, layers: [['b'], ['a']] }),
+      run: () => ({ layers: [['b'], ['a']] }),
     };
     const error = expectContractError({ rank: spreadRank, order: descending });
     expect(error.stage).toBe('descending-order');
@@ -194,7 +194,7 @@ describe('layout stage contract', () => {
   it('catches an order stage that emits an empty layer', () => {
     const padding: OrderStage = {
       name: 'padding-order',
-      run: (input) => ({ ...input, layers: [['a'], [], ['b']] }),
+      run: () => ({ layers: [['a'], [], ['b']] }),
     };
     const error = expectContractError({ rank: spreadRank, order: padding });
     expect(error.stage).toBe('padding-order');
@@ -205,7 +205,7 @@ describe('layout stage contract', () => {
   it('catches a position stage that leaves a node unplaced', () => {
     const partial: PositionStage = {
       name: 'partial-position',
-      run: (input) => ({ ...input, positions: new Map([['a', { x: 0, y: 0 }]]) }),
+      run: () => ({ positions: new Map([['a', { x: 0, y: 0 }]]) }),
     };
     const error = expectContractError({ position: partial });
     expect(error.stage).toBe('partial-position');
@@ -216,8 +216,7 @@ describe('layout stage contract', () => {
   it('catches a position stage that produces a coordinate that is not finite', () => {
     const infinite: PositionStage = {
       name: 'infinite-position',
-      run: (input) => ({
-        ...input,
+      run: () => ({
         positions: new Map<string, Point>([
           ['a', { x: 0, y: 0 }],
           ['b', { x: Number.POSITIVE_INFINITY, y: 0 }],
@@ -243,9 +242,7 @@ describe('layout stage contract', () => {
   it('catches a route with fewer than two points', () => {
     const stub: RouteStage = {
       name: 'stub-route',
-      run(input) {
-        return { ...input, routes: new Map([['ab', [{ x: 0, y: 0 }]]]) };
-      },
+      run: () => ({ routes: new Map([['ab', [{ x: 0, y: 0 }]]]) }),
     };
     const error = expectContractError({ route: stub });
     expect(error.stage).toBe('stub-route');
@@ -277,7 +274,7 @@ describe('layout stage contract', () => {
           // ranked direction emits the polyline the way it ranked it.
           routes.set(edge.id, input.reversedEdges.has(edge.id) ? [to, from] : [from, to]);
         }
-        return { ...input, routes };
+        return { routes };
       },
     };
 
@@ -310,7 +307,7 @@ describe('layout stage contract', () => {
           { x: 0, y: 0 },
           { x: 1, y: 1 },
         ]);
-        return { ...routed, routes };
+        return { routes };
       },
     };
     const error = expectContractError({ route: inventing });
@@ -345,69 +342,42 @@ describe('layout stage contract', () => {
     expect(recorder.log).toEqual([]);
   });
 
-  it('blames the order stage, not a later one, when it swaps in a smaller graph', () => {
-    // The escape hatch this pair of rules closes. Checking a stage's output
-    // against the graph that same stage returned lets it shrink the roster out
-    // from under its own check, and the failure then surfaces at whichever
-    // later boundary still compares against the caller's graph.
+  // Gone with M2.4a's narrowing of the four stage return types: the four tests
+  // for a stage that returns a different graph, and the `graph` label on
+  // `StageContractError` that went with them.
+  //
+  // A stage returns its own fields now (a `RankOutput` and its three siblings)
+  // and the runner builds each record around its own graph and its own config.
+  // There is no field for a different graph to arrive in, so `checkGraphKept`
+  // was deleted rather than left as a check that cannot fire, and a test for it
+  // would be a test that a `StageContractError` is thrown by code that no
+  // longer exists for a program that no longer compiles. The property those
+  // four tests protected is stronger than it was, and it is now pinned by the
+  // compiler plus the test below and the merge tests in
+  // layout.pipeline.test.ts, which assert the record the next stage reads
+  // carries the RUNNER's graph by identity.
+
+  it('lays the graph out from the roster the runner holds, not one an order stage prefers', () => {
+    // What the escape hatch used to be. An orderer that wanted a smaller graph
+    // could return one, and every check downstream that read the record's own
+    // graph would then run against the shrunken roster. It cannot return one at
+    // all now, so the only thing left of the attempt is the layers it emitted,
+    // and those are short a node: the failure lands on the orderer, named, at
+    // the orderer's own boundary.
     const shrinking: OrderStage = {
       name: 'shrinking-order',
-      run(input) {
-        const smaller = new Graph();
-        smaller.addNode('a');
-        return { ...input, graph: smaller, layers: [['a']] };
-      },
+      run: () => ({ layers: [['a']] }),
     };
     const error = expectContractError({ order: shrinking });
     expect(error.stage).toBe('shrinking-order');
-  });
-
-  it('rejects a rank stage that returns a different graph', () => {
-    const swapping: RankStage = {
-      name: 'swapping-rank',
-      run: (input) => ({ ...defaultStages.rank.run(input), graph: chain() }),
-    };
-    const error = expectContractError({ rank: swapping });
-    expect(error.stage).toBe('swapping-rank');
-    expect(error.id).toBe('graph');
-    expect(error.message).toContain('virtualNodes');
-  });
-
-  it('rejects an order stage that returns a different graph', () => {
-    const swapping: OrderStage = {
-      name: 'swapping-order',
-      run: (input) => ({ ...defaultStages.order.run(input), graph: chain() }),
-    };
-    const error = expectContractError({ order: swapping });
-    expect(error.stage).toBe('swapping-order');
-    expect(error.id).toBe('graph');
-  });
-
-  it('rejects a route stage that returns a different graph', () => {
-    const swapping: RouteStage = {
-      name: 'swapping-route',
-      run: (input) => ({ ...defaultStages.route.run(input), graph: chain() }),
-    };
-    const error = expectContractError({ route: swapping });
-    expect(error.stage).toBe('swapping-route');
-    expect(error.id).toBe('graph');
-  });
-
-  it('rejects a position stage that returns a different graph', () => {
-    const swapping: PositionStage = {
-      name: 'swapping-position',
-      run: (input) => ({ ...defaultStages.position.run(input), graph: chain() }),
-    };
-    const error = expectContractError({ position: swapping });
-    expect(error.stage).toBe('swapping-position');
-    expect(error.id).toBe('graph');
+    expect(error.id).toBe('b');
+    expect(error.message).toContain('missing from the layers');
   });
 
   it('lets a stage that does its job through untouched', () => {
     const wide: PositionStage = {
       name: 'wide-position',
-      run: (input) => ({
-        ...input,
+      run: () => ({
         positions: new Map([
           ['a', { x: -500, y: 0 }],
           ['b', { x: 500, y: 0 }],

@@ -2,7 +2,13 @@ import { Graph } from '@dagr/graph';
 import type { EdgeId } from '@dagr/graph';
 import { describe, expect, it } from 'vitest';
 import { defaultStages, layout } from '../src/index.js';
-import type { Point, PositionStage, RankStage, RouteStage } from '../src/index.js';
+import type {
+  Point,
+  PositionStage,
+  PreparedState,
+  RankStage,
+  RouteStage,
+} from '../src/index.js';
 import { recordingStages } from './fakes.js';
 
 function chain(): Graph {
@@ -49,12 +55,48 @@ describe('layout pipeline plumbing', () => {
     expect(recorder.inputs.route?.graph).toBe(graph);
   });
 
-  it('hands each stage the exact output of the previous stage', () => {
+  it('carries each stage output into the record the next stage is handed', () => {
+    // This replaces an identity check ("what a stage returned is what the next
+    // one got"), which M2.4a made false and which was the weaker claim anyway:
+    // a runner that never read a stage's record would have satisfied it. A
+    // stage now returns its own fields, the runner builds the record, and what
+    // is asserted is that each field arrived, by identity, in the right one.
     const recorder = recordingStages();
     layout({ graph: chain() }, recorder.stages);
-    expect(recorder.inputs.order).toBe(recorder.outputs.rank);
-    expect(recorder.inputs.position).toBe(recorder.outputs.order);
-    expect(recorder.inputs.route).toBe(recorder.outputs.position);
+    expect(recorder.inputs.order?.ranks).toBe(recorder.outputs.rank?.ranks);
+    expect(recorder.inputs.order?.reversedEdges).toBe(recorder.outputs.rank?.reversedEdges);
+    expect(recorder.inputs.position?.layers).toBe(recorder.outputs.order?.layers);
+    expect(recorder.inputs.route?.positions).toBe(recorder.outputs.position?.positions);
+  });
+
+  it('merges a stage that returns its own fields alone into a record carrying the runner graph', () => {
+    // The property that replaced "what a stage returned is what the next one
+    // got". A stage hands back its own contribution and nothing else, so the
+    // record the next stage reads is one the RUNNER built: its graph by
+    // identity, the config it resolved, and the fields the stage did return.
+    const graph = chain();
+    const ranks = new Map([
+      ['a', 0],
+      ['b', 1],
+    ]);
+    let prepared: PreparedState | undefined;
+    const bare: RankStage = {
+      name: 'bare-rank',
+      run(input) {
+        prepared = input;
+        return { ranks, reversedEdges: new Set<EdgeId>() };
+      },
+    };
+    const recorder = recordingStages();
+    layout({ graph }, { ...recorder.stages, rank: bare });
+    const ordered = recorder.inputs.order;
+    expect(ordered?.graph).toBe(graph);
+    expect(ordered?.config).toBe(prepared?.config);
+    // The prepared sizes by identity, not a copy: this ranker declared nothing,
+    // so there was nothing to merge and nothing to copy a map for.
+    expect(ordered?.sizes).toBe(prepared?.sizes);
+    expect(ordered?.ranks).toBe(ranks);
+    expect(ordered?.virtualNodes.size).toBe(0);
   });
 
   it('returns a result built from what the route stage returned', () => {
@@ -94,7 +136,7 @@ describe('layout pipeline plumbing', () => {
       run(input) {
         positionCalls += 1;
         const positions = new Map(input.graph.nodes().map((node) => [node.id, { x: 1000, y: 5 }]));
-        return { ...input, positions };
+        return { positions };
       },
     };
     const recorder = recordingStages();
@@ -145,7 +187,7 @@ describe('layout pipeline plumbing', () => {
   });
 
   it('assembles the result around a route stage that only routes', () => {
-    // The point of the route stage returning a `RoutedState`: a third-party
+    // The point of the route stage returning a `RouteOutput`: a third-party
     // router writes the routes and nothing else. Building the node map and
     // computing `bounds` is neither routing nor something each router should be
     // trusted to redo, so the runner does both.
@@ -159,7 +201,7 @@ describe('layout pipeline plumbing', () => {
           if (from === undefined || to === undefined) throw new Error('unreachable');
           routes.set(edge.id, [from, to]);
         }
-        return { ...input, routes };
+        return { routes };
       },
     };
     const result = layout({ graph: chain() }, { route: routesOnly });
@@ -178,17 +220,14 @@ describe('layout pipeline plumbing', () => {
     const dummyRank: RankStage = {
       name: 'dummy-rank',
       run(input) {
-        const sizes = new Map(input.sizes);
-        sizes.set('ab#1', { width: 1, height: 40 });
         return {
           ...defaultStages.rank.run(input),
-          sizes,
           ranks: new Map([
             ['a', 0],
             ['ab#1', 1],
             ['b', 2],
           ]),
-          virtualNodes: new Set(['ab#1']),
+          virtualNodes: new Map([['ab#1', { width: 1, height: 40 }]]),
         };
       },
     };

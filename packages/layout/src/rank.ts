@@ -40,7 +40,7 @@ function at<T>(values: readonly T[], index: number): T {
  * M2.3's tight-tree pass is for: `a -> d` alongside `a -> b -> c -> d` leaves
  * `a -> d` spanning three ranks when `d` could not be anywhere else, but a node
  * with slack elsewhere in the graph is pinned as far down as it can go rather
- * than as far up. That is a quality problem, not a correctness one, and M2.4's
+ * than as far up. That is a quality problem, not a correctness one, and M2.4b's
  * dummy chains make it a cost in dummy nodes.
  *
  * ## How
@@ -58,9 +58,12 @@ function at<T>(values: readonly T[], index: number): T {
  * would give its node an in-degree the sweep could never clear, stalling the
  * whole ranking on an edge that means nothing here.
  *
- * `virtualNodes` is empty: dummy chains for edges that span several ranks are
- * M2.4, and nothing before then needs a node the caller did not add. `sizes`
- * passes straight through, because nothing has been added to size.
+ * It returns the ranks and the reversals and nothing else. `virtualNodes` is
+ * omitted rather than handed back empty: dummy chains for edges that span
+ * several ranks are M2.4b, and nothing before then needs a node the caller did
+ * not add, so this stage has nothing to say about the field. The runner puts an
+ * empty set in the record and leaves `PreparedState.sizes` exactly as it found
+ * it, because nothing has been added to size.
  *
  * @throws {InternalLayoutError} when the sweep cannot reach every node, which
  * means the acyclic view still had a cycle. That is a bug in this stage rather
@@ -126,6 +129,6 @@ export const longestPathRankStage: RankStage = {
 
     const ranks = new Map<NodeId, number>();
     for (const [number, node] of nodes.entries()) ranks.set(node.id, at(rankOf, number));
-    return { ...input, ranks, reversedEdges, virtualNodes: new Set<NodeId>() };
+    return { ranks, reversedEdges };
   },
 };

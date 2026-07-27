@@ -14,6 +14,10 @@ of doc prose.
 
 ### Added
 
+- `RankOutput`, `OrderOutput`, `PositionOutput` and `RouteOutput`, exported as
+  types. Each is what one stage contributes, and it is what that stage's `run`
+  now returns. See the Changed entry below. (M2.4a)
+
 - `InternalLayoutError`, exported, `code: 'INTERNAL'`. The pipeline's own
   invariant failures were bare `Error`s, outside the family the docs promise one
   `instanceof` check covers; every one of them is now this. It is always a bug
@@ -22,6 +26,57 @@ of doc prose.
   (M2.2 review)
 
 ### Changed
+
+- **Breaking for every custom stage:** `RankStage`, `OrderStage`,
+  `PositionStage` and `RouteStage` now return that stage's own contribution
+  rather than the whole next record. A stage still READS the record it is handed
+  and can still read everything computed upstream of it; the five `...State`
+  records are unchanged, still exported, and still an extends chain. What
+  changed is the return type of all four `run` methods. Any stage that ends with
+  `{ ...input, ... }` stops compiling until the spread is dropped. (M2.4a)
+
+  ```ts
+  // Before
+  const rank: RankStage = {
+    name: 'my-rank',
+    run(input) {
+      const sizes = new Map(input.sizes);
+      sizes.set('dummy#1', { width: 1, height: 40 });
+      return { ...input, sizes, ranks, reversedEdges, virtualNodes: new Set(['dummy#1']) };
+    },
+  };
+
+  // After
+  const rank: RankStage = {
+    name: 'my-rank',
+    run(input) {
+      return { ranks, reversedEdges, virtualNodes: new Map([['dummy#1', { width: 1, height: 40 }]]) };
+    },
+  };
+  ```
+
+  The other three are a one-line delete each: `{ ...input, layers }` becomes
+  `{ layers }`, and likewise for `positions` and `routes`. A stage that wrapped
+  a default and adjusted its answer now spreads the OUTPUT (one field) instead
+  of the record: `const { positions } = defaultStages.position.run(input)`.
+
+  Three things follow, all of them the point of the change. **A stage can no
+  longer replace the graph**, so the check that caught one was deleted, and with
+  it the `StageContractError` labelled `graph`. A rule the compiler enforces
+  beats a rule that could only fire at runtime after the stage ran. **A declared
+  virtual node carries its own size**: `RankOutput.virtualNodes` is a
+  `ReadonlyMap<NodeId, Size>` where the old `RankedState.virtualNodes` was a
+  `ReadonlySet<NodeId>` next to a roster-wide `sizes` map the stage had to copy
+  and extend. Declaring without sizing is unrepresentable rather than checked,
+  and a ranker can no longer overwrite the size the caller's own node was
+  measured at, so those two checks are gone too. On the read side
+  `RankedState.virtualNodes` is still a set, and the runner derives it and the
+  roster-wide `sizes` map. **`virtualNodes` is optional**: a ranker with nothing
+  to declare omits it, where before it had to hand back an empty set.
+
+  No behaviour a caller can observe changed. The same graph laid out with the
+  same config returns an identical `LayoutResult`, which the suite pins against
+  a result captured from the previous implementation.
 
 - **Breaking for an exhaustive `switch`:** the exported `DagrLayoutErrorCode`
   union gains `'INTERNAL'`. A caller switching over every member without a

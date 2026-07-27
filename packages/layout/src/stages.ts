@@ -65,12 +65,16 @@ function requirePoint(positions: ReadonlyMap<NodeId, Point>, id: NodeId): Point 
  * a starting point.
  *
  * It walks the roster rather than the graph, so a rank stage that declares
- * virtual nodes is already ordered correctly by this one. That keeps M2.4 out
+ * virtual nodes is already ordered correctly by this one. That keeps M2.4b out
  * of the ordering stage entirely: it adds to the ranker (splitting a long edge
  * into a chain) and to the router (rejoining that chain into a polyline), and
  * changes no contract between them. Virtual nodes come after the graph's own
  * within a layer, which is as arbitrary and as reproducible as the rest of this
  * stage.
+ *
+ * It returns the layers and nothing else. The runner merges them into the
+ * record the position stage reads, so this stage has no way to disturb the
+ * graph, the config, the ranks or the sizes it was handed.
  */
 export const insertionOrderStage: OrderStage = {
   name: 'insertion-order',
@@ -86,7 +90,7 @@ export const insertionOrderStage: OrderStage = {
     const layers: readonly (readonly NodeId[])[] = [...byRank.entries()]
       .sort(([left], [right]) => left - right)
       .map(([, layer]) => layer);
-    return { ...input, layers };
+    return { layers };
   },
 };
 
@@ -121,6 +125,9 @@ export const insertionOrderStage: OrderStage = {
  * Empty layers do not arise: the runner rejects them at the order boundary,
  * where the layers still know their ranks, so this stage never draws a row of
  * `rankSep` worth of nothing.
+ *
+ * It returns the positions and nothing else, and the runner merges them into
+ * the record the route stage reads.
  */
 export const gridPositionStage: PositionStage = {
   name: 'grid-position',
@@ -145,7 +152,7 @@ export const gridPositionStage: PositionStage = {
       }
       top += rowHeight + rankSep;
     }
-    return { ...input, positions };
+    return { positions };
   },
 };
 
@@ -161,6 +168,10 @@ export const gridPositionStage: PositionStage = {
  * A self loop routes to two identical points, which is degenerate but well
  * formed; M2.8 gives it a real shape along with everything else, and bends a
  * long edge through its dummies' coordinates while it is at it.
+ *
+ * It returns the routes and nothing else. The runner assembles the
+ * {@link LayoutResult} from them and from the graph, so a router states the
+ * polyline and never the identity of what it routed.
  */
 export const straightRouteStage: RouteStage = {
   name: 'straight-route',
@@ -174,7 +185,7 @@ export const straightRouteStage: RouteStage = {
         { x: to.x, y: to.y },
       ]);
     }
-    return { ...input, routes };
+    return { routes };
   },
 };
 

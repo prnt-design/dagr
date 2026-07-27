@@ -11,10 +11,10 @@ sidebar_position: 3
 `LayoutResult`: where every node sits, how every edge runs, and the box around
 the lot.
 
-This page describes the pipeline as of M2.2. The types, the runner, and the
+This page describes the pipeline as of M2.4a. The types, the runner, and the
 stage boundaries are real: they are what every later milestone is built against,
 and the roster below exists so the one boundary that was going to have to move
-(M2.4's dummy nodes) does not. One of the four algorithms is real: the rank
+(M2.4b's dummy nodes) does not. One of the four algorithms is real: the rank
 stage breaks cycles and ranks by longest path, so the layers are the ones the
 graph asks for. The other three are placeholders that produce a well formed but
 naive result. Expect the contract to gain rules as real stages land, rather than
@@ -28,10 +28,10 @@ between them are swappable stages:
 
 ```
 prepare (the runner)   ->  PreparedState
-rank stage             ->  RankedState
-order stage            ->  OrderedState
-position stage         ->  PositionedState
-route stage            ->  RoutedState
+rank stage             ->  RankOutput      merged into  RankedState
+order stage            ->  OrderOutput     merged into  OrderedState
+position stage         ->  PositionOutput  merged into  PositionedState
+route stage            ->  RouteOutput     merged into  RoutedState
 assemble (the runner)  ->  LayoutResult
 ```
 
@@ -54,10 +54,32 @@ in the runner also makes three properties true by construction rather than by
 check: the result holds exactly the caller's own ids, both of its maps iterate
 in graph insertion order, and `bounds` is computed the same way on every run.
 
-Each record extends the one before it and adds that stage's own output, so
-`RoutedState` still carries the graph, the config, the sizes, the ranks, the
-layers, and the positions. A stage can read everything computed upstream of it,
-and nothing has to be threaded around out of band.
+**A stage reads a record and writes an output.** The five `...State` records
+are the read side: each extends the one before it, so `RoutedState` still
+carries the graph, the config, the sizes, the ranks, the layers, and the
+positions, and a stage can read everything computed upstream of it without
+anything being threaded around out of band. The four `...Output` types are the
+write side, and each holds that stage's own contribution and nothing else. The
+runner merges an output into the next record.
+
+| Stage | Reads | Writes | Runner adds |
+| --- | --- | --- | --- |
+| rank | `PreparedState` | `RankOutput`: `ranks`, `reversedEdges`, optional `virtualNodes` | `graph`, `config`, and a roster-wide `sizes` |
+| order | `RankedState` | `OrderOutput`: `layers` | everything upstream, unchanged |
+| position | `OrderedState` | `PositionOutput`: `positions` | everything upstream, unchanged |
+| route | `PositionedState` | `RouteOutput`: `routes` | everything upstream, unchanged |
+
+**Returning less is a stronger contract than returning more.** Until M2.4a a
+stage returned the whole next record, which meant every stage handed back a
+`graph`, a `config` and a `sizes` map it had no opinion about, usually by
+spreading the record it was given. Three things follow from taking those away.
+A stage cannot replace the graph, so there is nothing to check and no error to
+document. A stage cannot restate a field it did not compute, so no two records
+can disagree about what `nodeSep` meant on this run. And nobody has to write
+`...input` any more, which is the line that quietly carries a stale value the
+day a new field appears upstream of it. The read side did not change at all: the
+`...State` records are still exported, still an extends chain, and still what a
+stage names when it types the argument its `run` is handed.
 
 **The five records are named `...State`, not `...Layout`.** They are the
 accumulating state that flows between stages, and only a stage author ever names
@@ -73,34 +95,43 @@ graph's own nodes, plus anything the rank stage declared in
 
 The source graph is never mutated. That is the pipeline's one hard promise, and
 it means a stage that needs a node the caller never added cannot add one. It
-declares it instead:
+declares it instead, in `RankOutput.virtualNodes`, as an id and the size it
+wants for it:
 
 ```ts
 const rank: RankStage = {
   name: 'my-rank',
   run(input) {
-    // A dummy needs a size, and a small width so nodeSep spacing still works.
-    const sizes = new Map(input.sizes);
-    sizes.set('long-edge#1', { width: 1, height: 40 });
-
-    // ... and a rank, alongside one for every node the graph holds.
+    // A rank for every node the graph holds, plus one for the dummy.
     const ranks = new Map(input.graph.nodes().map((node) => [node.id, 0]));
     ranks.set('long-edge#1', 1);
 
     return {
-      ...input,
-      sizes,
       ranks,
       reversedEdges: new Set(),
-      virtualNodes: new Set(['long-edge#1']),
+      // A dummy gets a small width so nodeSep spacing still works around it.
+      virtualNodes: new Map([['long-edge#1', { width: 1, height: 40 }]]),
     };
   },
 };
 ```
 
+**Declaring an id and sizing it are one act, so they are one field.** A stage
+does not copy `input.sizes` and add to it; the runner builds the roster-wide
+`sizes` map from what prepare measured plus what the stage declared. That makes
+"declared but unsized" unrepresentable rather than merely rejected, and it means
+a ranker cannot reach into the map and resize a node the caller measured itself.
+On the read side `RankedState.virtualNodes` is a `ReadonlySet<NodeId>`, because
+a later stage wants the roster and already has the sizes: a map there would be a
+second copy of every size, free to disagree with the first.
+
+`virtualNodes` is optional. A ranker with nothing to declare omits it, and the
+runner puts an empty set in the record. There is no difference between omitting
+it and declaring nothing.
+
 This is the same argument `reversedEdges` carries, applied to nodes rather than
-edges. A declared id is a full citizen from that point on: it needs a rank and a
-size, it has to appear in exactly one layer, and it has to get a position. The
+edges. A declared id is a full citizen from that point on: it has a rank, it has
+a size, it has to appear in exactly one layer, and it has to get a position. The
 runner checks all of that over the roster, so it is checked exactly as hard as a
 node the caller added.
 
@@ -109,23 +140,32 @@ more and no less, because the runner builds both of its maps by walking the
 caller's own graph. A declared node has no way in, so no caller ever has to
 filter out a node it did not add.
 
-**A stage never replaces the graph.** Every record a stage returns has to carry
-back the very object the runner handed in, compared by identity, and the runner
-throws a `StageContractError` naming the stage if it does not. Two reasons.
-Every contract check compares a stage's output against the runner's graph rather
-than against the graph in the record being checked, so a stage that swapped the
-graph would otherwise be shrinking the roster its own check runs over, and the
-failure would land on whichever later stage still compared against the real
-thing. And replacing it is never necessary: the one reason to want to, needing a
-node the caller never added, is what the roster is for.
+**A stage cannot replace the graph.** Until M2.4a that was a rule with a check
+behind it: a record had to carry back the very object the runner handed in, and
+a `StageContractError` labelled `graph` said so when it did not. It is now a
+property of the types instead. A stage returns its own fields, the runner builds
+each record around its own graph and its own config, and there is no field for a
+different graph to arrive in. The check was deleted rather than kept as
+something that cannot fire, and the `graph` label went with it.
 
-`virtualNodes` is empty today. It exists now because M2.4, which splits a long
+That is the better version of the same story. The reason the rule existed is
+that every contract check compares a stage's output against the runner's graph,
+so a stage that swapped the graph would have been shrinking the roster its own
+check runs over, and the failure would have landed on whichever later stage
+still compared against the real thing. A rule the compiler enforces cannot be
+broken at all, where a check could only ever fire at runtime, on your machine,
+after the stage ran. And replacing the graph was never necessary anyway: the one
+reason to want to, needing a node the caller never added, is what the roster is
+for.
+
+`virtualNodes` is empty today. It exists now because M2.4b, which splits a long
 edge into a chain of one dummy node per rank it spans, is the reason the roster
 is shaped this way: a contract phrased as "every node the graph holds" would
-have had to be weakened to let M2.4 land, and one phrased as "every node in the
-roster" does not. The default order stage already walks the roster, so M2.4 adds
-to the ranker and the router (splitting a long edge into a chain, rejoining the
-chain into a polyline on output) without touching the contract between them.
+have had to be weakened to let M2.4b land, and one phrased as "every node in the
+roster" does not. The default order stage already walks the roster, so M2.4b
+adds to the ranker and the router (splitting a long edge into a chain, rejoining
+the chain into a polyline on output) without touching the contract between
+them.
 
 ## Ranking, and what it does with a cycle
 
@@ -202,7 +242,7 @@ out, and both are relied on:
 Every edge that is neither reversed nor a self loop runs **strictly** down:
 `rank(source) < rank(target)`. A reversed edge runs strictly up.
 [The runner's own check](#the-stage-contract) is the weaker `<=`, because a self
-loop puts both ends on one rank and because M2.4's long edges will legitimately
+loop puts both ends on one rank and because M2.4b's long edges will legitimately
 span several, but this stage means the strict form and its tests assert it.
 
 What longest path does not give is minimum total edge length. `a -> d` alongside
@@ -248,9 +288,20 @@ Every stage is an object with a `name` and a `run`:
 ```ts
 interface RankStage {
   readonly name: string;
-  run(input: PreparedState): RankedState;
+  run(input: PreparedState): RankOutput;
+}
+
+interface RankOutput {
+  readonly ranks: ReadonlyMap<NodeId, number>;
+  readonly reversedEdges: ReadonlySet<EdgeId>;
+  readonly virtualNodes?: ReadonlyMap<NodeId, Size>; // declared nodes, with their sizes
 }
 ```
+
+The other three are the same shape with one field each: an `OrderStage` returns
+an `OrderOutput` of `layers`, a `PositionStage` a `PositionOutput` of
+`positions`, a `RouteStage` a `RouteOutput` of `routes`. All eight types are
+exported.
 
 Sugiyama layout is four hard problems in a trench coat, and each of them has a
 range of answers that trade quality against time. Ranking can be longest-path or
@@ -282,11 +333,26 @@ const timed: PositionStage = {
     const started = performance.now();
     const output = defaultStages.position.run(input);
     console.log('position took', performance.now() - started);
-    return output;
+    return output; // a PositionOutput: { positions }
   },
 };
 
 layout({ graph }, { position: timed });
+```
+
+A wrapper that wants to adjust the default's answer spreads the OUTPUT, which is
+one field, rather than the record it was handed:
+
+```ts
+const nudged: PositionStage = {
+  name: 'nudged-position',
+  run(input) {
+    const { positions } = defaultStages.position.run(input);
+    const moved = new Map<NodeId, Point>();
+    for (const [id, point] of positions) moved.set(id, { x: point.x + 20, y: point.y });
+    return { positions: moved };
+  },
+};
 ```
 
 The four default stages are reachable only through `defaultStages`, and are not
@@ -305,35 +371,35 @@ half-finished ranker is reported as a ranker problem rather than surfacing three
 stages later as an edge that routes to nowhere. A stage that leaves work undone
 throws a `StageContractError` naming that stage and the id it dropped.
 
-Every check compares against the graph and the roster the **runner** holds, not
-against the record the stage returned. That is what makes "at its own boundary"
-mean anything: a check that read the graph out of the record under test would be
-asking a stage to mark its own homework.
+Every check compares against the graph and the roster the **runner** holds. That
+is what makes "at its own boundary" mean anything, and since M2.4a it is also
+the only graph there is: a stage returns its own fields and the runner builds
+the record, so no stage has a graph of its own to be marked against.
 
-After **every** stage:
-
-- the record's `graph` is the same object the runner handed in. See
-  [The roster](#the-roster).
+There is no longer a rule that applies after every stage. The one that used to,
+"the record's `graph` is the same object the runner handed in", is enforced by
+the types now and is described in [The roster](#the-roster).
 
 After the **rank** stage:
 
-- no id in `virtualNodes` is one the graph already holds. A collision is not a
-  second node, it is the caller's node wearing a stage's clothes: `sizes` is
-  roster-wide from here, so the declaration would overwrite the size the
-  caller's node was measured at and nothing downstream would notice. Once M2.4
-  mints dummy ids from edge ids, a graph whose node ids look like that pattern
-  lands here;
+- no id declared in `virtualNodes` is one the graph already holds. A collision
+  is not a second node, it is the caller's node wearing a stage's clothes: the
+  declaration's size wins in the roster-wide map, so the caller's node quietly
+  changes size and nothing downstream notices. Once M2.4b mints dummy ids from
+  edge ids, a graph whose node ids look like that pattern lands here;
+- every declared size is a finite pair of lengths that are zero or greater.
+  This is the one size in a run that the config never saw: prepare measures and
+  validates every node the graph holds, and a declared node's size is minted by
+  the stage afterwards. There is no matching "every roster member HAS a size"
+  rule, and its absence is deliberate: a declaration carries its size and the
+  runner builds the map, so a roster member without one is not a mistake a
+  stage can make;
 - every member of the roster has a rank, and it is a finite number;
-- every member of the roster has a size, and it is a finite pair of lengths
-  that are zero or greater. Checked here and not only at prepare, because
-  `sizes` is roster-wide from this point on: a rank stage that sizes a dummy
-  can also overwrite the size the caller's own node was measured at, and the
-  config that validated the original is two steps upstream;
 - every id in `reversedEdges` is an edge the graph holds;
 - every edge is a ranking: `rank(source) <= rank(target)` for an edge that was
   not reversed, `rank(target) <= rank(source)` for one that was. Less-or-equal
   rather than strictly-less, because a self loop puts both endpoints on one
-  rank, and after M2.4 a long edge legitimately spans several. The default
+  rank, and after M2.4b a long edge legitimately spans several. The default
   ranker is strictly stronger than this and its own tests say so, see
   [Ranking](#ranking); the contract stays weak because a third-party ranker with
   a self loop to place has nowhere else to put it.
@@ -606,7 +672,7 @@ the whole thing and every member carries a `code`.
 | --- | --- | --- |
 | `DagrLayoutError` | abstract | Base class, abstract, never thrown directly. |
 | `InvalidConfigError` | `INVALID_CONFIG` | A separation or a size is not a finite number that is zero or greater. Carries `field` (a path such as `nodeSize("n1").width`) and the offending `value`. |
-| `StageContractError` | `STAGE_CONTRACT` | A stage broke one of the rules in [The stage contract](#the-stage-contract). Carries the offending stage's `name`, the `id` it dropped, and a `detail`. A few checks are about the record as a whole rather than one id, and use a plain label instead: `graph`, or `layer 3`. |
+| `StageContractError` | `STAGE_CONTRACT` | A stage broke one of the rules in [The stage contract](#the-stage-contract). Carries the offending stage's `name`, the `id` it dropped, and a `detail`. One check is about the layers rather than one id, and uses a plain label instead: `layer 3`. The `graph` label is gone as of M2.4a, along with the check that raised it. |
 | `InternalLayoutError` | `INTERNAL` | The pipeline caught itself breaking one of its own invariants. Carries a `detail`. Always a bug in `@dagr/layout`, never in your graph, your config, or a stage you supplied, which is why it is not a `StageContractError`: that class names a stage, and naming one here would blame whoever was plugged in. Nothing to fix on your side. Please report it. |
 
 The three sort by whose bug it is, which is the only question a caller catching
@@ -638,7 +704,7 @@ placeholders:
 
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
-| rank | `longest-path-rank` | Breaks cycles with a greedy feedback arc set, then ranks by longest path. Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). | Rank tightening (M2.3) and dummy chains for long edges (M2.4). |
+| rank | `longest-path-rank` | Breaks cycles with a greedy feedback arc set, then ranks by longest path. Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). | Rank tightening (M2.3) and dummy chains for long edges (M2.4b). |
 | order | `insertion-order` | Groups the roster by rank, orders each layer by graph insertion order. | Barycenter sweeps with a crossing counter (M2.5), then transpose refinement (M2.6). |
 | position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. | Brandes-Koepf horizontal coordinate assignment (M2.7). |
 | route | `straight-route` | A straight two-point line between the endpoint centres. | Polylines through dummy-node coordinates, monotone in the rank axis (M2.8). |
@@ -652,11 +718,15 @@ satisfies every guarantee this page makes about the result, which is what the
 later milestones are built against.
 
 `RankedState.virtualNodes` is still empty: it is the bookkeeping slot dummy-node
-chains fill in M2.4, and it exists now because the alternative, mutating the
+chains fill in M2.4b, and it exists now because the alternative, mutating the
 caller's graph to add a node, is the one thing this pipeline promises not to do.
 `RankedState.reversedEdges` was the same kind of slot until M2.2 filled it, and
 it filled without a contract change, which is the argument for having declared
-both early.
+both early. `virtualNodes` did not manage that: M2.4a changed how a stage
+declares one, from a set of ids plus a copied-and-extended `sizes` map to a map
+of ids to sizes. That is the whole cost of the slot having been declared before
+anything filled it, it was paid before any real stage populated the field, and
+it is why the interface change landed on its own and ahead of the chains.
 
 Also still to come: a golden corpus compared against dagre with layout
 benchmarks (M2.9), and running the same API in a worker (M2.10). Incremental

@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { measureNodes, resolveConfig } from '../src/config.js';
 import { StageContractError, defaultStages, layout } from '../src/index.js';
 import { longestPathRankStage } from '../src/rank.js';
-import type { PreparedState, RankedState } from '../src/types.js';
+import type { PreparedState, RankOutput } from '../src/types.js';
+import { recordingStages } from './fakes.js';
 import { mulberry32, randomDigraph } from './random.js';
 
 /** What the runner hands the rank stage, built the way the runner builds it. */
@@ -13,8 +14,8 @@ function prepare(graph: Graph): PreparedState {
   return { graph, config, sizes: measureNodes(graph, config, undefined) };
 }
 
-/** Runs the stage under test on a graph and hands back the whole record. */
-function rank(graph: Graph): RankedState {
+/** Runs the stage under test on a graph and hands back what it contributes. */
+function rank(graph: Graph): RankOutput {
   return longestPathRankStage.run(prepare(graph));
 }
 
@@ -24,7 +25,7 @@ function ranksOf(graph: Graph): Record<NodeId, number> {
 }
 
 /** The rank of a node, which the stage owes for every node in the graph. */
-function requireRank(state: RankedState, id: NodeId): number {
+function requireRank(state: RankOutput, id: NodeId): number {
   const rank = state.ranks.get(id);
   if (rank === undefined) throw new Error(`no rank for "${id}"`);
   return rank;
@@ -237,13 +238,27 @@ describe('longestPathRankStage', () => {
     expect(longestChain(graph, state.reversedEdges)).toBe(3);
   });
 
-  it('declares no virtual node and passes the sizes through untouched', () => {
+  it('declares no virtual node, and contributes nothing but ranks and reversals', () => {
     const input = prepare(tangled());
     const state = longestPathRankStage.run(input);
-    expect(state.virtualNodes.size).toBe(0);
-    expect(state.sizes).toBe(input.sizes);
-    expect(state.graph).toBe(input.graph);
-    expect(state.config).toBe(input.config);
+    // Omitted rather than handed back empty. The runner supplies the empty set,
+    // so a ranker with nothing to declare says nothing.
+    expect(state.virtualNodes).toBeUndefined();
+    // The graph, the config and the sizes are not this stage's to return. They
+    // used to travel back through a spread; now there is nowhere to put them,
+    // which is what makes "the ranker left the sizes alone" a fact about the
+    // type rather than a fact about this implementation.
+    expect(Object.keys(state).sort()).toEqual(['ranks', 'reversedEdges']);
+  });
+
+  it('leaves the runner sharing the prepared sizes rather than copying them', () => {
+    // A ranker that declares nothing costs no size copy: the runner hands the
+    // very map prepare built to every stage after it. On a 10k node graph that
+    // is the difference between one map and two.
+    const recorder = recordingStages();
+    layout({ graph: tangled() }, recorder.stages);
+    expect(recorder.inputs.order?.sizes).toBe(recorder.inputs.rank?.sizes);
+    expect(recorder.inputs.route?.sizes).toBe(recorder.inputs.rank?.sizes);
   });
 
   it('never touches the graph it was handed', () => {
@@ -371,7 +386,7 @@ describe('longestPathRankStage on random digraphs', () => {
         expect([...state.ranks.keys()], `${where}: ranked exactly the graph`).toEqual(
           nodesBefore.map((node) => node.id),
         );
-        expect(state.virtualNodes.size, `${where}: virtual nodes`).toBe(0);
+        expect(state.virtualNodes, `${where}: virtual nodes`).toBeUndefined();
 
         // Contiguous from zero, which is what keeps the order stage from
         // producing an empty layer.

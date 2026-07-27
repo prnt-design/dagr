@@ -204,7 +204,7 @@ findings addressed or logged, docs land with the feature.
   never reversed and never ranked, all parallel copies of a pair go the same
   way, and the graph is still never mutated. The descent the stage produces is
   strictly stronger than the runner's `<=` contract check, which stays weak on
-  purpose for self loops and for M2.4's long edges, so the strict form is
+  purpose for self loops and for M2.4b's long edges, so the strict form is
   asserted in the stage's own tests instead.
 - [ ] **M2.3** Ranking v2: tight-tree / network-simplex rank tightening.
   Golden comparisons against longest-path on a small corpus; rank sum must
@@ -225,14 +225,49 @@ findings addressed or logged, docs land with the feature.
   churn between equal-cost optima, because churn does not change the sum. Add a
   rank-stability check: re-ranking after a trivial perturbation must not move
   ranks that a tight-tree argument says are forced.
-- [ ] **M2.4** Dummy-node chains: split long edges across ranks into virtual
+- [x] **M2.4a** Stage return types: the four stage interfaces return only their
+  own contribution rather than the whole next record.
+  Decided here, and no later, whether the four stage interfaces should return
+  only their own contribution rather than the whole next record. Raised by the
+  M2.2 API review against `rank.ts`, which ended
+  `return { ...input, ranks, reversedEdges, virtualNodes: new Set() }`: the
+  spread carried back `graph`, `config` and `sizes` that the stage has no
+  opinion about, and `virtualNodes` was a required field a pre-M2.4b ranker has
+  nothing to say about. The proposal was a `RankOutput` (and three siblings)
+  holding that stage's fields alone, with the runner merging into the `...State`
+  record, which leaves the extends-chain and everything a stage can READ exactly
+  as it is, and makes `checkGraphKept` dead code because replacing the graph
+  stops being representable. It was not done in M2.2 because it is a breaking
+  change to all four public stage interfaces and M2.2's increment was the
+  algorithm; doing both in one run would have made the diff hard to review and
+  neither change would have been judged on its own. The reviewer's timing
+  argument is why it was pinned rather than left open: M2.4b is the first
+  milestone where a real stage populates `virtualNodes` and `sizes`, and after
+  that the migration stops being mechanical.
+  Landed exactly as proposed, and split out of M2.4 for the same reason M2.2
+  did not carry it: M2.4 was two changes, a breaking interface change and the
+  dummy-chain algorithm, and the review's own argument against doing both at
+  once applies unchanged to doing both here. Landing the interface FIRST is what
+  satisfies the timing argument, so M2.4a is this and M2.4b is the chains.
+  `RankOutput`, `OrderOutput`, `PositionOutput` and `RouteOutput` are exported;
+  `checkGraphKept` and the `graph` label on `StageContractError` are deleted
+  rather than left as a check that cannot fire. One thing changed shape beyond
+  the proposal: `RankOutput.virtualNodes` is a `ReadonlyMap<NodeId, Size>` and
+  is optional, because declaring a node and sizing it are one act, which makes
+  "declared but unsized" unrepresentable rather than checked and stops a ranker
+  overwriting the size the caller's own node was measured at. The runner derives
+  the roster set and the roster-wide `sizes` map from it, sharing the prepared
+  map untouched when nothing was declared. Two contract checks went with those
+  two hazards. No observable behaviour changed, pinned by a whole-result
+  equality against a layout captured from the previous implementation.
+- [ ] **M2.4b** Dummy-node chains: split long edges across ranks into virtual
   nodes, rejoin on output. Tests: chain integrity, no multi-rank edges reach
   later stages.
   Dummy ids must be a deterministic function of the edge and the rank
   (`#dummy:<edgeId>:<rank>` or equivalent), never a counter and never iteration
   order, so a chain's identity is stable across runs by construction with no
   bookkeeping. This is a hard requirement of M3 and it is recorded here because
-  M2.4 is unbuilt: changing dummy ids after M2.5 through M2.9 commit golden
+  M2.4b is unbuilt: changing dummy ids after M2.5 through M2.9 commit golden
   files is a corpus-wide migration, and adding it now costs nothing. Without it
   every dummy is a node M3.6's warm start has never seen and M3.8 has no
   previous coordinate to anchor, so a long edge visibly jitters between two
@@ -242,30 +277,14 @@ findings addressed or logged, docs land with the feature.
   geometry rather than a corner of it. Test what happens when a chain's rank
   span changes: growing from three ranks to four should keep the three stable
   dummies and gain one.
-  Prepared in M2.1, so this is a ranker change and not an interface change: the
-  pipeline works over a roster (the graph's nodes plus whatever the rank stage
-  declares in `RankedState.virtualNodes`), a declared dummy is checked exactly
-  as hard as a real node (rank, size, exactly one layer, a position), the
-  default order stage already places roster members, and the runner already
-  refuses to let a dummy reach `LayoutResult`. What is left here is the chain
-  splitting itself and rejoining the chain into a polyline on output.
-  Decide here, and no later, whether the four stage interfaces should return
-  only their own contribution rather than the whole next record. Raised by the
-  M2.2 API review against `rank.ts`, which ends
-  `return { ...input, ranks, reversedEdges, virtualNodes: new Set() }`: the
-  spread carries back `graph`, `config` and `sizes` that the stage has no
-  opinion about, and `virtualNodes` is a required field a pre-M2.4 ranker has
-  nothing to say about. The proposal is a `RankOutput` (and three siblings)
-  holding that stage's fields alone, with the runner merging into the `...State`
-  record, which leaves the extends-chain and everything a stage can READ exactly
-  as it is, and makes `checkGraphKept` dead code because replacing the graph
-  stops being representable. It was not done in M2.2 because it is a breaking
-  change to all four public stage interfaces and M2.2's increment was the
-  algorithm; doing both in one run would have made the diff hard to review and
-  neither change would have been judged on its own. The reviewer's timing
-  argument is why it is pinned here rather than left open: M2.4 is the first
-  milestone where a real stage populates `virtualNodes` and `sizes`, and after
-  that the migration stops being mechanical.
+  Prepared in M2.1 and settled in M2.4a, so this is a ranker change and not an
+  interface change: the pipeline works over a roster (the graph's nodes plus
+  whatever the rank stage declares in `RankOutput.virtualNodes`), a declared
+  dummy is checked exactly as hard as a real node (rank, size, exactly one
+  layer, a position), the default order stage already places roster members, and
+  the runner already refuses to let a dummy reach `LayoutResult`. What is left
+  here is the chain splitting itself and rejoining the chain into a polyline on
+  output.
 - [ ] **M2.5** Ordering v1: barycenter sweeps with median fallback, crossing
   counter as the metric. Tests on known small graphs with hand-counted
   crossings. Also measure adjacency allocation churn in the sweeps (every
@@ -329,7 +348,7 @@ benchmark baselines.
 
 M3 also depends on two requirements now recorded upstream, both added by this
 milestone's planning review and both placed on the unbuilt task that owns them:
-M2.4's dummy ids must be a deterministic function of edge and rank, and M2.3's
+M2.4b's dummy ids must be a deterministic function of edge and rank, and M2.3's
 network simplex must be warm-startable. Neither is retrofittable from inside M3.
 If either lands without its requirement, say so here rather than working around
 it, because both defeat stability in ways the node-displacement metrics cannot
@@ -898,7 +917,7 @@ of M3 would leave the second runner idle for a milestone.
   width is in world space (scales with zoom, matches the node boxes) or screen
   space (constant pixels, stays legible when zoomed out), because that choice
   is visible in every screenshot afterwards. Demo scene exercising a graph with
-  edges spanning many ranks, which is what M2.4's dummy chains turn into the
+  edges spanning many ranks, which is what M2.4b's dummy chains turn into the
   multi-point polylines this task has to tessellate without pinching.
 - [ ] **M4.6** (`@dagr/render`) Spring integrator: critically damped springs
   driving scalar and vec2 targets, retargetable mid-flight with no

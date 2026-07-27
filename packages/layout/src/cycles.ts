@@ -85,9 +85,12 @@ function at<T>(values: readonly T[], index: number): T {
  * nodes and edges as parameters instead, so that the rank stage could share the
  * arrays it materialises anyway, was considered and deliberately deferred: it
  * buys an unmeasured saving and costs a function that can be handed arrays
- * disagreeing with its own graph, which is the class of bug `checkGraphKept`
- * exists to prevent elsewhere in this package. M0.2's bench harness is what
- * should decide it, on a measurement rather than on a count of allocations.
+ * disagreeing with its own graph. That is the class of bug the pipeline spent
+ * M2.4a making unrepresentable at the stage boundary, by having a stage return
+ * its own fields and the runner supply the graph, and reintroducing it here as
+ * a private convention would be going the other way. M0.2's bench harness is
+ * what should decide it, on a measurement rather than on a count of
+ * allocations.
  *
  * ## Self loops
  *

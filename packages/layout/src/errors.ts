@@ -94,7 +94,8 @@ export class InvalidConfigError extends DagrLayoutError {
 
 /**
  * Thrown when a stage returns a result that later stages, or the caller, could
- * not work with: a node with no rank or no size, an edge that runs up the page
+ * not work with: a node with no rank, a virtual node declared at a size that is
+ * not a usable pair of lengths, an edge that runs up the page
  * without being declared reversed, a node missing from the layers or listed
  * twice, a layer that mixes ranks or is empty, a node with no position, an edge
  * with no route, a route with fewer than two points, a result that mentions

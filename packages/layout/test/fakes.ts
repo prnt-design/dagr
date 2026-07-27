@@ -1,11 +1,14 @@
 import { defaultStages } from '../src/index.js';
 import type {
   LayoutStages,
+  OrderOutput,
   OrderedState,
+  PositionOutput,
   PositionedState,
   PreparedState,
+  RankOutput,
   RankedState,
-  RoutedState,
+  RouteOutput,
 } from '../src/index.js';
 
 /**
@@ -29,12 +32,24 @@ export interface StageRecorder {
     route?: PositionedState;
   };
 
-  /** What each stage returned, so a test can check it is what the next one got. */
+  /**
+   * What each stage returned: its own contribution, not the next record.
+   *
+   * The invariant these used to serve, "what a stage returned is what the next
+   * one got", was retired in M2.4a and could not be repaired, because it is no
+   * longer true and no longer should be. A stage returns a `RankOutput` and its
+   * three siblings; the runner builds the record. What holds instead, and what
+   * `layout.pipeline.test.ts` asserts, is that stage N + 1 is handed a record
+   * carrying the runner's own graph by identity, the config the runner
+   * resolved, and the fields stage N returned. That is a stronger claim than
+   * the old one: identity of a whole object could be satisfied by a runner that
+   * passed a stage's record along without reading it, and this cannot.
+   */
   readonly outputs: {
-    rank?: RankedState;
-    order?: OrderedState;
-    position?: PositionedState;
-    route?: RoutedState;
+    rank?: RankOutput;
+    order?: OrderOutput;
+    position?: PositionOutput;
+    route?: RouteOutput;
   };
 }
 

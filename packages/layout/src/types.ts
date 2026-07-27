@@ -98,11 +98,12 @@ export interface LayoutInput {
  * vocabularies for two audiences, split along the line that matters: what a
  * caller passes and gets back, versus what one stage hands the next.
  *
- * A stage returns the graph it was given, unchanged and by identity. The runner
- * rejects a record whose `graph` is not the object it handed in, because a
- * stage that replaced the graph would be checked against its own account of the
- * work. Replacing it is never necessary: the one reason to want to, needing a
- * node the caller never added, is what {@link RankedState.virtualNodes} is for.
+ * The five records are what a stage READS. What a stage WRITES is one of the
+ * four `...Output` types, and the runner merges that into the next record
+ * itself. So `graph` here is always the object the caller passed: a stage has
+ * no way to hand back a different one, which is why nothing checks for it. The
+ * one reason to want to replace the graph, needing a node the caller never
+ * added, is what {@link RankOutput.virtualNodes} is for.
  */
 export interface PreparedState {
   readonly graph: Graph;
@@ -141,25 +142,33 @@ export interface RankedState extends PreparedState {
 
   /**
    * Ids the rank stage needs to lay out but the caller never added to the
-   * graph. Empty until dummy-node chains land in M2.4, where a long edge is
+   * graph. Empty until dummy-node chains land in M2.4b, where a long edge is
    * split into a chain of one virtual node per rank it spans.
    *
    * This carries exactly the argument `reversedEdges` carries: the source graph
    * is never mutated, so a stage that needs a node the user never added
-   * declares it here instead of adding it. Declaring an id puts it in the
-   * roster, which is what the rank, order, and position checks run over, so a
-   * dummy is a first-class citizen of the pipeline right up to the route stage.
-   * It stops there: the result only ever mentions the caller's own nodes.
+   * declares it in {@link RankOutput.virtualNodes} instead of adding it.
+   * Declaring an id puts it in the roster, which is what the rank, order, and
+   * position checks run over, so a dummy is a first-class citizen of the
+   * pipeline right up to the route stage. It stops there: the result only ever
+   * mentions the caller's own nodes.
    *
-   * A stage that declares an id also has to size it and rank it. Dagre gives a
-   * dummy a small width so that `nodeSep` spacing still works around it.
+   * The runner builds this set from the keys of what the rank stage declared,
+   * which is why it is a set here and a map there. A stage WRITES a declaration,
+   * where an id without a size is a bug, and READS a roster, where a size it
+   * already has in `sizes` would be a second copy to disagree with. Two types
+   * for the two directions, so the compiler catches the confusion rather than a
+   * check catching it later.
    */
   readonly virtualNodes: ReadonlySet<NodeId>;
 
   /**
    * Resolved size per node, now covering the whole roster rather than only the
-   * graph. A rank stage that declares a virtual node supplies its size here,
-   * by copying {@link PreparedState.sizes} and adding to it.
+   * graph. The runner derives it: {@link PreparedState.sizes} for the graph's
+   * own nodes, plus the size the rank stage gave each id it declared. A stage
+   * never assembles this map, which is what makes "declared but unsized"
+   * unrepresentable rather than merely rejected, and what stops a ranker
+   * silently resizing a node the caller measured itself.
    */
   readonly sizes: ReadonlyMap<NodeId, Size>;
 }
@@ -195,7 +204,8 @@ export interface PositionedState extends OrderedState {
  * record the pipeline produces.
  *
  * A route stage adds routes and nothing else, in the same shape as the three
- * stages before it. It does not build the {@link LayoutResult}: the runner does
+ * stages before it: it returns a {@link RouteOutput} and the runner builds this
+ * record. It does not build the {@link LayoutResult} either: the runner does
  * that, from `positions` and `sizes` for the nodes, from `routes` for the
  * edges, and by computing `bounds` itself. Assembling the result is not
  * routing, and a third-party router that had to do it would be reimplementing
@@ -206,7 +216,7 @@ export interface RoutedState extends PositionedState {
   /**
    * Polyline per edge, with an entry for every edge the graph holds and nothing
    * else. Virtual nodes stop here: a long edge split into a dummy chain in
-   * M2.4 is rejoined into one polyline by the router, keyed by the caller's
+   * M2.4b is rejoined into one polyline by the router, keyed by the caller's
    * own edge id.
    *
    * The polyline alone, not a {@link RoutedEdge}: which edge this is, and which
@@ -281,36 +291,93 @@ export interface LayoutResult {
 }
 
 /**
+ * What the rank stage contributes, and all it contributes.
+ *
+ * The four `...Output` types are the write side of the pipeline, and the five
+ * `...State` records are the read side. A stage reads everything computed
+ * upstream of it and returns its own fields alone; the runner merges those into
+ * the next record. Returning less is a stronger contract than returning more,
+ * for three reasons that are all the same reason. A stage cannot replace the
+ * graph, so nothing has to check that it did not. A stage cannot restate a
+ * field it has no opinion about, so no two records can disagree about what
+ * `config` meant on this run. And a stage no longer has to spread the record it
+ * was handed just to give back fields it never touched, which is the line that
+ * quietly carries a mistake when a new field is added upstream.
+ */
+export interface RankOutput {
+  /** Layer index per node, covering the roster. See {@link RankedState.ranks}. */
+  readonly ranks: ReadonlyMap<NodeId, number>;
+
+  /** Edges treated as running the other way. See {@link RankedState.reversedEdges}. */
+  readonly reversedEdges: ReadonlySet<EdgeId>;
+
+  /**
+   * Nodes this stage needs that the caller never added, each WITH its size.
+   *
+   * Declaring an id and sizing it are one act, so they are one field. The
+   * alternative, a set of ids next to a roster-wide `sizes` map the stage had
+   * to copy and extend, made "declared but unsized" a mistake to check for
+   * rather than a mistake to be unable to make, and it handed every ranker a
+   * copy of the caller's sizes to overwrite by accident. Here a stage can only
+   * say what its own nodes measure.
+   *
+   * Optional, because most rankers declare nothing and a required field whose
+   * only honest answer is an empty collection is a question that should not
+   * have been asked. Omitting it and declaring nothing are the same thing: the
+   * runner puts an empty set in {@link RankedState.virtualNodes} either way.
+   *
+   * Dagre gives a dummy a small width so that `nodeSep` spacing still works
+   * around it.
+   */
+  readonly virtualNodes?: ReadonlyMap<NodeId, Size>;
+}
+
+/** What the order stage contributes. See {@link OrderedState.layers}. */
+export interface OrderOutput {
+  readonly layers: readonly (readonly NodeId[])[];
+}
+
+/** What the position stage contributes. See {@link PositionedState.positions}. */
+export interface PositionOutput {
+  readonly positions: ReadonlyMap<NodeId, Point>;
+}
+
+/** What the route stage contributes. See {@link RoutedState.routes}. */
+export interface RouteOutput {
+  readonly routes: ReadonlyMap<EdgeId, readonly Point[]>;
+}
+
+/**
  * Assigns each node a layer index, and records any edge it had to treat as
  * reversed to do so.
  *
  * All four stage interfaces have the same shape: a `name` used in diagnostics,
- * and a `run` from the previous record to the next one, adding that stage's own
- * field and passing everything else through. Because each record extends the
- * last, a stage reads everything upstream of it, and replacing one
- * implementation is a one-line change at the call site that still typechecks.
+ * and a `run` from the record the runner built for it to that stage's own
+ * output. Because each record extends the last, a stage reads everything
+ * upstream of it, and replacing one implementation is a one-line change at the
+ * call site that still typechecks.
  */
 export interface RankStage {
   readonly name: string;
-  run(input: PreparedState): RankedState;
+  run(input: PreparedState): RankOutput;
 }
 
 /** Turns ranks into ordered layers, choosing the left-to-right order in each. */
 export interface OrderStage {
   readonly name: string;
-  run(input: RankedState): OrderedState;
+  run(input: RankedState): OrderOutput;
 }
 
 /** Turns ordered layers into coordinates. */
 export interface PositionStage {
   readonly name: string;
-  run(input: OrderedState): PositionedState;
+  run(input: OrderedState): PositionOutput;
 }
 
 /** Turns coordinates into routes, one polyline per edge the graph holds. */
 export interface RouteStage {
   readonly name: string;
-  run(input: PositionedState): RoutedState;
+  run(input: PositionedState): RouteOutput;
 }
 
 /** The four stages a run uses, in the order the runner calls them. */

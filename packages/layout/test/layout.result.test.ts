@@ -1,7 +1,14 @@
 import { Graph } from '@dagr/graph';
 import { describe, expect, it } from 'vitest';
 import { StageContractError, defaultStages, layout } from '../src/index.js';
-import type { LayoutResult, Point, PositionedNode, RankStage, RouteStage } from '../src/index.js';
+import type {
+  LayoutConfig,
+  LayoutResult,
+  Point,
+  PositionedNode,
+  RankStage,
+  RouteStage,
+} from '../src/index.js';
 
 /** `a` fans out to `b` and `c`. Three nodes, two edges, no cycles. */
 function fanOut(): Graph {
@@ -398,7 +405,7 @@ describe('layout result', () => {
           if (from === undefined || to === undefined) throw new Error('unreachable');
           routes.set(edge.id, [from, { x: from.x + 1e4, y: from.y - 1e4 }, to]);
         }
-        return { ...input, routes };
+        return { routes };
       },
     };
     const result = layout({ graph: fanOut() }, { route: scenic });
@@ -417,7 +424,7 @@ describe('layout result', () => {
             { x: Number.NaN, y: 0 },
           ]);
         }
-        return { ...input, routes };
+        return { routes };
       },
     };
     try {
@@ -444,5 +451,166 @@ describe('layout result', () => {
       height: 40,
     });
     expectNoOverlaps(result);
+  });
+});
+
+/**
+ * A graph with one of everything the pipeline has to survive: a diamond whose
+ * tail belongs under the longer side, a cycle back to the top for the ranker to
+ * break, a self loop it must not break, a two-cycle in a second component, and
+ * a third component that is a lone node. Sizes vary by id length so a node that
+ * moved between rows shows up in the coordinates rather than cancelling out.
+ */
+function menagerie(): Graph {
+  const graph = new Graph();
+  graph.addNode('a');
+  graph.addNode('b');
+  graph.addNode('c');
+  graph.addNode('d');
+  graph.addEdge('a', 'b', 'ab');
+  graph.addEdge('a', 'c', 'ac');
+  graph.addEdge('b', 'd', 'bd');
+  graph.addEdge('c', 'd', 'cd');
+  graph.addEdge('d', 'a', 'da');
+  graph.addEdge('b', 'b', 'bb');
+  graph.addNode('p');
+  graph.addNode('q');
+  graph.addEdge('p', 'q', 'pq');
+  graph.addEdge('q', 'p', 'qp');
+  graph.addNode('lonely');
+  return graph;
+}
+
+const menagerieConfig: LayoutConfig = {
+  nodeSep: 12,
+  rankSep: 34,
+  nodeSize: (node) => ({ width: node.id.length * 10, height: 20 }),
+};
+
+describe('layout result identity across refactors', () => {
+  /**
+   * The whole result, written out, captured from the implementation as it stood
+   * before M2.4a narrowed the four stage return types.
+   *
+   * Every other test in this suite asserts a property, which is what a test
+   * should do and what leaves room for a refactor to be judged on its own. This
+   * one asserts the opposite: that nothing at all moved. M2.4a rebuilt how the
+   * runner assembles each pipeline record, and the one claim that change makes
+   * to a caller is that it makes no claim, so the guard has to be an equality
+   * against a value nobody could derive from the new code. A property test would
+   * have passed against a runner that quietly changed a coordinate.
+   *
+   * It is one graph rather than a corpus on purpose. M2.9 commits golden files
+   * against dagre and that is where a corpus belongs; this is a single pin for a
+   * single refactor, and it is expected to be REPLACED, not preserved, the first
+   * time a milestone deliberately changes what a default run draws. M2.5, M2.7
+   * and M2.8 each will. A test like this outliving its refactor is how a suite
+   * ends up asserting that a placeholder algorithm stays a placeholder.
+   */
+  const captured = {
+    nodes: [
+      { id: 'a', x: -47, y: 10, width: 10, height: 20 },
+      { id: 'b', x: -22, y: 64, width: 10, height: 20 },
+      { id: 'c', x: 0, y: 64, width: 10, height: 20 },
+      { id: 'd', x: 0, y: 118, width: 10, height: 20 },
+      { id: 'p', x: -25, y: 10, width: 10, height: 20 },
+      { id: 'q', x: 22, y: 64, width: 10, height: 20 },
+      { id: 'lonely', x: 22, y: 10, width: 60, height: 20 },
+    ],
+    edges: [
+      {
+        id: 'ab',
+        source: 'a',
+        target: 'b',
+        points: [
+          { x: -47, y: 10 },
+          { x: -22, y: 64 },
+        ],
+      },
+      {
+        id: 'ac',
+        source: 'a',
+        target: 'c',
+        points: [
+          { x: -47, y: 10 },
+          { x: 0, y: 64 },
+        ],
+      },
+      {
+        id: 'bd',
+        source: 'b',
+        target: 'd',
+        points: [
+          { x: -22, y: 64 },
+          { x: 0, y: 118 },
+        ],
+      },
+      {
+        id: 'cd',
+        source: 'c',
+        target: 'd',
+        points: [
+          { x: 0, y: 64 },
+          { x: 0, y: 118 },
+        ],
+      },
+      {
+        id: 'da',
+        source: 'd',
+        target: 'a',
+        points: [
+          { x: 0, y: 118 },
+          { x: -47, y: 10 },
+        ],
+      },
+      {
+        id: 'bb',
+        source: 'b',
+        target: 'b',
+        points: [
+          { x: -22, y: 64 },
+          { x: -22, y: 64 },
+        ],
+      },
+      {
+        id: 'pq',
+        source: 'p',
+        target: 'q',
+        points: [
+          { x: -25, y: 10 },
+          { x: 22, y: 64 },
+        ],
+      },
+      {
+        id: 'qp',
+        source: 'q',
+        target: 'p',
+        points: [
+          { x: 22, y: 64 },
+          { x: -25, y: 10 },
+        ],
+      },
+    ],
+    bounds: { x: -52, y: 0, width: 104, height: 128 },
+  };
+
+  it('draws the same graph exactly as it did before the stage outputs were narrowed', () => {
+    const result = layout({ graph: menagerie(), config: menagerieConfig });
+    expect({
+      nodes: [...result.nodes.values()],
+      edges: [...result.edges.values()],
+      bounds: result.bounds,
+    }).toEqual(captured);
+  });
+
+  it('keeps the key order too, which the result promises is graph insertion order', () => {
+    // Deep equality on the arrays above already compares order, and this states
+    // separately that the MAPS iterate that way, which is the documented
+    // guarantee M3.1's diff is built on rather than an accident of how the
+    // assertion above was written.
+    const graph = menagerie();
+    const result = layout({ graph, config: menagerieConfig });
+    expect([...result.nodes.keys()]).toEqual(graph.nodes().map((node) => node.id));
+    expect([...result.edges.keys()]).toEqual(graph.edges().map((edge) => edge.id));
   });
 });

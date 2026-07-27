@@ -8,17 +8,21 @@ import type {
   LayoutResult,
   LayoutStageOverrides,
   LayoutStages,
+  OrderOutput,
   OrderStage,
   OrderedState,
   Point,
+  PositionOutput,
   PositionStage,
   PositionedState,
   PositionedNode,
   PreparedState,
+  RankOutput,
   RankStage,
   RankedState,
   Rect,
   ResolvedLayoutConfig,
+  RouteOutput,
   RoutedEdge,
   RoutedState,
   RouteStage,
@@ -55,7 +59,7 @@ describe('@dagr/layout public surface', () => {
           shifted += 1;
           positions.set(id, { x: point.x + 1000, y: point.y });
         }
-        return { ...placed, positions };
+        return { positions };
       },
     };
     const graph = new Graph();
@@ -119,6 +123,8 @@ describe('@dagr/layout public surface', () => {
 
     const prepared: PreparedState = { graph, config: resolved, sizes: new Map([['a', size]]) };
     const ranks = new Map([['a', 0]]);
+    // The five records a stage READS, still exported and still an extends
+    // chain, so a stage author can name the argument its `run` is handed.
     const ranked: RankedState = {
       ...prepared,
       ranks,
@@ -129,22 +135,37 @@ describe('@dagr/layout public surface', () => {
     const placed: PositionedState = { ...ordered, positions: new Map([['a', point]]) };
     const wired: RoutedState = { ...placed, routes: new Map() };
 
-    const rank: RankStage = { name: 'r', run: () => ranked };
-    const order: OrderStage = { name: 'o', run: () => ordered };
-    const position: PositionStage = { name: 'p', run: () => placed };
-    const route: RouteStage = { name: 't', run: () => wired };
+    // The four types a stage WRITES. Each is that stage's own contribution, and
+    // the runner merges it into the record above.
+    const rankOut: RankOutput = { ranks, reversedEdges: new Set() };
+    const orderOut: OrderOutput = { layers: [['a']] };
+    const positionOut: PositionOutput = { positions: new Map([['a', point]]) };
+    const routeOut: RouteOutput = { routes: new Map() };
+
+    const rank: RankStage = { name: 'r', run: () => rankOut };
+    const order: OrderStage = { name: 'o', run: () => orderOut };
+    const position: PositionStage = { name: 'p', run: () => positionOut };
+    const route: RouteStage = { name: 't', run: () => routeOut };
     const stages: LayoutStages = { rank, order, position, route };
     const overrides: LayoutStageOverrides = { position };
 
     // The runner assembles the result from the last record's `positions` and
-    // `sizes`, so these hand-built records decide the node, not the default run
-    // that produced `positioned`.
-    const handBuilt: PositionedNode = { id: 'a', x: 0, y: 0, width: 1, height: 2 };
+    // `sizes`. The position comes from the stage above, and the size does NOT:
+    // it is what the runner measured during prepare, because a stage has no
+    // field to hand back a size in unless it declared the node itself. The
+    // `size` in `prepared` is therefore a record a stage reads, not one it can
+    // impose, which is the whole shape of the M2.4a contract in one assertion.
+    const handBuilt: PositionedNode = { id: 'a', x: 0, y: 0, width: 100, height: 40 };
     expect(api.layout(input, stages).nodes.get('a')).toEqual(handBuilt);
     expect(api.layout(input, overrides).nodes.get('a')).toEqual(handBuilt);
     expect(positioned).toEqual({ id: 'a', x: 0, y: 20, width: 100, height: 40 });
     expect(routed).toBeUndefined();
     expect(bounds).toEqual({ x: -50, y: 0, width: 100, height: 40 });
     expect(rect.width).toBe(1);
+    // The read-side records still exist and still extend one another, which is
+    // what lets a stage author name the argument its `run` is handed.
+    expect(wired.graph).toBe(graph);
+    expect(wired.layers).toEqual([['a']]);
+    expect(wired.sizes.get('a')).toBe(size);
   });
 });
