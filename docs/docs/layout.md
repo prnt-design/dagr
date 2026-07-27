@@ -11,14 +11,17 @@ sidebar_position: 3
 `LayoutResult`: where every node sits, how every edge runs, and the box around
 the lot.
 
-This page describes the pipeline as of M2.3. The types, the runner, and the
-stage boundaries are real: they are what every later milestone is built against,
-and the roster below exists so the one boundary that was going to have to move
-(M2.4b's dummy nodes) does not. One of the four default algorithms is real: the
-rank stage breaks cycles and ranks by longest path, so the layers are the ones
-the graph asks for, and M2.3 added a second ranker a caller can select instead.
-The other three defaults are placeholders that produce a well formed but naive
-result.
+This page describes the pipeline as of M2.4a, plus M2.3's second ranker. Those
+two numbers are the wrong way round on purpose: M2.4a landed first, and the
+milestones do not run in landing order.
+
+The types, the runner, and the stage boundaries are real: they are what every
+later milestone is built against, and the roster below exists so the one
+boundary that was going to have to move (M2.4b's dummy nodes) does not. One of
+the four default algorithms is real: the rank stage breaks cycles and ranks by
+longest path, so the layers are the ones the graph asks for, and M2.3 added a
+second ranker a caller can select instead. The other three defaults are
+placeholders that produce a well formed but naive result.
 
 Expect the contract to gain rules as real stages land. A rule leaves the list
 only when the mistake it caught stops being one a stage can make, never because
@@ -354,6 +357,17 @@ corpus it takes the default ranker's 40,430 dummies down to 17,285, a 57% cut,
 in about 20ms. On the 10k corpus it reaches 405,709 from 1,414,263 inside its
 default budget.
 
+**None of that saving is collectable in this release.** M2.4b is unbuilt: no
+stage mints a dummy today, both rank stages omit `virtualNodes`, and the counts
+above are a cost nobody is paying yet. Read the future tense in "will mint"
+literally. What a caller who switches today actually gets is a rank stage that
+costs several times more (a few milliseconds against about 20 on the 1k corpus,
+and tens of milliseconds against the seconds the budget caps it at on the 10k
+one), a drawing that is never shorter and may be taller, and zero dummy nodes
+saved, because there are none to save. The 57% is real and it reproduces; it
+becomes a saving when M2.4b lands, and until then switching buys a ranking that
+M2.4b will be able to exploit and costs the height risk below.
+
 **It cannot make the drawing shorter, and it can make it taller.** Minimum total
 edge length and minimum height are different objectives, and this stage
 optimises the first. Every feasible ranking sends each edge down at least one
@@ -370,28 +384,41 @@ v6 -> v9 -> v0
 
 Pulling `v6` down one rank tightens `v6 -> v5`, and drags `v9` and `v0` into a
 fourth layer to do it. Both corpora happen to come out the same height either
-way (61 ranks and 153 ranks), so this is a real risk rather than a certainty.
-If a short drawing is what matters, keep the default.
+way (62 ranks and 154 ranks), so this is a real risk rather than a certainty.
+If a short drawing is what matters, name `longestPathRankStage`: minimum height
+is its guarantee, and it is the algorithm you want for that whether or not it
+also happens to be the default.
 
-Select it per run, like any other stage:
+Both real rank stages are exported by name, so a call site says which objective
+it wants rather than inheriting whichever one is currently the default:
 
 ```ts
-import { layout, networkSimplexRankStage } from '@dagr/layout';
+import { layout, longestPathRankStage, networkSimplexRankStage } from '@dagr/layout';
 
-const result = layout({ graph }, { rank: networkSimplexRankStage });
+// Fewest layers. Also what a run with no `rank` override gets today.
+const short = layout({ graph }, { rank: longestPathRankStage });
+
+// Least total edge length, at the risk of more layers.
+const tight = layout({ graph }, { rank: networkSimplexRankStage });
 ```
 
 `networkSimplexRank(options)` builds one with options, and there are two.
 
 **`maxIterations`** bounds the pivots and defaults to 20,000. It is a safety
-valve rather than a quality knob: it is ten times what the 1k corpus needs to
-converge, and it is what bounds the 10k corpus, which does not converge inside
-any budget worth spending, to about three seconds. Give it more if a run is
-worth it; the 10k corpus is still improving at 200,000 pivots, and takes 41
-seconds to get there. Whatever stops it, the ranking that comes back is
-feasible, and never worse than the ranking the stage started from. A budget
-that is not a finite number of zero or more is an `InvalidConfigError`, thrown
-by `networkSimplexRank` rather than by the run.
+valve rather than a quality knob: it is about seventeen times what the 1k corpus
+needs to converge, which is around 1,200 pivots (1,000 is still a couple of
+percent off, 1,200 reaches the optimum, and 20,000 returns exactly what 1,200
+did), and it is what bounds the 10k corpus, which does not converge inside any
+budget worth spending, to about three seconds. Give it more if a run is worth
+it; the 10k corpus is still improving at 200,000 pivots, and takes 41 seconds to
+get there. Whatever stops it, the ranking that comes back is feasible, and never
+worse than the ranking the stage started from.
+
+A budget is a pivot count, so it has to be an integer that is zero or greater,
+or `Number.POSITIVE_INFINITY`, which means no budget at all: run until no tree
+edge has a negative cut value. Anything else, `2.5` and `0.5` included, is an
+`InvalidConfigError` thrown by `networkSimplexRank` rather than by the run, so a
+bad budget fails at the call that named it.
 
 **`initialRanks`** is a previous ranking to start from. It matters because this
 LP is degenerate: many different rankings reach the same total edge length, and
@@ -401,13 +428,23 @@ churning ranks across a region that did not change and improving nothing, which
 is exactly what M3 re-running layout on every patch would suffer.
 
 ```ts
-const first = layout({ graph }, { rank: networkSimplexRankStage });
-// ... the graph changes ...
+import { layout, networkSimplexRank } from '@dagr/layout';
+
+// `previousRanks` is a ReadonlyMap<NodeId, number> from an earlier run.
 const again = layout(
   { graph },
   { rank: networkSimplexRank({ initialRanks: previousRanks }) },
 );
 ```
+
+**There is no way to get `previousRanks` out of `layout()` today.** A
+`LayoutResult` carries `nodes`, `edges` and `bounds`, which are coordinates and
+not ranks, and no exported function will hand you a ranking another way. So this
+option is not one a caller can close the loop on in this release. It is the
+shape M3's engine will hand you, and it exists now so that the ranker did not
+have to be rebuilt around a warm start after the fact. Passing a ranking you
+built yourself works exactly as described below; there is just nothing in this
+package that produces one for you.
 
 A supplied ranking is a **hint**, never trusted. It is used as a floor for the
 longest-path sweep, which pushes any node the hint put too high back down below
@@ -415,16 +452,50 @@ its predecessors, so what the solver actually starts from is feasible whatever
 the hint said. Three kinds of entry are dropped outright: an id the graph does
 not hold, a value that is not an integer, and a value further from zero than the
 graph has nodes, which is wider than any ranking of it needs and would cost the
-solver a pivot per unit of nonsense. So a stale hint cannot make the result
-infeasible, and cannot make it worse than a cold run either. All it can do is
-choose between optima, which is the whole point of passing one.
+solver a pivot per unit of nonsense.
+
+So a stale hint cannot make the result infeasible, and cannot make it
+non-optimal **as long as the budget holds**. What it can do is change what a run
+cut short returns: the hint is the floor the longest-path sweep starts from, so
+a hinted run begins at a different feasible ranking from a cold one, and the
+"never worse than the ranking it started from" guard compares against *that*
+ranking rather than against the cold one. A run that hits its budget can
+therefore come back with more total edge length than a cold run stopped at the
+same point. With enough budget to converge, all a hint does is choose between
+optima, which is the whole point of passing one.
+
+**Dropping is silent, and "every entry was dropped" looks exactly like "the
+hint was honoured" from outside.** That is the right behaviour for the case the
+option exists for, a stale hint from a previous M3 patch: a thrown error would
+turn the normal case into a failure, and a report channel would be a second
+return value for something the caller can compute. But it means a warm start
+that has quietly stopped working shows up only as the rank churn the option
+exists to remove. The check is one line, worth running when a warm start stops
+helping:
+
+```ts
+const kept = [...previousRanks.keys()].filter((id) => graph.hasNode(id)).length;
+```
+
+A `kept` of zero is a hint that did nothing at all. A `kept` far below
+`previousRanks.size` is a hint that has drifted from the graph it is being
+applied to, which is the state a long-running M3 session drifts into one patch
+at a time.
 
 Ranks still come out contiguous from zero per connected component, as the
-default stage's do, but as a consequence rather than a construction: a ranking
-with an empty rank between two occupied ones is never optimal, because sliding
-everything below the gap up by one shortens every edge that crossed it and
-breaks none. A budget that runs out can therefore leave a gap, and nothing
-downstream minds.
+default stage's do, but the two halves of that get there by different routes and
+only one of them is conditional.
+
+Gap-freeness is a consequence. A ranking with an empty rank between two occupied
+ones is never optimal, because sliding everything below the gap up by one
+shortens every edge that crossed it and breaks none. Nothing constructs it, so a
+budget that runs out before the solver gets there can leave a gap, and nothing
+downstream minds: the order stage sorts the distinct ranks it finds.
+
+Starting at zero is a construction. Each component is re-based on its own lowest
+rank at the very end of the run, after the keep-the-better-ranking restore, and
+that runs whatever the budget did. An exhausted budget can leave a gap; it
+cannot leave a component floating at a nonzero floor.
 
 ### What `reversedEdges` means if you are reading a result
 
@@ -448,9 +519,17 @@ attachment. See [Route direction](#route-direction).
 Both steps of the default stage are O(V + E) in time and space. Cycle breaking
 gets there by keeping vertices in degree buckets rather than rescanning what is
 left each round, and ranking is a Kahn-style sweep that visits each node and
-edge once. No timing figure is quoted here because none is measured yet: M2.9
-commits benchmark baselines at 1k and 10k nodes, and until it does the
-complexity is the claim.
+edge once. No timing figure is quoted for the default stage, because none is
+measured yet: M2.9 commits benchmark baselines at 1k and 10k nodes, and until it
+does the complexity is the claim.
+
+The exception is
+[Minimum total edge length](#minimum-total-edge-length-and-what-it-costs), which
+quotes four, because a pivot count is not a complexity a reader can size a
+budget against. Read those as one machine's measurements of two generated
+corpora, taken to justify a default budget and a warning about height. They are
+not baselines and they are not machine independent: M2.9's committed numbers are
+the ones anything is allowed to regress against.
 Both steps are fully deterministic: vertices are numbered in `graph.nodes()`
 order, edges are walked in `graph.edges()` order, and a tie is broken by bucket
 arrival order, which is itself fixed by the graph's order.
@@ -547,13 +626,23 @@ const nudged: PositionStage = {
 };
 ```
 
-The four default stages are reachable only through `defaultStages`, and are not
-exported individually. Three of them are still placeholders scheduled for
-replacement, so a name exported today is a name to delete tomorrow. Going
-through `defaultStages.position` also keeps this wrapper working when M2.7
-changes what that property points at, which importing the stage by name would
-not: M2.2 already changed what `defaultStages.rank` points at, and no wrapper
-written this way noticed.
+**Every real stage is exported by name; no placeholder is.** That is the whole
+rule, and it is why `longestPathRankStage` and `networkSimplexRankStage` are
+both importable while the three placeholders in `stages.ts` are reachable only
+through `defaultStages`. A placeholder's name is a name to delete tomorrow. A
+real algorithm's name is how a caller says which objective it wants: the two
+rankers answer different questions, and "the default one" does not identify
+either, because which one is default can change and neither is chosen for being
+it. See
+[Minimum total edge length](#minimum-total-edge-length-and-what-it-costs) for
+which is which. Expect `order`, `position` and `route` to gain names the same
+way as M2.5, M2.7 and M2.8 replace them.
+
+Going through `defaultStages.position` is still the right way to WRAP a default,
+though, and that is what the example above does. It keeps the wrapper working
+when M2.7 changes what that property points at, which importing a stage by name
+would not: M2.2 already changed what `defaultStages.rank` points at, and no
+wrapper written this way noticed.
 
 ## The stage contract
 
@@ -908,7 +997,8 @@ try {
 ## What is not here yet
 
 One of the four default stages is a layout algorithm. The other three are
-placeholders:
+placeholders. (`network-simplex-rank` is a second real algorithm, but it is not
+a default: it is selected per run.)
 
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
@@ -928,16 +1018,20 @@ later milestones are built against.
 `RankedState.virtualNodes` and `RankedState.virtualChains` are both still empty:
 they are the bookkeeping slots dummy-node chains fill in M2.4b, and they exist
 now because the alternative, mutating the caller's graph to add a node, is the
-one thing this pipeline promises not to do. `RankedState.reversedEdges` was the
-same kind of slot until M2.2 filled it, and it filled without a contract change,
-which is the argument for having declared all three early. `virtualNodes` did
-not manage that: M2.4a changed how a stage declares one, from a set of ids plus
-a copied-and-extended `sizes` map to a map of ids to sizes. That is the whole
-cost of the slot having been declared before anything filled it, it was paid
-before any real stage populated the field, and it is why the interface change
-landed on its own and ahead of the chains. `virtualChains` is declared on the
-same argument and with its checks already written, so M2.4b fills it rather than
-designing it.
+one thing this pipeline promises not to do. Empty here is also what makes
+`network-simplex-rank`'s headline number a promise rather than a saving today,
+for the reason in
+[Minimum total edge length](#minimum-total-edge-length-and-what-it-costs): there
+are no dummies yet for a shorter ranking to save. `RankedState.reversedEdges`
+was the same kind of slot until M2.2 filled it, and it filled without a contract
+change, which is the argument for having declared all three early.
+`virtualNodes` did not manage that: M2.4a changed how a stage declares one, from
+a set of ids plus a copied-and-extended `sizes` map to a map of ids to sizes.
+That is the whole cost of the slot having been declared before anything filled
+it, it was paid before any real stage populated the field, and it is why the
+interface change landed on its own and ahead of the chains. `virtualChains` is
+declared on the same argument and with its checks already written, so M2.4b
+fills it rather than designing it.
 
 Also still to come: a golden corpus compared against dagre with layout
 benchmarks (M2.9), and running the same API in a worker (M2.10). Incremental
