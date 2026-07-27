@@ -1,16 +1,25 @@
 # Benchmark harness
 
 The machinery behind the charter's "benchmarks within 10% of baseline", and the
-reasoning that makes that rule survive contact with a CI runner.
+reasoning that makes that rule survive contact with a busy machine.
 
 ```
 pnpm bench            # run every package's benchmarks, writing a report each
 pnpm bench:check      # compare that run to bench/baseline.json, non-zero on a regression
 pnpm bench:baseline   # record that run as the new baseline
-pnpm bench:ci         # what CI runs: both of the above, re-measuring once if the run was unreadable
+pnpm bench:ci         # both of the above, re-measuring once if the run was unreadable
 ```
 
-CI runs `pnpm bench:ci` on every pull request.
+The agent runs `pnpm bench:ci` before it opens a pull request, and does not
+merge on a regression. CI does not run it.
+
+The gate lives here rather than on CI because the baseline is machine-matched.
+`bench/baseline.json` records the machine it was captured on, and a comparison
+is only meaningful against the same one. GitHub's x64 Ubuntu runners are not
+the maintainer's arm64 Apple M4, and the ratio normalization below corrects for
+a slower machine, not for a different architecture. Gating on CI reported
+eleven regressions between +23% and +76% on a commit that changed one docs
+page.
 
 ## When the runner is too busy to measure
 
@@ -19,16 +28,18 @@ different responses. `bench:check` exits 1 for a regression and 2 when the run
 was too noisy to read; `bench:ci` retries only on 2, after letting the machine
 settle, and a real regression fails on the first attempt and is never retried.
 
-The noise is predictable rather than hypothetical. CI runs `pnpm build`
-immediately before the bench step, and a run started here while the machine was
-still busy with the build put 7 of 10 benchmarks past the readability ceiling.
+The noise is predictable rather than hypothetical. The agent runs this gate on
+the same machine that just ran its persona reviewers, and a run started while
+those were still resident put 7 of 10 benchmarks past the readability ceiling.
 The same benchmarks on a settled machine a few seconds later came back with all
-10 readable and inside tolerance. Failing a pull request over that would make
-the gate a flake generator, which is what this design set out to avoid; passing
-it silently would make the gate a no-op, which is what the harness was written
-to fix. Measuring again is the only answer that is neither. Two unreadable runs
-in a row fail the build, and say plainly that nothing was measured, so nothing
-is being claimed about the code.
+10 readable and inside tolerance. Failing a merge over that would make the gate
+a flake generator, which is what this design set out to avoid; passing it
+silently would make the gate a no-op, which is what the harness was written to
+fix. Measuring again is the only answer that is neither. Two unreadable runs in
+a row fail the gate, and say plainly that nothing was measured, so nothing is
+being claimed about the code.
+
+Run the gate after the reviewers have exited. They are themselves the load.
 
 ## Why this is not a 10% comparison of milliseconds
 
