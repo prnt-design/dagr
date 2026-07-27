@@ -1,6 +1,13 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // The base sets `lib: ["ES2022"]` with no DOM, which is right for every
+    // other package here: `@dagr/graph` and `@dagr/layout` are headless, and a
+    // DOM global reachable from one of them is a bug the compiler should catch.
+    // This package draws on a canvas, so `HTMLCanvasElement` and
+    // `devicePixelRatio` have to resolve. Widened here rather than in the base,
+    // so the headless packages keep the check.
+    "lib": ["ES2022", "DOM"],
     "noEmit": true,
     "types": ["node"]
   },

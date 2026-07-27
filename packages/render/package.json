@@ -15,9 +15,13 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "sideEffects": false,
+  "peerDependencies": {
+    "three": ">=0.180.0 <1.0.0"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/prnt-design/dagr",
@@ -27,5 +31,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "tsc -p tsconfig.build.json"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.0",
+    "three": "^0.185.1"
   }
 }
