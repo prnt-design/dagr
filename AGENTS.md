@@ -38,8 +38,11 @@ directly.
    so skipping them locally is a way to turn main red. The bench gate runs
    here rather than on CI because the committed baseline is machine-matched;
    see `bench/README.md`.
-2. Rebase onto `origin/main`. If the rebase brought in changes, run the gate
-   again. Rebasing is not a formality: the changes it pulls in are exactly the
+2. Rebase onto `origin/main`. If the rebase brought in changes, run
+   `pnpm install --frozen-lockfile` before running the gate again. A rebase
+   can bring in a new lockfile, and a stale `node_modules` against it fails
+   in a way that looks exactly like broken code, not a stale install.
+   Rebasing is not a formality: the changes it pulls in are exactly the
    ones your local gate has never seen.
 3. Push the branch and open a pull request.
 4. The PR body records this run's persona reviews: which personas ran, what
