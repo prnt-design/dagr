@@ -883,12 +883,12 @@ that cap is worth respecting: `assets/` holds one SVG today, ten retina PNGs
 would be several megabytes added permanently, and AGENTS.md forbids the history
 rewrite that would be needed to take them back out.
 
-Two practical notes before this milestone starts. Screenshots need the Chrome
-browser extension connected, a human-gated setup step that has been outstanding
-for a while as not urgent before M4. M4.1 is where it becomes urgent, so raise
-it at the start of the milestone rather than at the end. And `@dagr/render`
-currently contains a stub `index.ts` and no dependencies, so M4.1 is also the
-run that adds three.js to the repo for the first time.
+Two practical notes before this milestone starts, both settled by M4.1 and left
+here as the record. Screenshots need the Chrome browser extension connected,
+which was a human-gated setup step outstanding for a while as not urgent before
+M4; it is connected and verified, so nothing in this milestone is waiting on it.
+And `@dagr/render` contained a stub `index.ts` and no dependencies, so M4.1 was
+also the run that added three.js to the repo for the first time.
 
 Parallelism, which matters while two runners work at once: M4.1, M4.2, M4.3 and
 M4.6 depend on nothing in M3 and nothing in M2 beyond the types M2.1 already
@@ -901,14 +901,16 @@ M3, because it consumes `LayoutDelta` from M3.1. So M3 leads M4 in dependency
 order at exactly one join, and treating the whole of M4 as blocked on the whole
 of M3 would leave the second runner idle for a milestone.
 
-- [ ] **M4.1** (`@dagr/render`, `apps/demo`, `docs`) First light: a three.js
+- [x] **M4.1** (`@dagr/render`, `apps/demo`, `docs`) First light: a three.js
   `WebGPURenderer` mounted in `apps/demo` drawing one shape on screen, an
   orthographic 2D camera with pan and zoom, resize and devicePixelRatio
   handling, and the `Renderer` interface module that everything later in the
   milestone plugs into. Unit tests for the camera and viewport math, which is
-  pure and needs no device: screen to world and back is a pixel-exact round
-  trip at any zoom and DPR, and the visible world rect matches the canvas
-  aspect. Screenshot committed.
+  pure and needs no device: screen to world and back round trips to a measured
+  bound at any zoom and DPR, and the visible world rect matches the canvas
+  aspect. Screenshot committed. (This line asked for a PIXEL-EXACT round trip
+  and was amended when M4.1 shipped, because floating point does not offer one
+  and no test here establishes it. See the DECIDED paragraph below.)
   The renderer docs page is created here, the way `docs/docs/graph-model.md`
   shipped with M1.1 and `docs/docs/layout.md` with M2.1, carrying this task's
   testing-strategy decision and three.js dependency call. `@dagr/render` is
@@ -937,6 +939,42 @@ of M3 would leave the second runner idle for a milestone.
   already own. Whether the public surface exposes any three.js type at all is
   itself a choice this task makes, and the dependency answer follows from it
   rather than the other way around.
+  DECIDED, and the two paragraphs above are the argument rather than an open
+  question. Testing: the split, pure modules in Node and a committed screenshot
+  for anything needing a device, with one addition worth carrying forward. The
+  seam between the camera's own math and the frustum it hands three is checked
+  by composing the orthographic projection by hand from `orthoFrustum()` and
+  asserting its NDC matches the NDC `worldToScreen` implies, because that seam
+  is the one a screenshot cannot check cheaply and a camera can be perfect in
+  isolation and still put every click in the wrong place. What is knowingly
+  untested is listed on `docs/docs/render.md` rather than left implied.
+  Dependency: `three` is a `peerDependency` plus a `devDependency`, range
+  `>=0.180.0 <1.0.0`, because three's pre-1.0 minor is its breaking slot so a
+  caret would warn every consumer tracking its monthly releases. The floor is a
+  judgement rather than a compatibility claim: 0.180.0 was read and exports all
+  seven imported names, 0.181 to 0.184 were not built against. The peer is for a
+  RELATED reason to `@dagr/graph`'s, not the same one: graph's is nominal typing
+  through `#private` fields, three's is runtime `instanceof` across copies. No
+  three.js type appears in the public surface, but the peer is still a PRESENT
+  necessity rather than a forward commitment, because `webgpu-renderer.ts`
+  imports `three/webgpu` at module scope. What the empty surface changes is the
+  failure mode: two copies compile cleanly and misbehave at runtime, where
+  `@dagr/graph`'s `#private` fields make the same mistake a type error.
+  Two more decisions this task made that later M4 tasks inherit. THERE IS NO
+  `Rect` IN `@dagr/render`: `visibleWorldBounds()` returns `WorldBounds`
+  (`minX/minY/maxX/maxY`), because a `{x, y, width, height}` rectangle was
+  structurally identical to `@dagr/layout`'s with the OPPOSITE corner
+  convention, so a layout rectangle assigned into a world slot compiled clean
+  and the symptom was a scene mirrored about the horizontal axis. Two reviewers
+  found that independently. A phantom brand does not close it, tested: an
+  optional key stays assignable and only a required one raises TS2741, so
+  extents were taken instead. M4.4 still owns the conversion; it now gets a
+  compile error at the seam. And the ERROR RULE, which is meant to be applied
+  without re-running the argument: an out-of-range value is a `RangeError`
+  naming the field, anything else this package throws gets a named class
+  (today just `RendererDisposedError`). Numerical claims quote a measured
+  bound: nothing in this package is described as pixel-exact, because no test
+  establishes it.
 - [ ] **M4.2** (`@dagr/render`, `apps/demo`) SDF shapes in TSL: rounded-rect
   and circle as signed distance fields authored in TSL, with fill, outline and
   glow all read from the same distance rather than from three separate pieces

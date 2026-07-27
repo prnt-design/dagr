@@ -26,7 +26,7 @@ now belongs, so a graph that changes reads as a graph that moved.
 | --- | --- |
 | [`@dagr/graph`](./graph-model.md) | Typed directed graph model: stable identity, zero dependencies |
 | [`@dagr/layout`](./layout.md) | Headless Sugiyama layout pipeline, incremental and animation first |
-| `@dagr/render` | WebGPU renderer: SDF shapes, instancing, spring animation |
+| [`@dagr/render`](./render.md) | WebGPU renderer: SDF shapes, instancing, spring animation |
 | `@dagr/react` | The `DagrCanvas` component and hooks |
 
 ## Status
@@ -37,8 +37,10 @@ ports, patches, traversal, and serialization are implemented, tested, and
 documented on the [graph model](./graph-model.md) page. `@dagr/layout` has its
 pipeline skeleton, the types and stage boundaries every later milestone is
 built against, with placeholder stages behind them for now; the
-[layout](./layout.md) page says which half is which. `@dagr/render` and
-`@dagr/react` are still scaffolds.
+[layout](./layout.md) page says which half is which. `@dagr/render` has reached
+first light: an orthographic camera, the renderer seam, and one shape drawn
+through a three.js `WebGPURenderer`, described on the
+[renderer](./render.md) page. `@dagr/react` is still a scaffold.
 
 Nothing is published to npm and there is no released API. Names and signatures
 change when a milestone learns something, without deprecation cycles, because
