@@ -389,13 +389,10 @@ four prompts.
 Run:
 
 ```bash
-pnpm typecheck && pnpm test && pnpm lint && pnpm build
+pnpm typecheck && pnpm test && pnpm lint && pnpm build && pnpm bench:ci
 ```
 
-Expected: all four pass. Skip `pnpm bench:ci` here only if no package source
-changed; this branch is docs, CI config and a spec, so the bench gate has
-nothing to measure against. Say so in the PR body rather than leaving it
-unexplained.
+Expected: all five pass. AGENTS.md permits no exception for this step.
 
 - [ ] **Step 2: Rebase onto origin/main**
 
@@ -417,8 +414,7 @@ git push -u origin HEAD
 Use the dispatch `create_pr` tool with `baseBranch: "main"`, a title of
 `ci: move agent merges onto pull requests and fix the CI bench gate`, and a
 body covering: the two problems, the diagnosis with the `c08e444` evidence,
-the two decisions, and a note that the bench gate was not run because no
-package source changed.
+the two decisions, and confirmation that the local bench gate ran and passed.
 
 - [ ] **Step 5: Wait for CI and confirm it is green**
 
