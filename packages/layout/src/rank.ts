@@ -37,14 +37,17 @@ function at(values: { readonly [index: number]: number | undefined }, index: num
  * the acyclic view, which is a lower bound for any ranking that sends every
  * edge down at least one rank.
  *
- * What longest path does not give is a minimum total edge length: `a -> d`
- * alongside `a -> b -> c -> d` leaves `a -> d` spanning three ranks when `d`
- * could not be anywhere else, but a node with slack elsewhere in the graph is
- * pinned as far down as it can go rather than as far up. That is a quality
- * problem, not a correctness one, and M2.4b's dummy chains make it a cost in
- * dummy nodes. `networkSimplexRankStage` is the stage that minimises that sum,
- * and it buys the saving with height rather than for free: see its docstring,
- * which is where the two objectives are compared.
+ * What longest path does not give is a minimum total edge length. It pins each
+ * node as high as its predecessors allow and never looks at what the node
+ * points at, so `e -> d` alongside `a -> b -> c -> d` leaves `e` at rank 0 with
+ * its one edge spanning three ranks when rank 2 was free. `a -> d` alongside
+ * that same chain is NOT that case, though it looks like it: `d` sits three
+ * ranks below `a` in every feasible ranking, so a shortcut edge spanning three
+ * ranks is a shape longest path cannot avoid rather than a total it gets wrong.
+ * Either way it is a quality problem and not a correctness one, and M2.4b's
+ * dummy chains make it a cost in dummy nodes. `networkSimplexRankStage` is the
+ * stage that minimises that sum, and it buys the saving with height rather than
+ * for free: see its docstring, which is where the two objectives are compared.
  *
  * ## How
  *

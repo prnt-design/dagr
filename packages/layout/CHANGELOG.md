@@ -14,6 +14,36 @@ of doc prose.
 
 ### Added
 
+- `networkSimplexRankStage` and `networkSimplexRank(options)`, exported, plus
+  the `NetworkSimplexOptions` type. A second real rank stage, and the first
+  stage exported by name: it is not a placeholder waiting for an algorithm, it
+  is a different algorithm with a different objective, so a caller has to be
+  able to say which one it wants. `defaultStages.rank` is unchanged and is
+  still `longest-path-rank`. (M2.3)
+
+  It minimises the TOTAL EDGE LENGTH, the sum over the acyclic view's edges of
+  how many ranks each crosses, which minus the edge count is exactly how many
+  dummy nodes M2.4b will mint. On the 1k benchmark corpus that is 40,430
+  dummies down to 17,285, a 57% cut, in about 20ms; on the 10k corpus
+  1,414,263 down to 405,709 inside the default budget.
+
+  **It cannot make a drawing shorter and it can make one taller**, because
+  minimum total edge length and minimum height are different objectives and
+  `longest-path-rank` already achieves the second exactly. Six nodes are enough
+  to trade a rank of height for a unit of length. Anyone picking a ranker on
+  the dummy-node number should read the height paragraph in
+  `docs/docs/layout.md` before switching.
+
+  Two options, both of which exist for M3 rather than for today.
+  `maxIterations` bounds the pivots at 20,000 by default, and whatever stops a
+  run the ranking it returns is feasible and never worse than the one it
+  started from. `initialRanks` is a previous ranking to warm start from, which
+  the ranking LP being degenerate is what makes necessary: without it a
+  one-edge patch can move the solver to a different optimum of equal cost and
+  churn ranks across a region that did not change. A supplied ranking is a hint
+  and is repaired into feasibility before use, so it can only ever choose
+  between optima.
+
 - `RankOutput`, `OrderOutput`, `PositionOutput` and `RouteOutput`, exported as
   types. Each is what one stage contributes, and it is what that stage's `run`
   now returns. See the Changed entry below. (M2.4a)

@@ -11,13 +11,14 @@ sidebar_position: 3
 `LayoutResult`: where every node sits, how every edge runs, and the box around
 the lot.
 
-This page describes the pipeline as of M2.4a. The types, the runner, and the
+This page describes the pipeline as of M2.3. The types, the runner, and the
 stage boundaries are real: they are what every later milestone is built against,
 and the roster below exists so the one boundary that was going to have to move
-(M2.4b's dummy nodes) does not. One of the four algorithms is real: the rank
-stage breaks cycles and ranks by longest path, so the layers are the ones the
-graph asks for. The other three are placeholders that produce a well formed but
-naive result.
+(M2.4b's dummy nodes) does not. One of the four default algorithms is real: the
+rank stage breaks cycles and ranks by longest path, so the layers are the ones
+the graph asks for, and M2.3 added a second ranker a caller can select instead.
+The other three defaults are placeholders that produce a well formed but naive
+result.
 
 Expect the contract to gain rules as real stages land. A rule leaves the list
 only when the mistake it caught stops being one a stage can make, never because
@@ -329,10 +330,101 @@ Every edge that is neither reversed nor a self loop runs **strictly** down:
 loop puts both ends on one rank and because M2.4b's long edges will legitimately
 span several, but this stage means the strict form and its tests assert it.
 
-What longest path does not give is minimum total edge length. `a -> d` alongside
-`a -> b -> c -> d` leaves `a -> d` spanning three ranks, and a node with slack is
-pinned as far down as it can go rather than as far up. That is a quality problem
-rather than a correctness one, and it is what M2.3's rank tightening is for.
+What longest path does not give is minimum total edge length. It pins each node
+as high as its predecessors allow and never looks at what the node points at, so
+`e -> d` alongside `a -> b -> c -> d` leaves `e` at rank 0 with its one edge
+spanning three ranks when rank 2 was free. `a -> d` alongside that same chain is
+not that case, though it looks like it: `d` sits three ranks below `a` in every
+feasible ranking, so a shortcut edge spanning three ranks is a shape longest
+path cannot avoid rather than a total it gets wrong. Either way it is a quality
+problem and not a correctness one, and the next section is the stage that fixes
+it.
+
+### Minimum total edge length, and what it costs
+
+`network-simplex-rank` is the second real rank stage, landed in M2.3 and
+exported by name. It breaks cycles exactly as the default does, over the same
+acyclic view, and then minimises the **total edge length**: the sum, over the
+edges of that view, of how many ranks each edge crosses. Gansner, Koutsofios,
+North and Vo (1993), section 2.
+
+That sum, minus the edge count, is exactly how many dummy nodes M2.4b's splitter
+will mint, which is why it is the quantity worth optimising. On the 1k benchmark
+corpus it takes the default ranker's 40,430 dummies down to 17,285, a 57% cut,
+in about 20ms. On the 10k corpus it reaches 405,709 from 1,414,263 inside its
+default budget.
+
+**It cannot make the drawing shorter, and it can make it taller.** Minimum total
+edge length and minimum height are different objectives, and this stage
+optimises the first. Every feasible ranking sends each edge down at least one
+rank, so the last rank is at least the longest path in the acyclic view, and
+longest path already hits that bound exactly: nothing can beat it. Nothing here
+defends it either. Six nodes are enough to lose a rank of height for a unit of
+length:
+
+```
+v8 -> v4 -> v5     longest path: three layers, total edge length 6
+v6 -> v5           simplex:      four layers,  total edge length 5
+v6 -> v9 -> v0
+```
+
+Pulling `v6` down one rank tightens `v6 -> v5`, and drags `v9` and `v0` into a
+fourth layer to do it. Both corpora happen to come out the same height either
+way (61 ranks and 153 ranks), so this is a real risk rather than a certainty.
+If a short drawing is what matters, keep the default.
+
+Select it per run, like any other stage:
+
+```ts
+import { layout, networkSimplexRankStage } from '@dagr/layout';
+
+const result = layout({ graph }, { rank: networkSimplexRankStage });
+```
+
+`networkSimplexRank(options)` builds one with options, and there are two.
+
+**`maxIterations`** bounds the pivots and defaults to 20,000. It is a safety
+valve rather than a quality knob: it is ten times what the 1k corpus needs to
+converge, and it is what bounds the 10k corpus, which does not converge inside
+any budget worth spending, to about three seconds. Give it more if a run is
+worth it; the 10k corpus is still improving at 200,000 pivots, and takes 41
+seconds to get there. Whatever stops it, the ranking that comes back is
+feasible, and never worse than the ranking the stage started from. A budget
+that is not a finite number of zero or more is an `InvalidConfigError`, thrown
+by `networkSimplexRank` rather than by the run.
+
+**`initialRanks`** is a previous ranking to start from. It matters because this
+LP is degenerate: many different rankings reach the same total edge length, and
+which one a cold run lands on depends on where it started. Without a warm start
+a one-edge patch can move the solver to a different optimum of equal cost,
+churning ranks across a region that did not change and improving nothing, which
+is exactly what M3 re-running layout on every patch would suffer.
+
+```ts
+const first = layout({ graph }, { rank: networkSimplexRankStage });
+// ... the graph changes ...
+const again = layout(
+  { graph },
+  { rank: networkSimplexRank({ initialRanks: previousRanks }) },
+);
+```
+
+A supplied ranking is a **hint**, never trusted. It is used as a floor for the
+longest-path sweep, which pushes any node the hint put too high back down below
+its predecessors, so what the solver actually starts from is feasible whatever
+the hint said. Three kinds of entry are dropped outright: an id the graph does
+not hold, a value that is not an integer, and a value further from zero than the
+graph has nodes, which is wider than any ranking of it needs and would cost the
+solver a pivot per unit of nonsense. So a stale hint cannot make the result
+infeasible, and cannot make it worse than a cold run either. All it can do is
+choose between optima, which is the whole point of passing one.
+
+Ranks still come out contiguous from zero per connected component, as the
+default stage's do, but as a consequence rather than a construction: a ranking
+with an empty rank between two occupied ones is never optimal, because sliding
+everything below the gap up by one shortens every edge that crossed it and
+breaks none. A budget that runs out can therefore leave a gap, and nothing
+downstream minds.
 
 ### What `reversedEdges` means if you are reading a result
 
@@ -353,17 +445,30 @@ attachment. See [Route direction](#route-direction).
 
 ### Determinism and cost
 
-Both steps are O(V + E) in time and space. Cycle breaking gets there by keeping
-vertices in degree buckets rather than rescanning what is left each round, and
-ranking is a Kahn-style sweep that visits each node and edge once. No timing
-figure is quoted here because none is measured yet: M2.9 commits benchmark
-baselines at 1k and 10k nodes, and until it does the complexity is the claim.
+Both steps of the default stage are O(V + E) in time and space. Cycle breaking
+gets there by keeping vertices in degree buckets rather than rescanning what is
+left each round, and ranking is a Kahn-style sweep that visits each node and
+edge once. No timing figure is quoted here because none is measured yet: M2.9
+commits benchmark baselines at 1k and 10k nodes, and until it does the
+complexity is the claim.
 Both steps are fully deterministic: vertices are numbered in `graph.nodes()`
 order, edges are walked in `graph.edges()` order, and a tie is broken by bucket
 arrival order, which is itself fixed by the graph's order.
 Determinism here is load bearing rather than tidy, for the reason in
 [Determinism](#determinism): a ranker that resolved a tie differently on a
 re-run would move nodes the user never touched.
+
+`network-simplex-rank` is deterministic in the same way and for the same reason,
+and its cost is the one thing about it that is not O(V + E): it is a pivot
+count, which is why it has a budget. Components are visited in node insertion
+order and rooted at their first node, the search for a tree edge to remove walks
+a component's nodes in insertion order, and among entering edges of equal slack
+the one added to the graph first wins. What is **not** claimed for either stage
+is invariance to the order the graph was built in. Cycle breaking is
+order-sensitive before ranking starts, and among two optima of equal cost the
+simplex returns whichever its tie-breaks reach first, so the same graph
+assembled in another order may rank differently. On a graph with a unique
+optimum it does not, and that is the claim the tests pin.
 
 ## Why the stages are swappable
 
@@ -807,7 +912,7 @@ placeholders:
 
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
-| rank | `longest-path-rank` | Breaks cycles with a greedy feedback arc set, then ranks by longest path. Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). | Rank tightening (M2.3) and dummy chains for long edges (M2.4b). |
+| rank | `longest-path-rank` | Breaks cycles with a greedy feedback arc set, then ranks by longest path. Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height. | Dummy chains for long edges (M2.4b). |
 | order | `insertion-order` | Groups the roster by rank, orders each layer by graph insertion order. | Barycenter sweeps with a crossing counter (M2.5), then transpose refinement (M2.6). |
 | position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. | Brandes-Koepf horizontal coordinate assignment (M2.7). |
 | route | `straight-route` | A straight two-point line between the endpoint centres. | Polylines through dummy-node coordinates, monotone in the rank axis (M2.8). |
