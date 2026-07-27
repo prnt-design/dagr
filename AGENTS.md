@@ -10,15 +10,19 @@ keep it short and current.
 
 ## Commands
 
-The pnpm workspace is scaffolded by the first daily run and does not exist
-yet. Once it does, the canonical commands from the repo root are:
+The pnpm workspace exists. The canonical commands from the repo root are:
 
 ```
 pnpm typecheck
 pnpm test
-pnpm bench
+pnpm lint
 pnpm build
+pnpm bench:ci
 ```
+
+`bench:ci` runs the benchmark gate against `bench/baseline.json`; see
+`bench/README.md`. See "How work reaches main" below for when each of these
+must pass.
 
 ## What agents may do unattended
 
