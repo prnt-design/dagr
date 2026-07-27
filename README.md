@@ -44,17 +44,20 @@ pnpm build         # tsc, each package to its own dist
 pnpm bench           # run every package's benchmarks
 pnpm bench:check     # compare that run to bench/baseline.json
 pnpm bench:baseline  # record that run as the new baseline
-pnpm bench:ci        # what CI runs: both of the first two, re-measuring once if the run was unreadable
+pnpm bench:ci        # both of the first two, re-measuring once if the run was unreadable
 ```
 
-CI runs `pnpm bench:ci` on every pull request, and a regression outside the
-tolerance fails the build. A run too noisy to read is not a regression and is
-not a pass either, so `bench:check` exits 2 for it against 1 for a regression,
-and `bench:ci` re-measures once before giving up. If a local `pnpm bench:check`
-exits 2, the machine was too busy to measure, not your change.
+The agent runs `pnpm bench:ci` locally before opening a pull request, and does
+not merge on a regression outside the tolerance. CI does not run it: the
+committed baseline is machine-matched, and CI's runner is a different machine,
+so the gate lives here instead (see [bench/README.md](./bench/README.md)). A
+run too noisy to read is not a regression and is not a pass either, so
+`bench:check` exits 2 for it against 1 for a regression, and `bench:ci`
+re-measures once before giving up. If a local `pnpm bench:check` exits 2, the
+machine was too busy to measure, not your change.
 
 The tolerance is not a flat 10% of wall clock, because benchmark numbers vary by
-machine and CI runners are noisy. Each benchmark is recorded as a ratio against
+machine and busy machines are noisy. Each benchmark is recorded as a ratio against
 a control workload run beside it, compared on the median rather than the mean,
 and allowed a tolerance that widens with the measured noise of both runs.
 
