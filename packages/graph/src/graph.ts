@@ -1,4 +1,5 @@
 import {
+  CycleError,
   DuplicateEdgeError,
   DuplicateNodeError,
   DuplicatePortError,
@@ -9,6 +10,8 @@ import {
   PortInUseError,
   PortNotFoundError,
 } from './errors.js';
+import { canReach, findCycle, reachable, topologicalOrder } from './traversal.js';
+import type { AdjacencyView } from './traversal.js';
 import { PatchListenerError } from './patch.js';
 import type {
   AddEdgeOp,
@@ -1045,6 +1048,121 @@ export class Graph<
   }
 
   /**
+   * Every node, ordered so each one comes after everything pointing at it.
+   *
+   * Ties go to the earliest-added node, so the answer never depends on which
+   * edge was added first and adding a redundant parallel edge cannot reorder
+   * anything. Node insertion order is the reference the tie-break is taken
+   * against, so it does still decide how independent nodes fall. The tie-break
+   * costs a heap: O((V + E) log V) rather than O(V + E).
+   *
+   * @throws {CycleError} when the graph has a cycle, carrying a witness. A
+   * cyclic graph has no topological order, so this refuses rather than handing
+   * back a partial one. {@link isAcyclic} and {@link findCycle} are the
+   * tolerant forms, though unlike `hasNode` they are not free: each is a full
+   * walk. To ask for the order and learn why there is none, catch instead of
+   * checking first, which costs one walk rather than two.
+   */
+  topologicalOrder(): readonly NodeId[] {
+    const order = topologicalOrder(this.#view('out'));
+    if (order !== undefined) return order;
+    // Only reached on a cyclic graph, so the second walk is on the error path
+    // and buys a witness worth naming. The sweep above knows a cycle exists but
+    // not which nodes are on one.
+    const cycle = findCycle(this.#view('out'));
+    // Unreachable, and loud rather than defensive: getting here means the Kahn
+    // sweep called the same view cyclic and the depth-first walk called it
+    // acyclic. An empty witness would render as `Graph is cyclic:  -> ` and
+    // break the promise that a `CycleError` always names a real cycle.
+    if (cycle === undefined) {
+      throw new Error('graph invariant: topological sweep and cycle search disagree');
+    }
+    throw new CycleError(cycle);
+  }
+
+  /**
+   * Whether the graph has no cycles. A self loop is a cycle. O(V + E).
+   */
+  isAcyclic(): boolean {
+    return findCycle(this.#view('out')) === undefined;
+  }
+
+  /**
+   * A cycle in the graph, or `undefined` when there is none.
+   *
+   * Consecutive entries are joined by an edge and the last closes back to the
+   * first, listed once, so a cycle of n nodes has n entries and a self loop has
+   * one. A graph may hold many cycles and this is a witness, not a census.
+   * O(V + E).
+   */
+  findCycle(): readonly NodeId[] | undefined {
+    return findCycle(this.#view('out'));
+  }
+
+  /**
+   * Nodes with no in-edges, in insertion order. A self loop counts as an
+   * in-edge, so a node carrying one is not a source. O(V).
+   */
+  sources(): readonly NodeId[] {
+    return this.#endsWithNothingArriving(this.#inEdges);
+  }
+
+  /**
+   * Nodes with no out-edges, in insertion order. A self loop counts as an
+   * out-edge, so a node carrying one is not a sink. O(V).
+   */
+  sinks(): readonly NodeId[] {
+    return this.#endsWithNothingArriving(this.#outEdges);
+  }
+
+  /**
+   * Every node reachable by following out-edges, in node insertion order.
+   *
+   * Excludes the node itself, even when a cycle leads back to it, matching what
+   * "descendants" means everywhere else it is used on directed graphs. Use
+   * {@link canReach} with the same node at both ends to ask whether it sits on
+   * a cycle: that is the one question this listing deliberately cannot answer,
+   * and the only case where the two disagree.
+   *
+   * O(V + E) over the reached subgraph, plus a sort over the result.
+   *
+   * @throws {NodeNotFoundError} when the node is not in the graph.
+   */
+  descendants(id: NodeId): readonly NodeId[] {
+    this.#requireOut(id);
+    return reachable(this.#view('out'), id);
+  }
+
+  /**
+   * Every node that can reach this one by following out-edges, in node
+   * insertion order. The mirror of {@link descendants}, walking in-edges.
+   *
+   * @throws {NodeNotFoundError} when the node is not in the graph.
+   */
+  ancestors(id: NodeId): readonly NodeId[] {
+    this.#requireIn(id);
+    return reachable(this.#view('in'), id);
+  }
+
+  /**
+   * Whether `to` can be reached from `from` by following out-edges one or more
+   * times.
+   *
+   * Stops at the first hit rather than listing everything reachable, which is
+   * why it is worth having beside {@link descendants}. Always one or more
+   * edges, so `canReach(a, a)` is true exactly when `a` sits on a cycle, which
+   * is the question {@link descendants} drops by excluding its own node.
+   * O(V + E) over the reached subgraph in the worst case.
+   *
+   * @throws {NodeNotFoundError} when either node is not in the graph.
+   */
+  canReach(from: NodeId, to: NodeId): boolean {
+    this.#requireOut(from);
+    this.#requireIn(to);
+    return canReach(this.#view('out'), from, to);
+  }
+
+  /**
    * Whether anything is watching.
    *
    * Read before anything a patch would need is built, never after. The simple
@@ -1192,6 +1310,79 @@ export class Graph<
       throw new Error(`graph invariant: edge endpoint "${id}" is not a node`);
     }
     return rank;
+  }
+
+  /**
+   * The nodes whose entry in the given index is empty, in insertion order.
+   *
+   * One helper for both {@link sources} and {@link sinks}, because they are the
+   * same question asked of the two adjacency indexes, and two copies would be
+   * two places for the self-loop rule to drift.
+   */
+  #endsWithNothingArriving(index: ReadonlyMap<NodeId, ReadonlySet<EdgeId>>): readonly NodeId[] {
+    const found: NodeId[] = [];
+    for (const id of this.#nodes.keys()) {
+      // `?? 0` and not a bare `=== 0` comparison against `?.size`. A node with
+      // no index entry has no edges on that side and therefore IS an end, so
+      // the missing case has to fall the same way the empty case does. Without
+      // the coalesce it silently drops the node instead, which is the one
+      // defensive read in this file that would produce a wrong answer rather
+      // than a loud one. Unreachable today, since `addNode` seeds both maps.
+      if ((index.get(id)?.size ?? 0) === 0) found.push(id);
+    }
+    return found;
+  }
+
+  /**
+   * Adjacency as `traversal.ts` reads it, pointed one way or the other.
+   *
+   * `'out'` walks out-edges to their targets, `'in'` walks in-edges to their
+   * sources, so the reversed graph costs an argument rather than a second copy
+   * of every algorithm. Nothing is cached: the object is four closures built
+   * once per traversal, against a walk that is O(V + E), and a cached view
+   * would be one more thing to keep in step with mutation for no measurable
+   * gain.
+   *
+   * The closures read the adjacency indexes directly. That is the point of the
+   * view: `successors` would deduplicate and sort a fresh array per node, and
+   * the committed baseline puts it at about 6x the cost of `outEdges` over the
+   * same nodes, which a traversal would pay once per node rather than once.
+   */
+  #view(direction: 'out' | 'in'): AdjacencyView {
+    const walked = direction === 'out' ? this.#outEdges : this.#inEdges;
+    const arriving = direction === 'out' ? this.#inEdges : this.#outEdges;
+    const side = direction === 'out' ? 'target' : 'source';
+    return {
+      nodes: () => this.#nodes.keys(),
+      neighboursOf: (id) => this.#neighbours(walked.get(id), side),
+      // A node the walk reached is always in the index, so a missing entry
+      // would be index skew rather than a caller's bad id, which the public
+      // methods have already rejected. Zero keeps the sweep from stalling, and
+      // it is the neutral answer: a node with no index entry has no edges.
+      arrivingCount: (id) => arriving.get(id)?.size ?? 0,
+      // `#requireRank` rather than a fallback, unlike the line above, because
+      // there is no neutral rank. Defaulting to 0 would sort a skewed node to
+      // the front of every listing and to the front of the heap, quietly
+      // corrupting the tie-break this whole traversal surface is built on.
+      rankOf: (id) => this.#requireRank(id),
+    };
+  }
+
+  /**
+   * The endpoints on one side of an index entry, once per edge and in edge
+   * insertion order.
+   *
+   * A generator rather than an array: this is called once per node of a
+   * traversal, and retaining a materialised neighbour array per node is what
+   * the view exists to avoid, so peak memory stays O(1) per node rather than
+   * O(degree) and the dedup and sort `successors` pays are skipped. It is not
+   * free: the generator object itself and one iterator result per edge are
+   * still allocated. Duplicates are kept, because the topological sweep counts
+   * edges rather than neighbours.
+   */
+  *#neighbours(edgeIds: ReadonlySet<EdgeId> | undefined, side: 'source' | 'target'): Generator<NodeId> {
+    if (edgeIds === undefined) return;
+    for (const edgeId of edgeIds) yield this.#requireIndexedEdge(edgeId)[side];
   }
 
   /** Edge records for an index entry, as a fresh array. */

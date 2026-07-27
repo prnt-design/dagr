@@ -120,9 +120,63 @@ findings addressed or logged, docs land with the feature.
   it now would be the speculative surface this project has twice decided
   against. The addition is source compatible whenever it lands, so waiting
   costs nothing.
-- [ ] **M1.4** Traversal and invariants: topological sort, cycle detection,
+- [x] **M1.4** Traversal and invariants: topological sort, cycle detection,
   sources/sinks, reachability. Property tests on random DAGs and random
   digraphs with cycles.
+  Landed as eight methods on `Graph` (`topologicalOrder`, `isAcyclic`,
+  `findCycle`, `sources`, `sinks`, `descendants`, `ancestors`, `canReach`) over
+  an internal `traversal.ts`. The algorithms take an `AdjacencyView` rather than
+  a `Graph`, which is what makes `ancestors` be `descendants` pointed the other
+  way instead of a second implementation that can drift; the view is not
+  exported, the same call M2.2 made in keeping only `defaultStages` public.
+  The walks read the adjacency indexes directly rather than going through
+  `successors`, because M0.2's benchmarks put `successors` at about 6x
+  `outEdges` over the same nodes and a traversal would pay that per node.
+  Decided here, and it is the one that cost a rewrite. TIES IN
+  `topologicalOrder` GO TO THE EARLIEST-ADDED NODE, not to whatever a queue
+  happened to hold. A first-in-first-out sweep is deterministic given the whole
+  history, but when relaxing one node frees two others they queue in the order
+  those two EDGES were added, so adding a redundant parallel edge or rebuilding
+  the same graph in a different order permutes the result. The property suite
+  caught exactly that against the first implementation, which had shipped a
+  docstring promising otherwise; the unit case was too simple to expose it.
+  Picking the smallest ready insertion rank costs a heap, about 10ms on the 10k
+  corpus, and buys the promise the docs now state: traversal answers do not
+  depend on the order the EDGES arrived in. Not a stronger promise than that,
+  and an earlier draft of both the docs and this entry overclaimed it as "a
+  function of the graph, not of the sequence that built it", which two reviewers
+  independently disproved in three lines. Node insertion rank IS the tie-break,
+  so node order still decides how independent nodes fall; making traversal
+  invariant to that too would mean tie-breaking on something intrinsic to the
+  id, which is a much larger decision. A plain-queue sweep did measure faster in
+  development, but against an implementation and an acyclic view that are both
+  gone, so no tracked number stands behind a ratio and none is quoted. Worth the
+  cost regardless for a model whose selling point is stable identity, and 10ms
+  on 10k nodes is not the bottleneck in anything that then lays them out at
+  about 30ms. A cheaper unordered sweep is an additive second entry point if
+  someone asks, not a quiet default.
+  Also decided: a cyclic graph has no topological order, so `topologicalOrder`
+  throws `CycleError` (the family's tenth member, carrying a witness) rather
+  than returning a partial order that invites use, with `isAcyclic` and
+  `findCycle` as the tolerant forms, exactly as `hasNode` is the tolerant form
+  of a lookup that throws, though unlike `hasNode` those guards are full walks,
+  so the docs show catching rather than checking as the cheaper idiom. A self
+  loop is a cycle, and its node is neither a source nor a sink; `@dagr/layout`'s
+  ranker deliberately differs and drops self loops, because a self loop
+  constrains nothing about rank.
+  `descendants` and `ancestors` EXCLUDE their own node, even on a cycle, which
+  reversed the first implementation after review: the name carries a strong
+  prior (networkx's `descendants` always excludes the source) and a name with a
+  prior that strong loses to it, silently, and only on the cyclic graphs this
+  package permits. `canReach` stays at one or more edges, so `canReach(a, a)`
+  answers "is `a` on a cycle". That is the one case where the two disagree and
+  it is what makes dropping the seed costless.
+  Baseline note: `bench/baseline.json` was recaptured wholesale here, which is
+  the harness's only mode, so ratios for benchmarks this task does not touch
+  moved a few percent within tolerance (control drift, documented in
+  `bench/src/gate.mjs`). Nothing was absorbed: the traversal entries are new and
+  the rest are unchanged code. A `--only` flag so adding a benchmark stops
+  rebasing the others is worth having and is not built.
 - [ ] **M1.5** Serialization: `toJSON`/`fromJSON` with identity-preserving
   round-trips, property-tested. Serialization section added to the graph model
   docs page (the page itself shipped with M1.1).

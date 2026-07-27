@@ -22,7 +22,8 @@ export type DagrGraphErrorCode =
   | 'DUPLICATE_PORT'
   | 'PORT_NOT_FOUND'
   | 'PORT_IN_USE'
-  | 'PORT_DIRECTION';
+  | 'PORT_DIRECTION'
+  | 'CYCLE';
 
 /**
  * Base class for every error the graph model throws. Abstract on purpose: a
@@ -31,8 +32,8 @@ export type DagrGraphErrorCode =
  *
  * This is a catch base, not an extension point. It is exported so one
  * `instanceof` can catch the family and so `code` can be switched on through
- * it, and the family is exactly the nine classes below.
- * {@link isDagrGraphError} narrows to a closed union of those nine and rejects
+ * it, and the family is exactly the ten classes below.
+ * {@link isDagrGraphError} narrows to a closed union of those ten and rejects
  * anything else, a subclass declared elsewhere included. A sibling package
  * that wants the same `code` ergonomics should declare its own root class,
  * its own code union, and its own predicate rather than extending this one:
@@ -185,6 +186,35 @@ export class PortDirectionError extends DagrGraphError {
 }
 
 /**
+ * Thrown when a call needs an acyclic graph and did not get one.
+ *
+ * Refusing rather than returning a partial order is the same rule the rest of
+ * this package keeps: a node the graph does not hold is an error and not an
+ * empty result, and a topological order of a cyclic graph does not exist, so
+ * handing back something order-shaped would invite a caller to use it.
+ *
+ * `isAcyclic` and `findCycle` are the tolerant forms, but unlike `hasNode`
+ * before a lookup they are not free: each is a full walk, and the call they
+ * guard is another. To ask for the order and learn why there is none, catch
+ * this rather than checking first. It carries the witness the check would have
+ * gone looking for, so the happy path costs one walk instead of two.
+ *
+ * `cycle` is a witness, not the whole story: a graph can hold many cycles and
+ * this is the one the search reached first. Consecutive entries are joined by
+ * an edge and the last closes back to the first, with the endpoint listed once,
+ * so a cycle of n nodes has n entries and a self loop has one.
+ */
+export class CycleError extends DagrGraphError {
+  readonly code = 'CYCLE';
+
+  constructor(readonly cycle: readonly string[]) {
+    super(`Graph is cyclic: ${cycle.join(' -> ')} -> ${cycle[0] ?? ''}`);
+    this.name = 'CycleError';
+    Object.setPrototypeOf(this, CycleError.prototype);
+  }
+}
+
+/**
  * Every concrete error the graph model throws, as a discriminated union.
  *
  * {@link DagrGraphError} narrows the `code` but not the object it came from,
@@ -202,7 +232,8 @@ export type DagrGraphErrorLike =
   | DuplicatePortError
   | PortNotFoundError
   | PortInUseError
-  | PortDirectionError;
+  | PortDirectionError
+  | CycleError;
 
 /**
  * Every member of {@link DagrGraphErrorCode}, keyed so the compiler keeps the
@@ -220,9 +251,10 @@ const KNOWN_CODES: Readonly<Record<DagrGraphErrorCode, true>> = {
   PORT_NOT_FOUND: true,
   PORT_IN_USE: true,
   PORT_DIRECTION: true,
+  CYCLE: true,
 };
 
-/** The same nine codes as a set, for the membership test in the predicate. */
+/** The same ten codes as a set, for the membership test in the predicate. */
 const KNOWN_CODE_SET: ReadonlySet<string> = new Set(Object.keys(KNOWN_CODES));
 
 /**
@@ -230,9 +262,9 @@ const KNOWN_CODE_SET: ReadonlySet<string> = new Set(Object.keys(KNOWN_CODES));
  * union rather than to the abstract base.
  *
  * The check is `instanceof DagrGraphError` AND a membership test of `code`
- * against the nine known codes. The second half is what makes the runtime test
+ * against the ten known codes. The second half is what makes the runtime test
  * as closed as {@link DagrGraphErrorLike} claims to be: the base class is
- * exported, so a tenth subclass carrying a code of its own would pass the
+ * exported, so a further subclass carrying a code of its own would pass the
  * `instanceof` alone and be narrowed to a union it is not a member of, at
  * which point an exhaustive-looking `switch` falls through and a case arm
  * reads a field off a class that does not have one.

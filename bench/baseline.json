@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "capturedAt": "2026-07-27T00:54:56.534Z",
+  "capturedAt": "2026-07-27T02:21:59.424Z",
   "machine": {
     "platform": "darwin",
     "arch": "arm64",
@@ -11,74 +11,109 @@
   },
   "benchmarks": {
     "@dagr/graph > bench/graph.bench.ts > adjacency > 2.5k outEdges": {
-      "medianMs": 0.1637909999999465,
-      "meanMs": 0.16577323036128042,
-      "rme": 0.43826360968063904,
-      "samples": 3017,
-      "ratio": 4.451810176124846
+      "medianMs": 0.1749999999992724,
+      "meanMs": 0.17997597625047757,
+      "rme": 0.5829068405247423,
+      "samples": 2779,
+      "ratio": 4.682274247486756
     },
     "@dagr/graph > bench/graph.bench.ts > adjacency > 2.5k successors": {
-      "medianMs": 1.005916999999954,
-      "meanMs": 1.0320771319587714,
-      "rme": 0.8006684159088509,
-      "samples": 485,
-      "ratio": 27.340644705375965
+      "medianMs": 1.0443340000001626,
+      "meanMs": 1.1732025761123408,
+      "rme": 3.7020013933319675,
+      "samples": 427,
+      "ratio": 27.94204682283386
     },
     "@dagr/graph > bench/graph.bench.ts > attributes > 2k updateNodeAttrs, no change": {
-      "medianMs": 0.35629100000005565,
-      "meanMs": 0.37144324201929596,
-      "rme": 1.2878305065575624,
-      "samples": 1347,
-      "ratio": 9.68392585345021
+      "medianMs": 0.36229150000008303,
+      "meanMs": 0.42617108858603914,
+      "rme": 4.285849925731866,
+      "samples": 1174,
+      "ratio": 9.693418060233084
     },
     "@dagr/graph > bench/graph.bench.ts > attributes > 2k updateNodeAttrs, unwatched": {
-      "medianMs": 0.6291670000000522,
-      "meanMs": 0.7460971371087946,
-      "rme": 8.815365941728832,
-      "samples": 671,
-      "ratio": 17.100646879761943
+      "medianMs": 0.6259790000001431,
+      "meanMs": 0.7192225732758556,
+      "rme": 8.745325588184638,
+      "samples": 696,
+      "ratio": 16.74860200674496
     },
     "@dagr/graph > bench/graph.bench.ts > attributes > 2k updateNodeAttrs, watched": {
-      "medianMs": 1.2308955000000878,
-      "meanMs": 1.460008840116285,
-      "rme": 6.896536485546319,
-      "samples": 344,
-      "ratio": 33.45552022179766
+      "medianMs": 1.3229160000000775,
+      "meanMs": 1.6301781986970598,
+      "rme": 6.589109154742831,
+      "samples": 307,
+      "ratio": 35.39574581951032
     },
     "@dagr/graph > bench/graph.bench.ts > build > 1k nodes and 4k edges from empty": {
-      "medianMs": 1.4697705000000951,
-      "meanMs": 1.776990230496446,
-      "rme": 6.159339136694482,
-      "samples": 282,
-      "ratio": 39.948100130475204
+      "medianMs": 1.4571249999999054,
+      "meanMs": 1.698568077966104,
+      "rme": 5.227476366319524,
+      "samples": 295,
+      "ratio": 38.9866220736975
+    },
+    "@dagr/graph > bench/graph.bench.ts > traversal > descendants, 10k nodes": {
+      "medianMs": 0.8140210000001389,
+      "meanMs": 0.8506274166666581,
+      "rme": 1.0021975323442383,
+      "samples": 588,
+      "ratio": 21.779826087028077
+    },
+    "@dagr/graph > bench/graph.bench.ts > traversal > isAcyclic on a cyclic graph, 10k nodes": {
+      "medianMs": 0.019874999999956344,
+      "meanMs": 0.021245158019973443,
+      "rme": 0.6609812444931494,
+      "samples": 23535,
+      "ratio": 0.5317725752513245
+    },
+    "@dagr/graph > bench/graph.bench.ts > traversal > isAcyclic on an acyclic graph, 10k nodes": {
+      "medianMs": 4.408166500000789,
+      "meanMs": 4.5734496818182215,
+      "rme": 2.9573992105278566,
+      "samples": 110,
+      "ratio": 117.94425418099048
+    },
+    "@dagr/graph > bench/graph.bench.ts > traversal > sources, 10k nodes": {
+      "medianMs": 0.11145799999985684,
+      "meanMs": 0.11640091340781882,
+      "rme": 0.9241454536955873,
+      "samples": 4296,
+      "ratio": 2.9821538461593047
+    },
+    "@dagr/graph > bench/graph.bench.ts > traversal > topologicalOrder, 10k nodes": {
+      "medianMs": 9.812729000000218,
+      "meanMs": 10.161422559999991,
+      "rme": 2.466630627356632,
+      "samples": 50,
+      "ratio": 262.5479331111915
     },
     "@dagr/layout > bench/layout.bench.ts > pipeline > 10k nodes, 40k edges": {
-      "medianMs": 30.22847899999988,
-      "meanMs": 31.28296958333334,
-      "rme": 2.5603678341830536,
-      "samples": 96,
-      "ratio": 828.1775068495491
+      "medianMs": 30.146041500000138,
+      "meanMs": 30.295022090000092,
+      "rme": 1.4942685446598074,
+      "samples": 100,
+      "ratio": 799.4601013057771
     },
     "@dagr/layout > bench/layout.bench.ts > pipeline > 1k nodes, 4k edges": {
-      "medianMs": 2.119958499999939,
-      "meanMs": 2.1814478391304677,
-      "rme": 1.3938532315967107,
-      "samples": 230,
-      "ratio": 58.08105479453551
+      "medianMs": 2.168479500000103,
+      "meanMs": 2.2597321756757163,
+      "rme": 3.419024166520927,
+      "samples": 222,
+      "ratio": 57.50714702457951
     },
     "@dagr/layout > bench/layout.bench.ts > rank > 10k nodes, 40k edges": {
-      "medianMs": 13.201334000000088,
-      "meanMs": 13.593004361990959,
-      "rme": 1.3094536262178829,
-      "samples": 221,
-      "ratio": 361.68038356174986
+      "medianMs": 13.184041500000149,
+      "meanMs": 13.308579075221221,
+      "rme": 0.8889916088274469,
+      "samples": 226,
+      "ratio": 349.6351304767374
     },
     "@dagr/layout > bench/layout.bench.ts > rank > 1k nodes, 4k edges": {
-      "medianMs": 0.8858330000000478,
-      "meanMs": 0.8986230682226171,
-      "rme": 0.6110033577389374,
-      "samples": 557,
-      "ratio": 24.269397260282236
+      "medianMs": 0.8953750000000582,
+      "meanMs": 0.9141366416819029,
+      "rme": 0.5346978890694426,
+      "samples": 547,
+      "ratio": 23.74496128145725
     }
   }
 }

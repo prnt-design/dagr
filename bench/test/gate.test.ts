@@ -190,6 +190,21 @@ describe('the exemption path', () => {
     expect(report.ok).toBe(true);
   });
 
+  it('rejects a gate value that is not exactly "off"', () => {
+    // The baseline is hand-edited, so "on" is the natural thing to write
+    // meaning "do gate this". Reading it as an exemption would leave the build
+    // green over a benchmark nobody compared, which is the one outcome this
+    // guard exists to prevent.
+    for (const gate of ['on', 'offf', true, false, '']) {
+      const report = compareReports(
+        baseline({ a: stat(4), b: { gate, reason: 'looks deliberate' } as never }),
+        current({ a: stat(4), b: stat(4) }),
+      );
+      expect(report.ok).toBe(false);
+      expect(report.errors.join(' ')).toMatch(/only value that turns the gate off/i);
+    }
+  });
+
   it('rejects an exemption with no reason written down', () => {
     // An exemption is a decision. Without this, `gate: "off"` becomes the
     // quiet way to make a failing benchmark stop failing.

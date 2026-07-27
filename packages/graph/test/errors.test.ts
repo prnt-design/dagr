@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CycleError,
   DagrGraphError,
   DuplicateEdgeError,
   DuplicateNodeError,
@@ -226,6 +227,8 @@ describe('isDagrGraphError', () => {
           return error.edgeIds.join(',');
         case 'PORT_DIRECTION':
           return `${error.direction} as ${error.end}`;
+        case 'CYCLE':
+          return error.cycle.join('->');
         default: {
           const unreachable: never = error;
           return unreachable;
@@ -250,6 +253,7 @@ describe('isDagrGraphError', () => {
       'a.out',
       'e1,e2',
       'in as source',
+      'a->b',
     ]);
   });
 });
@@ -266,6 +270,7 @@ function everyError(): DagrGraphErrorLike[] {
     new PortNotFoundError('a', 'out'),
     new PortInUseError('a', 'out', ['e1', 'e2']),
     new PortDirectionError('a', 'sink', 'in', 'source'),
+    new CycleError(['a', 'b']),
   ];
 }
 
@@ -305,6 +310,8 @@ describe('error catching', () => {
           return 'port in use';
         case 'PORT_DIRECTION':
           return 'port direction';
+        case 'CYCLE':
+          return 'cycle';
         default: {
           const unreachable: never = error.code;
           return unreachable;
@@ -323,6 +330,7 @@ describe('error catching', () => {
       'port not found',
       'port in use',
       'port direction',
+      'cycle',
     ]);
   });
 

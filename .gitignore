@@ -18,6 +18,10 @@ docs/build/
 # bench/baseline.json, written by `pnpm bench:baseline`.
 bench-report.json
 
+# Scratch probe scripts. Reviewers and contributors write these to check a
+# claim against the real code, and they should never reach a commit.
+.probe*
+
 # Vite / vitest caches
 .vite/
 **/node_modules/.vite/

@@ -41,17 +41,22 @@ pnpm build         # tsc, each package to its own dist
 ### Benchmarks
 
 ```bash
-pnpm bench         # run every package's benchmarks
-pnpm bench:check   # compare that run to bench/baseline.json
+pnpm bench           # run every package's benchmarks
+pnpm bench:check     # compare that run to bench/baseline.json
 pnpm bench:baseline  # record that run as the new baseline
+pnpm bench:ci        # what CI runs: both of the first two, re-measuring once if the run was unreadable
 ```
 
-CI runs `pnpm bench` and `pnpm bench:check` on every pull request, and a
-regression outside the tolerance fails the build. The tolerance is not a flat
-10% of wall clock, because benchmark numbers vary by machine and CI runners are
-noisy. Each benchmark is recorded as a ratio against a control workload run
-beside it, compared on the median rather than the mean, and allowed a tolerance
-that widens with the measured noise of both runs.
+CI runs `pnpm bench:ci` on every pull request, and a regression outside the
+tolerance fails the build. A run too noisy to read is not a regression and is
+not a pass either, so `bench:check` exits 2 for it against 1 for a regression,
+and `bench:ci` re-measures once before giving up. If a local `pnpm bench:check`
+exits 2, the machine was too busy to measure, not your change.
+
+The tolerance is not a flat 10% of wall clock, because benchmark numbers vary by
+machine and CI runners are noisy. Each benchmark is recorded as a ratio against
+a control workload run beside it, compared on the median rather than the mean,
+and allowed a tolerance that widens with the measured noise of both runs.
 
 [bench/README.md](./bench/README.md) has the full reasoning, the guards that
 keep the gate from quietly degrading into a no-op, how to add a benchmark, and

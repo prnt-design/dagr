@@ -698,10 +698,92 @@ Those bounds describe the work, not the allocation. Every listing returns a
 fresh array, and `successors` and `predecessors` also build a set to
 deduplicate and sort the result by node insertion order, so a sweep that
 queries adjacency once per node per pass allocates once per node per pass. That
-is deliberate for now: it keeps the API small and the results safe to keep. If
-the layout benchmarks show the churn matters, a non-allocating traversal form
-(a visitor over the same indexes) will be added alongside these, which is a
-purely additive change.
+is deliberate for now: it keeps the API small and the results safe to keep.
+
+The benchmarks that question was waiting on now exist, and they say the churn
+is real: `successors` costs about 6x `outEdges` over the same nodes on a 10k
+node graph. The traversal methods below therefore do not go through these
+listings at all, walking the adjacency indexes directly instead, so none of them
+builds the deduplicated, sorted array per node that these listings do. They are
+not allocation-free (they walk through a generator, which costs an object per
+visited node), but they never retain a neighbour array, so peak memory stays
+flat per node rather than growing with degree. Whether a non-allocating
+adjacency form should also be public is a separate question, and it belongs to
+the first caller that needs one: the layout ordering sweeps, where it is listed
+against that task.
+
+### Traversal
+
+Every method here answers a question about shape rather than about one node's
+neighbourhood, and all of them are O(V + E) unless noted.
+
+| Method | Behaviour |
+| --- | --- |
+| `topologicalOrder()` | Every node, ordered so each comes after everything pointing at it. Throws `CycleError` on a cyclic graph. O((V + E) log V), see the tie-break below. |
+| `isAcyclic()` | Whether the graph has no cycles. A self loop is a cycle. |
+| `findCycle()` | A cycle as the nodes on it, or `undefined`. Consecutive entries are joined by an edge and the last closes back to the first, listed once, so an n-node cycle has n entries and a self loop has one. |
+| `sources()` | Nodes with no in-edges, in insertion order. O(V). |
+| `sinks()` | Nodes with no out-edges, in insertion order. O(V). |
+| `descendants(id)` | Every node reachable by following out-edges, excluding the node itself, in node insertion order. Plus a sort over the result. |
+| `ancestors(id)` | The mirror, walking in-edges. |
+| `canReach(from, to)` | Whether a path of one or more edges runs from one to the other. Stops at the first hit rather than listing everything. |
+
+Three things about these are choices rather than consequences, so they are
+worth stating plainly.
+
+**A cyclic graph has no topological order, so `topologicalOrder` refuses.** It
+does not return a partial order, because something order-shaped invites a
+caller to use it. The thrown `CycleError` carries a `cycle` witness, which is
+one of possibly many.
+
+`isAcyclic` and `findCycle` are the tolerant forms, but unlike `hasNode` before
+a lookup they are not free: each is a full walk, and the call they guard is
+another. Checking first therefore costs two walks on the happy path. Catching
+costs one, because `topologicalOrder` already finds the witness on its way out:
+
+```ts
+import { isDagrGraphError } from '@dagr/graph';
+
+try {
+  return graph.topologicalOrder();
+} catch (error) {
+  if (isDagrGraphError(error) && error.code === 'CYCLE') return error.cycle;
+  throw error;
+}
+```
+
+Reach for `isAcyclic` or `findCycle` when the yes/no or the witness is all you
+wanted, and for the block above when you wanted the order.
+
+**Ties in `topologicalOrder` go to the earliest-added node.** Most graphs have
+more than one valid order, so this is a decision, and it is the same one the
+adjacency listings make: the answer never depends on which edge was added
+first. Node insertion order it does depend on, and has to, because that is what
+the tie-break is taken against. A plain queue would also be deterministic, but
+only given the whole history, because when one node frees two others they queue
+in the order those two edges were added. Adding a redundant parallel edge could
+then permute a result nothing else changed. Picking the smallest ready rank costs
+a heap, so the sweep is O((V + E) log V) and runs at about 10ms on a 10k node,
+40k edge graph, and buys an order that does not move when unrelated edges do.
+
+**A self loop is a cycle.** A node cannot come after itself, so a graph with
+one has no topological order, and the node is neither a source nor a sink
+because a self loop is both an in-edge and an out-edge. `@dagr/layout`'s ranker
+deliberately differs and drops self loops before its own sweep, because a self
+loop says nothing about which rank a node belongs on. Both are right for their
+own question.
+
+**`descendants` excludes the node itself, and `canReach` does not.** That is
+the one place the two disagree, and it is deliberate. `descendants(a)` never
+contains `a`, even when a cycle leads straight back to it, because that is what
+the name means everywhere else it is used on directed graphs and a listing that
+quietly included the source would be wrong in exactly the case a caller is least
+likely to test. `canReach` stays at "one or more edges", so `canReach(a, a)` is
+true precisely when `a` sits on a cycle. Ask it that way. For every pair of
+distinct nodes the two agree exactly.
+
+The walk still goes around the cycle, so anything reachable only by passing back
+through `a` is still listed. It is the seed that is dropped, not the path.
 
 ## Errors
 
@@ -746,13 +828,14 @@ try {
 | `PortNotFoundError` | `PORT_NOT_FOUND` | An operation names a port the node does not declare. Carries `nodeId` and `portId`. |
 | `PortInUseError` | `PORT_IN_USE` | `removePort` names a port live edges still reference. Carries `nodeId`, `portId`, and `edgeIds`. |
 | `PortDirectionError` | `PORT_DIRECTION` | An edge asks a port to be an end it does not face. Carries `nodeId`, `portId`, `direction`, and `end`. |
+| `CycleError` | `CYCLE` | `topologicalOrder` is called on a graph with a cycle. Carries `cycle`, a witness. |
 
 Switching on `code` through `DagrGraphError` narrows the code but not the
 object, because an abstract base cannot know its subclasses. `isDagrGraphError`
 closes that gap: it narrows a caught value to `DagrGraphErrorLike`, a
-discriminated union of the nine concrete classes, so an arm can read the fields
+discriminated union of the ten concrete classes, so an arm can read the fields
 only its own class carries. It tests `instanceof DagrGraphError` and then that
-`code` is one of the nine, so the runtime check is as closed as the type it
+`code` is one of the ten, so the runtime check is as closed as the type it
 narrows to.
 
 `DagrGraphError` is a catch base, not an extension point. A subclass declared
@@ -819,13 +902,28 @@ so the model makes these promises:
 The same sequence of calls therefore always produces the same graph, with the
 same ids in the same order.
 
+Traversal adds one guarantee on top: its answers do not depend on the order the
+*edges* arrived in. Two graphs whose nodes were added in the same order give the
+same topological order, the same sources and sinks, and the same reachability
+listings, however the edges were interleaved and however many redundant parallel
+edges were added and removed along the way. That is what costs a heap in
+`topologicalOrder`, and the property suite is what holds it: an earlier version
+of that sweep did not keep it and the tests found the difference.
+
+Node insertion order is not something traversal is invariant to, and cannot be:
+node insertion rank *is* the tie-break. The same nodes and the same edges added
+in a different node order give different answers, which is the sense in which
+insertion order is part of a graph's identity described above. Making the
+stronger promise true would mean tie-breaking on something intrinsic to the id,
+lexicographic order say, which is a different and much larger decision than a
+tie-break rule.
+
 ## Not here yet
 
-Traversal (topological sort, cycle detection, reachability) and
-`toJSON`/`fromJSON` are separate tasks. See
-[ROADMAP.md](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md) for the
-order they arrive in. Until then the graph is identity, shape, adjacency,
-attributes, ports, and patches.
+`toJSON`/`fromJSON` is a separate task. See
+[ROADMAP.md](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md) for when
+it arrives. Until then the graph is identity, shape, adjacency, attributes,
+ports, patches, and traversal.
 
 Patches describe single calls. There is no batching or transaction API, so
 several mutations cannot be coalesced into one patch, and no listener sees a

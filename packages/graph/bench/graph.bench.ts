@@ -3,6 +3,7 @@ import { bench, describe } from 'vitest';
 
 import { Graph } from '../src/graph.js';
 import type { GraphSpec } from '@dagr/bench';
+import type { NodeId } from '../src/types.js';
 
 /**
  * `@dagr/graph`'s hot paths.
@@ -101,6 +102,97 @@ describe('attributes', () => {
       const id = ids[index];
       if (id !== undefined) unchanged.updateNodeAttrs(id, { width: index });
     }
+  });
+});
+
+/**
+ * Traversal over the 10k corpus.
+ *
+ * `topologicalOrder` orders ties by node insertion rank rather than by whatever
+ * a queue happened to hold, which costs a heap and turns O(V + E) into
+ * O((V + E) log V). This is where that trade is priced rather than argued
+ * about. The corpus is about 2% back edges, so it is cyclic, and a topological
+ * sort of a cyclic graph throws: the acyclic view is built once here so the
+ * benchmark measures the sweep and not the error path.
+ */
+describe('traversal', () => {
+  const cyclic = build(large);
+  /**
+   * The corpus with every edge ORIENTED from the lower-indexed endpoint to the
+   * higher, rather than with backward edges dropped.
+   *
+   * Dropping was the first attempt and it quietly destroyed the thing being
+   * measured. The corpus assigns nodes to layers on a skewed draw, so node
+   * index does not track layer, and filtering on index threw away about half
+   * the 40k edges and fragmented what was left: the best source reached 357
+   * nodes. Orienting keeps every edge, so this stays a 10k node, 40k edge DAG
+   * and the walks have something to walk.
+   */
+  const acyclic = (() => {
+    const graph = new Graph();
+    for (const id of large.nodes) graph.addNode(id);
+    const rank = new Map(large.nodes.map((id, index) => [id, index]));
+    const seen = new Set<string>();
+    for (const [source, target] of large.edges) {
+      const from = (rank.get(source) ?? 0) < (rank.get(target) ?? 0) ? source : target;
+      const to = from === source ? target : source;
+      if (from === to) continue;
+      const key = `${from} ${to}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      graph.addEdge(from, to);
+    }
+    return graph;
+  })();
+
+  /**
+   * The source that reaches the most, chosen once, outside the timed body.
+   *
+   * Both halves of that matter, and the first version of this benchmark got
+   * both wrong. Calling `sources()` inside the body made 97% of the recorded
+   * time an O(V) scan of all 10k nodes, so the entry sat within noise of the
+   * `sources` benchmark below it and a `descendants` regression would have had
+   * to be about 40x to move it: exactly the silent no-op the harness exists to
+   * prevent, and exactly the trap `bench/README.md` warns about. And the FIRST
+   * source by insertion rank reaches 16 of 10,000 nodes, so even hoisted it
+   * would have measured a sixteen-node walk under a name saying 10k.
+   */
+  // The best length is carried alongside the id rather than recomputed. The
+  // obvious `reduce` calls `descendants(best)` again on every step, which is
+  // two traversals per source instead of one, and this runs at setup on every
+  // bench invocation including CI.
+  const { id: deepestSource, reach } = acyclic.sources().reduce<{ id: NodeId; reach: number }>(
+    (best, id) => {
+      const length = acyclic.descendants(id).length;
+      return length > best.reach ? { id, reach: length } : best;
+    },
+    { id: '', reach: -1 },
+  );
+  // Asserted, not assumed: if a corpus reseed or a change to the rank filter
+  // ever shrinks this, the benchmark fails loudly instead of quietly measuring
+  // a walk over nothing again.
+  if (reach < 1_000) {
+    throw new Error(`descendants benchmark reaches only ${String(reach)} nodes, so it measures nothing`);
+  }
+
+  bench('topologicalOrder, 10k nodes', () => {
+    acyclic.topologicalOrder();
+  });
+
+  bench('isAcyclic on a cyclic graph, 10k nodes', () => {
+    cyclic.isAcyclic();
+  });
+
+  bench('isAcyclic on an acyclic graph, 10k nodes', () => {
+    acyclic.isAcyclic();
+  });
+
+  bench('descendants, 10k nodes', () => {
+    acyclic.descendants(deepestSource);
+  });
+
+  bench('sources, 10k nodes', () => {
+    acyclic.sources();
   });
 });
 

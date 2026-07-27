@@ -63,6 +63,7 @@ describe('@dagr/graph public surface', () => {
 
   it('exports nothing else at runtime', () => {
     expect(Object.keys(api).sort()).toEqual([
+      'CycleError',
       'DagrGraphError',
       'DuplicateEdgeError',
       'DuplicateNodeError',

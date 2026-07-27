@@ -154,11 +154,35 @@ export const GATE_DEFAULTS = {
 };
 
 /**
+ * Whether an entry is exempt, testing the VALUE and not just the key.
+ *
+ * Presence alone is not enough, and the difference is the whole point of the
+ * guard. The baseline is hand-edited by design, so `"gate": "on"` (the natural
+ * thing to write meaning "do gate this"), `"gate": false`, or a typo like
+ * `"gate": "offf"` would all take the exempt branch, never be compared, and
+ * leave the build green over an unmeasured benchmark. Anything that is not
+ * exactly `"off"` is rejected loudly by the caller instead.
+ *
  * @param {BaselineEntry} entry
  * @returns {entry is ExemptEntry}
  */
 function isExempt(entry) {
-  return 'gate' in entry;
+  return 'gate' in entry && entry.gate === 'off';
+}
+
+/**
+ * The `gate` an entry declares, as whatever JSON actually held.
+ *
+ * Read through `unknown` deliberately. The typedef says the only legal value is
+ * `'off'`, so narrowing on the declared type would make every other value
+ * unreachable to the compiler, and those are exactly the values this has to
+ * catch: the file is hand-edited and nothing validates it on the way in.
+ *
+ * @param {BaselineEntry} entry
+ * @returns {unknown}
+ */
+function declaredGate(entry) {
+  return /** @type {{ gate?: unknown }} */ (entry).gate;
 }
 
 /**
@@ -198,6 +222,15 @@ export function compareReports(baselineReport, currentReport, overrides = {}) {
   let inconclusive = 0;
 
   for (const [key, entry] of baselineEntries) {
+    // A `gate` spelled any way other than "off" is a mistake, not an
+    // exemption, and it must not be read as either one silently.
+    const declared = declaredGate(entry);
+    if (declared !== undefined && declared !== 'off') {
+      errors.push(
+        `${key} records gate ${JSON.stringify(declared)}. The only value that turns the gate off is "off"`,
+      );
+      continue;
+    }
     if (isExempt(entry)) {
       if (typeof entry.reason !== 'string' || entry.reason.trim() === '') {
         errors.push(`${key} is exempt from the gate but records no reason`);
