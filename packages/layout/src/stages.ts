@@ -157,17 +157,28 @@ export const gridPositionStage: PositionStage = {
 };
 
 /**
- * Routes every edge as a straight two-point line between the endpoint centres.
+ * Routes every edge as straight segments: the source centre, the centre of each
+ * dummy on the edge's chain, and the target centre.
+ *
+ * Every SEGMENT is straight, which is what the name means, and since M2.4b a
+ * polyline may have more than one of them: an edge the ranker split into a
+ * chain bends through each of its dummies, so it crosses every layer between
+ * its endpoints at a coordinate that layer chose, rather than wherever the
+ * straight line between two distant centres happened to fall. An edge with no
+ * chain keeps the two-point line it always had.
  *
  * The routes are built by walking the graph rather than the roster, so a route
  * exists for every edge the caller added and for nothing else, and the points
  * run from `source` to `target` because that is where they are read from. That
  * direction is a contract, not an accident of this implementation: see
- * {@link RoutedEdge.points}.
+ * {@link RoutedEdge.points}. The chain needs no reversal bookkeeping for the
+ * same reason: `RankedState.virtualChains` lists a chain source to target as the
+ * caller authored it, and the coordinates are looked up by id, so an edge the
+ * ranker reversed comes out running the caller's way with nothing to undo.
  *
  * A self loop routes to two identical points, which is degenerate but well
- * formed; M2.8 gives it a real shape along with everything else, and bends a
- * long edge through its dummies' coordinates while it is at it.
+ * formed; M2.8 gives it a real shape along with everything else, and gives
+ * these polylines a proper monotone shape and border attachment.
  *
  * It returns the routes and nothing else. The runner assembles the
  * {@link LayoutResult} from them and from the graph, so a router states the
@@ -180,10 +191,13 @@ export const straightRouteStage: RouteStage = {
     for (const edge of input.graph.edges()) {
       const from = requirePoint(input.positions, edge.source);
       const to = requirePoint(input.positions, edge.target);
-      routes.set(edge.id, [
-        { x: from.x, y: from.y },
-        { x: to.x, y: to.y },
-      ]);
+      const points: Point[] = [{ x: from.x, y: from.y }];
+      for (const id of input.virtualChains.get(edge.id) ?? []) {
+        const bend = requirePoint(input.positions, id);
+        points.push({ x: bend.x, y: bend.y });
+      }
+      points.push({ x: to.x, y: to.y });
+      routes.set(edge.id, points);
     }
     return { routes };
   },

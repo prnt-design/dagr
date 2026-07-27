@@ -324,6 +324,85 @@ findings addressed or logged, docs land with the feature.
   strictly MONOTONIC (increasing normally, decreasing for a reversed edge) and
   not strictly increasing. What is left here is the chain splitting itself and
   rejoining the chain into a polyline on output.
+  BUILT AND NOT LANDED, on branch `m2.4b-dummy-chains`. It is green on
+  typecheck, tests and lint, it survived three persona reviews, and it CANNOT
+  MERGE: it is blocked on ranking quality, and the block is this entry's own
+  prediction coming true. See the blocked event and `state.blockers`. On the 10k
+  corpus the splitter mints 1,414,263 dummies for 10,000 real nodes, the
+  pipeline goes from about 30ms to 5.2 seconds and 735MB, and `pnpm bench:check`
+  reports +16513% against +23% allowed while every `@dagr/graph` entry stays in
+  tolerance, so the machine was quiet and the diff is what moved.
+  The cause is NOT the splitter, which is why this is a blocker rather than a
+  defect in this task. An A/B on the same corpus with `backEdgeShare: 0` gives
+  a feedback arc set of 0, a maximum rank of 59 (exactly the authored layer
+  count) and 32,107 dummies, which is the roughly 4x roster this task expected.
+  With the corpus's 2% back edges the greedy feedback arc set reverses 6,327 of
+  40,000 edges where about 800 would do, and every unnecessary reversal of a
+  FORWARD edge turns it into a backward edge in the acyclic view, destroying the
+  layer structure that bounded the depth. Longest path then finds 153-deep
+  zigzags through a 60-layer graph, mean chain length 47 instead of 3, and the
+  dummy count follows. `cycles.ts` is a correct Eades-Lin-Smyth implementation,
+  so 6,327 is greedy suboptimality rather than a bug.
+  M2.3 IS THEREFORE A HARD PREREQUISITE OF M2.4b, and this roadmap had them as
+  independent tasks. Network simplex minimises total edge length, which is
+  exactly the quantity that becomes dummy nodes here, so tightening the ranks is
+  the designed remedy and not a workaround. Take M2.3 first, then rebase this
+  branch and re-measure. Everything below was decided by this task and survives
+  the rebase; the branch is worth keeping rather than rewriting.
+  It answered the question this entry posed. **An edge spans every
+  rank the layout ACTUALLY HAS strictly between its endpoint ranks**, and a
+  chain holds exactly one node at each of them. Phrased over the occupied ranks
+  rather than as steps of exactly one, which was the obvious alternative and is
+  rejected here for the reason this entry already gave: `insertionOrderStage`
+  refuses to assume contiguous integer ranks, and over ranks 0, 10, 20 the step
+  rule would demand nine dummies, eight of them with no layer to sit in. The
+  rule is enforced in the runner at the rank boundary, and it names the first
+  missing rank in ROUTE order (so a reversed chain reports the hole its polyline
+  meets first) together with the node occupying that rank, which is routinely
+  not on the chain being blamed.
+  Its scope is the half that is easiest to lose, so it is written twice: the
+  rule binds a chain that EXISTS. Declaring a chain at all stays optional, and
+  the "an orphan dummy stays legal" allowance above survives unchanged. What is
+  no longer legal is a chain with a hole in it. Because the rule is phrased over
+  the ranks the layout has rather than over one edge's endpoints, completeness
+  is a property of the whole ranking: a stage that puts a node on a rank nothing
+  previously occupied has to extend every chain spanning it, including chains it
+  did not mint. That is correct (a layer that exists is a layer a long edge
+  crosses unconstrained) and it is documented rather than softened.
+  It also binds the RANKER and not the router. A third-party router that ignores
+  `virtualChains` and emits a two-point line for a long edge is not detected. A
+  points-count rule ("a chain of n dummies needs a route of at least n + 2
+  points") was considered and rejected: straightening a dummy chain is a primary
+  goal of M2.7's Brandes-Koepf, so a collinear chain is what a GOOD positioner
+  produces and M2.8 could then legitimately emit two points, and a rule that has
+  to be withdrawn is worse here than one never claimed.
+  **The deterministic-id requirement is met, but not by the id this entry
+  suggested.** Ids are `#dummy:<edgeId>:<index>`, where the index is the dummy's
+  0-based position along its chain counting from the source the CALLER authored,
+  which is the "or equivalent" this entry allowed for. The review disproved the
+  rank form against this entry's own stated failure mode: insert one unrelated
+  node upstream and every rank shifts, so an edge whose dummies sat at ranks 1
+  and 2 has them at 2 and 3, and the surviving id names the SECOND bend before
+  and the FIRST after, which misanchors a warm start rather than merely missing
+  it. An index is invariant under that shift. The guarantee is claimed narrowly
+  and is narrower than "stable": the id survives any edit that does not move the
+  edge's endpoints RELATIVE to each other, and when they do move relatively the
+  index misanchors by one row rather than losing identity.
+  The test this entry asked for, growing a chain from three ranks to four,
+  is `keeps the dummies a chain already had when the chain grows by a rank` in
+  `packages/layout/test/layout.chains.test.ts`. On its own it does NOT establish
+  the id rule, and the review is why that is written down: it lengthens the path
+  BELOW the shared dummies so their ranks never move, and both candidate id
+  schemes pass it identically. `keeps a chain's ids when an unrelated node
+  upstream shifts every rank` is the test that pins it, and M3.6 should read
+  that one.
+  Two consequences beyond the chains themselves. `bounds` is now the hull of
+  the node boxes AND the route points, because a route bending through a
+  zero-width dummy at a row's right extreme need not stay inside the box hull;
+  see M2.8, which no longer has to make that change. And the residue this entry
+  names at the end of the sorted-roster paragraph is untouched and still M2.7's:
+  a layer's indices are still not stable when a dummy is INSERTED into that
+  layer.
 - [ ] **M2.5** Ordering v1: barycenter sweeps with median fallback, crossing
   counter as the metric. Tests on known small graphs with hand-counted
   crossings. Also measure adjacency allocation churn in the sweeps (every
@@ -342,12 +421,13 @@ findings addressed or logged, docs land with the feature.
   node overlaps, spacing respected.
 - [ ] **M2.8** Edge routing: polyline routes through dummy-node coordinates,
   monotone in the rank axis. Route invariant tests.
-  From the M2.1 algorithms review: this is where `bounds` stops being the hull
-  of the node boxes, because a route that goes around an obstacle can leave
-  them. The runner contracts containment rather than tightness for exactly that
-  reason. The durable formulation, worth adopting here, is the hull of the node
-  boxes and the route points, which is equivalent today and stays true after
-  this lands.
+  From the M2.1 algorithms review: `bounds` had to stop being the hull of the
+  node boxes, because a route that goes around an obstacle can leave them. The
+  runner contracts containment rather than tightness for exactly that reason.
+  M2.4b adopted the durable formulation early (the hull of the node boxes and
+  the route points), because a route bending through a zero-width dummy can
+  already leave the box hull, so nothing here changes when obstacle detours
+  land.
 - [ ] **M2.9** Golden corpus vs dagre: port a corpus of real graphs
   (including a prnt.design-shaped pattern-generator graph), assert
   structural parity metrics vs dagre output (rank counts, crossing counts

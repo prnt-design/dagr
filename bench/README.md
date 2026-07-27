@@ -171,6 +171,19 @@ editing it silently rebases the entire committed baseline. If it has to change,
 change it and run `pnpm bench:baseline` in the same commit, and say so in the
 message.
 
+The same hazard, from the other end: a milestone that grows the WORKLOAD a
+benchmark measures rebases that benchmark's entry just as surely, without
+touching a line of bench code. M2.4b was the first (dummy chains roughly triple
+the nodes the layout pipeline places on the 10k corpus), and M2.5 through M2.8
+will each do it again. Recapturing is right in that case, and it is the same
+recipe: recapture in the same commit and say why in the message. What separates
+it from talking a gate out of a failure is one habit, so make it one: PREDICT
+THE MAGNITUDE BEFORE YOU MEASURE, from what the change actually does, and put
+the predicted figure next to the measured one in the commit message. A ratio
+near the prediction is a measurement of known extra work. A ratio well above it
+is a regression hiding inside a rebase, in the one place nobody will look
+again.
+
 ## Layout
 
 `src/control.ts`, `src/corpus.ts` and `src/register.ts` are TypeScript, compiled

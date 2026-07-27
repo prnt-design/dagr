@@ -489,32 +489,53 @@ const menagerieConfig: LayoutConfig = {
 
 describe('layout result identity across refactors', () => {
   /**
-   * The whole result, written out, captured from the implementation as it stood
-   * before M2.4a narrowed the four stage return types.
+   * The whole result, written out, captured from the implementation as it
+   * stands after M2.4b split long edges into dummy chains.
    *
    * Every other test in this suite asserts a property, which is what a test
    * should do and what leaves room for a refactor to be judged on its own. This
-   * one asserts the opposite: that nothing at all moved. M2.4a rebuilt how the
-   * runner assembles each pipeline record, and the one claim that change makes
-   * to a caller is that it makes no claim, so the guard has to be an equality
-   * against a value nobody could derive from the new code. A property test would
-   * have passed against a runner that quietly changed a coordinate.
+   * one asserts the opposite: that nothing at all moved. It was written for
+   * M2.4a, which rebuilt how the runner assembles each pipeline record and whose
+   * one claim to a caller was that it made no claim, so the guard had to be an
+   * equality against a value nobody could derive from the new code.
+   *
+   * M2.4b is the first milestone to deliberately change what a default run
+   * draws, which is the moment this pin was always going to be REPLACED rather
+   * than preserved. Recorded here so the replacement is a decision rather than a
+   * re-capture, exactly what changed: `da` runs from rank 2 to rank 0, so it is
+   * now split at rank 1, and the dummy is a full member of that layer. It takes
+   * no width but it does take a `nodeSep` gap, so rank 1 is 12 wider and `b`,
+   * `c` and `q` each shift 6 left; the dummy lands at the right end of the row
+   * at `x = 33`; and `da`'s polyline gains that point as a bend. Nothing else
+   * moves, and `bounds` does not either, because 33 is inside the hull the wider
+   * rows already had. Every node the caller added is still in the result and
+   * the dummy is not.
+   *
+   * The M2.4b review renamed that dummy from `#dummy:da:1` to `#dummy:da:0`,
+   * suffixing the id with the dummy's index along its chain rather than with its
+   * rank, and not a number here moved. Within-layer order IS id-derived, so a
+   * rename can move coordinates, but only between two dummies sharing a layer:
+   * `insertionOrderStage` appends the roster's virtual segment after the graph's
+   * own nodes, and rank 1 holds exactly one dummy. So the arithmetic is
+   * untouched, `x = 33` is still `(16 + 10 / 2) + 12 + 0 / 2`, which is `q`'s
+   * right edge, plus the 12 of `nodeSep`, plus half of nothing, and this pin was
+   * re-derived rather than re-captured. (Rank 1 is `b`, `c`, `q`, dummy: a row
+   * of `12 * 3 + 10 + 10 + 10 + 0 = 66` starting at `-33`.)
    *
    * It is one graph rather than a corpus on purpose. M2.9 commits golden files
-   * against dagre and that is where a corpus belongs; this is a single pin for a
-   * single refactor, and it is expected to be REPLACED, not preserved, the first
-   * time a milestone deliberately changes what a default run draws. M2.5, M2.7
-   * and M2.8 each will. A test like this outliving its refactor is how a suite
-   * ends up asserting that a placeholder algorithm stays a placeholder.
+   * against dagre and that is where a corpus belongs; this is a single pin, and
+   * M2.5, M2.7 and M2.8 will each replace it again. A test like this outliving
+   * its milestone is how a suite ends up asserting that a placeholder algorithm
+   * stays a placeholder.
    */
   const captured = {
     nodes: [
       { id: 'a', x: -47, y: 10, width: 10, height: 20 },
-      { id: 'b', x: -22, y: 64, width: 10, height: 20 },
-      { id: 'c', x: 0, y: 64, width: 10, height: 20 },
+      { id: 'b', x: -28, y: 64, width: 10, height: 20 },
+      { id: 'c', x: -6, y: 64, width: 10, height: 20 },
       { id: 'd', x: 0, y: 118, width: 10, height: 20 },
       { id: 'p', x: -25, y: 10, width: 10, height: 20 },
-      { id: 'q', x: 22, y: 64, width: 10, height: 20 },
+      { id: 'q', x: 16, y: 64, width: 10, height: 20 },
       { id: 'lonely', x: 22, y: 10, width: 60, height: 20 },
     ],
     edges: [
@@ -524,7 +545,7 @@ describe('layout result identity across refactors', () => {
         target: 'b',
         points: [
           { x: -47, y: 10 },
-          { x: -22, y: 64 },
+          { x: -28, y: 64 },
         ],
       },
       {
@@ -533,7 +554,7 @@ describe('layout result identity across refactors', () => {
         target: 'c',
         points: [
           { x: -47, y: 10 },
-          { x: 0, y: 64 },
+          { x: -6, y: 64 },
         ],
       },
       {
@@ -541,7 +562,7 @@ describe('layout result identity across refactors', () => {
         source: 'b',
         target: 'd',
         points: [
-          { x: -22, y: 64 },
+          { x: -28, y: 64 },
           { x: 0, y: 118 },
         ],
       },
@@ -550,7 +571,7 @@ describe('layout result identity across refactors', () => {
         source: 'c',
         target: 'd',
         points: [
-          { x: 0, y: 64 },
+          { x: -6, y: 64 },
           { x: 0, y: 118 },
         ],
       },
@@ -560,6 +581,7 @@ describe('layout result identity across refactors', () => {
         target: 'a',
         points: [
           { x: 0, y: 118 },
+          { x: 33, y: 64 },
           { x: -47, y: 10 },
         ],
       },
@@ -568,8 +590,8 @@ describe('layout result identity across refactors', () => {
         source: 'b',
         target: 'b',
         points: [
-          { x: -22, y: 64 },
-          { x: -22, y: 64 },
+          { x: -28, y: 64 },
+          { x: -28, y: 64 },
         ],
       },
       {
@@ -578,7 +600,7 @@ describe('layout result identity across refactors', () => {
         target: 'q',
         points: [
           { x: -25, y: 10 },
-          { x: 22, y: 64 },
+          { x: 16, y: 64 },
         ],
       },
       {
@@ -586,7 +608,7 @@ describe('layout result identity across refactors', () => {
         source: 'q',
         target: 'p',
         points: [
-          { x: 22, y: 64 },
+          { x: 16, y: 64 },
           { x: -25, y: 10 },
         ],
       },

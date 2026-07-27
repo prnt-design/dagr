@@ -19,7 +19,14 @@ function rank(graph: Graph): RankOutput {
   return longestPathRankStage.run(prepare(graph));
 }
 
-/** Ranks as a plain object, which reads better in a failure than a Map does. */
+/**
+ * Ranks as a plain object, which reads better in a failure than a Map does.
+ *
+ * The whole roster, so a graph with a long edge in it shows the dummies the
+ * stage split that edge into as well as its own nodes. `ranks` covers what the
+ * stage DECLARED, not what the caller added, and the runner's own check is over
+ * the roster for the same reason.
+ */
 function ranksOf(graph: Graph): Record<NodeId, number> {
   return Object.fromEntries(rank(graph).ranks);
 }
@@ -140,7 +147,11 @@ describe('longestPathRankStage', () => {
         ['a', 'c', 'ac'],
       ],
     );
-    expect(ranksOf(graph)).toEqual({ a: 0, b: 1, c: 2 });
+    // Ranking `c` below `b` is what makes `a -> c` a long edge, so this is also
+    // the smallest graph the splitter has anything to do with: the dummy on
+    // rank 1 is the chain for `ac`, and `layout.chains.test.ts` is where that
+    // half is tested.
+    expect(ranksOf(graph)).toEqual({ a: 0, b: 1, c: 2, '#dummy:ac:0': 1 });
   });
 
   it('starts each disconnected component at rank 0', () => {
@@ -382,23 +393,35 @@ describe('longestPathRankStage on random digraphs', () => {
         const state = rank(graph);
         if (state.reversedEdges.size > 0) broken += 1;
 
-        // Every node ranked, and nothing else.
-        expect([...state.ranks.keys()], `${where}: ranked exactly the graph`).toEqual(
-          nodesBefore.map((node) => node.id),
-        );
-        expect(state.virtualNodes, `${where}: virtual nodes`).toBeUndefined();
+        // Every node ranked, then every dummy the splitter declared, and
+        // nothing else. The roster, in other words, in the order the runner
+        // will read it.
+        const declared = [...(state.virtualNodes?.keys() ?? [])];
+        expect([...state.ranks.keys()], `${where}: ranked exactly the roster`).toEqual([
+          ...nodesBefore.map((node) => node.id),
+          ...declared,
+        ]);
+        // Declaring and sizing are one act, and a plain long-edge dummy takes
+        // no room of its own.
+        for (const size of state.virtualNodes?.values() ?? []) {
+          expect(size, `${where}: dummy size`).toEqual({ width: 0, height: 0 });
+        }
 
         // Contiguous from zero, which is what keeps the order stage from
-        // producing an empty layer.
+        // producing an empty layer. A dummy sits on a rank its edge crosses, so
+        // it can never be what makes this true.
         const used = [...new Set(state.ranks.values())].sort((left, right) => left - right);
         expect(used, `${where}: ranks used`).toEqual(used.map((_, index) => index));
 
+        const chains = state.virtualChains ?? new Map<EdgeId, readonly NodeId[]>();
+        const chained = new Set<NodeId>();
         for (const edge of graph.edges()) {
           const from = requireRank(state, edge.source);
           const to = requireRank(state, edge.target);
           if (edge.source === edge.target) {
             expect(state.reversedEdges.has(edge.id), `${where}: ${edge.id} is a reversed self loop`)
               .toBe(false);
+            expect(chains.has(edge.id), `${where}: ${edge.id} is a chained self loop`).toBe(false);
             continue;
           }
           // Strict both ways. The runner only asks for `<=`, which an edge
@@ -408,7 +431,39 @@ describe('longestPathRankStage on random digraphs', () => {
           } else {
             expect(from, `${where}: ${edge.id} runs down`).toBeLessThan(to);
           }
+
+          // The chain, stated from the ranks rather than from the loop that
+          // built it: every rank the layout has strictly between the endpoints,
+          // walked source to target as the caller authored them, and one dummy
+          // per rank named for its POSITION along that walk rather than for the
+          // rank it sits at. An edge with nothing between its endpoints has no
+          // entry at all rather than an empty one.
+          const low = Math.min(from, to);
+          const high = Math.max(from, to);
+          const spanned = used.filter((rank) => rank > low && rank < high);
+          if (from > to) spanned.reverse();
+          const chain = chains.get(edge.id);
+          if (spanned.length === 0) {
+            expect(chain, `${where}: ${edge.id} has no chain`).toBeUndefined();
+            continue;
+          }
+          expect(
+            (chain ?? []).map((id) => requireRank(state, id)),
+            `${where}: ${edge.id} chain ranks`,
+          ).toEqual(spanned);
+          for (const [index, id] of (chain ?? []).entries()) {
+            expect(id, `${where}: ${edge.id} dummy ${String(index)}`).toBe(
+              `#dummy:${edge.id}:${String(index)}`,
+            );
+            expect(chained.has(id), `${where}: ${id} is in one chain`).toBe(false);
+            chained.add(id);
+          }
         }
+        // Nothing declared that no chain claims: this stage's only reason to
+        // want a node the caller never added is a long edge.
+        expect([...chained].sort(), `${where}: every dummy is in a chain`).toEqual(
+          [...declared].sort(),
+        );
 
         // Minimum height, against a longest path found by walking every path.
         const height = used.length === 0 ? 0 : Math.max(...state.ranks.values());

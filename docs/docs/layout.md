@@ -11,10 +11,10 @@ sidebar_position: 3
 `LayoutResult`: where every node sits, how every edge runs, and the box around
 the lot.
 
-This page describes the pipeline as of M2.4a. The types, the runner, and the
+This page describes the pipeline as of M2.4b. The types, the runner, and the
 stage boundaries are real: they are what every later milestone is built against,
-and the roster below exists so the one boundary that was going to have to move
-(M2.4b's dummy nodes) does not. One of the four algorithms is real: the rank
+and the roster below is why the one boundary that was going to have to move
+(dummy nodes) did not have to. One of the four algorithms is real: the rank
 stage breaks cycles and ranks by longest path, so the layers are the ones the
 graph asks for. The other three are placeholders that produce a well formed but
 naive result.
@@ -157,13 +157,13 @@ it and declaring nothing.
 caller's edge id to the chain of declared ids the stage split it into, in order,
 and the runner passes it through to `RankedState.virtualChains` (an empty map
 when it is omitted, the same treatment `virtualNodes` gets). It exists because a
-dummy is not just a sized id: M2.4b's router has to rejoin a chain into one
-polyline keyed by the edge it belongs to, and without the chain recorded the
-only recourse is parsing a dummy id back apart. That is ambiguous, because an
-`EdgeId` is a caller-supplied string that may contain whatever separator the id
-format picks; it couples the ranker and the router through a string format; and
-it promotes the id format to load-bearing public contract when the requirement
-M3 actually has only pins the id's VALUE.
+dummy is not just a sized id: the router rejoins a chain into one polyline keyed
+by the edge it belongs to, and without the chain recorded the only recourse is
+parsing a dummy id back apart. That is ambiguous, because an `EdgeId` is a
+caller-supplied string that may contain whatever separator the id format picks;
+it couples the ranker and the router through a string format; and it promotes
+the id format to load-bearing public contract when the requirement M3 actually
+has only pins the id's VALUE.
 
 **A chain is listed source to target as the caller authored them.** That is the
 direction [`RoutedEdge.points`](#route-direction) runs and it is stated for the
@@ -174,6 +174,31 @@ strictly increasing. They increase for a normal edge and decrease for one in
 `reversedEdges`, and either way they lie strictly between the two endpoint
 ranks. Writing that rule as "strictly increasing" reads fine and is wrong for
 every reversed edge.
+
+**A chain that exists has to be complete.** It holds exactly one node at every
+rank the layout actually has, strictly between its endpoint ranks. The occupied
+ranks are exactly the layers the order stage builds, so a chain that skips one
+routes across a row at an `x` that nothing in that row constrains, which is the
+one thing dummies are there to prevent. The rule is phrased over the occupied
+ranks rather than as steps of exactly one because that would assume contiguous
+integer ranks, which `insertionOrderStage` explicitly refuses to assume: over
+ranks 0, 10 and 20 it would demand nine dummies, eight of which have no layer to
+sit in. **The scope is a chain that exists.** Having one at all is optional, a
+ranker that splits nothing is legal, and a declared id that belongs to no chain
+is legal too. What is not legal is a chain with a hole in it.
+
+**Completeness is a property of the whole ranking, not of one chain.** Those two
+sentences compose, and the composition is worth stating outright because it is
+what a stage author trips over. The rule is phrased over the ranks the layout
+has rather than over an edge's own endpoints, so a stage that introduces a rank
+nothing previously occupied, say by declaring one unchained dummy at a rank of
+its own, has to extend every chain that spans that rank, including chains it did
+not mint. Real nodes at ranks 0, 10 and 20 with a complete chain at rank 10,
+plus one loose declared dummy at rank 5, and the chain is now incomplete. That is
+correct rather than incidental: if a layer exists at rank 5, a long edge really
+does cross it at an `x` nothing in it constrains. The error names the node
+occupying the missing rank as well as the rank, because the node that made the
+rank exist is routinely not on the chain being blamed for skipping it.
 
 This is the same argument `reversedEdges` carries, applied to nodes rather than
 edges. A declared id is a full citizen from that point on: it has a rank, it has
@@ -233,14 +258,14 @@ What no type reaches is the graph a stage was **handed**, which is live and
 mutable. That case is still a runtime rule, and it is the one described above
 under [The roster](#the-roster).
 
-`virtualNodes` and `virtualChains` are both empty today. They exist now because
-M2.4b, which splits a long edge into a chain of one dummy node per rank it
-spans, is the reason the roster is shaped this way: a contract phrased as "every
-node the graph holds" would have had to be weakened to let M2.4b land, and one
-phrased as "every node in the roster" does not. The default order stage already
-walks the roster, so M2.4b adds to the ranker and the router (splitting a long
-edge into a chain, rejoining the chain into a polyline on output) without
-touching the contract between them.
+`virtualNodes` and `virtualChains` are both filled as of M2.4b, which splits a
+long edge into a chain of one dummy node per rank it spans. See
+[Dummy chains](#dummy-chains). That milestone is the reason the roster is shaped
+this way: a contract phrased as "every node the graph holds" would have had to
+be weakened for the chains to land, and one phrased as "every node in the
+roster" did not. The default order stage already walked the roster, so M2.4b
+changed the ranker and the router (splitting a long edge into a chain, rejoining
+the chain into a polyline on output) and no contract between them.
 
 **The roster's virtual segment is ordered by id, not by declaration order.** The
 runner sorts the ids the rank stage declared before putting them in the roster,
@@ -333,6 +358,91 @@ What longest path does not give is minimum total edge length. `a -> d` alongside
 `a -> b -> c -> d` leaves `a -> d` spanning three ranks, and a node with slack is
 pinned as far down as it can go rather than as far up. That is a quality problem
 rather than a correctness one, and it is what M2.3's rank tightening is for.
+Since M2.4b it is also a cost in dummy nodes, because each of those extra ranks
+is one more node to place.
+
+### Dummy chains
+
+An edge whose endpoints are more than one rank apart is split into a **chain**
+of virtual nodes, one per rank strictly between them. `a -> d` alongside
+`a -> b -> c -> d` becomes `a -> ? -> ? -> d` through two dummies on ranks 1 and
+2, and the router rejoins the three segments into one polyline for `a -> d`.
+Nothing downstream of the ranker meets an edge that crosses a layer it has no
+node in, which is what lets M2.5's crossing counter and M2.7's positioner have
+an opinion about where a long edge passes through each row.
+
+**A dummy is `#dummy:<edgeId>:<index>`**, where `index` is its 0-based position
+along the chain counting from the source **you** authored. So index 0 is the
+dummy next to `edge.source` for a normal edge and for a reversed one alike, a
+reversed edge's source being the end at the high rank. The id is a pure function
+of the edge and that position, never a counter and never iteration order. That
+is a requirement of M3 rather than a tidiness: with a counter, adding an
+unrelated edge would rename every dummy on a chain, so M3.6's warm start would
+meet nodes it had never seen and M3.8 would have no previous coordinate to
+anchor, and a long edge would visibly jitter between two endpoints that did not
+move at all. On a real Sugiyama drawing dummies outnumber real nodes, so that is
+most of the geometry rather than a corner of it. Nothing parses the id back
+apart: which dummies belong to which edge, and in what order, is
+`RankedState.virtualChains`.
+
+**The index, rather than the rank, and what that does and does not buy.** An
+index is invariant under a uniform rank shift, which is the common edit: insert
+one node upstream and a whole cone moves down a row, which under a rank-suffixed
+id renames every dummy in it while every one of those edges kept the shape it
+had. Worse than a clean rename, it renames them onto each other. Nodes `a`,
+`p1`, `p2`, `z` with an edge `a -> z` give that edge dummies at ranks 1 and 2;
+add a node `up` and an edge `up -> a`, touching neither end of `a -> z` and
+leaving its span three ranks, and they are at ranks 2 and 3. One of the two ids
+survives, and it survives wrong: the id that named the second bend now names the
+first, so a warm start anchoring by id anchors that bend to the wrong previous
+coordinate rather than simply missing it.
+
+So the guarantee is narrower than "the id is stable", and it is stated narrowly
+on purpose. **The id is stable under any edit that does not move the edge's
+endpoints relative to each other**, and a uniform rank shift is such an edit.
+What an index loses on is endpoints that move relative to each other, which is a
+genuine change to the shape of the edge rather than an unrelated edit, and there
+it misanchors by one row instead of losing identity outright. Neither scheme is
+stable under everything and nothing here claims one is.
+
+**The `#dummy:` prefix is reserved, which is not the same as unforgeable.** If
+your graph holds a node whose id is one the splitter would mint, the splitter
+throws a `StageContractError` naming `longest-path-rank`, the colliding id, and
+the reservation, and telling you to rename your node. The runner's own
+declaration check would catch the same collision one step later and still does
+for a third-party ranker that mints ids some other way, so the collision is
+reported once rather than twice. There is no claim that a collision is
+impossible: what is claimed is that it is a named, actionable error rather than
+one of your nodes quietly wearing a dummy's size.
+
+**A dummy has no size**, `{ width: 0, height: 0 }`, matching dagre's plain
+long-edge dummy. It is a place a route passes through rather than a thing that
+is drawn, and the `nodeSep` on either side of it is what keeps the route clear
+of the boxes it runs between. `edgeSep` is deliberately not involved: that is
+the gap between two routes running alongside each other, which is M2.8's
+business, and not a node's width.
+
+**A chain runs source to target as you authored it**, so its ranks are strictly
+monotonic rather than strictly increasing: they descend for an edge the ranker
+reversed. It has to be complete, holding one node at every rank the layout has
+between its endpoints. Both rules, and the reasons for them, are in
+[The roster](#the-roster), and the runner checks both.
+
+A self loop gets no chain, having both ends on one rank, and neither does an
+edge between neighbouring ranks. A graph with no long edge in it therefore
+declares nothing at all, and is laid out exactly as it was before M2.4b: same
+coordinates, same routes, same `bounds`. The run is not quite free of the
+milestone, though. The runner now walks every route point when it computes
+`bounds` and again when it asserts them, which it did not do before, so a
+chainless run pays a linear pass over the polylines it already built. What it
+does not pay is anything per dummy, because there are none.
+
+Two things a caller sees. Long edges come back as polylines: two points for a
+short edge, and one more for every rank a long edge crosses, where before M2.4b
+every route was two points. And `bounds` can be larger, because it is the hull
+of the node boxes and the route points, and a zero-width dummy at the end of a
+row sits at that row's right extreme, `nodeSep` clear of the last box in it. See
+[The result](#the-result).
 
 ### What `reversedEdges` means if you are reading a result
 
@@ -474,7 +584,9 @@ After the **rank** stage:
   is not a second node, it is the caller's node wearing a stage's clothes: the
   declaration's size wins in the roster-wide map, so the caller's node quietly
   changes size and nothing downstream notices. Once M2.4b mints dummy ids from
-  edge ids, a graph whose node ids look like that pattern lands here;
+  edge ids, a graph whose node ids look like that pattern lands here, though the
+  default ranker gets there first with a message about its reserved `#dummy:`
+  namespace, so this one is what catches a third-party ranker;
 - every declared size is a finite pair of lengths that are zero or greater.
   This is the one size in a run that the config never saw: prepare measures and
   validates every node the graph holds, and a declared node's size is minted by
@@ -499,6 +611,14 @@ After the **rank** stage:
   strictly between the two endpoint ranks. See
   [The roster](#the-roster) for why the direction is the caller's and not the
   ranker's;
+- a chain holds one node at every rank the layout actually has, strictly
+  between its endpoint ranks, so it has no hole in it. The error names the first
+  rank that is missing, and the node occupying it, rather than saying the chain
+  is too short. This applies to a chain that EXISTS: declaring one is optional,
+  a ranker that splits no long edge is legal, and so is a declared id that
+  belongs to no chain. Being phrased over the ranks the layout has, it is a property of
+  the whole ranking rather than of one edge, which is what the paragraph on
+  completeness in [The roster](#the-roster) is about;
 - every edge is a ranking: `rank(source) <= rank(target)` for an edge that was
   not reversed, `rank(target) <= rank(source)` for one that was. Less-or-equal
   rather than strictly-less, because a self loop puts both endpoints on one
@@ -538,6 +658,19 @@ After the **route** stage:
   [Route direction](#route-direction) for why the form is proximity and not
   equality.
 
+**The chain contract binds the ranker, not the router.** Nothing on that list
+checks that a router actually used `virtualChains`, and that asymmetry is
+deliberate rather than an oversight. A third-party router that ignores the field
+and emits the old two-point line for a long edge passes every check above, and
+silently discards every dummy the ranker minted. The obvious rule, that an edge
+with a chain of `n` dummies has a route of at least `n + 2` points, was
+considered and rejected: straightening long-edge chains is a primary goal of
+Brandes-Koepf (M2.7), so a collinear chain is exactly what a good positioner
+produces, and a polyline router (M2.8) may then legitimately collapse it back to
+two points. That is the same argument [route direction](#route-direction) makes
+about proximity against equality. A rule that would have to be withdrawn a
+milestone later is worse than one never claimed.
+
 ### Route direction
 
 **A polyline runs from its edge's `source` to its `target`, as the caller
@@ -575,10 +708,11 @@ mislabel an edge, and as of M2.2 it cannot quietly draw a backwards one either.
 Node completeness and `bounds` are not on this list, and stopped being checks
 when the runner took over assembling the result. There is no route stage output
 that could get either wrong. `bounds` is still finite, still encloses every node
-box, and is still the zero rectangle when there are no nodes, and the runner
-asserts all three over its own output before returning; the containment
-comparison carries a tolerance scaled to the magnitude of the coordinates, for
-the floating point reason in [Overlap, exactly](#overlap-exactly). A failure
+box and every route point, and is still the zero rectangle when there are no
+nodes, and the runner asserts all three over its own output before returning;
+the containment comparison carries a tolerance scaled to the magnitude of the
+coordinates, for the floating point reason in
+[Overlap, exactly](#overlap-exactly). A failure
 there would be a bug in this package rather than in a stage, so it throws an
 `InternalLayoutError` and not a `StageContractError`, which names a stage.
 
@@ -609,10 +743,11 @@ for (const node of result.nodes.values()) {
 }
 
 for (const edge of result.edges.values()) {
-  console.log(edge.id, edge.points); // [{ x, y }, { x, y }]
+  // Two points for a short edge, one more for every rank a long edge crosses.
+  console.log(edge.id, edge.points);
 }
 
-result.bounds; // { x, y, width, height } around every node box
+result.bounds; // { x, y, width, height } around every box and every route point
 ```
 
 ## Config
@@ -715,10 +850,23 @@ needed internally, including anything it declared in `virtualNodes`, stops at
 the route stage, because the runner builds both maps by walking the caller's own
 graph rather than by trusting what a stage handed it.
 
-`bounds` is the smallest rectangle containing every node box. Edge routes are
-not counted, because today they run centre to centre and cannot leave it; once
-M2.8 routes around obstacles the bounds will grow to cover them. An empty graph
-gets a zero rectangle at the origin.
+`bounds` is the smallest rectangle containing every node box **and every route
+point**. An empty graph gets a zero rectangle at the origin.
+
+Until M2.4b the two formulations agreed, and the cheaper one was what this page
+promised: a route ran centre to centre, and a centre is inside its own box. A
+route that bends through a dummy need not agree, because a zero-width dummy at
+the end of a row sits at that row's right extreme, `nodeSep` clear of the last
+box in it, so the claim was made true rather than softened.
+
+"Need not" is doing real work there. Whether a bend actually leaves the hull
+depends on the rest of the drawing: at `nodeSep: 0`, which the config accepts,
+the dummy lands exactly on the last box's right edge, and a row that is wider
+somewhere else in the graph can contain the bend anyway. One reachable case is
+enough to make the old claim false, and the formulation now covers the case
+rather than the common case. It is also what M2.8's obstacle detours need, so
+nothing here changes again when they arrive. A layout with no chain in it has
+exactly the bounds it had before.
 
 ## Overlap, exactly
 
@@ -807,32 +955,33 @@ placeholders:
 
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
-| rank | `longest-path-rank` | Breaks cycles with a greedy feedback arc set, then ranks by longest path. Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). | Rank tightening (M2.3) and dummy chains for long edges (M2.4b). |
+| rank | `longest-path-rank` | Breaks cycles with a greedy feedback arc set, ranks by longest path, and splits every long edge into a dummy chain. Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). | Rank tightening (M2.3). |
 | order | `insertion-order` | Groups the roster by rank, orders each layer by graph insertion order. | Barycenter sweeps with a crossing counter (M2.5), then transpose refinement (M2.6). |
 | position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. | Brandes-Koepf horizontal coordinate assignment (M2.7). |
-| route | `straight-route` | A straight two-point line between the endpoint centres. | Polylines through dummy-node coordinates, monotone in the rank axis (M2.8). |
+| route | `straight-route` | Straight segments from the source centre through each of the edge's dummies to the target centre, which is two points for an edge with no chain. | Border attachment, obstacle detours and splines, monotone in the rank axis (M2.8). |
 
 So a default run of a real graph gives you the right number of rows with the
 right nodes in them, and then evenly spaces each row in insertion order and
-joins the lot with straight lines. The layers are worth reading; the horizontal
-order and the edges are not yet. What it is, is a run that always completes,
-never overlaps two boxes (see [Overlap, exactly](#overlap-exactly)), and
-satisfies every guarantee this page makes about the result, which is what the
-later milestones are built against.
+joins the lot with polylines that bend once per rank a long edge crosses. The
+layers and the number of bends are worth reading; where along a row a node or a
+bend sits is not yet. What it is, is a run that always completes, never overlaps
+two boxes (see [Overlap, exactly](#overlap-exactly)), and satisfies every
+guarantee this page makes about the result, which is what the later milestones
+are built against.
 
-`RankedState.virtualNodes` and `RankedState.virtualChains` are both still empty:
-they are the bookkeeping slots dummy-node chains fill in M2.4b, and they exist
-now because the alternative, mutating the caller's graph to add a node, is the
-one thing this pipeline promises not to do. `RankedState.reversedEdges` was the
-same kind of slot until M2.2 filled it, and it filled without a contract change,
-which is the argument for having declared all three early. `virtualNodes` did
-not manage that: M2.4a changed how a stage declares one, from a set of ids plus
-a copied-and-extended `sizes` map to a map of ids to sizes. That is the whole
-cost of the slot having been declared before anything filled it, it was paid
-before any real stage populated the field, and it is why the interface change
-landed on its own and ahead of the chains. `virtualChains` is declared on the
-same argument and with its checks already written, so M2.4b fills it rather than
-designing it.
+`RankedState.virtualNodes` and `RankedState.virtualChains` were the last two of
+those bookkeeping slots to be filled, and M2.4b filled them. They exist because
+the alternative, mutating the caller's graph to add a node, is the one thing
+this pipeline promises not to do. `RankedState.reversedEdges` was the same kind
+of slot until M2.2 filled it, and it filled without a contract change, which is
+the argument for having declared all three early. `virtualNodes` did not manage
+that: M2.4a changed how a stage declares one, from a set of ids plus a
+copied-and-extended `sizes` map to a map of ids to sizes. That is the whole cost
+of the slot having been declared before anything filled it, it was paid before
+any real stage populated the field, and it is why the interface change landed on
+its own and ahead of the chains. `virtualChains` was declared on the same
+argument and with its checks already written, so M2.4b filled it and added one
+rule (completeness) rather than designing it.
 
 Also still to come: a golden corpus compared against dagre with layout
 benchmarks (M2.9), and running the same API in a worker (M2.10). Incremental

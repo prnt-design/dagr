@@ -21,11 +21,11 @@ of doc prose.
 - `RankOutput.virtualChains`, optional, and `RankedState.virtualChains`, which
   the runner derives from it. A `ReadonlyMap<EdgeId, readonly NodeId[]>`: the
   chain of declared ids a rank stage split a long edge into, keyed by the
-  caller's own edge id. Nothing produces one yet; M2.4b's chains do, and this is
-  a slot declared ahead of the milestone that fills it, exactly as
-  `reversedEdges` and `virtualNodes` each were. It exists because M2.4b's router
-  has to rejoin a chain into one polyline keyed by the edge it serves, and
-  without the chain recorded the only recourse is parsing a dummy id back apart,
+  caller's own edge id. It was declared here and filled one milestone later, by
+  M2.4b's chains (see Changed), exactly as `reversedEdges` and `virtualNodes`
+  each were. It exists because M2.4b's router has to rejoin a chain into one
+  polyline keyed by the edge it serves, and without the chain recorded the only
+  recourse is parsing a dummy id back apart,
   which is ambiguous (an `EdgeId` is a caller-supplied string), couples the
   ranker and the router through a string format, and promotes the id format to
   load-bearing public contract when the M3 requirement only pins the id's value.
@@ -61,6 +61,102 @@ of doc prose.
   (M2.2 review)
 
 ### Changed
+
+- **Every long edge is now split into a dummy chain, so long edges route
+  differently and a layout can be wider.** The default rank stage splits an edge
+  whose endpoints are more than one rank apart into a chain of virtual nodes,
+  one per rank strictly between them, and the default route stage rejoins the
+  chain into one polyline. No type and no exported name changed. What a caller
+  upgrading past this sees is that an edge spanning `n` ranks comes back with
+  `n + 1` points instead of two, that a graph with a long edge in it has more
+  nodes to place so the rows those dummies join are wider, and that `bounds` may
+  be larger (see the entry below). A graph whose every edge is a one-rank hop is
+  laid out exactly as before, because nothing is declared and nothing is split.
+  (M2.4b)
+
+  **The one upgrade effect that stops a working program**, and the reason this
+  entry is not just cosmetic. A caller who overrode `order` or `position` and
+  wrote that stage against `input.graph.nodes()` rather than against the roster
+  worked fine before M2.4b, because `defaultStages.rank` never declared a
+  virtual node, so the rule and the practice never disagreed where anyone could
+  see. From M2.4b, any graph with a long edge in it makes `checkOrdered`
+  ("missing from the layers") or `checkPositioned` ("no position was assigned")
+  throw a `StageContractError` naming THEIR stage, for a node they have never
+  heard of. No type changed, so nothing says a word at compile time, which is
+  exactly the category this file exists for. **The roster rule itself has not
+  changed**: every stage from the rank boundary on has always been checked over
+  the roster (the graph's nodes plus whatever the ranker declared), and what
+  changed is that a default run now declares something.
+
+  A dummy is `#dummy:<edgeId>:<index>`, where the index is the dummy's 0-based
+  position along its chain counting from the source the CALLER authored, so
+  index 0 sits next to `edge.source` for a reversed edge (whose source is at the
+  high rank) as much as for a normal one. A pure function of the edge and that
+  position, never a counter and never iteration order. That is a requirement of
+  M3 rather than a detail: with a counter, adding an unrelated edge renames
+  every dummy on a chain, so M3.6's warm start meets nodes it has never seen and
+  a long edge jitters between two endpoints that did not move.
+
+  The index rather than the rank, which the ROADMAP suggested "or equivalent",
+  because an index is invariant under a uniform rank shift and a rank is not.
+  Insert one node upstream and a whole cone moves down a row, renaming every
+  dummy in it under the rank scheme while every one of those edges kept its
+  shape, and renaming them onto each other: an edge whose dummies were at ranks
+  1 and 2 has them at ranks 2 and 3, so the id that named the second bend now
+  names the first and a warm start anchors that bend to the wrong previous
+  coordinate. The guarantee this buys is narrower than "stable" and is claimed
+  narrowly: the id is stable under any edit that does not move the edge's
+  endpoints RELATIVE to each other. Endpoints that move relative to each other
+  are a real change to the edge's shape, and there the index misanchors by one
+  row rather than losing identity outright. (M2.4b review)
+
+  The `#dummy:` prefix is RESERVED, and reserved is not unforgeable: a graph
+  that already holds a node with a minted id gets a `StageContractError` naming
+  `longest-path-rank`, the colliding id, and the reservation, telling the caller
+  to rename their node. The splitter raises it, and the runner's own declaration
+  check still covers a third-party ranker that mints ids some other way, so it
+  is reported once and the message is about the namespace rather than about a
+  built-in stage leaving work undone. A dummy has no size,
+  `{ width: 0, height: 0 }`, as dagre's plain long-edge dummy has. A chain is
+  listed source to target as the CALLER authored them, so its ranks descend for
+  an edge the ranker reversed, and the router needs no reversal bookkeeping to
+  walk it.
+
+- **A rank stage that declares an incomplete chain now throws.** New rule at the
+  rank boundary: a chain holds exactly one node at every rank the layout
+  actually has, strictly between its endpoint ranks. This is the rule M2.4a
+  declared the field without, and named as M2.4b's call: a single dummy at rank
+  1 on an edge from rank 0 to rank 3 satisfied all five older rules and routed
+  across rank 2 with no bend. The error names the first rank that is missing
+  rather than reporting a length. It is phrased over the occupied ranks rather
+  than as steps of exactly one, because that would assume contiguous integer
+  ranks and `insertionOrderStage` explicitly refuses to. **The scope is a chain
+  that EXISTS**: declaring one stays optional, a third-party ranker that splits
+  nothing is still legal, and a declared id that belongs to no chain is still
+  legal. What is no longer legal is a chain with a hole in it. (M2.4b)
+
+  Being phrased over the ranks the layout has, it is a property of the whole
+  RANKING rather than of one edge, and the two paragraphs above compose into a
+  third: a stage that introduces a rank nothing previously occupied, say by
+  declaring one unchained dummy at a rank of its own, has to extend every chain
+  spanning that rank, including chains it did not mint. That is correct (a layer
+  that exists is a layer a long edge crosses unconstrained) and the error names
+  the node occupying the missing rank as well as the rank, because that node is
+  routinely not on the chain being blamed. (M2.4b review)
+
+- **`bounds` is the hull of the node boxes AND the route points.** It was the
+  hull of the node boxes, and the two agreed while every route ran centre to
+  centre, because a centre is inside its own box. A route that bends through a
+  dummy need not agree: the order stage puts a virtual node after the graph's
+  own within a layer and the position stage lays a row out left to right, so a
+  zero-width dummy at the end of a row sits at that row's right extreme,
+  `nodeSep` clear of the last box in it. Whether that bend actually leaves the
+  hull depends on the rest of the drawing (at `nodeSep: 0` it lands exactly on
+  that box's edge, and a wider row elsewhere can swallow it), but one reachable
+  case is enough to make the old claim false. The claim was made true rather
+  than softened, in the formulation M2.8's obstacle detours need anyway. A
+  layout with no chain in it has exactly the bounds it had before, since a
+  straight route's endpoints are node centres. (M2.4b)
 
 - **Breaking for every custom stage:** `RankStage`, `OrderStage`,
   `PositionStage` and `RouteStage` now return that stage's own contribution

@@ -145,8 +145,8 @@ export interface RankedState extends PreparedState {
 
   /**
    * Ids the rank stage needs to lay out but the caller never added to the
-   * graph. Empty until dummy-node chains land in M2.4b, where a long edge is
-   * split into a chain of one virtual node per rank it spans.
+   * graph. Filled since M2.4b, where the default ranker splits a long edge into
+   * a chain of one virtual node per rank it spans.
    *
    * This carries exactly the argument `reversedEdges` carries: the source graph
    * is never mutated, so a stage that needs a node the user never added
@@ -167,10 +167,10 @@ export interface RankedState extends PreparedState {
 
   /**
    * The dummy chain the rank stage split each long edge into, keyed by the
-   * caller's own edge id. Empty until M2.4b fills it, exactly as
-   * `reversedEdges` was empty until M2.2 and `virtualNodes` is empty today: a
-   * slot declared before anything fills it, so the milestone that fills it is a
-   * stage change rather than a contract change.
+   * caller's own edge id. Filled since M2.4b, and declared in M2.4a: a slot
+   * declared before anything fills it, exactly as `reversedEdges` was until
+   * M2.2, so the milestone that fills it was a stage change rather than a
+   * contract change.
    *
    * **A chain is listed source to target as the CALLER authored them**, which
    * is the same direction {@link RoutedEdge.points} runs and for the same
@@ -315,10 +315,15 @@ export interface LayoutResult {
   readonly edges: ReadonlyMap<EdgeId, RoutedEdge>;
 
   /**
-   * The smallest rectangle containing every node box. Edge routes are not
-   * counted: today they run centre to centre and cannot leave it, and once
-   * M2.8 routes around obstacles the bounds will grow to cover them too.
-   * An empty graph gets a zero rectangle at the origin.
+   * The smallest rectangle containing every node box AND every route point. An
+   * empty graph gets a zero rectangle at the origin.
+   *
+   * The routes count as of M2.4b, and until then the two formulations agreed:
+   * a route ran centre to centre, and a centre is inside its own box. A route
+   * that bends through a dummy does not agree, because a zero-width dummy at
+   * the end of a row sits at that row's right extreme, outside every box in it.
+   * This is the formulation M2.8's obstacle detours need as well, so it is the
+   * durable one rather than a patch.
    */
   readonly bounds: Rect;
 }
@@ -367,8 +372,10 @@ export interface RankOutput {
    * have been asked. Omitting it and declaring nothing are the same thing: the
    * runner puts an empty set in {@link RankedState.virtualNodes} either way.
    *
-   * Dagre gives a dummy a small width so that `nodeSep` spacing still works
-   * around it.
+   * A size is whatever the stage wants. The default ranker gives a plain
+   * long-edge dummy no size at all, matching dagre's, because a dummy is a place
+   * a route passes through rather than a thing that is drawn, and the `nodeSep`
+   * on either side of it is what keeps the route clear of its neighbours.
    */
   readonly virtualNodes?: ReadonlyMap<NodeId, Size>;
 
@@ -381,8 +388,7 @@ export interface RankOutput {
    * Every id in a chain has to be a key of {@link virtualNodes}, every key has
    * to be an edge the graph holds, no id may appear in two chains or twice in
    * one, and a chain is never empty: an edge with no dummies simply has no
-   * entry. Optional for the same reason `virtualNodes` is, and empty until
-   * M2.4b, which is the milestone that splits the edges.
+   * entry. Optional for the same reason `virtualNodes` is.
    *
    * The converse is deliberately NOT required: a declared id that belongs to no
    * chain is legal, and stays legal after M2.4b. A long edge split is only the
@@ -391,13 +397,29 @@ export interface RankOutput {
    * decision rather than an omission. What a chain adds is that these
    * particular dummies belong to one edge and run in one order.
    *
-   * One thing five green checks do NOT establish: that a chain is COMPLETE.
-   * A single dummy at rank 1 on an edge from rank 0 to rank 3 passes every rule
-   * above, and its route then crosses rank 2 with no bend. Tightening that
-   * needs a definition of what an edge "spans", and the obvious one (steps of
-   * exactly one) assumes contiguous integer ranks, which `insertionOrderStage`
-   * explicitly refuses to assume. It is M2.4b's call once a real splitter gives
-   * "spans" a meaning.
+   * A chain that exists also has to be COMPLETE, which M2.4b decided and which
+   * the five rules above do not establish on their own: a single dummy at rank
+   * 1 on an edge from rank 0 to rank 3 satisfies every one of them and routes
+   * across rank 2 with no bend. The rule is that a chain holds exactly one node
+   * at every rank THE LAYOUT ACTUALLY HAS strictly between its endpoint ranks,
+   * the occupied ranks being exactly the layers the order stage builds. It is
+   * phrased that way rather than as steps of exactly one because that assumes
+   * contiguous integer ranks, which `insertionOrderStage` explicitly refuses to
+   * assume.
+   *
+   * Its scope is a chain that EXISTS. Having one at all stays optional: a
+   * ranker that splits nothing is legal, and so is a declared id in no chain.
+   * What is not legal is a chain with a hole in it.
+   *
+   * Because the rule is phrased over the ranks the layout HAS rather than over
+   * an edge's own endpoints, completeness is a property of the whole ranking and
+   * not of one chain. Those two paragraphs compose: a stage that introduces a
+   * rank nothing previously occupied, by declaring a dummy in no chain at a rank
+   * of its own, has to extend every chain that spans that rank, including chains
+   * it did not mint. That is the intended reading rather than an accident, since
+   * a layer that exists really is a layer a long edge crosses at a coordinate
+   * nothing in it constrains, and the runner's error names the node occupying
+   * the missing rank so the cause is findable from the message.
    */
   readonly virtualChains?: ReadonlyMap<EdgeId, readonly NodeId[]>;
 
