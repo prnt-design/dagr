@@ -281,7 +281,7 @@ findings addressed or logged, docs land with the feature.
   rank of height for a unit of length, and a default that quietly made some
   drawings taller is not a default. What it buys is large and measured: the 1k
   bench corpus goes from 40,430 dummy nodes to 17,285, a 57% cut, in about
-  20ms, and the 10k corpus from 1,414,263 to 405,709 inside the default pivot
+  20ms, and the 10k corpus from 1,414,263 to 423,426 inside the default pivot
   budget. Which of the two a run wants is the caller's call and now has a name.
   Cut values come from one postorder accumulation of `indegree - outdegree`
   rather than the textbook's leaf elimination, and a pivot costs the subtree it
@@ -314,8 +314,8 @@ findings addressed or logged, docs land with the feature.
   one. So every ranker in this repo is handed a view two and a half times
   deeper than the graph it came from, before any ranking happens. Every extra
   rank is one more rank for an edge to span and every rank an edge spans is a
-  dummy node M2.4b has to mint, which is why the simplex still returns 405,709
-  of them at the default budget, after a cut of 71% on that corpus. A RANKER
+  dummy node M2.4b has to mint, which is why the simplex still returns 423,426
+  of them at the default budget, after a cut of 70% on that corpus. A RANKER
   CANNOT REPAIR THIS: it optimises over the view it is handed, and the view is
   the cycle breaker's output. What sets M2.4b's dummy count is the feedback arc
   set rather than the choice between longest path and network simplex, and the
@@ -428,7 +428,7 @@ findings addressed or logged, docs land with the feature.
   the 10k corpus the greedy feedback arc set reverses 6,327 of 40,000 edges
   where roughly 800 would leave a DAG, and the view it hands the ranker is 154
   ranks deep against a corpus generated with 60 layers. M2.3's 57% cut is real
-  and does not touch any of that, so the 405,709 dummies still left on that
+  and does not touch any of that, so the 423,426 dummies still left on that
   corpus are a cycle-breaking problem arriving at this milestone's door. If the
   count is what hurts once this lands, the lever is a better feedback arc set.
 - [ ] **M2.5** Ordering v1: barycenter sweeps with median fallback, crossing

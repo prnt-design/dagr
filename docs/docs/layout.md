@@ -354,7 +354,7 @@ North and Vo (1993), section 2.
 That sum, minus the edge count, is exactly how many dummy nodes M2.4b's splitter
 will mint, which is why it is the quantity worth optimising. On the 1k benchmark
 corpus it takes the default ranker's 40,430 dummies down to 17,285, a 57% cut,
-in about 20ms. On the 10k corpus it reaches 405,709 from 1,414,263 inside its
+in about 20ms. On the 10k corpus it reaches 423,426 from 1,414,263 inside its
 default budget.
 
 **None of that saving is collectable in this release.** M2.4b is unbuilt: no
@@ -405,10 +405,10 @@ const tight = layout({ graph }, { rank: networkSimplexRankStage });
 `networkSimplexRank(options)` builds one with options, and there are two.
 
 **`maxIterations`** bounds the pivots and defaults to 20,000. It is a safety
-valve rather than a quality knob: it is about seventeen times what the 1k corpus
-needs to converge, which is around 1,200 pivots (1,000 is still a couple of
-percent off, 1,200 reaches the optimum, and 20,000 returns exactly what 1,200
-did), and it is what bounds the 10k corpus, which does not converge inside any
+valve rather than a quality knob: it is about fifteen times what the 1k corpus
+needs to converge, which is 1,300 pivots (1,000 is still 4% off, 1,300 reaches
+the optimum, and 20,000 returns exactly what 1,300 did), and it is what bounds
+the 10k corpus, which does not converge inside any
 budget worth spending, to about three seconds. Give it more if a run is worth
 it; the 10k corpus is still improving at 200,000 pivots, and takes 41 seconds to
 get there. Whatever stops it, the ranking that comes back is feasible, and never
@@ -538,8 +538,11 @@ Determinism here is load bearing rather than tidy, for the reason in
 re-run would move nodes the user never touched.
 
 `network-simplex-rank` is deterministic in the same way and for the same reason,
-and its cost is the one thing about it that is not O(V + E): it is a pivot
-count, which is why it has a budget. Components are visited in node insertion
+and its cost is the one thing about it that is not O(V + E). That cost has two
+halves and `maxIterations` bounds only one of them: the pivots are a count and
+the budget stops them, while building the first spanning tree is O(E log E) and
+runs in full whatever the budget says, so `maxIterations: 0` is not free.
+Components are visited in node insertion
 order and rooted at their first node, the search for a tree edge to remove walks
 a component's nodes in insertion order, and among entering edges of equal slack
 the one added to the graph first wins. What is **not** claimed for either stage
@@ -968,7 +971,7 @@ the whole thing and every member carries a `code`.
 | Class | `code` | Thrown when |
 | --- | --- | --- |
 | `DagrLayoutError` | abstract | Base class, abstract, never thrown directly. |
-| `InvalidConfigError` | `INVALID_CONFIG` | A separation or a size is not a finite number that is zero or greater. Carries `field` (a path such as `nodeSize("n1").width`) and the offending `value`. |
+| `InvalidConfigError` | `INVALID_CONFIG` | A number a caller supplied is not one the pipeline can use. Two kinds reach it. A separation or a size that is not finite and zero or greater, which reads `Invalid layout config:` and carries `field` as a path such as `nodeSize("n1").width`. And an option a stage factory validates, which reads `Invalid layout option:` and names the option, `maxIterations` being the only one today. Both carry the offending `value`. |
 | `StageContractError` | `STAGE_CONTRACT` | A stage broke one of the rules in [The stage contract](#the-stage-contract). Carries the offending stage's `name`, the `id` it dropped, and a `detail`. One check is about the layers rather than one id, and uses a plain label instead: `layer 3`. The `graph` label is gone as of M2.4a, along with the check that raised it. |
 | `InternalLayoutError` | `INTERNAL` | The pipeline caught itself breaking one of its own invariants. Carries a `detail`. Always a bug in `@dagr/layout`, never in your graph, your config, or a stage you supplied, which is why it is not a `StageContractError`: that class names a stage, and naming one here would blame whoever was plugged in. Nothing to fix on your side. Please report it. |
 

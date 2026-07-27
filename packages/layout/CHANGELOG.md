@@ -24,7 +24,7 @@ of doc prose.
   how many ranks each crosses, which minus the edge count is exactly how many
   dummy nodes M2.4b will mint. On the 1k benchmark corpus that is 40,430
   dummies down to 17,285, a 57% cut, in about 20ms; on the 10k corpus
-  1,414,263 down to 405,709 inside the default budget.
+  1,414,263 down to 423,426 inside the default budget.
 
   **None of that saving is collectable in this release.** M2.4b is unbuilt, no
   stage mints a dummy node today, and `virtualNodes` comes back empty from both
