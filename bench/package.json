@@ -1,0 +1,17 @@
+{
+  "name": "@dagr/bench",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Benchmark harness for Dagr: shared corpora, the control workload, and the CI baseline gate. Never published.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prnt-design/dagr",
+    "directory": "bench"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}

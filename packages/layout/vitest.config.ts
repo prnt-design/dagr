@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@dagr/graph': fileURLToPath(new URL('../graph/src/index.ts', import.meta.url)),
+      '@dagr/bench': fileURLToPath(new URL('../../bench/src/index.ts', import.meta.url)),
     },
   },
 });

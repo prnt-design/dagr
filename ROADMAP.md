@@ -16,16 +16,52 @@ findings addressed or logged, docs land with the feature.
   vitest, eslint, root scripts (`typecheck`, `test`, `bench`, `build`,
   `lint`), CI running typecheck + test on every PR and push to `main`.
   This document. First green merge.
-- [ ] **M0.2** Benchmark harness: vitest bench setup, a `bench` baseline
+- [x] **M0.2** Benchmark harness: vitest bench setup, a `bench` baseline
   capture script, baseline JSON committed, CI bench step comparing against
   baseline with a 10% tolerance. README development guide section.
   Deliberately deferred until early M1 lands real code worth benchmarking.
-  That trigger has now fired: M1.3 landed patch emission on every mutation,
-  which is the first hot path in the repo that a baseline is meant to protect,
-  and `pnpm bench` is still `pnpm -r --if-present bench` with no package
-  defining one, so it is a silent no-op that would pass forever if CI ran it
-  as it stands. This is the next task off the board, before M1.4 adds more
-  graph surface to measure.
+  That trigger fired with M1.3, which landed patch emission on every mutation,
+  the first hot path in the repo a baseline is meant to protect.
+  Decided here, because "within 10% of baseline" does not survive being read
+  literally against wall-clock milliseconds measured on a shared runner, and a
+  gate that cries wolf gets muted, which is worse than no gate because it also
+  looks like coverage. Three parts, all in `bench/README.md`. Each benchmark is
+  recorded as a RATIO against a fixed control workload run beside it in the same
+  worker, so a runner twice as slow runs the control twice as slow too and the
+  ratio holds; two workers agreed on the control to within 1%. It compares
+  MEDIANS, not means, because one garbage collection drags a mean a long way: a
+  0.016ms operation here recorded a 12ms maximum, 4.9% of margin of error on the
+  mean, while the median barely moved. And the tolerance WIDENS BY THE MEASURED
+  NOISE of both runs, `10% + baseline rme + current rme` capped at 25%, so a
+  noisy runner gates wider on evidence rather than failing at random. That would
+  make a noisy enough benchmark unfailable, so past 15% of margin of error a
+  measurement is reported as inconclusive rather than passed, and a run where
+  most benchmarks come back unreadable is a hard failure.
+  Verified against the case that motivated the task rather than asserted: with
+  the `diffAttrs` allocation guard reverted, all 329 tests still pass and the
+  gate fails at +87.8% against a +25.0% allowance on the one benchmark that
+  should move, with no false positives elsewhere.
+  The exemption path M4.10 needs is explicit, not accidental. A baseline entry
+  carrying `"gate": "off"` must also carry a `reason`, or the gate hard-errors;
+  an exempt entry need not appear in a run at all, so a hand-measured number can
+  live in the baseline; and `pnpm bench:baseline` carries exempt entries across
+  rather than deleting them on the next capture.
+  Most of the harness is guards against the gate becoming a silent no-op again,
+  which is the disease it was written to cure. It fails on a run that collected
+  nothing, a baseline with nothing to gate against, a benchmark that vanished
+  from the run, a bench file with no control, a duplicate key, and stale reports.
+  Corpora are seeded and shared: `smallCorpus()` at 1k nodes and 4k edges,
+  `largeCorpus()` at 10k and 40k, emitting plain descriptions rather than a
+  `Graph` so `@dagr/graph` can benchmark itself without the kit and the package
+  it measures depending on each other, and so M4.10 can take the same corpus as
+  coordinates. M2.9, M3.9 and M4.10 all measure against the 10k one, so they
+  compare to each other only if the shape stays put.
+  First numbers, on an Apple M4: the rank stage is 13.7ms on 10k nodes and 40k
+  edges against a 33ms figure a reviewer measured on a different machine and a
+  more cyclic graph, the full pipeline is 33ms on the same corpus, `successors`
+  costs 6.1x `outEdges` over the same nodes (the array materialisation the M1.2
+  review flagged and M2.5 deferred), and a watched attribute update costs 2.0x
+  an unwatched one against the 1.8x M1.3 measured.
 
 ## M1: Graph model (`@dagr/graph`)
 

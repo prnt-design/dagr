@@ -23,6 +23,7 @@
     "@dagr/graph": "workspace:^"
   },
   "devDependencies": {
+    "@dagr/bench": "workspace:*",
     "@dagr/graph": "workspace:^"
   },
   "repository": {
@@ -33,6 +34,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "bench": "vitest bench --run --outputJson bench-report.json",
     "build": "tsc -p tsconfig.build.json"
   }
 }

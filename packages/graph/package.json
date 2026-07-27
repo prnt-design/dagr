@@ -26,9 +26,11 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "bench": "vitest bench --run --outputJson bench-report.json",
     "build": "tsc -p tsconfig.build.json"
   },
   "devDependencies": {
+    "@dagr/bench": "workspace:*",
     "fast-check": "^4.9.0"
   }
 }

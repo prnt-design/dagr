@@ -14,6 +14,10 @@ coverage/
 .docusaurus/
 docs/build/
 
+# Raw per-package benchmark output. The committed artefact is
+# bench/baseline.json, written by `pnpm bench:baseline`.
+bench-report.json
+
 # Vite / vitest caches
 .vite/
 **/node_modules/.vite/
