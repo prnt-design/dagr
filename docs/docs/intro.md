@@ -5,6 +5,8 @@ sidebar_position: 1
 slug: /
 ---
 
+<img src="/img/logo.svg" className="hero-mark" width="64" height="64" alt="" />
+
 # Dagr
 
 Dagr is a directed-graph toolkit for the web: a typed, headless Sugiyama layout

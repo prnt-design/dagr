@@ -1,23 +1,600 @@
-/* Minimal theme overrides. Kept small on purpose: the visual identity lands
-   with the renderer work, not with the scaffold. */
+/* Dagr docs theme.
+ *
+ * The palette is the same one the rest of prnt.design is dressed in. The
+ * token values below are copied by hand rather than imported: the docs site
+ * stays self contained and carries no dependency on the design system
+ * package. If the brand tokens move over there, these are the values to
+ * resync.
+ *
+ * The one idea worth knowing before reading further: the neutrals are not
+ * grey. Every border, divider, and muted surface is the primary green at low
+ * alpha, so the whole page carries a faint green cast instead of the usual
+ * slate. That is the signature of the palette, and it is why the contrast
+ * scale below is written as alphas of one colour rather than as a set of
+ * independent greys.
+ */
+
+/* ==========================================================================
+   Brand tokens
+   ========================================================================== */
 
 :root {
-  --ifm-color-primary: #2a5bd7;
-  --ifm-color-primary-dark: #2652c2;
-  --ifm-color-primary-darker: #244db7;
-  --ifm-color-primary-darkest: #1e4097;
-  --ifm-color-primary-light: #3e6ade;
-  --ifm-color-primary-lighter: #4a73e0;
-  --ifm-color-primary-lightest: #6c8ce7;
-  --ifm-code-font-size: 95%;
+  /* Brand. #21785d, tuned in oklch for a perceptual match. */
+  --dagr-primary: oklch(0.49 0.08 161);
+  /* A darker cut of the same hue, for primary coloured text on white. */
+  --dagr-primary-text: oklch(0.42 0.08 161);
+  --dagr-primary-10pct: oklch(0.49 0.08 161 / 0.1);
+  --dagr-primary-50pct: oklch(0.49 0.08 161 / 0.5);
+
+  /* The contrast scale: neutrals tinted with the primary. */
+  --dagr-contrast-5pct: oklch(0.49 0.08 161 / 0.05);
+  --dagr-contrast-10pct: oklch(0.49 0.08 161 / 0.1);
+  --dagr-contrast-20pct: oklch(0.49 0.08 161 / 0.2);
+  --dagr-contrast-30pct: oklch(0.49 0.08 161 / 0.3);
+  --dagr-contrast-50pct: oklch(0.49 0.08 161 / 0.5);
+  --dagr-contrast-60pct: oklch(0.49 0.08 161 / 0.6);
+  --dagr-contrast-70pct: oklch(0.49 0.08 161 / 0.7);
+  --dagr-contrast-90pct: oklch(0.49 0.08 161 / 0.9);
+
+  --dagr-background: oklch(1 0 0);
+  --dagr-foreground: oklch(0.13 0 0);
+  --dagr-surface: oklch(0.49 0.08 161 / 0.035);
+
+  /* Secondary text needs its own value. The contrast scale above is an alpha
+     ramp, which is right for borders and surfaces but wrong for type: 70% of
+     the primary over white lands near 3:1, so nav labels and table headers
+     set from it would fail WCAG AA. This keeps the green cast and buys the
+     contrast back with lightness instead of alpha. */
+  --dagr-text-muted: oklch(0.42 0.03 161);
+
+  /* The slab behind a `:::note`, which is the admonition people actually
+     write. It renders off the *secondary* contrast pair, not the primary
+     one, and Infima's secondary is a flat grey: the one surface in the site
+     that would contradict the header's claim that the neutrals are tinted.
+     The semantic pairs are deliberately left stock. An amber warning should
+     stay amber, a red danger red, and info blue is worth keeping distinct
+     from tip green rather than collapsing everything into the brand. */
+  --dagr-callout: oklch(0.97 0.008 161);
+  --dagr-callout-text: oklch(0.3 0.03 161);
+
+  --dagr-radius-s: 0.25rem;
+  --dagr-radius-m: 0.5rem;
+  --dagr-radius-l: 0.75rem;
+
+  --dagr-duration-fast: 100ms;
+  --dagr-duration-base: 200ms;
+  --dagr-ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
 }
 
 [data-theme='dark'] {
-  --ifm-color-primary: #8aa8f5;
-  --ifm-color-primary-dark: #6c92f2;
-  --ifm-color-primary-darker: #5d86f1;
-  --ifm-color-primary-darkest: #3064ec;
-  --ifm-color-primary-light: #a8bef8;
-  --ifm-color-primary-lighter: #b7c9f9;
-  --ifm-color-primary-lightest: #e3eafd;
+  --dagr-primary: oklch(0.68 0.1 161);
+  --dagr-primary-text: oklch(0.75 0.1 161);
+  --dagr-primary-10pct: oklch(0.68 0.1 161 / 0.1);
+  --dagr-primary-50pct: oklch(0.68 0.1 161 / 0.5);
+
+  /* On dark the scale flips to white alphas: green at low alpha over a green
+     tinted ground would be invisible. */
+  --dagr-contrast-5pct: oklch(1 0 0 / 0.05);
+  --dagr-contrast-10pct: oklch(1 0 0 / 0.1);
+  --dagr-contrast-20pct: oklch(1 0 0 / 0.2);
+  --dagr-contrast-30pct: oklch(1 0 0 / 0.3);
+  --dagr-contrast-50pct: oklch(1 0 0 / 0.5);
+  --dagr-contrast-60pct: oklch(1 0 0 / 0.6);
+  --dagr-contrast-70pct: oklch(1 0 0 / 0.7);
+  --dagr-contrast-90pct: oklch(1 0 0 / 0.9);
+
+  /* Not black: the dark neutrals keep a trace of the brand hue. */
+  --dagr-background: oklch(0.14 0.01 161);
+  --dagr-foreground: oklch(0.96 0 0);
+  --dagr-surface: oklch(0.18 0.01 161);
+  --dagr-text-muted: oklch(0.72 0.02 161);
+  --dagr-callout: oklch(0.22 0.012 161);
+  --dagr-callout-text: oklch(0.9 0.02 161);
+}
+
+/* ==========================================================================
+   Infima mapping
+   ==========================================================================
+   The dark selector is repeated here, and qualified with `html`, for a
+   reason worth keeping. Infima's own dark block is `html[data-theme='dark']`,
+   which is (0,1,1), and it reassigns more than thirty Infima variables
+   including the page background, the content colour, and the TOC border. A
+   plain `:root` mapping is (0,1,0) and loses to it on specificity, so half
+   of dark mode would quietly stay stock while still looking dark enough to
+   pass a glance. Matching that selector exactly ties the specificity, and
+   this file wins on source order because Docusaurus injects
+   `theme.customCss` after Infima, which is the documented way to override
+   it rather than an accident of bundling.
+
+   Every value below is a `var()` on a brand token, and those tokens already
+   swap per theme, so the two selectors can share one block. */
+
+:root,
+html[data-theme='dark'] {
+  --ifm-color-primary: var(--dagr-primary);
+  --ifm-color-primary-dark: oklch(0.45 0.08 161);
+  --ifm-color-primary-darker: oklch(0.42 0.08 161);
+  --ifm-color-primary-darkest: oklch(0.35 0.08 161);
+  --ifm-color-primary-light: oklch(0.55 0.08 161);
+  --ifm-color-primary-lighter: oklch(0.6 0.075 161);
+  --ifm-color-primary-lightest: oklch(0.72 0.06 161);
+
+  --ifm-background-color: var(--dagr-background);
+  --ifm-background-surface-color: var(--dagr-background);
+  --ifm-color-content: var(--dagr-foreground);
+  --ifm-color-content-secondary: var(--dagr-text-muted);
+  --ifm-heading-color: var(--dagr-foreground);
+
+  --ifm-font-family-base:
+    -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, ui-sans-serif, sans-serif;
+  --ifm-font-family-monospace:
+    'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+
+  --ifm-font-size-base: 16px;
+  --ifm-line-height-base: 1.7;
+  --ifm-paragraph-margin-bottom: 1.25rem;
+
+  --ifm-heading-font-weight: 600;
+  --ifm-heading-line-height: 1.25;
+  --ifm-h1-font-size: 2.25rem;
+  --ifm-h2-font-size: 1.75rem;
+  --ifm-h3-font-size: 1.375rem;
+  --ifm-h4-font-size: 1.125rem;
+
+  /* Links carry the darker cut so they stay legible as running text. */
+  --ifm-link-color: var(--dagr-primary-text);
+  --ifm-link-hover-color: var(--dagr-primary);
+  --ifm-link-decoration: none;
+
+  --ifm-code-font-size: 0.875em;
+  --ifm-code-background: var(--dagr-contrast-5pct);
+  --ifm-code-border-radius: var(--dagr-radius-s);
+  --ifm-code-padding-vertical: 0.15rem;
+  --ifm-code-padding-horizontal: 0.35rem;
+  --ifm-pre-padding: 1rem 1.15rem;
+
+  --ifm-global-radius: var(--dagr-radius-m);
+  --ifm-hr-background-color: var(--dagr-contrast-10pct);
+  --ifm-hr-height: 1px;
+  --ifm-toc-border-color: var(--dagr-contrast-10pct);
+  --ifm-table-border-color: var(--dagr-contrast-10pct);
+  --ifm-table-stripe-background: transparent;
+  --ifm-table-head-background: transparent;
+  --ifm-table-head-font-weight: 500;
+  --ifm-table-cell-padding: 0.7rem 1rem;
+  --ifm-blockquote-color: var(--dagr-text-muted);
+  --ifm-blockquote-border-color: var(--dagr-primary-50pct);
+
+  /* Infima's light value for this is a pure grey, which would make hover the
+     one surface in the site where the neutrals are not tinted. */
+  --ifm-hover-overlay: var(--dagr-contrast-5pct);
+  --ifm-color-secondary-contrast-background: var(--dagr-callout);
+  --ifm-color-secondary-contrast-foreground: var(--dagr-callout-text);
+
+  --ifm-navbar-height: 3.75rem;
+  --ifm-navbar-background-color: color-mix(
+    in oklab,
+    var(--dagr-background) 82%,
+    transparent
+  );
+  --ifm-navbar-shadow: none;
+  --ifm-navbar-link-color: var(--dagr-text-muted);
+  --ifm-navbar-link-hover-color: var(--dagr-primary-text);
+
+  --ifm-menu-color: var(--dagr-text-muted);
+  --ifm-menu-color-active: var(--dagr-primary-text);
+  --ifm-menu-color-background-active: var(--dagr-contrast-5pct);
+  --ifm-menu-color-background-hover: var(--dagr-contrast-5pct);
+  --ifm-menu-link-padding-vertical: 0.4rem;
+  --ifm-menu-link-padding-horizontal: 0.75rem;
+
+  --ifm-breadcrumb-color-active: var(--dagr-primary-text);
+  --ifm-breadcrumb-item-background-active: var(--dagr-contrast-5pct);
+  --ifm-breadcrumb-padding-horizontal: 0.6rem;
+  --ifm-breadcrumb-size-multiplier: 0.9;
+
+  --ifm-footer-background-color: var(--dagr-contrast-5pct);
+  --ifm-footer-color: var(--dagr-text-muted);
+
+  --ifm-transition-fast: var(--dagr-duration-fast);
+  --ifm-transition-slow: var(--dagr-duration-base);
+  --ifm-transition-timing-default: var(--dagr-ease-out);
+
+  --ifm-scrollbar-track-background-color: transparent;
+  --ifm-scrollbar-thumb-background-color: var(--dagr-contrast-20pct);
+  --ifm-scrollbar-thumb-hover-background-color: var(--dagr-contrast-30pct);
+
+  --docusaurus-highlighted-code-line-bg: var(--dagr-primary-10pct);
+}
+
+html[data-theme='dark'] {
+  --ifm-color-primary: var(--dagr-primary);
+  --ifm-color-primary-dark: oklch(0.63 0.1 161);
+  --ifm-color-primary-darker: oklch(0.6 0.1 161);
+  --ifm-color-primary-darkest: oklch(0.52 0.1 161);
+  --ifm-color-primary-light: oklch(0.73 0.1 161);
+  --ifm-color-primary-lighter: oklch(0.78 0.09 161);
+  --ifm-color-primary-lightest: oklch(0.87 0.06 161);
+}
+
+/* ==========================================================================
+   The vertical bounce
+   ==========================================================================
+   Docusaurus scrolls the document, so the root element owns the overscroll.
+   Only the y axis is pinned. The x axis stays at its default `auto` on
+   purpose: on macOS that is what carries the two finger swipe back and
+   forward through history, and turning it off would cost a real navigation
+   gesture to remove a bounce nobody asked to keep. */
+
+html,
+body {
+  overscroll-behavior-y: none;
+}
+
+/* ==========================================================================
+   Type
+   ========================================================================== */
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  letter-spacing: -0.018em;
+}
+
+.markdown > h1 {
+  --ifm-h1-vertical-rhythm-bottom: 1;
+}
+
+/* A hairline above every h2, so the page reads as a stack of ranks with a
+   line drawn between them. The first one is suppressed: there is nothing
+   above it to divide from. */
+.markdown > h2 {
+  padding-top: 2.25rem;
+  border-top: 1px solid var(--dagr-contrast-10pct);
+  margin-top: 2.25rem;
+}
+
+.markdown > h2:first-child {
+  padding-top: 0;
+  margin-top: 0;
+  border-top: 0;
+}
+
+.markdown > h3 {
+  --ifm-h3-vertical-rhythm-top: 2;
+}
+
+/* Prose sits at a readable measure. Tables and code share the same right
+   edge so the column reads as one shape rather than as ragged blocks. */
+.theme-doc-markdown {
+  max-width: 46rem;
+}
+
+.markdown a {
+  transition: color var(--dagr-duration-fast) var(--dagr-ease-out);
+  text-decoration-color: var(--dagr-contrast-30pct);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.16em;
+}
+
+.markdown a:hover {
+  text-decoration: underline;
+  text-decoration-color: currentcolor;
+}
+
+.markdown blockquote {
+  border-left-width: 2px;
+  padding-left: 1.15rem;
+  font-style: normal;
+}
+
+/* ==========================================================================
+   Code
+   ==========================================================================
+   The one place the docs get loud. The syntax palette in
+   docusaurus.config.ts is lifted off the Dagr mark itself: sunrise for
+   strings, violet for keywords, the brand green for numbers. The chrome
+   around it stays quiet so the code is the thing you look at.
+
+   The surface has to be painted on the element, not handed over as
+   `--prism-background-color`. Docusaurus turns the Prism theme's `plain`
+   object into inline custom properties on the code block container, and an
+   inline custom property shadows the `:root` declaration for that element
+   and everything under it, so a `:root` value here would never win. The
+   Prism themes declare a transparent plain background for exactly that
+   reason, and the real surface is set below. */
+
+.markdown code {
+  border: 1px solid var(--dagr-contrast-10pct);
+  font-variant-ligatures: none;
+}
+
+/* Qualified with the tag name to outrank the CSS module Docusaurus ships for
+   this element, which sets both the background and a drop shadow and loads
+   after this file. */
+div.theme-code-block {
+  background: var(--dagr-surface);
+  border: 1px solid var(--dagr-contrast-10pct);
+  border-radius: var(--dagr-radius-m);
+  box-shadow: none;
+}
+
+.theme-code-block pre {
+  font-size: 0.8125rem;
+  line-height: 1.65;
+}
+
+.theme-code-block code {
+  border: 0;
+}
+
+/* The code block title bar, when a block declares one. */
+.theme-code-block div[class*='codeBlockTitle'] {
+  border-bottom-color: var(--dagr-contrast-10pct);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: var(--dagr-text-muted);
+}
+
+.theme-code-block button[class*='copyButton'] {
+  background: var(--dagr-contrast-5pct);
+  border: 1px solid var(--dagr-contrast-10pct);
+  border-radius: var(--dagr-radius-s);
+}
+
+/* ==========================================================================
+   Tables
+   ==========================================================================
+   Rows are ranks: divided by a hairline, never boxed in, never striped.
+   Headers take the mono face, which is the same utility voice the sidebar
+   categories and breadcrumbs use. */
+
+.markdown table {
+  display: table;
+  width: 100%;
+  table-layout: auto;
+  border-collapse: collapse;
+  border: 0;
+  margin-bottom: 1.75rem;
+  font-size: 0.9375rem;
+}
+
+.markdown table thead {
+  /* Infima tints the thead element itself, not the row or the cells. */
+  background: transparent;
+  border-bottom: 1px solid var(--dagr-contrast-20pct);
+}
+
+.markdown table thead tr {
+  background: transparent;
+  border: 0;
+}
+
+.markdown table th {
+  border: 0;
+  padding-left: 0;
+  /* Markdown without an alignment row leaves th on the browser default of
+     centre. An explicit `:---:` still wins: that lands as an inline style. */
+  text-align: left;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--dagr-text-muted);
+}
+
+/* A header is already set in the mono face, so a code chip inside one is a
+   box around nothing. Strip it back to text and let it keep its own case:
+   that is what marks it as a literal field name. */
+.markdown table th code {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+  letter-spacing: inherit;
+  text-transform: none;
+}
+
+.markdown table th:not(:first-child),
+.markdown table td:not(:first-child) {
+  padding-left: 1rem;
+}
+
+.markdown table td {
+  border: 0;
+  border-top: 1px solid var(--dagr-contrast-10pct);
+  padding-left: 0;
+  vertical-align: top;
+}
+
+.markdown table tbody tr {
+  background: transparent;
+  border: 0;
+}
+
+/* A table laid out as a real table shares the prose column's right edge,
+   which is the point of capping the measure in the first place. It also gives
+   up the ability to scroll, so below the sidebar breakpoint (where a four
+   column table has nowhere to wrap to) it goes back to a scrolling block. */
+@media (max-width: 996px) {
+  .markdown table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+/* ==========================================================================
+   Navbar
+   ========================================================================== */
+
+.navbar {
+  border-bottom: 1px solid var(--dagr-contrast-10pct);
+  backdrop-filter: saturate(1.4) blur(12px);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+}
+
+.navbar__title {
+  font-weight: 620;
+  letter-spacing: -0.015em;
+}
+
+.navbar__logo {
+  height: 1.5rem;
+  margin-right: 0.55rem;
+}
+
+.navbar__link {
+  font-size: 0.9375rem;
+  font-weight: 500;
+}
+
+.navbar__link:hover,
+.navbar__brand:hover {
+  color: var(--dagr-primary-text);
+}
+
+/* ==========================================================================
+   Sidebar and table of contents
+   ========================================================================== */
+
+.theme-doc-sidebar-container {
+  border-right: 1px solid var(--dagr-contrast-10pct) !important;
+}
+
+.menu {
+  padding: 1rem 0.75rem !important;
+  font-size: 0.9375rem;
+}
+
+.menu__link {
+  border-radius: var(--dagr-radius-s);
+  transition:
+    color var(--dagr-duration-fast) var(--dagr-ease-out),
+    background-color var(--dagr-duration-fast) var(--dagr-ease-out);
+}
+
+/* The active page gets a rank line of its own, on the left edge. */
+.menu__link--active:not(.menu__link--sublist) {
+  box-shadow: inset 2px 0 0 0 var(--dagr-primary);
+  font-weight: 550;
+}
+
+.menu__list-item-collapsible > .menu__link--sublist,
+.menu__caret::before {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.6875rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--dagr-text-muted);
+}
+
+.table-of-contents {
+  border-left: 1px solid var(--dagr-contrast-10pct);
+  font-size: 0.8125rem;
+}
+
+.table-of-contents__link {
+  color: var(--dagr-text-muted);
+  transition: color var(--dagr-duration-fast) var(--dagr-ease-out);
+}
+
+.table-of-contents__link--active,
+.table-of-contents__link--active code,
+.table-of-contents__link:hover,
+.table-of-contents__link:hover code {
+  color: var(--dagr-primary-text);
+}
+
+.breadcrumbs__item .breadcrumbs__link {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+.pagination-nav__link {
+  border-color: var(--dagr-contrast-10pct);
+  border-radius: var(--dagr-radius-m);
+  transition: border-color var(--dagr-duration-base) var(--dagr-ease-out);
+}
+
+.pagination-nav__link:hover {
+  border-color: var(--dagr-primary-50pct);
+}
+
+.pagination-nav__sublabel {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.6875rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--dagr-text-muted);
+}
+
+.theme-edit-this-page,
+.theme-last-updated {
+  font-size: 0.875rem;
+}
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+
+.footer {
+  border-top: 1px solid var(--dagr-contrast-10pct);
+  font-size: 0.875rem;
+  padding: 2rem 0;
+}
+
+/* ==========================================================================
+   The mark, on the intro page
+   ==========================================================================
+   The intro page is the site root, so its breadcrumb reads "home > Dagr" on
+   a page already titled Dagr, above a heading that also says Dagr. Dropping
+   it leaves room for the mark to sit directly over the title as a lockup,
+   which is the one place the logo earns its keep in the body copy. */
+
+html.docs-doc-id-intro .theme-doc-breadcrumbs {
+  display: none;
+}
+
+.markdown img.hero-mark {
+  display: block;
+  width: 4rem;
+  height: 4rem;
+  margin: 0 0 0.9rem;
+}
+
+.markdown > img.hero-mark + h1 {
+  margin-top: 0;
+}
+
+/* ==========================================================================
+   Focus and motion
+   ========================================================================== */
+
+a:focus-visible,
+button:focus-visible,
+.menu__link:focus-visible,
+.navbar__link:focus-visible {
+  outline: 2px solid var(--dagr-primary);
+  outline-offset: 2px;
+  border-radius: var(--dagr-radius-s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
