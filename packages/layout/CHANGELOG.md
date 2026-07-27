@@ -64,15 +64,15 @@ of doc prose.
 
 - **Breaking for every custom stage:** `RankStage`, `OrderStage`,
   `PositionStage` and `RouteStage` now return that stage's own contribution
-  rather than the whole next record. A stage still READS the record it is handed
-  and can still read everything computed upstream of it; the `...State` records
-  are still an extends chain and still what a stage names when it types its
-  `run` argument. Two of them did change, and each has its own entry below:
-  `RankedState` gains a required `virtualChains`, and `RoutedState` is no longer
-  exported. What changed is the return type of all four `run` methods. Any stage that ends with
-  `{ ...input, ... }` stops compiling until the spread is dropped, because each
-  output type declares every field the runner owns, and every field contributed
-  upstream of that stage, as `never`. (M2.4a)
+  rather than the whole next record. A stage still READS the record it is
+  handed and can still read everything computed upstream of it; the `...State`
+  records are still an extends chain and still what a stage names when it types
+  its `run` argument. Two of them did change, and each has its own entry below:
+  `RankedState` gains a required `virtualChains`, and `RoutedState` is no
+  longer exported. What changed is the return type of all four `run` methods.
+  Any stage that ends with `{ ...input, ... }` stops compiling until the spread
+  is dropped, because each output type declares every field the runner owns,
+  and every field contributed upstream of that stage, as `never`. (M2.4a)
 
   ```ts
   // Before
