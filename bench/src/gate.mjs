@@ -49,7 +49,7 @@
  * A baseline entry that is deliberately outside the gate. Stats are optional
  * because an exempt number need not come from `pnpm bench` at all: ROADMAP
  * M4.10's GPU frame time is measured by hand on a named machine, and there is
- * no comparable CI GPU to re-measure it against.
+ * no automated way to re-measure it, even on that same machine.
  *
  * @typedef {object} ExemptEntry
  * @property {'off'} gate

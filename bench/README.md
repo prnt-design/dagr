@@ -7,7 +7,7 @@ reasoning that makes that rule survive contact with a busy machine.
 pnpm bench            # run every package's benchmarks, writing a report each
 pnpm bench:check      # compare that run to bench/baseline.json, non-zero on a regression
 pnpm bench:baseline   # record that run as the new baseline
-pnpm bench:ci         # both of the above, re-measuring once if the run was unreadable
+pnpm bench:ci         # both of the first two, re-measuring once if the run was unreadable
 ```
 
 The agent runs `pnpm bench:ci` before it opens a pull request, and does not
@@ -115,16 +115,17 @@ fail, because there is nothing to compare it against. Run `pnpm bench:baseline`.
 ## Exemptions
 
 Not every benchmark can join the gate. ROADMAP M4.10's 10k-at-60fps figure is
-the first that cannot: a GPU frame time measured on one machine has nothing
-comparable to gate against on a CI runner, and the roadmap records that
-exemption deliberately rather than discovering it later.
+the first that cannot: a GPU frame time is measured by hand in a browser, and
+there is no automated way to re-measure it again later, even on the baseline
+machine, so it has nothing to gate against. The roadmap records that exemption
+deliberately rather than discovering it later.
 
 An exemption is written into the baseline entry and must carry a reason:
 
 ```json
 "@dagr/render > frame time, 10k animating": {
   "gate": "off",
-  "reason": "GPU frame time. No comparable CI GPU to re-measure against",
+  "reason": "GPU frame time. Hand-measured in a browser, no automated re-measurement path",
   "note": "Apple M4, Chrome 141, zoomed to fit at 2x DPR"
 }
 ```
@@ -188,6 +189,6 @@ message.
 by vitest, and reached through `@dagr/bench` by a `paths` entry and a vitest
 alias in each consuming package. `src/gate.mjs`, `src/collect.mjs`,
 `src/baseline.mjs` and `bin/bench-check.mjs` are plain `.mjs` with JSDoc types,
-because they run under bare `node` in a CI job that has deliberately not built
+because they run under bare `node`, in a job that has deliberately not built
 anything yet; `checkJs` keeps them under the same strict compiler as everything
 else. `src/names.mjs` holds the two names both halves need.
