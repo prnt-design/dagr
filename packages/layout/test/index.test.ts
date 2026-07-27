@@ -33,9 +33,9 @@ import type {
 // name it in. It is reached from the module that defines it, like the default
 // stages below.
 import type { RoutedState } from '../src/types.js';
-// The default stages are deliberately not part of the public surface, so the
-// tests that name them reach into the modules that define them.
-import { longestPathRankStage } from '../src/rank.js';
+// The three placeholder stages are deliberately not part of the public surface,
+// so the tests that name them reach into the module that defines them. The two
+// real rank stages are exported, and are reached below through `api`.
 import { gridPositionStage, insertionOrderStage, straightRouteStage } from '../src/stages.js';
 
 describe('@dagr/layout public surface', () => {
@@ -44,7 +44,7 @@ describe('@dagr/layout public surface', () => {
   });
 
   it('exports the default stages as a set, which is what they are reachable as', () => {
-    expect(api.defaultStages.rank).toBe(longestPathRankStage);
+    expect(api.defaultStages.rank).toBe(api.longestPathRankStage);
     expect(api.defaultStages.order).toBe(insertionOrderStage);
     expect(api.defaultStages.position).toBe(gridPositionStage);
     expect(api.defaultStages.route).toBe(straightRouteStage);
@@ -90,10 +90,13 @@ describe('@dagr/layout public surface', () => {
     expect(typeof api.InternalLayoutError).toBe('function');
   });
 
-  // The one stage exported by name, because it is not a placeholder waiting for
-  // a real algorithm: it is a second real algorithm with a different objective,
-  // and a caller has to be able to name the one it wants.
-  it('exports the network simplex rank stage and its factory', () => {
+  // The two stages exported by name, because neither is a placeholder waiting
+  // for a real algorithm: they are two real algorithms with different
+  // objectives, and a caller has to be able to name the one it wants. Naming
+  // one of them "the default stage" would not do it, because which one that is
+  // changes: M2.2 already moved it once.
+  it('exports both rank stages, and the simplex factory', () => {
+    expect(api.longestPathRankStage.name).toBe('longest-path-rank');
     expect(api.networkSimplexRankStage.name).toBe('network-simplex-rank');
     expect(api.defaultStages.rank).not.toBe(api.networkSimplexRankStage);
     const graph = new Graph();
@@ -103,6 +106,23 @@ describe('@dagr/layout public surface', () => {
     const options: NetworkSimplexOptions = { maxIterations: 10, initialRanks: new Map() };
     const stage: RankStage = api.networkSimplexRank(options);
     expect(api.layout({ graph }, { rank: stage }).nodes.size).toBe(2);
+    const shortest: RankStage = api.longestPathRankStage;
+    expect(api.layout({ graph }, { rank: shortest }).nodes.size).toBe(2);
+  });
+
+  // Both are module-level singletons shared by every run in the process, which
+  // is the same argument that freezes `defaultStages`, and a stage's `name` is
+  // quoted in every `StageContractError` the runner raises against it. An
+  // assignment to one of these names would poison those messages process wide,
+  // from anywhere that can import the package.
+  it('freezes every stage it shares', () => {
+    expect(Object.isFrozen(api.defaultStages)).toBe(true);
+    expect(Object.isFrozen(api.longestPathRankStage)).toBe(true);
+    expect(Object.isFrozen(api.networkSimplexRankStage)).toBe(true);
+    expect(() => {
+      (api.networkSimplexRankStage as { name: string }).name = 'mine';
+    }).toThrow(TypeError);
+    expect(api.networkSimplexRankStage.name).toBe('network-simplex-rank');
   });
 
   it('exports nothing else at runtime', () => {
@@ -114,6 +134,7 @@ describe('@dagr/layout public surface', () => {
       'StageContractError',
       'defaultStages',
       'layout',
+      'longestPathRankStage',
       'networkSimplexRank',
       'networkSimplexRankStage',
     ]);

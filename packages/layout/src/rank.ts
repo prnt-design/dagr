@@ -63,12 +63,17 @@ function at(values: { readonly [index: number]: number | undefined }, index: num
  * empty set in the record and leaves `PreparedState.sizes` exactly as it found
  * it, because nothing has been added to size.
  *
+ * Frozen, for the reason `defaultStages` is: it is one object shared by every
+ * run in the process, and a stage's `name` is quoted in every
+ * `StageContractError` the runner raises against it, so an assignment to it
+ * anywhere would be an assignment to it everywhere.
+ *
  * @throws {InternalLayoutError} when the sweep cannot reach every node, which
  * means the acyclic view still had a cycle. That is a bug in this stage rather
  * than in the caller, so it is an internal error rather than a
  * `StageContractError`, which names a stage the caller supplied.
  */
-export const longestPathRankStage: RankStage = {
+export const longestPathRankStage: RankStage = Object.freeze<RankStage>({
   name: 'longest-path-rank',
   run(input) {
     const { graph } = input;
@@ -80,4 +85,4 @@ export const longestPathRankStage: RankStage = {
     for (const [number, node] of view.nodes.entries()) ranks.set(node.id, at(rankOf, number));
     return { ranks, reversedEdges };
   },
-};
+});

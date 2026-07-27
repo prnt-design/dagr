@@ -15,22 +15,25 @@ import type { LayoutStages, OrderStage, Point, PositionStage, RouteStage, Size }
  * {@link gridPositionStage} (M2.7), and polyline routing replaces
  * {@link straightRouteStage} (M2.8). The rank stage is no longer among them:
  * M2.2 replaced the single-rank placeholder with `longestPathRankStage`, which
- * breaks cycles and ranks by longest path, and M2.3 will tighten those ranks
- * rather than replace the stage wholesale.
+ * breaks cycles and ranks by longest path, and M2.3 left it exactly where it
+ * was and added a second rank stage beside it, `networkSimplexRankStage`, which
+ * a caller selects. The two optimise different things, so neither replaces the
+ * other: see `simplex.ts`, which is where they are compared.
  *
  * What they do guarantee, and what their tests hold them to, is the pipeline
  * contract: every node in exactly one layer, every node positioned, every edge
  * routed, and no two node boxes overlapping (up to floating point rounding, see
  * {@link gridPositionStage}).
  *
- * Each is exported from this module, for the tests, and none of them is
- * exported from the package: `index.ts` re-exports `defaultStages` alone. Every
- * one of them is scheduled for replacement, and a public name now is a choice
- * later between breaking callers and keeping a dead placeholder exported
- * forever. `defaultStages` covers the use case the individual names would
- * serve, wrapping whatever the current default is, and it keeps working when
- * the default behind one of its properties changes, which is exactly what
- * happened to `rank` in M2.2.
+ * Each is exported from this module, for the tests, and none of the three is
+ * exported from the package, which is the rule `index.ts` states: every real
+ * stage is exported by name, no placeholder is, and `defaultStages` is exported
+ * whatever a stage is. All three here are scheduled for replacement, and a
+ * public name now is a choice later between breaking callers and keeping a dead
+ * placeholder exported forever. `defaultStages` covers the use case the
+ * individual names would serve, wrapping whatever the current default is, and
+ * it keeps working when the default behind one of its properties changes, which
+ * is exactly what happened to `rank` in M2.2.
  */
 
 /** A size that must be present. Absence is a runner bug, so it fails loudly. */

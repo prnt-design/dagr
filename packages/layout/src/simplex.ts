@@ -742,9 +742,11 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  * layers and pays 6; pulling `v6` down one rank tightens `v6 -> v5` and pays 5,
  * and it drags `v9` and `v0` down into a fourth layer to do it. Minimum total
  * edge length and minimum height are DIFFERENT OBJECTIVES and this stage
- * optimises the first. Pick the default stage if a short drawing is what
- * matters. (Both corpora happen to come out the same height either way, 61
- * ranks and 153 ranks, so this is a real risk rather than a certainty.)
+ * optimises the first. Pick `longestPathRankStage` if a short drawing is what
+ * matters, naming that stage rather than whichever one is the default today,
+ * which is a thing that changes. (Both corpora happen to come out the same
+ * height either way, 61 ranks and 153 ranks, so this is a real risk rather than
+ * a certainty.)
  *
  * Ranks come out contiguous from zero per connected component, as the default
  * stage's do, but as a consequence rather than a construction: a ranking with an
@@ -755,9 +757,9 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  *
  * ## How
  *
- * Cycles are broken exactly as the default stage breaks them, with the greedy
- * feedback arc set of `cycles.ts`, and the ranking runs over the same acyclic
- * view. Then: a longest-path ranking to start from, a spanning tree of
+ * Cycles are broken exactly as `longestPathRankStage` breaks them, with the
+ * greedy feedback arc set of `cycles.ts`, and the ranking runs over the same
+ * acyclic view. Then: a longest-path ranking to start from, a spanning tree of
  * zero-slack edges, and a sequence of pivots, each of which finds a tree edge
  * the ranking would be shorter without and swaps it for the tightest edge
  * crossing the same cut the other way. It stops when no tree edge has a
@@ -842,5 +844,10 @@ export function networkSimplexRank(options?: NetworkSimplexOptions): RankStage {
  * The network simplex rank stage with no options: a 20,000 pivot budget and no
  * warm start. See {@link networkSimplexRank}, which is where all of it is
  * argued, including why this is not the default stage.
+ *
+ * Frozen, for the reason `defaultStages` is: it is one object shared by every
+ * run in the process, and a stage's `name` is quoted in every
+ * `StageContractError` the runner raises against it, so an assignment to it
+ * anywhere would be an assignment to it everywhere.
  */
-export const networkSimplexRankStage: RankStage = networkSimplexRank();
+export const networkSimplexRankStage: RankStage = Object.freeze(networkSimplexRank());

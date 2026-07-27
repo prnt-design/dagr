@@ -1,20 +1,24 @@
 /** Headless Sugiyama layout pipeline, the dagre successor: incremental and animation first. */
 export { layout } from './pipeline.js';
 export { DEFAULT_LAYOUT_CONFIG } from './config.js';
-// The stage set is exported, and none of the four stages behind it. Three of
-// them are still placeholders scheduled for replacement (M2.5, M2.7, M2.8), and
-// a name exported now is a name to delete or to keep as a dead placeholder
-// later. `defaultStages` covers the real use case, wrapping a default, and it
-// keeps working when the default behind one of its four properties changes,
-// which is what M2.2 did to `rank`.
+// The rule for stages: every REAL one is exported by name, no PLACEHOLDER is,
+// and the stage set is exported whatever a stage is.
+//
+// A real stage is an algorithm a caller chooses between, so it needs a name to
+// choose it by: the two rank stages optimise different things, minimum height
+// against minimum total edge length, and neither is a default a caller should
+// have to accept to get. Naming one of them "the default stage" is not a handle
+// on it either, because which one that is changes: M2.2 already moved `rank`
+// once. A placeholder is the opposite. Three of the four defaults are still
+// stand-ins scheduled for replacement (M2.5, M2.7, M2.8), and a name exported
+// now is a name to delete later or to keep exported as a dead placeholder
+// forever. `defaultStages` covers what a caller wants from those, wrapping
+// whatever the current default is, and it keeps working when the default behind
+// one of its properties changes.
 export { defaultStages } from './stages.js';
-// The network simplex ranker is exported by name, and that argument does not
-// cover it. It is not a placeholder waiting for a real algorithm, it is a
-// second real algorithm with a different objective from the default one:
-// minimum total edge length rather than minimum height. A caller has to be able
-// to name the one it wants, and `stages: { rank: networkSimplexRankStage }` is
-// how. The factory is exported beside it because M3 warm starts a run from the
-// previous run's ranks, which is an argument and therefore a call.
+export { longestPathRankStage } from './rank.js';
+// The factory is exported beside the simplex stage because M3 warm starts a run
+// from the previous run's ranks, which is an argument and therefore a call.
 export { networkSimplexRank, networkSimplexRankStage } from './simplex.js';
 export type { NetworkSimplexOptions } from './simplex.js';
 export {
