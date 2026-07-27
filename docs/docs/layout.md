@@ -17,9 +17,19 @@ and the roster below exists so the one boundary that was going to have to move
 (M2.4b's dummy nodes) does not. One of the four algorithms is real: the rank
 stage breaks cycles and ranks by longest path, so the layers are the ones the
 graph asks for. The other three are placeholders that produce a well formed but
-naive result. Expect the contract to gain rules as real stages land, rather than
-to lose them. See [What is not here yet](#what-is-not-here-yet) before you reach
-for this in anger.
+naive result.
+
+Expect the contract to gain rules as real stages land. A rule leaves the list
+only when the mistake it caught stops being one a stage can make, never because
+a guarantee was dropped. M2.4a did that twice: a stage has no field to hand a
+different graph back in, so the rule that it must hand back the runner's own is
+now the compiler's, and the size rule narrowed to the sizes a stage actually
+mints, because the runner builds the roster-wide map from prepare's answers and
+the stage's declarations. It is not a one-way street either. The rule that every
+roster member has a size came straight back, because the mistake it catches
+turned out to still be reachable: a stage can reach into the live graph it was
+handed. See [What is not here yet](#what-is-not-here-yet) before you reach for
+this in anger.
 
 ## The shape of a run
 
@@ -64,22 +74,27 @@ runner merges an output into the next record.
 
 | Stage | Reads | Writes | Runner adds |
 | --- | --- | --- | --- |
-| rank | `PreparedState` | `RankOutput`: `ranks`, `reversedEdges`, optional `virtualNodes` | `graph`, `config`, and a roster-wide `sizes` |
+| rank | `PreparedState` | `RankOutput`: `ranks`, `reversedEdges`, optional `virtualNodes` and `virtualChains` | `graph`, `config`, and a roster-wide `sizes` |
 | order | `RankedState` | `OrderOutput`: `layers` | everything upstream, unchanged |
 | position | `OrderedState` | `PositionOutput`: `positions` | everything upstream, unchanged |
 | route | `PositionedState` | `RouteOutput`: `routes` | everything upstream, unchanged |
+
+`RoutedState` is the one record in that chain a caller never names. It is what
+the runner builds after the last stage and hands to nobody, so it is not
+exported from the package; the other four are, because each is the parameter
+type of a `run` somebody writes. The four `...Output` types are exported too.
 
 **Returning less is a stronger contract than returning more.** Until M2.4a a
 stage returned the whole next record, which meant every stage handed back a
 `graph`, a `config` and a `sizes` map it had no opinion about, usually by
 spreading the record it was given. Three things follow from taking those away.
-A stage cannot replace the graph, so there is nothing to check and no error to
-document. A stage cannot restate a field it did not compute, so no two records
+A stage does not hand back a graph, so no check has to ask whether it was the
+right one. A stage cannot restate a field it did not compute, so no two records
 can disagree about what `nodeSep` meant on this run. And nobody has to write
 `...input` any more, which is the line that quietly carries a stale value the
 day a new field appears upstream of it. The read side did not change at all: the
-`...State` records are still exported, still an extends chain, and still what a
-stage names when it types the argument its `run` is handed.
+`...State` records are still an extends chain, and still what a stage names when
+it types the argument its `run` is handed.
 
 **The five records are named `...State`, not `...Layout`.** They are the
 accumulating state that flows between stages, and only a stage author ever names
@@ -94,7 +109,7 @@ graph's own nodes, plus anything the rank stage declared in
 `RankedState.virtualNodes`.
 
 The source graph is never mutated. That is the pipeline's one hard promise, and
-it means a stage that needs a node the caller never added cannot add one. It
+it means a stage that needs a node the caller never added must not add one. It
 declares it instead, in `RankOutput.virtualNodes`, as an id and the size it
 wants for it:
 
@@ -125,9 +140,40 @@ On the read side `RankedState.virtualNodes` is a `ReadonlySet<NodeId>`, because
 a later stage wants the roster and already has the sizes: a map there would be a
 second copy of every size, free to disagree with the first.
 
+**"Must not", not "cannot".** `PreparedState.graph` is the live `Graph` the
+caller still holds, so a stage that calls `addNode` on it really does add a
+node, and no type can stop it. What happens then is that the roster (recomputed
+from the graph at every check) gains a member prepare never sized, and the rank
+boundary rejects it with a `StageContractError` naming the stage that did it.
+That is the whole reason the "every roster member has a size" rule is still on
+the list: without it the caller gets an `InternalLayoutError` blaming this
+package for a stage's mistake.
+
 `virtualNodes` is optional. A ranker with nothing to declare omits it, and the
 runner puts an empty set in the record. There is no difference between omitting
 it and declaring nothing.
+
+**A dummy also says which edge it serves.** `RankOutput.virtualChains` maps a
+caller's edge id to the chain of declared ids the stage split it into, in order,
+and the runner passes it through to `RankedState.virtualChains` (an empty map
+when it is omitted, the same treatment `virtualNodes` gets). It exists because a
+dummy is not just a sized id: M2.4b's router has to rejoin a chain into one
+polyline keyed by the edge it belongs to, and without the chain recorded the
+only recourse is parsing a dummy id back apart. That is ambiguous, because an
+`EdgeId` is a caller-supplied string that may contain whatever separator the id
+format picks; it couples the ranker and the router through a string format; and
+it promotes the id format to load-bearing public contract when the requirement
+M3 actually has only pins the id's VALUE.
+
+**A chain is listed source to target as the caller authored them.** That is the
+direction [`RoutedEdge.points`](#route-direction) runs and it is stated for the
+same reason: a router working from the ranked direction naturally walks its
+chain backwards, and nothing downstream notices until an arrowhead lands on the
+wrong end. So the ranks along a chain are strictly **monotonic** rather than
+strictly increasing. They increase for a normal edge and decrease for one in
+`reversedEdges`, and either way they lie strictly between the two endpoint
+ranks. Writing that rule as "strictly increasing" reads fine and is wrong for
+every reversed edge.
 
 This is the same argument `reversedEdges` carries, applied to nodes rather than
 edges. A declared id is a full citizen from that point on: it has a rank, it has
@@ -140,32 +186,70 @@ more and no less, because the runner builds both of its maps by walking the
 caller's own graph. A declared node has no way in, so no caller ever has to
 filter out a node it did not add.
 
-**A stage cannot replace the graph.** Until M2.4a that was a rule with a check
-behind it: a record had to carry back the very object the runner handed in, and
-a `StageContractError` labelled `graph` said so when it did not. It is now a
-property of the types instead. A stage returns its own fields, the runner builds
-each record around its own graph and its own config, and there is no field for a
-different graph to arrive in. The check was deleted rather than kept as
-something that cannot fire, and the `graph` label went with it.
+**No stage hands a graph back.** Until M2.4a that was a rule with a check behind
+it: a record had to carry back the very object the runner handed in, and a
+`StageContractError` labelled `graph` said so when it did not. Two mechanisms
+hold it now, belt and braces, and the check was deleted rather than kept as
+something that cannot fire. The `graph` label went with it.
 
-That is the better version of the same story. The reason the rule existed is
-that every contract check compares a stage's output against the runner's graph,
-so a stage that swapped the graph would have been shrinking the roster its own
-check runs over, and the failure would have landed on whichever later stage
-still compared against the real thing. A rule the compiler enforces cannot be
-broken at all, where a check could only ever fire at runtime, on your machine,
-after the stage ran. And replacing the graph was never necessary anyway: the one
-reason to want to, needing a node the caller never added, is what the roster is
-for.
+The first is the types. Each of the four `...Output` types declares every field
+the runner owns, and every field contributed upstream of that stage, as `never`:
 
-`virtualNodes` is empty today. It exists now because M2.4b, which splits a long
-edge into a chain of one dummy node per rank it spans, is the reason the roster
-is shaped this way: a contract phrased as "every node the graph holds" would
-have had to be weakened to let M2.4b land, and one phrased as "every node in the
-roster" does not. The default order stage already walks the roster, so M2.4b
-adds to the ranker and the router (splitting a long edge into a chain, rejoining
-the chain into a polyline on output) without touching the contract between
-them.
+```ts
+interface RankOutput {
+  readonly ranks: ReadonlyMap<NodeId, number>;
+  readonly reversedEdges: ReadonlySet<EdgeId>;
+  readonly virtualNodes?: ReadonlyMap<NodeId, Size>;
+  readonly virtualChains?: ReadonlyMap<EdgeId, readonly NodeId[]>;
+  readonly graph?: never;
+  readonly config?: never;
+  readonly sizes?: never;
+}
+```
+
+Those lines are doing real work rather than documenting an intention.
+TypeScript does not excess-property-check a **spread**, so without them
+`return { ...input, ranks, reversedEdges }` was a perfectly legal `RankOutput`.
+A *declared* property is checked through a spread, so with them it does not
+compile. That is what makes the migration mechanical instead of silent: the
+realistic half-migration, fixing the line the compiler flags and leaving `sizes`
+in the spread, would otherwise have compiled, dropped the returned sizes on the
+floor, and produced a wrong layout with no error at all.
+
+The second is the runner. It names every field it takes out of an output, one at
+a time, and spreads only its own previous record. So a stage that cast its way
+past the compiler and returned an extra `graph` would still not have one read.
+
+Neither mechanism alone would do. The types stop the mistake at the keyboard and
+a cast gets past them; the runner stops any value getting through but only after
+the stage ran. The reason to want both is that every contract check compares a
+stage's output against the runner's graph, so a stage working from a graph of
+its own would be shrinking the roster its own check runs over, and the failure
+would land on whichever later stage still compared against the real thing.
+Replacing the graph was never necessary anyway: the one reason to want to,
+needing a node the caller never added, is what the roster is for.
+
+What no type reaches is the graph a stage was **handed**, which is live and
+mutable. That case is still a runtime rule, and it is the one described above
+under [The roster](#the-roster).
+
+`virtualNodes` and `virtualChains` are both empty today. They exist now because
+M2.4b, which splits a long edge into a chain of one dummy node per rank it
+spans, is the reason the roster is shaped this way: a contract phrased as "every
+node the graph holds" would have had to be weakened to let M2.4b land, and one
+phrased as "every node in the roster" does not. The default order stage already
+walks the roster, so M2.4b adds to the ranker and the router (splitting a long
+edge into a chain, rejoining the chain into a polyline on output) without
+touching the contract between them.
+
+**The roster's virtual segment is ordered by id, not by declaration order.** The
+runner sorts the ids the rank stage declared before putting them in the roster,
+so a dummy's index within its layer is a function of its identity. Without that
+it would be a function of where its edge sat in the ranker's iteration:
+deterministic run to run, but not incrementally stable, so adding an unrelated
+edge would shift every later dummy in its layer and move the bends of long edges
+whose endpoints did not move at all. M2.4b's deterministic-id rule is necessary
+for stability and not sufficient; this is what completes it.
 
 ## Ranking, and what it does with a cycle
 
@@ -295,13 +379,16 @@ interface RankOutput {
   readonly ranks: ReadonlyMap<NodeId, number>;
   readonly reversedEdges: ReadonlySet<EdgeId>;
   readonly virtualNodes?: ReadonlyMap<NodeId, Size>; // declared nodes, with their sizes
+  readonly virtualChains?: ReadonlyMap<EdgeId, readonly NodeId[]>; // which edge each serves
+  // Plus `graph`, `config` and `sizes` declared `never`, so a stage that
+  // spreads the record it was handed does not compile. See The roster.
 }
 ```
 
 The other three are the same shape with one field each: an `OrderStage` returns
 an `OrderOutput` of `layers`, a `PositionStage` a `PositionOutput` of
-`positions`, a `RouteStage` a `RouteOutput` of `routes`. All eight types are
-exported.
+`positions`, a `RouteStage` a `RouteOutput` of `routes`, each with its own
+`never` block covering everything upstream of it. All eight types are exported.
 
 Sugiyama layout is four hard problems in a trench coat, and each of them has a
 range of answers that trade quality against time. Ranking can be longest-path or
@@ -378,7 +465,8 @@ the record, so no stage has a graph of its own to be marked against.
 
 There is no longer a rule that applies after every stage. The one that used to,
 "the record's `graph` is the same object the runner handed in", is enforced by
-the types now and is described in [The roster](#the-roster).
+the types and by the runner now, and is described in
+[The roster](#the-roster).
 
 After the **rank** stage:
 
@@ -390,12 +478,27 @@ After the **rank** stage:
 - every declared size is a finite pair of lengths that are zero or greater.
   This is the one size in a run that the config never saw: prepare measures and
   validates every node the graph holds, and a declared node's size is minted by
-  the stage afterwards. There is no matching "every roster member HAS a size"
-  rule, and its absence is deliberate: a declaration carries its size and the
-  runner builds the map, so a roster member without one is not a mistake a
-  stage can make;
+  the stage afterwards;
 - every member of the roster has a rank, and it is a finite number;
+- every member of the roster has a size. This is a lookup rather than a
+  validation, and the only way to fail it is to reach into the live graph and
+  add a node instead of declaring one, which puts a member in the roster that
+  prepare never measured. Narrowing the stage return types stopped a stage
+  handing a graph back, not a stage mutating the one it was handed, so this
+  rule is what keeps that mistake a named stage error rather than an
+  `InternalLayoutError` blaming this package;
 - every id in `reversedEdges` is an edge the graph holds;
+- every key of `virtualChains` is an edge the graph holds, and no chain is
+  empty. An edge with no dummies has no entry at all rather than an empty one;
+- every id in a chain was declared in `virtualNodes`, and no id appears in two
+  chains or twice in one. A dummy belongs to exactly one edge: shared, it would
+  be pulled toward two routes at once, and each of them would bend through a
+  coordinate chosen for the other;
+- a chain's ranks are strictly monotonic from its edge's source to its target,
+  increasing for a normal edge and decreasing for a reversed one, and lie
+  strictly between the two endpoint ranks. See
+  [The roster](#the-roster) for why the direction is the caller's and not the
+  ranker's;
 - every edge is a ranking: `rank(source) <= rank(target)` for an edge that was
   not reversed, `rank(target) <= rank(source)` for one that was. Less-or-equal
   rather than strictly-less, because a self loop puts both endpoints on one
@@ -717,16 +820,19 @@ never overlaps two boxes (see [Overlap, exactly](#overlap-exactly)), and
 satisfies every guarantee this page makes about the result, which is what the
 later milestones are built against.
 
-`RankedState.virtualNodes` is still empty: it is the bookkeeping slot dummy-node
-chains fill in M2.4b, and it exists now because the alternative, mutating the
-caller's graph to add a node, is the one thing this pipeline promises not to do.
-`RankedState.reversedEdges` was the same kind of slot until M2.2 filled it, and
-it filled without a contract change, which is the argument for having declared
-both early. `virtualNodes` did not manage that: M2.4a changed how a stage
-declares one, from a set of ids plus a copied-and-extended `sizes` map to a map
-of ids to sizes. That is the whole cost of the slot having been declared before
-anything filled it, it was paid before any real stage populated the field, and
-it is why the interface change landed on its own and ahead of the chains.
+`RankedState.virtualNodes` and `RankedState.virtualChains` are both still empty:
+they are the bookkeeping slots dummy-node chains fill in M2.4b, and they exist
+now because the alternative, mutating the caller's graph to add a node, is the
+one thing this pipeline promises not to do. `RankedState.reversedEdges` was the
+same kind of slot until M2.2 filled it, and it filled without a contract change,
+which is the argument for having declared all three early. `virtualNodes` did
+not manage that: M2.4a changed how a stage declares one, from a set of ids plus
+a copied-and-extended `sizes` map to a map of ids to sizes. That is the whole
+cost of the slot having been declared before anything filled it, it was paid
+before any real stage populated the field, and it is why the interface change
+landed on its own and ahead of the chains. `virtualChains` is declared on the
+same argument and with its checks already written, so M2.4b fills it rather than
+designing it.
 
 Also still to come: a golden corpus compared against dagre with layout
 benchmarks (M2.9), and running the same API in a worker (M2.10). Incremental

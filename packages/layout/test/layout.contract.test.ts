@@ -352,10 +352,13 @@ describe('layout stage contract', () => {
   // was deleted rather than left as a check that cannot fire, and a test for it
   // would be a test that a `StageContractError` is thrown by code that no
   // longer exists for a program that no longer compiles. The property those
-  // four tests protected is stronger than it was, and it is now pinned by the
-  // compiler plus the test below and the merge tests in
-  // layout.pipeline.test.ts, which assert the record the next stage reads
-  // carries the RUNNER's graph by identity.
+  // four tests protected is pinned three ways instead: by the `never` fields on
+  // the four output types, case by case in stage-output.types.test.ts; by the
+  // test below; and by the merge tests in layout.pipeline.test.ts, which assert
+  // the record the next stage reads carries the RUNNER's graph by identity.
+  //
+  // What none of that reaches is a stage that mutates the graph it was handed,
+  // which is a runtime rule and is tested in layout.virtual.test.ts.
 
   it('lays the graph out from the roster the runner holds, not one an order stage prefers', () => {
     // What the escape hatch used to be. An orderer that wanted a smaller graph

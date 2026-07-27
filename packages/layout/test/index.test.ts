@@ -24,10 +24,14 @@ import type {
   ResolvedLayoutConfig,
   RouteOutput,
   RoutedEdge,
-  RoutedState,
   RouteStage,
   Size,
 } from '../src/index.js';
+// `RoutedState` is not part of the public surface: it is the record the runner
+// builds after the last stage and hands to nobody, so no caller has a `run` to
+// name it in. It is reached from the module that defines it, like the default
+// stages below.
+import type { RoutedState } from '../src/types.js';
 // The default stages are deliberately not part of the public surface, so the
 // tests that name them reach into the modules that define them.
 import { longestPathRankStage } from '../src/rank.js';
@@ -123,13 +127,15 @@ describe('@dagr/layout public surface', () => {
 
     const prepared: PreparedState = { graph, config: resolved, sizes: new Map([['a', size]]) };
     const ranks = new Map([['a', 0]]);
-    // The five records a stage READS, still exported and still an extends
-    // chain, so a stage author can name the argument its `run` is handed.
+    // The records a stage READS, still an extends chain, so a stage author can
+    // name the argument its `run` is handed. Four of the five are exported from
+    // the package; `RoutedState` is not, for the reason at the top of this file.
     const ranked: RankedState = {
       ...prepared,
       ranks,
       reversedEdges: new Set(),
       virtualNodes: new Set(),
+      virtualChains: new Map(),
     };
     const ordered: OrderedState = { ...ranked, layers: [['a']] };
     const placed: PositionedState = { ...ordered, positions: new Map([['a', point]]) };

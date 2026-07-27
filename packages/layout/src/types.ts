@@ -100,10 +100,13 @@ export interface LayoutInput {
  *
  * The five records are what a stage READS. What a stage WRITES is one of the
  * four `...Output` types, and the runner merges that into the next record
- * itself. So `graph` here is always the object the caller passed: a stage has
- * no way to hand back a different one, which is why nothing checks for it. The
- * one reason to want to replace the graph, needing a node the caller never
- * added, is what {@link RankOutput.virtualNodes} is for.
+ * itself. So `graph` here is always the object the caller passed, held there by
+ * two mechanisms rather than one: each output type declares `graph` as `never`,
+ * so a stage that spreads the record it was handed fails to compile, and the
+ * runner names every field it takes out of an output, so a field a stage
+ * returned anyway is never read. The one reason to want to replace the graph,
+ * needing a node the caller never added, is what
+ * {@link RankOutput.virtualNodes} is for.
  */
 export interface PreparedState {
   readonly graph: Graph;
@@ -161,6 +164,36 @@ export interface RankedState extends PreparedState {
    * check catching it later.
    */
   readonly virtualNodes: ReadonlySet<NodeId>;
+
+  /**
+   * The dummy chain the rank stage split each long edge into, keyed by the
+   * caller's own edge id. Empty until M2.4b fills it, exactly as
+   * `reversedEdges` was empty until M2.2 and `virtualNodes` is empty today: a
+   * slot declared before anything fills it, so the milestone that fills it is a
+   * stage change rather than a contract change.
+   *
+   * **A chain is listed source to target as the CALLER authored them**, which
+   * is the same direction {@link RoutedEdge.points} runs and for the same
+   * reason. A router working from the ranked direction naturally walks its
+   * chain backwards, and nothing downstream would notice until an arrowhead
+   * landed on the wrong end, two packages away from the cause. So the ranks
+   * along a chain are strictly MONOTONIC rather than strictly increasing:
+   * increasing for a normal edge, decreasing for one in {@link reversedEdges},
+   * and strictly between the two endpoint ranks either way.
+   *
+   * It exists because a dummy is not just a sized id. M2.4b's router has to
+   * rejoin a chain into one polyline keyed by the edge it serves, and without
+   * this the only recourse is parsing a dummy id back apart, which is ambiguous
+   * (an `EdgeId` is a caller-supplied string and may contain any separator a
+   * format picks), couples the ranker and the router through a string format,
+   * and promotes the id format to load-bearing public contract when the M3
+   * requirement only pins the VALUE.
+   *
+   * The runner builds this from {@link RankOutput.virtualChains}, putting an
+   * empty map here when the stage omitted it, which is the treatment
+   * `virtualNodes` gets for the same reason.
+   */
+  readonly virtualChains: ReadonlyMap<EdgeId, readonly NodeId[]>;
 
   /**
    * Resolved size per node, now covering the whole roster rather than only the
@@ -297,12 +330,20 @@ export interface LayoutResult {
  * `...State` records are the read side. A stage reads everything computed
  * upstream of it and returns its own fields alone; the runner merges those into
  * the next record. Returning less is a stronger contract than returning more,
- * for three reasons that are all the same reason. A stage cannot replace the
- * graph, so nothing has to check that it did not. A stage cannot restate a
- * field it has no opinion about, so no two records can disagree about what
- * `config` meant on this run. And a stage no longer has to spread the record it
- * was handed just to give back fields it never touched, which is the line that
- * quietly carries a mistake when a new field is added upstream.
+ * for three reasons that are all the same reason. A stage does not hand back a
+ * graph, so the roster every check runs over is the runner's. A stage cannot
+ * restate a field it has no opinion about, so no two records can disagree about
+ * what `config` meant on this run. And a stage no longer has to spread the
+ * record it was handed just to give back fields it never touched, which is the
+ * line that quietly carries a mistake when a new field is added upstream.
+ *
+ * Two mechanisms hold that up, belt and braces. Each output type DECLARES every
+ * field the runner owns, and every field contributed upstream of it, as
+ * `never`: see the block at the end of each of the four. And the runner names
+ * every field it takes out of an output one at a time, so a field a stage
+ * returned anyway is never read. Neither alone is enough. The types stop the
+ * mistake at the keyboard but a cast gets past them; the runner stops any
+ * value getting through but only after the stage ran.
  */
 export interface RankOutput {
   /** Layer index per node, covering the roster. See {@link RankedState.ranks}. */
@@ -330,21 +371,97 @@ export interface RankOutput {
    * around it.
    */
   readonly virtualNodes?: ReadonlyMap<NodeId, Size>;
+
+  /**
+   * The chain of declared ids this stage split each long edge into, in order,
+   * source to target as the CALLER authored them. See
+   * {@link RankedState.virtualChains} for the direction argument and for why
+   * the chain is recorded rather than recovered from the ids.
+   *
+   * Every id in a chain has to be a key of {@link virtualNodes}, every key has
+   * to be an edge the graph holds, no id may appear in two chains or twice in
+   * one, and a chain is never empty: an edge with no dummies simply has no
+   * entry. Optional for the same reason `virtualNodes` is, and empty until
+   * M2.4b, which is the milestone that splits the edges.
+   *
+   * The converse is deliberately NOT required: a declared id that belongs to no
+   * chain is legal, and stays legal after M2.4b. A long edge split is only the
+   * first reason to want a node the caller never added, and dagre has others
+   * (an edge label, a self loop's stand-in), so the asymmetry here is a
+   * decision rather than an omission. What a chain adds is that these
+   * particular dummies belong to one edge and run in one order.
+   *
+   * One thing five green checks do NOT establish: that a chain is COMPLETE.
+   * A single dummy at rank 1 on an edge from rank 0 to rank 3 passes every rule
+   * above, and its route then crosses rank 2 with no bend. Tightening that
+   * needs a definition of what an edge "spans", and the obvious one (steps of
+   * exactly one) assumes contiguous integer ranks, which `insertionOrderStage`
+   * explicitly refuses to assume. It is M2.4b's call once a real splitter gives
+   * "spans" a meaning.
+   */
+  readonly virtualChains?: ReadonlyMap<EdgeId, readonly NodeId[]>;
+
+  // Every field the runner owns, declared `never` so that a stage which spreads
+  // the record it was handed fails to compile. TypeScript does not
+  // excess-property-check a spread, so `{ ...input, ranks, reversedEdges }` was
+  // a legal `RankOutput` without these, and quietly handed back a graph, a
+  // config and a sizes map the runner ignored. A DECLARED property is checked
+  // through a spread, which is what makes the rule a compiler rule rather than
+  // a claim. Optional, because a correct stage says nothing about any of them.
+  // Pinned case by case in `test/stage-output.types.test.ts`.
+  readonly graph?: never;
+  readonly config?: never;
+  readonly sizes?: never;
 }
 
 /** What the order stage contributes. See {@link OrderedState.layers}. */
 export interface OrderOutput {
   readonly layers: readonly (readonly NodeId[])[];
+
+  // The runner's own fields, plus everything the rank stage contributed. Same
+  // rule as {@link RankOutput}, one stage further down: an order stage that
+  // ends `{ ...input, layers }` fails to compile, because the record it was
+  // handed carries the ranker's four fields as well as the runner's three.
+  readonly graph?: never;
+  readonly config?: never;
+  readonly sizes?: never;
+  readonly ranks?: never;
+  readonly reversedEdges?: never;
+  readonly virtualNodes?: never;
+  readonly virtualChains?: never;
 }
 
 /** What the position stage contributes. See {@link PositionedState.positions}. */
 export interface PositionOutput {
   readonly positions: ReadonlyMap<NodeId, Point>;
+
+  // Everything upstream of the position stage, declared `never` so that
+  // `{ ...input, positions }` fails to compile. Same rule as {@link RankOutput}.
+  readonly graph?: never;
+  readonly config?: never;
+  readonly sizes?: never;
+  readonly ranks?: never;
+  readonly reversedEdges?: never;
+  readonly virtualNodes?: never;
+  readonly virtualChains?: never;
+  readonly layers?: never;
 }
 
 /** What the route stage contributes. See {@link RoutedState.routes}. */
 export interface RouteOutput {
   readonly routes: ReadonlyMap<EdgeId, readonly Point[]>;
+
+  // Everything upstream of the route stage, declared `never` so that
+  // `{ ...input, routes }` fails to compile. Same rule as {@link RankOutput}.
+  readonly graph?: never;
+  readonly config?: never;
+  readonly sizes?: never;
+  readonly ranks?: never;
+  readonly reversedEdges?: never;
+  readonly virtualNodes?: never;
+  readonly virtualChains?: never;
+  readonly layers?: never;
+  readonly positions?: never;
 }
 
 /**

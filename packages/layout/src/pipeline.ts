@@ -34,6 +34,10 @@ import type {
  * braces: a stage returns its own fields alone, so the `graph` on a record is
  * always the runner's. Keeping it a parameter states which graph a check is
  * entitled to consult, and costs nothing.
+ *
+ * The virtual segment comes out in id order, because {@link declaredRoster}
+ * put it in id order. That is the roster's order for every consumer, this
+ * generator and the order stage alike, and the reason it matters is there.
  */
 function* rosterOf(graph: Graph, virtualNodes: ReadonlySet<NodeId>): Generator<NodeId> {
   for (const node of graph.nodes()) yield node.id;
@@ -41,14 +45,46 @@ function* rosterOf(graph: Graph, virtualNodes: ReadonlySet<NodeId>): Generator<N
 }
 
 /**
+ * The declared ids as a roster set, in ID order rather than in the order the
+ * rank stage happened to declare them.
+ *
+ * The sort is the point of this function. A `Map`'s keys come out in insertion
+ * order, so without it a dummy's index within its layer would depend on where
+ * its edge sat in the ranker's iteration rather than on its identity.
+ * Deterministic run to run, and NOT incrementally stable: adding an unrelated
+ * edge early in that iteration would shift every later dummy within its layer,
+ * moving the bends of long edges whose endpoints did not move at all. That is
+ * exactly the jitter M2.4b's deterministic-id rule exists to prevent, so stable
+ * ids are necessary and this is what makes them sufficient.
+ *
+ * It is done here rather than in `insertionOrderStage` for two reasons. M2.5
+ * replaces that stage wholesale, so sorting there buys nothing durable, while
+ * the roster the runner builds is what every future order stage reads. And
+ * within a layer a chain contributes at most one node per rank, so ids differ
+ * by edge and lexicographic order is both stable and meaningful.
+ *
+ * The bare `.sort()` is deliberate and is not a latent bug to tidy up. It is
+ * UTF-16 lexicographic, so it would put `#dummy:e:10` before `#dummy:e:2`, and
+ * that never decides anything: two dummies in one layer come from different
+ * edges, so the rank component is equal wherever the comparison is used. All
+ * this has to be is a pure function of the id set. A numeric-aware comparator
+ * would be slower, would need its own tests, and would buy nothing.
+ */
+function declaredRoster(declared: ReadonlyMap<NodeId, Size> | undefined): ReadonlySet<NodeId> {
+  return new Set([...(declared?.keys() ?? [])].sort());
+}
+
+/**
  * The roster-wide size map, from what prepare measured plus what the rank stage
  * declared.
  *
- * A fresh map only when there is something to add. A declaration is rare (no
- * ranker before M2.4b's chains makes one) and `PreparedState.sizes` has an
- * entry per node, so copying it on every run would be a 10k entry copy to add
- * nothing to. Sharing the map when nothing was declared is safe because nobody
- * downstream writes to either one: both are handed out as `ReadonlyMap`.
+ * A fresh map only when there is something to add, which is a rule about the
+ * invariant rather than about how often a stage declares. `PreparedState.sizes`
+ * has an entry per node, so a copy is a 10k entry copy on a 10k node graph, and
+ * there is nothing to copy it for when the declaration is empty. Sharing it in
+ * that case is safe because nobody downstream writes to either map: both are
+ * handed out as `ReadonlyMap`, and the merged one is built here and never
+ * touched again.
  */
 function mergedSizes(
   prepared: ReadonlyMap<NodeId, Size>,
@@ -93,16 +129,24 @@ function toleranceFor(...values: readonly number[]): number {
  * top of another one.
  *
  * `declared` is the stage's own `RankOutput.virtualNodes`, before the
- * runner folded it into `ranked`, because the two rules below are about what
- * the STAGE said. `graph` is the runner's for the same reason the other checks
- * take it: it is the account the stage is being checked against.
+ * runner folded it into `ranked`, because the rules about declarations are
+ * about what the STAGE said. `graph` is the runner's for the same reason the
+ * other checks take it: it is the account the stage is being checked against.
+ * `ranked.virtualChains` needs no such parameter: the runner passes the
+ * declared map through unchanged, substituting an empty one only when the stage
+ * omitted it.
  *
- * There is no "every roster member has a size" rule here any more, and its
- * absence is the point of M2.4a rather than an oversight. Prepare sizes every
- * graph node and validates each one, a declaration carries its own size, and
- * the runner is the only thing that builds `ranked.sizes` out of those two. A
- * roster member with no size is no longer a mistake a stage can make, so
- * checking for it would be checking the runner against itself.
+ * The "every roster member has a size" rule is a LOOKUP here and no longer a
+ * validation. Validating a size moved to the declaration loop, where prepare
+ * has not already checked it. The lookup stayed because it catches something no
+ * type can: `PreparedState.graph` is a live mutable `Graph` and the roster is
+ * recomputed from `graph.nodes()` at every check, so a stage that ADDS its
+ * dummy to the graph rather than declaring it produces a roster member
+ * `prepared.sizes` never covered. Narrowing the stage return types stopped a
+ * stage handing a graph BACK, not a stage reaching into the one it was handed.
+ * Without this the caller gets an `InternalLayoutError` blaming this package
+ * for a third-party stage's mistake, and M2.4b makes that mistake the obvious
+ * wrong first attempt.
  */
 function checkRanked(
   stage: string,
@@ -141,6 +185,16 @@ function checkRanked(
     if (!Number.isFinite(rank)) {
       throw new StageContractError(stage, id, `rank ${String(rank)} is not a finite number`);
     }
+    // See the note above: the only way to reach this is a stage that added the
+    // node to the live graph instead of declaring it.
+    if (!ranked.sizes.has(id)) {
+      throw new StageContractError(
+        stage,
+        id,
+        'no size was assigned; a stage never adds a node to the graph, it declares it ' +
+          'with its size in virtualNodes',
+      );
+    }
   }
 
   // A stale or invented id here would sit invisible until M2.8 tried to
@@ -148,6 +202,74 @@ function checkRanked(
   for (const id of ranked.reversedEdges) {
     if (!graph.hasEdge(id)) {
       throw new StageContractError(stage, id, 'was reversed but the graph does not hold that edge');
+    }
+  }
+
+  // The one cross-stage relationship in the package, and the only one with two
+  // authors: the ranker splits a long edge into a chain and the router rejoins
+  // it. Checked here, over what the ranker declared, because a chain that is
+  // wrong in any of these ways surfaces as a polyline with a bend in the wrong
+  // place, which nothing downstream can tell from a bend in the right one.
+  const chained = new Set<NodeId>();
+  for (const [edgeId, chainIds] of ranked.virtualChains) {
+    const edge = graph.getEdge(edgeId);
+    if (edge === undefined) {
+      throw new StageContractError(
+        stage,
+        edgeId,
+        'has a virtual chain but the graph does not hold that edge',
+      );
+    }
+    if (chainIds.length === 0) {
+      throw new StageContractError(
+        stage,
+        edgeId,
+        'has an empty virtual chain; an edge with no dummies has no entry at all',
+      );
+    }
+    for (const id of chainIds) {
+      if (!(declared?.has(id) ?? false)) {
+        throw new StageContractError(
+          stage,
+          id,
+          `is in the virtual chain for "${edgeId}" but was never declared in virtualNodes`,
+        );
+      }
+      // A dummy belongs to exactly one edge. Shared between two, it would be
+      // pulled toward two routes at once and each of them would bend through a
+      // coordinate chosen for the other.
+      if (chained.has(id)) {
+        throw new StageContractError(
+          stage,
+          id,
+          'is in more than one virtual chain, or twice in one',
+        );
+      }
+      chained.add(id);
+    }
+    // A chain is listed source to target AS THE CALLER AUTHORED THEM, matching
+    // `RoutedEdge.points` and for the same reason, so its ranks are strictly
+    // MONOTONIC rather than strictly increasing: increasing for a normal edge
+    // and decreasing for a reversed one. Walking the chain with the target
+    // appended checks the monotonicity and the "strictly between the endpoint
+    // ranks" rule in one pass, since the walk starts at the source's rank.
+    const reversed = ranked.reversedEdges.has(edgeId);
+    let previous = ranked.ranks.get(edge.source);
+    for (const id of [...chainIds, edge.target]) {
+      const rank = ranked.ranks.get(id);
+      // Unreachable: the roster loop above ranked every graph node and every
+      // declared id, and the loop above rejected an undeclared chain member.
+      if (previous === undefined || rank === undefined) break;
+      if (reversed ? rank >= previous : rank <= previous) {
+        throw new StageContractError(
+          stage,
+          edgeId,
+          `has a virtual chain that does not run ${reversed ? 'up' : 'down'} the ranks from ` +
+            'source to target as the caller authored them: ' +
+            `rank ${String(rank)} follows rank ${String(previous)}`,
+        );
+      }
+      previous = rank;
     }
   }
 
@@ -477,22 +599,31 @@ function assemble(graph: Graph, routed: RoutedState): LayoutResult {
  * dropped, and every check compares against the runner's own graph rather than
  * against whatever the stage handed back.
  *
- * The input graph is never mutated, and no stage can replace it. That used to be
- * a rule with a check behind it and is now a property of the types: a stage
- * returns its own fields alone (a `RankOutput` and its three siblings) and
- * the runner builds each record around its own `graph` and its own `config`, so
- * there is no field for a different graph to arrive in. A rule the compiler
- * enforces beats a rule a check enforces, because the check could only ever fire
- * at runtime, on the caller's machine, after the stage ran.
+ * The runner never mutates the input graph, and no stage hands one back. That
+ * used to be a rule with a check behind it and is now two mechanisms, belt and
+ * braces. The four `...Output` types declare every field the runner owns as
+ * `never`, so a stage that ends `{ ...input, ... }` fails to compile: a spread
+ * is not excess-property-checked, but a DECLARED property is checked through
+ * one. And the runner names every field it takes out of an output, so a value
+ * that got past the compiler by way of a cast is still never read. Neither
+ * alone would do. The types stop the mistake at the keyboard and a cast gets
+ * past them; the naming stops any value getting through and only after the
+ * stage ran.
+ *
+ * What no type can see is a stage that reaches into the graph it was HANDED and
+ * adds a node to it. That one is still a runtime check, and it fails at the
+ * rank boundary naming the stage rather than surfacing later as an invariant of
+ * this package.
  *
  * A stage that needs to pretend an edge runs the other way records its id in
  * `reversedEdges`, and one that needs a node the caller never added declares it,
- * with its size, in `virtualNodes`. Those two are what make replacing the graph
- * unnecessary as well as impossible. The runner turns a declaration into the
- * roster (the graph's nodes plus the declared ids) and into the roster-wide
- * `sizes` map; everything from the rank stage on is checked over that roster,
- * and the result is filtered back down to the caller's own ids, so a declared
- * node never escapes.
+ * with its size, in `virtualNodes`, and says which edge the node serves in
+ * `virtualChains`. Those are what make mutating the graph unnecessary as well
+ * as forbidden. The runner turns a declaration into the roster (the graph's
+ * nodes plus the declared ids, in id order) and into the roster-wide `sizes`
+ * map; everything from the rank stage on is checked over that roster, and the
+ * result is filtered back down to the caller's own ids, so a declared node
+ * never escapes.
  *
  * The default rank stage is real as of M2.2: it breaks cycles with a greedy
  * feedback arc set and ranks by longest path, so the layers are the ones the
@@ -520,10 +651,11 @@ export function layout(input: LayoutInput, stages?: LayoutStageOverrides): Layou
 
   // Every field a stage contributes is named here, one at a time. The spreads
   // below carry the runner's OWN previous record forward; nothing a stage
-  // returned is ever spread. That is the difference between a stage's output
-  // being merged and a stage's output being trusted: a stage that cast its way
-  // past the compiler and returned an extra `graph` would still not have one
-  // read, so narrowing the types closes the hole rather than moving it.
+  // returned is ever spread. That is the second of the two mechanisms behind
+  // "no stage hands back a graph": the output types make the mistake fail to
+  // compile, and this makes a value that got past them anyway go unread. A
+  // stage that cast its way past the compiler and returned an extra `graph`
+  // would still not have one read.
   const rank = stages?.rank ?? defaultStages.rank;
   const rankOut = rank.run(prepared);
   const ranked: RankedState = {
@@ -531,7 +663,8 @@ export function layout(input: LayoutInput, stages?: LayoutStageOverrides): Layou
     config,
     ranks: rankOut.ranks,
     reversedEdges: rankOut.reversedEdges,
-    virtualNodes: new Set(rankOut.virtualNodes?.keys() ?? []),
+    virtualNodes: declaredRoster(rankOut.virtualNodes),
+    virtualChains: rankOut.virtualChains ?? new Map(),
     sizes: mergedSizes(prepared.sizes, rankOut.virtualNodes),
   };
   checkRanked(rank.name, graph, ranked, rankOut.virtualNodes);

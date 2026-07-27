@@ -257,9 +257,18 @@ findings addressed or logged, docs land with the feature.
   "declared but unsized" unrepresentable rather than checked and stops a ranker
   overwriting the size the caller's own node was measured at. The runner derives
   the roster set and the roster-wide `sizes` map from it, sharing the prepared
-  map untouched when nothing was declared. Two contract checks went with those
-  two hazards. No observable behaviour changed, pinned by a whole-result
-  equality against a layout captured from the previous implementation.
+  map untouched when nothing was declared. The roster-wide size check narrowed
+  to the declaration alone rather than going away: three reviewers found the run
+  had over-claimed here, and the review fixes restored the LOOKUP half of it,
+  because `PreparedState.graph` is live and a stage that adds a node to it puts
+  a member in the roster that prepare never sized. The four `...Output` types
+  also gained `never` fields for every field the runner owns, which is what
+  makes "a stage does not hand a graph back" a compiler rule rather than a
+  claim: TypeScript does not excess-property-check a spread, but it does check a
+  declared property through one. Pinned case by case in
+  `test/stage-output.types.test.ts`. No observable behaviour changed, pinned by
+  a whole-result equality against a layout captured from the previous
+  implementation.
 - [ ] **M2.4b** Dummy-node chains: split long edges across ranks into virtual
   nodes, rejoin on output. Tests: chain integrity, no multi-rank edges reach
   later stages.
@@ -277,14 +286,44 @@ findings addressed or logged, docs land with the feature.
   geometry rather than a corner of it. Test what happens when a chain's rank
   span changes: growing from three ranks to four should keep the three stable
   dummies and gain one.
+  The deterministic-id rule is necessary and NOT sufficient, and the M2.4a
+  review found the missing half. Ids fix a dummy's identity; they do not fix its
+  index within its layer, which came out of the ranker's declaration order and
+  would therefore shift every later dummy whenever an unrelated edge was added
+  upstream of it, moving the bends of long edges whose endpoints did not move.
+  The runner now sorts the declared ids by id before putting them in the roster,
+  which is what completes the rule, and it is done there rather than in
+  `insertionOrderStage` because M2.5 replaces that stage wholesale while every
+  future order stage reads the roster.
+  Be precise about what that sort buys, so this milestone does not over-claim
+  it. It removes the dependency on the ranker's declaration order, and nothing
+  more. It does NOT make a layer's indices stable when a dummy is INSERTED into
+  that layer: anything joining a row still shifts everything after it under
+  `gridPositionStage`. That residue belongs to M2.7's coordinate assignment, not
+  here.
+  Two things M2.4a's chain checks deliberately do not establish, both worth
+  knowing before reading five green rules as more than they are. An orphan
+  dummy, declared but in no chain, is legal and stays legal: a long edge split
+  is only the first reason to want a node the caller never added. And a chain
+  may SKIP a rank it crosses, so a single dummy at rank 1 on an edge from rank 0
+  to rank 3 passes every check and routes across rank 2 with no bend. Tightening
+  that needs a definition of what an edge "spans", and the obvious one (steps of
+  exactly one) assumes contiguous integer ranks, which `insertionOrderStage`
+  explicitly refuses to assume. Decide it here, where a real splitter finally
+  gives "spans" a meaning.
   Prepared in M2.1 and settled in M2.4a, so this is a ranker change and not an
   interface change: the pipeline works over a roster (the graph's nodes plus
   whatever the rank stage declares in `RankOutput.virtualNodes`), a declared
   dummy is checked exactly as hard as a real node (rank, size, exactly one
   layer, a position), the default order stage already places roster members, and
-  the runner already refuses to let a dummy reach `LayoutResult`. What is left
-  here is the chain splitting itself and rejoining the chain into a polyline on
-  output.
+  the runner already refuses to let a dummy reach `LayoutResult`.
+  `RankOutput.virtualChains` is declared too, with its contract checks already
+  written: which edge each dummy serves and in what order, source to target as
+  the CALLER authored them, so the router rejoins a chain from the record rather
+  than by parsing dummy ids back apart. That direction makes the rank check
+  strictly MONOTONIC (increasing normally, decreasing for a reversed edge) and
+  not strictly increasing. What is left here is the chain splitting itself and
+  rejoining the chain into a polyline on output.
 - [ ] **M2.5** Ordering v1: barycenter sweeps with median fallback, crossing
   counter as the metric. Tests on known small graphs with hand-counted
   crossings. Also measure adjacency allocation churn in the sweeps (every

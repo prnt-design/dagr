@@ -48,15 +48,21 @@ const oneNodePerLayer: OrderStage = {
 };
 
 /** Runs a layout expected to fail, and returns the error for inspection. */
-function expectContractError(stages: Partial<LayoutStages>): StageContractError {
+function expectContractError(
+  stages: Partial<LayoutStages>,
+  graph: Graph = chain(),
+): StageContractError {
   try {
-    layout({ graph: chain() }, stages);
+    layout({ graph }, stages);
   } catch (error) {
     if (error instanceof StageContractError) return error;
     throw error;
   }
   throw new Error('layout should have thrown a StageContractError');
 }
+
+/** The one dummy size every chain test below uses, since none is about sizing. */
+const dummySize: Size = { width: 1, height: 40 };
 
 describe('virtual nodes', () => {
   it('runs a declared virtual node through the whole pipeline', () => {
@@ -96,13 +102,16 @@ describe('virtual nodes', () => {
   // Two tests are gone here, and both premises went with M2.4a rather than
   // being weakened. "A ranker that declares a virtual node without sizing it"
   // is no longer a program: a declaration IS a size, so the runner has no way
-  // to be handed an id with no measurement behind it, and the check that caught
-  // it was deleted along with the shape that made it possible. "A ranker that
-  // overwrites the size the caller's own node was measured at" went the same
-  // way: `sizes` is the runner's to build now, and a stage can only state a
-  // size for a node it declared itself. What is left of that second test is the
-  // one case still reachable, an unusable size on a node the stage did declare,
-  // which is the test below.
+  // to be handed an id with no measurement behind it. "A ranker that overwrites
+  // the size the caller's own node was measured at" went the same way: `sizes`
+  // is the runner's to build now, and a stage can only state a size for a node
+  // it declared itself. So the size VALIDATION narrowed to the declaration
+  // alone, which is the test below, and what is gone is the pair of shapes that
+  // made those two programs writable.
+  //
+  // The size LOOKUP did not go anywhere, and the M2.4a review was right that it
+  // could not: see the graph-mutation test further down for the one way still
+  // left to put a roster member in front of the runner that nothing measured.
 
   it('rejects an unusable declared size, naming the ranker', () => {
     // The one size in a run the config never validated: prepare measured and
@@ -228,6 +237,83 @@ describe('virtual nodes', () => {
     expect(error.message).toContain('the graph already holds it');
   });
 
+  it('names the ranker when it adds a node to the graph instead of declaring it', () => {
+    // The hazard the roster-size rule exists for, and the reason it is a rule
+    // rather than a runner invariant. `PreparedState.graph` is a live mutable
+    // `Graph` and the roster is recomputed from `graph.nodes()` at every check,
+    // so a ranker that ADDS its dummy rather than declaring it produces a
+    // roster member `prepared.sizes` never covered. Nothing in the type system
+    // can see that: narrowing the return types stops a stage handing a graph
+    // back, not a stage reaching into the one it was handed.
+    //
+    // What the caller must not get is `InternalLayoutError: ... This is a bug
+    // in @dagr/layout`, which is a third-party stage author being told to file
+    // a bug against us for their own mistake. M2.4b makes "just add the dummy
+    // to the graph" the obvious wrong first attempt, so this is the error that
+    // has to name the ranker.
+    const mutating: RankStage = {
+      name: 'mutating-rank',
+      run(input) {
+        input.graph.addNode('ab#1');
+        return {
+          ranks: new Map<NodeId, number>([
+            ['a', 0],
+            ['ab#1', 1],
+            ['b', 2],
+          ]),
+          reversedEdges: new Set<EdgeId>(),
+        };
+      },
+    };
+    const error = expectContractError({ rank: mutating });
+    expect(error.code).toBe('STAGE_CONTRACT');
+    expect(error.stage).toBe('mutating-rank');
+    expect(error.id).toBe('ab#1');
+    expect(error.message).toContain('no size was assigned');
+    expect(error.message).toContain('virtualNodes');
+  });
+
+  it('orders the roster by id rather than by the order the ranker declared in', () => {
+    // Deterministic run to run either way, but declaration order is not
+    // INCREMENTALLY stable: a dummy's index within its layer would depend on
+    // where its edge happened to sit in the ranker's iteration, so adding an
+    // unrelated edge upstream would shift every later dummy in its layer and
+    // move the bends of long edges whose endpoints did not move. M2.4b's
+    // deterministic-id rule is necessary for stability and not sufficient; the
+    // roster being ordered by id is what completes it.
+    function sameRankDummies(order: readonly NodeId[]): RankStage {
+      return {
+        name: 'same-rank-dummy-rank',
+        run: () => ({
+          ranks: new Map<NodeId, number>([
+            ['a', 0],
+            ['ab#1', 1],
+            ['ab#2', 1],
+            ['b', 2],
+          ]),
+          reversedEdges: new Set<EdgeId>(),
+          virtualNodes: new Map<NodeId, Size>(order.map((id) => [id, dummySize])),
+        }),
+      };
+    }
+    function layersFrom(rank: RankStage): readonly (readonly NodeId[])[] {
+      let seen: readonly (readonly NodeId[])[] = [];
+      const watching: PositionStage = {
+        name: 'watching-position',
+        run(input) {
+          seen = input.layers;
+          return defaultStages.position.run(input);
+        },
+      };
+      layout({ graph: chain() }, { rank, position: watching });
+      return seen;
+    }
+    const declared = layersFrom(sameRankDummies(['ab#1', 'ab#2']));
+    const reversed = layersFrom(sameRankDummies(['ab#2', 'ab#1']));
+    expect(declared).toEqual([['a'], ['ab#1', 'ab#2'], ['b']]);
+    expect(reversed).toEqual(declared);
+  });
+
   it('keeps a virtual node out of the result even from a router that tries', () => {
     // This replaces a check. A route stage used to return the `LayoutResult`
     // and could put a dummy in its node map, so the runner checked for it. A
@@ -259,5 +345,257 @@ describe('virtual nodes', () => {
     // The dummy's coordinate still shapes the route, which is the M2.4b shape.
     expect(result.edges.get('ab')?.points).toHaveLength(3);
     expect(result.bounds.height).toBe(220);
+  });
+});
+
+/** `a -> b` twice, so two chains have something to collide over. */
+function parallel(): Graph {
+  const graph = new Graph();
+  graph.addNode('a');
+  graph.addNode('b');
+  graph.addEdge('a', 'b', 'ab');
+  graph.addEdge('a', 'b', 'ab2');
+  return graph;
+}
+
+/**
+ * A ranker that declares whatever a chain test is about, so each test states
+ * only the part it is testing. Every declared id gets the same size, because no
+ * test here is about sizing.
+ */
+function chainRank(spec: {
+  readonly ranks: readonly (readonly [NodeId, number])[];
+  readonly declare: readonly NodeId[];
+  readonly chains: readonly (readonly [EdgeId, readonly NodeId[]])[];
+  readonly reversed?: readonly EdgeId[];
+}): RankStage {
+  return {
+    name: 'chain-rank',
+    run: () => ({
+      ranks: new Map<NodeId, number>(spec.ranks),
+      reversedEdges: new Set<EdgeId>(spec.reversed ?? []),
+      virtualNodes: new Map<NodeId, Size>(spec.declare.map((id) => [id, dummySize])),
+      virtualChains: new Map<EdgeId, readonly NodeId[]>(spec.chains),
+    }),
+  };
+}
+
+describe('virtual chains', () => {
+  it('carries a declared chain through to the next stage, keyed by the caller edge id', () => {
+    // The whole point of the field: the router that rejoins a chain into one
+    // polyline is handed the edge it belongs to and the order to walk it in,
+    // rather than parsing a dummy id back apart.
+    let seen: ReadonlyMap<EdgeId, readonly NodeId[]> | undefined;
+    const watching: OrderStage = {
+      name: 'watching-order',
+      run(input) {
+        seen = input.virtualChains;
+        return defaultStages.order.run(input);
+      },
+    };
+    const result = layout(
+      { graph: chain() },
+      {
+        rank: chainRank({
+          ranks: [
+            ['a', 0],
+            ['ab#1', 1],
+            ['b', 2],
+          ],
+          declare: ['ab#1'],
+          chains: [['ab', ['ab#1']]],
+        }),
+        order: watching,
+      },
+    );
+    expect([...(seen ?? [])]).toEqual([['ab', ['ab#1']]]);
+    // And it stops where every other piece of dummy bookkeeping stops.
+    expect([...result.nodes.keys()]).toEqual(['a', 'b']);
+  });
+
+  it('hands the next stage an empty map when the ranker declares no chains', () => {
+    // The same treatment `virtualNodes` gets, and for the same reason: no
+    // downstream stage and no check should have to handle an absent map.
+    let seen: ReadonlyMap<EdgeId, readonly NodeId[]> | undefined;
+    const watching: OrderStage = {
+      name: 'watching-order',
+      run(input) {
+        seen = input.virtualChains;
+        return defaultStages.order.run(input);
+      },
+    };
+    layout({ graph: chain() }, { order: watching });
+    expect(seen?.size).toBe(0);
+  });
+
+  it('catches a chain keyed by an edge the graph does not hold', () => {
+    const error = expectContractError({
+      rank: chainRank({
+        ranks: [
+          ['a', 0],
+          ['ab#1', 1],
+          ['b', 2],
+        ],
+        declare: ['ab#1'],
+        chains: [['gone', ['ab#1']]],
+      }),
+    });
+    expect(error.stage).toBe('chain-rank');
+    expect(error.id).toBe('gone');
+    expect(error.message).toContain('does not hold that edge');
+  });
+
+  it('catches an empty chain, which is not the same as no chain', () => {
+    const error = expectContractError({
+      rank: chainRank({
+        ranks: [
+          ['a', 0],
+          ['b', 1],
+        ],
+        declare: [],
+        chains: [['ab', []]],
+      }),
+    });
+    expect(error.stage).toBe('chain-rank');
+    expect(error.id).toBe('ab');
+    expect(error.message).toContain('empty');
+  });
+
+  it('catches a chain member that was never declared in virtualNodes', () => {
+    // Without this the id would be in a chain, absent from the roster, and
+    // therefore unranked, unordered and unpositioned, and the router would ask
+    // for a coordinate nothing ever computed.
+    const error = expectContractError({
+      rank: chainRank({
+        ranks: [
+          ['a', 0],
+          ['b', 1],
+        ],
+        declare: [],
+        chains: [['ab', ['ab#1']]],
+      }),
+    });
+    expect(error.stage).toBe('chain-rank');
+    expect(error.id).toBe('ab#1');
+    expect(error.message).toContain('virtualNodes');
+  });
+
+  it('catches one dummy shared between two chains', () => {
+    // A dummy belongs to exactly one edge. Shared, it would be pulled toward
+    // two routes at once and each of them would bend through a coordinate
+    // chosen for the other.
+    const error = expectContractError(
+      {
+        rank: chainRank({
+          ranks: [
+            ['a', 0],
+            ['ab#1', 1],
+            ['b', 2],
+          ],
+          declare: ['ab#1'],
+          chains: [
+            ['ab', ['ab#1']],
+            ['ab2', ['ab#1']],
+          ],
+        }),
+      },
+      parallel(),
+    );
+    expect(error.stage).toBe('chain-rank');
+    expect(error.id).toBe('ab#1');
+    expect(error.message).toContain('more than one');
+  });
+
+  it('catches a dummy listed twice in one chain', () => {
+    const error = expectContractError({
+      rank: chainRank({
+        ranks: [
+          ['a', 0],
+          ['ab#1', 1],
+          ['b', 2],
+        ],
+        declare: ['ab#1'],
+        chains: [['ab', ['ab#1', 'ab#1']]],
+      }),
+    });
+    expect(error.stage).toBe('chain-rank');
+    expect(error.id).toBe('ab#1');
+    expect(error.message).toContain('more than one');
+  });
+
+  it('catches a chain whose ranks are not strictly monotonic', () => {
+    const error = expectContractError({
+      rank: chainRank({
+        ranks: [
+          ['a', 0],
+          ['ab#1', 2],
+          ['ab#2', 1],
+          ['b', 3],
+        ],
+        declare: ['ab#1', 'ab#2'],
+        chains: [['ab', ['ab#1', 'ab#2']]],
+      }),
+    });
+    expect(error.stage).toBe('chain-rank');
+    expect(error.id).toBe('ab');
+    expect(error.message).toContain('rank 1 follows rank 2');
+  });
+
+  it('catches a chain that leaves the ranks its endpoints sit between', () => {
+    const error = expectContractError({
+      rank: chainRank({
+        ranks: [
+          ['a', 0],
+          ['ab#1', 5],
+          ['b', 2],
+        ],
+        declare: ['ab#1'],
+        chains: [['ab', ['ab#1']]],
+      }),
+    });
+    expect(error.stage).toBe('chain-rank');
+    expect(error.id).toBe('ab');
+    expect(error.message).toContain('rank 2 follows rank 5');
+  });
+
+  it('takes a chain that descends for a reversed edge, because a chain runs source to target', () => {
+    // The direction decision, stated as a test. A chain is listed source to
+    // target as the CALLER authored them, matching `RoutedEdge.points`, so a
+    // reversed edge's chain runs DOWN the ranks rather than up them. Writing
+    // the rule as "strictly increasing" would reject this, and it is correct.
+    const result = layout(
+      { graph: chain() },
+      {
+        rank: chainRank({
+          ranks: [
+            ['a', 2],
+            ['ab#1', 1],
+            ['b', 0],
+          ],
+          declare: ['ab#1'],
+          chains: [['ab', ['ab#1']]],
+          reversed: ['ab'],
+        }),
+      },
+    );
+    expect(result.nodes.get('b')?.y).toBeLessThan(result.nodes.get('a')?.y ?? 0);
+  });
+
+  it('catches a reversed edge whose chain runs the other way', () => {
+    const error = expectContractError({
+      rank: chainRank({
+        ranks: [
+          ['a', 2],
+          ['ab#1', 3],
+          ['b', 0],
+        ],
+        declare: ['ab#1'],
+        chains: [['ab', ['ab#1']]],
+        reversed: ['ab'],
+      }),
+    });
+    expect(error.stage).toBe('chain-rank');
+    expect(error.id).toBe('ab');
+    expect(error.message).toContain('rank 3 follows rank 2');
   });
 });

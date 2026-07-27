@@ -38,6 +38,10 @@ export type {
   RouteOutput,
   RouteStage,
   RoutedEdge,
-  RoutedState,
   Size,
 } from './types.js';
+// `RoutedState` is deliberately not here. The other four `...State` records
+// each earn their export by being the parameter type of a `run` a caller
+// writes; that one is the record the runner builds after the last stage and
+// hands to nobody, so a caller has nothing to name it for. It stays exported
+// from `types.ts` for use inside the package.

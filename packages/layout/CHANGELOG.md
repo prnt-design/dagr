@@ -18,6 +18,41 @@ of doc prose.
   types. Each is what one stage contributes, and it is what that stage's `run`
   now returns. See the Changed entry below. (M2.4a)
 
+- `RankOutput.virtualChains`, optional, and `RankedState.virtualChains`, which
+  the runner derives from it. A `ReadonlyMap<EdgeId, readonly NodeId[]>`: the
+  chain of declared ids a rank stage split a long edge into, keyed by the
+  caller's own edge id. Nothing produces one yet; M2.4b's chains do, and this is
+  a slot declared ahead of the milestone that fills it, exactly as
+  `reversedEdges` and `virtualNodes` each were. It exists because M2.4b's router
+  has to rejoin a chain into one polyline keyed by the edge it serves, and
+  without the chain recorded the only recourse is parsing a dummy id back apart,
+  which is ambiguous (an `EdgeId` is a caller-supplied string), couples the
+  ranker and the router through a string format, and promotes the id format to
+  load-bearing public contract when the M3 requirement only pins the id's value.
+
+  **A chain is listed source to target as the CALLER authored them**, the same
+  direction `RoutedEdge.points` runs and for the same reason: a router working
+  from the ranked direction naturally walks its chain backwards, and nothing
+  downstream notices until an arrowhead lands on the wrong end. So the rank
+  check is that a chain's ranks are strictly MONOTONIC, increasing for a normal
+  edge and decreasing for one in `reversedEdges`, and lie strictly between the
+  two endpoint ranks. "Strictly increasing" reads fine and is wrong for every
+  reversed edge.
+
+  This is knowingly the same bet that cost this release its breaking change, and
+  it is worth saying so rather than leaving a reader to notice. `virtualNodes`
+  was also a slot declared ahead of its milestone, and M2.4a is here partly
+  because the shape guessed for it turned out wrong once a real stage needed it.
+  The direction rule above is a genuine semantic commitment made before any
+  algorithm has had to satisfy it, and a real router meeting a self loop chain
+  or a chain sharing a rank may yet revise it. It is taken anyway because the
+  alternative is not "decide later": it is a router recovering a chain by
+  parsing dummy ids, which fixes the id FORMAT as public contract instead of
+  just the id's value, and a format is far harder to revise than a field. A
+  wrong field is one more breaking change to a package with no published
+  consumers; a wrong format is every third-party ranker and router at once.
+  (M2.4a review)
+
 - `InternalLayoutError`, exported, `code: 'INTERNAL'`. The pipeline's own
   invariant failures were bare `Error`s, outside the family the docs promise one
   `instanceof` check covers; every one of them is now this. It is always a bug
@@ -30,10 +65,14 @@ of doc prose.
 - **Breaking for every custom stage:** `RankStage`, `OrderStage`,
   `PositionStage` and `RouteStage` now return that stage's own contribution
   rather than the whole next record. A stage still READS the record it is handed
-  and can still read everything computed upstream of it; the five `...State`
-  records are unchanged, still exported, and still an extends chain. What
-  changed is the return type of all four `run` methods. Any stage that ends with
-  `{ ...input, ... }` stops compiling until the spread is dropped. (M2.4a)
+  and can still read everything computed upstream of it; the `...State` records
+  are still an extends chain and still what a stage names when it types its
+  `run` argument. Two of them did change, and each has its own entry below:
+  `RankedState` gains a required `virtualChains`, and `RoutedState` is no longer
+  exported. What changed is the return type of all four `run` methods. Any stage that ends with
+  `{ ...input, ... }` stops compiling until the spread is dropped, because each
+  output type declares every field the runner owns, and every field contributed
+  upstream of that stage, as `never`. (M2.4a)
 
   ```ts
   // Before
@@ -60,23 +99,49 @@ of doc prose.
   a default and adjusted its answer now spreads the OUTPUT (one field) instead
   of the record: `const { positions } = defaultStages.position.run(input)`.
 
-  Three things follow, all of them the point of the change. **A stage can no
-  longer replace the graph**, so the check that caught one was deleted, and with
-  it the `StageContractError` labelled `graph`. A rule the compiler enforces
-  beats a rule that could only fire at runtime after the stage ran. **A declared
-  virtual node carries its own size**: `RankOutput.virtualNodes` is a
-  `ReadonlyMap<NodeId, Size>` where the old `RankedState.virtualNodes` was a
-  `ReadonlySet<NodeId>` next to a roster-wide `sizes` map the stage had to copy
-  and extend. Declaring without sizing is unrepresentable rather than checked,
-  and a ranker can no longer overwrite the size the caller's own node was
-  measured at, so those two checks are gone too. On the read side
+  **How the breakage reaches you, per stage.** Each output type declares the
+  fields it will not accept as `never`, so the compiler names the first one it
+  meets rather than reporting a bare excess property. A rank stage that spreads
+  `PreparedState` is told `graph`, `config` or `sizes` is not assignable to
+  `never`; an order stage that spreads `RankedState` gets those plus `ranks`,
+  `reversedEdges`, `virtualNodes` and `virtualChains`; a position stage adds
+  `layers` to that list and a route stage adds `positions`. This matters because
+  TypeScript does **not** excess-property-check a spread. Without the `never`
+  fields the four spreads above all compiled, and so did the realistic
+  half-migration (fix the line the compiler flags, leave `sizes` in the spread),
+  which would have dropped the returned sizes on the floor and produced a
+  silently wrong layout instead of a failed build.
+
+  Three things follow, all of them the point of the change. **No stage hands a
+  graph back**, so the check that caught one was deleted, and with it the
+  `StageContractError` labelled `graph`. Two mechanisms replace it: the `never`
+  fields above, and the runner naming every field it takes out of an output, so
+  a value that got past the compiler by way of a cast is still never read.
+  Neither alone would do, and neither reaches a stage that mutates the live
+  graph it was HANDED, which is why "every roster member has a size" is still a
+  runtime rule. **A declared virtual node carries its own size**:
+  `RankOutput.virtualNodes` is a `ReadonlyMap<NodeId, Size>` where the old
+  `RankedState.virtualNodes` was a `ReadonlySet<NodeId>` next to a roster-wide
+  `sizes` map the stage had to copy and extend. Declaring without sizing is
+  unrepresentable rather than checked, and a ranker can no longer overwrite the
+  size the caller's own node was measured at, so the size VALIDATION narrowed to
+  the declaration alone, where prepare has not already run. On the read side
   `RankedState.virtualNodes` is still a set, and the runner derives it and the
-  roster-wide `sizes` map. **`virtualNodes` is optional**: a ranker with nothing
-  to declare omits it, where before it had to hand back an empty set.
+  roster-wide `sizes` map; the ids go in sorted, so a dummy's index within its
+  layer is a function of its id rather than of the order the ranker declared in.
+  **`virtualNodes` is optional**: a ranker with nothing to declare omits it,
+  where before it had to hand back an empty set.
 
   No behaviour a caller can observe changed. The same graph laid out with the
   same config returns an identical `LayoutResult`, which the suite pins against
   a result captured from the previous implementation.
+
+- **`RoutedState` is no longer exported from the package.** It stays in the
+  pipeline and nothing about it changed; it is simply the one `...State` record
+  a caller has nothing to name. The other four are each the parameter type of a
+  `run` somebody writes, and `RoutedState` is what the runner builds after the
+  last stage and hands to nobody. Import it and the build breaks; there was
+  never anything to do with it. (M2.4a review)
 
 - **Breaking for an exhaustive `switch`:** the exported `DagrLayoutErrorCode`
   union gains `'INTERNAL'`. A caller switching over every member without a

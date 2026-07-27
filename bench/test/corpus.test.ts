@@ -53,7 +53,7 @@ describe('the layered corpus generator', () => {
   });
 
   it('includes edges that span more than one layer', () => {
-    // These are the edges that become dummy chains in M2.4, which is most of
+    // These are the edges that become dummy chains in M2.4b, which is most of
     // the geometry on a real layout. A corpus of only short edges would
     // benchmark the cheap half of the pipeline.
     const spec = layeredDag({

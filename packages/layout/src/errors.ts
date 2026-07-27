@@ -94,20 +94,21 @@ export class InvalidConfigError extends DagrLayoutError {
 
 /**
  * Thrown when a stage returns a result that later stages, or the caller, could
- * not work with: a node with no rank, a virtual node declared at a size that is
- * not a usable pair of lengths, an edge that runs up the page
- * without being declared reversed, a node missing from the layers or listed
- * twice, a layer that mixes ranks or is empty, a node with no position, an edge
- * with no route, a route with fewer than two points, a result that mentions
- * something the graph does not hold, bounds that do not enclose the drawing.
+ * not work with: a node with no rank or no size, a virtual node declared at a
+ * size that is not a usable pair of lengths, a dummy chain that is empty or
+ * runs the wrong way, an edge that runs up the page without being declared
+ * reversed, a node missing from the layers or listed twice, a layer that mixes
+ * ranks or is empty, a node with no position, an edge with no route, a route
+ * with fewer than two points, a result that mentions something the graph does
+ * not hold.
  *
  * This is the payoff of swappable stages. The runner checks each stage's output
  * at that stage's own boundary, so a half-finished ranker is reported as a
  * ranker problem rather than surfacing three stages later as an edge that
  * routes to `undefined`. `stage` is the offending stage's `name` and `id` is
- * the node or edge it left behind, both also quoted in the message. A few
- * checks are about the whole result rather than one id, and those use a plain
- * label instead: `bounds`, or `layer 3`.
+ * the node or edge it left behind, both also quoted in the message. One check
+ * is about the layers rather than one id, and uses a plain label instead:
+ * `layer 3`.
  */
 export class StageContractError extends DagrLayoutError {
   readonly code = 'STAGE_CONTRACT';
