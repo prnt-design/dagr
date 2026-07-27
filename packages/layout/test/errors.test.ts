@@ -53,6 +53,24 @@ describe('layout errors', () => {
     expect(error.message).toContain('NaN');
   });
 
+  // A stage factory validates its own options, and those never appeared in a
+  // `LayoutConfig`. Telling a caller that `maxIterations` is not a valid layout
+  // config sends them looking for it in an object that has no field by that
+  // name, so the message says which of the two objects it means, and says what
+  // the field had to be rather than assuming every rejected value is a size.
+  it('says whether it rejected a config field or a stage option', () => {
+    expect(new InvalidConfigError('nodeSep', -1).message).toBe(
+      'Invalid layout config: nodeSep must be a finite number that is not negative, received -1',
+    );
+    const option = new InvalidConfigError('maxIterations', 2.5, 'option', 'a whole number');
+    expect(option.message).toBe(
+      'Invalid layout option: maxIterations must be a whole number, received 2.5',
+    );
+    expect(option.field).toBe('maxIterations');
+    expect(option.value).toBe(2.5);
+    expect(option.code).toBe('INVALID_CONFIG');
+  });
+
   it('reports the offending stage, id, and detail', () => {
     const error = new StageContractError('order', 'b', 'listed twice in the layers');
     expect(error.stage).toBe('order');

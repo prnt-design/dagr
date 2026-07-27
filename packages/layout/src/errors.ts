@@ -64,14 +64,27 @@ function describeValue(value: unknown): string {
 }
 
 /**
- * Thrown when a separation or a size is not a finite number that is zero or
- * greater. Covers `nodeSep`, `rankSep`, `edgeSep`, `defaultNodeSize`, and every
- * size the `nodeSize` callback returns.
+ * Thrown when a number a caller named is not one the pipeline can work with.
+ *
+ * Two kinds of caller input reach it. A field of the `LayoutConfig`, which is a
+ * separation or a size and has to be a finite number that is zero or greater:
+ * `nodeSep`, `rankSep`, `edgeSep`, `defaultNodeSize`, and every size the
+ * `nodeSize` callback returns. And an option a stage factory validates when the
+ * stage is built rather than when it runs, which today is `maxIterations` on
+ * {@link networkSimplexRank} and has a rule of its own.
+ *
+ * The message says which of the two it was, `Invalid layout config:` against
+ * `Invalid layout option:`, and quotes the rule the value broke rather than
+ * assuming every rejected value is a size. A caller told that `maxIterations`
+ * is not a valid layout config would go looking for it in an object that has no
+ * field by that name.
  *
  * Zero is allowed: a zero separation or a zero-sized node is a strange layout
  * but a well defined one. `NaN` and `Infinity` are not, because they propagate
  * silently through every later coordinate and the failure would surface as an
- * unrenderable scene rather than as a bad input.
+ * unrenderable scene rather than as a bad input. An option gets to say
+ * otherwise: an infinite budget is a run to convergence, not an unrenderable
+ * scene.
  *
  * `field` is a path rather than a bare name, so a size rejected inside the
  * `nodeSize` callback says which node it came from: `nodeSize("n1").width`.
@@ -82,9 +95,11 @@ export class InvalidConfigError extends DagrLayoutError {
   constructor(
     readonly field: string,
     readonly value: unknown,
+    subject: 'config' | 'option' = 'config',
+    requirement = 'a finite number that is not negative',
   ) {
     super(
-      `Invalid layout config: ${field} must be a finite number that is not negative, ` +
+      `Invalid layout ${subject}: ${field} must be ${requirement}, ` +
         `received ${describeValue(value)}`,
     );
     this.name = 'InvalidConfigError';
