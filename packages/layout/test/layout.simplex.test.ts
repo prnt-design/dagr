@@ -656,7 +656,7 @@ describe('networkSimplexRank and its iteration budget', () => {
       ],
     );
 
-  it('never returns a ranking worse than the one it started from', () => {
+  it('never returns a ranking worse than the longest-path one it computes first', () => {
     const graph = regressor();
     const start = longestPathRankStage.run(prepare(graph));
     expect(totalEdgeLength(graph, start)).toBe(15);
@@ -672,7 +672,8 @@ describe('networkSimplexRank and its iteration budget', () => {
 
   it('returns a feasible ranking when the budget runs out mid-solve', () => {
     // A graph that needs many pivots, cut off after one. The assertion is the
-    // promise: still feasible, and no worse than the ranking it started from.
+    // promise: still feasible, and no worse than the longest-path ranking the
+    // stage computed before pivoting.
     const graph = new Graph();
     const random = mulberry32(4242);
     for (let index = 0; index < 60; index += 1) graph.addNode(`v${String(index)}`);
@@ -971,6 +972,38 @@ describe('networkSimplexRank and its warm start', () => {
         expect(totalEdgeLength(graph, state), `${where} from ${String(scale)}`).toBe(total);
       }
     }
+  });
+
+  /**
+   * A hint entry that SURVIVES, on an ancestor of a node with no entry of its
+   * own. The hint tests above do not reach this: every entry of theirs is
+   * dropped, so nothing is left to propagate, and a run where nothing survives
+   * cannot tell a floor that propagates from one that does not.
+   *
+   * A floor does propagate. `f` is `b`'s only predecessor here, and a floor
+   * under `f` pushes `b` down with it, so `b` lands one below `f` rather than
+   * where the cold run left it, having had no entry at all. Both rankings cost
+   * 7, so what the hint did was choose between two optima, which is the whole
+   * job. What it cannot do is put `b` anywhere its predecessors do not allow.
+   */
+  it('lets a surviving hint on an ancestor move a node with no entry', () => {
+    const graph = build(
+      ['a', 'b', 'c', 'd', 'e', 'f'],
+      [
+        ['a', 'b', 'ab'],
+        ['b', 'c', 'bc'],
+        ['a', 'd', 'ad'],
+        ['d', 'e', 'de'],
+        ['e', 'c', 'ec'],
+        ['f', 'b', 'fb'],
+      ],
+    );
+    expect(ranksOf(graph)).toEqual({ a: 0, b: 1, c: 3, d: 1, e: 2, f: 0 });
+    const hint: ReadonlyMap<NodeId, number> = new Map([['f', 1]]);
+    const hinted = networkSimplexRank({ initialRanks: hint }).run(prepare(graph));
+    expectFeasible(graph, hinted, 'a floor on an ancestor');
+    expect(Object.fromEntries(hinted.ranks)).toEqual({ a: 0, b: 2, c: 3, d: 1, e: 2, f: 1 });
+    expect(totalEdgeLength(graph, hinted)).toBe(totalEdgeLength(graph, rank(graph)));
   });
 
   it('takes a hint from a graph it has never seen', () => {

@@ -74,9 +74,13 @@ export interface NetworkSimplexOptions {
  * Everything unusable is dropped rather than repaired into something else, and
  * dropping is safe because a floor is only ever a preference: the sweep in
  * `longestPathRanks` pushes a node below its predecessors whatever its floor
- * said, so a node with no floor lands exactly where the cold run would have put
- * it. Three things are dropped, all for the same reason, which is that they
- * carry no information a feasible ranking of THIS graph could use.
+ * said, so a node whose entry was dropped is constrained by its predecessors
+ * alone, exactly as it would be with no hint at all. That is not the same as
+ * landing where a cold run would have put it, and it is worth being exact about
+ * which is claimed: a floor that survives propagates down the sweep, so a node
+ * with no entry of its own still moves when an ancestor of it has one. Three
+ * things are dropped, all for the same reason, which is that they carry no
+ * information a feasible ranking of THIS graph could use.
  *
  * An id the graph does not hold has no node to be a floor for. A value that is
  * not an integer is not a rank. And a value outside `[-count, count]` is wider
@@ -530,9 +534,11 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
       for (let index = 0; index < size; index += 1) inTree[at(grouped, base + index)] = 0;
       admit(root);
       while (treeSize < size) {
-        // The candidates are the two heap tops, priced by the class offset. One
-        // comparison then settles both the class and the tie-break, so the edge
-        // that closes is the one the rescan this replaced would have found.
+        // The candidates are the two heap tops, priced by their class offset,
+        // and one comparison settles the class and the tie-break together:
+        // minimum slack, and among equal slacks the lowest edge number. A slack
+        // read off an empty heap is never used, because the edge number beside
+        // it is then -1 and every branch below tests that first.
         const outEdge = heapTop(outward, true);
         const inEdge = heapTop(inward, false);
         const outSlack = at(outward.key, 0) - shifted;
@@ -728,9 +734,9 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  * Total edge length minus the edge count is exactly the number of dummy nodes
  * M2.4b's splitter will mint, so it is the quantity that decides how much of
  * the drawing is chains of stand-in nodes rather than the caller's own. On the
- * 1k bench corpus it takes the default ranker's 40,430 dummies down to 17,285,
- * a 57% cut, in about 20ms. On the 10k corpus it reaches 405,709 from
- * 1,414,263 inside the default budget, and 221,975 given ten times it.
+ * 1k bench corpus it takes `longestPathRankStage`'s 40,430 dummies down to
+ * 17,285, a 57% cut, in about 20ms. On the 10k corpus it reaches 423,426 from
+ * 1,414,263 inside the default budget, and 224,789 given ten times it.
  *
  * **It cannot make the drawing shorter, and it can make it taller.** Every
  * feasible ranking sends each edge down at least one rank, so along a path of L
@@ -745,15 +751,19 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  * optimises the first. Pick `longestPathRankStage` if a short drawing is what
  * matters, naming that stage rather than whichever one is the default today,
  * which is a thing that changes. (Both corpora happen to come out the same
- * height either way, 61 ranks and 153 ranks, so this is a real risk rather than
+ * height either way, 62 ranks and 154 ranks, so this is a real risk rather than
  * a certainty.)
  *
- * Ranks come out contiguous from zero per connected component, as the default
- * stage's do, but as a consequence rather than a construction: a ranking with an
- * empty rank between two occupied ones is never optimal, because sliding
- * everything below the gap up by one shortens every edge that crossed it and
- * breaks none. An exhausted budget can therefore leave a gap, and nothing
- * downstream minds: the order stage sorts the distinct ranks it finds.
+ * Ranks come out contiguous from zero per connected component, as
+ * `longestPathRankStage`'s do, and the two halves of that have different
+ * standing. GAP-FREE is a consequence: a ranking with an empty rank between two
+ * occupied ones is never optimal, because sliding everything below the gap up by
+ * one shortens every edge that crossed it and breaks none. An exhausted budget
+ * can therefore leave a gap, and nothing downstream minds, because the order
+ * stage sorts the distinct ranks it finds. FROM ZERO is a construction: the last
+ * thing {@link tighten} does to a component is subtract its lowest rank,
+ * unconditionally, whatever stopped the run. So a run out of budget can hand
+ * back a gap and can never hand back a floor that is not zero.
  *
  * ## How
  *
@@ -770,21 +780,24 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  * ## The budget
  *
  * `maxIterations` bounds the pivots, and defaults to 20,000, which is a safety
- * valve and not a quality knob. It is ten times what the 1k bench corpus needs
- * to converge (which is between 1,000 and 2,000 pivots: the answer stops moving
- * there and a budget of 200,000 returns the same ranking), and it is what
- * bounds the 10k corpus, which does not converge inside any budget worth
- * spending, to about three seconds. Give it more if a run is worth it: the 10k
- * corpus takes 41 seconds and is still improving at 200,000 pivots.
+ * valve and not a quality knob. It is about fifteen times what the 1k bench
+ * corpus needs to converge, which is about 1,300 pivots (1,000 leaves it at
+ * 17,978 dummies, 1,200 at 17,394, 1,300 at 17,285 which is the optimum, and
+ * 20,000 and 200,000 both return that same 17,285), and it is what bounds the
+ * 10k corpus, which does not converge inside any budget worth spending, to a
+ * few seconds. Give it more if a run is worth it: the 10k corpus is still
+ * improving at 200,000 pivots, and `Number.POSITIVE_INFINITY` is how to ask for
+ * as many as it takes.
  *
  * Whatever stops it, the ranking returned is feasible, and never worse than the
- * ranking it started from. Feasible because every step here is a rank shift of
+ * longest-path ranking it computes before pivoting, which is the cold one when
+ * no hint was given. Feasible because every step here is a rank shift of
  * one side of a cut, which preserves every edge's descent. Never worse because
  * it is CHECKED, and not because it is obvious: growing the first tight tree
  * can shift a partly grown tree in a direction that lengthens more edges than
  * it shortens, and with no pivots left to win that back the run would return
  * something worse than it was given. Each component therefore keeps the better
- * of the ranking it started with and the ranking it ended with. Eight nodes are
+ * of that longest-path ranking and the one it ended with. Eight nodes are
  * enough to reach it, and the graph that does is in the test suite.
  *
  * ## The warm start
