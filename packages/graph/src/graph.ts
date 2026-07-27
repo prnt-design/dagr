@@ -10,6 +10,8 @@ import {
   PortInUseError,
   PortNotFoundError,
 } from './errors.js';
+import { readDocument, restore, toDocument } from './serialize.js';
+import type { GraphDocument } from './serialize.js';
 import { canReach, findCycle, reachable, topologicalOrder } from './traversal.js';
 import type { AdjacencyView } from './traversal.js';
 import { PatchListenerError } from './patch.js';
@@ -418,6 +420,65 @@ export class Graph<
 
   /** Next candidate suffix for a generated edge id (`e1`, `e2`, ...). */
   #nextEdgeSeq = 1;
+
+  /**
+   * The graph a {@link GraphDocument} describes.
+   *
+   * Static rather than a constructor overload, so the three attribute type
+   * parameters can be named at the call site (`Graph.fromJSON<NodeAttrs,
+   * EdgeAttrs, GraphAttrs>(doc)`) and so the entry point is spelled out where
+   * a reader looks for it. The document is validated in full before anything
+   * is built, and then replayed through this class's own public mutators, in
+   * array order.
+   *
+   * Two things follow, and both are the point rather than an implementation
+   * detail. Insertion order is restored, unlike `apply`, because a document
+   * holds the whole graph at once and array order IS the insertion order. And
+   * a document describing an impossible graph is refused by the mutator that
+   * owns the rule, so a duplicate id is a {@link DuplicateNodeError} and an
+   * edge naming a node that is not in the document is a
+   * {@link NodeNotFoundError}, exactly as if a caller had made those calls by
+   * hand. The half-built graph is not handed back and not reachable.
+   *
+   * What is NOT restored is the id generation counters: a document holds
+   * content, not history. See the module docstring on `serialize.ts` for what
+   * that costs.
+   *
+   * O(nodes plus edges plus ports).
+   *
+   * @throws {InvalidDocumentError} when the value is not a graph document,
+   * carrying the path of the offending field.
+   * @throws {DagrGraphError} whatever the mutators throw for a document that
+   * is well formed but describes a graph that does not hold together.
+   */
+  static fromJSON<
+    NodeAttrs extends object = Attrs,
+    EdgeAttrs extends object = Attrs,
+    GraphAttrs extends object = Attrs,
+  >(doc: unknown): Graph<NodeAttrs, EdgeAttrs, GraphAttrs> {
+    const document = readDocument<NodeAttrs, EdgeAttrs, GraphAttrs>(doc);
+    const graph = new Graph<NodeAttrs, EdgeAttrs, GraphAttrs>();
+    restore(graph, document);
+    return graph;
+  }
+
+  /**
+   * The graph as a {@link GraphDocument}: attributes, nodes with their ports,
+   * and edges, every listing in insertion order.
+   *
+   * Named `toJSON` because that is the hook `JSON.stringify` calls, so
+   * `JSON.stringify(graph)` is the document and no caller has to remember to
+   * reach for a method first. Deliberate, and the reason the method is not
+   * called `toDocument` on the class.
+   *
+   * The attribute bags come back by reference, frozen as the graph holds them,
+   * and are never inspected: a value `JSON.stringify` cannot express behaves
+   * here exactly as it would in any other object. O(nodes plus edges plus
+   * ports), with no deep copy.
+   */
+  toJSON(): GraphDocument<NodeAttrs, EdgeAttrs, GraphAttrs> {
+    return toDocument(this);
+  }
 
   /** Number of nodes currently in the graph. O(1). */
   get nodeCount(): number {

@@ -23,7 +23,8 @@ export type DagrGraphErrorCode =
   | 'PORT_NOT_FOUND'
   | 'PORT_IN_USE'
   | 'PORT_DIRECTION'
-  | 'CYCLE';
+  | 'CYCLE'
+  | 'INVALID_DOCUMENT';
 
 /**
  * Base class for every error the graph model throws. Abstract on purpose: a
@@ -32,8 +33,8 @@ export type DagrGraphErrorCode =
  *
  * This is a catch base, not an extension point. It is exported so one
  * `instanceof` can catch the family and so `code` can be switched on through
- * it, and the family is exactly the ten classes below.
- * {@link isDagrGraphError} narrows to a closed union of those ten and rejects
+ * it, and the family is exactly the eleven classes below.
+ * {@link isDagrGraphError} narrows to a closed union of those eleven and rejects
  * anything else, a subclass declared elsewhere included. A sibling package
  * that wants the same `code` ergonomics should declare its own root class,
  * its own code union, and its own predicate rather than extending this one:
@@ -215,6 +216,48 @@ export class CycleError extends DagrGraphError {
 }
 
 /**
+ * Thrown when `Graph.fromJSON` is handed something that is not a graph
+ * document.
+ *
+ * This is a different failure from the ones the mutators throw, and that is
+ * why it is a class of its own rather than an `InvalidIdError` stretched to
+ * cover it. "This is not a graph document" says the input never described a
+ * graph; "node `b` does not exist" says it described one that does not hold
+ * together. A caller reading a file wants to tell a corrupt file from a
+ * consistent file describing a graph this version refuses, and only the first
+ * is worth retrying against a different reader.
+ *
+ * `path` locates the offending field from the document root in the notation a
+ * reader would use to reach it, `nodes[3].ports[1].direction`, so an error from
+ * a ten-thousand-node document still says which one. The empty string is the
+ * document itself, which is what a non-object or a missing root field gets,
+ * since there is no field to name. `detail` is what was wrong there, and it is
+ * kept as a field as well as folded into the message so a caller rendering its
+ * own diagnostic does not have to parse the message back apart.
+ *
+ * Structure only: the validation this comes from never inspects an attribute
+ * value, so a bag holding anything at all passes. Attribute types are an
+ * unchecked caller claim on the way in exactly as they are everywhere else the
+ * model stores caller data.
+ */
+export class InvalidDocumentError extends DagrGraphError {
+  readonly code = 'INVALID_DOCUMENT';
+
+  constructor(
+    readonly path: string,
+    readonly detail: string,
+  ) {
+    super(
+      path === ''
+        ? `Invalid graph document: ${detail}`
+        : `Invalid graph document at ${path}: ${detail}`,
+    );
+    this.name = 'InvalidDocumentError';
+    Object.setPrototypeOf(this, InvalidDocumentError.prototype);
+  }
+}
+
+/**
  * Every concrete error the graph model throws, as a discriminated union.
  *
  * {@link DagrGraphError} narrows the `code` but not the object it came from,
@@ -233,7 +276,8 @@ export type DagrGraphErrorLike =
   | PortNotFoundError
   | PortInUseError
   | PortDirectionError
-  | CycleError;
+  | CycleError
+  | InvalidDocumentError;
 
 /**
  * Every member of {@link DagrGraphErrorCode}, keyed so the compiler keeps the
@@ -252,9 +296,10 @@ const KNOWN_CODES: Readonly<Record<DagrGraphErrorCode, true>> = {
   PORT_IN_USE: true,
   PORT_DIRECTION: true,
   CYCLE: true,
+  INVALID_DOCUMENT: true,
 };
 
-/** The same ten codes as a set, for the membership test in the predicate. */
+/** The same eleven codes as a set, for the membership test in the predicate. */
 const KNOWN_CODE_SET: ReadonlySet<string> = new Set(Object.keys(KNOWN_CODES));
 
 /**
@@ -262,7 +307,7 @@ const KNOWN_CODE_SET: ReadonlySet<string> = new Set(Object.keys(KNOWN_CODES));
  * union rather than to the abstract base.
  *
  * The check is `instanceof DagrGraphError` AND a membership test of `code`
- * against the ten known codes. The second half is what makes the runtime test
+ * against the eleven known codes. The second half is what makes the runtime test
  * as closed as {@link DagrGraphErrorLike} claims to be: the base class is
  * exported, so a further subclass carrying a code of its own would pass the
  * `instanceof` alone and be narrowed to a union it is not a member of, at

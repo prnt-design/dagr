@@ -6,6 +6,7 @@ import {
   DuplicateNodeError,
   DuplicatePortError,
   EdgeNotFoundError,
+  InvalidDocumentError,
   InvalidIdError,
   NodeNotFoundError,
   PortDirectionError,
@@ -19,7 +20,7 @@ import { PatchListenerError } from '../src/patch.js';
 /**
  * The base class is abstract, so a test that wants a bare family member has to
  * declare one. Nothing in the package ships a class like this: every real
- * error is one of the nine below.
+ * error is one of the eleven below.
  */
 class TestGraphError extends DagrGraphError {
   readonly code = 'INVALID_ID';
@@ -159,6 +160,32 @@ describe('PortDirectionError', () => {
   });
 });
 
+describe('InvalidDocumentError', () => {
+  it('carries the INVALID_DOCUMENT code and the path of the offending field', () => {
+    const error = new InvalidDocumentError('nodes[3].ports[1].direction', 'expected a direction');
+    expect(error).toBeInstanceOf(DagrGraphError);
+    expect(error).toBeInstanceOf(InvalidDocumentError);
+    expect(error.name).toBe('InvalidDocumentError');
+    expect(error.code).toBe('INVALID_DOCUMENT');
+    expect(error.path).toBe('nodes[3].ports[1].direction');
+    expect(error.detail).toBe('expected a direction');
+    expect(error.message).toBe(
+      'Invalid graph document at nodes[3].ports[1].direction: expected a direction',
+    );
+  });
+
+  /**
+   * The whole document is a field like any other, and it has no path to name.
+   * The empty path is that case, and the message drops the "at" clause rather
+   * than rendering an empty one.
+   */
+  it('names the document itself with the empty path', () => {
+    const error = new InvalidDocumentError('', 'expected an object');
+    expect(error.path).toBe('');
+    expect(error.message).toBe('Invalid graph document: expected an object');
+  });
+});
+
 describe('isDagrGraphError', () => {
   it('accepts every member of the family', () => {
     for (const error of everyError()) expect(isDagrGraphError(error)).toBe(true);
@@ -186,9 +213,9 @@ describe('isDagrGraphError', () => {
   });
 
   /**
-   * The predicate narrows to a closed union of the nine concrete classes, so
+   * The predicate narrows to a closed union of the eleven concrete classes, so
    * an `instanceof` test against the exported base is not enough on its own: a
-   * tenth subclass with a code of its own would pass it and be narrowed to a
+   * twelfth subclass with a code of its own would pass it and be narrowed to a
    * union it is not in, and an exhaustive-looking switch would then read a
    * field off a class that does not carry it. The code membership test is what
    * makes the runtime check as closed as the type claims.
@@ -229,6 +256,8 @@ describe('isDagrGraphError', () => {
           return `${error.direction} as ${error.end}`;
         case 'CYCLE':
           return error.cycle.join('->');
+        case 'INVALID_DOCUMENT':
+          return error.path;
         default: {
           const unreachable: never = error;
           return unreachable;
@@ -254,6 +283,7 @@ describe('isDagrGraphError', () => {
       'e1,e2',
       'in as source',
       'a->b',
+      'nodes[0].id',
     ]);
   });
 });
@@ -271,6 +301,7 @@ function everyError(): DagrGraphErrorLike[] {
     new PortInUseError('a', 'out', ['e1', 'e2']),
     new PortDirectionError('a', 'sink', 'in', 'source'),
     new CycleError(['a', 'b']),
+    new InvalidDocumentError('nodes[0].id', 'expected a string'),
   ];
 }
 
@@ -312,6 +343,8 @@ describe('error catching', () => {
           return 'port direction';
         case 'CYCLE':
           return 'cycle';
+        case 'INVALID_DOCUMENT':
+          return 'invalid document';
         default: {
           const unreachable: never = error.code;
           return unreachable;
@@ -331,6 +364,7 @@ describe('error catching', () => {
       'port in use',
       'port direction',
       'cycle',
+      'invalid document',
     ]);
   });
 

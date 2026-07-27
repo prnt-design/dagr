@@ -13,6 +13,7 @@ export {
   DuplicateNodeError,
   DuplicatePortError,
   EdgeNotFoundError,
+  InvalidDocumentError,
   InvalidIdError,
   NodeNotFoundError,
   PortDirectionError,
@@ -37,6 +38,17 @@ export type {
   UpdateGraphAttrsOp,
   UpdateNodeAttrsOp,
 } from './patch.js';
+// Only the document types are public. `toJSON` is a method on `Graph` and
+// `fromJSON` is a static on it, so the functions behind them in `serialize.ts`
+// are an internal seam in the same way `traversal.ts` is: exporting them would
+// pin a second entry point to the format before anything outside has asked for
+// one. A caller who needs a name for a document has one.
+export type {
+  EdgeDocument,
+  GraphDocument,
+  NodeDocument,
+  PortDocument,
+} from './serialize.js';
 export type {
   Attrs,
   AttrsPatch,

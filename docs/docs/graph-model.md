@@ -21,7 +21,8 @@ renderer a fresh set of coordinates.
 Nodes, edges, and the graph itself also carry attributes, and nodes may declare
 ports for edges to attach to. Every mutation emits a patch, the flat and
 invertible description of what that call did, so a consumer can follow the
-graph instead of polling it. All three are described below.
+graph instead of polling it. A whole graph also writes itself out as a JSON
+document and reads back from one. All four are described below.
 
 ## Usage
 
@@ -626,6 +627,223 @@ has not finished when the next one starts. If the work has to be asynchronous,
 make the listener itself synchronous: push the patch onto a queue and drain the
 queue outside the emission.
 
+## Serialization
+
+`graph.toJSON()` writes the whole graph as a plain JSON document and
+`Graph.fromJSON(doc)` reads one back. `toJSON` is named for the hook
+`JSON.stringify` calls, so `JSON.stringify(graph)` is the document and there is
+no method to remember first.
+
+| Method | Behaviour |
+| --- | --- |
+| `graph.toJSON()` | The graph as a `GraphDocument`, in insertion order throughout. O(nodes plus edges plus ports). |
+| `Graph.fromJSON(doc)` | The graph a document describes. Static, and it takes the three attribute type parameters. Throws `InvalidDocumentError` for anything that is not a document, and whatever the mutators throw for one that is. |
+
+```ts
+import { Graph } from '@dagr/graph';
+import type { GraphDocument } from '@dagr/graph';
+
+const graph = new Graph();
+graph.updateAttrs({ rankdir: 'TB' });
+graph.addNode({ id: 'ingest', attrs: { label: 'Ingest' }, ports: [{ id: 'out', direction: 'out' }] });
+graph.addNode({ id: 'parse', ports: [{ id: 'in', direction: 'in' }] });
+graph.addEdge({ source: 'ingest', target: 'parse', id: 'first', sourcePort: 'out', targetPort: 'in' });
+
+const document: GraphDocument = graph.toJSON();
+const text = JSON.stringify(graph); // the same document, via the hook
+
+const restored = Graph.fromJSON(JSON.parse(text));
+restored.nodes().map((node) => node.id); // ['ingest', 'parse'], in that order
+```
+
+The document that produces, in full:
+
+```json
+{
+  "version": 1,
+  "attrs": { "rankdir": "TB" },
+  "nodes": [
+    { "id": "ingest", "attrs": { "label": "Ingest" }, "ports": [{ "id": "out", "direction": "out" }] },
+    { "id": "parse", "attrs": {}, "ports": [{ "id": "in", "direction": "in" }] }
+  ],
+  "edges": [
+    {
+      "id": "first",
+      "source": "ingest",
+      "target": "parse",
+      "attrs": {},
+      "sourcePort": "out",
+      "targetPort": "in"
+    }
+  ]
+}
+```
+
+```ts
+interface GraphDocument<
+  NodeAttrs extends object = Attrs,
+  EdgeAttrs extends object = Attrs,
+  GraphAttrs extends object = Attrs,
+> {
+  readonly version: 1;
+  readonly attrs: ReadAttrs<GraphAttrs>;
+  readonly nodes: readonly NodeDocument<NodeAttrs>[];
+  readonly edges: readonly EdgeDocument<EdgeAttrs>[];
+}
+
+interface NodeDocument<N extends object = Attrs> {
+  readonly id: NodeId;
+  readonly attrs: ReadAttrs<N>;
+  readonly ports: readonly PortDocument[];
+}
+
+interface EdgeDocument<E extends object = Attrs> {
+  readonly id: EdgeId;
+  readonly source: NodeId;
+  readonly target: NodeId;
+  readonly attrs: ReadAttrs<E>;
+  readonly sourcePort?: PortId;
+  readonly targetPort?: PortId;
+}
+
+interface PortDocument {
+  readonly id: PortId;
+  readonly direction: PortDirection;
+}
+```
+
+These are document types rather than the record types under new names, even
+though the two shapes match today. The document is a wire format with a version
+field on it and the records are what the model holds in memory, and they are
+allowed to diverge: when `Port` grows an attribute bag the record changes on the
+spot, while the document changing is a format decision with a version bump
+attached. `direction` is required here where `PortInit` defaults it, for the
+same reason.
+
+They are exported so a caller holding a document in a variable, a field, or a
+function signature has something to annotate it with. `GraphDocument` takes the
+same three attribute type parameters `Graph` does, in the same order and with the
+same defaults, so the bags inside are typed rather than `unknown`. Every field
+is required, empty bags and empty port lists included: there is exactly one
+document for a given graph, which is what makes two documents comparable
+directly.
+
+### The round trip, and its one limit
+
+`Graph.fromJSON(graph.toJSON())` gives back a graph that writes the same
+document, down to the text. Every id, attribute, port, and port binding
+survives, and so does insertion order in all three places it exists: node
+order, edge order, and each node's port declaration order.
+
+**A document describes content, not history.** The id generation counters are
+not in it. Two graphs holding the same elements in the same order write the
+same document whatever sequence of calls built them, which is what makes a
+document usable as a golden file: a committed fixture compares equal to a
+rebuilt one with no normalisation step in between.
+
+That is the whole limit, and it is worth stating plainly rather than leaving to
+be discovered. The counters are rebuilt from the ids that are actually there,
+so a generated suffix the original spent on an element it has since removed is
+free again on the other side:
+
+```ts
+const graph = new Graph();
+graph.addNode(); // 'n1'
+graph.addNode(); // 'n2'
+graph.addNode(); // 'n3'
+graph.removeNode('n3');
+graph.removeNode('n2'); // the graph holds 'n1', its counter sits past 'n3'
+
+const restored = Graph.fromJSON(graph.toJSON());
+graph.addNode().id; // 'n4': the original never hands out a spent suffix again
+restored.addNode().id; // 'n2': this graph has only ever seen 'n1'
+```
+
+A round trip is therefore not a way to continue the original instance's
+generation sequence. Uniqueness within a graph is unaffected: replay passes
+every id through `addNode` and `addEdge`, which advance the counters past an
+explicit id exactly as they always do.
+
+### How this differs from patch replay
+
+This is the sharp difference, and it is a decision rather than an
+implementation accident. `apply` restores content but not insertion order, for
+the reason the section above gives: an op describes one element and cannot know
+where in the order it belongs, so a replayed element lands at the end of its
+listing exactly as a re-added one would.
+
+A document does not have that problem. It holds the whole graph at once, so
+array order *is* insertion order and replaying in array order restores it for
+free. Undoing `removeNode('a')` on a graph of `a`, `b`, `c` gives you `b`, `c`,
+`a`; round-tripping the same graph gives you `a`, `b`, `c`.
+
+What the two share is the replay mechanism. `fromJSON` calls the same public
+mutators any caller would, in the same order, so every consistency rule is
+checked by the one implementation that owns it. A document naming an edge
+endpoint that is not in its node list fails with `NodeNotFoundError`, a
+duplicate node id with `DuplicateNodeError`, a port binding facing the wrong
+way with `PortDirectionError`: the errors the equivalent calls would throw, not
+a second set. Nothing half built escapes either, since the throw comes out of
+`fromJSON` and the partly filled graph is never handed to anyone. A fresh graph
+has no listeners, so the patches emitted during replay are observed by nobody.
+
+### Attribute values are passed through, not inspected
+
+`toJSON` hands the frozen attribute bags back by reference. It does not copy
+them, walk them, or check what is in them, which is what keeps writing a
+document O(nodes plus edges plus ports) with no deep copy.
+
+The consequence is worth being explicit about: a caller who stored a function,
+an `undefined`, a `Date`, or a cyclic object gets `JSON.stringify`'s own
+behaviour for it, dropped or converted or thrown. That is what any other object
+holding those values does, and rewriting them here would mean the document
+carrying a value the caller never stored.
+
+Values are not validated on the way back in either. `fromJSON` checks that a
+bag is an object and stops there, so the attribute type parameters are an
+unchecked caller claim exactly as they are everywhere else the model stores
+caller data. What it does guarantee is that the two graphs do not share bags: a
+document's bags are handed to the mutators as merge patches, and the mutators
+store fresh bags of their own.
+
+### Versions and refusals
+
+Every document carries `"version": 1`, and this build reads that version and no
+other. The field is constant, so it never disturbs a golden file, and it is
+cheap insurance while the format is pre-1.0: a document from a later format is
+refused with a message that says so, rather than failing somewhere structural
+and confusing.
+
+Anything that is not a graph document is refused with `InvalidDocumentError`,
+which carries the `path` of the offending field in the notation you would use to
+reach it, so an error from a large document still says which element is wrong:
+
+```ts
+import { InvalidDocumentError } from '@dagr/graph';
+
+try {
+  Graph.fromJSON(JSON.parse(text));
+} catch (error) {
+  if (error instanceof InvalidDocumentError) {
+    error.path; // 'nodes[3].ports[1].direction'
+    error.detail; // 'expected "in", "out" or "inout", got "sideways"'
+    error.message; // 'Invalid graph document at nodes[3].ports[1].direction: ...'
+  }
+}
+```
+
+The empty path is the document itself, which is what a non-object or a missing
+top-level field gets, since there is no field to name. Reading stops at the
+first problem rather than collecting them all.
+
+That this is a class of its own is the point. "This is not a graph document"
+and "this document names a node that is not there" are different failures: the
+first says the input never described a graph, the second says it described one
+that does not hold together, and only the first means the file is corrupt.
+Fields this version does not know are ignored rather than refused, since a
+document from a later format is caught on its `version` long before an unknown
+field could be read.
+
 ## Methods
 
 ### Counts
@@ -808,7 +1026,7 @@ try {
     switch (error.code) {
       case 'EDGE_NOT_FOUND':
         break;
-      // ... the other eight codes
+      // ... the other nine codes
     }
   }
 }
@@ -829,14 +1047,15 @@ try {
 | `PortInUseError` | `PORT_IN_USE` | `removePort` names a port live edges still reference. Carries `nodeId`, `portId`, and `edgeIds`. |
 | `PortDirectionError` | `PORT_DIRECTION` | An edge asks a port to be an end it does not face. Carries `nodeId`, `portId`, `direction`, and `end`. |
 | `CycleError` | `CYCLE` | `topologicalOrder` is called on a graph with a cycle. Carries `cycle`, a witness. |
+| `InvalidDocumentError` | `INVALID_DOCUMENT` | `Graph.fromJSON` is handed something that is not a graph document. Carries `path` (the offending field, `nodes[3].ports[1].direction`, empty for the document itself) and `detail`. |
 
 Switching on `code` through `DagrGraphError` narrows the code but not the
 object, because an abstract base cannot know its subclasses. `isDagrGraphError`
 closes that gap: it narrows a caught value to `DagrGraphErrorLike`, a
-discriminated union of the ten concrete classes, so an arm can read the fields
-only its own class carries. It tests `instanceof DagrGraphError` and then that
-`code` is one of the ten, so the runtime check is as closed as the type it
-narrows to.
+discriminated union of the eleven concrete classes, so an arm can read the
+fields only its own class carries. It tests `instanceof DagrGraphError` and then
+that `code` is one of the eleven, so the runtime check is as closed as the type
+it narrows to.
 
 `DagrGraphError` is a catch base, not an extension point. A subclass declared
 outside this package is correctly rejected by `isDagrGraphError`, because the
@@ -855,7 +1074,7 @@ try {
       case 'PORT_IN_USE':
         error.edgeIds; // readonly string[], no cast needed
         break;
-      // ... the other eight codes
+      // ... the other nine codes
     }
   }
 }
@@ -920,10 +1139,16 @@ tie-break rule.
 
 ## Not here yet
 
-`toJSON`/`fromJSON` is a separate task. See
-[ROADMAP.md](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md) for when
-it arrives. Until then the graph is identity, shape, adjacency, attributes,
-ports, patches, and traversal.
+There is one document format and one version of it, and no migration path
+between versions, because there has never been a second version. When the
+format changes, `version` is what a reader will refuse on, and what a migration
+would switch over. Writing the migration machinery before there is anything to
+migrate would be guessing at the shape of a change nobody has made yet.
+
+Documents also have no partial or streaming form. `toJSON` builds the whole
+document and `fromJSON` reads the whole document, so a graph too large to hold
+twice in memory is a graph this API cannot serialize. Nothing has asked for
+that, and a patch log is already the incremental form for the case that would.
 
 Patches describe single calls. There is no batching or transaction API, so
 several mutations cannot be coalesced into one patch, and no listener sees a

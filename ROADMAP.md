@@ -177,9 +177,66 @@ findings addressed or logged, docs land with the feature.
   `bench/src/gate.mjs`). Nothing was absorbed: the traversal entries are new and
   the rest are unchanged code. A `--only` flag so adding a benchmark stops
   rebasing the others is worth having and is not built.
-- [ ] **M1.5** Serialization: `toJSON`/`fromJSON` with identity-preserving
+- [x] **M1.5** Serialization: `toJSON`/`fromJSON` with identity-preserving
   round-trips, property-tested. Serialization section added to the graph model
   docs page (the page itself shipped with M1.1).
+  Landed as `toJSON()` on `Graph` and a static `Graph.fromJSON<N, E, G>(doc)`
+  over an internal `serialize.ts`, with the document types exported and the
+  three functions behind them kept private, the same call M1.4 made with
+  `traversal.ts` and M2.2 with `defaultStages`.
+  Decided here, and it is the decision the rest follow from. THE DOCUMENT
+  DESCRIBES CONTENT, NOT HISTORY: the id generation counters are not
+  serialized, so two graphs holding the same elements in the same order write
+  the same document whatever sequence of calls built them. M2.5 through M2.9
+  commit golden files and a document that varied with history could not be a
+  golden key. It costs one thing and the docs state it rather than glossing it:
+  a generated suffix the original spent on a since-removed element is free
+  again after a round trip, so a round trip is not a way to continue an
+  instance's generation sequence. Uniqueness within a graph is unaffected,
+  since replay passes every id through `addNode`, which advances the counters
+  as it always does.
+  Also decided: REPLAY IS ORDER FAITHFUL, deliberately unlike `apply`. M1.3
+  decided patch replay is not, because one op cannot know where in the order it
+  belongs; a document holds the whole graph at once, so that reason does not
+  apply and array order IS insertion order. All three orderings come back, node
+  order, edge order, and each node's port declaration order, and the property
+  suite compares an ORDERED snapshot where `patch.properties.test.ts`
+  deliberately sorts before comparing. This does not reopen M3.2: order-faithful
+  patch replay is still undecided and still belongs to the milestone that needs
+  it. It also means the round trip is exact as TEXT and not merely as content,
+  attribute key order included, which is what a golden file actually rests on
+  and is asserted as such.
+  Also decided: `fromJSON` replays through the public mutators, so validation is
+  reused rather than reimplemented and a corrupt document fails the way the
+  equivalent bad call fails. That splits the failures in two, which is why the
+  family has an eleventh member: `InvalidDocumentError` (`INVALID_DOCUMENT`,
+  carrying the `path` of the offending field) means "this is not a graph
+  document", while a well-formed document naming an endpoint that is not there
+  still gets `NodeNotFoundError` from `addEdge`. Only the first means the file
+  is corrupt.
+  Also decided: `toJSON` does not inspect attribute values. The frozen bags go
+  back by reference, so a caller who stored a function or a cyclic object gets
+  `JSON.stringify`'s own behaviour, which is what any other object does and is
+  documented rather than silently true; values are not validated on the way in
+  either, since attribute types are an unchecked caller claim everywhere else
+  the model stores caller data. A `version` field, constant at 1, is cheap
+  insurance while the format is pre-1.0 and constant so it never disturbs a
+  golden file. And `toJSON` is the `JSON.stringify` hook by name, so
+  `JSON.stringify(graph)` is the document, which is tested rather than left as
+  a happy accident.
+  Decided during implementation and not in the plan: EVERY DOCUMENT FIELD IS
+  REQUIRED, empty bags, empty port lists and a port's `direction` included,
+  even though `PortInit` defaults `direction` to `'inout'`. A declaration is
+  written by hand and deserves the shorthand; a document is written by `toJSON`,
+  which always states it. Accepting the shorthand would mean several documents
+  per graph, one of which does not round trip back to itself, and canonical form
+  is the whole point of a golden key. Unknown fields are ignored rather than
+  refused, since a document from a later format is caught on `version` long
+  before an unknown field could be read.
+  No hot path changed, so `bench/baseline.json` is untouched and nothing was
+  recaptured. Serialization has no benchmark of its own: nothing in M2 or M3
+  runs it per frame, and adding one would be measuring a path no milestone is
+  on.
 
 ## M2: Layout core (`@dagr/layout`)
 

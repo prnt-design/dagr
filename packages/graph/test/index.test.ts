@@ -8,7 +8,11 @@ import type {
   DagrGraphErrorCode,
   DagrGraphErrorLike,
   Edge,
+  EdgeDocument,
   EdgeInit,
+  GraphDocument,
+  NodeDocument,
+  PortDocument,
   Node,
   NodeInit,
   Patch,
@@ -45,6 +49,8 @@ describe('@dagr/graph public surface', () => {
     expect(typeof api.PortNotFoundError).toBe('function');
     expect(typeof api.PortInUseError).toBe('function');
     expect(typeof api.PortDirectionError).toBe('function');
+    expect(typeof api.CycleError).toBe('function');
+    expect(typeof api.InvalidDocumentError).toBe('function');
   });
 
   it('exports the isDagrGraphError guard', () => {
@@ -70,6 +76,7 @@ describe('@dagr/graph public surface', () => {
       'DuplicatePortError',
       'EdgeNotFoundError',
       'Graph',
+      'InvalidDocumentError',
       'InvalidIdError',
       'NodeNotFoundError',
       'PatchListenerError',
@@ -187,6 +194,8 @@ describe('@dagr/graph public surface', () => {
       new api.PortNotFoundError('a', 'p').code,
       new api.PortInUseError('a', 'p', ['e1']).code,
       new api.PortDirectionError('a', 'p', 'in', 'source').code,
+      new api.CycleError(['a', 'b']).code,
+      new api.InvalidDocumentError('nodes[0]', 'expected an object').code,
     ];
     expect(codes).toEqual([
       'INVALID_ID',
@@ -198,6 +207,8 @@ describe('@dagr/graph public surface', () => {
       'PORT_NOT_FOUND',
       'PORT_IN_USE',
       'PORT_DIRECTION',
+      'CYCLE',
+      'INVALID_DOCUMENT',
     ]);
   });
 
@@ -225,6 +236,50 @@ describe('@dagr/graph public surface', () => {
     expect(direction).toBe('out');
     expect(edge.sourcePort).toBe('p');
     expect(family[0]?.code).toBe('PORT_NOT_FOUND');
+  });
+
+  /**
+   * The document types are annotated by hand, and under all three attribute
+   * type parameters, because that is the whole reason they are exported: a
+   * caller holding a document in a field or passing one across a function
+   * boundary needs a name for it, and the bags inside have to stay typed
+   * rather than collapsing to `unknown`. Checked by `tsc --noEmit` over this
+   * directory, so the assertion is the annotation, not the expectation.
+   */
+  it('exports the document types, under all three attribute type parameters', () => {
+    type NodeAttrs = { label: string };
+    type EdgeAttrs = { weight: number };
+    type GraphAttrs = { rankdir: 'TB' | 'LR' };
+
+    const graph = new api.Graph<NodeAttrs, EdgeAttrs, GraphAttrs>();
+    graph.updateAttrs({ rankdir: 'LR' });
+    graph.addNode({ id: 'a', attrs: { label: 'A' }, ports: [{ id: 'p', direction: 'out' }] });
+    graph.addNode('b');
+    graph.addEdge({ source: 'a', target: 'b', id: 'ab', attrs: { weight: 2 }, sourcePort: 'p' });
+
+    const document: GraphDocument<NodeAttrs, EdgeAttrs, GraphAttrs> = graph.toJSON();
+    const node: NodeDocument<NodeAttrs> | undefined = document.nodes[0];
+    const port: PortDocument | undefined = node?.ports[0];
+    const edge: EdgeDocument<EdgeAttrs> | undefined = document.edges[0];
+    const rankdir: 'TB' | 'LR' | undefined = document.attrs.rankdir;
+    const label: string | undefined = node?.attrs.label;
+    const weight: number | undefined = edge?.attrs.weight;
+
+    expect([rankdir, label, weight, port?.direction, edge?.sourcePort]).toEqual([
+      'LR',
+      'A',
+      2,
+      'out',
+      'p',
+    ]);
+
+    const restored: api.Graph<NodeAttrs, EdgeAttrs, GraphAttrs> = api.Graph.fromJSON<
+      NodeAttrs,
+      EdgeAttrs,
+      GraphAttrs
+    >(JSON.parse(JSON.stringify(graph)));
+    expect(restored.requireNode('a').attrs.label).toBe('A');
+    expect(restored.toJSON()).toEqual(document);
   });
 
   it('exports the Node and Edge types', () => {
