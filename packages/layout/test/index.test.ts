@@ -8,6 +8,7 @@ import type {
   LayoutResult,
   LayoutStageOverrides,
   LayoutStages,
+  NetworkSimplexOptions,
   OrderOutput,
   OrderStage,
   OrderedState,
@@ -89,6 +90,21 @@ describe('@dagr/layout public surface', () => {
     expect(typeof api.InternalLayoutError).toBe('function');
   });
 
+  // The one stage exported by name, because it is not a placeholder waiting for
+  // a real algorithm: it is a second real algorithm with a different objective,
+  // and a caller has to be able to name the one it wants.
+  it('exports the network simplex rank stage and its factory', () => {
+    expect(api.networkSimplexRankStage.name).toBe('network-simplex-rank');
+    expect(api.defaultStages.rank).not.toBe(api.networkSimplexRankStage);
+    const graph = new Graph();
+    graph.addNode('a');
+    graph.addNode('b');
+    graph.addEdge('a', 'b');
+    const options: NetworkSimplexOptions = { maxIterations: 10, initialRanks: new Map() };
+    const stage: RankStage = api.networkSimplexRank(options);
+    expect(api.layout({ graph }, { rank: stage }).nodes.size).toBe(2);
+  });
+
   it('exports nothing else at runtime', () => {
     expect(Object.keys(api).sort()).toEqual([
       'DEFAULT_LAYOUT_CONFIG',
@@ -98,6 +114,8 @@ describe('@dagr/layout public surface', () => {
       'StageContractError',
       'defaultStages',
       'layout',
+      'networkSimplexRank',
+      'networkSimplexRankStage',
     ]);
   });
 
