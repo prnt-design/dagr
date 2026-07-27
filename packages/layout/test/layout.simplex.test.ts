@@ -733,12 +733,8 @@ describe('networkSimplexRank and its warm start', () => {
     const hints: [string, ReadonlyMap<NodeId, number>][] = [
       ['every node at zero', new Map([...cold.ranks].map(([id]) => [id, 0]))],
       ['the ranking upside down', new Map([...cold.ranks].map(([id, value]) => [id, -value]))],
-      ['ids the graph does not hold', new Map([['nope', 3]])],
       ['a node missing from the hint', new Map([['c', 3]])],
-      ['ranks that are not integers', new Map([['b', 2.5]])],
-      ['a rank wider than the graph', new Map([['b', 1e9]])],
-      ['a rank below anything usable', new Map([['b', -1e9]])],
-      ['nothing at all', new Map()],
+      ['the other optimum', other],
     ];
     for (const [what, hint] of hints) {
       const state = networkSimplexRank({ initialRanks: hint }).run(prepare(graph));
@@ -748,6 +744,73 @@ describe('networkSimplexRank and its warm start', () => {
       // able to break.
       const used = [...new Set(state.ranks.values())].sort((left, right) => left - right);
       expect(used, what).toEqual(used.map((_, index) => index));
+    }
+  });
+
+  // Dropped entirely rather than repaired into something else, which is a
+  // stronger claim than "still optimal": each of these leaves the run exactly
+  // where the cold one landed. A fractional rank rounded rather than dropped
+  // would put `b` on rank 2 and pass an optimality check, and a rank of a
+  // billion honoured rather than dropped would hand the solver a ranking
+  // stretched over a window it has to pivot back closed, one pivot per unit of
+  // nonsense, which no budget survives.
+  it('drops a hint entry that carries nothing a ranking of this graph could use', () => {
+    const graph = twoOptima();
+    const hints: [string, ReadonlyMap<NodeId, number>][] = [
+      ['ids the graph does not hold', new Map([['nope', 3]])],
+      ['ranks that are not integers', new Map([['b', 2.5]])],
+      ['a rank wider than the graph', new Map([['b', 1e9]])],
+      ['a rank below anything usable', new Map([['b', -1e9]])],
+      ['nothing at all', new Map()],
+    ];
+    for (const [what, hint] of hints) {
+      const state = networkSimplexRank({ initialRanks: hint }).run(prepare(graph));
+      expect([...state.ranks], what).toEqual([...rank(graph).ranks]);
+    }
+  });
+
+  /**
+   * The one property that reaches the incremental bookkeeping a pivot does
+   * outside the subtree it moves, and the reason it is here rather than beside
+   * the optimality suite: those graphs are small enough to brute force and this
+   * one is not.
+   *
+   * A pivot rehangs one side of a cut somewhere else in the tree, so the subtree
+   * sums along the path from the old attachment point to the new one change,
+   * and only those. Getting that wrong does not break feasibility and does not
+   * throw. It corrupts a cut value, so the search stops at a ranking that is not
+   * optimal, and WHICH ranking depends on where it started. Convergence to a
+   * global optimum does not: the cost is the same from every starting basis.
+   * Skipping the update leaves these graphs at 71 and 492 from a cold start and
+   * at 69 and 490 from one of the hinted ones, which is what this catches.
+   */
+  it('reaches the same total from four very different starting points', () => {
+    for (const [nodes, edges, seed] of [
+      [20, 40, 2],
+      [60, 150, 0],
+    ] as const) {
+      const random = mulberry32(seed);
+      const graph = new Graph();
+      for (let index = 0; index < nodes; index += 1) graph.addNode(`v${String(index)}`);
+      for (let index = 0; index < edges; index += 1) {
+        graph.addEdge(
+          `v${String(Math.floor(random() * nodes))}`,
+          `v${String(Math.floor(random() * nodes))}`,
+          `e${String(index)}`,
+        );
+      }
+      const where = `${String(nodes)} nodes, ${String(edges)} edges`;
+      const cold = rank(graph);
+      const total = totalEdgeLength(graph, cold);
+      expect(total, where).toBeLessThan(totalEdgeLength(graph, longestPathRankStage.run(prepare(graph))));
+      // Every one of these is a different feasible starting basis: the ranking
+      // squashed flat, stretched to twice its height, and turned upside down.
+      for (const scale of [0, 2, -1]) {
+        const hint = new Map([...cold.ranks].map(([id, value]) => [id, value * scale]));
+        const state = networkSimplexRank({ initialRanks: hint }).run(prepare(graph));
+        expectFeasible(graph, state, `${where} from ${String(scale)}`);
+        expect(totalEdgeLength(graph, state), `${where} from ${String(scale)}`).toBe(total);
+      }
     }
   });
 
