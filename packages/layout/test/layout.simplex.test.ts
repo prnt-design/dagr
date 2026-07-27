@@ -5,6 +5,7 @@ import { measureNodes, resolveConfig } from '../src/config.js';
 import { InvalidConfigError, defaultStages, layout } from '../src/index.js';
 import { longestPathRankStage } from '../src/rank.js';
 import { networkSimplexRank, networkSimplexRankStage } from '../src/simplex.js';
+import type { NetworkSimplexOptions } from '../src/simplex.js';
 import type { PreparedState, RankOutput } from '../src/types.js';
 import { mulberry32, randomDigraph } from './random.js';
 
@@ -691,12 +692,62 @@ describe('networkSimplexRank and its iteration budget', () => {
     );
   });
 
+  // A count, not a number. `Number.isFinite(2.5)` is true, so a check for a
+  // finite number takes 2.5 as a budget and takes 0.5 as a budget of zero
+  // pivots, which is a run that silently does none of the work it was asked
+  // for. The one number that is not an integer and is still a budget is
+  // infinity, which is how a caller spells "run to convergence".
   it('rejects a budget that is not a count, at the call that named it', () => {
-    for (const value of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    for (const value of [-1, -0.5, 2.5, 0.5, Number.NaN, Number.NEGATIVE_INFINITY]) {
       expect(() => networkSimplexRank({ maxIterations: value })).toThrow(InvalidConfigError);
       expect(() => networkSimplexRank({ maxIterations: value })).toThrow(/maxIterations/);
+      // And says which object it means, because no `LayoutConfig` holds one.
+      expect(() => networkSimplexRank({ maxIterations: value })).toThrow(/Invalid layout option/);
     }
     expect(() => networkSimplexRank({ maxIterations: 0 })).not.toThrow();
+  });
+
+  it('takes an infinite budget as a run to convergence', () => {
+    const graph = regressor();
+    expect(() => networkSimplexRank({ maxIterations: Number.POSITIVE_INFINITY })).not.toThrow();
+    const forever = networkSimplexRank({ maxIterations: Number.POSITIVE_INFINITY });
+    const state = forever.run(prepare(graph));
+    expectFeasible(graph, state, 'an infinite budget');
+    // The same answer the default budget reaches on a graph that converges
+    // well inside it, which is what makes this a budget rather than a mode.
+    expect(totalEdgeLength(graph, state)).toBe(13);
+    expect([...state.ranks]).toEqual([...rank(graph).ranks]);
+  });
+
+  /**
+   * The call site both options exist for, which `exactOptionalPropertyTypes`
+   * would reject if they were declared `?: T` rather than `?: T | undefined`.
+   * On the first run of an M3 session there is no previous ranking, so the
+   * variable holding it is `Map | undefined` by construction, and a caller
+   * would have to build the options object conditionally to say so.
+   *
+   * A type-level assertion that happens to run: what it pins is that this file
+   * compiles, and `pnpm typecheck` is where it is really checked.
+   */
+  it('takes an option that is explicitly undefined', () => {
+    const previousRanks: ReadonlyMap<NodeId, number> | undefined = undefined;
+    const budget: number | undefined = undefined;
+    const options: NetworkSimplexOptions = {
+      initialRanks: previousRanks,
+      maxIterations: budget,
+    };
+    const graph = build(
+      ['a', 'b', 'c'],
+      [
+        ['a', 'b', 'ab'],
+        ['b', 'c', 'bc'],
+      ],
+    );
+    expect(Object.fromEntries(networkSimplexRank(options).run(prepare(graph)).ranks)).toEqual({
+      a: 0,
+      b: 1,
+      c: 2,
+    });
   });
 });
 

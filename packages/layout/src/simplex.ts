@@ -25,29 +25,47 @@ function at(values: { readonly [index: number]: number | undefined }, index: num
   return value;
 }
 
-/** What a caller may say about a network simplex run. */
+/**
+ * What a caller may say about a network simplex run.
+ *
+ * Both are declared `?: T | undefined` rather than `?: T`, which under this
+ * repo's `exactOptionalPropertyTypes` are different types: the second rejects
+ * an explicitly `undefined` value, and that is exactly what a call site has.
+ * On the first run of a session there is no previous ranking to hand over, so
+ * the variable holding one is `Map | undefined` by construction, and `?: T`
+ * would make the caller build the options object conditionally to say nothing.
+ * `@dagr/graph` settled the same question the same way.
+ */
 export interface NetworkSimplexOptions {
   /**
    * How many pivots the solver may take before returning what it has. Shared
    * across the whole graph rather than granted per connected component.
    * Defaults to 20,000, which converges every graph the test corpus and the 1k
-   * bench corpus contain.
+   * bench corpus contain. `Number.POSITIVE_INFINITY` is how to say "run to
+   * convergence, however long that takes".
    *
    * The budget is a safety valve rather than a quality knob. Whatever it stops,
-   * the ranking returned is feasible, and it is never worse than the ranking
-   * the stage started from.
+   * the ranking returned is feasible, and it is never worse than the
+   * longest-path ranking the stage computes before pivoting, which is the cold
+   * one when no hint was given.
    *
-   * @throws {InvalidConfigError} when it is not a finite number that is zero or
-   * greater. Checked when the stage is built rather than when it runs, so a bad
-   * budget fails at the call that named it.
+   * It bounds the PIVOTS and nothing else. The tight tree is grown before the
+   * first one and is not counted, which is why the growth carries a bound of
+   * its own: see {@link tighten}.
+   *
+   * @throws {InvalidConfigError} when it is not a whole number of pivots that
+   * is zero or greater, and not `Number.POSITIVE_INFINITY`. A count, so 2.5 is
+   * rejected rather than truncated and 0.5 is rejected rather than quietly
+   * meaning no pivots at all. Checked when the stage is built rather than when
+   * it runs, so a bad budget fails at the call that named it.
    */
-  readonly maxIterations?: number;
+  readonly maxIterations?: number | undefined;
 
   /**
    * A previous ranking to start from. A HINT, never trusted: see the warm start
    * section of {@link networkSimplexRank}.
    */
-  readonly initialRanks?: ReadonlyMap<NodeId, number>;
+  readonly initialRanks?: ReadonlyMap<NodeId, number> | undefined;
 }
 
 /**
@@ -84,11 +102,26 @@ function floorFrom(
   return floor;
 }
 
-/** The budget, checked at the call that named it. */
+/**
+ * The budget, checked at the call that named it: a whole number of pivots that
+ * is not negative, or an infinite one.
+ *
+ * `Number.isInteger` rather than `Number.isFinite`, and it subsumes the finite
+ * check: 2.5 pivots is not a count, and 0.5 is a budget of none at all dressed
+ * up as a budget of some. Infinity is the exception because it is the one value
+ * that is not a count and still means something here, which is to run until the
+ * pivots stop rather than until a number does.
+ */
 function resolveBudget(maxIterations: number | undefined): number {
   if (maxIterations === undefined) return DEFAULT_MAX_ITERATIONS;
-  if (!Number.isFinite(maxIterations) || maxIterations < 0) {
-    throw new InvalidConfigError('maxIterations', maxIterations);
+  const counted = Number.isInteger(maxIterations) || maxIterations === Number.POSITIVE_INFINITY;
+  if (!counted || maxIterations < 0) {
+    throw new InvalidConfigError(
+      'maxIterations',
+      maxIterations,
+      'option',
+      'a whole number of pivots that is zero or greater, or Number.POSITIVE_INFINITY',
+    );
   }
   return maxIterations;
 }
@@ -783,8 +816,8 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  * differently. On a graph with a unique optimum it may not, and the test suite
  * pins that narrower claim rather than the one it would be nice to make.
  *
- * @throws {InvalidConfigError} when `maxIterations` is not a finite number that
- * is zero or greater.
+ * @throws {InvalidConfigError} when `maxIterations` is not a whole number of
+ * pivots that is zero or greater, and not `Number.POSITIVE_INFINITY`.
  */
 export function networkSimplexRank(options?: NetworkSimplexOptions): RankStage {
   const budget = resolveBudget(options?.maxIterations);
