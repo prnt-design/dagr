@@ -68,14 +68,27 @@ describe('the 10% gate', () => {
 
 describe('noise handling', () => {
   it('widens the tolerance by the measured noise of both runs', () => {
-    // 4 -> 4.7 is 17.5%. Outside a bare 10%, inside 10% + 5% + 4%.
+    // 4 -> 4.9 is 22.5%. Outside the quiet allowance, inside one widened by 5%
+    // and 4% of measured margin of error.
     const noisyBaseline = baseline({ a: stat(4, 5) });
-    const noisyCurrent = current({ a: stat(4.7, 4) });
+    const noisyCurrent = current({ a: stat(4.9, 4) });
     expect(statusOf(compareReports(noisyBaseline, noisyCurrent), 'a')).toBe('pass');
-    // The same 17.5% move on a quiet pair of runs is a real regression.
-    expect(statusOf(compareReports(baseline({ a: stat(4) }), current({ a: stat(4.7) })), 'a')).toBe(
+    // The same 22.5% move on a quiet pair of runs is a real regression.
+    expect(statusOf(compareReports(baseline({ a: stat(4) }), current({ a: stat(4.9) })), 'a')).toBe(
       'regressed',
     );
+  });
+
+  it('allows for the drift the control cannot cancel', () => {
+    // A benchmark can be measured cleanly twice and still move against the
+    // control, because one control cannot normalise arithmetic, allocation and
+    // cache behaviour at once. Observed at up to 9.9% on `2.5k outEdges` with
+    // its own margin of error steady near 0.7%. Without this term that
+    // benchmark gates at about 11% and flakes.
+    const quiet = 0.7;
+    const drifted = compareReports(baseline({ a: stat(4, quiet) }), current({ a: stat(4.4, quiet) }));
+    expect(statusOf(drifted, 'a')).toBe('pass');
+    expect(GATE_DEFAULTS.controlDrift).toBeGreaterThan(0);
   });
 
   it('caps how far noise can widen the tolerance', () => {
@@ -104,6 +117,30 @@ describe('noise handling', () => {
     );
     expect(report.ok).toBe(false);
     expect(report.errors.join(' ')).toMatch(/too noisy/i);
+  });
+
+  it('separates an unreadable run from a regression', () => {
+    // The two want different responses: a regression is a red build, and a bad
+    // measurement is a reason to measure again. `bin/bench-ci.mjs` retries on
+    // the second and never on the first.
+    const noise = GATE_DEFAULTS.maxRme + 1;
+    const unreadable = compareReports(
+      baseline({ a: stat(4), b: stat(4) }),
+      current({ a: stat(4, noise), b: stat(4, noise) }),
+    );
+    expect(unreadable.measuredNothing).toBe(true);
+
+    const regression = compareReports(baseline({ a: stat(4) }), current({ a: stat(8) }));
+    expect(regression.measuredNothing).toBe(false);
+    expect(regression.ok).toBe(false);
+  });
+
+  it('does not call a readable run unmeasured just because one entry was noisy', () => {
+    const report = compareReports(
+      baseline({ a: stat(4), b: stat(4), c: stat(4) }),
+      current({ a: stat(4, GATE_DEFAULTS.maxRme + 1), b: stat(4), c: stat(4) }),
+    );
+    expect(report.measuredNothing).toBe(false);
   });
 });
 

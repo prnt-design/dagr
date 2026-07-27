@@ -34,11 +34,10 @@ jobs:
       - run: pnpm build
 
       # Benchmarks run after build so a failure here is never what hides a
-      # broken typecheck or a red test. `pnpm bench` writes a report per
-      # package and `pnpm bench:check` compares it to bench/baseline.json,
-      # failing on a regression outside the tolerance. The tolerance is not a
-      # flat 10% of wall clock: see bench/README.md for why, and for what to do
-      # when this step is the thing that goes red.
-      - run: pnpm bench
-
-      - run: pnpm bench:check
+      # broken typecheck or a red test. `pnpm bench:ci` measures, compares
+      # against bench/baseline.json, and re-measures once if this runner was too
+      # busy to produce a readable measurement, which is a real risk directly
+      # after the build step above. A regression fails on the first attempt and
+      # is never retried. The tolerance is not a flat 10% of wall clock: see
+      # bench/README.md for why, and for what to do when this step goes red.
+      - run: pnpm bench:ci

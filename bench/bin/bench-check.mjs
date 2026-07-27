@@ -164,6 +164,21 @@ function main() {
   for (const note of gate.notes) console.log(`\n  note   ${note}`);
   for (const error of [...errors, ...gate.errors]) console.error(`\n  error  ${error}`);
 
+  // Two failure kinds, two exit codes, because they want different responses. A
+  // regression is a red build. A run too noisy to read says nothing about the
+  // code either way, and the answer to a bad measurement is to measure again,
+  // which is what `bin/bench-ci.mjs` does with exit code 2. Passing an
+  // unreadable run instead would be the silent no-op this harness exists to
+  // prevent, so it is still not a pass.
+  const regressed = gate.results.some(
+    (result) => result.status === 'regressed' || result.status === 'missing',
+  );
+  const onlyNoise = gate.measuredNothing && !regressed && errors.length === 0 && gate.errors.length === 1;
+
+  if (onlyNoise) {
+    console.error('\nBenchmark gate could not read this run. Re-measure before drawing a conclusion.');
+    process.exit(2);
+  }
   if (!gate.ok || errors.length > 0) {
     console.error('\nBenchmark gate failed.');
     process.exit(1);

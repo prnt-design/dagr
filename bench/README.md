@@ -7,9 +7,28 @@ reasoning that makes that rule survive contact with a CI runner.
 pnpm bench            # run every package's benchmarks, writing a report each
 pnpm bench:check      # compare that run to bench/baseline.json, non-zero on a regression
 pnpm bench:baseline   # record that run as the new baseline
+pnpm bench:ci         # what CI runs: both of the above, re-measuring once if the run was unreadable
 ```
 
-CI runs `pnpm bench` then `pnpm bench:check` on every pull request.
+CI runs `pnpm bench:ci` on every pull request.
+
+## When the runner is too busy to measure
+
+A regression and an unreadable measurement are different facts and get
+different responses. `bench:check` exits 1 for a regression and 2 when the run
+was too noisy to read; `bench:ci` retries only on 2, after letting the machine
+settle, and a real regression fails on the first attempt and is never retried.
+
+The noise is predictable rather than hypothetical. CI runs `pnpm build`
+immediately before the bench step, and a run started here while the machine was
+still busy with the build put 7 of 10 benchmarks past the readability ceiling.
+The same benchmarks on a settled machine a few seconds later came back with all
+10 readable and inside tolerance. Failing a pull request over that would make
+the gate a flake generator, which is what this design set out to avoid; passing
+it silently would make the gate a no-op, which is what the harness was written
+to fix. Measuring again is the only answer that is neither. Two unreadable runs
+in a row fail the build, and say plainly that nothing was measured, so nothing
+is being claimed about the code.
 
 ## Why this is not a 10% comparison of milliseconds
 
@@ -32,20 +51,30 @@ scheduler hiccup drags the mean a long way. In the run that motivated this, a
 error on the mean while the median barely moved.
 
 **The tolerance widens by the measured noise of the two runs being compared.**
-`10% + baseline rme + current rme`, capped at 25%. A quiet pair gates at about
-10%; a noisy runner gates wider, on evidence, rather than failing at random.
-Because that would otherwise make a noisy enough benchmark unfailable, past 15%
-of margin of error a measurement is reported as `noisy` and read as neither a
-pass nor a fail. An unreadable measurement is a fact worth printing, not a green
-tick.
+`10% + 5% control drift + baseline rme + current rme`, capped at 25%. A noisy
+runner gates wider, on evidence, rather than failing at random. Because that
+would otherwise make a noisy enough benchmark unfailable, past 15% of margin of
+error a measurement is reported as `noisy` and read as neither a pass nor a
+fail. An unreadable measurement is a fact worth printing, not a green tick.
 
-The residual after all three is real and worth knowing: one control cannot
-normalise arithmetic, allocation and cache behaviour at once, so ratios still
-drift a few percent between runs. Observed drift here has been under 10% against
-tolerances of 11% to 25%. The noise allowance is what covers it. If a benchmark
-drifts persistently while its code is untouched, the fix is a second control
-matching that class of work, not a wider tolerance: a wider tolerance hides the
-drift and the regression together.
+That 5% is a separate term rather than padding folded into the 10%, because it
+is a different kind of error. `rme` describes sampling noise inside one
+measurement. Control drift is systematic: one control workload cannot normalise
+arithmetic, allocation and cache behaviour at once, so a benchmark whose mix
+differs from the control's moves against it between runs even when both were
+measured cleanly. Measured here on `2.5k outEdges`, almost pure pointer chasing
+against an allocation-heavy control: five runs on one idle machine, no code
+change, its own margin of error steady near 0.7%, landing between -9.5% and
++9.9%. Without the term that benchmark gates at about 11% and flakes.
+
+So the effective floor is nearer 15% than 10%, and that is said plainly rather
+than dressed up, because the honest reading of the charter's 10% is "10% of a
+number this harness can actually resolve". Shrinking it is earned by making the
+control track better, most likely a second control for low-allocation work, and
+not by asserting a tighter number than the measurement supports. A benchmark
+that drifts persistently while its code is untouched is evidence for that second
+control, not for a wider tolerance: a wider tolerance hides the drift and the
+regression together.
 
 ## Why it exists
 

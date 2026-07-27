@@ -106,14 +106,40 @@
  * @property {GateResult[]} results
  * @property {string[]} errors Hard failures that are about the harness, not the code.
  * @property {string[]} notes
+ * @property {boolean} measuredNothing
+ *   The run was too noisy to read, so it says nothing either way about the
+ *   code. Separated from `ok` because the two want different responses: a
+ *   regression is a red build, and an unreadable measurement is a reason to
+ *   measure again. `bin/bench-ci.mjs` is what acts on the difference.
  */
 
-/** @typedef {{ tolerance: number, maxRme: number, maxTolerance: number, maxInconclusiveFraction: number }} GateOptions */
+/** @typedef {{ tolerance: number, controlDrift: number, maxRme: number, maxTolerance: number, maxInconclusiveFraction: number }} GateOptions */
 
 /** @type {GateOptions} */
 export const GATE_DEFAULTS = {
   /** The headline rule from the charter, applied to control-normalised ratios. */
   tolerance: 0.1,
+  /**
+   * What the control cannot cancel, which the per-run margin of error does not
+   * see.
+   *
+   * `rme` describes sampling noise within one measurement. Control drift is a
+   * different and systematic error: one control workload cannot normalise
+   * arithmetic, allocation and cache behaviour at once, so a benchmark whose
+   * mix differs from the control's moves relative to it between runs even when
+   * both were measured cleanly. Measured here on `2.5k outEdges`, which is
+   * almost pure pointer chasing against an allocation-heavy control: five runs
+   * on one idle machine, with no code change and its own margin of error steady
+   * near 0.7%, landed between -9.5% and +9.9%.
+   *
+   * So the effective floor is nearer 15% than 10%, and it is written down here
+   * rather than folded quietly into `tolerance`, because the honest reading of
+   * the charter's 10% is "10% of a number this harness can actually resolve".
+   * Shrinking this is earned by making the control track better, most likely a
+   * second control for low-allocation work, and not by asserting a tighter
+   * number than the measurement supports.
+   */
+  controlDrift: 0.05,
   /**
    * Above this relative margin of error a measurement is not read as a pass or
    * a fail. Chosen so that the widened tolerance can never exceed
@@ -207,7 +233,7 @@ export function compareReports(baselineReport, currentReport, overrides = {}) {
     }
 
     const tolerance = Math.min(
-      options.tolerance + entry.rme / 100 + observed.rme / 100,
+      options.tolerance + options.controlDrift + entry.rme / 100 + observed.rme / 100,
       options.maxTolerance,
     );
     const delta = (observed.ratio - entry.ratio) / entry.ratio;
@@ -247,7 +273,8 @@ export function compareReports(baselineReport, currentReport, overrides = {}) {
     errors.push('the baseline holds nothing to gate against');
   }
 
-  if (gated > 0 && inconclusive / gated > options.maxInconclusiveFraction) {
+  const measuredNothing = gated > 0 && inconclusive / gated > options.maxInconclusiveFraction;
+  if (measuredNothing) {
     errors.push(
       `${String(inconclusive)} of ${String(gated)} benchmarks were too noisy to read. The gate measured nothing this run`,
     );
@@ -257,5 +284,5 @@ export function compareReports(baselineReport, currentReport, overrides = {}) {
     (result) => result.status === 'regressed' || result.status === 'missing',
   );
 
-  return { ok: errors.length === 0 && !failed, results, errors, notes };
+  return { ok: errors.length === 0 && !failed, results, errors, notes, measuredNothing };
 }

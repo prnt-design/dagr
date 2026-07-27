@@ -32,11 +32,29 @@ findings addressed or logged, docs land with the feature.
   MEDIANS, not means, because one garbage collection drags a mean a long way: a
   0.016ms operation here recorded a 12ms maximum, 4.9% of margin of error on the
   mean, while the median barely moved. And the tolerance WIDENS BY THE MEASURED
-  NOISE of both runs, `10% + baseline rme + current rme` capped at 25%, so a
-  noisy runner gates wider on evidence rather than failing at random. That would
-  make a noisy enough benchmark unfailable, so past 15% of margin of error a
-  measurement is reported as inconclusive rather than passed, and a run where
-  most benchmarks come back unreadable is a hard failure.
+  NOISE of both runs, `10% + 5% control drift + baseline rme + current rme`
+  capped at 25%, so a noisy runner gates wider on evidence rather than failing at
+  random. That would make a noisy enough benchmark unfailable, so past 15% of
+  margin of error a measurement is reported as inconclusive rather than passed.
+  The 5% is a separate term because it is a different error: `rme` is sampling
+  noise inside one measurement, while control drift is systematic, since one
+  control cannot normalise arithmetic, allocation and cache behaviour at once.
+  Measured on `2.5k outEdges`, nearly pure pointer chasing against an
+  allocation-heavy control: five runs on one idle machine, no code change, its
+  own margin of error steady near 0.7%, landing between -9.5% and +9.9%. So the
+  effective floor is nearer 15% than 10%, said plainly rather than dressed up,
+  because the honest reading of the charter's 10% is 10% of a number this
+  harness can actually resolve. Shrinking it is earned by a second control for
+  low-allocation work, not by asserting a tighter number than the measurement
+  supports.
+  A run too noisy to read is not a red build and not a pass either: it says
+  nothing about the code, so `pnpm bench:ci` measures again. CI runs `pnpm build`
+  immediately before the bench step, and a run started while the machine was
+  still busy with it put 7 of 10 benchmarks past the readability ceiling where
+  the same benchmarks on a settled machine came back all readable and inside
+  tolerance. A regression exits 1 and is never retried; only an unreadable run
+  exits 2. Two unreadable runs in a row fail, saying plainly that nothing was
+  measured.
   Verified against the case that motivated the task rather than asserted: with
   the `diffAttrs` allocation guard reverted, all 329 tests still pass and the
   gate fails at +87.8% against a +25.0% allowance on the one benchmark that
