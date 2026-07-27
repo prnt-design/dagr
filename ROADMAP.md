@@ -222,8 +222,8 @@ findings addressed or logged, docs land with the feature.
   an empty id is a shape error here and not the `InvalidIdError` the same value
   earns from `addNode`: the review found it was the one content error carrying
   nothing to search a hand-edited file for, and moving it buys the `path` the
-  others get for free. Attribute values pass through by
-  reference, unvalidated and uncloned, because the graph never reads one.
+  others get for free. Attribute values pass through by reference, unvalidated
+  and uncloned, because the graph never reads one.
   Fifteen defensive branches were each broken on purpose and confirmed to turn
   the suite red, which is how the `__proto__` and empty-omission branches were
   shown to be covered rather than argued to be.

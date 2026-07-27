@@ -750,11 +750,11 @@ wrong place to discover it.
 
 ### Reading
 
-`Graph.fromJSON(json)` takes `unknown`, because this is the package's only
-untrusted-input door: a file, a message, a hand edit. It validates the shape in
-full before it constructs anything, so a malformed document cannot leave a
-half-built graph anywhere, and the graph it builds is local until it is
-returned.
+`Graph.fromJSON(json)` takes `unknown` on one of its two signatures, because
+this is the package's only untrusted-input door: a file, a message, a hand
+edit. It validates the shape in full before it constructs anything, so a
+malformed document cannot leave a half-built graph anywhere, and the graph it
+builds is local until it is returned.
 
 ```ts
 type NodeAttrs = { label: string };
