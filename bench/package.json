@@ -2,7 +2,7 @@
   "name": "@dagr/bench",
   "version": "0.0.0",
   "private": true,
-  "description": "Benchmark harness for Dagr: shared corpora, the control workload, and the CI baseline gate. Never published.",
+  "description": "Benchmark harness for Dagr: shared corpora, the control workload, and the local baseline gate. Never published.",
   "license": "MIT",
   "type": "module",
   "repository": {

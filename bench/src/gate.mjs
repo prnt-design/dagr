@@ -2,7 +2,7 @@
 
 /**
  * The benchmark gate: what "within 10% of baseline" actually means once the
- * numbers are measured on a shared CI runner rather than on a quiet desk.
+ * numbers are measured on a busy machine rather than on a quiet desk.
  *
  * The quality bar in the charter asks for benchmarks within 10% of baseline.
  * Taken literally, against wall-clock milliseconds recorded on one machine and
@@ -49,7 +49,7 @@
  * A baseline entry that is deliberately outside the gate. Stats are optional
  * because an exempt number need not come from `pnpm bench` at all: ROADMAP
  * M4.10's GPU frame time is measured by hand on a named machine, and there is
- * no comparable CI GPU to re-measure it against.
+ * no automated way to re-measure it, even on that same machine.
  *
  * @typedef {object} ExemptEntry
  * @property {'off'} gate

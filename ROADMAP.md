@@ -17,8 +17,11 @@ findings addressed or logged, docs land with the feature.
   `lint`), CI running typecheck + test on every PR and push to `main`.
   This document. First green merge.
 - [x] **M0.2** Benchmark harness: vitest bench setup, a `bench` baseline
-  capture script, baseline JSON committed, CI bench step comparing against
-  baseline with a 10% tolerance. README development guide section.
+  capture script, baseline JSON committed, a CI bench step comparing against
+  baseline with a 10% tolerance. README development guide section. (The bench
+  step later moved off CI entirely: the committed baseline is machine-matched
+  and CI runs a different architecture, so the gate now runs locally before a
+  pull request opens. See `bench/README.md`.)
   Deliberately deferred until early M1 lands real code worth benchmarking.
   That trigger fired with M1.3, which landed patch emission on every mutation,
   the first hot path in the repo a baseline is meant to protect.
@@ -48,13 +51,14 @@ findings addressed or logged, docs land with the feature.
   low-allocation work, not by asserting a tighter number than the measurement
   supports.
   A run too noisy to read is not a red build and not a pass either: it says
-  nothing about the code, so `pnpm bench:ci` measures again. CI runs `pnpm build`
-  immediately before the bench step, and a run started while the machine was
-  still busy with it put 7 of 10 benchmarks past the readability ceiling where
-  the same benchmarks on a settled machine came back all readable and inside
-  tolerance. A regression exits 1 and is never retried; only an unreadable run
-  exits 2. Two unreadable runs in a row fail, saying plainly that nothing was
-  measured.
+  nothing about the code, so `pnpm bench:ci` measures again. At the time this
+  ran on CI, that runner ran `pnpm build` immediately before the bench step,
+  and a run started while the machine was still busy with it put 7 of 10
+  benchmarks past the readability ceiling where the same benchmarks on a
+  settled machine came back all readable and inside tolerance. (The gate later
+  moved off CI entirely; see M0.2 above and `bench/README.md`.) A regression
+  exits 1 and is never retried; only an unreadable run exits 2. Two unreadable
+  runs in a row fail, saying plainly that nothing was measured.
   Verified against the case that motivated the task rather than asserted: with
   the `diffAttrs` allocation guard reverted, all 329 tests still pass and the
   gate fails at +87.8% against a +25.0% allowance on the one benchmark that
@@ -1217,15 +1221,16 @@ of M3 would leave the second runner idle for a milestone.
   WebGL2 number too or state plainly that the fallback is unbenchmarked,
   because M4.9 notes automatic fallback hides a performance cliff and an
   unmeasured cliff is one a consumer finds first.
-  This baseline cannot participate in M0.2's CI bench gate, and that is
+  This baseline cannot participate in M0.2's bench gate, and that is
   intentional rather than an oversight: the quality bar at the top of this file
-  asks for benchmarks within 10% of baseline, and a GPU number measured on one
-  machine has nothing comparable to gate against. Say how a regression is
-  caught instead. The strongest option, if the pass breakdown supports it, is
-  to bench the CPU-side passes (instance update, buffer upload) in CI under the
-  M0.2 gate and keep only the draw passes local, which puts most of the number
-  back under an automated check. Otherwise commit to re-measuring by hand at
-  the end of the milestone and again at M5.4's v0.1 readiness review.
+  asks for benchmarks within 10% of baseline, and a GPU frame time measured by
+  hand in a browser has no automated way to be re-measured, even on the
+  baseline machine. Say how a regression is caught instead. The strongest
+  option, if the pass breakdown supports it, is to bench the CPU-side passes
+  (instance update, buffer upload) under the M0.2 gate and keep only the draw
+  passes local, which puts most of the number back under an automated check.
+  Otherwise commit to re-measuring by hand at the end of the milestone and
+  again at M5.4's v0.1 readiness review.
 
 ## M5: React + demo = v0.1
 

@@ -4,23 +4,24 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 /**
- * The single step CI runs: measure, gate, and re-measure once if the runner was
- * too busy to produce a readable measurement.
+ * The single step the agent runs locally before opening a pull request:
+ * measure, gate, and re-measure once if the runner was too busy to produce a
+ * readable measurement.
  *
  * The retry is not a way to let a regression through. `bench-check.mjs` exits 1
  * for a regression and 2 only when the run was too noisy to read, and a real
  * regression reproduces on the second measurement, so only exit 2 is retried. A
  * regression fails on the first attempt and never reaches here.
  *
- * This exists because the noise is predictable rather than hypothetical. CI
- * runs `pnpm build` immediately before this step, and a run started while the
- * machine was still busy with it put 7 of 10 benchmarks past the readability
- * ceiling, where the same benchmarks on a settled machine a few seconds later
- * came back with all 10 readable and inside tolerance. Failing a pull request
- * over that would make the gate a flake generator, which is the thing the
- * design set out to avoid; passing it silently would make the gate a no-op,
- * which is the thing the harness was written to fix. Measuring again is the
- * only answer that is neither.
+ * This exists because the noise is predictable rather than hypothetical. The
+ * agent runs this gate on the same machine that just ran its persona
+ * reviewers, and a run started while those were still resident put 7 of 10
+ * benchmarks past the readability ceiling, where the same benchmarks on a
+ * settled machine a few seconds later came back with all 10 readable and
+ * inside tolerance. Failing a merge over that would make the gate a flake
+ * generator, which is the thing the design set out to avoid; passing it
+ * silently would make the gate a no-op, which is the thing the harness was
+ * written to fix. Measuring again is the only answer that is neither.
  */
 
 const root = fileURLToPath(new URL('../../', import.meta.url));

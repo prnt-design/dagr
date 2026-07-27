@@ -1,11 +1,11 @@
 /**
- * The control workload, and the reason the 10% gate can survive a CI runner.
+ * The control workload, and the reason the 10% gate can survive a busy machine.
  *
  * Every bench file runs this alongside its real benchmarks, in the same worker,
  * and every recorded number is a ratio against it. A machine twice as slow runs
  * the control twice as slow too, so the ratio is what stays comparable across
- * the desk a baseline was captured on and the shared runner CI hands out that
- * morning. `gate.mjs` explains what is done with the ratio.
+ * the desk a baseline was captured on and whatever machine is running the gate
+ * that morning. `gate.mjs` explains what is done with the ratio.
  *
  * WHAT THIS IS NOT. One control cannot normalise every kind of work. Pure
  * arithmetic scales with clock speed, allocation-heavy code scales with

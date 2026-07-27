@@ -33,8 +33,10 @@ CI, and packaging changes across the Dagr monorepo.
   it.
 
 ### CI health
-- CI must run typecheck + test (+ bench when present) on every PR; flag
-  steps that are skipped, allowed-to-fail, or silently narrowed.
+- CI must run typecheck, test, lint, and build on every PR. Benchmarks are
+  gated locally against a machine-matched baseline before a PR opens, not on
+  CI; see `bench/README.md`. Flag steps that are skipped, allowed-to-fail, or
+  silently narrowed.
 
 ## Scope: IMPORTANT
 

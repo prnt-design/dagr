@@ -4,8 +4,8 @@
     "noEmit": true,
     "types": ["node"],
     // The collector, the gate and the CLI are plain `.mjs` with JSDoc types
-    // rather than TypeScript. They run under bare `node` in CI, before any
-    // build step exists, so a TypeScript source would need either a build or a
+    // rather than TypeScript. They run under bare `node`, before any build
+    // step exists, so a TypeScript source would need either a build or a
     // Node version new enough to strip types. `checkJs` keeps them under the
     // same strict compiler as everything else without either.
     "allowJs": true,
