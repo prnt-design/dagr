@@ -15,17 +15,24 @@ of doc prose.
 ### Added
 
 - `networkSimplexRankStage` and `networkSimplexRank(options)`, exported, plus
-  the `NetworkSimplexOptions` type. A second real rank stage, and the first
-  stage exported by name: it is not a placeholder waiting for an algorithm, it
-  is a different algorithm with a different objective, so a caller has to be
-  able to say which one it wants. `defaultStages.rank` is unchanged and is
-  still `longest-path-rank`. (M2.3)
+  the `NetworkSimplexOptions` type. A second real rank stage: it is not a
+  placeholder waiting for an algorithm, it is a different algorithm with a
+  different objective, so a caller has to be able to say which one it wants.
+  `defaultStages.rank` is unchanged and is still `longest-path-rank`. (M2.3)
 
   It minimises the TOTAL EDGE LENGTH, the sum over the acyclic view's edges of
   how many ranks each crosses, which minus the edge count is exactly how many
   dummy nodes M2.4b will mint. On the 1k benchmark corpus that is 40,430
   dummies down to 17,285, a 57% cut, in about 20ms; on the 10k corpus
   1,414,263 down to 405,709 inside the default budget.
+
+  **None of that saving is collectable in this release.** M2.4b is unbuilt, no
+  stage mints a dummy node today, and `virtualNodes` comes back empty from both
+  rankers, so the counts above are a cost nobody is paying yet. Switching today
+  buys a rank stage that costs several times more (about 20ms against a few
+  milliseconds on the 1k corpus, seconds against tens of milliseconds on the
+  10k one) and saves no dummy nodes, because there are none. What it buys is a
+  ranking M2.4b will be able to exploit.
 
   **It cannot make a drawing shorter and it can make one taller**, because
   minimum total edge length and minimum height are different objectives and
@@ -37,12 +44,33 @@ of doc prose.
   Two options, both of which exist for M3 rather than for today.
   `maxIterations` bounds the pivots at 20,000 by default, and whatever stops a
   run the ranking it returns is feasible and never worse than the one it
-  started from. `initialRanks` is a previous ranking to warm start from, which
-  the ranking LP being degenerate is what makes necessary: without it a
-  one-edge patch can move the solver to a different optimum of equal cost and
-  churn ranks across a region that did not change. A supplied ranking is a hint
-  and is repaired into feasibility before use, so it can only ever choose
-  between optima.
+  started from. It takes a non-negative INTEGER, or
+  `Number.POSITIVE_INFINITY`, which means no budget at all: run to convergence.
+  A pivot count has no fractional form, so `2.5` and `0.5` are an
+  `InvalidConfigError`, thrown at the call that names the budget rather than at
+  the run.
+
+  `initialRanks` is a previous ranking to warm start from, which the ranking LP
+  being degenerate is what makes necessary: without it a one-edge patch can
+  move the solver to a different optimum of equal cost and churn ranks across a
+  region that did not change. A supplied ranking is a hint and is repaired into
+  feasibility before use, so it cannot make a result infeasible, and it can
+  only choose between optima AS LONG AS THE BUDGET HOLDS: a run cut short by
+  its budget can come back with more total edge length than a cold run cut
+  short at the same point. Note also that nothing exported today produces a
+  ranking for you to pass, because a `LayoutResult` holds coordinates and not
+  ranks; the option is here so that M3's engine, which will have one, does not
+  need the ranker rebuilt around it.
+
+- `longestPathRankStage`, exported. The default ranker, now nameable. Nothing
+  about the stage changed and a run with no `rank` override still gets it; what
+  changed is that a call site wanting MINIMUM HEIGHT can say which algorithm it
+  means instead of relying on which one happens to be the default. That makes
+  the export rule "every real stage is exported by name, no placeholder is",
+  which is the version that survives M2.5, M2.7 and M2.8 replacing the other
+  three. The placeholders (`insertion-order`, `grid-position`,
+  `straight-route`) are still reachable only through `defaultStages`, because a
+  placeholder's name is a name to delete tomorrow. (M2.3)
 
 - `RankOutput`, `OrderOutput`, `PositionOutput` and `RouteOutput`, exported as
   types. Each is what one stage contributes, and it is what that stage's `run`
