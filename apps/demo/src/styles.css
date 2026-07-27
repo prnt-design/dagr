@@ -1,0 +1,234 @@
+/*
+ * The demo's whole stylesheet.
+ *
+ * Plain CSS, one file, no framework and no build step beyond the one vite
+ * already runs. The demo exists to look at a renderer, so the page around it is
+ * deliberately quiet: it borrows the renderer's own two colours (amber on near
+ * black, from `webgpu-renderer.ts`) so that nothing on screen competes with the
+ * canvas, and every measurement here is in rem or a viewport unit so the layout
+ * has one job, which is to give the canvas as much room as it can.
+ */
+
+:root {
+  --page: #07080a;
+  --panel: #0f1216;
+  --ink: #d7dbe1;
+  --ink-dim: #79828d;
+  --amber: #ffb703;
+  --rule: rgba(255, 255, 255, 0.09);
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+}
+
+body {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+.page__header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.page__title {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.page__subtitle {
+  margin: 0;
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+}
+
+/* The canvas and everything painted on top of it. */
+
+.stage {
+  position: relative;
+  height: clamp(600px, 62vh, 780px);
+  border: 1px solid var(--rule);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: #0b0d10;
+}
+
+.stage__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* The pan gesture is ours. Without this, a touch drag scrolls the page and
+     the pointermove events stop arriving mid-gesture. */
+  touch-action: none;
+  cursor: grab;
+}
+
+.stage__canvas:active {
+  cursor: grabbing;
+}
+
+.stage__readout {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.375rem;
+  background: rgba(7, 8, 10, 0.72);
+  backdrop-filter: blur(8px);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 1.7;
+  color: var(--ink);
+  /* The panel sits over the canvas, so it must not eat the drag. */
+  pointer-events: none;
+  user-select: none;
+}
+
+.stage__readout-row {
+  margin: 0;
+  white-space: pre;
+}
+
+.stage__readout-key {
+  display: inline-block;
+  width: 8ch;
+  color: var(--ink-dim);
+}
+
+.stage__readout-hint {
+  margin: 0.5rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-dim);
+  letter-spacing: 0.02em;
+}
+
+.stage__failure {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.5rem;
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.stage__failure-title {
+  margin: 0;
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stage__failure-message {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.stage__failure-hint {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 0.8125rem;
+}
+
+/* The `@dagr/graph` facts, below the canvas. */
+
+.facts {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--rule);
+}
+
+.facts__title {
+  margin: 0 0 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.facts__lead {
+  margin: 0 0 1.25rem;
+  max-width: 60ch;
+  color: var(--ink-dim);
+  font-size: 0.875rem;
+}
+
+.facts__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1.25rem;
+}
+
+.facts__label {
+  margin: 0 0 0.25rem;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+
+.facts__value {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.875rem;
+}
+
+.facts__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 0.875rem;
+}
+
+.facts__list li {
+  padding: 0.125rem 0;
+  color: var(--ink);
+}
+
+.facts__arrow {
+  color: var(--amber);
+  padding: 0 0.375rem;
+}
+
+code {
+  font-family: var(--mono);
+  color: var(--amber);
+}
