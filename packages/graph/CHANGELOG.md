@@ -27,22 +27,36 @@ diffing five milestones of doc prose.
   port declaration order, neighbour order, and the `topologicalOrder` tie-break
   all come back. Three things do not survive and are documented rather than
   quietly true. Generated-id counters are re-derived from content, which lands
-  the counter one past the highest surviving id in generated shape, so a higher
-  suffix spent by a removed element is free again. Absolute insertion ranks are
-  compacted, which nothing can observe. Attribute values pass through by
-  reference and are neither validated nor cloned, so a value `JSON.stringify`
-  cannot represent is the caller's problem.
+  the counter one past the highest surviving id in generated shape that the
+  counter accepts (which excludes a suffix at or past `Number.MAX_SAFE_INTEGER`,
+  where arithmetic stops being exact), so a higher suffix spent by a removed
+  element is free again. Absolute insertion ranks are compacted, which nothing
+  can observe. Attribute values pass through by reference and are neither
+  validated nor cloned, so a value `JSON.stringify` cannot represent is the
+  caller's problem.
+
+  `fromJSON` has two signatures. A value already typed as a `GraphJSON` infers
+  all three attribute parameters, so reading a `toJSON` result back keeps the
+  types the graph that wrote it had; anything else is `unknown` and lands on the
+  defaults, which is what a `JSON.parse` result should do. Types only: one
+  implementation serves both and nothing about the runtime depends on which
+  signature a call resolved to.
 
 - `InvalidGraphJSONError`, exported, `code: 'INVALID_GRAPH_JSON'`, the eleventh
   member of the `DagrGraphError` family. Carries `path`, where the offending
   field sits in the document (`nodes[3].ports[1].direction`), and `expected`.
   Thrown only by `Graph.fromJSON`, and only for shape.
 
-  It covers shape alone on purpose. Content that the graph itself has an opinion
-  about (a duplicate id, an unknown endpoint, a port facing the wrong way, an
-  empty id) comes back as the family member it always was, because `fromJSON`
-  builds through the same public constructors and so cannot construct a graph
-  the public API could not.
+  It covers shape alone on purpose, shape being what is checkable from the
+  format alone: one field, decided without looking at the rest of the document.
+  Content that the graph itself has an opinion about (a duplicate id, an unknown
+  endpoint, a port facing the wrong way) comes back as the family member it
+  always was, because `fromJSON` builds through the same public constructors and
+  so cannot construct a graph the public API could not. An empty id falls on the
+  shape side, `expected: 'a non-empty string'`, since it is decidable from the
+  format and the `InvalidIdError` it would otherwise raise names no position in
+  the document. `InvalidIdError` still owns the rule for `addNode`, `addEdge`,
+  and `addPort`.
 
   This widens `DagrGraphErrorCode` and `DagrGraphErrorLike` for the second
   release running. An exhaustive `switch` over either now has a missing arm,

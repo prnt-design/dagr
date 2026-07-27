@@ -709,14 +709,14 @@ interface EdgeJSON<E extends object = Attrs> {
 }
 
 interface GraphJSON<
-  N extends object = Attrs,
-  E extends object = Attrs,
-  G extends object = Attrs,
+  NodeAttrs extends object = Attrs,
+  EdgeAttrs extends object = Attrs,
+  GraphAttrs extends object = Attrs,
 > {
   readonly version: 1;
-  readonly attrs?: ReadAttrs<G>;
-  readonly nodes: readonly NodeJSON<N>[];
-  readonly edges: readonly EdgeJSON<E>[];
+  readonly attrs?: ReadAttrs<GraphAttrs>;
+  readonly nodes: readonly NodeJSON<NodeAttrs>[];
+  readonly edges: readonly EdgeJSON<EdgeAttrs>[];
 }
 ```
 
@@ -763,10 +763,28 @@ const restored = Graph.fromJSON<NodeAttrs>(JSON.parse(text));
 restored.requireNode('filter').attrs.label; // string | undefined
 ```
 
-The three type parameters are generic the way `Graph`'s are, and they are a
-claim you are making about a file you chose to read, not something `fromJSON`
-checked. There is nothing here that could check one: the graph never reads an
-attribute, so it has no idea what a `NodeAttrs` is supposed to look like.
+There are two signatures. A value that is already typed as a `GraphJSON` infers
+all three parameters, so reading a `toJSON` result back keeps the types the
+graph that wrote it had, with nothing to restate:
+
+```ts
+const graph = new Graph<NodeAttrs>();
+const doc = graph.toJSON(); // GraphJSON<NodeAttrs>
+
+const back = Graph.fromJSON(doc); // Graph<NodeAttrs>
+back.getNode('filter')?.attrs.label; // string | undefined
+```
+
+Everything else is `unknown` and lands on the defaults, which is what a
+`JSON.parse` result should do: it is a value nobody has typed yet, and the
+annotated form above is how you say what you think it is. The overload is types
+only, so the same code runs either way.
+
+Inferred or annotated, the parameters are a claim you are making about a file
+you chose to read, not something `fromJSON` checked. There is nothing here that
+could check one: the graph never reads an attribute, so it has no idea what a
+`NodeAttrs` is supposed to look like. Inference is not stronger evidence than
+the annotation, since the typed document was somebody's claim too.
 `fromJSON<NodeAttrs>` is worth exactly what your knowledge of what wrote the
 file is worth.
 
@@ -793,8 +811,8 @@ re-derived, because every element in a document is added with an explicit id and
 claiming an id in generated shape already moves the counter past it. That is
 almost exact, and the exception is worth knowing rather than discovering.
 Re-deriving lands the counter one past the highest *surviving* id in generated
-shape, so a suffix above that, spent by an element the original had removed, is
-free again on the other side:
+shape *that the counter accepts*, so a suffix above that, spent by an element
+the original had removed, is free again on the other side:
 
 ```ts
 const graph = new Graph();
@@ -807,12 +825,31 @@ graph.removeNode('n3');
 Graph.fromJSON(graph.toJSON()).addNode().id; // 'n2', which this graph retired
 ```
 
-A suffix *under* a surviving id is not recovered, since the counter is a
+A suffix *under* an accepted survivor is not recovered, since the counter is a
 maximum, so this is a rule about where the counter lands rather than about
-removal as such. Nothing can collide either way: an id in use is never handed
-out. The two graphs simply disagree about which ids are spent. If that matters
-to you, write your own ids rather than generated ones, and they round trip
-exactly.
+removal as such.
+
+"That the counter accepts" is the qualifier the exact rule needs, and it has one
+case: a suffix at or past `Number.MAX_SAFE_INTEGER` never moves the counter,
+because arithmetic there is not exact. Such a survivor is invisible to the
+re-derivation, so every smaller suffix comes back free however far under it they
+sit:
+
+```ts
+const graph = new Graph();
+graph.addNode(); // n1
+graph.addNode(); // n2
+graph.addNode(`n${Number.MAX_SAFE_INTEGER}`); // moves the counter nowhere
+graph.removeNode('n1');
+graph.removeNode('n2');
+
+Graph.fromJSON(graph.toJSON()).addNode().id; // 'n1', under the survivor
+```
+
+Nothing can collide either way, whatever the counter says: generation checks
+what is actually in the graph, so an id in use is never handed out. The two
+graphs simply disagree about which ids are spent. If that matters to you, write
+your own ids rather than generated ones, and they round trip exactly.
 
 **Listeners do not survive**, and there is nowhere for them to go. `fromJSON` is
 a static that builds a graph nobody has had the chance to subscribe to, so the
@@ -827,6 +864,14 @@ written by one version would be misread by another, and never merely because
 the package released. Version 1 is the only one this package writes and the only
 one it reads, and an unrecognised version is refused rather than guessed at: a
 reader that guessed would corrupt a graph quietly.
+
+The four type names above carry no version, and that is a policy rather than an
+oversight: `GraphJSON`, `NodeJSON`, `EdgeJSON`, and `PortJSON` mean *the current
+format*, which today is version 1. When a version 2 exists, the version 1 shapes
+get versioned names and these four move on to describe the new current one, so
+an annotation written against "the format" keeps meaning that. If you want a
+type pinned to version 1 whatever happens next, ask for the versioned name when
+there is one to ask for.
 
 A future version 2 owes a reader three things, in this order. It has to say what
 changed and what a version 1 document means under the new rules. It has to keep
@@ -863,19 +908,28 @@ actionable on its own, and a document large enough to be worth serialising is
 too large to search. The document itself is `(root)`, so a failure at the top
 level still names something.
 
+An empty string is a shape error too, and it is the one worth calling out.
+`{ "id": "" }` is refused as `expected: 'a non-empty string'` at the path of the
+field, not as the `InvalidIdError` that `addNode('')` would throw. Emptiness is
+decidable looking at the one field, which puts it on the shape side of the line
+below, and `InvalidIdError` carries a kind and an id that is the empty string,
+so leaving it to the graph made this the single refusal here that gives a reader
+nothing to search a large file for. `InvalidIdError` still owns the rule
+everywhere a call rather than a document is what went wrong.
+
 **Content** is refused by the graph, and reuses the errors it always throws: a
 `DuplicateNodeError` for a repeated id, a `NodeNotFoundError` for an edge naming
 an endpoint that is not in the file, a `PortDirectionError` for an edge asking a
-port to be an end it does not face, an `InvalidIdError` for an empty id. That
-reuse is the design rather than a shortcut. `fromJSON` builds by calling the
-same public constructors any other caller would, so it cannot construct a graph
-the public API could not, and there is no second dialect of "duplicate node" to
-learn for the deserialization path.
+port to be an end it does not face. That reuse is the design rather than a
+shortcut. `fromJSON` builds by calling the same public constructors any other
+caller would, so it cannot construct a graph the public API could not, and there
+is no second dialect of "duplicate node" to learn for the deserialization path.
 
-The line between the two is where the knowledge lives. Shape is what the format
-knows on its own, one field at a time, and all of it is checked before anything
-is built. Content is what only the graph can know, because it depends on the
-rest of the document, and it surfaces while the graph is being built.
+The line between the two is where the knowledge lives. Shape is what is
+checkable from the format alone: one field, decided without looking at anything
+else in the document, and all of it checked before anything is built. Content is
+what only the graph can know, because it depends on the rest of the document,
+and it surfaces while the graph is being built.
 
 ## Methods
 
@@ -1036,7 +1090,7 @@ distinct nodes the two agree exactly.
 The walk still goes around the cycle, so anything reachable only by passing back
 through `a` is still listed. It is the seed that is dropped, not the path.
 
-### Serialization
+### Documents
 
 | Method | Behaviour |
 | --- | --- |
@@ -1144,11 +1198,17 @@ so the model makes these promises:
   existing one, and claiming `n3` yourself spends that suffix: the counter
   moves past it, so generation never hands it out even after you remove the
   node. Generation never recycles a suffix, whatever you remove; claiming a
-  removed id again yourself is still allowed, that is your call to make. An
-  explicit id outside the generated shape, `n007` or `node-3`, leaves the
-  counter alone. Within one graph, that is: the counters are re-derived rather
-  than carried across a `toJSON`/`fromJSON` round trip, and the serialization
-  section says exactly what that changes.
+  removed id again yourself is still allowed, that is your call to make. Both
+  of those hold **within one graph**, and neither survives a
+  `toJSON`/`fromJSON` round trip: the counters are re-derived from what is in
+  the document, so a restored graph can hand out a suffix the original had
+  retired. Re-deriving lands the counter one past the highest surviving id in
+  generated shape that the counter accepts, which excludes a suffix at or past
+  `Number.MAX_SAFE_INTEGER`. The serialization section works both halves of
+  that through with examples.
+- An explicit id outside the generated shape, `n007` or `node-3`, leaves the
+  counter alone. That one is round-trip stable, since the shape a document
+  writes is the shape the counter reads.
 - Returned arrays are fresh copies: mutating one cannot corrupt the graph, and
   it will not be updated by later mutations either. The records inside are not
   copies, they are the graph's own objects, frozen at construction, so a write

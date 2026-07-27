@@ -274,6 +274,14 @@ function build(items: readonly Command[]): Graph {
  * comparison and is exactly the failure this suite exists to catch. The
  * topological order is included only where there is one, since a cyclic graph
  * has none and asking throws.
+ *
+ * The cycle witness is here because `topological` alone leaves a hole. Roughly
+ * a third of the generated documents are cyclic, and for every one of those the
+ * topological entry collapses to `null`, so without `cycle` the whole
+ * walk-order-dependent half of the traversal surface goes uncompared on exactly
+ * the graphs where it is hardest to get right. `findCycle` is ordered and its
+ * answer depends on the order the walk visits in, which is what makes it worth
+ * comparing rather than a restatement of `isAcyclic`.
  */
 function ordering(graph: Graph): unknown {
   const nodes = graph.nodes().map((node) => node.id);
@@ -286,6 +294,7 @@ function ordering(graph: Graph): unknown {
     sources: graph.sources(),
     sinks: graph.sinks(),
     topological: graph.isAcyclic() ? graph.topologicalOrder() : null,
+    cycle: graph.findCycle() ?? null,
   };
 }
 
@@ -308,6 +317,18 @@ interface Coverage {
   /** Documents that were acyclic, and ones that were not. */
   acyclic: number;
   cyclic: number;
+  /**
+   * The two shapes `cyclic` alone does not distinguish, counted as edges.
+   *
+   * Almost every cyclic document here is cyclic because of a self loop, so
+   * `cyclic` on its own is close to a self-loop counter wearing another name.
+   * These two say which shape actually turned up, and the parallel-edge tally
+   * covers one `cyclic` says nothing about at all: two edges between the same
+   * ordered pair are the multi-digraph promise, and a round trip that collapsed
+   * them would still be acyclic.
+   */
+  selfLoops: number;
+  parallelEdges: number;
 }
 
 const emptyCoverage = (): Coverage => ({
@@ -321,6 +342,8 @@ const emptyCoverage = (): Coverage => ({
   reordered: 0,
   acyclic: 0,
   cyclic: 0,
+  selfLoops: 0,
+  parallelEdges: 0,
 });
 
 /** Whether a listing is in ascending order, which the pools are generated in. */
@@ -343,10 +366,17 @@ function tally(coverage: Coverage, graph: Graph, json: GraphJSON): void {
     if (Object.hasOwn(held, '__proto__')) coverage.withProto += 1;
   }
   for (const node of json.nodes) if (node.ports !== undefined) coverage.withPorts += 1;
+  const pairs = new Set<string>();
   for (const edge of json.edges) {
     if (edge.sourcePort !== undefined || edge.targetPort !== undefined) {
       coverage.withBoundEnds += 1;
     }
+    if (edge.source === edge.target) coverage.selfLoops += 1;
+    // Counted as the edges beyond the first between a given ordered pair, so
+    // the tally is what a round trip that collapsed them would lose.
+    const pair = `${edge.source}\u0000${edge.target}`;
+    if (pairs.has(pair)) coverage.parallelEdges += 1;
+    else pairs.add(pair);
   }
 }
 
@@ -361,6 +391,8 @@ function accumulate(total: Coverage, one: Coverage): void {
   total.reordered += one.reordered;
   total.acyclic += one.acyclic;
   total.cyclic += one.cyclic;
+  total.selfLoops += one.selfLoops;
+  total.parallelEdges += one.parallelEdges;
 }
 
 describe('serialization properties over random mutation sequences', () => {
@@ -389,6 +421,12 @@ describe('serialization properties over random mutation sequences', () => {
     expect(total.reordered).toBeGreaterThan(80);
     expect(total.acyclic).toBeGreaterThan(80);
     expect(total.cyclic).toBeGreaterThan(40);
+    // `cyclic` reads as a multi-node-cycle guard and is not one: only six of
+    // the sixty-nine cyclic documents are cyclic without a self loop. These two
+    // say which shapes the run really reached (measured: 72 self loops, 9
+    // parallel edges), so a generator change that lost one is visible here.
+    expect(total.selfLoops).toBeGreaterThan(40);
+    expect(total.parallelEdges).toBeGreaterThan(4);
   });
 
   it('survives a real JSON.stringify and JSON.parse over JSON-safe values', () => {

@@ -1,11 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import { Graph } from '../src/graph.js';
 import {
   DuplicateEdgeError,
   DuplicateNodeError,
   DuplicatePortError,
   InvalidGraphJSONError,
-  InvalidIdError,
   NodeNotFoundError,
   PortDirectionError,
   PortNotFoundError,
@@ -13,6 +12,7 @@ import {
 } from '../src/errors.js';
 import type { Patch } from '../src/patch.js';
 import type { GraphJSON } from '../src/serialize.js';
+import type { Attrs } from '../src/types.js';
 
 /**
  * Unit coverage for `toJSON` and `fromJSON`.
@@ -168,10 +168,14 @@ describe('toJSON', () => {
     expect(json.edges.map((edge) => edge.id)).toEqual(['ca', 'ba']);
   });
 
-  it('hands back fresh bags holding the caller values by reference', () => {
+  it('hands back fresh bags and fresh ports, holding caller values by reference', () => {
     const nested = { rows: [1, 2] };
     const graph = new Graph();
-    const node = graph.addNode({ id: 'a', attrs: { nested } });
+    const node = graph.addNode({
+      id: 'a',
+      attrs: { nested },
+      ports: [{ id: 'p', direction: 'out' }],
+    });
     const json = graph.toJSON();
 
     // The bag is a copy, so a caller may edit the document it was handed
@@ -183,6 +187,18 @@ describe('toJSON', () => {
     // it has no business cloning one, and this is the same aliasing
     // `addNode({ attrs })` already has.
     expect(json.nodes[0]?.attrs?.nested).toBe(nested);
+
+    // The port listing is the same promise, and it needs its own assertions:
+    // `PortJSON` is structurally identical to `Port` today, so aliasing the
+    // record's own frozen array into the document would typecheck and would
+    // still round trip. It would hand a caller a document they cannot edit,
+    // which is the one thing the copy is for. All four levels are pinned: the
+    // array, the array's freeze, the port object, and the port's freeze.
+    const ports = json.nodes[0]?.ports;
+    expect(ports).not.toBe(node.ports);
+    expect(Object.isFrozen(ports)).toBe(false);
+    expect(ports?.[0]).not.toBe(node.ports[0]);
+    expect(Object.isFrozen(ports?.[0])).toBe(false);
   });
 
   it('stores a __proto__ attribute key as an own key rather than a prototype', () => {
@@ -264,6 +280,47 @@ describe('fromJSON', () => {
   });
 
   /**
+   * The two shapes the format could quietly collapse and still look right.
+   *
+   * Parallel edges are the multi-digraph promise, and nothing about the
+   * document layout enforces it: a reader that keyed edges by their ordered
+   * pair rather than by their id would drop the second one and still write out
+   * a graph that round trips. A self loop is the other, since it is the one
+   * edge whose two ends are the same node and the one shape that makes a graph
+   * cyclic on its own. Both are common in the property run and neither had a
+   * unit-level round trip until now.
+   */
+  it('restores parallel edges and a self loop, ends and order intact', () => {
+    const source = new Graph();
+    source.addNode('a');
+    source.addNode({ id: 'b', ports: [{ id: 'p', direction: 'inout' }] });
+    source.addEdge({ source: 'a', target: 'b', id: 'ab1' });
+    source.addEdge({ source: 'a', target: 'b', id: 'ab2', attrs: { weight: 2 } });
+    source.addEdge({ source: 'b', target: 'b', id: 'loop', sourcePort: 'p', targetPort: 'p' });
+
+    const restored = Graph.fromJSON(source.toJSON());
+    expect(restored.edges().map((edge) => edge.id)).toEqual(['ab1', 'ab2', 'loop']);
+    expect(restored.edgesBetween('a', 'b').map((edge) => edge.id)).toEqual(['ab1', 'ab2']);
+    expect(restored.getEdge('ab2')?.attrs['weight']).toBe(2);
+    // The loop's ends both name `b`, and both are bound to the same port.
+    const loop = restored.requireEdge('loop');
+    expect([loop.source, loop.target, loop.sourcePort, loop.targetPort]).toEqual([
+      'b',
+      'b',
+      'p',
+      'p',
+    ]);
+    // A self loop is what makes this graph cyclic, and the witness survives.
+    expect(restored.isAcyclic()).toBe(false);
+    expect(restored.findCycle()).toEqual(source.findCycle());
+    // Neighbours are distinct, so two parallel edges list `b` once and the loop
+    // makes `b` its own successor.
+    expect(restored.successors('a')).toEqual(['b']);
+    expect(restored.successors('b')).toEqual(['b']);
+    expect(restored.toJSON()).toEqual(source.toJSON());
+  });
+
+  /**
    * Only relative order is promised, and only relative order is observable.
    * Removals leave gaps in the rank counter, so a restored graph's absolute
    * ranks are compacted; nothing on the public surface can see the difference,
@@ -313,9 +370,11 @@ describe('fromJSON', () => {
    * The other half of the same story, and the reason this is a divergence
    * rather than a bug: a removed suffix UNDER a surviving one is not recovered,
    * because the counter is a maximum. So the rule is about where the counter
-   * lands, not about removal as such.
+   * lands, not about removal as such. Named for the one case it pins rather
+   * than for the general rule, because the general rule has an exception the
+   * next test owns.
    */
-  it('does not recover a removed suffix that a surviving id sits above', () => {
+  it('does not recover n1 under a surviving n2, since the counter is a maximum', () => {
     const source = new Graph();
     source.addNode(); // n1
     source.addNode(); // n2
@@ -324,6 +383,43 @@ describe('fromJSON', () => {
     const restored = Graph.fromJSON(source.toJSON());
     expect(restored.addNode().id).toBe('n3');
     expect(source.addNode().id).toBe('n3');
+  });
+
+  /**
+   * Where "one past the highest surviving suffix" stops being the rule.
+   * {@link advanceSeq} refuses a suffix at or past `Number.MAX_SAFE_INTEGER`,
+   * since arithmetic there is not exact, so such a survivor moves the counter
+   * nowhere on either side of the trip and every smaller suffix is free in the
+   * restored graph however far under the survivor it sits.
+   *
+   * Nothing unsafe follows. Generation probes the node map rather than trusting
+   * the counter, so an id in use is still never handed out, which is why this
+   * is a documented divergence and not a defect.
+   */
+  it('leaves the counter alone for a survivor past the safe-integer boundary', () => {
+    const huge = `n${String(Number.MAX_SAFE_INTEGER)}`;
+    const source = new Graph();
+    source.addNode(); // n1
+    source.addNode(); // n2
+    source.addNode(huge); // refused by advanceSeq, so the counter stays at 3
+    source.removeNode('n1');
+    source.removeNode('n2');
+    expect(source.nodes().map((node) => node.id)).toEqual([huge]);
+
+    const restored = Graph.fromJSON(source.toJSON());
+    // The survivor contributes nothing, so the restored counter is back at 1
+    // and hands out ids the survivor sits far above.
+    expect(restored.addNode().id).toBe('n1');
+    expect(restored.addNode().id).toBe('n2');
+    // The original never went back either: its counter is still where the two
+    // generated nodes left it.
+    expect(source.addNode().id).toBe('n3');
+    // One under the boundary is accepted, which is what makes the line exact.
+    const under = new Graph();
+    under.addNode(`n${String(Number.MAX_SAFE_INTEGER - 1)}`);
+    expect(Graph.fromJSON(under.toJSON()).addNode().id).toBe(
+      `n${String(Number.MAX_SAFE_INTEGER)}`,
+    );
   });
 
   /**
@@ -426,6 +522,69 @@ describe('fromJSON', () => {
     expect(restored.nodeCount).toBe(0);
     expect(restored.edgeCount).toBe(0);
     expect(restored.toJSON()).toEqual({ version: 1, nodes: [], edges: [] });
+  });
+});
+
+/**
+ * Type-level coverage of the two `fromJSON` signatures.
+ *
+ * These assertions are checked by `tsc --noEmit`, which covers this directory,
+ * so this file failing to compile is the failure they exist to catch. The
+ * overload is the whole point: a document that already carries its attribute
+ * types has no business handing them back as `Attrs`, and the `unknown` door
+ * has to keep landing exactly where it always did. Nothing here changes at
+ * runtime, so pinning both halves is the only thing stopping the overload from
+ * rotting into a signature nobody reaches.
+ */
+describe('fromJSON type parameters', () => {
+  type NodeAttrs = { label: string };
+  type EdgeAttrs = { weight: number };
+  type GraphAttrs = { rankdir: string };
+
+  it('infers all three from a document that already carries them', () => {
+    const source = new Graph<NodeAttrs, EdgeAttrs, GraphAttrs>();
+    source.updateAttrs({ rankdir: 'LR' });
+    source.addNode({ id: 'a', attrs: { label: 'A' } });
+    source.addNode('b');
+    source.addEdge({ source: 'a', target: 'b', id: 'ab', attrs: { weight: 2 } });
+    const doc: GraphJSON<NodeAttrs, EdgeAttrs, GraphAttrs> = source.toJSON();
+
+    // No annotation and no explicit arguments: the document says what it holds.
+    const back = Graph.fromJSON(doc);
+    expectTypeOf(back).toEqualTypeOf<Graph<NodeAttrs, EdgeAttrs, GraphAttrs>>();
+    expectTypeOf(back.getNode('a')?.attrs.label).toEqualTypeOf<string | undefined>();
+    expectTypeOf(back.getEdge('ab')?.attrs.weight).toEqualTypeOf<number | undefined>();
+    expectTypeOf(back.attrs.rankdir).toEqualTypeOf<string | undefined>();
+
+    // @ts-expect-error the document declared `label`, so there is no `colour`.
+    const colour: unknown = back.getNode('a')?.attrs.colour;
+    expect(colour).toBeUndefined();
+
+    expect(back.requireNode('a').attrs.label).toBe('A');
+  });
+
+  it('leaves an unknown value on the defaults, exactly as before', () => {
+    const value: unknown = { version: 1, nodes: [{ id: 'a' }], edges: [] };
+    const back = Graph.fromJSON(value);
+    expectTypeOf(back).toEqualTypeOf<Graph<Attrs, Attrs, Attrs>>();
+    // The bare `Attrs` bag reads anything as `unknown` rather than refusing it,
+    // which is what makes this the honest answer for a value nobody typed.
+    expectTypeOf(back.getNode('a')?.attrs.anything).toEqualTypeOf<unknown>();
+    expect(back.nodeCount).toBe(1);
+  });
+
+  it('leaves JSON.parse on the defaults, since its result is any', () => {
+    const parsed = JSON.parse('{"version":1,"nodes":[],"edges":[]}') as unknown;
+    expectTypeOf(Graph.fromJSON(parsed)).toEqualTypeOf<Graph<Attrs, Attrs, Attrs>>();
+    expect(Graph.fromJSON(parsed).nodeCount).toBe(0);
+  });
+
+  it('still takes explicit arguments over an untyped value', () => {
+    const value: unknown = { version: 1, nodes: [{ id: 'a', attrs: { label: 'A' } }], edges: [] };
+    const back = Graph.fromJSON<NodeAttrs>(value);
+    expectTypeOf(back).toEqualTypeOf<Graph<NodeAttrs, Attrs, Attrs>>();
+    expectTypeOf(back.getNode('a')?.attrs.label).toEqualTypeOf<string | undefined>();
+    expect(back.requireNode('a').attrs.label).toBe('A');
   });
 });
 
@@ -540,6 +699,42 @@ describe('fromJSON on a value that is not a document', () => {
       { version: 1, nodes: [], edges: [{ id: 'ab', source: 'a', target: 'b', targetPort: {} }] },
       'edges[0].targetPort',
     ],
+    // Emptiness is shape, not content. `''` is refusable from the format alone
+    // with no knowledge of the rest of the document, which is the line this
+    // module draws, and a caller looking for the field in a large file needs
+    // the path far more here than anywhere else: the error the graph would
+    // throw instead names a kind and an id that is the empty string, so it
+    // gives a reader nothing to search for.
+    ['an empty node id', { version: 1, nodes: [{ id: '' }], edges: [] }, 'nodes[0].id'],
+    [
+      'an empty port id',
+      { version: 1, nodes: [{ id: 'a', ports: [{ id: '', direction: 'in' }] }], edges: [] },
+      'nodes[0].ports[0].id',
+    ],
+    [
+      'an empty edge id',
+      { version: 1, nodes: [{ id: 'a' }], edges: [{ id: '', source: 'a', target: 'a' }] },
+      'edges[0].id',
+    ],
+    [
+      'an empty edge source',
+      { version: 1, nodes: [{ id: 'a' }], edges: [{ id: 'aa', source: '', target: 'a' }] },
+      'edges[0].source',
+    ],
+    [
+      'an empty edge target',
+      { version: 1, nodes: [{ id: 'a' }], edges: [{ id: 'aa', source: 'a', target: '' }] },
+      'edges[0].target',
+    ],
+    [
+      'an empty bound port end',
+      {
+        version: 1,
+        nodes: [{ id: 'a' }],
+        edges: [{ id: 'aa', source: 'a', target: 'a', sourcePort: '' }],
+      },
+      'edges[0].sourcePort',
+    ],
   ];
 
   for (const [label, value, path] of REFUSALS) {
@@ -550,6 +745,14 @@ describe('fromJSON on a value that is not a document', () => {
       expect(error.message).toContain(path);
     });
   }
+
+  it('says what it wanted when a string is there but empty', () => {
+    const error = refusal({ version: 1, nodes: [{ id: '' }], edges: [] });
+    expect(error.expected).toBe('a non-empty string');
+    // A missing or mistyped one is the other message, so the two failures stay
+    // distinguishable to a reader who only has the error.
+    expect(refusal({ version: 1, nodes: [{ id: 7 }], edges: [] }).expected).toBe('a string');
+  });
 
   /**
    * Shape is checked in full before anything is constructed, so a document
@@ -595,17 +798,6 @@ describe('fromJSON on a document the graph itself refuses', () => {
       'an edge naming an endpoint that is not there',
       { version: 1, nodes: [{ id: 'a' }], edges: [{ id: 'ab', source: 'a', target: 'b' }] },
       NodeNotFoundError,
-    ],
-    ['an empty node id', { version: 1, nodes: [{ id: '' }], edges: [] }, InvalidIdError],
-    [
-      'an empty edge id',
-      { version: 1, nodes: [{ id: 'a' }], edges: [{ id: '', source: 'a', target: 'a' }] },
-      InvalidIdError,
-    ],
-    [
-      'an empty port id',
-      { version: 1, nodes: [{ id: 'a', ports: [{ id: '', direction: 'in' }] }], edges: [] },
-      InvalidIdError,
     ],
     [
       'a port declared twice on one node',

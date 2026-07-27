@@ -81,6 +81,17 @@ export interface EdgeJSON<E extends object = Attrs> {
  * and never merely because the package released. Version 1 is the only one this
  * package writes and the only one it reads: an unrecognised version is refused
  * rather than guessed at.
+ *
+ * The four unversioned names, this one and {@link NodeJSON}, {@link EdgeJSON},
+ * and {@link PortJSON}, TRACK the current format version rather than pinning
+ * one. Today that is version 1 and the distinction costs nothing; the day a
+ * version 2 exists, the version 1 shapes get versioned names (`GraphJSONV1` and
+ * friends) and these four move on to mean the new current, so an annotation
+ * written against "the format" keeps meaning that. A caller who wants the
+ * opposite, a type that stays pinned to version 1 whatever else happens, wants
+ * the versioned name and should ask for it then rather than reading it into one
+ * of these. Nothing is aliased ahead of time: an alias with one member is a
+ * second name for the same type and buys nothing until there are two.
  */
 export interface GraphJSON<
   NodeAttrs extends object = Attrs,
@@ -142,12 +153,24 @@ function requireArray(value: unknown, path: string): readonly unknown[] {
 }
 
 /**
- * A string. Emptiness is deliberately not checked: an empty id is a content
- * error `InvalidIdError` already answers for, and a second copy of that rule
- * here would be a second place for it to drift.
+ * A non-empty string, which is what every string field in the format is.
+ *
+ * Emptiness is checked here rather than left to `InvalidIdError` because it is
+ * decidable from the format alone: `''` is refusable looking at one field, with
+ * no knowledge of the rest of the document, which is the line this module draws
+ * between shape and content. Leaving it to the graph made it the one content
+ * failure with nothing to search a large file for, since `InvalidIdError`
+ * carries a kind and an id that is the empty string and so names no position.
+ *
+ * This does not take the rule away from `InvalidIdError`, which still owns it
+ * for `addNode`, `addEdge`, and `addPort`. Those see a call, not a document,
+ * and have no path to offer.
  */
 function requireString(value: unknown, path: string): string {
   if (typeof value !== 'string') throw new InvalidGraphJSONError(path, 'a string');
+  // Said separately from the type check, so the message names which of the two
+  // went wrong rather than making a reader guess from a value they cannot see.
+  if (value === '') throw new InvalidGraphJSONError(path, 'a non-empty string');
   return value;
 }
 

@@ -33,8 +33,8 @@ now belongs, so a graph that changes reads as a graph that moved.
 
 Early, and moving fast, but past the point of being only scaffolding.
 `@dagr/graph` is the furthest along: identity, shape, adjacency, attributes,
-ports, and patches are implemented, tested, and documented on the
-[graph model](./graph-model.md) page. `@dagr/layout` has its pipeline skeleton,
+ports, patches, traversal, and serialization are implemented, tested, and
+documented on the [graph model](./graph-model.md) page. `@dagr/layout` has its pipeline skeleton,
 the types and stage boundaries every later milestone is built against, with
 placeholder stages behind them for now; the [layout](./layout.md) page says
 which half is which. `@dagr/render` and `@dagr/react` are still scaffolds.

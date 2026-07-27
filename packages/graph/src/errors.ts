@@ -219,15 +219,23 @@ export class CycleError extends DagrGraphError {
  * Thrown when a value handed to `Graph.fromJSON` is not the shape the
  * serialization format describes.
  *
- * This covers shape alone: a missing `version`, a `nodes` that is not an array,
- * an id that is not a string, a `direction` outside the three it may be. What it
- * deliberately does not cover is content, which is to say everything the graph
- * itself already has an opinion about: a duplicate id, an edge naming an
- * endpoint that is not there, a port facing the wrong way. `fromJSON` builds by
- * calling the same public constructors any other caller would, so it cannot
- * construct a graph the public API could not, and those failures come back as
- * the family members they always were. One error per kind of wrongness rather
- * than one per entry point.
+ * Shape is what one field decides on its own: a value is refusable from the
+ * format alone, without knowing anything about the rest of the document. A
+ * missing `version`, a `nodes` that is not an array, an id that is not a string
+ * or is the empty string, a `direction` outside the three it may be. Content is
+ * the rest, which is to say everything the graph itself already has an opinion
+ * about because it depends on what else is in the file: a duplicate id, an edge
+ * naming an endpoint that is not there, a port facing the wrong way. `fromJSON`
+ * builds by calling the same public constructors any other caller would, so it
+ * cannot construct a graph the public API could not, and those failures come
+ * back as the family members they always were. One error per kind of wrongness
+ * rather than one per entry point.
+ *
+ * The empty id is the case where the line was worth drawing carefully.
+ * `InvalidIdError` still owns the rule for `addNode`, `addEdge`, and `addPort`,
+ * which see a call rather than a document; it just is not what a document earns,
+ * because it carries a kind and an id that is the empty string, so it would be
+ * the one refusal here naming nothing a reader could search a file for.
  *
  * `path` is where the offending field sits in the document, written the way a
  * reader would index into it: `nodes[3].ports[1].direction`. The whole document

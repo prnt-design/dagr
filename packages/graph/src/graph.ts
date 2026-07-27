@@ -1262,11 +1262,21 @@ export class Graph<
    * member that call always throws. The graph being built is local and is never
    * returned when construction throws, so nothing can observe a half-built one.
    *
-   * The three type parameters are the caller's claim about a document they
-   * chose to read, not something this checked. The graph never reads an
-   * attribute, so there is nothing here that could check one; annotating
-   * `fromJSON<NodeAttrs>` says "I know what wrote this file" and is worth
-   * exactly what that knowledge is worth.
+   * Two signatures, because a document that already carries its attribute types
+   * has no business handing them back as `Attrs`. A value already typed as a
+   * {@link GraphJSON} infers all three, so a `toJSON` result read straight back
+   * keeps the types the graph that wrote it had, and an `unknown` value (a
+   * `JSON.parse` result, a message, a file) lands on the defaults exactly as it
+   * always did. The overload is types only: one implementation validates both
+   * and nothing about the runtime depends on which signature a call resolved to.
+   *
+   * Inferred or annotated, the three parameters are the caller's claim about a
+   * document they chose to read, not something this checked. The graph never
+   * reads an attribute, so there is nothing here that could check one; the
+   * inferring overload is not stronger evidence than the annotation, it just
+   * spares a caller from restating what a typed document already said.
+   * `fromJSON<NodeAttrs>` over an untrusted value says "I know what wrote this
+   * file" and is worth exactly what that knowledge is worth.
    *
    * Both arrays are replayed in the order they are written in, so the restored
    * graph has the iteration order, neighbour order, and `topologicalOrder` of
@@ -1279,14 +1289,19 @@ export class Graph<
    * element arrives with an explicit id and {@link advanceSeq} already moves the
    * counter past one in generated shape. That leaves exactly one divergence,
    * and it is real rather than theoretical. Re-deriving lands the counter one
-   * past the highest SURVIVING id in generated shape, so a suffix above that,
-   * spent by an element the original removed before writing the document, is
-   * free again here and a restored graph can generate an id the original had
-   * retired. A suffix under a surviving one is not recovered, since the counter
-   * is a maximum, which is the sense in which this is about where the counter
-   * lands rather than about removal. Ids in use are still never handed out, so
-   * nothing can collide inside either graph; the two just disagree about which
-   * ids are spent.
+   * past the highest SURVIVING id in generated shape that {@link advanceSeq}
+   * accepts, meaning one whose suffix is below `Number.MAX_SAFE_INTEGER`, so a
+   * suffix above that, spent by an element the original removed before writing
+   * the document, is free again here and a restored graph can generate an id the
+   * original had retired. A suffix under an accepted survivor is not recovered,
+   * since the counter is a maximum, which is the sense in which this is about
+   * where the counter lands rather than about removal. The qualifier is not
+   * decoration: a survivor at or past the boundary contributes nothing, so a
+   * document whose only node is `n${Number.MAX_SAFE_INTEGER}` restores with the
+   * counter at 1 and every smaller suffix free however far under the survivor it
+   * sits. Ids in use are still never handed out whatever the counter says, since
+   * the generators probe the maps, so nothing can collide inside either graph;
+   * the two just disagree about which ids are spent.
    *
    * Nothing is emitted. Nobody can have subscribed to a graph that does not
    * exist yet, so the mutations below run on an unwatched graph and the patch
@@ -1295,6 +1310,16 @@ export class Graph<
    * @throws {InvalidGraphJSONError} when the value is not a version 1 document.
    * @throws {DagrGraphError} whatever the graph itself refuses the content for.
    */
+  static fromJSON<
+    NodeAttrs extends object = Attrs,
+    EdgeAttrs extends object = Attrs,
+    GraphAttrs extends object = Attrs,
+  >(json: GraphJSON<NodeAttrs, EdgeAttrs, GraphAttrs>): Graph<NodeAttrs, EdgeAttrs, GraphAttrs>;
+  static fromJSON<
+    NodeAttrs extends object = Attrs,
+    EdgeAttrs extends object = Attrs,
+    GraphAttrs extends object = Attrs,
+  >(json: unknown): Graph<NodeAttrs, EdgeAttrs, GraphAttrs>;
   static fromJSON<
     NodeAttrs extends object = Attrs,
     EdgeAttrs extends object = Attrs,
