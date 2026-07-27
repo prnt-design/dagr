@@ -21,7 +21,8 @@ renderer a fresh set of coordinates.
 Nodes, edges, and the graph itself also carry attributes, and nodes may declare
 ports for edges to attach to. Every mutation emits a patch, the flat and
 invertible description of what that call did, so a consumer can follow the
-graph instead of polling it. All three are described below.
+graph instead of polling it. All three are described below, along with the JSON
+form a graph writes itself out as and reads itself back from.
 
 ## Usage
 
@@ -626,6 +627,256 @@ has not finished when the next one starts. If the work has to be asynchronous,
 make the listener itself synchronous: push the patch onto a queue and drain the
 queue outside the emission.
 
+## Serialization
+
+`toJSON` writes a graph out as a plain JavaScript value and `Graph.fromJSON`
+reads one back. The pair is a round trip that restores the graph rather than
+only its contents: the same nodes and edges with the same ids and attributes,
+and the same order, which in this model is part of what a graph is.
+
+```ts
+import { Graph } from '@dagr/graph';
+
+const graph = new Graph();
+
+graph.updateAttrs({ rankdir: 'LR' });
+graph.addNode({
+  id: 'filter',
+  attrs: { label: 'Filter' },
+  ports: [
+    { id: 'in', direction: 'in' },
+    { id: 'pass', direction: 'out' },
+  ],
+});
+graph.addNode('sink');
+graph.addEdge({ source: 'filter', target: 'sink', id: 'e1', sourcePort: 'pass' });
+
+const text = JSON.stringify(graph, null, 2);
+const restored = Graph.fromJSON(JSON.parse(text));
+```
+
+That is the whole file, here wrapped a little tighter than `JSON.stringify`
+would wrap it:
+
+```json
+{
+  "version": 1,
+  "attrs": { "rankdir": "LR" },
+  "nodes": [
+    {
+      "id": "filter",
+      "attrs": { "label": "Filter" },
+      "ports": [
+        { "id": "in", "direction": "in" },
+        { "id": "pass", "direction": "out" }
+      ]
+    },
+    { "id": "sink" }
+  ],
+  "edges": [
+    { "id": "e1", "source": "filter", "target": "sink", "sourcePort": "pass" }
+  ]
+}
+```
+
+`sink` is one key wide because it has nothing else to say, and the edge has no
+`attrs` and no `targetPort` for the same reason. What is empty is left out: an
+empty attribute bag, an empty port list, an unbound port end. `nodes` and
+`edges` are the exception and are always written, empty arrays included, so a
+reader never has to tell "none" from "not said".
+
+### The types
+
+```ts
+interface PortJSON {
+  readonly id: PortId;
+  readonly direction: PortDirection; // always written, never inferred
+}
+
+interface NodeJSON<N extends object = Attrs> {
+  readonly id: NodeId;
+  readonly attrs?: ReadAttrs<N>; // absent when the bag is empty
+  readonly ports?: readonly PortJSON[]; // absent when there are none
+}
+
+interface EdgeJSON<E extends object = Attrs> {
+  readonly id: EdgeId;
+  readonly source: NodeId;
+  readonly target: NodeId;
+  readonly attrs?: ReadAttrs<E>;
+  readonly sourcePort?: PortId; // absent when that end is unbound
+  readonly targetPort?: PortId;
+}
+
+interface GraphJSON<
+  N extends object = Attrs,
+  E extends object = Attrs,
+  G extends object = Attrs,
+> {
+  readonly version: 1;
+  readonly attrs?: ReadAttrs<G>;
+  readonly nodes: readonly NodeJSON<N>[];
+  readonly edges: readonly EdgeJSON<E>[];
+}
+```
+
+`PortJSON` is structurally the same as `Port` today and is a separate type on
+purpose. The record is what this version of the package happens to store; the
+document is a format other tools read. Ports are already scheduled to grow an
+attribute bag, and when they do the record gains a field on the day that lands
+while the document gains one on the day the format says it does.
+
+A document is a value, not a string. `JSON.stringify` and `JSON.parse` stay
+yours to call, which is what lets a graph be embedded in a larger file, or
+diffed, without being serialised twice.
+
+### Writing
+
+`toJSON` is named for the standard protocol, so `JSON.stringify(graph)` is the
+whole file and there is no second name to remember. It is a read: it emits no
+patch, and a watched graph stays quiet.
+
+The bags it hands back are fresh one level deep, so the document is yours to
+edit without reaching into the graph. **The values inside them are not copied.**
+The graph never reads an attribute, so serialization does not validate,
+deep-clone, or repair one either: a `Date`, a `Map`, a function, a `NaN`, or a
+cycle is exactly what `JSON.stringify` says it is, which is respectively a
+string, `{}`, a missing key, `null`, and a thrown `TypeError`. Holding the
+result of `toJSON()` without stringifying it shares those nested values with the
+graph, which is the aliasing `addNode({ attrs })` already has and the same one
+the attributes section describes for a mutable array in a bag. If your
+attributes are not JSON, converting them is your job and the document is the
+wrong place to discover it.
+
+### Reading
+
+`Graph.fromJSON(json)` takes `unknown`, because this is the package's only
+untrusted-input door: a file, a message, a hand edit. It validates the shape in
+full before it constructs anything, so a malformed document cannot leave a
+half-built graph anywhere, and the graph it builds is local until it is
+returned.
+
+```ts
+type NodeAttrs = { label: string };
+
+const restored = Graph.fromJSON<NodeAttrs>(JSON.parse(text));
+restored.requireNode('filter').attrs.label; // string | undefined
+```
+
+The three type parameters are generic the way `Graph`'s are, and they are a
+claim you are making about a file you chose to read, not something `fromJSON`
+checked. There is nothing here that could check one: the graph never reads an
+attribute, so it has no idea what a `NodeAttrs` is supposed to look like.
+`fromJSON<NodeAttrs>` is worth exactly what your knowledge of what wrote the
+file is worth.
+
+### What survives, and what does not
+
+**Order survives, and that is the point.** Both arrays are written in insertion
+order and replayed in that order, so the restored graph has the same `nodes()`
+and `edges()` listings, the same declaration order per node's ports, the same
+neighbour order from `successors` and `predecessors`, and the same
+`topologicalOrder` down to the tie-break. That is a strictly stronger promise
+than `apply` makes for a patch, which restores content and lets replayed
+elements land at the end of iteration order. Serialization can make it because
+it writes the whole graph at once and controls the order it replays in; a patch
+describes one call and has no such luxury.
+
+**Absolute insertion ranks do not survive, and cannot be observed.** Removing a
+node leaves a gap in the rank counter that a replay does not reproduce, so the
+restored graph's ranks are compacted. Nothing on the public surface can see the
+difference, because every listing that reads rank reads it as an ordering. Only
+the relative order is promised, and only the relative order is real.
+
+**Generated-id counters do not survive.** They are not written; they are
+re-derived, because every element in a document is added with an explicit id and
+claiming an id in generated shape already moves the counter past it. That is
+almost exact, and the exception is worth knowing rather than discovering.
+Re-deriving lands the counter one past the highest *surviving* id in generated
+shape, so a suffix above that, spent by an element the original had removed, is
+free again on the other side:
+
+```ts
+const graph = new Graph();
+graph.addNode(); // n1
+graph.addNode(); // n2
+graph.removeNode('n2'); // the suffix stays spent
+graph.addNode().id; // 'n3'
+graph.removeNode('n3');
+
+Graph.fromJSON(graph.toJSON()).addNode().id; // 'n2', which this graph retired
+```
+
+A suffix *under* a surviving id is not recovered, since the counter is a
+maximum, so this is a rule about where the counter lands rather than about
+removal as such. Nothing can collide either way: an id in use is never handed
+out. The two graphs simply disagree about which ids are spent. If that matters
+to you, write your own ids rather than generated ones, and they round trip
+exactly.
+
+**Listeners do not survive**, and there is nowhere for them to go. `fromJSON` is
+a static that builds a graph nobody has had the chance to subscribe to, so the
+construction emits nothing at all, and the returned graph is unwatched. Nothing
+is queued for a later subscriber either: the first patch a listener sees is the
+first mutation after it subscribed.
+
+### The version field
+
+`version` is the format's version, not the package's. It moves when a document
+written by one version would be misread by another, and never merely because
+the package released. Version 1 is the only one this package writes and the only
+one it reads, and an unrecognised version is refused rather than guessed at: a
+reader that guessed would corrupt a graph quietly.
+
+A future version 2 owes a reader three things, in this order. It has to say what
+changed and what a version 1 document means under the new rules. It has to keep
+reading version 1 documents, or say plainly that it does not and ship the
+converter. And it has to be a change a version 1 reader *cannot* silently
+misread, which is what the tag buys: unknown keys are ignored today, so an
+additive field that a version 1 reader would drop on the floor without noticing
+is a version bump even though nothing about it looks breaking.
+
+### When a document is refused
+
+Two kinds of wrongness, and they are deliberately not the same error.
+
+**Shape** is `InvalidGraphJSONError`, a full member of the `DagrGraphError`
+family, and it carries the `path` of the offending field written the way you
+would index into the document:
+
+```ts
+import { InvalidGraphJSONError } from '@dagr/graph';
+
+try {
+  Graph.fromJSON(JSON.parse(text));
+} catch (error) {
+  if (error instanceof InvalidGraphJSONError) {
+    error.path; // 'nodes[3].ports[1].direction'
+    error.expected; // '"in", "out", or "inout"'
+    error.message; // 'Invalid graph JSON at ' + path + ': expected ' + expected
+  }
+}
+```
+
+The path is the whole reason the class exists. "Expected a string" is not
+actionable on its own, and a document large enough to be worth serialising is
+too large to search. The document itself is `(root)`, so a failure at the top
+level still names something.
+
+**Content** is refused by the graph, and reuses the errors it always throws: a
+`DuplicateNodeError` for a repeated id, a `NodeNotFoundError` for an edge naming
+an endpoint that is not in the file, a `PortDirectionError` for an edge asking a
+port to be an end it does not face, an `InvalidIdError` for an empty id. That
+reuse is the design rather than a shortcut. `fromJSON` builds by calling the
+same public constructors any other caller would, so it cannot construct a graph
+the public API could not, and there is no second dialect of "duplicate node" to
+learn for the deserialization path.
+
+The line between the two is where the knowledge lives. Shape is what the format
+knows on its own, one field at a time, and all of it is checked before anything
+is built. Content is what only the graph can know, because it depends on the
+rest of the document, and it surfaces while the graph is being built.
+
 ## Methods
 
 ### Counts
@@ -785,6 +1036,13 @@ distinct nodes the two agree exactly.
 The walk still goes around the cycle, so anything reachable only by passing back
 through `a` is still listed. It is the seed that is dropped, not the path.
 
+### Serialization
+
+| Method | Behaviour |
+| --- | --- |
+| `toJSON()` | The graph as a plain JSON-ready document. Named for the standard protocol, so `JSON.stringify(graph)` works. O(V + E + ports and attribute keys). |
+| `Graph.fromJSON(json)` | Static. Reads an untrusted value back into a graph, order included. Throws `InvalidGraphJSONError` on a bad shape, and the graph's own errors on bad content. |
+
 ## Errors
 
 Every error the graph throws to refuse a call extends `DagrGraphError`, so one
@@ -808,7 +1066,7 @@ try {
     switch (error.code) {
       case 'EDGE_NOT_FOUND':
         break;
-      // ... the other eight codes
+      // ... the other ten codes
     }
   }
 }
@@ -829,14 +1087,15 @@ try {
 | `PortInUseError` | `PORT_IN_USE` | `removePort` names a port live edges still reference. Carries `nodeId`, `portId`, and `edgeIds`. |
 | `PortDirectionError` | `PORT_DIRECTION` | An edge asks a port to be an end it does not face. Carries `nodeId`, `portId`, `direction`, and `end`. |
 | `CycleError` | `CYCLE` | `topologicalOrder` is called on a graph with a cycle. Carries `cycle`, a witness. |
+| `InvalidGraphJSONError` | `INVALID_GRAPH_JSON` | `Graph.fromJSON` is given a value that is not a version 1 document. Carries `path`, where the offending field sits, and `expected`. |
 
 Switching on `code` through `DagrGraphError` narrows the code but not the
 object, because an abstract base cannot know its subclasses. `isDagrGraphError`
 closes that gap: it narrows a caught value to `DagrGraphErrorLike`, a
-discriminated union of the ten concrete classes, so an arm can read the fields
-only its own class carries. It tests `instanceof DagrGraphError` and then that
-`code` is one of the ten, so the runtime check is as closed as the type it
-narrows to.
+discriminated union of the eleven concrete classes, so an arm can read the
+fields only its own class carries. It tests `instanceof DagrGraphError` and then
+that `code` is one of the eleven, so the runtime check is as closed as the type
+it narrows to.
 
 `DagrGraphError` is a catch base, not an extension point. A subclass declared
 outside this package is correctly rejected by `isDagrGraphError`, because the
@@ -855,7 +1114,7 @@ try {
       case 'PORT_IN_USE':
         error.edgeIds; // readonly string[], no cast needed
         break;
-      // ... the other eight codes
+      // ... the other ten codes
     }
   }
 }
@@ -887,7 +1146,9 @@ so the model makes these promises:
   node. Generation never recycles a suffix, whatever you remove; claiming a
   removed id again yourself is still allowed, that is your call to make. An
   explicit id outside the generated shape, `n007` or `node-3`, leaves the
-  counter alone.
+  counter alone. Within one graph, that is: the counters are re-derived rather
+  than carried across a `toJSON`/`fromJSON` round trip, and the serialization
+  section says exactly what that changes.
 - Returned arrays are fresh copies: mutating one cannot corrupt the graph, and
   it will not be updated by later mutations either. The records inside are not
   copies, they are the graph's own objects, frozen at construction, so a write
@@ -919,11 +1180,6 @@ lexicographic order say, which is a different and much larger decision than a
 tie-break rule.
 
 ## Not here yet
-
-`toJSON`/`fromJSON` is a separate task. See
-[ROADMAP.md](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md) for when
-it arrives. Until then the graph is identity, shape, adjacency, attributes,
-ports, patches, and traversal.
 
 Patches describe single calls. There is no batching or transaction API, so
 several mutations cannot be coalesced into one patch, and no listener sees a

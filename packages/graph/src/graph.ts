@@ -12,6 +12,8 @@ import {
 } from './errors.js';
 import { canReach, findCycle, reachable, topologicalOrder } from './traversal.js';
 import type { AdjacencyView } from './traversal.js';
+import { parseGraphJSON } from './serialize.js';
+import type { EdgeJSON, GraphJSON, NodeJSON, PortJSON } from './serialize.js';
 import { PatchListenerError } from './patch.js';
 import type {
   AddEdgeOp,
@@ -326,6 +328,49 @@ function portOp(
   index: number,
 ): AddPortOp | RemovePortOp {
   return Object.freeze({ op, nodeId, port, index });
+}
+
+/**
+ * The `attrs` key of a document element, present only when the bag has a key.
+ *
+ * A fresh bag rather than the record's own, so the document a caller is handed
+ * is theirs to edit and does not carry the record's freeze into a value that is
+ * about to be written to a file. The copy is one level deep: the graph never
+ * reads an attribute, so serialization has no business cloning one either, and
+ * the values inside stay shared with the graph exactly as they already are
+ * between the graph and whoever passed them to `addNode`.
+ *
+ * `fromEntries` defines rather than sets, for the same reason {@link define}
+ * exists: a `__proto__` attribute key would otherwise reassign this object's
+ * prototype and vanish from the document. The assertion is the one
+ * {@link sealAttrs} explains, minus the freeze.
+ */
+function attrsJSON<A extends object>(attrs: ReadAttrs<A>): { readonly attrs?: ReadAttrs<A> } {
+  const entries: [string, unknown][] = Object.entries(attrs);
+  if (entries.length === 0) return {};
+  return { attrs: Object.fromEntries(entries) as ReadAttrs<A> };
+}
+
+/**
+ * A validated bag handed on under the attribute type the caller claimed.
+ *
+ * The mirror of {@link sealAttrs} on the way in, and it needs an assertion for
+ * the same reason: {@link AttrsPatch} is a mapped type over an unresolved type
+ * parameter and no `Record<string, unknown>` satisfies one however it was
+ * built. What makes the claim safe is different here, though, and weaker: the
+ * validator proved the bag is a bag and nothing more, because the graph never
+ * reads an attribute and so has nothing to check a value against. The type
+ * parameters on `fromJSON` are the caller's assertion about a document they
+ * chose to read, which is what the docstring there says out loud.
+ */
+function claimAttrs<A extends object>(bag: ReadAttrs<Attrs>): AttrsPatch<A> {
+  return bag as AttrsPatch<A>;
+}
+
+/** The `ports` key of a node, present only when the node declares one. */
+function portsJSON(ports: readonly Port[]): { readonly ports?: readonly PortJSON[] } {
+  if (ports.length === 0) return {};
+  return { ports: ports.map((port) => ({ id: port.id, direction: port.direction })) };
 }
 
 /** The shorthand `addNode(id?)` form, read as the init form. */
@@ -1160,6 +1205,125 @@ export class Graph<
     this.#requireOut(from);
     this.#requireIn(to);
     return canReach(this.#view('out'), from, to);
+  }
+
+  /**
+   * The graph as a plain JSON-ready value: `{ version, attrs?, nodes, edges }`.
+   *
+   * Named for the standard protocol on purpose, so `JSON.stringify(graph)` is
+   * the whole file and no caller has to remember a second name. A plain value
+   * rather than a string, so a document can be embedded in a larger one,
+   * structurally cloned, or diffed without being serialised twice.
+   *
+   * Both arrays come out in insertion order, and {@link Graph.fromJSON} replays
+   * them in that order, which is what makes the round trip restore a graph
+   * rather than merely its contents. What is empty is left out: an empty
+   * attribute bag, an empty port list, an unbound port end. Nothing else is:
+   * `nodes` and `edges` are written even when empty, so a reader never has to
+   * tell "none" from "not said".
+   *
+   * The bags are fresh, one level deep, and the values in them are not copied.
+   * The graph never reads an attribute, so this does not validate, clone, or
+   * repair one: a `Date`, a `Map`, a function, a `NaN`, or a cycle is whatever
+   * `JSON.stringify` says it is, and holding the result without stringifying it
+   * shares those values with the graph, the same aliasing `addNode({ attrs })`
+   * already has. O(V + E + total ports and attribute keys).
+   */
+  toJSON(): GraphJSON<NodeAttrs, EdgeAttrs, GraphAttrs> {
+    const nodes: NodeJSON<NodeAttrs>[] = [];
+    for (const node of this.#nodes.values()) {
+      nodes.push({ id: node.id, ...attrsJSON(node.attrs), ...portsJSON(node.ports) });
+    }
+    const edges: EdgeJSON<EdgeAttrs>[] = [];
+    for (const edge of this.#edges.values()) {
+      edges.push({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        ...attrsJSON(edge.attrs),
+        ...(edge.sourcePort === undefined ? {} : { sourcePort: edge.sourcePort }),
+        ...(edge.targetPort === undefined ? {} : { targetPort: edge.targetPort }),
+      });
+    }
+    return { version: 1, ...attrsJSON(this.#attrs), nodes, edges };
+  }
+
+  /**
+   * A graph from a document {@link Graph.toJSON} wrote, or a refusal.
+   *
+   * The input is `unknown` because this is the package's only untrusted-input
+   * door: a file, a message, a hand edit. Shape is validated in full before
+   * anything is constructed, and a document that is not one throws
+   * `InvalidGraphJSONError` naming the path of the offending field.
+   * Content is not validated twice. Every element is added through the same
+   * public constructor any other caller would use, so this cannot build a graph
+   * the public API could not, and a duplicate id, an edge naming an endpoint
+   * that is not there, or a port facing the wrong way comes back as the family
+   * member that call always throws. The graph being built is local and is never
+   * returned when construction throws, so nothing can observe a half-built one.
+   *
+   * The three type parameters are the caller's claim about a document they
+   * chose to read, not something this checked. The graph never reads an
+   * attribute, so there is nothing here that could check one; annotating
+   * `fromJSON<NodeAttrs>` says "I know what wrote this file" and is worth
+   * exactly what that knowledge is worth.
+   *
+   * Both arrays are replayed in the order they are written in, so the restored
+   * graph has the iteration order, neighbour order, and `topologicalOrder` of
+   * the one that wrote it, not merely its contents. Absolute insertion ranks
+   * are not promised and cannot be observed: removals leave gaps in the
+   * original that a replay does not reproduce, and every listing that reads
+   * rank reads it as an ordering.
+   *
+   * The generated-id counters are re-derived rather than carried, because every
+   * element arrives with an explicit id and {@link advanceSeq} already moves the
+   * counter past one in generated shape. That leaves exactly one divergence,
+   * and it is real rather than theoretical. Re-deriving lands the counter one
+   * past the highest SURVIVING id in generated shape, so a suffix above that,
+   * spent by an element the original removed before writing the document, is
+   * free again here and a restored graph can generate an id the original had
+   * retired. A suffix under a surviving one is not recovered, since the counter
+   * is a maximum, which is the sense in which this is about where the counter
+   * lands rather than about removal. Ids in use are still never handed out, so
+   * nothing can collide inside either graph; the two just disagree about which
+   * ids are spent.
+   *
+   * Nothing is emitted. Nobody can have subscribed to a graph that does not
+   * exist yet, so the mutations below run on an unwatched graph and the patch
+   * machinery never starts. O(V + E + total ports and attribute keys).
+   *
+   * @throws {InvalidGraphJSONError} when the value is not a version 1 document.
+   * @throws {DagrGraphError} whatever the graph itself refuses the content for.
+   */
+  static fromJSON<
+    NodeAttrs extends object = Attrs,
+    EdgeAttrs extends object = Attrs,
+    GraphAttrs extends object = Attrs,
+  >(json: unknown): Graph<NodeAttrs, EdgeAttrs, GraphAttrs> {
+    const document = parseGraphJSON(json);
+    const graph = new Graph<NodeAttrs, EdgeAttrs, GraphAttrs>();
+    if (document.attrs !== undefined) graph.updateAttrs(claimAttrs<GraphAttrs>(document.attrs));
+    // Every node before any edge, since an edge needs both its endpoints. That
+    // is the only ordering constraint between the two listings, and within each
+    // one the document's order is the graph's.
+    for (const node of document.nodes) {
+      graph.addNode({
+        id: node.id,
+        ...(node.attrs === undefined ? {} : { attrs: claimAttrs<NodeAttrs>(node.attrs) }),
+        ...(node.ports === undefined ? {} : { ports: node.ports }),
+      });
+    }
+    for (const edge of document.edges) {
+      graph.addEdge({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        ...(edge.attrs === undefined ? {} : { attrs: claimAttrs<EdgeAttrs>(edge.attrs) }),
+        ...(edge.sourcePort === undefined ? {} : { sourcePort: edge.sourcePort }),
+        ...(edge.targetPort === undefined ? {} : { targetPort: edge.targetPort }),
+      });
+    }
+    return graph;
   }
 
   /**

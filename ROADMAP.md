@@ -177,9 +177,47 @@ findings addressed or logged, docs land with the feature.
   `bench/src/gate.mjs`). Nothing was absorbed: the traversal entries are new and
   the rest are unchanged code. A `--only` flag so adding a benchmark stops
   rebasing the others is worth having and is not built.
-- [ ] **M1.5** Serialization: `toJSON`/`fromJSON` with identity-preserving
+- [x] **M1.5** Serialization: `toJSON`/`fromJSON` with identity-preserving
   round-trips, property-tested. Serialization section added to the graph model
   docs page (the page itself shipped with M1.1).
+  Landed as `graph.toJSON()`, the static `Graph.fromJSON(json)`, four document
+  types, and a `serialize.ts` holding the format and a pure `unknown`-to-
+  document validator, with `graph.ts` keeping construction. Same seam as
+  `traversal.ts`, and it buys the same thing twice: no import cycle, and "every
+  shape error is found before anything is built" becomes a fact about where the
+  code sits rather than a discipline.
+  Decided here: THE ROUND TRIP PRESERVES ORDER, which is a stronger promise than
+  M1.3's `apply` makes and is the reason this task is not just `apply` with a
+  file around it. Insertion order is observable three ways in this model
+  (iteration order, neighbour order, the `topologicalOrder` tie-break M1.4 paid
+  a heap for), so a restore that permuted it would restore the content and hand
+  back a different graph. It costs nothing at all: writing in insertion order
+  and replaying in that order is the obvious implementation, and the property
+  suite deliberately compares order-sensitively with no sorting anywhere, which
+  is what M1.3's suite could not do.
+  Also decided: generated-id counters are re-derived from content rather than
+  serialised, and that leaves one divergence, stated in the docs rather than
+  left to be found. Re-deriving lands the counter one past the highest SURVIVING
+  id in generated shape, so a suffix above that, spent by an element the
+  original removed, is free again after a round trip and the restored graph can
+  generate an id the original had retired. The first draft of that claim was
+  looser (any removed suffix), and the test disproved it in one run: a removed
+  `n1` under a surviving `n2` is not recovered, because the counter is a
+  maximum. Carrying the counters in the document would close it and was not
+  taken: it puts a private implementation detail into a format other tools have
+  to write, to fix a case where no id can collide and the two graphs merely
+  disagree about which ids are spent. Callers who care should write their own
+  ids, which round trip exactly.
+  Also decided: shape errors get `InvalidGraphJSONError` (the family's eleventh
+  member, carrying the `path` of the offending field so a hand-edited file is
+  debuggable), and content errors REUSE the family. `fromJSON` builds by calling
+  the same public constructors any other caller would, so it cannot construct a
+  graph the public API could not, and there is no second dialect of "duplicate
+  node" for the deserialization path. Attribute values pass through by
+  reference, unvalidated and uncloned, because the graph never reads one.
+  Fifteen defensive branches were each broken on purpose and confirmed to turn
+  the suite red, which is how the `__proto__` and empty-omission branches were
+  shown to be covered rather than argued to be.
 
 ## M2: Layout core (`@dagr/layout`)
 

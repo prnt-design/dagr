@@ -13,6 +13,7 @@ export {
   DuplicateNodeError,
   DuplicatePortError,
   EdgeNotFoundError,
+  InvalidGraphJSONError,
   InvalidIdError,
   NodeNotFoundError,
   PortDirectionError,
@@ -37,6 +38,10 @@ export type {
   UpdateGraphAttrsOp,
   UpdateNodeAttrsOp,
 } from './patch.js';
+// The document types are public, because a caller annotating a file reader or
+// a fixture needs them. The validator behind `Graph.fromJSON` is not, for the
+// same reason `traversal.ts` is not: it is a seam, and `fromJSON` is the door.
+export type { EdgeJSON, GraphJSON, NodeJSON, PortJSON } from './serialize.js';
 export type {
   Attrs,
   AttrsPatch,

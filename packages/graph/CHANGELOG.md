@@ -14,6 +14,41 @@ diffing five milestones of doc prose.
 
 ### Added
 
+- Serialization: `graph.toJSON()` and the static `Graph.fromJSON(json)`, with
+  the document types `GraphJSON`, `NodeJSON`, `EdgeJSON`, and `PortJSON` (M1.5).
+  Additive again, so nothing under a caller moves.
+
+  `toJSON` is named for the standard protocol, so `JSON.stringify(graph)` is the
+  whole file. The document is `{ version: 1, attrs?, nodes, edges }`, both
+  listings always present and everything empty left out.
+
+  The round trip is order preserving, which is a stronger promise than `apply`
+  makes: `fromJSON` replays both arrays in document order, so iteration order,
+  port declaration order, neighbour order, and the `topologicalOrder` tie-break
+  all come back. Three things do not survive and are documented rather than
+  quietly true. Generated-id counters are re-derived from content, which lands
+  the counter one past the highest surviving id in generated shape, so a higher
+  suffix spent by a removed element is free again. Absolute insertion ranks are
+  compacted, which nothing can observe. Attribute values pass through by
+  reference and are neither validated nor cloned, so a value `JSON.stringify`
+  cannot represent is the caller's problem.
+
+- `InvalidGraphJSONError`, exported, `code: 'INVALID_GRAPH_JSON'`, the eleventh
+  member of the `DagrGraphError` family. Carries `path`, where the offending
+  field sits in the document (`nodes[3].ports[1].direction`), and `expected`.
+  Thrown only by `Graph.fromJSON`, and only for shape.
+
+  It covers shape alone on purpose. Content that the graph itself has an opinion
+  about (a duplicate id, an unknown endpoint, a port facing the wrong way, an
+  empty id) comes back as the family member it always was, because `fromJSON`
+  builds through the same public constructors and so cannot construct a graph
+  the public API could not.
+
+  This widens `DagrGraphErrorCode` and `DagrGraphErrorLike` for the second
+  release running. An exhaustive `switch` over either now has a missing arm,
+  which is a compile error rather than a silent fallthrough, and is the only way
+  this release can break a build.
+
 - Traversal on `Graph`: `topologicalOrder`, `isAcyclic`, `findCycle`, `sources`,
   `sinks`, `descendants`, `ancestors`, and `canReach` (M1.4). Additive, so the
   compiler tells a caller nothing changed under them.

@@ -23,7 +23,8 @@ export type DagrGraphErrorCode =
   | 'PORT_NOT_FOUND'
   | 'PORT_IN_USE'
   | 'PORT_DIRECTION'
-  | 'CYCLE';
+  | 'CYCLE'
+  | 'INVALID_GRAPH_JSON';
 
 /**
  * Base class for every error the graph model throws. Abstract on purpose: a
@@ -32,8 +33,8 @@ export type DagrGraphErrorCode =
  *
  * This is a catch base, not an extension point. It is exported so one
  * `instanceof` can catch the family and so `code` can be switched on through
- * it, and the family is exactly the ten classes below.
- * {@link isDagrGraphError} narrows to a closed union of those ten and rejects
+ * it, and the family is exactly the eleven classes below.
+ * {@link isDagrGraphError} narrows to a closed union of those eleven and rejects
  * anything else, a subclass declared elsewhere included. A sibling package
  * that wants the same `code` ergonomics should declare its own root class,
  * its own code union, and its own predicate rather than extending this one:
@@ -215,6 +216,40 @@ export class CycleError extends DagrGraphError {
 }
 
 /**
+ * Thrown when a value handed to `Graph.fromJSON` is not the shape the
+ * serialization format describes.
+ *
+ * This covers shape alone: a missing `version`, a `nodes` that is not an array,
+ * an id that is not a string, a `direction` outside the three it may be. What it
+ * deliberately does not cover is content, which is to say everything the graph
+ * itself already has an opinion about: a duplicate id, an edge naming an
+ * endpoint that is not there, a port facing the wrong way. `fromJSON` builds by
+ * calling the same public constructors any other caller would, so it cannot
+ * construct a graph the public API could not, and those failures come back as
+ * the family members they always were. One error per kind of wrongness rather
+ * than one per entry point.
+ *
+ * `path` is where the offending field sits in the document, written the way a
+ * reader would index into it: `nodes[3].ports[1].direction`. The whole document
+ * is `(root)`, which is a path rather than the empty string so a message never
+ * reads as though the field had no name. A file edited by hand is the reason
+ * this is carried at all: "expected a string" is not actionable on its own, and
+ * a document large enough to be worth serialising is too large to search.
+ */
+export class InvalidGraphJSONError extends DagrGraphError {
+  readonly code = 'INVALID_GRAPH_JSON';
+
+  constructor(
+    readonly path: string,
+    readonly expected: string,
+  ) {
+    super(`Invalid graph JSON at ${path}: expected ${expected}`);
+    this.name = 'InvalidGraphJSONError';
+    Object.setPrototypeOf(this, InvalidGraphJSONError.prototype);
+  }
+}
+
+/**
  * Every concrete error the graph model throws, as a discriminated union.
  *
  * {@link DagrGraphError} narrows the `code` but not the object it came from,
@@ -233,7 +268,8 @@ export type DagrGraphErrorLike =
   | PortNotFoundError
   | PortInUseError
   | PortDirectionError
-  | CycleError;
+  | CycleError
+  | InvalidGraphJSONError;
 
 /**
  * Every member of {@link DagrGraphErrorCode}, keyed so the compiler keeps the
@@ -252,9 +288,10 @@ const KNOWN_CODES: Readonly<Record<DagrGraphErrorCode, true>> = {
   PORT_IN_USE: true,
   PORT_DIRECTION: true,
   CYCLE: true,
+  INVALID_GRAPH_JSON: true,
 };
 
-/** The same ten codes as a set, for the membership test in the predicate. */
+/** The same eleven codes as a set, for the membership test in the predicate. */
 const KNOWN_CODE_SET: ReadonlySet<string> = new Set(Object.keys(KNOWN_CODES));
 
 /**
@@ -262,7 +299,7 @@ const KNOWN_CODE_SET: ReadonlySet<string> = new Set(Object.keys(KNOWN_CODES));
  * union rather than to the abstract base.
  *
  * The check is `instanceof DagrGraphError` AND a membership test of `code`
- * against the ten known codes. The second half is what makes the runtime test
+ * against the eleven known codes. The second half is what makes the runtime test
  * as closed as {@link DagrGraphErrorLike} claims to be: the base class is
  * exported, so a further subclass carrying a code of its own would pass the
  * `instanceof` alone and be narrowed to a union it is not a member of, at

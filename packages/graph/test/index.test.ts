@@ -9,7 +9,10 @@ import type {
   DagrGraphErrorLike,
   Edge,
   EdgeInit,
+  EdgeJSON,
+  GraphJSON,
   Node,
+  NodeJSON,
   NodeInit,
   Patch,
   PatchListener,
@@ -17,6 +20,7 @@ import type {
   Port,
   PortDirection,
   PortInit,
+  PortJSON,
   ReadAttrs,
   RemoveEdgeOp,
   RemoveNodeOp,
@@ -45,6 +49,8 @@ describe('@dagr/graph public surface', () => {
     expect(typeof api.PortNotFoundError).toBe('function');
     expect(typeof api.PortInUseError).toBe('function');
     expect(typeof api.PortDirectionError).toBe('function');
+    expect(typeof api.CycleError).toBe('function');
+    expect(typeof api.InvalidGraphJSONError).toBe('function');
   });
 
   it('exports the isDagrGraphError guard', () => {
@@ -70,6 +76,7 @@ describe('@dagr/graph public surface', () => {
       'DuplicatePortError',
       'EdgeNotFoundError',
       'Graph',
+      'InvalidGraphJSONError',
       'InvalidIdError',
       'NodeNotFoundError',
       'PatchListenerError',
@@ -187,6 +194,8 @@ describe('@dagr/graph public surface', () => {
       new api.PortNotFoundError('a', 'p').code,
       new api.PortInUseError('a', 'p', ['e1']).code,
       new api.PortDirectionError('a', 'p', 'in', 'source').code,
+      new api.CycleError(['a']).code,
+      new api.InvalidGraphJSONError('nodes[0]', 'an object').code,
     ];
     expect(codes).toEqual([
       'INVALID_ID',
@@ -198,6 +207,8 @@ describe('@dagr/graph public surface', () => {
       'PORT_NOT_FOUND',
       'PORT_IN_USE',
       'PORT_DIRECTION',
+      'CYCLE',
+      'INVALID_GRAPH_JSON',
     ]);
   });
 
@@ -225,6 +236,30 @@ describe('@dagr/graph public surface', () => {
     expect(direction).toBe('out');
     expect(edge.sourcePort).toBe('p');
     expect(family[0]?.code).toBe('PORT_NOT_FOUND');
+  });
+
+  it('exports the serialization types, and the round trip through them', () => {
+    type NodeAttrs = { label: string };
+    const graph = new api.Graph<NodeAttrs>();
+    graph.addNode({ id: 'a', attrs: { label: 'A' }, ports: [{ id: 'p', direction: 'out' }] });
+    graph.addNode('b');
+    graph.addEdge({ source: 'a', target: 'b', id: 'ab', sourcePort: 'p' });
+
+    // Annotated by hand rather than inferred, so dropping one from the export
+    // list fails the typecheck here rather than going unnoticed.
+    const json: GraphJSON<NodeAttrs> = graph.toJSON();
+    const node: NodeJSON<NodeAttrs> | undefined = json.nodes[0];
+    const port: PortJSON | undefined = node?.ports?.[0];
+    const edge: EdgeJSON | undefined = json.edges[0];
+
+    expect(node?.attrs?.label).toBe('A');
+    expect(port?.direction).toBe('out');
+    expect(edge?.sourcePort).toBe('p');
+
+    const restored: api.Graph<NodeAttrs> = api.Graph.fromJSON<NodeAttrs>(json);
+    expect(restored.toJSON()).toEqual(json);
+    // The validator itself stays internal: `fromJSON` is the door.
+    expect(Object.hasOwn(api, 'parseGraphJSON')).toBe(false);
   });
 
   it('exports the Node and Edge types', () => {
