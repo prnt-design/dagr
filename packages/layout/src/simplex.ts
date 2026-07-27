@@ -123,6 +123,43 @@ function resolveBudget(maxIterations: number | undefined): number {
  * pessimiser, and `test/layout.simplex.test.ts` compares these numbers against
  * cut values counted edge by edge for exactly that reason.
  *
+ * ## What the tight tree costs, and what the budget does not bound
+ *
+ * The budget counts PIVOTS, and the tree is grown before the first one, so
+ * `maxIterations` bounds none of this section and a caller cannot ask for less
+ * of it.
+ *
+ * The obvious growth is quadratic and this is not it. Rescanning every node
+ * already in the tree at every stall, to find the crossing edge of least slack,
+ * is Theta(V * E) on a chain with one extra source hanging off every link:
+ * every source sits at rank 0 and every link one rank lower than the last, so
+ * no two of the crossing slacks are equal, each stall admits exactly one node,
+ * and the tree that gets rescanned is half the graph by the end. With the
+ * budget at zero, so that the growth is all that ran, that cost 1.8 seconds at
+ * 8,000 nodes and 21 seconds at 32,000, against 18ms and 50ms for the whole of
+ * `longestPathRankStage` on the same two graphs.
+ *
+ * What runs instead is O(E log E) for a component, and it is 23ms and 65ms on
+ * those two. Every edge crossing out of the tree sits in one of two heaps, by
+ * whether it runs out of the tree or into it, and a node feeds the heaps as it
+ * JOINS: an edge whose other endpoint is already in the tree is internal, and
+ * since nothing ever leaves the tree it will never cross again, so it is never
+ * pushed. A shift moves every tree node together, so within one direction class
+ * every crossing slack moves by the same amount, `-shift` out of the tree and
+ * `+shift` into it. Each heap therefore carries a running offset and stores a
+ * key that the offset has been taken out of, which no later shift changes, so
+ * heap order stays current-slack order for the whole growth and the price of a
+ * whole heap is one subtraction. An entry whose outside endpoint has since
+ * joined is dropped when it reaches the top rather than deleted where it lies,
+ * which is what keeps a decrease-key out of this. Each edge is pushed at most
+ * once and popped at most once.
+ *
+ * The shifts are recorded rather than performed, which is the other half of the
+ * same bound: shifting the tree at each stall is O(V) a stall and quadratic
+ * over a run of them. Each node keeps the running total it joined at, which is
+ * the share of the shifting that happened before it and therefore does not
+ * apply to it, and one pass at the end applies the rest.
+ *
  * ## Cost per pivot
  *
  * A pivot exchanges `f` for a non-tree edge crossing the same cut the other
@@ -141,18 +178,20 @@ function resolveBudget(maxIterations: number | undefined): number {
  * cut value, which is the paper's own weak spot too. It resumes where the last
  * one left off and wraps rather than restarting at the first node, which is
  * what the paper recommends, but the bound is the bound: a structure that keeps
- * the candidates is the next thing to try if a measurement asks for it.
+ * the candidates is the next thing to try if a measurement asks for it. That
+ * one the budget does bound, at `maxIterations` searches.
  *
  * ## Determinism
  *
  * Same graph, same ranks, always, and every tie is broken by the graph's own
  * iteration order. Components are visited in node insertion order and each is
- * rooted at its first node. The leave-edge search walks the component's nodes
+ * rooted at its first node. The tight tree grows by taking the crossing edge of
+ * minimum slack, and among equal slacks the one added to the graph first,
+ * compared by edge number rather than by the order the incidence lists or the
+ * heaps happen to reach it. The leave-edge search walks the component's nodes
  * in insertion order, resuming after the last edge it found. The entering edge
- * is the one of minimum slack, and among equal slacks the one added to the
- * graph first, compared by edge number rather than by the order the incidence
- * lists happen to reach it, so the answer does not depend on the shape of the
- * tree at the time.
+ * is chosen by the same rule as the growth: minimum slack, then lowest edge
+ * number, so the answer does not depend on the shape of the tree at the time.
  */
 function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
   const { from, to } = view;
@@ -257,8 +296,110 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
   const marked = new Int32Array(count);
   let markedCount = 0;
   const order = new Int32Array(count);
-  const treeNodes = new Int32Array(count);
   const saved = new Int32Array(count);
+
+  // The tight tree's two heaps, and the bookkeeping that lets the shifts it
+  // makes be recorded rather than performed. See the growth loop below, and the
+  // cost section of the docstring above for why they are here at all.
+  //
+  // A heap holds the edges crossing out of the tree in one DIRECTION class,
+  // ordered by a key the shifts do not move, with the edge number as the
+  // tie-break. Capacity is the edge count because an edge is pushed at most
+  // once: it goes in when the first of its endpoints joins, and by the time the
+  // second joins it is internal and is skipped.
+  const newHeap = () => ({
+    key: new Int32Array(edgeCount),
+    edge: new Int32Array(edgeCount),
+    size: 0,
+  });
+  type Heap = ReturnType<typeof newHeap>;
+  /** Minimum slack, and among equal slacks the lowest edge number. */
+  const before = (key: number, edge: number, otherKey: number, otherEdge: number): boolean =>
+    key < otherKey || (key === otherKey && edge < otherEdge);
+  const heapPush = (heap: Heap, key: number, edge: number): void => {
+    let slot = heap.size;
+    heap.size += 1;
+    while (slot > 0) {
+      const holder = (slot - 1) >> 1;
+      if (!before(key, edge, at(heap.key, holder), at(heap.edge, holder))) break;
+      heap.key[slot] = at(heap.key, holder);
+      heap.edge[slot] = at(heap.edge, holder);
+      slot = holder;
+    }
+    heap.key[slot] = key;
+    heap.edge[slot] = edge;
+  };
+  const heapPop = (heap: Heap): void => {
+    heap.size -= 1;
+    if (heap.size === 0) return;
+    const key = at(heap.key, heap.size);
+    const edge = at(heap.edge, heap.size);
+    let slot = 0;
+    for (;;) {
+      let child = slot * 2 + 1;
+      if (child >= heap.size) break;
+      const right = child + 1;
+      if (
+        right < heap.size &&
+        before(at(heap.key, right), at(heap.edge, right), at(heap.key, child), at(heap.edge, child))
+      ) {
+        child = right;
+      }
+      if (!before(at(heap.key, child), at(heap.edge, child), key, edge)) break;
+      heap.key[slot] = at(heap.key, child);
+      heap.edge[slot] = at(heap.edge, child);
+      slot = child;
+    }
+    heap.key[slot] = key;
+    heap.edge[slot] = edge;
+  };
+  /**
+   * The lowest edge still crossing out of a heap's side, or -1 when the heap
+   * holds nothing but edges that have gone internal. Nothing ever leaves the
+   * tree, so an entry whose outside endpoint has joined is dead rather than
+   * stale, and dropping it here is what keeps the heaps free of a decrease-key.
+   */
+  const heapTop = (heap: Heap, outsideIsTarget: boolean): number => {
+    while (heap.size > 0) {
+      const edge = at(heap.edge, 0);
+      if (at(inTree, outsideIsTarget ? at(to, edge) : at(from, edge)) === 0) return edge;
+      heapPop(heap);
+    }
+    return -1;
+  };
+  // Edges running out of the tree, and edges running into it. A shift of the
+  // whole tree changes every slack in one class by `-shift` and every slack in
+  // the other by `+shift`, so one running offset per class prices them all.
+  const outward = newHeap();
+  const inward = newHeap();
+  let shifted = 0;
+  let treeSize = 0;
+  // What `shifted` stood at when a node joined, which is the part of the total
+  // shift that happened before it and therefore does not apply to it.
+  const joinShift = new Int32Array(count);
+
+  /**
+   * Adds a node to the tight tree and feeds the heaps every edge that crosses
+   * out of it. Both endpoints of such an edge read at their true rank here: the
+   * one outside the tree has never been shifted, and the one joining is shifted
+   * by everything after this moment and nothing before it, which is what
+   * recording `shifted` says.
+   */
+  const admit = (node: number): void => {
+    inTree[node] = 1;
+    joinShift[node] = shifted;
+    treeSize += 1;
+    for (let slot = at(start, node); slot < at(start, node + 1); slot += 1) {
+      const edge = at(incident, slot);
+      if (at(inTree, other(edge, node)) === 1) continue;
+      // The key is the current slack undone by the class offset, so heap order
+      // is current-slack order however far the tree goes on to move: an outward
+      // edge's slack is `key - shifted` from here on, an inward edge's is
+      // `key + shifted`.
+      if (at(from, edge) === node) heapPush(outward, slackOf(edge) + shifted, edge);
+      else heapPush(inward, slackOf(edge) - shifted, edge);
+    }
+  };
 
   /**
    * What a component's edges cost as the ranks stand. Each edge is priced once,
@@ -340,70 +481,58 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
       startedAt = componentTotal(base, size);
 
       // A tight tree: a spanning tree of the component using only edges with no
-      // slack. Grown from the root over tight edges, and when it stalls, the
-      // minimum-slack edge with exactly one endpoint in it is made tight by
-      // shifting everything already in the tree. That shift moves both ends of
-      // every edge inside the tree, so the tree stays tight, and it preserves
-      // feasibility because the edge it closes is the tightest one crossing.
-      let treeSize = 0;
+      // slack. Grown from the root by repeatedly taking the edge of minimum
+      // slack with exactly one endpoint in it, and shifting everything already
+      // in the tree by that slack to close it. A tight edge is a slack of zero
+      // and costs no shift, so this absorbs every tight edge it can reach
+      // before it moves anything. A shift moves both ends of every edge inside
+      // the tree, so the tree stays tight, and it preserves feasibility because
+      // the edge it closes is the tightest one crossing: every other crossing
+      // edge of that class had at least as much slack to give up, and every
+      // edge of the other class gains.
+      outward.size = 0;
+      inward.size = 0;
+      shifted = 0;
+      treeSize = 0;
       for (let index = 0; index < size; index += 1) inTree[at(grouped, base + index)] = 0;
-      inTree[root] = 1;
-      treeNodes[0] = root;
-      treeSize = 1;
-      stack[0] = root;
-      top = 1;
-      for (;;) {
-        while (top > 0) {
-          top -= 1;
-          const node = at(stack, top);
-          for (let slot = at(start, node); slot < at(start, node + 1); slot += 1) {
-            const edge = at(incident, slot);
-            const next = other(edge, node);
-            if (at(inTree, next) === 1 || slackOf(edge) !== 0) continue;
-            inTree[next] = 1;
-            treeEdge[edge] = 1;
-            treeNodes[treeSize] = next;
-            treeSize += 1;
-            stack[top] = next;
-            top += 1;
-          }
-        }
-        if (treeSize >= size) break;
-        let closing = -1;
-        let closingSlack = Number.POSITIVE_INFINITY;
-        for (let index = 0; index < treeSize; index += 1) {
-          const node = at(treeNodes, index);
-          for (let slot = at(start, node); slot < at(start, node + 1); slot += 1) {
-            const edge = at(incident, slot);
-            if (at(inTree, other(edge, node)) === 1) continue;
-            const slack = slackOf(edge);
-            if (slack < closingSlack || (slack === closingSlack && edge < closing)) {
-              closingSlack = slack;
-              closing = edge;
-            }
-          }
-        }
+      admit(root);
+      while (treeSize < size) {
+        // The candidates are the two heap tops, priced by the class offset. One
+        // comparison then settles both the class and the tie-break, so the edge
+        // that closes is the one the rescan this replaced would have found.
+        const outEdge = heapTop(outward, true);
+        const inEdge = heapTop(inward, false);
+        const outSlack = at(outward.key, 0) - shifted;
+        const inSlack = at(inward.key, 0) + shifted;
+        const takeOutward =
+          outEdge >= 0 &&
+          (inEdge < 0 || outSlack < inSlack || (outSlack === inSlack && outEdge < inEdge));
         // Unreachable: the component is connected in the undirected view, so a
         // tree that does not span it has an edge leaving it. Throwing rather
         // than breaking out, because breaking out would leave a tree that is
         // not spanning and every pivot after it would read a parent pointer
         // that was never set.
-        if (closing < 0) {
+        if (!takeOutward && inEdge < 0) {
           throw new InternalLayoutError(
             `no edge leaves the tight tree of ${String(treeSize)} of ` +
               `${String(size)} nodes, so the component is not connected after all`,
           );
         }
-        const shift = at(inTree, at(to, closing)) === 1 ? -closingSlack : closingSlack;
-        for (let index = 0; index < treeSize; index += 1) {
-          const node = at(treeNodes, index);
-          rank[node] = at(rank, node) + shift;
-          // Everything in the tree may have gained a tight edge, not just the
-          // endpoint of the one just closed, so the whole tree is rescanned.
-          // The scan is what the stall already costs, so this is free.
-          stack[top] = node;
-          top += 1;
-        }
+        const closing = takeOutward ? outEdge : inEdge;
+        // Down to meet an edge running out of the tree, up to meet one running
+        // into it, which is the direction that shortens the edge either way.
+        shifted += takeOutward ? outSlack : -inSlack;
+        treeEdge[closing] = 1;
+        heapPop(takeOutward ? outward : inward);
+        admit(takeOutward ? at(to, closing) : at(from, closing));
+      }
+      // The shifts, performed at last. A node keeps its own share of the total,
+      // which is everything that happened after it joined, so the ranking is
+      // exactly the one shifting the tree at every stall would have left and
+      // costs one pass rather than one pass per stall.
+      for (let index = 0; index < size; index += 1) {
+        const node = at(grouped, base + index);
+        rank[node] = at(rank, node) + shifted - at(joinShift, node);
       }
 
       for (let index = 0; index < size; index += 1) region[at(grouped, base + index)] = 1;

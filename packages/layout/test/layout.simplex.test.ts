@@ -377,6 +377,43 @@ describe('networkSimplexRankStage determinism', () => {
     expect([...rank(tangled()).ranks]).toEqual([...rank(tangled()).ranks]);
   });
 
+  /**
+   * The tight tree's tie-break, which is the entering edge's rule as well:
+   * minimum slack, and among equal slacks the lowest edge number.
+   *
+   * The tree here reaches `v0, v8, v18, v15` over tight edges and then stalls
+   * with two edges tied at slack 1: `e2` (`v6 -> v15`), which runs INTO the
+   * tree, and `e4` (`v8 -> v3`), which runs out of it. The lower edge number
+   * wins, so the tree shifts up by one to meet `v6` rather than down by one to
+   * meet `v3`, and the two choices leave different trees and different
+   * rankings. Both are feasible and neither costs more than the other, so
+   * nothing but the tie-break decides it, which is why it is a tie-break worth
+   * pinning: it is the whole of what "same graph, same ranks" rests on here.
+   * The pivots that follow do not wash the choice out, so both budgets below
+   * see it.
+   */
+  it('breaks a tie in the tight tree by the lowest edge number', () => {
+    const graph = build(
+      ['v0', 'v3', 'v6', 'v8', 'v14', 'v15', 'v16', 'v18', 'v19'],
+      [
+        ['v8', 'v18', 'e0'],
+        ['v18', 'v15', 'e1'],
+        ['v6', 'v15', 'e2'],
+        ['v19', 'v3', 'e3'],
+        ['v8', 'v3', 'e4'],
+        ['v16', 'v6', 'e5'],
+        ['v16', 'v14', 'e6'],
+        ['v14', 'v15', 'e7'],
+        ['v6', 'v19', 'e8'],
+        ['v0', 'v8', 'e9'],
+      ],
+    );
+    const settled = { v0: 0, v3: 4, v6: 2, v8: 1, v14: 2, v15: 3, v16: 1, v18: 2, v19: 3 };
+    const grown = networkSimplexRank({ maxIterations: 0 }).run(prepare(graph));
+    expect(Object.fromEntries(grown.ranks), 'the tight tree alone').toEqual(settled);
+    expect(ranksOf(graph), 'and every pivot after it').toEqual(settled);
+  });
+
   // What edge order does NOT change, on a graph whose optimum is unique. It is
   // stated that narrowly on purpose: this stage's tie-breaks are the graph's own
   // iteration order, so a graph with two optima of equal cost may well land on
@@ -661,6 +698,77 @@ describe('networkSimplexRank and its iteration budget', () => {
     }
     expect(() => networkSimplexRank({ maxIterations: 0 })).not.toThrow();
   });
+});
+
+describe('the cost of growing the tight tree', () => {
+  /**
+   * The shape that stalls the tight tree once per link: a chain
+   * `c0 -> c1 -> ... ` with one extra source `b(i) -> c(i)` hanging off every
+   * link. Longest path puts `c(i)` at rank `i` and every `b(i)` at rank 0, so
+   * the `b(i) -> c(i)` slacks are all distinct, no shift makes two of them tight
+   * at once, and every stall admits exactly one node.
+   */
+  const witness = (total: number): Graph => {
+    const chain = Math.floor(total / 2);
+    const graph = new Graph();
+    for (let index = 0; index < chain; index += 1) graph.addNode(`c${String(index)}`);
+    for (let index = 1; index < chain; index += 1) graph.addNode(`b${String(index)}`);
+    for (let index = 1; index < chain; index += 1) {
+      graph.addEdge(`c${String(index - 1)}`, `c${String(index)}`, `l${String(index)}`);
+    }
+    for (let index = 1; index < chain; index += 1) {
+      graph.addEdge(`b${String(index)}`, `c${String(index)}`, `s${String(index)}`);
+    }
+    return graph;
+  };
+
+  /** The best of a few runs, which sheds a garbage collection rather than a bug. */
+  const fastest = (run: () => void): number => {
+    let best = Number.POSITIVE_INFINITY;
+    for (let round = 0; round < 3; round += 1) {
+      const started = performance.now();
+      run();
+      best = Math.min(best, performance.now() - started);
+    }
+    return best;
+  };
+
+  /**
+   * What the tight tree costs, in units of one linear sweep over the same graph.
+   *
+   * A ratio against `longestPathRankStage` rather than a wall time or a ratio of
+   * two sizes, and both halves of that matter. A wall time pins the machine.
+   * Timing one stage at two sizes pins the shape in principle, but the constant
+   * factor climbs with the graph as the arrays leave cache, so quadratic growth
+   * came out at 12 over a fourfold graph rather than 16 while the heaps come out
+   * between 4 and 8, which is not a gap to hang a test on. The default stage is
+   * O(V + E) over the SAME view: it breaks the same cycles, builds the same
+   * acyclic view and runs the same longest-path sweep, and then stops exactly
+   * where the tight tree starts. So the ratio is 1 plus what the tree costs in
+   * sweeps, on this machine, at this size, with this much of the graph in cache.
+   */
+  const sweepsPerGrowth = (total: number): number => {
+    const input = prepare(witness(total));
+    const stage = networkSimplexRank({ maxIterations: 0 });
+    const sweep = fastest(() => void longestPathRankStage.run(input));
+    const growth = fastest(() => void stage.run(input));
+    expect(stage.run(input).ranks.size).toBe(input.graph.nodeCount);
+    return growth / sweep;
+  };
+
+  /**
+   * Measured at two sizes because the claim is that the cost does not climb
+   * with the graph: the rescan this replaced cost 86 sweeps at 8,000 nodes and
+   * 392 at 16,000, and the heaps cost between 1.0 and 2.0 at both. The limit of
+   * 10 therefore sits a factor of five above anything measured and a factor of
+   * eight below the shape it rules out.
+   */
+  it('grows it in far less than the time a full rescan per stall would take', () => {
+    const small = sweepsPerGrowth(8000);
+    const large = sweepsPerGrowth(16000);
+    expect(small, 'sweeps per growth at 8,000 nodes').toBeLessThan(10);
+    expect(large, 'sweeps per growth at 16,000 nodes').toBeLessThan(10);
+  }, 120_000);
 });
 
 describe('networkSimplexRank and its warm start', () => {
