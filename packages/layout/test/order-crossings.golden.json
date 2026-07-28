@@ -1,0 +1,144 @@
+{
+  "regenerate": "UPDATE_GOLDEN=1 pnpm --filter @dagr/layout test layout.order.golden",
+  "regenerateWhen": "Only for a deliberate change to what the stage does, and only when you can say what moved and why. A count that changed without an intended cause is something to investigate, not a file to refresh.",
+  "entries": [
+    {
+      "name": "tall-600",
+      "generator": {
+        "name": "tall-600",
+        "nodeCount": 600,
+        "edgeCount": 1800,
+        "layerCount": 30,
+        "seed": 161,
+        "longEdgeShare": 0.25,
+        "backEdgeShare": 0.02
+      },
+      "selfLoops": 0,
+      "parallelEdges": 0,
+      "built": {
+        "nodes": 600,
+        "edges": 1800,
+        "layers": 66
+      },
+      "crossings": {
+        "sweepsOnly": 1282,
+        "withTranspose": 1076
+      }
+    },
+    {
+      "name": "wide-600",
+      "generator": {
+        "name": "wide-600",
+        "nodeCount": 600,
+        "edgeCount": 2400,
+        "layerCount": 6,
+        "seed": 162,
+        "longEdgeShare": 0.05,
+        "backEdgeShare": 0.02
+      },
+      "selfLoops": 0,
+      "parallelEdges": 0,
+      "built": {
+        "nodes": 600,
+        "edges": 2400,
+        "layers": 28
+      },
+      "crossings": {
+        "sweepsOnly": 9907,
+        "withTranspose": 9033
+      }
+    },
+    {
+      "name": "dense-1200",
+      "generator": {
+        "name": "dense-1200",
+        "nodeCount": 1200,
+        "edgeCount": 6000,
+        "layerCount": 16,
+        "seed": 163,
+        "longEdgeShare": 0.4,
+        "backEdgeShare": 0.05
+      },
+      "selfLoops": 0,
+      "parallelEdges": 0,
+      "built": {
+        "nodes": 1200,
+        "edges": 6000,
+        "layers": 77
+      },
+      "crossings": {
+        "sweepsOnly": 1799,
+        "withTranspose": 1433
+      }
+    },
+    {
+      "name": "sparse-2000",
+      "generator": {
+        "name": "sparse-2000",
+        "nodeCount": 2000,
+        "edgeCount": 3000,
+        "layerCount": 40,
+        "seed": 164,
+        "longEdgeShare": 0.1,
+        "backEdgeShare": 0
+      },
+      "selfLoops": 0,
+      "parallelEdges": 0,
+      "built": {
+        "nodes": 2000,
+        "edges": 3000,
+        "layers": 40
+      },
+      "crossings": {
+        "sweepsOnly": 7464,
+        "withTranspose": 5462
+      }
+    },
+    {
+      "name": "self-loops-800",
+      "generator": {
+        "name": "self-loops-800",
+        "nodeCount": 800,
+        "edgeCount": 2400,
+        "layerCount": 12,
+        "seed": 165,
+        "longEdgeShare": 0.2,
+        "backEdgeShare": 0.02
+      },
+      "selfLoops": 40,
+      "parallelEdges": 0,
+      "built": {
+        "nodes": 800,
+        "edges": 2440,
+        "layers": 38
+      },
+      "crossings": {
+        "sweepsOnly": 4404,
+        "withTranspose": 3613
+      }
+    },
+    {
+      "name": "parallel-800",
+      "generator": {
+        "name": "parallel-800",
+        "nodeCount": 800,
+        "edgeCount": 2400,
+        "layerCount": 12,
+        "seed": 166,
+        "longEdgeShare": 0.2,
+        "backEdgeShare": 0.02
+      },
+      "selfLoops": 0,
+      "parallelEdges": 200,
+      "built": {
+        "nodes": 800,
+        "edges": 2600,
+        "layers": 40
+      },
+      "crossings": {
+        "sweepsOnly": 4573,
+        "withTranspose": 3647
+      }
+    }
+  ]
+}
