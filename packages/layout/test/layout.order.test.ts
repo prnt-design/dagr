@@ -368,6 +368,73 @@ describe('barycenterOrder, the sweeps', () => {
     ]);
   });
 
+  /**
+   * The same rule, asserted where the SHIPPING stage actually runs it.
+   *
+   * `ordered` turns the pass off so that the sweep and seed rules above are
+   * tested without a later pass answering for them, which is right for those.
+   * It is wrong for this one: the pinning rule is precisely the rule the
+   * transpose pass was found to override, because an unanchored node has a
+   * delta of zero on both sides and the pass takes zero-delta swaps. Asserting
+   * it only with the pass off would assert it only in the configuration where
+   * it happens to survive, which is the shape of test that let the defect
+   * through in the first place.
+   */
+  it('pins that node at its own index with the transpose pass on as well', () => {
+    const graph = build(
+      ['p', 'q', 'x', 'u', 'y'],
+      [
+        ['p', 'y'],
+        ['q', 'x'],
+      ],
+    );
+    const state = stateOf(graph, [
+      ['p', 'q'],
+      ['x', 'u', 'y'],
+    ]);
+    const seed = [
+      ['p', 'q'],
+      ['x', 'u', 'y'],
+    ];
+    const swept = barycenterOrder({ maxSweeps: 1, initialOrder: seed })
+      .run(state)
+      .layers.map((layer) => [...layer]);
+    expect(swept).toEqual([
+      ['p', 'q'],
+      ['y', 'u', 'x'],
+    ]);
+  });
+
+  /**
+   * A hint that names nothing must stay silent at the default cap too, for the
+   * same reason: `applyHint` and the pass are the two things that can move a
+   * node without the sweeps asking, and turning one off to test the other
+   * leaves the pair untested together.
+   */
+  it('ignores a hint that names nothing, with the transpose pass on', () => {
+    const graph = build(
+      ['p', 'q', 'x', 'u', 'y'],
+      [
+        ['p', 'y'],
+        ['q', 'x'],
+      ],
+    );
+    const state = stateOf(graph, [
+      ['p', 'q'],
+      ['x', 'u', 'y'],
+    ]);
+    const cold = barycenterOrder({ maxSweeps: 0 })
+      .run(state)
+      .layers.map((layer) => [...layer]);
+    for (const hint of [[], [['ghost'], ['phantom']]]) {
+      expect(
+        barycenterOrder({ maxSweeps: 0, initialOrder: hint })
+          .run(state)
+          .layers.map((layer) => [...layer]),
+      ).toEqual(cold);
+    }
+  });
+
   it('never returns more crossings than its own seed', () => {
     const random = mulberry32(0x5eed);
     let seedTotal = 0;

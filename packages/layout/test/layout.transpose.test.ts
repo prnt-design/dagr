@@ -143,6 +143,35 @@ function idsOf(rows: readonly (readonly number[])[], ids: readonly NodeId[]): No
  * the rule that hangs. Both are here because a test that only ran the shipping
  * rule could not show that the other one does not terminate.
  */
+/**
+ * The ids at least one adjacent layer has something to say about, worked out
+ * from the graph and the layering alone.
+ *
+ * Deliberately NOT read off the stage's CSR adjacency, even though that is
+ * where the shipping pass reads the same fact. This function is half of a
+ * second solver, and a second solver that borrowed the first one's index would
+ * agree with it about exactly the thing worth checking.
+ */
+function anchoredIds(
+  graph: Graph,
+  layers: readonly (readonly NodeId[])[],
+): ReadonlySet<NodeId> {
+  const layerOf = new Map<NodeId, number>();
+  for (const [index, layer] of layers.entries()) {
+    for (const id of layer) layerOf.set(id, index);
+  }
+  const anchored = new Set<NodeId>();
+  for (const edge of graph.edges()) {
+    const source = layerOf.get(edge.source);
+    const target = layerOf.get(edge.target);
+    if (source === undefined || target === undefined) continue;
+    if (Math.abs(source - target) !== 1) continue;
+    anchored.add(edge.source);
+    anchored.add(edge.target);
+  }
+  return anchored;
+}
+
 function referenceTranspose(
   graph: Graph,
   layers: readonly (readonly NodeId[])[],
@@ -150,6 +179,7 @@ function referenceTranspose(
   gate: 'improving' | 'any' = 'improving',
 ): { layers: NodeId[][]; passes: number } {
   const working = layers.map((layer) => [...layer]);
+  const anchors = anchoredIds(graph, layers);
   let passes = 0;
   while (passes < maxPasses) {
     passes += 1;
@@ -161,6 +191,7 @@ function referenceTranspose(
         const one = layer[slot];
         const other = layer[slot + 1];
         if (one === undefined || other === undefined) continue;
+        if (!anchors.has(one) || !anchors.has(other)) continue;
         layer[slot] = other;
         layer[slot + 1] = one;
         const after = countCrossings({ graph, layers: working });
@@ -203,6 +234,79 @@ function sharedNeighbour(): { graph: Graph; layers: NodeId[][] } {
   );
   return { graph, layers: [['n1', 'n2'], ['n0']] };
 }
+
+/**
+ * A layer holding one node the adjacent layers say NOTHING about, between two
+ * the ranker anchored.
+ *
+ * `n1` has no edge to either adjacent layer, so it contributes no segment to
+ * either gap and no swap involving it can change a crossing count. That makes
+ * every delta it takes part in exactly zero, which under the tie rule alone
+ * would mean every such pair is taken.
+ */
+function unanchoredMiddle(): { graph: Graph; layers: NodeId[][] } {
+  const graph = build(
+    ['a0', 'a1', 'n0', 'n1', 'n2'],
+    [
+      ['a0', 'n0'],
+      ['a1', 'n2'],
+    ],
+  );
+  return {
+    graph,
+    layers: [
+      ['a0', 'a1'],
+      ['n0', 'n1', 'n2'],
+    ],
+  };
+}
+
+describe('transposeLayers, the nodes it may not move', () => {
+  /**
+   * The stage's own rule, which the sweeps already keep and the pass must not
+   * quietly override: A NODE THE FIXED LAYER SAYS NOTHING ABOUT KEEPS ITS
+   * INDEX. `reorder` pins such a node and permutes the rest into the slots that
+   * leaves, and that was measured rather than assumed, so a pass that undoes it
+   * is not a smaller version of the same policy, it is the opposite one.
+   *
+   * The tie rule is what puts this in reach. An unanchored node contributes no
+   * segment to either gap, so both sides of its delta are zero, so its delta is
+   * zero, so a pass that swaps on a zero delta swaps EVERY pair containing one
+   * unconditionally. That is not a crossing-neutral shuffle that happens to be
+   * harmless: it is a drift of exactly one slot per pass in a fixed direction,
+   * which at the default cap is eight, and it compounds across re-layouts
+   * because the warm start hands the drifted order back in.
+   *
+   * Found by algorithms-review on 41 of 41 unanchored nodes in one generated
+   * corpus and 371 of 371 in another, every one displaced by exactly the pass
+   * budget.
+   */
+  it('leaves a node with no neighbour in either adjacent layer where it was', () => {
+    const { graph, layers } = unanchoredMiddle();
+    const flat = flatten(graph, layers);
+    transposeLayers(flat.rows, flat.position, flat.adjacency, 8);
+    expect(idsOf(flat.rows, flat.ids)).toEqual([
+      ['a0', 'a1'],
+      ['n0', 'n1', 'n2'],
+    ]);
+  });
+
+  /**
+   * The same rule stated as the property that actually bites a caller: running
+   * the stage on its own output must not move anything. A drift of one slot per
+   * pass is invisible in a single run and obvious across three.
+   */
+  it('is idempotent across re-layouts on a graph with unanchored nodes', () => {
+    const { graph, layers } = unanchoredMiddle();
+    const first = flatten(graph, layers);
+    transposeLayers(first.rows, first.position, first.adjacency, 8);
+    const settled = idsOf(first.rows, first.ids);
+
+    const second = flatten(graph, settled);
+    transposeLayers(second.rows, second.position, second.adjacency, 8);
+    expect(idsOf(second.rows, second.ids)).toEqual(settled);
+  });
+});
 
 describe('transposeLayers, the swap delta', () => {
   /**

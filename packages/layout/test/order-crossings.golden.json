@@ -20,6 +20,16 @@
         "edges": 1800,
         "layers": 66
       },
+      "config": {
+        "sweepsOnly": {
+          "maxSweeps": 8,
+          "maxTransposePasses": 0
+        },
+        "withTranspose": {
+          "maxSweeps": 8,
+          "maxTransposePasses": 8
+        }
+      },
       "crossings": {
         "sweepsOnly": 1282,
         "withTranspose": 1076
@@ -42,6 +52,16 @@
         "nodes": 600,
         "edges": 2400,
         "layers": 28
+      },
+      "config": {
+        "sweepsOnly": {
+          "maxSweeps": 8,
+          "maxTransposePasses": 0
+        },
+        "withTranspose": {
+          "maxSweeps": 8,
+          "maxTransposePasses": 8
+        }
       },
       "crossings": {
         "sweepsOnly": 9907,
@@ -66,6 +86,16 @@
         "edges": 6000,
         "layers": 77
       },
+      "config": {
+        "sweepsOnly": {
+          "maxSweeps": 8,
+          "maxTransposePasses": 0
+        },
+        "withTranspose": {
+          "maxSweeps": 8,
+          "maxTransposePasses": 8
+        }
+      },
       "crossings": {
         "sweepsOnly": 1799,
         "withTranspose": 1433
@@ -88,6 +118,16 @@
         "nodes": 2000,
         "edges": 3000,
         "layers": 40
+      },
+      "config": {
+        "sweepsOnly": {
+          "maxSweeps": 8,
+          "maxTransposePasses": 0
+        },
+        "withTranspose": {
+          "maxSweeps": 8,
+          "maxTransposePasses": 8
+        }
       },
       "crossings": {
         "sweepsOnly": 7464,
@@ -112,6 +152,16 @@
         "edges": 2440,
         "layers": 38
       },
+      "config": {
+        "sweepsOnly": {
+          "maxSweeps": 8,
+          "maxTransposePasses": 0
+        },
+        "withTranspose": {
+          "maxSweeps": 8,
+          "maxTransposePasses": 8
+        }
+      },
       "crossings": {
         "sweepsOnly": 4404,
         "withTranspose": 3613
@@ -134,6 +184,16 @@
         "nodes": 800,
         "edges": 2600,
         "layers": 40
+      },
+      "config": {
+        "sweepsOnly": {
+          "maxSweeps": 8,
+          "maxTransposePasses": 0
+        },
+        "withTranspose": {
+          "maxSweeps": 8,
+          "maxTransposePasses": 8
+        }
       },
       "crossings": {
         "sweepsOnly": 4573,

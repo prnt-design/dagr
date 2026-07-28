@@ -527,6 +527,19 @@ function sideDelta(
  * keeps the best layering it has seen, so it would quietly discard the evidence
  * of either one failing.
  */
+/**
+ * Whether either adjacent layer has anything to say about where this node goes.
+ *
+ * An empty CSR range on BOTH sides means no segment in either gap, which is the
+ * same condition `reorder` reads when it pins a node rather than sorting it.
+ */
+function anchored(adjacency: TransposeAdjacency, node: number): boolean {
+  return (
+    at(adjacency.upStart, node) !== at(adjacency.upStart, node + 1) ||
+    at(adjacency.downStart, node) !== at(adjacency.downStart, node + 1)
+  );
+}
+
 export function transposeLayers(
   layers: readonly number[][],
   position: Int32Array,
@@ -541,6 +554,15 @@ export function transposeLayers(
       for (let slot = 0; slot + 1 < layer.length; slot += 1) {
         const before = at(layer, slot);
         const after = at(layer, slot + 1);
+        // A node neither adjacent layer says anything about KEEPS ITS INDEX,
+        // which is the rule `reorder` already keeps and this pass must not
+        // quietly reverse. It matters here only because of the tie rule: such a
+        // node carries no segment in either gap, so both sides of its delta are
+        // zero, so every pair containing one would otherwise be swapped
+        // unconditionally and drift it a slot per pass in a fixed direction.
+        // Crossing-neutral, and still wrong: the warm start hands the drifted
+        // order back in, so it compounds across re-layouts.
+        if (!anchored(adjacency, before) || !anchored(adjacency, after)) continue;
         const delta =
           sideDelta(adjacency.upStart, adjacency.upNext, position, before, after) +
           sideDelta(adjacency.downStart, adjacency.downNext, position, before, after);
@@ -847,6 +869,26 @@ function applyHint(
  * 10k run to a fixed point it reaches 29,260 crossings against 32,677 for the
  * strict rule. A plateau of equal-scoring permutations is a thing to walk
  * across to reach something better, not a wall.
+ *
+ * WITH ONE EXCLUSION THE TIE RULE MAKES NECESSARY: A PAIR IS SKIPPED WHEN
+ * EITHER NODE HAS NO NEIGHBOUR IN EITHER ADJACENT LAYER. Such a node carries no
+ * segment in either gap, so both sides of its delta are zero, so its delta is
+ * zero, so without this the pass would swap every pair containing one
+ * UNCONDITIONALLY. That is crossing-neutral and still wrong, for two reasons.
+ * It reverses this stage's own measured rule that a node the fixed layer says
+ * nothing about keeps its index, which `reorder` keeps and which is not a
+ * corner case: 120 of the 1k corpus's nodes and 1,101 of the 10k's qualify. And
+ * because the drift is one slot per pass in a fixed direction, the warm start
+ * hands the drifted order back in and it compounds across re-layouts, which is
+ * the one thing `initialOrder` exists to prevent.
+ *
+ * Found by algorithms-review after the pass was built, on 41 of 41 unanchored
+ * nodes in one generated corpus and 371 of 371 in another, every one displaced
+ * by exactly the pass budget. Worth recording that IT COSTS NOTHING AND SO THE
+ * MEASUREMENTS ABOVE ALL STAND: the corpora read 3,605 and 3,005 on the 1k and
+ * 35,114 and 30,318 on the 10k both before the exclusion and after it, which is
+ * what a crossing-neutral change has to do, and re-measuring rather than
+ * asserting that is what makes the figures in this docstring still true.
  *
  * TERMINATION IS GATED ON STRICTLY IMPROVING SWAPS ONLY, and that is a
  * constraint rather than a detail. A zero-delta swap leaves a zero-delta swap

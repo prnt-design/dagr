@@ -25,11 +25,23 @@ import type { RankedState, Size } from '../src/types.js';
  * has to come here and rewrite the file, which is a line in a diff someone can
  * ask about, rather than sliding under a band nobody set deliberately.
  *
- * BOTH COLUMNS ARE RECORDED, the count with the transpose pass at its default
- * cap and the count with `maxTransposePasses: 0`. Pinning both means the file
- * says what the pass buys on each graph rather than only what the stage
- * totals, and a regression in either one shows up on its own instead of one
- * masking the other.
+ * BOTH COLUMNS ARE RECORDED, the count with the transpose pass running and the
+ * count with `maxTransposePasses: 0`. Pinning both means the file says what the
+ * pass buys on each graph rather than only what the stage totals, and a
+ * regression in either one shows up on its own instead of one masking the
+ * other.
+ *
+ * AND SO IS THE CONFIGURATION EACH COLUMN WAS MEASURED UNDER, resolved: the
+ * budgets actually in force rather than an option left out and standing for
+ * whatever a default happens to be. A file that recorded only the counts would
+ * move six of its numbers, or all twelve, the day a default changed, and say
+ * nothing about what changed, which leaves a reader of that diff unable to tell
+ * a quality regression from a deliberate change of default. Both budgets are
+ * therefore named at the call that produces each column, and the same values
+ * are what the file records, which is what stops the numbers and the
+ * configuration beside them from drifting apart. Naming them is also what would
+ * let a changed default pass unnoticed here, so a test below holds the recorded
+ * budgets to being the stage's own defaults.
  *
  * HOW TO REGENERATE IT, and it is one command from the repo root:
  *
@@ -64,6 +76,18 @@ import type { RankedState, Size } from '../src/types.js';
  * otherwise.
  */
 
+/** The budgets one column was measured under, both of them resolved numbers. */
+interface StageConfig {
+  readonly maxSweeps: number;
+  readonly maxTransposePasses: number;
+}
+
+/** One such configuration per column, under the column's own name. */
+interface StageConfigs {
+  readonly sweepsOnly: StageConfig;
+  readonly withTranspose: StageConfig;
+}
+
 /** One graph of the corpus: how to build it, and what the stage reaches on it. */
 interface GoldenEntry {
   readonly name: string;
@@ -75,10 +99,18 @@ interface GoldenEntry {
   readonly parallelEdges: number;
   /** What the graph came out as, so generator drift fails here and not later. */
   readonly built: { readonly nodes: number; readonly edges: number; readonly layers: number };
+  /**
+   * What the stage was configured as for each column, resolved. Per entry
+   * rather than once for the whole file so that an entry measured at a budget
+   * of its own could say so: a graph added later because it needs more sweeps
+   * than the rest would otherwise be recorded under a header that lies about
+   * it.
+   */
+  readonly config: StageConfigs;
   readonly crossings: {
     /** `maxTransposePasses: 0`: the sweeps alone. */
     readonly sweepsOnly: number;
-    /** The transpose pass at its default cap, which is what the stage does. */
+    /** The transpose pass running, which is what the stage does by default. */
     readonly withTranspose: number;
   };
 }
@@ -91,8 +123,26 @@ interface GoldenFile {
 
 const goldenPath = new URL('./order-crossings.golden.json', import.meta.url);
 
+/** An entry as the corpus states it: everything measuring it does not supply. */
+type CorpusEntry = Omit<GoldenEntry, 'built' | 'config' | 'crossings'>;
+
+/**
+ * The configuration each column is measured under, both budgets named in full
+ * so that neither column depends on a default to be reproducible.
+ *
+ * 8 and 8 are the stage's own defaults, written out here rather than imported
+ * because `order.ts` keeps those constants to itself, and held to that by the
+ * last test in this file. The `withTranspose` column is meant to be what the
+ * stage does out of the box, so a default that moved away from these numbers
+ * would leave the file recording a run nobody gets.
+ */
+const stageConfig: StageConfigs = {
+  sweepsOnly: { maxSweeps: 8, maxTransposePasses: 0 },
+  withTranspose: { maxSweeps: 8, maxTransposePasses: 8 },
+};
+
 /** The corpus, as the arguments that produce it. The numbers are in the file. */
-const corpus: readonly Omit<GoldenEntry, 'built' | 'crossings'>[] = [
+const corpus: readonly CorpusEntry[] = [
   {
     name: 'tall-600',
     generator: {
@@ -185,7 +235,7 @@ const corpus: readonly Omit<GoldenEntry, 'built' | 'crossings'>[] = [
  * same node and rejects a duplicate pair, so a self loop and a parallel edge
  * have to be added here, deterministically and recorded in the file.
  */
-function buildGraph(entry: Omit<GoldenEntry, 'built' | 'crossings'>): Graph {
+function buildGraph(entry: CorpusEntry): Graph {
   const spec = layeredDag(entry.generator);
   const graph = new Graph();
   for (const id of spec.nodes) graph.addNode(id);
@@ -217,17 +267,20 @@ function rankedState(graph: Graph): RankedState {
   };
 }
 
-/** Everything the file records about one entry, measured. */
-function measure(entry: Omit<GoldenEntry, 'built' | 'crossings'>): GoldenEntry {
+/**
+ * Everything the file records about one entry, measured.
+ *
+ * The configuration the entry records is the very object each count was
+ * produced from rather than a description of it written out alongside, so a
+ * count and the budgets recorded beside it cannot come apart: changing what a
+ * column is measured under is changing what the file says it was measured
+ * under, in one place.
+ */
+function measure(entry: CorpusEntry): GoldenEntry {
   const graph = buildGraph(entry);
   const state = rankedState(graph);
-  const scoreAt = (maxTransposePasses?: number): number =>
-    countCrossings({
-      graph,
-      layers: barycenterOrder(
-        maxTransposePasses === undefined ? undefined : { maxTransposePasses },
-      ).run(state).layers,
-    });
+  const scoreAt = (config: StageConfig): number =>
+    countCrossings({ graph, layers: barycenterOrder(config).run(state).layers });
   return {
     ...entry,
     built: {
@@ -235,7 +288,11 @@ function measure(entry: Omit<GoldenEntry, 'built' | 'crossings'>): GoldenEntry {
       edges: graph.edges().length,
       layers: new Set(state.ranks.values()).size,
     },
-    crossings: { sweepsOnly: scoreAt(0), withTranspose: scoreAt() },
+    config: stageConfig,
+    crossings: {
+      sweepsOnly: scoreAt(stageConfig.sweepsOnly),
+      withTranspose: scoreAt(stageConfig.withTranspose),
+    },
   };
 }
 
@@ -299,5 +356,34 @@ describe('barycenterOrder, the golden crossing-count corpus', () => {
     const edges = buildGraph(parallel).edges();
     const pairs = new Set(edges.map((edge) => `${edge.source} ${edge.target}`));
     expect(edges.length - pairs.size).toBe(parallel.parallelEdges);
+  });
+
+  /**
+   * The budgets the file records are the stage's own defaults, which is what
+   * makes `withTranspose` the shipping column rather than one configuration
+   * among many. Naming both budgets at the call is what keeps a count and the
+   * configuration recorded beside it together, and it is also what would let a
+   * changed default slip past this file, so the two are compared directly: the
+   * stage built with nothing said against the stage built with what the file
+   * says. That covers the other column too, which differs only in a budget it
+   * sets to zero, a value no default can be.
+   *
+   * On the corpus rather than on a small graph, because the budget has to bite
+   * for the comparison to assert anything. These graphs are still improving at
+   * eight sweeps, the way the 1k bench corpus reaches 3,605 crossings at eight
+   * and 3,467 at sixteen, whereas a graph small enough to settle early agrees
+   * with every budget and would pass on any default at all.
+   *
+   * Layers rather than counts, for the same reason `layout.transpose.test.ts`
+   * pins layers: two budgets can reach the same number by different routes, and
+   * the claim here is that the stage did the same run.
+   */
+  it('records the budgets the stage runs at when it is given no options', () => {
+    for (const entry of corpus) {
+      const state = rankedState(buildGraph(entry));
+      expect(barycenterOrder().run(state).layers).toEqual(
+        barycenterOrder(stageConfig.withTranspose).run(state).layers,
+      );
+    }
   });
 });
