@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import * as api from '../src/index.js';
 import type {
   BarycenterOrderOptions,
-  CrossingInput,
   DagrLayoutErrorCode,
+  Layering,
   LayoutConfig,
   LayoutInput,
   LayoutResult,
@@ -161,8 +161,8 @@ describe('@dagr/layout public surface', () => {
     const options: BarycenterOrderOptions = { maxSweeps: 4, initialOrder: [['a'], ['b']] };
     const stage: OrderStage = api.barycenterOrder(options);
     expect(api.layout({ graph }, { order: stage }).nodes.size).toBe(2);
-    const input: CrossingInput = { graph, layers: [['a'], ['b']] };
-    expect(api.countCrossings(input)).toBe(0);
+    const drawing: Layering = { graph, layers: [['a'], ['b']] };
+    expect(api.countCrossings(drawing)).toBe(0);
   });
 
   it('exports the DagrLayoutErrorCode type, and every code is a member of it', () => {

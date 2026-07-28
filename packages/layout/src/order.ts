@@ -43,15 +43,21 @@ function requireRank(ranks: ReadonlyMap<NodeId, number>, id: NodeId): number {
 }
 
 /**
- * A drawing to count the crossings of: a graph, and the layers its nodes are
- * drawn in, top to bottom and each left to right.
+ * A graph and a layering of it: the layers its nodes are drawn in, top to
+ * bottom and each left to right.
+ *
+ * Named for what it is rather than for who takes it, because more than one
+ * thing takes it. {@link countCrossings} scores one, M2.6's transpose pass
+ * refines one, and M3.4 reports the crossings of one, and a type named after
+ * the first of those would leave the others either borrowing a name that lies
+ * or minting a structural twin the compiler cannot tell apart.
  *
  * An `OrderedState` satisfies this structurally, so a caller holding one passes
  * it straight in. `ranks` is deliberately not part of it: which pairs of layers
  * are adjacent is decided by layer INDEX alone, and taking a second source of
  * the same fact would only give the two something to disagree about.
  */
-export interface CrossingInput {
+export interface Layering {
   readonly graph: Graph;
   readonly layers: readonly (readonly NodeId[])[];
 }
@@ -149,7 +155,7 @@ function treeSizeFor(stride: number): number {
  *
  * O(E log V), not the O(E^2) of comparing every pair of segments.
  */
-export function countCrossings(input: CrossingInput): number {
+export function countCrossings(input: Layering): number {
   const places = new Map<NodeId, Place>();
   for (const [layer, ids] of input.layers.entries()) {
     for (const [index, id] of ids.entries()) places.set(id, { layer, index });
@@ -430,15 +436,34 @@ function seedWalk(index: OrderIndex): number[][] {
 /**
  * Reorders each layer by a hint, in place, dropping everything unusable.
  *
- * The hint is flattened into one sequence and each id takes its index in it,
- * first occurrence winning; then each layer is sorted by that index, stably, so
- * that a node the hint does not name keeps the walk's order among its like. An
- * id the roster does not hold has no node to be a position for and is ignored;
- * an id the hint puts in the wrong layer only ever contributes its position
- * within the layer it actually belongs to, because the sort happens inside a
- * layer that was built from the ranks. So nothing here can produce an invalid
- * layering, which is what makes "never trusted" a property rather than a
- * promise.
+ * An id's key is its index WITHIN ITS OWN HINT LAYER, first occurrence winning
+ * and a repeat consuming nothing. Then each layer of the seed is reordered by
+ * that key, and only the nodes the hint names move: they are collected with the
+ * indices they hold, sorted, and written back into those same indices. A node
+ * the hint does not name stays exactly where the walk put it, which is this
+ * stage's own rule for silence stated once rather than twice: a node the fixed
+ * layer has no opinion about does not move either, see {@link barycenterOrder}.
+ * The alternative, keying an unnamed node after everything named, reads silence
+ * as the assertion "put it last", and gets the M3.6 case it exists for exactly
+ * backwards: the dominant warm start is a patch that ADDED nodes, so the hint
+ * names every old node and no new one, and sweeping the new ones into a cluster
+ * at one end of the layer throws away the walk that actually saw their edges.
+ *
+ * Keying within the hint layer rather than within the flattened hint is what
+ * keeps the key about IDENTITY rather than position, which is what M3.6
+ * requires of a warm start. Two ids listed in different hint layers say nothing
+ * about each other, so when they land in one layer here they TIE, and the tie
+ * falls through to the walk order, which means structure decides. A global
+ * index would instead let a node whose rank rose carry a small key to the front
+ * of its new layer and a node whose rank fell go to the back, which is the
+ * `(rank, index)` coupling M3.6 names as the obvious and incorrect approach.
+ *
+ * An id the roster does not hold has no node to be a position for and is
+ * ignored, and an id the hint puts in the wrong layer only ever contributes its
+ * position among the ids of its own hint layer that landed in the same real
+ * layer, because the reordering happens inside a layer built from the ranks. So
+ * nothing here can produce an invalid layering, which is what makes "never
+ * trusted" a property rather than a promise.
  */
 function applyHint(
   layers: number[][],
@@ -446,28 +471,37 @@ function applyHint(
   hint: readonly (readonly NodeId[])[],
 ): void {
   const hintIndex = new Map<NodeId, number>();
-  let next = 0;
   for (const layer of hint) {
+    let next = 0;
     for (const id of layer) {
-      if (!hintIndex.has(id)) hintIndex.set(id, next);
+      if (hintIndex.has(id)) continue;
+      hintIndex.set(id, next);
       next += 1;
     }
   }
   if (hintIndex.size === 0) return;
-  const keyOf = (node: number): number =>
-    hintIndex.get(idAt(ids, node)) ?? Number.POSITIVE_INFINITY;
+  // Named by node number, the way the sweeps hold a barycenter, so that the
+  // comparator reads two array entries rather than two map lookups.
+  const key = new Int32Array(ids.length);
+  const walkAt = new Int32Array(ids.length);
+  const named: number[] = [];
+  const slots: number[] = [];
   for (const layer of layers) {
-    const walkIndex = new Map<number, number>();
-    for (const [index, node] of layer.entries()) walkIndex.set(node, index);
-    layer.sort((left, right) => {
-      const leftKey = keyOf(left);
-      const rightKey = keyOf(right);
-      // Not a subtraction: two unnamed nodes both key as Infinity, and
-      // `Infinity - Infinity` is `NaN`, which a comparator reads as "equal
-      // enough" in one engine and as chaos in the next.
-      if (leftKey !== rightKey) return leftKey < rightKey ? -1 : 1;
-      return (walkIndex.get(left) ?? 0) - (walkIndex.get(right) ?? 0);
-    });
+    named.length = 0;
+    slots.length = 0;
+    for (const [slot, node] of layer.entries()) {
+      const position = hintIndex.get(idAt(ids, node));
+      if (position === undefined) continue;
+      key[node] = position;
+      walkAt[node] = slot;
+      named.push(node);
+      slots.push(slot);
+    }
+    if (named.length < 2) continue;
+    named.sort(
+      (left, right) => at(key, left) - at(key, right) || at(walkAt, left) - at(walkAt, right),
+    );
+    for (const [rank, node] of named.entries()) layer[at(slots, rank)] = node;
   }
 }
 
@@ -597,6 +631,15 @@ function applyHint(
  * see {@link applyHint} for what is dropped and why nothing it can say produces
  * an invalid layering.
  *
+ * Two of its rules are rules from the sections above rather than rules of their
+ * own, and both are argued at {@link applyHint}. An id keys by its position
+ * within its OWN hint layer, so two ids the hint listed in different layers tie
+ * when they meet in one layer here and the walk breaks the tie, which is what
+ * keeps the hint keyed by node identity rather than by the `(rank, index)`
+ * position M3.6 rules out. And an id the hint does not name keeps the index the
+ * walk gave it, exactly as a node the fixed layer says nothing about keeps its
+ * index through a sweep.
+ *
  * ## Determinism
  *
  * Same graph, same layers, always. Node numbers are the roster's own order,
@@ -621,6 +664,12 @@ function applyHint(
  * recaptures wholesale. And M2.6's transpose refinement improves this same
  * stage, so flipping the default once, after both, is one decision and one
  * rebaseline instead of two.
+ *
+ * Those two numbers, the baseline and the tolerance, are why the argument is
+ * made here and nowhere else. Both expire the moment either one is recaptured,
+ * so `index.ts` and `docs/docs/layout.md` say that the stage is opt-in and how
+ * to opt into it and then point back at this section, which leaves one
+ * paragraph to correct rather than three.
  *
  * @throws {InvalidConfigError} when `maxSweeps` is not a whole number of sweeps
  * that is zero or greater.

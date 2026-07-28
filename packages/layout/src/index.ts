@@ -19,10 +19,9 @@ export { DEFAULT_LAYOUT_CONFIG } from './config.js';
 //
 // `barycenterOrderStage` is the second real stage to arrive without taking the
 // default, so the rule is now the one that survives that too: a real stage is
-// exported by name whether or not it is the default, and which stage is the
-// default is a separate decision from whether the algorithm exists. See
-// `order.ts` for why the order default has not moved yet, and M2.6 for when it
-// is meant to.
+// exported by name whether or not it is the default. Why the order default has
+// not moved and when it is meant to is argued once, beside the code it is
+// about, in the last section of `barycenterOrder`'s docstring in `order.ts`.
 export { defaultStages } from './stages.js';
 export { longestPathRankStage } from './rank.js';
 // The factory is exported beside the simplex stage because M3 warm starts a run
@@ -34,7 +33,7 @@ export type { NetworkSimplexOptions } from './simplex.js';
 // exported because the metric a stage optimises has to be one its callers can
 // compute, and M2.6's regression corpus is committed against this counter.
 export { barycenterOrder, barycenterOrderStage, countCrossings } from './order.js';
-export type { BarycenterOrderOptions, CrossingInput } from './order.js';
+export type { BarycenterOrderOptions, Layering } from './order.js';
 export {
   DagrLayoutError,
   InternalLayoutError,

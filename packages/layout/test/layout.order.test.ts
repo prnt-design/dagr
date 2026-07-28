@@ -221,15 +221,91 @@ describe('barycenterOrder, the initialOrder hint', () => {
   });
 
   /**
-   * An id the hint puts in the wrong layer still only contributes its position
-   * within the layer it actually belongs to. The hint below claims `d` sits
-   * above `a`, and all that survives is that `d` comes before `c`.
+   * An id the hint puts in the wrong layer contributes nothing but its position
+   * within its own hint layer, and that position is only ever compared with the
+   * positions of ids listed in the SAME hint layer. The hint below claims `d`
+   * sits above `a`, so all it says about the second layer is where `c` sits in
+   * it, which is a layer of one and therefore nothing. `d` stays in front of
+   * `c` because the walk put it there.
    */
-  it('reads a misplaced id as a position within its own layer', () => {
+  it('reads a misplaced id as a position within its own hint layer', () => {
     const layers = ordered(state, { maxSweeps: 0, initialOrder: [['d', 'b', 'a'], ['c']] });
     expect(layers).toEqual([
       ['b', 'a'],
       ['d', 'c'],
+    ]);
+  });
+
+  /**
+   * The same hint against a graph whose walk disagrees with it, which is what
+   * separates "keys are per hint layer" from "keys are positions in the whole
+   * flattened hint". Here the walk reaches `c` first, and the hint lists `d` in
+   * its first layer and `c` in its second. A flattened key would put `d` ahead
+   * of `c` on the strength of `d` having been listed earlier, which is a
+   * relation between two hint layers rather than one the hint ever expressed.
+   * Their keys tie instead, and the tie falls through to the walk, so structure
+   * decides.
+   */
+  it('ties two ids the hint lists in different layers, and the walk breaks it', () => {
+    const crossed = build(
+      ['a', 'b', 'c', 'd'],
+      [
+        ['a', 'c'],
+        ['b', 'd'],
+      ],
+    );
+    const crossedState = stateOf(crossed, [
+      ['a', 'b'],
+      ['c', 'd'],
+    ]);
+    expect(ordered(crossedState, { maxSweeps: 0 })).toEqual([
+      ['a', 'b'],
+      ['c', 'd'],
+    ]);
+    const layers = ordered(crossedState, {
+      maxSweeps: 0,
+      initialOrder: [['d', 'b', 'a'], ['c']],
+    });
+    expect(layers).toEqual([
+      ['b', 'a'],
+      ['c', 'd'],
+    ]);
+  });
+
+  /**
+   * A hint that names some of a layer's nodes moves those and only those. `u`
+   * is unnamed, so it holds the index the walk gave it, index 1, and `x` and
+   * `y` permute among the two indices that leaves. The M3.6 case this is: a
+   * re-layout of a patch that added nodes hands back a hint naming every old
+   * node and no new one, and the new ones have to keep the walk that saw their
+   * edges rather than being swept to one end of the layer.
+   */
+  it('leaves an id the hint does not name at its walk index', () => {
+    const partial = build(
+      ['p', 'x', 'u', 'q', 'y'],
+      [
+        ['p', 'x'],
+        ['q', 'y'],
+      ],
+    );
+    const partialState = stateOf(partial, [
+      ['p', 'q'],
+      ['x', 'u', 'y'],
+    ]);
+    expect(ordered(partialState, { maxSweeps: 0 })).toEqual([
+      ['p', 'q'],
+      ['x', 'u', 'y'],
+    ]);
+    const layers = ordered(partialState, {
+      maxSweeps: 0,
+      initialOrder: [
+        ['p', 'q'],
+        ['y', 'x'],
+      ],
+    });
+    expect(layers).toEqual([
+      ['p', 'q'],
+      ['y', 'u', 'x'],
     ]);
   });
 

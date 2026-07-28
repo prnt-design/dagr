@@ -658,9 +658,11 @@ default is [below](#why-barycenter-order-is-not-the-default).
 ### What a crossing is counted between
 
 `countCrossings({ graph, layers })` is the metric, and it is exported because a
-number only the stage can compute is a number nobody can hold the stage to. An
-`OrderedState` satisfies its input type structurally, so a stage author holding
-one passes it straight in.
+number only the stage can compute is a number nobody can hold the stage to. What
+it takes is a `Layering`, a graph plus the layers its nodes are drawn in, named
+for what it is rather than for this one consumer because M2.6's transpose pass
+and M3.4's quality report take the same pair. An `OrderedState` satisfies it
+structurally, so a stage author holding one passes it straight in.
 
 **A crossing is only defined between two segments joining the same pair of
 adjacent layers.** An edge whose endpoints are more than one layer apart is
@@ -764,13 +766,23 @@ a budget of 16 it stops after sweep 14 at 3,532 where running all 16 reaches
 
 `initialOrder` is a previous run's layers, handed back so a re-layout does not
 churn an ordering somebody has already read. It is a hint and never a
-permutation taken on trust, exactly as `initialRanks` is on the simplex ranker:
-the hint is flattened into one sequence, each id takes its index in it, and each
-layer is sorted stably by that index. An id the roster does not hold is ignored,
-an id the hint puts in the wrong layer only ever contributes its position within
-the layer it actually belongs to, and a hint that mentions nothing leaves the
-seed exactly as the walk computed it. Nothing it can say produces an invalid
-layering.
+permutation taken on trust, exactly as `initialRanks` is on the simplex ranker.
+Each id takes its index **within its own hint layer**, and each layer of the
+seed is reordered by reading the nodes the hint names out of the indices they
+hold, sorting those by that index, and writing them back into the same indices.
+So a node the hint does not name keeps the index the walk gave it, which is the
+same rule the sweeps follow for a node the fixed layer says nothing about, and
+two ids the hint listed in different layers tie when they meet in one layer
+here, with the tie falling through to the walk. An id the roster does not hold
+is ignored, an id the hint puts in the wrong layer only ever contributes its
+position among the ids of its own hint layer that landed in the same real layer,
+and a hint that mentions nothing leaves the seed exactly as the walk computed
+it. Nothing it can say produces an invalid layering.
+
+Keying within the hint layer is also what M3.6 needs of a warm start: the key is
+node identity and never `(rank, index)` position, so a node whose rank changed
+arrives at its new layer as a newcomer rather than carrying a stale slot to the
+front or the back of it.
 
 The stage is deterministic in the same way the rankers are: same graph, same
 layers, always. Every tie in the walk is edge insertion order and every tie in a
@@ -778,20 +790,21 @@ sort key falls through to the node's current index.
 
 ### Why `barycenter-order` is not the default
 
-Three reasons, and none of them is that the stage is unfinished.
+Not because the stage is unfinished. It is a finished stage that is opt-in: you
+select it per run, as the one `order` argument at the call shown
+[above](#ordering-and-what-a-crossing-is-counted-between).
 
-It costs about 21ms on the 10k corpus against a committed `pipeline > 10k`
-baseline of 30.15ms, and the bench gate's base tolerance is 10%, so making it
-the default would put that entry roughly 70% over and the gate would fail. The
-baseline refresh that would absorb it is owed already and deferred to a quiet
-machine, because recapturing a baseline recaptures every entry at once.
+The reasons it has not taken the default are that its cost on the 10k corpus
+would put the committed `pipeline > 10k` benchmark entry over the bench gate's
+tolerance until that baseline is recaptured, and that M2.6's transpose
+refinement improves this same stage, so the default flips once, after both, for
+one decision and one rebaseline instead of two. It is also the precedent M2.3
+set with `network-simplex-rank`: a real stage is exported by name whether or not
+it is the default.
 
-M2.6's transpose refinement improves this same stage. Flipping the default once,
-after both, is one decision and one rebaseline instead of two.
-
-And it is the precedent M2.3 set with `network-simplex-rank`: a real stage is
-exported by name whether or not it is the default, and which stage is the
-default is a separate decision from whether the algorithm exists.
+The arithmetic behind the first of those, which is the part that expires the
+moment the baseline is recaptured, is stated once, in the last section of
+`barycenterOrder`'s docstring in `packages/layout/src/order.ts`.
 
 ## Why the stages are swappable
 

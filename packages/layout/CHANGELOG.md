@@ -15,10 +15,11 @@ of doc prose.
 ### Added
 
 - `barycenterOrderStage` and `barycenterOrder(options)`, exported, plus the
-  `BarycenterOrderOptions` type, and `countCrossings(input)` with its
-  `CrossingInput` type. The first real order stage: crossing reduction by
-  barycenter sweeps, with the crossing counter it optimises exported beside it.
-  `defaultStages.order` is unchanged and is still `insertion-order`. (M2.5)
+  `BarycenterOrderOptions` type, and `countCrossings(layering)` with the
+  `Layering` type it takes, which is a graph and the layers its nodes are drawn
+  in. The first real order stage: crossing reduction by barycenter sweeps, with
+  the crossing counter it optimises exported beside it. `defaultStages.order` is
+  unchanged and is still `insertion-order`. (M2.5)
 
   **The seed permutation is a connected depth-first walk over adjacent-layer
   edges**, not the roster order the placeholder uses. It is recorded here as
@@ -51,18 +52,23 @@ of doc prose.
   double the time. It takes a non-negative INTEGER and rejects everything else,
   including `Number.POSITIVE_INFINITY`, with an `InvalidConfigError` thrown at
   the call that names the budget; there is no optimality condition here for an
-  unbounded run to converge to. The stage scores the layering after every sweep
-  and returns the BEST one seen rather than the last, because the sweeps are not
-  monotone, so a larger budget is a weakly better answer rather than a different
-  one.
+  unbounded run to converge to. `InvalidConfigError` is the member of this
+  package's error family that means "the caller handed in nonsense", so it is
+  the one a bad budget gets; the rule that an out-of-range value is a
+  `RangeError` naming the field is scoped to `@dagr/render` and does not reach
+  here. The stage scores the layering after every sweep and returns the BEST one
+  seen rather than the last, because the sweeps are not monotone, so a larger
+  budget is a weakly better answer rather than a different one.
 
   `initialOrder` is a previous run's layers to start from, a hint and never a
   permutation taken on trust, on the same terms as `initialRanks` on the simplex
   ranker: unusable entries are dropped one at a time and nothing it can say
-  produces an invalid layering. As with `initialRanks`, nothing exported today
-  produces one for you to pass, because a `LayoutResult` holds coordinates and
-  not layers; it is here so that M3's engine does not need the stage rebuilt
-  around it.
+  produces an invalid layering. An id keys by its index WITHIN ITS OWN HINT
+  LAYER, so the hint constrains relative order and never absolute index, and an
+  id it does not name keeps the index the seed walk gave it rather than being
+  swept to one end. As with `initialRanks`, nothing exported today produces one
+  for you to pass, because a `LayoutResult` holds coordinates and not layers; it
+  is here so that M3's engine does not need the stage rebuilt around it.
 
   **It is not the default, and the reason is a benchmark rather than the
   algorithm.** It costs about 21ms on the 10k corpus against a committed
