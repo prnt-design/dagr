@@ -135,10 +135,12 @@ function treeSizeFor(stride: number): number {
  * invisible here, and so is a self loop, which spans none. Under the default
  * ranker most edges are in that first category, so this is a real quantity
  * counted over a proper subset of the drawing rather than over all of it. See
- * `docs/docs/layout.md` for the measured share, and note what changes it:
- * M2.4b's dummy chains make every edge span exactly one rank, at which point
- * every edge is a segment and this sees the whole graph without a line
- * changing here.
+ * `docs/docs/layout.md` for the measured share, and note what changes it and
+ * what does not: M2.4b's dummy chains make every edge that spans more than one
+ * rank span exactly one, at which point this sees the whole of any graph
+ * without a self loop, both benchmark corpora included, and no line changes
+ * here. A self loop spans no rank, so there is nothing for a chain to split and
+ * it stays invisible.
  *
  * Direction is not consulted. An edge the ranker reversed still joins the same
  * two layers and still crosses whatever it crosses, so a segment runs from the
@@ -458,6 +460,11 @@ function seedWalk(index: OrderIndex): number[][] {
  * of its new layer and a node whose rank fell go to the back, which is the
  * `(rank, index)` coupling M3.6 names as the obvious and incorrect approach.
  *
+ * The tie falls through to the walk with no tiebreaking term to make it: `named`
+ * is collected in slot order and `Array.prototype.sort` has been stable since
+ * ES2019, so equal keys come out in the order they went in, which is the walk's.
+ * A second term comparing the walk index would be that same order written twice.
+ *
  * An id the roster does not hold has no node to be a position for and is
  * ignored, and an id the hint puts in the wrong layer only ever contributes its
  * position among the ids of its own hint layer that landed in the same real
@@ -483,7 +490,6 @@ function applyHint(
   // Named by node number, the way the sweeps hold a barycenter, so that the
   // comparator reads two array entries rather than two map lookups.
   const key = new Int32Array(ids.length);
-  const walkAt = new Int32Array(ids.length);
   const named: number[] = [];
   const slots: number[] = [];
   for (const layer of layers) {
@@ -493,14 +499,11 @@ function applyHint(
       const position = hintIndex.get(idAt(ids, node));
       if (position === undefined) continue;
       key[node] = position;
-      walkAt[node] = slot;
       named.push(node);
       slots.push(slot);
     }
     if (named.length < 2) continue;
-    named.sort(
-      (left, right) => at(key, left) - at(key, right) || at(walkAt, left) - at(walkAt, right),
-    );
+    named.sort((left, right) => at(key, left) - at(key, right));
     for (const [rank, node] of named.entries()) layer[at(slots, rank)] = node;
   }
 }
@@ -545,12 +548,14 @@ function applyHint(
  * loses. A start built from edges the sweeps cannot see is worth less than one
  * built from the edges they can.
  *
- * ## The sort key: barycenter, then median, then current index
+ * ## The sort key: barycenter, then median
  *
  * A node's barycenter is the arithmetic mean of its neighbours' positions in
- * the fixed layer. Ties break on the median of the same positions, and any
- * remaining tie on the node's own current index, which makes the sort stable
- * and the stage deterministic.
+ * the fixed layer. Ties break on the median of the same positions, and a node
+ * both keys tie on keeps its position relative to the other: the nodes to sort
+ * are collected in index order and `Array.prototype.sort` has been stable since
+ * ES2019, so a third term comparing their current indices would decide nothing
+ * the first two had not already left in that order.
  *
  * That order of the two keys is measured rather than assumed, and the measurement
  * is close enough that it decides nothing on its own. Median first with the
@@ -601,17 +606,25 @@ function applyHint(
  * be recommended without a caveat about the budget, and it is what makes a
  * larger `maxSweeps` a weakly better answer rather than a different one.
  *
- * A full down-and-up round that lowers the best seen by nothing stops the run.
- * That rule is a time saving with a QUALITY COST, and the cost is measured
- * rather than assumed away: the layering carried into the next round is the last
- * one rather than the best one, so a round that improved nothing is not proof
- * that the next one will not. On the 1k at a budget of 16 the stop fires after
- * sweep 14 and the answer is 3,532 where running all 16 reaches 3,467, which is
- * 1.9%. At the default budget of 8 it fires on neither corpus, so it costs
- * nothing there, and the 10k is unaffected at 16 as well.
+ * TWO CONSECUTIVE full down-and-up rounds that lower the best seen by nothing
+ * stop the run. That is a time saving with no measured quality cost: it leaves
+ * every number in this docstring where it is, on both corpora and at both
+ * budgets, and it matches running the full budget on all 200 of the random
+ * layered graphs the test suite's stop case is drawn from.
+ *
+ * It takes two rounds rather than one because the rule is not a fixed point: the
+ * layering carried into the next round is the last one rather than the best one,
+ * so a round that improved nothing is not proof that the next one will not.
+ * Stopping on the FIRST such round is what the extra counter exists to avoid,
+ * and it was measured before it was rejected. It cost quality on 32 of those 200
+ * graphs at the DEFAULT budget of 8, worst 1,055 crossings against 893, for
+ * 188,602 against 187,340 in aggregate; and on the 1k at a budget of 16 it fired
+ * after sweep 14 for 3,532 where the full 16 reach 3,467. Waiting for a second
+ * round recovers all of that, exactly, and costs about 21.6ms on the 10k at the
+ * default budget against 21.9ms for the one-round stop.
  *
  * Measured, crossings by budget on the chosen seed: the 1k is 7,933 at the seed
- * and 4,619, 3,880, 3,605 and 3,532 at 2, 4, 8 and 16 sweeps; the 10k is 94,991
+ * and 4,619, 3,880, 3,605 and 3,467 at 2, 4, 8 and 16 sweeps; the 10k is 94,991
  * at the seed and 50,735, 40,217, 35,114 and 32,503. The 10k cost about 5.5ms
  * for the seed alone and 9.5ms, 13.5ms, 21ms and 38ms at 2, 4, 8 and 16 sweeps,
  * scoring included, on the maintainer's machine. Read those as one machine's
@@ -642,12 +655,15 @@ function applyHint(
  *
  * ## Determinism
  *
- * Same graph, same layers, always. Node numbers are the roster's own order,
- * every tie in the seed walk is edge insertion order, and every tie in a sort
- * key falls through to the node's current index. Unlike the rank stages this
- * one is also invariant to nothing in particular about the graph's history: it
- * reads the ranks it is given, so a graph assembled in a different order that
- * ranks the same and rosters the same orders the same.
+ * Same graph, same layers, always. Node numbers are the roster's own order, and
+ * every tie in the seed walk is edge insertion order. Every tie in a sort key
+ * comes down to two facts together: the nodes to sort are collected in index
+ * order, and `Array.prototype.sort` is stable by specification, so a tie leaves
+ * them in the order they already sat in. Neither fact is a comparator term, and
+ * a comparator term restating the second one would not add a guarantee. Unlike
+ * the rank stages this one is also invariant to nothing in particular about the
+ * graph's history: it reads the ranks it is given, so a graph assembled in a
+ * different order that ranks the same and rosters the same orders the same.
  *
  * ## Why this is not the default order stage
  *
@@ -731,6 +747,12 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
        * Reorders one layer against the fixed layer on one side of it. A node
        * with no neighbour there is pinned where it is, and the rest are sorted
        * into the indices that leaves.
+       *
+       * `movable` is collected in index order and the sort is stable, so two
+       * nodes with the same barycenter and the same median come out in the
+       * order they were in. That is where this stage's determinism comes from,
+       * along with the node numbering; it is not something a further comparator
+       * term supplies, which is why there is not one.
        */
       const reorder = (layer: number[], fromAbove: boolean): void => {
         const start = fromAbove ? index.upStart : index.downStart;
@@ -762,8 +784,7 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
         movable.sort(
           (left, right) =>
             at(barycenter, left) - at(barycenter, right) ||
-            at(median, left) - at(median, right) ||
-            at(position, left) - at(position, right),
+            at(median, left) - at(median, right),
         );
         for (const [rank, node] of movable.entries()) {
           const slot = at(slots, rank);
@@ -788,6 +809,7 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
       let best = layers.map((layer) => [...layer]);
       let bestScore = score();
       let roundScore = bestScore;
+      let dry = 0;
       for (let sweep = 1; sweep <= budget; sweep += 1) {
         if (sweep % 2 === 1) sweepDown();
         else sweepUp();
@@ -796,20 +818,26 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
           bestScore = current;
           best = layers.map((layer) => [...layer]);
         }
-        // A full down-and-up round that lowered the best seen by nothing ends
-        // the run. Checked on the round rather than on the sweep, because a
-        // single sweep going nowhere is normal and a single sweep going
-        // backwards is normal too.
+        // TWO CONSECUTIVE full down-and-up rounds that lowered the best seen by
+        // nothing end the run. Checked on the round rather than on the sweep,
+        // because a single sweep going nowhere is normal and a single sweep
+        // going backwards is normal too.
         //
-        // This is a heuristic and NOT a fixed point. What carries into the next
-        // round is the last layering, not the best one, so the run really can
-        // improve again after a round that did not: it does on the 1k corpus at
-        // a budget of 16, which stops after sweep 14 at 3,532 where the full 16
-        // reach 3,467. Measured at 1.9% there and at nothing at all at the
-        // default budget, where it fires on neither corpus. See the sweeps
-        // section of the docstring above.
+        // The counter is the only difference from a one-round stop, and the
+        // one-round stop is why it is here. This is a heuristic and NOT a fixed
+        // point: what carries into the next round is the last layering, not the
+        // best one, so the run really can improve again after a round that did
+        // not. Stopping on the first such round cost quality on 32 of 200 random
+        // layered graphs at the default budget, worst 1,055 crossings against
+        // 893, and took the 1k corpus at a budget of 16 to 3,532 where the full
+        // 16 sweeps reach 3,467. Waiting for a second one recovers every
+        // crossing of that on all three, at no measured cost in time. See the
+        // sweeps section of the docstring above.
         if (sweep % 2 === 0) {
-          if (bestScore >= roundScore) break;
+          if (bestScore >= roundScore) {
+            dry += 1;
+            if (dry >= 2) break;
+          } else dry = 0;
           roundScore = bestScore;
         }
       }

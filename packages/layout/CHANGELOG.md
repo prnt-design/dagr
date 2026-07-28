@@ -43,22 +43,25 @@ of doc prose.
   so an edge spanning more than one rank is invisible to the counter and to the
   sweeps alike, and so is a self loop. Under the default ranker that is 1,324 of
   the 1k corpus's 4,000 edges (33.1%) and 10,528 of the 10k's 40,000 (26.3%);
-  the longest edge spans 78 and 201 ranks. M2.4b's chains take that share to
-  100% without a line changing here.
+  the longest edge spans 78 and 201 ranks. M2.4b's chains make every edge that
+  spans more than one rank span exactly one, which takes that share to 100% on
+  any graph without self loops, both benchmark corpora included, without a line
+  changing here.
 
   `maxSweeps` defaults to 8: the 10k corpus goes 94,991 at the seed, 50,735 at
   2, 40,217 at 4, 35,114 at 8 and 32,503 at 16, costing about 5.5ms, 9.5ms,
-  13.5ms, 21ms and 38ms. Sixteen sweeps buy another 7% for something under
-  double the time. It takes a non-negative INTEGER and rejects everything else,
-  including `Number.POSITIVE_INFINITY`, with an `InvalidConfigError` thrown at
-  the call that names the budget; there is no optimality condition here for an
-  unbounded run to converge to. `InvalidConfigError` is the member of this
-  package's error family that means "the caller handed in nonsense", so it is
-  the one a bad budget gets; the rule that an out-of-range value is a
-  `RangeError` naming the field is scoped to `@dagr/render` and does not reach
-  here. The stage scores the layering after every sweep and returns the BEST one
-  seen rather than the last, because the sweeps are not monotone, so a larger
-  budget is a weakly better answer rather than a different one.
+  13.5ms, 21ms and 38ms. Sixteen sweeps buy another 7% of what is left for
+  something under double the time. It takes a non-negative INTEGER and rejects
+  everything else, including `Number.POSITIVE_INFINITY`, with an
+  `InvalidConfigError` thrown at the call that names the budget; there is no
+  optimality condition here for an unbounded run to converge to.
+  `InvalidConfigError` is the member of this package's error family that means
+  "the caller handed in nonsense", so it is the one a bad budget gets; the rule
+  that an out-of-range value is a `RangeError` naming the field is scoped to
+  `@dagr/render` and does not reach here. The stage scores the layering after
+  every sweep and returns the BEST one seen rather than the last, because the
+  sweeps are not monotone, so a larger budget is a weakly better answer rather
+  than a different one.
 
   `initialOrder` is a previous run's layers to start from, a hint and never a
   permutation taken on trust, on the same terms as `initialRanks` on the simplex

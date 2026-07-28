@@ -646,7 +646,7 @@ rank and orders each layer by graph insertion order. `barycenter-order` is a
 real crossing-reduction stage beside it, selected per run:
 
 ```ts
-import { barycenterOrder, barycenterOrderStage, countCrossings } from '@dagr/layout';
+import { barycenterOrder, barycenterOrderStage, layout } from '@dagr/layout';
 
 layout({ graph }, { order: barycenterOrderStage });
 layout({ graph }, { order: barycenterOrder({ maxSweeps: 16 }) });
@@ -664,6 +664,27 @@ for what it is rather than for this one consumer because M2.6's transpose pass
 and M3.4's quality report take the same pair. An `OrderedState` satisfies it
 structurally, so a stage author holding one passes it straight in.
 
+Layers are what an order stage returns, so scoring a run means wrapping one: a
+`LayoutResult` holds coordinates and not layers, and nothing exported today
+turns the first back into the second.
+
+```ts
+import { barycenterOrderStage, countCrossings, layout } from '@dagr/layout';
+import type { OrderStage } from '@dagr/layout';
+
+const scored: OrderStage = {
+  name: 'scored-order',
+  run(input) {
+    const { graph } = input;
+    const output = barycenterOrderStage.run(input);
+    console.log('crossings', countCrossings({ graph, layers: output.layers }));
+    return output;
+  },
+};
+
+layout({ graph }, { order: scored });
+```
+
 **A crossing is only defined between two segments joining the same pair of
 adjacent layers.** An edge whose endpoints are more than one layer apart is
 invisible to the counter and to the sweeps alike, and so is a self loop, which
@@ -674,9 +695,11 @@ spans 78 ranks on the one and 201 on the other. So the stage today optimises a
 real quantity over a quarter to a third of the drawing.
 
 What changes that is M2.4b. Splitting every long edge into a chain of one dummy
-per rank makes every edge span exactly one rank, at which point the share is
-100% and both the counter and the sweeps see the whole graph without a line
-changing in either.
+per rank makes every edge that spans more than one rank span exactly one, at
+which point the share is 100% on any graph without self loops, both benchmark
+corpora included, and both the counter and the sweeps see the whole graph
+without a line changing in either. A self loop is the exception a chain cannot
+reach: it spans no rank, so there is nothing to split, and it stays invisible.
 
 Two segments that share an endpoint touch rather than cross, and two parallel
 edges lie on top of each other. Direction is not consulted: an edge the ranker
@@ -700,9 +723,10 @@ the first time it is visited, neighbours are taken in `outEdges` order and then
 `inEdges` order, and a node no such edge reaches is appended when the outer loop
 arrives at it. It is not the roster order the placeholder uses.
 
-Measured on the benchmark corpora, crossings after 8 sweeps, lower is better:
+Measured on the benchmark corpora, adjacent-layer crossings after 8 sweeps,
+lower is better:
 
-| seed | 1k | 10k |
+| seed | 1k crossings | 10k crossings |
 | --- | --- | --- |
 | roster order (the placeholder's) | 3,943 | 54,744 |
 | walk over adjacent-layer edges | 3,605 | 35,114 |
@@ -728,29 +752,34 @@ built from the edges they can.
 A downward sweep fixes layer `i` and reorders layer `i + 1` from the neighbours
 above it; an upward sweep is the mirror image. They alternate, starting
 downward. A node is placed by the barycenter of its neighbours' positions in the
-fixed layer, ties broken by their median and then by the node's own current
-index; a node with no neighbour in the fixed layer keeps its index and the rest
-sort into the indices left over.
+fixed layer, ties broken by their median, and a node both keys tie on keeps its
+position relative to the other; a node with no neighbour in the fixed layer
+keeps its index and the rest sort into the indices left over.
 
 The layering is scored after every sweep and **the best one seen is what comes
 back**, not the last one, because the sweeps are not monotone. That is what
 makes a larger `maxSweeps` a weakly better answer rather than a different one.
 
-| sweeps | 1k | 10k | 10k cost |
+Adjacent-layer crossings by budget on the same two corpora, from the seed above:
+
+| sweeps | 1k crossings | 10k crossings | 10k cost |
 | --- | --- | --- | --- |
 | 0 (the seed) | 7,933 | 94,991 | 5.5ms |
 | 2 | 4,619 | 50,735 | 9.5ms |
 | 4 | 3,880 | 40,217 | 13.5ms |
 | 8 (the default) | 3,605 | 35,114 | 21ms |
-| 16 | 3,532 | 32,503 | 38ms |
+| 16 | 3,467 | 32,503 | 38ms |
 
 `maxSweeps` defaults to 8, which is where the curve has given up most of what it
 will give: 8 sweeps take the 10k to 8.3% of the roster-order seed's crossings
-and 16 take it to 7.6%, so doubling the budget buys another 7% of what is left.
-It bounds the sweeps and nothing else, the way `maxIterations` bounds pivots
-only. Zero is legal and means "seed only". A non-integer or negative budget is
-an `InvalidConfigError` naming the field, thrown at the call that builds the
-stage rather than at the run.
+and 16 take it to 7.6%, both counted over the 26.3% of edges the metric sees, so
+doubling the budget buys another 7% of what is left. It bounds the sweeps and
+nothing else, the way `maxIterations` bounds pivots only. Zero is legal and
+means "seed only". Unlike `maxIterations` it does not take
+`Number.POSITIVE_INFINITY`: these sweeps have no optimality condition to
+converge to, so "as many as it takes" has nothing to mean. A non-integer or
+negative budget is an `InvalidConfigError` naming the field, thrown at the call
+that builds the stage rather than at the run.
 
 Those timings are one machine's, taken to justify a default rather than to tell
 you what the stage will cost you, exactly as the figures under
@@ -758,11 +787,16 @@ you what the stage will cost you, exactly as the figures under
 The committed benchmark medians are the only numbers anything regresses
 against.
 
-A full down-and-up round that lowers the best seen by nothing ends the run,
-which is a time saving with a small quality cost rather than a fixed point: what
-carries into the next round is the last layering, not the best one. On the 1k at
-a budget of 16 it stops after sweep 14 at 3,532 where running all 16 reaches
-3,467. At the default budget of 8 it fires on neither corpus.
+Two consecutive down-and-up rounds that lower the best seen by nothing end the
+run. It takes two rather than one because the rule is a heuristic and not a
+fixed point: what carries into the next round is the last layering, not the best
+one, so a round that improved nothing is not proof that the next one will not.
+Stopping on the first such round is what the two-round rule was measured
+against: it cost quality on 32 of 200 random layered graphs at the default
+budget, worst 1,055 crossings against 893, and took the 1k at a budget of 16 to
+3,532 where running all 16 reaches 3,467. The rule that ships recovers all of
+that, so every number in the table above is what running the budget out gives,
+on both corpora and at both budgets.
 
 `initialOrder` is a previous run's layers, handed back so a re-layout does not
 churn an ordering somebody has already read. It is a hint and never a
@@ -785,8 +819,9 @@ arrives at its new layer as a newcomer rather than carrying a stale slot to the
 front or the back of it.
 
 The stage is deterministic in the same way the rankers are: same graph, same
-layers, always. Every tie in the walk is edge insertion order and every tie in a
-sort key falls through to the node's current index.
+layers, always. Every tie in the walk is edge insertion order, and every tie in
+a sort key leaves the nodes in the order they already sat in, because the nodes
+to sort are collected in index order and JavaScript's sort is stable.
 
 ### Why `barycenter-order` is not the default
 
@@ -1233,7 +1268,7 @@ The three sort by whose bug it is, which is the only question a caller catching
 one has to answer: fix the input, fix the stage, or file the bug.
 
 ```ts
-import { DagrLayoutError } from '@dagr/layout';
+import { DagrLayoutError, layout } from '@dagr/layout';
 
 try {
   layout({ graph }, { rank: myRankStage });

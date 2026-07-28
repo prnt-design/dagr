@@ -399,6 +399,26 @@ describe('barycenterOrder, the sweeps', () => {
     }
   });
 
+  /**
+   * The early stop, on the graph that shows what a one-round stop cost.
+   *
+   * Stopping on the FIRST round that lowered the best seen by nothing gave 1,055
+   * crossings here where the full budget of 8 reaches 893, because the layering
+   * carried into the next round is the last one rather than the best one, so a
+   * round that improved nothing is not proof that the next one will not. Two
+   * consecutive fruitless rounds is the rule that ships, and on this graph it
+   * runs the budget out and reaches the same 893 the full budget does.
+   *
+   * A pin rather than an inequality, because what is being ruled out is a stop
+   * that fires a round too early, and 893 is what firing at the right time is
+   * worth. See the sweeps section of {@link barycenterOrder}.
+   */
+  it('does not stop on the first fruitless round, which used to cost 18%', () => {
+    const { graph, layers } = randomLayered(mulberry32(69), 150, 7, 320);
+    const state = stateOf(graph, layers);
+    expect(countCrossings({ graph, layers: ordered(state) })).toBe(893);
+  });
+
   it('improves with a bigger sweep budget, and runs no sweep at all at zero', () => {
     const random = mulberry32(11);
     const { graph, layers } = randomLayered(random, 200, 8, 700);
@@ -616,7 +636,7 @@ describe('barycenterOrder, on the bench corpora', () => {
       ];
     });
     expect(table).toEqual([
-      ['1k', 12_890, 3_943, 7_933, 4_619, 3_880, 3_605, 3_532],
+      ['1k', 12_890, 3_943, 7_933, 4_619, 3_880, 3_605, 3_467],
       ['10k', 425_394, 54_744, 94_991, 50_735, 40_217, 35_114, 32_503],
     ]);
   });

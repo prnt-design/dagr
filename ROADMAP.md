@@ -852,13 +852,14 @@ findings addressed or logged, docs land with the feature.
   `test/layout.order.test.ts` fails if it moves. (c) The metric counts a
   crossing only between two segments joining the same pair of ADJACENT layers,
   which today is 1,324 of the 1k corpus's 4,000 edges (33.1%) and 10,528 of the
-  10k's 40,000 (26.3%); M2.4b takes both to 100%. (d) `maxSweeps` defaults to 8
-  and the stage returns the best layering it saw rather than the last, because
-  the sweeps are not monotone. (e) It is not the default because it costs about
-  21ms on the 10k against a `pipeline > 10k` baseline of 30.15ms with a 10%
-  gate tolerance, and because M2.6 improves the same stage, so one flip and one
-  rebaseline serve both. Everything below is the measurement that chose each of
-  those.
+  10k's 40,000 (26.3%); M2.4b takes both to 100% on any graph without self
+  loops, which both corpora are, because a self loop spans no rank for a chain
+  to split. (d) `maxSweeps` defaults to 8 and the stage returns the best
+  layering it saw rather than the last, because the sweeps are not monotone.
+  (e) It is not the default because it costs about 21ms on the 10k against a
+  `pipeline > 10k` baseline of 30.15ms with a 10% gate tolerance, and because
+  M2.6 improves the same stage, so one flip and one rebaseline serve both.
+  Everything below is the measurement that chose each of those.
   The seed was chosen by measurement, crossings after 8 sweeps: roster order
   3,943 on the 1k and 54,744 on the 10k, the adjacent-layer walk 3,605 and
   35,114, a walk over ALL edges 3,459 and 38,152. The all-edges walk was the
@@ -868,7 +869,7 @@ findings addressed or logged, docs land with the feature.
   also COINCIDE once M2.4b splits every long edge, so this is the behaviour the
   stage will have anyway rather than one that changes character under it.
   The sweep curve, on that seed: the 1k is 7,933 at the seed and 4,619, 3,880,
-  3,605, 3,532 at 2, 4, 8, 16 sweeps; the 10k is 94,991 and 50,735, 40,217,
+  3,605, 3,467 at 2, 4, 8, 16 sweeps; the 10k is 94,991 and 50,735, 40,217,
   35,114, 32,503, costing about 5.5ms, 9.5ms, 13.5ms, 21ms and 38ms. Eight is
   the default because 8 sweeps reach 8.3% of the roster seed's crossings on the
   10k and 16 reach 7.6%.
@@ -887,15 +888,18 @@ findings addressed or logged, docs land with the feature.
   `graph.edges()` produces flat typed-array adjacency, and every sweep reads
   node numbers, so there is no per-sweep adjacency query to churn and no
   non-allocating traversal form was needed in `@dagr/graph`.
-  One thing measured that the plan did not predict, recorded because it is a
-  quality cost hiding inside a time saving. Stopping when a full down-and-up
-  round improves nothing is a HEURISTIC and not a fixed point: what carries into
-  the next round is the last layering, not the best one. On the 1k at a budget
-  of 16 it stops after sweep 14 at 3,532 where running all 16 reaches 3,467,
-  which is 1.9%. At the default budget of 8 it fires on neither corpus. If M2.6
-  wants those 1.9% back, the cheap fix is to stop on a round that leaves the
-  layering UNCHANGED rather than one that improves nothing, which is a real
-  fixed point and costs a comparison.
+  One thing measured that the plan did not predict, recorded because the first
+  version of it was a quality cost hiding inside a time saving. The early stop
+  is a HEURISTIC and not a fixed point: what carries into the next round is the
+  last layering, not the best one, so a round that improved nothing is not proof
+  that the next one will not. Stopping on the FIRST full down-and-up round that
+  improved nothing therefore cost quality, and the shipped rule waits for TWO
+  consecutive ones. Measured, one round against running the budget out: 32 of
+  200 random layered graphs were worse at the DEFAULT budget of 8, worst 1,055
+  crossings against 893, and the 1k at a budget of 16 stopped after sweep 14 at
+  3,532 where all 16 reach 3,467. Two rounds recovers every crossing of that on
+  all three, leaves both budget-8 corpus pins where they are, and costs about
+  21.6ms on the 10k against 21.9ms for the one-round stop.
 - [ ] **M2.6** Ordering v2: transpose refinement pass; crossing-count
   regression corpus committed as golden files.
   The default flip is owed here and is cheapest done together with the transpose

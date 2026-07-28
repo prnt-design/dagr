@@ -221,12 +221,38 @@ describe('countCrossings', () => {
     }
   });
 
+  /**
+   * The same agreement, on layerings that hold empty and single-node layers.
+   *
+   * Sized so that those layers coexist with crossings to count, which is the
+   * whole difficulty of the case: an empty layer is easiest to produce by
+   * spreading few nodes over many layers, and few nodes over many layers is
+   * also how you produce a gap with nothing in it to cross. Six nodes over
+   * eight layers put an empty layer in all 60 runs and 2 crossings in the whole
+   * loop, with 58 of the 60 agreeing that the answer was zero, which is two
+   * implementations agreeing on nothing.
+   *
+   * 40 over 12 is where both happen. It is not every run, so the counts are
+   * over the loop rather than over each run: 18 of the 60 have an empty layer,
+   * 49 have a layer of one, and 32 count something. The three totals are pinned
+   * exactly, because "an empty layer turned up at least once" is the assertion
+   * that quietly stops being worth anything if the generator drifts.
+   */
   it('agrees with the pair loop when a layer is empty or holds one node', () => {
     const random = mulberry32(7);
+    let crossings = 0;
+    let empty = 0;
+    let single = 0;
     for (let run = 0; run < 60; run += 1) {
-      const { graph, layers } = randomLayering(random, 6, 8);
-      expect(layers.some((layer) => layer.length === 0)).toBe(true);
-      expect(countCrossings({ graph, layers })).toBe(pairLoopCrossings(graph, layers));
+      const { graph, layers } = randomLayering(random, 40, 12);
+      if (layers.some((layer) => layer.length === 0)) empty += 1;
+      if (layers.some((layer) => layer.length === 1)) single += 1;
+      const counted = countCrossings({ graph, layers });
+      expect(counted).toBe(pairLoopCrossings(graph, layers));
+      crossings += counted;
     }
+    expect(empty).toBe(18);
+    expect(single).toBe(49);
+    expect(crossings).toBe(128);
   });
 });
