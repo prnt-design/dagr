@@ -49,7 +49,8 @@ are part of the change. If you find zero in-scope issues, approve.
 2. For packaging changes, check `package.json` exports/files and run a build
    if the output shape is in question.
 3. Submit findings via `dispatch_feedback` with severity. Only file actual
-   issues: no affirmations.
+   issues: no affirmations. Keep the whole submission inside the reporting
+   budget below: a review that is too long does not arrive at all.
 
 ## Severity guidance
 
@@ -58,3 +59,32 @@ are part of the change. If you find zero in-scope issues, approve.
 - **medium**: feature merged without docs, missing changelog entry, unjustified
   dev dependency, broken docs links.
 - **low / info**: wording, formatting, minor doc completeness.
+
+## Reporting budget: HARD, and it is why reviews go missing
+
+A submitted review is injected into the parent run's terminal as ONE bracketed
+paste. Above 4KB dispatch has to guess whether that paste actually submitted and
+press Enter again, and the guess fails often enough that a long review is
+SILENTLY SWALLOWED: the parent waits, nothing ever arrives, and the run dies
+holding a green unmerged branch. That has already cost this project a full
+four-hour run. A review that does not arrive is worth nothing, so a short one
+that lands beats a thorough one that vanishes.
+
+Budget the WHOLE submission, summary plus every finding, under 4,000 characters.
+
+- **Summary, 600 characters.** What you checked, what holds up, the verdict.
+  Not a narrative of your session and not a list of your methods.
+- **Each finding, 600 characters.** Four things and nothing else: where
+  (`file:line`), what is wrong, why it matters in ONE sentence, and the concrete
+  fix. If you proved it by mutation, that is a clause, not a paragraph.
+- **Six findings.** Merge related ones. Eight documentation corrections of the
+  same kind are ONE finding that lists the sites, not eight items.
+- **Evidence does not go in the finding.** Measurement tables, pixel dumps,
+  per-seed counts and long code blocks are the first thing to cut. If the numbers
+  genuinely decide something, write them to a file, `dispatch_share` it, and give
+  the finding one line pointing at the path.
+
+Write for the agent that has to ACT on this, not for a reader you want to
+convince that you did the work. It reads your finding once and then goes and
+edits the file. Anything that does not change what it types is weight, and
+weight is what makes the whole review disappear.
