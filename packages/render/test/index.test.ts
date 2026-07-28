@@ -13,7 +13,7 @@ import * as api from '../src/index.js';
  * package unusable in any server-rendered application.
  */
 describe('@dagr/render', () => {
-  it('exports exactly the M4.1 runtime surface', () => {
+  it('exports exactly the M4.1 runtime surface, which M4.2 did not widen', () => {
     // Types are erased, so only the runtime exports can be checked here. The
     // type surface is exercised by the other files in the suite importing from
     // it.
@@ -35,5 +35,24 @@ describe('@dagr/render', () => {
 
   it('no longer exports the PKG_NAME scaffolding', () => {
     expect('PKG_NAME' in api).toBe(false);
+  });
+
+  it('keeps M4.2 shader nodes off the surface', () => {
+    // Not tidiness. These return three.js node objects, and `types.ts` records
+    // why no three type may appear here: three is a peer dependency, so a type
+    // on the surface makes two copies of three a type error and forces every
+    // consumer to install three to name a shape. M4.3 owns material assembly
+    // and is the first real caller, so exporting a shader-node API now would
+    // fix a public surface at the point of minimum information.
+    for (const name of [
+      'tslOps',
+      'roundedRectSDF',
+      'circleSDF',
+      'shapeShading',
+      'shapeFragment',
+      'createShowcaseShapes',
+    ]) {
+      expect(name in api).toBe(false);
+    }
   });
 });

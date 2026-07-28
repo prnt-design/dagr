@@ -42,20 +42,28 @@ function labelOf(id: string): string {
 /**
  * The demo playground, in two halves that do not know about each other yet.
  *
- * The canvas is `@dagr/render`'s first light: one quad, drawn through a real
- * camera you can pan and zoom. The facts underneath are `@dagr/graph` driving
- * its real API, which is what this page proved before there was anything to
- * draw with and still proves now. They are separate on purpose: nothing in M4.1
- * turns a graph into a scene, and pretending otherwise by drawing five quads
- * here would be a layout engine written in the demo. M4.4 is what joins them,
- * and on that day this file loses its second half rather than gaining a third.
+ * The canvas is `@dagr/render`'s SDF shapes: a rounded rectangle and a circle,
+ * each shaded from its own signed distance field, drawn through a real camera
+ * you can pan and zoom. The facts underneath are `@dagr/graph` driving its real
+ * API, which is what this page proved before there was anything to draw with
+ * and still proves now. They are separate on purpose: nothing in M4.2 turns a
+ * graph into a scene, and pretending otherwise by drawing five shapes here
+ * would be a layout engine written in the demo. M4.4 is what joins them, and on
+ * that day this file loses its second half rather than gaining a third.
  */
 export function App(): JSX.Element {
   return (
     <main className="page">
       <header className="page__header">
         <h1 className="page__title">Dagr demo</h1>
-        <p className="page__subtitle">M4.1 first light</p>
+        <p className="page__subtitle">M4.2 SDF shapes</p>
+        <p className="page__lead">
+          A rounded rectangle and a circle, drawn as signed distance fields in TSL. The fill, the
+          outline and the glow all come from the same distance, and the edges are antialiased from
+          its screen-space derivative rather than by multisampling, so they stay crisp at every
+          zoom. The presets are the reference frames: 0.1x, where the rectangle is ten pixels
+          across, and 100x, on one of its corners.
+        </p>
       </header>
 
       <FirstLight />

@@ -55,23 +55,113 @@ export const WHEEL_MAX_PIXELS = 200;
  * multiply the zoom by e^9, about 8100x. **So the RANGE is what stops a fling,
  * and it is the only thing that does.**
  *
- * The values are picked so that neither limit can be mistaken for a broken
- * renderer, which is a claim about this specific scene: `@dagr/render` draws one
- * 100 by 40 world-unit quad, on a stage `styles.css` keeps at least 600 CSS
- * pixels tall. At 12 the visible world is at most 50 world units tall, so the
- * quad's top and bottom edges are both still on screen instead of amber filling
- * the frame. At 0.2 the quad is 20 by 8 CSS pixels, small but unmistakably a
- * rectangle rather than a speck.
+ * ## M4.2 widened this, and replaced the argument behind it
  *
- * 0.05 to 60 was the range before, and it produced both failures rather than
- * preventing them: from zoom 3, ten saturated events reach 60, where a 1102 by
- * 598 canvas sees 18 by 10 world units, entirely INSIDE the quad and flat amber
- * edge to edge; the other way lands on 0.05, where the quad is 5 by 2 pixels.
- * See `test/camera-input.test.ts`, which fails on those numbers.
+ * The range was 0.2 to 12, chosen so that neither limit could be mistaken for a
+ * broken renderer: at 12 the quad's top and bottom edges were both still on
+ * screen instead of amber filling the frame, and at 0.2 it was 20 by 8 CSS
+ * pixels, small but unmistakably a rectangle. Both bounds are gone, because the
+ * roadmap asks M4.2 for a screenshot of the same shape at 0.1x AND at 100x as
+ * the crispness reference, and neither was reachable.
+ *
+ * The old failures are still real; they are prevented somewhere else now.
+ *
+ * **At 100 the frame is a flat amber field unless the camera also moves**, and
+ * that is exactly what the old MAX_ZOOM existed to stop. A 100 by 40 shape at
+ * zoom 100 covers 10000 by 4000 CSS pixels, so a stage under 800 pixels tall is
+ * entirely inside it. The fix is {@link ZOOM_PRESETS}, which recentres on a
+ * corner of the rounded rectangle rather than only changing the zoom: a curved
+ * edge crossing the frame is the thing the screenshot has to show, and it is
+ * also the only frame at that zoom that proves anything about crispness.
+ *
+ * **At 0.1 the shape is 10 by 4 CSS pixels**, which the old MIN_ZOOM would have
+ * rejected as a speck. It is the point: at that size an edge either resolves
+ * cleanly or it sparkles, and analytic antialiasing from the distance field is
+ * the claim under test. A speck is a bad DEFAULT view and a good reference
+ * frame, which is why 0.1 is a preset a user chooses rather than where the demo
+ * opens.
+ *
+ * {@link INITIAL_ZOOM} is unchanged at 3, which frames both shapes with room
+ * around them on any stage this page produces.
  */
 export const INITIAL_ZOOM = 3;
-export const MIN_ZOOM = 0.2;
-export const MAX_ZOOM = 12;
+export const MIN_ZOOM = 0.1;
+export const MAX_ZOOM = 100;
+
+/**
+ * The rounded rectangle `@dagr/render` draws, in world units.
+ *
+ * A COPY, on purpose, and the same copy `test/camera-input.test.ts` has always
+ * kept. These numbers are internal to `@dagr/render`: `shapes.ts` owns them and
+ * `index.ts` deliberately exports nothing from it, because they are three.js
+ * node parameters and no three type may reach this package's surface. Importing
+ * them would mean widening a public API so that a demo could position a camera.
+ *
+ * The cost of the copy is that this file goes stale if the scene moves, and the
+ * symptom would be a 100x preset pointing at empty background. That is a
+ * screenshot away from obvious, and it is the cheaper of the two mistakes.
+ */
+export const SHOWCASE_RECT = {
+  width: 100,
+  height: 40,
+  radius: 10,
+  center: { x: -90, y: 0 },
+} as const;
+
+/**
+ * Where the camera looks at 100x: a point ON the rounded rectangle's top-left
+ * corner arc, 45 degrees around it.
+ *
+ * The arc's centre is one radius in from each edge, and the point 45 degrees
+ * around it is `radius / sqrt(2)` away on both axes. Choosing a point ON the
+ * boundary rather than the arc's centre matters at this zoom: an 1100 by 600
+ * stage at zoom 100 sees 11 by 6 world units, which is smaller than the 10 unit
+ * radius, so centring on the arc's centre would put the whole curve off screen
+ * and show flat amber, which is the failure this preset exists to avoid. The 45
+ * degree point puts the boundary through the middle of the frame at its
+ * steepest, with fill on one side and glow on the other.
+ */
+export const CORNER_FOCUS: Vec2 = cornerFocus();
+
+/** {@link CORNER_FOCUS}, as arithmetic rather than as four magic numbers. */
+function cornerFocus(): Vec2 {
+  const { width, height, radius, center } = SHOWCASE_RECT;
+  const arcX = center.x - width / 2 + radius;
+  const arcY = center.y + height / 2 - radius;
+  const diagonal = radius / Math.SQRT2;
+  return { x: arcX - diagonal, y: arcY + diagonal };
+}
+
+/** One button on the demo's zoom bar: a zoom AND the point to look at. */
+export interface ZoomPreset {
+  /** Stable across renders, for a React key and for a test to name one. */
+  readonly id: string;
+  readonly label: string;
+  readonly zoom: number;
+  readonly center: Vec2;
+}
+
+/**
+ * The reproducible views the demo's buttons set.
+ *
+ * **Buttons rather than a scroll gesture, because a screenshot has to be
+ * repeatable.** "Zoom out a lot" is not a view: two people, or the same person
+ * on two trackpads, land on different numbers, and a crispness reference
+ * comparing two frames taken at unknown zooms compares nothing. Each preset
+ * pins both halves of the camera state, so the frame is a function of the code
+ * rather than of the gesture.
+ *
+ * Each carries a CENTRE as well as a zoom, and that is the part that is easy to
+ * leave out. A preset that only set the zoom would put the 100x frame wherever
+ * the user had last panned to, which at that magnification is almost certainly
+ * flat amber or flat background: see {@link CORNER_FOCUS}.
+ */
+export const ZOOM_PRESETS: readonly ZoomPreset[] = [
+  { id: 'far', label: '0.1x', zoom: 0.1, center: { x: 0, y: 0 } },
+  { id: 'unit', label: '1x', zoom: 1, center: { x: 0, y: 0 } },
+  { id: 'fit', label: '3x', zoom: INITIAL_ZOOM, center: { x: 0, y: 0 } },
+  { id: 'corner', label: '100x', zoom: 100, center: CORNER_FOCUS },
+];
 
 /** The part of a `WheelEvent` that {@link wheelPixels} reads. */
 export interface WheelLike {

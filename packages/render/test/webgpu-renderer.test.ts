@@ -21,10 +21,18 @@ import type { FrameSink, GpuResource, ProjectionTarget } from '../src/webgpu-ren
  *
  * The stubs below are honest for one specific reason: the collaborator types
  * they implement are the ones the class actually declares, and `createRenderer`
- * passes a real `WebGPURenderer`, `Scene`, `OrthographicCamera`, `PlaneGeometry`
- * and `MeshBasicNodeMaterial` into those same parameters. So the typecheck of
- * `createRenderer` is the proof that the real three objects satisfy the
- * interfaces these stubs satisfy, and no cast is involved anywhere.
+ * passes a real `WebGPURenderer`, `Scene`, `OrthographicCamera` and a list of
+ * real `PlaneGeometry` and `MeshBasicNodeMaterial` objects into those same
+ * parameters. So the typecheck of `createRenderer` is the proof that the real
+ * three objects satisfy the interfaces these stubs satisfy, and no cast is
+ * involved anywhere.
+ *
+ * M4.2 turned the two named resource parameters into a LIST, because the scene
+ * now has four resources and M4.4's will have as many as the graph does. The
+ * bookkeeping did not get vaguer for it: the assertions below say every resource
+ * is disposed exactly once, which is a stronger statement than the two `toBe(1)`
+ * calls it replaced, since it is a claim about the whole list rather than about
+ * two names somebody remembered to check.
  */
 
 /** A three-shaped position: the two lines of `Vector3` this renderer touches. */
@@ -92,10 +100,19 @@ interface Harness {
   readonly camera: Camera2D;
   readonly sink: StubFrameSink;
   readonly threeCamera: StubProjectionTarget;
-  readonly geometry: StubResource;
-  readonly material: StubResource;
+  readonly resources: readonly StubResource[];
   readonly renderer: WebGPUSceneRenderer;
 }
+
+/**
+ * How many resources a renderer under test owns.
+ *
+ * Four, matching the M4.2 scene (a geometry and a material per shape), and
+ * deliberately more than one: a `dispose` that stopped at the first element, or
+ * one that disposed `resources[0]` twice, passes every assertion a single
+ * resource could support.
+ */
+const RESOURCE_COUNT = 4;
 
 /**
  * The viewport every renderer under test starts on: 800 by 600 at ratio 2, so
@@ -108,10 +125,9 @@ const initialViewport = { width: 800, height: 600, devicePixelRatio: 2 } as cons
 function harness(camera = new Camera2D({ viewport: initialViewport })): Harness {
   const sink = new StubFrameSink();
   const threeCamera = new StubProjectionTarget();
-  const geometry = new StubResource();
-  const material = new StubResource();
-  const renderer = new WebGPUSceneRenderer(camera, sink, {}, threeCamera, geometry, material);
-  return { camera, sink, threeCamera, geometry, material, renderer };
+  const resources = Array.from({ length: RESOURCE_COUNT }, () => new StubResource());
+  const renderer = new WebGPUSceneRenderer(camera, sink, {}, threeCamera, resources);
+  return { camera, sink, threeCamera, resources, renderer };
 }
 
 describe('WebGPUSceneRenderer drawing buffer', () => {
@@ -251,10 +267,13 @@ describe('WebGPUSceneRenderer camera sync', () => {
 
 describe('WebGPUSceneRenderer disposal', () => {
   it('disposes every resource it owns exactly once', () => {
-    const { sink, geometry, material, renderer } = harness();
+    // Every one, counted as a list rather than by name. A loop that stopped
+    // early, or one that disposed the same element twice, leaves a leak with no
+    // symptom until several have accumulated, and there is nothing on screen
+    // that says so.
+    const { sink, resources, renderer } = harness();
     renderer.dispose();
-    expect(geometry.disposals).toBe(1);
-    expect(material.disposals).toBe(1);
+    expect(resources.map((resource) => resource.disposals)).toEqual([1, 1, 1, 1]);
     expect(sink.disposals).toBe(1);
   });
 
@@ -262,13 +281,67 @@ describe('WebGPUSceneRenderer disposal', () => {
     // `dispose()` on an already-disposed three renderer is not a documented
     // no-op, and a component that unmounts twice is ordinary rather than a bug
     // worth crashing for.
-    const { sink, geometry, material, renderer } = harness();
+    const { sink, resources, renderer } = harness();
     renderer.dispose();
     renderer.dispose();
     renderer.dispose();
-    expect(geometry.disposals).toBe(1);
-    expect(material.disposals).toBe(1);
+    expect(resources.map((resource) => resource.disposals)).toEqual([1, 1, 1, 1]);
     expect(sink.disposals).toBe(1);
+  });
+
+  it('keeps its own list, so a caller mutating theirs cannot change what is freed', () => {
+    // The array is copied in the constructor. Without that, a scene builder
+    // that reused its array (or a caller that cleared it after handing it over)
+    // would silently leak every resource it removed, and the renderer would
+    // have no way to know it had ever owned them.
+    const sink = new StubFrameSink();
+    const owned = [new StubResource(), new StubResource()];
+    const renderer = new WebGPUSceneRenderer(
+      new Camera2D({ viewport: initialViewport }),
+      sink,
+      {},
+      new StubProjectionTarget(),
+      owned,
+    );
+    owned.length = 0;
+    renderer.dispose();
+    expect(sink.disposals).toBe(1);
+  });
+
+  it('disposes nothing twice when a resource throws on the way out', () => {
+    // The flag is set before the loop runs, so a resource that throws does not
+    // leave the renderer in a state where a retry disposes everything that
+    // already succeeded a second time. Three's own `dispose` is not documented
+    // to tolerate that, which is why this matters at all.
+    const sink = new StubFrameSink();
+    const first = new StubResource();
+    const explosive: GpuResource = {
+      dispose(): void {
+        throw new Error('a driver said no');
+      },
+    };
+    const last = new StubResource();
+    const renderer = new WebGPUSceneRenderer(
+      new Camera2D({ viewport: initialViewport }),
+      sink,
+      {},
+      new StubProjectionTarget(),
+      [first, explosive, last],
+    );
+
+    expect(() => {
+      renderer.dispose();
+    }).toThrow('a driver said no');
+    renderer.dispose();
+
+    expect(first.disposals).toBe(1);
+    // Documented rather than defended: the resources after the throw are NOT
+    // disposed, and neither is the frame sink. Swallowing the error to keep
+    // going would hide a driver failure that a caller can do something about,
+    // and a partial teardown is already unrecoverable. What the flag buys is
+    // that the loop does not run again over what it already freed.
+    expect(last.disposals).toBe(0);
+    expect(sink.disposals).toBe(0);
   });
 
   it('refuses to render afterwards, with a catchable error', () => {

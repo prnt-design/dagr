@@ -14,6 +14,83 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- Signed distance fields for a rounded rectangle and a circle, and one shading
+  function turning a distance into a premultiplied colour, with fill, outline
+  and glow all read from that single distance. **None of it is exported.** These
+  are three.js node objects, and no three.js type appears in this package's
+  public surface; M4.3 owns material assembly and is the first real caller, so
+  exporting a shader-node API now would be a public surface decision at the
+  point of minimum information. Listed here anyway, because everything drawn
+  from M4.3 onward inherits the behaviour below. (M4.2)
+
+  **The maths is written once and run over two arithmetics.** The shapes are
+  authored in TSL, so the real implementation is a graph of three.js nodes
+  compiled to WGSL and nothing in Node can execute one. The usual answer is to
+  write the maths twice, once in TSL and once in TypeScript for the suite, and
+  then the suite tests the copy: a copy that drifts still passes. So every
+  distance function and every line of shading is generic over a nine-operation
+  scalar algebra (`literal`, `add`, `sub`, `mul`, `div`, `min`, `max`, `abs`,
+  `sqrt`), instantiated over plain numbers for the suite and over TSL nodes for
+  the shader. It costs a scalar algebra with no vectors, no swizzles and no
+  control flow, so `length(q)` is spelled `sqrt(qx * qx + qy * qy)`, which is
+  identical WGSL either way. What it does not buy: no test in Node establishes
+  that a TSL node graph compiles, or that its WGSL rounds the way a double does.
+
+  `fwidth` is a parameter rather than a call inside the maths. The shading takes
+  a filter width; the derivative is taken at fragment assembly. A screen-space
+  derivative exists only inside a fragment shader, so keeping it out is what
+  makes the rest testable, and a caller wanting a softer or supersampled edge
+  passes a different width instead of forking the function.
+
+  Coverage is a linear box filter, `clamp(0.5 - d / w, 0, 1)`, not a
+  `smoothstep`. For a straight edge crossing a pixel the covered fraction is
+  linear in the signed distance, so this is the exact answer for the case that
+  dominates a graph view. `smoothstep` is not uniformly too dark, which is the
+  usual misstatement: it is symmetric, 0.15625 where the truth is 0.25 and
+  0.84375 where the truth is 0.75, agreeing at the boundary, so the artefact is
+  a slightly soft and slightly heavy stroke everywhere at once.
+
+  **The outline is inset**, `outlineOpacity * (coverage(d) - coverage(d + w))`.
+  Centred on the boundary it would grow the shape by half the width on every
+  side, so a 100 by 40 node box with a 2 unit outline would occupy 101 by 41 and
+  disagree with the layout that placed it. Below a pixel wide, the band's peak
+  alpha is `outlineWidth / filterWidth`, measured to twelve decimal places at a
+  filter width of 1 for widths 0.5, 0.1, 0.01, 0.001 and 1e-6, which is the
+  fraction of the pixel the band covers and is why a hairline fades instead of
+  crawling.
+
+  **The colour returned is premultiplied, so it has to be blended as
+  `(One, OneMinusSrcAlpha)`.** Three layers composited with straight alpha need
+  a divide each and are undefined at zero alpha, which is most of the plane;
+  premultiplied "over" is `src + dst * (1 - srcAlpha)` on all four channels with
+  no special case. Getting the blend wrong is not an error: the straight-alpha
+  equation multiplies by the alpha twice and leaves a dark halo around every
+  antialiased edge, which reads as "the antialiasing is a bit off" rather than
+  as "the blend mode is wrong". Note that three's `premultipliedAlpha` material
+  flag is NOT the way to ask for it: it selects that blend equation and ALSO
+  premultiplies in the shader, so an already premultiplied colour would be
+  premultiplied twice. The shape material sets the four blend factors directly
+  and leaves the flag false.
+
+  **An out-of-range corner radius is clamped by the arithmetic rather than
+  rejected with a `RangeError`**, because nothing can throw per fragment. That
+  is a correctness fix and not a tidiness one, and it was measured: unclamped, a
+  10 by 2 box with radius 3 reports 1.4721 at (6, 0) where the distance to its
+  own zero set is 1.7639, a 16.5 per cent underestimate, and a 4 by 4 box with
+  radius 10 is positive everywhere, so there is no zero set left. The lesson
+  worth carrying is that the broken field is still eikonal, gradient magnitude 1
+  to within 7.5e-11, because folding into the first quadrant preserves gradient
+  magnitude, so a suite checking only `|grad d| = 1` would have shipped it. The
+  suite carries a ray-marched distance-to-zero-set reference for that reason.
+
+  Scale invariance is the "crisp at every zoom" claim in testable form:
+  `d(k p, k size, k r) = k d(p, size, r)` and
+  `coverage(k d, k w) = coverage(d, w)`. Over 20000 seeded cases each with `k`
+  spanning 1e-3 to 1e3, the rounded rectangle holds homogeneity to 7.074e-16 of
+  the scaled size and the circle to 1.078e-15 of the scaled radius, both against
+  an asserted bound of 1e-14, and coverage holds its invariance to 2.220e-16
+  against a bound of 1e-15.
+
 - `Camera2D`, the orthographic 2D camera every Dagr view is drawn through. It
   holds a world centre, a zoom, and the canvas viewport, and it converts between
   world space and screen space in both directions (`screenToWorld`,
@@ -49,7 +126,8 @@ not" is the category this file has a heading for.
   new size rather than more graph at the same size.
 
 - `createRenderer(options)`, which builds a three.js `WebGPURenderer` on a
-  canvas and draws one quad through a `Camera2D`. Asynchronous because
+  canvas and draws a hard-coded scene through a `Camera2D` (one quad at M4.1,
+  M4.2's two shapes since). Asynchronous because
   `WebGPURenderer.init()` requests a GPU adapter and there is no synchronous
   moment at which such a renderer is usable; awaiting it once here means the
   object handed back is ready to draw. (M4.1)
@@ -82,9 +160,9 @@ not" is the category this file has a heading for.
 
 - The `Renderer` interface, the seam every later M4 task plugs into: a camera, a
   `resize`, a `render` and a `dispose`. It deliberately says nothing about scene
-  contents. M4.1 draws a hard-coded quad, and a `setLayout` designed now would
-  be a guess at M4.4 with nothing to check the guess against. What it does fix
-  is the lifecycle, which is the part that will not change. (M4.1)
+  contents. The scene stays hard-coded through M4.2, and a `setLayout` designed
+  now would be a guess at M4.4 with nothing to check the guess against. What it
+  does fix is the lifecycle, which is the part that will not change. (M4.1)
 
   **`render()` adopts the whole camera, not two thirds of it.** The frustum and
   the drawing buffer size are both pulled from the camera every frame, so
@@ -131,6 +209,23 @@ not" is the category this file has a heading for.
 
 ### Changed
 
+- **`antialias` on the `WebGPURenderer` is now `false`.** This is the revisit
+  M4.1 flagged rather than a new opinion: MSAA earned its place against a scene
+  of box corners and diagonals, and it earns nothing against shapes that
+  antialias analytically per fragment from their own distance field and whose
+  planes have geometric edges that are fully transparent under this shading.
+  It costs a
+  4x-sampled colour target plus a resolve every frame, which on a 4K canvas at
+  ratio 2 is a real bandwidth line against M4.10's budget. Be honest about the
+  evidence on each half: the visual half is verified by comparing the scene
+  rendered both ways, and the cost half is an argument rather than a
+  measurement, because nothing in this repo has GPU timing. M4.10 is the first
+  task that can put a number on it. (M4.2)
+
+  Behaviour changed and no type did, which is the category this file exists
+  for: a caller upgrading past this gets a different frame and no compiler
+  tells them.
+
 - `PKG_NAME` is no longer exported. It was scaffolding from the workspace's
   first commit and nothing imported it. (M4.1)
 
@@ -174,7 +269,9 @@ not" is the category this file has a heading for.
   does not, is tested.** Drawing needs an adapter, Node has none, and a headless
   browser runner is CI infrastructure M4.1 does not have. So the arithmetic was
   pushed into `camera.ts`, where a seeded property suite covers it, and the
-  renderer was kept close to declarative wiring.
+  renderer was kept close to declarative wiring. M4.2 pushed that line further
+  than the split assumed it could go, a fragment shader's own source being on
+  the tested side of it: see the distance-field entry under **Added**.
 
   Calling the whole renderer "wiring" was an overstatement, and it is corrected
   here rather than carried: the lifecycle is decisions, not wiring. When the
@@ -191,7 +288,7 @@ not" is the category this file has a heading for.
   objects satisfy what the stubs satisfy.
 
   What that leaves unverified is listed in the file's own docstring rather than
-  left to be discovered: that the quad appears at all, in the right place and
+  left to be discovered: that anything appears at all, in the right place and
   colour; that the buffer sizes computed here reach a real canvas; that
   `dispose` frees GPU memory rather than merely being called once; and that
   `init()` succeeds or that three's automatic WebGL2 fallback engages, and so
@@ -216,9 +313,9 @@ not" is the category this file has a heading for.
   takes `(left, right, top, bottom, near, far)`, which is not the field order of
   `OrthoFrustum`; the renderer avoids that by assigning the fields by name, and
   a hand-rolled projection cannot catch a mistake there. Writing that mutant
-  confirmed the new test does. The same camera also answers whether the quad's
-  plane sits inside the near and far planes, for one line: the projected z is
-  -0.80, so that came off the untested list rather than staying on it.
+  confirmed the new test does. The same camera also answers whether M4.1's quad
+  sat on a plane inside the near and far planes, for one line: the projected z
+  is -0.80, so that came off the untested list rather than staying on it.
 
 - Numerical claims in this package state a measured bound rather than calling
   anything exact. The screen round trip is within 7.4e-10 CSS pixels over the
@@ -242,14 +339,11 @@ not" is the category this file has a heading for.
   because a viewport the caller set deliberately is better information than a
   number nobody chose.
 
-- `antialias: true` is right for M4.1 and is flagged in the source to be
-  revisited in M4.2 rather than carried forward because it is already there.
-  A graph at M4.1 is box corners and diagonals, every one of which reads as a
-  staircase without MSAA. M4.2's SDF shapes antialias their own edges
-  analytically, per pixel, and gain nothing from it, while MSAA keeps costing a
-  4x-sampled target plus a resolve every frame: on a 4K canvas at ratio 2 that
-  is a real bandwidth line against M4.10's 10k-nodes-at-60fps budget. Measure
-  both ways when the SDF path lands.
+- `antialias: true` was right for M4.1 and was flagged in the source to be
+  revisited when the SDF path landed rather than carried forward because it was
+  already there. It landed in M4.2 and the flag is now `false`; the reasoning
+  and what evidence stands behind each half of it are under **Changed** above,
+  which is the one copy of that argument.
 
 ## 0.1.0
 

@@ -6,21 +6,30 @@ import {
   INITIAL_ZOOM,
   MAX_ZOOM,
   MIN_ZOOM,
+  ZOOM_PRESETS,
   canvasPoint,
   wheelZoomFactor,
 } from './camera-input.js';
+import type { ZoomPreset } from './camera-input.js';
 
 /**
- * M4.1 first light: `@dagr/render` on a canvas, with pan and zoom wired to a
- * real {@link Camera2D}.
+ * `@dagr/render` on a canvas, with pan, zoom and reproducible zoom presets
+ * wired to a real {@link Camera2D}.
+ *
+ * M4.1 called this first light and drew one flat quad. M4.2 draws a rounded
+ * rectangle and a circle as signed distance fields, with fill, outline and glow
+ * read from the same distance, and adds the preset bar below. The component
+ * kept its name: it is still the same canvas stage with the same lifecycle, and
+ * a rename would churn every reference to it in the docs for no behaviour.
  *
  * There is no test file for this component, and that is the same decision
  * `@dagr/render` documents for its own renderer rather than a gap. Everything
  * here needs a GPU adapter, a laid-out canvas and live input events; a jsdom
  * suite could only assert that a mock was called, which would pass just as
- * happily if the quad never appeared. The arithmetic that CAN be checked was
- * moved to `camera-input.ts` and is tested there, and what is left is wiring,
- * verified by the committed screenshot.
+ * happily if nothing ever appeared. The arithmetic that CAN be checked, which
+ * now includes where the 100x preset points, was moved to `camera-input.ts` and
+ * is tested there, and what is left is wiring, verified by the committed
+ * screenshots.
  *
  * The one thing worth reading closely is the lifecycle in the effect below.
  */
@@ -96,6 +105,23 @@ export function FirstLight(): JSX.Element {
    * no signal.
    */
   const teardownRef = useRef<Promise<void>>(Promise.resolve());
+
+  /**
+   * How a button reaches the camera the effect owns.
+   *
+   * The camera is built inside the effect (see the comment where it is
+   * constructed: it has to exist before `createRenderer` is even called, so
+   * input works during adapter acquisition), so it is not a value the render
+   * body can close over. A ref set by the effect and cleared by its cleanup is
+   * the smallest thing that bridges them, and `null` while unmounted is what
+   * makes a click during teardown a no-op rather than a mutation of a camera
+   * nobody is drawing through.
+   *
+   * A `useState` camera would be the React-shaped alternative and is worse:
+   * `Camera2D` is deliberately mutable with no change notification, so putting
+   * it in state would promise a re-render on pan that never arrives.
+   */
+  const applyPresetRef = useRef<((preset: ZoomPreset) => void) | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -276,6 +302,21 @@ export function FirstLight(): JSX.Element {
       requestDraw();
     };
 
+    /**
+     * Jumps to a preset: both halves of the camera state, then one frame.
+     *
+     * The centre is set BEFORE the zoom, and it would be the same view either
+     * way here, since neither setter reads the other. Written in this order
+     * because {@link Camera2D.zoomAtScreen}, which the wheel uses, does read
+     * both, and a reader comparing the two paths should not have to work out
+     * whether the difference matters.
+     */
+    applyPresetRef.current = (preset: ZoomPreset): void => {
+      camera.setCenter(preset.center);
+      camera.setZoom(preset.zoom);
+      requestDraw();
+    };
+
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
@@ -304,6 +345,10 @@ export function FirstLight(): JSX.Element {
 
     return () => {
       abort.abort();
+      // Before anything else: a click landing during teardown would otherwise
+      // mutate a camera nothing is drawing through and schedule a frame into a
+      // renderer that is being disposed.
+      applyPresetRef.current = null;
       // Any frame already scheduled would draw through a renderer that is about
       // to be disposed, and publish into an unmounted component.
       cancelAnimationFrame(frame);
@@ -329,6 +374,18 @@ export function FirstLight(): JSX.Element {
   return (
     <div className="stage" ref={containerRef}>
       <canvas className="stage__canvas" ref={canvasRef} />
+      <div className="stage__presets" role="group" aria-label="Zoom presets">
+        {ZOOM_PRESETS.map((preset) => (
+          <button
+            className="stage__preset"
+            key={preset.id}
+            onClick={() => applyPresetRef.current?.(preset)}
+            type="button"
+          >
+            {preset.label}
+          </button>
+        ))}
+      </div>
       {failure === null ? (
         <Overlay readout={readout} />
       ) : (
@@ -353,10 +410,12 @@ function fixed(value: number, digits: number): string {
 /**
  * The live camera state, over the canvas.
  *
- * This exists to make the screenshot mean something. An amber quad on near
+ * This exists to make the screenshot mean something. An amber shape on near
  * black proves a frame was drawn; only numbers that move when you drag prove
  * the camera behind it is real, and that the world bounds the camera reports
- * are the region you are actually looking at.
+ * are the region you are actually looking at. It matters more at 100x than
+ * anywhere else: a crisp curve filling the frame is a photograph of nothing in
+ * particular until the readout says the frame is 11 world units wide.
  */
 function Overlay({ readout }: { readout: CameraReadout | null }): JSX.Element {
   if (readout === null) {
@@ -391,7 +450,7 @@ function Overlay({ readout }: { readout: CameraReadout | null }): JSX.Element {
         {Math.round(viewport.width)} x {Math.round(viewport.height)} css at{' '}
         {fixed(viewport.devicePixelRatio, 2)}x
       </p>
-      <p className="stage__readout-hint">drag to pan, scroll to zoom</p>
+      <p className="stage__readout-hint">drag to pan, scroll to zoom, or pick a preset</p>
     </div>
   );
 }

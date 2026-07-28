@@ -1042,17 +1042,31 @@ of M3 would leave the second runner idle for a milestone.
   (today just `RendererDisposedError`). Numerical claims quote a measured
   bound: nothing in this package is described as pixel-exact, because no test
   establishes it.
-- [ ] **M4.2** (`@dagr/render`, `apps/demo`) SDF shapes in TSL: rounded-rect
+- [x] **M4.2** (`@dagr/render`, `apps/demo`) SDF shapes in TSL: rounded-rect
   and circle as signed distance fields authored in TSL, with fill, outline and
   glow all read from the same distance rather than from three separate pieces
   of geometry. Screen-space derivative antialiasing, so an edge is crisp at
   every zoom instead of at one. Demo scene showing the same shape at 0.1x and
-  100x, screenshot committed as the crispness reference.
+  100x, screenshot committed as the crispness reference. (The demo line is
+  amended rather than merely elaborated. The presets are 0.1x, 1x, 3x and 100x,
+  3x being where the demo opens and therefore the one that gets a user back, and
+  the 100x preset RECENTRES on a corner of the rounded rectangle. At zoom 100 a
+  100 by 40 shape covers 10000 by 4000 CSS pixels, so a preset that only changed
+  the zoom would show a flat amber field: the frame that looks exactly like a
+  broken renderer, and the one frame showing none of the edge the preset exists
+  to show.)
   Author the distance functions as composable TSL nodes with no opinion about
   material assembly: a `roundedRectSDF(p, size, radius)`, a `circleSDF(p, r)`,
-  and a shared fill/outline/glow shading node consuming a distance. That is
-  deliberately NOT the same thing as deciding whether the package uses one
-  material with a per-instance shape id or one material per family. That
+  and a shared fill/outline/glow shading node consuming a distance. (Met
+  literally: `sdf-tsl.ts` exports `roundedRectSDF(point, size, radius)`,
+  `circleSDF(point, radius)` and `shapeShading(distance, filterWidth, style)`,
+  all returning TSL nodes. What the requirement did not anticipate is that each
+  is a THIN CALL into a generic `roundedRectDistance` / `circleDistance` /
+  `shadeDistance` that holds the arithmetic, and it is the generic pair that the
+  suite exercises over plain numbers. See the first paragraph below for why.)
+  That is deliberately NOT the same thing as
+  deciding whether the package uses one material with a per-instance shape id
+  or one material per family. That
   decision belongs to M4.3, which owns the per-instance attribute anyway, with
   an explicit revisit gate at M4.10. Making it here would be a high-cost
   irreversible call at the point of minimum information: the deciding factor is
@@ -1062,7 +1076,113 @@ of M3 would leave the second runner idle for a milestone.
   every shader.
   What this task does own, and has evidence for, is whether one distance field
   can carry fill, outline and glow with derivative-based antialiasing that
-  holds at both 0.1x and 100x.
+  holds at both 0.1x and 100x. It does, and the material decision was left
+  open exactly as asked.
+  THE MATHS IS WRITTEN ONCE AND RUN OVER TWO ARITHMETICS, and that is the
+  decision the rest of the task hangs off. The shapes are TSL, so the real
+  implementation is a graph of three.js nodes compiled to WGSL and nothing in
+  Node can execute one. The usual answer is to write the maths twice, once in
+  TSL and once in TypeScript for the suite, and then the suite tests the copy: a
+  copy that drifts still passes. So every distance function and every line of
+  shading is generic over a nine-operation scalar algebra (`literal`, `add`,
+  `sub`, `mul`, `div`, `min`, `max`, `abs`, `sqrt`), instantiated over plain
+  numbers for the suite and over TSL nodes for the shader. Every line the GPU
+  runs is a line the suite ran. What it costs: no vectors, no swizzles, no
+  `select`, no control flow, so `length(q)` is spelled
+  `sqrt(qx * qx + qy * qy)`, which is identical WGSL either way. What it does
+  NOT prove is on the docs page rather than implied here: no test in Node
+  establishes that a TSL node graph compiles, or that its WGSL rounds the way a
+  double does. That claim is structural (one source, two implementations of nine
+  operations), not measured.
+  `fwidth` is a parameter, not a call inside the maths. The shading takes a
+  filter width and the `fwidth(distance)` call happens only at fragment
+  assembly. A screen-space derivative exists only in a fragment shader and
+  nothing in Node can evaluate one, so keeping it out is what makes the rest
+  testable, and it is the better factoring anyway: a caller wanting a softer or
+  a supersampled edge passes a different width instead of forking the function.
+  Coverage is a linear box filter, `clamp(0.5 - d / w, 0, 1)`, not a
+  `smoothstep`. For a straight edge crossing a pixel the covered fraction is
+  linear in the signed distance, so this is the exact answer for the dominant
+  case rather than an approximation to it. Be careful with the criticism of
+  `smoothstep`, because the obvious phrasing is wrong: it is not uniformly too
+  dark. It is symmetric, giving 0.15625 where the truth is 0.25 and 0.84375
+  where the truth is 0.75, and agreeing at the boundary where both give exactly
+  one half. The artefact is a stroke that is slightly soft and slightly heavy
+  everywhere at once, which is hardest to spot precisely because it is
+  everywhere.
+  The outline is INSET, `outlineOpacity * (coverage(d) - coverage(d + width))`.
+  Centred on the boundary it would grow the shape by half the width on every
+  side, so a 100 by 40 node box with a 2 unit outline would occupy 101 by 41 and
+  disagree with the layout that placed it, which shows up as boxes touching
+  where the layout left a gap and hit testing that misses along every edge. The
+  band's alpha cannot go negative without a clamp, since coverage is
+  non-increasing in its distance and the width is floored at zero, and that is
+  worth being sure of rather than clamping anyway: a negative alpha composites
+  as `dst * (1 - srcAlpha)` and AMPLIFIES the layer beneath. When the outline is
+  thinner than a pixel its peak alpha is `outlineWidth / filterWidth`, measured
+  to twelve decimal places at a filter width of 1 for widths 0.5, 0.1, 0.01,
+  0.001 and 1e-6, which is the fraction of the pixel the band covers and is why
+  a hairline fades instead of crawling.
+  The result is PREMULTIPLIED RGBA. Compositing three layers with straight alpha
+  needs a divide per layer and is undefined at zero alpha, which is most of the
+  plane; premultiplied "over" is `src + dst * (1 - srcAlpha)` on all four
+  channels, one expression with no special case. Worst overshoot of any channel
+  past its own alpha over 20000 random styles: 0, exactly. It has to be blended
+  as `(One, OneMinusSrcAlpha)`, and getting that wrong is a silent dark halo
+  around every antialiased edge rather than an error. THREE'S
+  `premultipliedAlpha` MATERIAL FLAG IS NOT THE WAY TO ASK FOR IT, which was
+  read out of `NodeMaterial.setupOutput` rather than assumed: the flag selects
+  that blend equation AND premultiplies again in the shader, so a colour that
+  arrives premultiplied is premultiplied twice, which is the same halo by the
+  other route. `shapes.ts` sets the four blend factors directly, leaves the flag
+  false, and a test compiles both spellings and shows the extra multiply
+  appearing in the generated WGSL.
+  The radius is clamped inside the arithmetic rather than rejected with a
+  `RangeError`. M4.1's error rule cannot apply per fragment, where nothing can
+  throw and the TSL backend would not compile a `throw`, so range correction has
+  to be arithmetic. AND THE CLAMP IS A CORRECTNESS FIX, NOT A TIDINESS ONE.
+  Unclamped, a 10 by 2 box with radius 3 reports 1.4721 at (6, 0) where the
+  distance to its own zero set is 1.7639, a 16.5 per cent underestimate, and a 2
+  by 2 box with radius 2 reports 1.1623 against 1.2679, 8.3 per cent. Both
+  errors are in the dangerous direction, too small. Push further and the shape
+  VANISHES: a 4 by 4 box with radius 10 is positive everywhere, so there is no
+  zero set for the number to be a distance to.
+  THE MOST INTERESTING PART IS A LESSON ABOUT TESTING RATHER THAN ABOUT SHAPES,
+  and it is on the docs page for that reason. THE BROKEN FIELD IS STILL EIKONAL.
+  Its gradient magnitude is 1 to within 7.5e-11, indistinguishable from the
+  correct field, because folding into the first quadrant preserves gradient
+  magnitude. `|grad d| = 1` is the property that licenses derivative
+  antialiasing and therefore the first property a reviewer asks for, and a suite
+  that checked only it would have shipped the broken field. That is why the
+  suite also carries a ray-marched distance-to-zero-set reference that never
+  reads the field's value and only asks where it changes sign.
+  Scale invariance is the "crisp at every zoom" claim in testable form:
+  `d(k p, k size, k r) = k d(p, size, r)` and `coverage(k d, k w) =
+  coverage(d, w)`. Together they are the entire antialiasing argument, since
+  zooming scales the distance and the filter width by the same factor and leaves
+  the ratio alone. Over 20000 seeded cases each with `k` spanning 1e-3 to 1e3,
+  the range `camera.test.ts` draws its zooms from: the rounded rectangle holds
+  homogeneity to 7.074e-16 of the scaled size and the circle to 1.078e-15 of the
+  scaled radius, both against an asserted bound of 1e-14, and coverage holds its
+  invariance to 2.220e-16 against a bound of 1e-15. The eikonal property itself
+  is within 1.305e-6 of 1 over the 3871 sampled points that survive a
+  medial-axis skip rule, against a bound of 1e-5, with at least 3000 survivors
+  asserted so the skip rule cannot pass vacuously.
+  None of this is exported. These are three.js node objects, and M4.1's decision
+  that no three.js type appears in this package's public surface holds: three is
+  a peer dependency, so a type on the surface turns two copies of three from a
+  bundle-size problem into a type error. M4.3 owns material assembly and is the
+  first real caller, so exporting a shader-node API now would be a public
+  surface decision at the point of minimum information.
+  `antialias: true` on the `WebGPURenderer` became `false`, which is the revisit
+  M4.1 flagged in the source rather than a new opinion. SDF shapes antialias
+  analytically per fragment, so MSAA has nothing to improve on them, and the
+  plane's own geometric edges are fully transparent under this shading. MSAA
+  costs a 4x-sampled colour target plus a resolve every frame. BE HONEST ABOUT
+  THE EVIDENCE: the visual half is verified by comparing the scene rendered both
+  ways, and the cost half is an argument rather than a measurement, because
+  nothing in this repo has GPU timing. M4.10 is the first task that can put a
+  number on it.
 - [ ] **M4.3** (`@dagr/render`) Instanced rendering: one instanced mesh per
   shape family, with the instance buffer allocation, growth and compaction
   bookkeeping split out as a pure module that knows nothing about a GPU.

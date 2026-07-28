@@ -69,6 +69,15 @@ body {
   font-size: 0.8125rem;
 }
 
+/* Takes the whole row, so the title and the milestone tag stay on one line. */
+.page__lead {
+  flex-basis: 100%;
+  max-width: 56rem;
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 0.875rem;
+}
+
 /* The canvas and everything painted on top of it. */
 
 .stage {
@@ -92,6 +101,52 @@ body {
 
 .stage__canvas:active {
   cursor: grabbing;
+}
+
+/*
+ * The zoom presets, top right of the canvas.
+ *
+ * Buttons rather than a hint telling someone how hard to scroll: the two
+ * reference frames M4.2 owes (0.1x and 100x on a corner) have to be
+ * reproducible, and a gesture is not. Unlike `.stage__readout`, which sets
+ * `pointer-events: none` so it cannot swallow a drag, this group is meant to be
+ * clicked and therefore deliberately DOES take the pointer. That is why it sits
+ * in a corner rather than anywhere a pan is likely to start.
+ */
+.stage__presets {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  gap: 0.375rem;
+  padding: 0.3125rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.375rem;
+  background: rgba(7, 8, 10, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.stage__preset {
+  padding: 0.25rem 0.625rem;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  cursor: pointer;
+}
+
+.stage__preset:hover {
+  border-color: var(--rule);
+  color: var(--ink);
+}
+
+.stage__preset:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 1px;
+  color: var(--ink);
 }
 
 .stage__readout {
