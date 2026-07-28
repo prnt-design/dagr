@@ -799,15 +799,17 @@ function applyHint(
  * they settled on: every layer is walked left to right and each adjacent pair
  * is swapped when the swap costs nothing or saves something, repeatedly, until
  * a walk finds no strictly improving swap or `maxTransposePasses` is spent. It
- * is {@link transposeLayers}, and it is where a third of this stage's total
- * crossing reduction now comes from.
+ * is {@link transposeLayers}, and it removes 13.7% of the crossings the sweeps
+ * leave on the 10k corpus and 16.6% on the 1k.
  *
  * WHERE IT RUNS. Once, at the end, on the BEST layering the sweeps saw. The
  * alternatives were measured at a sweep budget of 8 on the 10k corpus: once at
  * the end reaches 32,677 crossings, after every full round 32,798, after every
  * sweep 32,854, so the cheapest placement is also the best one. It is cheapest
  * by a wide margin, 30.1ms against 48.6ms and 125.5ms in the prototype those
- * three were compared in.
+ * three were compared in. All three of those numbers are from before ties were
+ * allowed, which is why none of them is the 30,318 this stage now reaches; what
+ * they compare is the placements against each other.
  *
  * The trap that placement sets is worth naming, because it does not announce
  * itself. `position` tracks `layers`, the last working layering, and the pass
@@ -1116,7 +1118,9 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
       // point, so the best one is copied back over both before a single delta
       // is computed: a pass run against stale positions computes every delta
       // for a permutation the layering is not in, which does not throw and does
-      // not produce an illegal layering, it just makes worse decisions.
+      // not produce an illegal layering, it decides arbitrarily. Arbitrary is
+      // not the same as worse, and measured it is sometimes better by luck,
+      // which is why the test for this pins layers rather than a count.
       if (passBudget > 0) {
         for (const [number, row] of best.entries()) {
           const layer = layers[number];

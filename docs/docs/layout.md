@@ -832,16 +832,18 @@ to sort are collected in index order and JavaScript's sort is stable.
 When the sweeps stop, one transpose refinement pass runs over the layering they
 settled on. It walks every layer left to right and swaps each adjacent pair
 when the swap costs nothing or saves something, repeating until a walk finds no
-strictly improving swap or `maxTransposePasses` is spent. About a third of the
-stage's total crossing reduction now comes from it: on the 10k corpus it takes
-35,114 crossings down to 30,318.
+strictly improving swap or `maxTransposePasses` is spent. It removes 13.7% of
+the crossings the sweeps leave on the 10k corpus, 35,114 down to 30,318, and
+16.6% on the 1k.
 
 **It runs once, at the end, on the best layering the sweeps saw**, not inside
 them. The alternatives were measured at a sweep budget of 8 on the 10k: once at
 the end reaches 32,677 crossings, after every full round 32,798, and after
 every sweep 32,854, so the cheapest placement is also the best one, and it is
 cheapest by a wide margin (30.1ms against 48.6ms and 125.5ms in the prototype
-the three were compared in).
+the three were compared in). Those three are from before ties were allowed,
+which is why none of them is the 30,318 above; what they compare is the
+placements against each other.
 
 **The swap delta is exact.** For an adjacent pair, the only crossings that can
 change are the ones in the gap above and the gap below involving edges incident
