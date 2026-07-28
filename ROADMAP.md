@@ -857,8 +857,11 @@ findings addressed or logged, docs land with the feature.
   to split. (d) `maxSweeps` defaults to 8 and the stage returns the best
   layering it saw rather than the last, because the sweeps are not monotone.
   (e) It is not the default because it costs about 21ms on the 10k against a
-  `pipeline > 10k` baseline of 30.15ms with a 10% gate tolerance, and because
-  M2.6 improves the same stage, so one flip and one rebaseline serve both.
+  `pipeline > 10k` baseline of 30.15ms with a 10% gate tolerance, and the
+  rebaseline that fixes it wants a quiet machine. M2.5 also gave a second
+  reason, that M2.6 would improve the same stage so one flip could serve both;
+  M2.6 has now shipped WITHOUT the flip, so that reason is spent and the
+  baseline cost is the only one left. The flip is M2.6b.
   Everything below is the measurement that chose each of those.
   The seed was chosen by measurement, crossings after 8 sweeps: roster order
   3,943 on the 1k and 54,744 on the 10k, the adjacent-layer walk 3,605 and
@@ -900,12 +903,59 @@ findings addressed or logged, docs land with the feature.
   3,532 where all 16 reach 3,467. Two rounds recovers every crossing of that on
   all three, leaves both budget-8 corpus pins where they are, and costs about
   21.6ms on the 10k against 21.9ms for the one-round stop.
-- [ ] **M2.6** Ordering v2: transpose refinement pass; crossing-count
+- [x] **M2.6** Ordering v2: transpose refinement pass; crossing-count
   regression corpus committed as golden files.
-  The default flip is owed here and is cheapest done together with the transpose
-  pass: `defaultStages.order` moves to `barycenter-order`, and the `pipeline`
-  benchmark entries are rebaselined once for both changes rather than once each.
-  See M2.5's (e) for why it was not done there.
+  WHAT SHIPPED. One transpose pass runs after the sweeps, on the best layering
+  they saw, swapping an adjacent pair whenever the swap costs nothing or saves
+  something. On the 10k corpus it takes 35,114 crossings to 30,318 (13.7%) for
+  about 5ms, and the 1k 3,605 to 3,005 (16.6%). The golden corpus is
+  `packages/layout/test/order-crossings.golden.json`, six seeded mid-sized
+  graphs from `@dagr/bench`'s own `layeredDag` with the exact count recorded
+  twice per graph, with the pass at its default cap and with it off, so a
+  regression in either shows up rather than one masking the other.
+  Five decisions, all measured, all argued in `barycenterOrder`'s docstring.
+  (a) PLACEMENT: once at the end beats after every round and after every sweep
+  on quality as well as on time, and by enough that it is not close; the
+  figures are in the docstring, where they can carry the note that the ones for
+  the two rejected placements were taken before the tie rule and so are not
+  comparable to the 30,318 above. The trap it sets is that `position` tracks
+  the last working layering and not the best one, so the pass repositions from
+  `best` first; a build without that decides arbitrarily rather than badly,
+  which is why the test pins layers and not a count. (b) The swap delta is
+  EXACT, so a decision is O(deg v * deg w) instead of a rescore, and the suite
+  holds it to that against a transpose that decides every swap by a full
+  `countCrossings`. (c) TIES ARE TAKEN: a zero-delta swap wins every
+  configuration it was tested in. (d) TERMINATION is gated on strictly
+  improving swaps ONLY, because a zero-delta swap leaves one available and any
+  other gate cycles forever; the witness is three nodes and two edges, two of
+  them sharing one neighbour, and both halves of the rule are pinned on it.
+  (e) A pair is SKIPPED when either node has no neighbour in either adjacent
+  layer, which the tie rule makes necessary: such a node has a delta of zero on
+  both sides, so without it every pair containing one is swapped
+  unconditionally and the node drifts a slot per pass.
+  `maxTransposePasses` defaults to 8, chosen at the knee of a measured cap
+  curve, and that it matches `maxSweeps`'s 8 is a COINCIDENCE recorded as one.
+  The curve itself lives in `barycenterOrder`'s docstring and is deliberately
+  not copied here: it, the tie-rule margins and the caveat below all expire on
+  the same event, and three copies means a three-place sweep when it happens.
+  THE CAVEAT, and it is not small, stated here because it changes what a LATER
+  TASK must do rather than merely describing this one. The saving COLLAPSES
+  once every edge is visible, so both the cap and the tie rule are measured
+  against a graph M2.4b replaces and BOTH MUST BE RE-DERIVED WHEN IT LANDS
+  rather than carried across. The figures behind that are in the docstring.
+  `defaultStages.order` did NOT change here. That is M2.6b below.
+- [ ] **M2.6b** Order default flip and bench rebaseline. Touches
+  `packages/layout` and `bench`. `defaultStages.order` moves from
+  `insertion-order` to `barycenter-order`, and the `pipeline` benchmark entries
+  are rebaselined for it. Split out of M2.6 because the two halves want
+  different machines: the transpose pass and its golden corpus are ordinary
+  work, and `pnpm bench:baseline` recaptures wholesale and wants a quiet one.
+  The arithmetic, which expires the moment the baseline is recaptured: the
+  stage costs about 21ms of sweeps plus about 5ms of transpose on the 10k
+  against a `pipeline > 10k` baseline of 30.15ms with a 10% gate tolerance, so
+  flipping without recapturing fails the gate. Both reasons M2.5 gave for
+  waiting are now down to this one; see M2.5's (e) and the last section of
+  `barycenterOrder`'s docstring.
 - [ ] **M2.7** Positioning: Brandes-Koepf horizontal coordinate assignment
   (or median-based v1 with the interface ready for BK). Invariant tests: no
   node overlaps, spacing respected.

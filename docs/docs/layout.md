@@ -650,19 +650,23 @@ import { barycenterOrder, barycenterOrderStage, layout } from '@dagr/layout';
 
 layout({ graph }, { order: barycenterOrderStage });
 layout({ graph }, { order: barycenterOrder({ maxSweeps: 16 }) });
+layout({ graph }, { order: barycenterOrder({ maxTransposePasses: 0 }) });
 ```
 
-It is the same arrangement as the two rank stages, and the reason it is not the
+It runs barycenter sweeps and then a transpose refinement pass, and the two
+budgets above are what you turn: `maxSweeps` bounds the sweeps, and
+`maxTransposePasses` bounds the pass, with zero meaning "do not run it". It is
+the same arrangement as the two rank stages, and the reason it is not the
 default is [below](#why-barycenter-order-is-not-the-default).
 
 ### What a crossing is counted between
 
 `countCrossings({ graph, layers })` is the metric, and it is exported because a
-number only the stage can compute is a number nobody can hold the stage to. What
-it takes is a `Layering`, a graph plus the layers its nodes are drawn in, named
-for what it is rather than for this one consumer because M2.6's transpose pass
-and M3.4's quality report take the same pair. An `OrderedState` satisfies it
-structurally, so a stage author holding one passes it straight in.
+number only the stage can compute is a number nobody can hold the stage to.
+What it takes is a `Layering`, a graph plus the layers its nodes are drawn in,
+named for what it is rather than for this one consumer because the transpose
+pass refines one and M3.4's quality report will score one. An `OrderedState`
+satisfies it structurally, so a stage author holding one passes it straight in.
 
 Layers are what an order stage returns, so scoring a run means wrapping one: a
 `LayoutResult` holds coordinates and not layers, and nothing exported today
@@ -823,22 +827,124 @@ layers, always. Every tie in the walk is edge insertion order, and every tie in
 a sort key leaves the nodes in the order they already sat in, because the nodes
 to sort are collected in index order and JavaScript's sort is stable.
 
+### The transpose pass
+
+When the sweeps stop, one transpose refinement pass runs over the layering they
+settled on. It walks every layer left to right and swaps each adjacent pair
+when the swap costs nothing or saves something, repeating until a walk finds no
+strictly improving swap or `maxTransposePasses` is spent. It removes 13.7% of
+the crossings the sweeps leave on the 10k corpus, 35,114 down to 30,318, and
+16.6% on the 1k.
+
+**It runs once, at the end, on the best layering the sweeps saw**, not inside
+them. The alternatives were measured at a sweep budget of 8 on the 10k: once at
+the end reaches 32,677 crossings, after every full round 32,798, and after
+every sweep 32,854, so the cheapest placement is also the best one, and it is
+cheapest by a wide margin (30.1ms against 48.6ms and 125.5ms in the prototype
+the three were compared in). Those three are from before ties were allowed,
+which is why none of them is the 30,318 above; what they compare is the
+placements against each other.
+
+**The swap delta is exact.** For an adjacent pair, the only crossings that can
+change are the ones in the gap above and the gap below involving edges incident
+to the two nodes, because every other segment keeps both its endpoints where
+they were. Taking one neighbour of each in the fixed layer, that pair of
+segments crosses now exactly when the first is to the right of the second and
+crosses after the swap exactly when it is to the left, so the side contributes
+the count of one minus the count of the other, and the two sides sum. A swap
+decision is therefore O(deg v * deg w) rather than the O(E log V) of rescoring
+the drawing, and the test suite holds the claim to being exact by running the
+pass against a transpose that decides every swap by a full rescore.
+
+**A swap worth exactly zero is taken.** That contradicts the obvious prior, and
+it was measured rather than reasoned: allowing zero-delta swaps wins all six
+configurations it was tested in, by between 2.7% and 13.5%, and on the 10k run
+to a fixed point it reaches 29,260 crossings against 32,677 for the strict
+rule. A plateau of equal-scoring permutations is something to walk across to
+reach a better one, not a wall. What keeps that from churning the drawing for
+nothing is the stage's existing rule: the transposed layering is scored and
+taken only if it is strictly better, so a reordering that bought nothing does
+not reach the output.
+
+**The loop ends on a pass with no strictly improving swap**, and that is a
+constraint rather than a detail. A zero-delta swap leaves a zero-delta swap
+available, so a loop that continued whenever anything moved would swap one pair
+back and forth forever. Two nodes sharing a single neighbour are enough to
+produce it, which is to say every fan-in and every fan-out is enough. It takes
+both the tie rule and the wrong gate to hang, so the test suite pins both
+halves on a three-node witness: the shipping gate stops after one pass, and an
+any-swap gate runs a clean period-2 cycle for as long as it is allowed to.
+
+`maxTransposePasses` defaults to 8. **That it equals `maxSweeps`'s default of 8
+is a coincidence**: the two bound different loops and were measured
+independently, and neither should track the other. Measured at a sweep budget
+of 8 on the 10k, against 35,114 crossings and 16.32ms with the pass off:
+
+| cap | 10k crossings | saving | extra time | crossings per ms |
+| --- | --- | --- | --- | --- |
+| 4 | 31,369 | 10.7% | +2.65ms | 1,413 |
+| 6 | 30,677 | 12.6% | +4.15ms | 461 |
+| 8 (the default) | 30,318 | 13.7% | +4.93ms | 460 |
+| 12 | 29,892 | 14.9% | +6.92ms | 214 |
+| 16 | 29,658 | 15.5% | +9.29ms | 99 |
+| 32 | 29,358 | 16.4% | +16.91ms | 39 |
+| fixed point (60 passes) | 29,260 | 16.7% | +30.61ms | 7 |
+
+The last column is the marginal rate: the crossings a row buys over the row
+above it, divided by the extra time it costs. That is the column the default is
+chosen on, and the rows past 8 are carried for it alone.
+
+Eight captures 81.9% of the full saving for 16.1% of the extra time, and the
+knee really is there: the rate holds at or above 460 up to 8 and falls to 214
+immediately past it, then by at least half at every further step. The 1k corpus
+agrees without deciding anything, 3,005 crossings against 3,605 for +0.41ms,
+with its own fixed point at 2,959 after 19 passes. Those timings are one
+machine's, like every other timing on this page.
+
+A larger cap is a weakly better answer and never a different one, for the same
+reason a larger `maxSweeps` is: the deltas are exact and only non-increasing
+swaps are taken, so a pass cannot raise the count. `maxTransposePasses` takes
+the same rule as `maxSweeps`, including rejecting `Number.POSITIVE_INFINITY`,
+and a non-integer or negative value is an `InvalidConfigError` naming the
+field, thrown at the call that builds the stage.
+
+**The caveat, and it is not a small one: the saving collapses once every edge
+is visible.** Every number above is measured on a graph where the counter sees
+about a quarter of the edges, for the reason in
+[What a crossing is counted between](#what-a-crossing-is-counted-between). On a
+dummy-expanded 10k, which is what M2.4b produces, the capped saving falls from
+10.7% to 1.4% at a cap of 4, which is the cap those two were compared at and is
+not the default of 8. The expanded graph was never measured at 8, so what this
+says is that a capped pass loses most of its value there, not that it loses
+exactly that much. Only a full fixed point holds its share, at a price nobody
+can pay: 214 seconds against 6.8. So the cap and the tie rule are both measured
+against a graph M2.4b replaces, and both must be re-derived when it lands
+rather than carried across unexamined.
+Neither is a constant of the algorithm.
+
+The crossing counts the stage reaches on a fixed set of generated graphs, with
+the pass on and off, are committed as a golden file at
+`packages/layout/test/order-crossings.golden.json` and asserted exactly. The
+test file beside it says how to regenerate it and when doing so is legitimate.
+
 ### Why `barycenter-order` is not the default
 
 Not because the stage is unfinished. It is a finished stage that is opt-in: you
 select it per run, as the one `order` argument at the call shown
 [above](#ordering-and-what-a-crossing-is-counted-between).
 
-The reasons it has not taken the default are that its cost on the 10k corpus
-would put the committed `pipeline > 10k` benchmark entry over the bench gate's
-tolerance until that baseline is recaptured, and that M2.6's transpose
-refinement improves this same stage, so the default flips once, after both, for
-one decision and one rebaseline instead of two. It is also the precedent M2.3
-set with `network-simplex-rank`: a real stage is exported by name whether or not
-it is the default.
+The reason it has not taken the default is that its cost on the 10k corpus would
+put the committed `pipeline > 10k` benchmark entry over the bench gate's
+tolerance until that baseline is recaptured, and recapturing it is a job for a
+quiet machine rather than for a run that has tests going. That flip and that
+rebaseline are M2.6b, and they are one decision. The other reason to wait, that
+the transpose pass was still to come and would move the same numbers again, has
+expired: the pass is here. It is also the precedent M2.3 set with
+`network-simplex-rank`: a real stage is exported by name whether or not it is
+the default.
 
-The arithmetic behind the first of those, which is the part that expires the
-moment the baseline is recaptured, is stated once, in the last section of
+The arithmetic behind the baseline, which is the part that expires the moment
+that baseline is recaptured, is stated once, in the last section of
 `barycenterOrder`'s docstring in `packages/layout/src/order.ts`.
 
 ## Why the stages are swappable
