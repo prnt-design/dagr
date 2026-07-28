@@ -119,10 +119,10 @@ export interface GpuResource {
  * hard-coded set of SDF shapes, which is a change to what is DRAWN and not to
  * anything a caller can reach; giving this interface a `setGraph` or a `setLayout`
  * now would still be guessing at the shape of M4.4 with nothing to check the
- * guess against. What it does fix is
- * the lifecycle, which is the part that will not change: something owns a
- * camera, something has to be told when the canvas resizes, something draws a
- * frame, and something has to give the GPU its memory back.
+ * guess against. What it does fix is the lifecycle, which is the part that will
+ * not change: something owns a camera, something has to be told when the canvas
+ * resizes, something draws a frame, and something has to give the GPU its memory
+ * back.
  *
  * The camera is `readonly` because it is the object callers mutate. Pan and
  * zoom go through {@link Camera2D}'s own methods, which validate; swapping in a

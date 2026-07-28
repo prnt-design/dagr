@@ -185,6 +185,16 @@ the fragment that would have faded is never shaded. It is a rasterisation limit,
 and the honest place for it is here rather than in a claim that shapes fade all the
 way down.
 
+Those two smallest shapes are also the only ones whose fill ramp is clipped by their
+own quad in the 0.1x frame, and getting that wrong is easy, so the arithmetic is
+worth stating. A quad is padded by the glow radius plus one world unit, and the
+fill's ramp reaches half a pixel past the boundary, so the ramp survives above zoom
+`1 / (2 * (glowWorld + 1))`. Each rung's glow is a quarter of its height, which puts
+the three crossovers at 0.25, 0.045 and 0.005: four of the six shapes are therefore
+clean at zoom 0.1 and the two 4-unit-tall ones are not. What is clipped there is the
+antialiasing of a shape already under a pixel across, which is why it is invisible
+in the frame, and a zoom-aware quad is M4.4's to add.
+
 ### What this task deliberately did not decide
 
 Whether the package uses one material with a per-instance shape id or one
