@@ -14,6 +14,75 @@ of doc prose.
 
 ### Added
 
+- `barycenterOrderStage` and `barycenterOrder(options)`, exported, plus the
+  `BarycenterOrderOptions` type, and `countCrossings(layering)` with the
+  `Layering` type it takes, which is a graph and the layers its nodes are drawn
+  in. The first real order stage: crossing reduction by barycenter sweeps, with
+  the crossing counter it optimises exported beside it. `defaultStages.order` is
+  unchanged and is still `insertion-order`. (M2.5)
+
+  **The seed permutation is a connected depth-first walk over adjacent-layer
+  edges**, not the roster order the placeholder uses. It is recorded here as
+  well as in the docs because M3.6 warm starts from exactly it and the stage
+  that used to define the answer will not exist by then. The roster is walked in
+  its own order, each unvisited node starts a walk that may only step along an
+  edge whose endpoints sit in adjacent layers, in either direction, neighbours
+  come in `outEdges` order and then `inEdges` order, and a node no such edge
+  reaches is appended when the outer loop arrives at it.
+
+  Measured against the alternatives, crossings after 8 sweeps: roster order
+  3,943 on the 1k corpus and 54,744 on the 10k, this walk 3,605 and 35,114, a
+  walk over ALL edges 3,459 and 38,152. The all-edges walk was the expected
+  winner, on the theory that the seed is the only place a long edge can
+  influence a stage that cannot otherwise see one, and it loses the corpus that
+  counts. The adjacent-layer rule also coincides with it once M2.4b splits the
+  long edges, so it is the behaviour this stage will have anyway.
+
+  **What a crossing is counted between**, which is the honest limit of this
+  release. Only two segments joining the same pair of ADJACENT layers can cross,
+  so an edge spanning more than one rank is invisible to the counter and to the
+  sweeps alike, and so is a self loop. Under the default ranker that is 1,324 of
+  the 1k corpus's 4,000 edges (33.1%) and 10,528 of the 10k's 40,000 (26.3%);
+  the longest edge spans 78 and 201 ranks. M2.4b's chains make every edge that
+  spans more than one rank span exactly one, which takes that share to 100% on
+  any graph without self loops, both benchmark corpora included, without a line
+  changing here.
+
+  `maxSweeps` defaults to 8: the 10k corpus goes 94,991 at the seed, 50,735 at
+  2, 40,217 at 4, 35,114 at 8 and 32,503 at 16, costing about 5.5ms, 9.5ms,
+  13.5ms, 21ms and 38ms. Sixteen sweeps buy another 7% of what is left for
+  something under double the time. It takes a non-negative INTEGER and rejects
+  everything else, including `Number.POSITIVE_INFINITY`, with an
+  `InvalidConfigError` thrown at the call that names the budget; there is no
+  optimality condition here for an unbounded run to converge to.
+  `InvalidConfigError` is the member of this package's error family that means
+  "the caller handed in nonsense", so it is the one a bad budget gets; the rule
+  that an out-of-range value is a `RangeError` naming the field is scoped to
+  `@dagr/render` and does not reach here. The stage scores the layering after
+  every sweep and returns the BEST one seen rather than the last, because the
+  sweeps are not monotone, so a larger budget is a weakly better answer rather
+  than a different one.
+
+  `initialOrder` is a previous run's layers to start from, a hint and never a
+  permutation taken on trust, on the same terms as `initialRanks` on the simplex
+  ranker: unusable entries are dropped one at a time and nothing it can say
+  produces an invalid layering. An id keys by its index WITHIN ITS OWN HINT
+  LAYER, so the hint constrains relative order and never absolute index, and an
+  id it does not name keeps the index the seed walk gave it rather than being
+  swept to one end. As with `initialRanks`, nothing exported today produces one
+  for you to pass, because a `LayoutResult` holds coordinates and not layers; it
+  is here so that M3's engine does not need the stage rebuilt around it.
+
+  **It is not the default, and the reason is a benchmark rather than the
+  algorithm.** It costs about 21ms on the 10k corpus against a committed
+  `pipeline > 10k` baseline of 30.15ms and a gate tolerance of 10%, so switching
+  the default today fails the bench gate; the baseline refresh that would absorb
+  it is owed already and recaptures every entry at once, so it wants a quiet
+  machine. M2.6's transpose pass improves this same stage, so the default flips
+  once, after both, with one rebaseline instead of two. That is also the
+  precedent M2.3 set: a real stage is exported by name whether or not it is the
+  default.
+
 - `networkSimplexRankStage` and `networkSimplexRank(options)`, exported, plus
   the `NetworkSimplexOptions` type. A second real rank stage: it is not a
   placeholder waiting for an algorithm, it is a different algorithm with a

@@ -831,7 +831,7 @@ findings addressed or logged, docs land with the feature.
   is academic: at the shipping pass's 1,359,680 dummies the pipeline would be
   working on 1.37 million nodes, so M2.2b was necessary here even though it is
   not sufficient for the gate, and it has landed without being sufficient.
-- [ ] **M2.5** Ordering v1: barycenter sweeps with median fallback, crossing
+- [x] **M2.5** Ordering v1: barycenter sweeps with median fallback, crossing
   counter as the metric. Tests on known small graphs with hand-counted
   crossings. Also measure adjacency allocation churn in the sweeps (every
   `@dagr/graph` adjacency query returns a fresh array) and add a
@@ -842,8 +842,70 @@ findings addressed or logged, docs land with the feature.
   virtual nodes; state whether the real stage inherits that or chooses
   otherwise, so M3.6 depends on a recorded decision rather than on an inference
   about a stage that no longer exists by then.
+  WHAT SHIPPED, in five lines, because the rest of this entry is a record.
+  (a) `barycenterOrder(options)`, `barycenterOrderStage` and `countCrossings`
+  are exported from `packages/layout/src/order.ts`; `defaultStages.order` DID
+  NOT CHANGE and is still `insertion-order`, for the reason in (e). (b) THE SEED
+  IS NOT ROSTER ORDER. It is a connected depth-first walk over adjacent-layer
+  edges only, in both directions, roster order for the outer loop and
+  `outEdges` then `inEdges` for the neighbours. That is the M3.6 answer, and
+  `test/layout.order.test.ts` fails if it moves. (c) The metric counts a
+  crossing only between two segments joining the same pair of ADJACENT layers,
+  which today is 1,324 of the 1k corpus's 4,000 edges (33.1%) and 10,528 of the
+  10k's 40,000 (26.3%); M2.4b takes both to 100% on any graph without self
+  loops, which both corpora are, because a self loop spans no rank for a chain
+  to split. (d) `maxSweeps` defaults to 8 and the stage returns the best
+  layering it saw rather than the last, because the sweeps are not monotone.
+  (e) It is not the default because it costs about 21ms on the 10k against a
+  `pipeline > 10k` baseline of 30.15ms with a 10% gate tolerance, and because
+  M2.6 improves the same stage, so one flip and one rebaseline serve both.
+  Everything below is the measurement that chose each of those.
+  The seed was chosen by measurement, crossings after 8 sweeps: roster order
+  3,943 on the 1k and 54,744 on the 10k, the adjacent-layer walk 3,605 and
+  35,114, a walk over ALL edges 3,459 and 38,152. The all-edges walk was the
+  expected winner, on the theory that the seed is the only place a long edge can
+  influence a stage that cannot otherwise see one, and it loses the 10k by 8.0%
+  while winning the 1k by 4.2%. The 10k decides it, per M2.2b. The two rules
+  also COINCIDE once M2.4b splits every long edge, so this is the behaviour the
+  stage will have anyway rather than one that changes character under it.
+  The sweep curve, on that seed: the 1k is 7,933 at the seed and 4,619, 3,880,
+  3,605, 3,467 at 2, 4, 8, 16 sweeps; the 10k is 94,991 and 50,735, 40,217,
+  35,114, 32,503, costing about 5.5ms, 9.5ms, 13.5ms, 21ms and 38ms. Eight is
+  the default because 8 sweeps reach 8.3% of the roster seed's crossings on the
+  10k and 16 reach 7.6%.
+  Two smaller decisions, both measured and both close, recorded so nobody
+  re-derives either as a principle. A node with no neighbour in the fixed layer
+  is PINNED at its index rather than rescaled into the fixed layer's index
+  space: a near wash on the seeds this stage does not use (1k 3,459 against
+  3,557, 10k 54,744 against 54,502 the other way) and not a wash on the one it
+  does (35,114 against 40,276 on the 10k). It is not a corner case either, 120
+  of the 1k's nodes and 1,101 of the 10k's have no neighbour in the layer above.
+  And the sort key is barycenter first with the median as the tiebreak, which
+  splits the four seed-and-corpus combinations two and two and is chosen on the
+  10k from the walk that ships (35,114 against 35,396).
+  The allocation-churn item resolved by construction rather than by profiling:
+  the stage asks the graph nothing after it builds its index. One pass over
+  `graph.edges()` produces flat typed-array adjacency, and every sweep reads
+  node numbers, so there is no per-sweep adjacency query to churn and no
+  non-allocating traversal form was needed in `@dagr/graph`.
+  One thing measured that the plan did not predict, recorded because the first
+  version of it was a quality cost hiding inside a time saving. The early stop
+  is a HEURISTIC and not a fixed point: what carries into the next round is the
+  last layering, not the best one, so a round that improved nothing is not proof
+  that the next one will not. Stopping on the FIRST full down-and-up round that
+  improved nothing therefore cost quality, and the shipped rule waits for TWO
+  consecutive ones. Measured, one round against running the budget out: 32 of
+  200 random layered graphs were worse at the DEFAULT budget of 8, worst 1,055
+  crossings against 893, and the 1k at a budget of 16 stopped after sweep 14 at
+  3,532 where all 16 reach 3,467. Two rounds recovers every crossing of that on
+  all three, leaves both budget-8 corpus pins where they are, and costs about
+  21.6ms on the 10k against 21.9ms for the one-round stop.
 - [ ] **M2.6** Ordering v2: transpose refinement pass; crossing-count
   regression corpus committed as golden files.
+  The default flip is owed here and is cheapest done together with the transpose
+  pass: `defaultStages.order` moves to `barycenter-order`, and the `pipeline`
+  benchmark entries are rebaselined once for both changes rather than once each.
+  See M2.5's (e) for why it was not done there.
 - [ ] **M2.7** Positioning: Brandes-Koepf horizontal coordinate assignment
   (or median-based v1 with the interface ready for BK). Invariant tests: no
   node overlaps, spacing respected.
