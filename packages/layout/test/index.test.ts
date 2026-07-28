@@ -35,9 +35,12 @@ import type {
 // name it in. It is reached from the module that defines it, like the default
 // stages below.
 import type { RoutedState } from '../src/types.js';
-// The three placeholder stages are deliberately not part of the public surface,
-// so the tests that name them reach into the module that defines them. The two
-// real rank stages are exported, and are reached below through `api`.
+// The stages `stages.ts` keeps to itself are deliberately not part of the
+// public surface, so the tests that name them reach into the module that
+// defines them: the two remaining placeholders, and `insertionOrderStage`,
+// which stopped being the default in M2.6b and stayed module-local because the
+// ordering evidence still runs it. The real stages are exported, and are
+// reached below through `api`.
 import { gridPositionStage, insertionOrderStage, straightRouteStage } from '../src/stages.js';
 
 describe('@dagr/layout public surface', () => {
@@ -47,9 +50,14 @@ describe('@dagr/layout public surface', () => {
 
   it('exports the default stages as a set, which is what they are reachable as', () => {
     expect(api.defaultStages.rank).toBe(api.longestPathRankStage);
-    expect(api.defaultStages.order).toBe(insertionOrderStage);
+    expect(api.defaultStages.order).toBe(api.barycenterOrderStage);
     expect(api.defaultStages.position).toBe(gridPositionStage);
     expect(api.defaultStages.route).toBe(straightRouteStage);
+    // The stage `order` used to point at is still in the package and still not
+    // exported from it, which is the export rule holding in the one direction
+    // it had not been asked to hold in yet: a stage that stops being the
+    // default does not thereby earn a public name.
+    expect(Object.values(api)).not.toContain(insertionOrderStage);
   });
 
   it('lets a caller wrap a default through defaultStages alone', () => {
@@ -145,14 +153,15 @@ describe('@dagr/layout public surface', () => {
     ]);
   });
 
-  // The order stage exported by name without taking the default, which is the
-  // second time that has happened and is what makes the export rule "every real
-  // stage is exported by name" rather than "every default is". The counter is
-  // exported beside it because a metric only a stage can compute is a metric
-  // nobody can hold the stage to.
+  // The order stage was exported by name for a milestone before it took the
+  // default, which is what makes the export rule "every real stage is exported
+  // by name" rather than "every default is": the name did not arrive with the
+  // default and does not depend on it. The counter is exported beside it
+  // because a metric only a stage can compute is a metric nobody can hold the
+  // stage to.
   it('exports the barycenter order stage, its factory, and the crossing counter', () => {
     expect(api.barycenterOrderStage.name).toBe('barycenter-order');
-    expect(api.defaultStages.order).not.toBe(api.barycenterOrderStage);
+    expect(api.defaultStages.order).toBe(api.barycenterOrderStage);
     expect(Object.isFrozen(api.barycenterOrderStage)).toBe(true);
     const graph = new Graph();
     graph.addNode('a');

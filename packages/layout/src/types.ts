@@ -395,9 +395,9 @@ export interface RankOutput {
    * A single dummy at rank 1 on an edge from rank 0 to rank 3 passes every rule
    * above, and its route then crosses rank 2 with no bend. Tightening that
    * needs a definition of what an edge "spans", and the obvious one (steps of
-   * exactly one) assumes contiguous integer ranks, which `insertionOrderStage`
-   * explicitly refuses to assume. It is M2.4b's call once a real splitter gives
-   * "spans" a meaning.
+   * exactly one) assumes contiguous integer ranks, which no order stage in this
+   * package assumes: both of them take the layers to be the distinct ranks
+   * sorted. It is M2.4b's call once a real splitter gives "spans" a meaning.
    */
   readonly virtualChains?: ReadonlyMap<EdgeId, readonly NodeId[]>;
 

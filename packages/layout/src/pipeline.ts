@@ -57,9 +57,9 @@ function* rosterOf(graph: Graph, virtualNodes: ReadonlySet<NodeId>): Generator<N
  * exactly the jitter M2.4b's deterministic-id rule exists to prevent, so stable
  * ids are necessary and this is what makes them sufficient.
  *
- * It is done here rather than in `insertionOrderStage` for two reasons. M2.5
- * replaces that stage wholesale, so sorting there buys nothing durable, while
- * the roster the runner builds is what every future order stage reads. And
+ * It is done here rather than in an order stage for two reasons. Order stages
+ * come and go, and M2.6b has since replaced the default with `barycenterOrder`,
+ * while the roster the runner builds is what every order stage reads. And
  * within a layer a chain contributes at most one node per rank, so ids differ
  * by edge and lexicographic order is both stable and meaningful.
  *
@@ -625,13 +625,15 @@ function assemble(graph: Graph, routed: RoutedState): LayoutResult {
  * result is filtered back down to the caller's own ids, so a declared node
  * never escapes.
  *
- * The default rank stage is real as of M2.2: it breaks cycles with a greedy
- * feedback arc set and ranks by longest path, so the layers are the ones the
- * graph asks for. The other three defaults are still placeholders, so within a
- * layer the order is the graph's insertion order, the coordinates are a grid,
- * and an edge is a straight line between two centres. Crossing reduction
- * (M2.5), coordinate assignment (M2.7) and real routing (M2.8) replace them
- * one at a time, against this runner and its contract checks.
+ * Two of the four default stages are real algorithms. The rank stage has been
+ * one since M2.2: it breaks cycles with a greedy feedback arc set and ranks by
+ * longest path, so the layers are the ones the graph asks for. The order stage
+ * has been one since M2.6b: barycenter sweeps and a transpose pass, so within a
+ * layer the horizontal order is one that has had its crossings reduced rather
+ * than the graph's insertion order. The other two are still placeholders, so
+ * the coordinates are a grid and an edge is a straight line between two
+ * centres, until coordinate assignment (M2.7) and real routing (M2.8) replace
+ * them one at a time, against this runner and its contract checks.
  *
  * @throws {InvalidConfigError} when a separation or a size is not a finite
  * number that is zero or greater.

@@ -233,6 +233,35 @@ of doc prose.
 
 ### Changed
 
+- **`defaultStages.order` is now `barycenter-order`, so a caller who never
+  named an order stage gets different layers, different coordinates and a
+  different drawing, with no type change to warn them.** That is the category
+  this file exists for, and this is the largest instance of it so far: within a
+  layer the horizontal order is now one that has had its crossings reduced,
+  where before it was the order the nodes happened to be added to the graph in.
+  (M2.6b)
+
+  What the change costs and what it buys, one sentence each. The full default
+  pipeline is about 1.8x slower on the 10k benchmark corpus and about 1.6x
+  slower on the 1k. The layering it returns has 92.9% fewer adjacent-layer
+  crossings on the 10k and 76.7% fewer on the 1k. The four measurements those
+  ratios come from are stated once, in the last section of `barycenterOrder`'s
+  docstring in `src/order.ts`, and deliberately not copied here: a benchmark
+  recapture moves the timings and M2.4b moves all four.
+
+  Nothing about the stage itself changed and no export moved.
+  `barycenterOrderStage` has been exported by name since M2.5 and is the very
+  object `defaultStages.order` now holds, so `layout({ graph })` and
+  `layout({ graph }, { order: barycenterOrderStage })` do the same thing, and
+  the entries under Added that describe the stage still describe it exactly.
+  What there is no longer a way to ask for is the old behaviour:
+  `insertion-order` is still in the package and still unexported, kept as the
+  roster-order reference the ordering tests measure against rather than as a
+  stage anyone can select. A run that wants to spend less than the default does
+  can turn the transpose pass off with
+  `barycenterOrder({ maxTransposePasses: 0 })`, or the sweeps down with
+  `maxSweeps`, which is the same lever it always was.
+
 - **Breaking for every custom stage:** `RankStage`, `OrderStage`,
   `PositionStage` and `RouteStage` now return that stage's own contribution
   rather than the whole next record. A stage still READS the record it is

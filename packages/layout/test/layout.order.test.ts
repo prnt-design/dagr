@@ -5,7 +5,7 @@ import { DEFAULT_LAYOUT_CONFIG } from '../src/config.js';
 import { InvalidConfigError } from '../src/errors.js';
 import { barycenterOrder, barycenterOrderStage, countCrossings } from '../src/order.js';
 import { longestPathRankStage } from '../src/rank.js';
-import { defaultStages } from '../src/stages.js';
+import { defaultStages, insertionOrderStage } from '../src/stages.js';
 import { layout } from '../src/pipeline.js';
 import { mulberry32, randomDigraph, randomLayered } from './random.js';
 import type { GraphSpec } from '@dagr/bench';
@@ -99,9 +99,12 @@ describe('barycenterOrder, the seed permutation', () => {
       ['a', 'b'],
       ['d', 'c'],
     ]);
-    // What the placeholder does with the same input, so that the difference is
-    // in the file rather than in a reader's head.
-    expect(defaultStages.order.run(state).layers).toEqual([
+    // What roster order does with the same input, so that the difference is in
+    // the file rather than in a reader's head. `insertionOrderStage` by name
+    // rather than through `defaultStages`, because what this needs is that one
+    // stage: a fixture that tracks the default silently changes what the case
+    // measures the moment the default moves, which is what M2.6b did to it.
+    expect(insertionOrderStage.run(state).layers).toEqual([
       ['a', 'b'],
       ['c', 'd'],
     ]);
@@ -122,7 +125,7 @@ describe('barycenterOrder, the seed permutation', () => {
     );
     const state = stateOf(graph, [['a', 'b'], ['c']]);
     expect(ordered(state, { maxSweeps: 0 })).toEqual([['a', 'b'], ['c']]);
-    expect(defaultStages.order.run(state).layers).toEqual([['b', 'a'], ['c']]);
+    expect(insertionOrderStage.run(state).layers).toEqual([['b', 'a'], ['c']]);
   });
 
   /**
@@ -581,9 +584,9 @@ describe('barycenterOrder, the options', () => {
     expect(() => stage.run(state)).not.toThrow();
   });
 
-  it('is named barycenter-order and is not the default order stage', () => {
+  it('is named barycenter-order and is the default order stage', () => {
     expect(barycenterOrderStage.name).toBe('barycenter-order');
-    expect(defaultStages.order.name).toBe('insertion-order');
+    expect(defaultStages.order.name).toBe('barycenter-order');
   });
 });
 
@@ -737,15 +740,18 @@ describe('barycenterOrder, on the bench corpora', () => {
 
   /**
    * The seed decision and the sweep budget, in one table. The roster-order row
-   * is the placeholder's permutation fed back in as a hint, which is both the
-   * comparison D1 was decided on and a test that a hint naming every node
-   * really does reproduce itself at this size.
+   * is `insertionOrderStage`'s permutation fed back in as a hint, which is both
+   * the comparison D1 was decided on and a test that a hint naming every node
+   * really does reproduce itself at this size. That stage is named rather than
+   * reached through `defaultStages`, which used to hold it: this column is the
+   * roster order specifically, and reading it off the default would have
+   * rewritten what the table compares the moment M2.6b moved the default here.
    */
   it('pins the seed comparison and the sweep curve, with the pass off', () => {
     const table = corpora.map(([name, spec]) => {
       const state = rankedCorpus(spec);
       const { graph } = state;
-      const roster = defaultStages.order.run(state).layers;
+      const roster = insertionOrderStage.run(state).layers;
       const at = (maxSweeps: number, initialOrder?: readonly (readonly NodeId[])[]): number =>
         countCrossings({
           graph,
@@ -817,5 +823,37 @@ describe('barycenterOrder, on the bench corpora', () => {
       expect(barycenterOrderStage.run(state).layers).toEqual(first);
       expect(barycenterOrder().run(rankedCorpus(spec)).layers).toEqual(first);
     }
+  });
+
+  /**
+   * What M2.6b bought, which is the one thing the name pins cannot say. Those
+   * pin the IDENTITY of the default order stage, so they fail when it moves and
+   * pass whatever the stage that took it is worth. This pins the REASON: a
+   * default run now leaves 76.7% fewer crossings on the 1k corpus and 92.9%
+   * fewer on the 10k than the roster order it replaced.
+   *
+   * Both columns are exact pins rather than an inequality, on the same argument
+   * as every other table here: an ordering that regressed badly without
+   * regressing all the way back to roster order would satisfy "substantially
+   * fewer" and change nothing that fails. The right column is the default cap's
+   * row of the transpose table above, which is what ties these numbers to the
+   * stage that ships rather than to any stage that beats roster order.
+   */
+  it('leaves far fewer crossings through the default stage set than roster order does', () => {
+    const table = corpora.map(([name, spec]) => {
+      const state = rankedCorpus(spec);
+      const { graph } = state;
+      const roster = insertionOrderStage.run(state).layers;
+      const byDefault = defaultStages.order.run(state).layers;
+      return [
+        name,
+        countCrossings({ graph, layers: roster }),
+        countCrossings({ graph, layers: byDefault }),
+      ];
+    });
+    expect(table).toEqual([
+      ['1k', 12_890, 3_005],
+      ['10k', 425_394, 30_318],
+    ]);
   });
 });

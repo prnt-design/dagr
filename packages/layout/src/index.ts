@@ -8,20 +8,22 @@ export { DEFAULT_LAYOUT_CONFIG } from './config.js';
 // choose it by: the two rank stages optimise different things, minimum height
 // against minimum total edge length, and neither is a default a caller should
 // have to accept to get. Naming one of them "the default stage" is not a handle
-// on it either, because which one that is changes: M2.2 already moved `rank`
-// once. A placeholder is the opposite. The defaults still holding the order,
-// position and route phases are stand-ins scheduled for replacement (M2.5 built
-// the replacement for the first of them without taking the default, M2.7 and
-// M2.8 are still to come), and a name exported now is a name to delete later or
-// to keep exported as a dead placeholder forever. `defaultStages` covers what a
-// caller wants from those, wrapping whatever the current default is, and it
-// keeps working when the default behind one of its properties changes.
+// on it either, because which one that is changes: M2.2 moved `rank` and M2.6b
+// moved `order`. A placeholder is the opposite. The defaults still holding the
+// position and route phases are stand-ins scheduled for replacement (M2.7 and
+// M2.8), and a name exported now is a name to delete later or to keep exported
+// as a dead placeholder forever. `defaultStages` covers what a caller wants
+// from those, wrapping whatever the current default is, and it keeps working
+// when the default behind one of its properties changes.
 //
-// `barycenterOrderStage` is the second real stage to arrive without taking the
-// default, so the rule is now the one that survives that too: a real stage is
-// exported by name whether or not it is the default. Why the order default has
-// not moved and when it is meant to is argued once, beside the code it is
-// about, in the last section of `barycenterOrder`'s docstring in `order.ts`.
+// `barycenterOrderStage` arrived exported and non-default in M2.5 and took the
+// default in M2.6b without its name changing, which is the rule surviving the
+// case that would have broken a rule tied to defaults: a real stage is exported
+// by name whether or not it is the default. What that default costs and what it
+// buys is argued once, beside the code it is about, in the last section of
+// `barycenterOrder`'s docstring in `order.ts`. The stage it displaced,
+// `insertionOrderStage`, is still in `stages.ts` and still unexported, for the
+// reason on it.
 export { defaultStages } from './stages.js';
 export { longestPathRankStage } from './rank.js';
 // The factory is exported beside the simplex stage because M3 warm starts a run

@@ -1,39 +1,44 @@
 import type { EdgeId, NodeId } from '@dagr/graph';
 import { InternalLayoutError } from './errors.js';
+import { barycenterOrderStage } from './order.js';
 import { longestPathRankStage } from './rank.js';
 import type { LayoutStages, OrderStage, Point, PositionStage, RouteStage, Size } from './types.js';
 
 /**
- * The order, position and route stages the pipeline uses when the caller
- * supplies none, and the stage set that binds them to the rank stage.
+ * The position and route stages the pipeline uses when the caller supplies
+ * none, the roster-order stage the ordering evidence is measured against, and
+ * the stage set that binds all of them to the stages the other modules define.
  *
- * None of the three here is a real algorithm yet. They exist so that the
- * pipeline produces a well formed `LayoutResult` for any graph, and so that
- * every later milestone can be a one-stage swap against a runner and a test
- * suite that already work: crossing reduction replaces
- * {@link insertionOrderStage} (M2.5, M2.6), Brandes-Koepf replaces
- * {@link gridPositionStage} (M2.7), and polyline routing replaces
- * {@link straightRouteStage} (M2.8). The rank stage is no longer among them:
- * M2.2 replaced the single-rank placeholder with `longestPathRankStage`, which
- * breaks cycles and ranks by longest path, and M2.3 left it exactly where it
- * was and added a second rank stage beside it, `networkSimplexRankStage`, which
- * a caller selects. The two optimise different things, so neither replaces the
- * other: see `simplex.ts`, which is where they are compared.
+ * Neither default here is a real algorithm yet. They exist so that the pipeline
+ * produces a well formed `LayoutResult` for any graph, and so that every later
+ * milestone can be a one-stage swap against a runner and a test suite that
+ * already work: Brandes-Koepf replaces {@link gridPositionStage} (M2.7) and
+ * polyline routing replaces {@link straightRouteStage} (M2.8). Two phases have
+ * been through that already and neither is defined here any more. M2.2 replaced
+ * the single-rank placeholder with `longestPathRankStage`, which breaks cycles
+ * and ranks by longest path, and M2.3 left it exactly where it was and added a
+ * second rank stage beside it, `networkSimplexRankStage`, which a caller
+ * selects; the two optimise different things, so neither replaces the other,
+ * and `simplex.ts` is where they are compared. M2.6b did the same for `order`,
+ * which now runs `barycenterOrderStage` from `order.ts`: sweeps and a transpose
+ * pass rather than the roster order {@link insertionOrderStage} lays out.
  *
- * What they do guarantee, and what their tests hold them to, is the pipeline
- * contract: every node in exactly one layer, every node positioned, every edge
- * routed, and no two node boxes overlapping (up to floating point rounding, see
- * {@link gridPositionStage}).
+ * What the defaults do guarantee, and what their tests hold them to, is the
+ * pipeline contract: every node in exactly one layer, every node positioned,
+ * every edge routed, and no two node boxes overlapping (up to floating point
+ * rounding, see {@link gridPositionStage}).
  *
- * Each is exported from this module, for the tests, and none of the three is
- * exported from the package, which is the rule `index.ts` states: every real
+ * Each stage here is exported from this module, for the tests, and none of them
+ * is exported from the package, which is the rule `index.ts` states: every real
  * stage is exported by name, no placeholder is, and `defaultStages` is exported
- * whatever a stage is. All three here are scheduled for replacement, and a
- * public name now is a choice later between breaking callers and keeping a dead
- * placeholder exported forever. `defaultStages` covers the use case the
- * individual names would serve, wrapping whatever the current default is, and
- * it keeps working when the default behind one of its properties changes, which
- * is exactly what happened to `rank` in M2.2.
+ * whatever a stage is. The two placeholders are scheduled for replacement, and
+ * a public name now is a choice later between breaking callers and keeping a
+ * dead placeholder exported forever; {@link insertionOrderStage} has its own
+ * reason to stay unexported, which is on it. `defaultStages` covers the use
+ * case the individual names would serve, wrapping whatever the current default
+ * is, and it keeps working when the default behind one of its properties
+ * changes, which is exactly what happened to `rank` in M2.2 and to `order` in
+ * M2.6b.
  */
 
 /** A size that must be present. Absence is a runner bug, so it fails loudly. */
@@ -58,22 +63,30 @@ function requirePoint(positions: ReadonlyMap<NodeId, Point>, id: NodeId): Point 
 }
 
 /**
- * Groups the roster by rank and orders each layer by graph insertion order.
+ * Groups the roster by rank and orders each layer by graph insertion order:
+ * the roster-order reference the ordering evidence is measured against.
+ *
+ * IT IS NOT THE DEFAULT AND IT IS NOT A PLACEHOLDER AWAITING DELETION. It held
+ * the order phase until M2.6b pointed `defaultStages.order` at
+ * `barycenterOrderStage`, and it survives that flip because three tests still
+ * execute it, one of them being the roster-order column of the committed
+ * seed-comparison table in `test/layout.order.test.ts`. That column is the
+ * evidence for what barycenter ordering beats, so deleting this stage means
+ * deleting that evidence or re-deriving it from an arrangement nothing in the
+ * package produces any more. M2.2 did delete the placeholder it replaced,
+ * `singleRankStage`, and the difference is exactly this: nothing was measured
+ * against that one.
  *
  * Ranks are sorted numerically rather than assumed to be a contiguous run from
  * zero, so a ranker that leaves gaps or uses negative ranks still produces
  * layers top to bottom. Within a layer the order is the order the nodes were
  * added to the graph, which is arbitrary as a drawing but completely
- * reproducible, which is what M2.5's crossing-count regression corpus needs as
- * a starting point.
+ * reproducible, and reproducible is the whole of what a baseline has to be.
  *
  * It walks the roster rather than the graph, so a rank stage that declares
- * virtual nodes is already ordered correctly by this one. That keeps M2.4b out
- * of the ordering stage entirely: it adds to the ranker (splitting a long edge
- * into a chain) and to the router (rejoining that chain into a polyline), and
- * changes no contract between them. Virtual nodes come after the graph's own
- * within a layer, which is as arbitrary and as reproducible as the rest of this
- * stage.
+ * virtual nodes is already ordered correctly by this one. Virtual nodes come
+ * after the graph's own within a layer, which is as arbitrary and as
+ * reproducible as the rest of this stage.
  *
  * It returns the layers and nothing else. The runner merges them into the
  * record the position stage reads, so this stage has no way to disturb the
@@ -198,7 +211,7 @@ export const straightRouteStage: RouteStage = {
  */
 export const defaultStages: LayoutStages = Object.freeze({
   rank: longestPathRankStage,
-  order: insertionOrderStage,
+  order: barycenterOrderStage,
   position: gridPositionStage,
   route: straightRouteStage,
 });
