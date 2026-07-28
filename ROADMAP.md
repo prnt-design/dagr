@@ -257,6 +257,271 @@ findings addressed or logged, docs land with the feature.
   strictly stronger than the runner's `<=` contract check, which stays weak on
   purpose for self loops and for M2.4b's long edges, so the strict form is
   asserted in the stage's own tests instead.
+- [ ] **M2.2b** Cycle breaking v2: a feedback arc set chosen for the
+  acyclic view it leaves rather than for how many edges it reverses. The
+  objective is minimum TOTAL SPAN of that view, the sum over its edges of
+  `max(0, rank(target) - rank(source) - 1)` under longest-path ranks, subject
+  to a reversal count low enough that the drawing still reads. Tests: total
+  span and view depth on both bench corpora, asserted with ceilings, beside the
+  existing acyclicity and `m/2` assertions rather than in place of them.
+  UNSTARTED.
+  THE WHOLE BRIEF IN THREE LINES, because the rest of this entry is a record
+  and a run scanning it for instructions should not have to read the record to
+  find them. (a) Minimise TOTAL SPAN of the acyclic view; the reversal count is
+  a constraint and not the target. (b) The bar on the 10k corpus, which is the
+  corpus that decides this because every candidate in the table cuts span on
+  the 1k: under about 400,000 dummies while reversing no more than the 6,327
+  the shipping breaker reverses, and the target to aim at is the ground truth's
+  32,050 at 796. (c) The budget: about 2ms on the 10k, where a Tarjan pass
+  alone costs 4.1ms, so a component-scoped candidate has to replace existing
+  work rather than run in front of it. Everything after this paragraph is
+  evidence for those three lines and a list of what has already been tried.
+  What is recorded below is a measurement run rather than an implementation,
+  and its first result is that the objective this task was originally written
+  with is WRONG. The prescription this repo carried until today, written into
+  the tail of M2.3 and into M2.4b, was "build a better feedback arc set, target
+  reversals near 800 and view depth near 60". Four families of replacement were
+  measured, six configurations in all, every run deterministic and every run on
+  the maintainer's machine. The reversal count turns out to be ANTI-correlated
+  with view depth across every candidate measured, on both corpora, and on the
+  10k corpus, the one every later milestone commits against, cutting the count
+  made the thing M2.4b actually pays for WORSE rather than better. This is the
+  second M2 task to be sized against a prescription that measurement then
+  refuted (M2.3 built network simplex on one), so the numbers are recorded in
+  full rather than summarised: all four families are dead ends and nobody
+  should spend a run rediscovering them.
+  Definitions first, because the whole finding turns on measuring the right
+  quantity. The view is `acyclicView(graph, reversed)`, its depth is
+  `max(longestPathRanks(view)) + 1`, and its total span is the sum over its
+  edges of `max(0, rank(target) - rank(source) - 1)`. That last number is
+  exactly how many dummy nodes M2.4b's splitter mints, one per rank an edge
+  crosses beyond the first. The cross-check that it is the right quantity, and
+  not a plausible-looking proxy of the kind this entry exists to warn about, is
+  that it reproduces the 1,414,263 dummies M2.3 recorded on the 10k corpus to
+  the digit, and the 40,430 on the 1k, both of which were counted by a
+  different route.
+  `smallCorpus()`, 1,000 nodes, 4,000 edges, 24 authored layers:
+
+  | candidate                          | reversals | depth | dummies      |
+  | ---------------------------------- | --------- | ----- | ------------ |
+  | shipping greedy ELS                | 422       | 62    | 40,430       |
+  | authored back edges (ground truth) | 71        | 24    | 2,665        |
+  | DFS back edges, insertion roots    | 42        | 115   | 30,954       |
+  | DFS back edges, sources first      | 62        | 117   | not measured |
+  | ELS per component                  | 23        | 84    | 20,676       |
+  | shipping ELS minus cross-component | 74        | 81    | 22,726       |
+  | median relaxation, whole graph     | 582       | 60    | 24,482       |
+  | median relaxation, per component   | 47        | 74    | 17,155       |
+  | condensation longest-path levels   | 109       | 78    | 19,727       |
+
+  `largeCorpus()`, 10,000 nodes, 40,000 edges, 60 authored layers:
+
+  | candidate                          | reversals | depth | dummies      |
+  | ---------------------------------- | --------- | ----- | ------------ |
+  | shipping greedy ELS                | 6,327     | 154   | 1,414,263    |
+  | authored back edges (ground truth) | 796       | 60    | 32,050       |
+  | DFS back edges, insertion roots    | 1,651     | 601   | 1,601,415    |
+  | DFS back edges, sources first      | 1,500     | 801   | not measured |
+  | ELS per component                  | 2,454     | 320   | 1,522,128    |
+  | shipping ELS minus cross-component | 4,620     | 203   | 1,359,680    |
+  | median relaxation, whole graph     | 15,457    | 61    | 230,083      |
+  | median relaxation, per component   | 7,680     | 133   | 364,118      |
+  | condensation longest-path levels   | 10,255    | 134   | 962,662      |
+
+  The two relaxation rows are iterative and are reported at their best point:
+  on the 1k the whole-graph form is its best round and the per-component form
+  had converged, and on the 10k they are 12 rounds and 6 rounds respectively.
+  The sources-first DFS row has no dummy count because a view 801 ranks deep on
+  a corpus authored with 60 layers is disqualifying on depth alone and counting
+  its span would only have said so more expensively; the insertion-roots DFS
+  row is measured because it turned out to be the sharpest row in the table.
+  The ground-truth row is not an algorithm: it reverses exactly the edges the
+  corpus generator authored as back edges, which is knowledge no cycle breaker
+  has, and it is in the table as the bound to argue against.
+  The minus-cross-component row is the cheapest thing in the table to state:
+  run the shipping breaker, then delete from its answer every edge whose
+  endpoints lie in different strongly connected components, changing nothing
+  else. It is the only row that is strictly better than the shipping breaker on
+  BOTH reversals and span on BOTH corpora, and it was found by algorithms-review
+  during this run rather than by the measurement pass, in the gap left by the
+  conflation two paragraphs down. It is also 32% deeper on the 10k and 31%
+  deeper on the 1k, so it sits on the same depth-against-reversals curve as
+  everything else here rather than escaping it, and it needs a components pass
+  it cannot currently afford. Read the ranker paragraph below before pricing
+  it.
+  Conclusion one, and be careful about its scope twice over, because the
+  tempting wide version of it is false in two different ways. Across the
+  ALGORITHMS measured, on BOTH corpora, reversal count and view DEPTH pull
+  against each other: every candidate that cut the reversal count made the view
+  deeper, on the 1k as much as on the 10k, and the three rows that got
+  shallower (whole-graph median relaxation at 61, per-component median
+  relaxation at 133 and condensation levels at 134, all on the 10k) each bought
+  it by reversing MORE edges than the shipping breaker. The ground-truth row is
+  the exception and is not an algorithm, which is conclusion three's whole
+  point: the tension is a property of the heuristics tried here and not a law
+  about feedback arc sets. The second limit on scope is the corpus. What holds
+  on the 10k and NOT on the 1k is that span goes the same way as depth. On the
+  10k, insertion-roots DFS reverses 1,651 edges against the shipping 6,327, a
+  cut of nearly four times, and pays 1,601,415 dummies against 1,414,263, which
+  is 13% MORE of exactly what M2.4b mints. Per-component ELS says it in one
+  line: 61% fewer reversals, 2.1 times the depth, 8% more span. On the 1k the
+  same insertion-roots DFS reverses 42 against 422 and comes out at 30,954
+  dummies against 40,430, 24% FEWER, while still being 86% deeper (115 ranks
+  against 62). So on the 1k a candidate can make the view much deeper and cut
+  span anyway, and a run that measured only the 1k would have concluded that
+  DFS is an improvement and shipped it. The 10k is the corpus that decides
+  this, and saying which corpus a claim holds on is not pedantry here. M2.4b,
+  M2.9, M3.9 and M4.10 all commit against the 10k, and M3.9 has already written
+  down why (a cold run on 1k is a few milliseconds, so it is dominated by
+  constant factors and flatters exactly the wrong thing). The 1k has 4,000
+  edges against 40,000 and 242 intra-component edges against 20,229, so its
+  cycle structure is nearly trivial and a deeper view has almost nothing to
+  span across. State the corpus with the claim. This project has been bitten by
+  the unqualified version before, in M1.4's `topologicalOrder` tie-break claim,
+  which two reviewers then disproved.
+  Conclusion two: what M2.4b pays for is total span, span follows depth on the
+  10k, and neither follows the reversal count anywhere. So the objective for a
+  better cycle breaker is minimum total span of the acyclic view, subject to
+  keeping the reversal count low enough that the drawing still reads. The
+  reversal count stays in the record as a CONSTRAINT, not as the thing being
+  minimised, and the `m/2` bound `cycles.ts` proves is a bound on the
+  constraint rather than on the objective. The only ALGORITHM that reached the
+  prescribed depth of about 60 on the 10k reached it by reversing 15,457 of
+  40,000 edges, and a drawing with 38% of its edges drawn backwards is not a
+  drawing anyone wants, which is what the constraint is there to rule out.
+  Conclusion three: the two are not inherently opposed, and the ground-truth
+  row is the proof. Reversing exactly the 796 authored back edges gives 796
+  reversals AND depth 60 AND 32,050 dummies, all three at once, on the corpus
+  where the shipping breaker gives 6,327 and 154 and 1,414,263. A solution
+  exists and it is a factor of forty on the quantity that matters. Greedy does
+  not find it and neither does any of the four families measured here, which is
+  what makes this a real task rather than a tuning pass.
+  Conclusion four, the shape of the problem. An edge between two distinct
+  strongly connected components lies on no cycle, so no correct cycle breaker
+  ever has to reverse one, and the greedy order has nothing that stops it: the
+  sequence it builds is global, and every edge running backwards in that
+  sequence is reversed whether or not any cycle required it. That class was
+  counted rather than assumed, because the first draft of this paragraph
+  asserted it was large and had no measurement behind it: of the shipping
+  breaker's 6,327 reversals on the 10k, 1,707 cross a component boundary, and
+  on the 1k it is 348 of 422. Say what that does and does not license, because
+  the first draft said "provably unnecessary" and the proof does not reach that
+  far. What the component theorem gives is that NO CYCLE REQUIRES those
+  reversals, so a construction avoiding them exists. It does NOT give that they
+  can be dropped from this particular set, because reversing a set is not
+  deleting it: a set can hit every cycle by deletion and still leave one when
+  reversed, since the reversed arcs create paths the original graph did not
+  have. algorithms-review built the witness, on four nodes: `u->v, v->a, a->b,
+  b->a, u->b`, whose components are {a,b}, {u} and {v}, so `u->v` is
+  cross-component and on no cycle. Under the order (v, a, b, u) the backward
+  set is {u->v, b->a, u->b} and reversing it is acyclic; drop `u->v` from the
+  set and the view holds `u->v, v->a, a->b, b->u`, which is a cycle. On both
+  bench corpora the drop happens to be legal, and that is a measurement rather
+  than a theorem: dropping all 1,707 and all 348 leaves views `longestPathRanks`
+  accepts.
+  DROPPING AND SCOPING ARE DIFFERENT OPERATIONS AND AN EARLIER DRAFT OF THIS
+  ENTRY CONFLATED THEM, which is worth stating because the conflation hid a
+  candidate. Dropping keeps the order the greedy pass built and merely removes
+  edges from the set it produced: 6,327 minus 1,707 is exactly 4,620, and that
+  is the "shipping ELS minus cross-component" row above. Scoping REBUILDS the
+  order inside each component and lands somewhere else entirely, at 2,454. The
+  two rows are 4,620 / 203 ranks / 1,359,680 dummies and 2,454 / 320 /
+  1,522,128, so they are not variants of one idea, they are two ideas.
+  Scoping the same heuristic to components removes the cross-component class
+  outright, and the whole trade is one line on the 10k: 61% fewer reversals,
+  2.1 times the depth, 8% more span. The middle number is the part worth
+  internalising: a reversal SHORTENS the path it sat on as well as pointing an
+  edge the wrong way, so taking away reversals nobody needed lengthens the
+  longest path. Cutting reversals and cutting span are in tension through
+  exactly that mechanism, and any candidate that treats the two as the same
+  goal will trade one away without noticing. The component structure that makes
+  this concrete: the 1k corpus has 871 components, largest 56, 860 of them
+  singletons, and only 242 of its 4,000 edges intra-component; the 10k has
+  5,129 components, largest 3,493 and next 543, 5,115 singletons, and 20,229 of
+  40,000 edges intra-component. Roughly half of the 10k's edges can be ruled
+  out of any reversal decision on structure alone, and the shipping breaker
+  rules none of them out.
+  WHICH RANKER THE SPAN COLUMN ASSUMES, because every figure above is under
+  `longestPathRanks` and the answer changes if you forget that. M2.3 shipped a
+  second ranker, and a caller can select it. algorithms-review re-measured the
+  same views through the network simplex tightener at its default 20,000-pivot
+  budget, warm started from the same longest-path ranks, and an independent
+  verifier reproduced all fifteen of those figures to the digit. On the 10k, as
+  longest path then simplex at 20k pivots: shipping ELS 1,414,263 then 423,426;
+  per-component ELS 1,522,128 then 311,179; minus-cross-component 1,359,680
+  then 268,589; DFS 1,601,415 then 1,214,286; ground truth 32,050 then 19,196.
+  On the 1k the simplex column is 17,285, 15,484, 15,713, 23,802 and 1,924 in
+  the same row order. Depth came out IDENTICAL under both rankers in all ten
+  rows and stayed identical at 200,000 pivots, which is worth recording as an
+  observation about these two corpora and not as a property: `simplex.ts` is
+  right that minimum total edge length and minimum height are different
+  objectives, it simply does not bite here.
+  DO NOT READ THE 20,000-PIVOT COLUMN AS A RANKING OF THE VIEWS, and this is
+  the correction that matters. That budget does not converge the 10k, and the
+  rows are not equally far from converged, so the column ranks how fast each
+  view converges rather than how cheap it is. At 200,000 pivots: shipping ELS
+  224,789 (the figure already in `simplex.ts`'s docstring, which is the
+  cross-check that the seam is honest), minus-cross-component 226,676,
+  per-component ELS 309,732. THE ORDER REVERSES: the row that looked 26% better
+  than shipping at 20k is 38% worse at 200k, because it was essentially
+  converged at 20k and had nowhere left to go while shipping had most of its
+  gain still ahead. Cost runs the same way, shipping being the most expensive
+  row to solve at every budget tried (97.4s at 200k against 1.3s). So a run
+  quoting a simplex figure must quote its pivot budget beside it, and a
+  candidate that wins only at a truncated budget has not won.
+  ONE PAIRING GENUINELY INVERTS BETWEEN THE RANKERS and it is worth naming:
+  per-component ELS is worse than shipping under longest path (1,522,128
+  against 1,414,263) and better under simplex at 20k (311,179 against 423,426).
+  That is real, and it is why this entry no longer calls that candidate a dead
+  end. It does not survive convergence, so it is a lead rather than a result.
+  ALSO NOTE WHAT A CALLER CAN ACTUALLY REACH TODAY: nothing here, directly.
+  Neither ranker takes a feedback set, both call `feedbackArcSet` themselves,
+  and the only route to these numbers is to pre-reverse the edges in your own
+  graph and hand the flipped graph to the stage, which forfeits the
+  `reversedEdges` bookkeeping the router needs to draw those edges the right way
+  round. That is fine for measurement and is not a feature. It also means the
+  win IS reachable by the one change this task contemplates, since replacing
+  `feedbackArcSet` moves both rankers at once.
+  What a future run has to beat, stated so it cannot be met by accident, and
+  restated after algorithms-review refuted the first version of it. THE OLD BAR
+  SAID: nothing measured beats the shipping breaker's 1,414,263 dummies without
+  reversing more edges than it does, so land under 400,000 at 6,327 reversals or
+  fewer. That was wrong, and the counterexample was sitting in the gap between
+  dropping and scoping: minus-cross-component reverses 4,620 and spans
+  1,359,680 under longest path, fewer reversals AND less span, legal on both
+  corpora. So the bar is now that row rather than the shipping breaker: beat
+  1,359,680 dummies at 4,620 reversals or fewer under longest path, or beat
+  224,789 under simplex run to convergence, and do it without going deeper than
+  the 203 ranks that row costs. The target remains the ground truth's 32,050 at
+  796, or 19,196 under simplex, which is a factor of forty either way.
+  Beware the 1k corpus while doing it, per conclusion one: on the 1k EVERY
+  candidate in the table cuts span, insertion-roots DFS included, so measured
+  there alone all four families look like wins. On the 10k two of them (DFS and
+  per-component ELS) make span worse instead, and the other three only cut it
+  by reversing more edges than the shipping breaker does. Per-component median
+  relaxation is the sweetest trap, reaching 17,155 dummies at 47 reversals on
+  the 1k, which is below the 17,285 M2.3's network simplex reaches on the same
+  corpus with a whole extra stage and 20ms of pivots. That is worth knowing for
+  what it says about which lever is bigger, and worth distrusting on the
+  strength of the same candidate's 364,118 at 7,680 on the 10k.
+  What it may not spend. The rank stage's committed bench baseline on the 10k
+  is 13.18ms median, and the shipping ELS is 10.4ms of it warm (35.2ms cold),
+  so a replacement has roughly 2ms of headroom before the gate's tolerance is
+  gone. Tarjan alone costs 4.1ms on that corpus, twice the whole budget, so a
+  component-scoped candidate cannot be added in front of the existing breaker.
+  Note what `cycles.ts` builds today before assuming the components are nearly
+  free: its "condensation" is the weighted simple condensation, the collapse of
+  parallel arcs into one weighted arc, and has nothing to do with strongly
+  connected components. There is no component structure sitting there to be
+  read out. So a component-scoped candidate has to pay for itself by REPLACING
+  the Map-based per-vertex arc maps that pass builds, getting both the collapse
+  and the components out of one traversal. A candidate that wants its own
+  structure beside the existing one has lost on time before it is judged on
+  quality.
+  Finally, read M2.4b's bench-gate paragraph before assuming this task unblocks
+  it. Even a perfect cycle breaker may not put M2.4b inside the gate, for a
+  reason that has nothing to do with cycle breaking, and that decision is the
+  maintainer's rather than this task's.
 - [x] **M2.3** Ranking v2: tight-tree / network-simplex rank tightening.
   Golden comparisons against longest-path on a small corpus; rank sum must
   never regress.
@@ -315,19 +580,48 @@ findings addressed or logged, docs land with the feature.
   and a `backEdgeShare` of 0.02, so roughly 800 edges point backwards by
   construction, reversing those 800 alone leaves a DAG, and that DAG is at most
   60 ranks deep because every other edge runs from a lower layer to a higher
-  one. So every ranker in this repo is handed a view two and a half times
-  deeper than the graph it came from, before any ranking happens. Every extra
-  rank is one more rank for an edge to span and every rank an edge spans is a
-  dummy node M2.4b has to mint, which is why the simplex still returns 423,426
-  of them at the default budget, after a cut of 70% on that corpus. A RANKER
-  CANNOT REPAIR THIS: it optimises over the view it is handed, and the view is
-  the cycle breaker's output. What sets M2.4b's dummy count is the feedback arc
-  set rather than the choice between longest path and network simplex, and the
-  next real cut in that number comes from a better cycle breaker and not from a
-  better ranking. Do not go looking for a defect in `cycles.ts`. It is a
-  correct Eades-Lin-Smyth implementation and 6,327 is greedy suboptimality, so
-  the work is a better heuristic, or a pass that un-reverses edges the finished
-  order no longer needs, not a bug hunt in there.
+  one. M2.2b has since measured that construction rather than reasoning about
+  it: reversing exactly the authored back edges is 796 reversals, a view 60
+  ranks deep, and 32,050 dummies. So every ranker in this repo is handed a view
+  two and a half times deeper than the graph it came from, before any ranking
+  happens. Every extra rank is one more rank for an edge to span and every rank
+  an edge spans is a dummy node M2.4b has to mint, which is why the simplex
+  still returns 423,426 of them at the default budget, after a cut of 70% on
+  that corpus. RANKING CANNOT REPAIR THIS: it optimises over the view, and the
+  view is the cycle breaker's output. Say ranking rather than ranker, which is
+  how this sentence read until M2.2b corrected it: a rank STAGE calls
+  `feedbackArcSet` itself and builds its own view (`rank.ts` and `simplex.ts`
+  each do), so a stage is exactly where a better breaker would land, and both
+  stages in this package are stuck here only because both call the same one.
+  What sets M2.4b's dummy count is the feedback arc set rather than the choice
+  between longest path and network simplex, and the next real cut in that
+  number comes from a better cycle breaker and not from a better ranking. Do
+  not go looking for a defect in `cycles.ts`. It is a correct Eades-Lin-Smyth
+  implementation and 6,327 is greedy suboptimality, so the work is a better
+  heuristic, not a bug hunt in there.
+  AMENDED BY M2.2b, and the amendment matters because this paragraph was read
+  as a prescription for two runs. The 6,327 against 800 comparison above is
+  evidence that the VIEW is wrong; it is not a target for the reversal count.
+  Reversal count and view depth turn out to be anti-correlated across every
+  candidate M2.2b measured, on both corpora, and on the 10k every candidate
+  that REBUILT THE ORDER and cut the reversal count below 6,327 left a deeper
+  view AND more dummies than the shipping breaker: per-component
+  Eades-Lin-Smyth at 2,454 reversals, 320 ranks and 1,522,128 dummies, and DFS
+  back edges at 1,651 reversals, 601 ranks and 1,601,415 dummies.
+  THE SECOND HALF OF THE SENTENCE ABOVE, "a pass that un-reverses edges the
+  finished order no longer needs", STANDS, and a first draft of this amendment
+  deleted it on the grounds that scoping reversals to components is the same
+  idea measured worse. That was wrong and algorithms-review caught it: scoping
+  REBUILDS the order, an un-reverse pass KEEPS it, and they land in different
+  places. Keeping the order and deleting only the cross-component reversals is
+  4,620 reversals, 203 ranks and 1,359,680 dummies, which is fewer reversals
+  AND less span than the shipping breaker on both corpora, and it is now the
+  bar M2.2b states. It is not free (it needs a components pass that does not
+  fit the time budget, and it costs 32% more depth), but it is the best thing
+  measured that beats the shipping breaker on both axes, and it exists because
+  a suggestion was tested rather than deleted. The objective, and what M2.2b
+  now carries, is minimum total span of the acyclic view with the reversal
+  count as a constraint rather than as the target.
 - [x] **M2.4a** Stage return types: the four stage interfaces return only their
   own contribution rather than the whole next record.
   Decided here, and no later, whether the four stage interfaces should return
@@ -427,14 +721,42 @@ findings addressed or logged, docs land with the feature.
   strictly MONOTONIC (increasing normally, decreasing for a reversed edge) and
   not strictly increasing. What is left here is the chain splitting itself and
   rejoining the chain into a polyline on output.
-  Read the last paragraph of M2.3 before pricing this one. How many dummies
-  this milestone mints is set by the cycle breaker and not by the ranker: on
-  the 10k corpus the greedy feedback arc set reverses 6,327 of 40,000 edges
-  where roughly 800 would leave a DAG, and the view it hands the ranker is 154
-  ranks deep against a corpus generated with 60 layers. M2.3's 57% cut is real
-  and does not touch any of that, so the 423,426 dummies still left on that
-  corpus are a cycle-breaking problem arriving at this milestone's door. If the
-  count is what hurts once this lands, the lever is a better feedback arc set.
+  Read the last paragraph of M2.3 and all of M2.2b before pricing this one. How
+  many dummies this milestone mints is set by the cycle breaker and not by the
+  ranker: on the 10k corpus the view the greedy feedback arc set hands the
+  ranker is 154 ranks deep against a corpus generated with 60 layers, and every
+  rank of that excess is ranks for edges to span. M2.3's 57% cut is real and
+  does not touch any of that, so the 423,426 dummies still left on that corpus
+  are a cycle-breaking problem arriving at this milestone's door.
+  What that lever actually is was got wrong here, and the correction is M2.2b's.
+  This entry used to end "if the count is what hurts once this lands, the lever
+  is a better feedback arc set", with the 6,327 reversals against roughly 800
+  read as the gap to close. The count is not the lever. M2.2b measured four
+  families of replacement and found reversal count anti-correlated with view
+  depth on both corpora: the candidates that cut reversals hardest produced the
+  deepest views, and on the 10k both of them also minted MORE dummies than the
+  shipping breaker (DFS 1,601,415, per-component ELS 1,522,128, against
+  1,414,263). What this milestone pays for is total span of the acyclic view,
+  which follows depth on the 10k. So the lever is a cycle breaker that minimises
+  span with the reversal count as a constraint, and M2.2b holds the tables, the
+  four dead ends, the reason the 1k corpus disagrees, and the time budget.
+  A WARNING ABOUT THE BENCH GATE, for whoever takes this milestone next, and it
+  is separate from every cycle-breaking question above. Even a perfect cycle
+  breaker may not put M2.4b inside the gate. The pipeline benchmark's committed
+  baseline was captured when the pipeline minted NO dummies at all, on 10,000
+  nodes. At the ground truth's 32,050 dummies the same pipeline is doing work on
+  42,050 nodes, so the comparison is not measuring a regression, it is measuring
+  a feature that legitimately does four times the work. No cycle breaker closes
+  that gap, and no amount of care with the splitter closes it either. What the
+  benchmark should compare, a new entry that measures the splitter honestly
+  against its own baseline, or a rebaseline of the existing entry with the
+  reason recorded, is a DECISION for the maintainer and the run that lands this.
+  It is not something to settle by quietly rebasing a baseline mid-run, and this
+  entry deliberately does not prescribe which of the two is right, because
+  neither has been measured. Note the sizes involved before assuming the choice
+  is academic: at the shipping breaker's 1,414,263 dummies the pipeline would be
+  working on 1.42 million nodes, so M2.2b is necessary here even though it is
+  not sufficient for the gate.
 - [ ] **M2.5** Ordering v1: barycenter sweeps with median fallback, crossing
   counter as the metric. Tests on known small graphs with hand-counted
   crossings. Also measure adjacency allocation churn in the sweeps (every

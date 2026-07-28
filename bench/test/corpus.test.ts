@@ -74,8 +74,9 @@ describe('the layered corpus generator', () => {
   });
 
   it('includes backward edges so cycle breaking has work to do', () => {
-    // Feedback arc set was 28ms of a 33ms rank stage on this repo's ranker. A
-    // pure DAG corpus would leave that path measured at zero.
+    // Feedback arc set was 28ms of a 33ms rank stage on a reviewer's machine,
+    // before the M0.2 baseline existed. A pure DAG corpus would leave that path
+    // measured at zero.
     const spec = layeredDag({
       name: 'x',
       nodeCount: 500,

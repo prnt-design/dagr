@@ -279,9 +279,35 @@ so isolated vertices inflate `n` for free and a sparse graph can miss the bound
 with no two-cycle in it either: a 3-cycle plus two lone nodes is `|F| = 1`
 against `0.667`. The term only starts to say anything once `m >= n/3`. What is
 claimed here, and what the tests assert, is the `m/2` half alone, which survives
-every input above and the weighting below. Half a bound is still what makes this
-worth more than the back edges of a depth-first search: DFS reverses whatever
-its traversal order happens to meet, with no bound at all.
+every input above and the weighting below. It is a bound on HOW MANY edges get
+reversed, and nothing more: the back edges of a depth-first search have no such
+bound, and on this repo's 10k benchmark corpus they nonetheless come out at
+1,651 reversed edges against this heuristic's 6,327. Fewer reversed edges is not
+the same thing as a better drawing, which is the next paragraph.
+
+**What it does not promise, and what that costs your drawing.** The set it finds
+leaves a DAG, and that is the whole promise. It is not the smallest such set,
+and, more to the point, it is not the set that leaves the SHALLOWEST drawing. On
+the 10k benchmark corpus, a graph authored with 60 layers, the view this
+heuristic hands the ranker is 154 ranks deep. Reversing only the edges that were
+authored pointing backwards would have left it 60 deep, so roughly two thirds of
+the layers in that drawing are there because of how the cycles were broken and
+not because of anything in the graph. Every extra layer is more ranks for a long
+edge to cross, so it shows up as taller drawings and longer, more bent edges.
+Three things follow for a caller. Choosing the other rank stage does not undo
+it: [`network-simplex-rank`](#minimum-total-edge-length-and-what-it-costs)
+shortens edges WITHIN that view, and does a lot of good doing so, but both
+stages rank a view whose depth cycle breaking has already fixed.
+The count in `reversedEdges` is not a quality signal, and a smaller one is not a
+better drawing: the DFS comparison above cuts that count by nearly four and
+makes the drawing four times deeper. And none of it applies to an acyclic graph,
+where the set is empty and `longest-path-rank` draws it exactly as deep as the
+graph is long, so it is worth knowing whether your graph actually has cycles
+before reading a tall drawing as a cycle-breaking problem.
+[`network-simplex-rank`](#minimum-total-edge-length-and-what-it-costs) can still
+spend a layer on an acyclic graph, for the unrelated reason described there: it
+buys edge length with height, and that trade has nothing to do with the feedback
+arc set.
 
 **The graph is not mutated.** Nothing is flipped, nothing is added, nothing is
 removed. The set of edge ids lands in `RankedState.reversedEdges` and the rest
@@ -319,9 +345,12 @@ out, and both are relied on:
   of that view that sends every edge down at least one rank. No layering of the
   view has fewer layers. The scope matters as soon as the input has a cycle:
   the view depends on which edges cycle breaking chose, and the heuristic is
-  bounded on how many it reverses, not on the longest path it leaves behind. A
-  different feedback arc set can leave a shallower drawing, and nothing here
-  optimises for that.
+  bounded on how many it reverses, not on the longest path it leaves behind. So
+  "minimum height" means minimum for that view and not minimum for your graph,
+  and on the 10k benchmark corpus the gap between the two is 154 ranks against
+  60. A different feedback arc set can leave a shallower drawing, nothing here
+  optimises for that, and neither stage in this package recovers it, because
+  both break cycles with the same heuristic.
 - **Contiguity.** The ranks used are exactly `0..max`, with no gaps, because a
   node at rank `r` only got there from a predecessor at rank `r - 1`. The order
   stage turns ranks into layers and the runner rejects an empty layer, so a gap
@@ -519,9 +548,14 @@ attachment. See [Route direction](#route-direction).
 Both steps of the default stage are O(V + E) in time and space. Cycle breaking
 gets there by keeping vertices in degree buckets rather than rescanning what is
 left each round, and ranking is a Kahn-style sweep that visits each node and
-edge once. No timing figure is quoted for the default stage, because none is
-measured yet: M2.9 commits benchmark baselines at 1k and 10k nodes, and until it
-does the complexity is the claim.
+edge once. No timing figure is quoted for the default stage, and the reason is
+no longer that none exists: the repo commits benchmark medians for the rank
+stage at 1k and 10k nodes and gates changes against them locally. They are
+machine-matched numbers, captured on one maintainer's machine and only
+comparable to themselves, so they are the right thing to gate a regression on
+and the wrong thing to publish as what the stage will cost you. M2.9 is where a
+figure a reader can use comes from, on a committed corpus. Until then the
+complexity is the claim.
 
 The exception is
 [Minimum total edge length](#minimum-total-edge-length-and-what-it-costs), which

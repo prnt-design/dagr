@@ -61,9 +61,13 @@ export interface LayeredOptions {
  * because those are the edges that become dummy chains, and on a real layout
  * dummies typically outnumber real nodes, so a corpus of only short edges would
  * benchmark the cheap half of the work. And a small share point backwards, so
- * cycle breaking has something to find: on this repo's ranker feedback arc set
- * was 28ms of a 33ms rank stage, and a pure DAG corpus would leave that path
- * measured at zero and unwatched.
+ * cycle breaking has something to find: feedback arc set was 28ms of a 33ms
+ * rank stage on a reviewer's machine, before the M0.2 baseline existed, and a
+ * pure DAG corpus would leave that path measured at zero and unwatched. Take
+ * that pair as evidence that the path is hot rather than as a current cost:
+ * the committed baseline this harness now writes puts the whole 10k rank stage
+ * at 13.18ms on the maintainer's machine, and the two were measured on
+ * different machines and different graphs.
  */
 export function layeredDag(options: LayeredOptions): GraphSpec {
   const { name, nodeCount, edgeCount, layerCount, seed } = options;
@@ -148,7 +152,8 @@ export function smallCorpus(): GraphSpec {
  * this size, M3.9 states its fast-path targets as absolute latencies on it, and
  * M4.10 measures a frame budget on it laid out. The 40k edges are the figure
  * the existing 33ms rank-stage measurement was taken at, so a baseline captured
- * here is comparable to the number already written down.
+ * here is measuring the same size of problem. It is not comparable to that
+ * number as a figure, which came off a different machine; see `layeredDag`.
  */
 export function largeCorpus(): GraphSpec {
   return memoise('large', () =>
