@@ -382,26 +382,24 @@ describe('barycenterOrder, the sweeps', () => {
    */
   it('pins that node at its own index with the transpose pass on as well', () => {
     const graph = build(
-      ['p', 'q', 'x', 'u', 'y'],
+      ['a', 'b', 'x', 'y', 'u'],
       [
-        ['p', 'y'],
-        ['q', 'x'],
+        ['a', 'y'],
+        ['b', 'x'],
       ],
     );
-    const state = stateOf(graph, [
-      ['p', 'q'],
-      ['x', 'u', 'y'],
-    ]);
     const seed = [
-      ['p', 'q'],
-      ['x', 'u', 'y'],
+      ['a', 'b'],
+      ['x', 'y', 'u'],
     ];
-    const swept = barycenterOrder({ maxSweeps: 1, initialOrder: seed })
-      .run(state)
-      .layers.map((layer) => [...layer]);
-    expect(swept).toEqual([
-      ['p', 'q'],
-      ['y', 'u', 'x'],
+    const state = stateOf(graph, seed);
+    expect(
+      barycenterOrder({ maxSweeps: 0, initialOrder: seed })
+        .run(state)
+        .layers.map((layer) => [...layer]),
+    ).toEqual([
+      ['b', 'a'],
+      ['x', 'y', 'u'],
     ]);
   });
 

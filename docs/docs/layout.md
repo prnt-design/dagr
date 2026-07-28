@@ -882,7 +882,7 @@ of 8 on the 10k, against 35,114 crossings and 16.32ms with the pass off:
 
 | cap | 10k crossings | saving | extra time | crossings per ms |
 | --- | --- | --- | --- | --- |
-| 4 | 31,369 | 10.7% | +2.65ms | |
+| 4 | 31,369 | 10.7% | +2.65ms | 1,413 |
 | 6 | 30,677 | 12.6% | +4.15ms | 461 |
 | 8 (the default) | 30,318 | 13.7% | +4.93ms | 460 |
 | 12 | 29,892 | 14.9% | +6.92ms | 214 |

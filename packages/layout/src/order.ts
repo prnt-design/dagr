@@ -882,6 +882,13 @@ function applyHint(
  * hands the drifted order back in and it compounds across re-layouts, which is
  * the one thing `initialOrder` exists to prevent.
  *
+ * ONE CONSEQUENCE OF STATING IT THIS WAY, since the alternative readings are
+ * not obviously worse: an unanchored node becomes a PERMANENT BARRIER, because
+ * a pair is skipped when EITHER member is unanchored, so the pass can never
+ * move an anchored node past one. Measured, that costs nothing on either
+ * corpus. It is the price of the pin being absolute, and the pin is absolute
+ * because that is what `reorder` already does.
+ *
  * Found by algorithms-review after the pass was built, on 41 of 41 unanchored
  * nodes in one generated corpus and 371 of 371 in another, every one displaced
  * by exactly the pass budget. Worth recording that IT COSTS NOTHING AND SO THE
@@ -910,7 +917,7 @@ function applyHint(
  *
  * | cap             | 10k crossings | saving | extra time | crossings per ms |
  * | --------------- | ------------- | ------ | ---------- | ---------------- |
- * | 4               | 31,369        | 10.7%  | +2.65ms    |                  |
+ * | 4               | 31,369        | 10.7%  | +2.65ms    | 1,413            |
  * | 6               | 30,677        | 12.6%  | +4.15ms    | 461              |
  * | 8 (the default) | 30,318        | 13.7%  | +4.93ms    | 460              |
  * | 12              | 29,892        | 14.9%  | +6.92ms    | 214              |
