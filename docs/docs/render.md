@@ -11,34 +11,65 @@ sidebar_position: 4
 `WebGPURenderer`, with an orthographic camera, one draw call per shape family,
 and springs carrying nodes between one layout and the next.
 
-This page describes the package as of M4.1, which is first light. One quad is on
-screen. What is real is the seam everything else plugs into: the `Renderer`
-interface, the camera, and two decisions that had to be made before a single
-test in this milestone could be written. Both are argued below rather than left
-in a commit message, because both are the kind of choice that is cheap now and
-expensive in six tasks' time.
+This page describes the package as of M4.2. Rounded rectangles and circles are
+on screen, drawn as signed distance fields. What is real is the seam everything
+else plugs into: the `Renderer` interface, the camera, the distance fields and
+the shading that reads them, and the decisions that had to be made before a
+single test in this milestone could be written. They are argued below rather
+than left in a commit message, because each is the kind of choice that is cheap
+now and expensive in six tasks' time.
 
-## First light, and what that means
+## What is on screen
 
-`createRenderer` mounts a three.js `WebGPURenderer` on a canvas and draws a
-single 100 by 40 quad in amber on near-black. That is the whole scene.
+`createRenderer` mounts a three.js `WebGPURenderer` on a canvas and draws six
+shapes: a rounded rectangle and a circle at each of 10, 100 and 1000 world units
+across, on near-black. Every one of them gets its fill, its inset outline and
+its glow out of a single distance, and antialiases its own edges from the
+screen-space derivative of that distance.
 
-![The demo app: an amber quad drawn through a WebGPURenderer, with a readout of
-the camera's zoom, centre, visible world rectangle and canvas
-size](../../assets/screenshots/m4.1-first-light.png)
+The scene is a ladder rather than one shape, and the reason is what makes the
+screenshots evidence. A texture atlas baked at one size looks perfect at the
+zoom it was baked for, so a scene of same-sized shapes cannot tell the two
+approaches apart however many stills are taken of it. Shapes two orders of
+magnitude apart in size put both ends of the range in one frame.
 
-That is `apps/demo`, captured at a device pixel ratio of 1 and 560 CSS pixels
-wide. The readout is live camera state rather than a caption: it is how a
-screenshot shows that the camera is real, since a still of a coloured rectangle
-would look the same whether the projection worked or not.
+![The demo at zoom 1: a 100 unit rounded rectangle in amber with a navy border and
+an orange halo, a blue circle beside it, the 10 unit rung as specks to the left and
+the 1000 unit rung entering from the
+right](../../assets/screenshots/m4.2-sdf-shapes-1x.png)
 
-The size is not arbitrary: it is `@dagr/layout`'s own `defaultNodeSize`, so the
-box on screen is the box a default node occupies, and when M4.4 feeds a real
-layout in, what changes is the positions rather than the scale. The colours are
-not arbitrary either. Amber on near-black is nobody's default, so a frame that
-comes out grey, white or black is a frame that did not come from this package,
-which turns the most common first-light failure (a blank canvas) from a mystery
-into one glance.
+That is `apps/demo` at zoom 1, one CSS pixel per world unit, where fill, outline
+and glow are all legible at once. The readout is live camera state rather than a
+caption: it is how a still shows that the camera behind it is real, and the zoom
+row is what makes the two references below checkable.
+
+Those two are the crispness pair, and they are the evidence for the claim in this
+task's name. At zoom 100 the 10 unit rung fills the view, so what you are looking
+at is one corner arc at a hundred pixels per world unit:
+
+![At zoom 100 the smallest rounded rectangle fills the canvas, its corner a smooth
+arc, with a two pixel navy border inside the
+edge](../../assets/screenshots/m4.2-sdf-shapes-100x.png)
+
+At zoom 0.1 the same scene is a thousand times smaller. The 1000 unit rung is 100
+CSS pixels and still visibly a rounded rectangle with a curved corner and its
+border; the 100 unit rung is 10 pixels and keeps both; the 10 unit rung is at the
+limit discussed below:
+
+![At zoom 0.1 the whole ladder is a small cluster: the 1000 unit rung at 100
+pixels, the 100 unit rung at 10, and the smallest rung at the
+limit](../../assets/screenshots/m4.2-sdf-shapes-0.1x.png)
+
+All three were captured against a real WebGPU adapter at a device pixel ratio of
+1, in a 1200 by 712 window, which is what makes the canvas 1102 by 598 CSS pixels.
+Reproducing one takes no gesture: run the demo and open `#zoom=100`. The frame is
+mostly background at 0.1, and that is inherent rather than a framing mistake, since
+the visible world there is 11020 world units across and the whole ladder fits
+inside it with room to spare.
+
+For the record, this is where the package started one task earlier:
+[first light](../../assets/screenshots/m4.1-first-light.png) was a single amber
+quad, drawn to prove the pipeline lit up at all.
 
 Creation is asynchronous, and that is a property of WebGPU rather than a style
 choice. Getting a device means requesting an adapter from the browser, which is
@@ -48,8 +79,119 @@ ready to draw, and no caller ever holds a renderer that exists but cannot render
 
 three's `WebGPURenderer` falls back to WebGL2 by itself when WebGPU is
 unavailable, so `createRenderer` resolving is not a promise that WebGPU is in
-use. M4.1 neither forces a backend nor reports which one won. M4.9 owns the
+use. Nothing here forces a backend or reports which one won. M4.9 owns the
 fallback, including telling the caller what they got.
+
+## Shapes are signed distance fields
+
+A shape is not geometry here. Every shape is one padded quad, and the fragment
+shader asks a single question per pixel: how far is this pixel from the shape's
+boundary, signed negative inside. `roundedRectSDF` and `circleSDF` answer it,
+and everything visible is read off that one number.
+
+That is what buys the property the whole approach exists for. Fill, outline and
+glow are three regions of one distance rather than three pieces of geometry, so
+they cannot disagree about where the edge is, and the edge itself is antialiased
+analytically per pixel rather than by sampling. A rounded corner is exact at any
+magnification because it is an arc in the arithmetic, not a run of triangles
+chosen when the mesh was built.
+
+### Two units, on purpose
+
+**An outline is measured in CSS pixels and is inset. A glow is measured in world
+units and is outside.** The asymmetry is deliberate and it is the substantive
+design call in this task.
+
+An outline is a property of the screen. A two pixel border should be two pixels
+at every zoom, which is precisely what a geometry pipeline cannot do without
+rebuilding geometry and what a distance field does for free: the same derivative
+that gives the antialiasing width converts pixels into world units at the
+fragment being shaded. It is inset, lying entirely inside the boundary, because
+the shape's footprint is a contract. A layout gives a node a box, and an outline
+straddling the boundary would draw a shape a pixel larger than that box at every
+zoom, so a hit test built on the geometry would miss pixels the user can see.
+A band of w pixels reaches full coverage at w pixel centres, so a hairline draws
+one opaque pixel and a two pixel border draws two. That is worth stating because
+an earlier draft of this code got it wrong in a way no test caught. It inset the
+band by half a pixel so that its coverage was exactly zero at the boundary, which
+sounds like the stricter contract and is in fact a worse one: the opaque plateau
+of an inset band is w minus 2 pixels wide, which is EMPTY at w = 2, so both pixel
+centres of a two pixel outline sampled 0.5 and the outline never drew its own
+colour anywhere. It took decoding a real frame to see it, where the navy
+`0x023047` came out as `#bc8932`, the amber fill half mixed with it.
+
+The inset bought nothing, and that is the part to keep hold of. Coverage here is
+the fill's own ramp applied to `abs(d + half) - half`, and since `abs(x)` is never
+less than `x`, outline coverage is at most fill coverage at every distance, width
+and antialiasing width. The alpha a shape writes is the max of the three
+coverages, so an outline can never make a pixel more covered than the fill already
+makes it: the shape's footprint is identical with a border and without one.
+
+A glow is a property of the shape. The quad has to be padded to contain the halo,
+and that padding is baked into the geometry when the mesh is built, so a
+pixel-space glow would need the quad resized every time the camera moved. That is
+a per-frame scene decision, and M4.4 owns it. A halo that stayed six pixels wide
+while its shape grew from one pixel to a thousand would also read as a different
+effect at each end of the range.
+
+### The antialiasing width is a gradient length, not `fwidth`
+
+The width of the ramp is `length(vec2(dFdx(d), dFdy(d)))` and deliberately not
+`fwidth(d)`. `fwidth` is defined as `abs(dFdx(d)) + abs(dFdy(d))`, the L1 norm of
+the same gradient, and L1 exceeds L2 by up to a factor of `sqrt(2)`, 41%, exactly
+when the two derivatives are equal. Equal derivatives means an edge at 45
+degrees, and a rounded corner is a continuum of diagonals: with `fwidth` the ramp
+is correct along the flat sides and up to 41% too soft around the corner, which
+reads as corners blurrier than the edges they join. That is the artefact a
+distance field is supposed to remove. It costs one `sqrt` per fragment, and the
+shader already has one.
+
+This works because the fields are TRUE euclidean distances outside the shape
+rather than a cheaper approximation. The gradient of such a field has magnitude 1
+in world space, so its screen-space gradient magnitude is world units per pixel
+and nothing else. It also means nothing reads the camera: the width follows
+whatever transform a mesh has picked up, including one M4.4 has not written yet.
+
+### Where the fade stops, measured
+
+A shape drawn smaller than a pixel fades toward the background rather than
+aliasing into a flickering speck, because the coverage falls away with the shape.
+That is the behaviour analytic antialiasing is for, and it holds down to about a
+pixel: at zoom 0.2 the 10-unit rung draws as a 2 by 2 block of `#723b0e`, a dim
+amber against the `#ffb703` it is at full coverage.
+
+Below that it stops, and the reason is worth knowing because it is not the
+shader's. At zoom 0.1 that same rung does not appear at all: its padded quad is
+1.4 by 0.8 CSS pixels, and whether a footprint that small covers a sample point
+depends on where it lands on the grid. The 10-unit circle beside it survives as one
+dim pixel in the same frame. Nothing a distance field does can help there, because
+the fragment that would have faded is never shaded. It is a rasterisation limit,
+and the honest place for it is here rather than in a claim that shapes fade all the
+way down.
+
+### What this task deliberately did not decide
+
+Whether the package uses one material with a per-instance shape id or one
+material per shape family. That decision belongs to M4.3, which owns the
+per-instance attribute anyway, with an explicit revisit at M4.10. The deciding
+factor is per-fragment branch cost at ten thousand instances against real fill
+rate, and none of that can be measured while six shapes are on screen, so making
+the call here would be an irreversible choice at the point of minimum
+information.
+
+What that means for the code is that the distance functions are composable nodes
+with no opinion about material assembly, and the shading node consumes a
+DISTANCE rather than a shape, so any field can go through it including one M4.5
+writes for an edge ribbon. Today's scene builds one material per shape because
+there is no instance attribute to carry a shape id yet. That is scene
+construction, not the architectural answer.
+
+`depthWrite` is off on these materials, which is worth stating because three
+leaves it on for transparent materials. Left on, a fragment with alpha 0 still
+writes depth and a transparent quad occludes whatever is drawn behind it
+afterwards. It makes no visible difference today (the quads are provably
+disjoint) and it is exactly wrong for M4.5, which layers edges behind nodes and
+selection in front on the same plane.
 
 ## The camera
 
@@ -194,6 +336,62 @@ encode and decode (M4.8) are the same shape and get the same treatment.
 the run that changes it, and by nothing else.** Screenshots live in
 `assets/screenshots/`, capped at 1x device pixel ratio and a stated width.
 
+### The shader is arithmetic, and arithmetic is testable
+
+A TSL node graph builds under bare Node with no device and does not evaluate:
+`Fn(([p]) => ...)` returns a node, while `getNodeType` needs a builder and code
+generation needs a real renderer backend. So the shader's arithmetic cannot be
+run in a unit test, and the obvious response is to write each formula twice, once
+in TSL for the GPU and once in TypeScript for the tests.
+
+This package does not do that. Every formula is written ONCE, generic over
+`Arith<T>`, an interface of nine arithmetic primitives: a literal, four
+operators, `abs`, `min`, `max` and `sqrt`. `numberArith` implements them with
+`Math` and the test suite runs every formula through it; `tslArith` implements
+them in TSL and the shader runs the same formulas through that. The suite
+therefore executes the exact expression tree the fragment shader evaluates, node
+for node.
+
+What that changes is the size of the untested surface: not six formulas, but nine
+one-line adapters, plus the assumption that WGSL agrees with `Math` about them
+for finite inputs. Nine is small enough that reading them is reviewing them, and
+a test pins that the two backends have the same nine members, so a primitive
+added to one and not the other fails a test rather than a shader compilation on
+somebody else's machine.
+
+There is a second, less obvious payoff. A shader computes a hypotenuse as
+`sqrt(x*x + y*y)`, and WGSL has no `hypot`. Written separately, the scalar copy
+would reach for `Math.hypot`, which is a different function: it rescales to avoid
+intermediate overflow and is accurate to under an ulp where the naive form is
+not. The two spellings then disagree in the last bits, and an exact assertion
+either fails for a reason that is not a bug or gets loosened until it stops
+catching real ones. One definition removes the question.
+
+`smoothstep`, `clamp` and `length` are all WGSL intrinsics and all absent from the
+nine, deliberately. Each is built from the primitives instead, which costs a few
+ALU operations per fragment against the intrinsic and keeps the ramp the tests
+exercise identical to the ramp the shader evaluates. M4.10 owns measuring whether
+that trade is still right at ten thousand instances, where the budget is far more
+likely to be bound by overdraw than by arithmetic.
+
+### Crisp at every zoom, as a test rather than a claim
+
+"An edge is crisp at every zoom instead of at one" sounds like something only a
+screenshot can show. It is not. The antialiasing width is one CSS pixel measured
+in world units, which is `1 / zoom` exactly, so feeding a distance of k pixels
+through the coverage functions at any zoom has to give the same answer: the zoom
+cancels, and nothing about the shape's size on screen enters the arithmetic. That
+is the property a texture atlas baked at one scale does not have.
+
+The suite asserts it across zooms from 0.1 to 1000. For k a dyadic rational the
+numerator and denominator of the ramp parameter are exact scalings by powers of
+two, so the results are bit identical and the assertion is exact equality; for
+other k the worst deviation measured is 1.2e-16 against an asserted bound of
+1e-15, which is far below the 1/255 an 8-bit framebuffer can represent. So
+"identical" is true of every pixel that can be drawn, and "bit identical" is true
+of the dyadic case only. The screenshots then cover what only a device can: that a
+real fragment shader's derivatives agree with that arithmetic.
+
 The split is worth more than its cost because of how the code was arranged to
 fit it. The arithmetic was pushed into `camera.ts`, where a seeded property
 suite covers it, and `webgpu-renderer.ts` was kept as declarative as it could
@@ -212,14 +410,20 @@ tests now, built over stubs that count those calls, with no device anywhere.
 milestone will be tempted to conflate them. So, plainly, what nothing in CI
 checks:
 
-- That the quad appears at all, in the right place, at the right size, or in the
+- That any shape appears at all, in the right place, at the right size, or in the
   intended colour. The camera suite proves the frustum agrees with
   `worldToScreen` and reaches a real `OrthographicCamera` intact; it cannot
-  prove the mesh is drawn, or that its winding faces the camera.
+  prove a mesh is drawn, or that its winding faces the camera.
+- **That the shader computes anything.** The nine TSL adapters described above
+  are the whole of it, and no Node test can execute one. The tests prove the node
+  graphs are CONSTRUCTIBLE, which is a different and much weaker claim.
+- That a real fragment shader's derivatives agree with the coverage arithmetic,
+  and therefore that the crispness the suite proves about the formulas is the
+  crispness on a display.
 - That the drawing buffer sizes computed here reach a real canvas, or that CSS
   does not stretch the canvas afterwards.
-- That `dispose` frees GPU memory. That it is called exactly once, and that a
-  disposed renderer then refuses to draw, IS tested.
+- That `dispose` frees GPU memory. That every resource in the list is disposed
+  exactly once, and that a disposed renderer then refuses to draw, IS tested.
 - That `init()` succeeds, or that three's automatic WebGL2 fallback engages, and
   therefore that anything in `createRenderer` past `init()` runs at all. That
   one has a named casualty: the abort check after `init()` cannot be reached
@@ -247,8 +451,8 @@ value of the test. `OrthographicCamera`'s constructor takes
 `OrthoFrustum`, and the renderer only avoids that by assigning the fields by
 name; a hand-rolled projection cannot catch a mistake there, and this one does,
 verified by making it. The same camera answers a second question for one line:
-the projected z sits at -0.80, inside the near and far planes, so the quad's
-plane being inside the frustum came off the untested list above.
+the projected z sits at -0.80, inside the near and far planes, so the z = 0 plane
+every shape is drawn on being inside the frustum came off the untested list above.
 
 Numerical claims in this package quote a measured bound rather than calling
 anything exact. The screen round trip holds to within 7.4e-10 CSS pixels over
@@ -340,10 +544,18 @@ renderer.render();
 ```
 
 `Renderer` is a camera, a `resize`, a `render` and a `dispose`. It deliberately
-says nothing about scene contents. M4.1 draws a hard-coded quad, and a
-`setLayout` designed now would be a guess at M4.4 with nothing to check the
-guess against. What the interface does fix is the lifecycle, which is the part
-that will not change.
+says nothing about scene contents, and M4.2 did not change that: the shapes it
+draws are hard-coded, nothing about them is exported, and a `setLayout` designed
+now would be a guess at M4.4 with nothing to check the guess against. So M4.2
+changed what is DRAWN and not what is CALLABLE, which is why this section reads
+the same as it did before it. What the interface does fix is the lifecycle, which
+is the part that will not change.
+
+The distance fields and the shading node are internal for a reason worth naming:
+a TSL node is a three.js type, and no three.js type appears in this package's
+public surface (see below). An exported `Node<'float'>` would make two copies of
+three in one consumer's tree a type error rather than the runtime hazard it
+already is.
 
 `render()` adopts the WHOLE camera every frame, the drawing buffer size as well
 as the frustum, so mutating `renderer.camera` is enough for all three things a
@@ -373,13 +585,12 @@ gets whatever the driver feels like.
 
 ## What is not here yet
 
-Almost all of it. M4.1 is one quad and the seam the rest plugs into.
+Most of it. M4.2 is six shapes, drawn correctly, one draw call each.
 
-- SDF shapes: rounded rectangles and circles authored in TSL, with fill, outline
-  and glow read from one distance field, and derivative-based antialiasing so an
-  edge is crisp at every zoom (M4.2).
 - Instancing, so ten thousand nodes are one draw call rather than ten thousand
-  (M4.3).
+  (M4.3). This is also the task that chooses between one material with a
+  per-instance shape id and one material per family, which M4.2 left open on
+  purpose.
 - A real layout on screen, which is also where the y-up and y-down mismatch
   above gets resolved once, in one place (M4.4).
 - Edge ribbons for polylines and beziers (M4.5).

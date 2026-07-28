@@ -1,26 +1,19 @@
-import {
-  Color,
-  Mesh,
-  MeshBasicNodeMaterial,
-  OrthographicCamera,
-  PlaneGeometry,
-  Scene,
-  WebGPURenderer,
-} from 'three/webgpu';
+import { Color, OrthographicCamera, Scene, WebGPURenderer } from 'three/webgpu';
 import { Camera2D } from './camera.js';
 import { RendererDisposedError } from './errors.js';
+import { createShapeMeshes } from './shape-scene.js';
 import type { Renderer, RendererOptions, Size, ViewportSize } from './types.js';
 
 /**
- * First light: a three.js `WebGPURenderer` drawing one quad through a
+ * A three.js `WebGPURenderer` drawing M4.2's SDF shapes through a
  * {@link Camera2D}.
  *
  * **What needs a GPU is not tested here, and what does not, is.** Drawing needs
  * an adapter: `WebGPURenderer.init()` requests one, `setSize` writes to a real
  * canvas, and `render` submits a command buffer. Node has none, and a headless
- * browser runner is CI infrastructure M4.1 does not have. So the arithmetic
- * lives in `camera.ts` and is tested exhaustively there, and the wiring is kept
- * as declarative as it can be.
+ * browser runner is CI infrastructure this milestone does not have. So the
+ * arithmetic lives in `camera.ts` and `sdf.ts` and is tested exhaustively there,
+ * and the wiring is kept as declarative as it can be.
  *
  * The lifecycle is the exception, and calling it "wiring" was a mistake worth
  * naming: when the drawing buffer is reallocated, whether `dispose` is
@@ -31,15 +24,30 @@ import type { Renderer, RendererOptions, Size, ViewportSize } from './types.js';
  * {@link GpuResource} and counts those calls, with no device anywhere.
  *
  * What is therefore still UNVERIFIED, stated plainly rather than left to be
- * discovered:
+ * discovered. M4.2 amended this list rather than replacing it, because every
+ * entry M4.1 wrote is still true and the SDF path added to it:
  *
- * - That the quad appears at all, in the right place, at the right size, or in
+ * - That any shape appears at all, in the right place, at the right size, or in
  *   the intended colour. The camera suite proves the frustum agrees with
  *   `worldToScreen` and reaches a real `OrthographicCamera` intact; it cannot
- *   prove the mesh is drawn, or that the winding faces the camera.
+ *   prove a mesh is drawn, or that the winding faces the camera.
+ * - **That the shader computes anything.** This is the big one M4.2 added. A TSL
+ *   graph builds in Node and does not evaluate: there is no builder and no
+ *   backend, so `getNodeType` and code generation are both out of reach. The
+ *   arithmetic is therefore tested as arithmetic, over plain numbers, by writing
+ *   each formula once against `Arith<T>` in `sdf.ts` and running it through
+ *   `numberArith` (see `test/sdf.test.ts`). What that leaves unverified is
+ *   exactly nine one-line adapters in `sdf-nodes.ts`, plus the assumption that
+ *   WGSL agrees with `Math` about them. `test/sdf-nodes.test.ts` proves those
+ *   graphs are CONSTRUCTIBLE and nothing more.
+ * - That antialiasing is actually crisp on a display. `test/sdf.test.ts` proves
+ *   the coverage at k pixels from a boundary is identical at zoom 0.1 and zoom
+ *   100, which is the claim; whether a real fragment shader's derivatives agree
+ *   with that arithmetic is a screenshot's job.
  * - That the drawing buffer sizes computed here reach a real canvas, or that
  *   the canvas is not stretched by CSS afterwards.
- * - That `dispose` actually frees GPU memory, only that it is called once.
+ * - That `dispose` actually frees GPU memory, only that every resource in the
+ *   list is disposed exactly once.
  * - That `init()` succeeds, or that the WebGL2 fallback below engages, and
  *   therefore that any of {@link createRenderer} past `init()` runs at all.
  *   That last one has a named casualty: the abort check AFTER `init()`, which
@@ -48,7 +56,8 @@ import type { Renderer, RendererOptions, Size, ViewportSize } from './types.js';
  *   suite green, which was measured rather than assumed. The check before
  *   `init()` is tested.
  *
- * A screenshot test in a browser runner is what closes this, and M4.9 owns it
+ * A screenshot test in a browser runner is what closes this. The orchestrator
+ * takes one per milestone with a real browser; M4.9 owns making it a CI gate,
  * along with the fallback story.
  */
 
@@ -94,20 +103,13 @@ export interface GpuResource {
 }
 
 /**
- * The size of the one quad, in world units: `@dagr/layout`'s own
- * `defaultNodeSize`. First light draws the box a default-sized node would
- * occupy, so the moment M4.4 feeds a real layout in, the change on screen is
- * the positions rather than the scale.
+ * The background the scene is drawn on, as `0xRRGGBB`.
+ *
+ * Near-black, and the shape palette that goes with it lives in `shape-scene.ts`
+ * with the reasoning for each colour. The pair is chosen to be obviously
+ * deliberate: amber on near-black is nobody's default, so a frame that comes out
+ * grey, white or black is a frame that did not come from this package.
  */
-const FIRST_LIGHT_SIZE = { width: 100, height: 40 } as const;
-
-/**
- * The quad's colour, and the background behind it. Both are chosen to be
- * obviously deliberate: amber on near-black is nobody's default, so a frame
- * that comes out grey, white or black is a frame that did not come from this
- * file.
- */
-const FIRST_LIGHT_COLOR = 0xffb703;
 const DEFAULT_CLEAR_COLOR = 0x0b0d10;
 
 /**
@@ -203,7 +205,7 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 }
 
 /**
- * The one {@link Renderer} implementation M4.1 ships.
+ * The one {@link Renderer} implementation this package ships.
  *
  * Exported from this module for `test/webgpu-renderer.test.ts`, and
  * deliberately NOT from `index.ts`: {@link createRenderer} is the only thing
@@ -217,8 +219,7 @@ export class WebGPUSceneRenderer implements Renderer {
   readonly #renderer: FrameSink;
   readonly #scene: OpaqueThreeObject;
   readonly #threeCamera: ProjectionTarget;
-  readonly #geometry: GpuResource;
-  readonly #material: GpuResource;
+  readonly #resources: readonly GpuResource[];
   #disposed = false;
 
   /**
@@ -228,20 +229,26 @@ export class WebGPUSceneRenderer implements Renderer {
    */
   #lastBuffer: Size = { width: 0, height: 0 };
 
+  /**
+   * The last two parameters used to be a geometry and a material, which was a
+   * signature that only fitted a scene of exactly one mesh. A LIST of resources
+   * fits any scene, and the copy is taken here so that a caller mutating the
+   * array afterwards cannot change what gets freed: a resource added to the array
+   * after construction would never be disposed, and one removed would be freed
+   * twice if the caller also disposed it themselves.
+   */
   constructor(
     camera: Camera2D,
     renderer: FrameSink,
     scene: OpaqueThreeObject,
     threeCamera: ProjectionTarget,
-    geometry: GpuResource,
-    material: GpuResource,
+    resources: readonly GpuResource[],
   ) {
     this.camera = camera;
     this.#renderer = renderer;
     this.#scene = scene;
     this.#threeCamera = threeCamera;
-    this.#geometry = geometry;
-    this.#material = material;
+    this.#resources = [...resources];
   }
 
   /**
@@ -271,12 +278,21 @@ export class WebGPUSceneRenderer implements Renderer {
    * already-disposed three renderer is not a documented no-op and a component
    * that unmounts twice is an ordinary thing rather than a bug worth crashing
    * for.
+   *
+   * Every resource in the list, then the renderer, in that order: three's
+   * `WebGPURenderer.dispose` tears down the device, and freeing a buffer through a
+   * device that has already gone is at best a no-op and at worst a driver
+   * complaint. The list is a scene's worth of geometries and materials rather
+   * than the one pair M4.1 had, and it grew with the scene: M4.2 draws six shapes
+   * and therefore owns twelve resources, so a loop is the difference between one
+   * leak per mount and none.
    */
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#geometry.dispose();
-    this.#material.dispose();
+    for (const resource of this.#resources) {
+      resource.dispose();
+    }
     this.#renderer.dispose();
   }
 
@@ -404,12 +420,19 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     // `RendererOptions` yet: it is a device capability question rather than a
     // scene one, and it belongs with the rest of the backend choices in M4.9.
     //
-    // Revisit this in M4.2 rather than carrying it forward because it is
-    // already here. SDF shapes antialias their own edges analytically, per
-    // pixel, and gain nothing from MSAA, while MSAA costs a 4x-sampled target
-    // plus a resolve every frame: on a 4K canvas at ratio 2 that is a real
-    // bandwidth line against M4.10's 10k-nodes-at-60fps budget. Measure both
-    // ways when the SDF path lands.
+    // M4.1 asked for this to be revisited rather than carried forward, and M4.2
+    // has now landed the SDF path without changing it, deliberately. The argument
+    // for turning it off is unchanged and still expected to win: SDF shapes
+    // antialias their own edges analytically, per pixel (`sdf.ts` proves the
+    // coverage ramp is identical at zoom 0.1 and zoom 100), and gain nothing from
+    // MSAA, while MSAA costs a 4x-sampled target plus a resolve every frame, which
+    // on a 4K canvas at ratio 2 is a real bandwidth line against the
+    // 10k-nodes-at-60fps budget. What is missing is the MEASUREMENT, and it needs
+    // a device: both the visual comparison (does anything look worse with it off)
+    // and the bandwidth cost belong to a browser run. M4.10 owns the bandwidth
+    // number; the orchestrator's screenshot covers the visual half. Flipping the
+    // flag on reasoning alone would be trading a known-good frame for an
+    // unmeasured saving.
     antialias: true,
   });
   await renderer.init();
@@ -427,23 +450,20 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
   const scene = new Scene();
   scene.background = new Color(clearColor);
 
-  // A plane, not a sprite or a line: it is the primitive M4.2's SDF shapes will
-  // be drawn on, so first light exercises the geometry path the rest of M4 uses
-  // rather than one that gets thrown away.
-  const geometry = new PlaneGeometry(FIRST_LIGHT_SIZE.width, FIRST_LIGHT_SIZE.height);
-  const material = new MeshBasicNodeMaterial({ color: FIRST_LIGHT_COLOR });
-  scene.add(new Mesh(geometry, material));
+  // The crispness ladder, in place of M4.1's single quad: six SDF shapes spanning
+  // 100:1 in size, so one frame shows what an SDF does at both ends of the zoom
+  // range. What is drawn and how it is coloured is entirely `shape-scene.ts`'s
+  // business, including the palette and the padding every quad needs; this
+  // function's job is to put the meshes in a scene and to remember what has to be
+  // given back.
+  const { meshes, resources } = createShapeMeshes();
+  for (const mesh of meshes) {
+    scene.add(mesh);
+  }
 
   const threeCamera = new OrthographicCamera(0, 0, 0, 0, CAMERA_NEAR, CAMERA_FAR);
 
-  const instance = new WebGPUSceneRenderer(
-    camera,
-    renderer,
-    scene,
-    threeCamera,
-    geometry,
-    material,
-  );
+  const instance = new WebGPUSceneRenderer(camera, renderer, scene, threeCamera, resources);
 
   // Adopt the camera's current viewport, which sizes the buffer and fills in
   // the frustum the `OrthographicCamera` was constructed with zeroes for. Not

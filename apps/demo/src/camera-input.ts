@@ -55,23 +55,109 @@ export const WHEEL_MAX_PIXELS = 200;
  * multiply the zoom by e^9, about 8100x. **So the RANGE is what stops a fling,
  * and it is the only thing that does.**
  *
- * The values are picked so that neither limit can be mistaken for a broken
- * renderer, which is a claim about this specific scene: `@dagr/render` draws one
- * 100 by 40 world-unit quad, on a stage `styles.css` keeps at least 600 CSS
- * pixels tall. At 12 the visible world is at most 50 world units tall, so the
- * quad's top and bottom edges are both still on screen instead of amber filling
- * the frame. At 0.2 the quad is 20 by 8 CSS pixels, small but unmistakably a
- * rectangle rather than a speck.
+ * The limits are 0.1 and 100 because those are the two zooms M4.2 owes a
+ * committed screenshot at. The claim the task has to demonstrate is that one
+ * signed distance field keeps an edge crisp at EVERY zoom rather than at one,
+ * and the evidence is the same shape photographed at 0.1x and at 100x. A range
+ * that stopped short of either end could not produce the reference at all, and
+ * {@link initialZoomFromHash} clamps, so `#zoom=100` against a smaller MAX_ZOOM
+ * would answer with something else and make the reference quietly
+ * unreproducible.
  *
- * 0.05 to 60 was the range before, and it produced both failures rather than
- * preventing them: from zoom 3, ten saturated events reach 60, where a 1102 by
- * 598 canvas sees 18 by 10 world units, entirely INSIDE the quad and flat amber
- * edge to edge; the other way lands on 0.05, where the quad is 5 by 2 pixels.
- * See `test/camera-input.test.ts`, which fails on those numbers.
+ * They still have to pass the older test, which is that neither end can be
+ * mistaken for a broken renderer, and that is a claim about this specific scene:
+ * `@dagr/render` draws a crispness ladder of rounded rects and circles about 10,
+ * 100 and 1000 world units across, the smallest at or beside the world origin,
+ * on a canvas that measures 1102 by 598 CSS pixels at the demo's full page width
+ * (`styles.css` caps `.page` at 72rem and holds the stage at least 600 tall).
+ *
+ * At 0.1 the 1000-unit rung is 100 CSS pixels and still visibly a rounded
+ * rectangle with a curved corner, the 100-unit rung is 10, and the 10-unit rung
+ * is exactly 1. As a shape shrinks towards a pixel a distance field FADES toward
+ * the background instead of aliasing into a flickering speck, because the
+ * coverage the screen-space derivative computes falls away with the shape. That
+ * is measured rather than assumed, and so is where it stops: at zoom 0.2 the
+ * 10-unit rung draws as a 2 by 2 block of #723b0e, a dim amber against the
+ * #ffb703 it is at full coverage, which is the fade. At zoom 0.1 that same rung
+ * does not appear at all. Its padded quad is 1.4 by 0.8 CSS pixels there, and
+ * whether a footprint that small covers a sample point at all depends on where it
+ * falls on the grid: the 10-unit CIRCLE beside it survives as one dim pixel in the
+ * same frame. That is a rasterisation limit rather than a shading one, and no
+ * distance field can fix it, because the fragment that would have faded is never
+ * shaded. The visible world is then 11020 by 5980 units, nearly six times the
+ * largest rung on the short axis, which is the headroom the ladder needs to be in
+ * frame.
+ *
+ * At 100 the 10-unit rung is 1000 CSS pixels: taller than the 598-pixel stage,
+ * so it fills the view the way the 100x reference wants, and still 9% narrower
+ * than the 1102-pixel canvas, so both of its side edges and two of its rounded
+ * corners stay on screen and the frame is an antialiased boundary rather than a
+ * flat fill. That second half holds only while the scene keeps a rung near 10
+ * units and only at the demo's full page width: a narrower window pushes the
+ * side edges out of frame, which is why the reference is taken maximised.
+ *
+ * INITIAL_ZOOM is 1, the middle of the ladder rather than the whole of it, for
+ * three reasons. One CSS pixel per world unit makes the overlay's world bounds
+ * and the sizes on screen literally the same numbers, which is the cheapest way
+ * for a first-time reader to believe the readout. The 100-unit rung is then at
+ * its natural size, which is the one size where fill, outline and glow are all
+ * legible at once, and that trio is what M4.2 claims. And it is neither limit,
+ * so a first flick in either direction visibly does something: about 8 saturated
+ * wheel events reach 0.1 and about 16 reach 100. Framing the whole ladder
+ * instead would take a number this file cannot honestly pick, because the
+ * ladder's layout lives in `@dagr/render` and is not exported.
+ *
+ * 0.2 to 12 from zoom 3 was the range before, argued against M4.1's single 100
+ * by 40 quad. Those numbers were right for that scene and are wrong for this
+ * one: 12 cannot reach the magnification the crispness claim is about, and 0.2
+ * puts the smallest rung at 2 pixels, which is inside the fade rather than past
+ * it and therefore proves nothing about aliasing either way.
  */
-export const INITIAL_ZOOM = 3;
-export const MIN_ZOOM = 0.2;
-export const MAX_ZOOM = 12;
+export const INITIAL_ZOOM = 1;
+export const MIN_ZOOM = 0.1;
+export const MAX_ZOOM = 100;
+
+/**
+ * The zoom to start at, taken from a URL hash like `#zoom=100`, falling back to
+ * `fallback` ({@link INITIAL_ZOOM} at the only call site) for a hash that does
+ * not name a usable one.
+ *
+ * This exists so M4.2's committed crispness screenshots are reproducible. The
+ * references are the same shape at 0.1x and 100x, and a maintainer checking one
+ * against the current build should be able to open the demo at `#zoom=100` and
+ * see what the image shows, instead of trying to land on 100x with a trackpad
+ * and then wondering whether a difference is the renderer or the gesture.
+ *
+ * Takes the hash verbatim, leading `#` and all, because that is exactly what
+ * `window.location.hash` yields (and it yields `''` when there is no hash).
+ * Parsed with `URLSearchParams` over the hash body rather than a split on `=`,
+ * which gets percent decoding, other keys, key order and a repeated key right
+ * for free; the FIRST `zoom` wins, as it would in a query string.
+ *
+ * An out-of-range number clamps into [{@link MIN_ZOOM}, {@link MAX_ZOOM}] rather
+ * than falling back, because somebody who typed `#zoom=500` wants the closest
+ * thing this camera can do, and `Camera2D` throws a `RangeError` on 500 rather
+ * than clamping it: the alternative to clamping here is a red overlay where the
+ * demo was. Zero and negatives are NOT in that group. A scale of 0 or -5 is not
+ * an extreme view this camera can approximate, it is a typo or a mangled link,
+ * and answering it with 0.1 would show a plausible frame and hide the mistake.
+ *
+ * So the `zoom <= 0` test does double duty, and its second job is the classic
+ * hole here: `Number('')` is 0 rather than NaN, so `#zoom=` walks straight
+ * through `Number.isFinite` and would otherwise clamp to MIN_ZOOM as though a
+ * user had asked for it.
+ *
+ * The fallback is returned as given rather than clamped: it is the caller's own
+ * constant, and clamping it would hide a bad one behind a working camera.
+ */
+export function initialZoomFromHash(hash: string, fallback: number): number {
+  const body = hash.startsWith('#') ? hash.slice(1) : hash;
+  const raw = new URLSearchParams(body).get('zoom');
+  if (raw === null) return fallback;
+  const zoom = Number(raw);
+  if (!Number.isFinite(zoom) || zoom <= 0) return fallback;
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
+}
 
 /** The part of a `WheelEvent` that {@link wheelPixels} reads. */
 export interface WheelLike {

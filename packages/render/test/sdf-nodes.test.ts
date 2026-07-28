@@ -1,0 +1,209 @@
+import { float, vec2, vec3 } from 'three/tsl';
+import { JoinNode, MathNode, VarNode } from 'three/webgpu';
+import type { Node } from 'three/webgpu';
+import { describe, expect, it } from 'vitest';
+import {
+  circleDistance,
+  fillCoverage,
+  glowCoverage,
+  numberArith,
+  outlineCoverage,
+  roundedRectDistance,
+  smoothstepBetween,
+} from '../src/sdf.js';
+import {
+  antialiasWidth,
+  circleSDF,
+  roundedRectSDF,
+  shapeShading,
+  tslArith,
+} from '../src/sdf-nodes.js';
+
+/**
+ * That the shader's node graph is CONSTRUCTIBLE, and nothing whatsoever about
+ * what it computes.
+ *
+ * Said plainly because the distinction is the whole reason `sdf.ts` is written
+ * the way it is. A TSL graph builds in Node with no device: `float(1).add(2)`
+ * returns a node with `isNode === true`. It does not evaluate. `getNodeType`
+ * needs a `NodeBuilder` and code generation needs a real renderer backend, so
+ * there is no way in this process to ask what a graph's value is, and every
+ * assertion below is therefore of the form "this expression tree got built
+ * without throwing". What each tree MEANS is covered by `test/sdf.test.ts`
+ * running the same formulas through `numberArith`, and the remaining gap (that
+ * the nine adapters here spell the nine primitives correctly, that WGSL agrees
+ * with `Math` about them, and that a pixel arrives on screen at all) is closed by
+ * the committed screenshot the orchestrator takes with a browser, and by nothing
+ * in this file.
+ *
+ * One shape of test here is doing more work than it looks like. `Fn` DEFERS its
+ * body: calling `roundedRectSDF(...)` builds a call node and does not run the
+ * arithmetic inside, so an `Fn` whose body is nonsense still calls cleanly in
+ * Node. So the bodies are also built directly, by calling the generic formulas
+ * from `sdf.ts` with `tslArith`, which constructs every node eagerly. That is the
+ * assertion that a mistyped adapter or a formula the node types reject cannot
+ * survive.
+ */
+
+/** A node-typed float, for the arguments below. */
+const one = float(1);
+const two = float(2);
+
+/**
+ * Strips the `VarNode` every TSL function wraps its result in.
+ *
+ * TSL returns `VarNode(MathNode(...))` rather than the `MathNode` itself, so that
+ * a subexpression used twice becomes one variable in the generated shader instead
+ * of two copies of the expression. Every structural assertion below therefore has
+ * to look through one layer, and doing it in one helper keeps that fact in one
+ * place rather than in every test.
+ */
+function unwrap(node: Node): Node {
+  return node instanceof VarNode ? node.node : node;
+}
+
+/** The `MathNode` method a node applies, or undefined if it is not one. */
+function methodOf(node: Node): string | undefined {
+  const inner = unwrap(node);
+  return inner instanceof MathNode ? inner.method : undefined;
+}
+
+describe('tslArith', () => {
+  it('implements exactly the primitives numberArith implements', () => {
+    // The point of this test: an operation added to one backend and not the
+    // other is a test failure here rather than a crash on a GPU nobody in CI
+    // has. `Arith<T>` makes the two the same interface to the compiler, but a
+    // missing member on an object literal is only an error if the literal is
+    // annotated, and this catches the case where somebody widens the type.
+    expect(Object.keys(tslArith).sort()).toEqual(Object.keys(numberArith).sort());
+  });
+
+  it('lifts a plain number into a node rather than passing it through', () => {
+    // `literal` is the one adapter that changes the KIND of value. If it were the
+    // identity, every constant in every formula would reach TSL as a JavaScript
+    // number, which mostly works (TSL coerces) and fails exactly where a formula
+    // starts with a literal, since `2 - node` is not a method call on anything.
+    expect(typeof tslArith.literal(0.5)).not.toBe('number');
+    expect(tslArith.literal(0.5).isNode).toBe(true);
+  });
+
+  it('builds a node for each of the nine primitives', () => {
+    expect(tslArith.add(one, two).isNode).toBe(true);
+    expect(tslArith.sub(one, two).isNode).toBe(true);
+    expect(tslArith.mul(one, two).isNode).toBe(true);
+    expect(tslArith.div(one, two).isNode).toBe(true);
+    expect(tslArith.abs(one).isNode).toBe(true);
+    expect(tslArith.min(one, two).isNode).toBe(true);
+    expect(tslArith.max(one, two).isNode).toBe(true);
+    expect(tslArith.sqrt(two).isNode).toBe(true);
+  });
+});
+
+describe('the shared formulas over tslArith', () => {
+  it('builds the rounded rect distance eagerly, body and all', () => {
+    const d = roundedRectDistance(tslArith, one, two, float(50), float(20), float(4));
+    expect(d.isNode).toBe(true);
+  });
+
+  it('builds the circle distance eagerly', () => {
+    expect(circleDistance(tslArith, one, two, float(20)).isNode).toBe(true);
+  });
+
+  it('builds the ramp and all three coverages eagerly', () => {
+    const aaWidth = float(0.01);
+    expect(smoothstepBetween(tslArith, float(0), one, two).isNode).toBe(true);
+    expect(fillCoverage(tslArith, one, aaWidth).isNode).toBe(true);
+    expect(outlineCoverage(tslArith, one, two, aaWidth).isNode).toBe(true);
+    expect(glowCoverage(tslArith, one, float(6), aaWidth).isNode).toBe(true);
+  });
+});
+
+describe('antialiasWidth', () => {
+  it('builds a node', () => {
+    expect(antialiasWidth(float(3)).isNode).toBe(true);
+  });
+
+  it('is the LENGTH of the gradient and not fwidth, checked structurally', () => {
+    // The one place this file inspects a graph's shape instead of only its
+    // existence, and it is worth the coupling. `fwidth(d)` builds just as happily
+    // as `length(vec2(dFdx(d), dFdy(d)))` and differs from it by up to 41% on a
+    // diagonal, which is every point of every rounded corner: the visible symptom
+    // is corners blurrier than the sides they join, at every zoom, which is a
+    // thing a reviewer would look straight past on a screenshot. So the decision
+    // gets a test rather than only a paragraph.
+    //
+    // What is asserted: the outermost operation is a `length`, and its argument
+    // joins exactly two components which are `dFdx` and `dFdy` of something. What
+    // is NOT asserted: that the something is the distance, or that WGSL's
+    // `length` does what its name says.
+    //
+    // Brittle by design. It reads `method`, `aNode` and `nodes`, which are three's
+    // node fields rather than a public API surface, so a three release that
+    // renames them fails this test loudly. That is the correct outcome: this file
+    // depends on those graphs and would rather find out here than in a screenshot.
+    const outer = unwrap(antialiasWidth(float(3)));
+    expect(outer).toBeInstanceOf(MathNode);
+    if (!(outer instanceof MathNode)) throw new Error('unreachable');
+    expect(outer.method).toBe('length');
+
+    const join = unwrap(outer.aNode);
+    expect(join).toBeInstanceOf(JoinNode);
+    if (!(join instanceof JoinNode)) throw new Error('unreachable');
+    expect(join.nodes).toHaveLength(2);
+    expect(join.nodes.map((node) => methodOf(node))).toEqual(['dFdx', 'dFdy']);
+  });
+});
+
+describe('the composable SDF nodes', () => {
+  it('build a call node for a rounded rect', () => {
+    expect(roundedRectSDF(vec2(1, 2), vec2(100, 40), float(4)).isNode).toBe(true);
+  });
+
+  it('build a call node for a circle', () => {
+    expect(circleSDF(vec2(1, 2), float(20)).isNode).toBe(true);
+  });
+
+  it('have no opinion about material assembly', () => {
+    // A property of the module rather than of a value: these two export a
+    // distance and nothing else, so `shapeShading` below can be pointed at either
+    // one, or at a distance field M4.5 has not written yet, without either of
+    // them knowing what a material is.
+    expect(typeof roundedRectSDF).toBe('function');
+    expect(typeof circleSDF).toBe('function');
+  });
+});
+
+describe('shapeShading', () => {
+  /** Every input the shading node needs, with three distinguishable colours. */
+  const input = {
+    distance: float(-3),
+    fillColor: vec3(1, 0.72, 0.01),
+    outlineColor: vec3(0.01, 0.19, 0.28),
+    glowColor: vec3(0.98, 0.52, 0),
+    glowAlpha: float(0.45),
+    outlinePixels: two,
+    glowWorld: float(6),
+  };
+
+  it('builds a colour and an alpha from a distance', () => {
+    const shading = shapeShading(input);
+    expect(shading.color.isNode).toBe(true);
+    expect(shading.alpha.isNode).toBe(true);
+  });
+
+  it('takes a distance rather than a shape, so any field can go through it', () => {
+    // The seam that matters for M4.5: the compositing is written once and knows
+    // nothing about rectangles or circles. Both of these build the whole graph
+    // eagerly, so a compositing expression the node types reject fails here.
+    const throughRect = shapeShading({
+      ...input,
+      distance: roundedRectDistance(tslArith, one, two, float(50), float(20), float(4)),
+    });
+    const throughCircle = shapeShading({
+      ...input,
+      distance: circleDistance(tslArith, one, two, float(20)),
+    });
+    expect(throughRect.alpha.isNode).toBe(true);
+    expect(throughCircle.alpha.isNode).toBe(true);
+  });
+});

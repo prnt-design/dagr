@@ -8,6 +8,7 @@ import {
   WHEEL_PAGE_HEIGHT,
   WHEEL_ZOOM_SPEED,
   canvasPoint,
+  initialZoomFromHash,
   wheelPixels,
   wheelZoomFactor,
 } from '../src/camera-input.js';
@@ -17,10 +18,11 @@ import {
  *
  * `FirstLight.tsx` is React glue over a GPU device: every line of it needs a
  * canvas, an adapter and a live layout, so it is verified by a screenshot the
- * way `@dagr/render`'s own renderer is. These two functions are the exception.
- * They are the arithmetic that sits between a DOM event and a `Camera2D` call,
- * they have sign conventions and unit conversions that are easy to get subtly
- * wrong, and they need nothing but numbers to check.
+ * way `@dagr/render`'s own renderer is. These functions are the exception. They
+ * are the arithmetic and the string parsing that sit between a DOM event or a
+ * URL and a `Camera2D` call, they have sign conventions, unit conversions and
+ * coercion holes that are easy to get subtly wrong, and they need nothing but
+ * numbers to check.
  */
 
 describe('wheelPixels', () => {
@@ -101,19 +103,36 @@ describe('wheelZoomFactor', () => {
 
 describe('the zoom range', () => {
   /**
-   * The quad `@dagr/render` draws, in world units, and the shortest the stage
-   * ever gets, in CSS pixels.
+   * The crispness ladder `@dagr/render` draws, in world units, and the canvas it
+   * lands on, in CSS pixels.
    *
-   * Both are copies, and both are copies on purpose. `FIRST_LIGHT_SIZE` is not
-   * exported from `@dagr/render` (M4.1 draws it, M4.4 replaces it), and the
-   * stage height is `clamp(600px, 62vh, 780px)` in `styles.css`, which no
-   * module can read. Importing the component to reach the first would pull
-   * three.js and a GPU device into a node test to check two numbers. The
-   * shortest stage is the worst case for the claim below, so a taller one only
-   * makes it truer.
+   * Every number here is a copy, and every one is a copy on purpose. The ladder
+   * exports nothing (M4.2 draws it, M4.4 replaces the scene), and importing the
+   * module to reach its sizes would pull three.js and a GPU device into a node
+   * test to check three numbers. The canvas comes from CSS that no module can
+   * read: `styles.css` holds the stage at `clamp(600px, 62vh, 780px)` inside a
+   * `.page` capped at 72rem with 1.5rem of padding, so 1102 by 598 is the widest
+   * page at the shortest stage, and it is the size the committed screenshots are
+   * taken at.
+   *
+   * The worst cases differ by end of the range, which is why one canvas figure
+   * is not enough. A taller stage only makes the MIN_ZOOM claims truer. A
+   * NARROWER window is the single case that weakens the MAX_ZOOM claim, because
+   * the smallest rung's side edges leave the frame once the canvas is under 1000
+   * CSS pixels wide; that is a property of the screenshot, not of the camera.
    */
-  const QUAD = { width: 100, height: 40 };
-  const SHORTEST_STAGE = 600;
+  const RUNG = { small: 10, medium: 100, large: 1000 };
+  const CANVAS = { width: 1102, height: 598 };
+
+  it('reaches exactly the two zooms the crispness reference is taken at', () => {
+    // The ROADMAP asks M4.2 for the same shape at 0.1x and 100x, committed as
+    // the reference. Those are the limits rather than points inside a wider
+    // range because `#zoom=` clamps, so a range that stopped short would answer
+    // `#zoom=100` with something else and quietly make the reference
+    // unreproducible.
+    expect(MIN_ZOOM).toBe(0.1);
+    expect(MAX_ZOOM).toBe(100);
+  });
 
   it('contains the zoom the camera starts at', () => {
     // Camera2D throws rather than clamps an out-of-range initial zoom, so this
@@ -132,20 +151,149 @@ describe('the zoom range', () => {
     expect(INITIAL_ZOOM / fling).toBeLessThan(MIN_ZOOM);
   });
 
-  it('keeps two edges of the quad on screen at MAX_ZOOM', () => {
-    // Zoom is CSS pixels per world unit, so the visible world is the canvas
-    // divided by it. Keeping that taller than the quad keeps the quad's top and
-    // bottom edges both on screen, which is what stops a zoom to the limit
-    // painting a flat amber fill that looks exactly like a broken renderer.
-    expect(SHORTEST_STAGE / MAX_ZOOM).toBeGreaterThanOrEqual(QUAD.height);
+  it('fills the view with the smallest rung at MAX_ZOOM, edges included', () => {
+    // Both halves of what the 100x screenshot has to show, and they pull against
+    // each other. Taller than the stage is "fills the view", which is what makes
+    // a magnified edge worth photographing. No wider than the canvas is what
+    // keeps the rung's two side edges and two rounded corners in frame, so the
+    // picture is an antialiased boundary rather than a flat fill that looks
+    // exactly like a broken renderer. 10 units at 100 is 1000 CSS pixels, which
+    // clears 598 comfortably and clears 1102 by 9%.
+    expect(RUNG.small * MAX_ZOOM).toBeGreaterThanOrEqual(CANVAS.height);
+    expect(RUNG.small * MAX_ZOOM).toBeLessThanOrEqual(CANVAS.width);
   });
 
-  it('leaves the quad a legible rectangle at MIN_ZOOM', () => {
-    // The other broken-renderer look: a quad small enough to read as a speck of
-    // dust. Both axes have to stay big enough to see a rectangle, and the short
-    // one is what binds.
-    expect(QUAD.width * MIN_ZOOM).toBeGreaterThanOrEqual(16);
-    expect(QUAD.height * MIN_ZOOM).toBeGreaterThanOrEqual(8);
+  it('leaves the largest rung a legible shape at MIN_ZOOM', () => {
+    // The other broken-renderer look: a whole scene reduced to specks of dust.
+    // The largest rung is 100 CSS pixels at 0.1, wide enough that its corner
+    // radius is still a curve and not a stair, so a reader can see it is the
+    // same shape they were just looking at at 100x.
+    expect(RUNG.large * MIN_ZOOM).toBeGreaterThanOrEqual(64);
+  });
+
+  it('gives the whole ladder room on the short axis at MIN_ZOOM', () => {
+    // Zoom is CSS pixels per world unit, so the visible world is the canvas
+    // divided by it: 5980 units tall at 0.1. The factor of four is headroom for
+    // the largest rung plus the rest of the ladder around it, and it is a bound
+    // rather than a measurement, because this file cannot see the scene's layout
+    // and should not: `@dagr/render` owns where the rungs sit.
+    expect(CANVAS.height / MIN_ZOOM).toBeGreaterThanOrEqual(4 * RUNG.large);
+  });
+
+  it('puts the smallest rung inside the sub-pixel fade at MIN_ZOOM', () => {
+    // 10 units at 0.1 is exactly 1 CSS pixel, and the middle rung is 10. Drawn
+    // at or under a pixel a signed distance field FADES toward the background
+    // instead of aliasing into a flickering speck, because the coverage the
+    // screen-space derivative computes falls with the shape. That fade is a
+    // result the 0.1x screenshot exists to show, so the range deliberately
+    // reaches into it rather than stopping above it.
+    expect(RUNG.small * MIN_ZOOM).toBeLessThanOrEqual(1);
+    expect(RUNG.medium * MIN_ZOOM).toBeGreaterThan(1);
+  });
+});
+
+describe('initialZoomFromHash', () => {
+  /**
+   * Deliberately not {@link INITIAL_ZOOM} and not a limit, so a fallback that
+   * comes back can only have come from the argument. A parse that quietly
+   * returned MIN_ZOOM, MAX_ZOOM or the real initial zoom would otherwise pass
+   * half of the assertions below by coincidence.
+   */
+  const FALLBACK = 7;
+
+  it('reads the two zooms the crispness screenshots are named by', () => {
+    // The whole point of the feature: `#zoom=100` has to give the zoom the
+    // reference image was taken at, exactly, with no gesture involved.
+    expect(initialZoomFromHash('#zoom=100', FALLBACK)).toBe(100);
+    expect(initialZoomFromHash('#zoom=0.1', FALLBACK)).toBe(0.1);
+    expect(initialZoomFromHash('#zoom=100', FALLBACK)).toBe(MAX_ZOOM);
+    expect(initialZoomFromHash('#zoom=0.1', FALLBACK)).toBe(MIN_ZOOM);
+  });
+
+  it('takes the hash with or without its leading hash mark', () => {
+    // `window.location.hash` includes the `#`, and callers that already sliced
+    // it off should not get a different answer.
+    expect(initialZoomFromHash('#zoom=2.5', FALLBACK)).toBe(2.5);
+    expect(initialZoomFromHash('zoom=2.5', FALLBACK)).toBe(2.5);
+  });
+
+  it('clamps an out-of-range zoom instead of rejecting it', () => {
+    // Somebody who typed 500 wants the closest thing this camera can do, and
+    // `Camera2D` throws a RangeError on 500 rather than clamping it, so the
+    // choice here is between clamping and a red overlay where the demo was.
+    expect(initialZoomFromHash('#zoom=500', FALLBACK)).toBe(MAX_ZOOM);
+    expect(initialZoomFromHash('#zoom=0.001', FALLBACK)).toBe(MIN_ZOOM);
+    expect(initialZoomFromHash('#zoom=1e9', FALLBACK)).toBe(MAX_ZOOM);
+  });
+
+  it('falls back when the hash names no zoom at all', () => {
+    for (const hash of ['', '#', '#x=3', '#zoom', '#zoomed=4', '#Zoom=4']) {
+      expect(initialZoomFromHash(hash, FALLBACK)).toBe(FALLBACK);
+    }
+  });
+
+  it('falls back when the value is not a number', () => {
+    for (const hash of ['#zoom=', '#zoom=abc', '#zoom=NaN', '#zoom=Infinity', '#zoom=2px']) {
+      expect(initialZoomFromHash(hash, FALLBACK)).toBe(FALLBACK);
+    }
+  });
+
+  it('treats zero and negatives as not a zoom rather than as clamp to MIN_ZOOM', () => {
+    // The distinction worth keeping: 500 is a view this camera can approximate,
+    // while 0 and -5 are not extreme views at all. They are a typo or a mangled
+    // link, and answering them with 0.1 would show a plausible frame and hide
+    // the mistake. `#zoom=` lands here too, because `Number('')` is 0 rather
+    // than NaN, which is the coercion hole this function exists to plug.
+    for (const hash of ['#zoom=0', '#zoom=-0', '#zoom=-5', '#zoom=-1e9']) {
+      expect(initialZoomFromHash(hash, FALLBACK)).toBe(FALLBACK);
+      expect(initialZoomFromHash(hash, FALLBACK)).not.toBe(MIN_ZOOM);
+    }
+  });
+
+  it('ignores other keys and takes the first of a repeated zoom', () => {
+    // `URLSearchParams.get` is what decides both, and it is why the parsing is
+    // not a hand-rolled split: order-independence and first-wins come free, and
+    // first-wins matches how a query string behaves everywhere else. Last-wins
+    // would be no more correct, so the property worth pinning is that it is
+    // predictable.
+    expect(initialZoomFromHash('#zoom=2&x=3', FALLBACK)).toBe(2);
+    expect(initialZoomFromHash('#x=3&zoom=2', FALLBACK)).toBe(2);
+    expect(initialZoomFromHash('#zoom=2&zoom=50', FALLBACK)).toBe(2);
+  });
+
+  it('accepts every spelling Number does, including exponents and padding', () => {
+    // Free with `Number`, and none of it is worth a special case: `%20` decodes
+    // to a space and `+` to a space, both of which `Number` trims.
+    expect(initialZoomFromHash('#zoom=1e1', FALLBACK)).toBe(10);
+    expect(initialZoomFromHash('#zoom=%202%20', FALLBACK)).toBe(2);
+    expect(initialZoomFromHash('#zoom=+2', FALLBACK)).toBe(2);
+  });
+
+  it('never returns a zoom Camera2D would throw on', () => {
+    // The property the call site depends on, stated once over everything above:
+    // whatever the hash says, the result is a zoom the camera accepts. The
+    // fallback is returned as given rather than clamped, so this holds for a
+    // caller whose fallback is in range, which the zoom range suite pins for
+    // INITIAL_ZOOM.
+    const hashes = [
+      '',
+      '#',
+      '#zoom=100',
+      '#zoom=0.1',
+      '#zoom=1e9',
+      '#zoom=-1e9',
+      '#zoom=0',
+      '#zoom=abc',
+      '#zoom=',
+      '#zoom=NaN',
+      '#zoom=Infinity',
+      '#zoom=2&zoom=50',
+    ];
+    for (const hash of hashes) {
+      const zoom = initialZoomFromHash(hash, INITIAL_ZOOM);
+      expect(zoom).toBeGreaterThanOrEqual(MIN_ZOOM);
+      expect(zoom).toBeLessThanOrEqual(MAX_ZOOM);
+    }
   });
 });
 
