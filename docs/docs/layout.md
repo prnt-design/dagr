@@ -608,7 +608,7 @@ complexity is the claim.
 
 The exception is
 [Minimum total edge length](#minimum-total-edge-length-and-what-it-costs), which
-quotes four, because a pivot count is not a complexity a reader can size a
+quotes several, because a pivot count is not a complexity a reader can size a
 budget against. Read those as one machine's measurements of two generated
 corpora, taken to justify a default budget and a warning about height. They are
 not baselines and they are not machine independent: M2.9's committed numbers are

@@ -79,9 +79,11 @@ function at(values: { readonly [index: number]: number | undefined }, index: num
  * Otherwise C uses an arc (u, v) whose endpoints are in different components,
  * which is kept exactly as authored. Every arc of the result either stays
  * inside one component or is an original cross-component arc, and an original
- * cross-component arc strictly advances the component DAG's topological order,
- * which is what makes that DAG a DAG. So the component index never falls along
- * C and rises at least once, and again C cannot close.
+ * cross-component arc strictly advances the topological order of the
+ * condensation, the DAG of components, which is what makes that DAG a DAG.
+ * (Condensation means that and only that in this file: the parallel-arc
+ * collapse below is called the weighted simple graph.) So the component index
+ * never falls along C and rises at least once, and again C cannot close.
  *
  * This does NOT contradict the four-node witness M2.2b records, `u->v, v->a,
  * a->b, b->a, u->b` with components {a, b}, {u} and {v}. That witness refutes
@@ -256,19 +258,14 @@ function at(values: { readonly [index: number]: number | undefined }, index: num
  *
  * ## Parallel edges
  *
- * GR runs over the weighted simple condensation, where all arcs from one
- * ordered pair collapse into one arc whose weight is how many there were, and
+ * GR runs over the weighted simple graph, where all arcs from one ordered
+ * pair collapse into one arc whose weight is how many there were, and
  * the reversal decision is then taken per pair. Every copy between the same
  * two nodes therefore goes the same way, and the component test cannot split
  * them either, since every copy has the same two endpoints and so the same
  * answer. Deciding per edge instead would let one copy of `a -> b` be reversed
  * and another not, which puts a two-cycle back into the supposedly acyclic
  * view, which is the whole thing this exists to prevent.
- *
- * The word condensation means that parallel-arc collapse here and NOT the
- * component DAG, which is the other thing the word names in this literature.
- * Both are built below, out of one set of CSR rows, so the sentence to read
- * carefully is any sentence with the word in it.
  *
  * ## Determinism
  *

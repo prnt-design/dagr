@@ -31,15 +31,13 @@ of doc prose.
   rank stages rank. They are left here because they are what this stage was
   measured at when it landed. What a caller gets today: 22,726 down to 15,713
   on the 1k, a 31% cut rather than 57%, in about 28ms rather than about 20ms,
-  and 1,359,680 down to 268,589 on the 10k. The 28ms governs the paragraph
-  below this one as well, which still says about 20ms. See the M2.2b entry
-  under Changed for why the percentage fell while nothing about this stage got
-  worse.
+  and 1,359,680 down to 268,589 on the 10k. See the M2.2b entry under Changed
+  for why the percentage fell while nothing about this stage got worse.
 
   **None of that saving is collectable in this release.** M2.4b is unbuilt, no
   stage mints a dummy node today, and `virtualNodes` comes back empty from both
   rankers, so the counts above are a cost nobody is paying yet. Switching today
-  buys a rank stage that costs several times more (about 20ms against a few
+  buys a rank stage that costs several times more (about 28ms against a few
   milliseconds on the 1k corpus, seconds against tens of milliseconds on the
   10k one) and saves no dummy nodes, because there are none. What it buys is a
   ranking M2.4b will be able to exploit.
@@ -237,9 +235,11 @@ of doc prose.
   running backwards in the greedy vertex order is reversed only when its two
   endpoints lie in the same strongly connected component. A backward edge
   between two components lies on no cycle, so no cycle needs it turned round,
-  and turning it round only stretched the view. **Layouts of a graph with cycles
-  return different coordinates and a smaller `reversedEdges`.** No type and no
-  exported name changed. (M2.2b)
+  and turning it round only stretched the view. **Layouts of a graph with a
+  backward edge whose endpoints lie in different components return different
+  coordinates and a smaller `reversedEdges`; a graph whose cycles all sit
+  within one component is unaffected.** No type and no exported name changed.
+  (M2.2b)
 
   What it costs and what it buys, measured on both benchmark corpora. The
   drawing gets TALLER and its edges get SHORTER overall: on the 10k corpus the
