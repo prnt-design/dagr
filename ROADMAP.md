@@ -726,8 +726,15 @@ findings addressed or logged, docs land with the feature.
   ranker: on the 10k corpus the view the greedy feedback arc set hands the
   ranker is 154 ranks deep against a corpus generated with 60 layers, and every
   rank of that excess is ranks for edges to span. M2.3's 57% cut is real and
-  does not touch any of that, so the 423,426 dummies still left on that corpus
-  are a cycle-breaking problem arriving at this milestone's door.
+  does not touch any of that, so the dummies still left on that corpus are a
+  cycle-breaking problem arriving at this milestone's door. Name the ranker and
+  the budget with that figure, per M2.2b: the splitter on
+  `m2.4b-dummy-chains` runs inside `longestPathRankStage`, so what this
+  milestone mints as it stands is the longest-path 1,414,263. The simplex
+  figures are quoted to say that even the better ranker leaves this much, and
+  they are 423,426 inside the default 20,000-pivot budget or 224,789 at ten
+  times it, which nearly halves, so a bare 423,426 prices this milestone off a
+  truncated solver.
   What that lever actually is was got wrong here, and the correction is M2.2b's.
   This entry used to end "if the count is what hurts once this lands, the lever
   is a better feedback arc set", with the 6,327 reversals against roughly 800
