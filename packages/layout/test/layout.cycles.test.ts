@@ -282,6 +282,86 @@ describe('feedbackArcSet', () => {
     expect([...feedbackArcSet(graph)]).toEqual(['xy']);
   });
 
+  // The component rule, on a witness small enough to check by eye.
+  //
+  // Four strongly connected components: {g, h}, {c1, c2} and {f1, f2} are each
+  // a two-cycle, and {s} is alone, because `c1` reaches only `c2`, `f1` and
+  // `f2` and so nothing leads back into `s`.
+  //
+  // The order this pass builds is (c1, h, f1, f2, g, c2, s). `c1` starts in the
+  // top delta bucket at `outdeg - indeg` of 1 and is ahead of `g` there on node
+  // order, so it goes first; taking it leaves `s` and `c2` with no out-arcs, so
+  // both go to the tail sequence; the rest unzips. Four arcs run backwards in
+  // that order: `g -> h`, `s -> c1`, `c2 -> c1` and `f2 -> f1`.
+  //
+  // Three of them have both endpoints inside one component and are reversed.
+  // `s -> c1` does not, and it is left alone: it lies on no cycle, so no cycle
+  // needs it turned round, and turning it round only stretches the view.
+  it('leaves a backward arc alone when its endpoints are in different components', () => {
+    const graph = build(
+      ['s', 'c1', 'c2', 'f1', 'f2', 'g', 'h'],
+      [
+        ['g', 'h', 'gh'],
+        ['h', 'g', 'hg'],
+        ['g', 's', 'gs'],
+        ['s', 'c1', 'sc1'],
+        ['c1', 'c2', 'c1c2'],
+        ['c2', 'c1', 'c2c1'],
+        ['c1', 'f1', 'c1f1'],
+        ['c1', 'f2', 'c1f2'],
+        ['f1', 'f2', 'f1f2'],
+        ['f2', 'f1', 'f2f1'],
+      ],
+    );
+
+    const reversed = feedbackArcSet(graph);
+    expect([...reversed]).toEqual(['gh', 'c2c1', 'f2f1']);
+    expect(reversed.has('sc1'), 'sc1 crosses a component boundary').toBe(false);
+    expect(referenceTopologicalOrder(graph, acyclicView(graph, reversed))).toHaveLength(7);
+  });
+
+  // The witness M2.2b records, which is why the rule is stated over the WHOLE
+  // class of cross-component arcs rather than over one of them at a time.
+  //
+  // Components {a, b}, {u} and {v}, so `u -> v` and `u -> b` are the
+  // cross-component arcs and `a -> b` and `b -> a` are the intra-component
+  // ones. Under the order (v, a, b, u), which is not the order this pass
+  // builds but is an order some greedy pass could build, the backward set is
+  // {u -> v, b -> a, u -> b}. Take `u -> v` out of it on its own and the view
+  // holds `u -> v, v -> a, a -> b, b -> u`, which is a cycle: the still
+  // reversed `u -> b` supplies the arc back. Take the whole cross-component
+  // class out and the view holds `u -> v, v -> a, a -> b, a -> b, u -> b`,
+  // which is acyclic, and that is what the proof in `cycles.ts` gives in
+  // general. Dropping SOME is what has no theorem behind it.
+  //
+  // The last two assertions are what this pass actually answers here. Its own
+  // order is (u, v, b, a), whose only backward arc is the intra-component
+  // `a -> b`, so the graph is a regression test for the rule leaving legal
+  // answers alone as much as for the rule itself.
+  it('keeps the whole cross-component class out, which one at a time would not', () => {
+    const graph = build(
+      ['u', 'v', 'a', 'b'],
+      [
+        ['u', 'v', 'uv'],
+        ['v', 'a', 'va'],
+        ['a', 'b', 'ab'],
+        ['b', 'a', 'ba'],
+        ['u', 'b', 'ub'],
+      ],
+    );
+
+    const wholeBackwardSet = new Set<EdgeId>(['uv', 'ba', 'ub']);
+    expect(referenceTopologicalOrder(graph, acyclicView(graph, wholeBackwardSet))).toBeDefined();
+    const withoutOne = new Set<EdgeId>(['ba', 'ub']);
+    expect(referenceTopologicalOrder(graph, acyclicView(graph, withoutOne))).toBeUndefined();
+    const withoutTheClass = new Set<EdgeId>(['ba']);
+    expect(referenceTopologicalOrder(graph, acyclicView(graph, withoutTheClass))).toBeDefined();
+
+    const reversed = feedbackArcSet(graph);
+    expect([...reversed]).toEqual(['ab']);
+    expect(referenceTopologicalOrder(graph, acyclicView(graph, reversed))).toHaveLength(4);
+  });
+
   it('leaves a digraph an independent topological sort can order', () => {
     // Two cycles sharing a vertex, a mutual pair hanging off one of them, and a
     // self loop, so a set that broke only the first cycle would still fail.
@@ -340,7 +420,10 @@ describe('feedbackArcSet on random digraphs', () => {
         // Implied by the paper's `|F| <= m/2 - n/6`, and the half of it that
         // survives the weighted condensation: the greedy pick always has
         // `indeg <= outdeg`, so it never makes more arcs backward than forward,
-        // and sinks and sources make none backward at all.
+        // and sinks and sources make none backward at all. The component rule
+        // only takes arcs OUT of that backward set, so the set asserted on here
+        // is a subset of the one the bound is proved for and the bound holds a
+        // fortiori.
         const breakable = graph.edges().filter((edge) => edge.source !== edge.target).length;
         expect(reversed.size, `${where}: |F| against m/2`).toBeLessThanOrEqual(breakable / 2);
       }
