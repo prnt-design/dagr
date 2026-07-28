@@ -866,17 +866,26 @@ function applyHint(
  * sweep budget of 8 on the 10k, against 35,114 crossings and 16.32ms with the
  * pass off:
  *
- * | cap             | 10k crossings | saving | extra time |
- * | --------------- | ------------- | ------ | ---------- |
- * | 4               | 31,369        | 10.7%  | +2.65ms    |
- * | 8 (the default) | 30,318        | 13.7%  | +4.93ms    |
- * | 16              | 29,658        | 15.5%  | +9.29ms    |
- * | fixed point     | 29,260        | 16.7%  | +30.61ms   |
+ * | cap             | 10k crossings | saving | extra time | crossings per ms |
+ * | --------------- | ------------- | ------ | ---------- | ---------------- |
+ * | 4               | 31,369        | 10.7%  | +2.65ms    |                  |
+ * | 6               | 30,677        | 12.6%  | +4.15ms    | 461              |
+ * | 8 (the default) | 30,318        | 13.7%  | +4.93ms    | 460              |
+ * | 12              | 29,892        | 14.9%  | +6.92ms    | 214              |
+ * | 16              | 29,658        | 15.5%  | +9.29ms    | 99               |
+ * | 32              | 29,358        | 16.4%  | +16.91ms   | 39               |
+ * | fixed point     | 29,260        | 16.7%  | +30.61ms   | 7                |
  *
- * where the fixed point takes 60 passes. Eight captures 81.9% of the full
- * saving for 16.1% of the extra time, and the knee really is there: the
- * marginal rate holds at or above 460 crossings per millisecond up to 8 and
- * falls to 214 immediately past it, halving at each further step. The 1k
+ * where the fixed point takes 60 passes. The last column is the MARGINAL rate,
+ * the crossings that row buys over the row above it divided by the extra time
+ * it costs, which is the column the default is chosen on. The rows past 8 are
+ * carried for that column alone: without them the claim below cannot be checked
+ * against this table, which is how it came to be quoted from a step the table
+ * did not contain.
+ *
+ * Eight captures 81.9% of the full saving for 16.1% of the extra time, and the
+ * knee really is there: the rate holds at or above 460 up to 8 and falls to 214
+ * immediately past it, then by at least half at every further step. The 1k
  * corpus agrees without deciding anything, 3,005 against 3,605 for +0.41ms,
  * with its own fixed point at 2,959 after 19 passes.
  *
@@ -909,11 +918,10 @@ function applyHint(
  * the cap those two were compared at and is not this stage's default of 8. The
  * expanded graph was never measured at 8, so the honest statement is that a
  * capped pass loses most of its value there and not that it loses exactly that
- * much. Only a full fixed point holds its share, at a price
- * nobody can pay: 214 seconds against 6.8. So the cap AND the tie rule are both
- * measured against a graph that M2.4b replaces, and BOTH MUST BE RE-DERIVED
- * WHEN IT LANDS rather than carried across unexamined. Neither is a constant of
- * the algorithm.
+ * much. Only a full fixed point holds its share, at a price nobody can pay: 214
+ * seconds against 6.8. So the cap AND the tie rule are both measured against a
+ * graph that M2.4b replaces, and BOTH MUST BE RE-DERIVED WHEN IT LANDS rather
+ * than carried across unexamined. Neither is a constant of the algorithm.
  *
  * ## The warm start
  *

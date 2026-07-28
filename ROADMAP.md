@@ -857,8 +857,11 @@ findings addressed or logged, docs land with the feature.
   to split. (d) `maxSweeps` defaults to 8 and the stage returns the best
   layering it saw rather than the last, because the sweeps are not monotone.
   (e) It is not the default because it costs about 21ms on the 10k against a
-  `pipeline > 10k` baseline of 30.15ms with a 10% gate tolerance, and because
-  M2.6 improves the same stage, so one flip and one rebaseline serve both.
+  `pipeline > 10k` baseline of 30.15ms with a 10% gate tolerance, and the
+  rebaseline that fixes wants a quiet machine. M2.5 also gave a second reason,
+  that M2.6 would improve the same stage so one flip could serve both; M2.6 has
+  now shipped WITHOUT the flip, so that reason is spent and the baseline cost
+  is the only one left. The flip is M2.6b.
   Everything below is the measurement that chose each of those.
   The seed was chosen by measurement, crossings after 8 sweeps: roster order
   3,943 on the 1k and 54,744 on the 10k, the adjacent-layer walk 3,605 and
@@ -924,19 +927,16 @@ findings addressed or logged, docs land with the feature.
   zero-delta swap leaves one available and any other gate cycles forever; the
   witness is three nodes and two edges, two of them sharing one neighbour, and
   both halves of the rule are pinned on it.
-  `maxTransposePasses` defaults to 8, and that it matches `maxSweeps`'s 8 is a
-  COINCIDENCE recorded as one. The curve on the 10k: cap 4 is 31,369 for
-  +2.65ms, cap 8 is 30,318 for +4.93ms, cap 16 is 29,658 for +9.29ms, and the
-  fixed point is 29,260 after 60 passes for +30.61ms. Eight captures 81.9% of
-  the full saving for 16.1% of the extra time, and the marginal rate halves
-  immediately past it.
-  THE CAVEAT, and it is not small. The saving COLLAPSES once every edge is
-  visible: on a dummy-expanded 10k the capped saving falls from 10.7% to 1.4%
-  at a cap of 4, which is what those two were compared at and is not the
-  default of 8, and only an unaffordable full fixed point holds its share (214
-  seconds against 6.8). Both the cap and the tie rule are measured against a
-  graph where about a quarter of edges are visible, so both must be RE-DERIVED
-  when M2.4b lands rather than carried across.
+  `maxTransposePasses` defaults to 8, chosen at the knee of a measured cap
+  curve, and that it matches `maxSweeps`'s 8 is a COINCIDENCE recorded as one.
+  The curve itself lives in `barycenterOrder`'s docstring and is deliberately
+  not copied here: it, the tie-rule margins and the caveat below all expire on
+  the same event, and three copies means a three-place sweep when it happens.
+  THE CAVEAT, and it is not small, stated here because it changes what a LATER
+  TASK must do rather than merely describing this one. The saving COLLAPSES
+  once every edge is visible, so both the cap and the tie rule are measured
+  against a graph M2.4b replaces and BOTH MUST BE RE-DERIVED WHEN IT LANDS
+  rather than carried across. The figures behind that are in the docstring.
   `defaultStages.order` did NOT change here. That is M2.6b below.
 - [ ] **M2.6b** Order default flip and bench rebaseline. Touches
   `packages/layout` and `bench`. `defaultStages.order` moves from
