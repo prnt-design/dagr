@@ -502,9 +502,9 @@ findings addressed or logged, docs land with the feature.
   What a future run has to beat, stated so it cannot be met by accident, and
   restated after algorithms-review refuted the first version of it. THE OLD BAR
   SAID: nothing measured beats the shipping breaker's 1,414,263 dummies without
-  reversing more edges than it does, so land under 400,000 at 6,327 reversals or
-  fewer. That was wrong, and the counterexample was sitting in the gap between
-  dropping and scoping: minus-cross-component reverses 4,620 and spans
+  reversing more edges than it does, so land under 400,000 at 6,327 reversals
+  or fewer. That was wrong, and the counterexample was sitting in the gap
+  between dropping and scoping: minus-cross-component reverses 4,620 and spans
   1,359,680 under longest path, fewer reversals AND less span, legal on both
   corpora. THAT ROW IS NOW THE SHIPPING PASS, so the bar and what ships are the
   same object again: beat 1,359,680 dummies at 4,620 reversals or fewer under
@@ -517,10 +517,10 @@ findings addressed or logged, docs land with the feature.
   convergence-speed caveat two paragraphs down doing exactly what it warns
   about: at the default 20,000 pivots the shipping view is 268,589 against the
   unscoped 423,426, a 37% cut, and it is also faster to solve at both budgets
-  (1.80s against 3.82s, and 51.1s against 60.5s). The
-  unscoped order simply had more of its gain still ahead of it. Quote the
-  budget with the figure, and beat 226,676 rather than 224,789 because 226,676
-  is what a caller can actually get today.
+  (1.80s against 3.82s, and 51.1s against 60.5s). The unscoped order simply had
+  more of its gain still ahead of it. Quote the budget with the figure, and
+  beat 226,676 rather than 224,789 because 226,676 is what a caller can
+  actually get today.
   Beware the 1k corpus while doing it, per conclusion one: on the 1k EVERY
   candidate in the table cuts span, insertion-roots DFS included, so measured
   there alone all four families look like wins. On the 10k two of them (DFS and
