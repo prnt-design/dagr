@@ -754,9 +754,9 @@ findings addressed or logged, docs land with the feature.
   would therefore shift every later dummy whenever an unrelated edge was added
   upstream of it, moving the bends of long edges whose endpoints did not move.
   The runner now sorts the declared ids by id before putting them in the roster,
-  which is what completes the rule, and it is done there rather than in
-  `insertionOrderStage` because M2.5 replaces that stage wholesale while every
-  future order stage reads the roster.
+  which is what completes the rule, and it is done there rather than in an order
+  stage because order stages come and go, M2.6b has since moved the default to
+  `barycenter-order`, while the roster is what every order stage reads.
   Be precise about what that sort buys, so this milestone does not over-claim
   it. It removes the dependency on the ranker's declaration order, and nothing
   more. It does NOT make a layer's indices stable when a dummy is INSERTED into
@@ -770,9 +770,9 @@ findings addressed or logged, docs land with the feature.
   may SKIP a rank it crosses, so a single dummy at rank 1 on an edge from rank 0
   to rank 3 passes every check and routes across rank 2 with no bend. Tightening
   that needs a definition of what an edge "spans", and the obvious one (steps of
-  exactly one) assumes contiguous integer ranks, which `insertionOrderStage`
-  explicitly refuses to assume. Decide it here, where a real splitter finally
-  gives "spans" a meaning.
+  exactly one) assumes contiguous integer ranks, which no order stage in this
+  package assumes: both take the layers to be the distinct ranks sorted. Decide
+  it here, where a real splitter finally gives "spans" a meaning.
   Prepared in M2.1 and settled in M2.4a, so this is a ranker change and not an
   interface change: the pipeline works over a roster (the graph's nodes plus
   whatever the rank stage declares in `RankOutput.virtualNodes`), a declared
@@ -845,23 +845,23 @@ findings addressed or logged, docs land with the feature.
   WHAT SHIPPED, in five lines, because the rest of this entry is a record.
   (a) `barycenterOrder(options)`, `barycenterOrderStage` and `countCrossings`
   are exported from `packages/layout/src/order.ts`; `defaultStages.order` DID
-  NOT CHANGE and is still `insertion-order`, for the reason in (e). (b) THE SEED
-  IS NOT ROSTER ORDER. It is a connected depth-first walk over adjacent-layer
-  edges only, in both directions, roster order for the outer loop and
-  `outEdges` then `inEdges` for the neighbours. That is the M3.6 answer, and
-  `test/layout.order.test.ts` fails if it moves. (c) The metric counts a
-  crossing only between two segments joining the same pair of ADJACENT layers,
-  which today is 1,324 of the 1k corpus's 4,000 edges (33.1%) and 10,528 of the
-  10k's 40,000 (26.3%); M2.4b takes both to 100% on any graph without self
-  loops, which both corpora are, because a self loop spans no rank for a chain
-  to split. (d) `maxSweeps` defaults to 8 and the stage returns the best
-  layering it saw rather than the last, because the sweeps are not monotone.
-  (e) It is not the default because it costs about 21ms on the 10k against a
-  `pipeline > 10k` baseline of 30.15ms with a 10% gate tolerance, and the
-  rebaseline that fixes it wants a quiet machine. M2.5 also gave a second
-  reason, that M2.6 would improve the same stage so one flip could serve both;
-  M2.6 has now shipped WITHOUT the flip, so that reason is spent and the
-  baseline cost is the only one left. The flip is M2.6b.
+  NOT CHANGE in this milestone and was still `insertion-order` when it landed,
+  for the reason in (e). (b) THE SEED IS NOT ROSTER ORDER. It is a connected
+  depth-first walk over adjacent-layer edges only, in both directions, roster
+  order for the outer loop and `outEdges` then `inEdges` for the neighbours.
+  That is the M3.6 answer, and `test/layout.order.test.ts` fails if it moves.
+  (c) The metric counts a crossing only between two segments joining the same
+  pair of ADJACENT layers, which today is 1,324 of the 1k corpus's 4,000 edges
+  (33.1%) and 10,528 of the 10k's 40,000 (26.3%); M2.4b takes both to 100% on
+  any graph without self loops, which both corpora are, because a self loop
+  spans no rank for a chain to split. (d) `maxSweeps` defaults to 8 and the
+  stage returns the best layering it saw rather than the last, because the
+  sweeps are not monotone.
+  (e) It did not take the default in M2.5, on two reasons that have both since
+  expired: that M2.6 would improve the same stage so one flip could serve both,
+  and that the bench baseline could not absorb its cost until it was recaptured.
+  M2.6 shipped the improvement and M2.6b did the flip and the recapture, so this
+  item is spent; what the default now costs and buys is M2.6b's entry.
   Everything below is the measurement that chose each of those.
   The seed was chosen by measurement, crossings after 8 sweeps: roster order
   3,943 on the 1k and 54,744 on the 10k, the adjacent-layer walk 3,605 and
@@ -944,18 +944,40 @@ findings addressed or logged, docs land with the feature.
   against a graph M2.4b replaces and BOTH MUST BE RE-DERIVED WHEN IT LANDS
   rather than carried across. The figures behind that are in the docstring.
   `defaultStages.order` did NOT change here. That is M2.6b below.
-- [ ] **M2.6b** Order default flip and bench rebaseline. Touches
+- [x] **M2.6b** Order default flip and bench rebaseline. Touches
   `packages/layout` and `bench`. `defaultStages.order` moves from
   `insertion-order` to `barycenter-order`, and the `pipeline` benchmark entries
   are rebaselined for it. Split out of M2.6 because the two halves want
   different machines: the transpose pass and its golden corpus are ordinary
   work, and `pnpm bench:baseline` recaptures wholesale and wants a quiet one.
-  The arithmetic, which expires the moment the baseline is recaptured: the
-  stage costs about 21ms of sweeps plus about 5ms of transpose on the 10k
-  against a `pipeline > 10k` baseline of 30.15ms with a 10% gate tolerance, so
-  flipping without recapturing fails the gate. Both reasons M2.5 gave for
-  waiting are now down to this one; see M2.5's (e) and the last section of
-  `barycenterOrder`'s docstring.
+  WHAT SHIPPED. `defaultStages.order` is `barycenterOrderStage`, so a run that
+  names no order stage gets barycenter sweeps and a transpose pass where it used
+  to get roster order. The full default pipeline is 1.80x slower on the 10k
+  corpus and returns a drawing with 92.9% fewer adjacent-layer crossings; on the
+  1k it is 1.60x slower for 76.7% fewer. The four measurements those ratios come
+  from live in the last section of `barycenterOrder`'s docstring and nowhere
+  else, because a bench recapture moves the timings and M2.4b moves all four;
+  the two crossing counts are pinned against both stages in
+  `test/layout.order.test.ts`, so a stage that gave the saving back fails there
+  rather than in a paragraph. The `pipeline` baselines are recaptured for the
+  new default, which is the half of this milestone that wanted the quiet
+  machine.
+  `insertionOrderStage` WAS KEPT, and that is the decision here that is not the
+  flip itself. M2.2 deleted the placeholder it replaced, `singleRankStage`;
+  this one stays, module-local and still unexported, because three tests execute
+  it and one of them is the roster-order column of the seed-comparison table
+  that says what barycenter ordering beats. Deleting the stage means deleting
+  that evidence or re-deriving it from an arrangement nothing in the package
+  produces any more. The reason is written on the stage rather than only here.
+  THE M2.4b CAVEAT IS NOW BIGGER THAN IT WAS, which is the part of this entry
+  that constrains a later task. M2.6 already recorded that the transpose pass's
+  cap and its tie rule are measured on a graph where the counter sees about a
+  quarter of the edges, and that both must be re-derived when M2.4b makes every
+  edge visible. What changes here is the blast radius: those constants no longer
+  govern an opt-in stage, they govern the DEFAULT PIPELINE, so M2.4b changes
+  what every caller who names no stage gets. Re-deriving them is a condition of
+  that milestone and not a tidy-up after it, and all four of this entry's own
+  figures expire on the same event.
 - [ ] **M2.7** Positioning: Brandes-Koepf horizontal coordinate assignment
   (or median-based v1 with the interface ready for BK). Invariant tests: no
   node overlaps, spacing respected.

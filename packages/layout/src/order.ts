@@ -357,9 +357,10 @@ function buildIndex(input: RankedState): OrderIndex {
   const count = ids.length;
 
   // Layers are the DISTINCT RANKS SORTED, not the ranks themselves. A ranker is
-  // allowed to leave gaps or start below zero, `insertionOrderStage` has always
-  // said so, and adjacency here is adjacency of layers: two ranks with nothing
-  // between them are one gap apart however far apart the numbers are.
+  // allowed to leave gaps or start below zero, every order stage this package
+  // has shipped has said so, and adjacency here is adjacency of layers: two
+  // ranks with nothing between them are one gap apart however far apart the
+  // numbers are.
   const rankOf = new Float64Array(count);
   const distinct = new Set<number>();
   for (const [number, id] of ids.entries()) {
@@ -699,27 +700,29 @@ function applyHint(
  * Builds an order stage that reduces edge crossings by barycenter sweeps.
  *
  * `barycenterOrderStage` is this with no options, and is what to reach for
- * unless a run needs a warm start or a different sweep budget. It is NOT the
- * default order stage; see the last section here for why not.
+ * unless a run needs a warm start or a different sweep budget. It is what
+ * `defaultStages.order` points at, so a run that names no order stage gets it;
+ * what that costs and what it buys is the last section here.
  *
  * ## The seed, which is the part M3.6 warm starts from
  *
  * Barycenter sweeps are sensitive to where they start, so the starting
  * permutation is a decision rather than an implementation detail, and it is
  * this: a connected DEPTH-FIRST WALK over adjacent-layer edges. See
- * {@link seedWalk} for the rule itself. It is not the roster order the
- * placeholder used.
+ * {@link seedWalk} for the rule itself. It is not the roster order the stage
+ * this one replaced as the default lays out.
  *
  * Measured on the bench corpora, crossings after 8 sweeps, lower is better:
  *
- * | seed                             | 1k    | 10k    |
- * | -------------------------------- | ----- | ------ |
- * | roster order (the placeholder's) | 3,943 | 54,744 |
- * | walk over adjacent-layer edges   | 3,605 | 35,114 |
- * | walk over all edges              | 3,459 | 38,152 |
+ * | seed                                 | 1k    | 10k    |
+ * | ------------------------------------ | ----- | ------ |
+ * | roster order (`insertionOrderStage`) | 3,943 | 54,744 |
+ * | walk over adjacent-layer edges       | 3,605 | 35,114 |
+ * | walk over all edges                  | 3,459 | 38,152 |
  *
- * and before any sweep runs: roster order 12,890 and 425,394, the
- * adjacent-layer walk 7,933 and 94,991, the all-edges walk 9,722 and 191,023.
+ * and before any sweep runs: the adjacent-layer walk 7,933 and 94,991, the
+ * all-edges walk 9,722 and 191,023. Roster order's pair is the `crossings
+ * before` column of the trade section below, quoted there rather than twice.
  *
  * The adjacent-layer walk is chosen over the all-edges walk for two reasons. It
  * wins the 10k by 8.0% and loses the 1k by 4.2%, and the 10k is the corpus
@@ -1001,28 +1004,43 @@ function applyHint(
  * graph's history: it reads the ranks it is given, so a graph assembled in a
  * different order that ranks the same and rosters the same orders the same.
  *
- * ## Why this is not the default order stage
+ * ## What the default costs and what it buys
  *
- * `defaultStages.order` is still `insertionOrderStage`, and this stage is
- * exported by name beside it, which is the precedent M2.3 set with
- * `networkSimplexRankStage`: a real stage is exported by name, and which stage
- * is the default is a separate decision from whether the algorithm exists.
+ * M2.6b pointed `defaultStages.order` at this stage, so what follows is what a
+ * caller who names no order stage now pays and now gets, measured against the
+ * roster order `insertionOrderStage` produces. Full default pipeline, median of
+ * 25 timed iterations after 5 warmups, and the crossings of the layering each
+ * one produces:
  *
- * One thing beyond the precedent, and it is a benchmark baseline rather than
- * anything about the algorithm. The sweeps cost about 21ms on the 10k corpus
- * and the transpose pass adds about 5ms more, against a `pipeline > 10k`
- * benchmark baseline of 30.15ms whose base tolerance is 10%, so making this the
- * default would put that entry far enough over for the bench gate to fail. The
- * baseline refresh that would absorb it is owed already and deferred to a quiet
- * machine, because `pnpm bench:baseline` recaptures wholesale. That refresh and
- * the default flip are M2.6b, and they are one decision: the reason to wait for
- * the transpose pass before flipping has now expired, because the pass is here.
+ * | corpus | roster order | this stage | crossings before | after  |
+ * | ------ | ------------ | ---------- | ---------------- | ------ |
+ * | 1k     | 2.502ms      | 3.992ms    | 12,890           | 3,005  |
+ * | 10k    | 26.257ms     | 47.229ms   | 425,394          | 30,318 |
  *
- * Those two numbers, the baseline and the tolerance, are why the argument is
- * made here and nowhere else. Both expire the moment either one is recaptured,
- * so `index.ts` and `docs/docs/layout.md` say that the stage is opt-in and how
- * to opt into it and then point back at this section, which leaves one
- * paragraph to correct rather than three.
+ * So the pipeline is 1.60x slower on the 1k (+1.49ms) and 1.80x slower on the
+ * 10k (+20.97ms), and the drawing has 76.7% fewer adjacent-layer crossings on
+ * the one and 92.9% fewer on the other. The two after-counts are this stage at
+ * its own defaults, the cap-of-8 row of the transpose table above, which is
+ * what ties the trade to the stage that actually ships rather than to some
+ * configuration of it. The timings are one machine's, as every timing here is.
+ *
+ * THOSE FOUR FIGURES ARE LIVE ADVICE HERE AND NOWHERE ELSE. Each is a
+ * measurement with a scheduled expiry: a bench recapture moves the timings and
+ * M2.4b moves all four. So `index.ts`, `ROADMAP.md` and `docs/docs/layout.md`
+ * describe the trade in a sentence and point back at this section rather than
+ * copying the table, which leaves one paragraph to correct rather than four.
+ * `CHANGELOG.md` is the deliberate exception: a dated entry records what a
+ * past change measured at the time, so M2.6's entry keeps its own 3,005 and
+ * 30,318 and is marked superseded in place rather than swept, which is this
+ * file's own precedent. The crossing counts are pinned against both stages in
+ * `test/layout.order.test.ts`, so a stage that quietly gave the saving back
+ * fails there; the timings are pinned by nothing, which is what the bench
+ * baseline is for.
+ *
+ * Being the default was always a separate decision from existing, which is the
+ * precedent M2.3 set with `networkSimplexRankStage`: a real stage is exported
+ * by name whether or not it is the default, and this one was exported by name
+ * for two milestones before it took it.
  *
  * @throws {InvalidConfigError} when `maxSweeps` is not a whole number of sweeps
  * that is zero or greater, or when `maxTransposePasses` is not a whole number
@@ -1214,7 +1232,7 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
 /**
  * The barycenter order stage with no options: eight sweeps and a cold start.
  * See {@link barycenterOrder}, which is where all of it is argued, including
- * why this is not the default stage.
+ * what being the default costs and what it buys.
  *
  * Frozen, for the reason `defaultStages` and `networkSimplexRankStage` are: it
  * is one object shared by every run in the process, and a stage's `name` is

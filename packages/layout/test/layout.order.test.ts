@@ -5,7 +5,7 @@ import { DEFAULT_LAYOUT_CONFIG } from '../src/config.js';
 import { InvalidConfigError } from '../src/errors.js';
 import { barycenterOrder, barycenterOrderStage, countCrossings } from '../src/order.js';
 import { longestPathRankStage } from '../src/rank.js';
-import { defaultStages } from '../src/stages.js';
+import { defaultStages, insertionOrderStage } from '../src/stages.js';
 import { layout } from '../src/pipeline.js';
 import { mulberry32, randomDigraph, randomLayered } from './random.js';
 import type { GraphSpec } from '@dagr/bench';
@@ -99,9 +99,12 @@ describe('barycenterOrder, the seed permutation', () => {
       ['a', 'b'],
       ['d', 'c'],
     ]);
-    // What the placeholder does with the same input, so that the difference is
-    // in the file rather than in a reader's head.
-    expect(defaultStages.order.run(state).layers).toEqual([
+    // What roster order does with the same input, so that the difference is in
+    // the file rather than in a reader's head. `insertionOrderStage` by name
+    // rather than through `defaultStages`, because what this needs is that one
+    // stage: a fixture that tracks the default silently changes what the case
+    // measures the moment the default moves, which is what M2.6b did to it.
+    expect(insertionOrderStage.run(state).layers).toEqual([
       ['a', 'b'],
       ['c', 'd'],
     ]);
@@ -122,7 +125,7 @@ describe('barycenterOrder, the seed permutation', () => {
     );
     const state = stateOf(graph, [['a', 'b'], ['c']]);
     expect(ordered(state, { maxSweeps: 0 })).toEqual([['a', 'b'], ['c']]);
-    expect(defaultStages.order.run(state).layers).toEqual([['b', 'a'], ['c']]);
+    expect(insertionOrderStage.run(state).layers).toEqual([['b', 'a'], ['c']]);
   });
 
   /**
@@ -581,9 +584,9 @@ describe('barycenterOrder, the options', () => {
     expect(() => stage.run(state)).not.toThrow();
   });
 
-  it('is named barycenter-order and is not the default order stage', () => {
+  it('is named barycenter-order and is the default order stage', () => {
     expect(barycenterOrderStage.name).toBe('barycenter-order');
-    expect(defaultStages.order.name).toBe('insertion-order');
+    expect(defaultStages.order.name).toBe('barycenter-order');
   });
 });
 
@@ -737,15 +740,18 @@ describe('barycenterOrder, on the bench corpora', () => {
 
   /**
    * The seed decision and the sweep budget, in one table. The roster-order row
-   * is the placeholder's permutation fed back in as a hint, which is both the
-   * comparison D1 was decided on and a test that a hint naming every node
-   * really does reproduce itself at this size.
+   * is `insertionOrderStage`'s permutation fed back in as a hint, which is both
+   * the comparison D1 was decided on and a test that a hint naming every node
+   * really does reproduce itself at this size. That stage is named rather than
+   * reached through `defaultStages`, which used to hold it: this column is the
+   * roster order specifically, and reading it off the default would have
+   * rewritten what the table compares the moment M2.6b moved the default here.
    */
   it('pins the seed comparison and the sweep curve, with the pass off', () => {
     const table = corpora.map(([name, spec]) => {
       const state = rankedCorpus(spec);
       const { graph } = state;
-      const roster = defaultStages.order.run(state).layers;
+      const roster = insertionOrderStage.run(state).layers;
       const at = (maxSweeps: number, initialOrder?: readonly (readonly NodeId[])[]): number =>
         countCrossings({
           graph,
@@ -818,4 +824,19 @@ describe('barycenterOrder, on the bench corpora', () => {
       expect(barycenterOrder().run(rankedCorpus(spec)).layers).toEqual(first);
     }
   });
+
+  /*
+   * M2.6b briefly added a case here pinning what the flip bought, roster order
+   * against the default on both corpora. It was cut before it merged, because
+   * algorithms-review measured it against six mutants (the median tiebreak,
+   * the sweep direction, both default caps, a differently configured stage
+   * object, and the default repointed) and it made ZERO unique kills: its left
+   * column is column one of the seed table above, its right column is the
+   * cap-of-8 row of the transpose table above, and the substitution it was
+   * meant to catch is caught harder by `index.test.ts`'s identity check on
+   * `defaultStages.order`. A test that only restates two committed tables
+   * costs a run of the 10k corpus and buys nothing. What the flip did NOT
+   * already have a pin for was determinism through `layout()` itself, and that
+   * case lives in `layout.determinism.test.ts` instead.
+   */
 });

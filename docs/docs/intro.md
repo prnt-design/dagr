@@ -36,11 +36,12 @@ Early, and moving fast, but past the point of being only scaffolding.
 ports, patches, traversal, and serialization are implemented, tested, and
 documented on the [graph model](./graph-model.md) page. `@dagr/layout` has its
 pipeline skeleton, the types and stage boundaries every later milestone is
-built against, with placeholder stages behind them for now; the
-[layout](./layout.md) page says which half is which. `@dagr/render` has reached
-first light: an orthographic camera, the renderer seam, and one shape drawn
-through a three.js `WebGPURenderer`, described on the
-[renderer](./render.md) page. `@dagr/react` is still a scaffold.
+built against, with real ranking and crossing reduction behind two of the four
+defaults and placeholders behind the other two; the [layout](./layout.md) page
+says which half is which. `@dagr/render` has reached first light: an
+orthographic camera, the renderer seam, and one shape drawn through a three.js
+`WebGPURenderer`, described on the [renderer](./render.md) page. `@dagr/react`
+is still a scaffold.
 
 Nothing is published to npm and there is no released API. Names and signatures
 change when a milestone learns something, without deprecation cycles, because
