@@ -511,13 +511,13 @@ findings addressed or logged, docs land with the feature.
   longest path, or beat 226,676 under simplex run to convergence, and do it
   without going deeper than the 203 ranks it costs. The target remains the
   ground truth's 32,050 at 796, or 19,196 under simplex, which is a factor of
-  forty either way. Note the simplex figure that moved:
-  the old bar quoted 224,789, which is the UNSCOPED order at 200,000 pivots and
-  is 0.8% BETTER than what ships. That is not a regression hiding in the
-  change, it is the convergence-speed caveat two paragraphs down doing exactly
-  what it warns about: at the default 20,000 pivots the shipping view is
-  268,589 against the unscoped 423,426, a 37% cut, and it is also faster to
-  solve at both budgets (1.80s against 3.82s, and 51.1s against 60.5s). The
+  forty either way. Note the simplex figure that moved: the old bar quoted
+  224,789, which is the UNSCOPED order at 200,000 pivots and is 0.8% BETTER
+  than what ships. That is not a regression hiding in the change, it is the
+  convergence-speed caveat two paragraphs down doing exactly what it warns
+  about: at the default 20,000 pivots the shipping view is 268,589 against the
+  unscoped 423,426, a 37% cut, and it is also faster to solve at both budgets
+  (1.80s against 3.82s, and 51.1s against 60.5s). The
   unscoped order simply had more of its gain still ahead of it. Quote the
   budget with the figure, and beat 226,676 rather than 224,789 because 226,676
   is what a caller can actually get today.
