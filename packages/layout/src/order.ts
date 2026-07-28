@@ -232,7 +232,7 @@ export interface BarycenterOrderOptions {
 
   /**
    * How many transpose passes the stage may run over the layering the sweeps
-   * settled on. Defaults to 4. Zero is legal and means no transpose at all.
+   * settled on. Defaults to 8. Zero is legal and means no transpose at all.
    *
    * It bounds PASSES, exactly as `maxSweeps` bounds sweeps: one pass is one
    * walk over every adjacent pair of every layer, and the loop stops early when
@@ -443,10 +443,18 @@ function buildIndex(input: RankedState): OrderIndex {
 /**
  * The two adjacency directions the transpose delta reads, as CSR arrays.
  *
- * A named interface rather than a `Pick` of {@link OrderIndex} because
- * {@link transposeLayers} is exported and a signature naming a type this module
- * keeps to itself would not survive declaration emit. `OrderIndex` satisfies it
+ * A named interface rather than a `Pick` of {@link OrderIndex} because it is
+ * the more readable contract: it says what the four arrays are for, which a
+ * structural `Pick` at the call site does not. `OrderIndex` satisfies it
  * structurally, so the stage passes its own index straight in.
+ *
+ * NOT because the compiler forces it. The earlier version of this comment
+ * claimed a signature naming a type this module kept to itself would not
+ * survive declaration emit, and that is false: TypeScript emits a non-exported
+ * local interface into the `.d.ts` when an exported signature references it,
+ * checked with `tsc --declaration` on exactly that shape. TS4023 bites on a
+ * name IMPORTED but not re-exported, which is a different case. Recorded so
+ * that nobody adds a named type here believing they had no choice.
  */
 export interface TransposeAdjacency {
   readonly upStart: Int32Array;

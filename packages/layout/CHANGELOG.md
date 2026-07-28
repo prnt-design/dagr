@@ -14,6 +14,41 @@ of doc prose.
 
 ### Added
 
+- `maxTransposePasses` on `BarycenterOrderOptions`, defaulting to 8, where zero
+  means no transpose at all. It bounds PASSES only, and it rejects a
+  non-integer, a negative and `Number.POSITIVE_INFINITY` with
+  `InvalidConfigError` naming the field, checked when the stage is built rather
+  than when it runs. That is `maxSweeps`'s rule, for `maxSweeps`'s reason: a
+  heuristic with no optimality condition has nothing for "as many as it takes"
+  to mean. (M2.6a)
+
+  **THE PASS IS ON BY DEFAULT, so `barycenterOrder()` and
+  `barycenterOrderStage` return different layers than they did before this
+  entry, with no type change to warn a caller.** This is the category the file
+  exists for. After the sweeps settle, the stage takes the best layering they
+  found and repeatedly swaps adjacent pairs within a layer while that lowers the
+  crossing count, which reaches 3,005 crossings on the 1k benchmark corpus where
+  the sweeps alone reach 3,605, and 30,318 against 35,114 on the 10k, costing
+  about 0.41ms and 4.93ms. `defaultStages.order` is still `insertion-order` and
+  is untouched, so a caller who never named an order stage sees nothing change.
+
+  The sharpest case, because it is the one that reads as a contradiction:
+  `barycenterOrder({ maxSweeps: 0 })` used to mean "the seed permutation,
+  untouched" and no longer does, because a sweep budget of zero does not
+  disable a pass that runs after the sweeps. Ask for the seed alone with
+  `barycenterOrder({ maxSweeps: 0, maxTransposePasses: 0 })`.
+
+  What the cap is measured against is worth carrying, because it will expire.
+  Eight is the knee of the curve: it captures 81.9% of what an unbounded run to
+  the fixed point would save, for 16.1% of the extra time. It matches
+  `maxSweeps`'s default of 8 by coincidence and the two are deliberately
+  separate constants. And it is measured on graphs where about a quarter of
+  edges span exactly one rank and so are visible to the counter at all. When
+  M2.4b splits every long edge into a chain, that share goes to essentially all
+  of them, and both the cap and the tie rule have to be re-derived rather than
+  carried across: the saving a capped pass keeps falls from 10.7% to 1.4% on a
+  dummy-expanded 10k.
+
 - `barycenterOrderStage` and `barycenterOrder(options)`, exported, plus the
   `BarycenterOrderOptions` type, and `countCrossings(layering)` with the
   `Layering` type it takes, which is a graph and the layers its nodes are drawn
