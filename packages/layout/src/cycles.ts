@@ -66,9 +66,93 @@ function at<T>(values: readonly T[], index: number): T {
  * argument that carries the proof: the deltas of the remaining vertices always
  * sum to zero, so the greedy pick has `indeg <= outdeg` and adds no more
  * backward arcs than forward ones, and sinks and sources add no backward arcs
- * at all. Half is still worth having, and is still the reason to prefer this to
- * the DFS back-edge set a naive cycle breaker produces: a DFS reverses whatever
- * its traversal order happens to hit, with no bound at all.
+ * at all. Half is still worth having, and it is still the difference between
+ * this and the DFS back-edge set a naive cycle breaker produces, which has no
+ * bound at all: a DFS reverses whatever its traversal order happens to hit.
+ *
+ * Do not read that as "and therefore DFS reverses more edges here". Measured on
+ * the 10k bench corpus, DFS back edges reverse FEWER of them than this does,
+ * 1,651 against 6,327, and leave a view 601 ranks deep against 154. The bound
+ * is about the count, and the count is not the quality this module's caller
+ * buys. The next section is what is.
+ *
+ * ## What quality actually means here
+ *
+ * The caller is the rank stage, and what it does with this set is build an
+ * acyclic view and rank it. The number it pays for is the TOTAL SPAN of that
+ * view, the sum over its edges of `max(0, rank(target) - rank(source) - 1)`,
+ * because that is exactly one dummy node per rank an edge crosses beyond the
+ * first once M2.4b's splitter exists. Span follows the DEPTH of the view ON THE
+ * 10k CORPUS, which is the corpus that decides this rather than a fact about
+ * span in general (the corpus paragraph below is the correction, and it is
+ * there because the wide version of this sentence is false), and depth runs
+ * against the reversal count across every candidate measured so far, on both
+ * bench corpora. So the `m/2` bound above is a real guarantee about the
+ * wrong quantity, and a change here that cuts the reversal count is not, on its
+ * own, an improvement. The ground-truth row below is the one exception, and it
+ * is not an algorithm: the two objectives are not inherently opposed, they are
+ * just opposed in every heuristic anyone has tried here.
+ *
+ * The numbers, from the M2.2b measurement run, on the 10k corpus (10,000 nodes,
+ * 40,000 edges, 60 authored layers), which is the corpus M2.4b, M2.9, M3.9 and
+ * M4.10 all commit against. This module: 6,327 reversals, 154 ranks, 1,414,263
+ * dummies. Reversing exactly the edges the corpus authored as back edges, which
+ * is knowledge no cycle breaker has and is here only as a bound to argue
+ * against: 796 reversals, 60 ranks, 32,050 dummies. So there is a factor of
+ * forty on the table and greedy does not find it.
+ *
+ * Three alternatives are already measured, recorded so that the next reader
+ * does not spend a run on them blind. All three figures below are under
+ * `longestPathRanks`; the ranker matters and the paragraph after next says how.
+ * DFS back edges: 1,651 reversals, 601 ranks, 1,601,415 dummies, so a cut of
+ * nearly four times in the reversal count bought 13% MORE of the thing that is
+ * actually paid for. Keeping this pass's order and deleting only the reversals
+ * whose endpoints lie in different strongly connected components: 4,620
+ * reversals, 203 ranks, 1,359,680 dummies, which is the only measured candidate
+ * that beats this pass on BOTH reversals and span, on both corpora, and it is
+ * the bar M2.2b now states. This same heuristic run per strongly connected
+ * component: 61% fewer reversals, 2.1 times the depth, 8% more span (2,454, 320
+ * ranks, 1,522,128 dummies). That last one is the instructive failure under
+ * this ranker, because the idea behind it is sound as
+ * far as it goes. An edge between two components lies on no cycle, so NO CYCLE
+ * REQUIRES reversing it, and the sequence built below reverses 1,707 of them
+ * anyway out of its 6,327 (348 of 422 on the 1k). Note the exact strength of
+ * that: it says a construction avoiding those reversals exists, NOT that they
+ * can be dropped from this set, because reversing a set is not deleting it and
+ * a reversed arc creates paths the original graph did not have. Dropping them
+ * from this set happens to leave a legal view on both corpora, which is a
+ * measurement and not a theorem. But a reversal SHORTENS the path it sat on as
+ * well as pointing an edge backwards, so taking away reversals nobody needed
+ * makes the longest path longer. That tension is the shape of the problem.
+ *
+ * ## Which ranker those spans assume
+ *
+ * All of them assume `longestPathRanks`, and the verdicts move under the
+ * network simplex ranker M2.3 shipped. At its default 20,000-pivot budget the
+ * 10k spans become 423,426 for this pass, 311,179 for the per-component variant
+ * and 268,589 for the deletion pass, which reads as though per-component wins.
+ * IT DOES NOT: that budget does not converge the 10k, and the rows are not
+ * equally far from converged, so the column ranks convergence SPEED. At 200,000
+ * pivots this pass is 224,789, the deletion pass 226,676 and the per-component
+ * variant 309,732, and the order is back to where longest path had it. Quote a
+ * pivot budget beside any simplex figure, and treat a candidate that wins only
+ * at a truncated budget as a lead rather than a result. Depth was identical
+ * under both rankers in every row measured, at both budgets.
+ *
+ * State the corpus with any claim made here. On the 1k corpus the depth result
+ * is the same (DFS is 86% deeper at a tenth of the reversals) but the span
+ * result INVERTS: DFS comes out at 30,954 dummies against this module's 40,430,
+ * 24% fewer, and every candidate measured cuts span there. A run that measured
+ * only the 1k would have concluded that DFS is an improvement. The 1k has 242
+ * intra-component edges out of 4,000 against the 10k's 20,229 out of 40,000, so
+ * its cycle structure is nearly trivial and a deeper view has little to span
+ * across. See M2.2b in `ROADMAP.md` for both corpora in full, the other two
+ * families measured, and the time budget a replacement has: about 2ms on the
+ * 10k, which is less than the 4.1ms a Tarjan pass costs there. Note that the
+ * word condensation below means the parallel-arc collapse and NOT the
+ * components, so there is nothing to read components out of for free. A
+ * component-scoped replacement has to pay for itself by REPLACING the work
+ * below rather than by running in front of it.
  *
  * ## Complexity
  *
