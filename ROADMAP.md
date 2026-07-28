@@ -931,11 +931,12 @@ findings addressed or logged, docs land with the feature.
   the full saving for 16.1% of the extra time, and the marginal rate halves
   immediately past it.
   THE CAVEAT, and it is not small. The saving COLLAPSES once every edge is
-  visible: on a dummy-expanded 10k the capped saving falls from 10.7% to 1.4%,
-  and only an unaffordable full fixed point holds its share (214 seconds
-  against 6.8). Both the cap and the tie rule are measured against a graph
-  where about a quarter of edges are visible, so both must be RE-DERIVED when
-  M2.4b lands rather than carried across.
+  visible: on a dummy-expanded 10k the capped saving falls from 10.7% to 1.4%
+  at a cap of 4, which is what those two were compared at and is not the
+  default of 8, and only an unaffordable full fixed point holds its share (214
+  seconds against 6.8). Both the cap and the tie rule are measured against a
+  graph where about a quarter of edges are visible, so both must be RE-DERIVED
+  when M2.4b lands rather than carried across.
   `defaultStages.order` did NOT change here. That is M2.6b below.
 - [ ] **M2.6b** Order default flip and bench rebaseline. Touches
   `packages/layout` and `bench`. `defaultStages.order` moves from

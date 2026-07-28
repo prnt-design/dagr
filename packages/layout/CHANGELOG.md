@@ -47,7 +47,8 @@ of doc prose.
   M2.4b splits every long edge into a chain, that share goes to essentially all
   of them, and both the cap and the tie rule have to be re-derived rather than
   carried across: the saving a capped pass keeps falls from 10.7% to 1.4% on a
-  dummy-expanded 10k.
+  dummy-expanded 10k, at the cap of 4 those two were compared at rather than at
+  this default of 8, which was never measured there.
 
 - `barycenterOrderStage` and `barycenterOrder(options)`, exported, plus the
   `BarycenterOrderOptions` type, and `countCrossings(layering)` with the

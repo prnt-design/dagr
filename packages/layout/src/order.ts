@@ -905,8 +905,11 @@ function applyHint(
  * is visible.** Every number above is measured on a graph where the counter
  * sees about a quarter of the edges, because an edge spanning more than one
  * rank is invisible to it. On a dummy-expanded 10k, which is what M2.4b
- * produces, the capped saving falls from 10.7% to 1.4% at the cap those two
- * were compared at, and only a full fixed point holds its share, at a price
+ * produces, the capped saving falls from 10.7% to 1.4% AT A CAP OF 4, which is
+ * the cap those two were compared at and is not this stage's default of 8. The
+ * expanded graph was never measured at 8, so the honest statement is that a
+ * capped pass loses most of its value there and not that it loses exactly that
+ * much. Only a full fixed point holds its share, at a price
  * nobody can pay: 214 seconds against 6.8. So the cap AND the tie rule are both
  * measured against a graph that M2.4b replaces, and BOTH MUST BE RE-DERIVED
  * WHEN IT LANDS rather than carried across unexamined. Neither is a constant of

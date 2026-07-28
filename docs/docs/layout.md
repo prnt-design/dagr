@@ -906,10 +906,13 @@ is visible.** Every number above is measured on a graph where the counter sees
 about a quarter of the edges, for the reason in
 [What a crossing is counted between](#what-a-crossing-is-counted-between). On a
 dummy-expanded 10k, which is what M2.4b produces, the capped saving falls from
-10.7% to 1.4% at the cap the two were compared at, and only a full fixed point
-holds its share, at a price nobody can pay: 214 seconds against 6.8. So the cap
-and the tie rule are both measured against a graph M2.4b replaces, and both
-must be re-derived when it lands rather than carried across unexamined.
+10.7% to 1.4% at a cap of 4, which is the cap those two were compared at and is
+not the default of 8. The expanded graph was never measured at 8, so what this
+says is that a capped pass loses most of its value there, not that it loses
+exactly that much. Only a full fixed point holds its share, at a price nobody
+can pay: 214 seconds against 6.8. So the cap and the tie rule are both measured
+against a graph M2.4b replaces, and both must be re-derived when it lands
+rather than carried across unexamined.
 Neither is a constant of the algorithm.
 
 The crossing counts the stage reaches on a fixed set of generated graphs, with
