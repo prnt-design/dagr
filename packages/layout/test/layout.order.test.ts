@@ -309,6 +309,53 @@ describe('barycenterOrder, the initialOrder hint', () => {
     ]);
   });
 
+  /**
+   * Both halves of the rule that keys a hint layer: an id takes its FIRST
+   * position there, and a repeat consumes no index. `initialOrder` is untrusted
+   * input, so a hint that lists an id twice is a case rather than a curiosity.
+   *
+   * The witness needs a second hint layer before the second half is visible at
+   * all. Within one hint layer only the ORDER of the keys is ever read, so an
+   * index a repeat had eaten would push every later key up by one and change
+   * nothing. It is against a key from ANOTHER hint layer that the shift shows:
+   * `y` and `w` are keyed 1 apiece and therefore tie, the walk breaks the tie,
+   * and a consumed index would be what took that tie away.
+   *
+   * Pinned against the concrete layering as well as against the same hint with
+   * the duplicate removed, because two runs that broke the same way would agree
+   * with each other and say nothing.
+   */
+  it("takes an id's first position in a hint layer, and a repeat consumes no index", () => {
+    const fan = build(
+      ['a', 'x', 'y', 'z', 'w'],
+      [
+        ['a', 'x'],
+        ['a', 'y'],
+        ['a', 'z'],
+        ['a', 'w'],
+      ],
+    );
+    const fanState = stateOf(fan, [['a'], ['x', 'y', 'z', 'w']]);
+    expect(ordered(fanState, { maxSweeps: 0 })).toEqual([['a'], ['x', 'y', 'z', 'w']]);
+    const duplicated = ordered(fanState, {
+      maxSweeps: 0,
+      initialOrder: [
+        ['x', 'x', 'y'],
+        ['z', 'w'],
+      ],
+    });
+    expect(duplicated).toEqual([['a'], ['x', 'z', 'y', 'w']]);
+    expect(duplicated).toEqual(
+      ordered(fanState, {
+        maxSweeps: 0,
+        initialOrder: [
+          ['x', 'y'],
+          ['z', 'w'],
+        ],
+      }),
+    );
+  });
+
   it('leaves the walk order alone when the hint names nothing it holds', () => {
     const cold = ordered(state, { maxSweeps: 0 });
     expect(ordered(state, { maxSweeps: 0, initialOrder: [] })).toEqual(cold);
@@ -417,6 +464,28 @@ describe('barycenterOrder, the sweeps', () => {
     const { graph, layers } = randomLayered(mulberry32(69), 150, 7, 320);
     const state = stateOf(graph, layers);
     expect(countCrossings({ graph, layers: ordered(state) })).toBe(893);
+  });
+
+  /**
+   * The word CONSECUTIVE in that same rule, which is a separate claim from the
+   * one above and takes a bigger budget to make. Two fruitless rounds end the
+   * run only when they are adjacent, and the reset of the counter is the whole
+   * of what makes them so.
+   *
+   * At the DEFAULT budget of 8 the two rules are indistinguishable, which is
+   * why no case above and no corpus pin below can defend this one. Eight sweeps
+   * are four rounds, so there are only four round checks, and a fruitless round
+   * with a fruitful one after it and a second fruitless one after that needs
+   * three of them plus sweeps still left to run before the difference is worth
+   * anything. A budget of 16 gives it the room: on this graph a counter that
+   * accumulated across non-adjacent rounds stops early at 1,118 crossings,
+   * which is already what a budget of 8 reaches, and resetting it carries the
+   * run on to 1,016.
+   */
+  it('counts two fruitless rounds only when they are consecutive', () => {
+    const { graph, layers } = randomLayered(mulberry32(111), 150, 7, 320);
+    const state = stateOf(graph, layers);
+    expect(countCrossings({ graph, layers: ordered(state, { maxSweeps: 16 }) })).toBe(1_016);
   });
 
   it('improves with a bigger sweep budget, and runs no sweep at all at zero', () => {
