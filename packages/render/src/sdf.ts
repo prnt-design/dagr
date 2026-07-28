@@ -66,12 +66,16 @@ import type { Size } from './types.js';
  * The nine arithmetic primitives every formula in this file is built from.
  *
  * Nine, and not ten. Each member is one line in `sdf-nodes.ts` that no Node test
- * can execute, so the count is the size of this package's untested arithmetic
- * surface and it is worth keeping small enough to read. `clamp`, `smoothstep`,
- * `oneMinus` and `length` all exist as TSL builtins and as WGSL intrinsics and
- * are all absent here deliberately: adding them would move a formula out of the
- * tested half of the file for the sake of a few instructions. See
- * {@link smoothstepBetween} for what that costs.
+ * can execute, and it is worth keeping the count small enough to read. It is NOT
+ * the whole of this package's untested arithmetic surface, which is these nine plus
+ * the three pieces of TSL named in the module docstring above: writing the two as
+ * the same thing is the mistake that got copied into five files before
+ * api-design-review caught it. `clamp`, `smoothstep`, `oneMinus` and `length` all
+ * exist as TSL builtins and as WGSL intrinsics, and the first three are absent here
+ * deliberately, because adding them would move a formula out of the tested half of
+ * the file for the sake of a few instructions. `length` is the exception and is used
+ * as an intrinsic in exactly one place. See {@link smoothstepBetween} for what
+ * building the others costs.
  *
  * `literal` is what lifts a plain number into the backend's value type. Every
  * other member takes and returns `T` only, so a formula written over this

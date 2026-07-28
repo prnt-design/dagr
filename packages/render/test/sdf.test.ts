@@ -181,16 +181,15 @@ describe('roundedRectDistance', () => {
     // 20 units out at this angle the circle reads exactly 0 and the rect reads
     // -3.55e-15, which is inside rather than on the edge by a distance no
     // rasteriser can sample.
-    const angle = (5 / 17) * 2 * Math.PI;
-    const onEdge = roundedRectDistance(
-      numberArith,
-      20 * Math.cos(angle),
-      20 * Math.sin(angle),
-      20,
-      20,
-      20,
-    );
-    expect(circleDistance(numberArith, 20 * Math.cos(angle), 20 * Math.sin(angle), 20)).toBe(0);
+    // The coordinates are hardcoded rather than computed from `Math.cos` and
+    // `Math.sin` of `(5 / 17) * 2 * PI`, which is where they came from. ECMAScript
+    // leaves the transcendentals implementation defined, so deriving them would pin
+    // this counterexample to one libm and `not.toBe(0)` could flip on another
+    // platform for a reason that has nothing to do with this file.
+    const px = -5.473259801441658;
+    const py = 19.23651286345638;
+    const onEdge = roundedRectDistance(numberArith, px, py, 20, 20, 20);
+    expect(circleDistance(numberArith, px, py, 20)).toBe(0);
     expect(onEdge).not.toBe(0);
     expect(onEdge).toBeCloseTo(0, 12);
   });
@@ -440,9 +439,16 @@ describe('outlineCoverage', () => {
     // therefore not a bound at all. It fails at width 7 with `aaWidth = 1.1`,
     // which is zoom 0.91 and squarely inside the range the committed screenshots
     // cover: measured 3.056e-30, and that aaWidth is in the list below now so the
-    // counterexample stays tested. Worst across the whole list as a multiple of
-    // `widthPixels^2`: 6.24e-32, against the 1e-30 asserted, so 16x of headroom;
-    // over a 500k pair random sweep with widths in [1, 201] it is 2.08e-31, so 5x.
+    // counterexample stays tested. The asserted constant is backed by a DERIVED
+    // bound rather than by the worst value anybody sampled, which matters because
+    // two independent probes of this residue disagreed about its ceiling by an
+    // order of magnitude and neither could reproduce the other's figure: the three
+    // roundings give a ramp parameter error of at most `2^-53 * (2w + 1)`, so the
+    // squared residue is at most `3 * 2^-106 * (2w + 1)^2`, which is about
+    // `1.5e-31 * w^2` for large `w` and therefore about 6.8x under what this
+    // asserts. Sampled figures for scale rather than as ceilings: 6.24e-32 per
+    // `w^2` across this list, 2.08e-31 over a 500k pair sweep with widths in
+    // [1, 201].
     //
     // All of it is thirty orders of magnitude under the 1/255 an 8 bit framebuffer
     // can represent, so no pixel anybody can see is affected. It is the reason the
@@ -758,7 +764,7 @@ describe('crisp at every zoom instead of at one', () => {
     // band the expression returns `d` untouched, so the deviation is the fill's own
     // 1.665e-16; on the INNER side it has to compute `widthPixels * aaWidth` and
     // negate a sum, and the error scales with the width: measured on these lists,
-    // 2.22e-16 at width 1, 3.33e-16 at width 2, 5.55e-16 at width 3 and 2.665e-15
+    // 2.22e-16 at width 1, 3.33e-16 at width 2, 9.99e-16 at width 3 and 2.665e-15
     // at width 11. The third of those is already past the 5e-16 that 15 digits
     // enforces, which is why the fill's tolerance cannot be reused here, and 14
     // digits (5e-15) leaves 1.9x on the widest band asserted. A 100 pixel band
