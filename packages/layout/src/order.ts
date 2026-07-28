@@ -720,8 +720,9 @@ function applyHint(
  * | walk over adjacent-layer edges       | 3,605 | 35,114 |
  * | walk over all edges                  | 3,459 | 38,152 |
  *
- * and before any sweep runs: roster order 12,890 and 425,394, the
- * adjacent-layer walk 7,933 and 94,991, the all-edges walk 9,722 and 191,023.
+ * and before any sweep runs: the adjacent-layer walk 7,933 and 94,991, the
+ * all-edges walk 9,722 and 191,023. Roster order's pair is the `crossings
+ * before` column of the trade section below, quoted there rather than twice.
  *
  * The adjacent-layer walk is chosen over the all-edges walk for two reasons. It
  * wins the 10k by 8.0% and loses the 1k by 4.2%, and the 10k is the corpus

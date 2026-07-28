@@ -740,8 +740,9 @@ lower is better:
 | walk over adjacent-layer edges | 3,605 | 35,114 |
 | walk over all edges | 3,459 | 38,152 |
 
-and before any sweep runs: roster order 12,890 and 425,394, the adjacent-layer
-walk 7,933 and 94,991, the all-edges walk 9,722 and 191,023.
+and before any sweep runs: the adjacent-layer walk 7,933 and 94,991, the
+all-edges walk 9,722 and 191,023. Roster order's pair is the before column of
+the trade below, quoted there rather than twice.
 
 The adjacent-layer walk is chosen over the all-edges walk for two reasons. It
 wins the 10k by 8.0% and loses the 1k by 4.2%, and the 10k is the corpus every
@@ -938,14 +939,18 @@ that names no order stage now makes. Ordering is the expensive half of it: on
 the 10k benchmark corpus the full default pipeline is roughly 1.8x slower than
 it was with roster order, and the drawing that comes back has 92.9% fewer
 adjacent-layer crossings. On the 1k it is roughly 1.6x slower for 76.7% fewer.
-Both slowdowns are on a pipeline whose other three stages are cheap, so the
-multiple is not a claim about crossing reduction in general.
+Both slowdowns are against a pipeline whose position and route stages are still
+placeholders, so the multiple moves again when M2.7 and M2.8 land; it is not a
+claim about crossing reduction in general.
 
 The four figures behind those two sentences, two timings and two crossing
 counts, are stated once and in one place: the last section of
 `barycenterOrder`'s docstring in `packages/layout/src/order.ts`. They are quoted
-nowhere else because every one of them expires, the timings on the next
-benchmark recapture and all four on M2.4b.
+nowhere else as live advice, because every one of them expires, the timings on
+the next benchmark recapture and all four on M2.4b. The package changelog is
+the exception, and deliberately: a dated entry records what a past change
+measured, so it keeps its own copies and is marked superseded in place rather
+than swept.
 
 None of that changes how a stage is exported, which is the precedent M2.3 set
 with `network-simplex-rank` and this stage kept: it was exported by name for two
@@ -1420,10 +1425,10 @@ right nodes in them and a horizontal order within each row that has had its
 crossings reduced, over the quarter to a third of the edges the metric can see
 today, and then evenly spaces each row and joins the lot with straight lines.
 The layers and the order within them are worth reading; the spacing and the
-edges are not yet. What it is, is a run that always completes,
-never overlaps two boxes (see [Overlap, exactly](#overlap-exactly)), and
-satisfies every guarantee this page makes about the result, which is what the
-later milestones are built against.
+edges are not yet. What it is, is a run that always completes, never overlaps
+two boxes (see [Overlap, exactly](#overlap-exactly)), and satisfies every
+guarantee this page makes about the result, which is what the later milestones
+are built against.
 
 `RankedState.virtualNodes` and `RankedState.virtualChains` are both still empty:
 they are the bookkeeping slots dummy-node chains fill in M2.4b, and they exist

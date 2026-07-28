@@ -205,6 +205,13 @@ of doc prose.
   `straight-route`) are still reachable only through `defaultStages`, because a
   placeholder's name is a name to delete tomorrow. (M2.3)
 
+  **`insertion-order` left that list at M2.6b** and is now reachable through
+  nothing, because `defaultStages.order` points at `barycenter-order` and the
+  older stage was neither exported nor deleted. This one is called out where
+  the other superseded paragraphs are merely marked, since it is the claim a
+  reader is most likely to act on and fail. See the M2.6b entry under Changed
+  for why it survives at all.
+
 - `RankOutput`, `OrderOutput`, `PositionOutput` and `RouteOutput`, exported as
   types. Each is what one stage contributes, and it is what that stage's `run`
   now returns. See the Changed entry below. (M2.4a)

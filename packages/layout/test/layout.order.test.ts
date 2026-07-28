@@ -825,35 +825,18 @@ describe('barycenterOrder, on the bench corpora', () => {
     }
   });
 
-  /**
-   * What M2.6b bought, which is the one thing the name pins cannot say. Those
-   * pin the IDENTITY of the default order stage, so they fail when it moves and
-   * pass whatever the stage that took it is worth. This pins the REASON: a
-   * default run now leaves 76.7% fewer crossings on the 1k corpus and 92.9%
-   * fewer on the 10k than the roster order it replaced.
-   *
-   * Both columns are exact pins rather than an inequality, on the same argument
-   * as every other table here: an ordering that regressed badly without
-   * regressing all the way back to roster order would satisfy "substantially
-   * fewer" and change nothing that fails. The right column is the default cap's
-   * row of the transpose table above, which is what ties these numbers to the
-   * stage that ships rather than to any stage that beats roster order.
+  /*
+   * M2.6b briefly added a case here pinning what the flip bought, roster order
+   * against the default on both corpora. It was cut before it merged, because
+   * algorithms-review measured it against six mutants (the median tiebreak,
+   * the sweep direction, both default caps, a differently configured stage
+   * object, and the default repointed) and it made ZERO unique kills: its left
+   * column is column one of the seed table above, its right column is the
+   * cap-of-8 row of the transpose table above, and the substitution it was
+   * meant to catch is caught harder by `index.test.ts`'s identity check on
+   * `defaultStages.order`. A test that only restates two committed tables
+   * costs a run of the 10k corpus and buys nothing. What the flip did NOT
+   * already have a pin for was determinism through `layout()` itself, and that
+   * case lives in `layout.determinism.test.ts` instead.
    */
-  it('leaves far fewer crossings through the default stage set than roster order does', () => {
-    const table = corpora.map(([name, spec]) => {
-      const state = rankedCorpus(spec);
-      const { graph } = state;
-      const roster = insertionOrderStage.run(state).layers;
-      const byDefault = defaultStages.order.run(state).layers;
-      return [
-        name,
-        countCrossings({ graph, layers: roster }),
-        countCrossings({ graph, layers: byDefault }),
-      ];
-    });
-    expect(table).toEqual([
-      ['1k', 12_890, 3_005],
-      ['10k', 425_394, 30_318],
-    ]);
-  });
 });
