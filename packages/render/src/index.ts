@@ -6,8 +6,12 @@
  *
  * **M4.2 changed what is drawn and not what is callable, and that is
  * deliberate.** `createRenderer` now puts six signed-distance-field shapes on
- * screen instead of one quad, spanning 100:1 in size so that one frame shows what
- * an SDF does at both ends of the zoom range. Not one export was added for it.
+ * screen instead of one quad, on three rungs a decade apart so that one frame shows
+ * what an SDF does at both ends of the zoom range. The RECTS are 10, 100 and 1000
+ * world units across, which is the 100:1 the rest of the package quotes; the
+ * circles are 4, 40 and 400, so the shapes themselves span 250:1. Both numbers are
+ * true of different things and the tests assert them separately, so quote the one
+ * you mean. Not one export was added for any of it.
  * Two reasons, and neither is an oversight:
  *
  * - The TSL nodes stay internal because a TSL node is a three.js type, and

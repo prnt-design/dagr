@@ -19,7 +19,9 @@ import type { Size } from './types.js';
  * `sdf-nodes.ts` implements them with TSL. `test/sdf.test.ts` therefore executes
  * the exact expression tree the fragment shader evaluates, node for node, and
  * the surface no Node test can reach shrinks from six formulas to nine one-line
- * adapters.
+ * adapters plus three pieces of TSL that cannot be written over a float interface
+ * at all. `sdf-nodes.ts`'s module docstring names all three and says which of them
+ * a structural assertion stands in for.
  *
  * One consequence worth spelling out: a shader computes a hypotenuse as
  * `sqrt(x*x + y*y)`, and there is no `hypot` in WGSL. Written twice, the scalar
@@ -51,11 +53,13 @@ import type { Size } from './types.js';
  * coverage function is called once per fragment per frame, which is millions of
  * times a second on the GPU and zero times in JavaScript for the path that
  * matters, so a check inside one costs real ALU on every pixel and cannot throw
- * anywhere a caller would see it. {@link requireShapeStyle} and
- * {@link requireCornerRadius} are the boundary instead: they run once per shape,
- * at the moment a caller's number is turned into geometry, and
- * {@link quadPadding} calls the first of them because sizing a quad is the first
- * thing any style is used for.
+ * anywhere a caller would see it. {@link requireShapeStyle},
+ * {@link requireCornerRadius} and {@link requireCircleRadius} are the boundary
+ * instead: they run once per shape, at the moment a caller's number is turned into
+ * geometry, and {@link quadPadding} calls the first of them because sizing a quad is
+ * the first thing any style is used for. Every one of them takes the field name from
+ * its caller, so the message says which shape and which field rather than which
+ * variable.
  */
 
 /**
@@ -162,11 +166,24 @@ export function roundedRectDistance<T>(
  * the origin.
  *
  * Kept as its own function rather than spelled as a square rounded rect, even
- * though {@link roundedRectDistance} reduces to exactly this expression when
- * `halfWidth === halfHeight === radius` (bit for bit, since the `min` term is
- * then identically zero: `test/sdf.test.ts` asserts the equality with `toBe`).
- * Five operations against eleven, per fragment, for the shape a graph draws most
- * of after boxes.
+ * though {@link roundedRectDistance} reduces to this expression when `halfWidth
+ * === halfHeight === radius`: the `min` term is then identically zero, so both
+ * formulas are the same euclidean term minus the same radius and the two shape
+ * families AGREE ABOUT WHERE THEIR EDGES ARE, which is the property that lets the
+ * scene draw circles with the cheap one. Five operations against eleven, per
+ * fragment, for the shape a graph draws most of after boxes.
+ *
+ * They agree to within a few ulps and not bit for bit, which is worth stating
+ * precisely because the difference used to be asserted with `toBe`. The rect
+ * computes `qx = (|px| - halfWidth) + radius`, and that does not round back to
+ * `|px|` when `halfWidth === radius`, so the `sqrt` argument differs in the last
+ * bits even where the `min` term contributes nothing. Measured over 200k
+ * pseudo-random points on the 20/20/20 square: 1.9% of them differ, worst
+ * absolute difference 7.105e-15, which is two ulps of a distance of 20 and
+ * thirteen orders of magnitude below the 1/255 a fragment can show. The zero level
+ * sets are not identical either, in the same sense: at 20 units out along an
+ * arbitrary angle the rect can read -3.6e-15 where the circle reads exactly 0.
+ * `test/sdf.test.ts` sweeps both and asserts the agreement to 12 decimal places.
  */
 export function circleDistance<T>(m: Arith<T>, px: T, py: T, radius: T): T {
   return m.sub(m.sqrt(m.add(m.mul(px, px), m.mul(py, py))), radius);
@@ -270,8 +287,16 @@ export function fillCoverage<T>(m: Arith<T>, distance: T, aaWidth: T): T {
  * rather than exactly. Written this way the outer branch returns `d` UNROUNDED
  * and all three become exact, at four primitives instead of five and with no
  * `div`. `test/sdf.test.ts` asserts each of them with `toBe`, and pins the one
- * remaining inexactness: the inner branch has real arithmetic in it, so the inner
- * cutoff still leaves up to 3e-30 for an aaWidth that is not a dyadic rational.
+ * remaining inexactness: the inner branch has real arithmetic in it, so for an
+ * aaWidth that is not a dyadic rational the inner cutoff leaves a residue of order
+ * `(widthPixels * 2^-53)^2`, GROWING QUADRATICALLY in the width, because the ramp
+ * parameter's error is a couple of ulps of `widthPixels * aaWidth` measured
+ * against `aaWidth` and `smoothstep` squares it. 2.73e-30 at width 7 is an example
+ * rather than a ceiling: it was quoted as a flat 3e-30 bound until that was
+ * measured, and width 7 at `aaWidth = 1.1`, which is zoom 0.91 and inside the
+ * range the screenshots cover, already exceeds it at 3.06e-30. Thirty orders of
+ * magnitude under the 1/255 an 8 bit framebuffer can represent at every width
+ * either way, so what is worth asserting is the scaling and not the constant.
  *
  * Shifting the ramp inward by half an `aaWidth`, so that its outermost sample
  * landed on the boundary, is a different thing again and is what this
@@ -318,6 +343,55 @@ export function outlineCoverage<T>(m: Arith<T>, distance: T, widthPixels: T, aaW
 export function glowCoverage<T>(m: Arith<T>, distance: T, radiusWorld: T, aaWidth: T): T {
   const edge = m.max(radiusWorld, aaWidth);
   return smoothstepBetween(m, edge, m.literal(0), distance);
+}
+
+/**
+ * How much of a pixel the SHAPE covers: the alpha a fragment writes, from the
+ * three coverages and the glow's own alpha.
+ *
+ * `max(glowAlpha * glow, max(fill, outline))`, and the `max` rather than the
+ * usual `over` chain (`a + b * (1 - a)`) is the whole content of this function.
+ * These three coverages are not three independent layers: they are three regions
+ * of ONE shape, so the alpha wanted is "how much of this pixel does the shape
+ * cover", not "how opaque is a stack of three sheets".
+ *
+ * **What the `over` chain costs, in numbers rather than in adjectives.** At the
+ * boundary the fill and the outline are both exactly 0.5 (see
+ * {@link fillCoverage} and {@link outlineCoverage}) and the glow is 1, so for the
+ * scene's `glowAlpha` of 0.45 this returns exactly 0.5 while `over` of the glow
+ * and the fill returns 0.725 and `over` of all three returns 0.8625. Following
+ * the 0.5 alpha contour out, that moves a shape's APPARENT edge 0.36 pixels
+ * outward from where its geometry is, all the way round every shape that has a
+ * glow under it, which is exactly the inflation `fillCoverage`'s exact half at
+ * the boundary exists to rule out. The damage is confined to the band where the
+ * fill's ramp overlaps the glow, because past half a pixel out the fill and the
+ * outline are both zero and the two forms agree identically.
+ *
+ * Exactly 0.5 holds for any `glowAlpha` at or below 0.5. Above that the halo
+ * itself sets the floor at the boundary and the shape's edge reads as the glow's
+ * alpha instead, which is a statement about how strong a halo is rather than
+ * about compositing: `shape-scene.ts` picks 0.45 deliberately, and
+ * {@link requireShapeStyle} allows the whole unit interval because a halo at 0.8
+ * is a legitimate if unsubtle choice.
+ *
+ * Here rather than in `sdf-nodes.ts` because it is pure float arithmetic, so
+ * `test/sdf.test.ts` can execute the decision instead of reading it: `mul` and
+ * `max` were already two of the nine primitives and this needs no tenth. Its
+ * partner, the colour, could not come along. That `mix` is a `vec3` operation,
+ * and adding a vector `mix` to {@link Arith} would widen the interface for one
+ * call site and put a tenth unexecutable line in `sdf-nodes.ts`, so the colour
+ * stays in TSL and is checked structurally. The asymmetry is deliberate and it is
+ * the reason the two halves of the compositing decision are documented in two
+ * files.
+ */
+export function shapeAlpha<T>(
+  m: Arith<T>,
+  glowAlpha: T,
+  glow: T,
+  fill: T,
+  outline: T,
+): T {
+  return m.max(m.mul(glowAlpha, glow), m.max(fill, outline));
 }
 
 /**
@@ -385,12 +459,25 @@ export interface ShapeStyle {
  *
  * One world unit, and what that buys is a number rather than a feeling. The fill
  * ramp reaches half an `aaWidth` past the boundary, which is `1 / (2 * zoom)`
- * world units, so one unit of padding is exhausted at zoom
- * {@link FILL_AA_CROSSOVER_ZOOM} and the outer half of the ramp is clipped by the
- * quad's own edge below that. What is lost when it is clipped is the tail of a
- * monotonically decreasing coverage below 0.5, so the symptom is an edge that
- * hardens rather than a missing pixel, and it only happens when a shape is
- * already being drawn at under a pixel per two world units.
+ * world units, so this unit of padding is exhausted at zoom
+ * {@link FILL_AA_CROSSOVER_ZOOM}.
+ *
+ * **That is the budget the fill has ON ITS OWN, and not the zoom at which anything
+ * gets clipped.** The quad's edge is {@link quadPadding} out, which is `glowWorld +
+ * FILL_AA_PADDING_WORLD` and not one unit, so the ramp is clipped by the quad only
+ * below `1 / (2 * (glowWorld + 1))`. 0.5 is therefore the GLOW-FREE worst case, and
+ * no shape in `shape-scene.ts` is glow-free: every rung's glow is a quarter of its
+ * height, so the 40 unit tall rung clips below 0.0455 (eleven times lower) and the
+ * 400 unit one below 0.00495. The 4 unit tall rungs are the exception worth
+ * stating, because they are the ones with a real crossover: a 1 unit glow gives 2
+ * units of padding and a crossover at 0.25, so at the committed 0.1x screenshot
+ * their ramps ARE clipped. At that zoom they are 1.0 by 0.4 and 0.4 by 0.4 CSS
+ * pixels, so what is clipped is the antialiasing of a shape smaller than a pixel.
+ *
+ * What is lost when it is clipped is the tail of a monotonically decreasing
+ * coverage below 0.5, so the symptom is an edge that hardens rather than a missing
+ * pixel, and it only happens when a shape is already being drawn at under a pixel
+ * per two world units.
  *
  * A quad sized from the camera's current zoom would remove the crossover
  * entirely, and that is M4.4's problem, not this one: it needs the geometry to
@@ -539,29 +626,63 @@ export function requireCornerRadius(
 }
 
 /**
+ * Rejects a circle radius that is not a finite number above zero, naming the field
+ * the CALLER wrote.
+ *
+ * Separate from {@link requireCornerRadius}, and the reason is the message rather
+ * than the arithmetic. A circle descriptor has a `radius` and no `size`, so putting
+ * its radius through the corner-radius check reported the derived size instead:
+ * `circle-10.size.width has to be above zero, got -2` for a caller who wrote
+ * `radius: -1`, naming a field that does not exist on a circle and quoting a number
+ * the caller never typed. Both halves of that are the kind of error message that
+ * costs a reader more time than no message at all.
+ *
+ * Nothing else about a circle needs checking, which is the discriminated union in
+ * `shape-scene.ts` paying for itself: a circle's radius IS half its smaller
+ * dimension by construction, so the bound {@link requireCornerRadius} exists to
+ * enforce cannot be violated and there is no second invariant to validate.
+ */
+export function requireCircleRadius(radius: number, field: string): number {
+  const value = requireFinite(radius, field);
+  if (value <= 0) {
+    throw new RangeError(`${field} has to be above zero, got ${String(value)}`);
+  }
+  return value;
+}
+
+/**
  * How far a shape's quad has to reach past the shape on every side: the whole
  * glow, plus {@link FILL_AA_PADDING_WORLD} for the fill's own ramp.
  *
  * Validates the style, because sizing the quad is the first thing any style is
  * used for and this is therefore the boundary described in the module docstring.
  * Once per shape, not once per fragment.
+ *
+ * `field` names the record in the `RangeError`, and it is a parameter rather than
+ * the hardcoded `'style'` it used to be because this function has callers that know
+ * a better name. `shapeQuadBounds` in `shape-scene.ts` is the one that matters:
+ * `shape-scene.ts` advertises it for overlap and fits-in-view tests, and M4.4 will
+ * call it on layout-derived descriptors, where `style.glowWorld` sends a caller to
+ * look at six identical records and `rect-100.style.glowWorld` does not. Defaulted,
+ * so a caller with nothing better to say says nothing.
  */
-export function quadPadding(style: ShapeStyle): number {
-  return requireShapeStyle(style, 'style').glowWorld + FILL_AA_PADDING_WORLD;
+export function quadPadding(style: ShapeStyle, field = 'style'): number {
+  return requireShapeStyle(style, field).glowWorld + FILL_AA_PADDING_WORLD;
 }
 
 /**
  * The size of the PLANE a shape is drawn on: the shape grown by
  * {@link quadPadding} on all four sides.
  *
- * Twice the padding on each axis, since the padding is per side. The quad is not
- * the shape and confusing the two is the failure this function exists to
- * prevent: a plane the size of the shape clips the glow entirely (the halo lives
- * outside the boundary by definition) and clips the outer half of the fill's own
- * antialiasing ramp, which turns a soft edge into a hard one along a rectangle
- * that has nothing to do with the shape.
+ * Twice the padding on each axis, since the padding is per side. `field` is passed
+ * straight through to {@link quadPadding}, which is where the validation and the
+ * `RangeError` live. The quad is not the shape and confusing the two is the failure
+ * this function exists to prevent: a plane the size of the shape clips the glow
+ * entirely (the halo lives outside the boundary by definition) and clips the outer
+ * half of the fill's own antialiasing ramp, which turns a soft edge into a hard one
+ * along a rectangle that has nothing to do with the shape.
  */
-export function shapeQuadSize(size: Size, style: ShapeStyle): Size {
-  const padding = quadPadding(style);
+export function shapeQuadSize(size: Size, style: ShapeStyle, field = 'style'): Size {
+  const padding = quadPadding(style, field);
   return { width: size.width + 2 * padding, height: size.height + 2 * padding };
 }

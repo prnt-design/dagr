@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { Camera2D } from '../src/camera.js';
 import { RendererDisposedError } from '../src/errors.js';
+import { CRISPNESS_LADDER } from '../src/shape-scene.js';
+import type { ShapeDescriptor } from '../src/shape-scene.js';
 import {
   WebGPUSceneRenderer,
   adoptCanvasViewport,
+  buildSceneRenderer,
   createRenderer,
 } from '../src/webgpu-renderer.js';
 import type { FrameSink, GpuResource, ProjectionTarget } from '../src/webgpu-renderer.js';
@@ -26,6 +29,16 @@ import type { FrameSink, GpuResource, ProjectionTarget } from '../src/webgpu-ren
  * parameters. So the typecheck of `createRenderer` is the proof that the real
  * three objects satisfy the interfaces these stubs satisfy, and no cast is
  * involved anywhere.
+ *
+ * The same argument reaches further than M4.2 first claimed. Everything
+ * `createRenderer` does after `await renderer.init()` is `buildSceneRenderer`,
+ * which takes its sink as a {@link FrameSink}, so the scene assembly is exercised
+ * here over the same counting stub: the six shapes, their twelve resources, the
+ * frustum, and the branch that hands the device back when building the scene
+ * throws. That last one is a leak `createShapeMeshes` made possible by validating,
+ * and it is the reason the assembly is a function rather than four lines inside an
+ * `async` one. What still needs a device is `init()` itself and the abort check
+ * that follows it.
  *
  * M4.2 generalised the last two constructor parameters from a geometry and a
  * material to a LIST of resources, because a signature with one of each only
@@ -458,6 +471,91 @@ describe('adoptCanvasViewport', () => {
     const camera = new Camera2D();
     adoptCanvasViewport(camera, fakeCanvas({ clientWidth: 800, clientHeight: 0 }));
     expect(camera.viewport).toEqual({ width: 300, height: 150, devicePixelRatio: 1 });
+  });
+});
+
+describe('buildSceneRenderer', () => {
+  /** A descriptor that fails validation: a corner radius past half the smaller side. */
+  const impossible: ShapeDescriptor = {
+    kind: 'roundedRect',
+    label: 'too-round',
+    center: { x: 0, y: 0 },
+    size: { width: 100, height: 40 },
+    cornerRadius: 30,
+    style: {
+      fillColor: 0xffb703,
+      outlineColor: 0x023047,
+      glowColor: 0xfb8500,
+      glowAlpha: 0.45,
+      outlinePixels: 2,
+      glowWorld: 10,
+    },
+  };
+
+  it('gives the device back when building the scene throws, and rethrows', () => {
+    // The leak this function exists to close, and the reason it is a function.
+    // Before M4.2 everything between `await renderer.init()` and the returned
+    // renderer was infallible literal construction; `createShapeMeshes` is not,
+    // because it validates, and a `RangeError` there used to propagate out of
+    // `createRenderer` with the initialised device referenced only by a local in
+    // an unwinding frame. Nothing in the shipped ladder can trigger it. M4.4 can,
+    // since the descriptor list is a parameter so that a layout result can be
+    // passed in, and it contradicted this module's own promise either way: a
+    // caller never has to dispose a renderer it did not receive.
+    const camera = new Camera2D({ viewport: initialViewport });
+    const sink = new StubFrameSink();
+    expect(() => buildSceneRenderer(camera, sink, 0x0b0d10, [impossible])).toThrow(RangeError);
+    expect(sink.disposals).toBe(1);
+    // The error is the validation's own, not something invented here: a caller who
+    // wrote a bad number still gets told which shape and which field.
+    expect(() => buildSceneRenderer(camera, new StubFrameSink(), 0x0b0d10, [impossible])).toThrow(
+      /too-round\.cornerRadius/,
+    );
+  });
+
+  it('disposes the device exactly once, not once per resource already built', () => {
+    // Two shapes, the second of which is impossible, so the first has already
+    // allocated a geometry and a material by the time the throw happens. Those are
+    // unreferenced and collectable; the device is not, and it has to be given back
+    // once rather than once per unwind.
+    const good = CRISPNESS_LADDER[0];
+    if (good === undefined) throw new Error('unreachable');
+    const sink = new StubFrameSink();
+    expect(() =>
+      buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 0x0b0d10, [
+        good,
+        impossible,
+      ]),
+    ).toThrow(RangeError);
+    expect(sink.disposals).toBe(1);
+  });
+
+  it('wires up the whole ladder on the success path, with no device anywhere', () => {
+    // The other half of pulling this out of the `async` function: the assembly
+    // past `init()` used to be unreachable in Node and therefore untested. It is
+    // not the renderer three would build (the sink is a stub), but every line of
+    // this package's own wiring runs: twelve resources for six shapes, a sized
+    // drawing buffer, and a frustum that is no longer four zeroes.
+    const camera = new Camera2D({ viewport: initialViewport });
+    const sink = new StubFrameSink();
+    const renderer = buildSceneRenderer(camera, sink, 0x0b0d10);
+    expect(renderer.camera).toBe(camera);
+    expect(sink.sizes).toEqual([{ width: 1600, height: 1200, updateStyle: false }]);
+    renderer.render();
+    expect(sink.frames).toBe(1);
+    // And it owns the scene's resources: six shapes, a geometry and a material
+    // each, all disposed by the one `dispose` a caller has.
+    renderer.dispose();
+    expect(sink.disposals).toBe(1);
+  });
+
+  it('accepts an empty scene, which is a graph with no nodes', () => {
+    const sink = new StubFrameSink();
+    const renderer = buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 0, []);
+    renderer.render();
+    expect(sink.frames).toBe(1);
+    renderer.dispose();
+    expect(sink.disposals).toBe(1);
   });
 });
 

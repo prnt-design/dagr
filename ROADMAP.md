@@ -1520,19 +1520,28 @@ of M3 would leave the second runner idle for a milestone.
   every shader.
   What this task does own, and has evidence for, is whether one distance field
   can carry fill, outline and glow with derivative-based antialiasing that
-  holds at both 0.1x and 100x. It does, and the evidence is two committed
-  screenshots plus a test that asserts the invariance directly.
+  holds at both 0.1x and 100x. It does, and the evidence is the 0.1x and 100x
+  references committed under `assets/screenshots/` (three frames in all, the third
+  at zoom 1 where the readout, the fill, the outline and the glow are legible
+  together) plus a test that asserts the invariance directly.
   DECIDED, and these are the paragraphs M4.3 onwards inherits rather than
   re-argues. THE FORMULAS ARE WRITTEN ONCE, over an `Arith<T>` interface of NINE
   primitives, with a `numberArith` backend the tests run and a `tslArith` backend
   the shader runs. A TSL graph builds under bare Node and does not evaluate, so
   the alternative was two copies of every formula and a suite checking the copy
   that never reaches a GPU. This way the suite executes the expression tree the
-  fragment shader evaluates and the untested arithmetic surface is nine one-line
-  adapters. Keep it at nine: `smoothstep`, `clamp` and `length` are WGSL
-  intrinsics deliberately NOT in the interface, because each would move a formula
-  out of the tested half of the file, and M4.10 owns measuring whether that trade
-  still holds at 10k instances.
+  fragment shader evaluates. KEEP THE INTERFACE AT NINE: `smoothstep` and `clamp`
+  are WGSL intrinsics deliberately NOT in it and are built from the primitives
+  instead, because each would move a formula out of the tested half of the file,
+  and M4.10 owns measuring whether that trade still holds at 10k instances. BUT DO
+  NOT READ THE UNTESTED SURFACE AS "THE NINE ADAPTERS" AND NOTHING ELSE, which an
+  earlier draft of this block said and which api-design-review caught: THREE pieces
+  of TSL are executed by no Node test. `length` IS used as an intrinsic, in
+  `antialiasWidth` alone; `shapeShading`'s colour `mix` is vec3 and cannot go
+  through a float interface; and the `mul(size, 0.5)` inside `roundedRectSDF`'s
+  deferred `Fn` body never runs, because the suite builds that body directly from
+  pre-halved literals. The compensating control is the STRUCTURAL assertions in
+  `test/sdf-nodes.test.ts` rather than a numeric test.
   TWO UNITS, AND THE ASYMMETRY IS THE POINT. An outline is in CSS PIXELS and is
   inset; a glow is in WORLD units and sits outside. An outline is a property of
   the screen and the derivative that gives the antialiasing width also converts
@@ -1567,10 +1576,14 @@ of M3 would leave the second runner idle for a milestone.
   matter is exactly the sub-pixel case above, and separating "MSAA is keeping this
   speck visible" from "the quad missed the samples" needs a controlled comparison
   this task has no harness for.
-  THE SCENE IS A CRISPNESS LADDER of six shapes at 10, 100 and 1000 world units
-  across, smallest on the origin so `#zoom=100` frames it with the default camera.
-  Its padded quads are PAIRWISE DISJOINT, which is the tested form of "nothing
-  overlaps" and is strictly stronger, so the frame does not depend on draw order.
+  THE SCENE IS A CRISPNESS LADDER of a rounded rect and a circle on each of three
+  rungs a decade apart, the RECTS 10, 100 and 1000 world units across and each
+  circle's diameter matching its rung's HEIGHT, so the circles are 4, 40 and 400.
+  Quote the rect widths rather than "the shapes are 10, 100 and 1000 across", which
+  is false of half of them. The smallest rect sits on the origin so `#zoom=100`
+  frames it with the default camera, and the padded quads are PAIRWISE DISJOINT,
+  which is the tested form of "nothing overlaps" and is strictly stronger, so the
+  frame does not depend on draw order.
   `apps/demo` grew a `#zoom=` URL hash for exactly one reason: the committed
   references are then reproducible by opening a link rather than by landing on
   100x with a trackpad.

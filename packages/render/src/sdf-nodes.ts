@@ -22,6 +22,7 @@ import {
   glowCoverage,
   outlineCoverage,
   roundedRectDistance,
+  shapeAlpha,
 } from './sdf.js';
 import type { Arith } from './sdf.js';
 
@@ -31,10 +32,31 @@ import type { Arith } from './sdf.js';
  *
  * **This file contains no formulas.** Every piece of arithmetic it draws with
  * lives in `sdf.ts`, written once over {@link Arith}, and is imported here.
- * `tslArith` below is the only thing in the package that cannot be executed by a
- * Node test, and it is nine one-line adapters long on purpose: see the module
+ * `tslArith` below is nine one-line adapters long on purpose: see the module
  * docstring in `sdf.ts` for why that arrangement was chosen over writing each
  * formula twice.
+ *
+ * **The untested surface is those nine adapters PLUS THREE pieces of TSL,** which
+ * is worth counting honestly rather than rounding down to the adapters:
+ *
+ * - `length(vec2(dFdx(d), dFdy(d)))` in {@link antialiasWidth}. `length` is a WGSL
+ *   intrinsic and cannot go through a float interface. Compensating control:
+ *   `test/sdf-nodes.test.ts` asserts the graph structurally, that the outermost
+ *   operation is a `length` over a two component join of `dFdx` and `dFdy`, and
+ *   that each of those differentiates the distance ITSELF with no factor in front.
+ * - the colour `mix` in {@link shapeShading}, which is a `vec3` operation and would
+ *   widen {@link Arith} for one call site. Compensating control: the same file
+ *   asserts that the outermost node of the colour is a `mix` and of the alpha a
+ *   `max`. That rules out an `add` or a `mul` blend and says nothing about the
+ *   order of the three layers.
+ * - `mul(size, 0.5)` and the `half.x` / `half.y` swizzles inside
+ *   {@link roundedRectSDF}'s `Fn` body. This one has NO compensating control, and
+ *   the reason is the `Fn`: its body is deferred until a `NodeBuilder` runs, so
+ *   calling it in Node builds a call node and never constructs the halving, and the
+ *   test that builds the body eagerly passes pre-halved literals to
+ *   `roundedRectDistance` and so bypasses it. A factor of two in the wrong place
+ *   there would draw every rect at half or twice its size, and the committed
+ *   screenshot is the whole of the evidence against that.
  *
  * Nothing here is exported from `index.ts`. A TSL node is a three.js type, and
  * `types.ts` decided that no three.js type appears in this package's public
@@ -190,15 +212,21 @@ export interface ShapeShading {
  * rgb   = mix(mix(glowColor, fillColor, fillCoverage), outlineColor, outlineCoverage)
  * ```
  *
- * `max` on the alpha rather than the usual `over` chain (`a + b * (1 - a)`),
- * because these three coverages are not three independent layers: they are three
- * regions of ONE shape, and the alpha wanted is "how much of this pixel does the
- * shape cover", not "how opaque is a stack of three sheets". The `over` form
- * would push the alpha towards 1 wherever the glow and the fill ramps overlap,
- * which is a one pixel band all the way round every shape, and the visible result
- * is a shape whose edge is slightly darker and slightly bigger than its geometry:
- * exactly the half-pixel inflation `fillCoverage`'s exact 0.5 at the boundary
- * exists to rule out. `max` leaves the boundary at 0.5 alpha, where it belongs.
+ * **The alpha is not written here.** It is `shapeAlpha` in `sdf.ts`, over the
+ * same nine primitives as every other formula, because it is pure float
+ * arithmetic and `mul` and `max` were already two of the nine: no tenth
+ * primitive, and `test/sdf.test.ts` executes the compositing decision rather than
+ * reading it. That docstring carries the argument for `max` over the `over` chain
+ * and the measured numbers (0.5 against 0.725 at the boundary, a 0.36 pixel
+ * outward shift of the apparent edge), and the test asserts both.
+ *
+ * The colour could NOT come along, and the asymmetry is visible right here in the
+ * two lines below. `mix` is a `vec3` operation, so hoisting it into `Arith` would
+ * widen the interface for one call site and add a tenth line to `tslArith` that
+ * no Node test can execute, which is precisely the cost the nine-primitive count
+ * exists to keep visible. So the colour stays in TSL and `test/sdf-nodes.test.ts`
+ * checks it structurally instead: the outermost node of the alpha is a `max` and
+ * the outermost node of the colour is a `mix`.
  *
  * `mix` on the colour in glow, then fill, then outline order, which is
  * back-to-front and therefore the order the layers actually sit in. The outline
@@ -221,6 +249,6 @@ export function shapeShading(input: ShapeShadingInput): ShapeShading {
 
   return {
     color: mix(mix(input.glowColor, input.fillColor, fill), input.outlineColor, outline),
-    alpha: max(mul(input.glowAlpha, glow), max(fill, outline)),
+    alpha: shapeAlpha(tslArith, input.glowAlpha, glow, fill, outline),
   };
 }

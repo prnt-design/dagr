@@ -2,7 +2,8 @@ import { Color, OrthographicCamera, Scene, WebGPURenderer } from 'three/webgpu';
 import { Camera2D } from './camera.js';
 import { RendererDisposedError } from './errors.js';
 import { createShapeMeshes } from './shape-scene.js';
-import type { Renderer, RendererOptions, Size, ViewportSize } from './types.js';
+import type { ShapeDescriptor } from './shape-scene.js';
+import type { GpuResource, Renderer, RendererOptions, Size, ViewportSize } from './types.js';
 
 /**
  * A three.js `WebGPURenderer` drawing M4.2's SDF shapes through a
@@ -36,10 +37,15 @@ import type { Renderer, RendererOptions, Size, ViewportSize } from './types.js';
  *   backend, so `getNodeType` and code generation are both out of reach. The
  *   arithmetic is therefore tested as arithmetic, over plain numbers, by writing
  *   each formula once against `Arith<T>` in `sdf.ts` and running it through
- *   `numberArith` (see `test/sdf.test.ts`). What that leaves unverified is
- *   exactly nine one-line adapters in `sdf-nodes.ts`, plus the assumption that
- *   WGSL agrees with `Math` about them. `test/sdf-nodes.test.ts` proves those
- *   graphs are CONSTRUCTIBLE and nothing more.
+ *   `numberArith` (see `test/sdf.test.ts`). What that leaves unverified is the nine
+ *   one-line adapters in `sdf-nodes.ts` and THREE pieces of TSL beside them (the
+ *   `length` in `antialiasWidth`, the colour `mix` in `shapeShading`, and the
+ *   `mul(size, 0.5)` inside `roundedRectSDF`'s deferred `Fn` body, which no test
+ *   builds), plus the assumption that WGSL agrees with `Math` about all of it. The
+ *   first two have structural assertions standing in for execution; the third has
+ *   nothing but the screenshot. See the module docstring in `sdf-nodes.ts`, which
+ *   carries the list. `test/sdf-nodes.test.ts` proves those graphs are
+ *   CONSTRUCTIBLE and nothing more.
  * - That antialiasing is actually crisp on a display. `test/sdf.test.ts` proves
  *   the coverage at k pixels from a boundary is identical at zoom 0.1 and zoom
  *   100, which is the claim; whether a real fragment shader's derivatives agree
@@ -49,12 +55,16 @@ import type { Renderer, RendererOptions, Size, ViewportSize } from './types.js';
  * - That `dispose` actually frees GPU memory, only that every resource in the
  *   list is disposed exactly once.
  * - That `init()` succeeds, or that the WebGL2 fallback below engages, and
- *   therefore that any of {@link createRenderer} past `init()` runs at all.
- *   That last one has a named casualty: the abort check AFTER `init()`, which
- *   is the branch that gives a device back when a caller aborts mid-request,
- *   cannot be reached without a device to give back. Deleting it leaves the
- *   suite green, which was measured rather than assumed. The check before
- *   `init()` is tested.
+ *   therefore that {@link createRenderer} itself gets past `await
+ *   renderer.init()` at all. This bullet used to swallow the whole assembly with
+ *   it, and no longer does: everything after that line is
+ *   {@link buildSceneRenderer}, which takes the sink as a {@link FrameSink} and is
+ *   therefore built over a stub in the test, scene, meshes, resources, frustum and
+ *   all. What is left is the two lines that need a device to exist. One has a
+ *   named casualty: the abort check AFTER `init()`, which is the branch that gives
+ *   a device back when a caller aborts mid-request, cannot be reached without a
+ *   device to give back. Deleting it leaves the suite green, which was measured
+ *   rather than assumed. The check before `init()` is tested.
  *
  * A screenshot test in a browser runner is what closes this. The orchestrator
  * takes one per milestone with a real browser; M4.9 owns making it a CI gate,
@@ -97,10 +107,14 @@ export interface ProjectionTarget {
   updateProjectionMatrix(): void;
 }
 
-/** A GPU resource this renderer owns and has to give back: a geometry or a material. */
-export interface GpuResource {
-  dispose(): void;
-}
+/**
+ * A GPU resource this renderer owns and has to give back: a geometry or a
+ * material. Defined in `types.ts` and re-exported here, so that this module's own
+ * test keeps importing it from the module under test while `shape-scene.ts` names
+ * it without importing the renderer. See {@link GpuResource} for why the direction
+ * matters.
+ */
+export type { GpuResource };
 
 /**
  * The background the scene is drawn on, as `0xRRGGBB`.
@@ -379,6 +393,78 @@ export class WebGPUSceneRenderer implements Renderer {
 }
 
 /**
+ * Everything between a live device and a usable renderer: the scene, the meshes,
+ * the projection camera, and the first viewport sync. **Gives the device back if
+ * any of it throws.**
+ *
+ * A function rather than four more lines in {@link createRenderer}, for two
+ * reasons that are really one. The first is the `catch`: this is the window where
+ * `createRenderer`'s promise (a caller never has to dispose a renderer it did not
+ * receive) can be broken, because `createShapeMeshes` VALIDATES, so a bad
+ * descriptor raises a `RangeError` at a point where the only reference to an
+ * initialised `WebGPURenderer` is a local variable in an unwinding frame. Nothing
+ * in the shipped ladder can trigger it, and it was still a leak waiting for M4.4:
+ * the descriptor list is a parameter precisely so a layout result can be passed
+ * in, and a layout result is somebody else's arithmetic. One `try` around the
+ * whole window, rather than one per fallible call, so a fallible line added later
+ * is covered by construction.
+ *
+ * The second is that pulling it out of the `async` function makes it TESTABLE.
+ * `createRenderer` cannot reach past `await renderer.init()` in Node, which is why
+ * the module docstring lists everything after that line as unverified; this
+ * function takes the sink as a {@link FrameSink}, so `test/webgpu-renderer.test.ts`
+ * builds the whole scene over a counting stub, with no device, and asserts both
+ * that the failure path disposes exactly once and that the success path wires up
+ * twelve resources and a filled-in frustum. `Scene`, `Color` and
+ * `OrthographicCamera` are real three objects here: none of the three needs an
+ * adapter, and the meshes are already built device-free (see
+ * `test/shape-scene.test.ts`).
+ *
+ * The scene it builds is the crispness ladder by default: a rounded rect and a
+ * circle on each of three rungs a decade apart, the rects 10, 100 and 1000 world
+ * units across, so one frame shows what an SDF does at both ends of the zoom range.
+ * What is drawn and how it is coloured is entirely `shape-scene.ts`'s business,
+ * including the palette and the padding every quad needs; this function's job is to
+ * put the meshes in a scene and to remember what has to be given back.
+ */
+export function buildSceneRenderer(
+  camera: Camera2D,
+  renderer: FrameSink,
+  clearColor: number,
+  descriptors?: readonly ShapeDescriptor[],
+): Renderer {
+  try {
+    const scene = new Scene();
+    scene.background = new Color(clearColor);
+
+    const { meshes, resources } = createShapeMeshes(descriptors);
+    for (const mesh of meshes) {
+      scene.add(mesh);
+    }
+
+    const threeCamera = new OrthographicCamera(0, 0, 0, 0, CAMERA_NEAR, CAMERA_FAR);
+    const instance = new WebGPUSceneRenderer(camera, renderer, scene, threeCamera, resources);
+
+    // Adopt the camera's current viewport, which sizes the buffer and fills in
+    // the frustum the `OrthographicCamera` was constructed with zeroes for. Not
+    // load bearing any more, since the first `render()` would do both, but a
+    // renderer handed back in a state where the frustum is four zeroes is a
+    // renderer a caller can read the wrong answer out of before drawing anything.
+    instance.resize(camera.viewport);
+    return instance;
+  } catch (error) {
+    // The device, and nothing else. Whatever was built before the throw is
+    // unreferenced and collectable; the device is the one thing the garbage
+    // collector cannot give back, and this is the only remaining reference to it.
+    // Disposed here rather than in `createRenderer`, so it cannot be disposed
+    // twice: three's `WebGPURenderer.dispose` is not a documented no-op on a
+    // second call.
+    renderer.dispose();
+    throw error;
+  }
+}
+
+/**
  * Builds a renderer on a canvas and draws the first frame's worth of scene into
  * memory. Await it, then call {@link Renderer.render}.
  *
@@ -447,29 +533,9 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     signal.throwIfAborted();
   }
 
-  const scene = new Scene();
-  scene.background = new Color(clearColor);
-
-  // The crispness ladder, in place of M4.1's single quad: six SDF shapes spanning
-  // 100:1 in size, so one frame shows what an SDF does at both ends of the zoom
-  // range. What is drawn and how it is coloured is entirely `shape-scene.ts`'s
-  // business, including the palette and the padding every quad needs; this
-  // function's job is to put the meshes in a scene and to remember what has to be
-  // given back.
-  const { meshes, resources } = createShapeMeshes();
-  for (const mesh of meshes) {
-    scene.add(mesh);
-  }
-
-  const threeCamera = new OrthographicCamera(0, 0, 0, 0, CAMERA_NEAR, CAMERA_FAR);
-
-  const instance = new WebGPUSceneRenderer(camera, renderer, scene, threeCamera, resources);
-
-  // Adopt the camera's current viewport, which sizes the buffer and fills in
-  // the frustum the `OrthographicCamera` was constructed with zeroes for. Not
-  // load bearing any more, since the first `render()` would do both, but a
-  // renderer handed back in a state where the frustum is four zeroes is a
-  // renderer a caller can read the wrong answer out of before drawing anything.
-  instance.resize(camera.viewport);
-  return instance;
+  // The crispness ladder, in place of M4.1's single quad, and the device handed
+  // back if building it throws. Everything from here to the returned renderer
+  // lives in one function with one `catch` for that reason: see
+  // {@link buildSceneRenderer}.
+  return buildSceneRenderer(camera, renderer, clearColor);
 }

@@ -17,8 +17,11 @@ not" is the category this file has a heading for.
 - Signed distance fields for rounded rectangles and circles, authored in TSL,
   with fill, an inset outline and a glow all read from the SAME distance and
   antialiased from that distance's own screen-space derivative. `createRenderer`
-  now draws six of them, at 10, 100 and 1000 world units across, in place of
-  M4.1's single quad. **Nothing new is exported.** A TSL node is a three.js type
+  now draws six of them, a rounded rect and a circle on each of three rungs a
+  decade apart, in place of M4.1's single quad. The RECTS are 10, 100 and 1000
+  world units across and each circle's diameter matches its rung's height, so the
+  circles are 4, 40 and 400: quoting "10, 100 and 1000" for the shapes is false of
+  half of them. **Nothing new is exported.** A TSL node is a three.js type
   and this package's surface has none; the scene is a hard-coded demonstration
   that M4.4 replaces with a real layout. So M4.2 changed what is DRAWN and not
   what is CALLABLE. (M4.2)
@@ -32,6 +35,16 @@ not" is the category this file has a heading for.
   shape, and its quad has to be padded to contain it at build time, so a
   pixel-space glow would need the quad resized whenever the camera moved, which
   is M4.4's problem and not a shader's.
+
+  **Where the outline band lands, which is this file's category exactly: a rule a
+  caller can see that no type describes.** The band's outer ramp is centred on the
+  boundary, like the fill's, so its two 50% points are the boundary itself and
+  `widthPixels` pixels in, and a band of w pixels paints w fully covered pixel
+  centres, a hairline included. Outline coverage can never exceed fill coverage at
+  any distance, so adding a border does not grow a shape's footprint by a pixel.
+  "Inset" here means drawn over the fill and never against the background; it does
+  NOT mean the band lies wholly inside the boundary, which is a different and
+  wrong rule that this run shipped first and then fixed.
 
   **The antialiasing width is `length(vec2(dFdx(d), dFdy(d)))` and deliberately
   not `fwidth(d)`.** `fwidth` is the L1 sum of the same two derivatives, and L1
@@ -252,14 +265,14 @@ not" is the category this file has a heading for.
   `screenToWorld` land on the shape a frame built on the frustum drew.
 
   Running three's own camera rather than reimplementing its algebra is the point
-  of the test, and the first draft did reimplement it. `OrthographicCamera`
-  takes `(left, right, top, bottom, near, far)`, which is not the field order of
-  `OrthoFrustum`; the renderer avoids that by assigning the fields by name, and
-  a hand-rolled projection cannot catch a mistake there. Writing that mutant
-  confirmed the new test does. The same camera also answers whether the z = 0
-  plane every shape is drawn on sits inside the near and far planes, for one
-  line: the projected z is
-  -0.80, so that came off the untested list rather than staying on it.
+  of the test, and the first draft did reimplement it. `OrthographicCamera` takes
+  `(left, right, top, bottom, near, far)`, which is not the field order of
+  `OrthoFrustum`; the renderer avoids that by assigning the fields by name, and a
+  hand-rolled projection cannot catch a mistake there. Writing that mutant
+  confirmed the new test does. The same camera also answers whether the z = 0 plane
+  every shape is drawn on sits inside the near and far planes, for one line: the
+  projected z is -0.80, so that came off the untested list rather than staying on
+  it.
 
 - Numerical claims in this package state a measured bound rather than calling
   anything exact. The screen round trip is within 7.4e-10 CSS pixels over the
@@ -293,14 +306,29 @@ not" is the category this file has a heading for.
   through it, `tslArith` implements them in TSL and the shader runs the same
   formulas through that. The suite therefore executes the expression tree the
   fragment shader evaluates, node for node, and the untested arithmetic surface is
-  nine one-line adapters rather than six formulas. A test pins that the two
-  backends have the same nine members, so a primitive added to one and not the
-  other fails a test instead of a shader compilation on somebody else's machine.
+  nine one-line adapters plus three pieces of TSL named below, rather than six
+  formulas. A test pins that the two backends have the same nine members, so a
+  primitive added to one and not the other fails a test instead of a shader
+  compilation on somebody else's machine.
 
-  `smoothstep`, `clamp` and `length` are WGSL intrinsics and are all absent from
-  the nine on purpose, built from the primitives instead. That costs a few ALU
-  operations per fragment and keeps the ramp the tests exercise identical to the
-  ramp the shader evaluates. There is a second payoff: a shader computes a
+  `smoothstep` and `clamp` are WGSL intrinsics and are absent from the nine on
+  purpose, built from the primitives instead. That costs a few ALU operations per
+  fragment and keeps the ramp the tests exercise identical to the ramp the shader
+  evaluates.
+
+  `length` is NOT one of those, and three pieces of TSL are executed by no Node
+  test: `length` as an intrinsic in exactly one place, `antialiasWidth`; the colour
+  `mix` in `shapeShading`, which is vec3 and cannot go through a float interface at
+  all; and the `mul(size, 0.5)` halving a rounded rect's extents inside a deferred
+  `Fn` body the suite never runs, because it builds that body directly from
+  pre-halved literals. Their compensating control is the structural assertions on
+  the node graph in `test/sdf-nodes.test.ts`. An earlier draft of this entry said
+  the untested surface was "exactly nine" and copied that into four other files;
+  api-design-review caught it, and it is worth recording because a counted claim
+  that survives copying unchecked is the failure this documentation style exists to
+  prevent.
+
+  There is a second payoff to writing each formula once: a shader computes a
   hypotenuse as `sqrt(x*x + y*y)` and WGSL has no `hypot`, so a separately written
   scalar copy would reach for `Math.hypot`, which rescales to avoid overflow and
   is accurate to under an ulp where the naive form is not. Two spellings would
@@ -312,9 +340,20 @@ not" is the category this file has a heading for.
   distance of k pixels through the coverage functions at any zoom must give the
   same answer: the zoom cancels and the shape's size on screen never enters the
   arithmetic, which is the property a texture atlas baked at one scale does not
-  have. Asserted from zoom 0.1 to 1000, bit-identically for dyadic k and to within
-  a measured 1.2e-16 (asserted bound 1e-15) otherwise, which is far below the
-  1/255 an 8-bit framebuffer can represent.
+  have. Asserted from zoom 0.1 to 1000. Bit-identical needs dyadic k AND a dyadic
+  `aaWidth`, which means a power-of-two zoom: dyadic k alone is not sufficient,
+  because the ramp's numerator is `aaWidth * (k - 0.5)` and `k - 0.5` is not a
+  power of two for most dyadic k. algorithms-review found that by producing
+  counterexamples at zoom 2.5, 5, 20 and 40, which are ordinary zooms, so the
+  headline test would have gone red on an unrelated change to its own zoom list.
+  Everywhere else the worst deviation across the lists the suite runs is 1.6653e-16,
+  at k = 0.123456 and zoom 2.5, against an asserted bound of 5e-16, since
+  `toBeCloseTo(expected, 15)` passes below half a unit in the last stated digit
+  rather than a whole one. Both numbers an earlier draft quoted here were wrong in
+  the flattering direction: it said 1.2e-16 against 1e-15, implying 8x of headroom
+  where there is 3.0x. A two million pair random sweep reaches 3.331e-16, inside the
+  bound by 1.5x, which is what makes 15 digits an assertion about this function
+  rather than a formality.
 
 - **A shape fades down to about a pixel and then stops being rasterised**, and the
   second half of that is measured rather than assumed. At zoom 0.2 the 10-unit
@@ -326,18 +365,19 @@ not" is the category this file has a heading for.
   the same frame. No distance field can fix that, because the fragment that would
   have faded is never shaded.
 
-- `antialias: true` stays on, and the M4.1 note asking M4.2 to revisit it is
-  answered rather than carried forward again. The argument for turning it off is
-  unchanged and still sound in itself: SDF shapes antialias their own edges
-  analytically, per pixel, and gain nothing from MSAA, while MSAA costs a
-  4x-sampled target plus a resolve every frame, which is a real bandwidth line
-  against M4.10's 10k-nodes-at-60fps budget. What stops this run from acting on it
-  is that the one place MSAA could still matter is the sub-pixel case above, where
-  coverage is decided by the sample grid rather than by the shader, and separating
-  "MSAA is keeping this speck visible" from "the quad happened to miss the sample
-  points" needs a controlled comparison this task has no harness for. So the
-  visual half is unresolved and the cost half is M4.10's, which is where the flag
-  should be settled with numbers on both sides.
+- `antialias: true` stays on, and M4.10 settles it rather than M4.2. The M4.1 note
+  asked M4.2 to revisit the flag and this is the revisit, so what M4.2 settled is
+  that it is not turning MSAA off and why it cannot decide the question with the
+  harness it has. The argument for turning it off is unchanged and still sound in
+  itself: SDF shapes antialias their own edges analytically, per pixel, and gain
+  nothing from MSAA, while MSAA costs a 4x-sampled target plus a resolve every
+  frame, which is a real bandwidth line against M4.10's 10k-nodes-at-60fps budget.
+  What stops this run from acting on it is that the one place MSAA could still
+  matter is the sub-pixel case above, where coverage is decided by the sample grid
+  rather than by the shader, and separating "MSAA is keeping this speck visible"
+  from "the quad happened to miss the sample points" needs a controlled comparison
+  this task has no harness for. So the visual half is unresolved and the cost half
+  is M4.10's, which is where the flag should be settled with numbers on both sides.
 
 ## 0.1.0
 

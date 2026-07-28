@@ -152,6 +152,31 @@ describe('antialiasWidth', () => {
     expect(join.nodes).toHaveLength(2);
     expect(join.nodes.map((node) => methodOf(node))).toEqual(['dFdx', 'dFdy']);
   });
+
+  it('differentiates the distance ITSELF, with no factor in front of it', () => {
+    // The OPERAND, which the assertion above says nothing about, and which is
+    // where every remaining factor error lives: `dFdx(mul(distance, 2))` builds
+    // the same three node kinds in the same three places and halves every
+    // antialiasing ramp in the shader, because `aaWidth` would then be two world
+    // units per pixel rather than one. Measured before this test existed: that
+    // mutation left all 67 tests in the two sdf suites green.
+    //
+    // A ramp half as wide as a pixel is not a subtle artefact either. It is a
+    // hard edge with one intermediate sample, which is the aliasing this whole
+    // milestone exists to remove, and it would look like a driver problem rather
+    // than like a factor of two.
+    const distance = float(3);
+    const outer = unwrap(antialiasWidth(distance));
+    if (!(outer instanceof MathNode)) throw new Error('unreachable');
+    const join = unwrap(outer.aNode);
+    if (!(join instanceof JoinNode)) throw new Error('unreachable');
+    for (const component of join.nodes) {
+      const derivative = unwrap(component);
+      expect(derivative).toBeInstanceOf(MathNode);
+      if (!(derivative instanceof MathNode)) throw new Error('unreachable');
+      expect(derivative.aNode).toBe(distance);
+    }
+  });
 });
 
 describe('the composable SDF nodes', () => {
@@ -189,6 +214,25 @@ describe('shapeShading', () => {
     const shading = shapeShading(input);
     expect(shading.color.isNode).toBe(true);
     expect(shading.alpha.isNode).toBe(true);
+  });
+
+  it('composites the alpha with a max and the colour with a mix', () => {
+    // The two compositing decisions, as far as a Node test can see them, and the
+    // division of labour is the point. The ALPHA is `shapeAlpha` in `sdf.ts` over
+    // the nine primitives, so `test/sdf.test.ts` executes it and asserts the 0.5
+    // at the boundary that the `over` chain would inflate to 0.725; all this
+    // assertion adds is that the graph handed to the material is that function's
+    // and not an `over` chain rebuilt here.
+    //
+    // The COLOUR cannot be executed anywhere in Node, because `mix` on a `vec3` is
+    // not one of the nine and adding it would put a tenth unexecutable line in
+    // `tslArith` for a single call site. So this is the whole of the evidence for
+    // the colour: the outermost operation is a `mix`, which rules out an `add` or
+    // a `mul` blend but says nothing about the order of the three layers. The
+    // screenshot is the rest of it.
+    const shading = shapeShading(input);
+    expect(methodOf(shading.alpha)).toBe('max');
+    expect(methodOf(shading.color)).toBe('mix');
   });
 
   it('takes a distance rather than a shape, so any field can go through it', () => {

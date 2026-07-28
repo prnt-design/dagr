@@ -8,8 +8,9 @@ sidebar_position: 4
 
 `@dagr/render` draws a graph. It takes coordinates, not a `Graph`: whatever
 [`@dagr/layout`](./layout.md) works out goes on screen through a three.js
-`WebGPURenderer`, with an orthographic camera, one draw call per shape family,
-and springs carrying nodes between one layout and the next.
+`WebGPURenderer`, with an orthographic camera, springs carrying nodes between one
+layout and the next, and, from M4.3, one draw call per shape family. Today it is
+one per shape, which is six.
 
 This page describes the package as of M4.2. Rounded rectangles and circles are
 on screen, drawn as signed distance fields. What is real is the seam everything
@@ -22,10 +23,12 @@ now and expensive in six tasks' time.
 ## What is on screen
 
 `createRenderer` mounts a three.js `WebGPURenderer` on a canvas and draws six
-shapes: a rounded rectangle and a circle at each of 10, 100 and 1000 world units
-across, on near-black. Every one of them gets its fill, its inset outline and
-its glow out of a single distance, and antialiases its own edges from the
-screen-space derivative of that distance.
+shapes: a rounded rectangle and a circle on each of three rungs a decade apart, on
+near-black. The rectangles are 10, 100 and 1000 world units across, and each
+circle's diameter matches its rung's height, so the circles are 4, 40 and 400.
+Every one of them gets its fill, its inset outline and its glow out of a single
+distance, and antialiases its own edges from the screen-space derivative of that
+distance.
 
 The scene is a ladder rather than one shape, and the reason is what makes the
 screenshots evidence. A texture atlas baked at one size looks perfect at the
@@ -102,14 +105,18 @@ chosen when the mesh was built.
 units and is outside.** The asymmetry is deliberate and it is the substantive
 design call in this task.
 
-An outline is a property of the screen. A two pixel border should be two pixels
-at every zoom, which is precisely what a geometry pipeline cannot do without
+An outline is a property of the screen. A two pixel border should be two pixels at
+every zoom, which is precisely what a geometry pipeline cannot do without
 rebuilding geometry and what a distance field does for free: the same derivative
-that gives the antialiasing width converts pixels into world units at the
-fragment being shaded. It is inset, lying entirely inside the boundary, because
-the shape's footprint is a contract. A layout gives a node a box, and an outline
-straddling the boundary would draw a shape a pixel larger than that box at every
-zoom, so a hit test built on the geometry would miss pixels the user can see.
+that gives the antialiasing width converts pixels into world units at the fragment
+being shaded. The band's two 50% points are the boundary itself and `widthPixels`
+pixels in, so its outer ramp is centred on the boundary exactly like the fill's,
+and "inset" here means it is drawn over the fill and never against the background
+rather than that it lies wholly inside the boundary. The shape's footprint is
+still a contract, and the paragraph after next is what keeps it: a layout gives a
+node a box, and a border that made the shape a pixel larger than that box would
+mean a hit test built on the geometry missed pixels the user can see.
+
 A band of w pixels reaches full coverage at w pixel centres, so a hairline draws
 one opaque pixel and a two pixel border draws two. That is worth stating because
 an earlier draft of this code got it wrong in a way no test caught. It inset the
@@ -121,11 +128,20 @@ colour anywhere. It took decoding a real frame to see it, where the navy
 `0x023047` came out as `#bc8932`, the amber fill half mixed with it.
 
 The inset bought nothing, and that is the part to keep hold of. Coverage here is
-the fill's own ramp applied to `abs(d + half) - half`, and since `abs(x)` is never
-less than `x`, outline coverage is at most fill coverage at every distance, width
-and antialiasing width. The alpha a shape writes is the max of the three
+the fill's own ramp applied to `max(d, -(d + w))`, and since `max(d, anything)` is
+never less than `d`, outline coverage is at most fill coverage at every distance,
+width and antialiasing width. The alpha a shape writes is the max of the three
 coverages, so an outline can never make a pixel more covered than the fill already
 makes it: the shape's footprint is identical with a border and without one.
+
+The `max` rather than the textbook `abs(d + half) - half` is deliberate, and it is
+why the numbers elsewhere on this page are exact rather than nearly exact. The
+textbook form computes `(d + half) - half`, which does not land back on `d`, so the
+outer ramp comes out a few ulps off the fill's instead of identical to it, the
+coverage at the outer cutoff reads about 1e-29 rather than 0, and zoom invariance
+holds to 1.4e-16 rather than exactly. The `max` returns `d` unrounded on the outer
+side, so all three are exact and the footprint comparison needs no tolerance at
+all.
 
 A glow is a property of the shape. The quad has to be padded to contain the halo,
 and that padding is baked into the geometry when the mesh is built, so a
@@ -353,11 +369,11 @@ therefore executes the exact expression tree the fragment shader evaluates, node
 for node.
 
 What that changes is the size of the untested surface: not six formulas, but nine
-one-line adapters, plus the assumption that WGSL agrees with `Math` about them
-for finite inputs. Nine is small enough that reading them is reviewing them, and
-a test pins that the two backends have the same nine members, so a primitive
-added to one and not the other fails a test rather than a shader compilation on
-somebody else's machine.
+one-line adapters plus three pieces of TSL named below, and the assumption that
+WGSL agrees with `Math` about the nine for finite inputs. Nine is small enough that
+reading them is reviewing them, and a test pins that the two backends have the same
+nine members, so a primitive added to one and not the other fails a test rather
+than a shader compilation on somebody else's machine.
 
 There is a second, less obvious payoff. A shader computes a hypotenuse as
 `sqrt(x*x + y*y)`, and WGSL has no `hypot`. Written separately, the scalar copy
@@ -367,12 +383,23 @@ not. The two spellings then disagree in the last bits, and an exact assertion
 either fails for a reason that is not a bug or gets loosened until it stops
 catching real ones. One definition removes the question.
 
-`smoothstep`, `clamp` and `length` are all WGSL intrinsics and all absent from the
-nine, deliberately. Each is built from the primitives instead, which costs a few
-ALU operations per fragment against the intrinsic and keeps the ramp the tests
-exercise identical to the ramp the shader evaluates. M4.10 owns measuring whether
-that trade is still right at ten thousand instances, where the budget is far more
-likely to be bound by overdraw than by arithmetic.
+`smoothstep` and `clamp` are WGSL intrinsics and are absent from the nine,
+deliberately: each is built from the primitives instead, which costs a few ALU
+operations per fragment against the intrinsic and keeps the ramp the tests exercise
+identical to the ramp the shader evaluates. M4.10 owns measuring whether that trade
+is still right at ten thousand instances, where the budget is far more likely to be
+bound by overdraw than by arithmetic.
+
+`length` is NOT one of those, and this is where an earlier draft of this page was
+wrong. It is used as an intrinsic, in `antialiasWidth` alone. Counting properly,
+three pieces of TSL are executed by no Node test: that `length` over a join of the
+two derivatives; the colour `mix` in the shading node, which is vec3 and cannot go
+through a float interface at all; and the `mul(size, 0.5)` that halves a rounded
+rect's extents inside a deferred `Fn` body, which the suite never runs because it
+builds the body directly from pre-halved literals. Their compensating control is
+the STRUCTURAL assertions on the node graph rather than a numeric test, and the
+first of the three is the one that needed it: swapping the gradient length for
+`fwidth` left every numeric test green.
 
 ### Crisp at every zoom, as a test rather than a claim
 
@@ -383,14 +410,25 @@ through the coverage functions at any zoom has to give the same answer: the zoom
 cancels, and nothing about the shape's size on screen enters the arithmetic. That
 is the property a texture atlas baked at one scale does not have.
 
-The suite asserts it across zooms from 0.1 to 1000. For k a dyadic rational the
-numerator and denominator of the ramp parameter are exact scalings by powers of
-two, so the results are bit identical and the assertion is exact equality; for
-other k the worst deviation measured is 1.2e-16 against an asserted bound of
-1e-15, which is far below the 1/255 an 8-bit framebuffer can represent. So
-"identical" is true of every pixel that can be drawn, and "bit identical" is true
-of the dyadic case only. The screenshots then cover what only a device can: that a
-real fragment shader's derivatives agree with that arithmetic.
+The suite asserts it across zooms from 0.1 to 1000. Bit-identical results need a
+dyadic k AND a dyadic antialiasing width, which means a power-of-two zoom: dyadic k
+alone is not enough, because the ramp's numerator is `aaWidth * (k - 0.5)` and
+`k - 0.5` is not a power of two for most dyadic k. An earlier draft of this page
+claimed dyadic k was sufficient, and algorithms-review refuted it with
+counterexamples at zoom 2.5, 5, 20 and 40, which are ordinary zooms rather than
+corners.
+
+Everywhere else the deviation is measured rather than described. The worst across
+the k and zoom lists the suite runs is 1.6653e-16, at k = 0.123456 and zoom 2.5,
+against an asserted bound of 5e-16: `toBeCloseTo(expected, 15)` passes below half a
+unit in the last stated digit, not a whole one, so the headroom is 3.0x. Over a two
+million pair random sweep the worst is 3.331e-16, inside the bound by 1.5x, which is
+what makes 15 digits a real assertion rather than a formality. Every one of those
+numbers is thirteen orders of magnitude under the 1/255 an 8-bit framebuffer can
+represent, so "identical" is true of every pixel that can be drawn while "bit
+identical" is true of the power-of-two case only. The screenshots then cover what
+only a device can: that a real fragment shader's derivatives agree with that
+arithmetic.
 
 The split is worth more than its cost because of how the code was arranged to
 fit it. The arithmetic was pushed into `camera.ts`, where a seeded property
@@ -414,9 +452,14 @@ checks:
   intended colour. The camera suite proves the frustum agrees with
   `worldToScreen` and reaches a real `OrthographicCamera` intact; it cannot
   prove a mesh is drawn, or that its winding faces the camera.
-- **That the shader computes anything.** The nine TSL adapters described above
-  are the whole of it, and no Node test can execute one. The tests prove the node
-  graphs are CONSTRUCTIBLE, which is a different and much weaker claim.
+- **That the shader computes anything.** The nine TSL adapters described above are
+  most of it and not the whole of it. Three other pieces of TSL are executed by no
+  Node test either: `length` as an intrinsic in `antialiasWidth`, the colour `mix`
+  in the shading node, which is vec3 and cannot go through a float interface at all,
+  and the `mul(size, 0.5)` that halves a rounded rect's extents inside a deferred
+  `Fn` body the suite bypasses by building that body from pre-halved literals. The
+  tests prove the node graphs are CONSTRUCTIBLE and assert their STRUCTURE, which is
+  a different and much weaker claim than computing the right answer.
 - That a real fragment shader's derivatives agree with the coverage arithmetic,
   and therefore that the crispness the suite proves about the formulas is the
   crispness on a display.

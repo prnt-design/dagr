@@ -179,6 +179,20 @@ describe('the ladder as geometry', () => {
     }
   });
 
+  it('names the descriptor when a quad cannot be sized, not just the field', () => {
+    // `shapeQuadBounds` is advertised for overlap and fits-in-view tests, so it is
+    // a place a caller's bad number surfaces without going through
+    // `createShapeMeshes`, and M4.4 will call it on layout-derived descriptors. It
+    // used to report `style.glowWorld`, which in a scene of six identical styles
+    // says nothing about which shape to look at.
+    const rect = CRISPNESS_LADDER[2];
+    if (rect === undefined) throw new Error('unreachable');
+    expect(rect.label).toBe('rect-100');
+    const bad: ShapeDescriptor = { ...rect, style: { ...rect.style, glowWorld: -1 } };
+    expect(() => shapeQuadBounds(bad)).toThrow(RangeError);
+    expect(() => shapeQuadBounds(bad)).toThrow(/rect-100\.style\.glowWorld/);
+  });
+
   it('describes a circle by its radius, so its size cannot contradict itself', () => {
     const circle = CRISPNESS_LADDER.find((shape) => shape.kind === 'circle');
     expect(circle).toBeDefined();
@@ -294,10 +308,23 @@ describe('createShapeMeshes', () => {
     expect(() => createShapeMeshes([bad])).toThrow(/glowWorld/);
   });
 
-  it('rejects a circle with a non-positive radius', () => {
+  it('rejects a circle by its RADIUS, quoting the number the caller wrote', () => {
+    // This was the only rejection test in the file that asserted nothing but the
+    // error class, and the reason was that there was no string worth asserting: a
+    // circle's radius went through the rounded rect's size check, so `radius: -1`
+    // came back as `circle-10.size.width has to be above zero, got -2`. That names
+    // a field a circle descriptor does not have and reports the diameter rather
+    // than the radius, which sends a reader to look for a `size` they never wrote.
     const circle = CRISPNESS_LADDER.find((shape) => shape.kind === 'circle');
     if (circle === undefined) throw new Error('unreachable');
-    expect(() => createShapeMeshes([{ ...circle, radius: 0 }])).toThrow(RangeError);
-    expect(() => createShapeMeshes([{ ...circle, radius: -1 }])).toThrow(RangeError);
+    expect(circle.label).toBe('circle-10');
+    for (const radius of [0, -1, Number.NaN]) {
+      expect(() => createShapeMeshes([{ ...circle, radius }])).toThrow(RangeError);
+      expect(() => createShapeMeshes([{ ...circle, radius }])).toThrow(/circle-10\.radius/);
+      expect(() => createShapeMeshes([{ ...circle, radius }])).not.toThrow(/size/);
+    }
+    // The radius, not its double: `-1` is what the caller typed and `-2` is what
+    // the old message reported.
+    expect(() => createShapeMeshes([{ ...circle, radius: -1 }])).toThrow(/got -1$/);
   });
 });

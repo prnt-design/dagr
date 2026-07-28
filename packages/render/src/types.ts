@@ -88,13 +88,38 @@ export interface OrthoFrustum {
 }
 
 /**
- * What a Dagr renderer does, and, in M4.1, all it does.
+ * A GPU resource somebody owns and has to give back: a geometry, a material, or
+ * anything else with a `dispose`.
+ *
+ * Here rather than in `webgpu-renderer.ts`, where it started, because the module
+ * that BUILDS a scene is a lower layer than the module that renders one, and
+ * `shape-scene.ts` naming a type out of `webgpu-renderer.ts` pointed the
+ * dependency the wrong way round and closed a cycle (the renderer imports
+ * `createShapeMeshes`). Nothing broke, since it was `import type` and
+ * `verbatimModuleSyntax` erases those, but M4.4 adds a second scene module on the
+ * same layer and will copy whichever direction it finds. This file is already the
+ * vocabulary both layers import, so it is where a type both of them name belongs.
+ *
+ * Structural on purpose, and it keeps this file's no-three.js rule: `dispose` is
+ * the whole of what a renderer does to a resource, three's `BufferGeometry` and
+ * `Material` both satisfy this, and so does a counting stub in a test.
+ * `webgpu-renderer.ts` re-exports it for its own test, which is a convenience and
+ * not a second definition.
+ */
+export interface GpuResource {
+  dispose(): void;
+}
+
+/**
+ * What a Dagr renderer does, and, as of M4.2, all it does.
  *
  * This is the seam every later M4 task plugs into. It deliberately says nothing
- * about scene contents: no node, no edge, no shape, no layout result. M4.1
- * draws a single hard-coded quad to prove the pipeline lights up, and giving
- * this interface a `setGraph` or a `setLayout` now would be guessing at the
- * shape of M4.4 with nothing to check the guess against. What it does fix is
+ * about scene contents: no node, no edge, no shape, no layout result. M4.1 drew a
+ * single hard-coded quad to prove the pipeline lights up and M4.2 draws a
+ * hard-coded set of SDF shapes, which is a change to what is DRAWN and not to
+ * anything a caller can reach; giving this interface a `setGraph` or a `setLayout`
+ * now would still be guessing at the shape of M4.4 with nothing to check the
+ * guess against. What it does fix is
  * the lifecycle, which is the part that will not change: something owns a
  * camera, something has to be told when the canvas resizes, something draws a
  * frame, and something has to give the GPU its memory back.

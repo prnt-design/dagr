@@ -1,22 +1,33 @@
 import { color, float, positionLocal, vec2 } from 'three/tsl';
 import { Mesh, MeshBasicNodeMaterial, PlaneGeometry } from 'three/webgpu';
-import { requireCornerRadius, requireShapeStyle, shapeQuadSize } from './sdf.js';
+import {
+  requireCircleRadius,
+  requireCornerRadius,
+  requireShapeStyle,
+  shapeQuadSize,
+} from './sdf.js';
 import type { ShapeStyle } from './sdf.js';
 import { circleSDF, roundedRectSDF, shapeShading } from './sdf-nodes.js';
-import type { Size, Vec2, WorldBounds } from './types.js';
-import type { GpuResource } from './webgpu-renderer.js';
+import type { GpuResource, Size, Vec2, WorldBounds } from './types.js';
 
 /**
- * The scene M4.2 draws: a CRISPNESS LADDER of six SDF shapes spanning 100:1 in
- * size, as data plus a function that turns each descriptor into a mesh.
+ * The scene M4.2 draws: a CRISPNESS LADDER of a rounded rect and a circle on each
+ * of three rungs a decade apart, as data plus a function that turns each descriptor
+ * into a mesh.
+ *
+ * The RECTS are 10, 100 and 1000 world units across, which is the 100:1 the rest of
+ * the package quotes. The circles are 4, 40 and 400, because each circle's diameter
+ * matches its rung's height rather than its rung's width, so the six SHAPES span
+ * 250:1. Two true numbers about different things: quote the one that is meant, and
+ * `test/shape-scene.test.ts` asserts them separately for that reason.
  *
  * **Why a ladder and not one shape.** The claim M4.2 makes is that an SDF is
  * crisp at every zoom rather than at one, and a scene containing shapes of a
  * single size cannot show the difference however many screenshots are taken of
  * it: a texture atlas baked at 100 units looks identical at zoom 1 and only falls
- * apart at the ends. Six shapes at 10, 100 and 1000 world units across put both
- * ends of the range in ONE frame, so a single screenshot at zoom 0.1 and a single
- * close-up at zoom 100 are between them evidence about the whole range.
+ * apart at the ends. Three rungs a decade apart put both ends of the range in ONE
+ * frame, so a single screenshot at zoom 0.1 and a single close-up at zoom 100 are
+ * between them evidence about the whole range.
  *
  * Data first, meshes second, because the layout is arithmetic and the meshes are
  * not. Where each shape sits, how big its padded quad is and whether any two of
@@ -248,11 +259,6 @@ export function shapeSize(descriptor: ShapeDescriptor): Size {
   return descriptor.size;
 }
 
-/** The corner radius a descriptor implies: half the side for a circle. */
-function shapeRadius(descriptor: ShapeDescriptor): number {
-  return descriptor.kind === 'circle' ? descriptor.radius : descriptor.cornerRadius;
-}
-
 /**
  * Where a descriptor's PADDED QUAD sits in world space, as extents.
  *
@@ -260,9 +266,19 @@ function shapeRadius(descriptor: ShapeDescriptor): number {
  * this for are an overlap test and a "does it fit in the view" test, and
  * {@link WorldBounds} is the shape both of those want: four comparisons, no
  * additions, and no chance of the y-down mixup `types.ts` describes.
+ *
+ * Validates, through `shapeQuadSize`, and names the descriptor when it does. That
+ * is what the `field` argument is for: this function is the one a caller reaches
+ * for without going through `createShapeMeshes`, so it is a place a bad number
+ * surfaces first, and `rect-100.style.glowWorld` is the difference between reading
+ * one line and reading a scene.
  */
 export function shapeQuadBounds(descriptor: ShapeDescriptor): WorldBounds {
-  const quad = shapeQuadSize(shapeSize(descriptor), descriptor.style);
+  const quad = shapeQuadSize(
+    shapeSize(descriptor),
+    descriptor.style,
+    `${descriptor.label}.style`,
+  );
   return {
     minX: descriptor.center.x - quad.width / 2,
     minY: descriptor.center.y - quad.height / 2,
@@ -350,7 +366,16 @@ function createShapeMesh(
     glowWorld: float(style.glowWorld),
   });
 
-  const quad = shapeQuadSize(size, style);
+  // Recorded rather than fixed, because fixing it is a restructuring and this is
+  // not the milestone for one: every style is validated TWICE per shape and a
+  // second validated copy is allocated. Once by `requireShapeDescriptor`, whose
+  // result is the `style` argument here, and again inside `shapeQuadSize`, which
+  // calls `quadPadding`, which validates because sizing a quad is the first thing
+  // any style is used for. Harmless at six shapes; at M4.4's node counts it is two
+  // validations and two allocations per node, and the fix (a `quadPadding` variant
+  // that trusts an already-validated style) is a second entry point whose whole
+  // job is to skip a check, which needs more thought than it needs here.
+  const quad = shapeQuadSize(size, style, `${descriptor.label}.style`);
   const geometry = new PlaneGeometry(quad.width, quad.height);
   const material = new MeshBasicNodeMaterial();
   material.colorNode = shading.color;
@@ -370,14 +395,25 @@ function createShapeMesh(
  * message is `rect-100.cornerRadius` rather than `cornerRadius`. This is the
  * boundary the module docstring in `sdf.ts` describes: the last place a caller's
  * number is still a caller's number rather than a per-fragment expression.
+ *
+ * **One check per KIND, and not one check over `shapeSize`.** A circle goes through
+ * `requireCircleRadius`, because it has a `radius` and no `size`: putting its radius
+ * through the rect's check reported `circle-10.size.width has to be above zero, got
+ * -2` for a caller who wrote `radius: -1`, which names a field a circle descriptor
+ * does not have and quotes twice the number the caller typed. The union in
+ * {@link ShapeDescriptor} is what makes the split cheap: after narrowing, each
+ * branch validates exactly the fields its own kind carries.
  */
 function requireShapeDescriptor(descriptor: ShapeDescriptor): ShapeStyle {
   const style = requireShapeStyle(descriptor.style, `${descriptor.label}.style`);
-  const radiusField = descriptor.kind === 'circle' ? 'radius' : 'cornerRadius';
+  if (descriptor.kind === 'circle') {
+    requireCircleRadius(descriptor.radius, `${descriptor.label}.radius`);
+    return style;
+  }
   requireCornerRadius(
-    shapeRadius(descriptor),
-    shapeSize(descriptor),
-    `${descriptor.label}.${radiusField}`,
+    descriptor.cornerRadius,
+    descriptor.size,
+    `${descriptor.label}.cornerRadius`,
     `${descriptor.label}.size`,
   );
   return style;

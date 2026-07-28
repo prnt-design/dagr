@@ -11,6 +11,7 @@ import {
   requireCornerRadius,
   requireShapeStyle,
   roundedRectDistance,
+  shapeAlpha,
   shapeQuadSize,
   smoothstepBetween,
 } from '../src/sdf.js';
@@ -140,23 +141,58 @@ describe('roundedRectDistance', () => {
     expect(rectAt(30 + half / Math.SQRT2, half / Math.SQRT2, half)).toBeCloseTo(0, 12);
   });
 
-  it('is exactly a circle on a square whose radius is half its side', () => {
-    // Not approximately, and not only at the boundary. On a square with
-    // `radius === halfWidth === halfHeight` the `min` term is identically zero
-    // and the euclidean term is `sqrt(px*px + py*py)`, so the two formulas
-    // reduce to the same expression and agree bit for bit. That is why the scene
-    // is allowed to draw circles with the cheaper `circleSDF` without the two
-    // families disagreeing about where their edges are.
-    for (let i = 0; i < 16; i += 1) {
-      const angle = (i / 16) * 2 * Math.PI;
-      for (const r of [0, 3, 20, 47.5]) {
+  it('is a circle to within two ulps on a square whose radius is half its side', () => {
+    // This test asserted bit-for-bit equality with `toBe` until the claim was
+    // measured, and passed only because of the four radii and sixteen angles it
+    // happened to sample. On a square with `radius === halfWidth === halfHeight`
+    // the `min` term IS identically zero, so both formulas are the same euclidean
+    // term minus the same radius and the two shape families agree about where
+    // their edges are, which is the property the scene relies on when it draws
+    // circles with the cheaper `circleSDF`. The arithmetic getting there is not
+    // identical: `qx = (|px| - halfWidth) + radius` does not round back to `|px|`
+    // when `halfWidth === radius`, so the `sqrt` argument differs in the last bits.
+    //
+    // Measured over 200k pseudo-random points on this square: 1.9% of them differ,
+    // worst absolute difference 7.105e-15, which is two ulps of a distance of 20
+    // and thirteen orders of magnitude under the 1/255 a fragment can show. The
+    // sweep below is four times as dense as the old one and includes radii 1 and
+    // 19, both of which are among the differing cases, so it can afford to be
+    // honest about the tolerance rather than sampling around it.
+    for (let i = 0; i < 64; i += 1) {
+      const angle = (i / 64) * 2 * Math.PI;
+      for (const r of [0, 1, 3, 19, 20, 47.5]) {
         const px = r * Math.cos(angle);
         const py = r * Math.sin(angle);
-        expect(roundedRectDistance(numberArith, px, py, 20, 20, 20)).toBe(
+        expect(roundedRectDistance(numberArith, px, py, 20, 20, 20)).toBeCloseTo(
           circleDistance(numberArith, px, py, 20),
+          12,
         );
       }
     }
+
+    // Two counterexamples, pinned so that the tolerance above keeps its reason
+    // attached rather than looking like a hedge. Inside the shape, at (0.1, 0.1),
+    // the rect gives -19.858578643762687 and the circle -19.85857864376269.
+    expect(roundedRectDistance(numberArith, 0.1, 0.1, 20, 20, 20)).not.toBe(
+      circleDistance(numberArith, 0.1, 0.1, 20),
+    );
+
+    // And ON the boundary, so the two zero level sets are not identical either:
+    // 20 units out at this angle the circle reads exactly 0 and the rect reads
+    // -3.55e-15, which is inside rather than on the edge by a distance no
+    // rasteriser can sample.
+    const angle = (5 / 17) * 2 * Math.PI;
+    const onEdge = roundedRectDistance(
+      numberArith,
+      20 * Math.cos(angle),
+      20 * Math.sin(angle),
+      20,
+      20,
+      20,
+    );
+    expect(circleDistance(numberArith, 20 * Math.cos(angle), 20 * Math.sin(angle), 20)).toBe(0);
+    expect(onEdge).not.toBe(0);
+    expect(onEdge).toBeCloseTo(0, 12);
   });
 
   it('never decreases as a point moves away along the x axis', () => {
@@ -387,33 +423,54 @@ describe('outlineCoverage', () => {
     expect(outlineCoverage(numberArith, -1, 1, 1)).toBe(0.5);
   });
 
-  it('is exact on the outer side of the band and within 3e-30 on the inner side', () => {
+  it('is exact on the outer side of the band and quadratic in the width on the inner side', () => {
     // The one asymmetry in the construction, measured rather than left for
     // somebody to trip over. `max(d, -(d + widthPixels * aaWidth))` returns `d`
     // UNROUNDED in the outer branch, so every claim about the outer edge is exact
     // at every aaWidth. The inner branch has to compute `widthPixels * aaWidth`
     // and negate a sum, so for an aaWidth that is not a dyadic rational the inner
     // cutoff lands a few ulps short of where it should and leaves a residue
-    // instead of a zero. The worst measured across these widths and aaWidths is
-    // 2.8e-30: thirty orders of magnitude under the 1/255 an 8 bit framebuffer
-    // can represent, so it is not a pixel anybody can see, but it is the reason
-    // the test above can say `toBe(0)` about the outer side and this one cannot
-    // say it about the inner side.
+    // instead of a zero.
+    //
+    // The bound SCALES, which is why it is written as one. The ramp parameter's
+    // error is a couple of ulps of `widthPixels * aaWidth` measured against
+    // `aaWidth`, so it is of order `widthPixels * 2^-53`, and `smoothstep` squares
+    // it: the residue is of order `(widthPixels * 2^-53)^2` and grows
+    // QUADRATICALLY in the width. The flat 3e-30 this test used to assert was
+    // therefore not a bound at all. It fails at width 7 with `aaWidth = 1.1`,
+    // which is zoom 0.91 and squarely inside the range the committed screenshots
+    // cover: measured 3.056e-30, and that aaWidth is in the list below now so the
+    // counterexample stays tested. Worst across the whole list as a multiple of
+    // `widthPixels^2`: 6.24e-32, against the 1e-30 asserted, so 16x of headroom;
+    // over a 500k pair random sweep with widths in [1, 201] it is 2.08e-31, so 5x.
+    //
+    // All of it is thirty orders of magnitude under the 1/255 an 8 bit framebuffer
+    // can represent, so no pixel anybody can see is affected. It is the reason the
+    // test above can say `toBe(0)` about the outer side and this one cannot say it
+    // about the inner side.
     for (const widthPixels of [1, 2, 3, 4, 7, 11]) {
-      for (const aaWidth of [1e-3, 0.01, 1 / 7, 1 / 3, 0.123, 1, 3.7, 10, 250]) {
+      for (const aaWidth of [1e-3, 0.01, 1 / 7, 1 / 3, 0.123, 1, 1.1, 3.7, 10, 250]) {
         const innerCutoff = outlineCoverage(
           numberArith,
           -(widthPixels + 0.5) * aaWidth,
           widthPixels,
           aaWidth,
         );
-        expect(innerCutoff).toBeLessThan(3e-30);
+        expect(innerCutoff).toBeLessThan(1e-30 * widthPixels ** 2);
         // Well past the ramp it is a hard zero again, whatever the rounding did.
         expect(outlineCoverage(numberArith, -(widthPixels + 4) * aaWidth, widthPixels, aaWidth)).toBe(
           0,
         );
       }
     }
+
+    // A SUB-PIXEL band does not follow that law and does not need to: the rounding
+    // there is an ulp of `aaWidth` itself rather than of `widthPixels * aaWidth`,
+    // so the residue stops shrinking with the width. At width 0.25 it is 2.26e-32,
+    // which is larger as a multiple of `widthPixels^2` (3.6e-31) and an order of
+    // magnitude SMALLER in absolute terms than any width above, so the width-1
+    // bound covers it.
+    expect(outlineCoverage(numberArith, -0.75 * 0.01, 0.25, 0.01)).toBeLessThan(1e-30);
   });
 
   it('scales its band with aaWidth, so its width in pixels is fixed', () => {
@@ -464,6 +521,135 @@ describe('glowCoverage', () => {
   });
 });
 
+describe('shapeAlpha', () => {
+  /**
+   * The scene's own glow alpha, which is what the claims below are about. Not
+   * `style.glowAlpha` above, deliberately: `shape-scene.ts` draws every shape at
+   * 0.45, and the numbers in `shapeAlpha`'s docstring are that shape's numbers.
+   */
+  const glowAlpha = 0.45;
+
+  /** The three coverages at `d` pixels from the boundary, at one pixel per world unit. */
+  function coverages(d: number): { fill: number; outline: number; glow: number } {
+    return {
+      fill: fillCoverage(numberArith, d, 1),
+      outline: outlineCoverage(numberArith, d, style.outlinePixels, 1),
+      glow: glowCoverage(numberArith, d, style.glowWorld, 1),
+    };
+  }
+
+  /** The alpha this package writes, at `d` pixels from the boundary. */
+  function alphaAt(d: number): number {
+    const { fill, outline, glow } = coverages(d);
+    return shapeAlpha(numberArith, glowAlpha, glow, fill, outline);
+  }
+
+  /**
+   * The `over` chain this function exists not to be: glow under fill under
+   * outline, each composited with `a + b * (1 - a)`.
+   */
+  function overAt(d: number): number {
+    const { fill, outline, glow } = coverages(d);
+    const overGlow = glowAlpha * glow;
+    const overFill = overGlow + fill * (1 - overGlow);
+    return overFill + outline * (1 - overFill);
+  }
+
+  /** Where a monotone alpha crosses 0.5, by bisection: the shape's APPARENT edge. */
+  function halfAlphaContour(alpha: (d: number) => number): number {
+    let inside = -1;
+    let outside = 8;
+    for (let i = 0; i < 80; i += 1) {
+      const mid = (inside + outside) / 2;
+      if (alpha(mid) > 0.5) inside = mid;
+      else outside = mid;
+    }
+    return (inside + outside) / 2;
+  }
+
+  it('is exactly a half on the boundary of a shape with a glow under it', () => {
+    // The assertion the whole compositing argument is about, and the one nothing
+    // checked before: replacing this function's `max` with the `over` chain it
+    // argues against left all 154 tests green. It is exact rather than close
+    // because all three inputs are exact there: the fill and the band are both
+    // 0.5 on the boundary and the glow is clamped to 1 inside, so the `max` picks
+    // 0.5 over the glow's 0.45 with no arithmetic in between.
+    const { fill, outline, glow } = coverages(0);
+    expect(fill).toBe(0.5);
+    expect(outline).toBe(0.5);
+    expect(glow).toBe(1);
+    expect(alphaAt(0)).toBe(0.5);
+  });
+
+  it('is what the over chain would NOT give: the docstring argument, computed', () => {
+    // The counterfactual, as arithmetic rather than as prose. `over` of the glow
+    // and the fill is 0.725 at the boundary and `over` of all three is 0.8625,
+    // both well past the half a shape's edge is supposed to write, so a reader
+    // does not have to take the docstring's word for which form inflates a shape.
+    const { fill, glow } = coverages(0);
+    const overGlow = glowAlpha * glow;
+    const overFill = overGlow + fill * (1 - overGlow);
+    expect(overFill).toBeCloseTo(0.725, 15);
+    expect(overFill).toBeGreaterThan(0.5);
+    expect(overAt(0)).toBe(0.8625);
+    expect(overAt(0)).toBeGreaterThan(0.5);
+  });
+
+  it('leaves the apparent edge on the geometry, where the over chain moves it out', () => {
+    // The consequence of the two numbers above, in the unit a reviewer looking at
+    // a screenshot cares about: pixels. Following the 0.5 alpha contour, this
+    // form puts a shape's apparent edge on its boundary and the over chain puts it
+    // 0.3637 pixels outside, so every shape with a glow under it would be drawn
+    // about a third of a pixel too big, at every zoom, with the error hidden
+    // inside the antialiasing ramp where nothing else would report it.
+    expect(halfAlphaContour(alphaAt)).toBeCloseTo(0, 12);
+    expect(halfAlphaContour(overAt)).toBeCloseTo(0.3637, 4);
+    expect(halfAlphaContour(overAt)).toBeGreaterThan(0.3);
+  });
+
+  it('is exactly a half at the boundary for every glow alpha at or below a half', () => {
+    // The precondition, stated as a range rather than as one number. Above 0.5 the
+    // halo itself sets the floor at the boundary, which is a decision about how
+    // strong a glow is (see `shape-scene.ts`, which picks 0.45) and not a
+    // compositing bug, so `requireShapeStyle` allows the whole unit interval.
+    const { fill, outline, glow } = coverages(0);
+    for (const alpha of [0, 0.1, 0.45, 0.5]) {
+      expect(shapeAlpha(numberArith, alpha, glow, fill, outline)).toBe(0.5);
+    }
+    expect(shapeAlpha(numberArith, 0.8, glow, fill, outline)).toBe(0.8);
+  });
+
+  it('is the glow alone outside the fill ramp, and the fill alone inside it', () => {
+    // Where the two forms agree, which is everywhere the ramps do not overlap:
+    // past half a pixel out the fill and the outline are both zero, so the alpha
+    // is the halo's and the `over` chain has nothing to add. That is why the
+    // inflation above is confined to a one pixel band around the shape.
+    for (const d of [0.5, 1, 2, 3, 5.9]) {
+      const { glow } = coverages(d);
+      expect(alphaAt(d)).toBe(glowAlpha * glow);
+      expect(alphaAt(d)).toBe(overAt(d));
+    }
+    // Well inside, the fill is 1 and nothing can raise it: an alpha above 1 is
+    // what the over chain cannot produce here either, and the fill's own clamp is
+    // what guarantees it.
+    expect(alphaAt(-3)).toBe(1);
+  });
+
+  it('never lets the outline or the glow enlarge the shape', () => {
+    // The footprint contract as the alpha sees it: `outlineCoverage` is at most
+    // `fillCoverage` everywhere (asserted above), and the glow is multiplied by an
+    // alpha in the unit interval, so the alpha is the fill's own coverage wherever
+    // the fill is the largest of the three and never exceeds 1.
+    for (let d = -4; d <= 7; d += 0.125) {
+      const { fill, outline, glow } = coverages(d);
+      const alpha = shapeAlpha(numberArith, glowAlpha, glow, fill, outline);
+      expect(alpha).toBeLessThanOrEqual(1);
+      expect(alpha).toBeGreaterThanOrEqual(fill);
+      expect(alpha).toBeGreaterThanOrEqual(outline);
+    }
+  });
+});
+
 describe('crisp at every zoom instead of at one', () => {
   /**
    * The headline claim of M4.2, as an executed test.
@@ -476,36 +662,64 @@ describe('crisp at every zoom instead of at one', () => {
    * shape's size on screen enters it, which is what distinguishes an SDF from a
    * texture atlas baked at one scale.
    */
-  const zooms = [0.1, 0.5, 1, 7, 100, 1000] as const;
+  /**
+   * The zooms where bit-identity is provable, and it is the ZOOM that has to be a
+   * power of two rather than only `k`.
+   *
+   * Kept as its own list because the reason is easy to get wrong and was: the
+   * argument is not "dyadic `k` makes the ramp parameter an exact scaling of
+   * `aaWidth` by powers of two", because the numerator is `aaWidth * (k - 0.5)`
+   * and `k - 0.5` is not a power of two for most dyadic `k` (`k = -0.25` gives
+   * -0.75). Exactness needs `aaWidth = 1 / zoom` to be dyadic TOO, so that every
+   * quantity in the ramp is the `zoom = 1` quantity scaled by one exact power of
+   * two and the division rounds identically. Do not trim this list towards
+   * "realistic" zooms: 1024 is here to be far from 1 while staying dyadic, and
+   * 0.25 and 4 are here so that the scaling is exercised in both directions.
+   * Counterexample from the other list, measured: at `k = -0.25`, zoom 2.5 gives
+   * `aaWidth = 0.4` and the coverage differs by 2.22e-16, which `toBe` would
+   * catch.
+   */
+  const dyadicZooms = [0.25, 0.5, 1, 2, 4, 1024] as const;
 
-  it('gives an identical fill coverage at k pixels from the boundary at every zoom', () => {
-    // Dyadic `k`, and exact equality. Both are deliberate: for `k` a dyadic
-    // rational the numerator and the denominator of the ramp parameter are exact
-    // scalings of `aaWidth` by powers of two, so the result is bit identical
-    // rather than merely close, and asserting `toBe` is a stronger statement
-    // than any tolerance.
-    for (const k of [-2, -1, -0.5, -0.25, 0, 0.25, 0.5, 1, 2]) {
+  /**
+   * Ordinary zooms, none of them a power of two, which is what a mouse wheel
+   * actually produces. 0.1 and 1000 are the ends of the 10000:1 range M4.2 claims;
+   * 2.5 is in this list rather than in the dyadic one precisely because it is the
+   * kind of zoom a user lands on by accident, and it is one of the zooms that
+   * makes bit-identity false.
+   */
+  const zooms = [0.1, 0.3, 2.5, 7, 100, 123.456, 1000] as const;
+
+  /** `k` values that are exact in binary, so only the zoom decides exactness. */
+  const dyadicK = [-2, -1, -0.5, -0.25, 0, 0.25, 0.5, 1, 2] as const;
+
+  it('gives a bit-identical fill coverage at k pixels from the boundary at every dyadic zoom', () => {
+    // Exact equality, and the precondition is dyadic `k` AND a dyadic `aaWidth`:
+    // every quantity in the ramp parameter is then the `zoom = 1` quantity scaled
+    // by one exact power of two, so the division rounds to the same double and
+    // `toBe` is a stronger statement than any tolerance. The version of this test
+    // that ran over the zoom list below passed by luck of sampling: adding 2.5 to
+    // it would have failed at `k = -0.25`, which was already in the list.
+    for (const k of dyadicK) {
       const expected = fillCoverage(numberArith, k, 1);
-      for (const zoom of zooms) {
+      for (const zoom of dyadicZooms) {
         const aaWidth = 1 / zoom;
         expect(fillCoverage(numberArith, k * aaWidth, aaWidth)).toBe(expected);
       }
     }
   });
 
-  it('gives an identical one and two pixel outline coverage at every zoom', () => {
-    // Bit identical, and `toBe` rather than a tolerance for the same reason the
-    // fill's version above gets one: the band distance is
-    // `max(d, -(d + widthPixels * aaWidth))`, which is a pure function of
-    // `d / aaWidth` and `widthPixels` and introduces no arithmetic of its own in
-    // the outer branch, where it returns `d` untouched. Both widths are asserted
-    // because a spelling that got the same ramp from `abs(d + half) - half` is
-    // exact for width 1 by accident (its subtrahend is identically zero there)
-    // and 1.4e-16 off for width 2.
-    for (const widthPixels of [1, 2]) {
-      for (const k of [-2, -1, -0.5, -0.25, 0, 0.25, 0.5, 1, 2]) {
+  it('gives a bit-identical outline coverage at every dyadic zoom, at four widths', () => {
+    // Same precondition, and the widths are integers so `widthPixels * aaWidth` is
+    // exact too. Widths 1 and 2 are asserted because a spelling that got the same
+    // ramp from `abs(d + half) - half` is exact for width 1 by accident (its
+    // subtrahend is identically zero there) and 1.4e-16 off for width 2; 3 and 11
+    // are here because the inner branch's error grows with the width, so a wide
+    // band is where a spelling that was only accidentally exact would show it.
+    for (const widthPixels of [1, 2, 3, 11]) {
+      for (const k of dyadicK) {
         const expected = outlineCoverage(numberArith, k, widthPixels, 1);
-        for (const zoom of zooms) {
+        for (const zoom of dyadicZooms) {
           const aaWidth = 1 / zoom;
           expect(outlineCoverage(numberArith, k * aaWidth, widthPixels, aaWidth)).toBe(expected);
         }
@@ -513,17 +727,57 @@ describe('crisp at every zoom instead of at one', () => {
     }
   });
 
-  it('is invariant to within 1.2e-16 for a k that is not a dyadic rational', () => {
-    // The honest version of the claim for arbitrary `k`. The worst deviation
-    // seen across these zooms and these `k` is 1.2e-16, against an asserted
-    // bound of 1e-15. Both are far below the 1/255 an 8 bit framebuffer can
-    // represent, so "identical" is true of every pixel that can be drawn, and
-    // "bit identical" is only true of the dyadic case above.
+  it('is invariant to within 1.67e-16 when the zoom or k is not dyadic', () => {
+    // The honest version for arbitrary zooms, with the two numbers that were wrong
+    // corrected. The worst deviation across these `k` and these zooms is
+    // 1.6653e-16, at `k = 0.123456` and zoom 2.5 (and again at zoom 1000), not the
+    // 1.2e-16 previously claimed. And `toBeCloseTo(expected, 15)` passes below
+    // `10^-15 / 2`, so the asserted bound is 5e-16 rather than 1e-15: the real
+    // headroom is 3.0x, not the 8x the two numbers together implied.
+    //
+    // Kept at 15 digits deliberately. Over a 2 million pair random sweep of `k` in
+    // [-3.5, 3.5] and zoom in [1e-4, 1e4] the worst fill deviation is 3.331e-16,
+    // still inside 5e-16 but only by 1.5x, so 15 digits is a real assertion about
+    // this function rather than a formality: a change that cost the ramp one more
+    // rounding would trip it. Every one of these numbers is thirteen orders of
+    // magnitude under the 1/255 an 8 bit framebuffer can represent, so "identical"
+    // is true of every pixel that can be drawn and "bit identical" is true only of
+    // the dyadic case above.
     for (const k of [1 / 3, 0.3, -0.7, 0.123456]) {
       const expected = fillCoverage(numberArith, k, 1);
-      for (const zoom of [...zooms, 0.3, 123.456]) {
+      for (const zoom of zooms) {
         const aaWidth = 1 / zoom;
         expect(fillCoverage(numberArith, k * aaWidth, aaWidth)).toBeCloseTo(expected, 15);
+      }
+    }
+  });
+
+  it('keeps a band invariant to a bound that scales with the band, not with the fill', () => {
+    // The outline's own version of the test above, at 14 digits rather than 15, and
+    // the loosening is measured rather than defensive. On the OUTER side of the
+    // band the expression returns `d` untouched, so the deviation is the fill's own
+    // 1.665e-16; on the INNER side it has to compute `widthPixels * aaWidth` and
+    // negate a sum, and the error scales with the width: measured on these lists,
+    // 2.22e-16 at width 1, 3.33e-16 at width 2, 5.55e-16 at width 3 and 2.665e-15
+    // at width 11. The third of those is already past the 5e-16 that 15 digits
+    // enforces, which is why the fill's tolerance cannot be reused here, and 14
+    // digits (5e-15) leaves 1.9x on the widest band asserted. A 100 pixel band
+    // would need looser again, at 2.2e-14: the rule of thumb the sweep supports is
+    // about 2.4e-16 per pixel of width.
+    for (const widthPixels of [1, 2, 3, 11]) {
+      for (const k of [1 / 3, 0.3, -0.7, 0.123456]) {
+        // Both sides of the band: `k` alone lands on the outer ramp, and
+        // `k - widthPixels` lands on the inner one, which is where the arithmetic
+        // is.
+        for (const offset of [k, k - widthPixels]) {
+          const expected = outlineCoverage(numberArith, offset, widthPixels, 1);
+          for (const zoom of zooms) {
+            const aaWidth = 1 / zoom;
+            expect(
+              outlineCoverage(numberArith, offset * aaWidth, widthPixels, aaWidth),
+            ).toBeCloseTo(expected, 14);
+          }
+        }
       }
     }
   });
@@ -531,8 +785,11 @@ describe('crisp at every zoom instead of at one', () => {
   it('keeps a 2 pixel outline exactly 2 pixels wide across a 10000:1 zoom range', () => {
     // The same claim read as geometry rather than as coverage, and read on the
     // pixel grid: the two pixels the band covers are fully covered and its inner
-    // 50% point is at 2 pixels in, whatever a pixel is worth in world units.
-    for (const zoom of zooms) {
+    // 50% point is at 2 pixels in, whatever a pixel is worth in world units. Both
+    // zoom lists, since this one is exact at every aaWidth: the coverages asserted
+    // are the clamped ends of the ramp and its exact midpoint, none of which
+    // depends on how `aaWidth` rounds.
+    for (const zoom of [...dyadicZooms, ...zooms]) {
       const aaWidth = 1 / zoom;
       expect(outlineCoverage(numberArith, -0.5 * aaWidth, 2, aaWidth)).toBe(1);
       expect(outlineCoverage(numberArith, -1.5 * aaWidth, 2, aaWidth)).toBe(1);
@@ -577,12 +834,41 @@ describe('quadPadding and shapeQuadSize', () => {
     expect(1 / (2 * FILL_AA_CROSSOVER_ZOOM)).toBe(FILL_AA_PADDING_WORLD);
   });
 
-  it('has an unclipped fill ramp at and above the crossover zoom, clipped below', () => {
+  it('clips the fill ramp at the QUAD edge, which a glow puts much further out', () => {
+    // What the crossover zoom is, and what it is not. The previous version of this
+    // test compared a local `halfRamp` against `FILL_AA_PADDING_WORLD`, which just
+    // restates the constant's definition and cannot notice the thing that was
+    // wrong: the quad's edge is `quadPadding` out, which is the glow PLUS the fill
+    // allowance, so 0.5 is the zoom at which the fill's own unit is spent and NOT
+    // the zoom at which anything is clipped. Below is the number that decides
+    // whether an edge hardens.
     const halfRamp = (zoom: number): number => 1 / (2 * zoom);
+    const clipZoom = (padded: ShapeStyle): number => 1 / (2 * quadPadding(padded));
+
+    // The sample style's 6 unit glow gives 7 units of padding, so its ramp survives
+    // to zoom 1/14, seven times further down than the constant suggests.
+    expect(quadPadding(style)).toBe(7);
+    expect(clipZoom(style)).toBe(1 / 14);
+    expect(clipZoom(style)).toBeLessThan(FILL_AA_CROSSOVER_ZOOM);
+    expect(FILL_AA_CROSSOVER_ZOOM / clipZoom(style)).toBe(quadPadding(style));
+
+    // The constant describes exactly one style: a glow-free one, which is the
+    // worst case and which `shape-scene.ts` never draws.
+    expect(clipZoom({ ...style, glowWorld: 0 })).toBe(FILL_AA_CROSSOVER_ZOOM);
+
+    // The ladder's own two extremes, so the numbers in the docstring are asserted
+    // rather than asserted about a hypothetical style: a 1 unit glow (the 4 unit
+    // tall rung) clips below 0.25, which is ABOVE the 0.1 the committed screenshot
+    // is taken at, and a 100 unit glow (the 400 unit rung) survives to 0.00495.
+    expect(clipZoom({ ...style, glowWorld: 1 })).toBe(0.25);
+    expect(clipZoom({ ...style, glowWorld: 1 })).toBeGreaterThan(0.1);
+    expect(clipZoom({ ...style, glowWorld: 10 })).toBeCloseTo(0.0455, 4);
+    expect(clipZoom({ ...style, glowWorld: 100 })).toBeCloseTo(0.00495, 5);
+
+    // And the relation the constant does hold: half a ramp at the crossover zoom is
+    // exactly the fill's own allowance, which is what makes it a crossover at all.
     expect(halfRamp(FILL_AA_CROSSOVER_ZOOM)).toBe(FILL_AA_PADDING_WORLD);
-    expect(halfRamp(FILL_AA_CROSSOVER_ZOOM * 1.0001)).toBeLessThan(FILL_AA_PADDING_WORLD);
-    expect(halfRamp(0.1)).toBeGreaterThan(FILL_AA_PADDING_WORLD);
-    expect(halfRamp(100)).toBeLessThan(FILL_AA_PADDING_WORLD);
+    expect(halfRamp(clipZoom(style))).toBe(quadPadding(style));
   });
 
   it('rejects a style whose numbers cannot describe a quad', () => {
@@ -602,6 +888,16 @@ describe('quadPadding and shapeQuadSize', () => {
 describe('requireShapeStyle', () => {
   it('accepts the style the scene uses', () => {
     expect(requireShapeStyle(style, 'style')).toEqual(style);
+  });
+
+  it('returns a COPY, so a validated style cannot be mutated behind its user', () => {
+    // The docstring's copy contract, which `toEqual` above cannot see: it is
+    // structural, so `return style` passes it. Measured before this line existed:
+    // changing the body to return its argument left all 153 tests green. What the
+    // copy buys is that a caller holding the record it passed cannot turn a
+    // validated style into an invalid one after the fact, which matters because
+    // everything downstream of this function is entitled to skip re-checking.
+    expect(requireShapeStyle(style, 'style')).not.toBe(style);
   });
 
   it('rejects a colour that is not a 24-bit integer, as createRenderer does', () => {
