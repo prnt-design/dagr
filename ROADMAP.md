@@ -858,10 +858,10 @@ findings addressed or logged, docs land with the feature.
   layering it saw rather than the last, because the sweeps are not monotone.
   (e) It is not the default because it costs about 21ms on the 10k against a
   `pipeline > 10k` baseline of 30.15ms with a 10% gate tolerance, and the
-  rebaseline that fixes wants a quiet machine. M2.5 also gave a second reason,
-  that M2.6 would improve the same stage so one flip could serve both; M2.6 has
-  now shipped WITHOUT the flip, so that reason is spent and the baseline cost
-  is the only one left. The flip is M2.6b.
+  rebaseline that fixes it wants a quiet machine. M2.5 also gave a second
+  reason, that M2.6 would improve the same stage so one flip could serve both;
+  M2.6 has now shipped WITHOUT the flip, so that reason is spent and the
+  baseline cost is the only one left. The flip is M2.6b.
   Everything below is the measurement that chose each of those.
   The seed was chosen by measurement, crossings after 8 sweeps: roster order
   3,943 on the 1k and 54,744 on the 10k, the adjacent-layer walk 3,605 and
@@ -913,20 +913,26 @@ findings addressed or logged, docs land with the feature.
   graphs from `@dagr/bench`'s own `layeredDag` with the exact count recorded
   twice per graph, with the pass at its default cap and with it off, so a
   regression in either shows up rather than one masking the other.
-  Four decisions, all measured, all argued in `barycenterOrder`'s docstring.
-  (a) PLACEMENT: once at the end beats after every round (32,798) and after
-  every sweep (32,854) on quality as well as on time (30.1ms against 48.6 and
-  125.5). The trap it sets is that `position` tracks the last working layering
-  and not the best one, so the pass repositions from `best` first; a build
-  without that decides arbitrarily rather than badly, which is why the test
-  pins layers and not a count. (b) The swap delta is EXACT, so a decision is
-  O(deg v * deg w) instead of a rescore, and the suite holds it to that against
-  a transpose that decides every swap by a full `countCrossings`. (c) TIES ARE
-  TAKEN: a zero-delta swap wins all six configurations tested, by 2.7% to
-  13.5%. (d) TERMINATION is gated on strictly improving swaps ONLY, because a
-  zero-delta swap leaves one available and any other gate cycles forever; the
-  witness is three nodes and two edges, two of them sharing one neighbour, and
-  both halves of the rule are pinned on it.
+  Five decisions, all measured, all argued in `barycenterOrder`'s docstring.
+  (a) PLACEMENT: once at the end beats after every round and after every sweep
+  on quality as well as on time, and by enough that it is not close; the
+  figures are in the docstring, where they can carry the note that the ones for
+  the two rejected placements were taken before the tie rule and so are not
+  comparable to the 30,318 above. The trap it sets is that `position` tracks
+  the last working layering and not the best one, so the pass repositions from
+  `best` first; a build without that decides arbitrarily rather than badly,
+  which is why the test pins layers and not a count. (b) The swap delta is
+  EXACT, so a decision is O(deg v * deg w) instead of a rescore, and the suite
+  holds it to that against a transpose that decides every swap by a full
+  `countCrossings`. (c) TIES ARE TAKEN: a zero-delta swap wins every
+  configuration it was tested in. (d) TERMINATION is gated on strictly
+  improving swaps ONLY, because a zero-delta swap leaves one available and any
+  other gate cycles forever; the witness is three nodes and two edges, two of
+  them sharing one neighbour, and both halves of the rule are pinned on it.
+  (e) A pair is SKIPPED when either node has no neighbour in either adjacent
+  layer, which the tie rule makes necessary: such a node has a delta of zero on
+  both sides, so without it every pair containing one is swapped
+  unconditionally and the node drifts a slot per pass.
   `maxTransposePasses` defaults to 8, chosen at the knee of a measured cap
   curve, and that it matches `maxSweeps`'s 8 is a COINCIDENCE recorded as one.
   The curve itself lives in `barycenterOrder`'s docstring and is deliberately
