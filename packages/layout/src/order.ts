@@ -1023,15 +1023,18 @@ function applyHint(
  * what ties the trade to the stage that actually ships rather than to some
  * configuration of it. The timings are one machine's, as every timing here is.
  *
- * THOSE FOUR FIGURES ARE STATED HERE AND NOWHERE ELSE. Each is a live
+ * THOSE FOUR FIGURES ARE LIVE ADVICE HERE AND NOWHERE ELSE. Each is a
  * measurement with a scheduled expiry: a bench recapture moves the timings and
- * M2.4b moves all four. So `index.ts`, `CHANGELOG.md`, `ROADMAP.md` and
- * `docs/docs/layout.md` describe the trade in a sentence and point back at this
- * section rather than copying the table, which leaves one paragraph to correct
- * rather than five. The crossing counts are pinned in
- * `test/layout.order.test.ts`, against both stages, so a stage that quietly
- * gave the saving back fails there; the timings are pinned by nothing, which is
- * what the bench baseline is for.
+ * M2.4b moves all four. So `index.ts`, `ROADMAP.md` and `docs/docs/layout.md`
+ * describe the trade in a sentence and point back at this section rather than
+ * copying the table, which leaves one paragraph to correct rather than four.
+ * `CHANGELOG.md` is the deliberate exception: a dated entry records what a
+ * past change measured at the time, so M2.6's entry keeps its own 3,005 and
+ * 30,318 and is marked superseded in place rather than swept, which is this
+ * file's own precedent. The crossing counts are pinned against both stages in
+ * `test/layout.order.test.ts`, so a stage that quietly gave the saving back
+ * fails there; the timings are pinned by nothing, which is what the bench
+ * baseline is for.
  *
  * Being the default was always a separate decision from existing, which is the
  * precedent M2.3 set with `networkSimplexRankStage`: a real stage is exported
@@ -1228,7 +1231,7 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
 /**
  * The barycenter order stage with no options: eight sweeps and a cold start.
  * See {@link barycenterOrder}, which is where all of it is argued, including
- * why this is not the default stage.
+ * what being the default costs and what it buys.
  *
  * Frozen, for the reason `defaultStages` and `networkSimplexRankStage` are: it
  * is one object shared by every run in the process, and a stage's `name` is
