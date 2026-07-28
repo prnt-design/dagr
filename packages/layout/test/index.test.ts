@@ -2,6 +2,8 @@ import { Graph } from '@dagr/graph';
 import { describe, expect, it } from 'vitest';
 import * as api from '../src/index.js';
 import type {
+  BarycenterOrderOptions,
+  CrossingInput,
   DagrLayoutErrorCode,
   LayoutConfig,
   LayoutInput,
@@ -132,12 +134,35 @@ describe('@dagr/layout public surface', () => {
       'InternalLayoutError',
       'InvalidConfigError',
       'StageContractError',
+      'barycenterOrder',
+      'barycenterOrderStage',
+      'countCrossings',
       'defaultStages',
       'layout',
       'longestPathRankStage',
       'networkSimplexRank',
       'networkSimplexRankStage',
     ]);
+  });
+
+  // The order stage exported by name without taking the default, which is the
+  // second time that has happened and is what makes the export rule "every real
+  // stage is exported by name" rather than "every default is". The counter is
+  // exported beside it because a metric only a stage can compute is a metric
+  // nobody can hold the stage to.
+  it('exports the barycenter order stage, its factory, and the crossing counter', () => {
+    expect(api.barycenterOrderStage.name).toBe('barycenter-order');
+    expect(api.defaultStages.order).not.toBe(api.barycenterOrderStage);
+    expect(Object.isFrozen(api.barycenterOrderStage)).toBe(true);
+    const graph = new Graph();
+    graph.addNode('a');
+    graph.addNode('b');
+    graph.addEdge('a', 'b');
+    const options: BarycenterOrderOptions = { maxSweeps: 4, initialOrder: [['a'], ['b']] };
+    const stage: OrderStage = api.barycenterOrder(options);
+    expect(api.layout({ graph }, { order: stage }).nodes.size).toBe(2);
+    const input: CrossingInput = { graph, layers: [['a'], ['b']] };
+    expect(api.countCrossings(input)).toBe(0);
   });
 
   it('exports the DagrLayoutErrorCode type, and every code is a member of it', () => {

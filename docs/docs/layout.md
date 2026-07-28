@@ -11,9 +11,10 @@ sidebar_position: 3
 `LayoutResult`: where every node sits, how every edge runs, and the box around
 the lot.
 
-This page describes the pipeline as of M2.4a, plus M2.3's second ranker. Those
-two numbers are the wrong way round on purpose: M2.4a landed first, and the
-milestones do not run in landing order.
+This page describes the pipeline as of M2.4a, plus M2.3's second ranker and
+M2.5's order stage. Those numbers are not in landing order on purpose: M2.4a
+landed before M2.3's entry was written up here, and the milestones do not run in
+landing order.
 
 The types, the runner, and the stage boundaries are real: they are what every
 later milestone is built against, and the roster below exists so the one
@@ -21,7 +22,10 @@ boundary that was going to have to move (M2.4b's dummy nodes) does not. One of
 the four default algorithms is real: the rank stage breaks cycles and ranks by
 longest path, so the layers are the ones the graph asks for, and M2.3 added a
 second ranker a caller can select instead. The other three defaults are
-placeholders that produce a well formed but naive result.
+placeholders that produce a well formed but naive result. M2.5 added a real
+crossing-reduction stage beside the order placeholder, `barycenter-order`,
+which a caller selects the same way and which
+[has not taken the default](#why-barycenter-order-is-not-the-default).
 
 Expect the contract to gain rules as real stages land. A rule leaves the list
 only when the mistake it caught stops being one a stage can make, never because
@@ -635,6 +639,160 @@ simplex returns whichever its tie-breaks reach first, so the same graph
 assembled in another order may rank differently. On a graph with a unique
 optimum it does not, and that is the claim the tests pin.
 
+## Ordering, and what a crossing is counted between
+
+The default order stage is still `insertion-order`, which groups the roster by
+rank and orders each layer by graph insertion order. `barycenter-order` is a
+real crossing-reduction stage beside it, selected per run:
+
+```ts
+import { barycenterOrder, barycenterOrderStage, countCrossings } from '@dagr/layout';
+
+layout({ graph }, { order: barycenterOrderStage });
+layout({ graph }, { order: barycenterOrder({ maxSweeps: 16 }) });
+```
+
+It is the same arrangement as the two rank stages, and the reason it is not the
+default is [below](#why-barycenter-order-is-not-the-default).
+
+### What a crossing is counted between
+
+`countCrossings({ graph, layers })` is the metric, and it is exported because a
+number only the stage can compute is a number nobody can hold the stage to. An
+`OrderedState` satisfies its input type structurally, so a stage author holding
+one passes it straight in.
+
+**A crossing is only defined between two segments joining the same pair of
+adjacent layers.** An edge whose endpoints are more than one layer apart is
+invisible to the counter and to the sweeps alike, and so is a self loop, which
+spans none. This is the honest limit of ordering v1 rather than a detail: under
+the default ranker, 1,324 of the 1k benchmark corpus's 4,000 edges span exactly
+one rank (33.1%) and 10,528 of the 10k's 40,000 (26.3%), and the longest edge
+spans 78 ranks on the one and 201 on the other. So the stage today optimises a
+real quantity over a quarter to a third of the drawing.
+
+What changes that is M2.4b. Splitting every long edge into a chain of one dummy
+per rank makes every edge span exactly one rank, at which point the share is
+100% and both the counter and the sweeps see the whole graph without a line
+changing in either.
+
+Two segments that share an endpoint touch rather than cross, and two parallel
+edges lie on top of each other. Direction is not consulted: an edge the ranker
+reversed still joins the same two layers. The counter is Barth, Junger and
+Mutzel's accumulator tree, O(E log V) rather than the O(E^2) of comparing every
+pair, and the test suite checks it against a brute-force pair loop on random
+layerings as well as against hand counts on small graphs.
+
+### The seed permutation, which M3.6 warm starts from
+
+Barycenter sweeps are sensitive to where they start, so the starting
+permutation is a decision and it is recorded here rather than left to be
+inferred from a stage that will not exist by M3.6.
+
+**The seed is a connected depth-first walk over adjacent-layer edges.** The
+roster is iterated in its own order (the graph's nodes in insertion order, then
+any virtual ids in id order), and each node it reaches that has not been seen
+starts a walk that may only step along an edge whose two endpoints sit in
+adjacent layers, in either direction. Every node is appended to its own layer
+the first time it is visited, neighbours are taken in `outEdges` order and then
+`inEdges` order, and a node no such edge reaches is appended when the outer loop
+arrives at it. It is not the roster order the placeholder uses.
+
+Measured on the benchmark corpora, crossings after 8 sweeps, lower is better:
+
+| seed | 1k | 10k |
+| --- | --- | --- |
+| roster order (the placeholder's) | 3,943 | 54,744 |
+| walk over adjacent-layer edges | 3,605 | 35,114 |
+| walk over all edges | 3,459 | 38,152 |
+
+and before any sweep runs: roster order 12,890 and 425,394, the adjacent-layer
+walk 7,933 and 94,991, the all-edges walk 9,722 and 191,023.
+
+The adjacent-layer walk is chosen over the all-edges walk for two reasons. It
+wins the 10k by 8.0% and loses the 1k by 4.2%, and the 10k is the corpus every
+later milestone commits against. And the two rules coincide once M2.4b splits
+the long edges, so choosing this one is choosing the behaviour the stage will
+have anyway rather than one that changes character under it.
+
+The hypothesis that lost is worth recording. The all-edges walk was expected to
+win, on the theory that the seed is the only place a long edge can influence
+this stage at all, since neither the sweeps nor the counter can see one. It
+loses: a start built from edges the sweeps cannot see is worth less than one
+built from the edges they can.
+
+### The sweep budget
+
+A downward sweep fixes layer `i` and reorders layer `i + 1` from the neighbours
+above it; an upward sweep is the mirror image. They alternate, starting
+downward. A node is placed by the barycenter of its neighbours' positions in the
+fixed layer, ties broken by their median and then by the node's own current
+index; a node with no neighbour in the fixed layer keeps its index and the rest
+sort into the indices left over.
+
+The layering is scored after every sweep and **the best one seen is what comes
+back**, not the last one, because the sweeps are not monotone. That is what
+makes a larger `maxSweeps` a weakly better answer rather than a different one.
+
+| sweeps | 1k | 10k | 10k cost |
+| --- | --- | --- | --- |
+| 0 (the seed) | 7,933 | 94,991 | 5.5ms |
+| 2 | 4,619 | 50,735 | 9.5ms |
+| 4 | 3,880 | 40,217 | 13.5ms |
+| 8 (the default) | 3,605 | 35,114 | 21ms |
+| 16 | 3,532 | 32,503 | 38ms |
+
+`maxSweeps` defaults to 8, which is where the curve has given up most of what it
+will give: 8 sweeps take the 10k to 8.3% of the roster-order seed's crossings
+and 16 take it to 7.6%, so doubling the budget buys another 7% of what is left.
+It bounds the sweeps and nothing else, the way `maxIterations` bounds pivots
+only. Zero is legal and means "seed only". A non-integer or negative budget is
+an `InvalidConfigError` naming the field, thrown at the call that builds the
+stage rather than at the run.
+
+Those timings are one machine's, taken to justify a default rather than to tell
+you what the stage will cost you, exactly as the figures under
+[Minimum total edge length](#minimum-total-edge-length-and-what-it-costs) are.
+The committed benchmark medians are the only numbers anything regresses
+against.
+
+A full down-and-up round that lowers the best seen by nothing ends the run,
+which is a time saving with a small quality cost rather than a fixed point: what
+carries into the next round is the last layering, not the best one. On the 1k at
+a budget of 16 it stops after sweep 14 at 3,532 where running all 16 reaches
+3,467. At the default budget of 8 it fires on neither corpus.
+
+`initialOrder` is a previous run's layers, handed back so a re-layout does not
+churn an ordering somebody has already read. It is a hint and never a
+permutation taken on trust, exactly as `initialRanks` is on the simplex ranker:
+the hint is flattened into one sequence, each id takes its index in it, and each
+layer is sorted stably by that index. An id the roster does not hold is ignored,
+an id the hint puts in the wrong layer only ever contributes its position within
+the layer it actually belongs to, and a hint that mentions nothing leaves the
+seed exactly as the walk computed it. Nothing it can say produces an invalid
+layering.
+
+The stage is deterministic in the same way the rankers are: same graph, same
+layers, always. Every tie in the walk is edge insertion order and every tie in a
+sort key falls through to the node's current index.
+
+### Why `barycenter-order` is not the default
+
+Three reasons, and none of them is that the stage is unfinished.
+
+It costs about 21ms on the 10k corpus against a committed `pipeline > 10k`
+baseline of 30.15ms, and the bench gate's base tolerance is 10%, so making it
+the default would put that entry roughly 70% over and the gate would fail. The
+baseline refresh that would absorb it is owed already and deferred to a quiet
+machine, because recapturing a baseline recaptures every entry at once.
+
+M2.6's transpose refinement improves this same stage. Flipping the default once,
+after both, is one decision and one rebaseline instead of two.
+
+And it is the precedent M2.3 set with `network-simplex-rank`: a real stage is
+exported by name whether or not it is the default, and which stage is the
+default is a separate decision from whether the algorithm exists.
+
 ## Why the stages are swappable
 
 Every stage is an object with a `name` and a `run`:
@@ -1083,20 +1241,22 @@ try {
 ## What is not here yet
 
 One of the four default stages is a layout algorithm. The other three are
-placeholders. (`network-simplex-rank` is a second real algorithm, but it is not
-a default: it is selected per run.)
+placeholders. (`network-simplex-rank` and `barycenter-order` are real algorithms
+too, but neither is a default: each is selected per run.)
 
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
 | rank | `longest-path-rank` | Breaks cycles with a greedy feedback arc set, then ranks by longest path. Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height. | Dummy chains for long edges (M2.4b). |
-| order | `insertion-order` | Groups the roster by rank, orders each layer by graph insertion order. | Barycenter sweeps with a crossing counter (M2.5), then transpose refinement (M2.6). |
+| order | `insertion-order` | Groups the roster by rank, orders each layer by graph insertion order. `barycenter-order` is a real order stage a caller can select instead, described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). | Transpose refinement (M2.6), and the default flips to `barycenter-order` there. |
 | position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. | Brandes-Koepf horizontal coordinate assignment (M2.7). |
 | route | `straight-route` | A straight two-point line between the endpoint centres. | Polylines through dummy-node coordinates, monotone in the rank axis (M2.8). |
 
 So a default run of a real graph gives you the right number of rows with the
 right nodes in them, and then evenly spaces each row in insertion order and
 joins the lot with straight lines. The layers are worth reading; the horizontal
-order and the edges are not yet. What it is, is a run that always completes,
+order and the edges are not yet. Selecting `barycenter-order` makes the
+horizontal order worth reading as well, over the quarter to a third of the edges
+the metric can see today. What it is, is a run that always completes,
 never overlaps two boxes (see [Overlap, exactly](#overlap-exactly)), and
 satisfies every guarantee this page makes about the result, which is what the
 later milestones are built against.
