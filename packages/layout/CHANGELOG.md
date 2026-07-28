@@ -20,7 +20,7 @@ of doc prose.
   `InvalidConfigError` naming the field, checked when the stage is built rather
   than when it runs. That is `maxSweeps`'s rule, for `maxSweeps`'s reason: a
   heuristic with no optimality condition has nothing for "as many as it takes"
-  to mean. (M2.6a)
+  to mean. (M2.6)
 
   **THE PASS IS ON BY DEFAULT, so `barycenterOrder()` and
   `barycenterOrderStage` return different layers than they did before this
