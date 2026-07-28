@@ -7,7 +7,7 @@ import { barycenterOrder, barycenterOrderStage, countCrossings } from '../src/or
 import { longestPathRankStage } from '../src/rank.js';
 import { defaultStages } from '../src/stages.js';
 import { layout } from '../src/pipeline.js';
-import { mulberry32, randomDigraph } from './random.js';
+import { mulberry32, randomDigraph, randomLayered } from './random.js';
 import type { GraphSpec } from '@dagr/bench';
 import type { NodeId } from '@dagr/graph';
 import type { RankedState, Size } from '../src/types.js';
@@ -60,46 +60,21 @@ function stateOf(graph: Graph, layers: readonly (readonly NodeId[])[]): RankedSt
   };
 }
 
-/** The layers a stage produces for a state, as plain arrays for comparison. */
+/**
+ * The layers a stage produces for a state, as plain arrays for comparison.
+ *
+ * The transpose pass is OFF unless a case here turns it on, which is a choice
+ * about what this file is for. Everything below is about the seed, the hint or
+ * the sweeps, and a refinement pass running after all three would be answering
+ * for them: a seed test would stop failing when a bad seed was tidied up
+ * afterwards. The pass has a suite of its own in `layout.transpose.test.ts`,
+ * and the figures it reaches on the bench corpora are pinned at the foot of
+ * this one.
+ */
 function ordered(state: RankedState, options?: Parameters<typeof barycenterOrder>[0]): NodeId[][] {
-  return barycenterOrder(options)
+  return barycenterOrder({ maxTransposePasses: 0, ...options })
     .run(state)
     .layers.map((layer) => [...layer]);
-}
-
-/**
- * A random layered graph: nodes spread over layers, most edges joining adjacent
- * layers and a share of them spanning two.
- *
- * Bigger than `randomDigraph`, because the properties below are about crossing
- * counts and a dozen nodes rarely has a crossing to count. The long edges are
- * there so that the seed and the sweeps both meet the case they cannot see.
- */
-function randomLayered(
-  random: () => number,
-  nodeCount: number,
-  layerCount: number,
-  edgeCount: number,
-): { graph: Graph; layers: NodeId[][] } {
-  const graph = new Graph();
-  const layers: NodeId[][] = Array.from({ length: layerCount }, () => []);
-  for (let index = 0; index < nodeCount; index += 1) {
-    const id = graph.addNode(`n${String(index)}`).id;
-    layers[Math.floor(random() * layerCount)]?.push(id);
-  }
-  for (let index = 0; index < edgeCount; index += 1) {
-    const span = random() < 0.2 ? 2 : 1;
-    const from = Math.floor(random() * (layerCount - span));
-    const source = layers[from];
-    const target = layers[from + span];
-    if (source === undefined || target === undefined) continue;
-    if (source.length === 0 || target.length === 0) continue;
-    const one = source[Math.floor(random() * source.length)];
-    const other = target[Math.floor(random() * target.length)];
-    if (one === undefined || other === undefined) continue;
-    graph.addEdge(one, other);
-  }
-  return { graph, layers: layers.filter((layer) => layer.length > 0) };
 }
 
 describe('barycenterOrder, the seed permutation', () => {
@@ -521,6 +496,26 @@ describe('barycenterOrder, the options', () => {
     expect(() => stage.run(state)).not.toThrow();
   });
 
+  /**
+   * `maxTransposePasses` takes the same rule as `maxSweeps`, down to rejecting
+   * `Number.POSITIVE_INFINITY`, and for the same reason: it bounds a heuristic
+   * with no optimality condition to converge to. The error is an
+   * `InvalidConfigError` naming the field, which is `@dagr/layout`'s rule and
+   * not `@dagr/render`'s `RangeError`.
+   */
+  it('rejects a maxTransposePasses that is not a whole number of passes', () => {
+    for (const maxTransposePasses of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => barycenterOrder({ maxTransposePasses })).toThrow(InvalidConfigError);
+      expect(() => barycenterOrder({ maxTransposePasses })).toThrow(/maxTransposePasses/);
+    }
+  });
+
+  it('rejects the transpose budget when the stage is built, not when it runs', () => {
+    expect(() => barycenterOrder({ maxTransposePasses: -1 })).toThrow(InvalidConfigError);
+    const stage = barycenterOrder({ maxTransposePasses: 0 });
+    expect(() => stage.run(state)).not.toThrow();
+  });
+
   it('is named barycenter-order and is not the default order stage', () => {
     expect(barycenterOrderStage.name).toBe('barycenter-order');
     expect(defaultStages.order.name).toBe('insertion-order');
@@ -681,7 +676,7 @@ describe('barycenterOrder, on the bench corpora', () => {
    * comparison D1 was decided on and a test that a hint naming every node
    * really does reproduce itself at this size.
    */
-  it('pins the seed comparison and the sweep curve', () => {
+  it('pins the seed comparison and the sweep curve, with the pass off', () => {
     const table = corpora.map(([name, spec]) => {
       const state = rankedCorpus(spec);
       const { graph } = state;
@@ -690,7 +685,9 @@ describe('barycenterOrder, on the bench corpora', () => {
         countCrossings({
           graph,
           layers: barycenterOrder(
-            initialOrder === undefined ? { maxSweeps } : { maxSweeps, initialOrder },
+            initialOrder === undefined
+              ? { maxSweeps, maxTransposePasses: 0 }
+              : { maxSweeps, maxTransposePasses: 0, initialOrder },
           ).run(state).layers,
         });
       return [
@@ -708,5 +705,52 @@ describe('barycenterOrder, on the bench corpora', () => {
       ['1k', 12_890, 3_943, 7_933, 4_619, 3_880, 3_605, 3_467],
       ['10k', 425_394, 54_744, 94_991, 50_735, 40_217, 35_114, 32_503],
     ]);
+  });
+
+  /**
+   * The transpose curve at the default sweep budget, which is the measurement
+   * the cap of 8 was chosen on. Caps 0, 4, 8 and 16, and then the full fixed
+   * point, which is what the cap is bought against: on the 10k it reaches
+   * 29,260 after 60 passes, and 8 passes capture 81.9% of that saving.
+   *
+   * `Number.POSITIVE_INFINITY` is not a legal cap, deliberately and for the
+   * reason argued beside the option, so the fixed point is asked for as a cap
+   * far beyond the pass count either corpus needs.
+   */
+  it('pins the transpose curve and the fixed point it is bought against', () => {
+    const table = corpora.map(([name, spec]) => {
+      const state = rankedCorpus(spec);
+      const { graph } = state;
+      const at = (maxTransposePasses: number): number =>
+        countCrossings({
+          graph,
+          layers: barycenterOrder({ maxTransposePasses }).run(state).layers,
+        });
+      return [name, at(0), at(4), at(8), at(16), at(200)];
+    });
+    expect(table).toEqual([
+      ['1k', 3_605, 3_116, 3_005, 2_961, 2_959],
+      ['10k', 35_114, 31_369, 30_318, 29_658, 29_260],
+    ]);
+  });
+
+  /**
+   * Determinism at the default cap, on the corpora rather than on a witness,
+   * because the tie rule is what makes it worth restating: the pass takes
+   * swaps worth exactly nothing, so "the same graph twice" is a claim about
+   * thousands of arbitrary-looking choices rather than a handful.
+   *
+   * Three ways of asking for the same answer: the same state again, a second
+   * graph built from scratch in the same insertion order, and a fresh stage
+   * object rather than the one that ran first.
+   */
+  it('returns identical layers for the same graph at the default cap', () => {
+    for (const [, spec] of corpora) {
+      const state = rankedCorpus(spec);
+      const first = barycenterOrder().run(state).layers;
+      expect(barycenterOrder().run(state).layers).toEqual(first);
+      expect(barycenterOrderStage.run(state).layers).toEqual(first);
+      expect(barycenterOrder().run(rankedCorpus(spec)).layers).toEqual(first);
+    }
   });
 });
