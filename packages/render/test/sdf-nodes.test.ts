@@ -120,7 +120,68 @@ describe('the shared formulas over tslArith', () => {
 
 describe('antialiasWidth', () => {
   it('builds a node', () => {
-    expect(antialiasWidth(float(3)).isNode).toBe(true);
+    expect(antialiasWidth(vec2(1, 2)).isNode).toBe(true);
+  });
+
+  it('differentiates the POSITION, which has no fold, and not the distance', () => {
+    // The defect this signature exists to prevent, found on a real device after
+    // three other personas had passed the file. Every distance in `sdf.ts` folds:
+    // `roundedRectDistance` runs both coordinates through `abs`, `circleDistance`
+    // squares them. So on the 2x2 fragment quad containing a shape's centre, where
+    // both symmetry axes cross, all four fragments see the SAME distance, the
+    // finite difference is ~0 on both axes, and an `aaWidth` taken from the
+    // distance gradient collapses to nearly nothing. `bandWorld` is
+    // `outlinePixels * aaWidth`, so the inset outline vanishes exactly there.
+    //
+    // It is invisible on large shapes, whose centre is deep in the fill where the
+    // outline is zero anyway, and severe on small ones: a 4 pixel circle measured
+    // on a real device flipped between all fill and all outline on alternate pan
+    // phases, because whether the centre lands on an even or odd quad boundary
+    // depends on the shape's sub-pixel position. `test/sdf.test.ts` executes the
+    // fold itself over `numberArith`; this asserts the graph that avoids it.
+    //
+    // The position is the right quantity because it is what the interpolator
+    // hands the fragment before any of the arithmetic runs, so there is no `abs`
+    // and no square anywhere in front of the derivative.
+    const position = vec2(1, 2);
+    const outer = unwrap(antialiasWidth(position));
+    expect(outer).toBeInstanceOf(MathNode);
+    if (!(outer instanceof MathNode)) throw new Error('unreachable');
+    expect(outer.method).toBe('max');
+
+    // A `max` with one operand is not a `max`, so the second is asserted present
+    // rather than assumed: three types `bNode` as nullable and a unary MathNode
+    // would otherwise reach the loop below as a single branch and pass it.
+    expect(outer.bNode).not.toBeNull();
+    if (outer.bNode === null) throw new Error('unreachable');
+    const branches = [unwrap(outer.aNode), unwrap(outer.bNode)];
+    const operands: unknown[] = [];
+    for (const branch of branches) {
+      expect(branch).toBeInstanceOf(MathNode);
+      if (!(branch instanceof MathNode)) throw new Error('unreachable');
+      expect(branch.method).toBe('length');
+
+      const join = unwrap(branch.aNode);
+      expect(join).toBeInstanceOf(JoinNode);
+      if (!(join instanceof JoinNode)) throw new Error('unreachable');
+      expect(join.nodes).toHaveLength(2);
+      expect(join.nodes.map((node) => methodOf(node))).toEqual(['dFdx', 'dFdy']);
+
+      // Both derivatives in one branch must differentiate the SAME component, or
+      // the branch is measuring a diagonal rather than one axis of the pixel.
+      const [dx, dy] = join.nodes.map((node) => {
+        const derivative = unwrap(node);
+        if (!(derivative instanceof MathNode)) throw new Error('unreachable');
+        return derivative.aNode;
+      });
+      expect(dx).toBe(dy);
+      operands.push(dx);
+    }
+
+    // And the two branches must differentiate DIFFERENT components, or this is one
+    // axis measured twice and the other never, which is a `max` that cannot see a
+    // pixel stretched along the axis it dropped.
+    expect(operands[0]).not.toBe(operands[1]);
   });
 
   it('is the LENGTH of the gradient and not fwidth, checked structurally', () => {
@@ -141,40 +202,47 @@ describe('antialiasWidth', () => {
     // node fields rather than a public API surface, so a three release that
     // renames them fails this test loudly. That is the correct outcome: this file
     // depends on those graphs and would rather find out here than in a screenshot.
-    const outer = unwrap(antialiasWidth(float(3)));
-    expect(outer).toBeInstanceOf(MathNode);
+    const outer = unwrap(antialiasWidth(vec2(1, 2)));
     if (!(outer instanceof MathNode)) throw new Error('unreachable');
-    expect(outer.method).toBe('length');
+    const branch = unwrap(outer.aNode);
+    expect(branch).toBeInstanceOf(MathNode);
+    if (!(branch instanceof MathNode)) throw new Error('unreachable');
+    expect(branch.method).toBe('length');
 
-    const join = unwrap(outer.aNode);
+    const join = unwrap(branch.aNode);
     expect(join).toBeInstanceOf(JoinNode);
     if (!(join instanceof JoinNode)) throw new Error('unreachable');
     expect(join.nodes).toHaveLength(2);
     expect(join.nodes.map((node) => methodOf(node))).toEqual(['dFdx', 'dFdy']);
   });
 
-  it('differentiates the distance ITSELF, with no factor in front of it', () => {
-    // The OPERAND, which the assertion above says nothing about, and which is
-    // where every remaining factor error lives: `dFdx(mul(distance, 2))` builds
-    // the same three node kinds in the same three places and halves every
-    // antialiasing ramp in the shader, because `aaWidth` would then be two world
-    // units per pixel rather than one. Measured before this test existed: that
-    // mutation left all 67 tests in the two sdf suites green.
+  it('has no factor in front of the quantity it differentiates', () => {
+    // Where every remaining factor error lives: `dFdx(mul(p.x, 2))` builds the
+    // same node kinds in the same places and doubles every antialiasing ramp in
+    // the shader, because `aaWidth` would then be two world units per pixel rather
+    // than one. Measured against the previous, distance-differentiating version of
+    // this function: that mutation left all 67 tests in the two sdf suites green.
     //
-    // A ramp half as wide as a pixel is not a subtle artefact either. It is a
-    // hard edge with one intermediate sample, which is the aliasing this whole
-    // milestone exists to remove, and it would look like a driver problem rather
-    // than like a factor of two.
-    const distance = float(3);
-    const outer = unwrap(antialiasWidth(distance));
+    // A ramp at the wrong width is not a subtle artefact. Halved, it is a hard
+    // edge with one intermediate sample, which is the aliasing this milestone
+    // exists to remove, and it reads like a driver problem rather than a factor.
+    //
+    // Asserted as "the operand is a leaf that is not itself arithmetic": a swizzle
+    // of the position, not a `mul` or an `add` wrapping one.
+    const outer = unwrap(antialiasWidth(vec2(1, 2)));
     if (!(outer instanceof MathNode)) throw new Error('unreachable');
-    const join = unwrap(outer.aNode);
-    if (!(join instanceof JoinNode)) throw new Error('unreachable');
-    for (const component of join.nodes) {
-      const derivative = unwrap(component);
-      expect(derivative).toBeInstanceOf(MathNode);
-      if (!(derivative instanceof MathNode)) throw new Error('unreachable');
-      expect(derivative.aNode).toBe(distance);
+    if (outer.bNode === null) throw new Error('unreachable');
+    for (const branchNode of [outer.aNode, outer.bNode]) {
+      const branch = unwrap(branchNode);
+      if (!(branch instanceof MathNode)) throw new Error('unreachable');
+      const join = unwrap(branch.aNode);
+      if (!(join instanceof JoinNode)) throw new Error('unreachable');
+      for (const component of join.nodes) {
+        const derivative = unwrap(component);
+        expect(derivative).toBeInstanceOf(MathNode);
+        if (!(derivative instanceof MathNode)) throw new Error('unreachable');
+        expect(unwrap(derivative.aNode)).not.toBeInstanceOf(MathNode);
+      }
     }
   });
 });
@@ -202,6 +270,7 @@ describe('shapeShading', () => {
   /** Every input the shading node needs, with three distinguishable colours. */
   const input = {
     distance: float(-3),
+    position: vec2(1, 2),
     fillColor: vec3(1, 0.72, 0.01),
     outlineColor: vec3(0.01, 0.19, 0.28),
     glowColor: vec3(0.98, 0.52, 0),

@@ -106,7 +106,7 @@ const CIRCLE_GLOW = 0x8ecae6;
 const OUTLINE = 0x023047;
 
 /**
- * The outline width, in CSS pixels, for every shape in the ladder.
+ * The outline width, in DEVICE pixels, for every shape in the ladder.
  *
  * Two, and it is a legibility decision rather than a floor imposed by the
  * arithmetic. `outlineCoverage` draws `w` fully covered pixel centres for a band
@@ -120,6 +120,18 @@ const OUTLINE = 0x023047;
  * That is the whole demonstration: the 1000 unit rect and the 10 unit rect get
  * the same 2 pixel border at every zoom, which a geometry pipeline cannot do
  * without rebuilding the geometry.
+ *
+ * **DEVICE pixels, which makes the number display dependent, and it is still 2.**
+ * The legibility argument above was made in CSS pixels, and the two units coincide
+ * at dpr 1, which is the ratio every committed reference frame was captured at. So
+ * at the only ratio this ladder has evidence for, 2 is exactly the width that
+ * argument justified. Raising it to 3 or 4 to defend the dpr 2 case would make the
+ * references thicker than the prose describes and trade measured evidence for an
+ * unmeasured display, which is the wrong way round. What is true and worth knowing
+ * is that the border reads finer on a higher ratio screen (1.00 CSS pixels at dpr 2,
+ * 0.67 at dpr 3). Revisit the NUMBER when M4.4 adds the `ShapeStyle` defaults
+ * helper and a ratio aware default has somewhere to live, and revisit it against a
+ * capture at that ratio rather than against this paragraph.
  */
 const OUTLINE_PIXELS = 2;
 
@@ -358,6 +370,7 @@ function createShapeMesh(
 
   const shading = shapeShading({
     distance,
+    position: p,
     fillColor: color(style.fillColor),
     outlineColor: color(style.outlineColor),
     glowColor: color(style.glowColor),

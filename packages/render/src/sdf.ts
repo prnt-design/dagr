@@ -34,16 +34,35 @@ import type { Size } from './types.js';
  *
  * ## Units, stated once
  *
- * Distances, radii and glow radii are WORLD units. Outline widths are CSS
+ * Distances, radii and glow radii are WORLD units. Outline widths are DEVICE
  * PIXELS, because the whole point of an SDF is that a two pixel outline is two
- * pixels wide at every zoom. `aaWidth` is the bridge: one CSS pixel measured in
- * world units, which is exactly `1 / zoom`. In the shader it is not read off the
- * camera but measured from the field itself, as
- * `length(vec2(dFdx(d), dFdy(d)))`. That works because these are TRUE euclidean
- * distances, so the gradient of the field has magnitude 1 in world space and its
- * screen-space gradient magnitude is world units per pixel and nothing else. It
- * also means the antialiasing follows any transform the mesh picks up without
- * being told about it.
+ * pixels wide at every zoom. `aaWidth` is the bridge: one DEVICE pixel measured in
+ * world units, which is `1 / (zoom * devicePixelRatio)`.
+ *
+ * **Device and not CSS, and the distinction is load bearing.** A derivative is
+ * taken across a FRAMEBUFFER pixel, and `#syncSize` in `webgpu-renderer.ts` sizes
+ * the framebuffer from `Camera2D.drawingBufferSize()`, which is the CSS size times
+ * the ratio. So `1 / zoom` is right only at dpr 1, which happens to be the ratio
+ * the committed screenshots were captured at. A 2 pixel outline is therefore 2.00
+ * CSS pixels at dpr 1, 1.00 at dpr 2 and 0.67 at dpr 3: thinner on exactly the
+ * displays most people read this on.
+ *
+ * That is CORRECT for the antialiasing, which wants device pixels and nothing else,
+ * and it is a deliberate choice for the outline rather than an oversight. Making
+ * the outline a true CSS width means multiplying by the ratio in the shader, which
+ * needs the ratio as a uniform and so puts a SECOND reader of `devicePixelRatio`
+ * beside `drawingBufferSize`, against the rule `camera.ts` states. One reader is
+ * worth more than a display-independent border, so the unit is stated honestly here
+ * instead. If that trade is ever revisited, revisit it in `camera.ts` first.
+ *
+ * In the shader `aaWidth` is not read off the camera but measured from the mesh, as
+ * the `max` of the two per-axis gradients of the interpolated POSITION. Not of the
+ * distance: every field here folds through `abs` or a square, and a folded quantity
+ * has a zero gradient on the quad containing the shape's centre. See
+ * `antialiasWidth` in `sdf-nodes.ts` for what that cost before it was fixed. Taking
+ * it from the position also means the antialiasing follows any transform the mesh
+ * picks up without being told about it, because the position Jacobian IS that
+ * transform.
  *
  * ## Validation
  *
@@ -312,8 +331,12 @@ export function fillCoverage<T>(m: Arith<T>, distance: T, aaWidth: T): T {
  * border came out #bc8932: the amber fill `0xffb703` half mixed with the navy
  * outline `0x023047`, rather than the navy asked for.
  *
- * `widthPixels` is in CSS pixels, so an outline is the same thickness on screen
- * at every zoom, which is the reason to draw one from a distance field at all.
+ * `widthPixels` is in DEVICE pixels, so an outline is the same thickness on screen
+ * at every zoom, which is the reason to draw one from a distance field at all. The
+ * pixel grid claim above is stated in the same unit and is unaffected by which one
+ * is meant: a band of `w` DEVICE pixels covers `w` device pixel centres. What the
+ * unit does change is the border's apparent thickness across displays, which the
+ * units section at the top of this file states in full.
  */
 export function outlineCoverage<T>(m: Arith<T>, distance: T, widthPixels: T, aaWidth: T): T {
   const bandWorld = m.mul(widthPixels, aaWidth);
@@ -399,7 +422,7 @@ export function shapeAlpha<T>(
 }
 
 /**
- * How a shape is painted: three colours, an outline width in CSS pixels, and a
+ * How a shape is painted: three colours, an outline width in DEVICE pixels, and a
  * glow radius in world units.
  *
  * One record rather than a colour record and a geometry record, on the same
@@ -433,9 +456,15 @@ export interface ShapeStyle {
   readonly glowAlpha: number;
 
   /**
-   * The inset outline's width in CSS PIXELS. Pixels rather than world units
+   * The inset outline's width in DEVICE PIXELS. Pixels rather than world units
    * because a border that thickened as you zoomed in is a border drawn by a
    * geometry pipeline, and not having to do that is the reason to use an SDF.
+   *
+   * DEVICE and not CSS: the width follows the framebuffer, so the same value is a
+   * finer line on a higher ratio display (2 device pixels is 1.00 CSS pixels at
+   * dpr 2 and 0.67 at dpr 3). That is a deliberate trade, made to keep a single
+   * reader of `devicePixelRatio`; the units section at the top of this file
+   * carries the argument.
    *
    * A width of `w` reaches full coverage at `w` pixel centres, so 1 is a crisp
    * hairline and 2 is a crisp two pixel border. Below 1 the outline fades: half a
@@ -497,6 +526,12 @@ export const FILL_AA_PADDING_WORLD = 1;
  * Derived rather than written down, so the two numbers cannot drift apart. Half
  * an `aaWidth` is `1 / (2 * zoom)`, and setting that equal to the padding gives
  * 0.5. `test/sdf.test.ts` pins both the value and the relation.
+ *
+ * That derivation assumes dpr 1. Above it `aaWidth` is `1 / (zoom * dpr)`, so the
+ * ramp is NARROWER than this constant expects and fits inside the padding at a
+ * lower zoom than 0.5. The constant is therefore conservative on every display
+ * finer than dpr 1, never optimistic, which is the safe direction for a padding
+ * bound and is why it is left at the dpr 1 figure rather than made dynamic.
  */
 export const FILL_AA_CROSSOVER_ZOOM = 1 / (2 * FILL_AA_PADDING_WORLD);
 

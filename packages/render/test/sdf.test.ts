@@ -1020,3 +1020,71 @@ describe('requireCornerRadius', () => {
     ).toThrow(RangeError);
   });
 });
+
+describe('the fold that makes a distance gradient collapse', () => {
+  /**
+   * WHY `antialiasWidth` DIFFERENTIATES POSITION AND NOT DISTANCE, executed rather
+   * than argued. The shader takes its pixel width from a screen-space derivative,
+   * which the GPU evaluates as a finite difference across a 2x2 fragment quad. Every
+   * distance in this file FOLDS about the shape's axes: `roundedRectDistance` runs
+   * both coordinates through `abs`, `circleDistance` squares them. So on the quad
+   * containing the centre, where both axes cross, all four fragments see the same
+   * distance and the difference is zero in both directions.
+   *
+   * These run the same formulas the shader runs, over `numberArith`, at the four
+   * fragment centres of one quad one world unit across. Nothing here needs a device.
+   */
+  const PIXEL = 1;
+  /** The three fragment centres a derivative needs: bottom left, and one step along each axis. */
+  const BOTTOM_LEFT = { x: -PIXEL / 2, y: -PIXEL / 2 };
+  const BOTTOM_RIGHT = { x: PIXEL / 2, y: -PIXEL / 2 };
+  const TOP_LEFT = { x: -PIXEL / 2, y: PIXEL / 2 };
+
+  /** `aaWidth` the way the shader computed it before this was fixed. */
+  function aaFromDistance(distanceAt: (x: number, y: number) => number): number {
+    const bl = distanceAt(BOTTOM_LEFT.x, BOTTOM_LEFT.y);
+    const br = distanceAt(BOTTOM_RIGHT.x, BOTTOM_RIGHT.y);
+    const tl = distanceAt(TOP_LEFT.x, TOP_LEFT.y);
+    return Math.hypot(br - bl, tl - bl);
+  }
+
+  it('collapses to exactly zero on a circle, whose centre folds both ways', () => {
+    const aa = aaFromDistance((x, y) => circleDistance(numberArith, x, y, 2));
+    expect(aa).toBe(0);
+  });
+
+  it('collapses to exactly zero on a rounded rect too', () => {
+    const aa = aaFromDistance((x, y) => roundedRectDistance(numberArith, x, y, 5, 2, 1));
+    expect(aa).toBe(0);
+  });
+
+  it('is the pixel size when the same quad differentiates position instead', () => {
+    // What ships. `max` over the two per-axis gradients, each a `length` of one
+    // component's derivatives, which for an axis-aligned quad of side PIXEL is
+    // PIXEL on both axes. No `abs` and no square stands between the interpolator
+    // and the derivative, so there is nothing here that can fold.
+    const dxOfX = BOTTOM_RIGHT.x - BOTTOM_LEFT.x;
+    const dyOfX = TOP_LEFT.x - BOTTOM_LEFT.x;
+    const dxOfY = BOTTOM_RIGHT.y - BOTTOM_LEFT.y;
+    const dyOfY = TOP_LEFT.y - BOTTOM_LEFT.y;
+    const aa = Math.max(Math.hypot(dxOfX, dyOfX), Math.hypot(dxOfY, dyOfY));
+    expect(aa).toBe(PIXEL);
+  });
+
+  it('loses the whole outline band when the width collapses', () => {
+    // The visible consequence, and the reason this is a defect rather than a
+    // curiosity. `outlineCoverage` derives its band as `outlinePixels * aaWidth`,
+    // so a collapsed width is a band of nothing: a fragment a full world unit
+    // inside the boundary, which the 2 pixel band should cover completely, draws
+    // as fill instead. On a 4 pixel circle that is the entire shape, which is why
+    // a real device showed one flipping between all fill and all outline as the
+    // camera panned a single pixel.
+    //
+    // A collapsed width is measured at ~1e-7 rather than 0 on a device, so that is
+    // what is used here: the defect does not need exact zero to bite.
+    const collapsed = outlineCoverage(numberArith, -1, 2, 1e-7);
+    const correct = outlineCoverage(numberArith, -1, 2, PIXEL);
+    expect(collapsed).toBe(0);
+    expect(correct).toBe(1);
+  });
+});

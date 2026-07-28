@@ -39,11 +39,16 @@ import type { Arith } from './sdf.js';
  * **The untested surface is those nine adapters PLUS THREE pieces of TSL,** which
  * is worth counting honestly rather than rounding down to the adapters:
  *
- * - `length(vec2(dFdx(d), dFdy(d)))` in {@link antialiasWidth}. `length` is a WGSL
- *   intrinsic and cannot go through a float interface. Compensating control:
- *   `test/sdf-nodes.test.ts` asserts the graph structurally, that the outermost
- *   operation is a `length` over a two component join of `dFdx` and `dFdy`, and
- *   that each of those differentiates the distance ITSELF with no factor in front.
+ * - the `max` of two `length(vec2(dFdx(p.c), dFdy(p.c)))` in {@link antialiasWidth}.
+ *   `length` and the derivatives are WGSL intrinsics and cannot go through a float
+ *   interface. Compensating control: `test/sdf-nodes.test.ts` asserts the graph
+ *   structurally, that the outermost operation is a `max` over two `length`s, that
+ *   each is a two component join of `dFdx` and `dFdy` differentiating ONE component,
+ *   that the two branches take DIFFERENT components, and that no arithmetic stands
+ *   between the position and the derivative. What it cannot assert is the reason the
+ *   operand is the position at all, so `test/sdf.test.ts` executes that separately:
+ *   it runs the real distance formulas at the four fragment centres of one quad and
+ *   pins the gradient at exactly zero, which is the fold this signature avoids.
  * - the colour `mix` in {@link shapeShading}, which is a `vec3` operation and would
  *   widen {@link Arith} for one call site. Compensating control: the same file
  *   asserts that the outermost node of the colour is a `mix` and of the alpha a
@@ -105,31 +110,57 @@ export const tslArith: Arith<FloatNode> = {
 };
 
 /**
- * One CSS pixel, measured in world units, at the fragment being shaded: the
- * length of the screen-space gradient of the distance field.
+ * One DEVICE pixel, measured in world units, at the fragment being shaded: the
+ * larger of the two per-axis screen-space gradients of the interpolated POSITION.
  *
- * **`length(vec2(dFdx(d), dFdy(d)))`, and NOT `fwidth(d)`.** `fwidth` is defined
- * as `abs(dFdx(d)) + abs(dFdy(d))`, which is the L1 norm of the same gradient,
- * and the L1 norm exceeds the L2 norm by up to a factor of `sqrt(2)`, 41% too
- * wide, when the two derivatives are equal. Equal derivatives means an edge at 45
- * degrees, and a rounded corner is nothing but a continuum of diagonals: with
- * `fwidth` the antialiasing ramp is correct along the flat sides and up to 41%
- * too soft at the corner's diagonal, which reads as corners that are blurrier
- * than the edges they join, at every zoom, and is exactly the artefact an SDF is
- * supposed to remove.
+ * **It takes the position, not the distance, and that is the whole point.** Every
+ * field in `sdf.ts` folds: `roundedRectDistance` runs both coordinates through
+ * `abs`, `circleDistance` squares them. A derivative is a finite difference across
+ * a 2x2 fragment quad, so on the quad containing a shape's centre, where both
+ * symmetry axes cross, all four fragments see the SAME distance and the difference
+ * is zero in both directions. An `aaWidth` read off the distance gradient collapses
+ * there, and since `outlineCoverage` derives its band as `outlinePixels * aaWidth`,
+ * the inset outline vanishes at exactly those fragments and the fill's ramp becomes
+ * a hard step.
  *
- * It costs one `sqrt` per fragment against `fwidth`'s two `abs` and an add. That
- * is the trade, taken deliberately, and there is already a `sqrt` in the rounded
- * rect distance so the unit is not new to the shader.
+ * Invisible on large shapes, whose centre is deep in the fill where the outline is
+ * zero anyway. Severe on small ones, and NOT STATIC: whether the centre lands on an
+ * even or odd quad boundary depends on the shape's sub-pixel position, so a 4 pixel
+ * circle measured on a real device flipped between all fill and all outline on
+ * alternate pan phases. On a graph of ten thousand small nodes that is a field
+ * strobing in checkerboard phase, which is the opposite of what an SDF is for.
+ * The position has no `abs` and no square in front of it, so it cannot fold.
+ * `test/sdf.test.ts` executes the fold; `test/sdf-nodes.test.ts` pins this graph.
  *
- * This is one CSS pixel in world units because the fields in `sdf.ts` are TRUE
- * euclidean distances: the gradient of such a field has magnitude 1 in world
- * space, so differentiating it across a pixel gives world units per pixel and
- * nothing else. That is also why nothing here reads the camera: the width follows
- * whatever transform the mesh has picked up, including one M4.4 has not written.
+ * **`max` of two `length`s, and NOT `fwidth`.** `fwidth` is `abs(dFdx) + abs(dFdy)`,
+ * the L1 norm, which exceeds the L2 norm by up to `sqrt(2)`, 41% too wide, when the
+ * two derivatives are equal. Equal derivatives means an edge at 45 degrees, and a
+ * rounded corner is a continuum of diagonals: with `fwidth` the ramp is right along
+ * the flat sides and up to 41% too soft at the corner, which reads as corners
+ * blurrier than the edges they join, at every zoom.
+ *
+ * The `max` over the two axes costs a second `length` against differentiating one
+ * scalar. The cheaper `max(abs(dFdx(p.x)), abs(dFdy(p.y)))` is exact for the
+ * axis-aligned orthographic camera this package has today and WRONG under rotation,
+ * which M4.4 may want, so the general form is taken now rather than swapped in later.
+ *
+ * **DEVICE pixels, not CSS pixels.** The derivative is taken across a framebuffer
+ * pixel, and `#syncSize` sizes the framebuffer from `Camera2D.drawingBufferSize()`,
+ * which is the CSS size times the device pixel ratio. So this is `1 / (zoom * dpr)`
+ * world units, and `1 / zoom` only at dpr 1. That is correct for antialiasing, which
+ * wants device pixels, and it is why `ShapeStyle.outlinePixels` is documented in
+ * device pixels too: making the outline a true CSS width would need the ratio in the
+ * shader as a uniform, putting a second reader of `devicePixelRatio` beside
+ * `drawingBufferSize` and breaking the rule `camera.ts` states.
+ *
+ * Nothing here reads the camera: the width follows whatever transform the mesh has
+ * picked up, because the position Jacobian IS that transform.
  */
-export function antialiasWidth(distance: FloatNode): FloatNode {
-  return length(vec2(dFdx(distance), dFdy(distance)));
+export function antialiasWidth(position: Node<'vec2'>): FloatNode {
+  return max(
+    length(vec2(dFdx(position.x), dFdy(position.x))),
+    length(vec2(dFdx(position.y), dFdy(position.y))),
+  );
 }
 
 /**
@@ -170,12 +201,19 @@ export const circleSDF = Fn(([p, radius]: [Node<'vec2'>, FloatNode]): FloatNode 
 export interface ShapeShadingInput {
   /** The signed distance at this fragment, in world units. Any field will do. */
   readonly distance: FloatNode;
+  /**
+   * The interpolated position this fragment sits at, in the same space the
+   * distance was measured in. Used ONLY for the pixel width, and it has to be the
+   * position rather than the distance because every distance folds: see
+   * {@link antialiasWidth}.
+   */
+  readonly position: Node<'vec2'>;
   readonly fillColor: ColorNode;
   readonly outlineColor: ColorNode;
   readonly glowColor: ColorNode;
   /** The halo's alpha where it meets the boundary, in `[0, 1]`. */
   readonly glowAlpha: FloatNode;
-  /** The inset outline's width, in CSS pixels. */
+  /** The inset outline's width, in DEVICE pixels. See {@link antialiasWidth}. */
   readonly outlinePixels: FloatNode;
   /** The halo's reach past the boundary, in world units. */
   readonly glowWorld: FloatNode;
@@ -242,7 +280,7 @@ export interface ShapeShading {
  * than on this reasoning alone.
  */
 export function shapeShading(input: ShapeShadingInput): ShapeShading {
-  const aaWidth = antialiasWidth(input.distance);
+  const aaWidth = antialiasWidth(input.position);
   const fill = fillCoverage(tslArith, input.distance, aaWidth);
   const outline = outlineCoverage(tslArith, input.distance, input.outlinePixels, aaWidth);
   const glow = glowCoverage(tslArith, input.distance, input.glowWorld, aaWidth);

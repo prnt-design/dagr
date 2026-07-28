@@ -338,7 +338,7 @@ not" is the category this file has a heading for.
   until it stopped catching real defects.
 
   **"Crisp at every zoom" is a test, not only a screenshot.** The antialiasing
-  width is one CSS pixel in world units, which is `1 / zoom` exactly, so feeding a
+  width is one device pixel in world units, which is `1 / (zoom * dpr)`, so feeding a
   distance of k pixels through the coverage functions at any zoom must give the
   same answer: the zoom cancels and the shape's size on screen never enters the
   arithmetic, which is the property a texture atlas baked at one scale does not

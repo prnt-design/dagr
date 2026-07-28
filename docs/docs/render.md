@@ -101,9 +101,18 @@ chosen when the mesh was built.
 
 ### Two units, on purpose
 
-**An outline is measured in CSS pixels and is inset. A glow is measured in world
+**An outline is measured in device pixels and is inset. A glow is measured in world
 units and is outside.** The asymmetry is deliberate and it is the substantive
 design call in this task.
+
+Device pixels rather than CSS pixels, and the difference is worth stating because
+it is visible. The antialiasing width is a derivative taken across a framebuffer
+pixel, and the framebuffer is the CSS size times the device pixel ratio, so a
+2 pixel outline is 2.00 CSS pixels at dpr 1, 1.00 at dpr 2 and 0.67 at dpr 3. The
+reference frames below were captured at dpr 1. Making the border display
+independent would need the ratio inside the shader, which would put a second
+reader of `devicePixelRatio` next to `drawingBufferSize` and break the single
+reader rule the camera states, so the unit is documented rather than converted.
 
 An outline is a property of the screen. A two pixel border should be two pixels at
 every zoom, which is precisely what a geometry pipeline cannot do without
@@ -414,11 +423,15 @@ first of the three is the one that needed it: swapping the gradient length for
 ### Crisp at every zoom, as a test rather than a claim
 
 "An edge is crisp at every zoom instead of at one" sounds like something only a
-screenshot can show. It is not. The antialiasing width is one CSS pixel measured
-in world units, which is `1 / zoom` exactly, so feeding a distance of k pixels
+screenshot can show. It is not. The antialiasing width is one device pixel measured
+in world units, which is `1 / (zoom * dpr)`, so feeding a distance of k pixels
 through the coverage functions at any zoom has to give the same answer: the zoom
 cancels, and nothing about the shape's size on screen enters the arithmetic. That
 is the property a texture atlas baked at one scale does not have.
+
+The ratio cancels with the zoom, so crispness does not depend on it. What the ratio
+does change is how many device pixels a fixed CSS length buys, which is why the
+outline's apparent thickness varies across displays while its crispness does not.
 
 The suite asserts it across zooms from 0.1 to 1000. Bit-identical results need a
 dyadic k AND a dyadic antialiasing width, which means a power-of-two zoom: dyadic k
