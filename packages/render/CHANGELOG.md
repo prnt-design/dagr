@@ -323,10 +323,12 @@ not" is the category this file has a heading for.
   `Fn` body the suite never runs, because it builds that body directly from
   pre-halved literals. Their compensating control is the structural assertions on
   the node graph in `test/sdf-nodes.test.ts`. An earlier draft of this entry said
-  the untested surface was "exactly nine" and copied that into four other files;
+  the untested surface was "exactly nine" and copied that into five other files;
   api-design-review caught it, and it is worth recording because a counted claim
   that survives copying unchecked is the failure this documentation style exists to
-  prevent.
+  prevent. The count in this sentence was itself wrong at first, which is the joke
+  writing itself: it said four, before `sdf.ts`'s own `Arith` docstring turned up as
+  a sixth location.
 
   There is a second payoff to writing each formula once: a shader computes a
   hypotenuse as `sqrt(x*x + y*y)` and WGSL has no `hypot`, so a separately written
