@@ -734,9 +734,22 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  * Total edge length minus the edge count is exactly the number of dummy nodes
  * M2.4b's splitter will mint, so it is the quantity that decides how much of
  * the drawing is chains of stand-in nodes rather than the caller's own. On the
- * 1k bench corpus it takes `longestPathRankStage`'s 40,430 dummies down to
- * 17,285, a 57% cut, in about 20ms. On the 10k corpus it reaches 423,426 from
- * 1,414,263 inside the default budget, and 224,789 given ten times it.
+ * 1k bench corpus it takes `longestPathRankStage`'s 22,726 dummies down to
+ * 15,713 at the default 20,000-pivot budget, a 31% cut, in about 28ms, and
+ * that is the optimum: 200,000 pivots return the same 15,713. On the 10k
+ * corpus it reaches 268,589 from 1,359,680 inside the default budget, and
+ * 226,676 given ten times it.
+ *
+ * That 31% read 57% before M2.2b, and the stage did not get worse: its INPUT
+ * got better. M2.2b scoped the cycle breaker's reversals to the strongly
+ * connected components, which took the 1k view both rank stages rank from
+ * 40,430 dummies to 22,726, so there is less left here to win. `cycles.ts` is
+ * where that change is argued, including the one column where the newer view
+ * costs something: at 200,000 pivots the 10k comes out 0.8% above what the old
+ * view reached at the same budget (226,676 against 224,789), against 37% below
+ * it at the default budget (268,589 against 423,426), because the old view had
+ * more of its gain still ahead of it. The newer view is the cheaper of the two
+ * at both budgets, 1.80s against 3.82s and 51.1s against 60.5s.
  *
  * **It cannot make the drawing shorter, and it can make it taller.** Every
  * feasible ranking sends each edge down at least one rank, so along a path of L
@@ -751,7 +764,7 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  * optimises the first. Pick `longestPathRankStage` if a short drawing is what
  * matters, naming that stage rather than whichever one is the default today,
  * which is a thing that changes. (Both corpora happen to come out the same
- * height either way, 62 ranks and 154 ranks, so this is a real risk rather than
+ * height either way, 81 ranks and 203 ranks, so this is a real risk rather than
  * a certainty.)
  *
  * Ranks come out contiguous from zero per connected component, as
@@ -780,14 +793,22 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  * ## The budget
  *
  * `maxIterations` bounds the pivots, and defaults to 20,000, which is a safety
- * valve and not a quality knob. It is about fifteen times what the 1k bench
- * corpus needs to converge, which is about 1,300 pivots (1,000 leaves it at
- * 17,978 dummies, 1,200 at 17,394, 1,300 at 17,285 which is the optimum, and
- * 20,000 and 200,000 both return that same 17,285), and it is what bounds the
- * 10k corpus, which does not converge inside any budget worth spending, to a
- * few seconds. Give it more if a run is worth it: the 10k corpus is still
- * improving at 200,000 pivots, and `Number.POSITIVE_INFINITY` is how to ask for
- * as many as it takes.
+ * valve and not a quality knob. It is about seventeen times what the 1k bench
+ * corpus needs to converge, which is about 1,150 pivots (0 pivots leaves it at
+ * 19,744 dummies, which is what growing the first tight tree is worth on its
+ * own, 1,000 at 15,919, 1,100 at 15,843, 1,200 at 15,713 which is the optimum,
+ * first reached at exactly 1,144, and 20,000 and 200,000 both return that same
+ * 15,713), and it is what bounds the 10k corpus, which does not converge inside
+ * any budget worth spending, to under two seconds. Give it more if a run is
+ * worth it: the 10k corpus is still improving at 200,000 pivots, where about
+ * 51 seconds buys 226,676 against the default budget's 268,589, and
+ * `Number.POSITIVE_INFINITY` is how to ask for as many as it takes.
+ *
+ * That landmark moved DOWN with M2.2b's acyclic view, from about 1,300 pivots,
+ * so the default is about seventeen times what the 1k needs where it used to be
+ * about fifteen. A budget written against the old curve is therefore still a
+ * budget the 1k converges inside, which is why the default did not move with
+ * the numbers.
  *
  * Whatever stops it, the ranking returned is feasible, and never worse than the
  * longest-path ranking it computes before pivoting, which is the cold one when

@@ -26,10 +26,18 @@ of doc prose.
   dummies down to 17,285, a 57% cut, in about 20ms; on the 10k corpus
   1,414,263 down to 423,426 inside the default budget.
 
+  **The figures in the paragraph above were superseded by M2.2b**, all of them
+  and not only the dummy counts, because M2.2b changed the acyclic view both
+  rank stages rank. They are left here because they are what this stage was
+  measured at when it landed. What a caller gets today: 22,726 down to 15,713
+  on the 1k, a 31% cut rather than 57%, in about 28ms rather than about 20ms,
+  and 1,359,680 down to 268,589 on the 10k. See the M2.2b entry under Changed
+  for why the percentage fell while nothing about this stage got worse.
+
   **None of that saving is collectable in this release.** M2.4b is unbuilt, no
   stage mints a dummy node today, and `virtualNodes` comes back empty from both
   rankers, so the counts above are a cost nobody is paying yet. Switching today
-  buys a rank stage that costs several times more (about 20ms against a few
+  buys a rank stage that costs several times more (about 28ms against a few
   milliseconds on the 1k corpus, seconds against tens of milliseconds on the
   10k one) and saves no dummy nodes, because there are none. What it buys is a
   ranking M2.4b will be able to exploit.
@@ -222,6 +230,40 @@ of doc prose.
   graph with more than one rank of structure now returns different coordinates,
   different bounds, and more than one layer.** No type and no exported name
   changed. (M2.2)
+
+- **Cycle breaking now leaves the strongly connected components alone.** An edge
+  running backwards in the greedy vertex order is reversed only when its two
+  endpoints lie in the same strongly connected component. A backward edge
+  between two components lies on no cycle, so no cycle needs it turned round,
+  and turning it round only stretched the view. **Layouts of a graph with a
+  backward edge whose endpoints lie in different components return different
+  coordinates and a smaller `reversedEdges`; a graph whose cycles all sit
+  within one component is unaffected.** No type and no exported name changed.
+  (M2.2b)
+
+  What it costs and what it buys, measured on both benchmark corpora. The
+  drawing gets TALLER and its edges get SHORTER overall: on the 10k corpus the
+  acyclic view goes from 154 ranks to 203, a rise of 32%, while the total
+  distance its edges travel falls from 1,414,263 rank crossings to 1,359,680, a
+  cut of 3.9%; on the 1k corpus it goes from 62 ranks to 81, a rise of 31%,
+  while the total falls from 40,430 to 22,726, a cut of 44%. Read the two
+  percentages together rather than the 44% alone: this is a trade, and it is a
+  much better one on the smaller graph.
+  That total is what decides how many stand-in nodes a long edge is split into,
+  which is the number a caller feels. Reversals fall too, 6,327 to 4,620 and
+  422 to 74. The pass also got faster, 8.5ms median against 11.0ms on the 10k,
+  because computing the components replaced the per-vertex arc maps rather than
+  running in front of them.
+
+  It moves `network-simplex-rank`'s headline figures, and NOT because that
+  stage changed: its input is better, so it has less left to win. Read the two
+  entries together. Over the new view the 1k corpus is 22,726 dummies down to
+  15,713 at the default budget, a 31% cut where the entry above says 57%, and
+  the 10k corpus is 1,359,680 down to 268,589, an 80% cut where the entry above
+  says 70%. At 200,000 pivots the 10k reaches 226,676, which is 0.8% above what
+  the old view reached at the same budget: the old view had more of its gain
+  still ahead of it, and quoting a simplex figure without its pivot budget
+  hides exactly that.
 
 ### Notes
 

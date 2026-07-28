@@ -257,25 +257,42 @@ findings addressed or logged, docs land with the feature.
   strictly stronger than the runner's `<=` contract check, which stays weak on
   purpose for self loops and for M2.4b's long edges, so the strict form is
   asserted in the stage's own tests instead.
-- [ ] **M2.2b** Cycle breaking v2: a feedback arc set chosen for the
+- [x] **M2.2b** Cycle breaking v2: a feedback arc set chosen for the
   acyclic view it leaves rather than for how many edges it reverses. The
   objective is minimum TOTAL SPAN of that view, the sum over its edges of
   `max(0, rank(target) - rank(source) - 1)` under longest-path ranks, subject
   to a reversal count low enough that the drawing still reads. Tests: total
   span and view depth on both bench corpora, asserted with ceilings, beside the
   existing acyclicity and `m/2` assertions rather than in place of them.
-  UNSTARTED.
-  THE WHOLE BRIEF IN THREE LINES, because the rest of this entry is a record
-  and a run scanning it for instructions should not have to read the record to
-  find them. (a) Minimise TOTAL SPAN of the acyclic view; the reversal count is
-  a constraint and not the target. (b) The bar on the 10k corpus, which is the
-  corpus that decides this because every candidate in the table cuts span on
-  the 1k: under about 400,000 dummies while reversing no more than the 6,327
-  the shipping breaker reverses, and the target to aim at is the ground truth's
-  32,050 at 796. (c) The budget: about 2ms on the 10k, where a Tarjan pass
-  alone costs 4.1ms, so a component-scoped candidate has to replace existing
-  work rather than run in front of it. Everything after this paragraph is
-  evidence for those three lines and a list of what has already been tried.
+  WHAT SHIPPED, in three lines, because the rest of this entry is a record and
+  a run scanning it for instructions should not have to read the record to find
+  them. (a) `feedbackArcSet` reverses a backward arc ONLY when its two
+  endpoints share a strongly connected component; a backward arc between two
+  components lies on no cycle and is left pointing as authored. That is the bar
+  row below, made the default: 74 / 81 ranks / 22,726 dummies on the 1k and
+  4,620 / 203 / 1,359,680 on the 10k. (b) It is a PROOF and not a measurement.
+  A cycle in the result would either lie inside one component, where every arc
+  runs forward in the greedy order, or use a kept cross-component arc, which
+  strictly advances the component DAG's topological order. Neither can close.
+  (c) The time budget was not spent, it was recovered: the per-vertex arc
+  `Map`s became CSR typed arrays and Tarjan walks the same collapsed rows the
+  greedy walks, so the call is FASTER than the unscoped version, 8.5ms median
+  against 11.0ms on the 10k. Everything after this paragraph is the measurement
+  run that chose this and a list of what has already been tried.
+  THE NEXT CANDIDATE'S BAR IS THE SHIPPING PASS, WHICH IS NOW THE BAR ROW
+  BELOW RATHER THAN A CANDIDATE BESIDE IT: beat 1,359,680 dummies at 4,620
+  reversals or fewer under longest path, or 226,676 under simplex run to
+  convergence, without going past 203 ranks. The target is unchanged and is
+  still the ground truth's 32,050 at 796, a factor of forty.
+  ONE WORD OF TERMINOLOGY BEFORE THE RECORD, because the record was written
+  before the implementation and its vocabulary froze there. Everywhere below,
+  "the shipping breaker" and "the shipping ELS" mean the UNSCOPED greedy order,
+  which reverses every backward arc and is what shipped up to this task. It is
+  the table's `unscoped greedy ELS` row (6,327 / 154 / 1,414,263 on the 10k).
+  What ships now is the `minus cross-component (SHIPPING)` row. The record is
+  left in its own tense rather than rewritten, because it is evidence for a
+  decision that has since been taken and editing evidence to agree with the
+  decision it produced is how a record stops being one.
   What is recorded below is a measurement run rather than an implementation,
   and its first result is that the objective this task was originally written
   with is WRONG. The prescription this repo carried until today, written into
@@ -304,12 +321,12 @@ findings addressed or logged, docs land with the feature.
 
   | candidate                          | reversals | depth | dummies      |
   | ---------------------------------- | --------- | ----- | ------------ |
-  | shipping greedy ELS                | 422       | 62    | 40,430       |
+  | unscoped greedy ELS                | 422       | 62    | 40,430       |
   | authored back edges (ground truth) | 71        | 24    | 2,665        |
   | DFS back edges, insertion roots    | 42        | 115   | 30,954       |
   | DFS back edges, sources first      | 62        | 117   | not measured |
   | ELS per component                  | 23        | 84    | 20,676       |
-  | shipping ELS minus cross-component | 74        | 81    | 22,726       |
+  | minus cross-component (SHIPPING)   | 74        | 81    | 22,726       |
   | median relaxation, whole graph     | 582       | 60    | 24,482       |
   | median relaxation, per component   | 47        | 74    | 17,155       |
   | condensation longest-path levels   | 109       | 78    | 19,727       |
@@ -318,12 +335,12 @@ findings addressed or logged, docs land with the feature.
 
   | candidate                          | reversals | depth | dummies      |
   | ---------------------------------- | --------- | ----- | ------------ |
-  | shipping greedy ELS                | 6,327     | 154   | 1,414,263    |
+  | unscoped greedy ELS                | 6,327     | 154   | 1,414,263    |
   | authored back edges (ground truth) | 796       | 60    | 32,050       |
   | DFS back edges, insertion roots    | 1,651     | 601   | 1,601,415    |
   | DFS back edges, sources first      | 1,500     | 801   | not measured |
   | ELS per component                  | 2,454     | 320   | 1,522,128    |
-  | shipping ELS minus cross-component | 4,620     | 203   | 1,359,680    |
+  | minus cross-component (SHIPPING)   | 4,620     | 203   | 1,359,680    |
   | median relaxation, whole graph     | 15,457    | 61    | 230,083      |
   | median relaxation, per component   | 7,680     | 133   | 364,118      |
   | condensation longest-path levels   | 10,255    | 134   | 962,662      |
@@ -423,7 +440,7 @@ findings addressed or logged, docs land with the feature.
   ENTRY CONFLATED THEM, which is worth stating because the conflation hid a
   candidate. Dropping keeps the order the greedy pass built and merely removes
   edges from the set it produced: 6,327 minus 1,707 is exactly 4,620, and that
-  is the "shipping ELS minus cross-component" row above. Scoping REBUILDS the
+  is the "minus cross-component (SHIPPING)" row above. Scoping REBUILDS the
   order inside each component and lands somewhere else entirely, at 2,454. The
   two rows are 4,620 / 203 ranks / 1,359,680 dummies and 2,454 / 320 /
   1,522,128, so they are not variants of one idea, they are two ideas.
@@ -485,15 +502,25 @@ findings addressed or logged, docs land with the feature.
   What a future run has to beat, stated so it cannot be met by accident, and
   restated after algorithms-review refuted the first version of it. THE OLD BAR
   SAID: nothing measured beats the shipping breaker's 1,414,263 dummies without
-  reversing more edges than it does, so land under 400,000 at 6,327 reversals or
-  fewer. That was wrong, and the counterexample was sitting in the gap between
-  dropping and scoping: minus-cross-component reverses 4,620 and spans
+  reversing more edges than it does, so land under 400,000 at 6,327 reversals
+  or fewer. That was wrong, and the counterexample was sitting in the gap
+  between dropping and scoping: minus-cross-component reverses 4,620 and spans
   1,359,680 under longest path, fewer reversals AND less span, legal on both
-  corpora. So the bar is now that row rather than the shipping breaker: beat
-  1,359,680 dummies at 4,620 reversals or fewer under longest path, or beat
-  224,789 under simplex run to convergence, and do it without going deeper than
-  the 203 ranks that row costs. The target remains the ground truth's 32,050 at
-  796, or 19,196 under simplex, which is a factor of forty either way.
+  corpora. THAT ROW IS NOW THE SHIPPING PASS, so the bar and what ships are the
+  same object again: beat 1,359,680 dummies at 4,620 reversals or fewer under
+  longest path, or beat 226,676 under simplex run to convergence, and do it
+  without going deeper than the 203 ranks it costs. The target remains the
+  ground truth's 32,050 at 796, or 19,196 under simplex, which is a factor of
+  forty either way. Note the simplex figure that moved: the old bar quoted
+  224,789, which is the UNSCOPED order at 200,000 pivots and is 0.8% BETTER
+  than what ships. That is not a regression hiding in the change, it is the
+  convergence-speed caveat two paragraphs down doing exactly what it warns
+  about: at the default 20,000 pivots the shipping view is 268,589 against the
+  unscoped 423,426, a 37% cut, and it is also faster to solve at both budgets
+  (1.80s against 3.82s, and 51.1s against 60.5s). The unscoped order simply had
+  more of its gain still ahead of it. Quote the budget with the figure, and
+  beat 226,676 rather than 224,789 because 226,676 is what a caller can
+  actually get today.
   Beware the 1k corpus while doing it, per conclusion one: on the 1k EVERY
   candidate in the table cuts span, insertion-roots DFS included, so measured
   there alone all four families look like wins. On the 10k two of them (DFS and
@@ -504,20 +531,48 @@ findings addressed or logged, docs land with the feature.
   corpus with a whole extra stage and 20ms of pivots. That is worth knowing for
   what it says about which lever is bigger, and worth distrusting on the
   strength of the same candidate's 364,118 at 7,680 on the 10k.
-  What it may not spend. The rank stage's committed bench baseline on the 10k
-  is 13.18ms median, and the shipping ELS is 10.4ms of it warm (35.2ms cold),
-  so a replacement has roughly 2ms of headroom before the gate's tolerance is
-  gone. Tarjan alone costs 4.1ms on that corpus, twice the whole budget, so a
-  component-scoped candidate cannot be added in front of the existing breaker.
-  Note what `cycles.ts` builds today before assuming the components are nearly
-  free: its "condensation" is the weighted simple condensation, the collapse of
-  parallel arcs into one weighted arc, and has nothing to do with strongly
-  connected components. There is no component structure sitting there to be
-  read out. So a component-scoped candidate has to pay for itself by REPLACING
-  the Map-based per-vertex arc maps that pass builds, getting both the collapse
-  and the components out of one traversal. A candidate that wants its own
-  structure beside the existing one has lost on time before it is judged on
-  quality.
+  What it may not spend, and what it turned out to cost, which are different
+  numbers and the gap between them is the useful part of this paragraph. The
+  rank stage's committed bench baseline on the 10k is 13.18ms median, and the
+  unscoped ELS was 10.4ms of it warm (35.2ms cold), so a replacement had
+  roughly 2ms of headroom before the gate's tolerance was gone. A Tarjan pass
+  measured on its own costs 4.1ms on that corpus, twice the whole budget, and
+  this entry concluded from that pair of figures that a component-scoped
+  candidate could not be added in front of the existing breaker. That much was
+  right. WHAT THE PAIR OF FIGURES DID NOT SAY, and what the shipping pass
+  demonstrates, is that a component-scoped candidate need not be ADDED at all.
+  Note what `cycles.ts` used to build: its "condensation" is the weighted
+  simple condensation, the collapse of parallel arcs into one weighted arc, and
+  has nothing to do with strongly connected components, so there was no
+  component structure sitting there to be read out. The pass now builds both
+  out of ONE set of CSR rows. The per-vertex arc `Map`s became typed arrays,
+  Tarjan walks the collapsed out-rows the greedy already walks, and the whole
+  call came out at 8.5ms median against the unscoped 11.0ms, warm, median of
+  25, both measured in one process on one machine. So the components were not
+  bought out of the 2ms of headroom, they were paid for by deleting a hash
+  lookup per arc and an allocation per vertex, and the headroom grew rather
+  than shrank. THE GENERAL LESSON, which is worth more than the specific one: a
+  cost measured for a pass STANDING ALONE prices adding it, not fusing it, and
+  this entry spent a run treating the first number as though it bounded the
+  second.
+  THE SPEEDUP IS NOT UNDER THE GATE, AND THAT WAS A DELIBERATE CHOICE RATHER
+  THAN AN OVERSIGHT, so do not read the paragraph above as a banked gain. Both
+  reviewers of the shipping run raised it: `bench:ci` passes and reports the
+  rank entries as FASTER than baseline (-14.6% on the 10k and -25% to -39.6% on
+  the 1k, depending on whose machine), with a note asking for a refresh so the
+  gain is protected. `bench/baseline.json` was left alone, so a later change can
+  give the whole gain back and the gate will still say ok, because regressing
+  to the old cost is inside the old tolerance. The reason is that
+  `pnpm bench:baseline` can only recapture WHOLESALE: it rebases every entry
+  including `@dagr/graph`'s, which this change does not touch, and the box runs
+  two agents at once by design. A reviewer's own gate run on a machine matching
+  the baseline read four `@dagr/graph` entries between +19.6% and +82.8% from
+  load alone. Capturing wholesale under that load writes the load into every
+  entry and makes the gate permanently lenient for packages this change never
+  went near, which is a worse failure than one stale-but-lenient rank entry. THE
+  REFRESH IS OWED AND NEEDS A QUIET MACHINE, which is the same scheduling
+  problem already queued for the maintainer as the bench gate's two-runner
+  collision, and it should be a run of its own rather than a rider on a feature.
   Finally, read M2.4b's bench-gate paragraph before assuming this task unblocks
   it. Even a perfect cycle breaker may not put M2.4b inside the gate, for a
   reason that has nothing to do with cycle breaking, and that decision is the
@@ -548,10 +603,15 @@ findings addressed or logged, docs land with the feature.
   objectives, and longest path already achieves the second exactly, so this
   stage can only spend height to buy length. Six nodes are enough to lose a
   rank of height for a unit of length, and a default that quietly made some
-  drawings taller is not a default. What it buys is large and measured: the 1k
-  bench corpus goes from 40,430 dummy nodes to 17,285, a 57% cut, in about
-  20ms, and the 10k corpus from 1,414,263 to 423,426 inside the default pivot
-  budget. Which of the two a run wants is the caller's call and now has a name.
+  drawings taller is not a default. What it buys is large and measured, and
+  BOTH ENDS OF THE COMPARISON MOVED when M2.2b changed the view both stages
+  rank: the 1k bench corpus now goes from 22,726 dummy nodes to 15,713, a 31%
+  cut, in about 28ms, and the 10k corpus from 1,359,680 to 268,589 inside the
+  default pivot budget, an 80% cut. Over the unscoped view those same lines
+  read 40,430 to 17,285 (57%) and 1,414,263 to 423,426 (70%). The stage did not
+  get worse, its INPUT got better, so there is less left for it to win, and a
+  percentage quoted without its baseline says nothing here.
+  Which of the two a run wants is the caller's call and now has a name.
   Cut values come from one postorder accumulation of `indegree - outdegree`
   rather than the textbook's leaf elimination, and a pivot costs the subtree it
   moves and the edges incident to it rather than the whole graph, which is what
@@ -574,25 +634,30 @@ findings addressed or logged, docs land with the feature.
   component keeps the better of the ranking it started with and the one it
   ended with.
   THIS TASK DID NOT UNBLOCK M2.4b, and the 57% above is exactly the number that
-  makes it look as though it did. Measured on the 10k corpus: the greedy
-  feedback arc set reverses 6,327 of 40,000 edges, and the acyclic view it
-  hands the ranker is 154 ranks deep. The corpus is generated with 60 layers
+  makes it look as though it did. Measured on the 10k corpus, and stated as it
+  read before M2.2b shipped so that the argument stays legible: the greedy
+  feedback arc set reversed 6,327 of 40,000 edges, and the acyclic view it
+  handed the ranker was 154 ranks deep. The corpus is generated with 60 layers
   and a `backEdgeShare` of 0.02, so roughly 800 edges point backwards by
   construction, reversing those 800 alone leaves a DAG, and that DAG is at most
   60 ranks deep because every other edge runs from a lower layer to a higher
   one. M2.2b has since measured that construction rather than reasoning about
   it: reversing exactly the authored back edges is 796 reversals, a view 60
   ranks deep, and 32,050 dummies. So every ranker in this repo is handed a view
-  two and a half times deeper than the graph it came from, before any ranking
-  happens. Every extra rank is one more rank for an edge to span and every rank
-  an edge spans is a dummy node M2.4b has to mint, which is why the simplex
-  still returns 423,426 of them at the default budget, after a cut of 70% on
-  that corpus. RANKING CANNOT REPAIR THIS: it optimises over the view, and the
-  view is the cycle breaker's output. Say ranking rather than ranker, which is
-  how this sentence read until M2.2b corrected it: a rank STAGE calls
-  `feedbackArcSet` itself and builds its own view (`rank.ts` and `simplex.ts`
-  each do), so a stage is exactly where a better breaker would land, and both
-  stages in this package are stuck here only because both call the same one.
+  several times deeper than the graph it came from, before any ranking happens,
+  and M2.2b made that WORSE on this axis while making span better: the shipping
+  view is now 203 ranks against the same authored 60, because declining the
+  reversals no cycle needed lengthens the longest path. Every extra rank is one
+  more rank for an edge to span and every rank an edge spans is a dummy node
+  M2.4b has to mint, which is why the simplex still returns 268,589 of them at
+  the default budget, after a cut of 80% on that corpus (it was 423,426 after a
+  cut of 70% when this paragraph was written, over the unscoped view). RANKING
+  CANNOT REPAIR THIS: it optimises over the view, and the view is the cycle
+  breaker's output. Say ranking rather than ranker, which is how this sentence
+  read until M2.2b corrected it: a rank STAGE calls `feedbackArcSet` itself and
+  builds its own view (`rank.ts` and `simplex.ts` each do), so a stage is
+  exactly where a better breaker would land, and both stages in this package
+  are stuck here only because both call the same one.
   What sets M2.4b's dummy count is the feedback arc set rather than the choice
   between longest path and network simplex, and the next real cut in that
   number comes from a better cycle breaker and not from a better ranking. Do
@@ -615,13 +680,13 @@ findings addressed or logged, docs land with the feature.
   REBUILDS the order, an un-reverse pass KEEPS it, and they land in different
   places. Keeping the order and deleting only the cross-component reversals is
   4,620 reversals, 203 ranks and 1,359,680 dummies, which is fewer reversals
-  AND less span than the shipping breaker on both corpora, and it is now the
-  bar M2.2b states. It is not free (it needs a components pass that does not
-  fit the time budget, and it costs 32% more depth), but it is the best thing
-  measured that beats the shipping breaker on both axes, and it exists because
-  a suggestion was tested rather than deleted. The objective, and what M2.2b
-  now carries, is minimum total span of the acyclic view with the reversal
-  count as a constraint rather than as the target.
+  AND less span than the unscoped order on both corpora, and it is what M2.2b
+  shipped. It is not free, it costs 32% more depth, but the components pass it
+  needs turned out to cost nothing at all once it replaced the arc `Map`s
+  rather than running in front of them. It exists because a suggestion was
+  tested rather than deleted. The objective, and what M2.2b now carries, is
+  minimum total span of the acyclic view with the reversal count as a
+  constraint rather than as the target.
 - [x] **M2.4a** Stage return types: the four stage interfaces return only their
   own contribution rather than the whole next record.
   Decided here, and no later, whether the four stage interfaces should return
@@ -723,18 +788,20 @@ findings addressed or logged, docs land with the feature.
   rejoining the chain into a polyline on output.
   Read the last paragraph of M2.3 and all of M2.2b before pricing this one. How
   many dummies this milestone mints is set by the cycle breaker and not by the
-  ranker: on the 10k corpus the view the greedy feedback arc set hands the
-  ranker is 154 ranks deep against a corpus generated with 60 layers, and every
-  rank of that excess is ranks for edges to span. M2.3's 57% cut is real and
-  does not touch any of that, so the dummies still left on that corpus are a
-  cycle-breaking problem arriving at this milestone's door. Name the ranker and
-  the budget with that figure, per M2.2b: the splitter on
-  `m2.4b-dummy-chains` runs inside `longestPathRankStage`, so what this
-  milestone mints as it stands is the longest-path 1,414,263. The simplex
-  figures are quoted to say that even the better ranker leaves this much, and
-  they are 423,426 inside the default 20,000-pivot budget or 224,789 at ten
-  times it, which nearly halves, so a bare 423,426 prices this milestone off a
-  truncated solver.
+  ranker: on the 10k corpus the view the feedback arc set hands the ranker is
+  203 ranks deep against a corpus generated with 60 layers, and every rank of
+  that excess is ranks for edges to span. M2.3's cut is real and does not touch
+  any of that, so the dummies still left on that corpus are a cycle-breaking
+  problem arriving at this milestone's door. Name the ranker and the budget
+  with that figure, per M2.2b: the splitter on `m2.4b-dummy-chains` runs inside
+  `longestPathRankStage`, so what this milestone mints as it stands is the
+  longest-path 1,359,680. NOTE THAT THE BRANCH WAS MEASURED AGAINST 1,414,263,
+  the unscoped figure, before M2.2b shipped the component rule, so a rebase
+  moves this milestone's own numbers by 4% before it changes a line of its
+  code. The simplex figures are quoted to say that even the better ranker
+  leaves this much, and over the shipping view they are 268,589 inside the
+  default 20,000-pivot budget or 226,676 at ten times it, so a bare 268,589
+  prices this milestone off a truncated solver.
   What that lever actually is was got wrong here, and the correction is M2.2b's.
   This entry used to end "if the count is what hurts once this lands, the lever
   is a better feedback arc set", with the 6,327 reversals against roughly 800
@@ -761,9 +828,9 @@ findings addressed or logged, docs land with the feature.
   It is not something to settle by quietly rebasing a baseline mid-run, and this
   entry deliberately does not prescribe which of the two is right, because
   neither has been measured. Note the sizes involved before assuming the choice
-  is academic: at the shipping breaker's 1,414,263 dummies the pipeline would be
-  working on 1.42 million nodes, so M2.2b is necessary here even though it is
-  not sufficient for the gate.
+  is academic: at the shipping pass's 1,359,680 dummies the pipeline would be
+  working on 1.37 million nodes, so M2.2b was necessary here even though it is
+  not sufficient for the gate, and it has landed without being sufficient.
 - [ ] **M2.5** Ordering v1: barycenter sweeps with median fallback, crossing
   counter as the metric. Tests on known small graphs with hand-counted
   crossings. Also measure adjacency allocation churn in the sweeps (every
