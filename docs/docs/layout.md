@@ -940,7 +940,8 @@ the 10k benchmark corpus the full default pipeline is roughly 1.8x slower than
 it was with roster order, and the drawing that comes back has 92.9% fewer
 adjacent-layer crossings. On the 1k it is roughly 1.6x slower for 76.7% fewer.
 Both slowdowns are against a pipeline whose position and route stages are still
-placeholders, so the multiple moves again when M2.7 and M2.8 land; it is not a
+placeholders, so the multiple moves again when either of those defaults changes,
+M2.7 having added a real position stage without taking that default; it is not a
 claim about crossing reduction in general.
 
 The four figures behind those two sentences, two timings and two crossing
@@ -998,9 +999,10 @@ layout({ graph }, { position: myPositionStage });
 The other three phases fall back to `defaultStages`, and the whole thing still
 typechecks, because a `PositionStage` is a `PositionStage` whoever wrote it.
 That is also how this project ships: M2.2 replaced the ranker, M2.5 and M2.6b
-replaced the orderer, M2.7 replaces the positioner, each against a runner and a
-test suite that already work. The override object has a name of its own,
-`LayoutStageOverrides`, for when you build one separately from the call.
+replaced the orderer, and M2.7 added a positioner beside the placeholder rather
+than over it, each against a runner and a test suite that already work. The
+override object has a name of its own, `LayoutStageOverrides`, for when you
+build one separately from the call.
 
 `defaultStages` is also how you wrap a default rather than replace it:
 
@@ -1036,26 +1038,28 @@ const nudged: PositionStage = {
 };
 ```
 
-**Every real stage is exported by name; no placeholder is.** That is the whole
-rule, and it is why `longestPathRankStage`, `networkSimplexRankStage` and
-`barycenterOrderStage` are all importable while the two placeholders left in
-`stages.ts` are reachable only through `defaultStages`. A placeholder's name is
-a name to delete tomorrow. A real algorithm's name is how a caller says which
-objective it wants: the two rankers answer different questions, and "the default
-one" does not identify either, because which one is default can change and
-neither is chosen for being it. See
+**Every stage you choose between is exported by name; no placeholder is.** That
+is the whole rule, and it is why `longestPathRankStage`,
+`networkSimplexRankStage` and `barycenterOrderStage` are all importable while
+the two placeholders left in `stages.ts` are reachable only through
+`defaultStages`. A placeholder's name is a name to delete tomorrow. An
+algorithm's name is how a caller says which objective it wants: the two rankers
+answer different questions, and "the default one" does not identify either,
+because which one is default can change and neither is chosen for being it. See
 [Minimum total edge length](#minimum-total-edge-length-and-what-it-costs) for
 which is which. `order` gained its name that way in M2.5 and its default in
-M2.6b, without the name changing in between; expect `position` and `route` to
-follow as M2.7 and M2.8 replace them. The one thing in `stages.ts` that is
-neither a placeholder nor a default is `insertion-order`, kept and unexported
-because the ordering tests measure against it.
+M2.6b, without the name changing in between, and `route` should follow as M2.8
+replaces it. Two stages in the package have no public name for a reason that is
+not placeholder-ness: `insertion-order`, kept because the ordering tests measure
+against it, and `brandes-koepf-position`, which M2.7 implemented and left
+unexported because there is no run today that should choose it, for
+[the reason below](#what-is-not-here-yet).
 
 Going through `defaultStages.position` is still the right way to WRAP a default,
 though, and that is what the example above does. It keeps the wrapper working
-when M2.7 changes what that property points at, which importing a stage by name
-would not: M2.2 already changed what `defaultStages.rank` points at, and no
-wrapper written this way noticed.
+when the position default changes, which importing a stage by name would not:
+M2.2 already changed what `defaultStages.rank` points at and M2.6b changed
+`defaultStages.order`, and no wrapper written this way noticed either.
 
 ## The stage contract
 
@@ -1410,14 +1414,15 @@ try {
 ## What is not here yet
 
 Two of the four default stages are layout algorithms. The other two are
-placeholders. (`network-simplex-rank` is a third real algorithm and is not a
-default: it is selected per run.)
+placeholders. One further real algorithm is selected per run rather than being
+anyone's default, `network-simplex-rank`, and one more exists inside the package
+without being selectable at all, `brandes-koepf-position`, for the reason below.
 
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
 | rank | `longest-path-rank` | Breaks cycles with a greedy feedback arc set, then ranks by longest path. Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height. | Dummy chains for long edges (M2.4b). |
 | order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). | M2.4b's dummy chains, which make every edge visible to it and so change both what it optimises and what its budgets are worth. |
-| position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. | Brandes-Koepf horizontal coordinate assignment (M2.7). |
+| position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. `brandes-koepf-position` is a real algorithm that is implemented but not exported, because it draws a worse picture until M2.4b lands, for the reason below this table. | M2.4b's dummy chains, which are what makes every edge visible to Brandes-Koepf and so what the position default waits on. |
 | route | `straight-route` | A straight two-point line between the endpoint centres. | Polylines through dummy-node coordinates, monotone in the rank axis (M2.8). |
 
 So a default run of a real graph gives you the right number of rows with the
@@ -1429,6 +1434,26 @@ edges are not yet. What it is, is a run that always completes, never overlaps
 two boxes (see [Overlap, exactly](#overlap-exactly)), and satisfies every
 guarantee this page makes about the result, which is what the later milestones
 are built against.
+
+The position phase already has its real algorithm, and it is deliberately not
+exported. M2.7 implemented and tested `brandes-koepf-position`, Brandes and
+Koepf's "Fast and Simple Horizontal Coordinate Assignment" (GD 2001), and left
+it inside the package with no public name, because the measurement said no
+caller should be choosing it yet. It aligns each node with the median of its
+neighbours in the adjacent layer, which means an edge spanning more than one
+rank is invisible to it, exactly as it is invisible to
+[the crossing counter](#what-a-crossing-is-counted-between), and today that is
+two thirds to three quarters of the benchmark corpora's edges. Against
+`grid-position` it comes out **2.7x worse on the 1k corpus and 4.4x worse on the
+10k on total horizontal edge length, and 53% and 60% wider**, and it loses the
+1k even restricted to the edges it can see. M2.4b's dummy chains are the
+prerequisite, because they are what makes every edge span exactly one rank, and
+whether the stage then takes the default and a public name is a decision for the
+milestone that will have the measurement to make it with. The full table, what
+the stage costs, what four alignments buy over one, and why its compaction is
+not the paper's are all in `brandesKoepfPosition`'s docstring in
+`packages/layout/src/position.ts`. Like every measurement on this page that
+mentions dummy nodes, they expire when M2.4b lands.
 
 `RankedState.virtualNodes` and `RankedState.virtualChains` are both still empty:
 they are the bookkeeping slots dummy-node chains fill in M2.4b, and they exist

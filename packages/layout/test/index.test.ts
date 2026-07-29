@@ -35,12 +35,15 @@ import type {
 // name it in. It is reached from the module that defines it, like the default
 // stages below.
 import type { RoutedState } from '../src/types.js';
-// The stages `stages.ts` keeps to itself are deliberately not part of the
-// public surface, so the tests that name them reach into the module that
-// defines them: the two remaining placeholders, and `insertionOrderStage`,
-// which stopped being the default in M2.6b and stayed module-local because the
-// ordering evidence still runs it. The real stages are exported, and are
-// reached below through `api`.
+// The stages that are deliberately not part of the public surface, so the tests
+// that name them reach into the module that defines them: the two remaining
+// placeholders, `insertionOrderStage`, which stopped being the default in M2.6b
+// and stayed module-local because the ordering evidence still runs it, and
+// `brandesKoepfPositionStage`, which M2.7 implemented and left unexported
+// because its own measurements say no caller should choose it yet. The stages
+// a caller does choose between are exported, and are reached below through
+// `api`.
+import { brandesKoepfPositionStage } from '../src/position.js';
 import { gridPositionStage, insertionOrderStage, straightRouteStage } from '../src/stages.js';
 
 describe('@dagr/layout public surface', () => {
@@ -62,8 +65,9 @@ describe('@dagr/layout public surface', () => {
 
   it('lets a caller wrap a default through defaultStages alone', () => {
     // The use case the four individual exports existed for. Going through
-    // `defaultStages` keeps working when M2.7 swaps what `.position` points at,
-    // which importing `gridPositionStage` by name would not.
+    // `defaultStages` keeps working when the milestone after M2.4b swaps what
+    // `.position` points at, which importing `gridPositionStage` by name would
+    // not.
     let shifted = 0;
     const nudging: PositionStage = {
       name: 'nudging-position',
@@ -129,6 +133,7 @@ describe('@dagr/layout public surface', () => {
     expect(Object.isFrozen(api.defaultStages)).toBe(true);
     expect(Object.isFrozen(api.longestPathRankStage)).toBe(true);
     expect(Object.isFrozen(api.networkSimplexRankStage)).toBe(true);
+    expect(Object.isFrozen(api.barycenterOrderStage)).toBe(true);
     expect(() => {
       (api.networkSimplexRankStage as { name: string }).name = 'mine';
     }).toThrow(TypeError);
@@ -172,6 +177,22 @@ describe('@dagr/layout public surface', () => {
     expect(api.layout({ graph }, { order: stage }).nodes.size).toBe(2);
     const drawing: Layering = { graph, layers: [['a'], ['b']] };
     expect(api.countCrossings(drawing)).toBe(0);
+  });
+
+  // M2.7's position stage is NOT here, which is the export rule holding in the
+  // direction M2.6b's `insertion-order` established: a stage earns a public
+  // name by being an algorithm a caller chooses between, and by its own
+  // measurements `brandes-koepf-position` is not one yet. It is implemented,
+  // tested and reached through `../src/position.js` by the suite that covers
+  // it. See `position.ts` for the measurement and `index.ts` for the rule.
+  it('does not export the Brandes-Koepf position stage', () => {
+    expect(api.defaultStages.position).toBe(gridPositionStage);
+    expect(Object.values(api)).not.toContain(brandesKoepfPositionStage);
+    expect(brandesKoepfPositionStage.name).toBe('brandes-koepf-position');
+    // Still one object shared by every run that names it, so still frozen, for
+    // the reason the other shared stages are; being module-local does not make
+    // an assignment to its `name` any less process wide.
+    expect(Object.isFrozen(brandesKoepfPositionStage)).toBe(true);
   });
 
   it('exports the DagrLayoutErrorCode type, and every code is a member of it', () => {
