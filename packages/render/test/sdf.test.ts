@@ -660,9 +660,13 @@ describe('crisp at every zoom instead of at one', () => {
   /**
    * The headline claim of M4.2, as an executed test.
    *
-   * `aaWidth` is one CSS pixel measured in world units, which is `1 / zoom`
-   * exactly: the distance field is a true euclidean distance, so the magnitude
-   * of its screen-space gradient is world units per pixel and nothing else. Feed
+   * `aaWidth` is one DEVICE pixel measured in world units, which is
+   * `1 / (zoom * dpr)`, and `1 / zoom` only at dpr 1. The shader takes it from
+   * the gradient of the interpolated POSITION rather than of the distance, so it
+   * is world units per device pixel and nothing else, and there is no `abs` in
+   * front of it to fold. The ratio cancels along with the zoom below, so this
+   * test is unaffected by which of the two units is meant; the distinction
+   * matters to the OUTLINE width, not to the crispness claim. Feed
    * a distance of `k` pixels through the coverage functions at any zoom and the
    * answer has to be the same number, because `zoom` cancels. Nothing about the
    * shape's size on screen enters it, which is what distinguishes an SDF from a

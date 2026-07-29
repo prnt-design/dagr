@@ -165,8 +165,20 @@ effect at each end of the range.
 
 ### The antialiasing width is a gradient length, not `fwidth`
 
-The width of the ramp is `length(vec2(dFdx(d), dFdy(d)))` and deliberately not
-`fwidth(d)`. `fwidth` is defined as `abs(dFdx(d)) + abs(dFdy(d))`, the L1 norm of
+The width of the ramp is the larger of the two per-axis gradients of the
+interpolated POSITION, `max(length(vec2(dFdx(p.x), dFdy(p.x))),
+length(vec2(dFdx(p.y), dFdy(p.y))))`, and deliberately not `fwidth`.
+
+**Of the position, not of the distance**, which is a correction rather than a
+detail. Every field here folds: `roundedRectDistance` runs both coordinates
+through `abs` and `circleDistance` squares them, so on the fragment quad holding
+a shape's centre all four fragments see the same distance, the difference is zero
+and the width collapses. The inset outline then vanishes exactly there, which on
+a small shape is the whole shape. The position has no `abs` in front of it and
+cannot fold. The euclidean-gradient argument that used to justify differentiating
+the distance was sound about magnitude and silent about folding.
+
+`fwidth` is defined as `abs(dFdx) + abs(dFdy)`, the L1 norm of
 the same gradient, and L1 exceeds L2 by up to a factor of `sqrt(2)`, 41%, exactly
 when the two derivatives are equal. Equal derivatives means an edge at 45
 degrees, and a rounded corner is a continuum of diagonals: with `fwidth` the ramp
@@ -186,7 +198,7 @@ whatever transform a mesh has picked up, including one M4.4 has not written yet.
 A shape drawn smaller than a pixel fades toward the background rather than
 aliasing into a flickering speck, because the coverage falls away with the shape.
 That is the behaviour analytic antialiasing is for, and it holds down to about a
-pixel: at zoom 0.2 the 10-unit rung draws as a 2 by 2 block of `#723b0e`, a dim
+pixel: at zoom 0.2 the 10-unit rung draws as a 2 by 2 block of `#7e4d1b`, a dim
 amber against the `#ffb703` it is at full coverage.
 
 Below that it stops, and the reason is worth knowing because it is not the

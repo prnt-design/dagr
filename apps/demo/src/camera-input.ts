@@ -77,7 +77,7 @@ export const WHEEL_MAX_PIXELS = 200;
  * the background instead of aliasing into a flickering speck, because the
  * coverage the screen-space derivative computes falls away with the shape. That
  * is measured rather than assumed, and so is where it stops: at zoom 0.2 the
- * 10-unit rung draws as a 2 by 2 block of #723b0e, a dim amber against the
+ * 10-unit rung draws as a 2 by 2 block of #7e4d1b, a dim amber against the
  * #ffb703 it is at full coverage, which is the fade. At zoom 0.1 that same rung
  * does not appear at all. Its padded quad is 1.4 by 0.8 CSS pixels there, and
  * whether a footprint that small covers a sample point at all depends on where it

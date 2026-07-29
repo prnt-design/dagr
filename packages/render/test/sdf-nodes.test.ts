@@ -187,7 +187,7 @@ describe('antialiasWidth', () => {
   it('is the LENGTH of the gradient and not fwidth, checked structurally', () => {
     // The one place this file inspects a graph's shape instead of only its
     // existence, and it is worth the coupling. `fwidth(d)` builds just as happily
-    // as `length(vec2(dFdx(d), dFdy(d)))` and differs from it by up to 41% on a
+    // as `length(vec2(dFdx(p.c), dFdy(p.c)))` and differs from it by up to 41% on a
     // diagonal, which is every point of every rounded corner: the visible symptom
     // is corners blurrier than the sides they join, at every zoom, which is a
     // thing a reviewer would look straight past on a screenshot. So the decision

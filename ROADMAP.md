@@ -1614,13 +1614,17 @@ of M3 would leave the second runner idle for a milestone.
   deferred `Fn` body never runs, because the suite builds that body directly from
   pre-halved literals. The compensating control is the STRUCTURAL assertions in
   `test/sdf-nodes.test.ts` rather than a numeric test.
-  TWO UNITS, AND THE ASYMMETRY IS THE POINT. An outline is in CSS PIXELS and is
+  TWO UNITS, AND THE ASYMMETRY IS THE POINT. An outline is in DEVICE PIXELS and is
   inset; a glow is in WORLD units and sits outside. An outline is a property of
   the screen and the derivative that gives the antialiasing width also converts
   pixels to world units; a glow is a property of the shape and its padding is
   baked into the quad, so a pixel-space glow would need the quad resized per
   frame, which is M4.4's.
-  THE ANTIALIASING WIDTH IS `length(vec2(dFdx(d), dFdy(d)))` AND NOT `fwidth(d)`,
+  THE ANTIALIASING WIDTH IS THE `max` OF THE TWO PER-AXIS `length`s OF THE
+  INTERPOLATED POSITION'S GRADIENT, AND NOT `fwidth`. OF THE POSITION AND NOT THE
+  DISTANCE: every field folds through `abs` or a square, so a distance gradient
+  collapses on the quad holding a shape's centre and the inset outline vanishes
+  there, which on a small shape is the whole shape.
   because `fwidth` is the L1 sum and exceeds L2 by up to 41% exactly where the
   derivatives are equal, which is a 45 degree edge, and a rounded corner is
   nothing else. READ THIS ONE AS A WARNING: swapping in either `fwidth` or its L1
@@ -1637,7 +1641,7 @@ of M3 would leave the second runner idle for a milestone.
   the same distance adds nothing to the shape's alpha support. Centred, a band of w
   pixels draws w fully covered pixel centres.
   A SHAPE FADES DOWN TO ABOUT A PIXEL AND THEN STOPS BEING RASTERISED. At zoom 0.2
-  the 10-unit rung is a 2 by 2 block of #723b0e against #ffb703 at full coverage,
+  the 10-unit rung is a 2 by 2 block of #7e4d1b against #ffb703 at full coverage,
   which is the fade. At 0.1 it does not appear at all: its padded quad is 1.4 by
   0.8 CSS pixels and whether that covers a sample point depends on where it lands
   on the grid, while the circle beside it survives as one dim pixel. No distance

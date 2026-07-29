@@ -46,8 +46,12 @@ not" is the category this file has a heading for.
   NOT mean the band lies wholly inside the boundary, which is a different and
   wrong rule that this run shipped first and then fixed.
 
-  **The antialiasing width is `length(vec2(dFdx(d), dFdy(d)))` and deliberately
-  not `fwidth(d)`.** `fwidth` is the L1 sum of the same two derivatives, and L1
+  **The antialiasing width is the `max` of the two per-axis `length`s of the
+  interpolated POSITION's gradient, and deliberately not `fwidth`.** Of the
+  position and not of the distance: every field in `sdf.ts` folds through `abs`
+  or a square, so a distance gradient collapses to zero on the fragment quad
+  holding a shape's centre, taking the inset outline with it. `fwidth` is the L1
+  sum of two derivatives, and L1
   exceeds L2 by up to 41% exactly when the derivatives are equal, which is an
   edge at 45 degrees. A rounded corner is nothing but diagonals, so `fwidth`
   gives a ramp that is right along the flat sides and up to 41% too soft around
@@ -359,7 +363,7 @@ not" is the category this file has a heading for.
 
 - **A shape fades down to about a pixel and then stops being rasterised**, and the
   second half of that is measured rather than assumed. At zoom 0.2 the 10-unit
-  rung draws as a 2 by 2 block of #723b0e, a dim amber against the #ffb703 it is
+  rung draws as a 2 by 2 block of #7e4d1b, a dim amber against the #ffb703 it is
   at full coverage: that is the fade analytic antialiasing is for. At zoom 0.1 the
   same rung does not appear at all, because its padded quad is 1.4 by 0.8 CSS
   pixels and whether a footprint that small covers a sample point depends on where
