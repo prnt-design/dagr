@@ -14,38 +14,46 @@ of doc prose.
 
 ### Added
 
-- `brandesKoepfPositionStage` and `brandesKoepfPosition(options)`, exported,
-  plus the `BrandesKoepfOptions` type. The first real position stage: Brandes
-  and Koepf's horizontal coordinate assignment (GD 2001), which marks the
-  conflicts where an ordinary edge crosses a dummy chain, aligns each node with
-  the median of its neighbours in the adjacent layer four ways, compacts each
-  alignment, and gives each node the median of its four candidates.
+- `brandes-koepf-position`, the first real position stage, INTERNAL TO THE
+  PACKAGE AND NOT EXPORTED. `brandesKoepfPosition(options)`,
+  `brandesKoepfPositionStage` and the `BrandesKoepfOptions` type are all in
+  `src/position.ts` and none of them is reachable from `@dagr/layout`, so no
+  caller can name this stage and nothing a caller already writes changes. It is
+  Brandes and Koepf's horizontal coordinate assignment (GD 2001), which marks
+  the conflicts where an ordinary edge crosses a dummy chain, aligns each node
+  with the median of its neighbours in the adjacent layer four ways, compacts
+  each alignment, and gives each node the median of its four candidates.
   `defaultStages.position` is unchanged and is still `grid-position`. (M2.7)
 
-  **It is not the default, and unlike `network-simplex-rank` the reason is not
-  a benchmark, it is the drawing.** Brandes-Koepf aligns a node with its
-  neighbours in the ADJACENT layer, so an edge spanning more than one rank is
-  invisible to it, which today is most of them: 1,324 of the 1k benchmark
-  corpus's 4,000 edges span exactly one rank and 10,528 of the 10k's 40,000.
-  Measured against `grid-position` on those corpora it is 2.7x and 4.4x worse on
-  total edge length (3,793,350 to 10,191,450 and 292,526,025 to 1,297,826,325,
-  measured horizontally, which is the only part either stage decides) and 53%
-  and 60% wider (17,950 to 27,550 and 165,100 to 264,175). Even restricted to
-  the edges it can see it wins only one of the two, 12% worse on the 1k
-  (1,112,700 to 1,246,200) and 7.4% better on the 10k (44,056,125 to
-  40,790,550). Selecting it today buys a worse drawing. M2.4b's dummy chains are
-  what change that, because they make every edge span exactly one rank, and the
-  stage ships now and unselected so that milestone is a default flip rather than
-  an algorithm.
+  **It is unexported for the reason it is not the default, and unlike
+  `network-simplex-rank` that reason is not a benchmark, it is the drawing.** A
+  stage earns a public name by being an algorithm a caller chooses between, and
+  by the numbers below there is no run today that should choose this one over
+  `grid-position`. `insertion-order` is in the package on the same terms.
+  Brandes-Koepf aligns a node with its neighbours in the ADJACENT layer, so an
+  edge spanning more than one rank is invisible to it, which today is most of
+  them: 1,324 of the 1k benchmark corpus's 4,000 edges span exactly one rank and
+  10,528 of the 10k's 40,000. Measured against `grid-position` on those corpora
+  it is 2.7x and 4.4x worse on total horizontal edge length (3,793,350 to
+  10,191,450 and 292,526,025 to 1,297,826,325, measured horizontally because
+  that is the only part either stage decides) and 53% and 60% wider (17,950 to
+  27,550 and 165,100 to 264,175). Even restricted to the edges it can see it
+  wins only one of the two, 12% worse on the 1k (1,112,700 to 1,246,200) and
+  7.4% better on the 10k (44,056,125 to 40,790,550). Running it today buys a
+  worse drawing. M2.4b's dummy chains are what change that, because they make
+  every edge span exactly one rank, and both the export and the default are
+  decisions for the milestone that will have the measurement to make them with.
 
-  `align` is the only option and takes `'balanced'`, the default and the median
-  of all four alignments, or one of `'down-left'`, `'down-right'`, `'up-left'`
-  and `'up-right'`, which run a single pass. A bad value is an
-  `InvalidConfigError` naming the field, thrown at the call that builds the
-  stage rather than at the run, which is the rule `maxSweeps` and
-  `maxIterations` already keep. Four passes cost about 7x one in solve time and
-  about 1.6x once the shared index build is counted, and they buy 21% of total
-  edge length on the 1k and 45% on the 10k, and a far narrower drawing.
+  `variant` is the only option and takes `'balanced'`, the default and the
+  median of all four alignments, or one of `'down-left'`, `'down-right'`,
+  `'up-left'` and `'up-right'`, which run a single pass. It is `variant` rather
+  than `align` because `'balanced'` is not an alignment, it is the median of
+  four completed layouts. A bad value is an `InvalidConfigError` naming the
+  field, thrown at the call that builds the stage rather than at the run, which
+  is the rule `maxSweeps` and `maxIterations` already keep. Four passes cost
+  6.3x to 7x one in solve time and about 1.6x once the shared index build is
+  counted, and they buy 21% of total horizontal edge length on the 1k and 45% on
+  the 10k, and a far narrower drawing.
 
   **The compaction is not the paper's, because the paper's is unsound as
   published.** `place_block` records `shift[sink[u]] = min(shift[sink[u]],

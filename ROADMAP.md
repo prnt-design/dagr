@@ -981,12 +981,17 @@ findings addressed or logged, docs land with the feature.
 - [x] **M2.7** Positioning: Brandes-Koepf horizontal coordinate assignment
   (or median-based v1 with the interface ready for BK). Invariant tests: no
   node overlaps, spacing respected.
-  WHAT SHIPPED. `brandesKoepfPositionStage`, `brandesKoepfPosition(options)` and
-  `BrandesKoepfOptions` are exported from `@dagr/layout`, and
-  `defaultStages.position` is UNCHANGED: it is still `grid-position`. The one
-  option is `align`, which selects one of the four alignments instead of the
-  median of all four, and which exists because the invariant is a property of
-  each pass rather than only of the median and a test has to be able to run one.
+  WHAT SHIPPED. `brandesKoepfPosition(options)`, `brandesKoepfPositionStage` and
+  `BrandesKoepfOptions`, all three INTERNAL to `packages/layout`: none of them is
+  exported from `@dagr/layout`, and `defaultStages.position` is UNCHANGED, still
+  `grid-position`. The name waits on the same event the default does. The export
+  rule is about an algorithm a caller CHOOSES BETWEEN, the measurement below says
+  nobody should choose this one over the grid yet, and adding an export later is
+  additive where removing one breaks callers; `insertion-order` is the same
+  shape. The one option is `variant`, which selects one of the four alignments
+  instead of the median of all four, and which exists because the invariant is a
+  property of each pass rather than only of the median and a test has to be able
+  to run one.
   The invariant tests asked for are there and the stronger of the two is the one
   they assert: two boxes side by side in a layer are at least `nodeSep` apart
   edge to edge, in the layer's own order, which every overlap within a layer
@@ -998,15 +1003,16 @@ findings addressed or logged, docs land with the feature.
   default did not move. It aligns a node with the median of its neighbours in
   the ADJACENT layer, and a quarter to a third of the corpora's edges join one,
   the same blind spot the crossing counter has: the drawing comes out 2.7x and
-  4.4x worse on total edge length and 53% and 60% wider than `grid-position`,
-  and it loses one of the two corpora even restricted to the edges it can see.
-  That is structural rather than a tuning problem, and M2.4b is the fix, because
-  dummy chains are what make every edge span exactly one rank. The prescription
-  "M2.7 replaces the positioner" was written before that was measured; the stage
-  ships exported and unselected so that M2.4b is a one-line default flip rather
-  than an algorithm. The figures live in `brandesKoepfPosition`'s docstring in
-  `packages/layout/src/position.ts` and nowhere else as live advice, because
-  they all expire on that milestone.
+  4.4x worse on total HORIZONTAL edge length and 53% and 60% wider than
+  `grid-position`, and it loses one of the two corpora even restricted to the
+  edges it can see. That is structural rather than a tuning problem, and M2.4b is
+  the fix, because dummy chains are what make every edge span exactly one rank.
+  The prescription "M2.7 replaces the positioner" was written before that was
+  measured; what shipped is the algorithm implemented, tested and unselectable,
+  so that M2.4b changes its INPUT rather than a line of it, and the decision it
+  then faces is whether the measurement has turned round. The figures live in
+  `brandesKoepfPosition`'s docstring in `packages/layout/src/position.ts` and
+  nowhere else as live advice, because they all expire on that milestone.
   **THE PAPER'S CLASS SHIFT IS UNSOUND AS PUBLISHED**, which is the second thing
   measurement refuted and the one that constrains a later task. `place_block`
   records one `min` per class and applies it once, so a class shifted against a
@@ -1017,8 +1023,9 @@ findings addressed or logged, docs land with the feature.
   Composing the shifts transitively fixes the counterexample and is still not
   sound. What ships compacts by longest path over the block order, which cannot
   overlap and costs 3% of width on the 1k while being narrower on the 10k. IT
-  COSTS 30% OF ADJACENT-LAYER EDGE LENGTH (28,559,325 against 40,790,550 on the
-  10k), and that 30% is not claimable because the layout it comes from overlaps.
+  COSTS 30% OF ADJACENT-LAYER EDGE LENGTH (40,790,550 against the class form's
+  28,559,325 on the 10k), and that 30% is not claimable because the layout it
+  comes from overlaps.
   THE NAMED NEXT STEP is the paper's erratum: resolve the shifts by longest path
   over a proper graph of classes. It is a task in its own right and it was not
   attempted here.

@@ -12,16 +12,20 @@ import type { LayoutStages, OrderStage, Point, PositionStage, RouteStage, Size }
  * Neither default here is a real algorithm yet. They exist so that the pipeline
  * produces a well formed `LayoutResult` for any graph, and so that every later
  * milestone can be a one-stage swap against a runner and a test suite that
- * already work: Brandes-Koepf replaces {@link gridPositionStage} (M2.7) and
- * polyline routing replaces {@link straightRouteStage} (M2.8). Two phases have
- * been through that already and neither is defined here any more. M2.2 replaced
- * the single-rank placeholder with `longestPathRankStage`, which breaks cycles
- * and ranks by longest path, and M2.3 left it exactly where it was and added a
- * second rank stage beside it, `networkSimplexRankStage`, which a caller
- * selects; the two optimise different things, so neither replaces the other,
- * and `simplex.ts` is where they are compared. M2.6b did the same for `order`,
- * which now runs `barycenterOrderStage` from `order.ts`: sweeps and a transpose
- * pass rather than the roster order {@link insertionOrderStage} lays out.
+ * already work: polyline routing replaces {@link straightRouteStage} (M2.8).
+ * M2.7 did the same for `position` and stopped short of the swap: Brandes-Koepf
+ * landed beside {@link gridPositionStage} rather than over it, and this one is
+ * still the default, because on today's graphs it draws the better picture.
+ * `position.ts` is where the two are compared and where that is measured. Two
+ * phases have been through the swap already and neither is defined here any
+ * more. M2.2 replaced the single-rank placeholder with `longestPathRankStage`,
+ * which breaks cycles and ranks by longest path, and M2.3 left it exactly where
+ * it was and added a second rank stage beside it, `networkSimplexRankStage`,
+ * which a caller selects; the two optimise different things, so neither
+ * replaces the other, and `simplex.ts` is where they are compared. M2.6b did
+ * the same for `order`, which now runs `barycenterOrderStage` from `order.ts`:
+ * sweeps and a transpose pass rather than the roster order
+ * {@link insertionOrderStage} lays out.
  *
  * What the defaults do guarantee, and what their tests hold them to, is the
  * pipeline contract: every node in exactly one layer, every node positioned,
@@ -29,16 +33,17 @@ import type { LayoutStages, OrderStage, Point, PositionStage, RouteStage, Size }
  * rounding, see {@link gridPositionStage}).
  *
  * Each stage here is exported from this module, for the tests, and none of them
- * is exported from the package, which is the rule `index.ts` states: every real
- * stage is exported by name, no placeholder is, and `defaultStages` is exported
- * whatever a stage is. The two placeholders are scheduled for replacement, and
- * a public name now is a choice later between breaking callers and keeping a
- * dead placeholder exported forever; {@link insertionOrderStage} has its own
- * reason to stay unexported, which is on it. `defaultStages` covers the use
- * case the individual names would serve, wrapping whatever the current default
- * is, and it keeps working when the default behind one of its properties
- * changes, which is exactly what happened to `rank` in M2.2 and to `order` in
- * M2.6b.
+ * is exported from the package, which is the rule `index.ts` states: every
+ * stage a caller chooses between is exported by name, no placeholder is, and
+ * `defaultStages` is exported whatever a stage is. The two placeholders are
+ * scheduled for replacement, and a public name now is a choice later between
+ * breaking callers and keeping a dead placeholder exported forever;
+ * {@link insertionOrderStage} has its own reason to stay unexported, which is
+ * on it, and `brandesKoepfPositionStage` has its own, which is on that.
+ * `defaultStages` covers the use case the individual names would serve,
+ * wrapping whatever the current default is, and it keeps working when the
+ * default behind one of its properties changes, which is exactly what happened
+ * to `rank` in M2.2 and to `order` in M2.6b.
  */
 
 /** A size that must be present. Absence is a runner bug, so it fails loudly. */

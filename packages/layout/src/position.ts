@@ -55,7 +55,10 @@ export interface BrandesKoepfOptions {
   /**
    * Which of the algorithm's layouts to return. Defaults to `'balanced'`, the
    * median of all four, which is what the algorithm is and what
-   * {@link brandesKoepfPositionStage} runs.
+   * {@link brandesKoepfPositionStage} runs. It is `variant` rather than
+   * `align` because `'balanced'` is not an alignment: it is the median of four
+   * completed layouts, so the name has to be about what comes back rather than
+   * about the step in the middle.
    *
    * The four named alignments each return ONE pass: the first word is the
    * direction the alignment runs (`down` aligns a node with the median of its
@@ -80,24 +83,24 @@ export interface BrandesKoepfOptions {
    * one error family and one member of it meaning "the caller handed in
    * nonsense". See `errors.ts`.
    */
-  readonly align?: 'balanced' | 'down-left' | 'down-right' | 'up-left' | 'up-right' | undefined;
+  readonly variant?: 'balanced' | 'down-left' | 'down-right' | 'up-left' | 'up-right' | undefined;
 }
 
-/** An alignment a run settled on: the option with its default filled in. */
-type Alignment = NonNullable<BrandesKoepfOptions['align']>;
+/** The layout a run settled on: the option with its default filled in. */
+type Variant = NonNullable<BrandesKoepfOptions['variant']>;
 
-/** The alignment, checked at the call that named it. */
-function resolveAlignment(align: BrandesKoepfOptions['align']): Alignment {
-  if (align === undefined || align === 'balanced') return 'balanced';
-  if (!ALIGNMENTS.includes(align)) {
+/** The variant, checked at the call that named it. */
+function resolveVariant(variant: BrandesKoepfOptions['variant']): Variant {
+  if (variant === undefined || variant === 'balanced') return 'balanced';
+  if (!ALIGNMENTS.includes(variant)) {
     throw new InvalidConfigError(
-      'align',
-      align,
+      'variant',
+      variant,
       'option',
       `one of ${["'balanced'", ...ALIGNMENTS.map((name) => `'${name}'`)].join(', ')}`,
     );
   }
-  return align;
+  return variant;
 }
 
 /**
@@ -538,10 +541,24 @@ function rowCentres(input: OrderedState): Float64Array {
  * `brandesKoepfPositionStage` is this with no options, and is what to reach for
  * unless a run needs one named alignment rather than the median of all four.
  *
- * ## IT IS NOT THE DEFAULT, and on today's graphs it is not an improvement
+ * It is a factory for one reason, and it is not symmetry with
+ * `networkSimplexRank` or `barycenterOrder`: those two are factories because M3
+ * and M3.6 warm start a run from state the caller passes in, and there is no
+ * warm start here. {@link BrandesKoepfOptions.variant} is the whole reason.
+ * Whether to spend four passes or one is a cost and quality trade a single call
+ * site makes, about 7x the solve time and 1.6x to 2.1x the whole stage for 21%
+ * of the horizontal edge length on the 1k and 45% on the 10k, and there is no
+ * one answer to freeze into a second shared stage.
+ *
+ * ## NOT THE DEFAULT, NOT EXPORTED, and not an improvement on today's graphs
  *
  * `defaultStages.position` is still `gridPositionStage`, and this section is why
  * rather than an apology for it. The reason is structural and it is measured.
+ * The same measurement is why nothing here is exported from the package:
+ * `index.ts`'s rule names a stage a caller CHOOSES BETWEEN, and by the table
+ * below no caller should choose this one yet. Adding the export when M2.4b makes
+ * that false is additive; removing one is not. `insertionOrderStage` is the
+ * precedent, real and tested and deliberately unexported.
  *
  * **BK aligns a node with the MEDIAN OF ITS NEIGHBOURS IN THE ADJACENT LAYER,
  * so an edge that spans more than one rank joins no adjacent pair of layers and
@@ -602,11 +619,11 @@ function rowCentres(input: OrderedState): Float64Array {
  * against 0.554ms on the 10k, and 6.3x on the 1k, 0.370ms against 0.059ms. The
  * shared index build takes that back to about 1.6x for the whole stage
  * (10.395ms against 6.538ms, and 0.780ms against 0.479ms; 4.491 against 2.810
- * and 0.590 against 0.278 for the shipping form). What they buy is 21% of total
- * edge length on the 1k (12,961,500 to 10,191,450) and 45% on the 10k
- * (2,371,358,550 to 1,297,826,325), and a far narrower drawing: 41,050 to 27,550
- * and 442,900 to 264,175. A single pass is reachable through
- * {@link BrandesKoepfOptions.align} for a caller who wants that trade.
+ * for the shipping form, and 2.1x on its 1k, 0.590 against 0.278). What they
+ * buy is 21% of total edge length on the 1k (12,961,500 to 10,191,450) and 45%
+ * on the 10k (2,371,358,550 to 1,297,826,325), and a far narrower drawing:
+ * 41,050 to 27,550 and 442,900 to 264,175. A single pass is reachable through
+ * {@link BrandesKoepfOptions.variant} for a caller who wants that trade.
  *
  * ## The compaction is NOT the paper's, and this is the part to read
  *
@@ -677,11 +694,11 @@ function rowCentres(input: OrderedState): Float64Array {
  * the way out, because `-0` and `0` are equal under `===` and different under
  * `Object.is`, and M3's diff is the caller that would notice.
  *
- * @throws {InvalidConfigError} when `align` is not one of the five names it
+ * @throws {InvalidConfigError} when `variant` is not one of the five names it
  * takes.
  */
 export function brandesKoepfPosition(options?: BrandesKoepfOptions): PositionStage {
-  const alignment = resolveAlignment(options?.align);
+  const variant = resolveVariant(options?.variant);
   return {
     name: 'brandes-koepf-position',
     run(input) {
@@ -702,7 +719,7 @@ export function brandesKoepfPosition(options?: BrandesKoepfOptions): PositionSta
 
       const { nodeSep } = input.config;
       let xs: Float64Array;
-      if (alignment === 'balanced') {
+      if (variant === 'balanced') {
         const candidates = ALIGNMENTS.map((name) => {
           const coordinates = new Float64Array(count);
           solve(index, nodeSep, name.startsWith('down'), name.endsWith('left'), coordinates);
@@ -711,7 +728,7 @@ export function brandesKoepfPosition(options?: BrandesKoepfOptions): PositionSta
         xs = balance(candidates, index.widths);
       } else {
         xs = new Float64Array(count);
-        solve(index, nodeSep, alignment.startsWith('down'), alignment.endsWith('left'), xs);
+        solve(index, nodeSep, variant.startsWith('down'), variant.endsWith('left'), xs);
       }
 
       const centres = rowCentres(input);

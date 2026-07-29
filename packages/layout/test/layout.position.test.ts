@@ -3,24 +3,15 @@ import type { GraphSpec } from '@dagr/bench';
 import { Graph } from '@dagr/graph';
 import type { NodeId } from '@dagr/graph';
 import { describe, expect, it } from 'vitest';
-import {
-  DEFAULT_LAYOUT_CONFIG,
-  InvalidConfigError,
-  brandesKoepfPosition,
-  brandesKoepfPositionStage,
-  layout,
-} from '../src/index.js';
-import type {
-  BrandesKoepfOptions,
-  LayoutResult,
-  OrderedState,
-  Point,
-  PositionedNode,
-  Size,
-} from '../src/index.js';
-// The placeholder this stage does not displace, reached through the module that
-// defines it because it is not part of the public surface. The row arithmetic
-// below is asserted against it rather than against a copy of its numbers.
+import { DEFAULT_LAYOUT_CONFIG, InvalidConfigError, layout } from '../src/index.js';
+import type { LayoutResult, OrderedState, Point, PositionedNode, Size } from '../src/index.js';
+// The stage under test, reached through the module that defines it because it
+// is not part of the public surface: it is implemented and not exported, for
+// the reason on it. The placeholder it does not displace is reached the same
+// way, and the row arithmetic below is asserted against that stage rather than
+// against a copy of its numbers.
+import { brandesKoepfPosition, brandesKoepfPositionStage } from '../src/position.js';
+import type { BrandesKoepfOptions } from '../src/position.js';
 import { gridPositionStage } from '../src/stages.js';
 import { mulberry32, randomLayered } from './random.js';
 
@@ -246,7 +237,7 @@ describe('brandesKoepfPosition, the spacing invariant', () => {
       ],
     );
     const state = stateOf(graph, layers, () => 100, { nodeSep: 50, rankSep: 50 });
-    const positions = brandesKoepfPosition({ align: 'up-left' }).run(state).positions;
+    const positions = brandesKoepfPosition({ variant: 'up-left' }).run(state).positions;
     expect(worstSpacing(state, positions)).toBe(0);
     // The two nodes the class shift collided, named so that a failure says
     // which pair rather than only that some pair broke.
@@ -346,16 +337,16 @@ describe('brandesKoepfPosition over random layerings', () => {
         if (layer.length > 1) crowdedLayers += 1;
         pairs += Math.max(layer.length - 1, 0);
       }
-      for (const align of [...alignments, 'balanced'] as const) {
-        const positions = brandesKoepfPosition({ align }).run(state).positions;
+      for (const variant of [...alignments, 'balanced'] as const) {
+        const positions = brandesKoepfPosition({ variant }).run(state).positions;
         solves += 1;
-        expect(worstSpacing(state, positions), `seed ${String(seed)} at ${align}`).toBe(0);
+        expect(worstSpacing(state, positions), `seed ${String(seed)} at ${variant}`).toBe(0);
       }
       // How much ALIGNING the passes did on this seed, counted as adjacent-layer
       // neighbours the down-left pass gave exactly the same x. A stage that
       // never aligned anything would still satisfy the invariant above, by
       // packing every layer left, and this is what says it did not.
-      const packed = brandesKoepfPosition({ align: 'down-left' }).run(state).positions;
+      const packed = brandesKoepfPosition({ variant: 'down-left' }).run(state).positions;
       const rankOf = state.ranks;
       for (const edge of graph.edges()) {
         const source = packed.get(edge.source);
@@ -406,11 +397,11 @@ describe('brandesKoepfPosition, the four passes and the balancing', () => {
     expect(required(balanced.get('n1'), 'n1').y).toBe(110);
     expect(required(balanced.get('n2'), 'n2').y).toBe(110);
 
-    const single = brandesKoepfPosition({ align: 'down-left' }).run(state).positions;
+    const single = brandesKoepfPosition({ variant: 'down-left' }).run(state).positions;
     expect(required(single.get('n0'), 'n0').x).toBe(0);
     // The four candidates are not four copies of one another, which is what a
     // balancing step has to have to be worth running.
-    const mirrored = brandesKoepfPosition({ align: 'down-right' }).run(state).positions;
+    const mirrored = brandesKoepfPosition({ variant: 'down-right' }).run(state).positions;
     expect(required(mirrored.get('n1'), 'n1').x).not.toBe(
       required(single.get('n1'), 'n1').x,
     );
@@ -432,9 +423,9 @@ describe('brandesKoepfPosition, the four passes and the balancing', () => {
       ],
     );
     const state = stateOf(graph, layers, () => 100, { nodeSep: 50, rankSep: 50 });
-    const left = brandesKoepfPosition({ align: 'down-left' }).run(state).positions;
+    const left = brandesKoepfPosition({ variant: 'down-left' }).run(state).positions;
     expect(required(left.get('n4'), 'n4').x).toBe(required(left.get('n1'), 'n1').x);
-    const right = brandesKoepfPosition({ align: 'down-right' }).run(state).positions;
+    const right = brandesKoepfPosition({ variant: 'down-right' }).run(state).positions;
     expect(required(right.get('n4'), 'n4').x).toBe(required(right.get('n2'), 'n2').x);
   });
 
@@ -487,7 +478,7 @@ describe('brandesKoepfPosition, the four passes and the balancing', () => {
     // balanced default averages the middle two of four candidates, and the two
     // in the middle of `[-0, -0, 0, 0]` average to `0` on their own, so it is
     // the single pass that pins this rather than the default.
-    const mirrored = brandesKoepfPosition({ align: 'down-right' }).run(state).positions;
+    const mirrored = brandesKoepfPosition({ variant: 'down-right' }).run(state).positions;
     expect(Object.is(required(mirrored.get('n0'), 'n0').x, 0)).toBe(true);
     const positions = brandesKoepfPositionStage.run(state).positions;
     expect(Object.is(required(positions.get('n0'), 'n0').x, 0)).toBe(true);
@@ -515,15 +506,15 @@ describe('brandesKoepfPosition, determinism and options', () => {
     });
     const first = [...brandesKoepfPositionStage.run(state).positions];
     expect([...brandesKoepfPositionStage.run(state).positions]).toEqual(first);
-    // A fresh stage object, since the exported one is a frozen singleton shared
-    // by every run in the process and could be accumulating state.
+    // A fresh stage object, since the module-level one is a frozen singleton
+    // shared by every run in the process and could be accumulating state.
     expect([...brandesKoepfPosition().run(state).positions]).toEqual(first);
   });
 
-  it('rejects an alignment it does not have, naming the option', () => {
+  it('rejects a variant it does not have, naming the option', () => {
     let caught: unknown;
     try {
-      brandesKoepfPosition({ align: 'sideways' as BrandesKoepfOptions['align'] });
+      brandesKoepfPosition({ variant: 'sideways' as BrandesKoepfOptions['variant'] });
     } catch (error) {
       caught = error;
     }
@@ -532,21 +523,21 @@ describe('brandesKoepfPosition, determinism and options', () => {
     // value and it does not reach this package, which has one error family and
     // one member of it meaning "the caller handed in nonsense".
     expect(caught).not.toBeInstanceOf(RangeError);
-    expect((caught as InvalidConfigError).field).toBe('align');
+    expect((caught as InvalidConfigError).field).toBe('variant');
     expect((caught as InvalidConfigError).code).toBe('INVALID_CONFIG');
     expect((caught as Error).message).toContain('Invalid layout option');
   });
 
-  it('is rejected at the call that named the alignment, not at the run', () => {
+  it('is rejected at the call that named the variant, not at the run', () => {
     const { graph, layers } = layered([1], []);
     const state = stateOf(graph, layers, () => 100, { nodeSep: 50, rankSep: 50 });
     // The good ones all build and all run, which is what makes the rejection
     // above about the value rather than about the option existing.
-    for (const align of [...alignments, 'balanced'] as const) {
-      expect(brandesKoepfPosition({ align }).run(state).positions.size).toBe(1);
+    for (const variant of [...alignments, 'balanced'] as const) {
+      expect(brandesKoepfPosition({ variant }).run(state).positions.size).toBe(1);
     }
     expect(brandesKoepfPosition({}).run(state).positions.size).toBe(1);
-    expect(brandesKoepfPosition({ align: undefined }).run(state).positions.size).toBe(1);
+    expect(brandesKoepfPosition({ variant: undefined }).run(state).positions.size).toBe(1);
   });
 });
 
@@ -578,7 +569,7 @@ describe('brandesKoepfPosition and type 1 conflicts', () => {
     ];
     const base = stateOf(graph, layers, () => 100, { nodeSep: 50, rankSep: 50 });
     const state: OrderedState = { ...base, virtualNodes: new Set(['d0', 'd1']) };
-    const positions = brandesKoepfPosition({ align: 'down-left' }).run(state).positions;
+    const positions = brandesKoepfPosition({ variant: 'down-left' }).run(state).positions;
     // The chain is vertical: the inner segment aligned and the crossing one did
     // not. Without the marking `d1` lands 150 to the right of `d0` instead.
     expect(required(positions.get('d1'), 'd1').x).toBe(required(positions.get('d0'), 'd0').x);
@@ -586,7 +577,7 @@ describe('brandesKoepfPosition and type 1 conflicts', () => {
     // The same layering with nothing declared virtual has no inner segment, so
     // nothing is marked and the chain does bend. That is the arm that says the
     // assertion above is about the marking rather than about the layering.
-    const unmarked = brandesKoepfPosition({ align: 'down-left' }).run(base).positions;
+    const unmarked = brandesKoepfPosition({ variant: 'down-left' }).run(base).positions;
     expect(required(unmarked.get('d1'), 'd1').x).not.toBe(
       required(unmarked.get('d0'), 'd0').x,
     );

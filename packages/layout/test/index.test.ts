@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import * as api from '../src/index.js';
 import type {
   BarycenterOrderOptions,
-  BrandesKoepfOptions,
   DagrLayoutErrorCode,
   Layering,
   LayoutConfig,
@@ -36,12 +35,15 @@ import type {
 // name it in. It is reached from the module that defines it, like the default
 // stages below.
 import type { RoutedState } from '../src/types.js';
-// The stages `stages.ts` keeps to itself are deliberately not part of the
-// public surface, so the tests that name them reach into the module that
-// defines them: the two remaining placeholders, and `insertionOrderStage`,
-// which stopped being the default in M2.6b and stayed module-local because the
-// ordering evidence still runs it. The real stages are exported, and are
-// reached below through `api`.
+// The stages that are deliberately not part of the public surface, so the tests
+// that name them reach into the module that defines them: the two remaining
+// placeholders, `insertionOrderStage`, which stopped being the default in M2.6b
+// and stayed module-local because the ordering evidence still runs it, and
+// `brandesKoepfPositionStage`, which M2.7 implemented and left unexported
+// because its own measurements say no caller should choose it yet. The stages
+// a caller does choose between are exported, and are reached below through
+// `api`.
+import { brandesKoepfPositionStage } from '../src/position.js';
 import { gridPositionStage, insertionOrderStage, straightRouteStage } from '../src/stages.js';
 
 describe('@dagr/layout public surface', () => {
@@ -63,8 +65,9 @@ describe('@dagr/layout public surface', () => {
 
   it('lets a caller wrap a default through defaultStages alone', () => {
     // The use case the four individual exports existed for. Going through
-    // `defaultStages` keeps working when M2.7 swaps what `.position` points at,
-    // which importing `gridPositionStage` by name would not.
+    // `defaultStages` keeps working when the milestone after M2.4b swaps what
+    // `.position` points at, which importing `gridPositionStage` by name would
+    // not.
     let shifted = 0;
     const nudging: PositionStage = {
       name: 'nudging-position',
@@ -131,7 +134,6 @@ describe('@dagr/layout public surface', () => {
     expect(Object.isFrozen(api.longestPathRankStage)).toBe(true);
     expect(Object.isFrozen(api.networkSimplexRankStage)).toBe(true);
     expect(Object.isFrozen(api.barycenterOrderStage)).toBe(true);
-    expect(Object.isFrozen(api.brandesKoepfPositionStage)).toBe(true);
     expect(() => {
       (api.networkSimplexRankStage as { name: string }).name = 'mine';
     }).toThrow(TypeError);
@@ -147,8 +149,6 @@ describe('@dagr/layout public surface', () => {
       'StageContractError',
       'barycenterOrder',
       'barycenterOrderStage',
-      'brandesKoepfPosition',
-      'brandesKoepfPositionStage',
       'countCrossings',
       'defaultStages',
       'layout',
@@ -179,28 +179,20 @@ describe('@dagr/layout public surface', () => {
     expect(api.countCrossings(drawing)).toBe(0);
   });
 
-  // The position stage exported by name in M2.7, and NOT made the default,
-  // which is the same shape M2.3 gave `network-simplex-rank`: a real algorithm
-  // earns a public name whether or not it is what a run gets by default, and
-  // this one is not, because most edges do not join two adjacent layers until
-  // M2.4b splits them and it cannot see the ones that do not. The factory is
-  // beside it because the alignment is a choice a call site makes.
-  it('exports the Brandes-Koepf position stage and its factory, without taking the default', () => {
-    expect(api.brandesKoepfPositionStage.name).toBe('brandes-koepf-position');
-    expect(api.defaultStages.position).not.toBe(api.brandesKoepfPositionStage);
+  // M2.7's position stage is NOT here, which is the export rule holding in the
+  // direction M2.6b's `insertion-order` established: a stage earns a public
+  // name by being an algorithm a caller chooses between, and by its own
+  // measurements `brandes-koepf-position` is not one yet. It is implemented,
+  // tested and reached through `../src/position.js` by the suite that covers
+  // it. See `position.ts` for the measurement and `index.ts` for the rule.
+  it('does not export the Brandes-Koepf position stage', () => {
     expect(api.defaultStages.position).toBe(gridPositionStage);
-    expect(Object.isFrozen(api.brandesKoepfPositionStage)).toBe(true);
-    const graph = new Graph();
-    graph.addNode('a');
-    graph.addNode('b');
-    graph.addEdge('a', 'b');
-    const options: BrandesKoepfOptions = { align: 'down-left' };
-    const stage: PositionStage = api.brandesKoepfPosition(options);
-    expect(api.layout({ graph }, { position: stage }).nodes.size).toBe(2);
-    expect(api.layout({ graph }, { position: api.brandesKoepfPositionStage }).nodes.size).toBe(2);
-    const bad = (): api.PositionStage =>
-      api.brandesKoepfPosition({ align: 'sideways' as BrandesKoepfOptions['align'] });
-    expect(bad).toThrow(api.InvalidConfigError);
+    expect(Object.values(api)).not.toContain(brandesKoepfPositionStage);
+    expect(brandesKoepfPositionStage.name).toBe('brandes-koepf-position');
+    // Still one object shared by every run that names it, so still frozen, for
+    // the reason the other shared stages are; being module-local does not make
+    // an assignment to its `name` any less process wide.
+    expect(Object.isFrozen(brandesKoepfPositionStage)).toBe(true);
   });
 
   it('exports the DagrLayoutErrorCode type, and every code is a member of it', () => {
