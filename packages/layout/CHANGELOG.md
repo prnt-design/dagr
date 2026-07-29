@@ -14,6 +14,63 @@ of doc prose.
 
 ### Added
 
+- `brandesKoepfPositionStage` and `brandesKoepfPosition(options)`, exported,
+  plus the `BrandesKoepfOptions` type. The first real position stage: Brandes
+  and Koepf's horizontal coordinate assignment (GD 2001), which marks the
+  conflicts where an ordinary edge crosses a dummy chain, aligns each node with
+  the median of its neighbours in the adjacent layer four ways, compacts each
+  alignment, and gives each node the median of its four candidates.
+  `defaultStages.position` is unchanged and is still `grid-position`. (M2.7)
+
+  **It is not the default, and unlike `network-simplex-rank` the reason is not
+  a benchmark, it is the drawing.** Brandes-Koepf aligns a node with its
+  neighbours in the ADJACENT layer, so an edge spanning more than one rank is
+  invisible to it, which today is most of them: 1,324 of the 1k benchmark
+  corpus's 4,000 edges span exactly one rank and 10,528 of the 10k's 40,000.
+  Measured against `grid-position` on those corpora it is 2.7x and 4.4x worse on
+  total edge length (3,793,350 to 10,191,450 and 292,526,025 to 1,297,826,325,
+  measured horizontally, which is the only part either stage decides) and 53%
+  and 60% wider (17,950 to 27,550 and 165,100 to 264,175). Even restricted to
+  the edges it can see it wins only one of the two, 12% worse on the 1k
+  (1,112,700 to 1,246,200) and 7.4% better on the 10k (44,056,125 to
+  40,790,550). Selecting it today buys a worse drawing. M2.4b's dummy chains are
+  what change that, because they make every edge span exactly one rank, and the
+  stage ships now and unselected so that milestone is a default flip rather than
+  an algorithm.
+
+  `align` is the only option and takes `'balanced'`, the default and the median
+  of all four alignments, or one of `'down-left'`, `'down-right'`, `'up-left'`
+  and `'up-right'`, which run a single pass. A bad value is an
+  `InvalidConfigError` naming the field, thrown at the call that builds the
+  stage rather than at the run, which is the rule `maxSweeps` and
+  `maxIterations` already keep. Four passes cost about 7x one in solve time and
+  about 1.6x once the shared index build is counted, and they buy 21% of total
+  edge length on the 1k and 45% on the 10k, and a far narrower drawing.
+
+  **The compaction is not the paper's, because the paper's is unsound as
+  published.** `place_block` records `shift[sink[u]] = min(shift[sink[u]],
+  x[v] - x[root[u]] - delta)` and applies it once, so a class shifted against a
+  class that is itself shifted later ends up short by the parent's shift. The
+  minimal counterexample is ten nodes, `layers [3, 2, 3, 2]` with
+  `edges [[1, 4], [2, 3], [2, 4], [3, 6], [4, 6], [7, 9]]` in the up direction
+  with the left bias, where two boxes land on one coordinate; on the 1k corpus
+  that compaction leaves 33 pairs of boxes overlapping. Composing the shifts
+  transitively through a recorded parent fixes the counterexample and is still
+  not sound. What ships compacts each alignment by longest path over the block
+  order, which cannot overlap, and it costs 30% of adjacent-layer edge length on
+  the 10k against the broken form (40,790,550 against 28,559,325). Recovering
+  that needs the paper's erratum, a proper class graph with the shifts resolved
+  by longest path over it, which is a task of its own and is named as the next
+  step in the stage's docstring.
+
+  The guarantee the stage carries is spacing rather than only no-overlap: two
+  boxes side by side in a layer are at least `nodeSep` apart edge to edge, in
+  the layer's own left-to-right order. It holds by construction in each pass and
+  survives the median of four by an order-statistics argument. Vertical
+  coordinates are `grid-position`'s, unchanged, so switching stages moves nodes
+  sideways and never up or down; the drawing is not centred on `x = 0`, which
+  `grid-position` does per row and this stage cannot do at all.
+
 - `maxTransposePasses` on `BarycenterOrderOptions`, defaulting to 8, where zero
   means no transpose at all. It bounds PASSES only, and it rejects a
   non-integer, a negative and `Number.POSITIVE_INFINITY` with

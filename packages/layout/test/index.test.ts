@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import * as api from '../src/index.js';
 import type {
   BarycenterOrderOptions,
+  BrandesKoepfOptions,
   DagrLayoutErrorCode,
   Layering,
   LayoutConfig,
@@ -129,6 +130,8 @@ describe('@dagr/layout public surface', () => {
     expect(Object.isFrozen(api.defaultStages)).toBe(true);
     expect(Object.isFrozen(api.longestPathRankStage)).toBe(true);
     expect(Object.isFrozen(api.networkSimplexRankStage)).toBe(true);
+    expect(Object.isFrozen(api.barycenterOrderStage)).toBe(true);
+    expect(Object.isFrozen(api.brandesKoepfPositionStage)).toBe(true);
     expect(() => {
       (api.networkSimplexRankStage as { name: string }).name = 'mine';
     }).toThrow(TypeError);
@@ -144,6 +147,8 @@ describe('@dagr/layout public surface', () => {
       'StageContractError',
       'barycenterOrder',
       'barycenterOrderStage',
+      'brandesKoepfPosition',
+      'brandesKoepfPositionStage',
       'countCrossings',
       'defaultStages',
       'layout',
@@ -172,6 +177,30 @@ describe('@dagr/layout public surface', () => {
     expect(api.layout({ graph }, { order: stage }).nodes.size).toBe(2);
     const drawing: Layering = { graph, layers: [['a'], ['b']] };
     expect(api.countCrossings(drawing)).toBe(0);
+  });
+
+  // The position stage exported by name in M2.7, and NOT made the default,
+  // which is the same shape M2.3 gave `network-simplex-rank`: a real algorithm
+  // earns a public name whether or not it is what a run gets by default, and
+  // this one is not, because most edges do not join two adjacent layers until
+  // M2.4b splits them and it cannot see the ones that do not. The factory is
+  // beside it because the alignment is a choice a call site makes.
+  it('exports the Brandes-Koepf position stage and its factory, without taking the default', () => {
+    expect(api.brandesKoepfPositionStage.name).toBe('brandes-koepf-position');
+    expect(api.defaultStages.position).not.toBe(api.brandesKoepfPositionStage);
+    expect(api.defaultStages.position).toBe(gridPositionStage);
+    expect(Object.isFrozen(api.brandesKoepfPositionStage)).toBe(true);
+    const graph = new Graph();
+    graph.addNode('a');
+    graph.addNode('b');
+    graph.addEdge('a', 'b');
+    const options: BrandesKoepfOptions = { align: 'down-left' };
+    const stage: PositionStage = api.brandesKoepfPosition(options);
+    expect(api.layout({ graph }, { position: stage }).nodes.size).toBe(2);
+    expect(api.layout({ graph }, { position: api.brandesKoepfPositionStage }).nodes.size).toBe(2);
+    const bad = (): api.PositionStage =>
+      api.brandesKoepfPosition({ align: 'sideways' as BrandesKoepfOptions['align'] });
+    expect(bad).toThrow(api.InvalidConfigError);
   });
 
   it('exports the DagrLayoutErrorCode type, and every code is a member of it', () => {

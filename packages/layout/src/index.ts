@@ -36,6 +36,18 @@ export type { NetworkSimplexOptions } from './simplex.js';
 // compute, and M2.6's regression corpus is committed against this counter.
 export { barycenterOrder, barycenterOrderStage, countCrossings } from './order.js';
 export type { BarycenterOrderOptions, Layering } from './order.js';
+// The position phase gets its first real algorithm in M2.7, and it arrives
+// exported and NOT the default, which is the shape M2.3 set with
+// `networkSimplexRankStage`: `defaultStages.position` is still
+// `gridPositionStage`, because Brandes-Koepf aligns a node with its neighbours
+// in the ADJACENT layer and most edges do not join one until M2.4b splits them,
+// so on today's graphs it draws a wider picture with more total edge length.
+// The measurements are in `brandesKoepfPosition`'s docstring in `position.ts`
+// and nowhere else, because they expire on that milestone. The factory is
+// exported beside the stage on the same terms as the other two: the alignment
+// is a choice a call site makes, so it takes a call.
+export { brandesKoepfPosition, brandesKoepfPositionStage } from './position.js';
+export type { BrandesKoepfOptions } from './position.js';
 export {
   DagrLayoutError,
   InternalLayoutError,
