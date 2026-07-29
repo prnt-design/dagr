@@ -64,8 +64,12 @@ pixels, the 100 unit rung at 10, and the smallest rung at the
 limit](../../assets/screenshots/m4.2-sdf-shapes-0.1x.png)
 
 All three were captured against a real WebGPU adapter at a device pixel ratio of
-1, in a 1200 by 712 window, which is what makes the canvas 1102 by 598 CSS pixels.
-Reproducing one takes no gesture: run the demo and open `#zoom=100`. The frame is
+1, cropped to the canvas itself, so each frame is exactly the 1102 by 598 pixels
+the renderer drew and nothing else. The canvas is that size because its container
+caps it, not because of the window: it measures 1102 by 598 in a 1920 wide window
+as readily as in a 1200 wide one, and an earlier version of this paragraph claimed
+the window size caused it, which is wrong. Reproducing one takes no gesture: run
+the demo and open `#zoom=100`. The frame is
 mostly background at 0.1, and that is inherent rather than a framing mistake, since
 the visible world there is 11020 world units across and the whole ladder fits
 inside it with room to spare.
