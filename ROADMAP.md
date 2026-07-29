@@ -1572,7 +1572,7 @@ of M3 would leave the second runner idle for a milestone.
   (today just `RendererDisposedError`). Numerical claims quote a measured
   bound: nothing in this package is described as pixel-exact, because no test
   establishes it.
-- [ ] **M4.2** (`@dagr/render`, `apps/demo`) SDF shapes in TSL: rounded-rect
+- [x] **M4.2** (`@dagr/render`, `apps/demo`) SDF shapes in TSL: rounded-rect
   and circle as signed distance fields authored in TSL, with fill, outline and
   glow all read from the same distance rather than from three separate pieces
   of geometry. Screen-space derivative antialiasing, so an edge is crisp at
@@ -1592,7 +1592,77 @@ of M3 would leave the second runner idle for a milestone.
   every shader.
   What this task does own, and has evidence for, is whether one distance field
   can carry fill, outline and glow with derivative-based antialiasing that
-  holds at both 0.1x and 100x.
+  holds at both 0.1x and 100x. It does, and the evidence is the 0.1x and 100x
+  references committed under `assets/screenshots/` (three frames in all, the third
+  at zoom 1 where the readout, the fill, the outline and the glow are legible
+  together) plus a test that asserts the invariance directly.
+  DECIDED, and these are the paragraphs M4.3 onwards inherits rather than
+  re-argues. THE FORMULAS ARE WRITTEN ONCE, over an `Arith<T>` interface of NINE
+  primitives, with a `numberArith` backend the tests run and a `tslArith` backend
+  the shader runs. A TSL graph builds under bare Node and does not evaluate, so
+  the alternative was two copies of every formula and a suite checking the copy
+  that never reaches a GPU. This way the suite executes the expression tree the
+  fragment shader evaluates. KEEP THE INTERFACE AT NINE: `smoothstep` and `clamp`
+  are WGSL intrinsics deliberately NOT in it and are built from the primitives
+  instead, because each would move a formula out of the tested half of the file,
+  and M4.10 owns measuring whether that trade still holds at 10k instances. BUT DO
+  NOT READ THE UNTESTED SURFACE AS "THE NINE ADAPTERS" AND NOTHING ELSE, which an
+  earlier draft of this block said and which api-design-review caught: THREE pieces
+  of TSL are executed by no Node test. `length` IS used as an intrinsic, in
+  `antialiasWidth` alone; `shapeShading`'s colour `mix` is vec3 and cannot go
+  through a float interface; and the `mul(size, 0.5)` inside `roundedRectSDF`'s
+  deferred `Fn` body never runs, because the suite builds that body directly from
+  pre-halved literals. The compensating control is the STRUCTURAL assertions in
+  `test/sdf-nodes.test.ts` rather than a numeric test.
+  TWO UNITS, AND THE ASYMMETRY IS THE POINT. An outline is in DEVICE PIXELS and is
+  inset; a glow is in WORLD units and sits outside. An outline is a property of
+  the screen and the derivative that gives the antialiasing width also converts
+  pixels to world units; a glow is a property of the shape and its padding is
+  baked into the quad, so a pixel-space glow would need the quad resized per
+  frame, which is M4.4's.
+  THE ANTIALIASING WIDTH IS THE `max` OF THE TWO PER-AXIS `length`s OF THE
+  INTERPOLATED POSITION'S GRADIENT, AND NOT `fwidth`. OF THE POSITION AND NOT THE
+  DISTANCE: every field folds through `abs` or a square, so a distance gradient
+  collapses on the quad holding a shape's centre and the inset outline vanishes
+  there, which on a small shape is the whole shape.
+  because `fwidth` is the L1 sum and exceeds L2 by up to 41% exactly where the
+  derivatives are equal, which is a 45 degree edge, and a rounded corner is
+  nothing else. READ THIS ONE AS A WARNING: swapping in either `fwidth` or its L1
+  expansion left the whole suite GREEN, since both are correct to within a factor
+  on every value a numeric test can check, so the suite now asserts the node
+  graph's STRUCTURE. A numeric test cannot catch a wrong-by-a-factor derivative.
+  THE OUTLINE'S OUTER RAMP IS CENTRED ON THE BOUNDARY, exactly like the fill's,
+  and an earlier draft inset it by half an antialiasing width so that its coverage
+  was exactly zero at the boundary. That draft was WRONG and a real GPU frame is
+  what caught it: a 2 pixel band then samples 0.5 at BOTH of its pixel centres and
+  can never draw its own colour, measured as #bc8932 where #023047 was asked for.
+  The footprint argument behind the inset does not hold either, because the FILL's
+  own ramp already reaches half a pixel past the boundary, so an outline reaching
+  the same distance adds nothing to the shape's alpha support. Centred, a band of w
+  pixels draws w fully covered pixel centres.
+  A SHAPE FADES DOWN TO ABOUT A PIXEL AND THEN STOPS BEING RASTERISED. At zoom 0.2
+  the 10-unit rung is a 2 by 2 block of #7e4d1b against #ffb703 at full coverage,
+  which is the fade. At 0.1 it does not appear at all: its padded quad is 1.4 by
+  0.8 CSS pixels and whether that covers a sample point depends on where it lands
+  on the grid, while the circle beside it survives as one dim pixel. No distance
+  field fixes that, because the fragment that would have faded is never shaded.
+  `antialias: true` THEREFORE STAYS ON and M4.10 settles it. The argument for
+  turning it off is unchanged and still sound (analytic edges gain nothing from
+  MSAA, which costs a 4x target plus a resolve), but the one place MSAA can still
+  matter is exactly the sub-pixel case above, and separating "MSAA is keeping this
+  speck visible" from "the quad missed the samples" needs a controlled comparison
+  this task has no harness for.
+  THE SCENE IS A CRISPNESS LADDER of a rounded rect and a circle on each of three
+  rungs a decade apart, the RECTS 10, 100 and 1000 world units across and each
+  circle's diameter matching its rung's HEIGHT, so the circles are 4, 40 and 400.
+  Quote the rect widths rather than "the shapes are 10, 100 and 1000 across", which
+  is false of half of them. The smallest rect sits on the origin so `#zoom=100`
+  frames it with the default camera, and the padded quads are PAIRWISE DISJOINT,
+  which is the tested form of "nothing overlaps" and is strictly stronger, so the
+  frame does not depend on draw order.
+  `apps/demo` grew a `#zoom=` URL hash for exactly one reason: the committed
+  references are then reproducible by opening a link rather than by landing on
+  100x with a trackpad.
 - [ ] **M4.3** (`@dagr/render`) Instanced rendering: one instanced mesh per
   shape family, with the instance buffer allocation, growth and compaction
   bookkeeping split out as a pure module that knows nothing about a GPU.

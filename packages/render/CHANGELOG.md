@@ -14,6 +14,63 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- Signed distance fields for rounded rectangles and circles, authored in TSL,
+  with fill, an inset outline and a glow all read from the SAME distance and
+  antialiased from that distance's own screen-space derivative. `createRenderer`
+  now draws six of them, a rounded rect and a circle on each of three rungs a
+  decade apart, in place of M4.1's single quad. The RECTS are 10, 100 and 1000
+  world units across and each circle's diameter matches its rung's height, so the
+  circles are 4, 40 and 400: quoting "10, 100 and 1000" for the shapes is false of
+  half of them. **Nothing new is exported.** A TSL node is a three.js type
+  and this package's surface has none; the scene is a hard-coded demonstration
+  that M4.4 replaces with a real layout. So M4.2 changed what is DRAWN and not
+  what is CALLABLE. (M4.2)
+
+  **Two units, and the asymmetry is the decision.** An outline is measured in CSS
+  PIXELS and is inset; a glow is measured in WORLD units and sits outside. An
+  outline is a property of the screen, and a two pixel border staying two pixels
+  at every zoom is the thing a geometry pipeline cannot do without rebuilding
+  geometry: the same derivative that gives the antialiasing width converts pixels
+  into world units at the fragment being shaded. A glow is a property of the
+  shape, and its quad has to be padded to contain it at build time, so a
+  pixel-space glow would need the quad resized whenever the camera moved, which
+  is M4.4's problem and not a shader's.
+
+  **Where the outline band lands, which is this file's category exactly: a rule a
+  caller can see that no type describes.** The band's outer ramp is centred on the
+  boundary, like the fill's, so its two 50% points are the boundary itself and
+  `widthPixels` pixels in, and a band of w pixels paints w fully covered pixel
+  centres, a hairline included. Outline coverage can never exceed fill coverage at
+  any distance, so adding a border does not grow a shape's footprint by a pixel.
+  "Inset" here means drawn over the fill and never against the background; it does
+  NOT mean the band lies wholly inside the boundary, which is a different and
+  wrong rule that this run shipped first and then fixed.
+
+  **The antialiasing width is the `max` of the two per-axis `length`s of the
+  interpolated POSITION's gradient, and deliberately not `fwidth`.** Of the
+  position and not of the distance: every field in `sdf.ts` folds through `abs`
+  or a square, so a distance gradient collapses to zero on the fragment quad
+  holding a shape's centre, taking the inset outline with it. `fwidth` is the L1
+  sum of two derivatives, and L1
+  exceeds L2 by up to 41% exactly when the derivatives are equal, which is an
+  edge at 45 degrees. A rounded corner is nothing but diagonals, so `fwidth`
+  gives a ramp that is right along the flat sides and up to 41% too soft around
+  the corner: corners blurrier than the edges they join, which is the artefact a
+  distance field exists to remove. It costs one `sqrt` per fragment and the
+  shader already has one. This one is worth reading as a warning rather than a
+  preference: swapping the gradient length for either `fwidth` or its L1
+  expansion left the whole suite GREEN, because both are correct to within a
+  factor on every value a numeric test can check. The suite now asserts the node
+  graph's structure (`length` over a join of `dFdx` and `dFdy`) for that reason.
+
+- `depthWrite` is off on the shape materials. three leaves it on when
+  `transparent` is set, and left on, a fragment with alpha 0 still writes depth
+  and a transparent quad occludes whatever is drawn behind it afterwards. It
+  makes no visible difference today, since the ladder's padded quads are provably
+  disjoint, and it is exactly wrong for M4.5, which layers edges behind nodes and
+  selection in front on the same plane. Turning it off now leaves M4.5 a draw
+  order decision rather than a flag in a file it is not editing. (M4.2)
+
 - `Camera2D`, the orthographic 2D camera every Dagr view is drawn through. It
   holds a world centre, a zoom, and the canvas viewport, and it converts between
   world space and screen space in both directions (`screenToWorld`,
@@ -49,7 +106,7 @@ not" is the category this file has a heading for.
   new size rather than more graph at the same size.
 
 - `createRenderer(options)`, which builds a three.js `WebGPURenderer` on a
-  canvas and draws one quad through a `Camera2D`. Asynchronous because
+  canvas and draws a scene through a `Camera2D`. Asynchronous because
   `WebGPURenderer.init()` requests a GPU adapter and there is no synchronous
   moment at which such a renderer is usable; awaiting it once here means the
   object handed back is ready to draw. (M4.1)
@@ -191,7 +248,7 @@ not" is the category this file has a heading for.
   objects satisfy what the stubs satisfy.
 
   What that leaves unverified is listed in the file's own docstring rather than
-  left to be discovered: that the quad appears at all, in the right place and
+  left to be discovered: that any shape appears at all, in the right place and
   colour; that the buffer sizes computed here reach a real canvas; that
   `dispose` frees GPU memory rather than merely being called once; and that
   `init()` succeeds or that three's automatic WebGL2 fallback engages, and so
@@ -212,13 +269,14 @@ not" is the category this file has a heading for.
   `screenToWorld` land on the shape a frame built on the frustum drew.
 
   Running three's own camera rather than reimplementing its algebra is the point
-  of the test, and the first draft did reimplement it. `OrthographicCamera`
-  takes `(left, right, top, bottom, near, far)`, which is not the field order of
-  `OrthoFrustum`; the renderer avoids that by assigning the fields by name, and
-  a hand-rolled projection cannot catch a mistake there. Writing that mutant
-  confirmed the new test does. The same camera also answers whether the quad's
-  plane sits inside the near and far planes, for one line: the projected z is
-  -0.80, so that came off the untested list rather than staying on it.
+  of the test, and the first draft did reimplement it. `OrthographicCamera` takes
+  `(left, right, top, bottom, near, far)`, which is not the field order of
+  `OrthoFrustum`; the renderer avoids that by assigning the fields by name, and a
+  hand-rolled projection cannot catch a mistake there. Writing that mutant
+  confirmed the new test does. The same camera also answers whether the z = 0 plane
+  every shape is drawn on sits inside the near and far planes, for one line: the
+  projected z is -0.80, so that came off the untested list rather than staying on
+  it.
 
 - Numerical claims in this package state a measured bound rather than calling
   anything exact. The screen round trip is within 7.4e-10 CSS pixels over the
@@ -242,14 +300,90 @@ not" is the category this file has a heading for.
   because a viewport the caller set deliberately is better information than a
   number nobody chose.
 
-- `antialias: true` is right for M4.1 and is flagged in the source to be
-  revisited in M4.2 rather than carried forward because it is already there.
-  A graph at M4.1 is box corners and diagonals, every one of which reads as a
-  staircase without MSAA. M4.2's SDF shapes antialias their own edges
-  analytically, per pixel, and gain nothing from it, while MSAA keeps costing a
-  4x-sampled target plus a resolve every frame: on a 4K canvas at ratio 2 that
-  is a real bandwidth line against M4.10's 10k-nodes-at-60fps budget. Measure
-  both ways when the SDF path lands.
+- **The shader is written once and tested as arithmetic.** A TSL node graph builds
+  under bare Node and does not evaluate: `getNodeType` needs a builder and code
+  generation needs a real renderer backend. The usual response is two copies of
+  every formula, one in TSL and one in TypeScript for the tests, and this package
+  does not do that. Each formula is written once over `Arith<T>`, an interface of
+  nine primitives (a literal, four operators, `abs`, `min`, `max`, `sqrt`);
+  `numberArith` implements them with `Math` and the suite runs every formula
+  through it, `tslArith` implements them in TSL and the shader runs the same
+  formulas through that. The suite therefore executes the expression tree the
+  fragment shader evaluates, node for node, and the untested arithmetic surface is
+  nine one-line adapters plus three pieces of TSL named below, rather than six
+  formulas. A test pins that the two backends have the same nine members, so a
+  primitive added to one and not the other fails a test instead of a shader
+  compilation on somebody else's machine.
+
+  `smoothstep` and `clamp` are WGSL intrinsics and are absent from the nine on
+  purpose, built from the primitives instead. That costs a few ALU operations per
+  fragment and keeps the ramp the tests exercise identical to the ramp the shader
+  evaluates.
+
+  `length` is NOT one of those, and three pieces of TSL are executed by no Node
+  test: `length` as an intrinsic in exactly one place, `antialiasWidth`; the colour
+  `mix` in `shapeShading`, which is vec3 and cannot go through a float interface at
+  all; and the `mul(size, 0.5)` halving a rounded rect's extents inside a deferred
+  `Fn` body the suite never runs, because it builds that body directly from
+  pre-halved literals. Their compensating control is the structural assertions on
+  the node graph in `test/sdf-nodes.test.ts`. An earlier draft of this entry said
+  the untested surface was "exactly nine" and copied that into five other files;
+  api-design-review caught it, and it is worth recording because a counted claim
+  that survives copying unchecked is the failure this documentation style exists to
+  prevent. The count in this sentence was itself wrong at first, which is the joke
+  writing itself: it said four, before `sdf.ts`'s own `Arith` docstring turned up as
+  a sixth location.
+
+  There is a second payoff to writing each formula once: a shader computes a
+  hypotenuse as `sqrt(x*x + y*y)` and WGSL has no `hypot`, so a separately written
+  scalar copy would reach for `Math.hypot`, which rescales to avoid overflow and
+  is accurate to under an ulp where the naive form is not. Two spellings would
+  then disagree in the last bits and an exact assertion would have to be loosened
+  until it stopped catching real defects.
+
+  **"Crisp at every zoom" is a test, not only a screenshot.** The antialiasing
+  width is one device pixel in world units, which is `1 / (zoom * dpr)`, so feeding a
+  distance of k pixels through the coverage functions at any zoom must give the
+  same answer: the zoom cancels and the shape's size on screen never enters the
+  arithmetic, which is the property a texture atlas baked at one scale does not
+  have. Asserted from zoom 0.1 to 1000. Bit-identical needs dyadic k AND a dyadic
+  `aaWidth`, which means a power-of-two zoom: dyadic k alone is not sufficient,
+  because the ramp's numerator is `aaWidth * (k - 0.5)` and `k - 0.5` is not a
+  power of two for most dyadic k. algorithms-review found that by producing
+  counterexamples at zoom 2.5, 5, 20 and 40, which are ordinary zooms, so the
+  headline test would have gone red on an unrelated change to its own zoom list.
+  Everywhere else the worst deviation across the lists the suite runs is 1.6653e-16,
+  at k = 0.123456 and zoom 2.5, against an asserted bound of 5e-16, since
+  `toBeCloseTo(expected, 15)` passes below half a unit in the last stated digit
+  rather than a whole one. Both numbers an earlier draft quoted here were wrong in
+  the flattering direction: it said 1.2e-16 against 1e-15, implying 8x of headroom
+  where there is 3.0x. A two million pair random sweep reaches 3.331e-16, inside the
+  bound by 1.5x, which is what makes 15 digits an assertion about this function
+  rather than a formality.
+
+- **A shape fades down to about a pixel and then stops being rasterised**, and the
+  second half of that is measured rather than assumed. At zoom 0.2 the 10-unit
+  rung draws as a 2 by 2 block of #7e4d1b, a dim amber against the #ffb703 it is
+  at full coverage: that is the fade analytic antialiasing is for. At zoom 0.1 the
+  same rung does not appear at all, because its padded quad is 1.4 by 0.8 CSS
+  pixels and whether a footprint that small covers a sample point depends on where
+  it lands on the grid; the 10-unit circle beside it survives as one dim pixel in
+  the same frame. No distance field can fix that, because the fragment that would
+  have faded is never shaded.
+
+- `antialias: true` stays on, and M4.10 settles it rather than M4.2. The M4.1 note
+  asked M4.2 to revisit the flag and this is the revisit, so what M4.2 settled is
+  that it is not turning MSAA off and why it cannot decide the question with the
+  harness it has. The argument for turning it off is unchanged and still sound in
+  itself: SDF shapes antialias their own edges analytically, per pixel, and gain
+  nothing from MSAA, while MSAA costs a 4x-sampled target plus a resolve every
+  frame, which is a real bandwidth line against M4.10's 10k-nodes-at-60fps budget.
+  What stops this run from acting on it is that the one place MSAA could still
+  matter is the sub-pixel case above, where coverage is decided by the sample grid
+  rather than by the shader, and separating "MSAA is keeping this speck visible"
+  from "the quad happened to miss the sample points" needs a controlled comparison
+  this task has no harness for. So the visual half is unresolved and the cost half
+  is M4.10's, which is where the flag should be settled with numbers on both sides.
 
 ## 0.1.0
 

@@ -98,6 +98,14 @@ body {
   position: absolute;
   left: 1rem;
   bottom: 1rem;
+  /* The panel is sized by its widest child, and since M4.2 that child is the
+     hint rather than a readout row: naming the zoom range and `#zoom=` takes 58
+     characters, which on one line is about 440 CSS pixels, 40% of the 1102 pixel
+     canvas the crispness screenshots are of. 18rem leaves the 31 character
+     `canvas` row (about 250 pixels with the padding) unwrapped, since
+     `.stage__readout-row` is `white-space: pre` and would overflow rather than
+     wrap, and lets the hint alone take two lines. */
+  max-width: 18rem;
   padding: 0.625rem 0.875rem;
   border: 1px solid var(--rule);
   border-radius: 0.375rem;

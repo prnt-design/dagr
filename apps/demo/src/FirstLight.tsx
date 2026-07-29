@@ -7,20 +7,32 @@ import {
   MAX_ZOOM,
   MIN_ZOOM,
   canvasPoint,
+  initialZoomFromHash,
   wheelZoomFactor,
 } from './camera-input.js';
 
 /**
- * M4.1 first light: `@dagr/render` on a canvas, with pan and zoom wired to a
- * real {@link Camera2D}.
+ * `@dagr/render` on a canvas, with pan and zoom wired to a real
+ * {@link Camera2D}.
+ *
+ * The scene is M4.2's crispness ladder: rounded rects and circles spanning two
+ * orders of magnitude in world units, whose fill, outline and glow all come out
+ * of one signed distance field. What this component owes it is a camera that can
+ * reach both ends of that range, so a reader can watch a single edge stay crisp
+ * from 0.1x to 100x, and a way to arrive at a named zoom without a gesture (see
+ * {@link initialZoomFromHash}) so the committed screenshots are reproducible.
  *
  * There is no test file for this component, and that is the same decision
  * `@dagr/render` documents for its own renderer rather than a gap. Everything
  * here needs a GPU adapter, a laid-out canvas and live input events; a jsdom
  * suite could only assert that a mock was called, which would pass just as
- * happily if the quad never appeared. The arithmetic that CAN be checked was
- * moved to `camera-input.ts` and is tested there, and what is left is wiring,
- * verified by the committed screenshot.
+ * happily if nothing were ever drawn. The arithmetic and the hash parsing that
+ * CAN be checked live in `camera-input.ts` and are tested there, and what is
+ * left is wiring, verified by the committed screenshots.
+ *
+ * The name is M4.1's and outlives its accuracy on purpose: M4.4 replaces this
+ * scene with real layout, and renaming a file twice costs more review than it
+ * saves.
  *
  * The one thing worth reading closely is the lifecycle in the effect below.
  */
@@ -122,7 +134,17 @@ export function FirstLight(): JSX.Element {
     // handlers below safe to attach immediately: a drag during adapter
     // acquisition moves this camera, and the first frame is already in the
     // right place when it arrives.
-    const camera = new Camera2D({ zoom: INITIAL_ZOOM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM });
+    //
+    // The hash is read ONCE, here, and there is deliberately no `hashchange`
+    // listener: a live binding would fight the wheel. `#zoom=` goes stale the
+    // instant a user zooms, and a listener re-applying it would yank the camera
+    // back out from under the gesture. So the hash is an entry point, not a
+    // binding, and it is spelled that way in the overlay's hint.
+    const camera = new Camera2D({
+      zoom: initialZoomFromHash(window.location.hash, INITIAL_ZOOM),
+      minZoom: MIN_ZOOM,
+      maxZoom: MAX_ZOOM,
+    });
 
     /**
      * Copies the camera's state into React, for {@link Overlay}.
@@ -353,10 +375,12 @@ function fixed(value: number, digits: number): string {
 /**
  * The live camera state, over the canvas.
  *
- * This exists to make the screenshot mean something. An amber quad on near
- * black proves a frame was drawn; only numbers that move when you drag prove
- * the camera behind it is real, and that the world bounds the camera reports
- * are the region you are actually looking at.
+ * This exists to make the screenshots mean something. Shapes on near black prove
+ * a frame was drawn; only numbers that move when you drag prove the camera
+ * behind them is real, that the world bounds it reports are the region you are
+ * actually looking at, and, for the crispness reference, that the frame you are
+ * looking at really is the 0.1x or 100x one and not a gesture that stopped
+ * nearby. The zoom row is the caption of both screenshots.
  */
 function Overlay({ readout }: { readout: CameraReadout | null }): JSX.Element {
   if (readout === null) {
@@ -391,7 +415,16 @@ function Overlay({ readout }: { readout: CameraReadout | null }): JSX.Element {
         {Math.round(viewport.width)} x {Math.round(viewport.height)} css at{' '}
         {fixed(viewport.devicePixelRatio, 2)}x
       </p>
-      <p className="stage__readout-hint">drag to pan, scroll to zoom</p>
+      {/*
+        The limits and the example are interpolated from the constants rather
+        than typed out, because a hint that disagrees with the camera is worse
+        than no hint: this is the only place a user is told what `#zoom=` does,
+        and the range moved once already.
+      */}
+      <p className="stage__readout-hint">
+        drag to pan, scroll to zoom ({MIN_ZOOM} to {MAX_ZOOM}), or load #zoom=
+        {MAX_ZOOM}
+      </p>
     </div>
   );
 }
