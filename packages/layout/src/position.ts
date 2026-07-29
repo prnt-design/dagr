@@ -546,9 +546,9 @@ function rowCentres(input: OrderedState): Float64Array {
  * and M3.6 warm start a run from state the caller passes in, and there is no
  * warm start here. {@link BrandesKoepfOptions.variant} is the whole reason.
  * Whether to spend four passes or one is a cost and quality trade a single call
- * site makes, about 7x the solve time and 1.6x to 2.1x the whole stage for 21%
- * of the horizontal edge length on the 1k and 45% on the 10k, and there is no
- * one answer to freeze into a second shared stage.
+ * site makes, about 6.3x to 7x the solve time and 1.6x to 2.1x the whole stage
+ * for 21% of the horizontal edge length on the 1k and 45% on the 10k, and there
+ * is no one answer to freeze into a second shared stage.
  *
  * ## NOT THE DEFAULT, NOT EXPORTED, and not an improvement on today's graphs
  *

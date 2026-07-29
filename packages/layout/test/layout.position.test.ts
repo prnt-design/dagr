@@ -145,9 +145,12 @@ function rows(result: LayoutResult): PositionedNode[][] {
  * cannot overlap when their centres are far enough apart horizontally, which is
  * the spacing check. Two nodes in different rows cannot overlap when the rows'
  * vertical spans are disjoint, which is the second loop. Together they cover
- * every pair. The 1k case below also runs the full pairwise sweep, so the
- * argument is checked against the predicate `layout.result.test.ts` uses rather
- * than only reasoned about.
+ * every pair, because {@link rows} groups by the exact `y` a node came back
+ * with and so partitions them. The pairwise predicate itself is exercised in
+ * `layout.result.test.ts`; a copy of that sweep used to run here on the 1k
+ * corpus and was removed, because over 47 mutants of `position.ts` it killed a
+ * strict subset of what the 1k row case below kills, nothing of its own, and it
+ * cost half a million comparisons a run.
  */
 function expectNoOverlaps(result: LayoutResult, nodeSep: number, label: string): void {
   const grouped = rows(result);
@@ -173,30 +176,6 @@ function expectNoOverlaps(result: LayoutResult, nodeSep: number, label: string):
       bottom - epsilonFor(top, bottom),
     );
   }
-}
-
-/** The box a positioned node occupies, as `layout.result.test.ts` computes it. */
-function box(node: PositionedNode) {
-  return {
-    left: node.x - node.width / 2,
-    right: node.x + node.width / 2,
-    top: node.y - node.height / 2,
-    bottom: node.y + node.height / 2,
-  };
-}
-
-/** Whether two node boxes share any interior area. Touching edges are fine. */
-function overlaps(left: PositionedNode, right: PositionedNode): boolean {
-  const one = box(left);
-  const other = box(right);
-  const epsX = epsilonFor(one.left, one.right, other.left, other.right);
-  const epsY = epsilonFor(one.top, one.bottom, other.top, other.bottom);
-  return (
-    one.left < other.right - epsX &&
-    other.left < one.right - epsX &&
-    one.top < other.bottom - epsY &&
-    other.top < one.bottom - epsY
-  );
 }
 
 function graphOf(spec: GraphSpec): Graph {
@@ -272,24 +251,6 @@ describe('brandesKoepfPosition, the spacing invariant', () => {
       expect(Math.max(...grouped.map((row) => row.length))).toBe(name === '1k' ? 120 : 1101);
     });
   }
-
-  it('agrees with the pairwise overlap predicate on the 1k corpus', () => {
-    // The row argument in `expectNoOverlaps` checked against the O(n^2) sweep
-    // `layout.result.test.ts` uses, on the larger of the two corpora that can
-    // afford it: 1,000 nodes is half a million pairs, 10,000 is fifty million.
-    const graph = graphOf(smallCorpus());
-    const result = layout({ graph }, { position: brandesKoepfPositionStage });
-    const nodes = [...result.nodes.values()];
-    let overlapping = 0;
-    for (let index = 0; index < nodes.length; index += 1) {
-      for (let other = index + 1; other < nodes.length; other += 1) {
-        const left = required(nodes[index], 'node');
-        const right = required(nodes[other], 'node');
-        if (overlaps(left, right)) overlapping += 1;
-      }
-    }
-    expect(overlapping).toBe(0);
-  });
 });
 
 describe('brandesKoepfPosition over random layerings', () => {
@@ -311,12 +272,14 @@ describe('brandesKoepfPosition over random layerings', () => {
    * hundred, so it has to say what those few hundred contained. The three
    * counting the population are pinned EXACTLY, because they are facts about
    * the generator and the seeds and nothing here should be able to move them.
-   * The fourth is a floor, because it counts what the stage did.
+   * The last two are floors, because they count what the stage did, and there
+   * are two of them because there are two sweep directions.
    */
   it('never breaks the spacing invariant, at every alignment', () => {
     let pairs = 0;
     let crowdedLayers = 0;
-    let aligned = 0;
+    const alignedDown = { total: 0 };
+    const alignedUp = { total: 0 };
     let solves = 0;
     for (let seed = 1; seed <= 240; seed += 1) {
       const random = mulberry32(seed);
@@ -343,25 +306,38 @@ describe('brandesKoepfPosition over random layerings', () => {
         expect(worstSpacing(state, positions), `seed ${String(seed)} at ${variant}`).toBe(0);
       }
       // How much ALIGNING the passes did on this seed, counted as adjacent-layer
-      // neighbours the down-left pass gave exactly the same x. A stage that
-      // never aligned anything would still satisfy the invariant above, by
-      // packing every layer left, and this is what says it did not.
-      const packed = brandesKoepfPosition({ variant: 'down-left' }).run(state).positions;
+      // neighbours a pass gave exactly the same x. A stage that never aligned
+      // anything would still satisfy the invariant above, by packing every layer
+      // left, and this is what says it did not.
+      //
+      // Counted for an UP pass as well as a down one, and kept apart. The two
+      // directions are separate code paths through the same loop, so one
+      // counter over `down-left` alone leaves the up direction with nothing at
+      // all counting its alignments: a pass that swept the wrong way, and so
+      // never reached the layer the sweep starts from, would move no number
+      // here.
       const rankOf = state.ranks;
-      for (const edge of graph.edges()) {
-        const source = packed.get(edge.source);
-        const target = packed.get(edge.target);
-        const from = rankOf.get(edge.source);
-        const to = rankOf.get(edge.target);
-        if (source === undefined || target === undefined) continue;
-        if (from === undefined || to === undefined || Math.abs(from - to) !== 1) continue;
-        if (source.x === target.x) aligned += 1;
+      for (const [variant, counts] of [
+        ['down-left', alignedDown],
+        ['up-left', alignedUp],
+      ] as const) {
+        const packed = brandesKoepfPosition({ variant }).run(state).positions;
+        for (const edge of graph.edges()) {
+          const source = packed.get(edge.source);
+          const target = packed.get(edge.target);
+          const from = rankOf.get(edge.source);
+          const to = rankOf.get(edge.target);
+          if (source === undefined || target === undefined) continue;
+          if (from === undefined || to === undefined || Math.abs(from - to) !== 1) continue;
+          if (source.x === target.x) counts.total += 1;
+        }
       }
     }
     expect(solves).toBe(1200);
     expect(crowdedLayers).toBe(1421);
     expect(pairs).toBe(11157);
-    expect(aligned).toBeGreaterThan(3000);
+    expect(alignedDown.total).toBeGreaterThan(3000);
+    expect(alignedUp.total).toBeGreaterThan(3000);
   });
 });
 
@@ -407,19 +383,98 @@ describe('brandesKoepfPosition, the four passes and the balancing', () => {
     );
   });
 
+  /**
+   * The balancing step itself, on a case where every one of its decisions is
+   * visible in a coordinate.
+   *
+   * The fan-out above has equal widths and symmetric candidates, so it cannot
+   * see any of this: the four layouts there are the same width, so which one is
+   * the reference does not matter, and they are symmetric, so aligning them by
+   * their left edges and by their right edges agree. Here the four come out
+   * 270, 205, 210 and 270 wide, so there is exactly one narrowest and it is
+   * neither the first candidate nor the widest, and the widths differ per node,
+   * so a shift measured from the wrong edge lands somewhere else.
+   *
+   * What the expected coordinates pin, in order: the reference is the NARROWEST
+   * of the four (`down-right` here, not `down-left` and not one of the two
+   * widest); a left-biased layout is shifted by its LEFT edge and a right-biased
+   * one by its right; and each node takes the median of the four, which is the
+   * mean of the middle two AFTER sorting. Drop the sort and `n1` reads
+   * `down-right` and `up-left` instead of the middle two and comes out at
+   * -62.5.
+   */
+  it('balances four layouts of different widths onto the narrowest of them', () => {
+    const { graph, layers } = layered(
+      [3, 3],
+      [
+        [0, 3],
+        [0, 5],
+        [1, 3],
+        [1, 4],
+        [2, 3],
+        [2, 4],
+        [2, 5],
+      ],
+    );
+    const widths = [90, 10, 30, 70, 40, 70];
+    const state = stateOf(graph, layers, (_id, index) => widths[index] ?? 0, {
+      nodeSep: 10,
+      rankSep: 10,
+    });
+    // The four extents, asserted so that a case which stopped having exactly
+    // one narrowest cannot leave the reference choice below untested.
+    const extents = alignments.map((variant) => {
+      const positions = brandesKoepfPosition({ variant }).run(state).positions;
+      let left = Number.POSITIVE_INFINITY;
+      let right = Number.NEGATIVE_INFINITY;
+      for (const [index, id] of layers.flat().entries()) {
+        const half = (widths[index] ?? 0) / 2;
+        const at = required(positions.get(id), id).x;
+        left = Math.min(left, at - half);
+        right = Math.max(right, at + half);
+      }
+      return right - left;
+    });
+    expect(extents).toEqual([270, 205, 210, 270]);
+
+    const balanced = brandesKoepfPositionStage.run(state).positions;
+    const expected = new Map([
+      ['n0', -125],
+      ['n1', -65],
+      ['n2', -15],
+      ['n3', -127.5],
+      ['n4', -62.5],
+      ['n5', 2.5],
+    ]);
+    for (const [id, x] of expected) {
+      expect(required(balanced.get(id), id).x, `balanced ${id}`).toBe(x);
+    }
+    expect(worstSpacing(state, balanced)).toBe(0);
+  });
+
   it('aligns a node with the median of its neighbours, and the bias picks which', () => {
     // Four parents and one child, so the median is a PAIR, indices 1 and 2 of
     // the four. The left bias takes the first of the two and the right bias the
     // second, which is the whole difference between those two passes, and
     // neither takes the outermost parent, which is what an alignment that
     // followed the first neighbour it found would do.
+    //
+    // The four edges are authored OUT OF POSITION ORDER, and the expected
+    // result is the same as if they were in it. That is the only thing in this
+    // suite that defends the two counting sorts in `compress`: a median taken
+    // by index is a median only if the bucket it indexes into is sorted by
+    // position, and nothing about a caller's edge order says it is. Distribute
+    // the entries in the caller's order instead of the neighbour-sorted one and
+    // this bucket reads `n2 n0 n3 n1`, so the left bias takes `n0` and the
+    // right bias `n3`: both OUTERMOST parents, which is what the assertions
+    // below already say an alignment must not do.
     const { graph, layers } = layered(
       [4, 1],
       [
-        [0, 4],
-        [1, 4],
         [2, 4],
+        [0, 4],
         [3, 4],
+        [1, 4],
       ],
     );
     const state = stateOf(graph, layers, () => 100, { nodeSep: 50, rankSep: 50 });
@@ -467,6 +522,60 @@ describe('brandesKoepfPosition, the four passes and the balancing', () => {
     expect(required(mine.get('n5'), 'n5').y).toBe(90 + 13 + 40 + 13 + 30);
   });
 
+  it('sweeps the up passes bottom to top, so the TOP layer is aligned too', () => {
+    // The same three-layer graph the row test below uses, pinned at the two UP
+    // alignments. Nothing else in the suite pins an exact `up-left` or
+    // `up-right` coordinate, and the spacing invariant cannot: a pass that
+    // stopped aligning anything and packed every layer left still satisfies it.
+    //
+    // What an up pass has to do that a down pass does not is start at the
+    // BOTTOM: `layer` counts down from `layerCount - 1` so that a node is
+    // placed after the children it aligns with. Sweep top to bottom instead and
+    // layer 0 is never visited at all, because the loop starts at step 1, so
+    // `n0` and `n1` come out packed against each other at 0 and 24.5 rather
+    // than aligned with the children below them.
+    const { graph, layers } = layered(
+      [2, 3, 1],
+      [
+        [0, 2],
+        [1, 3],
+        [1, 4],
+        [2, 5],
+      ],
+    );
+    const state = stateOf(graph, layers, (_id, index) => 10 + index * 7, {
+      nodeSep: 11,
+      rankSep: 13,
+    });
+    const up = brandesKoepfPosition({ variant: 'up-left' }).run(state).positions;
+    const expected = new Map([
+      ['n0', 0],
+      ['n1', 38.5],
+      ['n2', 0],
+      ['n3', 38.5],
+      ['n4', 84],
+      ['n5', 0],
+    ]);
+    for (const [id, x] of expected) expect(required(up.get(id), id).x, `up-left ${id}`).toBe(x);
+    // `n1` sits over `n3`, its median child, which is the alignment the top
+    // layer only gets if the sweep reached it.
+    expect(required(up.get('n1'), 'n1').x).toBe(required(up.get('n3'), 'n3').x);
+    const mirrored = brandesKoepfPosition({ variant: 'up-right' }).run(state).positions;
+    const mirroredExpected = new Map([
+      ['n0', -84],
+      ['n1', 0],
+      ['n2', -84],
+      ['n3', -45.5],
+      ['n4', 0],
+      ['n5', -84],
+    ]);
+    for (const [id, x] of mirroredExpected) {
+      expect(required(mirrored.get(id), id).x, `up-right ${id}`).toBe(x);
+    }
+    expect(worstSpacing(state, up)).toBe(0);
+    expect(worstSpacing(state, mirrored)).toBe(0);
+  });
+
   it('reads back a coordinate of zero as zero rather than as negative zero', () => {
     // The mirrored passes negate their coordinates, and negating zero gives
     // `-0`, which is a legal double that compares equal under `===` and NOT
@@ -474,14 +583,14 @@ describe('brandesKoepfPosition, the four passes and the balancing', () => {
     // move from `0` to `-0`.
     const { graph, layers } = layered([1], []);
     const state = stateOf(graph, layers, () => 100, { nodeSep: 50, rankSep: 50 });
-    // A mirrored pass on its own is where the sign survives to the output. The
-    // balanced default averages the middle two of four candidates, and the two
-    // in the middle of `[-0, -0, 0, 0]` average to `0` on their own, so it is
-    // the single pass that pins this rather than the default.
+    // A mirrored pass on its own is where the sign survives to the output, and
+    // it is the ONLY place: the balanced default cannot fail this, so it is not
+    // asserted. Its four candidates for a lone node are `[0, -0, 0, -0]`, a
+    // typed-array sort orders `-0` before `0`, so the middle two are `-0` and
+    // `0` and `(-0 + 0) / 2` is `+0` whatever the normalisation does. An arm on
+    // the default here would have been an assertion that cannot go red.
     const mirrored = brandesKoepfPosition({ variant: 'down-right' }).run(state).positions;
     expect(Object.is(required(mirrored.get('n0'), 'n0').x, 0)).toBe(true);
-    const positions = brandesKoepfPositionStage.run(state).positions;
-    expect(Object.is(required(positions.get('n0'), 'n0').x, 0)).toBe(true);
   });
 });
 
@@ -581,5 +690,151 @@ describe('brandesKoepfPosition and type 1 conflicts', () => {
     expect(required(unmarked.get('d1'), 'd1').x).not.toBe(
       required(unmarked.get('d0'), 'd0').x,
     );
+  });
+
+  /**
+   * The marking walk over a gap that has TWO inner segments and something on
+   * either side of both, which is the case the picture above cannot reach.
+   *
+   * That one has a single gap, one inner segment and two nodes per layer, so
+   * the conflict window `k0` never leaves 0 and no upper endpoint is ever below
+   * it. Everything the walk does with a window, with a second boundary, or with
+   * the two virtuality tests is invisible there. Two chains and three layers:
+   *
+   * ```
+   *   layer 0   u0   a0   c0   b0
+   *   layer 1   x1   a1   w1   y1   b1
+   *   layer 2   a2   b2
+   * ```
+   *
+   * (Left to right is the layer's own order, so `a2` and `b2` are at positions
+   * 0 and 1 of the bottom layer, not under the columns they line up with here.)
+   *
+   * `a0 a1 a2` and `b0 b1 b2` are dummy chains, so every link of both is an
+   * inner segment, and the four other edges are each a case of their own:
+   *
+   * - `u0 -> y1` runs from LEFT of the first chain to between the two, so it is
+   *   caught by `position < window` and by nothing else. That half of the test
+   *   is what a left-biased pass cannot see, because its own alignment bound
+   *   already refuses a neighbour to the left of one it used; a RIGHT-biased
+   *   pass walks the layer the other way and would follow this edge happily.
+   *   So the coordinates below are `down-right` ones.
+   * - `u0 -> w1` gives a VIRTUAL lower node a real upper neighbour, so the walk
+   *   finds no inner segment at `w1` and `w1` starts no window.
+   * - `b0 -> x1` gives a REAL lower node a virtual upper neighbour, which is
+   *   the mirror case: it is not an inner segment either, because an inner
+   *   segment needs both ends virtual. Those two are what tell the walk's two
+   *   virtuality tests apart; drop either and the window boundaries move.
+   * - `c0 -> a1` puts a second inner segment on one node, which a dummy chain
+   *   cannot do (a dummy has one predecessor) and which the walk resolves by
+   *   taking the FIRST. Take the last and `c0 -> a1` stops being marked, `a1`
+   *   follows it, and chain `a` bends.
+   *
+   * The assertion is the one the pass exists for: BOTH chains come out
+   * straight, and every other node sits where the compaction leaves it.
+   */
+  it('marks around two inner segments in one gap, and both chains stay straight', () => {
+    const graph = new Graph();
+    const layers = [
+      ['u0', 'a0', 'c0', 'b0'],
+      ['x1', 'a1', 'w1', 'y1', 'b1'],
+      ['a2', 'b2'],
+    ];
+    for (const id of layers.flat()) graph.addNode(id);
+    for (const [source, target] of [
+      ['a0', 'a1'],
+      ['c0', 'a1'],
+      ['b0', 'b1'],
+      ['u0', 'y1'],
+      ['u0', 'w1'],
+      ['b0', 'x1'],
+      ['a1', 'a2'],
+      ['b1', 'b2'],
+    ] as const) {
+      graph.addEdge(source, target);
+    }
+    const base = stateOf(graph, layers, () => 100, { nodeSep: 50, rankSep: 50 });
+    const state: OrderedState = {
+      ...base,
+      virtualNodes: new Set(['a0', 'c0', 'b0', 'a1', 'w1', 'b1', 'a2', 'b2']),
+    };
+    const positions = brandesKoepfPosition({ variant: 'down-right' }).run(state).positions;
+    const expected = new Map([
+      ['u0', -600],
+      ['a0', -450],
+      ['c0', -150],
+      ['b0', 0],
+      ['x1', -600],
+      ['a1', -450],
+      ['w1', -300],
+      ['y1', -150],
+      ['b1', 0],
+      ['a2', -450],
+      ['b2', 0],
+    ]);
+    for (const [id, x] of expected) {
+      expect(required(positions.get(id), id).x, `down-right ${id}`).toBe(x);
+    }
+    // Said again as the property rather than as eleven numbers, because that is
+    // what a reader has to be able to check: neither chain bends.
+    for (const chain of [
+      ['a0', 'a1', 'a2'],
+      ['b0', 'b1', 'b2'],
+    ]) {
+      const [head, ...rest] = chain;
+      const straight = required(positions.get(required(head, 'head')), 'head').x;
+      for (const id of rest) {
+        expect(required(positions.get(id), id).x, `${id} on its chain`).toBe(straight);
+      }
+    }
+    expect(worstSpacing(state, positions)).toBe(0);
+  });
+
+  /**
+   * A node whose FIRST median is marked, so the alignment has to try its
+   * second.
+   *
+   * `v1` has two parents: `u0`, which is real, and `q0`, which is virtual and
+   * so forms an inner segment with it. The chain `m0 m1` to their left sets the
+   * conflict window past `u0`, so `u0 -> v1` is marked and `q0 -> v1` is not.
+   * The left-biased downward pass therefore reads median index 0, finds it
+   * marked, and takes index 1 instead.
+   *
+   * `z0` is a spacer and is load bearing: it pushes `q0` far enough right that
+   * `q0`'s own block, not `v1`'s left neighbour, is what decides where the pair
+   * lands, so aligning and not aligning give different coordinates rather than
+   * the same one.
+   *
+   * Stop after the first median and `v1` aligns with nothing and packs against
+   * `m1` at 300, which is the whole fallback going missing. It is not a corner:
+   * every even-degree node whose first median is marked or blocked by the bound
+   * runs it.
+   */
+  it('falls through to the second median when the first one is marked', () => {
+    const graph = new Graph();
+    const layers = [
+      ['u0', 'm0', 'z0', 'q0'],
+      ['m1', 'v1'],
+    ];
+    for (const id of layers.flat()) graph.addNode(id);
+    for (const [source, target] of [
+      ['m0', 'm1'],
+      ['u0', 'v1'],
+      ['q0', 'v1'],
+    ] as const) {
+      graph.addEdge(source, target);
+    }
+    const base = stateOf(graph, layers, () => 100, { nodeSep: 50, rankSep: 50 });
+    const state: OrderedState = {
+      ...base,
+      virtualNodes: new Set(['m0', 'm1', 'q0', 'v1']),
+    };
+    const positions = brandesKoepfPosition({ variant: 'down-left' }).run(state).positions;
+    // The second median, `q0`, is what `v1` ends up under. Not `u0`, which is
+    // the first one and is marked, and not nothing.
+    expect(required(positions.get('v1'), 'v1').x).toBe(required(positions.get('q0'), 'q0').x);
+    expect(required(positions.get('v1'), 'v1').x).toBe(450);
+    expect(required(positions.get('m1'), 'm1').x).toBe(required(positions.get('m0'), 'm0').x);
+    expect(worstSpacing(state, positions)).toBe(0);
   });
 });
