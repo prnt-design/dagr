@@ -11,21 +11,21 @@ sidebar_position: 3
 `LayoutResult`: where every node sits, how every edge runs, and the box around
 the lot.
 
-This page describes the pipeline as of M2.4a, plus M2.3's second ranker and
-M2.5's order stage. Those numbers are not in landing order on purpose: M2.4a
-landed before M2.3's entry was written up here, and the milestones do not run in
-landing order.
+This page describes the pipeline as of M2.4a, plus M2.3's second ranker and the
+order stage M2.5 built and M2.6b made the default. Those numbers are not in
+landing order on purpose: M2.4a landed before M2.3's entry was written up here,
+and the milestones do not run in landing order.
 
 The types, the runner, and the stage boundaries are real: they are what every
 later milestone is built against, and the roster below exists so the one
-boundary that was going to have to move (M2.4b's dummy nodes) does not. One of
-the four default algorithms is real: the rank stage breaks cycles and ranks by
+boundary that was going to have to move (M2.4b's dummy nodes) does not. Two of
+the four default algorithms are real. The rank stage breaks cycles and ranks by
 longest path, so the layers are the ones the graph asks for, and M2.3 added a
-second ranker a caller can select instead. The other three defaults are
-placeholders that produce a well formed but naive result. M2.5 added a real
-crossing-reduction stage beside the order placeholder, `barycenter-order`,
-which a caller selects the same way and which
-[has not taken the default](#why-barycenter-order-is-not-the-default).
+second ranker a caller can select instead. The order stage reduces edge
+crossings by barycenter sweeps and a transpose pass, which M2.6b made what you
+get when you name no order stage, at a price and for a saving that are
+[stated below](#what-the-default-order-stage-costs-and-buys). The other two
+defaults are placeholders that produce a well formed but naive result.
 
 Expect the contract to gain rules as real stages land. A rule leaves the list
 only when the mistake it caught stops being one a stage can make, never because
@@ -641,28 +641,36 @@ optimum it does not, and that is the claim the tests pin.
 
 ## Ordering, and what a crossing is counted between
 
-The default order stage is still `insertion-order`, which groups the roster by
-rank and orders each layer by graph insertion order. `barycenter-order` is a
-real crossing-reduction stage beside it, selected per run:
+The default order stage is `barycenter-order`, which M2.6b put there in place of
+`insertion-order`, the stage that grouped the roster by rank and left each layer
+in graph insertion order. So a run that names no order stage gets crossing
+reduction, and naming one is how you turn its budgets:
 
 ```ts
 import { barycenterOrder, barycenterOrderStage, layout } from '@dagr/layout';
 
+layout({ graph });
 layout({ graph }, { order: barycenterOrderStage });
 layout({ graph }, { order: barycenterOrder({ maxSweeps: 16 }) });
+layout({ graph }, { order: barycenterOrder({ maxTransposePasses: 0 }) });
 ```
 
-It is the same arrangement as the two rank stages, and the reason it is not the
-default is [below](#why-barycenter-order-is-not-the-default).
+The first two lines do the same thing. It runs barycenter sweeps and then a
+transpose refinement pass, and the two budgets above are what you turn:
+`maxSweeps` bounds the sweeps, and `maxTransposePasses` bounds the pass, with
+zero meaning "do not run it". What that default costs and what it buys is
+[below](#what-the-default-order-stage-costs-and-buys). `insertion-order` is not
+a stage you can select: it stayed in the package unexported, as the roster-order
+reference the ordering evidence is measured against.
 
 ### What a crossing is counted between
 
 `countCrossings({ graph, layers })` is the metric, and it is exported because a
-number only the stage can compute is a number nobody can hold the stage to. What
-it takes is a `Layering`, a graph plus the layers its nodes are drawn in, named
-for what it is rather than for this one consumer because M2.6's transpose pass
-and M3.4's quality report take the same pair. An `OrderedState` satisfies it
-structurally, so a stage author holding one passes it straight in.
+number only the stage can compute is a number nobody can hold the stage to.
+What it takes is a `Layering`, a graph plus the layers its nodes are drawn in,
+named for what it is rather than for this one consumer because the transpose
+pass refines one and M3.4's quality report will score one. An `OrderedState`
+satisfies it structurally, so a stage author holding one passes it straight in.
 
 Layers are what an order stage returns, so scoring a run means wrapping one: a
 `LayoutResult` holds coordinates and not layers, and nothing exported today
@@ -721,19 +729,20 @@ starts a walk that may only step along an edge whose two endpoints sit in
 adjacent layers, in either direction. Every node is appended to its own layer
 the first time it is visited, neighbours are taken in `outEdges` order and then
 `inEdges` order, and a node no such edge reaches is appended when the outer loop
-arrives at it. It is not the roster order the placeholder uses.
+arrives at it. It is not the roster order `insertion-order` lays out.
 
 Measured on the benchmark corpora, adjacent-layer crossings after 8 sweeps,
 lower is better:
 
 | seed | 1k crossings | 10k crossings |
 | --- | --- | --- |
-| roster order (the placeholder's) | 3,943 | 54,744 |
+| roster order (`insertion-order`'s) | 3,943 | 54,744 |
 | walk over adjacent-layer edges | 3,605 | 35,114 |
 | walk over all edges | 3,459 | 38,152 |
 
-and before any sweep runs: roster order 12,890 and 425,394, the adjacent-layer
-walk 7,933 and 94,991, the all-edges walk 9,722 and 191,023.
+and before any sweep runs: the adjacent-layer walk 7,933 and 94,991, the
+all-edges walk 9,722 and 191,023. Roster order's pair is the before column of
+the trade below, quoted there rather than twice.
 
 The adjacent-layer walk is chosen over the all-edges walk for two reasons. It
 wins the 10k by 8.0% and loses the 1k by 4.2%, and the 10k is the corpus every
@@ -823,23 +832,132 @@ layers, always. Every tie in the walk is edge insertion order, and every tie in
 a sort key leaves the nodes in the order they already sat in, because the nodes
 to sort are collected in index order and JavaScript's sort is stable.
 
-### Why `barycenter-order` is not the default
+### The transpose pass
 
-Not because the stage is unfinished. It is a finished stage that is opt-in: you
-select it per run, as the one `order` argument at the call shown
-[above](#ordering-and-what-a-crossing-is-counted-between).
+When the sweeps stop, one transpose refinement pass runs over the layering they
+settled on. It walks every layer left to right and swaps each adjacent pair
+when the swap costs nothing or saves something, repeating until a walk finds no
+strictly improving swap or `maxTransposePasses` is spent. It removes 13.7% of
+the crossings the sweeps leave on the 10k corpus, 35,114 down to 30,318, and
+16.6% on the 1k.
 
-The reasons it has not taken the default are that its cost on the 10k corpus
-would put the committed `pipeline > 10k` benchmark entry over the bench gate's
-tolerance until that baseline is recaptured, and that M2.6's transpose
-refinement improves this same stage, so the default flips once, after both, for
-one decision and one rebaseline instead of two. It is also the precedent M2.3
-set with `network-simplex-rank`: a real stage is exported by name whether or not
-it is the default.
+**It runs once, at the end, on the best layering the sweeps saw**, not inside
+them. The alternatives were measured at a sweep budget of 8 on the 10k: once at
+the end reaches 32,677 crossings, after every full round 32,798, and after
+every sweep 32,854, so the cheapest placement is also the best one, and it is
+cheapest by a wide margin (30.1ms against 48.6ms and 125.5ms in the prototype
+the three were compared in). Those three are from before ties were allowed,
+which is why none of them is the 30,318 above; what they compare is the
+placements against each other.
 
-The arithmetic behind the first of those, which is the part that expires the
-moment the baseline is recaptured, is stated once, in the last section of
-`barycenterOrder`'s docstring in `packages/layout/src/order.ts`.
+**The swap delta is exact.** For an adjacent pair, the only crossings that can
+change are the ones in the gap above and the gap below involving edges incident
+to the two nodes, because every other segment keeps both its endpoints where
+they were. Taking one neighbour of each in the fixed layer, that pair of
+segments crosses now exactly when the first is to the right of the second and
+crosses after the swap exactly when it is to the left, so the side contributes
+the count of one minus the count of the other, and the two sides sum. A swap
+decision is therefore O(deg v * deg w) rather than the O(E log V) of rescoring
+the drawing, and the test suite holds the claim to being exact by running the
+pass against a transpose that decides every swap by a full rescore.
+
+**A swap worth exactly zero is taken.** That contradicts the obvious prior, and
+it was measured rather than reasoned: allowing zero-delta swaps wins all six
+configurations it was tested in, by between 2.7% and 13.5%, and on the 10k run
+to a fixed point it reaches 29,260 crossings against 32,677 for the strict
+rule. A plateau of equal-scoring permutations is something to walk across to
+reach a better one, not a wall. What keeps that from churning the drawing for
+nothing is the stage's existing rule: the transposed layering is scored and
+taken only if it is strictly better, so a reordering that bought nothing does
+not reach the output.
+
+**The loop ends on a pass with no strictly improving swap**, and that is a
+constraint rather than a detail. A zero-delta swap leaves a zero-delta swap
+available, so a loop that continued whenever anything moved would swap one pair
+back and forth forever. Two nodes sharing a single neighbour are enough to
+produce it, which is to say every fan-in and every fan-out is enough. It takes
+both the tie rule and the wrong gate to hang, so the test suite pins both
+halves on a three-node witness: the shipping gate stops after one pass, and an
+any-swap gate runs a clean period-2 cycle for as long as it is allowed to.
+
+`maxTransposePasses` defaults to 8. **That it equals `maxSweeps`'s default of 8
+is a coincidence**: the two bound different loops and were measured
+independently, and neither should track the other. Measured at a sweep budget
+of 8 on the 10k, against 35,114 crossings and 16.32ms with the pass off:
+
+| cap | 10k crossings | saving | extra time | crossings per ms |
+| --- | --- | --- | --- | --- |
+| 4 | 31,369 | 10.7% | +2.65ms | 1,413 |
+| 6 | 30,677 | 12.6% | +4.15ms | 461 |
+| 8 (the default) | 30,318 | 13.7% | +4.93ms | 460 |
+| 12 | 29,892 | 14.9% | +6.92ms | 214 |
+| 16 | 29,658 | 15.5% | +9.29ms | 99 |
+| 32 | 29,358 | 16.4% | +16.91ms | 39 |
+| fixed point (60 passes) | 29,260 | 16.7% | +30.61ms | 7 |
+
+The last column is the marginal rate: the crossings a row buys over the row
+above it, divided by the extra time it costs. That is the column the default is
+chosen on, and the rows past 8 are carried for it alone.
+
+Eight captures 81.9% of the full saving for 16.1% of the extra time, and the
+knee really is there: the rate holds at or above 460 up to 8 and falls to 214
+immediately past it, then by at least half at every further step. The 1k corpus
+agrees without deciding anything, 3,005 crossings against 3,605 for +0.41ms,
+with its own fixed point at 2,959 after 19 passes. Those timings are one
+machine's, like every other timing on this page.
+
+A larger cap is a weakly better answer and never a different one, for the same
+reason a larger `maxSweeps` is: the deltas are exact and only non-increasing
+swaps are taken, so a pass cannot raise the count. `maxTransposePasses` takes
+the same rule as `maxSweeps`, including rejecting `Number.POSITIVE_INFINITY`,
+and a non-integer or negative value is an `InvalidConfigError` naming the
+field, thrown at the call that builds the stage.
+
+**The caveat, and it is not a small one: the saving collapses once every edge
+is visible.** Every number above is measured on a graph where the counter sees
+about a quarter of the edges, for the reason in
+[What a crossing is counted between](#what-a-crossing-is-counted-between). On a
+dummy-expanded 10k, which is what M2.4b produces, the capped saving falls from
+10.7% to 1.4% at a cap of 4, which is the cap those two were compared at and is
+not the default of 8. The expanded graph was never measured at 8, so what this
+says is that a capped pass loses most of its value there, not that it loses
+exactly that much. Only a full fixed point holds its share, at a price nobody
+can pay: 214 seconds against 6.8. So the cap and the tie rule are both measured
+against a graph M2.4b replaces, and both must be re-derived when it lands
+rather than carried across unexamined.
+Neither is a constant of the algorithm.
+
+The crossing counts the stage reaches on a fixed set of generated graphs, with
+the pass on and off, are committed as a golden file at
+`packages/layout/test/order-crossings.golden.json` and asserted exactly. The
+test file beside it says how to regenerate it and when doing so is legitimate.
+
+### What the default order stage costs and buys
+
+M2.6b pointed the order default at this stage, so the trade below is what a run
+that names no order stage now makes. Ordering is the expensive half of it: on
+the 10k benchmark corpus the full default pipeline is roughly 1.8x slower than
+it was with roster order, and the drawing that comes back has 92.9% fewer
+adjacent-layer crossings. On the 1k it is roughly 1.6x slower for 76.7% fewer.
+Both slowdowns are against a pipeline whose position and route stages are still
+placeholders, so the multiple moves again when M2.7 and M2.8 land; it is not a
+claim about crossing reduction in general.
+
+The four figures behind those two sentences, two timings and two crossing
+counts, are stated once and in one place: the last section of
+`barycenterOrder`'s docstring in `packages/layout/src/order.ts`. They are quoted
+nowhere else as live advice, because every one of them expires, the timings on
+the next benchmark recapture and all four on M2.4b. The package changelog is
+the exception, and deliberately: a dated entry records what a past change
+measured, so it keeps its own copies and is marked superseded in place rather
+than swept.
+
+None of that changes how a stage is exported, which is the precedent M2.3 set
+with `network-simplex-rank` and this stage kept: it was exported by name for two
+milestones before it took the default, and its name did not change when it did.
+`insertion-order` went the other way, staying in the package unexported once it
+stopped being the default, because the ordering tests still measure against the
+roster order it produces.
 
 ## Why the stages are swappable
 
@@ -879,9 +997,9 @@ layout({ graph }, { position: myPositionStage });
 
 The other three phases fall back to `defaultStages`, and the whole thing still
 typechecks, because a `PositionStage` is a `PositionStage` whoever wrote it.
-That is also how this project ships: M2.2 replaced the ranker, M2.5 replaces the
-orderer, M2.7 replaces the positioner, each against a runner and a test suite
-that already work. The override object has a name of its own,
+That is also how this project ships: M2.2 replaced the ranker, M2.5 and M2.6b
+replaced the orderer, M2.7 replaces the positioner, each against a runner and a
+test suite that already work. The override object has a name of its own,
 `LayoutStageOverrides`, for when you build one separately from the call.
 
 `defaultStages` is also how you wrap a default rather than replace it:
@@ -919,16 +1037,19 @@ const nudged: PositionStage = {
 ```
 
 **Every real stage is exported by name; no placeholder is.** That is the whole
-rule, and it is why `longestPathRankStage` and `networkSimplexRankStage` are
-both importable while the three placeholders in `stages.ts` are reachable only
-through `defaultStages`. A placeholder's name is a name to delete tomorrow. A
-real algorithm's name is how a caller says which objective it wants: the two
-rankers answer different questions, and "the default one" does not identify
-either, because which one is default can change and neither is chosen for being
-it. See
+rule, and it is why `longestPathRankStage`, `networkSimplexRankStage` and
+`barycenterOrderStage` are all importable while the two placeholders left in
+`stages.ts` are reachable only through `defaultStages`. A placeholder's name is
+a name to delete tomorrow. A real algorithm's name is how a caller says which
+objective it wants: the two rankers answer different questions, and "the default
+one" does not identify either, because which one is default can change and
+neither is chosen for being it. See
 [Minimum total edge length](#minimum-total-edge-length-and-what-it-costs) for
-which is which. Expect `order`, `position` and `route` to gain names the same
-way as M2.5, M2.7 and M2.8 replace them.
+which is which. `order` gained its name that way in M2.5 and its default in
+M2.6b, without the name changing in between; expect `position` and `route` to
+follow as M2.7 and M2.8 replace them. The one thing in `stages.ts` that is
+neither a placeholder nor a default is `insertion-order`, kept and unexported
+because the ordering tests measure against it.
 
 Going through `defaultStages.position` is still the right way to WRAP a default,
 though, and that is what the example above does. It keeps the wrapper working
@@ -1288,26 +1409,26 @@ try {
 
 ## What is not here yet
 
-One of the four default stages is a layout algorithm. The other three are
-placeholders. (`network-simplex-rank` and `barycenter-order` are real algorithms
-too, but neither is a default: each is selected per run.)
+Two of the four default stages are layout algorithms. The other two are
+placeholders. (`network-simplex-rank` is a third real algorithm and is not a
+default: it is selected per run.)
 
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
 | rank | `longest-path-rank` | Breaks cycles with a greedy feedback arc set, then ranks by longest path. Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height. | Dummy chains for long edges (M2.4b). |
-| order | `insertion-order` | Groups the roster by rank, orders each layer by graph insertion order. `barycenter-order` is a real order stage a caller can select instead, described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). | Transpose refinement (M2.6), and the default flips to `barycenter-order` there. |
+| order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). | M2.4b's dummy chains, which make every edge visible to it and so change both what it optimises and what its budgets are worth. |
 | position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. | Brandes-Koepf horizontal coordinate assignment (M2.7). |
 | route | `straight-route` | A straight two-point line between the endpoint centres. | Polylines through dummy-node coordinates, monotone in the rank axis (M2.8). |
 
 So a default run of a real graph gives you the right number of rows with the
-right nodes in them, and then evenly spaces each row in insertion order and
-joins the lot with straight lines. The layers are worth reading; the horizontal
-order and the edges are not yet. Selecting `barycenter-order` makes the
-horizontal order worth reading as well, over the quarter to a third of the edges
-the metric can see today. What it is, is a run that always completes,
-never overlaps two boxes (see [Overlap, exactly](#overlap-exactly)), and
-satisfies every guarantee this page makes about the result, which is what the
-later milestones are built against.
+right nodes in them and a horizontal order within each row that has had its
+crossings reduced, over the quarter to a third of the edges the metric can see
+today, and then evenly spaces each row and joins the lot with straight lines.
+The layers and the order within them are worth reading; the spacing and the
+edges are not yet. What it is, is a run that always completes, never overlaps
+two boxes (see [Overlap, exactly](#overlap-exactly)), and satisfies every
+guarantee this page makes about the result, which is what the later milestones
+are built against.
 
 `RankedState.virtualNodes` and `RankedState.virtualChains` are both still empty:
 they are the bookkeeping slots dummy-node chains fill in M2.4b, and they exist

@@ -51,3 +51,45 @@ export function randomDigraph(random: () => number): Graph {
   }
   return graph;
 }
+
+/**
+ * A random layered graph: nodes spread over layers, most edges joining adjacent
+ * layers and a share of them spanning two. Empty layers are dropped, so the
+ * layering it returns is one an order stage could have produced.
+ *
+ * Bigger than `randomDigraph`, because the suites that take it are about
+ * crossing counts and a dozen nodes rarely has a crossing to count. The long
+ * edges are there so that the seed, the sweeps and the transpose pass all meet
+ * the case they cannot see.
+ *
+ * It lives here rather than in the ordering suite that first needed it for the
+ * reason at the top of this file: the ordering suite and the transpose suite
+ * both pin exact crossing counts on the graphs it draws, and two copies of it
+ * would drift into two populations quoting one set of numbers.
+ */
+export function randomLayered(
+  random: () => number,
+  nodeCount: number,
+  layerCount: number,
+  edgeCount: number,
+): { graph: Graph; layers: NodeId[][] } {
+  const graph = new Graph();
+  const layers: NodeId[][] = Array.from({ length: layerCount }, () => []);
+  for (let index = 0; index < nodeCount; index += 1) {
+    const id = graph.addNode(`n${String(index)}`).id;
+    layers[Math.floor(random() * layerCount)]?.push(id);
+  }
+  for (let index = 0; index < edgeCount; index += 1) {
+    const span = random() < 0.2 ? 2 : 1;
+    const from = Math.floor(random() * (layerCount - span));
+    const source = layers[from];
+    const target = layers[from + span];
+    if (source === undefined || target === undefined) continue;
+    if (source.length === 0 || target.length === 0) continue;
+    const one = source[Math.floor(random() * source.length)];
+    const other = target[Math.floor(random() * target.length)];
+    if (one === undefined || other === undefined) continue;
+    graph.addEdge(one, other);
+  }
+  return { graph, layers: layers.filter((layer) => layer.length > 0) };
+}

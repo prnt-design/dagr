@@ -238,7 +238,7 @@ describe('layout pipeline plumbing', () => {
   it('exposes the four defaults as a stage set', () => {
     expect(Object.keys(defaultStages).sort()).toEqual(['order', 'position', 'rank', 'route']);
     expect(defaultStages.rank.name).toBe('longest-path-rank');
-    expect(defaultStages.order.name).toBe('insertion-order');
+    expect(defaultStages.order.name).toBe('barycenter-order');
     expect(defaultStages.position.name).toBe('grid-position');
     expect(defaultStages.route.name).toBe('straight-route');
   });

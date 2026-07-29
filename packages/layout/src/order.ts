@@ -16,6 +16,18 @@ import type { OrderStage, RankedState } from './types.js';
 const DEFAULT_MAX_SWEEPS = 8;
 
 /**
+ * The transpose budget a stage built with no `maxTransposePasses` runs to.
+ *
+ * That this is 8 and {@link DEFAULT_MAX_SWEEPS} is 8 IS A COINCIDENCE. The two
+ * were measured independently, they bound different loops, and neither should
+ * track the other, so this is deliberately a second constant and not a shared
+ * one. See the transpose section of {@link barycenterOrder} for the curve that
+ * put the knee here, and for why the number has to be re-derived when M2.4b
+ * lands rather than carried across.
+ */
+const DEFAULT_MAX_TRANSPOSE_PASSES = 8;
+
+/**
  * An entry of one of this module's own arrays, which is always present because
  * every index is a node number this file minted. Mirrors the guard in
  * `simplex.ts` for the same reason: under `noUncheckedIndexedAccess` the
@@ -219,6 +231,23 @@ export interface BarycenterOrderOptions {
   readonly maxSweeps?: number | undefined;
 
   /**
+   * How many transpose passes the stage may run over the layering the sweeps
+   * settled on. Defaults to 8. Zero is legal and means no transpose at all.
+   *
+   * It bounds PASSES, exactly as `maxSweeps` bounds sweeps: one pass is one
+   * walk over every adjacent pair of every layer, and the loop stops early when
+   * a pass makes no strictly improving swap. `Number.POSITIVE_INFINITY` is
+   * rejected for the same reason it is on `maxSweeps`, and here there is a
+   * second one: the pass takes zero-delta swaps, so an unbounded loop is not
+   * merely unmotivated, it is a way to ask for a run that has no reason to end.
+   *
+   * @throws {InvalidConfigError} when it is not a whole number of passes that
+   * is zero or greater. Checked when the stage is built rather than when it
+   * runs, so a bad budget fails at the call that named it.
+   */
+  readonly maxTransposePasses?: number | undefined;
+
+  /**
    * A previous run's layers to start from. A HINT, never trusted: see the warm
    * start section of {@link barycenterOrder}.
    */
@@ -240,6 +269,25 @@ function resolveBudget(maxSweeps: number | undefined): number {
     );
   }
   return maxSweeps;
+}
+
+/**
+ * The transpose budget, checked at the call that named it: a whole number of
+ * passes that is not negative. The same rule as `maxSweeps` above, written out
+ * beside it rather than folded into a shared helper, because the two fields
+ * differ in the noun they count and the message quotes it.
+ */
+function resolveTransposeBudget(maxTransposePasses: number | undefined): number {
+  if (maxTransposePasses === undefined) return DEFAULT_MAX_TRANSPOSE_PASSES;
+  if (!Number.isInteger(maxTransposePasses) || maxTransposePasses < 0) {
+    throw new InvalidConfigError(
+      'maxTransposePasses',
+      maxTransposePasses,
+      'option',
+      'a whole number of passes that is zero or greater',
+    );
+  }
+  return maxTransposePasses;
 }
 
 /**
@@ -309,9 +357,10 @@ function buildIndex(input: RankedState): OrderIndex {
   const count = ids.length;
 
   // Layers are the DISTINCT RANKS SORTED, not the ranks themselves. A ranker is
-  // allowed to leave gaps or start below zero, `insertionOrderStage` has always
-  // said so, and adjacency here is adjacency of layers: two ranks with nothing
-  // between them are one gap apart however far apart the numbers are.
+  // allowed to leave gaps or start below zero, every order stage this package
+  // has shipped has said so, and adjacency here is adjacency of layers: two
+  // ranks with nothing between them are one gap apart however far apart the
+  // numbers are.
   const rankOf = new Float64Array(count);
   const distinct = new Set<number>();
   for (const [number, id] of ids.entries()) {
@@ -390,6 +439,145 @@ function buildIndex(input: RankedState): OrderIndex {
     segUpper: upperByGap,
     segLower: lowerByGap,
   };
+}
+
+/**
+ * The two adjacency directions the transpose delta reads, as CSR arrays.
+ *
+ * A named interface rather than a `Pick` of {@link OrderIndex} because it is
+ * the more readable contract: it says what the four arrays are for, which a
+ * structural `Pick` at the call site does not. `OrderIndex` satisfies it
+ * structurally, so the stage passes its own index straight in.
+ *
+ * NOT because the compiler forces it. The earlier version of this comment
+ * claimed a signature naming a type this module kept to itself would not
+ * survive declaration emit, and that is false: TypeScript emits a non-exported
+ * local interface into the `.d.ts` when an exported signature references it,
+ * checked with `tsc --declaration` on exactly that shape. TS4023 bites on a
+ * name IMPORTED but not re-exported, which is a different case. Recorded so
+ * that nobody adds a named type here believing they had no choice.
+ */
+export interface TransposeAdjacency {
+  readonly upStart: Int32Array;
+  readonly upNext: Int32Array;
+  readonly downStart: Int32Array;
+  readonly downNext: Int32Array;
+}
+
+/**
+ * What swapping the adjacent pair (`before`, `after`) costs on one side of the
+ * layer, in crossings, as a signed change.
+ *
+ * `before` sits immediately left of `after`, so for a pair of neighbours `a` of
+ * `before` and `b` of `after` in the fixed layer, the two segments cross NOW
+ * exactly when `a` sits right of `b`, and cross AFTER THE SWAP exactly when `a`
+ * sits left of `b`. Equal positions are the same node, which is two segments
+ * sharing an endpoint: they touch either way and contribute nothing. So the
+ * side contributes the number of pairs with `a` left of `b` minus the number
+ * with `a` right of `b`, and no other pair of segments in the gap can change,
+ * because every other segment keeps both its endpoints where they were.
+ *
+ * O(deg(before) * deg(after)) against the O(E log V) of rescoring the drawing,
+ * which is the whole reason the pass is affordable. It is also EXACT rather
+ * than an estimate, and the test suite holds it to that by running the pass
+ * against a transpose that decides every swap by a full rescore.
+ */
+function sideDelta(
+  start: Int32Array,
+  next: Int32Array,
+  position: Int32Array,
+  before: number,
+  after: number,
+): number {
+  const leftFirst = at(start, before);
+  const leftLast = at(start, before + 1);
+  const rightFirst = at(start, after);
+  const rightLast = at(start, after + 1);
+  let delta = 0;
+  for (let entry = leftFirst; entry < leftLast; entry += 1) {
+    const left = at(position, at(next, entry));
+    for (let other = rightFirst; other < rightLast; other += 1) {
+      const right = at(position, at(next, other));
+      if (left < right) delta += 1;
+      else if (left > right) delta -= 1;
+    }
+  }
+  return delta;
+}
+
+/**
+ * The transpose refinement pass, run over `layers` in place, and the number of
+ * passes it took.
+ *
+ * One pass walks every layer in index order and every layer left to right,
+ * swapping the pair at each adjacent slot when the swap costs nothing or saves
+ * something. `position` is read for every delta and updated with every swap, so
+ * a caller handing in a layering has to hand in the positions OF THAT LAYERING;
+ * see the transpose section of {@link barycenterOrder} for the trap that is.
+ *
+ * The loop ends after a pass that made no STRICTLY IMPROVING swap, or when
+ * `maxPasses` is spent. Gating on strictly improving swaps is a requirement and
+ * not a refinement: zero-delta swaps are taken (D3), and a zero-delta swap
+ * leaves a zero-delta swap available, so a loop that continued whenever
+ * anything moved would swap one pair back and forth forever. Two nodes sharing
+ * a single neighbour are enough to produce it.
+ *
+ * Exported for the test suite and NOT from `index.ts`. Two of the claims made
+ * about it, that the delta is exact and that a pass never raises the crossing
+ * count, are claims about the pass rather than about the stage, and the stage
+ * keeps the best layering it has seen, so it would quietly discard the evidence
+ * of either one failing.
+ */
+/**
+ * Whether either adjacent layer has anything to say about where this node goes.
+ *
+ * An empty CSR range on BOTH sides means no segment in either gap, which is the
+ * same condition `reorder` reads when it pins a node rather than sorting it.
+ */
+function anchored(adjacency: TransposeAdjacency, node: number): boolean {
+  return (
+    at(adjacency.upStart, node) !== at(adjacency.upStart, node + 1) ||
+    at(adjacency.downStart, node) !== at(adjacency.downStart, node + 1)
+  );
+}
+
+export function transposeLayers(
+  layers: readonly number[][],
+  position: Int32Array,
+  adjacency: TransposeAdjacency,
+  maxPasses: number,
+): number {
+  let passes = 0;
+  while (passes < maxPasses) {
+    passes += 1;
+    let improved = false;
+    for (const layer of layers) {
+      for (let slot = 0; slot + 1 < layer.length; slot += 1) {
+        const before = at(layer, slot);
+        const after = at(layer, slot + 1);
+        // A node neither adjacent layer says anything about KEEPS ITS INDEX,
+        // which is the rule `reorder` already keeps and this pass must not
+        // quietly reverse. It matters here only because of the tie rule: such a
+        // node carries no segment in either gap, so both sides of its delta are
+        // zero, so every pair containing one would otherwise be swapped
+        // unconditionally and drift it a slot per pass in a fixed direction.
+        // Crossing-neutral, and still wrong: the warm start hands the drifted
+        // order back in, so it compounds across re-layouts.
+        if (!anchored(adjacency, before) || !anchored(adjacency, after)) continue;
+        const delta =
+          sideDelta(adjacency.upStart, adjacency.upNext, position, before, after) +
+          sideDelta(adjacency.downStart, adjacency.downNext, position, before, after);
+        if (delta > 0) continue;
+        layer[slot] = after;
+        layer[slot + 1] = before;
+        position[after] = slot;
+        position[before] = slot + 1;
+        if (delta < 0) improved = true;
+      }
+    }
+    if (!improved) break;
+  }
+  return passes;
 }
 
 /**
@@ -512,27 +700,29 @@ function applyHint(
  * Builds an order stage that reduces edge crossings by barycenter sweeps.
  *
  * `barycenterOrderStage` is this with no options, and is what to reach for
- * unless a run needs a warm start or a different sweep budget. It is NOT the
- * default order stage; see the last section here for why not.
+ * unless a run needs a warm start or a different sweep budget. It is what
+ * `defaultStages.order` points at, so a run that names no order stage gets it;
+ * what that costs and what it buys is the last section here.
  *
  * ## The seed, which is the part M3.6 warm starts from
  *
  * Barycenter sweeps are sensitive to where they start, so the starting
  * permutation is a decision rather than an implementation detail, and it is
  * this: a connected DEPTH-FIRST WALK over adjacent-layer edges. See
- * {@link seedWalk} for the rule itself. It is not the roster order the
- * placeholder used.
+ * {@link seedWalk} for the rule itself. It is not the roster order the stage
+ * this one replaced as the default lays out.
  *
  * Measured on the bench corpora, crossings after 8 sweeps, lower is better:
  *
- * | seed                             | 1k    | 10k    |
- * | -------------------------------- | ----- | ------ |
- * | roster order (the placeholder's) | 3,943 | 54,744 |
- * | walk over adjacent-layer edges   | 3,605 | 35,114 |
- * | walk over all edges              | 3,459 | 38,152 |
+ * | seed                                 | 1k    | 10k    |
+ * | ------------------------------------ | ----- | ------ |
+ * | roster order (`insertionOrderStage`) | 3,943 | 54,744 |
+ * | walk over adjacent-layer edges       | 3,605 | 35,114 |
+ * | walk over all edges                  | 3,459 | 38,152 |
  *
- * and before any sweep runs: roster order 12,890 and 425,394, the
- * adjacent-layer walk 7,933 and 94,991, the all-edges walk 9,722 and 191,023.
+ * and before any sweep runs: the adjacent-layer walk 7,933 and 94,991, the
+ * all-edges walk 9,722 and 191,023. Roster order's pair is the `crossings
+ * before` column of the trade section below, quoted there rather than twice.
  *
  * The adjacent-layer walk is chosen over the all-edges walk for two reasons. It
  * wins the 10k by 8.0% and loses the 1k by 4.2%, and the 10k is the corpus
@@ -636,6 +826,155 @@ function applyHint(
  * 16 take it to 7.6%, so doubling the budget buys another 7% of what is left
  * for something under double the time.
  *
+ * ## The transpose pass
+ *
+ * After the sweeps stop, one transpose refinement pass runs over the layering
+ * they settled on: every layer is walked left to right and each adjacent pair
+ * is swapped when the swap costs nothing or saves something, repeatedly, until
+ * a walk finds no strictly improving swap or `maxTransposePasses` is spent. It
+ * is {@link transposeLayers}, and it removes 13.7% of the crossings the sweeps
+ * leave on the 10k corpus and 16.6% on the 1k.
+ *
+ * WHERE IT RUNS. Once, at the end, on the BEST layering the sweeps saw. The
+ * alternatives were measured at a sweep budget of 8 on the 10k corpus: once at
+ * the end reaches 32,677 crossings, after every full round 32,798, after every
+ * sweep 32,854, so the cheapest placement is also the best one. It is cheapest
+ * by a wide margin, 30.1ms against 48.6ms and 125.5ms in the prototype those
+ * three were compared in. All three of those numbers are from before ties were
+ * allowed, which is why none of them is the 30,318 this stage now reaches; what
+ * they compare is the placements against each other.
+ *
+ * The trap that placement sets is worth naming, because it does not announce
+ * itself. `position` tracks `layers`, the last working layering, and the pass
+ * is applied to `best`, so the best layering is copied back over `layers` and
+ * `reposition` is called BEFORE a single delta is computed. A pass run against
+ * stale positions still returns a legal layering and still returns it quickly;
+ * what it does is decide arbitrarily, and measured on a build with that
+ * repositioning removed the arbitrary decisions are not reliably worse, which
+ * is why `layout.transpose.test.ts` pins the layers rather than a count.
+ *
+ * THE SWAP DELTA, and it is EXACT rather than an estimate. For an adjacent pair
+ * with `v` at slot `i` and `w` at slot `i + 1`, the only crossings that can
+ * change are those in the gap above and the gap below involving edges incident
+ * to `v` or `w`, because every other segment keeps both endpoints where they
+ * were. Taking one neighbour `a` of `v` and one neighbour `b` of `w` in the
+ * fixed layer, that pair of segments crosses now exactly when `a` is right of
+ * `b` and crosses after the swap exactly when `a` is left of `b`, so the side
+ * contributes the count of one minus the count of the other. Both sides sum.
+ * That makes a swap decision O(deg(v) * deg(w)) rather than the O(E log V) of
+ * rescoring the drawing, and the suite holds it to being exact by running the
+ * pass against a transpose that decides every swap by a full rescore.
+ *
+ * TIES ARE TAKEN. A swap is made when the delta is negative OR EXACTLY ZERO.
+ * That contradicts the obvious prior, which is to move only on an improvement,
+ * and it was measured rather than reasoned: allowing zero-delta swaps wins all
+ * six configurations it was tested in, by between 2.7% and 13.5%, and on the
+ * 10k run to a fixed point it reaches 29,260 crossings against 32,677 for the
+ * strict rule. A plateau of equal-scoring permutations is a thing to walk
+ * across to reach something better, not a wall.
+ *
+ * WITH ONE EXCLUSION THE TIE RULE MAKES NECESSARY: A PAIR IS SKIPPED WHEN
+ * EITHER NODE HAS NO NEIGHBOUR IN EITHER ADJACENT LAYER. Such a node carries no
+ * segment in either gap, so both sides of its delta are zero, so its delta is
+ * zero, so without this the pass would swap every pair containing one
+ * UNCONDITIONALLY. That is crossing-neutral and still wrong, for two reasons.
+ * It reverses this stage's own measured rule that a node the fixed layer says
+ * nothing about keeps its index, which `reorder` keeps and which is not a
+ * corner case: 120 of the 1k corpus's nodes and 1,101 of the 10k's qualify. And
+ * because the drift is one slot per pass in a fixed direction, the warm start
+ * hands the drifted order back in and it compounds across re-layouts, which is
+ * the one thing `initialOrder` exists to prevent.
+ *
+ * ONE CONSEQUENCE OF STATING IT THIS WAY, since the alternative readings are
+ * not obviously worse: an unanchored node becomes a PERMANENT BARRIER, because
+ * a pair is skipped when EITHER member is unanchored, so the pass can never
+ * move an anchored node past one. Measured, that costs nothing on either
+ * corpus. It is the price of the pin being absolute, and the pin is absolute
+ * because that is what `reorder` already does.
+ *
+ * Found by algorithms-review after the pass was built, on 41 of 41 unanchored
+ * nodes in one generated corpus and 371 of 371 in another, every one displaced
+ * by exactly the pass budget. Worth recording that IT COSTS NOTHING AND SO THE
+ * MEASUREMENTS ABOVE ALL STAND: the corpora read 3,605 and 3,005 on the 1k and
+ * 35,114 and 30,318 on the 10k both before the exclusion and after it, which is
+ * what a crossing-neutral change has to do, and re-measuring rather than
+ * asserting that is what makes the figures in this docstring still true.
+ *
+ * TERMINATION IS GATED ON STRICTLY IMPROVING SWAPS ONLY, and that is a
+ * constraint rather than a detail. A zero-delta swap leaves a zero-delta swap
+ * available, so a loop that continued whenever anything moved swaps one pair
+ * back and forth forever: the prototype hung on exactly this. Two nodes sharing
+ * a single neighbour are enough to produce it, which is to say every fan-in and
+ * every fan-out produces it. The witness is three nodes and two edges, and the
+ * suite pins both halves of the rule on it: the shipping gate stops after one
+ * pass, and an any-swap gate runs a clean period-2 cycle for as long as it is
+ * allowed to. It takes both the tie rule and the wrong gate to hang, so a test
+ * that only asserted "the loop ends" would pass on a strict-only build and
+ * catch nothing.
+ *
+ * THE CAP, `maxTransposePasses`, defaults to 8. That it equals `maxSweeps`'s
+ * default of 8 IS A COINCIDENCE: the two bound different loops, they were
+ * measured independently, and neither should track the other. Measured at a
+ * sweep budget of 8 on the 10k, against 35,114 crossings and 16.32ms with the
+ * pass off:
+ *
+ * | cap             | 10k crossings | saving | extra time | crossings per ms |
+ * | --------------- | ------------- | ------ | ---------- | ---------------- |
+ * | 4               | 31,369        | 10.7%  | +2.65ms    | 1,413            |
+ * | 6               | 30,677        | 12.6%  | +4.15ms    | 461              |
+ * | 8 (the default) | 30,318        | 13.7%  | +4.93ms    | 460              |
+ * | 12              | 29,892        | 14.9%  | +6.92ms    | 214              |
+ * | 16              | 29,658        | 15.5%  | +9.29ms    | 99               |
+ * | 32              | 29,358        | 16.4%  | +16.91ms   | 39               |
+ * | fixed point     | 29,260        | 16.7%  | +30.61ms   | 7                |
+ *
+ * where the fixed point takes 60 passes. The last column is the MARGINAL rate,
+ * the crossings that row buys over the row above it divided by the extra time
+ * it costs, which is the column the default is chosen on. The rows past 8 are
+ * carried for that column alone: without them the claim below cannot be checked
+ * against this table, which is how it came to be quoted from a step the table
+ * did not contain.
+ *
+ * Eight captures 81.9% of the full saving for 16.1% of the extra time, and the
+ * knee really is there: the rate holds at or above 460 up to 8 and falls to 214
+ * immediately past it, then by at least half at every further step. The 1k
+ * corpus agrees without deciding anything, 3,005 against 3,605 for +0.41ms,
+ * with its own fixed point at 2,959 after 19 passes.
+ *
+ * A LARGER CAP IS A WEAKLY BETTER ANSWER, never a different one, for the same
+ * reason a larger `maxSweeps` is: the deltas are exact and only non-increasing
+ * swaps are taken, so a pass cannot raise the count. That is a property of the
+ * pass and it is tested as one, over random layerings, rather than defended at
+ * runtime by keeping whichever layering scores better. A runtime guard there
+ * would hide exactly the arithmetic bug the property exists to catch.
+ *
+ * What the stage does do at the end is score the transposed layering and take
+ * it only if it is STRICTLY better, which is the same best-seen rule the sweeps
+ * already run under. That cannot cost a crossing, since the pass never raises
+ * the count, and it answers the churn objection to taking zero-delta swaps: a
+ * reordering that bought nothing does not reach the output. On the three-node
+ * witness above, where the only available swap is worth exactly zero, the
+ * layers that come back are the ones that went in.
+ *
+ * DETERMINISM SURVIVES THE TIE RULE, which is the part worth checking rather
+ * than assuming, because taking zero-delta swaps means thousands of decisions
+ * that could have gone either way. Both corpora return byte-identical layers
+ * across a rerun on the same state, a second graph built from scratch in the
+ * same insertion order, and a fresh stage object.
+ *
+ * THE CAVEAT, AND IT IS NOT A SMALL ONE. **The saving collapses once every edge
+ * is visible.** Every number above is measured on a graph where the counter
+ * sees about a quarter of the edges, because an edge spanning more than one
+ * rank is invisible to it. On a dummy-expanded 10k, which is what M2.4b
+ * produces, the capped saving falls from 10.7% to 1.4% AT A CAP OF 4, which is
+ * the cap those two were compared at and is not this stage's default of 8. The
+ * expanded graph was never measured at 8, so the honest statement is that a
+ * capped pass loses most of its value there and not that it loses exactly that
+ * much. Only a full fixed point holds its share, at a price nobody can pay: 214
+ * seconds against 6.8. So the cap AND the tie rule are both measured against a
+ * graph that M2.4b replaces, and BOTH MUST BE RE-DERIVED WHEN IT LANDS rather
+ * than carried across unexamined. Neither is a constant of the algorithm.
+ *
  * ## The warm start
  *
  * `initialOrder` is a previous run's layers, handed back so that a re-layout
@@ -665,33 +1004,51 @@ function applyHint(
  * graph's history: it reads the ranks it is given, so a graph assembled in a
  * different order that ranks the same and rosters the same orders the same.
  *
- * ## Why this is not the default order stage
+ * ## What the default costs and what it buys
  *
- * `defaultStages.order` is still `insertionOrderStage`, and this stage is
- * exported by name beside it, which is the precedent M2.3 set with
- * `networkSimplexRankStage`: a real stage is exported by name, and which stage
- * is the default is a separate decision from whether the algorithm exists.
+ * M2.6b pointed `defaultStages.order` at this stage, so what follows is what a
+ * caller who names no order stage now pays and now gets, measured against the
+ * roster order `insertionOrderStage` produces. Full default pipeline, median of
+ * 25 timed iterations after 5 warmups, and the crossings of the layering each
+ * one produces:
  *
- * Two things beyond the precedent. It costs about 21ms on the 10k corpus against
- * a `pipeline > 10k` benchmark baseline of 30.15ms, and the gate's base
- * tolerance is 10%, so making it the default would put that entry about 70%
- * over and the bench gate would fail; the baseline refresh that would absorb it
- * is owed already and deferred to a quiet machine, because `pnpm bench:baseline`
- * recaptures wholesale. And M2.6's transpose refinement improves this same
- * stage, so flipping the default once, after both, is one decision and one
- * rebaseline instead of two.
+ * | corpus | roster order | this stage | crossings before | after  |
+ * | ------ | ------------ | ---------- | ---------------- | ------ |
+ * | 1k     | 2.502ms      | 3.992ms    | 12,890           | 3,005  |
+ * | 10k    | 26.257ms     | 47.229ms   | 425,394          | 30,318 |
  *
- * Those two numbers, the baseline and the tolerance, are why the argument is
- * made here and nowhere else. Both expire the moment either one is recaptured,
- * so `index.ts` and `docs/docs/layout.md` say that the stage is opt-in and how
- * to opt into it and then point back at this section, which leaves one
- * paragraph to correct rather than three.
+ * So the pipeline is 1.60x slower on the 1k (+1.49ms) and 1.80x slower on the
+ * 10k (+20.97ms), and the drawing has 76.7% fewer adjacent-layer crossings on
+ * the one and 92.9% fewer on the other. The two after-counts are this stage at
+ * its own defaults, the cap-of-8 row of the transpose table above, which is
+ * what ties the trade to the stage that actually ships rather than to some
+ * configuration of it. The timings are one machine's, as every timing here is.
+ *
+ * THOSE FOUR FIGURES ARE LIVE ADVICE HERE AND NOWHERE ELSE. Each is a
+ * measurement with a scheduled expiry: a bench recapture moves the timings and
+ * M2.4b moves all four. So `index.ts`, `ROADMAP.md` and `docs/docs/layout.md`
+ * describe the trade in a sentence and point back at this section rather than
+ * copying the table, which leaves one paragraph to correct rather than four.
+ * `CHANGELOG.md` is the deliberate exception: a dated entry records what a
+ * past change measured at the time, so M2.6's entry keeps its own 3,005 and
+ * 30,318 and is marked superseded in place rather than swept, which is this
+ * file's own precedent. The crossing counts are pinned against both stages in
+ * `test/layout.order.test.ts`, so a stage that quietly gave the saving back
+ * fails there; the timings are pinned by nothing, which is what the bench
+ * baseline is for.
+ *
+ * Being the default was always a separate decision from existing, which is the
+ * precedent M2.3 set with `networkSimplexRankStage`: a real stage is exported
+ * by name whether or not it is the default, and this one was exported by name
+ * for two milestones before it took it.
  *
  * @throws {InvalidConfigError} when `maxSweeps` is not a whole number of sweeps
- * that is zero or greater.
+ * that is zero or greater, or when `maxTransposePasses` is not a whole number
+ * of passes that is zero or greater.
  */
 export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
   const budget = resolveBudget(options?.maxSweeps);
+  const passBudget = resolveTransposeBudget(options?.maxTransposePasses);
   const hint = options?.initialOrder;
   return {
     name: 'barycenter-order',
@@ -842,6 +1199,31 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
         }
       }
 
+      // The transpose pass, once, on the BEST layering rather than on the last
+      // working one. `layers` and `position` describe the last one at this
+      // point, so the best one is copied back over both before a single delta
+      // is computed: a pass run against stale positions computes every delta
+      // for a permutation the layering is not in, which does not throw and does
+      // not produce an illegal layering, it decides arbitrarily. Arbitrary is
+      // not the same as worse, and measured it is sometimes better by luck,
+      // which is why the test for this pins layers rather than a count.
+      if (passBudget > 0) {
+        for (const [number, row] of best.entries()) {
+          const layer = layers[number];
+          if (layer === undefined) continue;
+          layer.length = 0;
+          for (const node of row) layer.push(node);
+        }
+        reposition();
+        transposeLayers(layers, position, index, passBudget);
+        // Scored and accepted on the same rule the sweeps run under, which is
+        // the best seen and a STRICTLY lower score. The pass cannot raise the
+        // count, so this never costs a crossing; what it rules out is a
+        // zero-delta reordering reaching the output having bought nothing,
+        // which is the churn objection to taking those swaps at all.
+        if (score() < bestScore) best = layers.map((layer) => [...layer]);
+      }
+
       return { layers: best.map((layer) => layer.map((node) => idAt(index.ids, node))) };
     },
   };
@@ -850,7 +1232,7 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
 /**
  * The barycenter order stage with no options: eight sweeps and a cold start.
  * See {@link barycenterOrder}, which is where all of it is argued, including
- * why this is not the default stage.
+ * what being the default costs and what it buys.
  *
  * Frozen, for the reason `defaultStages` and `networkSimplexRankStage` are: it
  * is one object shared by every run in the process, and a stage's `name` is

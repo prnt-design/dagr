@@ -50,11 +50,12 @@ const preparedLarge = prepare(large);
 /**
  * The rank stage on its own, which is where the cost currently sits.
  *
- * Isolated from the full pipeline because three of the four stages are still
- * placeholders scheduled for replacement (M2.5, M2.7, M2.8). A combined number
- * would move when any of those lands and tell nobody which one moved, and the
- * ranker itself is due to be replaced by network simplex in M2.3, which is the
- * change this baseline exists to keep honest.
+ * Isolated from the full pipeline because the other stages keep being replaced:
+ * two of them are still placeholders scheduled for it (M2.7, M2.8) and the
+ * order stage was replaced in M2.6b. A combined number would move when any of
+ * those lands and tell nobody which one moved, and the ranker itself is due to
+ * be replaced by network simplex in M2.3, which is the change this baseline
+ * exists to keep honest.
  */
 describe('rank', () => {
   bench('1k nodes, 4k edges', () => {
@@ -66,7 +67,7 @@ describe('rank', () => {
   }, HEAVY);
 });
 
-/** The whole pipeline, including whatever the placeholder stages currently cost. */
+/** The whole pipeline, including whatever the stages behind it currently cost. */
 describe('pipeline', () => {
   bench('1k nodes, 4k edges', () => {
     layout({ graph: small });

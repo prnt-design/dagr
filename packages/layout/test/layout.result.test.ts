@@ -503,9 +503,13 @@ describe('layout result identity across refactors', () => {
    * It is one graph rather than a corpus on purpose. M2.9 commits golden files
    * against dagre and that is where a corpus belongs; this is a single pin for a
    * single refactor, and it is expected to be REPLACED, not preserved, the first
-   * time a milestone deliberately changes what a default run draws. M2.5, M2.7
-   * and M2.8 each will. A test like this outliving its refactor is how a suite
-   * ends up asserting that a placeholder algorithm stays a placeholder.
+   * time a milestone deliberately changes what a default run draws. M2.6b was
+   * such a milestone and this capture survived it untouched, which is a fact
+   * about this graph and not a guarantee: the barycenter stage that took the
+   * order default happens to lay these seven nodes out exactly as roster order
+   * did. M2.7 and M2.8 will not be so gentle. A test like this outliving its
+   * refactor is how a suite ends up asserting that a placeholder algorithm
+   * stays a placeholder.
    */
   const captured = {
     nodes: [

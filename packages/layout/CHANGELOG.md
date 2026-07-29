@@ -14,12 +14,61 @@ of doc prose.
 
 ### Added
 
+- `maxTransposePasses` on `BarycenterOrderOptions`, defaulting to 8, where zero
+  means no transpose at all. It bounds PASSES only, and it rejects a
+  non-integer, a negative and `Number.POSITIVE_INFINITY` with
+  `InvalidConfigError` naming the field, checked when the stage is built rather
+  than when it runs. That is `maxSweeps`'s rule, for `maxSweeps`'s reason: a
+  heuristic with no optimality condition has nothing for "as many as it takes"
+  to mean. (M2.6)
+
+  **THE PASS IS ON BY DEFAULT, so `barycenterOrder()` and
+  `barycenterOrderStage` return different layers than they did before this
+  entry, with no type change to warn a caller.** This is the category the file
+  exists for. After the sweeps settle, the stage takes the best layering they
+  found and repeatedly swaps adjacent pairs within a layer while that lowers the
+  crossing count, which reaches 3,005 crossings on the 1k benchmark corpus where
+  the sweeps alone reach 3,605, and 30,318 against 35,114 on the 10k, costing
+  about 0.41ms and 4.93ms. `defaultStages.order` is still `insertion-order` and
+  is untouched, so a caller who never named an order stage sees nothing change.
+
+  **The last sentence above was superseded by M2.6b**, which pointed
+  `defaultStages.order` at `barycenter-order`, so a caller who names no order
+  stage now gets this pass and everything in front of it. It is left here
+  because it is what was true when the pass landed. The two crossing counts in
+  this paragraph are NOT superseded: they are still what the stage produces,
+  and they expire with M2.4b rather than with the flip. See the M2.6b entry
+  under Changed.
+
+  The sharpest case, because it is the one that reads as a contradiction:
+  `barycenterOrder({ maxSweeps: 0 })` used to mean "the seed permutation,
+  untouched" and no longer does, because a sweep budget of zero does not
+  disable a pass that runs after the sweeps. Ask for the seed alone with
+  `barycenterOrder({ maxSweeps: 0, maxTransposePasses: 0 })`.
+
+  What the cap is measured against is worth carrying, because it will expire.
+  Eight is the knee of the curve: it captures 81.9% of what an unbounded run to
+  the fixed point would save, for 16.1% of the extra time. It matches
+  `maxSweeps`'s default of 8 by coincidence and the two are deliberately
+  separate constants. And it is measured on graphs where about a quarter of
+  edges span exactly one rank and so are visible to the counter at all. When
+  M2.4b splits every long edge into a chain, that share goes to essentially all
+  of them, and both the cap and the tie rule have to be re-derived rather than
+  carried across: the saving a capped pass keeps falls from 10.7% to 1.4% on a
+  dummy-expanded 10k, at the cap of 4 those two were compared at rather than at
+  this default of 8, which was never measured there.
+
 - `barycenterOrderStage` and `barycenterOrder(options)`, exported, plus the
   `BarycenterOrderOptions` type, and `countCrossings(layering)` with the
   `Layering` type it takes, which is a graph and the layers its nodes are drawn
   in. The first real order stage: crossing reduction by barycenter sweeps, with
   the crossing counter it optimises exported beside it. `defaultStages.order` is
   unchanged and is still `insertion-order`. (M2.5)
+
+  **The last sentence above was superseded by M2.6b**, which made this stage
+  the default. It is left here because a stage existing and a stage being the
+  default were separate decisions, and this entry is the record of the first
+  one. See the M2.6b entry under Changed.
 
   **The seed permutation is a connected depth-first walk over adjacent-layer
   edges**, not the roster order the placeholder uses. It is recorded here as
@@ -82,6 +131,13 @@ of doc prose.
   once, after both, with one rebaseline instead of two. That is also the
   precedent M2.3 set: a real stage is exported by name whether or not it is the
   default.
+
+  **The paragraph above was superseded by M2.6b**, which is the flip it
+  describes waiting for: the transpose pass landed with M2.6, the baseline was
+  recaptured wholesale in the same change as the flip, and the default is now
+  `barycenter-order`. It is left here because it is the reasoning that made the
+  stage ship without the default, and because the last sentence of it, the
+  export rule, is still exactly true. See the M2.6b entry under Changed.
 
 - `networkSimplexRankStage` and `networkSimplexRank(options)`, exported, plus
   the `NetworkSimplexOptions` type. A second real rank stage: it is not a
@@ -149,6 +205,13 @@ of doc prose.
   `straight-route`) are still reachable only through `defaultStages`, because a
   placeholder's name is a name to delete tomorrow. (M2.3)
 
+  **`insertion-order` left that list at M2.6b** and is now reachable through
+  nothing, because `defaultStages.order` points at `barycenter-order` and the
+  older stage was neither exported nor deleted. This one is called out where
+  the other superseded paragraphs are merely marked, since it is the claim a
+  reader is most likely to act on and fail. See the M2.6b entry under Changed
+  for why it survives at all.
+
 - `RankOutput`, `OrderOutput`, `PositionOutput` and `RouteOutput`, exported as
   types. Each is what one stage contributes, and it is what that stage's `run`
   now returns. See the Changed entry below. (M2.4a)
@@ -196,6 +259,35 @@ of doc prose.
   (M2.2 review)
 
 ### Changed
+
+- **`defaultStages.order` is now `barycenter-order`, so a caller who never
+  named an order stage gets different layers, different coordinates and a
+  different drawing, with no type change to warn them.** That is the category
+  this file exists for, and this is the largest instance of it so far: within a
+  layer the horizontal order is now one that has had its crossings reduced,
+  where before it was the order the nodes happened to be added to the graph in.
+  (M2.6b)
+
+  What the change costs and what it buys, one sentence each. The full default
+  pipeline is about 1.8x slower on the 10k benchmark corpus and about 1.6x
+  slower on the 1k. The layering it returns has 92.9% fewer adjacent-layer
+  crossings on the 10k and 76.7% fewer on the 1k. The four measurements those
+  ratios come from are stated once, in the last section of `barycenterOrder`'s
+  docstring in `src/order.ts`, and deliberately not copied here: a benchmark
+  recapture moves the timings and M2.4b moves all four.
+
+  Nothing about the stage itself changed and no export moved.
+  `barycenterOrderStage` has been exported by name since M2.5 and is the very
+  object `defaultStages.order` now holds, so `layout({ graph })` and
+  `layout({ graph }, { order: barycenterOrderStage })` do the same thing, and
+  the entries under Added that describe the stage still describe it exactly.
+  What there is no longer a way to ask for is the old behaviour:
+  `insertion-order` is still in the package and still unexported, kept as the
+  roster-order reference the ordering tests measure against rather than as a
+  stage anyone can select. A run that wants to spend less than the default does
+  can turn the transpose pass off with
+  `barycenterOrder({ maxTransposePasses: 0 })`, or the sweeps down with
+  `maxSweeps`, which is the same lever it always was.
 
 - **Breaking for every custom stage:** `RankStage`, `OrderStage`,
   `PositionStage` and `RouteStage` now return that stage's own contribution
