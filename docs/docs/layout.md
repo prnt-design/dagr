@@ -268,20 +268,27 @@ which edges have to be treated as running the other way, then rank what is left.
 
 Sugiyama layout wants a DAG, and real graphs have cycles. The stage computes a
 **feedback arc set**, a set of edges that would leave a DAG if they ran the
-other way, using the greedy heuristic of Eades, Lin and Smyth (1993). It builds
-a vertex order by repeatedly moving a sink to the front of a tail sequence, a
-source to the back of a head sequence, and, when it has neither, the vertex
-maximising `outdeg - indeg` to the back of the head sequence. An edge running
-backwards in the finished order is in the set if, and only if, its two endpoints
-lie in the same strongly connected component of your graph.
+other way. It gives every node a real-valued **height**, the one that minimises
+the sum over edges of `(height(target) - height(source) - 1)^2`, which is the
+least-squares way of saying "put every target one step below its source". An
+edge running downhill in those heights is in the set if, and only if, its two
+endpoints lie in the same strongly connected component of your graph.
+
+Solving that is a linear system, `L h = b`, where `L` is your graph's Laplacian
+and `b(u)` is `indeg(u) - outdeg(u)`, and the stage solves it with a
+preconditioned conjugate gradient: about 24 iterations on the 1k benchmark
+corpus and 46 on the 10k. Every edge pulls on both of its endpoints and the
+answer is the balance of all of them at once, so a few edges pointing against
+the grain cannot move a height far. That is what lets it recover the layering of
+a graph that has one, rather than deciding each node's place from that node's
+own degrees.
 
 **A backward edge between two components is left alone.** If the two endpoints
 are in different components then no cycle passes through that edge, so no cycle
 needs it turned round, and turning it round only stretches the view the ranker
 then has to rank. The stage reads the components off the same arc structure it
-already builds for the greedy order rather than building a second one, so it
-does not pay for them twice, and the pass as a whole came out faster than the
-version that reversed them, 8.5ms median against 11.0ms on the 10k corpus.
+already builds for the solve rather than building a second one, so it does not
+pay for them twice.
 
 The rule is safe by construction rather than by testing. A cycle in the result
 would have to be one of two things. If every edge on it stayed inside one
@@ -294,52 +301,47 @@ works only for the whole class at once: leaving SOME cross-component edges
 unreversed while reversing others is not safe, because a reversed edge creates
 paths your graph did not have.
 
-**What the bound actually says.** The paper proves `|F| <= m/2 - n/6` for a
-digraph with **no two-cycles**, which is a stronger hypothesis than being simple
-and self loop free, and Dagr's inputs routinely have two-cycles. Two nodes
-pointing at each other are `n = 2`, `m = 2`, `|F| = 1` against a bound of
-`0.667`. The `n/6` term is earned per vertex removed with arcs still attached,
-so isolated vertices inflate `n` for free and a sparse graph can miss the bound
-with no two-cycle in it either: a 3-cycle plus two lone nodes is `|F| = 1`
-against `0.667`. The term only starts to say anything once `m >= n/3`. What is
-claimed here, and what the tests assert, is the `m/2` half alone, which survives
-every input above and the weighting below. It is a bound on HOW MANY edges get
-reversed, and nothing more: the back edges of a depth-first search have no such
-bound, and on this repo's 10k benchmark corpus they nonetheless come out at
-1,651 reversed edges against this heuristic's 4,620. Fewer reversed edges is not
-the same thing as a better drawing, which is the next paragraph. The component
-rule above only takes edges out of the set the bound is proved for, so the bound
-survives it untouched.
+**What the bound actually says.** At most half the edges are ever reversed, and
+the stage establishes that by construction. An edge runs backwards in exactly
+one of a vertex order and its reverse, so the two backward sets partition the
+edges between them and the smaller is at most half; the stage counts and takes
+the smaller side. Without that step the heights alone would promise nothing, and
+the case is not hypothetical: a cycle whose nodes were added in the order that
+walks it backwards has every height tied, falls back to insertion order, and
+would reverse all but one of its edges. The component rule only takes edges out
+of the set the bound applies to, so it survives untouched.
+
+It is a bound on HOW MANY edges get reversed, and nothing more. Fewer reversed
+edges is not the same thing as a better drawing, which is the next paragraph.
 
 **What it does not promise, and what that costs your drawing.** The set it finds
 leaves a DAG, and that is the whole promise. It is not the smallest such set,
 and, more to the point, it is not the set that leaves the SHALLOWEST drawing. On
-the 10k benchmark corpus, a graph authored with 60 layers, the view this
-heuristic hands the ranker is 203 ranks deep. Reversing only the edges that were
-authored pointing backwards would have left it 60 deep, so about seven tenths of
-the layers in that drawing are there because of how the cycles were broken and
-not because of anything in the graph. Every extra layer is more ranks for a long
-edge to cross, so it shows up as taller drawings and longer, more bent edges.
-Note which way the component rule moves this number: it makes the drawing TALLER
-(154 ranks before it, 203 after) and the edges in it SHORTER overall, because a
-reversal shortens the path it sat on as well as pointing an edge the wrong way,
-so declining a reversal no cycle needed lengthens the longest path. What it buys
-is the total distance edges travel, which on that corpus falls from 1,414,263
-rank crossings to 1,359,680, a cut of 3.9%, and on the 1k corpus from 40,430 to
-22,726, a cut of 44%. Read those two percentages against the depth: the 10k
-corpus pays 32% more ranks for 3.9% less span, and the 1k pays 31% more for
-44% less, so this is a trade and it is a much better one on the smaller graph.
-Total span is what decides how many stand-in nodes a long edge is broken into,
-so it is the number a caller feels.
+the 10k benchmark corpus, a graph authored with 60 layers, the view this stage
+hands the ranker is 160 ranks deep. Reversing only the edges that were authored
+pointing backwards would have left it 60 deep, so well over half the layers in
+that drawing are there because of how the cycles were broken and not because of
+anything in the graph. Every extra layer is more ranks for a long edge to cross,
+so it shows up as taller drawings and longer, more bent edges.
+
+The number a caller actually feels is the total distance edges travel, because
+that is what decides how many stand-in nodes a long edge is broken into. On the
+10k corpus it is 174,222 rank crossings and on the 1k it is 14,746, against
+32,050 and 2,665 for reversing exactly the authored back edges. That is about
+five and a half times a ground truth no cycle breaker could compute, the
+generator's own record of which edges it inserted backwards, and the whole of
+the remaining gap is depth.
 Three things follow for a caller, and the first is that choosing the other
 rank stage does not undo the depth.
 [`network-simplex-rank`](#minimum-total-edge-length-and-what-it-costs) shortens
 edges WITHIN that view, and does a lot of good doing so, but both stages rank a
 view whose depth cycle breaking has already fixed.
-The count in `reversedEdges` is not a quality signal, and a smaller one is not a
-better drawing: the DFS comparison above cuts that count by nearly three and
-makes the drawing three times deeper. And none of it applies to an acyclic
-graph, where the set is empty and `longest-path-rank` draws it exactly as deep
+The count in `reversedEdges` is not a quality signal, and a smaller one is not
+a better drawing: the cycle breaker's own recorded not-taken variant reverses
+about 30% MORE edges on the 10k corpus, 1,117 against the 857 that ship, and
+leaves a view about a quarter smaller in total span, 128,141 against 174,222.
+And none of it applies to an acyclic graph, where the set is empty and
+`longest-path-rank` draws it exactly as deep
 as the graph is long, so it is worth knowing whether your graph actually has
 cycles before reading a tall drawing as a cycle-breaking problem.
 [`network-simplex-rank`](#minimum-total-edge-length-and-what-it-costs) can still
@@ -361,16 +363,18 @@ points, so reversing it buys nothing, and the pipeline already tolerates it: the
 runner compares endpoint ranks with `<=` precisely so both ends of a loop can
 share a rank.
 
-**Parallel edges all go the same way.** The heuristic runs over the weighted
-simple condensation, where every edge from one ordered pair collapses into one
-arc whose weight is how many there were, and the decision is taken per pair.
-Two copies of `a -> b` are therefore never split, one reversed and one not,
-which would put a two-cycle straight back into the view that is supposed to be
-acyclic. The weighting is also what lets the heuristic prefer the cheaper cut:
-three edges one way against one the other reverses the one. Prefer, not
-guarantee. The weights feed the `outdeg - indeg` key the heuristic picks on,
-they do not make it minimise reversed weight, and in a larger graph the cheaper
-direction of a pair can still end up the one running backwards.
+**Parallel edges all go the same way.** The decision is taken by comparing two
+heights, and every copy of a pair has the same two endpoints, so every copy gets
+the same answer. Two copies of `a -> b` are therefore never split, one reversed
+and one not, which would put a two-cycle straight back into the view that is
+supposed to be acyclic.
+
+Copies do count in the solve, once each, and that is what lets it prefer the
+cheaper cut: three edges one way against one the other pull three times as hard,
+so the one is what ends up running downhill. Prefer, not guarantee. The
+multiplicity is a weight in a least-squares objective, not a constraint, and in
+a larger graph the cheaper direction of a pair can still end up the one running
+backwards.
 
 ### Ranking
 
@@ -385,7 +389,7 @@ out, and both are relied on:
   the view depends on which edges cycle breaking chose, and the heuristic is
   bounded on how many it reverses, not on the longest path it leaves behind. So
   "minimum height" means minimum for that view and not minimum for your graph,
-  and on the 10k benchmark corpus the gap between the two is 203 ranks against
+  and on the 10k benchmark corpus the gap between the two is 160 ranks against
   60. A different feedback arc set can leave a shallower drawing, nothing here
   optimises for that, and neither stage in this package recovers it, because
   both break cycles with the same heuristic.
@@ -420,32 +424,39 @@ North and Vo (1993), section 2.
 
 That sum, minus the edge count, is exactly how many dummy nodes M2.4b's splitter
 will mint, which is why it is the quantity worth optimising. On the 1k benchmark
-corpus it takes the default ranker's 22,726 dummies down to 15,713, a 31% cut,
-in about 28ms, and that is as far as it goes: ten times the budget returns the
-same 15,713. On the 10k corpus it reaches 268,589 from 1,359,680 inside its
-default budget, an 80% cut, and 226,676 given ten times it.
+corpus it takes the default ranker's 14,746 dummies down to 10,660, a 28% cut,
+and that is as far as it goes: ten times the budget returns the same 10,660. On
+the 10k corpus it reaches 105,975 from 174,222 inside its default budget, a 39%
+cut, and 99,698 given ten times it.
 
-That 31% read 57% in the previous release, and this stage did not get worse. Its
-INPUT got better: the cycle breaker now leaves the components alone, which took
-the 1k view both stages rank from 40,430 dummies down to 22,726 on its own, so
-there is less left here to win. See [Cycle breaking](#cycle-breaking).
+That 28% read 31% in the previous release and 57% in the one before, and this
+stage did not get worse either time. Its INPUT got better: the cycle breaker
+leaves the components alone and now solves for a layering rather than picking
+greedily, which together took the 1k view both stages rank from 40,430 dummies
+down to 14,746 and the 10k view from 1,414,263 to 174,222, so there is less left
+here to win. See [Cycle breaking](#cycle-breaking).
 
-The comparison runs the other way in one column, and it is worth knowing which.
-On the 10k corpus the newer view is 37% below the older one at the default
-budget (268,589 against 423,426) and 0.8% ABOVE it at 200,000 pivots (226,676
-against 224,789), because the older view had more of its gain still ahead of it
+Quote a budget beside any figure here. The gap between the default budget and
+ten times it used to be 16% on the 10k corpus and is now 6% (105,975 against
+99,698), because a view with an eighth of the span has an eighth of the length
+to pivot out of it. The older, deeper view was 37% worse at the default
+budget (423,426 against 268,589) and 0.8% BETTER at 200,000 pivots (224,789
+against 226,676), because the older view had more of its gain still ahead of it
 and the default budget was measuring how fast each converges rather than how far
-each gets. The newer view is the cheaper of the two to solve at both budgets.
+each gets. That pair compares the pre-M2.2b view against the M2.2b one, and
+neither is the view that ships today, but the lesson carries across breakers.
+The newer view of any such pair is the cheaper of the two to solve at both
+budgets.
 This is why a simplex figure quoted without its pivot budget says nothing.
 
 **None of that saving is collectable in this release.** M2.4b is unbuilt: no
 stage mints a dummy today, both rank stages omit `virtualNodes`, and the counts
 above are a cost nobody is paying yet. Read the future tense in "will mint"
 literally. What a caller who switches today actually gets is a rank stage that
-costs several times more (a few milliseconds against about 28 on the 1k corpus,
-and tens of milliseconds against the seconds the budget caps it at on the 10k
-one), a drawing that is never shorter and may be taller, and zero dummy nodes
-saved, because there are none to save. The 31% is real and it reproduces; it
+costs far more (tens of milliseconds against the seconds the budget caps it at on
+the 10k corpus), a drawing that is never shorter and may be taller,
+and zero dummy nodes saved, because there are none to save. The 28% is real
+and it reproduces; it
 becomes a saving when M2.4b lands, and until then switching buys a ranking that
 M2.4b will be able to exploit and costs the height risk below.
 
@@ -465,7 +476,7 @@ v6 -> v9 -> v0
 
 Pulling `v6` down one rank tightens `v6 -> v5`, and drags `v9` and `v0` into a
 fourth layer to do it. Both corpora happen to come out the same height either
-way (81 ranks and 203 ranks), so this is a real risk rather than a certainty.
+way (64 ranks and 160 ranks), so this is a real risk rather than a certainty.
 If a short drawing is what matters, name `longestPathRankStage`: minimum height
 is its guarantee, and it is the algorithm you want for that whether or not it
 also happens to be the default.
@@ -486,14 +497,14 @@ const tight = layout({ graph }, { rank: networkSimplexRankStage });
 `networkSimplexRank(options)` builds one with options, and there are two.
 
 **`maxIterations`** bounds the pivots and defaults to 20,000. It is a safety
-valve rather than a quality knob: it is about seventeen times what the 1k corpus
-needs to converge, which is about 1,150 pivots (1,000 is still 1.3% off at
-15,919, the optimum of 15,713 is first reached at exactly 1,144, and 20,000 and
-200,000 both return that same 15,713), and it is what bounds the 10k corpus,
-which does not converge inside any budget worth spending, to under two seconds.
+valve rather than a quality knob: it is about nine times what the 1k corpus
+needs to converge, which is about 2,200 pivots (2,000 is still 0.3% off at
+10,688, the optimum of 10,660 is first reached at exactly 2,182, and 20,000 and
+200,000 both return that same 10,660), and it is what bounds the 10k corpus,
+which does not converge inside any budget worth spending, to a few seconds.
 Give it more if a run is worth it: the 10k corpus is still improving at 200,000
-pivots, where about 51 seconds buys 226,676 against the default budget's
-268,589. Whatever stops it, the ranking that comes back is feasible, and never
+pivots, where about 49 seconds buys 99,698 against the default budget's
+105,975. Whatever stops it, the ranking that comes back is feasible, and never
 worse than the ranking the stage started from.
 
 A budget is a pivot count, so it has to be an integer that is zero or greater,
@@ -1420,7 +1431,7 @@ without being selectable at all, `brandes-koepf-position`, for the reason below.
 
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
-| rank | `longest-path-rank` | Breaks cycles with a greedy feedback arc set, then ranks by longest path. Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height. | Dummy chains for long edges (M2.4b). |
+| rank | `longest-path-rank` | Breaks cycles with a least-squares feedback arc set, then ranks by longest path. Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height. | Dummy chains for long edges (M2.4b). |
 | order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). | M2.4b's dummy chains, which make every edge visible to it and so change both what it optimises and what its budgets are worth. |
 | position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. `brandes-koepf-position` is a real algorithm that is implemented but not exported, because it draws a worse picture until M2.4b lands, for the reason below this table. | M2.4b's dummy chains, which are what makes every edge visible to Brandes-Koepf and so what the position default waits on. |
 | route | `straight-route` | A straight two-point line between the endpoint centres. | Polylines through dummy-node coordinates, monotone in the rank axis (M2.8). |

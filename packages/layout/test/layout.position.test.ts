@@ -244,11 +244,19 @@ describe('brandesKoepfPosition, the spacing invariant', () => {
       // The workload, pinned so that a corpus that stopped being one cannot
       // leave this green: rows with something to space, and a widest row that
       // makes the spacing a real constraint rather than a formality.
+      //
+      // These are a function of the RANKING and so of `cycles.ts`, not of this
+      // stage, which is why they moved wholesale under M2.2c: 81 rows to 64 on
+      // the 1k and 203 to 160 on the 10k, with the widest row falling from
+      // 1,101 to 814 as the same nodes redistribute over fewer, fuller layers.
+      // A shallower view is the point of that change rather than a side effect
+      // of it. What this test is actually asserting is unchanged and is the
+      // line above: no two boxes overlap, whatever shape the ranking hands it.
       const grouped = rows(result);
       const crowded = grouped.filter((row) => row.length > 1);
-      expect(grouped.length).toBe(name === '1k' ? 81 : 203);
-      expect(crowded.length).toBe(name === '1k' ? 79 : 203);
-      expect(Math.max(...grouped.map((row) => row.length))).toBe(name === '1k' ? 120 : 1101);
+      expect(grouped.length).toBe(name === '1k' ? 64 : 160);
+      expect(crowded.length).toBe(name === '1k' ? 64 : 159);
+      expect(Math.max(...grouped.map((row) => row.length))).toBe(name === '1k' ? 118 : 814);
     });
   }
 });

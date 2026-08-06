@@ -678,6 +678,14 @@ describe('barycenterOrder, on the bench corpora', () => {
    * only if its endpoints land in adjacent layers, and today most do not. This
    * is the number that goes to 100% when M2.4b splits the long edges, so it is
    * pinned here as the thing that is expected to move rather than as a fact.
+   *
+   * It moved under M2.2c, in the good direction and for the reason that change
+   * exists: a shallower view puts more edges between adjacent layers, 1,324 to
+   * 1,513 on the 1k and 10,528 to 13,131 on the 10k, and shortens the longest
+   * edge from 78 layers to 61 and from 201 to 153. Read the crossing tables
+   * further down against this: they count only what this line calls adjacent,
+   * so a quarter more of the graph became countable at the same time, and the
+   * counts there are not comparing the same population before and after.
    */
   it('sees a third of the 1k corpus and a quarter of the 10k', () => {
     const spans = corpora.map(([, spec]) => {
@@ -699,8 +707,8 @@ describe('barycenterOrder, on the bench corpora', () => {
       return { adjacent, longest, edges: state.graph.edges().length };
     });
     expect(spans).toEqual([
-      { adjacent: 1_324, longest: 78, edges: 4_000 },
-      { adjacent: 10_528, longest: 201, edges: 40_000 },
+      { adjacent: 1_513, longest: 61, edges: 4_000 },
+      { adjacent: 13_131, longest: 153, edges: 40_000 },
     ]);
   });
 
@@ -733,8 +741,8 @@ describe('barycenterOrder, on the bench corpora', () => {
       return { noneAbove, neither };
     });
     expect(counts).toEqual([
-      { noneAbove: 120, neither: 49 },
-      { noneAbove: 1_101, neither: 572 },
+      { noneAbove: 118, neither: 48 },
+      { noneAbove: 814, neither: 438 },
     ]);
   });
 
@@ -773,8 +781,8 @@ describe('barycenterOrder, on the bench corpora', () => {
       ];
     });
     expect(table).toEqual([
-      ['1k', 12_890, 3_943, 7_933, 4_619, 3_880, 3_605, 3_467],
-      ['10k', 425_394, 54_744, 94_991, 50_735, 40_217, 35_114, 32_503],
+      ['1k', 17_787, 6_704, 12_147, 7_383, 6_891, 6_591, 6_241],
+      ['10k', 411_492, 106_861, 212_566, 113_786, 105_240, 102_641, 102_641],
     ]);
   });
 
@@ -782,7 +790,11 @@ describe('barycenterOrder, on the bench corpora', () => {
    * The transpose curve at the default sweep budget, which is the measurement
    * the cap of 8 was chosen on. Caps 0, 4, 8 and 16, and then the full fixed
    * point, which is what the cap is bought against: on the 10k it reaches
-   * 29,260 after 60 passes, and 8 passes capture 81.9% of that saving.
+   * 85,633, and 8 passes capture 84.3% of that saving, against 81.9% of the
+   * pre-M2.2c figure. So the cap of 8 is still bought at the same place and the
+   * decision it was chosen on is unchanged; only the population being counted
+   * moved. See the adjacency note above before reading the absolute numbers as
+   * a regression.
    *
    * `Number.POSITIVE_INFINITY` is not a legal cap, deliberately and for the
    * reason argued beside the option, so the fixed point is asked for as a cap
@@ -800,8 +812,8 @@ describe('barycenterOrder, on the bench corpora', () => {
       return [name, at(0), at(4), at(8), at(16), at(200)];
     });
     expect(table).toEqual([
-      ['1k', 3_605, 3_116, 3_005, 2_961, 2_959],
-      ['10k', 35_114, 31_369, 30_318, 29_658, 29_260],
+      ['1k', 6_591, 5_720, 5_562, 5_542, 5_542],
+      ['10k', 102_641, 91_785, 88_301, 86_568, 85_633],
     ]);
   });
 

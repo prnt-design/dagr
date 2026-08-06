@@ -42,13 +42,19 @@ import type { GraphSpec } from '@dagr/bench';
  * with STRICTLY MORE span. The corpus pins are the guard: they make any change
  * to `cycles.ts` show up here as a diff in three numbers rather than silently.
  *
- * What ships is that greedy order with its cross-component reversals dropped,
- * which is M2.2b's bar row: 74 reversals, depth 81 and 22,726 dummies on the
- * 1k, and 4,620, depth 203 and 1,359,680 on the 10k. So this file now asserts a
- * target as well as a pin. The CEILINGS below are what the algorithm promises
- * and are what M2.2b asks for; the exact pins beside them are what it currently
- * does. The two say different things and a change that moves one without the
- * other is the interesting case, which is why neither replaces the other.
+ * What ships is a least-squares vertex order with its cross-component
+ * reversals dropped, which is M2.2c: 40 reversals, depth 64 and 14,746 dummies
+ * on the 1k, and 857, depth 160 and 174,222 on the 10k. So this file asserts a
+ * target as well as a pin. The CEILINGS below are what the algorithm promises;
+ * the exact pins beside them are what it currently does. The two say different
+ * things and a change that moves one without the other is the interesting case,
+ * which is why neither replaces the other.
+ *
+ * The paragraphs above are kept in the tense they were written in, because they
+ * are the argument that produced this file and the argument still holds: the
+ * reversal count is still not the thing being minimised, and the witnesses
+ * still show a smaller set costing more span. What has changed is that the
+ * shipping pass no longer sits at the bad end of that trade.
  */
 
 /**
@@ -266,10 +272,13 @@ function measure(graph: Graph, reversed: ReadonlySet<EdgeId>): Quality {
  * A six-cycle, `v0 -> v1 -> ... -> v5 -> v0`.
  *
  * The smallest object this file needs, and the one that carries its argument.
- * Every vertex has one arc in and one out, so the greedy breaker sees no sink,
- * no source, and a delta of zero everywhere, takes `v0` off the front of the
- * FIFO delta bucket, and then unzips the rest as a run of sinks. The order it
- * lands on is `v0 ... v5` and the one backward arc is `v5 -> v0`.
+ * Every vertex has one arc in and one out, so `indeg - outdeg` is zero
+ * everywhere, the least-squares system has a zero right-hand side, and every
+ * height comes out at zero. The order is then the tie break, which is node
+ * order, so it lands on `v0 ... v5` and the one backward arc is `v5 -> v0`.
+ * Being a cycle, one arc has to be reversed whatever the order, so this is the
+ * best answer available on reversal count and the worst on span, which is the
+ * whole point of it.
  */
 function sixCycle(): Graph {
   return build(
@@ -422,15 +431,19 @@ const largeQuality = measure(large, largeReversed);
  * of the reversal count alone. Whoever updates these has to say which of the two
  * happened.
  *
- * Last updated by M2.2b, scoping the reversals to components, and it is the
- * first of the two: TOTAL SPAN FELL ON BOTH CORPORA, 44% on the 1k (40,430 to
- * 22,726) and 3.9% on the 10k (1,414,263 to 1,359,680), and the reversal count
- * fell with it (422 to 74, and 6,327 to 4,620). DEPTH ROSE, 62 to 81 and 154 to
- * 203, and that is paid rather than hidden: a reversal shortens the path it sat
- * on as well as pointing an edge backwards, so declining the reversals no cycle
- * needed makes the longest path longer. The entry that governs the trade is
- * ROADMAP M2.2b's bar row, which states this exact triple on both corpora and
- * accepts the depth alongside it.
+ * Last updated by M2.2c, replacing the greedy order with a least-squares one,
+ * and it is the first of the two on every axis at once: TOTAL SPAN FELL 35% on
+ * the 1k (22,726 to 14,746) and 87% on the 10k (1,359,680 to 174,222),
+ * REVERSALS FELL (74 to 40, and 4,620 to 857), and DEPTH FELL (81 to 64, and
+ * 203 to 160). Nothing was traded away for it, which is worth stating because
+ * the two updates before this one both paid depth for span and this entry was
+ * written to make that payment visible. The entry that governs it is ROADMAP
+ * M2.2c, which states this triple on both corpora.
+ *
+ * The gap that remains is depth. The 10k corpus is authored as 60 layers and
+ * this view occupies 160 ranks, so the ground truth's 796 / 60 / 32,050 is
+ * still a factor of five away in dummies, where it used to be a factor of
+ * forty-two.
  */
 describe('acyclic view quality on the bench corpora', () => {
   // Asserted before the three numbers below, because it is what tells the two
@@ -476,14 +489,14 @@ describe('acyclic view quality on the bench corpora', () => {
     'deterministic, so those three numbers are the only other thing that moves.';
 
   it('pins the shipping answer on the 1k corpus', () => {
-    expect(smallQuality, REVIEW_ITEM).toEqual({ reversals: 74, depth: 81, totalSpan: 22_726 });
+    expect(smallQuality, REVIEW_ITEM).toEqual({ reversals: 40, depth: 64, totalSpan: 14_746 });
   });
 
   it('pins the shipping answer on the 10k corpus', () => {
     expect(largeQuality, REVIEW_ITEM).toEqual({
-      reversals: 4_620,
-      depth: 203,
-      totalSpan: 1_359_680,
+      reversals: 857,
+      depth: 160,
+      totalSpan: 174_222,
     });
   });
 
@@ -554,27 +567,29 @@ describe('acyclic view quality on the bench corpora', () => {
   // is allowed to rewrite the pin above without further argument and a change
   // that breaks one is a change of objective.
   //
-  // Why these numbers. The span ceilings are round numbers just under what the
-  // unscoped greedy pass used to cost, 25,000 against its 40,430 on the 1k and
-  // 1,400,000 against its 1,414,263 on the 10k, so they cannot be met by
-  // reverting the component rule: they assert the win rather than the current
-  // measurement. The depth ceilings are round numbers just above what the pass
-  // costs today, 90 against 81 and 220 against 203, because depth is the side of
-  // this trade that is PAID and a ceiling below today's depth would be a
-  // promise this pass does not make. They still bite: DFS back edges come out at
-  // 115 and 601, and per-component ELS at 84 and 320, so both of the shapes this
-  // objective is meant to rule out are well over them. The reversal ceiling is
-  // M2.2b's constraint verbatim, no more than the 6,327 the unscoped pass
-  // reversed on the 10k and the 422 on the 1k, and it holds a fortiori because
-  // the scoped set is a subset of the unscoped one.
-  it('keeps both corpora under the ceilings M2.2b states', () => {
-    expect(smallQuality.totalSpan).toBeLessThanOrEqual(25_000);
-    expect(smallQuality.depth).toBeLessThanOrEqual(90);
-    expect(smallQuality.reversals).toBeLessThanOrEqual(422);
+  // Why these numbers, and why they moved with M2.2c. Every one of them is now
+  // a round number just ABOVE what the pass costs today, on all three axes and
+  // both corpora. The previous set was mixed, span held just under what the
+  // pass before it cost and depth just above what the pass then cost, because
+  // that update PAID depth to buy span and a ceiling below the price it paid
+  // would have been a promise it did not make. M2.2c paid nothing: span, depth
+  // and reversals all fell together, so there is no axis left that needs the
+  // slack, and holding the old ceilings would leave five of the six a factor
+  // away from anything they could catch.
+  //
+  // They bite hard, which is the point of tightening them. Every candidate
+  // M2.2b measured is over the 10k span ceiling by between four and eight
+  // times, the greedy pass this replaced included at 1,359,680 against 200,000,
+  // so reverting any part of this change fails here rather than only moving the
+  // pins above.
+  it('keeps both corpora under the ceilings M2.2c states', () => {
+    expect(smallQuality.totalSpan).toBeLessThanOrEqual(16_000);
+    expect(smallQuality.depth).toBeLessThanOrEqual(70);
+    expect(smallQuality.reversals).toBeLessThanOrEqual(50);
 
-    expect(largeQuality.totalSpan).toBeLessThanOrEqual(1_400_000);
-    expect(largeQuality.depth).toBeLessThanOrEqual(220);
-    expect(largeQuality.reversals).toBeLessThanOrEqual(6_327);
+    expect(largeQuality.totalSpan).toBeLessThanOrEqual(200_000);
+    expect(largeQuality.depth).toBeLessThanOrEqual(175);
+    expect(largeQuality.reversals).toBeLessThanOrEqual(1_000);
   });
 
   // The gap this file exists to make visible.
@@ -592,6 +607,14 @@ describe('acyclic view quality on the bench corpora', () => {
   // already pinned above. This one is here to say what the pinned number MEANS,
   // and it should keep failing to be interesting until a breaker lands that
   // actually closes the gap.
+  //
+  // M2.2c narrowed it and did not close it, 203 ranks down to 160 against 60
+  // authored, so this still holds and the assertion is unchanged. Depth is now
+  // the whole of the remaining gap: the 10k view mints 174,222 dummies against
+  // the ground truth's 32,050, and a view that occupied 60 ranks would mint
+  // about that. WHEN THIS TEST FINALLY FAILS, that is the win landing, and the
+  // right response is to turn it into a positive assertion with the new depth
+  // in it rather than to lower the multiplier.
   it('leaves the 10k view far deeper than the corpus has authored layers', () => {
     const authoredLayers = 60;
     expect(largeQuality.depth).toBeGreaterThan(2 * authoredLayers);

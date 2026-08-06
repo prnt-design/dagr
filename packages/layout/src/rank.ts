@@ -5,7 +5,7 @@ import { InternalLayoutError } from './errors.js';
 import type { RankStage } from './types.js';
 
 /**
- * The default rank stage: greedy feedback-arc-set cycle breaking, then
+ * The default rank stage: least-squares feedback-arc-set cycle breaking, then
  * longest-path ranking over the acyclic view that leaves behind.
  */
 

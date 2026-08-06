@@ -2,9 +2,9 @@ import type { EdgeId, Graph, NodeId } from '@dagr/graph';
 import { InternalLayoutError } from './errors.js';
 
 /**
- * Cycle breaking for the rank stage: the greedy feedback-arc-set heuristic of
- * Eades, Lin and Smyth (1993), usually called GR, with its reversals scoped to
- * the strongly connected components of the input.
+ * Cycle breaking for the rank stage: a least-squares vertex order, with the
+ * backward arcs of that order reversed, scoped to the strongly connected
+ * components of the input.
  *
  * The output is a set of edge ids, not a modified graph. Nothing here touches
  * the caller's graph, because not touching it is the pipeline's one hard
@@ -12,17 +12,30 @@ import { InternalLayoutError } from './errors.js';
  * for the router to undo later.
  */
 
-/** The bucket a vertex with no out-arcs left sits in. Emptied before any other. */
-const SINK_BIN = 0;
-
-/** The bucket a vertex with no in-arcs left sits in. Emptied after the sinks. */
-const SOURCE_BIN = 1;
-
-/** The first bucket holding a vertex by its `outdeg - indeg`. See {@link binFor}. */
-const DELTA_BASE = 2;
-
-/** The empty end of a bucket's linked list, and of a vertex's links within it. */
+/** The empty end of a list, and the unvisited mark in the components pass. */
 const NONE = -1;
+
+/**
+ * How far the solver drives the residual down before its answer is taken.
+ *
+ * Measured rather than picked: the answer stops moving at 1e-3 on both bench
+ * corpora and is identical at every tolerance from there down to 1e-12, so this
+ * is one step inside the plateau rather than on its edge. See the convergence
+ * section of {@link feedbackArcSet}.
+ */
+const RESIDUAL_TOLERANCE = 1e-4;
+
+/**
+ * The most solver iterations any one call may spend.
+ *
+ * A quality knob and never a correctness one: the solver's output is only ever
+ * used to ORDER the vertices, and every linear order yields a legal feedback
+ * set, so stopping early returns a worse answer and never a wrong one. Both
+ * bench corpora converge well inside it (24 iterations on the 1k, 46 on the
+ * 10k), so it is a guard against a pathological spectrum rather than a budget
+ * the normal path spends.
+ */
+const ITERATION_CAP = 200;
 
 /**
  * An entry of one of this module's own arrays, which is always present because
@@ -41,17 +54,46 @@ function at(values: { readonly [index: number]: number | undefined }, index: num
 }
 
 /**
+ * {@link at} for one array type each, which is the whole reason they exist.
+ *
+ * `at` takes an index signature so that one guard can serve every array in this
+ * file, and that makes its argument position MEGAMORPHIC: it is handed
+ * `Int32Array`, `Float64Array` and plain arrays, so the engine cannot settle on
+ * one shape and every read through it pays for the lookup. That is free
+ * everywhere in this module except the solver, which reads through it about
+ * seventeen million times on the 10k corpus. These two are the same guard with the
+ * argument nailed down to one type each, used only in the loops that are hot.
+ */
+function atInt(values: Int32Array, index: number): number {
+  const value = values[index];
+  if (value === undefined) throw new InternalLayoutError(`no entry at index ${String(index)}`);
+  return value;
+}
+
+function atFloat(values: Float64Array, index: number): number {
+  const value = values[index];
+  if (value === undefined) throw new InternalLayoutError(`no entry at index ${String(index)}`);
+  return value;
+}
+
+/**
  * The edges that have to be treated as running the other way for the graph to
  * become acyclic. Reversing exactly these, and nothing else, leaves a DAG.
  *
  * ## What it computes
  *
- * GR builds a vertex sequence and then calls every arc that runs backwards in
- * that sequence a feedback arc. The sequence is grown from both ends: a vertex
- * with no remaining out-arcs (a sink) goes to the front of the tail sequence, a
- * vertex with no remaining in-arcs (a source) goes to the back of the head
- * sequence, and when neither exists the vertex maximising `outdeg - indeg` goes
- * to the back of the head sequence. Head then tail is the order.
+ * Every vertex gets a real-valued height, and the arcs that run downhill in
+ * those heights are the feedback set. The heights are the ones minimising
+ *
+ *     sum over arcs (u, v) of (s(v) - s(u) - 1)^2
+ *
+ * which is the least-squares statement of "put every target one step below its
+ * source". Setting the gradient to zero gives `L s = b`, where `L` is the
+ * graph's undirected Laplacian counting parallel arcs with multiplicity and
+ * `b(u) = indeg(u) - outdeg(u)`, and that system is solved by a
+ * Jacobi-preconditioned conjugate gradient. Exact ties in `s` fall back to
+ * vertex number, and the whole order is flipped if that leaves more arcs
+ * pointing backwards than forwards; see the bound section.
  *
  * The set returned is those backward arcs whose two endpoints lie in the SAME
  * strongly connected component of the input graph. A backward arc between two
@@ -59,17 +101,98 @@ function at(values: { readonly [index: number]: number | undefined }, index: num
  * no cycle needs it turned round, and turning it round only stretches the view
  * the rank stage then has to rank.
  *
+ * ## Why least squares rather than greedy
+ *
+ * This pass used to be the greedy feedback-arc-set heuristic of Eades, Lin and
+ * Smyth (1993), usually called GR, which builds its order by repeatedly taking
+ * a sink, then a source, then the vertex maximising `outdeg - indeg`. GR is a
+ * LOCAL rule: it decides where a vertex goes from that vertex's own degrees and
+ * never revisits the decision. On a layered graph that is exactly the
+ * information it needs least. M2.2b measured what it cost, and the whole case
+ * for this change is one row of that table: on the 10k corpus GR left a view
+ * 203 ranks deep on a graph authored with 60 layers, and the depth is paid one
+ * dummy node per rank per edge that spans it.
+ *
+ * Least squares is a GLOBAL rule. Every arc pulls its two endpoints, the
+ * solution is the balance of all of them at once, and a handful of arcs
+ * pointing the wrong way cannot move a height far because the arcs around it
+ * hold it in place. That is what recovers a layering from a graph that has one:
+ * the 2% of the 10k corpus authored as back edges are outvoted by the 98% that
+ * are not, rather than being taken at face value one vertex at a time.
+ *
+ * Being a physical analogy rather than a proof, it is not a guarantee, and the
+ * numbers below are what it is claimed on.
+ *
+ * ## What quality actually means here
+ *
+ * The caller is the rank stage, and what it does with this set is build an
+ * acyclic view and rank it. The number it pays for is the TOTAL SPAN of that
+ * view, the sum over its edges of `max(0, rank(target) - rank(source) - 1)`,
+ * because that is exactly one dummy node per rank an edge crosses beyond the
+ * first once M2.4b's splitter exists. The reversal count is a CONSTRAINT and
+ * not the objective: a drawing with a third of its edges pointing backwards is
+ * not a drawing anyone wants, but between two answers that both read, the one
+ * that mints fewer dummies wins. M2.2b's record is the long form of this and it
+ * is worth reading before changing anything here, because it is a list of four
+ * families of heuristic that cut the reversal count and made span WORSE.
+ *
+ * The numbers, on the two bench corpora, as reversals / depth / dummies. This
+ * pass on the 10k corpus (10,000 nodes, 40,000 edges, 60 authored layers):
+ * 857 / 160 / 174,222, against the greedy pass it replaces at
+ * 4,620 / 203 / 1,359,680. On the 1k (1,000 nodes, 4,000 edges, 24 authored
+ * layers): 40 / 64 / 14,746 against 74 / 81 / 22,726. So it is better on ALL
+ * THREE numbers on BOTH corpora, which is the bar M2.2b set for a replacement
+ * and is a stronger result than that bar asked for: the bar allowed depth to
+ * stay where it was and only required span to fall.
+ *
+ * The target it does not reach is still the ground truth, reversing exactly the
+ * edges the corpus generator authored as back edges, which is knowledge no
+ * cycle breaker has: 796 / 60 / 32,050 on the 10k. So the gap has gone from a
+ * factor of forty-two to a factor of five, and the remaining five is depth. A
+ * view 160 ranks deep on 60 authored layers still stretches every long edge in
+ * it, and closing that is the next thing worth measuring here.
+ *
+ * ## What was measured beside it and NOT taken
+ *
+ * Recorded so the next reader does not spend a run rediscovering them. All
+ * figures under `longestPathRanks` on the 10k, as reversals / depth / dummies.
+ *
+ * DROPPING THE COMPONENT RULE, which is to say reversing every backward arc of
+ * the same least-squares order: 1,117 / 124 / 128,141, and 110 / 39 / 8,388 on
+ * the 1k. That is 26% LESS span than what ships, at 30% more reversals, and it
+ * is the one row here that beats the shipping choice on the stated objective.
+ * It is not taken because the component rule is a shipped property with a proof
+ * and a test of its own (`layout.cycles.quality.test.ts` calls a violation of
+ * it a bug and not a trade), and swapping the core heuristic is already one
+ * decision. Taking it is a one-line change and a deliberate one, not a tuning
+ * pass: it means accepting that some edges are drawn backwards when no cycle
+ * required it, in exchange for a quarter of the dummy nodes.
+ *
+ * A HINGE OBJECTIVE, charging `max(0, s(u) + 1 - s(v))^2` so that a long
+ * forward arc costs nothing and only a backward or too-short arc is penalised,
+ * relaxed from the least-squares answer. At 1,024 rounds it reaches
+ * 664 / 117 / 101,146 unscoped, the best row anything here produced. IT IS NOT
+ * TAKEN, and the reason is the lesson M2.2b already wrote down about quoting a
+ * budget beside a figure: that row is its best point and not its converged one.
+ * At 4,096 rounds the same relaxation is 594 / 140 / 127,695 and at 16,384 it
+ * is 485 / 184 / 186,856, so it degrades monotonically towards the shipping
+ * greedy pass as it converges. A candidate that wins only at a truncated
+ * iteration budget has not won, and 1,024 is a number tuned to this corpus. It
+ * is a lead, and what would make it a result is a stopping rule that is about
+ * the graph rather than about the count.
+ *
  * ## Why scoping to components is safe
  *
  * A proof rather than a measurement, because the neighbouring rule that looks
- * like it is a measurement and is false. Let sigma be the order this pass
- * builds, and reverse exactly the arcs (u, v) with sigma(v) < sigma(u) and u
+ * like it is a measurement and is false. Let sigma be any linear order of the
+ * vertices, and reverse exactly the arcs (u, v) with sigma(v) < sigma(u) and u
  * and v in one strongly connected component of the INPUT graph. The view
- * `acyclic.ts` builds from that result is acyclic. The claim is about the VIEW
- * rather than about the graph with the set applied, because the view drops
- * self loops and a self loop is the one cycle no reversal can break; see Self
- * loops below. Suppose the view holds a cycle C. Every arc of C therefore has
- * two distinct endpoints.
+ * `acyclic.ts` builds from that result is acyclic. Nothing in the argument
+ * mentions how sigma was built, which is why it survived this module's change
+ * of heuristic unaltered. The claim is about the VIEW rather than about the
+ * graph with the set applied, because the view drops self loops and a self loop
+ * is the one cycle no reversal can break; see Self loops below. Suppose the
+ * view holds a cycle C. Every arc of C therefore has two distinct endpoints.
  *
  * If every arc of C is intra-component, then after the transform every arc of C
  * runs forward in sigma: a forward one was kept and a backward one was turned
@@ -80,171 +203,94 @@ function at(values: { readonly [index: number]: number | undefined }, index: num
  * which is kept exactly as authored. Every arc of the result either stays
  * inside one component or is an original cross-component arc, and an original
  * cross-component arc strictly advances the topological order of the
- * condensation, the DAG of components, which is what makes that DAG a DAG.
- * (Condensation means that and only that in this file: the parallel-arc
- * collapse below is called the weighted simple graph.) So the component index
- * never falls along C and rises at least once, and again C cannot close.
+ * condensation, the DAG of components, which is what makes that DAG a DAG. So
+ * the component index never falls along C and rises at least once, and again C
+ * cannot close.
  *
  * This does NOT contradict the four-node witness M2.2b records, `u->v, v->a,
  * a->b, b->a, u->b` with components {a, b}, {u} and {v}. That witness refutes
- * dropping SOME cross-component reversals while keeping others. Under the order
- * (v, a, b, u) the backward set is {u->v, b->a, u->b}; drop `u->v` alone and
- * the view holds `u->v, v->a, a->b, b->u`, which is a cycle, because the
- * reversed `u->b` is still there to close it. Drop the whole class at once and
- * the view holds `u->v, v->a, a->b, a->b, u->b`, which is acyclic. The witness
- * is in `layout.cycles.test.ts` with that reading beside it.
+ * dropping SOME cross-component reversals while keeping others, not dropping
+ * the whole class at once, which is what the paragraphs above prove. The
+ * witness is in `layout.cycles.test.ts` with that reading beside it.
  *
- * ## What is actually guaranteed
+ * ## The `m/2` bound, and how it survives
  *
- * The paper proves `|F| <= m/2 - n/6` for a digraph with NO TWO-CYCLES, an
- * oriented graph, which is a stronger hypothesis than being simple and self
- * loop free. A digon breaks it outright, and Dagr's inputs are full of digons:
- * this module's own `breaks a two-node cycle with exactly one edge` test has
- * `n = 2`, `m = 2` and `|F| = 1` against a bound of `2/2 - 2/6 = 0.667`. The
- * `n/6` term is also earned per vertex removed with arcs still attached, so a
- * vertex with no arcs left inflates `n` for free and a sparse graph can miss
- * the bound without a digon anywhere: a 3-cycle plus two isolated vertices is
- * `|F| = 1` against `1.5 - 0.833 = 0.667`. It only starts to say anything once
- * `m >= n/3`.
+ * The old pass inherited a bound from its paper: GR's greedy pick always has
+ * `indeg <= outdeg`, so it never adds more backward arcs than forward ones, and
+ * `|F| <= m/2` fell out of that. Least squares proves nothing of the kind. Its
+ * order comes from a numerical solve, and there are graphs where the solve is
+ * degenerate and the order it produces is close to the worst one available: a
+ * directed cycle whose vertices were added in the order that walks it backwards
+ * has `indeg == outdeg` at every vertex, so `b` is zero everywhere, every
+ * height ties at zero, the tie break hands back insertion order, and every arc
+ * but one runs backwards in it.
  *
- * So what is claimed here, and what the tests assert, is the `m/2` half alone.
- * That half survives both the weighting below and every input above, by the
- * argument that carries the proof: the deltas of the remaining vertices always
- * sum to zero, so the greedy pick has `indeg <= outdeg` and adds no more
- * backward arcs than forward ones, and sinks and sources add no backward arcs
- * at all. It survives the component rule for free, since that rule only takes
- * arcs OUT of the backward set the argument bounds, so the returned set is a
- * subset of a set already under `m/2`. Half is still worth having, and it is
- * still the difference between this and the DFS back-edge set a naive cycle
- * breaker produces, which has no bound at all: a DFS reverses whatever its
- * traversal order happens to hit.
+ * So the bound is restored by construction rather than inherited. The backward
+ * arcs of an order and the backward arcs of its REVERSE partition the arcs
+ * between them, since an arc runs backwards in exactly one of the two, so the
+ * smaller of those two sets is at most `m/2`. This pass counts the backward
+ * arcs, flips the order when that count is more than half, and takes the
+ * smaller side. The bound is then exact and unconditional, and the component
+ * rule only takes arcs OUT of the set it bounds, so the returned set is a
+ * subset of a set already under `m/2`.
  *
- * Do not read that as "and therefore DFS reverses more edges here". Measured on
- * the 10k bench corpus, DFS back edges reverse FEWER of them than this does,
- * 1,651 against 4,620, and leave a view 601 ranks deep against 203. The bound
- * is about the count, and the count is not the quality this module's caller
- * buys. The next section is what is.
+ * The flip is not defensive padding for a case that cannot arise. The backwards
+ * cycle above is the case, it is small enough to check by eye, and it is in
+ * `layout.cycles.test.ts`: without the flip that graph reverses `n - 1` of its
+ * `n` arcs and with it exactly one.
  *
- * ## What quality actually means here
+ * As before, the bound is a real guarantee about the wrong quantity. Half the
+ * edges reversed is not a drawing anyone would accept, so nothing is ever
+ * ACTUALLY close to it: measured, this pass reverses 2.1% of the 10k corpus's
+ * arcs and 1.0% of the 1k's. It is kept because it is what rules out the
+ * degenerate answer entirely, not because it is tight.
  *
- * The caller is the rank stage, and what it does with this set is build an
- * acyclic view and rank it. The number it pays for is the TOTAL SPAN of that
- * view, the sum over its edges of `max(0, rank(target) - rank(source) - 1)`,
- * because that is exactly one dummy node per rank an edge crosses beyond the
- * first once M2.4b's splitter exists. Span follows the DEPTH of the view ON THE
- * 10k CORPUS, which is the corpus that decides this rather than a fact about
- * span in general (the corpus paragraph below is the correction, and it is
- * there because the wide version of this sentence is false), and depth runs
- * against the reversal count across every candidate measured so far, on both
- * bench corpora. So the `m/2` bound above is a real guarantee about the
- * wrong quantity, and a change here that cuts the reversal count is not, on its
- * own, an improvement. The ground-truth row below is the one exception, and it
- * is not an algorithm: the two objectives are not inherently opposed, they are
- * just opposed in every heuristic anyone has tried here.
+ * ## Convergence
  *
- * The numbers, from the M2.2b measurement run, on the 10k corpus (10,000 nodes,
- * 40,000 edges, 60 authored layers), which is the corpus M2.4b, M2.9, M3.9 and
- * M4.10 all commit against. This module: 4,620 reversals, 203 ranks, 1,359,680
- * dummies, and 74, 81 and 22,726 on the 1k. The same order with EVERY backward
- * arc reversed, which is what this module returned before the component rule:
- * 6,327 reversals, 154 ranks, 1,414,263 dummies, and 422, 62 and 40,430.
- * Reversing exactly the edges the corpus authored as back edges, which is
- * knowledge no cycle breaker has and is here only as a bound to argue against:
- * 796 reversals, 60 ranks, 32,050 dummies. So there is a factor of forty on the
- * table and greedy does not find it.
+ * Conjugate gradient on `L s = b`, preconditioned by the diagonal of `L`, which
+ * is each vertex's degree. `L` is singular, its null space being a constant per
+ * WEAKLY connected component, and the system is consistent because `b` sums to
+ * zero over each of those components. The null direction is harmless twice
+ * over: conjugate gradient never leaves the subspace its residual starts in,
+ * and a constant added to one weakly connected component cannot change the
+ * comparison across any arc, because an arc has both endpoints in one such
+ * component.
  *
- * The candidates measured beside it are recorded so that the next reader does
- * not spend a run on them blind. All the figures here are under
- * `longestPathRanks`; the ranker matters and the paragraph after next says how.
- * DFS back edges: 1,651 reversals, 601 ranks, 1,601,415 dummies, so a cut of
- * nearly three times in the reversal count bought 18% MORE of the thing that is
- * actually paid for. This same heuristic run PER strongly connected component,
- * which rebuilds the order inside each component rather than scoping the
- * reversals of one global order: 2,454 reversals, 320 ranks, 1,522,128 dummies,
- * so 47% fewer reversals than this pass at 1.6 times the depth and 12% more
- * span. That last one is the instructive failure under this ranker, because it
- * runs on the same idea this pass does and takes it one step too far.
+ * The stopping rule is a residual tolerance rather than an iteration count, and
+ * the difference matters for the reason the hinge row above is not taken: a
+ * count is tuned to a corpus and a tolerance is a statement about the solve.
+ * Measured, the answer is IDENTICAL at every tolerance from 1e-3 to 1e-12 on
+ * both corpora, so {@link RESIDUAL_TOLERANCE} sits inside a plateau rather than
+ * on a cliff. It takes 24 iterations on the 1k and 46 on the 10k.
  *
- * The idea both of them turn on: an edge between two components lies on no
- * cycle, so NO CYCLE REQUIRES reversing it, and the order built below makes
- * 1,707 of its 6,327 backward arcs cross a boundary (348 of 422 on the 1k).
- * Those 1,707 are exactly the reversals this pass declines, which is where
- * 6,327 minus 1,707 equals 4,620 comes from. Note the exact strength of the
- * component theorem taken alone: it says a construction avoiding those
- * reversals exists, NOT that they can be dropped from a set one at a time,
- * because reversing a set is not deleting it and a reversed arc creates paths
- * the original graph did not have. Dropping SOME of them is what has no theorem
- * behind it, and the four-node witness above is the counterexample; dropping
- * the whole class is the theorem two sections up. But a reversal SHORTENS the
- * path it sat on as well as pointing an edge backwards, so taking away
- * reversals nobody needed makes the longest path longer, and that is why this
- * pass costs 203 ranks against the unscoped order's 154. That tension is the
- * shape of the problem, and the depth is a price M2.2b's bar row states and
- * accepts rather than one to leave unsaid.
- *
- * ## Which ranker those spans assume
- *
- * All of them assume `longestPathRanks`, and the verdicts move under the
- * network simplex ranker M2.3 shipped. At its default 20,000-pivot budget the
- * 10k spans become 423,426 for the unscoped order, 311,179 for the
- * per-component variant and 268,589 for this pass, which reads as though
- * per-component wins. IT DOES NOT: that budget does not converge the 10k, and
- * the rows are not equally far from converged, so the column ranks convergence
- * SPEED. At 200,000 pivots the unscoped order is 224,789, this pass 226,676 and
- * the per-component variant 309,732, and the order is back to where longest
- * path had it. Quote a pivot budget beside any simplex figure, and treat a
- * candidate that wins only at a truncated budget as a lead rather than a
- * result. Depth was identical under both rankers in every row measured, at both
- * budgets.
- *
- * State the corpus with any claim made here. On the 1k corpus the depth result
- * is the same (DFS is 86% deeper than the unscoped order at a tenth of the
- * reversals) but the span result INVERTS: DFS comes out at 30,954 dummies
- * against the unscoped order's 40,430, 24% fewer, and every candidate measured
- * cuts span there. A run that measured only the 1k would have concluded that
- * DFS is an improvement. It is not: this pass reaches 22,726 on that corpus,
- * 27% under DFS. The 1k has 242 intra-component edges out of 4,000 against the
- * 10k's 20,229 out of 40,000, so its cycle structure is nearly trivial and a
- * deeper view has little to span across. See M2.2b in `ROADMAP.md` for both
- * corpora in full and the other two families measured.
- *
- * The components and the parallel-arc collapse come out of ONE CSR build, and
- * that is what makes the rule affordable. M2.2b sizes a component-scoped
- * candidate against a Tarjan pass measured at 4.1ms on the 10k, against a time
- * budget of about 2ms, on the assumption that such a pass would run IN FRONT OF
- * the work below. This one replaces that work: the per-vertex arc `Map`s became
- * typed arrays, Tarjan walks the same collapsed rows the greedy walks, and the
- * call came out FASTER than the unscoped version rather than slower, 8.5ms
- * median against 11.0ms on the 10k (warm, median of 25, both measured in the
- * same process on one machine, so the ratio is the claim and the absolute is
- * not).
+ * Convergence is a quality knob and never a correctness one. The heights are
+ * only ever used to sort the vertices, every linear order gives a legal
+ * feedback set, and so an early stop at {@link ITERATION_CAP} returns a worse
+ * answer rather than a wrong one. That is worth stating because it is what
+ * makes a numerical method acceptable in a pass whose output has to be exactly
+ * right.
  *
  * ## Complexity
  *
- * O(V + E) time and space. The passes are one walk of `graph.edges()` for the
- * degrees, a second walk to fill the CSR rows, one linear collapse per row
- * that folds parallel arcs together in place, one Tarjan over the collapsed
- * out-rows, the greedy itself, and one final walk of the edges to collect the
- * set. Tarjan runs over the COLLAPSED rows, so a pair with k parallel arcs
- * between it is traversed once rather than k times.
+ * O(V + E) space, and O(k(V + E) + V log V) time for k solver iterations. The
+ * passes are one walk of `graph.edges()` for the degrees and the right-hand
+ * side, a second to fill the CSR rows, one linear collapse of parallel arcs per
+ * row, one Tarjan over the collapsed rows, k solver iterations each walking the
+ * arcs once, one sort of the vertices by height, and one final walk of the
+ * edges to collect the set. Tarjan runs over the COLLAPSED rows, so a pair with
+ * k parallel arcs between it is traversed once rather than k times.
  *
- * The vertex to pick each round comes from degree buckets rather than from a
- * scan of what is left: each vertex sits in one bucket keyed by its current
- * `outdeg - indeg`, removing a vertex moves only its neighbours between
- * buckets, and the pointer at the highest occupied bucket only ever walks down
- * as far as it was pushed up. A rescan per round would be O(V * E), which is
- * the difference between laying out a 10k-node graph and not.
+ * It costs more than the pass it replaces, and the trade is deliberate. On the
+ * 10k corpus this call is about twice the greedy one, and it removes about 1.19
+ * million dummy nodes from everything downstream of it. M2.4b measured what
+ * those cost when they existed: 5.2 seconds and 735MB on a pipeline that runs
+ * in about 30ms without them. A cycle breaker is not the place to save
+ * milliseconds at the price of dummies.
  *
- * `graph.edges()` is walked three times per call, off one materialised array.
- * Taking the nodes and edges as parameters instead, so that the rank stage
- * could share the arrays it materialises anyway, was considered and
- * deliberately deferred: it buys an unmeasured saving and costs a function that
- * can be handed arrays disagreeing with its own graph. That is the class of bug
- * the pipeline spent M2.4a making unrepresentable at the stage boundary, by
- * having a stage return its own fields and the runner supply the graph, and
- * reintroducing it here as a private convention would be going the other way.
- * M0.2's bench harness is what should decide it, on a measurement rather than
- * on a count of allocations.
+ * `graph.edges()` is walked once into a materialised array and that array is
+ * then walked several times, for the reason the old pass did the same: every
+ * walk wants the same edges in the same order as the first, so asking the graph
+ * again would pay for a copy to be told the same thing.
  *
  * ## Self loops
  *
@@ -253,35 +299,60 @@ function at(values: { readonly [index: number]: number | undefined }, index: num
  * runner's rank check compares endpoint ranks with `<=` precisely so that both
  * ends of a self loop may share a rank. A loop is a cycle, so its vertex is in
  * a component with itself and would pass the component test, but it never
- * reaches that test: it is skipped when the rows are built, skipped again when
- * the set is collected, and so never becomes a backward arc to scope.
+ * reaches that test: it is skipped when the arcs are numbered, so it is absent
+ * from the degrees, from the right-hand side, from the rows and from the final
+ * collection. Leaving it in would be wrong and not merely wasteful, because it
+ * contributes `(s(v) - s(v) - 1)^2` to the objective, a constant the solve
+ * cannot reduce, while adding two to its vertex's degree and so damping every
+ * real arc attached to it.
  *
  * ## Parallel edges
  *
- * GR runs over the weighted simple graph, where all arcs from one ordered
- * pair collapse into one arc whose weight is how many there were, and
- * the reversal decision is then taken per pair. Every copy between the same
- * two nodes therefore goes the same way, and the component test cannot split
- * them either, since every copy has the same two endpoints and so the same
- * answer. Deciding per edge instead would let one copy of `a -> b` be reversed
- * and another not, which puts a two-cycle back into the supposedly acyclic
- * view, which is the whole thing this exists to prevent.
+ * The reversal decision is taken per ordered PAIR and not per edge, because it
+ * is taken by comparing the two endpoints' positions and every copy of a pair
+ * has the same two endpoints. Deciding per edge instead would let one copy of
+ * `a -> b` be reversed and another not, which puts a two-cycle back into the
+ * supposedly acyclic view, which is the whole thing this exists to prevent.
+ * Under the greedy pass this needed a weighted collapse to arrange; here it is
+ * a property of the rule.
+ *
+ * Copies do count in the solve, once each. Two copies of `a -> b` pull their
+ * endpoints twice as hard as one, which is the right answer for the same reason
+ * `acyclic.ts` keeps both: M2.4b mints a dummy per copy per rank spanned, so
+ * the second copy costs exactly what the first one does.
  *
  * ## Determinism
  *
  * Same graph, same set, always. Vertices are numbered by `graph.nodes()` and
  * arcs are walked in `graph.edges()` order, both of which `@dagr/graph`
  * guarantees to be insertion order, and every intermediate structure here is an
- * array whose contents are placed in one of those two orders. A vertex's
- * collapsed row holds its neighbours in FIRST-OCCURRENCE order over the edges,
- * which is what the insertion-ordered `Map` this used to keep gave and what the
- * stamped collapse below preserves. Buckets are FIFO queues seeded in insertion
- * order, so a tie between two vertices neither of which has moved bucket goes
- * to the one added to the graph first, and a tie involving a vertex that has
- * moved goes to whichever arrived in the bucket first, which is itself fixed by
- * the graph's order. M3 re-runs layout on every patch, and a ranker that
- * resolved a tie differently on a re-run would move nodes the user never
+ * array whose contents are placed in one of those two orders. The solve is
+ * floating point but it is not therefore unpredictable: every operation is an
+ * IEEE-754 double operation in an order this file fixes, with no transcendental
+ * function anywhere in it, so it gives the same bits on every engine. The sort
+ * that turns heights into an order compares height first and vertex number
+ * second, which is a total order with no ties left in it, so it does not depend
+ * on the sort being stable. M3 re-runs layout on every patch, and a breaker
+ * that resolved a tie differently on a re-run would move nodes the user never
  * touched.
+ *
+ * BE PRECISE ABOUT WHAT THE VERTEX-NUMBER TIE BREAK ACTUALLY DECIDES, because
+ * the loose reading of it is wrong and it is worth knowing which. It settles
+ * EXACT equality of two doubles and nothing else. Two vertices that are
+ * structurally interchangeable, the two ends of a two-cycle hanging off one
+ * place in the graph being the smallest example, have equal heights in exact
+ * arithmetic and do NOT generally come out of the solve as equal doubles: on
+ * the seven-node witness in `layout.cycles.test.ts` they land at
+ * -1.6999999999999995 and -1.6999999999999997, so the last bit of an iterative
+ * solve is what puts one before the other. That is reproducible, which is the
+ * property M3 needs, and it is arbitrary, which is worth saying rather than
+ * implying that the tie break governs it. It costs nothing in quality, since
+ * the two orders of a pair of interchangeable vertices are equally good by
+ * construction, and it is why the witnesses in the test suite quote the arcs
+ * that come out reversed rather than the heights that decided them. What it
+ * does mean is that a change to the solver or to its tolerance can reorder such
+ * a pair, so a pinned set moving on a graph with symmetric parts is a weaker
+ * signal than a pinned set moving on one without.
  *
  * Tarjan is deterministic for the same two reasons: roots are tried in vertex
  * number order and each row is walked in first-occurrence order, so the
@@ -294,128 +365,240 @@ function at(values: { readonly [index: number]: number | undefined }, index: num
 export function feedbackArcSet(graph: Graph): ReadonlySet<EdgeId> {
   const nodes = graph.nodes();
   const count = nodes.length;
-  // Materialised once and walked three times below, twice through the vertex
-  // numbers resolved from it and once for the ids. `graph.edges()` builds a
-  // fresh array on every call, and every walk wants the same edges in the same
-  // order as the first, so asking again would pay for a copy to be told the
-  // same thing.
   const edges = graph.edges();
   const numbers = new Map<NodeId, number>();
   for (const [number, node] of nodes.entries()) numbers.set(node.id, number);
 
   // The edges by vertex number, parallel to `edges`, with NONE where an edge is
   // not an arc this pass has anything to say about. Resolved once here so that
-  // the two walks after this one are array reads rather than two more hash
-  // lookups per edge, which is worth about a millisecond on the 10k corpus.
+  // every later walk is an array read rather than two more hash lookups.
   const arcSource = new Int32Array(edges.length).fill(NONE);
   const arcTarget = new Int32Array(edges.length).fill(NONE);
+  // Degree counts parallel arcs with multiplicity, because the objective sums
+  // over arcs. It is the diagonal of the Laplacian and so the preconditioner.
+  const degree = new Float64Array(count);
+  // `b(u) = indeg(u) - outdeg(u)`, the right-hand side of `L s = b`.
+  const load = new Float64Array(count);
   const outDegree = new Int32Array(count);
-  const inDegree = new Int32Array(count);
-  // Every arc that is not a self loop, counted once. Bounds how far a delta can
-  // travel in either direction, which is what sizes the bucket array, and it is
-  // also the length of the uncollapsed CSR rows.
-  let weight = 0;
+  let arcCount = 0;
   for (const [index, edge] of edges.entries()) {
     const source = numbers.get(edge.source);
     const target = numbers.get(edge.target);
     // Unreachable: an edge's endpoints are always nodes of the graph.
     if (source === undefined || target === undefined) continue;
-    // A self loop is skipped, and not only because it is never reversed. It
-    // adds one to BOTH of its vertex's degrees, so it leaves `outdeg - indeg`
-    // untouched and still pushes the vertex out of SINK_BIN or SOURCE_BIN into
-    // a delta bucket. Counting it would change the vertex's PRIORITY CLASS, not
-    // its key: a source with a loop on it stops being picked early, gets picked
-    // late instead, and drags the arcs around it backwards in the order. That
-    // is how a graph whose only cycles are self loops ends up with a real edge
-    // reversed.
     if (source === target) continue;
     arcSource[index] = source;
     arcTarget[index] = target;
+    degree[source] = at(degree, source) + 1;
+    degree[target] = at(degree, target) + 1;
+    load[source] = at(load, source) - 1;
+    load[target] = at(load, target) + 1;
     outDegree[source] = at(outDegree, source) + 1;
-    inDegree[target] = at(inDegree, target) + 1;
-    weight += 1;
+    arcCount += 1;
   }
 
-  // The arcs as CSR, one row per vertex, filled in edge order so that a row
-  // lists its neighbours in first-occurrence order. Both directions are needed:
-  // removing a vertex has to reach the vertices it points at AND the ones that
-  // point at it. A `Map` per vertex would collapse parallel arcs as it went and
-  // read in the same order, which is what this replaced, at the price of a
-  // hash lookup per arc and an allocation per vertex.
-  const outStart = new Int32Array(count + 1);
-  const inStart = new Int32Array(count + 1);
-  for (let vertex = 0; vertex < count; vertex += 1) {
-    outStart[vertex + 1] = at(outStart, vertex) + at(outDegree, vertex);
-    inStart[vertex + 1] = at(inStart, vertex) + at(inDegree, vertex);
-  }
-  const outNeighbour = new Int32Array(weight);
-  const inNeighbour = new Int32Array(weight);
-  const outCursor = outStart.slice(0, count);
-  const inCursor = inStart.slice(0, count);
+  const componentOf = stronglyConnected(count, arcCount, arcSource, arcTarget, outDegree);
+  const height = solveHeights(count, arcSource, arcTarget, degree, load);
+  const position = orderBy(height);
+
+  // The order or its reverse, whichever leaves fewer arcs pointing backwards.
+  // An arc runs backwards in exactly one of the two, so the smaller side is at
+  // most half of them, which is the bound the docblock restores by doing this.
+  let backward = 0;
   for (let index = 0; index < edges.length; index += 1) {
     const source = at(arcSource, index);
-    const target = at(arcTarget, index);
     if (source === NONE) continue;
-    outNeighbour[at(outCursor, source)] = target;
-    outCursor[source] = at(outCursor, source) + 1;
-    inNeighbour[at(inCursor, target)] = source;
-    inCursor[target] = at(inCursor, target) + 1;
+    if (at(position, source) > at(position, at(arcTarget, index))) backward += 1;
   }
+  const flipped = backward * 2 > arcCount;
 
-  // Which row last claimed a given neighbour, and where in the collapsed output
-  // it put it. A stamp rather than a cleared flag array, so the collapse costs
-  // one pass over the arcs and not one pass per row.
-  const seenBy = new Int32Array(count);
-  const seenAt = new Int32Array(count);
-  const outWeight = new Int32Array(weight);
-  const inWeight = new Int32Array(weight);
+  // Every arc that runs backwards in the chosen order AND stays inside one
+  // strongly connected component. A self loop is one of the edges `arcSource`
+  // left at NONE, so it is skipped here as it was everywhere else. That skip
+  // states the rule rather than doing work, twice over: a self loop's endpoints
+  // share a position and could not compare as backward, and they trivially
+  // share a component. It is here so that the rule survives a change to either
+  // comparison.
+  const feedback = new Set<EdgeId>();
+  for (const [index, edge] of edges.entries()) {
+    const source = at(arcSource, index);
+    if (source === NONE) continue;
+    const target = at(arcTarget, index);
+    if (at(componentOf, source) !== at(componentOf, target)) continue;
+    const runsBackward = at(position, source) > at(position, target);
+    if (runsBackward !== flipped) feedback.add(edge.id);
+  }
+  return feedback;
+}
 
-  /**
-   * Folds each row's parallel arcs into one entry carrying how many there were,
-   * rewriting `start` to the collapsed row bounds.
-   *
-   * In place, and safe in place, because the write cursor never overtakes the
-   * read cursor: it advances at most once per arc read and starts each row at
-   * or before that row's first arc. First-occurrence order survives because an
-   * entry is appended when its neighbour is first seen in the row and only
-   * added to afterwards, which is exactly what the insertion-ordered `Map` this
-   * replaced did.
-   */
-  const collapse = (start: Int32Array, neighbour: Int32Array, arcs: Int32Array): void => {
-    seenBy.fill(NONE);
-    let write = 0;
+/**
+ * The heights minimising the sum over arcs of `(s(target) - s(source) - 1)^2`,
+ * by conjugate gradient on `L s = b` preconditioned by the diagonal of `L`.
+ *
+ * See {@link feedbackArcSet} for why the singular `L` is harmless and why an
+ * unconverged answer is a quality loss rather than a correctness one.
+ */
+function solveHeights(
+  count: number,
+  arcSource: Int32Array,
+  arcTarget: Int32Array,
+  degree: Float64Array,
+  load: Float64Array,
+): Float64Array {
+  const height = new Float64Array(count);
+  const residual = Float64Array.from(load);
+  const preconditioned = new Float64Array(count);
+  const direction = new Float64Array(count);
+  const applied = new Float64Array(count);
+
+  const precondition = (): void => {
     for (let vertex = 0; vertex < count; vertex += 1) {
-      const from = at(start, vertex);
-      const upto = at(start, vertex + 1);
-      start[vertex] = write;
-      for (let slot = from; slot < upto; slot += 1) {
-        const other = at(neighbour, slot);
-        if (at(seenBy, other) === vertex) {
-          const already = at(seenAt, other);
-          arcs[already] = at(arcs, already) + 1;
-          continue;
-        }
-        seenBy[other] = vertex;
-        seenAt[other] = write;
-        neighbour[write] = other;
-        arcs[write] = 1;
-        write += 1;
-      }
+      const scale = atFloat(degree, vertex);
+      preconditioned[vertex] = scale === 0 ? 0 : atFloat(residual, vertex) / scale;
     }
-    start[count] = write;
   };
 
-  collapse(outStart, outNeighbour, outWeight);
-  collapse(inStart, inNeighbour, inWeight);
+  precondition();
+  direction.set(preconditioned);
+  let residualDotPreconditioned = 0;
+  let residualNorm = 0;
+  for (let vertex = 0; vertex < count; vertex += 1) {
+    residualDotPreconditioned += atFloat(residual, vertex) * atFloat(preconditioned, vertex);
+    residualNorm += atFloat(residual, vertex) * atFloat(residual, vertex);
+  }
+  const target = RESIDUAL_TOLERANCE * RESIDUAL_TOLERANCE * residualNorm;
 
-  // Tarjan's strongly connected components over the collapsed out-rows,
-  // iterative because a 10k-node chain would overflow a recursive one and the
-  // overflow would read as a layout failure. `discovery` is a vertex's visit
-  // number and NONE means unvisited; `lowest` is the smallest discovery number
-  // reachable from its subtree without leaving the stack; a vertex whose two
-  // agree is the root of a component, which is then the run of vertices above
-  // it on the stack. `frame` is the explicit call stack: which vertex, and how
-  // far through its row.
+  for (let step = 0; step < ITERATION_CAP; step += 1) {
+    if (residualNorm <= target || residualDotPreconditioned <= 0) break;
+
+    // `L p`, assembled arc by arc: the Laplacian's action on a vector is the
+    // sum over arcs of the endpoint difference, added at one end and subtracted
+    // at the other. Never materialised as a matrix, which on the 10k corpus
+    // would be a hundred million entries to hold ten thousand rows.
+    applied.fill(0);
+    for (let index = 0; index < arcSource.length; index += 1) {
+      const source = atInt(arcSource, index);
+      if (source === NONE) continue;
+      const targetVertex = atInt(arcTarget, index);
+      const difference = atFloat(direction, source) - atFloat(direction, targetVertex);
+      applied[source] = atFloat(applied, source) + difference;
+      applied[targetVertex] = atFloat(applied, targetVertex) - difference;
+    }
+
+    let curvature = 0;
+    for (let vertex = 0; vertex < count; vertex += 1) {
+      curvature += atFloat(direction, vertex) * atFloat(applied, vertex);
+    }
+    // Zero curvature means the direction lies in the null space, which is the
+    // constant per weakly connected component. There is no descent left along
+    // it and the step would divide by zero.
+    if (curvature <= 0) break;
+
+    const stepSize = residualDotPreconditioned / curvature;
+    residualNorm = 0;
+    for (let vertex = 0; vertex < count; vertex += 1) {
+      height[vertex] = atFloat(height, vertex) + stepSize * atFloat(direction, vertex);
+      const updated = atFloat(residual, vertex) - stepSize * atFloat(applied, vertex);
+      residual[vertex] = updated;
+      residualNorm += updated * updated;
+    }
+
+    precondition();
+    let next = 0;
+    for (let vertex = 0; vertex < count; vertex += 1) {
+      next += atFloat(residual, vertex) * atFloat(preconditioned, vertex);
+    }
+    const decay = next / residualDotPreconditioned;
+    for (let vertex = 0; vertex < count; vertex += 1) {
+      direction[vertex] = atFloat(preconditioned, vertex) + decay * atFloat(direction, vertex);
+    }
+    residualDotPreconditioned = next;
+  }
+
+  return height;
+}
+
+/**
+ * The position of every vertex in the order the heights put them in, ties
+ * broken by vertex number.
+ *
+ * The comparator is a total order with no ties left in it, so this does not
+ * rest on the sort being stable, and the tie break is vertex number rather than
+ * anything structural because vertex number is graph insertion order and
+ * insertion order is what every other tie break in the layout package is
+ * stated against.
+ */
+function orderBy(height: Float64Array): Int32Array {
+  const count = height.length;
+  const order = Array.from({ length: count }, (unused, index) => index);
+  order.sort((left, right) => {
+    const difference = at(height, left) - at(height, right);
+    if (difference !== 0) return difference;
+    return left - right;
+  });
+  const position = new Int32Array(count);
+  for (const [place, vertex] of order.entries()) position[vertex] = place;
+  return position;
+}
+
+/**
+ * Tarjan's strongly connected components, as a component number per vertex.
+ *
+ * Iterative because a 10k-node chain would overflow a recursive one and the
+ * overflow would read as a layout failure. `discovery` is a vertex's visit
+ * number and NONE means unvisited; `lowest` is the smallest discovery number
+ * reachable from its subtree without leaving the stack; a vertex whose two
+ * agree is the root of a component, which is then the run of vertices above it
+ * on the stack. `frame` is the explicit call stack: which vertex, and how far
+ * through its row.
+ *
+ * It walks CSR rows with each vertex's parallel arcs collapsed to one entry, so
+ * a pair with k arcs between it is traversed once rather than k times. The
+ * collapse keeps first-occurrence order, which is what fixes the component
+ * numbering as well as the partition.
+ */
+function stronglyConnected(
+  count: number,
+  arcCount: number,
+  arcSource: Int32Array,
+  arcTarget: Int32Array,
+  outDegree: Int32Array,
+): Int32Array {
+  const start = new Int32Array(count + 1);
+  for (let vertex = 0; vertex < count; vertex += 1) {
+    start[vertex + 1] = at(start, vertex) + at(outDegree, vertex);
+  }
+  const cursor = start.slice(0, count);
+  const neighbour = new Int32Array(arcCount);
+  for (let index = 0; index < arcSource.length; index += 1) {
+    const source = at(arcSource, index);
+    if (source === NONE) continue;
+    neighbour[at(cursor, source)] = at(arcTarget, index);
+    cursor[source] = at(cursor, source) + 1;
+  }
+
+  // Folds each row's parallel arcs into one entry, rewriting `start` to the
+  // collapsed bounds. In place, and safe in place, because the write cursor
+  // never overtakes the read cursor: it advances at most once per arc read and
+  // starts each row at or before that row's first arc. A stamp rather than a
+  // cleared flag array, so this costs one pass over the arcs and not one pass
+  // per row.
+  const seenBy = new Int32Array(count).fill(NONE);
+  let write = 0;
+  for (let vertex = 0; vertex < count; vertex += 1) {
+    const from = at(start, vertex);
+    const upto = at(start, vertex + 1);
+    start[vertex] = write;
+    for (let slot = from; slot < upto; slot += 1) {
+      const other = at(neighbour, slot);
+      if (at(seenBy, other) === vertex) continue;
+      seenBy[other] = vertex;
+      neighbour[write] = other;
+      write += 1;
+    }
+  }
+  start[count] = write;
+
   const componentOf = new Int32Array(count).fill(NONE);
   const discovery = new Int32Array(count).fill(NONE);
   const lowest = new Int32Array(count);
@@ -436,14 +619,14 @@ export function feedbackArcSet(graph: Graph): ReadonlySet<EdgeId> {
     stacked += 1;
     onStack[root] = 1;
     frameVertex[frames] = root;
-    frameSlot[frames] = at(outStart, root);
+    frameSlot[frames] = at(start, root);
     frames += 1;
     while (frames > 0) {
       const vertex = at(frameVertex, frames - 1);
       const slot = at(frameSlot, frames - 1);
-      if (slot < at(outStart, vertex + 1)) {
+      if (slot < at(start, vertex + 1)) {
         frameSlot[frames - 1] = slot + 1;
-        const other = at(outNeighbour, slot);
+        const other = at(neighbour, slot);
         if (at(discovery, other) === NONE) {
           discovery[other] = visited;
           lowest[other] = visited;
@@ -452,7 +635,7 @@ export function feedbackArcSet(graph: Graph): ReadonlySet<EdgeId> {
           stacked += 1;
           onStack[other] = 1;
           frameVertex[frames] = other;
-          frameSlot[frames] = at(outStart, other);
+          frameSlot[frames] = at(start, other);
           frames += 1;
         } else if (at(onStack, other) === 1 && at(discovery, other) < at(lowest, vertex)) {
           lowest[vertex] = at(discovery, other);
@@ -476,138 +659,5 @@ export function feedbackArcSet(graph: Graph): ReadonlySet<EdgeId> {
       }
     }
   }
-
-  /** Which bucket a vertex belongs in right now. Sink beats source beats delta. */
-  const binFor = (vertex: number): number => {
-    if (at(outDegree, vertex) === 0) return SINK_BIN;
-    if (at(inDegree, vertex) === 0) return SOURCE_BIN;
-    return DELTA_BASE + weight + at(outDegree, vertex) - at(inDegree, vertex);
-  };
-
-  // Buckets as intrusive doubly linked lists: one `head`/`tail` pair per bucket
-  // and one `next`/`previous` pair per vertex, so unlinking a vertex whose
-  // degree changed is O(1) and does not disturb the order of the rest.
-  const binCount = DELTA_BASE + 2 * weight + 1;
-  const head = new Int32Array(binCount).fill(NONE);
-  const tail = new Int32Array(binCount).fill(NONE);
-  const next = new Int32Array(count).fill(NONE);
-  const previous = new Int32Array(count).fill(NONE);
-  const binOf = new Int32Array(count).fill(NONE);
-  const removed = new Int32Array(count);
-  // The highest bucket that has ever held a vertex, walked down on demand. It
-  // is a high-water mark rather than an exact maximum because keeping it exact
-  // would cost a scan on every removal.
-  let highest = DELTA_BASE - 1;
-
-  /** Appends to a bucket's tail, which is what makes the buckets FIFO. */
-  const link = (vertex: number, bin: number): void => {
-    const last = at(tail, bin);
-    previous[vertex] = last;
-    next[vertex] = NONE;
-    if (last === NONE) head[bin] = vertex;
-    else next[last] = vertex;
-    tail[bin] = vertex;
-    binOf[vertex] = bin;
-    if (bin > highest) highest = bin;
-  };
-
-  const unlink = (vertex: number): void => {
-    const bin = at(binOf, vertex);
-    const before = at(previous, vertex);
-    const after = at(next, vertex);
-    if (before === NONE) head[bin] = after;
-    else next[before] = after;
-    if (after === NONE) tail[bin] = before;
-    else previous[after] = before;
-    binOf[vertex] = NONE;
-  };
-
-  for (let vertex = 0; vertex < count; vertex += 1) link(vertex, binFor(vertex));
-
-  /** Moves a vertex whose degrees changed, and only if the bucket changed. */
-  const reclassify = (vertex: number): void => {
-    const bin = binFor(vertex);
-    if (bin === at(binOf, vertex)) return;
-    unlink(vertex);
-    link(vertex, bin);
-  };
-
-  /**
-   * Takes a vertex out of the running and tells its neighbours. Everything
-   * costed here is charged to a collapsed arc, and each arc is charged once
-   * from each end over the whole run, which is where the O(V + E) comes from.
-   */
-  const take = (bin: number): number => {
-    const vertex = at(head, bin);
-    unlink(vertex);
-    removed[vertex] = 1;
-    for (let slot = at(outStart, vertex); slot < at(outStart, vertex + 1); slot += 1) {
-      const neighbour = at(outNeighbour, slot);
-      if (at(removed, neighbour) === 1) continue;
-      inDegree[neighbour] = at(inDegree, neighbour) - at(outWeight, slot);
-      reclassify(neighbour);
-    }
-    for (let slot = at(inStart, vertex); slot < at(inStart, vertex + 1); slot += 1) {
-      const neighbour = at(inNeighbour, slot);
-      if (at(removed, neighbour) === 1) continue;
-      outDegree[neighbour] = at(outDegree, neighbour) - at(inWeight, slot);
-      reclassify(neighbour);
-    }
-    return vertex;
-  };
-
-  const heads: number[] = [];
-  const tails: number[] = [];
-  for (let taken = 0; taken < count; taken += 1) {
-    if (at(head, SINK_BIN) !== NONE) {
-      // Pushed rather than unshifted, and reversed once at the end: a sink goes
-      // to the FRONT of the tail sequence, so the first sink out is the last
-      // vertex of the order.
-      tails.push(take(SINK_BIN));
-      continue;
-    }
-    if (at(head, SOURCE_BIN) !== NONE) {
-      heads.push(take(SOURCE_BIN));
-      continue;
-    }
-    while (highest >= DELTA_BASE && at(head, highest) === NONE) highest -= 1;
-    // Unreachable: with vertices left and neither a sink nor a source among
-    // them, some delta bucket holds one, and `highest` is never below it.
-    //
-    // It throws rather than breaking out of the loop, because breaking is the
-    // expensive way to be wrong here. Every untaken vertex would keep position
-    // 0, tie with whatever `heads[0]` holds, and leave any two-cycle among them
-    // unreversed, and the first sign of it would be `rank.ts` throwing two
-    // stages later about a cycle the breaker "left", with nothing pointing back
-    // at this line. Failing here costs a run that was already wrong and names
-    // the place that went wrong.
-    if (highest < DELTA_BASE) {
-      throw new InternalLayoutError(
-        `no sink, no source and no delta bucket with ${String(count - taken)} vertices left`,
-      );
-    }
-    heads.push(take(highest));
-  }
-  tails.reverse();
-
-  const position = new Int32Array(count);
-  for (const [place, vertex] of [...heads, ...tails].entries()) position[vertex] = place;
-
-  // Every arc that runs backwards in the order AND stays inside one strongly
-  // connected component, taken per edge rather than per collapsed pair, so all
-  // copies of a pair are decided together by the one pair of comparisons. A
-  // self loop is one of the edges `arcSource` left at NONE, so it is skipped
-  // here as it was everywhere else. That skip states the rule rather than doing
-  // work, twice over: a self loop's endpoints share a position and could not
-  // compare as backward, and they trivially share a component. It is here so
-  // that the rule survives a change to either comparison.
-  const feedback = new Set<EdgeId>();
-  for (const [index, edge] of edges.entries()) {
-    const source = at(arcSource, index);
-    const target = at(arcTarget, index);
-    if (source === NONE) continue;
-    if (at(componentOf, source) !== at(componentOf, target)) continue;
-    if (at(position, source) > at(position, target)) feedback.add(edge.id);
-  }
-  return feedback;
+  return componentOf;
 }
