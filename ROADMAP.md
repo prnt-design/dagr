@@ -264,6 +264,9 @@ findings addressed or logged, docs land with the feature.
   to a reversal count low enough that the drawing still reads. Tests: total
   span and view depth on both bench corpora, asserted with ceilings, beside the
   existing acyclicity and `m/2` assertions rather than in place of them.
+  SUPERSEDED BY M2.2c for what currently ships: the component rule below still
+  ships exactly as stated, the greedy order it scoped does not, and the current
+  numbers are in the M2.2c entry. What follows is this task's own record.
   WHAT SHIPPED, in three lines, because the rest of this entry is a record and
   a run scanning it for instructions should not have to read the record to find
   them. (a) `feedbackArcSet` reverses a backward arc ONLY when its two
@@ -284,6 +287,10 @@ findings addressed or logged, docs land with the feature.
   reversals or fewer under longest path, or 226,676 under simplex run to
   convergence, without going past 203 ranks. The target is unchanged and is
   still the ground truth's 32,050 at 796, a factor of forty.
+  THAT BAR WAS MET AND MOVED: M2.2c's least-squares order beat it on all three
+  axes, so what ships is no longer this entry's pass and the current bar lives
+  in the M2.2c entry below (174,222 at 857, within 160 ranks). Everything after
+  this line is the record of the run that set the old bar, in its own tense.
   ONE WORD OF TERMINOLOGY BEFORE THE RECORD, because the record was written
   before the implementation and its vocabulary froze there. Everywhere below,
   "the shipping breaker" and "the shipping ELS" mean the UNSCOPED greedy order,
@@ -577,6 +584,139 @@ findings addressed or logged, docs land with the feature.
   it. Even a perfect cycle breaker may not put M2.4b inside the gate, for a
   reason that has nothing to do with cycle breaking, and that decision is the
   maintainer's rather than this task's.
+- [x] **M2.2c** Cycle breaking v3: a least-squares vertex order in place of the
+  greedy one, which is what finally moved the number M2.2b identified and could
+  not shift.
+  WHAT SHIPPED, in three lines, because the rest of this entry is the record.
+  (a) `feedbackArcSet` gives every vertex the height minimising the sum over
+  arcs of `(s(target) - s(source) - 1)^2`, solves that as `L s = b` by
+  Jacobi-preconditioned conjugate gradient, orders the vertices by height, and
+  reverses the backward arcs of that order. (b) M2.2b's component rule is
+  UNCHANGED and its proof carries over untouched, because that proof was already
+  stated over an arbitrary linear order and never mentioned how the order was
+  built. (c) The `m/2` bound is no longer inherited from Eades, Lin and Smyth
+  and is now established by construction: an arc runs backwards in exactly one
+  of an order and its reverse, so the smaller of the two backward sets is at
+  most half, and the pass counts and takes the smaller side.
+  THE RESULT, as reversals / depth / dummies under longest path, against
+  M2.2b's bar row in the same units. On the 10k: 857 / 160 / 174,222 against
+  4,620 / 203 / 1,359,680. On the 1k: 40 / 64 / 14,746 against 74 / 81 /
+  22,726. BETTER ON ALL THREE AXES ON BOTH CORPORA, which is stronger than the
+  bar asked for: the bar allowed depth to stay where it was and only required
+  span to fall. Under network simplex at the default 20,000-pivot budget the
+  10k is 105,975 against the old view's 268,589, and at 200,000 pivots 99,698
+  against 226,676, so the win survives convergence and does not depend on which
+  ranker or which budget it is quoted at. That last sentence is the one M2.2b's
+  record demanded of any candidate and is why these four numbers are here.
+  WHAT IT DID NOT DO. It did not close the gap to the ground truth, it narrowed
+  it from a factor of forty-two to a factor of five, and the whole of what is
+  left is DEPTH. The 10k view is 160 ranks on a corpus authored with 60 layers,
+  and a view that occupied 60 would mint about the ground truth's 32,050. So
+  the next candidate's bar is 174,222 dummies at 857 reversals or fewer without
+  going past 160 ranks, and the lever is depth rather than the reversal count,
+  which is now within 8% of the ground truth's 796 and is not where the
+  remaining span is.
+  WHY IT WORKS, and it is worth stating because it is not the shape of anything
+  in M2.2b's table. Every candidate there was a LOCAL rule: greedy ELS decides a
+  vertex's place from that vertex's own degrees, DFS from the order its
+  traversal happens to hit, and both then never revisit the decision. A layered
+  graph's structure is not in any one vertex's degrees, it is in the agreement
+  between all of them, so a local rule cannot see it. Least squares is global:
+  every arc pulls both endpoints, the answer is the balance of all of them at
+  once, and the 2% of the 10k corpus authored as back edges are outvoted by the
+  98% that are not rather than being taken at face value one vertex at a time.
+  The relaxation family in M2.2b's table was reaching for this and stopped
+  short: median relaxation on the whole graph got to depth 61 and had to reverse
+  15,457 arcs to do it, which the constraint rules out. The difference is that
+  the least-squares order is solved rather than iterated to a chosen round, so
+  it lands on the objective's actual minimiser instead of somewhere on the way
+  to it.
+  WHAT WAS MEASURED BESIDE IT AND NOT TAKEN, recorded so nobody spends a run
+  rediscovering them. Both are in `cycles.ts` in full.
+  DROPPING THE COMPONENT RULE, which is the same least-squares order with every
+  backward arc reversed: 1,117 / 124 / 128,141 on the 10k and 110 / 39 / 8,388
+  on the 1k. That is 26% LESS span than what ships, at 30% more reversals, and
+  it is the only thing measured in this task that beats the shipping choice on
+  the stated objective. IT IS A ONE-LINE CHANGE AND IT IS THE MAINTAINER'S CALL,
+  not a tuning pass: it means accepting that some edges are drawn backwards when
+  no cycle required it, in exchange for a quarter of the dummy nodes. It was not
+  taken here because the component rule is a shipped property with a proof and a
+  test that calls a violation of it a bug rather than a trade, and replacing the
+  core heuristic is already one decision for one task.
+  A HINGE OBJECTIVE, charging `max(0, s(u) + 1 - s(v))^2` so a long forward arc
+  costs nothing and only a backward or too-short arc is penalised, relaxed from
+  the least-squares answer. At 1,024 rounds it reaches 664 / 117 / 101,146
+  unscoped, the best row anything in this task produced. IT IS NOT TAKEN, and
+  the reason is the lesson M2.2b already wrote down about pivot budgets: that
+  row is its best point and not its converged one. At 4,096 rounds it is
+  594 / 140 / 127,695 and at 16,384 it is 485 / 184 / 186,856, degrading
+  monotonically towards the greedy pass as it converges, and 1,024 is a number
+  tuned to this corpus. A candidate that wins only at a truncated iteration
+  budget has not won. What would make it a result is a stopping rule that is
+  about the graph rather than about the count, and that is a real lead for a
+  later run.
+  THE COST, which is the one axis that got worse. The call is about 2.3 times
+  the greedy one on the 10k corpus, 25.0ms against 10.8ms measured in one
+  process on one machine, so the ratio is the claim and the absolute is not.
+  That is deliberate and it is not close: it
+  removes 1.19 million dummy nodes from every stage downstream, and M2.4b
+  measured what those cost when they existed, 5.2 seconds and 735MB on a
+  pipeline that runs in about 30ms without them.
+  THE BENCH GATE FAILS ON THIS CHANGE AND IT HAS NOT BEEN RUN ON A MATCHING
+  MACHINE, which is the one thing outstanding. On the implementing agent's box,
+  an x64 Node under Rosetta on an M1 Pro against a baseline captured on an arm64
+  M4, `bench:check` reports rank +59.8% on the 10k against +19.5% allowed and
+  +49.6% on the 1k, and pipeline +47.3% and +65.3%. Those are the right sign and
+  are not a valid gate result: the same run also failed two `@dagr/graph`
+  entries, +24.6% and +24.1%, on a package this change does not touch, which is
+  the machine mismatch `bench/README.md` warns about showing up exactly as it
+  says it will. WHAT IS OWED is a `bench:ci` run on the maintainer's machine and
+  then a decision, and the decision is a rebaseline rather than a fix: the rank
+  stage really is slower, deliberately, and the entry it is bought against is a
+  pipeline cost that only exists once M2.4b lands. Note that the refresh already
+  owed from M2.2b's run is the same refresh, so the two should be taken
+  together.
+  THAT DEBT WAS PAID on 2026-08-06, on the maintainer's instruction, and the
+  paragraph above is left as written because it is the record that predicted
+  what the run then showed. `bench:ci` on a settled arm64 machine (Apple M1
+  Pro, node v23.11.0, the maintainer's current box rather than the M4 the old
+  baseline named) failed exactly as forecast: five untouched `@dagr/graph`
+  entries between +24.2% and +78.8%, the mismatch signature, plus rank +33.7%
+  on the 1k and +23.6% on the 10k, the deliberate cost, with pipeline inside
+  2% both corpora. The decision taken was the rebaseline this entry called
+  for: `bench:baseline` recorded all 15 benchmarks on this machine, and the
+  rerun gate passed with every entry ok and none noisy, rank -3.8% and -1.7%
+  against the fresh baseline. The refresh M2.2b owed is folded into the same
+  capture.
+  WHAT MOVED IN THE SUITE, because a heuristic swap moves every pinned number
+  downstream of the ranking and a reader of that diff needs to know which
+  direction each one went. The two corpus pins in `layout.cycles.quality.test.ts`
+  and the six ceilings beside them (tightened, since nothing was traded away
+  this time). The depth and workload pins in `layout.position.test.ts`, 81 rows
+  to 64 and 203 to 160. Four pins in `layout.order.test.ts` and the whole
+  `order-crossings.golden.json` corpus. THE CROSSING COUNTS ROSE AND THAT IS NOT
+  A REGRESSION IN THE ORDER STAGE: crossings are counted only between adjacent
+  layers, a shallower ranking puts a quarter more of the 10k corpus between
+  adjacent layers (10,528 edges to 13,131), and so a quarter more of the graph
+  became countable at the same moment. The entries whose depth fell furthest are
+  exactly the ones whose counts rose furthest. The comparison across that diff
+  is not like for like.
+  ONE TEST WAS REBUILT RATHER THAN REPINNED, and it is worth copying elsewhere.
+  `layout.simplex.test.ts`'s tight-tree regressor was a CYCLIC graph whose
+  acyclic view came out of whatever `cycles.ts` returned, so this task moved all
+  three of its numbers and it stopped witnessing the tight-tree regression it
+  was built for. It is now written as the view itself, already a DAG, so
+  `feedbackArcSet` returns nothing on it and no later change to cycle breaking
+  can move it. A witness about stage B should not be hostage to stage A.
+  WHAT THE TIE BREAK ACTUALLY DECIDES, recorded because the loose reading is
+  wrong. It settles EXACT equality of two doubles and nothing else. Two
+  structurally interchangeable vertices have equal heights in exact arithmetic
+  and do not generally come out of the solve as equal doubles, so the last bit
+  of an iterative solve is what orders them. That is reproducible, which is the
+  property M3 needs, and it is arbitrary, and it costs nothing in quality
+  because the two orders of an interchangeable pair are equally good by
+  construction. What it does mean is that a pinned set moving on a graph with
+  symmetric parts is a weaker signal than one moving on a graph without.
 - [x] **M2.3** Ranking v2: tight-tree / network-simplex rank tightening.
   Golden comparisons against longest-path on a small corpus; rank sum must
   never regress.
@@ -634,7 +774,11 @@ findings addressed or logged, docs land with the feature.
   component keeps the better of the ranking it started with and the one it
   ended with.
   THIS TASK DID NOT UNBLOCK M2.4b, and the 57% above is exactly the number that
-  makes it look as though it did. Measured on the 10k corpus, and stated as it
+  makes it look as though it did. M2.2c IS WHAT DID, by the route the last
+  sentence of this block names: a better cycle breaker rather than a better
+  ranker. The paragraph below is left in its own tense because it is the
+  diagnosis that pointed at the fix, and it was right. Measured on the 10k
+  corpus, and stated as it
   read before M2.2b shipped so that the argument stays legible: the greedy
   feedback arc set reversed 6,327 of 40,000 edges, and the acyclic view it
   handed the ranker was 154 ranks deep. The corpus is generated with 60 layers
@@ -734,6 +878,21 @@ findings addressed or logged, docs land with the feature.
 - [ ] **M2.4b** Dummy-node chains: split long edges across ranks into virtual
   nodes, rejoin on output. Tests: chain integrity, no multi-rank edges reach
   later stages.
+  UNBLOCKED BY M2.2c, and this is the first line of this entry because the rest
+  of it was written while it was blocked. The branch that implemented this task
+  is green on typecheck, tests and lint and does not merge, for one reason: on
+  the 10k corpus the splitter minted 1,414,263 dummies for 10,000 real nodes and
+  the pipeline went from about 30ms to 5.2 seconds and 735MB, which is a bench
+  regression of +16,513% against +23% allowed. M2.2c takes the view that number
+  comes from to 174,222, a cut of 88%, so the same splitter now mints about an
+  eighth of what it did. REBASE THAT BRANCH ONTO THIS AND RE-MEASURE BEFORE
+  CHANGING ANYTHING IN IT. What it needs is a fresh measurement and a decision
+  about the gate, not a redesign: every decision recorded in its commit message
+  still stands, including the dummy-id form, which M2.2c did not touch. Expect
+  it to still be the most expensive thing in the pipeline, because an eighth of
+  1.4 million is still 174,000 nodes that have to be positioned, ordered and
+  routed, and read the bench-gate paragraph below before assuming the gate is
+  now satisfiable.
   Dummy ids must be a deterministic function of the edge and the rank
   (`#dummy:<edgeId>:<rank>` or equivalent), never a counter and never iteration
   order, so a chain's identity is stable across runs by construction with no

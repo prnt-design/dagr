@@ -626,8 +626,8 @@ function assemble(graph: Graph, routed: RoutedState): LayoutResult {
  * never escapes.
  *
  * Two of the four default stages are real algorithms. The rank stage has been
- * one since M2.2: it breaks cycles with a greedy feedback arc set and ranks by
- * longest path, so the layers are the ones the graph asks for. The order stage
+ * one since M2.2: it breaks cycles with a least-squares feedback arc set and
+ * ranks by longest path, so the layers are the ones the graph asks for. The order stage
  * has been one since M2.6b: barycenter sweeps and a transpose pass, so within a
  * layer the horizontal order is one that has had its crossings reduced rather
  * than the graph's insertion order. The other two are still placeholders, so

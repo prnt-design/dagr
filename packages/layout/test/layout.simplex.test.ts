@@ -638,6 +638,18 @@ describe('networkSimplexRank and its iteration budget', () => {
    * win it back: 15 becomes 16. One pivot takes it to 13, which is the optimum,
    * so this is only ever visible with a budget too small to be useful, which is
    * exactly when a caller is relying on the promise.
+   *
+   * ALREADY A DAG, and that is the point of it rather than an accident. The
+   * witness is about what the tight tree does to ONE acyclic view, and it was
+   * originally written as a cyclic graph whose view came out of whatever
+   * `cycles.ts` happened to return. That made it hostage to a module it is not
+   * testing: M2.2c replaced the cycle breaker, the view moved, and all three
+   * numbers moved with it, so the witness stopped witnessing the tight-tree
+   * regression it was built for and said nothing about whether that regression
+   * had been fixed. It is written here as the view itself, `e6` and `e10`
+   * already pointing the way the old breaker turned them, so `feedbackArcSet`
+   * returns nothing on it and no future change to that module can move these
+   * numbers. Anything that does move them is this stage.
    */
   const regressor = () =>
     build(
@@ -646,11 +658,11 @@ describe('networkSimplexRank and its iteration budget', () => {
         ['v3', 'v10', 'e0'],
         ['v3', 'v7', 'e2'],
         ['v1', 'v2', 'e5'],
-        ['v10', 'v3', 'e6'],
+        ['v3', 'v10', 'e6'],
         ['v0', 'v9', 'e7'],
         ['v9', 'v2', 'e8'],
         ['v0', 'v1', 'e9'],
-        ['v5', 'v0', 'e10'],
+        ['v0', 'v5', 'e10'],
         ['v7', 'v5', 'e12'],
         ['v2', 'v10', 'e13'],
       ],

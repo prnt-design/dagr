@@ -219,10 +219,15 @@ of doc prose.
   **The figures in the paragraph above were superseded by M2.2b**, all of them
   and not only the dummy counts, because M2.2b changed the acyclic view both
   rank stages rank. They are left here because they are what this stage was
-  measured at when it landed. What a caller gets today: 22,726 down to 15,713
+  measured at when it landed. As of M2.2b a caller got 22,726 down to 15,713
   on the 1k, a 31% cut rather than 57%, in about 28ms rather than about 20ms,
   and 1,359,680 down to 268,589 on the 10k. See the M2.2b entry under Changed
   for why the percentage fell while nothing about this stage got worse.
+
+  **And superseded again by M2.2c**, for the same reason in the same direction.
+  What a caller gets today: 14,746 down to 10,660 on the 1k, a 28% cut, and
+  174,222 down to 105,975 on the 10k inside the default budget. See the M2.2c
+  entry under Changed.
 
   **None of that saving is collectable in this release.** M2.4b is unbuilt, no
   stage mints a dummy node today, and `virtualNodes` comes back empty from both
@@ -324,6 +329,33 @@ of doc prose.
   (M2.2 review)
 
 ### Changed
+
+- **Cycle breaking is now a least-squares vertex order rather than the greedy
+  heuristic of Eades, Lin and Smyth, so every graph with a cycle in it ranks
+  differently, lays out differently and draws differently, with no type change
+  to warn a caller.** `feedbackArcSet` gives every node the height minimising
+  the sum over edges of `(height(target) - height(source) - 1)^2`, solves it as
+  a Laplacian system by preconditioned conjugate gradient, and reverses the
+  edges that run downhill in the result. The component rule M2.2b added is
+  unchanged. (M2.2c)
+
+  What it buys, on the two benchmark corpora, as reversed edges / ranks / dummy
+  nodes the M2.4b splitter will mint: the 10k corpus goes from
+  4,620 / 203 / 1,359,680 to 857 / 160 / 174,222, and the 1k from
+  74 / 81 / 22,726 to 40 / 64 / 14,746. Better on all three numbers on both
+  corpora, and an 87% cut in the quantity that decides how much of a drawing is
+  stand-in nodes. Under `network-simplex-rank` at its default budget the 10k
+  figure is 105,975 against the old view's 268,589, so the win does not depend
+  on which ranker you select.
+
+  What it costs is time in the rank stage: the call is about 2.3 times the
+  greedy one on the 10k corpus. That is deliberate, and the thing it is bought
+  against is a cost nobody is paying yet, because M2.4b is unbuilt and no stage
+  mints a dummy today.
+
+  **An acyclic graph is unaffected.** The feedback set is empty either way, so
+  the view, the ranks and the drawing are exactly what they were. Everything
+  above is about graphs that have a cycle in them.
 
 - **`defaultStages.order` is now `barycenter-order`, so a caller who never
   named an order stage gets different layers, different coordinates and a
@@ -483,7 +515,10 @@ of doc prose.
 
   It moves `network-simplex-rank`'s headline figures, and NOT because that
   stage changed: its input is better, so it has less left to win. Read the two
-  entries together. Over the new view the 1k corpus is 22,726 dummies down to
+  entries together, and note that every figure in this paragraph was itself
+  superseded by M2.2c, whose entry above has the current ones; "the new view"
+  below means M2.2b's view, which is no longer the one that ships. Over that
+  view the 1k corpus is 22,726 dummies down to
   15,713 at the default budget, a 31% cut where the entry above says 57%, and
   the 10k corpus is 1,359,680 down to 268,589, an 80% cut where the entry above
   says 70%. At 200,000 pivots the 10k reaches 226,676, which is 0.8% above what

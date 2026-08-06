@@ -66,6 +66,22 @@ import type { RankedState, Size } from '../src/types.js';
  * more force to a committed file: two generators drift, and a golden file
  * against a drifted generator pins numbers for a graph nobody else has.
  *
+ * WHAT LAST MOVED IT, and it was not this stage. M2.2c replaced the cycle
+ * breaker, which changes the RANKING every entry here is ordered against, and
+ * five of the six `layers` counts fell: 66 to 62, 28 to 22, 77 to 45, 38 to
+ * 32 and 40 to 27, while `sparse-2000` alone kept its 40 layers and both of
+ * its counts. Four of the five moved entries then count MORE crossings and one
+ * counts fewer. That is not a quality regression in the order stage and reading
+ * it as one is the trap this paragraph exists to close: crossings are counted
+ * only between adjacent layers, a shallower ranking puts a larger share of each
+ * graph between adjacent layers, and so a larger share of each graph became
+ * countable at the same moment. The entries whose depth fell furthest are
+ * exactly the ones whose counts rose furthest, `dense-1200` at 77 layers to 45
+ * and 1,433 crossings to 3,841 being both. `layout.order.test.ts` pins the
+ * adjacency share on the bench corpora and it rose by a quarter on the 10k.
+ * The comparison across this diff is therefore not like for like, and the
+ * numbers after it are a fresh baseline rather than a worse one.
+ *
  * They are mid-sized on purpose, a few hundred to a couple of thousand nodes.
  * The 10k corpus takes tens of milliseconds in the stage but far longer to
  * build, and this file runs in the ordinary test run. The shapes vary in the

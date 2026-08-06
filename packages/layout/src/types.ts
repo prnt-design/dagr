@@ -132,8 +132,8 @@ export interface RankedState extends PreparedState {
    * holds, and a self loop is never one of them: reversing a self loop cannot
    * make it any less of a cycle.
    *
-   * Filled in since M2.2, where the default ranker started breaking cycles with
-   * a greedy feedback arc set. It exists rather than the ranker flipping the
+   * Filled in since M2.2, where the default ranker started breaking cycles
+   * with a feedback arc set. It exists rather than the ranker flipping the
    * edge because the alternative, mutating the caller's graph, is the one thing
    * this pipeline promises not to do.
    *
