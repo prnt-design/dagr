@@ -676,6 +676,18 @@ findings addressed or logged, docs land with the feature.
   pipeline cost that only exists once M2.4b lands. Note that the refresh already
   owed from M2.2b's run is the same refresh, so the two should be taken
   together.
+  THAT DEBT WAS PAID on 2026-08-06, on the maintainer's instruction, and the
+  paragraph above is left as written because it is the record that predicted
+  what the run then showed. `bench:ci` on a settled arm64 machine (Apple M1
+  Pro, node v23.11.0, the maintainer's current box rather than the M4 the old
+  baseline named) failed exactly as forecast: five untouched `@dagr/graph`
+  entries between +24.2% and +78.8%, the mismatch signature, plus rank +33.7%
+  on the 1k and +23.6% on the 10k, the deliberate cost, with pipeline inside
+  2% both corpora. The decision taken was the rebaseline this entry called
+  for: `bench:baseline` recorded all 15 benchmarks on this machine, and the
+  rerun gate passed with every entry ok and none noisy, rank -3.8% and -1.7%
+  against the fresh baseline. The refresh M2.2b owed is folded into the same
+  capture.
   WHAT MOVED IN THE SUITE, because a heuristic swap moves every pinned number
   downstream of the ranking and a reader of that diff needs to know which
   direction each one went. The two corpus pins in `layout.cycles.quality.test.ts`
