@@ -977,15 +977,21 @@ findings addressed or logged, docs land with the feature.
   second pair is a THIRD baseline rather than the one M2.7's table recorded: it
   still places the dummies and differs only in whether the order stage saw them,
   so neither its lengths nor its widths compare with M2.7's. Both stages improved
-  absolutely and grid improved far more. The suspect is the
-  compaction rather than the alignment, and it is named as a suspect because
-  nobody has run the experiment: a dummy chain is exactly the long alignment
-  block Brandes-Koepf exists to straighten, what ships compacts each alignment by
-  longest path over the block order because the paper's class shift is unsound as
-  published, and a long block under a longest-path compaction pushes everything
-  after it. So the position default is now blocked on that compaction rather than
-  on this milestone, which is a better-understood blocker than the one it
-  replaced.
+  absolutely and grid improved far more.
+  THE CAUSE WAS THEN MEASURED RATHER THAN LEFT AS A SUSPECT, by the review, and
+  the obvious hypothesis is refuted. That hypothesis was that a chain is the long
+  alignment block Brandes-Koepf exists to straighten, so the chains made the
+  blocks long and a long block under a longest-path compaction pushes everything
+  after it. Capping block length in `solve` and measuring on the 1k with the
+  chains consumed: no alignment at all 1.00x, blocks of two already 5.18x,
+  uncapped 7.36x with the longest block only 59. Blocks of two cost 70% of the
+  blowup and further length buys almost nothing, and a single alignment matches
+  the median of four. What is left is that the compaction only ever takes maxima
+  and never pulls a block back LEFT, so any alignment at all propagates the
+  widest row's packing pressure into every row it touches. The fix is a
+  CONTRACTION pass, which is the class shift's real job in the paper. So the
+  position default is blocked on that rather than on this milestone, and it is a
+  better-understood blocker than the one it replaced.
   THE SPLITTER IS IN ONLY ONE OF THE TWO RANK STAGES, which is the gap this
   milestone leaves open rather than closes.
   `networkSimplexRankStage` declares no chains at all, so a caller who selects

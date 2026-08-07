@@ -72,13 +72,17 @@ of doc prose.
   8.61x against 3.63x and 2.76x. Both stages improved in absolute terms and grid
   improved far more.
 
-  The suspect is the compaction rather than the alignment: a dummy chain is the
-  long alignment block this algorithm exists to straighten, what ships compacts
-  each alignment by longest path over the block order because the paper's class
-  shift is unsound, and a long block under a longest-path compaction pushes
-  everything after it. That is a hypothesis with an obvious experiment attached
-  and nobody has run it. So the stage stays unexported for a stronger reason
-  than it had, and what blocks it is now that compaction rather than the ranker.
+  The cause is the compaction, and it is not the length of the blocks, which was
+  the obvious guess and is refuted. Capping block length in `solve` and measuring
+  on the 1k with the chains consumed: no alignment at all is 1.00x, blocks of two
+  are already 5.18x, and uncapped is 7.36x with the longest block only 59. Blocks
+  of two cost 70% of the blowup and further length buys almost nothing. A single
+  alignment matches the median of four, so that is not it either. What is left is
+  that the compaction only ever takes maxima and never pulls a block back LEFT,
+  so any alignment at all propagates the widest row's packing pressure into every
+  row it touches. The fix is a contraction pass, which is the class shift's real
+  job. So the stage stays unexported for a stronger reason than it had, and what
+  blocks it is that contraction rather than the ranker.
   The two edge shares quoted above are pre-M2.2c on top of everything else; over
   the view that ships they were 1,513 of 4,000 and 13,131 of 40,000, and they are
   now 18,746 and 214,222 segments, all of them adjacent.

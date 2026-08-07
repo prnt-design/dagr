@@ -2,8 +2,11 @@ import { Graph } from '@dagr/graph';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LAYOUT_CONFIG } from '../src/config.js';
 import { barycenterOrder, countCrossings, transposeLayers } from '../src/order.js';
+import { forEachSegment } from '../src/segments.js';
+import { longestPathRankStage } from '../src/rank.js';
+import { measureNodes, resolveConfig } from '../src/config.js';
 import { mulberry32, randomLayered } from './random.js';
-import type { NodeId } from '@dagr/graph';
+import type { EdgeId, NodeId } from '@dagr/graph';
 import type { TransposeAdjacency } from '../src/order.js';
 import type { RankedState, Size } from '../src/types.js';
 
@@ -81,6 +84,7 @@ function csr(lists: readonly (readonly number[])[]): { start: Int32Array; next: 
 function flatten(
   graph: Graph,
   layers: readonly (readonly NodeId[])[],
+  virtualChains: ReadonlyMap<EdgeId, readonly NodeId[]> = new Map(),
 ): { rows: number[][]; position: Int32Array; adjacency: TransposeAdjacency; ids: NodeId[] } {
   const ids: NodeId[] = [];
   const numberOf = new Map<NodeId, number>();
@@ -102,16 +106,19 @@ function flatten(
   }
   const up: number[][] = ids.map(() => []);
   const down: number[][] = ids.map(() => []);
-  for (const edge of graph.edges()) {
-    const from = layerOf.get(edge.source);
-    const to = layerOf.get(edge.target);
-    if (from === undefined || to === undefined) continue;
-    if (Math.abs(from - to) !== 1) continue;
-    const upper = numberOf.get(from < to ? edge.source : edge.target) ?? 0;
-    const lower = numberOf.get(from < to ? edge.target : edge.source) ?? 0;
+  // Over segments rather than edges, so that a chained drawing builds the index
+  // the shipping stage builds. A dummy has degree 2 here and degree 0 without
+  // the chains, which is exactly the difference the delta has to survive.
+  forEachSegment(graph, virtualChains, (fromId, toId) => {
+    const from = layerOf.get(fromId);
+    const to = layerOf.get(toId);
+    if (from === undefined || to === undefined) return;
+    if (Math.abs(from - to) !== 1) return;
+    const upper = numberOf.get(from < to ? fromId : toId) ?? 0;
+    const lower = numberOf.get(from < to ? toId : fromId) ?? 0;
     up[lower]?.push(upper);
     down[upper]?.push(lower);
-  }
+  });
   const upper = csr(up);
   const lower = csr(down);
   return {
@@ -155,20 +162,21 @@ function idsOf(rows: readonly (readonly number[])[], ids: readonly NodeId[]): No
 function anchoredIds(
   graph: Graph,
   layers: readonly (readonly NodeId[])[],
+  virtualChains: ReadonlyMap<EdgeId, readonly NodeId[]> = new Map(),
 ): ReadonlySet<NodeId> {
   const layerOf = new Map<NodeId, number>();
   for (const [index, layer] of layers.entries()) {
     for (const id of layer) layerOf.set(id, index);
   }
   const anchored = new Set<NodeId>();
-  for (const edge of graph.edges()) {
-    const source = layerOf.get(edge.source);
-    const target = layerOf.get(edge.target);
-    if (source === undefined || target === undefined) continue;
-    if (Math.abs(source - target) !== 1) continue;
-    anchored.add(edge.source);
-    anchored.add(edge.target);
-  }
+  forEachSegment(graph, virtualChains, (fromId, toId) => {
+    const source = layerOf.get(fromId);
+    const target = layerOf.get(toId);
+    if (source === undefined || target === undefined) return;
+    if (Math.abs(source - target) !== 1) return;
+    anchored.add(fromId);
+    anchored.add(toId);
+  });
   return anchored;
 }
 
@@ -177,15 +185,16 @@ function referenceTranspose(
   layers: readonly (readonly NodeId[])[],
   maxPasses: number,
   gate: 'improving' | 'any' = 'improving',
+  virtualChains: ReadonlyMap<EdgeId, readonly NodeId[]> = new Map(),
 ): { layers: NodeId[][]; passes: number } {
   const working = layers.map((layer) => [...layer]);
-  const anchors = anchoredIds(graph, layers);
+  const anchors = anchoredIds(graph, layers, virtualChains);
   let passes = 0;
   while (passes < maxPasses) {
     passes += 1;
     let improved = false;
     let swapped = false;
-    let before = countCrossings({ graph, layers: working });
+    let before = countCrossings({ graph, layers: working, virtualChains });
     for (const layer of working) {
       for (let slot = 0; slot + 1 < layer.length; slot += 1) {
         const one = layer[slot];
@@ -194,7 +203,7 @@ function referenceTranspose(
         if (!anchors.has(one) || !anchors.has(other)) continue;
         layer[slot] = other;
         layer[slot + 1] = one;
-        const after = countCrossings({ graph, layers: working });
+        const after = countCrossings({ graph, layers: working, virtualChains });
         if (after > before) {
           layer[slot] = one;
           layer[slot + 1] = other;
@@ -344,6 +353,52 @@ describe('transposeLayers, the swap delta', () => {
     // Not a vacuous agreement: the pass rearranges all 30 of these.
     expect(moved).toBe(30);
   });
+
+  /**
+   * The same agreement on drawings that HAVE chains in them, which is the case
+   * that gained meaning when the order stage started reading `virtualChains`.
+   *
+   * It holds by construction, both sides reading the same segment rule, and
+   * that is exactly why it is worth a test: nothing above executes the delta
+   * with a dummy in the index. Without the chains a dummy has degree ZERO here,
+   * so every case above exercises the delta only on nodes the graph itself
+   * connects, and a delta that mishandled a degree-2 virtual node would pass
+   * all of them.
+   */
+  it('agrees with a rescoring transpose on a drawing whose long edges are split', () => {
+    const config = resolveConfig(undefined);
+    let moved = 0;
+    let dummies = 0;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const { graph } = randomLayered(mulberry32(0x51d + attempt), 70, 7, 170);
+      const sizes = measureNodes(graph, config, undefined);
+      const out = longestPathRankStage.run({ graph, config, sizes });
+      const virtualChains = out.virtualChains ?? new Map<EdgeId, readonly NodeId[]>();
+      const merged = new Map(sizes);
+      for (const [id, size] of out.virtualNodes ?? []) merged.set(id, size);
+      const layers = barycenterOrder({ maxTransposePasses: 0 }).run({
+        graph,
+        config,
+        sizes: merged,
+        ranks: out.ranks,
+        reversedEdges: out.reversedEdges,
+        virtualNodes: new Set<NodeId>(out.virtualNodes?.keys() ?? []),
+        virtualChains,
+      }).layers;
+      dummies += out.virtualNodes?.size ?? 0;
+      const flat = flatten(graph, layers, virtualChains);
+      transposeLayers(flat.rows, flat.position, flat.adjacency, 4);
+      const reference = referenceTranspose(graph, layers, 4, 'improving', virtualChains);
+      expect(idsOf(flat.rows, flat.ids)).toEqual(reference.layers);
+      if (!reference.layers.every((layer, at) => layer.join() === layers[at]?.join())) {
+        moved += 1;
+      }
+    }
+    // Not vacuous: there really are dummies in the index and the pass really
+    // rearranges every one of these drawings.
+    expect(dummies).toBeGreaterThan(200);
+    expect(moved).toBe(8);
+  }, 120_000);
 
   /**
    * D6, and it is tested here rather than at the stage because the stage keeps

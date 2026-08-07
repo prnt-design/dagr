@@ -1,8 +1,12 @@
 import { Graph } from '@dagr/graph';
 import { describe, expect, it } from 'vitest';
 import { countCrossings } from '../src/order.js';
-import { mulberry32 } from './random.js';
-import type { NodeId } from '@dagr/graph';
+import { longestPathRankStage } from '../src/rank.js';
+import { forEachSegment } from '../src/segments.js';
+import { barycenterOrder } from '../src/order.js';
+import { measureNodes, resolveConfig } from '../src/config.js';
+import { mulberry32, randomLayered } from './random.js';
+import type { EdgeId, NodeId } from '@dagr/graph';
 
 /**
  * What `countCrossings` counts, checked twice over: by hand on graphs small
@@ -39,7 +43,11 @@ function build(
  * the sign of the product says. Equality either end means they share an
  * endpoint, and the product is then zero: they touch, they do not cross.
  */
-function pairLoopCrossings(graph: Graph, layers: readonly (readonly NodeId[])[]): number {
+function pairLoopCrossings(
+  graph: Graph,
+  layers: readonly (readonly NodeId[])[],
+  virtualChains: ReadonlyMap<EdgeId, readonly NodeId[]> = new Map(),
+): number {
   const layerOf = new Map<NodeId, number>();
   const indexOf = new Map<NodeId, number>();
   for (const [layer, ids] of layers.entries()) {
@@ -49,18 +57,23 @@ function pairLoopCrossings(graph: Graph, layers: readonly (readonly NodeId[])[])
     }
   }
   const gaps = new Map<number, [number, number][]>();
-  for (const edge of graph.edges()) {
-    const from = layerOf.get(edge.source);
-    const to = layerOf.get(edge.target);
-    if (from === undefined || to === undefined) continue;
-    if (Math.abs(from - to) !== 1) continue;
-    const upper = from < to ? edge.source : edge.target;
-    const lower = from < to ? edge.target : edge.source;
+  // Over SEGMENTS rather than edges, the same rule `countCrossings` uses, so
+  // that a chained drawing has a reference at all. It walks `segments.ts`
+  // deliberately rather than reimplementing the chain walk: what this function
+  // is an independent check of is the accumulator tree, not the definition of a
+  // segment, and a second copy of the walk would be a second thing to get wrong.
+  forEachSegment(graph, virtualChains, (fromId, toId) => {
+    const from = layerOf.get(fromId);
+    const to = layerOf.get(toId);
+    if (from === undefined || to === undefined) return;
+    if (Math.abs(from - to) !== 1) return;
+    const upper = from < to ? fromId : toId;
+    const lower = from < to ? toId : fromId;
     const gap = Math.min(from, to);
     const segments = gaps.get(gap) ?? [];
     segments.push([indexOf.get(upper) ?? 0, indexOf.get(lower) ?? 0]);
     gaps.set(gap, segments);
-  }
+  });
   let crossings = 0;
   for (const segments of gaps.values()) {
     for (const [index, one] of segments.entries()) {
@@ -255,4 +268,55 @@ describe('countCrossings', () => {
     expect(single).toBe(49);
     expect(crossings).toBe(128);
   });
+
+  /**
+   * The same agreement over drawings that HAVE chains in them, which is the case
+   * no fixed witness in this file covers and the one the counter gained when the
+   * order stage started reading `virtualChains`.
+   *
+   * Both sides walk `segments.ts`, so what this checks is the accumulator tree
+   * against the pair loop over the same segment set, exactly as the cases above
+   * check it over an edge set. What it does NOT check is the definition of a
+   * segment, and that is deliberate: a second copy of the chain walk here would
+   * be a second thing to get wrong, and `layout.chains.test.ts` pins the walk
+   * itself against a written-out expectation.
+   *
+   * The corpus is asked for long edges on purpose, and the three totals below
+   * are pinned as lower bounds so that a generator which stopped producing
+   * chains, or a ranker which stopped splitting them, cannot leave this green by
+   * agreeing about nothing.
+   */
+  it('agrees with the pair loop on drawings whose long edges are split', () => {
+    const config = resolveConfig(undefined);
+    let crossings = 0;
+    let segments = 0;
+    let chained = 0;
+    for (let run = 0; run < 12; run += 1) {
+      const { graph } = randomLayered(mulberry32(run + 1), 60, 8, 120);
+      const sizes = measureNodes(graph, config, undefined);
+      const out = longestPathRankStage.run({ graph, config, sizes });
+      const virtualChains = out.virtualChains ?? new Map<EdgeId, readonly NodeId[]>();
+      const merged = new Map(sizes);
+      for (const [id, size] of out.virtualNodes ?? []) merged.set(id, size);
+      const layers = barycenterOrder().run({
+        graph,
+        config,
+        sizes: merged,
+        ranks: out.ranks,
+        reversedEdges: out.reversedEdges,
+        virtualNodes: new Set<NodeId>(out.virtualNodes?.keys() ?? []),
+        virtualChains,
+      }).layers;
+      chained += virtualChains.size;
+      forEachSegment(graph, virtualChains, () => {
+        segments += 1;
+      });
+      const counted = countCrossings({ graph, layers, virtualChains });
+      expect(counted).toBe(pairLoopCrossings(graph, layers, virtualChains));
+      crossings += counted;
+    }
+    expect(chained).toBeGreaterThan(100);
+    expect(segments).toBeGreaterThan(1_500);
+    expect(crossings).toBeGreaterThan(0);
+  }, 120_000);
 });

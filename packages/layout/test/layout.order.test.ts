@@ -709,7 +709,9 @@ describe('barycenterOrder, on the bench corpora', () => {
    * from 13,131 segments to 214,222 on the 10k. A count taken over the first is
    * not comparable with a count taken over the second, and reading the rise as
    * a quality regression is the trap. The like-for-like comparison, both
-   * layerings scored on the full population, is in `layout.chains.test.ts`.
+   * layerings scored on the full population, is
+   * `cuts crossings by two thirds against a layering that ignores the chains`,
+   * thirty lines below in this file.
    */
   it('sees every segment of the drawing, not a third of the edges', () => {
     const spans = corpora.map(([, spec]) => {

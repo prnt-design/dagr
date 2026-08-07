@@ -502,25 +502,29 @@ describe('layout result identity across refactors', () => {
    * M2.4b is the first milestone to deliberately change what a default run
    * draws, which is the moment this pin was always going to be REPLACED rather
    * than preserved. Recorded here so the replacement is a decision rather than a
-   * re-capture, exactly what changed: `da` runs from rank 2 to rank 0, so it is
-   * now split at rank 1, and the dummy is a full member of that layer. It takes
-   * no width but it does take a `nodeSep` gap, so rank 1 is 12 wider and `b`,
-   * `c` and `q` each shift 6 left; the dummy lands at the right end of the row
-   * at `x = 33`; and `da`'s polyline gains that point as a bend. Nothing else
-   * moves, and `bounds` does not either, because 33 is inside the hull the wider
-   * rows already had. Every node the caller added is still in the result and
-   * the dummy is not.
+   * re-capture, exactly what changed. `da` runs from rank 2 to rank 0, so it is
+   * split at rank 1 and the dummy is a full member of that layer. It takes no
+   * width but it does take a `nodeSep` gap, so rank 1 goes from three members to
+   * four and from 54 wide to 66: `3 * 10 + 2 * 12` becomes
+   * `3 * 10 + 0 + 3 * 12`, and a row centred on zero starts at -33 rather than
+   * -27.
+   *
+   * THE DUMMY LANDS SECOND, between `b` and `c`, which is the order stage's
+   * decision and not an arithmetic one. So rank 1 is `b`, dummy, `c`, `q` at
+   * -28, -11, 6 and 28, and against the pre-M2.4b row of `b`, `c`, `q` at -22,
+   * 0 and 22 that is `b` six left and `c` and `q` six RIGHT: the row's left edge
+   * moved six left when it widened, and the dummy sitting ahead of `c` and `q`
+   * pushes those two twelve right of where the widening alone would put them.
+   * `da`'s polyline gains -11 as its bend. Nothing else moves and `bounds` does
+   * not either, because rank 0 is the wider row and -11 is well inside it. Every
+   * node the caller added is still in the result and the dummy is not.
    *
    * The M2.4b review renamed that dummy from `#dummy:da:1` to `#dummy:da:0`,
    * suffixing the id with the dummy's index along its chain rather than with its
-   * rank, and not a number here moved. Within-layer order IS id-derived, so a
-   * rename can move coordinates, but only between two dummies sharing a layer:
-   * `insertionOrderStage` appends the roster's virtual segment after the graph's
-   * own nodes, and rank 1 holds exactly one dummy. So the arithmetic is
-   * untouched, `x = 33` is still `(16 + 10 / 2) + 12 + 0 / 2`, which is `q`'s
-   * right edge, plus the 12 of `nodeSep`, plus half of nothing, and this pin was
-   * re-derived rather than re-captured. (Rank 1 is `b`, `c`, `q`, dummy: a row
-   * of `12 * 3 + 10 + 10 + 10 + 0 = 66` starting at `-33`.)
+   * rank, and not a number here moved. Within-layer order can be id-derived, so
+   * a rename can move coordinates, but only between two dummies sharing a layer,
+   * and rank 1 holds exactly one. So the rename is free here whatever the order
+   * stage does with the slot.
    *
    * It is one graph rather than a corpus on purpose. M2.9 commits golden files
    * against dagre and that is where a corpus belongs; this is a single pin for a

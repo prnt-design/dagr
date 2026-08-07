@@ -408,18 +408,20 @@ describe('what the chains are consumed by', () => {
     expect(countCrossings({ graph, layers: good })).toBe(0);
   });
 
-  it('gives brandes-koepf an inner segment to mark, which it never had before', () => {
+  it('straightens a chain under brandes-koepf where the grid stage bends it', () => {
     // An inner segment joins two nodes the caller never added, and the only
-    // place two dummies are ever joined is inside a chain. `az` spanning three
-    // gaps has one interior link, so this is the smallest graph with an inner
-    // segment in it, and an index built from graph edges alone would have none.
+    // place two dummies are ever joined is inside a chain, so an index built
+    // from graph edges alone has none however many dummies the roster holds.
+    // `az` spanning four gaps has three dummies and two interior links.
     const graph = build(
-      ['a', 'm', 'n', 'z'],
+      ['a', 'm', 'n', 'o', 'z', 'p', 'q'],
       [
         ['a', 'm', 'am'],
         ['m', 'n', 'mn'],
-        ['n', 'z', 'nz'],
+        ['n', 'o', 'no'],
+        ['o', 'z', 'oz'],
         ['a', 'z', 'az'],
+        ['p', 'q', 'pq'],
       ],
     );
     const out = longestPathRankStage.run(prepare(graph));
@@ -429,10 +431,24 @@ describe('what the chains are consumed by', () => {
     forEachSegment(graph, chains, (from, to) => {
       if (virtual.has(from) && virtual.has(to)) inner += 1;
     });
-    expect(inner).toBe(1);
-    // And the whole pipeline runs over it with that stage selected.
-    const result = layout({ graph }, { position: brandesKoepfPositionStage });
-    expect(result.edges.get('az')?.points).toHaveLength(4);
+    expect(inner).toBe(2);
+
+    // What the pass DECIDES, rather than that it ran. Brandes-Koepf aligns a
+    // chain into one block and the type 1 rule is what keeps an ordinary
+    // segment from pulling it apart, so a straight chain is the observable
+    // outcome. `grid-position` has no such rule and bends this one, which is
+    // what makes the assertion discriminating rather than vacuous: a regression
+    // in the alignment or in `markTypeOneConflicts` fails the first line and
+    // leaves the second passing.
+    const bends = (stage?: PositionStage): number[] => {
+      const result = stage === undefined ? layout({ graph }) : layout({ graph }, { position: stage });
+      const points = result.edges.get('az')?.points ?? [];
+      return points.slice(1, -1).map((point) => point.x);
+    };
+    const straightened = bends(brandesKoepfPositionStage);
+    expect(straightened).toHaveLength(3);
+    expect(new Set(straightened).size).toBe(1);
+    expect(new Set(bends()).size).toBeGreaterThan(1);
   });
 });
 

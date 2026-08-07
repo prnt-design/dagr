@@ -624,17 +624,27 @@ function rowCentres(input: OrderedState): Float64Array {
  * its lengths nor its widths are the table's. On the 1k, 8.03x and 8.61x against 3.63x and
  * 2.76x. Both stages improved in absolute terms and grid improved far more.
  *
- * WHY IS NOT ESTABLISHED, and the suspect is named below rather than guessed at
- * here: a chain is exactly the long alignment block this algorithm is built to
- * straighten, and what ships compacts each alignment by longest path over the
- * block order because the paper's class shift is unsound. A long block under a
- * longest-path compaction pushes everything after it, and the chains made the
- * blocks long. That is a hypothesis with an obvious experiment attached and it
- * has not been run.
+ * WHY, and it is NOT the obvious answer. The obvious answer is that a chain is
+ * the long alignment block this algorithm exists to straighten, so the chains
+ * made the blocks long and a long block under a longest-path compaction pushes
+ * everything after it. THAT IS REFUTED, by capping block length in `solve` and
+ * measuring on the 1k corpus with the chains consumed, balanced against
+ * `gridPositionStage`, summed over segments: cap 1 (no alignment at all) 1.00x
+ * length and 1.00x width, cap 2 5.18x and 5.12x, cap 4 6.63x, cap 8 7.23x,
+ * uncapped 7.36x and 7.87x with the longest block only 59. Blocks of TWO
+ * already cost 70% of the blowup and further length buys almost nothing, so
+ * block length is not the mechanism. Nor is the median of four: a single
+ * alignment lands in the same place (down-left 7.14x, up-right 7.22x).
+ *
+ * What is left is the COMPACTION ITSELF. It only ever takes maxima and never
+ * pulls a block back left, so any alignment at all propagates the widest row's
+ * packing pressure into every row it touches, and the first unit of alignment is
+ * what costs. That is the class shift's real job in the paper, and it is why the
+ * task below is a CONTRACTION pass rather than a bigger longest-path solve.
  *
  * So this stage stays unexported and not the default, on a stronger reason than
- * it had before rather than the same one, and the erratum-shaped compaction task
- * below is now the thing blocking it rather than the ranker.
+ * it had before rather than the same one, and that contraction is now the thing
+ * blocking it rather than the ranker.
  *
  * ## What it costs
  *
