@@ -875,30 +875,143 @@ findings addressed or logged, docs land with the feature.
   `test/stage-output.types.test.ts`. No observable behaviour changed, pinned by
   a whole-result equality against a layout captured from the previous
   implementation.
-- [ ] **M2.4b** Dummy-node chains: split long edges across ranks into virtual
+- [x] **M2.4b** Dummy-node chains: split long edges across ranks into virtual
   nodes, rejoin on output. Tests: chain integrity, no multi-rank edges reach
   later stages.
-  UNBLOCKED BY M2.2c, and this is the first line of this entry because the rest
-  of it was written while it was blocked. The branch that implemented this task
-  is green on typecheck, tests and lint and does not merge, for one reason: on
-  the 10k corpus the splitter minted 1,414,263 dummies for 10,000 real nodes and
-  the pipeline went from about 30ms to 5.2 seconds and 735MB, which is a bench
-  regression of +16,513% against +23% allowed. M2.2c takes the view that number
-  comes from to 174,222, a cut of 88%, so the same splitter now mints about an
-  eighth of what it did. REBASE THAT BRANCH ONTO THIS AND RE-MEASURE BEFORE
-  CHANGING ANYTHING IN IT. What it needs is a fresh measurement and a decision
-  about the gate, not a redesign: every decision recorded in its commit message
-  still stands, including the dummy-id form, which M2.2c did not touch. Expect
-  it to still be the most expensive thing in the pipeline, because an eighth of
-  1.4 million is still 174,000 nodes that have to be positioned, ordered and
-  routed, and read the bench-gate paragraph below before assuming the gate is
-  now satisfiable.
+  LANDED, and the box stayed open until the last thing in this entry was
+  settled: the bench-gate decision, which was the maintainer's and is recorded
+  at the end. Four persona reviews raised 22 findings across the run and every
+  one was fixed and verified by the reviewer who raised it.
+  REBASED ONTO M2.2c AND RE-MEASURED, which is what the paragraph this replaces
+  asked for, and this is the first line of the entry because most of the rest of
+  it was written while the task was blocked. Not a line of the splitter changed
+  to get the new number. `m2.4b-dummy-chains` was cherry-picked onto M2.2c, the
+  conflicts were resolved toward main's structure, and the same splitter now
+  mints 174,222 dummies on the 10k corpus and 14,746 on the 1k, under
+  `longestPathRankStage` and therefore under the default pipeline. That is 87.7%
+  below the 1,414,263 the branch was measured at and it is EXACTLY the total span
+  M2.2c's entry records for the same view, which is the check worth stating: what
+  the splitter mints is the total span of the acyclic view, one dummy per rank
+  per edge, so the two numbers agreeing is the arithmetic closing rather than a
+  coincidence. Depth 160 and 857 reversals on the 10k, 64 and 40 on the 1k, all
+  M2.2c's.
+  WHAT THE REBASE COST, because "rebase and re-measure" reads cheaper than it
+  was. The branch forked at `3ed15a0` and four milestones rewrote the pipeline
+  under it (M2.3 ranking, M2.5/M2.6 ordering, M2.6b's default flip, M2.7
+  positioning) on top of M2.2c itself. Three source files conflicted. The
+  splitter moved onto `acyclic.ts`'s shared view rather than keeping the branch's
+  own inlined Kahn sweep, which is where M2.3 put that code so two rankers could
+  share it, and it walks `graph.edges()` for the split because a chain is
+  recorded against the caller's edge id in the caller's direction and the view
+  has neither. Three tests moved and none of them was repinned to a number that
+  suited: `layout.simplex.test.ts`'s tight-tree cost ratio was denominated in
+  `longestPathRankStage.run`, which used to stop exactly where the tight tree
+  starts and now goes on to split, so on its witness (a chain with a source
+  hanging off every link) the denominator became quadratic and the run exceeded
+  the 16.7M entry ceiling on a `Map`. It is now denominated in
+  `feedbackArcSet` plus `acyclicView` plus `longestPathRanks`, which is the unit
+  its own docstring always described. The 10k corpus cases in
+  `layout.position.test.ts` and `layout.determinism.test.ts` gained explicit
+  120-second budgets, because the inherited five seconds was sized for a pipeline
+  laying out 10,000 nodes and the roster is now 184,222.
+  NOTHING DOWNSTREAM READ A CHAIN, WHICH IS THE BIGGEST THING THIS RUN FOUND,
+  AND IT WAS THE ALGORITHMS REVIEW THAT FOUND IT. The splitter was correct, the
+  contract checks were correct, and the chains were INERT. `order.ts` and
+  `position.ts` both built their adjacency from `graph.edges()`, neither had ever
+  read `virtualChains`, and no graph edge touches a dummy, so a dummy was an
+  isolated node in both indexes: it joined a layer, took a `nodeSep` gap and a
+  coordinate, and constrained nothing. Measured on the 10k corpus at that point:
+  adjacent-layer segments 13,131 with the chains and without, the order stage
+  reaching 88,301 crossings either way, the golden crossing corpus identical
+  either way, and Brandes-Koepf's type 1 pass running on every default run and
+  marking nothing. 201,091 chain segments read by nobody. So the milestone as
+  rebased paid the full cost and bought the polyline shape and the M3 id
+  stability, and not the crossing reduction or the straighter long edges it was
+  priced on.
+  THE MAINTAINER'S CALL WAS TO WIRE THEM IN AND RE-MEASURE, so that is what
+  shipped and the paragraph above is the record of what it fixed. `segments.ts`
+  is one rule in one place, the same argument `acyclic.ts` makes about two
+  rankers sharing one view: an edge with a chain is DRAWN as the chain, so it
+  contributes one segment per gap it crosses, and an edge without one is drawn
+  as itself. `order.ts`'s index, `countCrossings` and `position.ts`'s index all
+  build from it. `Layering` gained an optional `virtualChains`, which is the one
+  public API change and is additive.
+  WHAT IT BOUGHT, and this is the only like-for-like comparison in the change,
+  both layerings scored over the SAME population, every segment of the drawing.
+  On the 10k: 8,748,361 crossings reading the chains against 33,932,556 ignoring
+  them, a 74% cut. On the 1k: 194,289 against 685,551, 72%. The default position
+  stage's total horizontal segment length falls 66% on the 10k and 63% on the
+  1k. Ignoring the chains never made those crossings go away, it made them
+  invisible: the long edges were drawn and crossed each other either way, and a
+  stage that could not see them arranged the layers for the third of the drawing
+  it could.
+  EVERY CROSSING COUNT IN THE PACKAGE ROSE BY ROUGHLY AN ORDER OF MAGNITUDE AND
+  NONE OF IT IS A REGRESSION, which is the same trap M2.2c's entry documents and
+  is worse here. The counter went from 13,131 of the 10k's 40,000 edges to all
+  214,222 segments, so the population grew sixteenfold at the moment the layering
+  over it got better. `order-crossings.golden.json` moved between 1.65x and 3.01x
+  per entry, the pinned tables in `layout.order.test.ts` moved wholesale, and the
+  whole-result capture in `layout.result.test.ts` moved because the dummy on its
+  one long edge stopped being parked at the end of its row. The like-for-like
+  numbers are the paragraph above and they are pinned as a test rather than left
+  in prose.
+  TWO PREDICTIONS THIS PACKAGE HAD WRITTEN DOWN WERE SETTLED, one confirmed and
+  one refuted, and both were settled by measurement rather than by argument.
+  CONFIRMED: `order.ts` predicted that the transpose pass's saving would collapse
+  once every edge was visible, from a hand-expanded corpus, at "1.4% at a cap of
+  4" against the shipping 10.7%. A cap of 4 now measures 1.38%. At the shipping
+  cap of 8 the pass captures 17.5% of the fixed point's saving on the 10k and
+  33.4% on the 1k, where it captured 84.3% and 81.9%. THE CAP AND THE SWEEP
+  BUDGET ARE THEREFORE OWED A RE-DERIVATION and this run did not do it: they are
+  shipped defaults, the 10k now reaches its sweep floor at four sweeps where it
+  used to still be improving at sixteen, and that is a tuning task with its own
+  before and after rather than a line in this one.
+  REFUTED: every entry that said dummy chains were the prerequisite for
+  `brandes-koepf-position` taking the default. The prerequisite is met, every
+  segment is visible to it, and the comparison got WORSE. Summing the horizontal
+  component over every segment, it is 15.91x `gridPositionStage`'s length on the
+  10k and 13.81x its width, against 9.41x and 4.53x over the same corpus ordered
+  without the chains; on the 1k 8.03x and 8.61x against 3.63x and 2.76x. That
+  second pair is a THIRD baseline rather than the one M2.7's table recorded: it
+  still places the dummies and differs only in whether the order stage saw them,
+  so neither its lengths nor its widths compare with M2.7's. Both stages improved
+  absolutely and grid improved far more.
+  THE CAUSE WAS THEN MEASURED RATHER THAN LEFT AS A SUSPECT, by the review, and
+  the obvious hypothesis is refuted. That hypothesis was that a chain is the long
+  alignment block Brandes-Koepf exists to straighten, so the chains made the
+  blocks long and a long block under a longest-path compaction pushes everything
+  after it. Capping block length in `solve` and measuring on the 1k with the
+  chains consumed: no alignment at all 1.00x, blocks of two already 5.18x,
+  uncapped 7.36x with the longest block only 59. Blocks of two cost 70% of the
+  blowup and further length buys almost nothing, and a single alignment matches
+  the median of four. What is left is that the compaction only ever takes maxima
+  and never pulls a block back LEFT, so any alignment at all propagates the
+  widest row's packing pressure into every row it touches. The fix is a
+  CONTRACTION pass, which is the class shift's real job in the paper. So the
+  position default is blocked on that rather than on this milestone, and it is a
+  better-understood blocker than the one it replaced.
+  THE SPLITTER IS IN ONLY ONE OF THE TWO RANK STAGES, which is the gap this
+  milestone leaves open rather than closes.
+  `networkSimplexRankStage` declares no chains at all, so a caller who selects
+  it gets multi-rank edges reaching the later stages, which is the one thing
+  this entry's own headline test forbids.
+  The default is unaffected: `defaultStages.rank` is `longestPathRankStage` and
+  always has been. What the simplex ranker WOULD mint if the splitter were shared
+  is measured rather than guessed, and named with its budget per M2.2b: 105,975
+  on the 10k inside the default 20,000-pivot budget and 99,698 at ten times it,
+  10,660 on the 1k at both budgets, so that ranker converges on the 1k and does
+  not on the 10k. Sharing the splitter is a small change and it was deliberately
+  not made here, because this run's instruction was to re-measure the branch
+  before changing anything in it, and because a second ranker minting 105,975
+  dummies is a second bench conversation and not a footnote to this one.
   Dummy ids must be a deterministic function of the edge and the rank
   (`#dummy:<edgeId>:<rank>` or equivalent), never a counter and never iteration
   order, so a chain's identity is stable across runs by construction with no
-  bookkeeping. This is a hard requirement of M3 and it is recorded here because
-  M2.4b is unbuilt: changing dummy ids after M2.5 through M2.9 commit golden
-  files is a corpus-wide migration, and adding it now costs nothing. Without it
+  bookkeeping. This is a hard requirement of M3 and it was recorded here while
+  M2.4b was unbuilt, because changing dummy ids after M2.5 through M2.9 commit
+  golden files is a corpus-wide migration and adding it up front cost nothing.
+  It is met, by `#dummy:<edgeId>:<index>` rather than by the rank form this
+  paragraph suggested, for the reason further down this entry. Without it
   every dummy is a node M3.6's warm start has never seen and M3.8 has no
   previous coordinate to anchor, so a long edge visibly jitters between two
   endpoints that did not move at all, on every patch, forever, while
@@ -945,7 +1058,10 @@ findings addressed or logged, docs land with the feature.
   strictly MONOTONIC (increasing normally, decreasing for a reversed edge) and
   not strictly increasing. What is left here is the chain splitting itself and
   rejoining the chain into a polyline on output.
-  Read the last paragraph of M2.3 and all of M2.2b before pricing this one. How
+  SUPERSEDED BY THE MEASUREMENT AT THE TOP OF THIS ENTRY, and left as written
+  because it is the paragraph that predicted where the number would land and
+  what it would have to be named with. Read the last paragraph of M2.3 and all
+  of M2.2b before pricing this one. How
   many dummies this milestone mints is set by the cycle breaker and not by the
   ranker: on the 10k corpus the view the feedback arc set hands the ranker is
   203 ranks deep against a corpus generated with 60 layers, and every rank of
@@ -961,6 +1077,12 @@ findings addressed or logged, docs land with the feature.
   leaves this much, and over the shipping view they are 268,589 inside the
   default 20,000-pivot budget or 226,676 at ten times it, so a bare 268,589
   prices this milestone off a truncated solver.
+  (Those five figures are all the pre-M2.2c view's. The rebase moved every one
+  of them: 174,222 rather than 1,359,680 under longest path, 105,975 and 99,698
+  rather than 268,589 and 226,676 under the simplex at the two budgets, and 160
+  ranks rather than 203. The instruction to name the ranker and the budget
+  beside the number is the part that did not move, and it is why this entry
+  quotes four figures where one would read better.)
   What that lever actually is was got wrong here, and the correction is M2.2b's.
   This entry used to end "if the count is what hurts once this lands, the lever
   is a better feedback arc set", with the 6,327 reversals against roughly 800
@@ -990,6 +1112,156 @@ findings addressed or logged, docs land with the feature.
   is academic: at the shipping pass's 1,359,680 dummies the pipeline would be
   working on 1.37 million nodes, so M2.2b was necessary here even though it is
   not sufficient for the gate, and it has landed without being sufficient.
+  THE ORIGINAL BLOCK, kept because the rebase is only legible against it. The
+  branch was green on typecheck, tests and lint, it survived three persona
+  reviews, and it could not merge: on the 10k corpus the splitter minted
+  1,414,263 dummies for 10,000 real nodes, the pipeline went from about 30ms to
+  5.2 seconds and 735MB, and `pnpm bench:check` reported +16513% against +23%
+  allowed while every `@dagr/graph` entry stayed in tolerance, so the machine was
+  quiet and the diff was what moved. The cause was NOT the splitter. An A/B on
+  the same corpus with `backEdgeShare: 0` gave a feedback arc set of 0, a maximum
+  rank of 59 (exactly the authored layer count) and 32,107 dummies, the roughly
+  4x roster the task expected. With the corpus's 2% back edges the greedy
+  feedback arc set reversed 6,327 of 40,000 edges where about 800 would do, and
+  every unnecessary reversal of a FORWARD edge turned it into a backward edge in
+  the acyclic view, destroying the layer structure that bounded the depth.
+  Longest path then found 153-deep zigzags through a 60-layer graph and a mean
+  chain of 47 dummies instead of 3.
+  THE BRANCH BLAMED THE WRONG MILESTONE, and that is the part worth carrying
+  forward rather than the numbers. It concluded "M2.3 is a hard prerequisite of
+  M2.4b", because network simplex minimises total edge length and total edge
+  length is what becomes dummy nodes. M2.3 shipped and moved this number by
+  nothing: the ranker was never the problem, the view it was handed was, and
+  M2.2c is what fixed it by minting a shallower acyclic view for the same ranker
+  to rank. M2.3's own entry says the same thing in its own words. A milestone
+  that measures a cost and then names the next milestone in the list as its cause
+  will be wrong about as often as it is right.
+  It answered the question this entry posed. **An edge spans every
+  rank the layout ACTUALLY HAS strictly between its endpoint ranks**, and a
+  chain holds exactly one node at each of them. Phrased over the occupied ranks
+  rather than as steps of exactly one, which was the obvious alternative and is
+  rejected here for the reason this entry already gave: no order stage in this
+  package assumes contiguous integer ranks, both taking the layers to be the
+  distinct ranks sorted, and over ranks 0, 10, 20 the step rule would demand
+  nine dummies, eight of them with no layer to sit in. The
+  rule is enforced in the runner at the rank boundary, and it names the first
+  missing rank in ROUTE order (so a reversed chain reports the hole its polyline
+  meets first) together with the node occupying that rank, which is routinely
+  not on the chain being blamed.
+  Its scope is the half that is easiest to lose, so it is written twice: the
+  rule binds a chain that EXISTS. Declaring a chain at all stays optional, and
+  the "an orphan dummy stays legal" allowance above survives unchanged. What is
+  no longer legal is a chain with a hole in it. Because the rule is phrased over
+  the ranks the layout has rather than over one edge's endpoints, completeness
+  is a property of the whole ranking: a stage that puts a node on a rank nothing
+  previously occupied has to extend every chain spanning it, including chains it
+  did not mint. That is correct (a layer that exists is a layer a long edge
+  crosses unconstrained) and it is documented rather than softened.
+  It also binds the RANKER and not the router. A third-party router that ignores
+  `virtualChains` and emits a two-point line for a long edge is not detected. A
+  points-count rule ("a chain of n dummies needs a route of at least n + 2
+  points") was considered and rejected: straightening a dummy chain is a primary
+  goal of M2.7's Brandes-Koepf, so a collinear chain is what a GOOD positioner
+  produces and M2.8 could then legitimately emit two points, and a rule that has
+  to be withdrawn is worse here than one never claimed.
+  **The deterministic-id requirement is met, but not by the id this entry
+  suggested.** Ids are `#dummy:<edgeId>:<index>`, where the index is the dummy's
+  0-based position along its chain counting from the source the CALLER authored,
+  which is the "or equivalent" this entry allowed for. The review disproved the
+  rank form against this entry's own stated failure mode: insert one unrelated
+  node upstream and every rank shifts, so an edge whose dummies sat at ranks 1
+  and 2 has them at 2 and 3, and the surviving id names the SECOND bend before
+  and the FIRST after, which misanchors a warm start rather than merely missing
+  it. An index is invariant under that shift. The guarantee is claimed narrowly
+  and is narrower than "stable": the id survives any edit that does not move the
+  edge's endpoints RELATIVE to each other, and when they do move relatively the
+  index misanchors by one row rather than losing identity.
+  The test this entry asked for, growing a chain from three ranks to four,
+  is `keeps the dummies a chain already had when the chain grows by a rank` in
+  `packages/layout/test/layout.chains.test.ts`. On its own it does NOT establish
+  the id rule, and the review is why that is written down: it lengthens the path
+  BELOW the shared dummies so their ranks never move, and both candidate id
+  schemes pass it identically. `keeps a chain's ids when an unrelated node
+  upstream shifts every rank` is the test that pins it, and M3.6 should read
+  that one.
+  Two consequences beyond the chains themselves. `bounds` is now the hull of
+  the node boxes AND the route points, because a route bending through a
+  zero-width dummy at a row's right extreme need not stay inside the box hull;
+  see M2.8, which no longer has to make that change. And the residue this entry
+  names at the end of the sorted-roster paragraph is untouched and still M2.7's:
+  a layer's indices are still not stable when a dummy is INSERTED into that
+  layer.
+  THE GATE FAILED, AS THE PARAGRAPH ABOVE FORECAST, AND THE DECISION IS NOT
+  TAKEN HERE. Measured twice, before and after the chains were consumed, on the
+  maintainer's machine and the baseline's (Apple M1 Pro, arm64, node v23.11.0,
+  the machine `bench/baseline.json` names, so these are valid gate results and
+  not the mismatch signature M2.2c hit). Both runs came back with every
+  `@dagr/graph` entry inside tolerance and the final one with nothing `noisy` at
+  all, the two workers agreeing on the control to 1.4%, which is the harness
+  saying the machine was quiet enough to read.
+  AS REBASED, chains declared and unread: pipeline 10k +588.9% against +24.2%
+  allowed, pipeline 1k +369.0%, rank 10k +410.9%, rank 1k +279.6%. The 10k
+  pipeline went from 91.27ms to 674.03ms.
+  WITH THE CHAINS CONSUMED, which is what ships: pipeline 10k +1365.0% against
+  +20.1% allowed, pipeline 1k +1131.7%, rank 10k +382.2%, rank 1k +244.5%. So
+  consuming them roughly doubled the pipeline cost again, 6.89x the baseline to
+  14.65x on the 10k and 4.69x to 12.32x on the 1k, and left the rank stage where
+  it was, which is right because the splitter did not change.
+  ATTRIBUTED RATHER THAN ACCEPTED, per `bench/README.md`, and this one was not
+  predicted in advance: the magnitude rule was written for the rebase and the
+  consumption was a second change on the maintainer's instruction, so the honest
+  statement is that the number was explained after the fact and not before it.
+  Timed by stage in one process on the 10k: rank 115ms, order 856ms with the
+  chains against 136ms without, position 47ms. The order stage is therefore the
+  whole of the new cost, +720ms of it, and what it is buying is 16.3x the
+  segments (13,131 to 214,222) for 6.3x the time, which is sublinear in the work
+  and is what a barycenter sweep over a CSR index should do. Nothing is hiding
+  in it.
+  THE TWO HONEST ANSWERS WERE PUT TO THE MAINTAINER AND (b) WAS CHOSEN. They
+  were: (a) A NEW ENTRY, renaming the pipeline entries to say they measure a
+  pipeline with chains in it, retiring the old keys with a reason and capturing
+  the new ones, so the discontinuity lives in `bench/baseline.json` where the
+  next reader of that file will see it. (b) A REBASELINE OF THE EXISTING FOUR
+  KEYS with the reason in the commit message, which is cheaper and leaves the
+  baseline file saying nothing about the entry having changed meaning. The
+  instruction was "rebaseline the four keys with the reason in the message", so
+  what this entry and that commit message say is the whole of the record, which
+  is the cost of (b) and was accepted knowingly.
+  WHAT THE FOUR KEYS MOVED TO, on the machine `bench/baseline.json` names:
+  pipeline 10k 91.27ms to 1174.05ms, pipeline 1k 7.30ms to 84.73ms, rank 10k
+  22.86ms to 112.49ms, rank 1k 1.57ms to 4.72ms. As control-normalised ratios,
+  which is what the gate actually reads, 12.72x, 11.48x, 4.87x and 2.98x.
+  ONLY THOSE FOUR MOVED, AND THAT TOOK DOING. `pnpm bench:baseline` rewrites
+  every entry the run produced, all fifteen, so running it as documented also
+  re-recorded the eleven `@dagr/graph` entries this branch never touches. It was
+  run that way first and the rerun then FAILED `2.5k successors` at +32.6%,
+  which is a package with no change in it drifting between two runs, and
+  committing that capture would have absorbed the drift into that package's
+  baseline under cover of a layout milestone. So the eleven were restored from
+  the previous capture and only the four layout entries were taken from the new
+  run. `capturedAt` is the new run's, which is right for the file and wrong for
+  eleven of its entries, and that is said here because the file has no
+  per-entry timestamp to say it with.
+  THE CAPTURE RUN WAS GATED ON BEING READABLE, rather than taken on the first
+  run that finished. A baseline is committed permanently, so noise in it is
+  worse than a noisy gate run, which at least re-measures. The machine had
+  fifteen agent sessions resident and would not settle for the first two
+  attempts: one run came back with four entries `noisy` and three untouched
+  `@dagr/graph` entries FAILING between +49.7% and +56.4%, which is the noise
+  signature and not a result. The capture was scripted to refuse any run with a
+  `noisy` entry or a non-layout failure, and it took the third attempt at a
+  1-minute load of 3.07.
+  WHAT DID CHANGE IS THE ARGUMENT FOR CALLING IT A REBASELINE AT ALL, and it
+  changed in the direction that supports one. As rebased this milestone was a
+  cost with no matching benefit: the chains were inert and the pipeline did
+  6.89x the work for the polyline shape alone. With them consumed it does 14.65x
+  the work and returns a drawing with 74% fewer crossings and 66% less
+  horizontal edge length, which is the first time in this milestone's history
+  that the extra work has bought the thing it was priced on. A gate entry whose
+  baseline was captured on a pipeline that placed 10,000 nodes and ordered
+  13,131 segments is not measuring a regression against a pipeline that places
+  184,222 and orders 214,222. Note that today's other rebaseline, M2.2c's, was
+  authorised for a MACHINE MISMATCH and is still not a precedent for this one.
 - [x] **M2.5** Ordering v1: barycenter sweeps with median fallback, crossing
   counter as the metric. Tests on known small graphs with hand-counted
   crossings. Also measure adjacency allocation churn in the sweeps (every
@@ -1137,6 +1409,15 @@ findings addressed or logged, docs land with the feature.
   what every caller who names no stage gets. Re-deriving them is a condition of
   that milestone and not a tidy-up after it, and all four of this entry's own
   figures expire on the same event.
+  M2.4b HAS SINCE LANDED, ITS CHAINS ARE NOW READ BY THIS STAGE, AND THE
+  RE-DERIVATION IS STILL OWED. The cap, the tie rule and all four figures are
+  still measured over a chainless layering. What the consumption did settle is
+  that the caveat was right: at the shipping cap of 8 the pass now captures 17.5%
+  of the fixed point's saving on the 10k against 84.3% before, and a cap of 4
+  measures 1.38% against the predicted 1.4%. `order-crossings.golden.json` was
+  recaptured over the drawing with the chains in it, which is a different thing
+  from re-deriving these: it pins what the stage reaches, not what the cap costs
+  and buys.
 - [x] **M2.7** Positioning: Brandes-Koepf horizontal coordinate assignment
   (or median-based v1 with the interface ready for BK). Invariant tests: no
   node overlaps, spacing respected.
@@ -1166,6 +1447,14 @@ findings addressed or logged, docs land with the feature.
   `grid-position`, and it loses one of the two corpora even restricted to the
   edges it can see. That is structural rather than a tuning problem, and M2.4b is
   the fix, because dummy chains are what make every edge span exactly one rank.
+  M2.4b HAS SINCE LANDED, ITS CHAINS ARE CONSUMED, AND THE MEASUREMENT WAS
+  REDONE: THE PRESCRIPTION IS REFUTED. Over a layering that reads the chains,
+  Brandes-Koepf is 15.91x `grid-position`'s horizontal segment length on the 10k
+  and 13.81x its width, against 9.41x and 4.53x over the same corpus ordered
+  without them, a baseline that still PLACES the dummies. Both improved
+  absolutely and grid improved far more. So the prerequisite was met and the
+  drawing got worse, and what blocks this stage is now the compaction rather
+  than the ranker. See M2.4b's entry.
   The prescription "M2.7 replaces the positioner" was written before that was
   measured; what shipped is the algorithm implemented, tested and unselectable,
   so that M2.4b changes its INPUT rather than a line of it, and the decision it
@@ -1190,12 +1479,13 @@ findings addressed or logged, docs land with the feature.
   attempted here.
 - [ ] **M2.8** Edge routing: polyline routes through dummy-node coordinates,
   monotone in the rank axis. Route invariant tests.
-  From the M2.1 algorithms review: this is where `bounds` stops being the hull
-  of the node boxes, because a route that goes around an obstacle can leave
-  them. The runner contracts containment rather than tightness for exactly that
-  reason. The durable formulation, worth adopting here, is the hull of the node
-  boxes and the route points, which is equivalent today and stays true after
-  this lands.
+  From the M2.1 algorithms review: `bounds` had to stop being the hull of the
+  node boxes, because a route that goes around an obstacle can leave them. The
+  runner contracts containment rather than tightness for exactly that reason.
+  M2.4b adopted the durable formulation early (the hull of the node boxes and
+  the route points), because a route bending through a zero-width dummy can
+  already leave the box hull, so nothing here changes when obstacle detours
+  land.
 - [ ] **M2.9** Golden corpus vs dagre: port a corpus of real graphs
   (including a prnt.design-shaped pattern-generator graph), assert
   structural parity metrics vs dagre output (rank counts, crossing counts

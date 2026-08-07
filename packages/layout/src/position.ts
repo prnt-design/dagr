@@ -1,5 +1,6 @@
 import type { NodeId } from '@dagr/graph';
 import { InternalLayoutError, InvalidConfigError } from './errors.js';
+import { forEachSegment } from './segments.js';
 import type { OrderedState, Point, PositionStage, Size } from './types.js';
 
 /**
@@ -207,25 +208,36 @@ function buildIndex(input: OrderedState): PositionIndex {
     layerStart[layer + 1] = ids.length;
   }
 
-  // One pass over the edges, keeping the ones that join adjacent layers. Which
-  // way the caller authored an edge is not consulted: an edge the ranker
+  // One pass over the drawing's SEGMENTS, keeping the ones that join adjacent
+  // layers. Segments and not edges: an edge the rank stage split is drawn as
+  // its chain, so it contributes one segment per gap it crosses rather than
+  // being dropped whole by the adjacent-layer test. `segments.ts` holds that
+  // rule for this file, `order.ts` and `countCrossings` alike.
+  //
+  // It is also what makes the marking pass below able to find anything. An
+  // inner segment is one whose BOTH endpoints are virtual, and the only place
+  // two dummies are ever joined is inside a chain, so an index built from the
+  // graph's edges alone has none by construction however many dummies the
+  // roster holds.
+  //
+  // Which way the caller authored an edge is not consulted: an edge the ranker
   // reversed joins the same two layers, so a segment always runs from the
   // endpoint in the upper layer to the one in the lower, which is the stance
   // `countCrossings` already takes. A self loop puts both ends on one layer and
   // is dropped by the same test.
   const upper: number[] = [];
   const lower: number[] = [];
-  for (const edge of input.graph.edges()) {
-    const source = numberOf.get(edge.source);
-    const target = numberOf.get(edge.target);
-    if (source === undefined || target === undefined) continue;
+  forEachSegment(input.graph, input.virtualChains, (fromId, toId) => {
+    const source = numberOf.get(fromId);
+    const target = numberOf.get(toId);
+    if (source === undefined || target === undefined) return;
     const sourceLayer = at(layerOf, source);
     const targetLayer = at(layerOf, target);
-    if (Math.abs(sourceLayer - targetLayer) !== 1) continue;
+    if (Math.abs(sourceLayer - targetLayer) !== 1) return;
     const down = sourceLayer < targetLayer;
     upper.push(down ? source : target);
     lower.push(down ? target : source);
-  }
+  });
 
   const up = compress(lower, upper, count);
   const down = compress(upper, lower, count);
@@ -249,13 +261,18 @@ function buildIndex(input: OrderedState): PositionIndex {
  * one. Algorithm 1 of the paper, over every gap rather than over the interior
  * ones.
  *
- * An INNER SEGMENT joins two nodes the caller never added. **There are none
- * today**: no stage in this package declares a virtual node, so
- * `input.virtualNodes` is always empty and the caller below skips this pass
- * entirely. It is written and tested anyway, because M2.4b splits every long
- * edge into a chain of dummies and every link of such a chain is an inner
- * segment, and a pass first executed by the milestone that depends on it is not
- * a pass that milestone should have to debug.
+ * An INNER SEGMENT joins two nodes the caller never added, and the only place
+ * two dummies are ever joined is INSIDE A CHAIN. So this pass had nothing to
+ * mark for as long as the index was built from `input.graph.edges()`, whatever
+ * the roster held: no graph edge touches a dummy. It marks real conflicts now
+ * that the index is built from the drawing's segments, which is what
+ * `segments.ts` supplies, and an edge spanning three or more gaps is the
+ * smallest thing that produces one.
+ *
+ * It was written and tested before it could fire, on the argument that a pass
+ * first executed by the milestone that depends on it is not a pass that
+ * milestone should have to debug. That turned out to be two milestones rather
+ * than one, and the argument held across both.
  *
  * The rule: a dummy chain is meant to come out straight, so where a chain and
  * an ordinary edge disagree the chain wins. Marking the ordinary segment is how
@@ -556,18 +573,25 @@ function rowCentres(input: OrderedState): Float64Array {
  * rather than an apology for it. The reason is structural and it is measured.
  * The same measurement is why nothing here is exported from the package:
  * `index.ts`'s rule names a stage a caller CHOOSES BETWEEN, and by the table
- * below no caller should choose this one yet. Adding the export when M2.4b makes
- * that false is additive; removing one is not. `insertionOrderStage` is the
- * precedent, real and tested and deliberately unexported.
+ * below no caller should choose this one yet. Adding the export when the
+ * measurement turns round is additive; removing one is not.
+ * `insertionOrderStage` is the precedent, real and tested and deliberately
+ * unexported.
  *
  * **BK aligns a node with the MEDIAN OF ITS NEIGHBOURS IN THE ADJACENT LAYER,
  * so an edge that spans more than one rank joins no adjacent pair of layers and
  * is invisible to it.** Today that is most of them: 1,324 of the 1k corpus's
  * 4,000 edges span exactly one rank (33.1%) and 10,528 of the 10k's 40,000
  * (26.3%). It is the same blind spot `countCrossings` has, described in the same
- * words in `order.ts`, and it has the same cure: M2.4b's dummy chains make every
- * edge span exactly one rank, at which point every edge is visible here and no
- * line of this file changes.
+ * words in `order.ts`, and it had the same cure: splitting every long edge into
+ * a chain makes every edge span exactly one rank. **THE BLIND SPOT IS GONE.**
+ * `buildIndex` below builds its segments from `segments.ts` rather than from
+ * `input.graph.edges()`, so an edge with a chain arrives as one segment per gap
+ * it crosses and every segment of the drawing is visible here. The two shares
+ * above are what this stage saw before that, and they are pre-M2.2c on top of
+ * it; over the view that ships they were 1,513 of 4,000 on the 1k and 13,131 of
+ * 40,000 on the 10k, and they are now 18,746 and 214,222 segments, all of them
+ * adjacent.
  *
  * Measured against `gridPositionStage` on the same two corpora, with everything
  * else the default. Edge length is measured HORIZONTALLY, which is the only part
@@ -583,13 +607,44 @@ function rowCentres(input: OrderedState): Float64Array {
  * | width                    | 1k     | 17,950      | 27,550        |
  * | width                    | 10k    | 165,100     | 264,175       |
  *
- * So it is 2.7x and 4.4x worse on total edge length, and 53% and 60% wider. Even
- * RESTRICTED TO THE EDGES IT CAN SEE it only wins one of the two corpora: 12%
- * worse on the 1k, 7.4% better on the 10k. **This stage is not an improvement on
- * these corpora today**, it is the algorithm the drawing will want once its
- * prerequisite lands, and the prerequisite is M2.4b. Anyone reading this before
- * then should read the width and total-length columns as what a caller who
- * selects it now actually gets.
+ * So it was 2.7x and 4.4x worse on total edge length, and 53% and 60% wider.
+ * Even RESTRICTED TO THE EDGES IT COULD SEE it only won one of the two corpora:
+ * 12% worse on the 1k, 7.4% better on the 10k.
+ *
+ * **THE PREREQUISITE IS MET AND IT DID NOT HELP. IT HURT.** Every figure in
+ * that table was taken over a drawing whose long edges were invisible here, and
+ * the prediction attached to it was that the chains would fix that. They fixed
+ * the visibility and made the comparison worse. Re-measured over a layering
+ * with the chains consumed, summing the horizontal component over every SEGMENT
+ * of the drawing (which is not the table's quantity, so read the ratios and not
+ * the levels): on the 10k this stage is 15.91x `gridPositionStage`'s segment
+ * length and 13.81x its width, against 9.41x and 4.53x over the same corpus
+ * ordered without the chains, a baseline that still PLACES the dummies and
+ * differs from the table above in that as well as in the ordering, so neither
+ * its lengths nor its widths are the table's. On the 1k, 8.03x and 8.61x against 3.63x and
+ * 2.76x. Both stages improved in absolute terms and grid improved far more.
+ *
+ * WHY, and it is NOT the obvious answer. The obvious answer is that a chain is
+ * the long alignment block this algorithm exists to straighten, so the chains
+ * made the blocks long and a long block under a longest-path compaction pushes
+ * everything after it. THAT IS REFUTED, by capping block length in `solve` and
+ * measuring on the 1k corpus with the chains consumed, balanced against
+ * `gridPositionStage`, summed over segments: cap 1 (no alignment at all) 1.00x
+ * length and 1.00x width, cap 2 5.18x and 5.12x, cap 4 6.63x, cap 8 7.23x,
+ * uncapped 7.36x and 7.87x with the longest block only 59. Blocks of TWO
+ * already cost 70% of the blowup and further length buys almost nothing, so
+ * block length is not the mechanism. Nor is the median of four: a single
+ * alignment lands in the same place (down-left 7.14x, up-right 7.22x).
+ *
+ * What is left is the COMPACTION ITSELF. It only ever takes maxima and never
+ * pulls a block back left, so any alignment at all propagates the widest row's
+ * packing pressure into every row it touches, and the first unit of alignment is
+ * what costs. That is the class shift's real job in the paper, and it is why the
+ * task below is a CONTRACTION pass rather than a bigger longest-path solve.
+ *
+ * So this stage stays unexported and not the default, on a stronger reason than
+ * it had before rather than the same one, and that contraction is now the thing
+ * blocking it rather than the ranker.
  *
  * ## What it costs
  *
@@ -706,9 +761,9 @@ export function brandesKoepfPosition(options?: BrandesKoepfOptions): PositionSta
       const count = index.ids.length;
 
       // The marking pass is skipped when the roster holds nothing the caller
-      // did not add, because an inner segment needs two such nodes. That is the
-      // whole graph today, and it is a saving rather than a shortcut: with no
-      // virtual node the pass provably marks nothing.
+      // did not add, because an inner segment needs two such nodes. That was
+      // every graph until the rank stage started splitting long edges, and is
+      // now only a graph with no long edge in it.
       if (input.virtualNodes.size > 0) {
         const virtual = new Uint8Array(count);
         for (const [number, id] of index.ids.entries()) {

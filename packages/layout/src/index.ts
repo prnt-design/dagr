@@ -11,7 +11,8 @@ export { DEFAULT_LAYOUT_CONFIG } from './config.js';
 // handle on it either, because which one that is changes: M2.2 moved `rank` and
 // M2.6b moved `order`. A placeholder is the opposite. The defaults still
 // holding the position and route phases are stand-ins scheduled for replacement
-// (M2.4b makes a real positioner worth selecting, and M2.8 brings the router),
+// (M2.8 brings the router, and the position default is waiting on the
+// compaction task named in `position.ts` rather than on a milestone),
 // and a name exported now is a name to delete later or to keep exported as a
 // dead placeholder forever. `defaultStages` covers what a caller wants from
 // those, wrapping whatever the current default is, and it keeps working when
@@ -26,8 +27,10 @@ export { DEFAULT_LAYOUT_CONFIG } from './config.js';
 // `insertionOrderStage`, is still in `stages.ts` and still unexported, for the
 // reason on it. `brandesKoepfPositionStage` is unexported for a version of that
 // reason it states itself: M2.7 implemented and tested it, and its own
-// measurements say no caller should choose it over `gridPositionStage` until
-// M2.4b lands, so the name waits with it. See `position.ts`.
+// measurements say no caller should choose it over `gridPositionStage`, and
+// consuming the dummy chains, which was supposed to be what fixed that, made
+// the gap wider rather than closing it. So the name waits on the compaction
+// work that file names. See `position.ts`.
 export { defaultStages } from './stages.js';
 export { longestPathRankStage } from './rank.js';
 // The factory is exported beside the simplex stage because M3 warm starts a run

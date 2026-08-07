@@ -1,5 +1,6 @@
-import type { Graph, NodeId } from '@dagr/graph';
+import type { EdgeId, Graph, NodeId } from '@dagr/graph';
 import { InternalLayoutError, InvalidConfigError } from './errors.js';
+import { forEachSegment } from './segments.js';
 import type { OrderStage, RankedState } from './types.js';
 
 /**
@@ -22,8 +23,8 @@ const DEFAULT_MAX_SWEEPS = 8;
  * were measured independently, they bound different loops, and neither should
  * track the other, so this is deliberately a second constant and not a shared
  * one. See the transpose section of {@link barycenterOrder} for the curve that
- * put the knee here, and for why the number has to be re-derived when M2.4b
- * lands rather than carried across.
+ * put the knee here, and for why the number is owed a re-derivation now that
+ * M2.4b has landed rather than being carried across.
  */
 const DEFAULT_MAX_TRANSPOSE_PASSES = 8;
 
@@ -72,7 +73,29 @@ function requireRank(ranks: ReadonlyMap<NodeId, number>, id: NodeId): number {
 export interface Layering {
   readonly graph: Graph;
   readonly layers: readonly (readonly NodeId[])[];
+
+  /**
+   * The chains the rank stage split each long edge into, if the drawing has
+   * any. Omitted and an empty map mean the same thing: the drawing's segments
+   * are its edges.
+   *
+   * Optional so that every call written before chains were consumed keeps
+   * compiling and keeps meaning what it meant. What it costs to omit it on a
+   * drawing that HAS chains is that a long edge is counted as nothing rather
+   * than as its pieces, which is the pre-M2.4b limit and is a real
+   * undercount: on the 10k bench corpus the counter sees 13,131 of 40,000
+   * edges without it and 214,222 segments with it. Pass it whenever the rank
+   * stage produced one.
+   */
+  readonly virtualChains?: ReadonlyMap<EdgeId, readonly NodeId[]> | undefined;
 }
+
+/**
+ * The chains of a drawing that has none, shared rather than rebuilt per call.
+ * `countCrossings` is called once per sweep per stage run, so an empty map a
+ * call allocates and throws away is an allocation per sweep for nothing.
+ */
+const EMPTY_CHAINS: ReadonlyMap<EdgeId, readonly NodeId[]> = new Map();
 
 /** Where a node sits in a drawing: which layer, and where in it. */
 interface Place {
@@ -141,18 +164,20 @@ function treeSizeFor(stride: number): number {
 /**
  * How many pairs of edges cross in a drawing of `layers`.
  *
- * **What it counts, and this is the honest limit of the metric today.** A
- * crossing is only defined between two segments joining the same pair of
- * ADJACENT layers. An edge whose endpoints are more than one layer apart is
- * invisible here, and so is a self loop, which spans none. Under the default
- * ranker most edges are in that first category, so this is a real quantity
- * counted over a proper subset of the drawing rather than over all of it. See
- * `docs/docs/layout.md` for the measured share, and note what changes it and
- * what does not: M2.4b's dummy chains make every edge that spans more than one
- * rank span exactly one, at which point this sees the whole of any graph
- * without a self loop, both benchmark corpora included, and no line changes
- * here. A self loop spans no rank, so there is nothing for a chain to split and
- * it stays invisible.
+ * **What it counts.** A crossing is only defined between two segments joining
+ * the same pair of ADJACENT layers, and what a SEGMENT is comes from
+ * `segments.ts`: an edge the rank stage split is drawn as its chain and
+ * contributes one segment per gap it crosses, an edge with no chain is drawn as
+ * itself. So on a drawing whose long edges were split this sees the whole graph
+ * bar its self loops, both benchmark corpora included, and a self loop stays
+ * invisible because it spans no rank for a chain to split.
+ *
+ * On a drawing with NO chains it sees only the edges whose endpoints happen to
+ * land in adjacent layers, which under the default ranker is 1,513 of the 1k
+ * bench corpus's 4,000 and 13,131 of the 10k's 40,000. That was the honest
+ * limit of this metric until the chains were consumed, and it is still what a
+ * caller gets who passes `layers` without `virtualChains`, so pass them: the
+ * two answers differ by more than an order of magnitude in segment count.
  *
  * Direction is not consulted. An edge the ranker reversed still joins the same
  * two layers and still crosses whatever it crosses, so a segment runs from the
@@ -177,11 +202,12 @@ export function countCrossings(input: Layering): number {
   // One list per gap that has a segment in it, so a 200-layer drawing whose
   // edges all sit in one gap allocates one array here rather than 199.
   const gaps = new Map<number, number[]>();
-  for (const edge of input.graph.edges()) {
-    const from = places.get(edge.source);
-    const to = places.get(edge.target);
-    if (from === undefined || to === undefined) continue;
-    if (Math.abs(from.layer - to.layer) !== 1) continue;
+  const chains = input.virtualChains ?? EMPTY_CHAINS;
+  forEachSegment(input.graph, chains, (fromId, toId) => {
+    const from = places.get(fromId);
+    const to = places.get(toId);
+    if (from === undefined || to === undefined) return;
+    if (Math.abs(from.layer - to.layer) !== 1) return;
     const gap = Math.min(from.layer, to.layer);
     const [upper, lower] = from.layer < to.layer ? [from, to] : [to, from];
     const stride = input.layers[gap + 1]?.length ?? 0;
@@ -189,7 +215,7 @@ export function countCrossings(input: Layering): number {
     const segments = gaps.get(gap);
     if (segments === undefined) gaps.set(gap, [encoded]);
     else segments.push(encoded);
-  }
+  });
   let crossings = 0;
   for (const [gap, segments] of gaps) {
     const stride = input.layers[gap + 1]?.length ?? 0;
@@ -376,28 +402,38 @@ function buildIndex(input: RankedState): OrderIndex {
     layerOf[number] = layerIndexOf.get(at(rankOf, number)) ?? 0;
   }
 
-  // One pass over the edges, keeping only the ones that join adjacent layers.
-  // A self loop puts both endpoints on one layer and is dropped by the same
-  // test, which is what "a self loop spans zero ranks" comes to here.
+  // One pass over the drawing's SEGMENTS, keeping only the ones that join
+  // adjacent layers. A self loop puts both endpoints on one layer and is
+  // dropped by the same test, which is what "a self loop spans zero ranks"
+  // comes to here.
+  //
+  // Segments and not edges, and that distinction is the whole of what
+  // `virtualChains` buys: an edge the ranker split is drawn as its chain, so it
+  // contributes one segment per gap it crosses instead of contributing nothing
+  // at all. Before those chains were read here, a long edge failed the adjacent
+  // layer test and was invisible to the sweeps and to the counter alike, which
+  // is the limit `countCrossings` still documents for a graph nobody split.
+  // `segments.ts` holds the rule, because this file, that counter and
+  // `position.ts` all need the same answer.
   const from: number[] = [];
   const to: number[] = [];
   const segUpper: number[] = [];
   const segLower: number[] = [];
   const segGap: number[] = [];
-  for (const edge of input.graph.edges()) {
-    const source = numberOf.get(edge.source);
-    const target = numberOf.get(edge.target);
-    if (source === undefined || target === undefined) continue;
+  forEachSegment(input.graph, input.virtualChains, (fromId, toId) => {
+    const source = numberOf.get(fromId);
+    const target = numberOf.get(toId);
+    if (source === undefined || target === undefined) return;
     const sourceLayer = at(layerOf, source);
     const targetLayer = at(layerOf, target);
-    if (Math.abs(sourceLayer - targetLayer) !== 1) continue;
+    if (Math.abs(sourceLayer - targetLayer) !== 1) return;
     from.push(source);
     to.push(target);
     const down = sourceLayer < targetLayer;
     segUpper.push(down ? source : target);
     segLower.push(down ? target : source);
     segGap.push(Math.min(sourceLayer, targetLayer));
-  }
+  });
 
   const out = compress(from, to, count);
   const incoming = compress(to, from, count);
@@ -726,10 +762,15 @@ function applyHint(
  *
  * The adjacent-layer walk is chosen over the all-edges walk for two reasons. It
  * wins the 10k by 8.0% and loses the 1k by 4.2%, and the 10k is the corpus
- * every later milestone commits against. And the two walks COINCIDE once M2.4b
- * splits every long edge into a chain, because then every edge spans exactly
- * one rank, so choosing the adjacent-layer rule is choosing the behaviour this
- * stage will have anyway rather than one that changes character under it.
+ * every later milestone commits against. And the two walks COINCIDE now that
+ * every long edge is split into a chain and the chains are read here, because
+ * every segment then spans exactly one layer and the two rules have the same
+ * segments to walk. So choosing the adjacent-layer rule turned out to be
+ * choosing the behaviour this stage has anyway, which is what the argument
+ * predicted. The three counts in the table above predate that and predate
+ * M2.2c: they are the measurement that chose the seed, a comparison between
+ * three columns rather than a level, and the level is in
+ * `test/layout.order.test.ts`.
  *
  * The hypothesis that was refuted is the interesting part, and it was the
  * all-edges walk's: the seed is the only place a long edge can influence this
@@ -962,18 +1003,24 @@ function applyHint(
  * across a rerun on the same state, a second graph built from scratch in the
  * same insertion order, and a fresh stage object.
  *
- * THE CAVEAT, AND IT IS NOT A SMALL ONE. **The saving collapses once every edge
- * is visible.** Every number above is measured on a graph where the counter
- * sees about a quarter of the edges, because an edge spanning more than one
- * rank is invisible to it. On a dummy-expanded 10k, which is what M2.4b
- * produces, the capped saving falls from 10.7% to 1.4% AT A CAP OF 4, which is
- * the cap those two were compared at and is not this stage's default of 8. The
- * expanded graph was never measured at 8, so the honest statement is that a
- * capped pass loses most of its value there and not that it loses exactly that
- * much. Only a full fixed point holds its share, at a price nobody can pay: 214
- * seconds against 6.8. So the cap AND the tie rule are both measured against a
- * graph that M2.4b replaces, and BOTH MUST BE RE-DERIVED WHEN IT LANDS rather
- * than carried across unexamined. Neither is a constant of the algorithm.
+ * THE CAVEAT CAME TRUE AND THE CAP IS NOW OWED A RE-DERIVATION. **The saving
+ * collapses once every edge is visible**, which is what this section predicted
+ * from a hand-expanded 10k: the capped saving falling from 10.7% to 1.4% AT A
+ * CAP OF 4. Every number above was measured when the counter saw about a
+ * quarter of the edges, because a long edge was invisible to it. It is not
+ * invisible any more, the chains being read here, and the prediction reproduces
+ * on the real thing to two figures: a cap of 4 now saves 1.38% on the 10k. At
+ * the shipping cap of 8 the pass captures 17.5% of the fixed point's saving on
+ * the 10k and 33.4% on the 1k, where it used to capture 84.3% and 81.9%. The
+ * fixed point is still unaffordable.
+ *
+ * So the cap AND the tie rule were both chosen against a drawing this stage no
+ * longer sees, and neither is a constant of the algorithm. The re-derivation is
+ * deliberately not done in the change that consumed the chains: it moves a
+ * shipped default, it wants the sweep budget looked at in the same pass (the
+ * 10k reaches its sweep floor at four sweeps now, where it used to still be
+ * improving at sixteen), and a tuning task deserves its own before and after.
+ * `test/layout.order.test.ts` holds the curve that says so.
  *
  * ## The warm start
  *
@@ -1026,7 +1073,9 @@ function applyHint(
  *
  * THOSE FOUR FIGURES ARE LIVE ADVICE HERE AND NOWHERE ELSE. Each is a
  * measurement with a scheduled expiry: a bench recapture moves the timings and
- * M2.4b moves all four. So `index.ts`, `ROADMAP.md` and `docs/docs/layout.md`
+ * M2.4b moves all four. M2.4b HAS LANDED AND DID NOT MOVE THEM, so all four are
+ * expired rather than replaced and this section is a record until someone
+ * re-derives it. So `index.ts`, `ROADMAP.md` and `docs/docs/layout.md`
  * describe the trade in a sentence and point back at this section rather than
  * copying the table, which leaves one paragraph to correct rather than four.
  * `CHANGELOG.md` is the deliberate exception: a dated entry records what a

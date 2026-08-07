@@ -581,6 +581,134 @@ describe('virtual chains', () => {
     expect(result.nodes.get('b')?.y).toBeLessThan(result.nodes.get('a')?.y ?? 0);
   });
 
+  it('catches a chain with a hole in it, and names the rank that is missing', () => {
+    // The rule M2.4a left open and M2.4b decided. One dummy at rank 1 on an
+    // edge from rank 0 to rank 3 passes all five rules above, and its route
+    // then crosses rank 2 at an x nothing constrains, which is the thing
+    // dummies exist to prevent. The message names rank 2 rather than counting:
+    // a count says the chain is too short, and this says where the hole is.
+    const error = expectContractError({
+      rank: chainRank({
+        ranks: [
+          ['a', 0],
+          ['ab#1', 1],
+          ['filler', 2],
+          ['b', 3],
+        ],
+        declare: ['ab#1', 'filler'],
+        chains: [['ab', ['ab#1']]],
+      }),
+    });
+    expect(error.stage).toBe('chain-rank');
+    expect(error.id).toBe('ab');
+    expect(error.message).toContain('rank 2');
+    // And it names what made rank 2 a rank. Completeness is a property of the
+    // whole ranking rather than of this edge, so the node that put the layer
+    // there is routinely not on the chain being blamed for skipping it, and a
+    // message that only said "rank 2" would leave the reader hunting for it.
+    expect(error.message).toContain('"filler"');
+  });
+
+  it('blames a complete chain for a rank an unchained dummy introduced, and says which node', () => {
+    // The two rules a paragraph apart compose into a third. A declared id needs
+    // no chain, AND a chain covers every rank the layout actually has between
+    // its endpoints, so an orphan dummy declared at a rank nothing previously
+    // occupied retroactively makes every chain spanning that rank incomplete.
+    // Here `ab`'s chain covers rank 10, which was every rank between 0 and 20
+    // until `loose` put a layer at rank 5, and now it does not.
+    //
+    // The behaviour is CORRECT and this test pins it rather than regrets it: if
+    // a layer exists at rank 5, a long edge really does cross it at an x nothing
+    // in it constrains. What the message has to do is say so, which is why it
+    // names `loose` and not only the rank.
+    const error = expectContractError({
+      rank: chainRank({
+        ranks: [
+          ['a', 0],
+          ['loose', 5],
+          ['ab#1', 10],
+          ['b', 20],
+        ],
+        declare: ['loose', 'ab#1'],
+        chains: [['ab', ['ab#1']]],
+      }),
+    });
+    expect(error.stage).toBe('chain-rank');
+    expect(error.id).toBe('ab');
+    expect(error.message).toContain('rank 5');
+    expect(error.message).toContain('"loose"');
+  });
+
+  it('names the first missing rank walking a reversed chain source to target', () => {
+    // Same rule on a reversed edge, where "first" is the first one the ROUTE
+    // meets: the chain descends from rank 4 to rank 0, holds rank 3, and the
+    // next rank the route would cross is 2. Reporting rank 1 instead would be
+    // naming the far end of the hole rather than the near one.
+    const error = expectContractError({
+      rank: chainRank({
+        ranks: [
+          ['a', 4],
+          ['ab#3', 3],
+          ['low', 1],
+          ['mid', 2],
+          ['b', 0],
+        ],
+        declare: ['ab#3', 'low', 'mid'],
+        chains: [['ab', ['ab#3']]],
+        reversed: ['ab'],
+      }),
+    });
+    expect(error.stage).toBe('chain-rank');
+    expect(error.id).toBe('ab');
+    expect(error.message).toContain('rank 2');
+  });
+
+  it('takes a chain over ranks that are not contiguous, so the rule assumes none', () => {
+    // The case that proves the rule is "every rank the layout actually has
+    // between the endpoints" and not "steps of exactly one". Ranks 0, 10 and 20
+    // are a perfectly legal ranking: `insertionOrderStage` sorts the distinct
+    // ranks it finds rather than assuming a contiguous run, and so must this.
+    // A rule phrased as steps of one would demand nine dummies here, none of
+    // which would have a layer to sit in.
+    const result = layout(
+      { graph: chain() },
+      {
+        rank: chainRank({
+          ranks: [
+            ['a', 0],
+            ['ab#1', 10],
+            ['b', 20],
+          ],
+          declare: ['ab#1'],
+          chains: [['ab', ['ab#1']]],
+        }),
+      },
+    );
+    expect(result.edges.get('ab')?.points).toHaveLength(3);
+  });
+
+  it('lets a ranker declare no chain at all for a long edge', () => {
+    // The scope of the completeness rule, stated as a test: it is about a chain
+    // that EXISTS. Having one stays optional, a ranker that splits nothing is
+    // still legal, and the route it produces is the straight two-point line it
+    // always was.
+    const result = layout(
+      { graph: chain() },
+      {
+        rank: chainRank({
+          ranks: [
+            ['a', 0],
+            ['filler', 1],
+            ['b', 2],
+          ],
+          declare: ['filler'],
+          chains: [],
+        }),
+      },
+    );
+    expect(result.edges.get('ab')?.points).toHaveLength(2);
+  });
+
   it('catches a reversed edge whose chain runs the other way', () => {
     const error = expectContractError({
       rank: chainRank({

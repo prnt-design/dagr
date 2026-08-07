@@ -23,10 +23,10 @@ import type {
  * anything a stage declared in `virtualNodes`.
  *
  * The rank, order, and position checks all run over this rather than over the
- * graph, which is what lets M2.4b add dummy-node chains without weakening a
+ * graph, which is what let M2.4b add dummy-node chains without weakening a
  * single check: a dummy is an id the source graph does not hold, so a check
- * phrased as "the graph holds it" would have to be deleted for M2.4b to land,
- * and a check phrased as "the roster holds it" does not. What it still catches
+ * phrased as "the graph holds it" would have had to be deleted for M2.4b to
+ * land, and a check phrased as "the roster holds it" did not. What it still catches
  * is a stage inventing a node it never declared, which is the case the phrasing
  * was there to catch in the first place.
  *
@@ -65,10 +65,14 @@ function* rosterOf(graph: Graph, virtualNodes: ReadonlySet<NodeId>): Generator<N
  *
  * The bare `.sort()` is deliberate and is not a latent bug to tidy up. It is
  * UTF-16 lexicographic, so it would put `#dummy:e:10` before `#dummy:e:2`, and
- * that never decides anything: two dummies in one layer come from different
- * edges, so the rank component is equal wherever the comparison is used. All
- * this has to be is a pure function of the id set. A numeric-aware comparator
- * would be slower, would need its own tests, and would buy nothing.
+ * that never decides anything: a chain contributes at most one node per rank, so
+ * two dummies in one layer come from different EDGES, and the edge portion of
+ * the id decides the comparison before the numeric suffix is ever reached. (The
+ * suffix is a chain index rather than a rank as of the M2.4b review, so it is no
+ * longer equal between two dummies of one layer, and the conclusion survives
+ * unchanged because it never rested on that.) All this has to be is a pure
+ * function of the id set. A numeric-aware comparator would be slower, would need
+ * its own tests, and would buy nothing.
  */
 function declaredRoster(declared: ReadonlyMap<NodeId, Size> | undefined): ReadonlySet<NodeId> {
   return new Set([...(declared?.keys() ?? [])].sort());
@@ -96,25 +100,9 @@ function mergedSizes(
   return sizes;
 }
 
-/**
- * Tolerance for a comparison of two coordinates, scaled to their magnitude.
- *
- * Box edges here are sums of floats: a node's right edge is recovered as
- * `x + width / 2` from an `x` that the position stage computed as
- * `left + width / 2`, and `(l + w / 2) + w / 2` is not always exactly `l + w`.
- * Two edges that coincide in real arithmetic can therefore differ in the last
- * bit, so an exact comparison would reject correct layouts. See the same
- * tolerance in `gridPositionStage`'s no-overlap guarantee.
- */
 /** A usable length: finite and not negative, the same rule the config enforces. */
 function isMeasure(value: number): boolean {
   return Number.isFinite(value) && value >= 0;
-}
-
-function toleranceFor(...values: readonly number[]): number {
-  let magnitude = 1;
-  for (const value of values) magnitude = Math.max(magnitude, Math.abs(value));
-  return magnitude * 1e-9;
 }
 
 /**
@@ -145,8 +133,24 @@ function toleranceFor(...values: readonly number[]): number {
  * `prepared.sizes` never covered. Narrowing the stage return types stopped a
  * stage handing a graph BACK, not a stage reaching into the one it was handed.
  * Without this the caller gets an `InternalLayoutError` blaming this package
- * for a third-party stage's mistake, and M2.4b makes that mistake the obvious
- * wrong first attempt.
+ * for a third-party stage's mistake, and M2.4b's chains make that mistake the
+ * obvious wrong first attempt.
+ *
+ * The chain rules end in a COMPLETENESS rule as of M2.4b, and its scope is
+ * worth stating twice: it is about a chain that EXISTS. A ranker that splits no
+ * long edge declares no chain and is perfectly legal, and a declared id that
+ * belongs to no chain is legal too. What is no longer legal is a chain with a
+ * hole in it, because that is a route crossing a layer at a coordinate nothing
+ * in that layer constrains, which is the one thing dummies are for.
+ *
+ * Completeness is a property of the whole RANKING rather than of one edge, and
+ * the two rules compose into a third that is worth stating outright: because a
+ * declared id needs no chain, and because a chain has to cover the ranks the
+ * layout actually has, a stage that puts a node on a rank nothing previously
+ * occupied has to extend every chain that spans that rank, including chains it
+ * did not mint. That is correct rather than incidental (a layer that exists is a
+ * layer a long edge crosses unconstrained), and it is why the error names the
+ * node occupying the missing rank rather than only the rank.
  */
 function checkRanked(
   stage: string,
@@ -160,9 +164,13 @@ function checkRanked(
     // in the roster-wide map, so the caller's own node quietly changes size,
     // and nothing downstream notices because the id really is a graph node.
     // This has to run before the roster loop, which would otherwise see the id
-    // twice and report whichever failure the duplicate happened to cause. Once
-    // M2.4b mints dummy ids from edge ids, a graph whose node ids look like
-    // that pattern lands here.
+    // twice and report whichever failure the duplicate happened to cause.
+    //
+    // `longestPathRankStage` mints dummy ids from edge ids, so a graph whose
+    // own node ids look like `#dummy:<edgeId>:<index>` lands here. That prefix
+    // is reserved, not unforgeable. The splitter checks first and throws with
+    // the reservation spelled out, so this is the catch-all for a third-party
+    // ranker that mints ids some other way and collides anyway.
     if (graph.hasNode(id)) {
       throw new StageContractError(stage, id, 'was declared virtual but the graph already holds it');
     }
@@ -179,12 +187,22 @@ function checkRanked(
     }
   }
 
+  // The ranks the layout actually has, which is what a chain has to span, so it
+  // is collected in the roster walk that has each rank in hand anyway, and only
+  // when there is a chain to check it against. Each rank remembers a node that
+  // occupies it, first one wins, so that the completeness error below can say
+  // WHY a rank the chain skipped is a rank at all. That matters because
+  // completeness is a global property: the node that made a rank exist is
+  // routinely not on the chain being blamed for skipping it.
+  const occupied = new Map<number, NodeId>();
+  const chainsDeclared = ranked.virtualChains.size > 0;
   for (const id of rosterOf(graph, ranked.virtualNodes)) {
     const rank = ranked.ranks.get(id);
     if (rank === undefined) throw new StageContractError(stage, id, 'no rank was assigned');
     if (!Number.isFinite(rank)) {
       throw new StageContractError(stage, id, `rank ${String(rank)} is not a finite number`);
     }
+    if (chainsDeclared && !occupied.has(rank)) occupied.set(rank, id);
     // See the note above: the only way to reach this is a stage that added the
     // node to the live graph instead of declaring it.
     if (!ranked.sizes.has(id)) {
@@ -211,6 +229,12 @@ function checkRanked(
   // wrong in any of these ways surfaces as a polyline with a bend in the wrong
   // place, which nothing downstream can tell from a bend in the right one.
   const chained = new Set<NodeId>();
+  // The occupied ranks in order, with each one's place in that order, so that
+  // the ranks a chain has to cover are a walk between two indices rather than a
+  // scan of every rank in the layout per chain.
+  const ordered = [...occupied.keys()].sort((left, right) => left - right);
+  const placeOfRank = new Map<number, number>();
+  for (const [place, rank] of ordered.entries()) placeOfRank.set(rank, place);
   for (const [edgeId, chainIds] of ranked.virtualChains) {
     const edge = graph.getEdge(edgeId);
     if (edge === undefined) {
@@ -254,12 +278,27 @@ function checkRanked(
     // appended checks the monotonicity and the "strictly between the endpoint
     // ranks" rule in one pass, since the walk starts at the source's rank.
     const reversed = ranked.reversedEdges.has(edgeId);
-    let previous = ranked.ranks.get(edge.source);
+    const from = ranked.ranks.get(edge.source);
+    const to = ranked.ranks.get(edge.target);
+    // Unreachable: both endpoints of an edge are graph nodes, and the roster
+    // loop above ranked every one of them.
+    if (from === undefined || to === undefined) continue;
+    let previous = from;
     for (const id of [...chainIds, edge.target]) {
       const rank = ranked.ranks.get(id);
-      // Unreachable: the roster loop above ranked every graph node and every
-      // declared id, and the loop above rejected an undeclared chain member.
-      if (previous === undefined || rank === undefined) break;
+      // Unreachable: the loop above rejected any chain member that was not
+      // declared, and the roster loop ranked every declared id.
+      //
+      // It THROWS rather than breaking, and that is load bearing since the
+      // M2.4b review. The completeness check below is a count comparison that
+      // trusts this walk to have established "strictly monotonic, so distinct,
+      // so a subset of the occupied ranks between the endpoints". A `break` here
+      // would leave that unestablished for the rest of the chain while the count
+      // still assumed it, which is exactly the shape this project's fail-loud
+      // convention exists to refuse.
+      if (rank === undefined) {
+        throw new InternalLayoutError(`chain member "${id}" of edge "${edgeId}" has no rank`);
+      }
       if (reversed ? rank >= previous : rank <= previous) {
         throw new StageContractError(
           stage,
@@ -270,6 +309,87 @@ function checkRanked(
         );
       }
       previous = rank;
+    }
+    // Completeness, which is M2.4b's rule and the one thing the five above do
+    // not establish: a chain SPANS EVERY RANK THE LAYOUT ACTUALLY HAS strictly
+    // between its endpoint ranks. The occupied ranks are exactly the layers the
+    // order stage will build, so a chain that skips one crosses a row at an x
+    // that nothing in that row constrains, which is the thing dummies exist to
+    // prevent.
+    //
+    // Phrased over the occupied ranks rather than as steps of exactly one,
+    // because `insertionOrderStage` explicitly refuses to assume ranks are
+    // contiguous integers and so must this: over ranks 0, 10, 20 the step rule
+    // would demand nine dummies, eight of which have no layer to sit in.
+    //
+    // Its scope is a chain that EXISTS. Having one at all stays OPTIONAL: a
+    // ranker that splits nothing is legal, and so is a declared dummy that
+    // belongs to no chain. What it is NOT is a property of one edge: the rule is
+    // phrased over the ranks the layout has rather than over the edge's own
+    // endpoints, so a stage that puts a node on a rank nothing previously
+    // occupied lengthens every chain that spans it, including chains it did not
+    // mint. That is correct (a layer that exists really is a layer a long edge
+    // crosses unconstrained) and it is why the error below names the node that
+    // occupies the rank as well as the rank.
+    //
+    // A COUNT decides it, and the walk above is what makes that sound. Every
+    // chain reaching here has strictly monotonic ranks (hence distinct) lying
+    // strictly between the endpoints, and every chain member is a roster member,
+    // so every chain rank is occupied. The chain's ranks are therefore a subset
+    // of the occupied ranks strictly between the endpoints, and there are
+    // exactly `|toPlace - fromPlace| - 1` of those. Subset plus equal
+    // cardinality is equality, so a matching count is completeness and the walk
+    // that names a hole only has to run when there is one.
+    //
+    // The first missing rank is reported rather than a count: naming rank 2 says
+    // where the hole is. "First" is the first one the ROUTE meets, so the walk
+    // runs in the chain's own direction, from the source's place in the rank
+    // order toward the target's. It is bounded by the array as well as by the
+    // terminator: `place !== toPlace` alone would run away from the terminator
+    // forever if the two places were ever equal, and while the monotonicity walk
+    // rules that out forty lines earlier, a loop whose termination depends on a
+    // proof elsewhere in the function is one edit away from not terminating.
+    const fromPlace = placeOfRank.get(from);
+    const toPlace = placeOfRank.get(to);
+    // Unreachable: both endpoint ranks went into the order with their nodes.
+    if (fromPlace === undefined || toPlace === undefined) continue;
+    if (chainIds.length !== Math.abs(toPlace - fromPlace) - 1) {
+      // Built HERE and not in the walk above, which is the point of the count:
+      // this is a set per FAILING chain rather than one per chain, and on the
+      // benchmark corpus the difference is tens of thousands of allocations a
+      // run. `required` rather than a fallback because the walk above threw on
+      // any chain member without a rank.
+      const held = new Set<number>();
+      for (const id of chainIds) held.add(required(ranked.ranks.get(id), 'rank', id));
+      const step = toPlace > fromPlace ? 1 : -1;
+      for (
+        let place = fromPlace + step;
+        place !== toPlace && place >= 0 && place < ordered.length;
+        place += step
+      ) {
+        const missing = ordered[place];
+        // Unreachable: the loop bound keeps `place` inside `ordered`. It throws
+        // rather than `continue`s because walking off the ranks would be a
+        // runner bug, and continuing past one in a loop whose other exit is a
+        // `!==` on an unbounded counter is how a defensive branch becomes a
+        // spin. Stopping is the correct response to an invariant failure.
+        if (missing === undefined) {
+          throw new InternalLayoutError(`rank order has no entry at place ${String(place)}`);
+        }
+        if (held.has(missing)) continue;
+        const occupant = occupied.get(missing);
+        // Unreachable: `ordered` is this very map's key list.
+        if (occupant === undefined) {
+          throw new InternalLayoutError(`rank ${String(missing)} is ordered but unoccupied`);
+        }
+        throw new StageContractError(
+          stage,
+          edgeId,
+          `has a virtual chain with no node at rank ${String(missing)}, which its endpoints ` +
+            `at ranks ${String(from)} and ${String(to)} span and which node "${occupant}" ` +
+            'occupies; a chain holds one node at every rank the layout has between them',
+        );
+      }
     }
   }
 
@@ -390,6 +510,10 @@ function checkPositioned(stage: string, graph: Graph, positioned: PositionedStat
  * `x + width` is not always exactly the `maxX` it came from. That is why the
  * comparison carries a tolerance, and why removing the tolerance makes this
  * fire on a real layout rather than on a broken one.
+ *
+ * Route points are checked as well as node boxes, since M2.4b, because they are
+ * now part of what `bounds` claims to contain: a route that bends through a
+ * dummy can leave the hull of the boxes. See {@link boundsOf}.
  */
 function assertBounds(result: LayoutResult): void {
   const { x, y, width, height } = result.bounds;
@@ -399,6 +523,8 @@ function assertBounds(result: LayoutResult): void {
         `${String(height)} has a component that is not a finite number`,
     );
   }
+  // No nodes means no routes either, because an edge needs two endpoints to
+  // exist, so there is nothing for the loops below to enclose.
   if (result.nodes.size === 0) {
     if (x !== 0 || y !== 0 || width !== 0 || height !== 0) {
       throw new InternalLayoutError(
@@ -407,13 +533,25 @@ function assertBounds(result: LayoutResult): void {
     }
     return;
   }
+  // Every comparison below is against the same four numbers, so their magnitude
+  // is hoisted out of both loops and each iteration folds in only its own
+  // coordinates. Tolerance is needed at all because the box edges are sums of
+  // floats: a node's right edge is recovered as `x + width / 2` from an `x` the
+  // position stage computed as `left + width / 2`, and `(l + w / 2) + w / 2` is
+  // not always exactly `l + w`, so two edges that coincide in real arithmetic
+  // can differ in the last bit and an exact comparison would reject a correct
+  // layout. See the same tolerance in `gridPositionStage`'s no-overlap
+  // guarantee. It is scaled to the magnitude of the numbers being compared, and
+  // never below 1, so a layout near the origin still gets a usable epsilon.
+  const baseX = Math.max(1, Math.abs(x), Math.abs(x + width));
+  const baseY = Math.max(1, Math.abs(y), Math.abs(y + height));
   for (const node of result.nodes.values()) {
     const left = node.x - node.width / 2;
     const right = node.x + node.width / 2;
     const top = node.y - node.height / 2;
     const bottom = node.y + node.height / 2;
-    const epsX = toleranceFor(left, right, x, x + width);
-    const epsY = toleranceFor(top, bottom, y, y + height);
+    const epsX = Math.max(baseX, Math.abs(left), Math.abs(right)) * 1e-9;
+    const epsY = Math.max(baseY, Math.abs(top), Math.abs(bottom)) * 1e-9;
     if (
       left < x - epsX ||
       right > x + width + epsX ||
@@ -425,6 +563,24 @@ function assertBounds(result: LayoutResult): void {
           `(${String(right)}, ${String(bottom)}) falls outside the bounds (${String(x)}, ` +
           `${String(y)}) ${String(width)} by ${String(height)}`,
       );
+    }
+  }
+  for (const edge of result.edges.values()) {
+    for (const [index, point] of edge.points.entries()) {
+      const epsX = Math.max(baseX, Math.abs(point.x)) * 1e-9;
+      const epsY = Math.max(baseY, Math.abs(point.y)) * 1e-9;
+      if (
+        point.x < x - epsX ||
+        point.x > x + width + epsX ||
+        point.y < y - epsY ||
+        point.y > y + height + epsY
+      ) {
+        throw new InternalLayoutError(
+          `edge "${edge.id}" route point ${String(index)} (${String(point.x)}, ` +
+            `${String(point.y)}) falls outside the bounds (${String(x)}, ${String(y)}) ` +
+            `${String(width)} by ${String(height)}`,
+        );
+      }
     }
   }
 }
@@ -523,8 +679,33 @@ function checkRouted(stage: string, graph: Graph, routed: RoutedState): void {
   }
 }
 
-/** The smallest rectangle containing every node box, or a zero rect for none. */
-function boundsOf(nodes: ReadonlyMap<NodeId, PositionedNode>): Rect {
+/**
+ * The smallest rectangle containing every node box AND every route point, or a
+ * zero rect when there is nothing to contain.
+ *
+ * The routes are counted as of M2.4b, which is where they started being able to
+ * leave the node hull. A route used to run centre to centre, and a centre is
+ * inside its own box, so the two formulations agreed and the cheaper one was
+ * written down. A route that bends through a dummy NEED NOT agree: the order
+ * stage puts a virtual node after the graph's own within a layer and the
+ * position stage lays a row out left to right, so a zero-width dummy at the end
+ * of a row sits at that row's right extreme, `nodeSep` clear of the last box in
+ * it.
+ *
+ * "Need not" rather than "does not", because whether that bend actually leaves
+ * the hull depends on the rest of the drawing. At `nodeSep: 0`, which the config
+ * accepts, the dummy lands exactly ON the last box's right edge and nothing
+ * grows. With a wider row elsewhere the bend is inside the hull of that row's
+ * boxes and nothing grows either. One reachable counterexample is all this needs
+ * (`test/layout.chains.test.ts` is that counterexample), and the rule on this
+ * project is to make a claim true rather than to soften it, so the formulation
+ * covers the case rather than the common case. It is also what M2.8 needs anyway
+ * once a route detours around an obstacle.
+ */
+function boundsOf(
+  nodes: ReadonlyMap<NodeId, PositionedNode>,
+  edges: ReadonlyMap<EdgeId, RoutedEdge>,
+): Rect {
   let minX = Number.POSITIVE_INFINITY;
   let minY = Number.POSITIVE_INFINITY;
   let maxX = Number.NEGATIVE_INFINITY;
@@ -535,6 +716,16 @@ function boundsOf(nodes: ReadonlyMap<NodeId, PositionedNode>): Rect {
     maxX = Math.max(maxX, node.x + node.width / 2);
     maxY = Math.max(maxY, node.y + node.height / 2);
   }
+  for (const edge of edges.values()) {
+    for (const point of edge.points) {
+      minX = Math.min(minX, point.x);
+      minY = Math.min(minY, point.y);
+      maxX = Math.max(maxX, point.x);
+      maxY = Math.max(maxY, point.y);
+    }
+  }
+  // No nodes means no edges, since an edge needs two endpoints to exist, so
+  // this is still the empty-graph case it always was.
   if (nodes.size === 0) return { x: 0, y: 0, width: 0, height: 0 };
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
@@ -580,7 +771,7 @@ function assemble(graph: Graph, routed: RoutedState): LayoutResult {
       points: required(routed.routes.get(edge.id), 'route', edge.id),
     });
   }
-  return { nodes, edges, bounds: boundsOf(nodes) };
+  return { nodes, edges, bounds: boundsOf(nodes, edges) };
 }
 
 /**
@@ -627,13 +818,16 @@ function assemble(graph: Graph, routed: RoutedState): LayoutResult {
  *
  * Two of the four default stages are real algorithms. The rank stage has been
  * one since M2.2: it breaks cycles with a least-squares feedback arc set and
- * ranks by longest path, so the layers are the ones the graph asks for. The order stage
- * has been one since M2.6b: barycenter sweeps and a transpose pass, so within a
- * layer the horizontal order is one that has had its crossings reduced rather
- * than the graph's insertion order. The other two are still placeholders, so
- * the coordinates are a grid and an edge is a straight line between two
- * centres, until coordinate assignment (M2.7) and real routing (M2.8) replace
- * them one at a time, against this runner and its contract checks.
+ * ranks by longest path, so the layers are the ones the graph asks for, and as
+ * of M2.4b it splits an edge that spans more than one rank into a chain of
+ * dummy nodes, one per rank between its endpoints. The order stage has been one
+ * since M2.6b: barycenter sweeps and a transpose pass, so within a layer the
+ * horizontal order is one that has had its crossings reduced rather than the
+ * graph's insertion order. The other two are still placeholders, so the
+ * coordinates are a grid and an edge is a straight line from centre to centre,
+ * bending through its chain where it has one, until coordinate assignment
+ * (M2.7) and real routing (M2.8) replace them one at a time, against this
+ * runner and its contract checks.
  *
  * @throws {InvalidConfigError} when a separation or a size is not a finite
  * number that is zero or greater.

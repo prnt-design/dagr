@@ -1,7 +1,9 @@
 import { Graph } from '@dagr/graph';
 import type { EdgeId, NodeId } from '@dagr/graph';
 import { describe, expect, it } from 'vitest';
+import { acyclicView, longestPathRanks } from '../src/acyclic.js';
 import { measureNodes, resolveConfig } from '../src/config.js';
+import { feedbackArcSet } from '../src/cycles.js';
 import { InvalidConfigError, defaultStages, layout } from '../src/index.js';
 import { longestPathRankStage } from '../src/rank.js';
 import { networkSimplexRank, networkSimplexRankStage } from '../src/simplex.js';
@@ -800,21 +802,31 @@ describe('the cost of growing the tight tree', () => {
   /**
    * What the tight tree costs, in units of one linear sweep over the same graph.
    *
-   * A ratio against `longestPathRankStage` rather than a wall time or a ratio of
-   * two sizes, and both halves of that matter. A wall time pins the machine.
-   * Timing one stage at two sizes pins the shape in principle, but the constant
-   * factor climbs with the graph as the arrays leave cache, so quadratic growth
-   * came out at 12 over a fourfold graph rather than 16 while the heaps come out
-   * between 4 and 8, which is not a gap to hang a test on. The default stage is
-   * O(V + E) over the SAME view: it breaks the same cycles, builds the same
-   * acyclic view and runs the same longest-path sweep, and then stops exactly
-   * where the tight tree starts. So the ratio is 1 plus what the tree costs in
-   * sweeps, on this machine, at this size, with this much of the graph in cache.
+   * A ratio against the sweep rather than a wall time or a ratio of two sizes,
+   * and both halves of that matter. A wall time pins the machine. Timing one
+   * stage at two sizes pins the shape in principle, but the constant factor
+   * climbs with the graph as the arrays leave cache, so quadratic growth came
+   * out at 12 over a fourfold graph rather than 16 while the heaps come out
+   * between 4 and 8, which is not a gap to hang a test on. The unit is O(V + E)
+   * over the SAME view: it breaks the same cycles, builds the same acyclic view
+   * and runs the same longest-path sweep, and then stops exactly where the tight
+   * tree starts. So the ratio is 1 plus what the tree costs in sweeps, on this
+   * machine, at this size, with this much of the graph in cache.
+   *
+   * The unit is those three calls rather than `longestPathRankStage.run`, which
+   * is what it was until M2.4b. That stage no longer stops where the tight tree
+   * starts: it goes on to split every long edge, and on this witness that is
+   * quadratic work in the chain length rather than the linear sweep this ratio
+   * is denominated in. Timing the three calls is the same unit the paragraph
+   * above always described, and it is now the only way to get it.
    */
   const sweepsPerGrowth = (total: number): number => {
     const input = prepare(witness(total));
     const stage = networkSimplexRank({ maxIterations: 0 });
-    const sweep = fastest(() => void longestPathRankStage.run(input));
+    const sweep = fastest(() => {
+      const reversed = feedbackArcSet(input.graph);
+      longestPathRanks(acyclicView(input.graph, reversed));
+    });
     const growth = fastest(() => void stage.run(input));
     expect(stage.run(input).ranks.size).toBe(input.graph.nodeCount);
     return growth / sweep;

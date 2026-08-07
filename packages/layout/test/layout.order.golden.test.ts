@@ -66,7 +66,20 @@ import type { RankedState, Size } from '../src/types.js';
  * more force to a committed file: two generators drift, and a golden file
  * against a drifted generator pins numbers for a graph nobody else has.
  *
- * WHAT LAST MOVED IT, and it was not this stage. M2.2c replaced the cycle
+ * WHAT LAST MOVED IT, and it was not this stage either time.
+ *
+ * Most recently, the order stage began reading the rank stage's dummy chains,
+ * so an edge that spans several layers is now ordered and counted as the
+ * segments it is drawn as rather than being invisible. Every count here rose,
+ * between 1.65x and 3.01x, and NONE of that is a quality regression: the
+ * population being counted grew by an order of magnitude at the same moment.
+ * The like-for-like comparison is in `layout.order.test.ts`, both layerings
+ * scored over the full segment population, and there the layering that reads
+ * the chains has 8,748,361 crossings on the 10k bench corpus against 33,932,556
+ * for the one that ignores them. This file cannot show that, because it records
+ * one layering per entry rather than two.
+ *
+ * Before that, M2.2c replaced the cycle
  * breaker, which changes the RANKING every entry here is ordered against, and
  * five of the six `layers` counts fell: 66 to 62, 28 to 22, 77 to 45, 38 to
  * 32 and 40 to 27, while `sparse-2000` alone kept its 40 layers and both of
@@ -267,19 +280,40 @@ function buildGraph(entry: CorpusEntry): Graph {
   return graph;
 }
 
-/** The graph ranked by the default stage, which is what the numbers assume. */
+/**
+ * The graph ranked by the default stage, chains and all, which is what a
+ * default run hands the order stage.
+ *
+ * It passed `virtualNodes` and `virtualChains` as empty until the M2.4b review.
+ * Passing them through was briefly a no-op, because neither the order index nor
+ * `countCrossings` read `virtualChains` at that point and a dummy was an
+ * isolated node contributing nothing to count. Both read them now, through
+ * `segments.ts`, so an edge with a chain arrives as one segment per gap it
+ * crosses and every count in the committed file moved: see the header's WHAT
+ * LAST MOVED IT.
+ *
+ * `ranks` is filtered to the roster this state declares. The stage ranks the
+ * dummies too, and handing back ranks for ids no roster holds would make
+ * `built.layers` measurable over ids nothing places.
+ */
 function rankedState(graph: Graph): RankedState {
   const sizes = new Map<NodeId, Size>();
   for (const node of graph.nodes()) sizes.set(node.id, { width: 10, height: 10 });
   const out = longestPathRankStage.run({ graph, config: DEFAULT_LAYOUT_CONFIG, sizes });
+  const virtualNodes = new Set<NodeId>(out.virtualNodes?.keys() ?? []);
+  const ranks = new Map<NodeId, number>();
+  for (const [id, rank] of out.ranks) {
+    if (graph.hasNode(id) || virtualNodes.has(id)) ranks.set(id, rank);
+  }
+  for (const [id, size] of out.virtualNodes ?? []) sizes.set(id, size);
   return {
     graph,
     config: DEFAULT_LAYOUT_CONFIG,
     sizes,
-    ranks: out.ranks,
+    ranks,
     reversedEdges: out.reversedEdges,
-    virtualNodes: new Set(),
-    virtualChains: new Map(),
+    virtualNodes,
+    virtualChains: out.virtualChains ?? new Map(),
   };
 }
 

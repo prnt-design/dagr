@@ -14,6 +14,19 @@ of doc prose.
 
 ### Added
 
+- `virtualChains` on `Layering`, the argument type of `countCrossings`, optional
+  and defaulting to none. Pass the rank stage's chains and a long edge is
+  counted as the segments it is drawn as; omit them and it is counted as
+  nothing, because its endpoints are more than one layer apart. Additive, so
+  every existing call keeps compiling and keeps meaning what it meant, but on a
+  drawing with chains in it the two answers are not close: 13,131 segments
+  counted against 214,222 on the 10k benchmark corpus. (M2.4b)
+
+  It is optional rather than required because a `Layering` is a drawing someone
+  wants a number for, and a drawing with no chains in it is a legitimate thing
+  to hand over. It is not defaulted to "look them up", because `Layering` holds
+  a `Graph` and a graph does not know what a rank stage decided.
+
 - `brandes-koepf-position`, the first real position stage, INTERNAL TO THE
   PACKAGE AND NOT EXPORTED. `brandesKoepfPosition(options)`,
   `brandesKoepfPositionStage` and the `BrandesKoepfOptions` type are all in
@@ -31,18 +44,49 @@ of doc prose.
   by the numbers below there is no run today that should choose this one over
   `grid-position`. `insertion-order` is in the package on the same terms.
   Brandes-Koepf aligns a node with its neighbours in the ADJACENT layer, so an
-  edge spanning more than one rank is invisible to it, which today is most of
-  them: 1,324 of the 1k benchmark corpus's 4,000 edges span exactly one rank and
-  10,528 of the 10k's 40,000. Measured against `grid-position` on those corpora
+  edge spanning more than one rank is invisible to it, which when this entry
+  was written was most of them: 1,324 of the 1k benchmark corpus's 4,000 edges
+  spanned exactly one rank and 10,528 of the 10k's 40,000. Measured against
+  `grid-position` on those corpora
   it is 2.7x and 4.4x worse on total horizontal edge length (3,793,350 to
   10,191,450 and 292,526,025 to 1,297,826,325, measured horizontally because
   that is the only part either stage decides) and 53% and 60% wider (17,950 to
   27,550 and 165,100 to 264,175). Even restricted to the edges it can see it
   wins only one of the two, 12% worse on the 1k (1,112,700 to 1,246,200) and
-  7.4% better on the 10k (44,056,125 to 40,790,550). Running it today buys a
-  worse drawing. M2.4b's dummy chains are what change that, because they make
-  every edge span exactly one rank, and both the export and the default are
-  decisions for the milestone that will have the measurement to make them with.
+  7.4% better on the 10k (44,056,125 to 40,790,550). Running it bought a worse
+  drawing. Dummy chains were expected to change that, because they make every
+  edge span exactly one rank, and both the export and the default were left as
+  decisions for the milestone that would have the measurement to make them
+  with.
+
+  **THE PREREQUISITE HAS BEEN MET AND IT MADE THIS STAGE WORSE against
+  `grid-position`, not better, which is the sentence above being refuted rather
+  than confirmed.** The chains are read here now and every segment of the
+  drawing is visible. Re-measured over a layering that consumes them, summing
+  the horizontal component over every SEGMENT (not the quantity the table above
+  measures, so compare the ratios and not the levels): 15.91x `grid-position`'s
+  segment length on the 10k and 13.81x its width, against 9.41x and 4.53x over
+  the same corpus ordered without the chains, a baseline that still PLACES the
+  dummies and so is neither the table's population nor the table's drawing: the
+  table's 60% wider is not comparable with that 4.53x. On the 1k, 8.03x and
+  8.61x against 3.63x and 2.76x. Both stages improved in absolute terms and grid
+  improved far more.
+
+  The cause is the compaction, and it is not the length of the blocks, which was
+  the obvious guess and is refuted. Capping block length in `solve` and measuring
+  on the 1k with the chains consumed: no alignment at all is 1.00x, blocks of two
+  are already 5.18x, and uncapped is 7.36x with the longest block only 59. Blocks
+  of two cost 70% of the blowup and further length buys almost nothing. A single
+  alignment matches the median of four, so that is not it either. What is left is
+  that the compaction only ever takes maxima and never pulls a block back LEFT,
+  so any alignment at all propagates the widest row's packing pressure into every
+  row it touches. The fix is a contraction pass, which is the class shift's real
+  job. So the stage stays unexported for a stronger reason than it had, and what
+  blocks it is that contraction rather than the ranker.
+  The two edge shares quoted above are pre-M2.2c on top of everything else; over
+  the view that ships they were 1,513 of 4,000 and 13,131 of 40,000, and they are
+  now 18,746 and 214,222 segments, all of them adjacent.
+  `defaultStages.position` is unchanged either way.
 
   `variant` is the only option and takes `'balanced'`, the default and the
   median of all four alignments, or one of `'down-left'`, `'down-right'`,
@@ -102,8 +146,9 @@ of doc prose.
   stage now gets this pass and everything in front of it. It is left here
   because it is what was true when the pass landed. The two crossing counts in
   this paragraph are NOT superseded: they are still what the stage produces,
-  and they expire with M2.4b rather than with the flip. See the M2.6b entry
-  under Changed.
+  and they expire with M2.4b rather than with the flip. M2.4b has since landed
+  and did not re-derive them, so they are expired and not replaced. See the
+  M2.6b entry under Changed.
 
   The sharpest case, because it is the one that reads as a contradiction:
   `barycenterOrder({ maxSweeps: 0 })` used to mean "the seed permutation,
@@ -149,8 +194,14 @@ of doc prose.
   walk over ALL edges 3,459 and 38,152. The all-edges walk was the expected
   winner, on the theory that the seed is the only place a long edge can
   influence a stage that cannot otherwise see one, and it loses the corpus that
-  counts. The adjacent-layer rule also coincides with it once M2.4b splits the
-  long edges, so it is the behaviour this stage will have anyway.
+  counts. The adjacent-layer rule would also coincide with it once every long
+  edge is split, so it is the behaviour this stage will have anyway. (The edges
+  are split and the chains are read here now, so the two rules do coincide, which
+  is the argument coming true. The three counts above are pre-M2.2c AND
+  pre-consumption and were never refreshed: over the drawing this stage sees
+  today it reaches 8,748,361 crossings on the 10k at its own defaults, which is
+  `test/layout.order.test.ts`'s pin, counted over 214,222 segments rather than
+  the 10,528 edges these three were counted over.)
 
   **What a crossing is counted between**, which is the honest limit of this
   release. Only two segments joining the same pair of ADJACENT layers can cross,
@@ -229,13 +280,19 @@ of doc prose.
   174,222 down to 105,975 on the 10k inside the default budget. See the M2.2c
   entry under Changed.
 
-  **None of that saving is collectable in this release.** M2.4b is unbuilt, no
-  stage mints a dummy node today, and `virtualNodes` comes back empty from both
-  rankers, so the counts above are a cost nobody is paying yet. Switching today
-  buys a rank stage that costs several times more (about 28ms against a few
-  milliseconds on the 1k corpus, seconds against tens of milliseconds on the
-  10k one) and saves no dummy nodes, because there are none. What it buys is a
-  ranking M2.4b will be able to exploit.
+  **None of that saving is collectable, and M2.4b did not change that.** The
+  paragraph that stood here said the counts were a cost nobody was paying
+  because no stage minted a dummy. Half of that expired: `longest-path-rank`
+  splits long edges as of M2.4b and pays the 174,222. The other half did not.
+  M2.4b put the splitter in `longest-path-rank` only, so `network-simplex-rank`
+  still declares nothing and `virtualNodes` still comes back empty from it, and
+  switching today still buys a rank stage that costs several times more (about
+  28ms against a few milliseconds on the 1k corpus, seconds against tens of
+  milliseconds on the 10k one) and saves no dummy nodes, because it mints none
+  to save. It also means a run that selects it gets multi-rank edges reaching
+  the later stages, which is the thing M2.4b exists to prevent. Sharing the
+  splitter between the two rankers is what makes the 105,975 real, and it is
+  named in M2.4b's ROADMAP entry as the gap that milestone left open.
 
   **It cannot make a drawing shorter and it can make one taller**, because
   minimum total edge length and minimum height are different objectives and
@@ -289,11 +346,11 @@ of doc prose.
 - `RankOutput.virtualChains`, optional, and `RankedState.virtualChains`, which
   the runner derives from it. A `ReadonlyMap<EdgeId, readonly NodeId[]>`: the
   chain of declared ids a rank stage split a long edge into, keyed by the
-  caller's own edge id. Nothing produces one yet; M2.4b's chains do, and this is
-  a slot declared ahead of the milestone that fills it, exactly as
-  `reversedEdges` and `virtualNodes` each were. It exists because M2.4b's router
-  has to rejoin a chain into one polyline keyed by the edge it serves, and
-  without the chain recorded the only recourse is parsing a dummy id back apart,
+  caller's own edge id. It was declared here and filled one milestone later, by
+  M2.4b's chains (see Changed), exactly as `reversedEdges` and `virtualNodes`
+  each were. It exists because M2.4b's router has to rejoin a chain into one
+  polyline keyed by the edge it serves, and without the chain recorded the only
+  recourse is parsing a dummy id back apart,
   which is ambiguous (an `EdgeId` is a caller-supplied string), couples the
   ranker and the router through a string format, and promotes the id format to
   load-bearing public contract when the M3 requirement only pins the id's value.
@@ -330,6 +387,121 @@ of doc prose.
 
 ### Changed
 
+- **Every long edge is now split into a dummy chain, so long edges route
+  differently and a layout can be wider.** The default rank stage splits an edge
+  whose endpoints are more than one rank apart into a chain of virtual nodes,
+  one per rank strictly between them, and the default route stage rejoins the
+  chain into one polyline. No type and no exported name changed. What a caller
+  upgrading past this sees is that an edge spanning `n` ranks comes back with
+  `n + 1` points instead of two, that a graph with a long edge in it has more
+  nodes to place so the rows those dummies join are wider, and that `bounds` may
+  be larger (see the entry below). A graph whose every edge is a one-rank hop is
+  laid out exactly as before, because nothing is declared and nothing is split.
+  (M2.4b)
+
+  **The order stage and the position stage read the chains**, which is what
+  makes them worth their cost: an edge with a chain is ordered, counted and
+  positioned as the segments it is DRAWN as, one per gap it crosses, rather than
+  being dropped whole by an adjacent-layer test. Measured on the 10k benchmark
+  corpus, both layerings scored over all 214,222 segments: reading the chains
+  gives 8,748,361 crossings against 33,932,556 for ignoring them, a 74% cut, and
+  72% on the 1k. The default position stage's total horizontal segment length
+  falls 66% on the 10k and 63% on the 1k.
+
+  **Every crossing count this package quotes rose by roughly an order of
+  magnitude at the same moment, and none of that is a regression.** The counter
+  went from seeing 13,131 of the 10k's 40,000 edges to seeing all 214,222
+  segments, so the population grew sixteenfold while the layering over it got
+  better. `order-crossings.golden.json` moved between 1.65x and 3.01x per entry
+  for exactly this reason, and the only like-for-like comparison in the suite is
+  the one in the paragraph above, which scores both layerings on the same
+  population. Do not read a count taken before this against a count taken
+  after.
+
+  **The one upgrade effect that stops a working program**, and the reason this
+  entry is not just cosmetic. A caller who overrode `order` or `position` and
+  wrote that stage against `input.graph.nodes()` rather than against the roster
+  worked fine before M2.4b, because `defaultStages.rank` never declared a
+  virtual node, so the rule and the practice never disagreed where anyone could
+  see. From M2.4b, any graph with a long edge in it makes `checkOrdered`
+  ("missing from the layers") or `checkPositioned` ("no position was assigned")
+  throw a `StageContractError` naming THEIR stage, for a node they have never
+  heard of. No type changed, so nothing says a word at compile time, which is
+  exactly the category this file exists for. **The roster rule itself has not
+  changed**: every stage from the rank boundary on has always been checked over
+  the roster (the graph's nodes plus whatever the ranker declared), and what
+  changed is that a default run now declares something.
+
+  A dummy is `#dummy:<edgeId>:<index>`, where the index is the dummy's 0-based
+  position along its chain counting from the source the CALLER authored, so
+  index 0 sits next to `edge.source` for a reversed edge (whose source is at the
+  high rank) as much as for a normal one. A pure function of the edge and that
+  position, never a counter and never iteration order. That is a requirement of
+  M3 rather than a detail: with a counter, adding an unrelated edge renames
+  every dummy on a chain, so M3.6's warm start meets nodes it has never seen and
+  a long edge jitters between two endpoints that did not move.
+
+  The index rather than the rank, which the ROADMAP suggested "or equivalent",
+  because an index is invariant under a uniform rank shift and a rank is not.
+  Insert one node upstream and a whole cone moves down a row, renaming every
+  dummy in it under the rank scheme while every one of those edges kept its
+  shape, and renaming them onto each other: an edge whose dummies were at ranks
+  1 and 2 has them at ranks 2 and 3, so the id that named the second bend now
+  names the first and a warm start anchors that bend to the wrong previous
+  coordinate. The guarantee this buys is narrower than "stable" and is claimed
+  narrowly: the id is stable under any edit that does not move the edge's
+  endpoints RELATIVE to each other. Endpoints that move relative to each other
+  are a real change to the edge's shape, and there the index misanchors by one
+  row rather than losing identity outright. (M2.4b review)
+
+  The `#dummy:` prefix is RESERVED, and reserved is not unforgeable: a graph
+  that already holds a node with a minted id gets a `StageContractError` naming
+  `longest-path-rank`, the colliding id, and the reservation, telling the caller
+  to rename their node. The splitter raises it, and the runner's own declaration
+  check still covers a third-party ranker that mints ids some other way, so it
+  is reported once and the message is about the namespace rather than about a
+  built-in stage leaving work undone. A dummy has no size,
+  `{ width: 0, height: 0 }`, as dagre's plain long-edge dummy has. A chain is
+  listed source to target as the CALLER authored them, so its ranks descend for
+  an edge the ranker reversed, and the router needs no reversal bookkeeping to
+  walk it.
+
+- **A rank stage that declares an incomplete chain now throws.** New rule at the
+  rank boundary: a chain holds exactly one node at every rank the layout
+  actually has, strictly between its endpoint ranks. This is the rule M2.4a
+  declared the field without, and named as M2.4b's call: a single dummy at rank
+  1 on an edge from rank 0 to rank 3 satisfied all five older rules and routed
+  across rank 2 with no bend. The error names the first rank that is missing
+  rather than reporting a length. It is phrased over the occupied ranks rather
+  than as steps of exactly one, because that would assume contiguous integer
+  ranks and no order stage in this package does. **The scope is a chain
+  that EXISTS**: declaring one stays optional, a third-party ranker that splits
+  nothing is still legal, and a declared id that belongs to no chain is still
+  legal. What is no longer legal is a chain with a hole in it. (M2.4b)
+
+  Being phrased over the ranks the layout has, it is a property of the whole
+  RANKING rather than of one edge, and the two paragraphs above compose into a
+  third: a stage that introduces a rank nothing previously occupied, say by
+  declaring one unchained dummy at a rank of its own, has to extend every chain
+  spanning that rank, including chains it did not mint. That is correct (a layer
+  that exists is a layer a long edge crosses unconstrained) and the error names
+  the node occupying the missing rank as well as the rank, because that node is
+  routinely not on the chain being blamed. (M2.4b review)
+
+- **`bounds` is the hull of the node boxes AND the route points.** It was the
+  hull of the node boxes, and the two agreed while every route ran centre to
+  centre, because a centre is inside its own box. A route that bends through a
+  dummy need not agree: an order stage is free to leave a virtual node at the
+  end of a layer and `grid-position` lays a row out left to right, so a
+  zero-width dummy at the end of a row sits at that row's right extreme,
+  `nodeSep` clear of the last box in it. Whether that bend actually leaves the
+  hull depends on the rest of the drawing (at `nodeSep: 0` it lands exactly on
+  that box's edge, and a wider row elsewhere can swallow it), but one reachable
+  case is enough to make the old claim false. The claim was made true rather
+  than softened, in the formulation M2.8's obstacle detours need anyway. A
+  layout with no chain in it has exactly the bounds it had before, since a
+  straight route's endpoints are node centres. (M2.4b)
+
 - **Cycle breaking is now a least-squares vertex order rather than the greedy
   heuristic of Eades, Lin and Smyth, so every graph with a cycle in it ranks
   differently, lays out differently and draws differently, with no type change
@@ -350,8 +522,10 @@ of doc prose.
 
   What it costs is time in the rank stage: the call is about 2.3 times the
   greedy one on the 10k corpus. That is deliberate, and the thing it is bought
-  against is a cost nobody is paying yet, because M2.4b is unbuilt and no stage
-  mints a dummy today.
+  against is a cost nobody was paying when this entry was written, because M2.4b
+  was unbuilt and no stage minted a dummy. M2.4b has since landed and the entry
+  above it is the bill: 174,222 dummies on the 10k rather than the 1,359,680
+  this change removed.
 
   **An acyclic graph is unaffected.** The feedback set is empty either way, so
   the view, the ranks and the drawing are exactly what they were. Everything
@@ -371,7 +545,13 @@ of doc prose.
   crossings on the 10k and 76.7% fewer on the 1k. The four measurements those
   ratios come from are stated once, in the last section of `barycenterOrder`'s
   docstring in `src/order.ts`, and deliberately not copied here: a benchmark
-  recapture moves the timings and M2.4b moves all four.
+  recapture moves the timings and M2.4b moves all four. M2.4b has since landed
+  and its chains are now read by this stage, so all four are owed a
+  re-derivation against a pipeline that orders 184,222 nodes and 214,222
+  segments on the 10k rather than 10,000 and 13,131. That re-derivation has not
+  been done. `order-crossings.golden.json` HAS been recaptured over the drawing
+  with the chains in it, which is a different thing: it pins what the stage
+  reaches, not what this trade cost and bought.
 
   Nothing about the stage itself changed and no export moved.
   `barycenterOrderStage` has been exported by name since M2.5 and is the very

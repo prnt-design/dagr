@@ -257,7 +257,12 @@ describe('brandesKoepfPosition, the spacing invariant', () => {
       expect(grouped.length).toBe(name === '1k' ? 64 : 160);
       expect(crowded.length).toBe(name === '1k' ? 64 : 159);
       expect(Math.max(...grouped.map((row) => row.length))).toBe(name === '1k' ? 118 : 814);
-    });
+      // Stated rather than inherited, for the reason in
+      // `layout.determinism.test.ts`: since M2.4b a run at this scale positions
+      // the roster, which on the 10k corpus is 174,222 dummies on top of the
+      // corpus's own nodes, and the default five seconds was sized for a
+      // pipeline that minted none.
+    }, 120_000);
   }
 });
 
