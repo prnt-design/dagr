@@ -71,7 +71,7 @@ import type { RankedState, Size } from '../src/types.js';
  * Most recently, the order stage began reading the rank stage's dummy chains,
  * so an edge that spans several layers is now ordered and counted as the
  * segments it is drawn as rather than being invisible. Every count here rose,
- * between 1.6x and 2.6x, and NONE of that is a quality regression: the
+ * between 1.65x and 3.01x, and NONE of that is a quality regression: the
  * population being counted grew by an order of magnitude at the same moment.
  * The like-for-like comparison is in `layout.order.test.ts`, both layerings
  * scored over the full segment population, and there the layering that reads
@@ -281,21 +281,16 @@ function buildGraph(entry: CorpusEntry): Graph {
 }
 
 /**
- * The graph ranked by the default stage, chains and all.
+ * The graph ranked by the default stage, chains and all, which is what a
+ * default run hands the order stage.
  *
- * It passed `virtualNodes` and `virtualChains` as empty until the M2.4b review,
- * on the belief that feeding the chains in would move every number in the file.
- * It moves none: the order index and `countCrossings` both build their segments
- * from `graph.edges()`, and no graph edge touches a dummy, so a dummy is an
- * isolated node in the index and contributes nothing to count. Measured on the
- * 10k corpus, crossings came out 88,301 both ways, and the four non-self-loop
- * entries here are identical either way.
- *
- * So the chains are passed through, because that makes this harness the same
- * ranking a default run produces rather than a narrowed one, and the committed
- * counts stand unchanged. What that identity actually shows is the milestone's
- * second gap and not a reassurance: nothing downstream reads a chain yet. See
- * the M2.4b ROADMAP entry.
+ * It passed `virtualNodes` and `virtualChains` as empty until the M2.4b review.
+ * Passing them through was briefly a no-op, because neither the order index nor
+ * `countCrossings` read `virtualChains` at that point and a dummy was an
+ * isolated node contributing nothing to count. Both read them now, through
+ * `segments.ts`, so an edge with a chain arrives as one segment per gap it
+ * crosses and every count in the committed file moved: see the header's WHAT
+ * LAST MOVED IT.
  *
  * `ranks` is filtered to the roster this state declares. The stage ranks the
  * dummies too, and handing back ranks for ids no roster holds would make

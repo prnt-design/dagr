@@ -66,9 +66,11 @@ of doc prose.
   the horizontal component over every SEGMENT (not the quantity the table above
   measures, so compare the ratios and not the levels): 15.91x `grid-position`'s
   segment length on the 10k and 13.81x its width, against 9.41x and 4.53x over
-  the same corpus ordered without the chains. On the 1k, 8.03x and 8.61x against
-  3.63x and 2.76x. Both stages improved in absolute terms and grid improved far
-  more.
+  the same corpus ordered without the chains, a baseline that still PLACES the
+  dummies and so is neither the table's population nor the table's drawing: the
+  table's 60% wider is not comparable with that 4.53x. On the 1k, 8.03x and
+  8.61x against 3.63x and 2.76x. Both stages improved in absolute terms and grid
+  improved far more.
 
   The suspect is the compaction rather than the alignment: a dummy chain is the
   long alignment block this algorithm exists to straighten, what ships compacts
@@ -189,11 +191,13 @@ of doc prose.
   winner, on the theory that the seed is the only place a long edge can
   influence a stage that cannot otherwise see one, and it loses the corpus that
   counts. The adjacent-layer rule would also coincide with it once every long
-  edge is split, so it is the behaviour this stage will have anyway. (M2.4b split
-  them and the rules have not coincided: this stage reads the graph's edges and
-  never `virtualChains`. The three counts above are pre-M2.2c and were never
-  refreshed. Over the view that ships this stage reaches 88,301 crossings on the
-  10k at its own defaults, which is `test/layout.order.test.ts`'s pin.)
+  edge is split, so it is the behaviour this stage will have anyway. (The edges
+  are split and the chains are read here now, so the two rules do coincide, which
+  is the argument coming true. The three counts above are pre-M2.2c AND
+  pre-consumption and were never refreshed: over the drawing this stage sees
+  today it reaches 8,748,361 crossings on the 10k at its own defaults, which is
+  `test/layout.order.test.ts`'s pin, counted over 214,222 segments rather than
+  the 10,528 edges these three were counted over.)
 
   **What a crossing is counted between**, which is the honest limit of this
   release. Only two segments joining the same pair of ADJACENT layers can cross,
@@ -404,7 +408,7 @@ of doc prose.
   magnitude at the same moment, and none of that is a regression.** The counter
   went from seeing 13,131 of the 10k's 40,000 edges to seeing all 214,222
   segments, so the population grew sixteenfold while the layering over it got
-  better. `order-crossings.golden.json` moved between 1.6x and 2.6x per entry
+  better. `order-crossings.golden.json` moved between 1.65x and 3.01x per entry
   for exactly this reason, and the only like-for-like comparison in the suite is
   the one in the paragraph above, which scores both layerings on the same
   population. Do not read a count taken before this against a count taken
@@ -537,11 +541,13 @@ of doc prose.
   crossings on the 10k and 76.7% fewer on the 1k. The four measurements those
   ratios come from are stated once, in the last section of `barycenterOrder`'s
   docstring in `src/order.ts`, and deliberately not copied here: a benchmark
-  recapture moves the timings and M2.4b moves all four. M2.4b has since landed,
-  so all four are owed a re-derivation against a pipeline that orders 184,222
-  nodes on the 10k rather than 10,000. It did not do that re-derivation, and
-  `order-crossings.golden.json` is still captured over a chainless layering,
-  which its harness now says outright.
+  recapture moves the timings and M2.4b moves all four. M2.4b has since landed
+  and its chains are now read by this stage, so all four are owed a
+  re-derivation against a pipeline that orders 184,222 nodes and 214,222
+  segments on the 10k rather than 10,000 and 13,131. That re-derivation has not
+  been done. `order-crossings.golden.json` HAS been recaptured over the drawing
+  with the chains in it, which is a different thing: it pins what the stage
+  reaches, not what this trade cost and bought.
 
   Nothing about the stage itself changed and no export moved.
   `barycenterOrderStage` has been exported by name since M2.5 and is the very

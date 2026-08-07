@@ -951,7 +951,7 @@ findings addressed or logged, docs land with the feature.
   NONE OF IT IS A REGRESSION, which is the same trap M2.2c's entry documents and
   is worse here. The counter went from 13,131 of the 10k's 40,000 edges to all
   214,222 segments, so the population grew sixteenfold at the moment the layering
-  over it got better. `order-crossings.golden.json` moved between 1.6x and 2.6x
+  over it got better. `order-crossings.golden.json` moved between 1.65x and 3.01x
   per entry, the pinned tables in `layout.order.test.ts` moved wholesale, and the
   whole-result capture in `layout.result.test.ts` moved because the dummy on its
   one long edge stopped being parked at the end of its row. The like-for-like
@@ -973,8 +973,11 @@ findings addressed or logged, docs land with the feature.
   segment is visible to it, and the comparison got WORSE. Summing the horizontal
   component over every segment, it is 15.91x `gridPositionStage`'s length on the
   10k and 13.81x its width, against 9.41x and 4.53x over the same corpus ordered
-  without the chains; on the 1k 8.03x and 8.61x against 3.63x and 2.76x. Both
-  stages improved absolutely and grid improved far more. The suspect is the
+  without the chains; on the 1k 8.03x and 8.61x against 3.63x and 2.76x. That
+  second pair is a THIRD baseline rather than the one M2.7's table recorded: it
+  still places the dummies and differs only in whether the order stage saw them,
+  so neither its lengths nor its widths compare with M2.7's. Both stages improved
+  absolutely and grid improved far more. The suspect is the
   compaction rather than the alignment, and it is named as a suspect because
   nobody has run the experiment: a dummy chain is exactly the long alignment
   block Brandes-Koepf exists to straighten, what ships compacts each alignment by
@@ -1377,13 +1380,15 @@ findings addressed or logged, docs land with the feature.
   what every caller who names no stage gets. Re-deriving them is a condition of
   that milestone and not a tidy-up after it, and all four of this entry's own
   figures expire on the same event.
-  M2.4b HAS SINCE LANDED AND DID NOT RE-DERIVE THEM. The cap, the tie rule and
-  all four figures are still measured over a chainless layering, and
-  `order-crossings.golden.json` is still captured over one, which its harness now
-  says outright. The condition above is therefore owed by whichever run takes it,
-  and it is a bigger job than it was when it was written: the golden corpus is
-  the evidence for what barycenter ordering beats, so re-deriving it moves every
-  crossing figure M2.5 and M2.6 quote.
+  M2.4b HAS SINCE LANDED, ITS CHAINS ARE NOW READ BY THIS STAGE, AND THE
+  RE-DERIVATION IS STILL OWED. The cap, the tie rule and all four figures are
+  still measured over a chainless layering. What the consumption did settle is
+  that the caveat was right: at the shipping cap of 8 the pass now captures 17.5%
+  of the fixed point's saving on the 10k against 84.3% before, and a cap of 4
+  measures 1.38% against the predicted 1.4%. `order-crossings.golden.json` was
+  recaptured over the drawing with the chains in it, which is a different thing
+  from re-deriving these: it pins what the stage reaches, not what the cap costs
+  and buys.
 - [x] **M2.7** Positioning: Brandes-Koepf horizontal coordinate assignment
   (or median-based v1 with the interface ready for BK). Invariant tests: no
   node overlaps, spacing respected.
@@ -1413,10 +1418,14 @@ findings addressed or logged, docs land with the feature.
   `grid-position`, and it loses one of the two corpora even restricted to the
   edges it can see. That is structural rather than a tuning problem, and M2.4b is
   the fix, because dummy chains are what make every edge span exactly one rank.
-  M2.4B HAS SINCE LANDED AND THE MEASUREMENT HAS NOT BEEN REDONE, so the
-  prerequisite is met and the question is open rather than answered: nothing
-  currently says which of the two stages draws the better picture over a
-  layering with chains in it.
+  M2.4b HAS SINCE LANDED, ITS CHAINS ARE CONSUMED, AND THE MEASUREMENT WAS
+  REDONE: THE PRESCRIPTION IS REFUTED. Over a layering that reads the chains,
+  Brandes-Koepf is 15.91x `grid-position`'s horizontal segment length on the 10k
+  and 13.81x its width, against 9.41x and 4.53x over the same corpus ordered
+  without them, a baseline that still PLACES the dummies. Both improved
+  absolutely and grid improved far more. So the prerequisite was met and the
+  drawing got worse, and what blocks this stage is now the compaction rather
+  than the ranker. See M2.4b's entry.
   The prescription "M2.7 replaces the positioner" was written before that was
   measured; what shipped is the algorithm implemented, tested and unselectable,
   so that M2.4b changes its INPUT rather than a line of it, and the decision it

@@ -619,7 +619,9 @@ function rowCentres(input: OrderedState): Float64Array {
  * of the drawing (which is not the table's quantity, so read the ratios and not
  * the levels): on the 10k this stage is 15.91x `gridPositionStage`'s segment
  * length and 13.81x its width, against 9.41x and 4.53x over the same corpus
- * ordered without the chains. On the 1k, 8.03x and 8.61x against 3.63x and
+ * ordered without the chains, a baseline that still PLACES the dummies and
+ * differs from the table above in that as well as in the ordering, so neither
+ * its lengths nor its widths are the table's. On the 1k, 8.03x and 8.61x against 3.63x and
  * 2.76x. Both stages improved in absolute terms and grid improved far more.
  *
  * WHY IS NOT ESTABLISHED, and the suspect is named below rather than guessed at

@@ -892,7 +892,10 @@ which is a comparison between three columns at one moment and is unaffected by
 the level moving under all three. Do not read any of them as a level: the
 shipping figure is pinned in `test/layout.order.test.ts`, and this stage reaches
 **8,748,361** crossings on the 10k at its own defaults, over a population
-sixteen times larger than the one these were counted on.
+twenty times larger than the one these were counted on. (Twenty against these,
+sixteen against the 13,131 the counter saw after M2.2c and before the chains
+were consumed. Which of the two you want depends on which era you are comparing
+with, and this page quotes both.)
 
 | seed | 1k crossings | 10k crossings |
 | --- | --- | --- |
@@ -1088,7 +1091,8 @@ field, thrown at the call that builds the stage.
 
 **The caveat came true: the saving collapsed once every edge became visible.**
 Every number in the table above was measured on a graph where the counter saw
-about a third of the edges, for the reason in
+about a quarter of the edges, that table being pre-M2.2c like the seed table
+above it, for the reason in
 [What a crossing is counted between](#what-a-crossing-is-counted-between). It
 sees all of it now, and the capped saving at 8 falls from 13.7% to 2.5% on the
 10k, capturing 17.5% of the fixed point's saving where it used to capture 84.3%.
@@ -1678,7 +1682,10 @@ now read here, every segment is visible, and the comparison got worse:
 re-measured over a layering that consumes them, summing the horizontal component
 over every segment of the drawing, Brandes-Koepf is **15.91x** `grid-position`'s
 segment length on the 10k and **13.81x** its width, against 9.41x and 4.53x over
-the same corpus ordered without the chains. On the 1k, 8.03x and 8.61x against
+the same corpus ordered without the chains. That second pair is a third
+baseline, not the table's: it still places the dummies and differs only in
+whether the order stage saw them, so its widths do not compare with the table's
+60%. On the 1k, 8.03x and 8.61x against
 3.63x and 2.76x. Both stages improved in absolute terms; grid improved far more.
 
 Why is not established. The suspect is the compaction: a dummy chain is exactly
