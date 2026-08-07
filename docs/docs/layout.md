@@ -1653,10 +1653,17 @@ the finding worth carrying rather than the figures. The prerequisite was that
 every edge span exactly one rank, and the ranker does now split every long edge
 into a chain. This stage does not read those chains: it builds its adjacency
 from the graph's own edges, so a dummy is an isolated node to it and its
-inner-segment pass marks nothing. The figures above therefore still stand, and
-what is owed is a consumer for the chains rather than a re-measurement. Whether
+inner-segment pass marks nothing. The blind spot that makes it unselectable is
+therefore exactly what it was, and that argument still stands.
+
+The absolute numbers above do not. Width and total edge length measure the
+drawing rather than what the stage can see, and the drawing gained 174,222
+members each taking a `nodeSep` gap, so the widest row on the 10k goes from 814
+to 1,719. Both stages lay out that same larger roster, so the ratios between
+them may well survive and have not been re-measured either. What is owed is a
+consumer for the chains and then a re-measurement, and whether
 `brandes-koepf-position` takes the default and a public name is a decision for
-the run that lands that consumer and measures what it produces. The full table,
+the run that has both. The full table,
 what the stage costs, what four alignments buy over
 one, and why its compaction is not the paper's are all in
 `brandesKoepfPosition`'s docstring in `packages/layout/src/position.ts`, and

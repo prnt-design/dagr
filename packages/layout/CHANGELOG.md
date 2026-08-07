@@ -45,14 +45,22 @@ of doc prose.
   span exactly one rank, and both the export and the default are decisions for
   the milestone that will have the measurement to make them with.
 
-  **M2.4b LANDED THE CHAINS AND DID NOT MEET THIS ENTRY'S PREREQUISITE, so every
-  figure above still stands.** The ranker splits every long edge now, and this
-  stage does not read `virtualChains`: it builds its adjacency from the graph's
-  own edges, so a dummy is an isolated node to it and its inner-segment pass runs
-  and marks nothing. What is owed is a consumer for the chains rather than a
-  re-measurement. The two edge shares quoted above are pre-M2.2c and were never
-  refreshed; over the view that ships they are 1,513 of 4,000 on the 1k and
-  13,131 of 40,000 on the 10k, and they are still what this stage sees.
+  **M2.4b LANDED THE CHAINS AND DID NOT MEET THIS ENTRY'S PREREQUISITE, so the
+  argument above stands and its absolute figures do not.** The ranker splits
+  every long edge now, and this stage does not read `virtualChains`: it builds
+  its adjacency from the graph's own edges, so a dummy is an isolated node to it,
+  its inner-segment pass runs and marks nothing, and the blind spot that makes it
+  unselectable is exactly what it was. The two edge shares quoted above are
+  pre-M2.2c and were never refreshed; over the view that ships they are 1,513 of
+  4,000 on the 1k and 13,131 of 40,000 on the 10k, and they are still what this
+  stage sees.
+
+  The width and total-edge-length numbers are a different matter and have moved,
+  because they measure the drawing rather than what the stage can see, and the
+  drawing gained 174,222 members each taking a `nodeSep` gap: the widest row on
+  the 10k goes from 814 to 1,719. The ratios between the two stages may well
+  survive it and have not been re-measured. So what is owed is a consumer for the
+  chains and then a re-measurement, in that order.
   `defaultStages.position` is unchanged either way.
 
   `variant` is the only option and takes `'balanced'`, the default and the

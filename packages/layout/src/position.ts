@@ -598,14 +598,21 @@ function rowCentres(input: OrderedState): Float64Array {
  * RESTRICTED TO THE EDGES IT CAN SEE it only wins one of the two corpora: 12%
  * worse on the 1k, 7.4% better on the 10k.
  *
- * **M2.4b DID NOT MEET THIS STAGE'S PREREQUISITE, so the table still stands.**
- * The prerequisite was that every edge span exactly one rank, and M2.4b's ranker
- * does split every long edge into a chain. This stage never reads those chains,
- * per the paragraph above, so a dummy is an isolated node here and the figures
- * are still what a caller who selected this stage would get. What is owed is a
- * consumer for the chains rather than a re-measurement, and the export and the
- * default are decisions for the run that lands one and measures what it
- * produces.
+ * **M2.4b DID NOT MEET THIS STAGE'S PREREQUISITE, so the ARGUMENT stands and
+ * the ABSOLUTE FIGURES DO NOT.** The prerequisite was that every edge span
+ * exactly one rank. M2.4b's ranker does split every long edge into a chain, and
+ * this stage never reads those chains, so a dummy is an isolated node here and
+ * the blind spot is exactly what it was: 13,131 of the 10k's 40,000 edges. That
+ * is the reason this stage is not selectable, and it is untouched.
+ *
+ * The width and total-edge-length rows are a different kind of number and they
+ * HAVE moved, because they measure the drawing rather than what this stage can
+ * see, and the drawing gained 174,222 members each taking a `nodeSep` gap: the
+ * widest row on the 10k goes from 814 to 1,719. Both stages lay out that same
+ * larger roster, so the RATIOS may well survive and have not been re-measured
+ * either. Read every absolute number in the table as pre-chain. What is owed is
+ * a consumer for the chains, and after that a re-measurement, and the export and
+ * the default are decisions for the run that has both.
  *
  * ## What it costs
  *
