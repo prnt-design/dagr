@@ -875,15 +875,13 @@ findings addressed or logged, docs land with the feature.
   `test/stage-output.types.test.ts`. No observable behaviour changed, pinned by
   a whole-result equality against a layout captured from the previous
   implementation.
-- [ ] **M2.4b** Dummy-node chains: split long edges across ranks into virtual
+- [x] **M2.4b** Dummy-node chains: split long edges across ranks into virtual
   nodes, rejoin on output. Tests: chain integrity, no multi-rank edges reach
   later stages.
-  THE BOX IS DELIBERATELY STILL OPEN. The work is written, reviewed, green on
-  typecheck, tests, lint and build, and on a pull request. What closes it is the
-  bench-gate decision at the end of this entry, which is the maintainer's and
-  is not taken here. The prose in `docs/docs/layout.md` and
-  `packages/layout/CHANGELOG.md` describes the pipeline this branch produces,
-  which is what those files are for; the checkbox describes whether it merged.
+  LANDED, and the box stayed open until the last thing in this entry was
+  settled: the bench-gate decision, which was the maintainer's and is recorded
+  at the end. Four persona reviews raised 22 findings across the run and every
+  one was fixed and verified by the reviewer who raised it.
   REBASED ONTO M2.2c AND RE-MEASURED, which is what the paragraph this replaces
   asked for, and this is the first line of the entry because most of the rest of
   it was written while the task was blocked. Not a line of the splitter changed
