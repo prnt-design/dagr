@@ -433,13 +433,16 @@ describe('what the chains are consumed by', () => {
     });
     expect(inner).toBe(2);
 
-    // What the pass DECIDES, rather than that it ran. Brandes-Koepf aligns a
-    // chain into one block and the type 1 rule is what keeps an ordinary
-    // segment from pulling it apart, so a straight chain is the observable
-    // outcome. `grid-position` has no such rule and bends this one, which is
-    // what makes the assertion discriminating rather than vacuous: a regression
-    // in the alignment or in `markTypeOneConflicts` fails the first line and
-    // leaves the second passing.
+    // What the stage DECIDES, rather than that it ran. Brandes-Koepf aligns a
+    // chain into one block, so a straight chain is the observable outcome, and
+    // `grid-position` has no such rule and bends this one. That contrast is
+    // what makes the assertion discriminating rather than vacuous.
+    //
+    // It does NOT cover `markTypeOneConflicts`, and the M2.4b review checked
+    // that by stubbing the pass to a no-op and watching this file stay green:
+    // no ordinary segment crosses an inner one here, so there is nothing to
+    // mark. `marks around two inner segments in one gap, and both chains stay
+    // straight` in `layout.position.test.ts` is the test that covers it.
     const bends = (stage?: PositionStage): number[] => {
       const result = stage === undefined ? layout({ graph }) : layout({ graph }, { position: stage });
       const points = result.edges.get('az')?.points ?? [];

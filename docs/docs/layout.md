@@ -1688,14 +1688,20 @@ whether the order stage saw them, so its widths do not compare with the table's
 60%. On the 1k, 8.03x and 8.61x against
 3.63x and 2.76x. Both stages improved in absolute terms; grid improved far more.
 
-Why is not established. The suspect is the compaction: a dummy chain is exactly
-the long alignment block this algorithm exists to straighten, what ships
-compacts each alignment by longest path over the block order because the paper's
-class shift is unsound as published, and a long block under a longest-path
-compaction pushes everything after it. That is a hypothesis with an obvious
-experiment attached and nobody has run it. So the stage stays unexported on a
-stronger reason than it had, and what blocks it is now that compaction rather
-than the ranker. The full table,
+The cause is the compaction, and it is not what it looks like. The obvious
+reading is that a dummy chain is the long alignment block this algorithm exists
+to straighten, so the chains made the blocks long and a long block under a
+longest-path compaction pushes everything after it. That is refuted by
+measurement: capping block length on the 1k corpus, no alignment at all is
+1.00x, blocks of two are already 5.18x, and uncapped is 7.36x with the longest
+block only 59. Blocks of two cost 70% of the blowup and further length buys
+almost nothing, and a single alignment lands where the median of four does. What
+is left is that the compaction only ever takes maxima and never pulls a block
+back left, so **any** alignment propagates the widest row's packing pressure
+into every row it touches. The fix is a contraction pass, which is the class
+shift's real job in the paper. So the stage stays unexported on a stronger
+reason than it had, and what blocks it is that contraction rather than the
+ranker. The full table,
 what the stage costs, what four alignments buy over
 one, and why its compaction is not the paper's are all in
 `brandesKoepfPosition`'s docstring in `packages/layout/src/position.ts`, and
