@@ -14,6 +14,19 @@ of doc prose.
 
 ### Added
 
+- `virtualChains` on `Layering`, the argument type of `countCrossings`, optional
+  and defaulting to none. Pass the rank stage's chains and a long edge is
+  counted as the segments it is drawn as; omit them and it is counted as
+  nothing, because its endpoints are more than one layer apart. Additive, so
+  every existing call keeps compiling and keeps meaning what it meant, but on a
+  drawing with chains in it the two answers are not close: 13,131 segments
+  counted against 214,222 on the 10k benchmark corpus. (M2.4b)
+
+  It is optional rather than required because a `Layering` is a drawing someone
+  wants a number for, and a drawing with no chains in it is a legitimate thing
+  to hand over. It is not defaulted to "look them up", because `Layering` holds
+  a `Graph` and a graph does not know what a rank stage decided.
+
 - `brandes-koepf-position`, the first real position stage, INTERNAL TO THE
   PACKAGE AND NOT EXPORTED. `brandesKoepfPosition(options)`,
   `brandesKoepfPositionStage` and the `BrandesKoepfOptions` type are all in
@@ -41,26 +54,32 @@ of doc prose.
   27,550 and 165,100 to 264,175). Even restricted to the edges it can see it
   wins only one of the two, 12% worse on the 1k (1,112,700 to 1,246,200) and
   7.4% better on the 10k (44,056,125 to 40,790,550). Running it bought a worse
-  drawing. Dummy chains are what would change that, because they make every edge
-  span exactly one rank, and both the export and the default are decisions for
-  the milestone that will have the measurement to make them with.
+  drawing. Dummy chains were expected to change that, because they make every
+  edge span exactly one rank, and both the export and the default were left as
+  decisions for the milestone that would have the measurement to make them
+  with.
 
-  **M2.4b LANDED THE CHAINS AND DID NOT MEET THIS ENTRY'S PREREQUISITE, so the
-  argument above stands and its absolute figures do not.** The ranker splits
-  every long edge now, and this stage does not read `virtualChains`: it builds
-  its adjacency from the graph's own edges, so a dummy is an isolated node to it,
-  its inner-segment pass runs and marks nothing, and the blind spot that makes it
-  unselectable is exactly what it was. The two edge shares quoted above are
-  pre-M2.2c and were never refreshed; over the view that ships they are 1,513 of
-  4,000 on the 1k and 13,131 of 40,000 on the 10k, and they are still what this
-  stage sees.
+  **THE PREREQUISITE HAS BEEN MET AND IT MADE THIS STAGE WORSE against
+  `grid-position`, not better, which is the sentence above being refuted rather
+  than confirmed.** The chains are read here now and every segment of the
+  drawing is visible. Re-measured over a layering that consumes them, summing
+  the horizontal component over every SEGMENT (not the quantity the table above
+  measures, so compare the ratios and not the levels): 15.91x `grid-position`'s
+  segment length on the 10k and 13.81x its width, against 9.41x and 4.53x over
+  the same corpus ordered without the chains. On the 1k, 8.03x and 8.61x against
+  3.63x and 2.76x. Both stages improved in absolute terms and grid improved far
+  more.
 
-  The width and total-edge-length numbers are a different matter and have moved,
-  because they measure the drawing rather than what the stage can see, and the
-  drawing gained 174,222 members each taking a `nodeSep` gap: the widest row on
-  the 10k goes from 814 to 1,719. The ratios between the two stages may well
-  survive it and have not been re-measured. So what is owed is a consumer for the
-  chains and then a re-measurement, in that order.
+  The suspect is the compaction rather than the alignment: a dummy chain is the
+  long alignment block this algorithm exists to straighten, what ships compacts
+  each alignment by longest path over the block order because the paper's class
+  shift is unsound, and a long block under a longest-path compaction pushes
+  everything after it. That is a hypothesis with an obvious experiment attached
+  and nobody has run it. So the stage stays unexported for a stronger reason
+  than it had, and what blocks it is now that compaction rather than the ranker.
+  The two edge shares quoted above are pre-M2.2c on top of everything else; over
+  the view that ships they were 1,513 of 4,000 and 13,131 of 40,000, and they are
+  now 18,746 and 214,222 segments, all of them adjacent.
   `defaultStages.position` is unchanged either way.
 
   `variant` is the only option and takes `'balanced'`, the default and the
@@ -372,20 +391,24 @@ of doc prose.
   laid out exactly as before, because nothing is declared and nothing is split.
   (M2.4b)
 
-  **WHAT THIS DOES NOT DO YET, said here because the effect is a cost with no
-  matching benefit and an upgrader should not have to find that out from a
-  benchmark.** No stage downstream of the ranker reads `virtualChains`. The
-  order stage and the position stage both build their adjacency from the
-  graph's own edges, and no graph edge touches a dummy, so a dummy is an
-  ISOLATED NODE in both: it joins a layer, takes a `nodeSep` gap and a
-  coordinate, and constrains nothing. On the 10k benchmark corpus the
-  adjacent-layer segment count is 13,131 with the chains and without, and the
-  order stage reaches 88,301 crossings either way. So crossing reduction is not
-  improved by this release, Brandes-Koepf's inner-segment pass runs and marks
-  nothing, and a long edge's bends land wherever an unconstrained node in each
-  row lands. What a caller gets is the polyline shape and the id stability M3
-  needs, at the cost of laying out a much larger roster. The consumer is the gap
-  M2.4b's ROADMAP entry records.
+  **The order stage and the position stage read the chains**, which is what
+  makes them worth their cost: an edge with a chain is ordered, counted and
+  positioned as the segments it is DRAWN as, one per gap it crosses, rather than
+  being dropped whole by an adjacent-layer test. Measured on the 10k benchmark
+  corpus, both layerings scored over all 214,222 segments: reading the chains
+  gives 8,748,361 crossings against 33,932,556 for ignoring them, a 74% cut, and
+  72% on the 1k. The default position stage's total horizontal segment length
+  falls 66% on the 10k and 63% on the 1k.
+
+  **Every crossing count this package quotes rose by roughly an order of
+  magnitude at the same moment, and none of that is a regression.** The counter
+  went from seeing 13,131 of the 10k's 40,000 edges to seeing all 214,222
+  segments, so the population grew sixteenfold while the layering over it got
+  better. `order-crossings.golden.json` moved between 1.6x and 2.6x per entry
+  for exactly this reason, and the only like-for-like comparison in the suite is
+  the one in the paragraph above, which scores both layerings on the same
+  population. Do not read a count taken before this against a count taken
+  after.
 
   **The one upgrade effect that stops a working program**, and the reason this
   entry is not just cosmetic. A caller who overrode `order` or `position` and

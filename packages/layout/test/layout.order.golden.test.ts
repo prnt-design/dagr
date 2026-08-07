@@ -66,7 +66,20 @@ import type { RankedState, Size } from '../src/types.js';
  * more force to a committed file: two generators drift, and a golden file
  * against a drifted generator pins numbers for a graph nobody else has.
  *
- * WHAT LAST MOVED IT, and it was not this stage. M2.2c replaced the cycle
+ * WHAT LAST MOVED IT, and it was not this stage either time.
+ *
+ * Most recently, the order stage began reading the rank stage's dummy chains,
+ * so an edge that spans several layers is now ordered and counted as the
+ * segments it is drawn as rather than being invisible. Every count here rose,
+ * between 1.6x and 2.6x, and NONE of that is a quality regression: the
+ * population being counted grew by an order of magnitude at the same moment.
+ * The like-for-like comparison is in `layout.order.test.ts`, both layerings
+ * scored over the full segment population, and there the layering that reads
+ * the chains has 8,748,361 crossings on the 10k bench corpus against 33,932,556
+ * for the one that ignores them. This file cannot show that, because it records
+ * one layering per entry rather than two.
+ *
+ * Before that, M2.2c replaced the cycle
  * breaker, which changes the RANKING every entry here is ordered against, and
  * five of the six `layers` counts fell: 66 to 62, 28 to 22, 77 to 45, 38 to
  * 32 and 40 to 27, while `sparse-2000` alone kept its 40 layers and both of

@@ -185,10 +185,10 @@ message.
 
 The same hazard, from the other end: a milestone that grows the WORKLOAD a
 benchmark measures rebases that benchmark's entry just as surely, without
-touching a line of bench code. M2.4b was the first (dummy chains take the nodes
-the layout pipeline places on the 10k corpus from 10,000 to 184,222; the 13,131
-adjacent-layer segments it orders do not move, because nothing downstream reads
-a chain yet), and M2.5 through M2.8 will each do it again. Recapturing can be
+touching a line of bench code. M2.4b was the first: dummy chains take the nodes
+the layout pipeline places on the 10k corpus from 10,000 to 184,222, and the
+segments it orders and counts crossings between from 13,131 to 214,222. M2.5
+through M2.8 will each do it again. Recapturing can be
 right in that case, and it is the same
 recipe: recapture in the same commit and say why in the message. What separates
 it from talking a gate out of a failure is one habit, so make it one: PREDICT

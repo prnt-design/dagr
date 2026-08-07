@@ -539,10 +539,10 @@ describe('layout result identity across refactors', () => {
     nodes: [
       { id: 'a', x: -47, y: 10, width: 10, height: 20 },
       { id: 'b', x: -28, y: 64, width: 10, height: 20 },
-      { id: 'c', x: -6, y: 64, width: 10, height: 20 },
+      { id: 'c', x: 6, y: 64, width: 10, height: 20 },
       { id: 'd', x: 0, y: 118, width: 10, height: 20 },
       { id: 'p', x: -25, y: 10, width: 10, height: 20 },
-      { id: 'q', x: 16, y: 64, width: 10, height: 20 },
+      { id: 'q', x: 28, y: 64, width: 10, height: 20 },
       { id: 'lonely', x: 22, y: 10, width: 60, height: 20 },
     ],
     edges: [
@@ -561,7 +561,7 @@ describe('layout result identity across refactors', () => {
         target: 'c',
         points: [
           { x: -47, y: 10 },
-          { x: -6, y: 64 },
+          { x: 6, y: 64 },
         ],
       },
       {
@@ -578,7 +578,7 @@ describe('layout result identity across refactors', () => {
         source: 'c',
         target: 'd',
         points: [
-          { x: -6, y: 64 },
+          { x: 6, y: 64 },
           { x: 0, y: 118 },
         ],
       },
@@ -588,7 +588,7 @@ describe('layout result identity across refactors', () => {
         target: 'a',
         points: [
           { x: 0, y: 118 },
-          { x: 33, y: 64 },
+          { x: -11, y: 64 },
           { x: -47, y: 10 },
         ],
       },
@@ -607,7 +607,7 @@ describe('layout result identity across refactors', () => {
         target: 'q',
         points: [
           { x: -25, y: 10 },
-          { x: 16, y: 64 },
+          { x: 28, y: 64 },
         ],
       },
       {
@@ -615,7 +615,7 @@ describe('layout result identity across refactors', () => {
         source: 'q',
         target: 'p',
         points: [
-          { x: 16, y: 64 },
+          { x: 28, y: 64 },
           { x: -25, y: 10 },
         ],
       },

@@ -5,7 +5,9 @@ import { measureNodes, resolveConfig } from '../src/config.js';
 import { StageContractError, defaultStages, layout } from '../src/index.js';
 import { longestPathRankStage } from '../src/rank.js';
 import { networkSimplexRankStage } from '../src/simplex.js';
-import { barycenterOrder } from '../src/order.js';
+import { countCrossings } from '../src/order.js';
+import { forEachSegment } from '../src/segments.js';
+import { brandesKoepfPositionStage } from '../src/position.js';
 import type { Point, PositionStage, PreparedState, RankOutput, Size } from '../src/index.js';
 
 /**
@@ -344,14 +346,101 @@ describe('straightRouteStage over a chain', () => {
   });
 });
 
-describe('what M2.4b did NOT reach', () => {
+describe('what the chains are consumed by', () => {
   /**
-   * The two gaps M2.4b left open, pinned so that they are visible in the suite
-   * rather than only in the ROADMAP, and so that a half-finished attempt to
-   * close either one breaks a test rather than a drawing.
+   * The chains reach the order stage and the position stage, which is what
+   * makes them worth their cost and was NOT true when M2.4b first split the
+   * edges: both stages built their adjacency from `graph.edges()`, no graph
+   * edge touches a dummy, and so a dummy was an isolated node that joined a
+   * layer, took a `nodeSep` gap and constrained nothing.
    *
-   * Neither is a bug in the splitter. Both are consumers the milestone did not
-   * write, and both are recorded in its ROADMAP entry.
+   * These are the tests that fail if a stage stops reading `virtualChains`.
+   */
+  it('gives the order stage a segment per gap a long edge crosses', () => {
+    // `az` spans two gaps and contributes a segment to each. Without the chain
+    // it spans two layers, fails every adjacent-layer test, and contributes
+    // nothing at all.
+    const graph = detour();
+    const out = longestPathRankStage.run(prepare(graph));
+    const chains = out.virtualChains ?? new Map<EdgeId, readonly NodeId[]>();
+    const seen: string[] = [];
+    forEachSegment(graph, chains, (from, to, edge) => void seen.push(`${edge}:${from}>${to}`));
+    expect(seen).toEqual([
+      'am:a>m',
+      'mz:m>z',
+      'az:a>#dummy:az:0',
+      'az:#dummy:az:0>z',
+    ]);
+  });
+
+  it('counts a long edge as its chain rather than as nothing', () => {
+    // Two long edges that cross, and the case is chosen so that WITHOUT the
+    // chains the metric cannot tell any ordering from any other: both spans are
+    // two layers, both fail the adjacent-layer test, and every arrangement
+    // scores zero. With the chains it separates a good drawing from a bad one.
+    const graph = build(
+      ['a', 'b', 'm', 'y', 'z'],
+      [
+        ['a', 'm', 'am'],
+        ['m', 'y', 'my'],
+        ['m', 'z', 'mz'],
+        ['a', 'z', 'az'],
+        ['b', 'y', 'by'],
+      ],
+    );
+    const out = longestPathRankStage.run(prepare(graph));
+    const chains = out.virtualChains;
+    const bad = [
+      ['a', 'b'],
+      ['m', '#dummy:az:0', '#dummy:by:0'],
+      ['y', 'z'],
+    ];
+    const good = [
+      ['b', 'a'],
+      ['#dummy:by:0', 'm', '#dummy:az:0'],
+      ['y', 'z'],
+    ];
+    expect(countCrossings({ graph, layers: bad, virtualChains: chains })).toBe(2);
+    expect(countCrossings({ graph, layers: good, virtualChains: chains })).toBe(0);
+    // Omit the chains and both drawings score the same nothing, which is the
+    // whole of what consuming them buys the metric.
+    expect(countCrossings({ graph, layers: bad })).toBe(0);
+    expect(countCrossings({ graph, layers: good })).toBe(0);
+  });
+
+  it('gives brandes-koepf an inner segment to mark, which it never had before', () => {
+    // An inner segment joins two nodes the caller never added, and the only
+    // place two dummies are ever joined is inside a chain. `az` spanning three
+    // gaps has one interior link, so this is the smallest graph with an inner
+    // segment in it, and an index built from graph edges alone would have none.
+    const graph = build(
+      ['a', 'm', 'n', 'z'],
+      [
+        ['a', 'm', 'am'],
+        ['m', 'n', 'mn'],
+        ['n', 'z', 'nz'],
+        ['a', 'z', 'az'],
+      ],
+    );
+    const out = longestPathRankStage.run(prepare(graph));
+    const chains = out.virtualChains ?? new Map<EdgeId, readonly NodeId[]>();
+    const virtual = new Set(out.virtualNodes?.keys() ?? []);
+    let inner = 0;
+    forEachSegment(graph, chains, (from, to) => {
+      if (virtual.has(from) && virtual.has(to)) inner += 1;
+    });
+    expect(inner).toBe(1);
+    // And the whole pipeline runs over it with that stage selected.
+    const result = layout({ graph }, { position: brandesKoepfPositionStage });
+    expect(result.edges.get('az')?.points).toHaveLength(4);
+  });
+});
+
+describe('what M2.4b did not reach', () => {
+  /**
+   * The gap the milestone still leaves open, pinned so that it is visible in
+   * the suite rather than only in the ROADMAP, and so that a half-finished
+   * attempt to close it breaks a test rather than a drawing.
    */
   it('leaves network-simplex-rank declaring no chain at all', () => {
     // A caller who selects the other ranker gets multi-rank edges reaching the
@@ -368,33 +457,6 @@ describe('what M2.4b did NOT reach', () => {
     expect(from).toBeDefined();
     expect(to).toBeDefined();
     expect(Math.abs((to ?? 0) - (from ?? 0))).toBeGreaterThan(1);
-  });
-
-  it('leaves the order stage reading no chain, so a dummy is an isolated node', () => {
-    // The order stage builds its segments from `graph.edges()` and never reads
-    // `virtualChains`, so the chains change neither the layering it computes
-    // nor the crossings it counts. This is the claim `order.ts`, `position.ts`
-    // and `docs/docs/layout.md` all now make, pinned on the smallest graph that
-    // has a chain in it. Delete it when a stage consumes a chain.
-    const graph = detour();
-    const out = longestPathRankStage.run(prepare(graph));
-    const base = { ...prepare(graph), reversedEdges: out.reversedEdges };
-    const withChains = barycenterOrder().run({
-      ...base,
-      ranks: out.ranks,
-      virtualNodes: new Set(out.virtualNodes?.keys() ?? []),
-      virtualChains: out.virtualChains ?? new Map(),
-    });
-    const without = barycenterOrder().run({
-      ...base,
-      ranks: new Map([...out.ranks].filter(([id]) => graph.hasNode(id))),
-      virtualNodes: new Set(),
-      virtualChains: new Map(),
-    });
-    // The dummy joins its layer and nothing else changes: strip it and the two
-    // layerings are identical, which is what "isolated node" comes to here.
-    const stripped = withChains.layers.map((layer) => layer.filter((id) => graph.hasNode(id)));
-    expect(stripped).toEqual(without.layers.map((layer) => [...layer]));
   });
 });
 

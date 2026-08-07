@@ -626,22 +626,30 @@ of virtual nodes, one per rank strictly between them. `a -> d` alongside
 `a -> b -> c -> d` becomes `a -> ? -> ? -> d` through two dummies on ranks 1 and
 2, and the router rejoins the three segments into one polyline for `a -> d`.
 
-**Read this first: what a chain buys today is a declaration, not a drawing.**
-The point of splitting is that nothing downstream meets an edge crossing a layer
-it has no node in, so the crossing counter and the positioner can have an
-opinion about where a long edge passes through each row. Neither of them reads
-`virtualChains` yet. Both build their adjacency from the graph's own edges, and
-no graph edge touches a dummy, so a dummy is an isolated node in both indexes.
-On the 10k benchmark corpus the adjacent-layer segment count is 13,131 with the
-chains and without, and the order stage reaches 88,301 crossings either way.
+Nothing downstream of the ranker then meets an edge crossing a layer it has no
+node in, which is what lets the crossing counter and the positioner have an
+opinion about where a long edge passes through each row. Both read
+`virtualChains`, and what they build their adjacency from is the drawing's
+**segments** rather than its edges: an edge with a chain contributes one segment
+per gap it crosses, an edge without one contributes itself. On the 10k benchmark
+corpus that is 214,222 segments where the graph has 40,000 edges, of which only
+13,131 joined adjacent layers and were visible at all.
 
-What you get is real and is less than that paragraph promises. A long edge comes
-back as a polyline that bends once per rank it crosses, and each bend sits where
-an unconstrained node in that row happens to sit rather than somewhere chosen
-for the edge. So the ranker's half of this milestone is done and the consumer's
-half is not: until a stage turns each chain into segments, the chains are
-correct, complete, paid for and inert. See the M2.4b ROADMAP entry, which
-records this as the gap.
+**What that is worth, measured, because it is the whole reason a chain is worth
+its cost.** Two layerings of the 10k corpus, both scored over all 214,222
+segments: the one the order stage produces reading the chains has 8,748,361
+crossings, the one it produces ignoring them has 33,932,556. A 74% cut, and 72%
+on the 1k. The same change takes the default position stage's total horizontal
+segment length down 66% on the 10k and 63% on the 1k. Ignoring the chains never
+made those crossings go away, it made them invisible: the long edges were drawn
+and crossed each other either way, and a stage that could not see them arranged
+the layers for the third of the drawing it could.
+
+There is a period in this package's history where that was the state of things.
+The ranker split every long edge one milestone and nothing read the chains until
+the next, so a dummy was an isolated node in every index downstream: it joined a
+layer, took a `nodeSep` gap and a coordinate, and constrained nothing. Any
+figure you meet that was measured then is measured over a third of the drawing.
 
 **A dummy is `#dummy:<edgeId>:<index>`**, where `index` is its 0-based position
 along the chain counting from the source **you** authored. So index 0 is the
@@ -712,9 +720,10 @@ does not pay is anything per dummy, because there are none.
 Two things a caller sees. Long edges come back as polylines: two points for a
 short edge, and one more for every rank a long edge crosses, where before M2.4b
 every route was two points. And `bounds` can be larger, because it is the hull
-of the node boxes and the route points, and a zero-width dummy at the end of a
-row sits at that row's right extreme, `nodeSep` clear of the last box in it. See
-[The result](#the-result).
+of the node boxes and the route points, and a zero-width dummy that lands at the
+end of a row sits at that row's right extreme, `nodeSep` clear of the last box
+in it. Where in the row a dummy lands is the order stage's decision, so this is
+a reachable case rather than the usual one. See [The result](#the-result).
 
 ### What `reversedEdges` means if you are reading a result
 
@@ -831,34 +840,26 @@ layout({ graph }, { order: scored });
 ```
 
 **A crossing is only defined between two segments joining the same pair of
-adjacent layers.** An edge whose endpoints are more than one layer apart is
-invisible to the counter and to the sweeps alike, and so is a self loop, which
-spans none. This is the honest limit of ordering v1 rather than a detail: under
-the default ranker, **1,513 of the 1k benchmark corpus's 4,000 edges span
-exactly one rank (37.8%) and 13,131 of the 10k's 40,000 (32.8%)**, and the
-longest edge spans 61 layers on the one and 153 on the other. So the stage
-optimises a real quantity over a third of the drawing.
+adjacent layers**, and a SEGMENT is a piece of the drawing rather than an edge:
+an edge the ranker split into a chain contributes one segment per gap it
+crosses, an edge with no chain contributes itself. So the counter and the sweeps
+see **every segment of the drawing**, 18,746 on the 1k benchmark corpus and
+214,222 on the 10k, and the share they cannot see is zero on any graph without a
+self loop. A self loop is the one exception a chain cannot reach: it spans no
+rank, so there is nothing to split, and it stays invisible.
 
-Those four numbers read 1,324 (33.1%), 10,528 (26.3%), 78 and 201 before M2.2c,
-and are quoted in that older form in several places this page points at,
-including `order.ts`'s own docstring and the M2.5 and M2.6 changelog entries. A
-shallower acyclic view puts a quarter more of each corpus between adjacent
-layers, so the older pair understates what the stage sees rather than describing
-a different quantity. Read any crossing count quoted beside the older pair as
-counted over a smaller population.
-
-What would change it altogether is splitting every long edge into a chain of one
-dummy per rank, which makes every edge that spans more than one rank span
-exactly one, at which point the share is 100% on any graph without self loops,
-both benchmark corpora included, and both the counter and the sweeps see the
-whole graph without a line changing in either. A self loop is the exception a
-chain cannot reach: it spans no rank, so there is nothing to split, and it stays
-invisible.
-
-M2.4b split the edges and the share did not move, because the split does not
-reach this stage: it reads the graph's edges and never `virtualChains`, so the
-10k's adjacent-layer segment count is 13,131 with the chains and without. See
-[Dummy chains](#dummy-chains).
+That was not always so, and it is worth knowing which era a figure comes from,
+because there are three and they differ by more than an order of magnitude.
+Before the chains were consumed this stage read the graph's edges, so it saw
+only the ones whose endpoints happened to land in adjacent layers: **1,513 of
+the 1k's 4,000 (37.8%) and 13,131 of the 10k's 40,000 (32.8%)**, the longest
+edge spanning 61 layers and 153. Before M2.2c that pair read 1,324 (33.1%) and
+10,528 (26.3%), with the longest edge at 78 layers and 201, because a deeper
+acyclic view puts less of the graph between adjacent layers. Both older pairs
+are still quoted in places this page points at, including `order.ts`'s
+measurement tables and the M2.5 and M2.6 changelog entries. **Any crossing count
+quoted beside either of them is counted over a smaller population and does not
+compare with a count taken today.**
 
 Two segments that share an endpoint touch rather than cross, and two parallel
 edges lie on top of each other. Direction is not consulted: an edge the ranker
@@ -884,12 +885,14 @@ arrives at it. It is not the roster order `insertion-order` lays out.
 
 Measured on the benchmark corpora, adjacent-layer crossings after 8 sweeps,
 lower is better. **Every count in this table and the two below it was taken over
-the pre-M2.2c acyclic view**, when the counter saw 1,324 of the 1k's edges and
-10,528 of the 10k's rather than today's 1,513 and 13,131. They are kept as the
-measurement that chose the seed, which is a comparison between three columns and
-is unaffected. Do not read them against a figure taken over the shipping view:
-`test/layout.order.test.ts` pins that one, and this stage reaches 88,301 on the
-10k at its own defaults, not 30,318.
+the pre-M2.2c acyclic view AND before the chains were consumed**, when the
+counter saw 10,528 of the 10k's 40,000 edges rather than today's 214,222
+segments. They are kept because they are the measurement that chose the seed,
+which is a comparison between three columns at one moment and is unaffected by
+the level moving under all three. Do not read any of them as a level: the
+shipping figure is pinned in `test/layout.order.test.ts`, and this stage reaches
+**8,748,361** crossings on the 10k at its own defaults, over a population
+sixteen times larger than the one these were counted on.
 
 | seed | 1k crossings | 10k crossings |
 | --- | --- | --- |
@@ -994,9 +997,20 @@ to sort are collected in index order and JavaScript's sort is stable.
 When the sweeps stop, one transpose refinement pass runs over the layering they
 settled on. It walks every layer left to right and swaps each adjacent pair
 when the swap costs nothing or saves something, repeating until a walk finds no
-strictly improving swap or `maxTransposePasses` is spent. It removes 13.7% of
-the crossings the sweeps leave on the 10k corpus, 35,114 down to 30,318, and
+strictly improving swap or `maxTransposePasses` is spent. It removed 13.7% of
+the crossings the sweeps left on the 10k corpus, 35,114 down to 30,318, and
 16.6% on the 1k.
+
+**Both of those are past tense now, and this pass is the part of the stage that
+consuming the chains hurt most.** Over the drawing the stage actually sees today
+it removes **2.5%** on the 10k (8,972,421 down to 8,748,361) and 7.6% on the 1k.
+The cap of 8 was bought as capturing 84.3% of what an unbounded run to the fixed
+point would save; it now captures 17.5%. That collapse was predicted here, from
+a hand-expanded corpus, at "1.4% at a cap of 4", and a cap of 4 now measures
+1.38%, so the prediction was right to two figures. **The cap and the sweep
+budget are both owed a re-derivation**, and neither has had one: they are
+shipped defaults and moving them is a tuning task with its own before and after,
+not a line in the change that consumed the chains.
 
 **It runs once, at the end, on the best layering the sweeps saw**, not inside
 them. The alternatives were measured at a sweep budget of 8 on the 10k: once at
@@ -1040,7 +1054,9 @@ any-swap gate runs a clean period-2 cycle for as long as it is allowed to.
 `maxTransposePasses` defaults to 8. **That it equals `maxSweeps`'s default of 8
 is a coincidence**: the two bound different loops and were measured
 independently, and neither should track the other. Measured at a sweep budget
-of 8 on the 10k, against 35,114 crossings and 16.32ms with the pass off:
+of 8 on the 10k, against 35,114 crossings and 16.32ms with the pass off, all of
+it over the pre-consumption population (see the note on the seed table above,
+and read the percentages rather than the counts):
 
 | cap | 10k crossings | saving | extra time | crossings per ms |
 | --- | --- | --- | --- | --- |
@@ -1070,20 +1086,20 @@ the same rule as `maxSweeps`, including rejecting `Number.POSITIVE_INFINITY`,
 and a non-integer or negative value is an `InvalidConfigError` naming the
 field, thrown at the call that builds the stage.
 
-**The caveat, and it is not a small one: the saving collapses once every edge
-is visible.** Every number above is measured on a graph where the counter sees
-about a quarter of the edges, for the reason in
-[What a crossing is counted between](#what-a-crossing-is-counted-between). On a
-dummy-expanded 10k, which is what M2.4b produces, the capped saving falls from
-10.7% to 1.4% at a cap of 4, which is the cap those two were compared at and is
-not the default of 8. The expanded graph was never measured at 8, so what this
-says is that a capped pass loses most of its value there, not that it loses
-exactly that much. Only a full fixed point holds its share, at a price nobody
-can pay: 214 seconds against 6.8. So the cap and the tie rule are both measured
-against a graph M2.4b has since replaced, and both are owed a re-derivation
-rather than being carried across unexamined. M2.4b did not do it: the milestone
-that lands the re-derivation is the one that will have measured it.
-Neither is a constant of the algorithm.
+**The caveat came true: the saving collapsed once every edge became visible.**
+Every number in the table above was measured on a graph where the counter saw
+about a third of the edges, for the reason in
+[What a crossing is counted between](#what-a-crossing-is-counted-between). It
+sees all of it now, and the capped saving at 8 falls from 13.7% to 2.5% on the
+10k, capturing 17.5% of the fixed point's saving where it used to capture 84.3%.
+The prediction written here was "1.4% at a cap of 4", from a hand-expanded
+corpus; a cap of 4 measures 1.38% today. Only a full fixed point holds its
+share, at a price nobody can pay. So the cap and the tie rule were both chosen
+against a drawing this stage no longer sees, and both are owed a re-derivation
+rather than being carried across unexamined. Neither is a constant of the
+algorithm, and neither has been re-derived: they are shipped defaults, moving
+them wants the sweep budget looked at in the same pass, and that is a tuning
+task with its own before and after.
 
 The crossing counts the stage reaches on a fixed set of generated graphs, with
 the pass on and off, are committed as a golden file at
@@ -1093,7 +1109,14 @@ test file beside it says how to regenerate it and when doing so is legitimate.
 ### What the default order stage costs and buys
 
 M2.6b pointed the order default at this stage, so the trade below is what a run
-that names no order stage now makes. Ordering is the expensive half of it: on
+that names no order stage now makes. **Every figure in this section predates the
+chains being consumed and none has been re-derived**, which moves both halves:
+the stage now orders 214,222 segments on the 10k rather than 13,131, so it is
+slower than the multiple below says, and it reduces crossings over the whole
+drawing rather than a third of it, so it buys more than the percentage below
+says. Read it as the shape of the trade and not as its size.
+
+Ordering is the expensive half of it: on
 the 10k benchmark corpus the full default pipeline is roughly 1.8x slower than
 it was with roster order, and the drawing that comes back has 92.9% fewer
 adjacent-layer crossings. On the 1k it is roughly 1.6x slower for 76.7% fewer.
@@ -1106,8 +1129,8 @@ The four figures behind those two sentences, two timings and two crossing
 counts, are stated once and in one place: the last section of
 `barycenterOrder`'s docstring in `packages/layout/src/order.ts`. They are quoted
 nowhere else as live advice, because every one of them expires, the timings on
-the next benchmark recapture and all four on M2.4b, which has landed and has not
-re-derived them. The package changelog is
+the next benchmark recapture and all four on the chains being consumed, which
+has happened and has not re-derived them. The package changelog is
 the exception, and deliberately: a dated entry records what a past change
 measured, so it keeps its own copies and is marked superseded in place rather
 than swept.
@@ -1619,8 +1642,8 @@ without being selectable at all, `brandes-koepf-position`, for the reason below.
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
 | rank | `longest-path-rank` | Breaks cycles with a least-squares feedback arc set, ranks by longest path, then splits every long edge into a [dummy chain](#dummy-chains). Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height, and it does NOT split. | Sharing the splitter with `network-simplex-rank`. |
-| order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). It places dummies but does not read chains, so a dummy is an isolated node to it. | Reading `virtualChains`, so a chain is segments here and not loose nodes, and then its budgets and tie rule re-derived over what that produces. |
-| position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. `brandes-koepf-position` is a real algorithm that is implemented but not exported, for the reason below this table. Its inner-segment pass runs and marks nothing, for the reason in the order row. | Reading `virtualChains` in both stages, then Brandes-Koepf re-measured over what that produces, then a decision about the default. |
+| order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass, over every segment of the drawing including the pieces of a split long edge. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). | Its sweep budget and transpose cap re-derived: both were chosen against a drawing a third this size and the cap now captures 17.5% of what it used to capture 84.3% of. |
+| position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. `brandes-koepf-position` is a real algorithm that is implemented but not exported, for the reason below this table. | A compaction that is not the longest-path substitute, which is what now blocks Brandes-Koepf, and then a decision about the default. |
 | route | `straight-route` | Straight segments from the source centre through each of the edge's dummies to the target centre, which is two points for an edge with no chain. | Border attachment, obstacle detours and splines, monotone in the rank axis (M2.8). |
 
 So a default run of a real graph gives you the right number of rows with the
@@ -1648,22 +1671,24 @@ corpora's edges. Against
 10k on total horizontal edge length, and 53% and 60% wider**, and it lost the
 1k even restricted to the edges it can see.
 
-**M2.4b has landed and it did not meet this stage's prerequisite**, which is
-the finding worth carrying rather than the figures. The prerequisite was that
-every edge span exactly one rank, and the ranker does now split every long edge
-into a chain. This stage does not read those chains: it builds its adjacency
-from the graph's own edges, so a dummy is an isolated node to it and its
-inner-segment pass marks nothing. The blind spot that makes it unselectable is
-therefore exactly what it was, and that argument still stands.
+**The prerequisite has since been met and it did not help. It hurt.** Those
+figures were taken when a long edge was invisible to this stage, and the
+prediction attached to them was that dummy chains would fix that. The chains are
+now read here, every segment is visible, and the comparison got worse:
+re-measured over a layering that consumes them, summing the horizontal component
+over every segment of the drawing, Brandes-Koepf is **15.91x** `grid-position`'s
+segment length on the 10k and **13.81x** its width, against 9.41x and 4.53x over
+the same corpus ordered without the chains. On the 1k, 8.03x and 8.61x against
+3.63x and 2.76x. Both stages improved in absolute terms; grid improved far more.
 
-The absolute numbers above do not. Width and total edge length measure the
-drawing rather than what the stage can see, and the drawing gained 174,222
-members each taking a `nodeSep` gap, so the widest row on the 10k goes from 814
-to 1,719. Both stages lay out that same larger roster, so the ratios between
-them may well survive and have not been re-measured either. What is owed is a
-consumer for the chains and then a re-measurement, and whether
-`brandes-koepf-position` takes the default and a public name is a decision for
-the run that has both. The full table,
+Why is not established. The suspect is the compaction: a dummy chain is exactly
+the long alignment block this algorithm exists to straighten, what ships
+compacts each alignment by longest path over the block order because the paper's
+class shift is unsound as published, and a long block under a longest-path
+compaction pushes everything after it. That is a hypothesis with an obvious
+experiment attached and nobody has run it. So the stage stays unexported on a
+stronger reason than it had, and what blocks it is now that compaction rather
+than the ranker. The full table,
 what the stage costs, what four alignments buy over
 one, and why its compaction is not the paper's are all in
 `brandesKoepfPosition`'s docstring in `packages/layout/src/position.ts`, and

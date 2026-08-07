@@ -139,16 +139,19 @@ const DUMMY_SIZE: Size = Object.freeze({ width: 0, height: 0 });
  * chain of virtual nodes, one per rank strictly between them, declared in
  * `virtualNodes` with the chain recorded in `virtualChains`.
  *
- * WHAT THAT BUYS TODAY IS A DECLARATION AND NOT A DRAWING, and the docstring
- * used to overclaim here. The intent is to stop a long edge crossing a layer at
- * a coordinate nothing constrains, by giving the order and position stages
- * something to hold on to in each row the edge passes through. Neither of them
- * reads `virtualChains`: both build their adjacency from `graph.edges()`, and no
- * graph edge touches a dummy, so a dummy is an isolated node in both indexes.
- * Measured on the 10k bench corpus, adjacent-layer segments are 13,131 with the
- * chains and without, and barycenter reaches 88,301 crossings either way. What
- * this stage produces is correct and complete and inert, and the consumer is the
- * gap M2.4b's ROADMAP entry records.
+ * That is what stops a long edge crossing a layer at a coordinate nothing
+ * constrains: the order and position stages read the chains through
+ * `segments.ts` and treat an edge that has one as the segments it is drawn as,
+ * so every row a long edge passes through holds a node of it that those stages
+ * have an opinion about. Measured on the 10k bench corpus, a layering that
+ * reads the chains has 8,748,361 crossings against 33,932,556 for one that
+ * ignores them, both scored over all 214,222 segments.
+ *
+ * The chains were declared one milestone and consumed the next, and the gap
+ * between the two is worth knowing about because it is invisible from here:
+ * while nothing read `virtualChains`, a dummy was an isolated node in every
+ * index downstream. It joined a layer, took a `nodeSep` gap and a coordinate,
+ * and constrained nothing.
  *
  * A dummy is `#dummy:<edgeId>:<index>`, takes no room, and belongs to exactly
  * one edge. See {@link dummyId} for why the id is a function of the edge and the

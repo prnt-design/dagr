@@ -31,8 +31,8 @@
         }
       },
       "crossings": {
-        "sweepsOnly": 967,
-        "withTranspose": 772
+        "sweepsOnly": 2061,
+        "withTranspose": 1824
       }
     },
     {
@@ -64,8 +64,8 @@
         }
       },
       "crossings": {
-        "sweepsOnly": 9962,
-        "withTranspose": 9162
+        "sweepsOnly": 16428,
+        "withTranspose": 15664
       }
     },
     {
@@ -97,8 +97,8 @@
         }
       },
       "crossings": {
-        "sweepsOnly": 4819,
-        "withTranspose": 3841
+        "sweepsOnly": 12147,
+        "withTranspose": 11567
       }
     },
     {
@@ -130,8 +130,8 @@
         }
       },
       "crossings": {
-        "sweepsOnly": 7464,
-        "withTranspose": 5462
+        "sweepsOnly": 13594,
+        "withTranspose": 11267
       }
     },
     {
@@ -163,8 +163,8 @@
         }
       },
       "crossings": {
-        "sweepsOnly": 5622,
-        "withTranspose": 4720
+        "sweepsOnly": 9306,
+        "withTranspose": 8464
       }
     },
     {
@@ -196,8 +196,8 @@
         }
       },
       "crossings": {
-        "sweepsOnly": 6452,
-        "withTranspose": 5081
+        "sweepsOnly": 12776,
+        "withTranspose": 11443
       }
     }
   ]

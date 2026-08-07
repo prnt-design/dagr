@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_LAYOUT_CONFIG } from '../src/config.js';
 import { InvalidConfigError } from '../src/errors.js';
 import { barycenterOrder, barycenterOrderStage, countCrossings } from '../src/order.js';
+import { forEachSegment } from '../src/segments.js';
 import { longestPathRankStage } from '../src/rank.js';
 import { defaultStages, insertionOrderStage } from '../src/stages.js';
 import { layout } from '../src/pipeline.js';
@@ -655,18 +656,15 @@ describe('barycenterOrder, on the bench corpora', () => {
   ] as const;
 
   /**
-   * The corpus ranked by the default stage, WITHOUT the chains it splits.
+   * The corpus ranked by the default stage, chains and all, which is what a
+   * default run hands this stage.
    *
-   * Every count below is over the graph's own nodes, which is what the numbers
-   * in `order.ts` and `docs/docs/layout.md` are quoted as. Passing the chains
-   * through would not move a crossing count, because this stage builds its
-   * segments from `graph.edges()` and never reads `virtualChains` (see the
-   * adjacency note below), but it WOULD put dummies in the roster the seed walk
-   * appends unreached nodes from, and the roster-order column of the table
-   * further down is the reference barycenter ordering is measured against. That
-   * column is M2.5's evidence and is deliberately left measuring what it always
-   * measured. `layout.order.golden.test.ts` passes the chains through, having
-   * checked that its own counts do not move, and the two differ on exactly this.
+   * It passed empty chains until they were consumed, and every count in this
+   * file moved when that changed, upward and by a lot. That is not a regression
+   * and the note on the segment test below is the argument: the stage went from
+   * seeing 13,131 of the 10k's 40,000 edges to seeing all 214,222 segments of
+   * the drawing, so the population being counted grew by a factor of sixteen at
+   * the same moment the layering got better on it.
    */
   function rankedCorpus(spec: GraphSpec): RankedState {
     const graph = new Graph();
@@ -675,35 +673,45 @@ describe('barycenterOrder, on the bench corpora', () => {
     const sizes = new Map<NodeId, Size>();
     for (const node of graph.nodes()) sizes.set(node.id, { width: 10, height: 10 });
     const out = longestPathRankStage.run({ graph, config: DEFAULT_LAYOUT_CONFIG, sizes });
+    for (const [id, size] of out.virtualNodes ?? []) sizes.set(id, size);
     return {
       graph,
       config: DEFAULT_LAYOUT_CONFIG,
       sizes,
       ranks: out.ranks,
       reversedEdges: out.reversedEdges,
-      virtualNodes: new Set(),
-      virtualChains: new Map(),
+      virtualNodes: new Set(out.virtualNodes?.keys() ?? []),
+      virtualChains: out.virtualChains ?? new Map(),
     };
   }
 
+  /** Counting over the drawing this stage actually orders, chains included. */
+  function crossingsOf(state: RankedState, layers: readonly (readonly NodeId[])[]): number {
+    return countCrossings({ graph: state.graph, layers, virtualChains: state.virtualChains });
+  }
+
   /**
-   * The share of the drawing this stage can see at all: an edge is a segment
-   * only if its endpoints land in adjacent layers, and today most do not. It was
-   * pinned here as the number that would go to 100% when M2.4b split the long
-   * edges, which it did NOT: M2.4b's ranker declares the chains and this stage
-   * has never read `virtualChains`, so its segments are still the graph's own
-   * edges and the share is what it was. It goes to 100% when a stage consumes a
-   * chain, which is the gap that milestone's ROADMAP entry records.
+   * What this stage can see, which since the chains were consumed is all of it.
    *
-   * It moved under M2.2c, in the good direction and for the reason that change
-   * exists: a shallower view puts more edges between adjacent layers, 1,324 to
-   * 1,513 on the 1k and 10,528 to 13,131 on the 10k, and shortens the longest
-   * edge from 78 layers to 61 and from 201 to 153. Read the crossing tables
-   * further down against this: they count only what this line calls adjacent,
-   * so a quarter more of the graph became countable at the same time, and the
-   * counts there are not comparing the same population before and after.
+   * Two numbers, and the gap between them is the point. `adjacent` counts the
+   * graph's OWN edges whose endpoints land in adjacent layers, which is what
+   * this stage saw when it read `graph.edges()` and is a property of the
+   * ranking: 1,513 of the 1k's 4,000 and 13,131 of the 10k's 40,000, the
+   * longest edge spanning 61 layers and 153. `segments` counts what the stage
+   * actually orders now, the drawing's segments, an edge with a chain
+   * contributing one per gap it crosses. Every one of those joins adjacent
+   * layers by construction, which is what completeness buys, so the share this
+   * test used to measure is 100% and the assertion below is that it is.
+   *
+   * The old share is kept rather than deleted because every crossing count in
+   * this file and in the golden corpus rose by more than an order of magnitude
+   * when the chains were consumed, and this is the reason: the population went
+   * from 13,131 segments to 214,222 on the 10k. A count taken over the first is
+   * not comparable with a count taken over the second, and reading the rise as
+   * a quality regression is the trap. The like-for-like comparison, both
+   * layerings scored on the full population, is in `layout.chains.test.ts`.
    */
-  it('sees a third of the 1k corpus and a quarter of the 10k', () => {
+  it('sees every segment of the drawing, not a third of the edges', () => {
     const spans = corpora.map(([, spec]) => {
       const state = rankedCorpus(spec);
       const layerOf = new Map<number, number>();
@@ -712,20 +720,42 @@ describe('barycenterOrder, on the bench corpora', () => {
         .entries()) {
         layerOf.set(rank, index);
       }
+      const layerIndex = (id: NodeId): number => layerOf.get(state.ranks.get(id) ?? 0) ?? 0;
       let adjacent = 0;
       let longest = 0;
       for (const edge of state.graph.edges()) {
-        const from = layerOf.get(state.ranks.get(edge.source) ?? 0) ?? 0;
-        const to = layerOf.get(state.ranks.get(edge.target) ?? 0) ?? 0;
-        if (Math.abs(from - to) === 1) adjacent += 1;
-        longest = Math.max(longest, Math.abs(from - to));
+        const gap = Math.abs(layerIndex(edge.source) - layerIndex(edge.target));
+        if (gap === 1) adjacent += 1;
+        longest = Math.max(longest, gap);
       }
-      return { adjacent, longest, edges: state.graph.edges().length };
+      // What the stage orders: an edge with a chain is drawn as the chain.
+      let segments = 0;
+      let spanning = 0;
+      let loops = 0;
+      forEachSegment(state.graph, state.virtualChains, (from, to) => {
+        segments += 1;
+        const gap = Math.abs(layerIndex(from) - layerIndex(to));
+        if (gap === 1) spanning += 1;
+        if (gap === 0) loops += 1;
+      });
+      return { adjacent, longest, edges: state.graph.edges().length, segments, spanning, loops };
     });
     expect(spans).toEqual([
-      { adjacent: 1_513, longest: 61, edges: 4_000 },
-      { adjacent: 13_131, longest: 153, edges: 40_000 },
+      { adjacent: 1_513, longest: 61, edges: 4_000, segments: 18_746, spanning: 18_746, loops: 0 },
+      {
+        adjacent: 13_131,
+        longest: 153,
+        edges: 40_000,
+        segments: 214_222,
+        spanning: 214_222,
+        loops: 0,
+      },
     ]);
+    // Every segment joins adjacent layers, so the share this stage cannot see
+    // is zero on a corpus with no self loop in it. A self loop would land in
+    // `loops`, spanning no layer for a chain to split, and both corpora have
+    // none.
+    for (const row of spans) expect(row.spanning).toBe(row.segments);
   }, 120_000);
 
   /** D2 is not a corner case: this many nodes are pinned on every sweep. */
@@ -763,6 +793,39 @@ describe('barycenterOrder, on the bench corpora', () => {
   }, 120_000);
 
   /**
+   * WHAT CONSUMING THE CHAINS ACTUALLY BUYS, which is the only comparison in
+   * this file that is like for like and is why every other number here rose.
+   *
+   * Two layerings, both scored on the SAME population: every segment of the
+   * drawing. The first is what this stage produces when it reads the chains,
+   * the second what it produces when it ignores them, which is what it did
+   * until they were consumed. Ignoring them does not make the crossings go
+   * away, it makes them invisible: the long edges are still drawn and still
+   * cross, and a stage that cannot see them arranges the layers for the quarter
+   * of the drawing it can.
+   *
+   * The counts in the tables below are the first column of this one, so a
+   * reader who reaches them after the golden file jumped by an order of
+   * magnitude has the answer here rather than having to derive it.
+   */
+  it('cuts crossings by two thirds against a layering that ignores the chains', () => {
+    const rows = corpora.map(([name, spec]) => {
+      const state = rankedCorpus(spec);
+      const ignoring: RankedState = { ...state, virtualChains: new Map() };
+      const consuming = crossingsOf(state, barycenterOrder().run(state).layers);
+      const ignored = crossingsOf(state, barycenterOrder().run(ignoring).layers);
+      return [name, consuming, ignored];
+    });
+    expect(rows).toEqual([
+      ['1k', 194_289, 685_551],
+      ['10k', 8_748_361, 33_932_556],
+    ]);
+    for (const [, consuming, ignored] of rows) {
+      expect(Number(consuming)).toBeLessThan(Number(ignored) * 0.3);
+    }
+  }, 300_000);
+
+  /**
    * The seed decision and the sweep budget, in one table. The roster-order row
    * is `insertionOrderStage`'s permutation fed back in as a hint, which is both
    * the comparison D1 was decided on and a test that a hint naming every node
@@ -774,20 +837,20 @@ describe('barycenterOrder, on the bench corpora', () => {
   it('pins the seed comparison and the sweep curve, with the pass off', () => {
     const table = corpora.map(([name, spec]) => {
       const state = rankedCorpus(spec);
-      const { graph } = state;
+
       const roster = insertionOrderStage.run(state).layers;
       const at = (maxSweeps: number, initialOrder?: readonly (readonly NodeId[])[]): number =>
-        countCrossings({
-          graph,
-          layers: barycenterOrder(
+        crossingsOf(
+          state,
+          barycenterOrder(
             initialOrder === undefined
               ? { maxSweeps, maxTransposePasses: 0 }
               : { maxSweeps, maxTransposePasses: 0, initialOrder },
           ).run(state).layers,
-        });
+        );
       return [
         name,
-        countCrossings({ graph, layers: roster }),
+        crossingsOf(state, roster),
         at(8, roster),
         at(0),
         at(2),
@@ -797,20 +860,29 @@ describe('barycenterOrder, on the bench corpora', () => {
       ];
     });
     expect(table).toEqual([
-      ['1k', 17_787, 6_704, 12_147, 7_383, 6_891, 6_591, 6_241],
-      ['10k', 411_492, 106_861, 212_566, 113_786, 105_240, 102_641, 102_641],
+      ['1k', 703_757, 210_611, 456_261, 215_975, 210_163, 210_163, 210_163],
+      ['10k', 34_510_321, 9_150_607, 19_753_239, 8_972_421, 8_972_421, 8_972_421, 8_972_421],
     ]);
   }, 120_000);
 
   /**
    * The transpose curve at the default sweep budget, which is the measurement
-   * the cap of 8 was chosen on. Caps 0, 4, 8 and 16, and then the full fixed
-   * point, which is what the cap is bought against: on the 10k it reaches
-   * 85,633, and 8 passes capture 84.3% of that saving, against 81.9% of the
-   * pre-M2.2c figure. So the cap of 8 is still bought at the same place and the
-   * decision it was chosen on is unchanged; only the population being counted
-   * moved. See the adjacency note above before reading the absolute numbers as
-   * a regression.
+   * the cap of 8 was chosen on.
+   *
+   * THE CAP OF 8 IS NO LONGER BOUGHT WHERE IT WAS, and this table is now the
+   * evidence for re-deriving it rather than for keeping it. Over a drawing whose
+   * chains are counted, 8 passes capture 17.5% of the fixed point's saving on
+   * the 10k (8,972,421 to 8,748,361, against 7,689,100 unbounded) and 33.4% on
+   * the 1k, where before they captured 84.3% and 81.9%. `order.ts` predicted
+   * exactly this collapse from a hand-expanded graph and put a number on it: a
+   * cap of 4 saving 1.4% rather than 10.7%. A cap of 4 here saves 1.38% on the
+   * 10k, so the prediction reproduces to two figures on the real thing.
+   *
+   * Re-deriving the cap is deliberately not done here. It changes a shipped
+   * default on a measurement that also wants the sweep budget looked at (the
+   * 10k reaches its sweep floor at four sweeps in the table above, where it
+   * used to still be improving at sixteen), and that is a tuning task with its
+   * own before and after rather than a line in this one.
    *
    * `Number.POSITIVE_INFINITY` is not a legal cap, deliberately and for the
    * reason argued beside the option, so the fixed point is asked for as a cap
@@ -819,17 +891,14 @@ describe('barycenterOrder, on the bench corpora', () => {
   it('pins the transpose curve and the fixed point it is bought against', () => {
     const table = corpora.map(([name, spec]) => {
       const state = rankedCorpus(spec);
-      const { graph } = state;
+
       const at = (maxTransposePasses: number): number =>
-        countCrossings({
-          graph,
-          layers: barycenterOrder({ maxTransposePasses }).run(state).layers,
-        });
+        crossingsOf(state, barycenterOrder({ maxTransposePasses }).run(state).layers);
       return [name, at(0), at(4), at(8), at(16), at(200)];
     });
     expect(table).toEqual([
-      ['1k', 6_591, 5_720, 5_562, 5_542, 5_542],
-      ['10k', 102_641, 91_785, 88_301, 86_568, 85_633],
+      ['1k', 210_163, 201_029, 194_289, 185_028, 162_662],
+      ['10k', 8_972_421, 8_848_414, 8_748_361, 8_586_890, 7_689_100],
     ]);
   }, 120_000);
 
