@@ -570,11 +570,15 @@ function rowCentres(input: OrderedState): Float64Array {
  * is invisible to it.** Today that is most of them: 1,324 of the 1k corpus's
  * 4,000 edges span exactly one rank (33.1%) and 10,528 of the 10k's 40,000
  * (26.3%). It is the same blind spot `countCrossings` has, described in the same
- * words in `order.ts`, and it has the same cure: M2.4b's dummy chains make every
- * edge span exactly one rank, at which point every edge is visible here and no
- * line of this file changes. **M2.4b HAS SINCE LANDED**, so the two shares above
- * are 100% under a default run and the blind spot is gone; they are kept because
- * they are what the table below was measured under.
+ * words in `order.ts`, and it has the same cure: splitting every long edge into
+ * a chain makes every edge span exactly one rank, at which point every edge is
+ * visible here and no line of this file changes. **M2.4b SPLIT THE EDGES AND THE
+ * BLIND SPOT IS STILL HERE.** `buildIndex` below drops any edge whose endpoints'
+ * layers differ by more than one, and it reads `input.graph.edges()`, so it
+ * never sees a chain: the shares above are what this stage still sees. The two
+ * numbers are pre-M2.2c and were never refreshed; over the view that ships they
+ * are 1,513 of 4,000 on the 1k and 13,131 of 40,000 on the 10k. The cure is a
+ * consumer that turns each chain into segments here.
  *
  * Measured against `gridPositionStage` on the same two corpora, with everything
  * else the default. Edge length is measured HORIZONTALLY, which is the only part
@@ -594,14 +598,14 @@ function rowCentres(input: OrderedState): Float64Array {
  * RESTRICTED TO THE EDGES IT CAN SEE it only wins one of the two corpora: 12%
  * worse on the 1k, 7.4% better on the 10k.
  *
- * **EVERY FIGURE IN THAT TABLE IS EXPIRED RATHER THAN CORRECTED, BECAUSE M2.4b
- * HAS LANDED AND NOBODY HAS RE-MEASURED.** They were taken over a pipeline that
- * minted no dummies, so an edge in them spanned as many ranks as the ranking
- * gave it, and the splitter is what makes every edge span exactly one. That was
- * named as this stage's prerequisite and it is now met. Nothing here says which
- * of the two stages draws the better picture today, and the run that measures it
- * is the run that decides the export and the default. Until then the table is a
- * record of what was true before the chains, not advice about what to select.
+ * **M2.4b DID NOT MEET THIS STAGE'S PREREQUISITE, so the table still stands.**
+ * The prerequisite was that every edge span exactly one rank, and M2.4b's ranker
+ * does split every long edge into a chain. This stage never reads those chains,
+ * per the paragraph above, so a dummy is an isolated node here and the figures
+ * are still what a caller who selected this stage would get. What is owed is a
+ * consumer for the chains rather than a re-measurement, and the export and the
+ * default are decisions for the run that lands one and measures what it
+ * produces.
  *
  * ## What it costs
  *
@@ -718,9 +722,12 @@ export function brandesKoepfPosition(options?: BrandesKoepfOptions): PositionSta
       const count = index.ids.length;
 
       // The marking pass is skipped when the roster holds nothing the caller
-      // did not add, because an inner segment needs two such nodes. That is the
-      // whole graph today, and it is a saving rather than a shortcut: with no
-      // virtual node the pass provably marks nothing.
+      // did not add, because an inner segment needs two such nodes. That was
+      // every graph until M2.4b and is now only a graph with no long edge in it:
+      // a default run declares a dummy per rank per long edge, so the guard
+      // passes and the pass RUNS. It still marks nothing, because `buildIndex`
+      // takes its segments from `input.graph.edges()` and no graph edge touches
+      // a dummy, so no segment here is inner. See this stage's docstring.
       if (input.virtualNodes.size > 0) {
         const virtual = new Uint8Array(count);
         for (const [number, id] of index.ids.entries()) {

@@ -834,22 +834,31 @@ layout({ graph }, { order: scored });
 adjacent layers.** An edge whose endpoints are more than one layer apart is
 invisible to the counter and to the sweeps alike, and so is a self loop, which
 spans none. This is the honest limit of ordering v1 rather than a detail: under
-the default ranker, 1,324 of the 1k benchmark corpus's 4,000 edges span exactly
-one rank (33.1%) and 10,528 of the 10k's 40,000 (26.3%), and the longest edge
-spans 78 ranks on the one and 201 on the other. So the stage optimises a real
-quantity over a quarter to a third of the drawing.
+the default ranker, **1,513 of the 1k benchmark corpus's 4,000 edges span
+exactly one rank (37.8%) and 13,131 of the 10k's 40,000 (32.8%)**, and the
+longest edge spans 61 layers on the one and 153 on the other. So the stage
+optimises a real quantity over a third of the drawing.
 
-What changed that is M2.4b. Splitting every long edge into a chain of one dummy
-per rank makes every edge that spans more than one rank span exactly one, at
-which point the share is 100% on any graph without self loops, both benchmark
-corpora included, and both the counter and the sweeps see the whole graph
-without a line changing in either. A self loop is the exception a chain cannot
-reach: it spans no rank, so there is nothing to split, and it stays invisible.
+Those four numbers read 1,324 (33.1%), 10,528 (26.3%), 78 and 201 before M2.2c,
+and are quoted in that older form in several places this page points at,
+including `order.ts`'s own docstring and the M2.5 and M2.6 changelog entries. A
+shallower acyclic view puts a quarter more of each corpus between adjacent
+layers, so the older pair understates what the stage sees rather than describing
+a different quantity. Read any crossing count quoted beside the older pair as
+counted over a smaller population.
 
-M2.4b has landed and the percentages above have NOT moved, because the split
-does not reach this stage: it reads the graph's edges and never
-`virtualChains`, so the 10k's adjacent-layer segment count is 13,131 either way.
-See [Dummy chains](#dummy-chains).
+What would change it altogether is splitting every long edge into a chain of one
+dummy per rank, which makes every edge that spans more than one rank span
+exactly one, at which point the share is 100% on any graph without self loops,
+both benchmark corpora included, and both the counter and the sweeps see the
+whole graph without a line changing in either. A self loop is the exception a
+chain cannot reach: it spans no rank, so there is nothing to split, and it stays
+invisible.
+
+M2.4b split the edges and the share did not move, because the split does not
+reach this stage: it reads the graph's edges and never `virtualChains`, so the
+10k's adjacent-layer segment count is 13,131 with the chains and without. See
+[Dummy chains](#dummy-chains).
 
 Two segments that share an endpoint touch rather than cross, and two parallel
 edges lie on top of each other. Direction is not consulted: an edge the ranker
@@ -874,7 +883,13 @@ the first time it is visited, neighbours are taken in `outEdges` order and then
 arrives at it. It is not the roster order `insertion-order` lays out.
 
 Measured on the benchmark corpora, adjacent-layer crossings after 8 sweeps,
-lower is better:
+lower is better. **Every count in this table and the two below it was taken over
+the pre-M2.2c acyclic view**, when the counter saw 1,324 of the 1k's edges and
+10,528 of the 10k's rather than today's 1,513 and 13,131. They are kept as the
+measurement that chose the seed, which is a comparison between three columns and
+is unaffected. Do not read them against a figure taken over the shipping view:
+`test/layout.order.test.ts` pins that one, and this stage reaches 88,301 on the
+10k at its own defaults, not 30,318.
 
 | seed | 1k crossings | 10k crossings |
 | --- | --- | --- |

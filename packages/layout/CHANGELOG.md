@@ -41,17 +41,19 @@ of doc prose.
   27,550 and 165,100 to 264,175). Even restricted to the edges it can see it
   wins only one of the two, 12% worse on the 1k (1,112,700 to 1,246,200) and
   7.4% better on the 10k (44,056,125 to 40,790,550). Running it bought a worse
-  drawing. M2.4b's dummy chains are what change that, because they make every
-  edge span exactly one rank, and both the export and the default are decisions
-  for the milestone that will have the measurement to make them with.
+  drawing. Dummy chains are what would change that, because they make every edge
+  span exactly one rank, and both the export and the default are decisions for
+  the milestone that will have the measurement to make them with.
 
-  **SUPERSEDED IN PLACE BY M2.4b, which lands in this file's Changed section.**
-  The two edge shares and all six figures above were measured over a pipeline
-  that minted no dummies, and both shares are 100% under a default run today. The
-  prerequisite this entry names is met. M2.4b did NOT re-measure, so the figures
-  are expired rather than corrected: nothing currently says which of the two
-  position stages draws the better picture, and the export and the default are
-  still open. `defaultStages.position` is unchanged either way.
+  **M2.4b LANDED THE CHAINS AND DID NOT MEET THIS ENTRY'S PREREQUISITE, so every
+  figure above still stands.** The ranker splits every long edge now, and this
+  stage does not read `virtualChains`: it builds its adjacency from the graph's
+  own edges, so a dummy is an isolated node to it and its inner-segment pass runs
+  and marks nothing. What is owed is a consumer for the chains rather than a
+  re-measurement. The two edge shares quoted above are pre-M2.2c and were never
+  refreshed; over the view that ships they are 1,513 of 4,000 on the 1k and
+  13,131 of 40,000 on the 10k, and they are still what this stage sees.
+  `defaultStages.position` is unchanged either way.
 
   `variant` is the only option and takes `'balanced'`, the default and the
   median of all four alignments, or one of `'down-left'`, `'down-right'`,
@@ -159,8 +161,12 @@ of doc prose.
   walk over ALL edges 3,459 and 38,152. The all-edges walk was the expected
   winner, on the theory that the seed is the only place a long edge can
   influence a stage that cannot otherwise see one, and it loses the corpus that
-  counts. The adjacent-layer rule also coincides with it once M2.4b splits the
-  long edges, so it is the behaviour this stage will have anyway.
+  counts. The adjacent-layer rule would also coincide with it once every long
+  edge is split, so it is the behaviour this stage will have anyway. (M2.4b split
+  them and the rules have not coincided: this stage reads the graph's edges and
+  never `virtualChains`. The three counts above are pre-M2.2c and were never
+  refreshed. Over the view that ships this stage reaches 88,301 crossings on the
+  10k at its own defaults, which is `test/layout.order.test.ts`'s pin.)
 
   **What a crossing is counted between**, which is the honest limit of this
   release. Only two segments joining the same pair of ADJACENT layers can cross,
