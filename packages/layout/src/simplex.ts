@@ -731,14 +731,26 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  *
  * ## What it optimises, and what it costs
  *
- * Total edge length minus the edge count is exactly the number of dummy nodes
- * M2.4b's splitter will mint, so it is the quantity that decides how much of
- * the drawing is chains of stand-in nodes rather than the caller's own. On the
- * 1k bench corpus it takes `longestPathRankStage`'s 14,746 dummies down to
- * 10,660 at the default 20,000-pivot budget, a 28% cut, and that is the
- * optimum: 200,000 pivots return the same 10,660. On the 10k corpus it reaches
- * 105,975 from 174,222 inside the default budget, and 99,698 given ten times
- * it.
+ * Total edge length minus the edge count is exactly the number of dummy nodes a
+ * splitter over this ranking would mint, so it is the quantity that decides how
+ * much of the drawing is chains of stand-in nodes rather than the caller's own.
+ * On the 1k bench corpus it would take `longestPathRankStage`'s 14,746 dummies
+ * down to 10,660 at the default 20,000-pivot budget, a 28% cut, and that is the
+ * optimum: 200,000 pivots return the same 10,660. On the 10k corpus it would
+ * reach 105,975 from 174,222 inside the default budget, and 99,698 given ten
+ * times it.
+ *
+ * **WOULD, BECAUSE THIS STAGE DOES NOT SPLIT, and M2.4b did not change that.**
+ * M2.4b put the splitter in `longestPathRankStage` and nowhere else, so this
+ * stage still declares no `virtualNodes` and no `virtualChains`, still mints no
+ * dummy, and the cut above is not collectable by switching to it. What a caller
+ * who switches actually gets is a rank stage that costs far more, a drawing
+ * that is never shorter and may be taller, zero dummy nodes saved because it
+ * mints none to save, and long edges reaching the later stages unsplit. The
+ * figures are still the right ones to quote for what this ranking is worth;
+ * they are not a saving anyone can take today. Sharing the splitter between the
+ * two rankers is what makes them real, and M2.4b's ROADMAP entry names it as
+ * the gap that milestone left open.
  *
  * That 28% read 31% after M2.2b and 57% before it, and the stage did not get
  * worse either time: its INPUT got better. M2.2b scoped the cycle breaker's

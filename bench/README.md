@@ -183,6 +183,34 @@ editing it silently rebases the entire committed baseline. If it has to change,
 change it and run `pnpm bench:baseline` in the same commit, and say so in the
 message.
 
+The same hazard, from the other end: a milestone that grows the WORKLOAD a
+benchmark measures rebases that benchmark's entry just as surely, without
+touching a line of bench code. M2.4b was the first (dummy chains take the nodes
+the layout pipeline places on the 10k corpus from 10,000 to 184,222; the 13,131
+adjacent-layer segments it orders do not move, because nothing downstream reads
+a chain yet), and M2.5 through M2.8 will each do it again. Recapturing can be
+right in that case, and it is the same
+recipe: recapture in the same commit and say why in the message. What separates
+it from talking a gate out of a failure is one habit, so make it one: PREDICT
+THE MAGNITUDE BEFORE YOU MEASURE, from what the change actually does, and put
+the predicted figure next to the measured one in the commit message. A ratio
+near the prediction is a measurement of known extra work. A ratio well above it
+is a regression hiding inside a rebase, in the one place nobody will look
+again.
+
+Two consequences, because a habit with no consequence is a note to self. **A
+ratio above the prediction blocks the recapture** until the excess is attributed
+to named work in the commit message. Attributing it means measuring it, not
+arguing it: M2.4b predicted its rank entry at +50% to +200%, measured +410.9%,
+and timed the stage in one process to show that 90.38ms of its 115.60ms was the
+splitter minting 174,222 ids, at which point the excess had a name and the
+prediction was the thing that had been wrong. **And the recapture is the
+maintainer's call rather than the agent's**, whichever way the prediction came
+out. An agent measures, states both options and asks; it does not run
+`bench:baseline` to turn its own gate green. The one exception already on the
+record is a machine mismatch, where the baseline names a machine that is not the
+one in front of you, and that is a different fact about a different thing.
+
 ## Layout
 
 `src/control.ts`, `src/corpus.ts` and `src/register.ts` are TypeScript, compiled

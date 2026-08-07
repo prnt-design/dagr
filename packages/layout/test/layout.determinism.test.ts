@@ -112,6 +112,11 @@ describe('layout determinism at corpus scale, through the default path', () => {
       // A fresh stage object, since the default is one frozen instance shared
       // by every run in the process and could be accumulating state.
       expect(digest(layout({ graph }, { order: barycenterOrder() }))).toBe(first);
-    });
+      // Four full pipeline runs, and since M2.4b each of them lays out the
+      // roster rather than the graph: 174,222 dummies on top of the 10k
+      // corpus's own nodes, which is what the splitter mints there. The default
+      // five seconds covered four runs of 10,000 nodes and does not cover four
+      // of 184,222, so the budget is stated rather than inherited.
+    }, 120_000);
   }
 });

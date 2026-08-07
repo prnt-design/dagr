@@ -654,7 +654,20 @@ describe('barycenterOrder, on the bench corpora', () => {
     ['10k', largeCorpus()],
   ] as const;
 
-  /** The corpus ranked by the default stage, which is what the numbers assume. */
+  /**
+   * The corpus ranked by the default stage, WITHOUT the chains it splits.
+   *
+   * Every count below is over the graph's own nodes, which is what the numbers
+   * in `order.ts` and `docs/docs/layout.md` are quoted as. Passing the chains
+   * through would not move a crossing count, because this stage builds its
+   * segments from `graph.edges()` and never reads `virtualChains` (see the
+   * adjacency note below), but it WOULD put dummies in the roster the seed walk
+   * appends unreached nodes from, and the roster-order column of the table
+   * further down is the reference barycenter ordering is measured against. That
+   * column is M2.5's evidence and is deliberately left measuring what it always
+   * measured. `layout.order.golden.test.ts` passes the chains through, having
+   * checked that its own counts do not move, and the two differ on exactly this.
+   */
   function rankedCorpus(spec: GraphSpec): RankedState {
     const graph = new Graph();
     for (const id of spec.nodes) graph.addNode(id);
@@ -675,9 +688,12 @@ describe('barycenterOrder, on the bench corpora', () => {
 
   /**
    * The share of the drawing this stage can see at all: an edge is a segment
-   * only if its endpoints land in adjacent layers, and today most do not. This
-   * is the number that goes to 100% when M2.4b splits the long edges, so it is
-   * pinned here as the thing that is expected to move rather than as a fact.
+   * only if its endpoints land in adjacent layers, and today most do not. It was
+   * pinned here as the number that would go to 100% when M2.4b split the long
+   * edges, which it did NOT: M2.4b's ranker declares the chains and this stage
+   * has never read `virtualChains`, so its segments are still the graph's own
+   * edges and the share is what it was. It goes to 100% when a stage consumes a
+   * chain, which is the gap that milestone's ROADMAP entry records.
    *
    * It moved under M2.2c, in the good direction and for the reason that change
    * exists: a shallower view puts more edges between adjacent layers, 1,324 to
@@ -710,7 +726,7 @@ describe('barycenterOrder, on the bench corpora', () => {
       { adjacent: 1_513, longest: 61, edges: 4_000 },
       { adjacent: 13_131, longest: 153, edges: 40_000 },
     ]);
-  });
+  }, 120_000);
 
   /** D2 is not a corner case: this many nodes are pinned on every sweep. */
   it('has this many nodes the layer above says nothing about', () => {
@@ -744,7 +760,7 @@ describe('barycenterOrder, on the bench corpora', () => {
       { noneAbove: 118, neither: 48 },
       { noneAbove: 814, neither: 438 },
     ]);
-  });
+  }, 120_000);
 
   /**
    * The seed decision and the sweep budget, in one table. The roster-order row
@@ -784,7 +800,7 @@ describe('barycenterOrder, on the bench corpora', () => {
       ['1k', 17_787, 6_704, 12_147, 7_383, 6_891, 6_591, 6_241],
       ['10k', 411_492, 106_861, 212_566, 113_786, 105_240, 102_641, 102_641],
     ]);
-  });
+  }, 120_000);
 
   /**
    * The transpose curve at the default sweep budget, which is the measurement
@@ -815,7 +831,7 @@ describe('barycenterOrder, on the bench corpora', () => {
       ['1k', 6_591, 5_720, 5_562, 5_542, 5_542],
       ['10k', 102_641, 91_785, 88_301, 86_568, 85_633],
     ]);
-  });
+  }, 120_000);
 
   /**
    * Determinism at the default cap, on the corpora rather than on a witness,
@@ -835,7 +851,7 @@ describe('barycenterOrder, on the bench corpora', () => {
       expect(barycenterOrderStage.run(state).layers).toEqual(first);
       expect(barycenterOrder().run(rankedCorpus(spec)).layers).toEqual(first);
     }
-  });
+  }, 120_000);
 
   /*
    * M2.6b briefly added a case here pinning what the flip bought, roster order

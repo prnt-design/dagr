@@ -249,13 +249,17 @@ function buildIndex(input: OrderedState): PositionIndex {
  * one. Algorithm 1 of the paper, over every gap rather than over the interior
  * ones.
  *
- * An INNER SEGMENT joins two nodes the caller never added. **There are none
- * today**: no stage in this package declares a virtual node, so
- * `input.virtualNodes` is always empty and the caller below skips this pass
- * entirely. It is written and tested anyway, because M2.4b splits every long
- * edge into a chain of dummies and every link of such a chain is an inner
- * segment, and a pass first executed by the milestone that depends on it is not
- * a pass that milestone should have to debug.
+ * An INNER SEGMENT joins two nodes the caller never added. **THERE ARE STILL
+ * NONE, AND M2.4b DID NOT CHANGE THAT, which is not what it was written to
+ * expect.** `longestPathRankStage` now declares a dummy per rank per long edge,
+ * so `input.virtualNodes` is no longer empty and this pass now RUNS on any graph
+ * with a long edge in it. It marks nothing, because a segment here is built from
+ * `input.graph.edges()` and no graph edge touches a dummy: a chain is recorded
+ * in `virtualChains`, this stage never reads that field, and so a dummy is an
+ * isolated node in the index below with no segment of any kind incident to it.
+ * The pass is written and tested and correct, and it is waiting on a consumer
+ * that turns each chain into segments. See the M2.4b ROADMAP entry, which
+ * records this as the gap that milestone left.
  *
  * The rule: a dummy chain is meant to come out straight, so where a chain and
  * an ordinary edge disagree the chain wins. Marking the ordinary segment is how
@@ -556,9 +560,10 @@ function rowCentres(input: OrderedState): Float64Array {
  * rather than an apology for it. The reason is structural and it is measured.
  * The same measurement is why nothing here is exported from the package:
  * `index.ts`'s rule names a stage a caller CHOOSES BETWEEN, and by the table
- * below no caller should choose this one yet. Adding the export when M2.4b makes
- * that false is additive; removing one is not. `insertionOrderStage` is the
- * precedent, real and tested and deliberately unexported.
+ * below no caller should choose this one yet. Adding the export when the
+ * measurement turns round is additive; removing one is not.
+ * `insertionOrderStage` is the precedent, real and tested and deliberately
+ * unexported.
  *
  * **BK aligns a node with the MEDIAN OF ITS NEIGHBOURS IN THE ADJACENT LAYER,
  * so an edge that spans more than one rank joins no adjacent pair of layers and
@@ -567,7 +572,9 @@ function rowCentres(input: OrderedState): Float64Array {
  * (26.3%). It is the same blind spot `countCrossings` has, described in the same
  * words in `order.ts`, and it has the same cure: M2.4b's dummy chains make every
  * edge span exactly one rank, at which point every edge is visible here and no
- * line of this file changes.
+ * line of this file changes. **M2.4b HAS SINCE LANDED**, so the two shares above
+ * are 100% under a default run and the blind spot is gone; they are kept because
+ * they are what the table below was measured under.
  *
  * Measured against `gridPositionStage` on the same two corpora, with everything
  * else the default. Edge length is measured HORIZONTALLY, which is the only part
@@ -585,11 +592,16 @@ function rowCentres(input: OrderedState): Float64Array {
  *
  * So it is 2.7x and 4.4x worse on total edge length, and 53% and 60% wider. Even
  * RESTRICTED TO THE EDGES IT CAN SEE it only wins one of the two corpora: 12%
- * worse on the 1k, 7.4% better on the 10k. **This stage is not an improvement on
- * these corpora today**, it is the algorithm the drawing will want once its
- * prerequisite lands, and the prerequisite is M2.4b. Anyone reading this before
- * then should read the width and total-length columns as what a caller who
- * selects it now actually gets.
+ * worse on the 1k, 7.4% better on the 10k.
+ *
+ * **EVERY FIGURE IN THAT TABLE IS EXPIRED RATHER THAN CORRECTED, BECAUSE M2.4b
+ * HAS LANDED AND NOBODY HAS RE-MEASURED.** They were taken over a pipeline that
+ * minted no dummies, so an edge in them spanned as many ranks as the ranking
+ * gave it, and the splitter is what makes every edge span exactly one. That was
+ * named as this stage's prerequisite and it is now met. Nothing here says which
+ * of the two stages draws the better picture today, and the run that measures it
+ * is the run that decides the export and the default. Until then the table is a
+ * record of what was true before the chains, not advice about what to select.
  *
  * ## What it costs
  *

@@ -22,8 +22,8 @@ const DEFAULT_MAX_SWEEPS = 8;
  * were measured independently, they bound different loops, and neither should
  * track the other, so this is deliberately a second constant and not a shared
  * one. See the transpose section of {@link barycenterOrder} for the curve that
- * put the knee here, and for why the number has to be re-derived when M2.4b
- * lands rather than carried across.
+ * put the knee here, and for why the number is owed a re-derivation now that
+ * M2.4b has landed rather than being carried across.
  */
 const DEFAULT_MAX_TRANSPOSE_PASSES = 8;
 
@@ -726,10 +726,15 @@ function applyHint(
  *
  * The adjacent-layer walk is chosen over the all-edges walk for two reasons. It
  * wins the 10k by 8.0% and loses the 1k by 4.2%, and the 10k is the corpus
- * every later milestone commits against. And the two walks COINCIDE once M2.4b
- * splits every long edge into a chain, because then every edge spans exactly
- * one rank, so choosing the adjacent-layer rule is choosing the behaviour this
- * stage will have anyway rather than one that changes character under it.
+ * every later milestone commits against. And the two walks would COINCIDE once
+ * every long edge is split into a chain, because then every edge would span
+ * exactly one rank, so choosing the adjacent-layer rule is choosing the
+ * behaviour this stage will have anyway rather than one that changes character
+ * under it. M2.4b split the edges and the walks have NOT coincided: this file
+ * builds its adjacency from `graph.edges()` and never reads `virtualChains`, so
+ * the ranker's chains are invisible here and the caller's own long edges are
+ * still long. That is the milestone's recorded gap, not a change to this
+ * argument.
  *
  * The hypothesis that was refuted is the interesting part, and it was the
  * all-edges walk's: the seed is the only place a long edge can influence this
@@ -965,15 +970,26 @@ function applyHint(
  * THE CAVEAT, AND IT IS NOT A SMALL ONE. **The saving collapses once every edge
  * is visible.** Every number above is measured on a graph where the counter
  * sees about a quarter of the edges, because an edge spanning more than one
- * rank is invisible to it. On a dummy-expanded 10k, which is what M2.4b
- * produces, the capped saving falls from 10.7% to 1.4% AT A CAP OF 4, which is
- * the cap those two were compared at and is not this stage's default of 8. The
- * expanded graph was never measured at 8, so the honest statement is that a
- * capped pass loses most of its value there and not that it loses exactly that
- * much. Only a full fixed point holds its share, at a price nobody can pay: 214
- * seconds against 6.8. So the cap AND the tie rule are both measured against a
- * graph that M2.4b replaces, and BOTH MUST BE RE-DERIVED WHEN IT LANDS rather
- * than carried across unexamined. Neither is a constant of the algorithm.
+ * rank is invisible to it. On a dummy-expanded 10k the capped saving falls from
+ * 10.7% to 1.4% AT A CAP OF 4, which is the cap those two were compared at and
+ * is not this stage's default of 8. The expanded graph was never measured at 8,
+ * so the honest statement is that a capped pass loses most of its value there
+ * and not that it loses exactly that much. Only a full fixed point holds its
+ * share, at a price nobody can pay: 214 seconds against 6.8. So the cap AND the
+ * tie rule are both measured against a graph an expansion replaces, and BOTH ARE
+ * OWED A RE-DERIVATION rather than being carried across unexamined. Neither is a
+ * constant of the algorithm.
+ *
+ * THE EXPANSION HAS NOT ARRIVED HERE, which is a correction to the sentence
+ * above rather than a reprieve from it. M2.4b's ranker declares a chain per long
+ * edge, and this file has never read `virtualChains`: it builds its segments
+ * from `graph.edges()`, no graph edge touches a dummy, and a dummy is therefore
+ * an isolated node in the index with no segment incident to it. Measured on the
+ * 10k bench corpus, adjacent-layer segments are 13,131 with the chains and
+ * without, and this stage reaches 88,301 crossings either way, so
+ * `order-crossings.golden.json` is unmoved by them and was reconfirmed against
+ * both. The debt is therefore owed to whatever CONSUMES a chain here, not to
+ * M2.4b, and it is the milestone's recorded gap.
  *
  * ## The warm start
  *
@@ -1026,7 +1042,9 @@ function applyHint(
  *
  * THOSE FOUR FIGURES ARE LIVE ADVICE HERE AND NOWHERE ELSE. Each is a
  * measurement with a scheduled expiry: a bench recapture moves the timings and
- * M2.4b moves all four. So `index.ts`, `ROADMAP.md` and `docs/docs/layout.md`
+ * M2.4b moves all four. M2.4b HAS LANDED AND DID NOT MOVE THEM, so all four are
+ * expired rather than replaced and this section is a record until someone
+ * re-derives it. So `index.ts`, `ROADMAP.md` and `docs/docs/layout.md`
  * describe the trade in a sentence and point back at this section rather than
  * copying the table, which leaves one paragraph to correct rather than four.
  * `CHANGELOG.md` is the deliberate exception: a dated entry records what a

@@ -267,19 +267,45 @@ function buildGraph(entry: CorpusEntry): Graph {
   return graph;
 }
 
-/** The graph ranked by the default stage, which is what the numbers assume. */
+/**
+ * The graph ranked by the default stage, chains and all.
+ *
+ * It passed `virtualNodes` and `virtualChains` as empty until the M2.4b review,
+ * on the belief that feeding the chains in would move every number in the file.
+ * It moves none: the order index and `countCrossings` both build their segments
+ * from `graph.edges()`, and no graph edge touches a dummy, so a dummy is an
+ * isolated node in the index and contributes nothing to count. Measured on the
+ * 10k corpus, crossings came out 88,301 both ways, and the four non-self-loop
+ * entries here are identical either way.
+ *
+ * So the chains are passed through, because that makes this harness the same
+ * ranking a default run produces rather than a narrowed one, and the committed
+ * counts stand unchanged. What that identity actually shows is the milestone's
+ * second gap and not a reassurance: nothing downstream reads a chain yet. See
+ * the M2.4b ROADMAP entry.
+ *
+ * `ranks` is filtered to the roster this state declares. The stage ranks the
+ * dummies too, and handing back ranks for ids no roster holds would make
+ * `built.layers` measurable over ids nothing places.
+ */
 function rankedState(graph: Graph): RankedState {
   const sizes = new Map<NodeId, Size>();
   for (const node of graph.nodes()) sizes.set(node.id, { width: 10, height: 10 });
   const out = longestPathRankStage.run({ graph, config: DEFAULT_LAYOUT_CONFIG, sizes });
+  const virtualNodes = new Set<NodeId>(out.virtualNodes?.keys() ?? []);
+  const ranks = new Map<NodeId, number>();
+  for (const [id, rank] of out.ranks) {
+    if (graph.hasNode(id) || virtualNodes.has(id)) ranks.set(id, rank);
+  }
+  for (const [id, size] of out.virtualNodes ?? []) sizes.set(id, size);
   return {
     graph,
     config: DEFAULT_LAYOUT_CONFIG,
     sizes,
-    ranks: out.ranks,
+    ranks,
     reversedEdges: out.reversedEdges,
-    virtualNodes: new Set(),
-    virtualChains: new Map(),
+    virtualNodes,
+    virtualChains: out.virtualChains ?? new Map(),
   };
 }
 
