@@ -1219,15 +1219,40 @@ findings addressed or logged, docs land with the feature.
   segments (13,131 to 214,222) for 6.3x the time, which is sublinear in the work
   and is what a barycenter sweep over a CSR index should do. Nothing is hiding
   in it.
-  THE TWO HONEST ANSWERS ARE UNCHANGED AND NEITHER WAS RUN, because
-  `bench:baseline` is the maintainer's call and this entry said so before the
-  numbers moved. (a) A NEW ENTRY: rename the pipeline entries to say they
-  measure a pipeline with chains in it, retire the old keys with a reason, and
-  capture the new ones, so the discontinuity lives in `bench/baseline.json`
-  where the next reader of that file will see it. (b) A REBASELINE OF THE
-  EXISTING FOUR KEYS with the reason in the commit message, which is cheaper and
-  leaves the baseline file saying nothing about the entry having changed
-  meaning.
+  THE TWO HONEST ANSWERS WERE PUT TO THE MAINTAINER AND (b) WAS CHOSEN. They
+  were: (a) A NEW ENTRY, renaming the pipeline entries to say they measure a
+  pipeline with chains in it, retiring the old keys with a reason and capturing
+  the new ones, so the discontinuity lives in `bench/baseline.json` where the
+  next reader of that file will see it. (b) A REBASELINE OF THE EXISTING FOUR
+  KEYS with the reason in the commit message, which is cheaper and leaves the
+  baseline file saying nothing about the entry having changed meaning. The
+  instruction was "rebaseline the four keys with the reason in the message", so
+  what this entry and that commit message say is the whole of the record, which
+  is the cost of (b) and was accepted knowingly.
+  WHAT THE FOUR KEYS MOVED TO, on the machine `bench/baseline.json` names:
+  pipeline 10k 91.27ms to 1174.05ms, pipeline 1k 7.30ms to 84.73ms, rank 10k
+  22.86ms to 112.49ms, rank 1k 1.57ms to 4.72ms. As control-normalised ratios,
+  which is what the gate actually reads, 12.72x, 11.48x, 4.87x and 2.98x.
+  ONLY THOSE FOUR MOVED, AND THAT TOOK DOING. `pnpm bench:baseline` rewrites
+  every entry the run produced, all fifteen, so running it as documented also
+  re-recorded the eleven `@dagr/graph` entries this branch never touches. It was
+  run that way first and the rerun then FAILED `2.5k successors` at +32.6%,
+  which is a package with no change in it drifting between two runs, and
+  committing that capture would have absorbed the drift into that package's
+  baseline under cover of a layout milestone. So the eleven were restored from
+  the previous capture and only the four layout entries were taken from the new
+  run. `capturedAt` is the new run's, which is right for the file and wrong for
+  eleven of its entries, and that is said here because the file has no
+  per-entry timestamp to say it with.
+  THE CAPTURE RUN WAS GATED ON BEING READABLE, rather than taken on the first
+  run that finished. A baseline is committed permanently, so noise in it is
+  worse than a noisy gate run, which at least re-measures. The machine had
+  fifteen agent sessions resident and would not settle for the first two
+  attempts: one run came back with four entries `noisy` and three untouched
+  `@dagr/graph` entries FAILING between +49.7% and +56.4%, which is the noise
+  signature and not a result. The capture was scripted to refuse any run with a
+  `noisy` entry or a non-layout failure, and it took the third attempt at a
+  1-minute load of 3.07.
   WHAT DID CHANGE IS THE ARGUMENT FOR CALLING IT A REBASELINE AT ALL, and it
   changed in the direction that supports one. As rebased this milestone was a
   cost with no matching benefit: the chains were inert and the pipeline did

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "capturedAt": "2026-08-06T23:14:43.029Z",
+  "capturedAt": "2026-08-07T05:10:39.640Z",
   "machine": {
     "platform": "darwin",
     "arch": "arm64",
@@ -88,32 +88,32 @@
       "ratio": 359.11685823822353
     },
     "@dagr/layout > bench/layout.bench.ts > pipeline > 10k nodes, 40k edges": {
-      "medianMs": 91.27370900000005,
-      "meanMs": 92.38004160606063,
-      "rme": 1.6535250443559513,
-      "samples": 33,
-      "ratio": 1420.6024747078302
+      "medianMs": 1174.0480834999998,
+      "meanMs": 1176.1656833000002,
+      "rme": 3.1882836139730903,
+      "samples": 10,
+      "ratio": 18073.956764357765
     },
     "@dagr/layout > bench/layout.bench.ts > pipeline > 1k nodes, 4k edges": {
-      "medianMs": 7.297416000000339,
-      "meanMs": 7.328787463768054,
-      "rme": 0.6930117421141428,
-      "samples": 69,
-      "ratio": 113.57845914394682
+      "medianMs": 84.72889549999991,
+      "meanMs": 86.23972079999994,
+      "rme": 3.6838055844724398,
+      "samples": 10,
+      "ratio": 1304.3642892320993
     },
     "@dagr/layout > bench/layout.bench.ts > rank > 10k nodes, 40k edges": {
-      "medianMs": 22.861125000000357,
-      "meanMs": 22.91142842748088,
-      "rme": 0.3021854713319786,
-      "samples": 131,
-      "ratio": 355.8151750971962
+      "medianMs": 112.48912500000006,
+      "meanMs": 112.47240425925932,
+      "rme": 4.273022897276635,
+      "samples": 27,
+      "ratio": 1731.7208811835155
     },
     "@dagr/layout > bench/layout.bench.ts > rank > 1k nodes, 4k edges": {
-      "medianMs": 1.5671255000000883,
-      "meanMs": 1.5971714171974505,
-      "rme": 0.6713110099678823,
-      "samples": 314,
-      "ratio": 24.39105836575426
+      "medianMs": 4.720375000000104,
+      "meanMs": 5.397926989247314,
+      "rme": 3.645241674901465,
+      "samples": 93,
+      "ratio": 72.6681086239831
     }
   }
 }
