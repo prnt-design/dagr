@@ -884,7 +884,8 @@ function applyHint(
  * the 1k is 2.8% above its floor there; and not one, because the golden corpus
  * is a different shape from the bench pair and `wide-600` loses 9.7% at one
  * sweep, 246,749 against the 224,924 it reaches at four; it loses 8.4% at two,
- * which is a second argument against 2 rather than the argument against 1. That corpus is the reason this is a reallocation and not simply a
+ * which is a second argument against 2 rather than the argument against 1.
+ * That corpus is the reason this is a reallocation and not simply a
  * cut: five of its six graphs are STILL IMPROVING at 8 sweeps, by 1.35% to
  * 3.48%, where both bench corpora floored by 3. Those sweeps are not free
  * everywhere. They are just worth less than the same milliseconds spent in the
@@ -1060,8 +1061,12 @@ function applyHint(
  * WHY 16 AND NOT MORE, since the curve says spend. Because 16 is the last cap
  * in the table that leaves the whole stage faster than the pair it replaces on
  * both corpora: 24 makes the 10k slower than it is today, for a further 1.5%.
- * Break-even is a cap of about 19 on the 10k, where four sweeps cost 151.46ms
- * measured and a pass is 13.9ms, and about 28 on the 1k. Sixteen is deliberately
+ * Break-even is a cap of about 19 on the 10k, where cutting the budget from 8
+ * to 4 saves a measured 151.46ms and a pass is 13.9ms, and about 28 on the 1k.
+ * That 151.46ms is about TWO sweeps at 78ms and not four, because the
+ * two-round stop already clips a budget of 8 to six on this corpus, so cutting
+ * to 4 removes the two sweeps it actually runs rather than the four it is
+ * allowed. Reading it as four would put break-even at 30. Sixteen is deliberately
  * inside both, so the pair is an improvement on either axis read alone rather
  * than a trade that has to be argued. This is a BUDGET rather than a knee and is
  * stated as one, which is the honest reading of a curve with no knee in it.

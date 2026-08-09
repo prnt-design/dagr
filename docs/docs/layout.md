@@ -1121,8 +1121,9 @@ early and a third by the end (19.3% from 4 to 8, 23.3% from 8 to 16, 29.2% from
 the fixed
 point is 675 passes away and the last 627 of them still average 858 crossings
 each. The table this replaces had the rate falling by more than half
-immediately past 8, threefold past 4, and by at least half at every step after. That knee was real, and it was a
-property of a drawing in which a long edge was invisible to the counter.
+immediately past 8, threefold past 4, and by at least half at every step
+after. That knee was real, and it was a property of a drawing in which a long
+edge was invisible to the counter.
 
 **So 16 is bought against the sweeps rather than against this curve**, which is
 why the two budgets stopped being equal. A sweep costs 5 to 6 passes of this
@@ -1142,10 +1143,13 @@ on the 10k. Take 4% to 8% as the honest 10k range and 21% as the 1k.
 **Sixteen and not more** because it is the last cap in the table that leaves the
 whole stage faster than the pair it replaces on both corpora. A cap of 24 makes
 the 10k slower than it was, for a further 1.5%. Break-even is a cap of about 19
-on the 10k, where four sweeps cost a measured 151.46ms against 13.9ms a pass,
-and about 28 on the 1k. Sixteen is inside both, so the pair is an improvement on
-either axis read alone rather than a trade that has to be argued. This is a
-budget rather than a knee and it is stated as one.
+on the 10k, where cutting the budget from 8 to 4 saves a measured 151.46ms
+against 13.9ms a pass, and about 28 on the 1k. That 151.46ms is about two sweeps
+at 78ms and not four, because the two-round stop already clips a budget of 8 to
+six on this corpus; reading it as four would put break-even at 30. Sixteen is
+inside both, so the pair is an improvement on either axis read alone rather
+than a trade that has to be argued. This is a budget rather than a knee and it
+is stated as one.
 
 The 1k agrees without deciding anything: 185,028 against 210,163 for +19.27ms,
 its own fixed point 162,662 after 187 passes. Sixteen captures 28.9% of the
@@ -1179,8 +1183,8 @@ with the 1k reaching 3,005 against 3,605 for +0.41ms and its own fixed point at
 2,959 after 19 passes. Eight captured 81.9% of the full saving for 16.1% of the
 extra time, and the rate held at or above 460 up to 8, fell to 214 immediately
 past it, then by at least half at every further step. That is the knee. Compare
-the last column with the one above it, which falls by a fifth per doubling and
-never stops.
+the last column with the one above it, which falls by a fifth per doubling
+early and a third by the end, and never stops.
 
 What this table got right is the prediction it carried: it forecast, from a
 hand-expanded corpus, that the saving would collapse to "1.4% at a cap of 4"

@@ -125,7 +125,8 @@ of doc prose.
 
 - `maxTransposePasses` on `BarycenterOrderOptions`, defaulting to 8, where zero
   means no transpose at all. (**The default is 16 as of M2.6c**; the rest of
-  this entry is what M2.6 shipped and is left as the record of it.) It bounds PASSES only, and it rejects a
+  this entry is what M2.6 shipped and is left as the record of it.) It bounds
+  PASSES only, and it rejects a
   non-integer, a negative and `Number.POSITIVE_INFINITY` with
   `InvalidConfigError` naming the field, checked when the stage is built rather
   than when it runs. That is `maxSweeps`'s rule, for `maxSweeps`'s reason: a
@@ -404,19 +405,21 @@ of doc prose.
   **What it buys, on both axes at once.** On the 10k benchmark corpus the stage
   reaches 8,586,890 crossings where the pair it replaces reached 8,748,361, and
   on the 1k 185,028 against 194,289: 1.85% and 4.77% fewer. All six graphs of
-  the golden regression corpus are lower too. And it is FASTER: 20% on the 1k,
-  and on the 10k three separate runs read 4.0%, 7.1% and 7.7% against 12%
-  predicted from the component costs, on a machine where two runs of one
-  configuration differ by about 12%.
+  the golden regression corpus are lower too. And it is FASTER: min of 8
+  interleaved runs gives 8.1% on the 10k and 21.1% on the 1k, against 6.1% and
+  20.4% predicted from the sweep and pass costs. Three earlier runs on a busier
+  machine read 4.0%, 7.1% and 7.7% on the 10k, so take 4% to 8% as the honest
+  range there.
 
   **Why the two stopped being equal**, which the old pair being 8 and 8 was
   always careful to call a coincidence. The sweep curve floors after ONE sweep
   on the 10k and three on the 1k, so sweeps 5 through 8 were buying nothing at
   all; the transpose curve has no knee anywhere, its marginal rate falling by a
   fifth per doubling early and a third by the end, smoothly and for hundreds of
-  passes. A sweep costs 5 to 6 passes of the pass's time. So the budget moves from the sweeps to the pass, and the
-  cap stops at 16 because that is the last value that leaves the whole stage
-  faster than before on both corpora rather than only on one.
+  passes. A sweep costs 5 to 6 passes of the pass's time. So the budget moves
+  from the sweeps to the pass, and the cap stops at 16 because that is the last
+  value that leaves the whole stage faster than before on both corpora rather
+  than only on one.
 
   **The knee the old cap was chosen at is gone, and so is the fixed point it
   was measured against.** The pass now runs 675 times on the 10k and 187 on the
