@@ -412,9 +412,9 @@ of doc prose.
   **Why the two stopped being equal**, which the old pair being 8 and 8 was
   always careful to call a coincidence. The sweep curve floors after ONE sweep
   on the 10k and three on the 1k, so sweeps 5 through 8 were buying nothing at
-  all; the transpose curve has no knee anywhere, its marginal rate falling by
-  about a fifth per doubling for hundreds of passes. A sweep costs 5 to 8 passes
-  of the pass's time. So the budget moves from the sweeps to the pass, and the
+  all; the transpose curve has no knee anywhere, its marginal rate falling by a
+  fifth per doubling early and a third by the end, smoothly and for hundreds of
+  passes. A sweep costs 5 to 6 passes of the pass's time. So the budget moves from the sweeps to the pass, and the
   cap stops at 16 because that is the last value that leaves the whole stage
   faster than before on both corpora rather than only on one.
 

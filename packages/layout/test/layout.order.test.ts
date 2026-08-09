@@ -698,6 +698,13 @@ describe('barycenterOrder, on the bench corpora', () => {
     return countCrossings({ graph: state.graph, layers, virtualChains: state.virtualChains });
   }
 
+  /** The layers a sweep budget settles on, the pass off, as plain arrays. */
+  function layersAt(state: RankedState, maxSweeps: number): NodeId[][] {
+    return barycenterOrder({ maxSweeps, maxTransposePasses: 0 })
+      .run(state)
+      .layers.map((layer) => [...layer]);
+  }
+
   /**
    * What this stage can see, which since the chains were consumed is all of it.
    *
@@ -860,7 +867,7 @@ describe('barycenterOrder, on the bench corpora', () => {
    * Columns at 1 and 3 are here for that reason rather than for symmetry: they
    * are the two floors, and without them the table cannot say where either one
    * is. The budget is not 2 because the 1k is still 2.8% above its floor there,
-   * and it is not 1 because `wide-600` in the golden corpus loses 8.4% at 2.
+   * and it is not 1 because `wide-600` in the golden corpus loses 9.7% there.
    * See the sweeps section of {@link barycenterOrder}.
    */
   it('pins the seed comparison and the sweep curve, with the pass off', () => {
@@ -877,6 +884,20 @@ describe('barycenterOrder, on the bench corpora', () => {
               : { maxSweeps, maxTransposePasses: 0, initialOrder },
           ).run(state).layers,
         );
+      // The floor is a LAYERING and not just a score, which is the stronger
+      // claim and the one the argument for `maxSweeps: 4` rests on: `best` is
+      // replaced only when a sweep scores strictly lower, and a 16-sweep run's
+      // first four sweeps ARE the 4-sweep run, so a floor found by sweep 4 can
+      // never be displaced afterwards. Equal counts in the table below would
+      // also be satisfied by two different layerings that happen to tie.
+      //
+      // What it catches, checked by breaking it rather than by reasoning: a
+      // stage that returns the LAST layering the sweeps produced instead of the
+      // best seen fails here, on the 1k. What it does NOT catch, also checked,
+      // is `current <= bestScore` in place of `current <`, because no sweep
+      // after the floor ties it on either corpus; the strictness of that
+      // comparison is a claim this case cannot make.
+      expect(layersAt(state, 4)).toEqual(layersAt(state, 16));
       return [
         name,
         crossingsOf(state, roster),
@@ -923,7 +944,7 @@ describe('barycenterOrder, on the bench corpora', () => {
    * SO 16 IS BOUGHT AGAINST THE SWEEPS RATHER THAN AGAINST THIS CURVE, which
    * is the other half of M2.6c and the reason the two budgets stopped being
    * equal. The sweep table above floors at 1 sweep on the 10k and 3 on the 1k,
-   * so a sweep past 4 buys nothing there, while a sweep costs 5 to 8 passes
+   * so a sweep past 4 buys nothing there, while a sweep costs 5 to 6 passes
    * of this pass's time. The pair that ships, 4 and 16, is faster AND lower on
    * both corpora and on all six golden graphs than the 8 and 8 it replaces.
    * The full argument is the transpose section of {@link barycenterOrder}.

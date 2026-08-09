@@ -1444,11 +1444,14 @@ findings addressed or logged, docs land with the feature.
   and not merely at an equal-scoring layering, the best seen is found early and
   never beaten, so the layers at 4 are the layers at 16. Sweeps 5 through 8 were
   buying nothing. The transpose curve has no knee anywhere: its marginal rate
-  falls by about a fifth per doubling and keeps going for hundreds of passes,
-  where the curve the cap of 8 was chosen on fell threefold immediately past 8.
+  falls by a fifth per doubling early and a third by the end, smoothly and for
+  hundreds of passes,
+  where the curve the cap of 8 was chosen on fell by more than half immediately
+  past 8 and threefold past 4.
   So neither budget could be read off its own curve, and what decides them is
-  the exchange rate between them: a sweep costs 5 passes of the pass's time on
-  the 1k and 8 on the 10k, and those passes buy 4.30% and 11.96% where the
+  the exchange rate between them: a sweep costs 5 to 6 passes of the pass's
+  time on both corpora, 5.38ms against 1.11ms on the 1k and 78ms against 13.9ms
+  on the 10k, and those passes buy 4.30% and 11.96% where the
   sweeps buy zero. The cap stops at 16 rather than 24 because 16 is the last
   value that leaves the whole stage faster than before on BOTH corpora.
   THE GOLDEN CORPUS IS WHY THIS IS A REALLOCATION AND NOT A CUT, and it is the

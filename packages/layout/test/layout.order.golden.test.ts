@@ -467,9 +467,13 @@ describe('barycenterOrder, the golden crossing-count corpus', () => {
    *
    * On the corpus rather than on a small graph, because the budget has to bite
    * for the comparison to assert anything. These graphs are still improving at
-   * eight sweeps, the way the 1k bench corpus reaches 3,605 crossings at eight
-   * and 3,467 at sixteen, whereas a graph small enough to settle early agrees
-   * with every budget and would pass on any default at all.
+   * eight sweeps, five of the six by between 1.35% and 3.48% from four to
+   * eight, whereas a graph small enough to settle early agrees with every
+   * budget and would pass on any default at all. That is this corpus's own
+   * measurement rather than the bench corpora's: BOTH of those are flat from
+   * three sweeps, so neither could carry this case, which is the same fact
+   * M2.6c's sweep table records and the reason the sweep cut was paired with a
+   * larger cap rather than taken alone.
    *
    * Layers rather than counts, for the same reason `layout.transpose.test.ts`
    * pins layers: two budgets can reach the same number by different routes, and

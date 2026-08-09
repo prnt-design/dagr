@@ -882,8 +882,9 @@ function applyHint(
  * Four rather than three because both floors are inside it and the sweeps
  * alternate down and up, so an even budget is whole rounds; not two, because
  * the 1k is 2.8% above its floor there; and not one, because the golden corpus
- * is a different shape from the bench pair and `wide-600` loses 8.4% at two
- * sweeps. That corpus is the reason this is a reallocation and not simply a
+ * is a different shape from the bench pair and `wide-600` loses 9.7% at one
+ * sweep, 246,749 against the 224,924 it reaches at four; it loses 8.4% at two,
+ * which is a second argument against 2 rather than the argument against 1. That corpus is the reason this is a reallocation and not simply a
  * cut: five of its six graphs are STILL IMPROVING at 8 sweeps, by 1.35% to
  * 3.48%, where both bench corpora floored by 3. Those sweeps are not free
  * everywhere. They are just worth less than the same milliseconds spent in the
@@ -1001,65 +1002,75 @@ function applyHint(
  *
  * | cap               | 10k crossings | saving | extra time | per pass | per ms |
  * | ----------------- | ------------- | ------ | ---------- | -------- | ------ |
- * | 4                 |     8,848,414 |  1.38% |   +37.18ms |   31,002 |  3,335 |
- * | 8                 |     8,748,361 |  2.50% |   +76.68ms |   25,013 |  2,533 |
- * | 12                |     8,663,589 |  3.44% |  +117.62ms |   21,193 |  2,071 |
- * | 16 (the default)  |     8,586,890 |  4.30% |  +160.04ms |   19,175 |  1,808 |
- * | 24                |     8,453,276 |  5.79% |  +246.40ms |   16,702 |  1,547 |
- * | 32                |     8,344,656 |  7.00% |  +335.13ms |   13,578 |  1,224 |
- * | 48                |     8,175,278 |  8.88% |  +516.98ms |   10,586 |    931 |
- * | fixed point (675) |     7,637,257 | 14.88% |   +8.66sec |      858 |     66 |
+ * | 4                 |     8,848,414 |  1.38% |   +81.43ms |   31,002 |  2,230 |
+ * | 8                 |     8,748,361 |  2.50% |  +131.09ms |   25,013 |  1,800 |
+ * | 12                |     8,663,589 |  3.44% |  +197.71ms |   21,193 |  1,525 |
+ * | 16 (the default)  |     8,586,890 |  4.30% |  +235.72ms |   19,175 |  1,379 |
+ * | 24                |     8,453,276 |  5.79% |  +345.24ms |   16,702 |  1,202 |
+ * | 32                |     8,344,656 |  7.00% |  +454.17ms |   13,578 |    977 |
+ * | 48                |     8,175,278 |  8.88% |  +685.73ms |   10,586 |    762 |
+ * | fixed point (675) |     7,637,257 | 14.88% |   +9.4sec* |      858 |     62 |
  *
- * `per pass` and `per ms` are both MARGINAL: what that row buys over the row
- * above it, per pass of the step and per millisecond of it. Extra time is time
- * inside {@link transposeLayers}, accumulated pass by pass in a single walk
- * rather than differenced between whole stage runs, because on this machine
- * the difference between two whole runs of the same configuration is about
- * 12% and every step here is smaller than that.
+ * HOW EACH COLUMN IS MEASURED, because two of them cannot be measured the same
+ * way. `extra time` is the whole stage at that cap minus the whole stage with
+ * the pass off, min of 8 INTERLEAVED runs: interleaved so that a drift in load
+ * hits every configuration equally, min because the fastest run of a
+ * deterministic function is the least contaminated. `per pass` is MARGINAL and
+ * exact, the crossings a row buys over the row above it divided by the passes
+ * in the step, and it needs no timing at all. `per ms` is `per pass` divided by
+ * 13.9ms, the measured cost of one pass, and NOT by the step's own extra time:
+ * the steps are 38ms to 232ms apart and the per-step timings do not resolve
+ * their own differences, which is what makes a per-step rate column read as
+ * noise. Turning the pass on also costs a one-off 26ms on the 10k to build its
+ * index, which is why the cap-4 row's extra time is more than four passes. The
+ * starred figure is the only modelled one, 26ms plus 675 passes at 13.9ms: the
+ * fixed point was run and its crossings are measured, but timing a nine-second
+ * configuration eight times over to gate one row was not worth the machine.
  *
  * THERE IS NO KNEE ON THIS CURVE, and that is the finding rather than a caveat
- * on it. The rate falls by about a fifth per doubling, from 3,335 at 4 to 931
- * at 48, and keeps going for hundreds of passes: the fixed point is 675 passes
- * away and the last 627 of them still average 858 crossings each. Compare the
- * table this replaces, where the rate fell threefold immediately past 8 and by
- * at least half at every step after. That knee was real and it was a property
- * of a drawing where a long edge was invisible to the counter. It is gone, so
- * a cap read off this curve alone would be "as many as you can afford", which
- * is not a default.
+ * on it. The rate falls by a fifth per doubling early and a third by the end
+ * (19.3% from 4 to 8, 23.3% from 8 to 16, 29.2% from 16 to 32, 36.6% from 24 to
+ * 48), smoothly and with no step, and it keeps going for hundreds of passes:
+ * the fixed point is 675 passes away and the last 627 of them still average 858
+ * crossings each. Compare the table this replaces, where the rate fell by more
+ * than half immediately past 8, threefold past 4, and by at least half at every
+ * step after. That knee was real and it was a property of a drawing where a long
+ * edge was invisible to the counter. It is gone, so a cap read off this curve
+ * alone would be "as many as you can afford", which is not a default.
  *
  * SO 16 IS BOUGHT AGAINST THE SWEEPS, NOT AGAINST THIS CURVE, and that is what
  * makes the pair a re-derivation of two budgets rather than two separate
- * decisions. A sweep costs 5 passes of this pass's time on the 1k and 8 on the
- * 10k, measured in the same run: 5.4ms against 1.05ms, and 82.8ms against
- * 10.5ms. The sweeps section shows sweeps 5 through 8 buying nothing at all on
- * either bench corpus and 1.35% to 3.48% on the golden corpus. The same
- * milliseconds in this pass buy 4.30% on the 10k and 11.96% on the 1k. So the
- * four sweeps come off and the cap goes up, and the pair that ships beats the
- * 8 and 8 it replaces on BOTH axes everywhere it was measured: 1.85% and 4.77%
- * fewer crossings on the 10k and the 1k, all six golden graphs lower, and the
- * stage faster on both.
+ * decisions. THE EXCHANGE RATE IS 5 TO 6 PASSES PER SWEEP on both corpora,
+ * measured in one interleaved run: a sweep is 5.38ms on the 1k and 78ms on the
+ * 10k, a pass 1.11ms and 13.9ms. The sweeps section shows sweeps 5 through 8
+ * buying nothing at all on either bench corpus and 1.35% to 3.48% on the golden
+ * corpus. The same milliseconds in this pass buy 4.30% on the 10k and 11.96% on
+ * the 1k. So the four sweeps come off and the cap goes up, and the pair that
+ * ships beats the 8 and 8 it replaces on BOTH axes everywhere it was measured:
+ * 1.85% and 4.77% fewer crossings on the 10k and the 1k, all six golden graphs
+ * lower, and the stage faster on both.
  *
- * HOW MUCH FASTER IS THE WEAKEST NUMBER HERE AND IT IS GIVEN AS A RANGE. From
- * the components it is 12% on the 10k (six effective sweeps and eight passes
- * against four and sixteen) and 22% on the 1k. Measured end to end it is 20%
- * on the 1k, and on the 10k three separate runs read 4.0%, 7.1% and 7.7%. The
- * machine would not settle: two whole runs of ONE configuration differ by
- * about 12% on it, which is larger than the effect being measured, and that is
- * why the table above times the pass rather than the stage.
+ * HOW MUCH FASTER, and this is the number to distrust first because it is a
+ * difference of two timings. Min of 8 interleaved runs: 670.38ms against
+ * 729.60ms on the 10k and 48.89ms against 61.95ms on the 1k, so 8.1% and 21.1%.
+ * The components predict 6.1% and 20.4% from the sweep and pass costs above,
+ * and three earlier runs on a busier machine read 4.0%, 7.1% and 7.7% on the
+ * 10k. Take 4% to 8% as the honest 10k range and 21% as the 1k.
  *
  * WHY 16 AND NOT MORE, since the curve says spend. Because 16 is the last cap
- * that leaves the whole stage faster than the pair it replaces on both corpora:
- * 24 makes the 10k slower than it is today, for a further 1.5%. A cap that
- * spent the sweep saving exactly would be about 20 on the 10k and 24 on the 1k,
- * and 16 is deliberately inside both so that the pair is an improvement on
- * either axis read alone. This is a BUDGET rather than a knee and is stated as
- * one, which is the honest reading of a curve with no knee in it.
+ * in the table that leaves the whole stage faster than the pair it replaces on
+ * both corpora: 24 makes the 10k slower than it is today, for a further 1.5%.
+ * Break-even is a cap of about 19 on the 10k, where four sweeps cost 151.46ms
+ * measured and a pass is 13.9ms, and about 28 on the 1k. Sixteen is deliberately
+ * inside both, so the pair is an improvement on either axis read alone rather
+ * than a trade that has to be argued. This is a BUDGET rather than a knee and is
+ * stated as one, which is the honest reading of a curve with no knee in it.
  *
  * The 1k agrees without deciding anything: 185,028 against 210,163 for
- * +16.82ms, its fixed point 162,662 after 187 passes. Sixteen captures 28.9%
- * of the fixed point's saving on the 10k and 52.9% on the 1k, for 1.8% and
- * 8.1% of its time. The fixed point is not affordable on either and is here
- * for the last column.
+ * +19.27ms, its fixed point 162,662 after 187 passes. Sixteen captures 28.9%
+ * of the fixed point's saving on the 10k and 52.9% on the 1k, for 2.5% and 9.2%
+ * of its time. The fixed point is not affordable on either and is here for the
+ * last column.
  *
  * A LARGER CAP IS A WEAKLY BETTER ANSWER, never a different one, for the same
  * reason a larger `maxSweeps` is: the deltas are exact and only non-increasing
