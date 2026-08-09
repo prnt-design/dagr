@@ -1071,14 +1071,57 @@ the drawing, and the test suite holds the claim to being exact by running the
 pass against a transpose that decides every swap by a full rescore.
 
 **A swap worth exactly zero is taken.** That contradicts the obvious prior, and
-it was measured rather than reasoned: allowing zero-delta swaps wins all six
-configurations it was tested in, by between 2.7% and 13.5%, and on the 10k run
-to a fixed point it reaches 29,260 crossings against 32,677 for the strict
-rule. A plateau of equal-scoring permutations is something to walk across to
-reach a better one, not a wall. What keeps that from churning the drawing for
-nothing is the stage's existing rule: the transposed layering is scored and
-taken only if it is strictly better, so a reordering that bought nothing does
-not reach the output.
+it is measured rather than reasoned. A plateau of equal-scoring permutations is
+something to walk across to reach a better one, not a wall. What keeps that from
+churning the drawing for nothing is the stage's existing rule: the transposed
+layering is scored and taken only if it is strictly better, so a reordering that
+bought nothing does not reach the output.
+
+The rule was re-derived in M2.6d, over the drawing the stage orders now and at
+the budgets it ships, both rules starting from the layering the sweeps settle
+on:
+
+| corpus | sweeps only | strict, cap 16 | ties, cap 16 | ties lower by |
+| --- | --- | --- | --- | --- |
+| 1k | 210,163 | 207,110 | 185,028 | 10.66% |
+| 10k | 8,972,421 | 8,921,937 | 8,586,890 | 3.76% |
+| tall-600 | 31,572 | 30,309 | 25,210 | 16.82% |
+| wide-600 | 224,924 | 222,653 | 207,140 | 6.97% |
+| dense-1200 | 931,903 | 927,135 | 878,459 | 5.25% |
+| sparse-2000 | 47,393 | 44,592 | 39,969 | 10.37% |
+| self-loops-800 | 127,837 | 125,408 | 112,709 | 10.13% |
+| parallel-800 | 144,451 | 141,083 | 126,710 | 10.19% |
+
+The first two are the benchmark corpora and the other six are the golden
+regression corpus. Every row is asserted in the test suite rather than only
+written down here, which matters because the next milestone to change the
+drawing will move all eight of them.
+
+**The margin is not the finding.** The strict rule captures about an eighth of
+what the pass is worth, 12.1% of it on the 1k and 13.1% on the 10k, so a pass
+that may not cross a plateau is not a weaker version of this one, it is a
+different and much smaller thing.
+
+The comparison has to say whether it is at equal cap or at equal time, because
+the two rules terminate differently: a zero-delta swap leaves one available, so
+the strict rule runs out of improving swaps far sooner. Both readings agree
+here. Neither rule terminates before 16 passes on either corpus, so equal cap is
+equal pass count, and a strict pass is if anything the cheaper of the two. Run to
+its own fixed point instead, the strict rule stops after 35 passes on the 1k and
+207 on the 10k, at 207,068 and 8,914,087, which is still above what the tie rule
+reaches in 16 and costs 1.35x and about 4.7x the whole stage. Those passes are a
+long grind for very little: strict is within 0.2% of its own fixed point after
+four passes on both corpora. There is no budget at which refusing ties is the
+better answer.
+
+Until M2.6d this page said the rule "wins all six configurations it was tested
+in, by between 2.7% and 13.5%, and on the 10k run to a fixed point it reaches
+29,260 crossings against 32,677 for the strict rule". That is kept here as the
+record of a conclusion reached on a drawing that no longer exists. Those six
+configurations were sweep budgets and caps the stage no longer uses, measured
+before M2.2c when the crossing counter saw 10,528 of the 10k's 40,000 edges
+against today's 214,222 segments, so no figure in that sentence compares with
+one in the table above.
 
 **The loop ends on a pass with no strictly improving swap**, and that is a
 constraint rather than a detail. A zero-delta swap leaves a zero-delta swap
@@ -1195,14 +1238,12 @@ been written here as settled. The knee, above. And the fixed point: 60 passes on
 the 10k and 19 on the 1k became 675 and 187, so a cap of 200, once described as
 far beyond what either corpus needs, stops the 10k two thirds of the way.
 
-**The tie rule is still owed a re-derivation.** It was chosen on the same
-pre-chain drawing as the cap, winning all six configurations it was tried in,
-and M2.6c did not re-run it: those six were sweep budgets and caps this stage no
-longer uses, over a population twenty times smaller: those six were measured
-before M2.2c, when the counter saw 10,528 of the 10k's 40,000 edges against
-today's 214,222 segments. It is load-bearing, since
-the exclusion of unanchored nodes above exists only because of it, and
-re-deriving it means re-running the strict-versus-ties comparison at 4 and 16.
+**The tie rule was owed one too, and M2.6d paid it.** It had been chosen on the
+same pre-chain drawing as the cap, and M2.6c re-ran neither the configurations
+nor the population. The strict-versus-ties comparison is now re-run at 4 and 16,
+on both corpora and all six golden graphs, and the rule is unchanged: the table
+is under "a swap worth exactly zero is taken" above. Nothing in this section
+moved as a result, because keeping a rule changes no count.
 
 The crossing counts the stage reaches on a fixed set of generated graphs, with
 the pass on and off, are committed as a golden file at

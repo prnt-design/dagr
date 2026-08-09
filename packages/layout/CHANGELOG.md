@@ -429,8 +429,13 @@ of doc prose.
   "1.4% at a cap of 4" once every edge became visible, and a cap of 4 measures
   1.38%.
 
-  **The tie rule is still owed one.** It was chosen on the same pre-chain
-  drawing as the cap and M2.6c did not re-run it.
+  **The tie rule was owed one too, and M2.6d paid it without changing
+  anything.** It had been chosen on the same pre-chain drawing as the cap and
+  M2.6c did not re-run it. Re-run at these budgets over the segment population,
+  taking zero-delta swaps still wins on both corpora and all six golden graphs,
+  so no count in this entry moves and there is no migration to describe. The
+  figures are in `barycenterOrder`'s docstring and the 1k and 10k columns are
+  pinned in `test/layout.transpose.test.ts`. (M2.6d)
 
   **To keep the layers you had**, name both budgets:
   `barycenterOrder({ maxSweeps: 8, maxTransposePasses: 8 })` reproduces exactly

@@ -1,12 +1,11 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { Graph } from '@dagr/graph';
-import { layeredDag } from '@dagr/bench';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LAYOUT_CONFIG } from '../src/config.js';
 import { barycenterOrder, countCrossings } from '../src/order.js';
 import { longestPathRankStage } from '../src/rank.js';
-import type { LayeredOptions } from '@dagr/bench';
-import type { NodeId } from '@dagr/graph';
+import { buildCorpusGraph, goldenCorpus } from './golden-corpus.js';
+import type { Graph, NodeId } from '@dagr/graph';
+import type { CorpusEntry } from './golden-corpus.js';
 import type { RankedState, Size } from '../src/types.js';
 
 /**
@@ -145,15 +144,16 @@ interface StageConfigs {
   readonly withTranspose: StageConfig;
 }
 
-/** One graph of the corpus: how to build it, and what the stage reaches on it. */
-interface GoldenEntry {
-  readonly name: string;
-  /** The `layeredDag` call, in full, so the graph can be rebuilt from the file. */
-  readonly generator: LayeredOptions;
-  /** Self loops added afterwards, on the first n nodes. `layeredDag` makes none. */
-  readonly selfLoops: number;
-  /** Duplicates of the first n generated edges. `layeredDag` makes none. */
-  readonly parallelEdges: number;
+/**
+ * One graph of the corpus: how to build it, and what the stage reaches on it.
+ *
+ * It EXTENDS `CorpusEntry` rather than restating it, so the four fields that
+ * say how to rebuild the graph have one definition. `golden-corpus.ts` owns
+ * those because `layout.transpose.test.ts` measures the same six graphs, and
+ * two files declaring their own would drift into pinning numbers for graphs
+ * that are no longer the same.
+ */
+interface GoldenEntry extends CorpusEntry {
   /** What the graph came out as, so generator drift fails here and not later. */
   readonly built: { readonly nodes: number; readonly edges: number; readonly layers: number };
   /**
@@ -180,9 +180,6 @@ interface GoldenFile {
 
 const goldenPath = new URL('./order-crossings.golden.json', import.meta.url);
 
-/** An entry as the corpus states it: everything measuring it does not supply. */
-type CorpusEntry = Omit<GoldenEntry, 'built' | 'config' | 'crossings'>;
-
 /**
  * The configuration each column is measured under, both budgets named in full
  * so that neither column depends on a default to be reproducible.
@@ -203,116 +200,6 @@ const stageConfig: StageConfigs = {
   sweepsOnly: { maxSweeps: 4, maxTransposePasses: 0 },
   withTranspose: { maxSweeps: 4, maxTransposePasses: 16 },
 };
-
-/** The corpus, as the arguments that produce it. The numbers are in the file. */
-const corpus: readonly CorpusEntry[] = [
-  {
-    name: 'tall-600',
-    generator: {
-      name: 'tall-600',
-      nodeCount: 600,
-      edgeCount: 1_800,
-      layerCount: 30,
-      seed: 0xa1,
-      longEdgeShare: 0.25,
-      backEdgeShare: 0.02,
-    },
-    selfLoops: 0,
-    parallelEdges: 0,
-  },
-  {
-    name: 'wide-600',
-    generator: {
-      name: 'wide-600',
-      nodeCount: 600,
-      edgeCount: 2_400,
-      layerCount: 6,
-      seed: 0xa2,
-      longEdgeShare: 0.05,
-      backEdgeShare: 0.02,
-    },
-    selfLoops: 0,
-    parallelEdges: 0,
-  },
-  {
-    name: 'dense-1200',
-    generator: {
-      name: 'dense-1200',
-      nodeCount: 1_200,
-      edgeCount: 6_000,
-      layerCount: 16,
-      seed: 0xa3,
-      longEdgeShare: 0.4,
-      backEdgeShare: 0.05,
-    },
-    selfLoops: 0,
-    parallelEdges: 0,
-  },
-  {
-    name: 'sparse-2000',
-    generator: {
-      name: 'sparse-2000',
-      nodeCount: 2_000,
-      edgeCount: 3_000,
-      layerCount: 40,
-      seed: 0xa4,
-      longEdgeShare: 0.1,
-      backEdgeShare: 0,
-    },
-    selfLoops: 0,
-    parallelEdges: 0,
-  },
-  {
-    name: 'self-loops-800',
-    generator: {
-      name: 'self-loops-800',
-      nodeCount: 800,
-      edgeCount: 2_400,
-      layerCount: 12,
-      seed: 0xa5,
-      longEdgeShare: 0.2,
-      backEdgeShare: 0.02,
-    },
-    selfLoops: 40,
-    parallelEdges: 0,
-  },
-  {
-    name: 'parallel-800',
-    generator: {
-      name: 'parallel-800',
-      nodeCount: 800,
-      edgeCount: 2_400,
-      layerCount: 12,
-      seed: 0xa6,
-      longEdgeShare: 0.2,
-      backEdgeShare: 0.02,
-    },
-    selfLoops: 0,
-    parallelEdges: 200,
-  },
-];
-
-/**
- * The graph an entry describes: the generator's, then the structure the
- * generator does not make. `layeredDag` skips an edge whose endpoints are the
- * same node and rejects a duplicate pair, so a self loop and a parallel edge
- * have to be added here, deterministically and recorded in the file.
- */
-function buildGraph(entry: CorpusEntry): Graph {
-  const spec = layeredDag(entry.generator);
-  const graph = new Graph();
-  for (const id of spec.nodes) graph.addNode(id);
-  for (const [source, target] of spec.edges) graph.addEdge(source, target);
-  for (let index = 0; index < entry.selfLoops; index += 1) {
-    const id = spec.nodes[index];
-    if (id !== undefined) graph.addEdge(id, id);
-  }
-  for (let index = 0; index < entry.parallelEdges; index += 1) {
-    const edge = spec.edges[index];
-    if (edge !== undefined) graph.addEdge(edge[0], edge[1]);
-  }
-  return graph;
-}
 
 /**
  * The graph ranked by the default stage, chains and all, which is what a
@@ -362,7 +249,7 @@ function rankedState(graph: Graph): RankedState {
  * under, in one place.
  */
 function measure(entry: CorpusEntry): GoldenEntry {
-  const graph = buildGraph(entry);
+  const graph = buildCorpusGraph(entry);
   const state = rankedState(graph);
   // Scored over the SEGMENTS of the drawing, which is the population the stage
   // optimises. Until M2.6c this call left `virtualChains` out while the state
@@ -396,7 +283,7 @@ function measure(entry: CorpusEntry): GoldenEntry {
 const updating = process.env['UPDATE_GOLDEN'] === '1';
 
 describe('barycenterOrder, the golden crossing-count corpus', () => {
-  const measured = corpus.map(measure);
+  const measured = goldenCorpus.map(measure);
 
   if (updating) {
     it('rewrites the golden file, because UPDATE_GOLDEN was set', () => {
@@ -409,7 +296,7 @@ describe('barycenterOrder, the golden crossing-count corpus', () => {
         entries: measured,
       };
       writeFileSync(goldenPath, `${JSON.stringify(file, undefined, 2)}\n`);
-      expect(measured.length).toBe(corpus.length);
+      expect(measured.length).toBe(goldenCorpus.length);
     });
     return;
   }
@@ -445,12 +332,12 @@ describe('barycenterOrder, the golden crossing-count corpus', () => {
    * counting one would move a number in this file.
    */
   it('holds a graph with self loops and a graph with parallel edges', () => {
-    const loops = corpus.find((entry) => entry.selfLoops > 0);
-    const parallel = corpus.find((entry) => entry.parallelEdges > 0);
+    const loops = goldenCorpus.find((entry) => entry.selfLoops > 0);
+    const parallel = goldenCorpus.find((entry) => entry.parallelEdges > 0);
     if (loops === undefined || parallel === undefined) throw new Error('corpus lost a shape');
-    const looped = buildGraph(loops).edges().filter((edge) => edge.source === edge.target);
+    const looped = buildCorpusGraph(loops).edges().filter((edge) => edge.source === edge.target);
     expect(looped.length).toBe(loops.selfLoops);
-    const edges = buildGraph(parallel).edges();
+    const edges = buildCorpusGraph(parallel).edges();
     const pairs = new Set(edges.map((edge) => `${edge.source} ${edge.target}`));
     expect(edges.length - pairs.size).toBe(parallel.parallelEdges);
   });
@@ -480,8 +367,8 @@ describe('barycenterOrder, the golden crossing-count corpus', () => {
    * the claim here is that the stage did the same run.
    */
   it('records the budgets the stage runs at when it is given no options', () => {
-    for (const entry of corpus) {
-      const state = rankedState(buildGraph(entry));
+    for (const entry of goldenCorpus) {
+      const state = rankedState(buildCorpusGraph(entry));
       expect(barycenterOrder().run(state).layers).toEqual(
         barycenterOrder(stageConfig.withTranspose).run(state).layers,
       );

@@ -821,9 +821,35 @@ function applyHint(
  * fixed layer has no opinion about does not move. Recorded with the near-wash
  * columns included so that nobody re-derives it as a principle.
  *
- * It is not a corner case either. 120 of the 1k corpus's nodes and 1,101 of the
- * 10k's have no neighbour in the layer above, and 49 and 572 respectively have
- * none in either adjacent layer.
+ * It is not a corner case either, and the count has to name a population to
+ * mean anything, so here are both. Over the SEGMENT adjacency, which is what
+ * `reorder` reads and therefore the one this rule is about: 118 of the 1k
+ * drawing's nodes and 814 of the 10k's have no neighbour in the layer above and
+ * are pinned on every downward sweep, and 24 and 162 have none in EITHER
+ * adjacent layer and are pinned on every sweep in both directions. That second
+ * pair is the transpose section's exclusion counted here, the same condition off
+ * the same adjacency. Over the graph's OWN edges, which is what
+ * `test/layout.order.test.ts` pins because it is a fact about the ranking rather
+ * than about the drawing, the first pair is the same 118 and 814 and the second
+ * is 48 and 438.
+ *
+ * THE SECOND FIGURE MOVES FOR THE REASON THE WHOLE OF M2.4b EXISTS: a node whose
+ * only edges span several ranks has no neighbour in an adjacent layer of the
+ * graph and has a dummy one rank away on each of them in the drawing, so 48 and
+ * 438 over edges become 24 and 162 over segments.
+ *
+ * THE FIRST FIGURE NOT MOVING IS A MEASUREMENT AND NOT A THEOREM, which is
+ * worth saying because the obvious argument for it is wrong. Splitting a long
+ * edge can only ADD an upward neighbour, so the segment set is a subset of the
+ * edge set and the count can only fall; equal counts therefore mean equal sets.
+ * What that rules out is any node in either corpus whose in-edges are ALL long,
+ * and nothing makes that impossible, it is just true of these two graphs. A
+ * corpus with one such node would separate the pair exactly as the second one
+ * is separated. Both are pinned, so a corpus that grew one would say so.
+ *
+ * All four read 120, 1,101, 49 and 572 until M2.6d, and all four of those were
+ * pre-M2.2c, taken before the cycle breaker that decides the ranking every one
+ * of them is a property of.
  *
  * ## The sweeps, and why the best is kept rather than the last
  *
@@ -949,11 +975,81 @@ function applyHint(
  *
  * TIES ARE TAKEN. A swap is made when the delta is negative OR EXACTLY ZERO.
  * That contradicts the obvious prior, which is to move only on an improvement,
- * and it was measured rather than reasoned: allowing zero-delta swaps wins all
- * six configurations it was tested in, by between 2.7% and 13.5%, and on the
- * 10k run to a fixed point it reaches 29,260 crossings against 32,677 for the
- * strict rule. A plateau of equal-scoring permutations is a thing to walk
- * across to reach something better, not a wall.
+ * and it is measured rather than reasoned. A plateau of equal-scoring
+ * permutations is a thing to walk across to reach something better, not a wall.
+ *
+ * Re-derived in M2.6d over the drawing the stage orders now and at the budgets
+ * it ships, against the same layering the sweeps hand the pass:
+ *
+ * | corpus         | sweeps only | strict, cap 16 | ties, cap 16 | ties lower |
+ * | -------------- | ----------- | -------------- | ------------ | ---------- |
+ * | 1k             |     210,163 |        207,110 |      185,028 |     10.66% |
+ * | 10k            |   8,972,421 |      8,921,937 |    8,586,890 |      3.76% |
+ * | tall-600       |      31,572 |         30,309 |       25,210 |     16.82% |
+ * | wide-600       |     224,924 |        222,653 |      207,140 |      6.97% |
+ * | dense-1200     |     931,903 |        927,135 |      878,459 |      5.25% |
+ * | sparse-2000    |      47,393 |         44,592 |       39,969 |     10.37% |
+ * | self-loops-800 |     127,837 |        125,408 |      112,709 |     10.13% |
+ * | parallel-800   |     144,451 |        141,083 |      126,710 |     10.19% |
+ *
+ * EVERY ROW OF IT IS PINNED, in `test/layout.transpose.test.ts`, which is not a
+ * detail of where the numbers live: this is the milestone whose thesis is that
+ * an unpinned figure goes stale without anyone noticing, and M2.8 will move all
+ * eight of these. The first two are the bench corpora and the other six are the
+ * golden regression corpus, rebuilt there from the same `test/golden-corpus.ts`
+ * the golden file's own test uses, so the two files cannot end up pinning
+ * numbers for different graphs.
+ *
+ * THE MARGIN IS NOT THE FINDING. THE STRICT RULE CAPTURES ABOUT AN EIGHTH OF
+ * WHAT THE PASS IS WORTH: 12.1% of it on the 1k and 13.1% on the 10k, 8.9% to
+ * 37.7% across the golden six. A pass that may not cross a plateau is not a
+ * weaker version of this one, it is a different and much smaller thing, and
+ * that is what makes the rule load-bearing rather than a tuning choice. It also
+ * says the margin will not close with a larger budget, which is the reading a
+ * single cap cannot rule out: the same comparison at caps of 4, 8 and 16 puts
+ * the 10k margin at 0.93%, 2.00% and 3.76% and the 1k's at 3.11%, 6.25% and
+ * 10.66%, widening at every step because ties keep buying and strict has
+ * stopped.
+ *
+ * AT EQUAL CAP OR AT EQUAL TIME, AND BOTH READINGS AGREE, which the comparison
+ * has to say because the two rules TERMINATE differently: a zero-delta swap
+ * leaves one available, so the strict rule runs out of improving swaps far
+ * sooner. It does not run out before 16 on either corpus, so equal cap IS equal
+ * pass count here, and that settles the time question without a stopwatch. The
+ * strict half of that is asserted; the ties half fails safe, since a ties run
+ * that stopped early would only make the winning column cheaper. What
+ * timing adds is that a strict pass is if anything the cheaper of the two, by
+ * 1.5% to 4.0% of whole-stage time across two interleaved runs, which is at the
+ * edge of what this machine resolves and is why the pass count is quoted first.
+ * Run to its own fixed point instead, the strict rule stops after 35 passes on
+ * the 1k at 207,068 and 207 on the 10k at 8,914,087, which is still 10.64% and
+ * 3.67% above what the tie rule reaches in 16, for 1.35x and about 4.7x the
+ * whole-stage time. Those are a long grind for very little: strict is within
+ * 0.2% of its own fixed point after FOUR passes on both corpora, so the other
+ * 31 and 203 passes buy a fifth of one percent between them. There is no budget
+ * at which refusing ties is the better answer on either corpus. Both pass counts
+ * and both fixed points are pinned with the table above.
+ *
+ * WHAT THIS REPLACES, kept rather than overwritten because it is the same
+ * conclusion reached on a drawing that no longer exists: "allowing zero-delta
+ * swaps wins all six configurations it was tested in, by between 2.7% and
+ * 13.5%, and on the 10k run to a fixed point it reaches 29,260 crossings
+ * against 32,677 for the strict rule". Those six were sweep budgets and caps
+ * this stage no longer uses, measured before M2.2c when the counter saw 10,528
+ * of the 10k's 40,000 edges against today's 214,222 segments, so not one figure
+ * in that sentence compares with one above it. Read the two as a conclusion
+ * that survived a change of drawing, and never as a trend.
+ *
+ * The strict column comes from a third solver in
+ * `test/layout.transpose.test.ts`, the same pass with `delta >= 0`, one line
+ * apart from {@link transposeLayers}. Nothing in the package ships a strict
+ * build, so without that column the evidence for this rule would be prose again
+ * the next time the drawing moves, which is exactly how it went stale the first
+ * time. It agrees with the shipping pass exactly BECAUSE ITS TRAVERSAL IS THE
+ * SAME ONE, and not because a strict descent has a single answer: the "swap v
+ * past w" relation can be cyclic, and on 200 random layered graphs run left to
+ * right against right to left, 198 end in different layers and 191 at a
+ * different count.
  *
  * WITH ONE EXCLUSION THE TIE RULE MAKES NECESSARY: A PAIR IS SKIPPED WHEN
  * EITHER NODE HAS NO NEIGHBOUR IN EITHER ADJACENT LAYER. Such a node carries no
@@ -961,11 +1057,30 @@ function applyHint(
  * zero, so without this the pass would swap every pair containing one
  * UNCONDITIONALLY. That is crossing-neutral and still wrong, for two reasons.
  * It reverses this stage's own measured rule that a node the fixed layer says
- * nothing about keeps its index, which `reorder` keeps and which is not a
- * corner case: 120 of the 1k corpus's nodes and 1,101 of the 10k's qualify. And
- * because the drift is one slot per pass in a fixed direction, the warm start
- * hands the drifted order back in and it compounds across re-layouts, which is
- * the one thing `initialOrder` exists to prevent.
+ * nothing about keeps its index, which `reorder` keeps. And because the drift
+ * is one slot per pass in a fixed direction, the warm start hands the drifted
+ * order back in and it compounds across re-layouts, which is the one thing
+ * `initialOrder` exists to prevent.
+ *
+ * THE EXCLUSION IS A NO-OP UNDER THE STRICT RULE, which is what makes it the
+ * tie rule's dependent rather than a rule of its own, and M2.6d asserted it
+ * rather than leaving it as the short argument it looks like: an unanchored
+ * node's delta is exactly zero, so a pass that refuses zero-delta swaps already
+ * refuses every pair this would skip. A strict build with the exclusion and one
+ * without return byte-identical layers on both corpora and on all six golden
+ * graphs. So the tie rule, this exclusion and M3.6's warm-start stability are
+ * one argument, and re-deriving the first is re-deriving all three.
+ *
+ * HOW MANY NODES IT IS ABOUT, and this figure has moved by a factor of seven:
+ * 24 of the 1k drawing's 15,746 nodes and 162 of the 10k's 184,222, against the
+ * 120 and 1,101 the rule was justified with before M2.4b's chains were
+ * consumed. That fall is the chains working rather than the rule losing its
+ * point. A node whose only edges spanned several ranks had no neighbour in an
+ * adjacent layer and was unanchored; it now has a dummy one rank away on each
+ * of them. What is left is genuinely isolated, and every one of those still
+ * drifts by exactly the pass budget without the exclusion, measured at a cap of
+ * 16 and again at 32 on both corpora, all in the same direction, and
+ * crossing-neutral to the last unit both times.
  *
  * ONE CONSEQUENCE OF STATING IT THIS WAY, since the alternative readings are
  * not obviously worse: an unanchored node becomes a PERMANENT BARRIER, because
@@ -980,10 +1095,11 @@ function applyHint(
  * read 3,605 and 3,005 on the 1k and 35,114 and 30,318 on the 10k both before
  * the exclusion and after it, which is what a crossing-neutral change has to
  * do. Those four are pre-chain figures and are kept as the pair they are, a
- * before and an after of one change rather than a level: the exclusion was not
- * re-measured in M2.6c and does not need to be, because what it claims is that
- * two counts taken either side of it agree, and that claim is about the change
- * and not about the drawing.
+ * before and an after of one change rather than a level, because what they
+ * claim is that two counts taken either side of it agree, and that claim is
+ * about the change and not about the drawing. M2.6d took the same pair on the
+ * drawing that ships and it still costs nothing: 185,028 and 8,586,890 either
+ * way, on 24 of 24 unanchored nodes and 162 of 162.
  *
  * TERMINATION IS GATED ON STRICTLY IMPROVING SWAPS ONLY, and that is a
  * constraint rather than a detail. A zero-delta swap leaves a zero-delta swap
@@ -1135,15 +1251,13 @@ function applyHint(
  * needs", stops the 10k two thirds of the way, so the 7,689,100 it reported was
  * never a fixed point.
  *
- * THE TIE RULE IS STILL OWED ONE. It was measured on the same pre-chain drawing
- * as the cap, it won all six configurations it was tried in there, and nothing
- * in M2.6c re-ran it: the six configurations were sweep budgets and caps this
- * stage no longer uses, over a population twenty times smaller: those six were
- * measured before M2.2c, when the counter saw 10,528 of the 10k's 40,000 edges
- * against today's 214,222 segments. The rule is
- * load-bearing (see the exclusion above, which exists only because of it) and
- * re-deriving it means re-running the strict-versus-ties comparison at 4 and
- * 16, which is a smaller task than this one was and is not folded into it.
+ * THE TIE RULE WAS OWED ONE AND M2.6d PAID IT. It had been measured on the same
+ * pre-chain drawing as the cap, winning all six configurations it was tried in
+ * there, and M2.6c re-ran neither those configurations nor that population. The
+ * strict-versus-ties comparison is now re-run at 4 and 16, on both corpora and
+ * all six golden graphs, and the rule is unchanged: see TIES ARE TAKEN above
+ * for the table, and note that nothing in this section moves as a result,
+ * because keeping a rule changes no count.
  *
  * ## The warm start
  *
@@ -1414,7 +1528,9 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
 }
 
 /**
- * The barycenter order stage with no options: eight sweeps and a cold start.
+ * The barycenter order stage with no options: four sweeps, a transpose cap of
+ * 16, and a cold start. It said eight sweeps until M2.6d noticed that M2.6c had
+ * moved the constant and left this line behind.
  * See {@link barycenterOrder}, which is where all of it is argued, including
  * what being the default costs and what it buys.
  *
