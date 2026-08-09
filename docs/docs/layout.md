@@ -637,9 +637,11 @@ corpus that is 214,222 segments where the graph has 40,000 edges, of which only
 
 **What that is worth, measured, because it is the whole reason a chain is worth
 its cost.** Two layerings of the 10k corpus, both scored over all 214,222
-segments: the one the order stage produces reading the chains has 8,748,361
-crossings, the one it produces ignoring them has 33,932,556. A 74% cut, and 72%
-on the 1k. The same change takes the default position stage's total horizontal
+segments: the one the order stage produces reading the chains has 8,586,890
+crossings, the one it produces ignoring them has 33,939,378. A 75% cut, and 73%
+on the 1k. (Both sides are the order stage at its defaults, so M2.6c's
+re-derivation of those moved both; M2.4b measured the pair at 8,748,361 and
+33,932,556, a 74% cut and 72%.) The same change takes the default position stage's total horizontal
 segment length down 66% on the 10k and 63% on the 1k. Ignoring the chains never
 made those crossings go away, it made them invisible: the long edges were drawn
 and crossed each other either way, and a stage that could not see them arranged
@@ -856,8 +858,10 @@ the 1k's 4,000 (37.8%) and 13,131 of the 10k's 40,000 (32.8%)**, the longest
 edge spanning 61 layers and 153. Before M2.2c that pair read 1,324 (33.1%) and
 10,528 (26.3%), with the longest edge at 78 layers and 201, because a deeper
 acyclic view puts less of the graph between adjacent layers. Both older pairs
-are still quoted in places this page points at, including `order.ts`'s
-measurement tables and the M2.5 and M2.6 changelog entries. **Any crossing count
+are still quoted in places this page points at, including `order.ts`'s seed
+table and the M2.5 and M2.6 changelog entries. Its sweep and cap tables were
+re-derived over the current population in M2.6c, and the figures they replaced
+are kept beside them marked as what they are. **Any crossing count
 quoted beside either of them is counted over a smaller population and does not
 compare with a count taken today.**
 
@@ -891,7 +895,7 @@ segments. They are kept because they are the measurement that chose the seed,
 which is a comparison between three columns at one moment and is unaffected by
 the level moving under all three. Do not read any of them as a level: the
 shipping figure is pinned in `test/layout.order.test.ts`, and this stage reaches
-**8,748,361** crossings on the 10k at its own defaults, over a population
+**8,586,890** crossings on the 10k at its own defaults, over a population
 twenty times larger than the one these were counted on. (Twenty against these,
 sixteen against the 13,131 the counter saw after M2.2c and before the chains
 were consumed. Which of the two you want depends on which era you are comparing
@@ -932,20 +936,44 @@ The layering is scored after every sweep and **the best one seen is what comes
 back**, not the last one, because the sweeps are not monotone. That is what
 makes a larger `maxSweeps` a weakly better answer rather than a different one.
 
-Adjacent-layer crossings by budget on the same two corpora, from the seed above:
+Crossings by budget on the same two corpora, from the seed above, over every
+segment of the drawing and with the transpose pass off:
 
-| sweeps | 1k crossings | 10k crossings | 10k cost |
-| --- | --- | --- | --- |
-| 0 (the seed) | 7,933 | 94,991 | 5.5ms |
-| 2 | 4,619 | 50,735 | 9.5ms |
-| 4 | 3,880 | 40,217 | 13.5ms |
-| 8 (the default) | 3,605 | 35,114 | 21ms |
-| 16 | 3,467 | 32,503 | 38ms |
+| sweeps | 1k crossings | 10k crossings |
+| --- | --- | --- |
+| 0 (the seed) | 456,261 | 19,753,239 |
+| 1 | 215,975 | 8,972,421 |
+| 2 | 215,975 | 8,972,421 |
+| 3 | 210,163 | 8,972,421 |
+| 4 (the default) | 210,163 | 8,972,421 |
+| 8 | 210,163 | 8,972,421 |
+| 16 | 210,163 | 8,972,421 |
 
-`maxSweeps` defaults to 8, which is where the curve has given up most of what it
-will give: 8 sweeps take the 10k to 8.3% of the roster-order seed's crossings
-and 16 take it to 7.6%, both counted over the 26.3% of edges the metric sees, so
-doubling the budget buys another 7% of what is left. It bounds the sweeps and
+**The 10k is at its floor after one sweep and the 1k after three**, and not
+merely at an equal-scoring layering: the best seen is found early and never
+beaten, so the layers that come back at 4 are the layers that come back at 16.
+Sweeps 5 through 8 buy nothing on either corpus, which is what the budget of 8
+that shipped until M2.6c was spending.
+
+`maxSweeps` defaults to **4**. Four rather than three because both floors are
+inside it and the sweeps alternate down and up, so an even budget is whole
+rounds; not two, because the 1k is 2.8% above its floor there; and not one,
+because the golden regression corpus is a different shape from the bench pair
+and `wide-600` loses 8.4% at two sweeps. That corpus is also why the cut is
+paired with a larger transpose cap rather than simply taken: five of its six
+graphs are still improving at 8 sweeps, by 1.35% to 3.48%. Those sweeps are not
+worthless everywhere. They are worth less than the same milliseconds spent in
+the transpose pass, which is the trade the next section measures.
+
+The table above replaces one taken before M2.4b's chains were consumed, when
+the counter saw a quarter of the edges: 7,933 at the 1k's seed and 4,619, 3,880,
+3,605 and 3,467 at 2, 4, 8 and 16, and 94,991 and 50,735, 40,217, 35,114 and
+32,503 on the 10k, the 10k costing about 5.5ms at the seed and 9.5ms, 13.5ms,
+21ms and 38ms. Those are kept in the changelog rather than here, and the shape
+is the difference worth seeing: that curve was still falling at 16 and this one
+is flat from 3.
+
+`maxSweeps` bounds the sweeps and
 nothing else, the way `maxIterations` bounds pivots only. Zero is legal and
 means "seed only". Unlike `maxIterations` it does not take
 `Number.POSITIVE_INFINITY`: these sweeps have no optimality condition to
@@ -953,8 +981,8 @@ converge to, so "as many as it takes" has nothing to mean. A non-integer or
 negative budget is an `InvalidConfigError` naming the field, thrown at the call
 that builds the stage rather than at the run.
 
-Those timings are one machine's, taken to justify a default rather than to tell
-you what the stage will cost you, exactly as the figures under
+Every timing on this page is one machine's, taken to justify a default rather
+than to tell you what the stage will cost you, exactly as the figures under
 [Minimum total edge length](#minimum-total-edge-length-and-what-it-costs) are.
 The committed benchmark medians are the only numbers anything regresses
 against.
@@ -964,8 +992,8 @@ run. It takes two rather than one because the rule is a heuristic and not a
 fixed point: what carries into the next round is the last layering, not the best
 one, so a round that improved nothing is not proof that the next one will not.
 Stopping on the first such round is what the two-round rule was measured
-against: it cost quality on 32 of 200 random layered graphs at the default
-budget, worst 1,055 crossings against 893, and took the 1k at a budget of 16 to
+against: it cost quality on 32 of 200 random layered graphs at a budget of 8,
+worst 1,055 crossings against 893, and took the 1k at a budget of 16 to
 3,532 where running all 16 reaches 3,467. The rule that ships recovers all of
 that, so every number in the table above is what running the budget out gives,
 on both corpora and at both budgets.
@@ -1000,20 +1028,18 @@ to sort are collected in index order and JavaScript's sort is stable.
 When the sweeps stop, one transpose refinement pass runs over the layering they
 settled on. It walks every layer left to right and swaps each adjacent pair
 when the swap costs nothing or saves something, repeating until a walk finds no
-strictly improving swap or `maxTransposePasses` is spent. It removed 13.7% of
-the crossings the sweeps left on the 10k corpus, 35,114 down to 30,318, and
-16.6% on the 1k.
+strictly improving swap or `maxTransposePasses` is spent. At the budgets that
+ship it removes **4.30%** of the crossings the sweeps leave on the 10k corpus,
+8,972,421 down to 8,586,890, and **11.96%** on the 1k.
 
-**Both of those are past tense now, and this pass is the part of the stage that
-consuming the chains hurt most.** Over the drawing the stage actually sees today
-it removes **2.5%** on the 10k (8,972,421 down to 8,748,361) and 7.6% on the 1k.
-The cap of 8 was bought as capturing 84.3% of what an unbounded run to the fixed
-point would save; it now captures 17.5%. That collapse was predicted here, from
-a hand-expanded corpus, at "1.4% at a cap of 4", and a cap of 4 now measures
-1.38%, so the prediction was right to two figures. **The cap and the sweep
-budget are both owed a re-derivation**, and neither has had one: they are
-shipped defaults and moving them is a tuning task with its own before and after,
-not a line in the change that consumed the chains.
+**Both the cap and the sweep budget were re-derived in M2.6c and both moved**,
+the sweeps from 8 to 4 and the cap from 8 to 16. Before that they were 8 and 8,
+a coincidence this page said was a coincidence, and at 8 the pass removed 2.5%
+on the 10k where it had removed 13.7% over the drawing it was tuned against.
+That collapse was predicted here, from a hand-expanded corpus, at "1.4% at a cap
+of 4", and a cap of 4 measures 1.38%, so the prediction was right to two
+figures. What the re-derivation then found is that the collapse had taken the
+knee with it, and the section on the cap below is the new argument.
 
 **It runs once, at the end, on the best layering the sweeps saw**, not inside
 them. The alternatives were measured at a sweep budget of 8 on the 10k: once at
@@ -1054,33 +1080,57 @@ both the tie rule and the wrong gate to hang, so the test suite pins both
 halves on a three-node witness: the shipping gate stops after one pass, and an
 any-swap gate runs a clean period-2 cycle for as long as it is allowed to.
 
-`maxTransposePasses` defaults to 8. **That it equals `maxSweeps`'s default of 8
-is a coincidence**: the two bound different loops and were measured
-independently, and neither should track the other. Measured at a sweep budget
-of 8 on the 10k, against 35,114 crossings and 16.32ms with the pass off, all of
-it over the pre-consumption population (see the note on the seed table above,
-and read the percentages rather than the counts):
+`maxTransposePasses` defaults to **16**, and defaulted to 8 until M2.6c.
+Measured at the shipping sweep budget of 4 on the 10k, against 8,972,421
+crossings with the pass off:
 
-| cap | 10k crossings | saving | extra time | crossings per ms |
-| --- | --- | --- | --- | --- |
-| 4 | 31,369 | 10.7% | +2.65ms | 1,413 |
-| 6 | 30,677 | 12.6% | +4.15ms | 461 |
-| 8 (the default) | 30,318 | 13.7% | +4.93ms | 460 |
-| 12 | 29,892 | 14.9% | +6.92ms | 214 |
-| 16 | 29,658 | 15.5% | +9.29ms | 99 |
-| 32 | 29,358 | 16.4% | +16.91ms | 39 |
-| fixed point (60 passes) | 29,260 | 16.7% | +30.61ms | 7 |
+| cap | 10k crossings | saving | extra time | per pass | per ms |
+| --- | --- | --- | --- | --- | --- |
+| 4 | 8,848,414 | 1.38% | +37.18ms | 31,002 | 3,335 |
+| 8 | 8,748,361 | 2.50% | +76.68ms | 25,013 | 2,533 |
+| 12 | 8,663,589 | 3.44% | +117.62ms | 21,193 | 2,071 |
+| 16 (the default) | 8,586,890 | 4.30% | +160.04ms | 19,175 | 1,808 |
+| 24 | 8,453,276 | 5.79% | +246.40ms | 16,702 | 1,547 |
+| 32 | 8,344,656 | 7.00% | +335.13ms | 13,578 | 1,224 |
+| 48 | 8,175,278 | 8.88% | +516.98ms | 10,586 | 931 |
+| fixed point (675 passes) | 7,637,257 | 14.88% | +8.66sec | 858 | 66 |
 
-The last column is the marginal rate: the crossings a row buys over the row
-above it, divided by the extra time it costs. That is the column the default is
-chosen on, and the rows past 8 are carried for it alone.
+The last two columns are marginal: what a row buys over the row above it, per
+pass of the step and per millisecond of it. Extra time is time inside the pass,
+accumulated pass by pass in a single walk rather than differenced between whole
+stage runs, because on the machine these were taken on two whole runs of one
+configuration differ by about 12% and every step here is smaller than that.
 
-Eight captures 81.9% of the full saving for 16.1% of the extra time, and the
-knee really is there: the rate holds at or above 460 up to 8 and falls to 214
-immediately past it, then by at least half at every further step. The 1k corpus
-agrees without deciding anything, 3,005 crossings against 3,605 for +0.41ms,
-with its own fixed point at 2,959 after 19 passes. Those timings are one
-machine's, like every other timing on this page.
+**There is no knee on this curve.** The rate falls by about a fifth per
+doubling, from 3,335 at a cap of 4 to 931 at 48, and keeps going: the fixed
+point is 675 passes away and the last 627 of them still average 858 crossings
+each. The table this replaces had the rate falling threefold immediately past 8
+and by at least half at every step after. That knee was real, and it was a
+property of a drawing in which a long edge was invisible to the counter.
+
+**So 16 is bought against the sweeps rather than against this curve**, which is
+why the two budgets stopped being equal. A sweep costs 5 passes of this pass's
+time on the 1k and 8 on the 10k. The sweep table above shows sweeps 5 through 8
+buying nothing on either bench corpus and 1.35% to 3.48% on the golden corpus;
+the same milliseconds here buy 4.30% and 11.96%. So four sweeps come off and the
+cap goes up, and the pair that ships beats the 8 and 8 it replaces on both axes
+everywhere it was measured: 1.85% and 4.77% fewer crossings on the 10k and the
+1k, all six golden graphs lower, and the stage faster on both. How much faster
+is the weakest figure here and is given as a range: 20% on the 1k, and on the
+10k three separate runs read 4.0%, 7.1% and 7.7% against 12% predicted from the
+component costs.
+
+**Sixteen and not more** because it is the last cap that leaves the whole stage
+faster than the pair it replaces on both corpora. A cap of 24 makes the 10k
+slower than it was, for a further 1.5%. A cap that spent the sweep saving
+exactly would be about 20 on the 10k and 24 on the 1k, and 16 is inside both, so
+the pair is an improvement on either axis read alone. This is a budget rather
+than a knee and it is stated as one.
+
+The 1k agrees without deciding anything: 185,028 against 210,163 for +16.82ms,
+its own fixed point 162,662 after 187 passes. Sixteen captures 28.9% of the
+fixed point's saving on the 10k and 52.9% on the 1k, for 1.8% and 8.1% of its
+time. Those timings are one machine's, like every other timing on this page.
 
 A larger cap is a weakly better answer and never a different one, for the same
 reason a larger `maxSweeps` is: the deltas are exact and only non-increasing
@@ -1089,21 +1139,26 @@ the same rule as `maxSweeps`, including rejecting `Number.POSITIVE_INFINITY`,
 and a non-integer or negative value is an `InvalidConfigError` naming the
 field, thrown at the call that builds the stage.
 
-**The caveat came true: the saving collapsed once every edge became visible.**
-Every number in the table above was measured on a graph where the counter saw
-about a quarter of the edges, that table being pre-M2.2c like the seed table
-above it, for the reason in
-[What a crossing is counted between](#what-a-crossing-is-counted-between). It
-sees all of it now, and the capped saving at 8 falls from 13.7% to 2.5% on the
-10k, capturing 17.5% of the fixed point's saving where it used to capture 84.3%.
-The prediction written here was "1.4% at a cap of 4", from a hand-expanded
-corpus; a cap of 4 measures 1.38% today. Only a full fixed point holds its
-share, at a price nobody can pay. So the cap and the tie rule were both chosen
-against a drawing this stage no longer sees, and both are owed a re-derivation
-rather than being carried across unexamined. Neither is a constant of the
-algorithm, and neither has been re-derived: they are shipped defaults, moving
-them wants the sweep budget looked at in the same pass, and that is a tuning
-task with its own before and after.
+**What the cap table used to say**, kept because the prediction on it is the
+one this page got right. It was measured at a sweep budget of 8 on a graph
+where the counter saw about a quarter of the edges: 35,114 crossings with the
+pass off, and 31,369, 30,318 and 29,658 at caps of 4, 8 and 16, with a fixed
+point of 29,260 after 60 passes. So the pass removed 13.7% at a cap of 8 and
+captured 84.3% of the fixed point's saving. This page predicted, from a
+hand-expanded corpus, that the saving would collapse to "1.4% at a cap of 4"
+once every edge became visible. It measures 1.38%.
+
+**Two things on that old table did not survive the re-derivation**, and both had
+been written here as settled. The knee, above. And the fixed point: 60 passes on
+the 10k and 19 on the 1k became 675 and 187, so a cap of 200, once described as
+far beyond what either corpus needs, stops the 10k two thirds of the way.
+
+**The tie rule is still owed a re-derivation.** It was chosen on the same
+pre-chain drawing as the cap, winning all six configurations it was tried in,
+and M2.6c did not re-run it: those six were sweep budgets and caps this stage no
+longer uses, over a population sixteen times smaller. It is load-bearing, since
+the exclusion of unanchored nodes above exists only because of it, and
+re-deriving it means re-running the strict-versus-ties comparison at 4 and 16.
 
 The crossing counts the stage reaches on a fixed set of generated graphs, with
 the pass on and off, are committed as a golden file at
@@ -1113,17 +1168,20 @@ test file beside it says how to regenerate it and when doing so is legitimate.
 ### What the default order stage costs and buys
 
 M2.6b pointed the order default at this stage, so the trade below is what a run
-that names no order stage now makes. **Every figure in this section predates the
-chains being consumed and none has been re-derived**, which moves both halves:
-the stage now orders 214,222 segments on the 10k rather than 13,131, so it is
-slower than the multiple below says, and it reduces crossings over the whole
-drawing rather than a third of it, so it buys more than the percentage below
-says. Read it as the shape of the trade and not as its size.
+that names no order stage now makes. All four figures behind it were re-derived
+in M2.6c, over the drawing the pipeline actually lays out now that M2.4b's
+chains are in it.
 
 Ordering is the expensive half of it: on
-the 10k benchmark corpus the full default pipeline is roughly 1.8x slower than
-it was with roster order, and the drawing that comes back has 92.9% fewer
-adjacent-layer crossings. On the 1k it is roughly 1.6x slower for 76.7% fewer.
+the 10k benchmark corpus the full default pipeline is roughly 2.5x slower than
+it is with roster order, and the drawing that comes back has 75.1% fewer
+crossings. On the 1k it is roughly 3.0x slower for 73.7% fewer. Those ratios are
+not comparable with the 1.8x and 92.9% this paragraph used to give: both halves
+of both numbers moved when the chains were consumed, the pipeline placing
+184,222 nodes on the 10k rather than 10,000 and the counter seeing 214,222
+segments rather than 13,131. The fall from 92.9% to 75.1% is the population
+growing, not the stage getting worse; scored like for like, the layering that
+reads the chains has 74.7% fewer crossings than one that ignores them.
 Both slowdowns are against a pipeline whose position and route stages are still
 placeholders, so the multiple moves again when either of those defaults changes,
 M2.7 having added a real position stage without taking that default; it is not a
@@ -1133,8 +1191,8 @@ The four figures behind those two sentences, two timings and two crossing
 counts, are stated once and in one place: the last section of
 `barycenterOrder`'s docstring in `packages/layout/src/order.ts`. They are quoted
 nowhere else as live advice, because every one of them expires, the timings on
-the next benchmark recapture and all four on the chains being consumed, which
-has happened and has not re-derived them. The package changelog is
+the next benchmark recapture and all four on M2.8's routing landing. The
+package changelog is
 the exception, and deliberately: a dated entry records what a past change
 measured, so it keeps its own copies and is marked superseded in place rather
 than swept.
@@ -1646,7 +1704,7 @@ without being selectable at all, `brandes-koepf-position`, for the reason below.
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
 | rank | `longest-path-rank` | Breaks cycles with a least-squares feedback arc set, ranks by longest path, then splits every long edge into a [dummy chain](#dummy-chains). Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height, and it does NOT split. | Sharing the splitter with `network-simplex-rank`. |
-| order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass, over every segment of the drawing including the pieces of a split long edge. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). | Its sweep budget and transpose cap re-derived: both were chosen against a drawing a third this size and the cap now captures 17.5% of what it used to capture 84.3% of. |
+| order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass, over every segment of the drawing including the pieces of a split long edge. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). Its two budgets were re-derived in M2.6c and are now 4 sweeps and a cap of 16. | Its tie rule re-derived: it is the last decision here still measured on a drawing a third this size. |
 | position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. `brandes-koepf-position` is a real algorithm that is implemented but not exported, for the reason below this table. | A compaction that is not the longest-path substitute, which is what now blocks Brandes-Koepf, and then a decision about the default. |
 | route | `straight-route` | Straight segments from the source centre through each of the edge's dummies to the target centre, which is two points for an edge with no chain. | Border attachment, obstacle detours and splines, monotone in the rank axis (M2.8). |
 

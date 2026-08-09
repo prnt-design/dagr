@@ -22,17 +22,17 @@
       },
       "config": {
         "sweepsOnly": {
-          "maxSweeps": 8,
+          "maxSweeps": 4,
           "maxTransposePasses": 0
         },
         "withTranspose": {
-          "maxSweeps": 8,
-          "maxTransposePasses": 8
+          "maxSweeps": 4,
+          "maxTransposePasses": 16
         }
       },
       "crossings": {
-        "sweepsOnly": 2061,
-        "withTranspose": 1824
+        "sweepsOnly": 31572,
+        "withTranspose": 25210
       }
     },
     {
@@ -55,17 +55,17 @@
       },
       "config": {
         "sweepsOnly": {
-          "maxSweeps": 8,
+          "maxSweeps": 4,
           "maxTransposePasses": 0
         },
         "withTranspose": {
-          "maxSweeps": 8,
-          "maxTransposePasses": 8
+          "maxSweeps": 4,
+          "maxTransposePasses": 16
         }
       },
       "crossings": {
-        "sweepsOnly": 16428,
-        "withTranspose": 15664
+        "sweepsOnly": 224924,
+        "withTranspose": 207140
       }
     },
     {
@@ -88,17 +88,17 @@
       },
       "config": {
         "sweepsOnly": {
-          "maxSweeps": 8,
+          "maxSweeps": 4,
           "maxTransposePasses": 0
         },
         "withTranspose": {
-          "maxSweeps": 8,
-          "maxTransposePasses": 8
+          "maxSweeps": 4,
+          "maxTransposePasses": 16
         }
       },
       "crossings": {
-        "sweepsOnly": 12147,
-        "withTranspose": 11567
+        "sweepsOnly": 931903,
+        "withTranspose": 878459
       }
     },
     {
@@ -121,17 +121,17 @@
       },
       "config": {
         "sweepsOnly": {
-          "maxSweeps": 8,
+          "maxSweeps": 4,
           "maxTransposePasses": 0
         },
         "withTranspose": {
-          "maxSweeps": 8,
-          "maxTransposePasses": 8
+          "maxSweeps": 4,
+          "maxTransposePasses": 16
         }
       },
       "crossings": {
-        "sweepsOnly": 13594,
-        "withTranspose": 11267
+        "sweepsOnly": 47393,
+        "withTranspose": 39969
       }
     },
     {
@@ -154,17 +154,17 @@
       },
       "config": {
         "sweepsOnly": {
-          "maxSweeps": 8,
+          "maxSweeps": 4,
           "maxTransposePasses": 0
         },
         "withTranspose": {
-          "maxSweeps": 8,
-          "maxTransposePasses": 8
+          "maxSweeps": 4,
+          "maxTransposePasses": 16
         }
       },
       "crossings": {
-        "sweepsOnly": 9306,
-        "withTranspose": 8464
+        "sweepsOnly": 127837,
+        "withTranspose": 112709
       }
     },
     {
@@ -187,17 +187,17 @@
       },
       "config": {
         "sweepsOnly": {
-          "maxSweeps": 8,
+          "maxSweeps": 4,
           "maxTransposePasses": 0
         },
         "withTranspose": {
-          "maxSweeps": 8,
-          "maxTransposePasses": 8
+          "maxSweeps": 4,
+          "maxTransposePasses": 16
         }
       },
       "crossings": {
-        "sweepsOnly": 12776,
-        "withTranspose": 11443
+        "sweepsOnly": 144451,
+        "withTranspose": 126710
       }
     }
   ]

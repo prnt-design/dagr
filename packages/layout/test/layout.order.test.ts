@@ -503,11 +503,18 @@ describe('barycenterOrder, the sweeps', () => {
    * A pin rather than an inequality, because what is being ruled out is a stop
    * that fires a round too early, and 893 is what firing at the right time is
    * worth. See the sweeps section of {@link barycenterOrder}.
+   *
+   * The budget is named rather than left to the default, and that is the point
+   * of the case rather than a detail of it: the comparison is between two stop
+   * rules at ONE budget, and M2.6c moved the default to 4, at which this graph
+   * has only two rounds to run and the two rules cannot come apart. Reading
+   * the budget off the default would have silently turned this into a case
+   * that asserts nothing the moment the default moved.
    */
   it('does not stop on the first fruitless round, which used to cost 18%', () => {
     const { graph, layers } = randomLayered(mulberry32(69), 150, 7, 320);
     const state = stateOf(graph, layers);
-    expect(countCrossings({ graph, layers: ordered(state) })).toBe(893);
+    expect(countCrossings({ graph, layers: ordered(state, { maxSweeps: 8 }) })).toBe(893);
   });
 
   /**
@@ -516,8 +523,9 @@ describe('barycenterOrder, the sweeps', () => {
    * run only when they are adjacent, and the reset of the counter is the whole
    * of what makes them so.
    *
-   * At the DEFAULT budget of 8 the two rules are indistinguishable, which is
-   * why no case above and no corpus pin below can defend this one. Eight sweeps
+   * At a budget of 8, which was the default until M2.6c and is twice it now,
+   * the two rules are indistinguishable, which is why no case above and no
+   * corpus pin below can defend this one. Eight sweeps
    * are four rounds, so there are only four round checks, and a fruitless round
    * with a fruitful one after it and a second fruitless one after that needs
    * three of them plus sweeps still left to run before the difference is worth
@@ -809,6 +817,15 @@ describe('barycenterOrder, on the bench corpora', () => {
    * The counts in the tables below are the first column of this one, so a
    * reader who reaches them after the golden file jumped by an order of
    * magnitude has the answer here rather than having to derive it.
+   *
+   * BOTH COLUMNS ARE THE STAGE AT ITS DEFAULTS, so M2.6c moved both of them: it
+   * is 74.7% on the 10k and 73.0% on the 1k at 4 sweeps and a cap of 16, where
+   * it was 74.2% and 71.7% at 8 and 8. The right-hand column moved too, up by
+   * 0.02% and 0.03%, which is the whole of what four fewer sweeps and eight
+   * more passes do to a layering arranged for a third of the drawing and
+   * scored over all of it. Both figures are
+   * therefore this milestone's rather than M2.4b's, and M2.4b's own pair is
+   * kept in the changelog entry that measured it.
    */
   it('cuts crossings by two thirds against a layering that ignores the chains', () => {
     const rows = corpora.map(([name, spec]) => {
@@ -819,8 +836,8 @@ describe('barycenterOrder, on the bench corpora', () => {
       return [name, consuming, ignored];
     });
     expect(rows).toEqual([
-      ['1k', 194_289, 685_551],
-      ['10k', 8_748_361, 33_932_556],
+      ['1k', 185_028, 685_764],
+      ['10k', 8_586_890, 33_939_378],
     ]);
     for (const [, consuming, ignored] of rows) {
       expect(Number(consuming)).toBeLessThan(Number(ignored) * 0.3);
@@ -835,6 +852,16 @@ describe('barycenterOrder, on the bench corpora', () => {
    * reached through `defaultStages`, which used to hold it: this column is the
    * roster order specifically, and reading it off the default would have
    * rewritten what the table compares the moment M2.6b moved the default here.
+   *
+   * THE SWEEP COLUMNS ARE WHY `maxSweeps` IS 4, and the two corpora reach that
+   * floor at different sweeps: the 10k at ONE, which is why every column from 1
+   * on holds the same number, and the 1k at THREE. Sweeps 5 through 8 buy
+   * nothing on either, which is what the shipped budget of 8 was spending.
+   * Columns at 1 and 3 are here for that reason rather than for symmetry: they
+   * are the two floors, and without them the table cannot say where either one
+   * is. The budget is not 2 because the 1k is still 2.8% above its floor there,
+   * and it is not 1 because `wide-600` in the golden corpus loses 8.4% at 2.
+   * See the sweeps section of {@link barycenterOrder}.
    */
   it('pins the seed comparison and the sweep curve, with the pass off', () => {
     const table = corpora.map(([name, spec]) => {
@@ -855,40 +882,60 @@ describe('barycenterOrder, on the bench corpora', () => {
         crossingsOf(state, roster),
         at(8, roster),
         at(0),
+        at(1),
         at(2),
+        at(3),
         at(4),
         at(8),
         at(16),
       ];
     });
     expect(table).toEqual([
-      ['1k', 703_757, 210_611, 456_261, 215_975, 210_163, 210_163, 210_163],
-      ['10k', 34_510_321, 9_150_607, 19_753_239, 8_972_421, 8_972_421, 8_972_421, 8_972_421],
+      ['1k', 703_757, 210_611, 456_261, 215_975, 215_975, 210_163, 210_163, 210_163, 210_163],
+      [
+        '10k',
+        34_510_321,
+        9_150_607,
+        19_753_239,
+        8_972_421,
+        8_972_421,
+        8_972_421,
+        8_972_421,
+        8_972_421,
+        8_972_421,
+      ],
     ]);
   }, 120_000);
 
   /**
    * The transpose curve at the default sweep budget, which is the measurement
-   * the cap of 8 was chosen on.
+   * `maxTransposePasses` is chosen on.
    *
-   * THE CAP OF 8 IS NO LONGER BOUGHT WHERE IT WAS, and this table is now the
-   * evidence for re-deriving it rather than for keeping it. Over a drawing whose
-   * chains are counted, 8 passes capture 17.5% of the fixed point's saving on
-   * the 10k (8,972,421 to 8,748,361, against 7,689,100 unbounded) and 33.4% on
-   * the 1k, where before they captured 84.3% and 81.9%. `order.ts` predicted
-   * exactly this collapse from a hand-expanded graph and put a number on it: a
-   * cap of 4 saving 1.4% rather than 10.7%. A cap of 4 here saves 1.38% on the
-   * 10k, so the prediction reproduces to two figures on the real thing.
+   * THE CAP OF 8 WAS BOUGHT AT A KNEE AND THERE IS NO LONGER A KNEE THERE, or
+   * anywhere else, which is the finding that moved it. Read the differences
+   * along either row: on the 10k every four passes buy between 124,007 and
+   * 76,699 crossings from 0 out to 32, and the rate keeps declining by about a
+   * fifth per doubling for hundreds of passes after that. Nothing on this curve
+   * picks out a cap. The old one had the marginal rate falling by a factor of
+   * three immediately past 8 and by half at every step after, over a drawing
+   * where a long edge was invisible to the counter.
    *
-   * Re-deriving the cap is deliberately not done here. It changes a shipped
-   * default on a measurement that also wants the sweep budget looked at (the
-   * 10k reaches its sweep floor at four sweeps in the table above, where it
-   * used to still be improving at sixteen), and that is a tuning task with its
-   * own before and after rather than a line in this one.
+   * SO 16 IS BOUGHT AGAINST THE SWEEPS RATHER THAN AGAINST THIS CURVE, which
+   * is the other half of M2.6c and the reason the two budgets stopped being
+   * equal. The sweep table above floors at 1 sweep on the 10k and 3 on the 1k,
+   * so a sweep past 4 buys nothing there, while a sweep costs 5.5 to 8 passes
+   * of this pass's time. The pair that ships, 4 and 16, is faster AND lower on
+   * both corpora and on all six golden graphs than the 8 and 8 it replaces.
+   * The full argument is the transpose section of {@link barycenterOrder}.
    *
-   * `Number.POSITIVE_INFINITY` is not a legal cap, deliberately and for the
-   * reason argued beside the option, so the fixed point is asked for as a cap
-   * far beyond the pass count either corpus needs.
+   * THE LAST COLUMN IS THE FIXED POINT AND THE OLD ONE WAS NOT. It used to be
+   * read off a cap of 200, described here as "far beyond the pass count either
+   * corpus needs". That is no longer true and was already false when it was
+   * written for the 10k: the pass now runs 187 times on the 1k and 675 on the
+   * 10k before it finds no improving swap, so a cap of 200 stops the 10k two
+   * thirds of the way and its 7,689,100 was never a fixed point. 1,000 is
+   * asked for instead, and `Number.POSITIVE_INFINITY` is still not a legal cap
+   * for the reason argued beside the option.
    */
   it('pins the transpose curve and the fixed point it is bought against', () => {
     const table = corpora.map(([name, spec]) => {
@@ -896,13 +943,23 @@ describe('barycenterOrder, on the bench corpora', () => {
 
       const at = (maxTransposePasses: number): number =>
         crossingsOf(state, barycenterOrder({ maxTransposePasses }).run(state).layers);
-      return [name, at(0), at(4), at(8), at(16), at(200)];
+      return [name, at(0), at(4), at(8), at(12), at(16), at(24), at(32), at(1_000)];
     });
     expect(table).toEqual([
-      ['1k', 210_163, 201_029, 194_289, 185_028, 162_662],
-      ['10k', 8_972_421, 8_848_414, 8_748_361, 8_586_890, 7_689_100],
+      ['1k', 210_163, 201_029, 194_289, 189_048, 185_028, 178_469, 174_318, 162_662],
+      [
+        '10k',
+        8_972_421,
+        8_848_414,
+        8_748_361,
+        8_663_589,
+        8_586_890,
+        8_453_276,
+        8_344_656,
+        7_637_257,
+      ],
     ]);
-  }, 120_000);
+  }, 300_000);
 
   /**
    * Determinism at the default cap, on the corpora rather than on a witness,

@@ -124,7 +124,8 @@ of doc prose.
   `grid-position` does per row and this stage cannot do at all.
 
 - `maxTransposePasses` on `BarycenterOrderOptions`, defaulting to 8, where zero
-  means no transpose at all. It bounds PASSES only, and it rejects a
+  means no transpose at all. (**The default is 16 as of M2.6c**; the rest of
+  this entry is what M2.6 shipped and is left as the record of it.) It bounds PASSES only, and it rejects a
   non-integer, a negative and `Number.POSITIVE_INFINITY` with
   `InvalidConfigError` naming the field, checked when the stage is built rather
   than when it runs. That is `maxSweeps`'s rule, for `maxSweeps`'s reason: a
@@ -145,10 +146,10 @@ of doc prose.
   `defaultStages.order` at `barycenter-order`, so a caller who names no order
   stage now gets this pass and everything in front of it. It is left here
   because it is what was true when the pass landed. The two crossing counts in
-  this paragraph are NOT superseded: they are still what the stage produces,
-  and they expire with M2.4b rather than with the flip. M2.4b has since landed
-  and did not re-derive them, so they are expired and not replaced. See the
-  M2.6b entry under Changed.
+  this paragraph WERE superseded, twice: M2.4b's consumption of the chains made
+  the counter see sixteen times as much of the drawing, and M2.6c then moved
+  both budgets. The stage reaches 185,028 and 8,586,890 today. See the M2.6c
+  entry under Changed.
 
   The sharpest case, because it is the one that reads as a contradiction:
   `barycenterOrder({ maxSweeps: 0 })` used to mean "the seed permutation,
@@ -157,6 +158,9 @@ of doc prose.
   `barycenterOrder({ maxSweeps: 0, maxTransposePasses: 0 })`.
 
   What the cap is measured against is worth carrying, because it will expire.
+  (It did. M2.6c re-derived it and found no knee at all on the curve over the
+  drawing the stage sees now, and a fixed point at 675 passes rather than 60.
+  The cap is 16 and `maxSweeps` is 4, so the coincidence below is also over.)
   Eight is the knee of the curve: it captures 81.9% of what an unbounded run to
   the fixed point would save, for 16.1% of the extra time. It matches
   `maxSweeps`'s default of 8 by coincidence and the two are deliberately
@@ -199,7 +203,7 @@ of doc prose.
   are split and the chains are read here now, so the two rules do coincide, which
   is the argument coming true. The three counts above are pre-M2.2c AND
   pre-consumption and were never refreshed: over the drawing this stage sees
-  today it reaches 8,748,361 crossings on the 10k at its own defaults, which is
+  today it reaches 8,586,890 crossings on the 10k at its own defaults, which is
   `test/layout.order.test.ts`'s pin, counted over 214,222 segments rather than
   the 10,528 edges these three were counted over.)
 
@@ -216,7 +220,10 @@ of doc prose.
   `maxSweeps` defaults to 8: the 10k corpus goes 94,991 at the seed, 50,735 at
   2, 40,217 at 4, 35,114 at 8 and 32,503 at 16, costing about 5.5ms, 9.5ms,
   13.5ms, 21ms and 38ms. Sixteen sweeps buy another 7% of what is left for
-  something under double the time. It takes a non-negative INTEGER and rejects
+  something under double the time. (**The default is 4 as of M2.6c.** These
+  five counts are this file's copy of that curve, kept because the curve over
+  the drawing the stage sees today is a different shape: flat from three sweeps
+  rather than still falling at sixteen.) It takes a non-negative INTEGER and rejects
   everything else, including `Number.POSITIVE_INFINITY`, with an
   `InvalidConfigError` thrown at the call that names the budget; there is no
   optimality condition here for an unbounded run to converge to.
@@ -386,6 +393,50 @@ of doc prose.
   (M2.2 review)
 
 ### Changed
+
+- **Both order-stage budgets changed, so `barycenterOrder()` and
+  `barycenterOrderStage` return different layers than they did, with no type
+  change to warn a caller.** `maxSweeps` goes from 8 to 4 and
+  `maxTransposePasses` from 8 to 16. This is the category this file exists for,
+  and it is the re-derivation M2.6 and M2.6b both recorded as owed once M2.4b
+  made every edge visible to the counter. (M2.6c)
+
+  **What it buys, on both axes at once.** On the 10k benchmark corpus the stage
+  reaches 8,586,890 crossings where the pair it replaces reached 8,748,361, and
+  on the 1k 185,028 against 194,289: 1.85% and 4.77% fewer. All six graphs of
+  the golden regression corpus are lower too. And it is FASTER: 20% on the 1k,
+  and on the 10k three separate runs read 4.0%, 7.1% and 7.7% against 12%
+  predicted from the component costs, on a machine where two runs of one
+  configuration differ by about 12%.
+
+  **Why the two stopped being equal**, which the old pair being 8 and 8 was
+  always careful to call a coincidence. The sweep curve floors after ONE sweep
+  on the 10k and three on the 1k, so sweeps 5 through 8 were buying nothing at
+  all; the transpose curve has no knee anywhere, its marginal rate falling by
+  about a fifth per doubling for hundreds of passes. A sweep costs 5 to 8 passes
+  of the pass's time. So the budget moves from the sweeps to the pass, and the
+  cap stops at 16 because that is the last value that leaves the whole stage
+  faster than before on both corpora rather than only on one.
+
+  **The knee the old cap was chosen at is gone, and so is the fixed point it
+  was measured against.** The pass now runs 675 times on the 10k and 187 on the
+  1k before it finds no improving swap, where the figures on record were 60 and
+  19, so a cap of 200 stops the 10k two thirds of the way. What the old table
+  got right is the prediction it carried: it forecast the saving collapsing to
+  "1.4% at a cap of 4" once every edge became visible, and a cap of 4 measures
+  1.38%.
+
+  **The tie rule is still owed one.** It was chosen on the same pre-chain
+  drawing as the cap and M2.6c did not re-run it.
+
+- **`order-crossings.golden.json` is now scored over the drawing's segments**,
+  not over the graph's own adjacent-layer edges. From the moment M2.4b's chains
+  were consumed the harness ordered each entry over the segments and then
+  counted only the edges, which is not a population the stage optimises and
+  moves the wrong way when the stage improves. Fixing that alone multiplies
+  every count by between 2.5x and 76x, the spread being each graph's long-edge
+  share, and the budgets above then move the shipping column down on all six.
+  Both causes are attributed separately in the file's own header. (M2.6c)
 
 - **Every long edge is now split into a dummy chain, so long edges route
   differently and a layout can be wider.** The default rank stage splits an edge

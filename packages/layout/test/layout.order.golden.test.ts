@@ -66,18 +66,46 @@ import type { RankedState, Size } from '../src/types.js';
  * more force to a committed file: two generators drift, and a golden file
  * against a drifted generator pins numbers for a graph nobody else has.
  *
- * WHAT LAST MOVED IT, and it was not this stage either time.
+ * WHAT LAST MOVED IT.
  *
- * Most recently, the order stage began reading the rank stage's dummy chains,
- * so an edge that spans several layers is now ordered and counted as the
- * segments it is drawn as rather than being invisible. Every count here rose,
- * between 1.65x and 3.01x, and NONE of that is a quality regression: the
- * population being counted grew by an order of magnitude at the same moment.
- * The like-for-like comparison is in `layout.order.test.ts`, both layerings
- * scored over the full segment population, and there the layering that reads
- * the chains has 8,748,361 crossings on the 10k bench corpus against 33,932,556
- * for the one that ignores them. This file cannot show that, because it records
- * one layering per entry rather than two.
+ * Most recently, M2.6c, and TWO causes moved every number in the same commit,
+ * so both are attributed separately below rather than left as one diff with a
+ * shared story. Doing that is not optional here: one of them multiplies the
+ * counts and the other moves them by a few percent, and the small one is the
+ * one the commit was about.
+ *
+ * CAUSE ONE, THE POPULATION, AND IT IS A FIX RATHER THAN A CHANGE OF MIND. The
+ * `countCrossings` call in `measure` left `virtualChains` out while
+ * `rankedState` passed them in, so from the moment M2.4b's chains were consumed
+ * this file ordered every entry over the drawing's segments and then counted
+ * only the graph's own adjacent-layer edges. That is not a population the stage
+ * optimises, and it moves the WRONG WAY when the stage improves, which is
+ * exactly what it did here. Fixing it alone, at the budgets that shipped
+ * before, multiplies the counts by between 2.5x and 76x: `sparse-2000` least at
+ * 13,594 to 47,393 with 10% long edges, `dense-1200` most at 12,147 to 909,301
+ * with 40% of them. The spread IS the point. It is the share of each graph that
+ * was being ordered and not counted.
+ *
+ * CAUSE TWO, THE DEFAULTS, which is what the commit was for: `maxSweeps` 8 to 4
+ * and `maxTransposePasses` 8 to 16. Against the population fix alone, the
+ * `sweepsOnly` column rises on five of six entries, between 1.35% and 3.48%,
+ * and that is the sweep cut showing through with nothing to pay for it: this
+ * corpus is still improving at 8 sweeps where both bench corpora have floored
+ * by 3. The `withTranspose` column, which is the one that ships, falls on all
+ * six, between 0.12% and 4.29%, because the cap of 16 buys back more than the
+ * four sweeps cost. Those two columns disagreeing is the trade the
+ * re-derivation is, on the only corpus in the package that could show it.
+ *
+ * Before that, the order stage began reading the rank stage's dummy chains, so
+ * an edge that spans several layers began being ORDERED as the segments it is
+ * drawn as. Every count here rose, between 1.65x and 3.01x, and none of that
+ * was a quality regression either: the layering changed to suit a population
+ * this file was not yet counting. The like-for-like comparison is in
+ * `layout.order.test.ts`, both layerings scored over the full segment
+ * population, and there the layering that reads the chains has 8,748,361
+ * crossings on the 10k bench corpus against 33,932,556 for the one that ignores
+ * them. This file cannot show that, because it records one layering per entry
+ * rather than two.
  *
  * Before that, M2.2c replaced the cycle
  * breaker, which changes the RANKING every entry here is ordered against, and
@@ -159,15 +187,21 @@ type CorpusEntry = Omit<GoldenEntry, 'built' | 'config' | 'crossings'>;
  * The configuration each column is measured under, both budgets named in full
  * so that neither column depends on a default to be reproducible.
  *
- * 8 and 8 are the stage's own defaults, written out here rather than imported
+ * 4 and 16 are the stage's own defaults, written out here rather than imported
  * because `order.ts` keeps those constants to itself, and held to that by the
  * last test in this file. The `withTranspose` column is meant to be what the
  * stage does out of the box, so a default that moved away from these numbers
  * would leave the file recording a run nobody gets.
+ *
+ * They were 8 and 8 until M2.6c re-derived them, and this corpus is part of
+ * why they moved apart rather than a bystander to it: five of these six graphs
+ * are still improving at 8 sweeps where both bench corpora have floored by 3,
+ * so cutting the sweep budget on the bench corpora alone would have cost 1.3%
+ * to 3.4% here. The cap of 16 more than pays that back on all six.
  */
 const stageConfig: StageConfigs = {
-  sweepsOnly: { maxSweeps: 8, maxTransposePasses: 0 },
-  withTranspose: { maxSweeps: 8, maxTransposePasses: 8 },
+  sweepsOnly: { maxSweeps: 4, maxTransposePasses: 0 },
+  withTranspose: { maxSweeps: 4, maxTransposePasses: 16 },
 };
 
 /** The corpus, as the arguments that produce it. The numbers are in the file. */
@@ -288,9 +322,10 @@ function buildGraph(entry: CorpusEntry): Graph {
  * Passing them through was briefly a no-op, because neither the order index nor
  * `countCrossings` read `virtualChains` at that point and a dummy was an
  * isolated node contributing nothing to count. Both read them now, through
- * `segments.ts`, so an edge with a chain arrives as one segment per gap it
- * crosses and every count in the committed file moved: see the header's WHAT
- * LAST MOVED IT.
+ * `segments.ts`, so an edge with a chain arrives at the stage as one segment
+ * per gap it crosses. What this state hands over and what `measure` counted
+ * then came apart for one milestone, the stage reading the chains and the
+ * counter not: see the header's WHAT LAST MOVED IT, cause one.
  *
  * `ranks` is filtered to the roster this state declares. The stage ranks the
  * dummies too, and handing back ranks for ids no roster holds would make
@@ -329,8 +364,20 @@ function rankedState(graph: Graph): RankedState {
 function measure(entry: CorpusEntry): GoldenEntry {
   const graph = buildGraph(entry);
   const state = rankedState(graph);
+  // Scored over the SEGMENTS of the drawing, which is the population the stage
+  // optimises. Until M2.6c this call left `virtualChains` out while the state
+  // above passed them in, so every entry was ordered with the chains and
+  // counted without them: the file recorded crossings among the graph's own
+  // adjacent-layer edges in a layering arranged for a population sixteen times
+  // larger. That is not a metric the stage has an opinion about, and it moves
+  // the wrong way when the stage improves. See the header for what each of the
+  // two causes contributed to the diff that fixed it.
   const scoreAt = (config: StageConfig): number =>
-    countCrossings({ graph, layers: barycenterOrder(config).run(state).layers });
+    countCrossings({
+      graph,
+      layers: barycenterOrder(config).run(state).layers,
+      virtualChains: state.virtualChains,
+    });
   return {
     ...entry,
     built: {

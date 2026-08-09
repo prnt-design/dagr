@@ -579,11 +579,16 @@ describe('barycenterOrder, where the transpose pass runs', () => {
     expect(ordered(state, { maxTransposePasses: 8 })).toEqual(off);
   });
 
-  it('defaults to a cap of 8 passes', () => {
+  it('defaults to a cap of 16 passes', () => {
     const { graph, layers } = randomLayered(mulberry32(17), 120, 6, 400);
     const state = stateOf(graph, layers);
-    expect(ordered(state)).toEqual(ordered(state, { maxTransposePasses: 8 }));
+    expect(ordered(state)).toEqual(ordered(state, { maxTransposePasses: 16 }));
     expect(ordered(state)).not.toEqual(ordered(state, { maxTransposePasses: 0 }));
+    // And not the 8 it was until M2.6c re-derived it, which is the assertion
+    // that fails if the constant is reverted rather than changed to something
+    // else. The two caps reach different layerings on this graph, so a stage
+    // that quietly went back to 8 does not pass by reaching the same answer.
+    expect(ordered(state)).not.toEqual(ordered(state, { maxTransposePasses: 8 }));
   });
 
   /**
