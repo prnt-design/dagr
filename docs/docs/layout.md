@@ -965,14 +965,6 @@ graphs are still improving at 8 sweeps, by 1.35% to 3.48%. Those sweeps are not
 worthless everywhere. They are worth less than the same milliseconds spent in
 the transpose pass, which is the trade the next section measures.
 
-The table above replaces one taken before M2.4b's chains were consumed, when
-the counter saw a quarter of the edges: 7,933 at the 1k's seed and 4,619, 3,880,
-3,605 and 3,467 at 2, 4, 8 and 16, and 94,991 and 50,735, 40,217, 35,114 and
-32,503 on the 10k, the 10k costing about 5.5ms at the seed and 9.5ms, 13.5ms,
-21ms and 38ms. Those are kept in the changelog rather than here, and the shape
-is the difference worth seeing: that curve was still falling at 16 and this one
-is flat from 3.
-
 `maxSweeps` bounds the sweeps and
 nothing else, the way `maxIterations` bounds pivots only. Zero is legal and
 means "seed only". Unlike `maxIterations` it does not take
@@ -980,6 +972,21 @@ means "seed only". Unlike `maxIterations` it does not take
 converge to, so "as many as it takes" has nothing to mean. A non-integer or
 negative budget is an `InvalidConfigError` naming the field, thrown at the call
 that builds the stage rather than at the run.
+
+**The table this replaces**, kept here rather than pointed at, because this
+page is the only copy of it outside `order.ts`. It was taken before M2.4b's
+chains were consumed, when the counter saw a quarter of the edges:
+
+| sweeps | 1k crossings | 10k crossings | 10k cost |
+| --- | --- | --- | --- |
+| 0 (the seed) | 7,933 | 94,991 | 5.5ms |
+| 2 | 4,619 | 50,735 | 9.5ms |
+| 4 | 3,880 | 40,217 | 13.5ms |
+| 8 (the default then) | 3,605 | 35,114 | 21ms |
+| 16 | 3,467 | 32,503 | 38ms |
+
+The shape is the difference worth seeing: that curve was still falling at 16
+and the one above is flat from three sweeps.
 
 Every timing on this page is one machine's, taken to justify a default rather
 than to tell you what the stage will cost you, exactly as the figures under
@@ -1046,9 +1053,10 @@ them. The alternatives were measured at a sweep budget of 8 on the 10k: once at
 the end reaches 32,677 crossings, after every full round 32,798, and after
 every sweep 32,854, so the cheapest placement is also the best one, and it is
 cheapest by a wide margin (30.1ms against 48.6ms and 125.5ms in the prototype
-the three were compared in). Those three are from before ties were allowed,
-which is why none of them is the 30,318 above; what they compare is the
-placements against each other.
+the three were compared in). Those three are from before ties were allowed and
+from before the chains were counted, which is why none of them is anywhere near
+the 8,586,890 this stage now reaches; what they compare is the placements
+against each other, and the placement they chose is unchanged.
 
 **The swap delta is exact.** For an adjacent pair, the only crossings that can
 change are the ones in the gap above and the gap below involving edges incident
@@ -1139,14 +1147,32 @@ the same rule as `maxSweeps`, including rejecting `Number.POSITIVE_INFINITY`,
 and a non-integer or negative value is an `InvalidConfigError` naming the
 field, thrown at the call that builds the stage.
 
-**What the cap table used to say**, kept because the prediction on it is the
-one this page got right. It was measured at a sweep budget of 8 on a graph
-where the counter saw about a quarter of the edges: 35,114 crossings with the
-pass off, and 31,369, 30,318 and 29,658 at caps of 4, 8 and 16, with a fixed
-point of 29,260 after 60 passes. So the pass removed 13.7% at a cap of 8 and
-captured 84.3% of the fixed point's saving. This page predicted, from a
+**The cap table this replaces**, kept whole and marked rather than summarised,
+because the argument above is partly an argument about its SHAPE and the
+marginal column is the only evidence for that. It was measured at a sweep budget
+of 8 on a graph where the counter saw about a quarter of the edges, against
+35,114 crossings and 16.32ms with the pass off:
+
+| cap | 10k crossings | saving | extra time | crossings per ms |
+| --- | --- | --- | --- | --- |
+| 4 | 31,369 | 10.7% | +2.65ms | 1,413 |
+| 6 | 30,677 | 12.6% | +4.15ms | 461 |
+| 8 (the default then) | 30,318 | 13.7% | +4.93ms | 460 |
+| 12 | 29,892 | 14.9% | +6.92ms | 214 |
+| 16 | 29,658 | 15.5% | +9.29ms | 99 |
+| 32 | 29,358 | 16.4% | +16.91ms | 39 |
+| fixed point (60 passes) | 29,260 | 16.7% | +30.61ms | 7 |
+
+with the 1k reaching 3,005 against 3,605 for +0.41ms and its own fixed point at
+2,959 after 19 passes. Eight captured 81.9% of the full saving for 16.1% of the
+extra time, and the rate held at or above 460 up to 8, fell to 214 immediately
+past it, then by at least half at every further step. That is the knee. Compare
+the last column with the one above it, which falls by a fifth per doubling and
+never stops.
+
+What this table got right is the prediction it carried: it forecast, from a
 hand-expanded corpus, that the saving would collapse to "1.4% at a cap of 4"
-once every edge became visible. It measures 1.38%.
+once every edge became visible. A cap of 4 measures 1.38%.
 
 **Two things on that old table did not survive the re-derivation**, and both had
 been written here as settled. The knee, above. And the fixed point: 60 passes on
@@ -1156,7 +1182,9 @@ far beyond what either corpus needs, stops the 10k two thirds of the way.
 **The tie rule is still owed a re-derivation.** It was chosen on the same
 pre-chain drawing as the cap, winning all six configurations it was tried in,
 and M2.6c did not re-run it: those six were sweep budgets and caps this stage no
-longer uses, over a population sixteen times smaller. It is load-bearing, since
+longer uses, over a population twenty times smaller: those six were measured
+before M2.2c, when the counter saw 10,528 of the 10k's 40,000 edges against
+today's 214,222 segments. It is load-bearing, since
 the exclusion of unanchored nodes above exists only because of it, and
 re-deriving it means re-running the strict-versus-ties comparison at 4 and 16.
 
@@ -1704,7 +1732,7 @@ without being selectable at all, `brandes-koepf-position`, for the reason below.
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
 | rank | `longest-path-rank` | Breaks cycles with a least-squares feedback arc set, ranks by longest path, then splits every long edge into a [dummy chain](#dummy-chains). Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height, and it does NOT split. | Sharing the splitter with `network-simplex-rank`. |
-| order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass, over every segment of the drawing including the pieces of a split long edge. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). Its two budgets were re-derived in M2.6c and are now 4 sweeps and a cap of 16. | Its tie rule re-derived: it is the last decision here still measured on a drawing a third this size. |
+| order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass, over every segment of the drawing including the pieces of a split long edge. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). Its two budgets were re-derived in M2.6c and are now 4 sweeps and a cap of 16. | Its tie rule re-derived: it is the last decision here still measured over a population twenty times smaller than the one the stage sees. |
 | position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. `brandes-koepf-position` is a real algorithm that is implemented but not exported, for the reason below this table. | A compaction that is not the longest-path substitute, which is what now blocks Brandes-Koepf, and then a decision about the default. |
 | route | `straight-route` | Straight segments from the source centre through each of the edge's dummies to the target centre, which is two points for an edge with no chain. | Border attachment, obstacle detours and splines, monotone in the rank axis (M2.8). |
 

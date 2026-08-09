@@ -1472,7 +1472,7 @@ findings addressed or logged, docs land with the feature.
   the stage improves: at the new budgets it read `dense-1200` as 20.5% worse
   while the metric the stage optimises had it slightly better. The two causes
   are attributed separately in the file's header rather than left as one diff,
-  because the population fix multiplies the counts by between 2.5x and 76x and
+  because the population fix multiplies the counts by between 3.5x and 76x and
   the budget change moves them by a few percent, and the small one is the one
   the milestone was about.
   THE TIE RULE IS STILL OWED A RE-DERIVATION and this run did not take it. It

@@ -81,7 +81,7 @@ import type { RankedState, Size } from '../src/types.js';
  * only the graph's own adjacent-layer edges. That is not a population the stage
  * optimises, and it moves the WRONG WAY when the stage improves, which is
  * exactly what it did here. Fixing it alone, at the budgets that shipped
- * before, multiplies the counts by between 2.5x and 76x: `sparse-2000` least at
+ * before, multiplies the counts by between 3.5x and 76x: `sparse-2000` least at
  * 13,594 to 47,393 with 10% long edges, `dense-1200` most at 12,147 to 909,301
  * with 40% of them. The spread IS the point. It is the share of each graph that
  * was being ordered and not counted.

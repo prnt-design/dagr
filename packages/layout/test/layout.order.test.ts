@@ -923,7 +923,7 @@ describe('barycenterOrder, on the bench corpora', () => {
    * SO 16 IS BOUGHT AGAINST THE SWEEPS RATHER THAN AGAINST THIS CURVE, which
    * is the other half of M2.6c and the reason the two budgets stopped being
    * equal. The sweep table above floors at 1 sweep on the 10k and 3 on the 1k,
-   * so a sweep past 4 buys nothing there, while a sweep costs 5.5 to 8 passes
+   * so a sweep past 4 buys nothing there, while a sweep costs 5 to 8 passes
    * of this pass's time. The pair that ships, 4 and 16, is faster AND lower on
    * both corpora and on all six golden graphs than the 8 and 8 it replaces.
    * The full argument is the transpose section of {@link barycenterOrder}.

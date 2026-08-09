@@ -889,12 +889,21 @@ function applyHint(
  * everywhere. They are just worth less than the same milliseconds spent in the
  * transpose pass, which is the trade the next section makes and measures.
  *
- * The pre-M2.4b figures this table replaces are kept in `CHANGELOG.md`'s M2.6
- * entry: 7,933 at the 1k's seed and 4,619, 3,880, 3,605 and 3,467 at 2, 4, 8
- * and 16, and 94,991 and 50,735, 40,217, 35,114 and 32,503 on the 10k. They
- * were taken when a long edge was invisible to the counter, so they do not
- * compare with the table above, and the shape is the difference worth seeing:
- * that curve was still falling at 16 and this one is flat from 3.
+ * THE TABLE THIS REPLACES IS KEPT HERE, marked, because this file and
+ * `docs/docs/layout.md` are the only copies of it and the argument above is
+ * partly an argument about its shape:
+ *
+ * | sweeps | 1k    | 10k    | 10k cost |
+ * | ------ | ----- | ------ | -------- |
+ * | 0      | 7,933 | 94,991 |    5.5ms |
+ * | 2      | 4,619 | 50,735 |    9.5ms |
+ * | 4      | 3,880 | 40,217 |   13.5ms |
+ * | 8      | 3,605 | 35,114 |     21ms |
+ * | 16     | 3,467 | 32,503 |     38ms |
+ *
+ * taken when a long edge was invisible to the counter, so no row of it compares
+ * with a row of the table above. The shape is what does: that curve was still
+ * falling at 16 and this one is flat from 3.
  *
  * ## The transpose pass
  *
@@ -1073,17 +1082,34 @@ function applyHint(
  * across a rerun on the same state, a second graph built from scratch in the
  * same insertion order, and a fresh stage object.
  *
- * THE CAVEAT CAME TRUE, THE CAP WAS RE-DERIVED, AND THIS IS THE RECORD OF THE
- * PREDICTION IT SETTLED. This section predicted, from a hand-expanded 10k
- * before any of it was built, that the saving would collapse once every edge
- * became visible: the capped saving falling from 10.7% to 1.4% AT A CAP OF 4.
- * A cap of 4 now measures 1.38%, so the prediction reproduced to two figures
- * on the real thing, and everything above it in this section was re-measured
- * rather than reasoned about from that agreement. The old table's own numbers
- * were taken when the counter saw about a quarter of the edges, and they are
- * kept in `CHANGELOG.md`'s M2.6 entry rather than here: 35,114 with the pass
- * off and 31,369, 30,318 and 29,658 at caps of 4, 8 and 16, its fixed point
- * 29,260 after 60 passes.
+ * THE CAP TABLE THIS REPLACES, KEPT WHOLE AND MARKED rather than summarised,
+ * for the reason it gave for carrying its own last three rows: without the
+ * marginal column the claim above about its shape cannot be checked against it.
+ * Measured at a sweep budget of 8 on the 10k, against 35,114 crossings and
+ * 16.32ms with the pass off, when the counter saw about a quarter of the edges:
+ *
+ * | cap             | 10k crossings | saving | extra time | crossings per ms |
+ * | --------------- | ------------- | ------ | ---------- | ---------------- |
+ * | 4               | 31,369        | 10.7%  | +2.65ms    | 1,413            |
+ * | 6               | 30,677        | 12.6%  | +4.15ms    | 461              |
+ * | 8 (the default) | 30,318        | 13.7%  | +4.93ms    | 460              |
+ * | 12              | 29,892        | 14.9%  | +6.92ms    | 214              |
+ * | 16              | 29,658        | 15.5%  | +9.29ms    | 99               |
+ * | 32              | 29,358        | 16.4%  | +16.91ms   | 39               |
+ * | fixed point     | 29,260        | 16.7%  | +30.61ms   | 7                |
+ *
+ * where the fixed point took 60 passes, and the 1k reached 3,005 against 3,605
+ * for +0.41ms with its own fixed point at 2,959 after 19. Eight captured 81.9%
+ * of the full saving for 16.1% of the extra time: the rate held at or above 460
+ * up to 8, fell to 214 immediately past it, then by at least half at every
+ * further step. That is a knee, and it was a real one.
+ *
+ * THE PREDICTION THAT TABLE CARRIED WAS SETTLED AND IT WAS RIGHT. This section
+ * predicted, from a hand-expanded 10k before any of it was built, that the
+ * saving would collapse once every edge became visible: from 10.7% to 1.4% AT A
+ * CAP OF 4. A cap of 4 now measures 1.38%, so it reproduced to two figures on
+ * the real thing. Everything above was still re-measured rather than reasoned
+ * about from that agreement.
  *
  * TWO THINGS DID NOT SURVIVE THE RE-DERIVATION AND ARE WORTH NAMING, because
  * both were stated here as settled. The knee, above. And the FIXED POINT: this
@@ -1096,7 +1122,9 @@ function applyHint(
  * THE TIE RULE IS STILL OWED ONE. It was measured on the same pre-chain drawing
  * as the cap, it won all six configurations it was tried in there, and nothing
  * in M2.6c re-ran it: the six configurations were sweep budgets and caps this
- * stage no longer uses, over a population sixteen times smaller. The rule is
+ * stage no longer uses, over a population twenty times smaller: those six were
+ * measured before M2.2c, when the counter saw 10,528 of the 10k's 40,000 edges
+ * against today's 214,222 segments. The rule is
  * load-bearing (see the exclusion above, which exists only because of it) and
  * re-deriving it means re-running the strict-versus-ties comparison at 4 and
  * 16, which is a smaller task than this one was and is not folded into it.

@@ -429,12 +429,19 @@ of doc prose.
   **The tie rule is still owed one.** It was chosen on the same pre-chain
   drawing as the cap and M2.6c did not re-run it.
 
+  **To keep the layers you had**, name both budgets:
+  `barycenterOrder({ maxSweeps: 8, maxTransposePasses: 8 })` reproduces exactly
+  what `barycenterOrderStage` returned before this entry. Nothing about the
+  stage other than the two numbers changed, so that is the whole of the
+  migration, and it is worth saying because no type change warns a caller who
+  never named a budget.
+
 - **`order-crossings.golden.json` is now scored over the drawing's segments**,
   not over the graph's own adjacent-layer edges. From the moment M2.4b's chains
   were consumed the harness ordered each entry over the segments and then
   counted only the edges, which is not a population the stage optimises and
   moves the wrong way when the stage improves. Fixing that alone multiplies
-  every count by between 2.5x and 76x, the spread being each graph's long-edge
+  every count by between 3.5x and 76x, the spread being each graph's long-edge
   share, and the budgets above then move the shipping column down on all six.
   Both causes are attributed separately in the file's own header. (M2.6c)
 
