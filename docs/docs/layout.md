@@ -641,11 +641,11 @@ segments: the one the order stage produces reading the chains has 8,586,890
 crossings, the one it produces ignoring them has 33,939,378. A 75% cut, and 73%
 on the 1k. (Both sides are the order stage at its defaults, so M2.6c's
 re-derivation of those moved both; M2.4b measured the pair at 8,748,361 and
-33,932,556, a 74% cut and 72%.) The same change takes the default position stage's total horizontal
-segment length down 66% on the 10k and 63% on the 1k. Ignoring the chains never
-made those crossings go away, it made them invisible: the long edges were drawn
-and crossed each other either way, and a stage that could not see them arranged
-the layers for the third of the drawing it could.
+33,932,556, a 74% cut and 72%.) The same change takes the default position
+stage's total horizontal segment length down 66% on the 10k and 63% on the 1k.
+Ignoring the chains never made those crossings go away, it made them invisible:
+the long edges were drawn and crossed each other either way, and a stage that
+could not see them arranged the layers for the third of the drawing it could.
 
 There is a period in this package's history where that was the state of things.
 The ranker split every long edge one milestone and nothing read the chains until
