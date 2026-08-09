@@ -1316,6 +1316,8 @@ findings addressed or logged, docs land with the feature.
   3,557, 10k 54,744 against 54,502 the other way) and not a wash on the one it
   does (35,114 against 40,276 on the 10k). It is not a corner case either, 120
   of the 1k's nodes and 1,101 of the 10k's have no neighbour in the layer above.
+  THOSE LAST TWO ARE PRE-M2.2c and are 118 and 814 against the ranking that
+  ships; the docstring carries the current pair and M2.6d corrected it there.
   And the sort key is barycenter first with the median as the tiebreak, which
   splits the four seed-and-corpus combinations two and two and is chosen on the
   10k from the walk that ships (35,114 against 35,396).
@@ -1380,8 +1382,11 @@ findings addressed or logged, docs land with the feature.
   THE CAP HAS SINCE BEEN RE-DERIVED AND IS 16, in M2.6c, along with `maxSweeps`
   at 4, so the coincidence is over and the two constants now differ. The knee
   the cap was chosen at does not exist over the drawing the stage sees today.
-  THE TIE RULE HAS NOT BEEN RE-DERIVED and is the only one of this entry's five
-  rules still measured against the graph M2.4b replaced.
+  THE TIE RULE HAS SINCE BEEN RE-DERIVED TOO, in M2.6d, and it is UNCHANGED, so
+  all five of this entry's rules are now measured against the drawing the stage
+  orders. Taking ties reaches 8,586,890 on the 10k against 8,921,937 for the
+  strict rule and 185,028 against 207,110 on the 1k, and wins all six golden
+  graphs. See M2.6d's entry.
 - [x] **M2.6b** Order default flip and bench rebaseline. Touches
   `packages/layout` and `bench`. `defaultStages.order` moves from
   `insertion-order` to `barycenter-order`, and the `pipeline` benchmark entries
@@ -1426,8 +1431,9 @@ findings addressed or logged, docs land with the feature.
   from re-deriving these: it pins what the stage reaches, not what the cap costs
   and buys.
   M2.6c HAS SINCE PAID MOST OF THAT DEBT: both budgets and all four figures are
-  re-derived. What it did not take is the tie rule, and the entry below says so
-  in its own words.
+  re-derived. What it did not take is the tie rule.
+  M2.6d TOOK THE TIE RULE TOO and it is unchanged, so nothing in this entry is
+  still owed.
 - [x] **M2.6c** Order budget re-derivation. Touches `packages/layout` and
   `docs`. Both budgets of `barycenter-order` re-derived over the drawing the
   stage sees now that M2.4b's chains are read, which is the debt M2.6 and M2.6b
@@ -1508,6 +1514,69 @@ findings addressed or logged, docs land with the feature.
   load-bearing, since the unanchored-node exclusion exists only because of it.
   Re-running the strict-versus-ties comparison at 4 and 16 is a smaller task
   than this one was, which is exactly why it is not folded into it.
+  M2.6d TOOK IT and the rule is unchanged. See the entry below.
+- [x] **M2.6d** Order tie-rule re-derivation. Touches `packages/layout` and
+  `docs`. The last decision in the order stage still measured against a drawing
+  it no longer sees: the transpose pass takes a swap when the delta is negative
+  OR EXACTLY ZERO, and that was chosen before M2.2c, in six configurations of
+  sweep budget and cap the stage no longer uses, over a population twenty times
+  smaller than the one it orders today.
+  WHAT SHIPPED: NOTHING, AND THAT IS THE RESULT. The rule is kept. No constant
+  moved, no default moved, no count in the golden file or in either pinned table
+  moved, and there is no migration for a caller. What changed is the evidence:
+  the strict-versus-ties comparison is re-run at the budgets that ship, 4 sweeps
+  and a cap of 16, over the drawing's 214,222 segments, on both bench corpora
+  and all six golden graphs, and taking ties wins all eight.
+  THE FIGURES ARE DELIBERATELY NOT COPIED HERE, which is the rule M2.6 set for
+  the cap curve two entries up and which applies with more force to a table that
+  M2.8 will move again: they live in the transpose section of `barycenterOrder`'s
+  docstring, the two bench-corpus rows are pinned in `layout.transpose.test.ts`,
+  and `docs/docs/layout.md` carries the reader-facing copy. Three places is the
+  standing cost; a fourth would make it four.
+  WHAT A LATER READER NEEDS FROM THIS ENTRY RATHER THAN FROM THE DOCSTRING is
+  the four things below.
+  THE MARGIN WAS NEVER THE POINT. The strict rule captures about an eighth of
+  what the pass is worth, so the finding is that a pass which may not cross a
+  plateau is a different and much smaller thing rather than a weaker setting of
+  the same one. A later tuning argument here has to beat that, not the margin.
+  EQUAL CAP OR EQUAL TIME HAD TO BE SETTLED, because the strict rule TERMINATES
+  differently and a comparison that did not say which it was making would be
+  answerable either way. Neither rule terminates before 16 passes on either
+  corpus, so equal cap IS equal pass count and the time question needed no
+  stopwatch. Any later re-derivation of this rule inherits that question the
+  moment it changes a budget.
+  THE EXCLUSION IS THE TIE RULE'S DEPENDENT, NOW ASSERTED RATHER THAN ARGUED. A
+  strict build with the unanchored-node exclusion and one without return
+  byte-identical layers on both corpora and all six golden graphs. So the tie
+  rule, the exclusion and M3.6's warm-start stability are one argument and
+  re-deriving the first is re-deriving all three.
+  FOUR FIGURES BEHIND THE PINNING RULES WERE STALE BY AN ERA, all four pre-M2.2c,
+  and correcting them turned up a second thing worth having: THE COUNT DEPENDS ON
+  WHICH POPULATION IT IS TAKEN OVER, and the docstring had never said which.
+  Over the graph's own edges, which is what `layout.order.test.ts` pins, 118 and
+  814 nodes have no neighbour in the layer above and 48 and 438 have none in
+  either, correcting 120, 1,101, 49 and 572. Over the SEGMENTS `reorder` actually
+  reads, the first pair is unchanged and the second is 24 and 162, which is the
+  transpose pass's exclusion counted in the sweeps' own terms. The second figure
+  moves for the reason M2.4b exists: a node whose only edges span several ranks
+  has no adjacent-layer neighbour in the graph and a dummy one rank away in the
+  drawing. The FIRST not moving is a measurement and not a theorem, and the
+  docstring says so: splitting a long edge can only add an upward neighbour, so
+  equal counts mean equal sets, which rules out any node in either corpus whose
+  in-edges are all long. Nothing makes that impossible. All four figures are now
+  pinned, so a corpus that grew such a node would say so.
+  A THIRD SOLVER NOW LIVES IN `layout.transpose.test.ts`, the same pass with
+  `delta >= 0`, one line apart from the shipping one, so the strict column moves
+  when the drawing moves. Nothing in the package ships a strict build, so
+  without it the evidence for this rule would be prose again the next time the
+  drawing changes, which is exactly how it went stale the first time. It
+  reproduces the shipping pass exactly BECAUSE THE TRAVERSAL IS THE SAME ONE,
+  and not because strict descent has a single answer: the "swap v past w"
+  relation can be cyclic, and on 200 random layered graphs run left to right
+  against right to left, 198 end in different layers and 191 at a different
+  count. The tempting stronger claim is false and the docstring says so.
+  NO BENCH RECAPTURE AND NO PREDICTION TO CHECK, because no shipping code path
+  changed. The gate was run as the process requires and is reported in the PR.
 - [x] **M2.7** Positioning: Brandes-Koepf horizontal coordinate assignment
   (or median-based v1 with the interface ready for BK). Invariant tests: no
   node overlaps, spacing respected.
