@@ -1478,6 +1478,29 @@ findings addressed or logged, docs land with the feature.
   because the population fix multiplies the counts by between 3.5x and 76x and
   the budget change moves them by a few percent, and the small one is the one
   the milestone was about.
+  THE BENCH GATE PASSED AND NO RECAPTURE WAS ASKED FOR, since the gate fails on
+  regressions and every layout entry improved. The prediction was written into
+  the commit message before the gate ran, per `bench/README.md`: `rank`
+  untouched, `pipeline` down 2% to 4% on the 10k and 12% to 16% on the 1k. The
+  readable run measured `pipeline` at -4.7% and -16.7% and `rank` at -7.9% and
+  -4.4%, so the pipeline came in just past the good end of both predictions.
+  TWO READABLE RUNS DISAGREED AND THE UNTOUCHED ENTRY IS WHY THAT IS KNOWABLE.
+  An earlier run, with no `noisy` entry and no failure anywhere, put `pipeline`
+  10k at +9.6% and `rank` 10k at +18.3%. Nothing in this branch touches the rank
+  stage, so a 26-point swing on that entry between two runs is machine state and
+  not code, and it is the reason the capture was scripted to take a run only
+  when nothing outside `packages/layout` fails: the run before the readable one
+  was discarded for `2.5k outEdges` at +20.1% in `@dagr/graph`, which is the
+  benchmark `bench/README.md` already documents as drifting about ten points
+  with its code untouched. Worth recording that THE GATE'S OWN NOISE DETECTOR
+  CAUGHT NEITHER: both runs had every entry inside its margin of error, because
+  what moved was between-run drift rather than within-run variance, and `rme`
+  cannot see that. An untouched benchmark in the same worker can, which is a
+  cheap check to keep.
+  FOUR `@dagr/graph` ENTRIES NOW READ 25% TO 35% FASTER THAN THE BASELINE and
+  the gate says so in a note asking for a refresh. That is a package this branch
+  does not touch and a recapture is the maintainer's call, so it is left alone
+  and flagged here rather than folded into this milestone.
   THE TIE RULE IS STILL OWED A RE-DERIVATION and this run did not take it. It
   was chosen on the same pre-chain drawing as the cap, winning all six
   configurations it was tried in, and those six were sweep budgets and caps this
