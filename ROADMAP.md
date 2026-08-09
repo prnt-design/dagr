@@ -965,7 +965,9 @@ findings addressed or logged, docs land with the feature.
   BUDGET ARE THEREFORE OWED A RE-DERIVATION and this run did not do it: they are
   shipped defaults, the 10k now reaches its sweep floor at four sweeps where it
   used to still be improving at sixteen, and that is a tuning task with its own
-  before and after rather than a line in this one.
+  before and after rather than a line in this one. M2.6c TOOK IT: the budgets
+  are 4 and 16, and the sweep floor is tighter than this paragraph guessed, at
+  ONE sweep on the 10k and three on the 1k.
   REFUTED: every entry that said dummy chains were the prerequisite for
   `brandes-koepf-position` taking the default. The prerequisite is met, every
   segment is visible to it, and the comparison got WORSE. Summing the horizontal
@@ -1285,9 +1287,9 @@ findings addressed or logged, docs land with the feature.
   pair of ADJACENT layers, which today is 1,324 of the 1k corpus's 4,000 edges
   (33.1%) and 10,528 of the 10k's 40,000 (26.3%); M2.4b takes both to 100% on
   any graph without self loops, which both corpora are, because a self loop
-  spans no rank for a chain to split. (d) `maxSweeps` defaults to 8 and the
-  stage returns the best layering it saw rather than the last, because the
-  sweeps are not monotone.
+  spans no rank for a chain to split. (d) `maxSweeps` defaults to 8, since
+  re-derived to 4 in M2.6c, and the stage returns the best layering it saw
+  rather than the last, because the sweeps are not monotone.
   (e) It did not take the default in M2.5, on two reasons that have both since
   expired: that M2.6 would improve the same stage so one flip could serve both,
   and that the bench baseline could not absorb its cost until it was recaptured.
@@ -1375,6 +1377,11 @@ findings addressed or logged, docs land with the feature.
   against a graph M2.4b replaces and BOTH MUST BE RE-DERIVED WHEN IT LANDS
   rather than carried across. The figures behind that are in the docstring.
   `defaultStages.order` did NOT change here. That is M2.6b below.
+  THE CAP HAS SINCE BEEN RE-DERIVED AND IS 16, in M2.6c, along with `maxSweeps`
+  at 4, so the coincidence is over and the two constants now differ. The knee
+  the cap was chosen at does not exist over the drawing the stage sees today.
+  THE TIE RULE HAS NOT BEEN RE-DERIVED and is the only one of this entry's five
+  rules still measured against the graph M2.4b replaced.
 - [x] **M2.6b** Order default flip and bench rebaseline. Touches
   `packages/layout` and `bench`. `defaultStages.order` moves from
   `insertion-order` to `barycenter-order`, and the `pipeline` benchmark entries
@@ -1418,6 +1425,89 @@ findings addressed or logged, docs land with the feature.
   recaptured over the drawing with the chains in it, which is a different thing
   from re-deriving these: it pins what the stage reaches, not what the cap costs
   and buys.
+  M2.6c HAS SINCE PAID MOST OF THAT DEBT: both budgets and all four figures are
+  re-derived. What it did not take is the tie rule, and the entry below says so
+  in its own words.
+- [x] **M2.6c** Order budget re-derivation. Touches `packages/layout` and
+  `docs`. Both budgets of `barycenter-order` re-derived over the drawing the
+  stage sees now that M2.4b's chains are read, which is the debt M2.6 and M2.6b
+  both recorded as owed and M2.4b deliberately did not take.
+  WHAT SHIPPED. `maxSweeps` 8 to 4 and `maxTransposePasses` 8 to 16, so the two
+  constants no longer share a value and the coincidence M2.6 was careful to call
+  a coincidence is over. The pair beats the one it replaces on BOTH axes
+  everywhere it was measured: 8,586,890 crossings on the 10k against 8,748,361
+  and 185,028 on the 1k against 194,289, all six golden graphs lower, and the
+  stage faster on both corpora.
+  NEITHER BUDGET HAS A KNEE ANY MORE, which is the finding the task was for and
+  is why the answer is a pair rather than two independent numbers. The sweep
+  curve FLOORS: the 10k is at its floor after ONE sweep and the 1k after three,
+  and not merely at an equal-scoring layering, the best seen is found early and
+  never beaten, so the layers at 4 are the layers at 16. Sweeps 5 through 8 were
+  buying nothing. The transpose curve has no knee anywhere: its marginal rate
+  falls by a fifth per doubling early and a third by the end, smoothly and for
+  hundreds of passes,
+  where the curve the cap of 8 was chosen on fell by more than half immediately
+  past 8 and threefold past 4.
+  So neither budget could be read off its own curve, and what decides them is
+  the exchange rate between them: a sweep costs 5 to 6 passes of the pass's
+  time on both corpora, 5.38ms against 1.11ms on the 1k and 78ms against 13.9ms
+  on the 10k, and those passes buy 4.30% and 11.96% where the
+  sweeps buy zero. The cap stops at 16 rather than 24 because 16 is the last
+  value that leaves the whole stage faster than before on BOTH corpora.
+  THE GOLDEN CORPUS IS WHY THIS IS A REALLOCATION AND NOT A CUT, and it is the
+  thing the bench corpora could not have told anyone. Five of its six graphs are
+  still improving at 8 sweeps, by 1.35% to 3.48%, where both bench corpora have
+  floored by three. Dropping the sweeps alone would have been free on the two
+  graphs the package measures itself on and 1.3% to 3.4% worse on the six it
+  regresses against. Raising the cap pays that back on all six.
+  TWO THINGS THE OLD MEASUREMENT HAD WRITTEN DOWN AS SETTLED WERE WRONG. The
+  fixed point is 675 passes on the 10k and 187 on the 1k, not 60 and 19, so the
+  cap of 200 that `layout.order.test.ts` asked for as "far beyond the pass count
+  either corpus needs" stopped the 10k two thirds of the way and its 7,689,100
+  was never a fixed point. And the knee, above. What the old measurement got
+  right is the prediction it carried: it forecast the saving collapsing to "1.4%
+  at a cap of 4" from a hand-expanded corpus, and a cap of 4 measures 1.38%.
+  A SECOND BUG WAS FOUND AND FIXED IN THE GOLDEN HARNESS, and it is not a
+  tuning change. `order-crossings.golden.json` ordered every entry over the
+  drawing's segments and then counted only the graph's own adjacent-layer edges,
+  from the moment M2.4b's chains were consumed, so the file recorded a
+  population the stage does not optimise and one that moves the WRONG WAY when
+  the stage improves: at the new budgets it read `dense-1200` as 20.5% worse
+  while the metric the stage optimises had it slightly better. The two causes
+  are attributed separately in the file's header rather than left as one diff,
+  because the population fix multiplies the counts by between 3.5x and 76x and
+  the budget change moves them by a few percent, and the small one is the one
+  the milestone was about.
+  THE BENCH GATE PASSED AND NO RECAPTURE WAS ASKED FOR, since the gate fails on
+  regressions and every layout entry improved. The prediction was written into
+  the commit message before the gate ran, per `bench/README.md`: `rank`
+  untouched, `pipeline` down 2% to 4% on the 10k and 12% to 16% on the 1k. The
+  readable run measured `pipeline` at -4.7% and -16.7% and `rank` at -7.9% and
+  -4.4%, so the pipeline came in just past the good end of both predictions.
+  TWO READABLE RUNS DISAGREED AND THE UNTOUCHED ENTRY IS WHY THAT IS KNOWABLE.
+  An earlier run, with no `noisy` entry and no failure anywhere, put `pipeline`
+  10k at +9.6% and `rank` 10k at +18.3%. Nothing in this branch touches the rank
+  stage, so a 26-point swing on that entry between two runs is machine state and
+  not code, and it is the reason the capture was scripted to take a run only
+  when nothing outside `packages/layout` fails: the run before the readable one
+  was discarded for `2.5k outEdges` at +20.1% in `@dagr/graph`, which is the
+  benchmark `bench/README.md` already documents as drifting about ten points
+  with its code untouched. Worth recording that THE GATE'S OWN NOISE DETECTOR
+  CAUGHT NEITHER: both runs had every entry inside its margin of error, because
+  what moved was between-run drift rather than within-run variance, and `rme`
+  cannot see that. An untouched benchmark in the same worker can, which is a
+  cheap check to keep.
+  FOUR `@dagr/graph` ENTRIES NOW READ 25% TO 35% FASTER THAN THE BASELINE and
+  the gate says so in a note asking for a refresh. That is a package this branch
+  does not touch and a recapture is the maintainer's call, so it is left alone
+  and flagged here rather than folded into this milestone.
+  THE TIE RULE IS STILL OWED A RE-DERIVATION and this run did not take it. It
+  was chosen on the same pre-chain drawing as the cap, winning all six
+  configurations it was tried in, and those six were sweep budgets and caps this
+  stage no longer uses over a population sixteen times smaller. It is
+  load-bearing, since the unanchored-node exclusion exists only because of it.
+  Re-running the strict-versus-ties comparison at 4 and 16 is a smaller task
+  than this one was, which is exactly why it is not folded into it.
 - [x] **M2.7** Positioning: Brandes-Koepf horizontal coordinate assignment
   (or median-based v1 with the interface ready for BK). Invariant tests: no
   node overlaps, spacing respected.

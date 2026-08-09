@@ -14,19 +14,20 @@ import type { OrderStage, RankedState } from './types.js';
  */
 
 /** The sweep budget a stage built with no `maxSweeps` runs to. See D5 below. */
-const DEFAULT_MAX_SWEEPS = 8;
+const DEFAULT_MAX_SWEEPS = 4;
 
 /**
  * The transpose budget a stage built with no `maxTransposePasses` runs to.
  *
- * That this is 8 and {@link DEFAULT_MAX_SWEEPS} is 8 IS A COINCIDENCE. The two
- * were measured independently, they bound different loops, and neither should
- * track the other, so this is deliberately a second constant and not a shared
- * one. See the transpose section of {@link barycenterOrder} for the curve that
- * put the knee here, and for why the number is owed a re-derivation now that
- * M2.4b has landed rather than being carried across.
+ * That this is 16 and {@link DEFAULT_MAX_SWEEPS} is 4 IS A MEASUREMENT. Both
+ * were 8 until M2.6c and that WAS a coincidence, stated as one here for two
+ * milestones. They bound different loops, they were re-derived independently
+ * over the drawing this stage sees now that M2.4b's chains are read, and they
+ * came apart: the sweeps have nothing left to buy past 4 and the pass is still
+ * buying at 16. See the transpose section of {@link barycenterOrder} for the
+ * curve, and the sweeps section for the other half of the same trade.
  */
-const DEFAULT_MAX_TRANSPOSE_PASSES = 8;
+const DEFAULT_MAX_TRANSPOSE_PASSES = 16;
 
 /**
  * An entry of one of this module's own arrays, which is always present because
@@ -237,7 +238,7 @@ export function countCrossings(input: Layering): number {
  */
 export interface BarycenterOrderOptions {
   /**
-   * How many sweeps the stage may run. Defaults to 8. Zero is legal and means
+   * How many sweeps the stage may run. Defaults to 4. Zero is legal and means
    * "seed only": build the starting permutation and return it.
    *
    * It bounds the SWEEPS and nothing else, the way `maxIterations` bounds
@@ -258,7 +259,7 @@ export interface BarycenterOrderOptions {
 
   /**
    * How many transpose passes the stage may run over the layering the sweeps
-   * settled on. Defaults to 8. Zero is legal and means no transpose at all.
+   * settled on. Defaults to 16. Zero is legal and means no transpose at all.
    *
    * It bounds PASSES, exactly as `maxSweeps` bounds sweeps: one pass is one
    * walk over every adjacent pair of every layer, and the loop stops early when
@@ -848,24 +849,63 @@ function applyHint(
  * so a round that improved nothing is not proof that the next one will not.
  * Stopping on the FIRST such round is what the extra counter exists to avoid,
  * and it was measured before it was rejected. It cost quality on 32 of those 200
- * graphs at the DEFAULT budget of 8, worst 1,055 crossings against 893, for
- * 188,602 against 187,340 in aggregate; and on the 1k at a budget of 16 it fired
- * after sweep 14 for 3,532 where the full 16 reach 3,467. Waiting for a second
- * round recovers all of that, exactly, and costs about 21.6ms on the 10k at the
- * default budget against 21.9ms for the one-round stop.
+ * graphs at a budget of 8, worst 1,055 crossings against 893, for 188,602
+ * against 187,340 in aggregate; and on the 1k at a budget of 16 it fired after
+ * sweep 14 for 3,532 where the full 16 reach 3,467. Waiting for a second round
+ * recovers all of that, exactly, and costs about 21.6ms on the 10k against
+ * 21.9ms for the one-round stop. Those five figures were measured when 8 was
+ * the default and the counter saw a quarter of the edges, so read them as a
+ * comparison between the two stop rules rather than as a level; the rule they
+ * chose is unchanged and the budget they were taken at is now 4.
  *
- * Measured, crossings by budget on the chosen seed: the 1k is 7,933 at the seed
- * and 4,619, 3,880, 3,605 and 3,467 at 2, 4, 8 and 16 sweeps; the 10k is 94,991
- * at the seed and 50,735, 40,217, 35,114 and 32,503. The 10k cost about 5.5ms
- * for the seed alone and 9.5ms, 13.5ms, 21ms and 38ms at 2, 4, 8 and 16 sweeps,
- * scoring included, on the maintainer's machine. Read those as one machine's
- * measurements taken to justify a default, not as baselines: the committed
- * benchmark medians are the only numbers anything regresses against.
+ * `maxSweeps` DEFAULTS TO 4, and it defaulted to 8 until M2.6c re-derived it
+ * over the drawing this stage sees now that M2.4b's chains are read. Measured,
+ * crossings by budget on the chosen seed, the pass off:
  *
- * `maxSweeps` defaults to 8, where the curve has given up most of what it will
- * give: 8 sweeps take the 10k to 8.3% of the roster-order seed's crossings and
- * 16 take it to 7.6%, so doubling the budget buys another 7% of what is left
- * for something under double the time.
+ * | sweeps | 1k      | 10k        |
+ * | ------ | ------- | ---------- |
+ * | 0      | 456,261 | 19,753,239 |
+ * | 1      | 215,975 |  8,972,421 |
+ * | 2      | 215,975 |  8,972,421 |
+ * | 3      | 210,163 |  8,972,421 |
+ * | 4      | 210,163 |  8,972,421 |
+ * | 8      | 210,163 |  8,972,421 |
+ * | 16     | 210,163 |  8,972,421 |
+ *
+ * THE 10k IS AT ITS FLOOR AFTER ONE SWEEP AND THE 1k AFTER THREE. Sweeps 5
+ * through 8 buy exactly nothing on either corpus, and the layering they return
+ * is not merely equal-scoring but identical: the best seen was found early and
+ * never beaten, so `best` is the same object's contents at 4 as at 16. That is
+ * what the shipped budget of 8 was spending, and the sweep loop's own
+ * two-round stop only clips it to 6 on the 10k.
+ *
+ * Four rather than three because both floors are inside it and the sweeps
+ * alternate down and up, so an even budget is whole rounds; not two, because
+ * the 1k is 2.8% above its floor there; and not one, because the golden corpus
+ * is a different shape from the bench pair and `wide-600` loses 9.7% at one
+ * sweep, 246,749 against the 224,924 it reaches at four; it loses 8.4% at two,
+ * which is a second argument against 2 rather than the argument against 1.
+ * That corpus is the reason this is a reallocation and not simply a
+ * cut: five of its six graphs are STILL IMPROVING at 8 sweeps, by 1.35% to
+ * 3.48%, where both bench corpora floored by 3. Those sweeps are not free
+ * everywhere. They are just worth less than the same milliseconds spent in the
+ * transpose pass, which is the trade the next section makes and measures.
+ *
+ * THE TABLE THIS REPLACES IS KEPT HERE, marked, because this file and
+ * `docs/docs/layout.md` are the only copies of it and the argument above is
+ * partly an argument about its shape:
+ *
+ * | sweeps | 1k    | 10k    | 10k cost |
+ * | ------ | ----- | ------ | -------- |
+ * | 0      | 7,933 | 94,991 |    5.5ms |
+ * | 2      | 4,619 | 50,735 |    9.5ms |
+ * | 4      | 3,880 | 40,217 |   13.5ms |
+ * | 8      | 3,605 | 35,114 |     21ms |
+ * | 16     | 3,467 | 32,503 |     38ms |
+ *
+ * taken when a long edge was invisible to the counter, so no row of it compares
+ * with a row of the table above. The shape is what does: that curve was still
+ * falling at 16 and this one is flat from 3.
  *
  * ## The transpose pass
  *
@@ -873,8 +913,8 @@ function applyHint(
  * they settled on: every layer is walked left to right and each adjacent pair
  * is swapped when the swap costs nothing or saves something, repeatedly, until
  * a walk finds no strictly improving swap or `maxTransposePasses` is spent. It
- * is {@link transposeLayers}, and it removes 13.7% of the crossings the sweeps
- * leave on the 10k corpus and 16.6% on the 1k.
+ * is {@link transposeLayers}, and at the budgets that ship it removes 4.30% of
+ * the crossings the sweeps leave on the 10k corpus and 11.96% on the 1k.
  *
  * WHERE IT RUNS. Once, at the end, on the BEST layering the sweeps saw. The
  * alternatives were measured at a sweep budget of 8 on the 10k corpus: once at
@@ -882,8 +922,9 @@ function applyHint(
  * sweep 32,854, so the cheapest placement is also the best one. It is cheapest
  * by a wide margin, 30.1ms against 48.6ms and 125.5ms in the prototype those
  * three were compared in. All three of those numbers are from before ties were
- * allowed, which is why none of them is the 30,318 this stage now reaches; what
- * they compare is the placements against each other.
+ * allowed and from before the chains were counted, which is why none of them is
+ * anywhere near the 8,586,890 this stage now reaches; what they compare is the
+ * placements against each other, and the placement they chose is unchanged.
  *
  * The trap that placement sets is worth naming, because it does not announce
  * itself. `position` tracks `layers`, the last working layering, and the pass
@@ -935,11 +976,14 @@ function applyHint(
  *
  * Found by algorithms-review after the pass was built, on 41 of 41 unanchored
  * nodes in one generated corpus and 371 of 371 in another, every one displaced
- * by exactly the pass budget. Worth recording that IT COSTS NOTHING AND SO THE
- * MEASUREMENTS ABOVE ALL STAND: the corpora read 3,605 and 3,005 on the 1k and
- * 35,114 and 30,318 on the 10k both before the exclusion and after it, which is
- * what a crossing-neutral change has to do, and re-measuring rather than
- * asserting that is what makes the figures in this docstring still true.
+ * by exactly the pass budget. Worth recording that IT COST NOTHING: the corpora
+ * read 3,605 and 3,005 on the 1k and 35,114 and 30,318 on the 10k both before
+ * the exclusion and after it, which is what a crossing-neutral change has to
+ * do. Those four are pre-chain figures and are kept as the pair they are, a
+ * before and an after of one change rather than a level: the exclusion was not
+ * re-measured in M2.6c and does not need to be, because what it claims is that
+ * two counts taken either side of it agree, and that claim is about the change
+ * and not about the drawing.
  *
  * TERMINATION IS GATED ON STRICTLY IMPROVING SWAPS ONLY, and that is a
  * constraint rather than a detail. A zero-delta swap leaves a zero-delta swap
@@ -953,34 +997,85 @@ function applyHint(
  * that only asserted "the loop ends" would pass on a strict-only build and
  * catch nothing.
  *
- * THE CAP, `maxTransposePasses`, defaults to 8. That it equals `maxSweeps`'s
- * default of 8 IS A COINCIDENCE: the two bound different loops, they were
- * measured independently, and neither should track the other. Measured at a
- * sweep budget of 8 on the 10k, against 35,114 crossings and 16.32ms with the
- * pass off:
+ * THE CAP, `maxTransposePasses`, DEFAULTS TO 16, and defaulted to 8 until
+ * M2.6c. Measured at the shipping sweep budget of 4 on the 10k, against
+ * 8,972,421 crossings with the pass off:
  *
- * | cap             | 10k crossings | saving | extra time | crossings per ms |
- * | --------------- | ------------- | ------ | ---------- | ---------------- |
- * | 4               | 31,369        | 10.7%  | +2.65ms    | 1,413            |
- * | 6               | 30,677        | 12.6%  | +4.15ms    | 461              |
- * | 8 (the default) | 30,318        | 13.7%  | +4.93ms    | 460              |
- * | 12              | 29,892        | 14.9%  | +6.92ms    | 214              |
- * | 16              | 29,658        | 15.5%  | +9.29ms    | 99               |
- * | 32              | 29,358        | 16.4%  | +16.91ms   | 39               |
- * | fixed point     | 29,260        | 16.7%  | +30.61ms   | 7                |
+ * | cap               | 10k crossings | saving | extra time | per pass | per ms |
+ * | ----------------- | ------------- | ------ | ---------- | -------- | ------ |
+ * | 4                 |     8,848,414 |  1.38% |   +81.43ms |   31,002 |  2,230 |
+ * | 8                 |     8,748,361 |  2.50% |  +131.09ms |   25,013 |  1,800 |
+ * | 12                |     8,663,589 |  3.44% |  +197.71ms |   21,193 |  1,525 |
+ * | 16 (the default)  |     8,586,890 |  4.30% |  +235.72ms |   19,175 |  1,379 |
+ * | 24                |     8,453,276 |  5.79% |  +345.24ms |   16,702 |  1,202 |
+ * | 32                |     8,344,656 |  7.00% |  +454.17ms |   13,578 |    977 |
+ * | 48                |     8,175,278 |  8.88% |  +685.73ms |   10,586 |    762 |
+ * | fixed point (675) |     7,637,257 | 14.88% |   +9.4sec* |      858 |     62 |
  *
- * where the fixed point takes 60 passes. The last column is the MARGINAL rate,
- * the crossings that row buys over the row above it divided by the extra time
- * it costs, which is the column the default is chosen on. The rows past 8 are
- * carried for that column alone: without them the claim below cannot be checked
- * against this table, which is how it came to be quoted from a step the table
- * did not contain.
+ * HOW EACH COLUMN IS MEASURED, because two of them cannot be measured the same
+ * way. `extra time` is the whole stage at that cap minus the whole stage with
+ * the pass off, min of 8 INTERLEAVED runs: interleaved so that a drift in load
+ * hits every configuration equally, min because the fastest run of a
+ * deterministic function is the least contaminated. `per pass` is MARGINAL and
+ * exact, the crossings a row buys over the row above it divided by the passes
+ * in the step, and it needs no timing at all. `per ms` is `per pass` divided by
+ * 13.9ms, the measured cost of one pass, and NOT by the step's own extra time:
+ * the steps are 38ms to 232ms apart and the per-step timings do not resolve
+ * their own differences, which is what makes a per-step rate column read as
+ * noise. Turning the pass on also costs a one-off 26ms on the 10k to build its
+ * index, which is why the cap-4 row's extra time is more than four passes. The
+ * starred figure is the only modelled one, 26ms plus 675 passes at 13.9ms: the
+ * fixed point was run and its crossings are measured, but timing a nine-second
+ * configuration eight times over to gate one row was not worth the machine.
  *
- * Eight captures 81.9% of the full saving for 16.1% of the extra time, and the
- * knee really is there: the rate holds at or above 460 up to 8 and falls to 214
- * immediately past it, then by at least half at every further step. The 1k
- * corpus agrees without deciding anything, 3,005 against 3,605 for +0.41ms,
- * with its own fixed point at 2,959 after 19 passes.
+ * THERE IS NO KNEE ON THIS CURVE, and that is the finding rather than a caveat
+ * on it. The rate falls by a fifth per doubling early and a third by the end
+ * (19.3% from 4 to 8, 23.3% from 8 to 16, 29.2% from 16 to 32, 36.6% from 24 to
+ * 48), smoothly and with no step, and it keeps going for hundreds of passes:
+ * the fixed point is 675 passes away and the last 627 of them still average 858
+ * crossings each. Compare the table this replaces, where the rate fell by more
+ * than half immediately past 8, threefold past 4, and by at least half at every
+ * step after. That knee was real and it was a property of a drawing where a long
+ * edge was invisible to the counter. It is gone, so a cap read off this curve
+ * alone would be "as many as you can afford", which is not a default.
+ *
+ * SO 16 IS BOUGHT AGAINST THE SWEEPS, NOT AGAINST THIS CURVE, and that is what
+ * makes the pair a re-derivation of two budgets rather than two separate
+ * decisions. THE EXCHANGE RATE IS 5 TO 6 PASSES PER SWEEP on both corpora,
+ * measured in one interleaved run: a sweep is 5.38ms on the 1k and 78ms on the
+ * 10k, a pass 1.11ms and 13.9ms. The sweeps section shows sweeps 5 through 8
+ * buying nothing at all on either bench corpus and 1.35% to 3.48% on the golden
+ * corpus. The same milliseconds in this pass buy 4.30% on the 10k and 11.96% on
+ * the 1k. So the four sweeps come off and the cap goes up, and the pair that
+ * ships beats the 8 and 8 it replaces on BOTH axes everywhere it was measured:
+ * 1.85% and 4.77% fewer crossings on the 10k and the 1k, all six golden graphs
+ * lower, and the stage faster on both.
+ *
+ * HOW MUCH FASTER, and this is the number to distrust first because it is a
+ * difference of two timings. Min of 8 interleaved runs: 670.38ms against
+ * 729.60ms on the 10k and 48.89ms against 61.95ms on the 1k, so 8.1% and 21.1%.
+ * The components predict 6.1% and 20.4% from the sweep and pass costs above,
+ * and three earlier runs on a busier machine read 4.0%, 7.1% and 7.7% on the
+ * 10k. Take 4% to 8% as the honest 10k range and 21% as the 1k.
+ *
+ * WHY 16 AND NOT MORE, since the curve says spend. Because 16 is the last cap
+ * in the table that leaves the whole stage faster than the pair it replaces on
+ * both corpora: 24 makes the 10k slower than it is today, for a further 1.5%.
+ * Break-even is a cap of about 19 on the 10k, where cutting the budget from 8
+ * to 4 saves a measured 151.46ms and a pass is 13.9ms, and about 28 on the 1k.
+ * That 151.46ms is about TWO sweeps at 78ms and not four, because the
+ * two-round stop already clips a budget of 8 to six on this corpus, so cutting
+ * to 4 removes the two sweeps it actually runs rather than the four it is
+ * allowed. Reading it as four would put break-even at 30. Sixteen is deliberately
+ * inside both, so the pair is an improvement on either axis read alone rather
+ * than a trade that has to be argued. This is a BUDGET rather than a knee and is
+ * stated as one, which is the honest reading of a curve with no knee in it.
+ *
+ * The 1k agrees without deciding anything: 185,028 against 210,163 for
+ * +19.27ms, its fixed point 162,662 after 187 passes. Sixteen captures 28.9%
+ * of the fixed point's saving on the 10k and 52.9% on the 1k, for 2.5% and 9.2%
+ * of its time. The fixed point is not affordable on either and is here for the
+ * last column.
  *
  * A LARGER CAP IS A WEAKLY BETTER ANSWER, never a different one, for the same
  * reason a larger `maxSweeps` is: the deltas are exact and only non-increasing
@@ -1003,24 +1098,52 @@ function applyHint(
  * across a rerun on the same state, a second graph built from scratch in the
  * same insertion order, and a fresh stage object.
  *
- * THE CAVEAT CAME TRUE AND THE CAP IS NOW OWED A RE-DERIVATION. **The saving
- * collapses once every edge is visible**, which is what this section predicted
- * from a hand-expanded 10k: the capped saving falling from 10.7% to 1.4% AT A
- * CAP OF 4. Every number above was measured when the counter saw about a
- * quarter of the edges, because a long edge was invisible to it. It is not
- * invisible any more, the chains being read here, and the prediction reproduces
- * on the real thing to two figures: a cap of 4 now saves 1.38% on the 10k. At
- * the shipping cap of 8 the pass captures 17.5% of the fixed point's saving on
- * the 10k and 33.4% on the 1k, where it used to capture 84.3% and 81.9%. The
- * fixed point is still unaffordable.
+ * THE CAP TABLE THIS REPLACES, KEPT WHOLE AND MARKED rather than summarised,
+ * for the reason it gave for carrying its own last three rows: without the
+ * marginal column the claim above about its shape cannot be checked against it.
+ * Measured at a sweep budget of 8 on the 10k, against 35,114 crossings and
+ * 16.32ms with the pass off, when the counter saw about a quarter of the edges:
  *
- * So the cap AND the tie rule were both chosen against a drawing this stage no
- * longer sees, and neither is a constant of the algorithm. The re-derivation is
- * deliberately not done in the change that consumed the chains: it moves a
- * shipped default, it wants the sweep budget looked at in the same pass (the
- * 10k reaches its sweep floor at four sweeps now, where it used to still be
- * improving at sixteen), and a tuning task deserves its own before and after.
- * `test/layout.order.test.ts` holds the curve that says so.
+ * | cap             | 10k crossings | saving | extra time | crossings per ms |
+ * | --------------- | ------------- | ------ | ---------- | ---------------- |
+ * | 4               | 31,369        | 10.7%  | +2.65ms    | 1,413            |
+ * | 6               | 30,677        | 12.6%  | +4.15ms    | 461              |
+ * | 8 (the default) | 30,318        | 13.7%  | +4.93ms    | 460              |
+ * | 12              | 29,892        | 14.9%  | +6.92ms    | 214              |
+ * | 16              | 29,658        | 15.5%  | +9.29ms    | 99               |
+ * | 32              | 29,358        | 16.4%  | +16.91ms   | 39               |
+ * | fixed point     | 29,260        | 16.7%  | +30.61ms   | 7                |
+ *
+ * where the fixed point took 60 passes, and the 1k reached 3,005 against 3,605
+ * for +0.41ms with its own fixed point at 2,959 after 19. Eight captured 81.9%
+ * of the full saving for 16.1% of the extra time: the rate held at or above 460
+ * up to 8, fell to 214 immediately past it, then by at least half at every
+ * further step. That is a knee, and it was a real one.
+ *
+ * THE PREDICTION THAT TABLE CARRIED WAS SETTLED AND IT WAS RIGHT. This section
+ * predicted, from a hand-expanded 10k before any of it was built, that the
+ * saving would collapse once every edge became visible: from 10.7% to 1.4% AT A
+ * CAP OF 4. A cap of 4 now measures 1.38%, so it reproduced to two figures on
+ * the real thing. Everything above was still re-measured rather than reasoned
+ * about from that agreement.
+ *
+ * TWO THINGS DID NOT SURVIVE THE RE-DERIVATION AND ARE WORTH NAMING, because
+ * both were stated here as settled. The knee, above. And the FIXED POINT: this
+ * section said 60 passes on the 10k and 19 on the 1k, and the pass now runs 675
+ * and 187 times before it finds no improving swap. A cap of 200, which the
+ * corpus test used to ask for as "far beyond the pass count either corpus
+ * needs", stops the 10k two thirds of the way, so the 7,689,100 it reported was
+ * never a fixed point.
+ *
+ * THE TIE RULE IS STILL OWED ONE. It was measured on the same pre-chain drawing
+ * as the cap, it won all six configurations it was tried in there, and nothing
+ * in M2.6c re-ran it: the six configurations were sweep budgets and caps this
+ * stage no longer uses, over a population twenty times smaller: those six were
+ * measured before M2.2c, when the counter saw 10,528 of the 10k's 40,000 edges
+ * against today's 214,222 segments. The rule is
+ * load-bearing (see the exclusion above, which exists only because of it) and
+ * re-deriving it means re-running the strict-versus-ties comparison at 4 and
+ * 16, which is a smaller task than this one was and is not folded into it.
  *
  * ## The warm start
  *
@@ -1059,32 +1182,44 @@ function applyHint(
  * 25 timed iterations after 5 warmups, and the crossings of the layering each
  * one produces:
  *
- * | corpus | roster order | this stage | crossings before | after  |
- * | ------ | ------------ | ---------- | ---------------- | ------ |
- * | 1k     | 2.502ms      | 3.992ms    | 12,890           | 3,005  |
- * | 10k    | 26.257ms     | 47.229ms   | 425,394          | 30,318 |
+ * | corpus | roster order | this stage | crossings before | after     |
+ * | ------ | ------------ | ---------- | ---------------- | --------- |
+ * | 1k     | 24.893ms     | 74.686ms   | 703,757          | 185,028   |
+ * | 10k    | 474.701ms    | 1206.009ms | 34,510,321       | 8,586,890 |
  *
- * So the pipeline is 1.60x slower on the 1k (+1.49ms) and 1.80x slower on the
- * 10k (+20.97ms), and the drawing has 76.7% fewer adjacent-layer crossings on
- * the one and 92.9% fewer on the other. The two after-counts are this stage at
- * its own defaults, the cap-of-8 row of the transpose table above, which is
- * what ties the trade to the stage that actually ships rather than to some
- * configuration of it. The timings are one machine's, as every timing here is.
+ * So the pipeline is 3.00x slower on the 1k (+49.79ms) and 2.54x slower on the
+ * 10k (+731.31ms), and the drawing has 73.7% fewer crossings on the one and
+ * 75.1% fewer on the other. The two after-counts are this stage at its own
+ * defaults, the cap-of-16 row of the transpose table above, which is what ties
+ * the trade to the stage that actually ships rather than to some configuration
+ * of it. The timings are one machine's, as every timing here is, and that
+ * machine was carrying a load of about six while these were taken.
+ *
+ * ALL FOUR WERE RE-DERIVED IN M2.6c AND THREE THINGS MOVED THEM, so read the
+ * shape rather than the arithmetic against the M2.6b table this replaces
+ * (1k 2.502ms and 3.992ms for 12,890 against 3,005; 10k 26.257ms and 47.229ms
+ * for 425,394 against 30,318). M2.4b's chains made every stage of the pipeline
+ * place 184,222 nodes on the 10k rather than 10,000, which is most of the
+ * timings; consuming them took the counted population from 13,131 edges to
+ * 214,222 segments, which is most of the counts; and this milestone moved the
+ * budgets, which is the smallest of the three and the only one this section is
+ * about. The ratios fell from 92.9% to 75.1% on the 10k for the second of
+ * those reasons and not because the stage got worse: the like-for-like
+ * comparison, both layerings scored over the same population, is in
+ * `test/layout.order.test.ts` and it is 74.7% on the 10k.
  *
  * THOSE FOUR FIGURES ARE LIVE ADVICE HERE AND NOWHERE ELSE. Each is a
- * measurement with a scheduled expiry: a bench recapture moves the timings and
- * M2.4b moves all four. M2.4b HAS LANDED AND DID NOT MOVE THEM, so all four are
- * expired rather than replaced and this section is a record until someone
- * re-derives it. So `index.ts`, `ROADMAP.md` and `docs/docs/layout.md`
- * describe the trade in a sentence and point back at this section rather than
- * copying the table, which leaves one paragraph to correct rather than four.
- * `CHANGELOG.md` is the deliberate exception: a dated entry records what a
- * past change measured at the time, so M2.6's entry keeps its own 3,005 and
- * 30,318 and is marked superseded in place rather than swept, which is this
- * file's own precedent. The crossing counts are pinned against both stages in
- * `test/layout.order.test.ts`, so a stage that quietly gave the saving back
- * fails there; the timings are pinned by nothing, which is what the bench
- * baseline is for.
+ * measurement with a scheduled expiry: a bench recapture moves the timings, and
+ * M2.8's routing will move the pipeline again. So `index.ts`, `ROADMAP.md` and
+ * `docs/docs/layout.md` describe the trade in a sentence and point back at this
+ * section rather than copying the table, which leaves one paragraph to correct
+ * rather than four. `CHANGELOG.md` is the deliberate exception: a dated entry
+ * records what a past change measured at the time, so M2.6's entry keeps its
+ * own 3,005 and 30,318 and is marked superseded in place rather than swept,
+ * which is this file's own precedent. The crossing counts are pinned against
+ * both stages in `test/layout.order.test.ts`, so a stage that quietly gave the
+ * saving back fails there; the timings are pinned by nothing, which is what the
+ * bench baseline is for.
  *
  * Being the default was always a separate decision from existing, which is the
  * precedent M2.3 set with `networkSimplexRankStage`: a real stage is exported

@@ -144,8 +144,10 @@ const DUMMY_SIZE: Size = Object.freeze({ width: 0, height: 0 });
  * `segments.ts` and treat an edge that has one as the segments it is drawn as,
  * so every row a long edge passes through holds a node of it that those stages
  * have an opinion about. Measured on the 10k bench corpus, a layering that
- * reads the chains has 8,748,361 crossings against 33,932,556 for one that
- * ignores them, both scored over all 214,222 segments.
+ * reads the chains has 8,586,890 crossings against 33,939,378 for one that
+ * ignores them, both scored over all 214,222 segments. Both sides are the
+ * order stage at its defaults, so M2.6c's re-derivation of those moved both;
+ * M2.4b measured the same pair at 8,748,361 and 33,932,556.
  *
  * The chains were declared one milestone and consumed the next, and the gap
  * between the two is worth knowing about because it is invisible from here:
