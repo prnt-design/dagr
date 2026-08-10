@@ -1345,11 +1345,12 @@ defaults, 100 by 40 boxes with a `rankSep` of 50, used to come back as
 unchanged, exactly, because a dummy's coordinate is the order and position
 stages' decision and never the router's.
 
-Across the two benchmark corpora and the six golden graphs that takes between
-0.6% and 5.9% off the total length of the drawing's polylines, and every unit of
-it was ink drawn underneath a node box. The spread is the interesting half: the
-saving is at most half a box diagonal per end, 53.85 at the default box, so a
-drawing of long thin rows saves a smaller share of a much larger number.
+Across the two benchmark corpora, the six golden graphs and one of those six
+again at box widths from 10 to 2010, that takes between 0.6% and 5.9% off the
+total length of the drawing's polylines, and every unit of it was ink drawn
+underneath a node box. The spread is the interesting half: the saving is at most
+half a box diagonal per end, 53.85 at the default box, so a drawing of long thin
+rows saves a smaller share of a much larger number.
 
 **Where the attachment lands.** Walking from the centre toward the next point on
 the route, the box's half width is reached at one fraction of the way and its

@@ -176,9 +176,9 @@ function reach(point: Point, centre: Point, size: Size): number {
  * The tolerance is scaled the way `assertBounds` scales its own, by the
  * magnitude of the coordinates involved and then divided back through the half
  * extent that {@link reach} divided by. A flat `1e-9` on the ratio is what this
- * had first and it is safe on the eight graphs below only by accident: with 100
- * by 40 boxes the error at an `x` of 6e8 is exactly zero. It stops being safe
- * the moment a box extent is SMALL at a large coordinate, where a width of
+ * had first and it is safe on the uniform graphs below only by accident: with
+ * 100 by 40 boxes the error at an `x` of 6e8 is exactly zero. It stops being
+ * safe the moment a box extent is SMALL at a large coordinate, where a width of
  * 5e-3 at an `x` of 2.8e8 puts a genuine border hit 4e-6 off the ratio and this
  * would report it as `inside`.
  */

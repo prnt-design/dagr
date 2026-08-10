@@ -1769,8 +1769,8 @@ findings addressed or logged, docs land with the feature.
   removed: `rankSep: 0` with a target of no height, reachable through the
   shipping stages alone, and a third-party position stage that overlaps two
   boxes outright.
-  CAP TWO IS HALF THE WAY TO THE EDGE'S OTHER ENDPOINT, and the first draft
-  shipped without it and was WRONG. The two are the same distance only on a
+  CAP TWO IS HALF THE WAY TO THE EDGE'S OTHER ENDPOINT, and the first draft of
+  this milestone went to review without it and was WRONG. The two are the same distance only on a
   bendless route. On a chained edge an attachment walks toward the nearest
   DUMMY, so cap one bounds the distance to that, while the runner's
   endpoint-proximity rule compares the result against the far NODE. Nothing in
@@ -1785,7 +1785,7 @@ findings addressed or logged, docs land with the feature.
   ninth row at varied widths whose 282 bound attachments are the only ones in
   the file, and removing the term fails six tests.
   THE LESSON IS THE ONE ABOUT UNIFORM FIXTURES rather than the one about
-  geometry. Nine tables over eight graphs agreed, the property they agreed about
+  geometry. Four tables over eight graphs agreed, the property they agreed about
   was real, and all eight were drawn at a single box size that put the whole
   drawing outside the regime where the code could fail. A corpus that varies
   what the code branches on is worth more than a corpus that is large.
@@ -1796,16 +1796,19 @@ findings addressed or logged, docs land with the feature.
   stage fails is worse than one never claimed. That is the same argument the
   endpoint-proximity rule makes, and proximity itself survived border attachment
   untouched, which is what it was written in M2.2 to do.
-  THE FIGURES ARE PINNED OVER EIGHT GRAPHS RATHER THAN ONE, the two bench
-  corpora and the six of `test/golden-corpus.ts`, which is the corpus the order
-  and transpose tests already share so that no two files pin numbers for graphs
-  nobody else has. Two of the six carry structure the bench corpora do not have
-  at all and this stage has a rule about: self loops and parallel edges. What is
-  pinned: every route monotone on all eight under both routers and both position
-  stages; every interior point identical between the two routers, 14,746 of them
-  on the 1k and 174,222 on the 10k, none differing; every end on its own box
-  border except the 80 belonging to `self-loops-800`'s 40 loops; and total
-  polyline length before and after, which is what the change is worth.
+  THE FIGURES ARE PINNED OVER NINE GRAPHS RATHER THAN ONE: the two bench
+  corpora, the six of `test/golden-corpus.ts`, which is the corpus the order and
+  transpose tests already share so that no two files pin numbers for graphs
+  nobody else has, and `dense-1200` a second time under box widths from 10 to
+  2010, which is the row the review's finding added. Two of the six carry
+  structure the bench corpora do not have at all and this stage has a rule
+  about: self loops and parallel edges. What is pinned: every route monotone on
+  all nine under both routers and both position stages; every interior point
+  identical between the two routers, 14,746 of them on the 1k and 174,222 on the
+  10k, none differing; where every end landed, which is the box border for all
+  but the 80 belonging to `self-loops-800`'s 40 loops and the 282 on the varied
+  row where a cap binds first; and total polyline length before and after, which
+  is what the change is worth.
   WHAT IT IS WORTH IS BETWEEN 0.6% AND 5.9% of the drawing's total polyline
   length, and the spread is more use than the size. The saving is bounded by
   half a box diagonal per END, 53.85 at the default 100 by 40, so a drawing of
