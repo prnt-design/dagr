@@ -1006,6 +1006,10 @@ findings addressed or logged, docs land with the feature.
   not made here, because this run's instruction was to re-measure the branch
   before changing anything in it, and because a second ranker minting 105,975
   dummies is a second bench conversation and not a footnote to this one.
+  M2.4c CLOSED THIS GAP and it was not a bench conversation after all: no
+  benchmark selects the simplex ranker, so no workload grew and no entry moved.
+  The splitter is in `chains.ts`, both stages call it, and the test that pinned
+  the gap is deleted as it said it would be. See M2.4c's entry.
   Dummy ids must be a deterministic function of the edge and the rank
   (`#dummy:<edgeId>:<rank>` or equivalent), never a counter and never iteration
   order, so a chain's identity is stable across runs by construction with no
@@ -1264,6 +1268,70 @@ findings addressed or logged, docs land with the feature.
   13,131 segments is not measuring a regression against a pipeline that places
   184,222 and orders 214,222. Note that today's other rebaseline, M2.2c's, was
   authorised for a MACHINE MISMATCH and is still not a precedent for this one.
+- [x] **M2.4c** Share the splitter with `networkSimplexRankStage`. Touches
+  `packages/layout` and `docs`. The gap M2.4b left open and named in its own
+  entry: the splitter was inside `longestPathRankStage` and nowhere else, so a
+  caller who selected the other ranker got multi-rank edges reaching the order
+  stage, the position stage and the router, which is the one thing M2.4b's
+  headline rule forbids. A chainless ranking is legal by design, so no contract
+  check fired and the drawing was quietly the one chains exist to prevent.
+  WHAT SHIPPED: `src/chains.ts`, holding `splitLongEdges`, the `#dummy:` id
+  scheme and the dummy size, called by both rank stages. The stage name is a
+  parameter, because a `StageContractError` naming the wrong stage sends the
+  reader to the wrong docstring. `defaultStages.rank` is unchanged and the
+  default pipeline's output is byte-identical: no golden file, no pinned count
+  and no benchmark entry moved. What moved is what a caller selecting
+  `networkSimplexRankStage` gets, which is the point of the change, and the
+  CHANGELOG carries it as a behaviour change under Changed.
+  THE SAVING THIS PACKAGE HAS QUOTED SINCE M2.3 IS NOW COLLECTABLE. The simplex
+  ranker mints 10,660 dummies on the 1k corpus and 105,975 on the 10k, both at
+  the default 20,000-pivot budget, against longest path's 14,746 and 174,222.
+  Those are M2.4b's own predicted figures and they reproduced exactly, which is
+  worth one line rather than a section: total edge length minus the edge count
+  IS what a splitter mints, so the two agreeing is the arithmetic closing. All
+  four counts are now pinned in `test/layout.chains.test.ts`, where they were
+  prose in two docstrings and a docs page before.
+  IT WAS NOT A BENCH CONVERSATION, which is the thing this entry's own
+  prediction got wrong and the reason it is stated here. M2.4b's entry priced
+  this task as one, on the grounds that a second ranker minting 105,975 dummies
+  rebases something. Nothing in `bench/` selects the simplex ranker: the rank
+  entry names `longestPathRankStage` and the pipeline entry runs the default
+  stages, so no workload grew. Predicted every entry flat and read against the
+  untouched `@dagr/graph` entries in the same worker, per `bench/README.md`.
+  THE SPLITTER WALKS THE OCCUPIED RANKS RATHER THAN THE INTEGERS between an
+  edge's endpoints, which is the one behaviour change inside the shared code and
+  is invisible today. It is how the runner's completeness rule is phrased,
+  because the occupied ranks are exactly the layers the order stage builds, and
+  a splitter that satisfies the rule it is checked against by construction
+  cannot disagree with the check. Both walks give the same answer for both
+  rankers, and that is verified by mutation rather than asserted: switching the
+  shared splitter to the integer walk fails exactly one test, the one written
+  for it. That test drives `splitLongEdges` directly over a ranking with a gap
+  in it, because no shipping ranker produces one.
+  A CLAIM IN `simplex.ts` WAS WRONG AND IS CORRECTED. It said an exhausted
+  budget could leave a gap in the ranks, reasoning that gap-freeness follows
+  from optimality. It follows from something stronger that does not mention the
+  budget: `tighten` keeps a TIGHT SPANNING TREE per component, growth runs to a
+  spanning tree whatever the budget since only the pivots are bounded, every
+  tree edge has slack zero, and a pivot shifts one whole side of a cut so the
+  entering edge becomes tight while the others keep their slack. A walk of ±1
+  steps joins any two nodes of a component, so its ranks are contiguous, and
+  each component's floor is subtracted last. The one path that argument does not
+  cover is the restore, which hands back the longest-path sweep run over a hint
+  as a FLOOR, and a floor can in principle spread a component out.
+  THE RESTORE PATH NEEDED A WITNESS RATHER THAN A BIG NUMBER, which the
+  algorithms review is what caught. The first draft offered 152,850 hinted runs
+  with no gapped ranking as evidence for it, and instrumenting the branch with a
+  counter showed how little of that reached it: 60 restores in 21,462 runs, and
+  zero in the 1,480 runs of the contiguity test that claimed to cover it. The
+  eight-node regressor already in `layout.simplex.test.ts` fires it
+  deterministically at a budget of zero, so that is the coverage now, cold and
+  floored, and the run count is quoted as restores rather than runs. A gapped
+  restore is hard to reach because the two conditions pull against each other, a
+  floor big enough to spread a component makes the ranking it saves long and the
+  tight tree then beats it, and that is an observation rather than a proof. So
+  the property is proved on one path and witnessed on the other, and the
+  splitter depends on neither.
 - [x] **M2.5** Ordering v1: barycenter sweeps with median fallback, crossing
   counter as the metric. Tests on known small graphs with hand-counted
   crossings. Also measure adjacency allocation churn in the sweeps (every

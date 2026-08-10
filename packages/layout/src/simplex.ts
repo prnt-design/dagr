@@ -1,6 +1,7 @@
 import type { NodeId } from '@dagr/graph';
 import { acyclicView, longestPathRanks } from './acyclic.js';
 import type { AcyclicView } from './acyclic.js';
+import { splitLongEdges } from './chains.js';
 import { feedbackArcSet } from './cycles.js';
 import { InternalLayoutError, InvalidConfigError } from './errors.js';
 import type { RankStage } from './types.js';
@@ -731,26 +732,28 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  *
  * ## What it optimises, and what it costs
  *
- * Total edge length minus the edge count is exactly the number of dummy nodes a
- * splitter over this ranking would mint, so it is the quantity that decides how
+ * Total edge length minus the edge count is exactly the number of dummy nodes
+ * the splitter over this ranking mints, so it is the quantity that decides how
  * much of the drawing is chains of stand-in nodes rather than the caller's own.
- * On the 1k bench corpus it would take `longestPathRankStage`'s 14,746 dummies
- * down to 10,660 at the default 20,000-pivot budget, a 28% cut, and that is the
- * optimum: 200,000 pivots return the same 10,660. On the 10k corpus it would
- * reach 105,975 from 174,222 inside the default budget, and 99,698 given ten
- * times it.
+ * On the 1k bench corpus it takes `longestPathRankStage`'s 14,746 dummies down
+ * to 10,660 at the default 20,000-pivot budget, a 28% cut, and that is the
+ * optimum: 200,000 pivots return the same 10,660. On the 10k corpus it reaches
+ * 105,975 from 174,222 inside the default budget, and 99,698 given ten times it.
  *
- * **WOULD, BECAUSE THIS STAGE DOES NOT SPLIT, and M2.4b did not change that.**
- * M2.4b put the splitter in `longestPathRankStage` and nowhere else, so this
- * stage still declares no `virtualNodes` and no `virtualChains`, still mints no
- * dummy, and the cut above is not collectable by switching to it. What a caller
- * who switches actually gets is a rank stage that costs far more, a drawing
- * that is never shorter and may be taller, zero dummy nodes saved because it
- * mints none to save, and long edges reaching the later stages unsplit. The
- * figures are still the right ones to quote for what this ranking is worth;
- * they are not a saving anyone can take today. Sharing the splitter between the
- * two rankers is what makes them real, and M2.4b's ROADMAP entry names it as
- * the gap that milestone left open.
+ * **THAT CUT IS COLLECTABLE AS OF M2.4c AND WAS NOT BEFORE IT.** M2.4b put the
+ * splitter in `longestPathRankStage` and nowhere else, so until M2.4c this stage
+ * declared no `virtualNodes` and no `virtualChains`, minted no dummy, and the
+ * counts above were a cost nobody was paying: what a caller who switched
+ * actually got was a rank stage that cost far more, a drawing that is never
+ * shorter and may be taller, zero dummy nodes saved because it minted none to
+ * save, and long edges reaching the order stage, the position stage and the
+ * router unsplit. The splitter now lives in `chains.ts` and both rankers call
+ * it, so the figures above are what this stage puts in the roster rather than
+ * what it would put there.
+ *
+ * What has not changed is the rest of the trade. A caller who switches still
+ * pays seconds against milliseconds on the 10k corpus and still risks a taller
+ * drawing, and the dummies saved are what they are buying with it.
  *
  * That 28% read 31% after M2.2b and 57% before it, and the stage did not get
  * worse either time: its INPUT got better. M2.2b scoped the cycle breaker's
@@ -787,15 +790,40 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  * certainty.)
  *
  * Ranks come out contiguous from zero per connected component, as
- * `longestPathRankStage`'s do, and the two halves of that have different
- * standing. GAP-FREE is a consequence: a ranking with an empty rank between two
+ * `longestPathRankStage`'s do, and both halves of that hold WHATEVER STOPPED THE
+ * RUN.
+ *
+ * GAP-FREE is a property of the tight tree rather than of optimality. What stood
+ * here argued it from optimality (a ranking with an empty rank between two
  * occupied ones is never optimal, because sliding everything below the gap up by
- * one shortens every edge that crossed it and breaks none. An exhausted budget
- * can therefore leave a gap, and nothing downstream minds, because the order
- * stage sorts the distinct ranks it finds. FROM ZERO is a construction: the last
- * thing {@link tighten} does to a component is subtract its lowest rank,
- * unconditionally, whatever stopped the run. So a run out of budget can hand
- * back a gap and can never hand back a floor that is not zero.
+ * one shortens every edge that crossed it and breaks none) and therefore
+ * concluded that an exhausted budget could leave a gap. That conclusion was
+ * wrong, and M2.4c had to settle it because the shared splitter reads these
+ * ranks. {@link tighten} keeps a TIGHT SPANNING TREE of each component: the
+ * growth loop runs to a spanning tree whatever the budget, since only the pivots
+ * are bounded, every tree edge has slack zero when it closes, a shift moves both
+ * ends of every edge already inside the tree, and a pivot shifts one whole side
+ * of a cut so the entering edge becomes tight while every edge with both ends on
+ * one side keeps the slack it had. So any two nodes of a component are joined by
+ * a walk of ±1 steps and the component's ranks are contiguous.
+ *
+ * The one path that does not cover is the restore below, which hands back the
+ * longest-path sweep run over a hint as a FLOOR, and a floor can in principle
+ * spread a component out. That path is covered by a witness rather than by an
+ * argument: the eight-node graph in `test/layout.simplex.test.ts` reaches it
+ * deterministically at a budget of zero, cold and floored, and comes back
+ * contiguous. It is barely reached by a random population, which is worth
+ * knowing before quoting one as evidence: instrumented with a counter, 21,462
+ * hinted runs across budgets 0 to 2 fire it 60 times. The reason a gapped
+ * restore is hard to reach at all is that the two conditions pull against each
+ * other, a floor big enough to spread a component makes the ranking it saves
+ * long and the tight tree then beats it, and that is an observation rather than
+ * a proof. `chains.ts` does not depend on any of it: the splitter walks the
+ * occupied ranks, which is what the runner checks completeness against.
+ *
+ * FROM ZERO is a construction: the last thing {@link tighten} does to a
+ * component is subtract its lowest rank, unconditionally, whatever stopped the
+ * run. So a run out of budget can never hand back a floor that is not zero.
  *
  * ## How
  *
@@ -892,7 +920,15 @@ export function networkSimplexRank(options?: NetworkSimplexOptions): RankStage {
 
       const ranks = new Map<NodeId, number>();
       for (const [number, node] of view.nodes.entries()) ranks.set(node.id, at(rank, number));
-      return { ranks, reversedEdges };
+
+      // The same splitter the default ranker uses, and the same one it has to
+      // be: a chain is a contract with the order stage, the position stage and
+      // the router, not a private convenience of whichever stage minted it.
+      // Shared since M2.4c; before that this stage declared no chain at all and
+      // its long edges reached those three unsplit.
+      const split = splitLongEdges('network-simplex-rank', graph, ranks);
+      if (split === undefined) return { ranks, reversedEdges };
+      return { ranks, reversedEdges, ...split };
     },
   };
 }

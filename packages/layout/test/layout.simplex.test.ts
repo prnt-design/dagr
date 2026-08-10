@@ -217,7 +217,18 @@ describe('networkSimplexRankStage', () => {
         ['a', 'd', 'ad'],
       ],
     );
-    expect(ranksOf(graph)).toEqual({ a: 0, b: 1, c: 2, d: 3 });
+    // `ad` spans three ranks in every feasible ranking, so it is a long edge
+    // whatever this stage does and the shared splitter gives it two dummies.
+    // That half is `layout.chains.test.ts`'s business; here it is listed because
+    // the ranks map holds the roster rather than the graph.
+    expect(ranksOf(graph)).toEqual({
+      a: 0,
+      b: 1,
+      c: 2,
+      d: 3,
+      '#dummy:ad:0': 1,
+      '#dummy:ad:1': 2,
+    });
     expect(totalEdgeLength(graph, rank(graph))).toBe(6);
     expect(totalEdgeLength(graph, longestPathRankStage.run(prepare(graph)))).toBe(6);
   });
@@ -283,6 +294,70 @@ describe('networkSimplexRankStage', () => {
     expect(requireRank(state, 'b')).toBe(1);
   });
 
+  /**
+   * NO GAP IN THE RANKS, whatever the budget and whatever the hint, which is
+   * what lets the shared splitter's walk over the occupied ranks agree exactly
+   * with a walk over the integers between two endpoints.
+   *
+   * This stage's own docstring used to reason the other way, from optimality: a
+   * ranking with an empty rank between two occupied ones is never optimal, so a
+   * run cut short by its budget might leave one. The reason it does not is
+   * stronger and does not depend on the budget at all. `tighten` keeps a TIGHT
+   * SPANNING TREE of each component: growth runs to a spanning tree whatever
+   * the budget, since only the pivots are bounded, every tree edge has slack
+   * zero, and a pivot shifts one whole side of a cut so that the entering edge
+   * becomes tight while every edge inside either side keeps the slack it had.
+   * A walk of ±1 steps therefore joins any two nodes of a component, so the
+   * component's ranks are contiguous, and the last thing `tighten` does is
+   * subtract each component's lowest rank.
+   *
+   * What that argument does NOT cover is the restore: a component the tight
+   * tree made worse is handed back the ranking it started from, which is the
+   * longest-path sweep run over the hint as a FLOOR, and a floor can in
+   * principle spread a component out.
+   *
+   * THIS TEST DOES NOT REACH THAT BRANCH, and says so rather than implying
+   * otherwise. Instrumenting the restore with a counter, the 1,480 runs below
+   * fire it zero times, and the random population barely reaches it at all: 60
+   * restores in 21,462 hinted runs across budgets 0 to 2. `leaves no empty rank
+   * when the restore hands back the ranking it started from`, further down this
+   * file, is the deterministic witness for that path. The splitter walks the
+   * occupied ranks regardless, because that is the rule the runner checks it
+   * against and it should not depend on either half of this being true.
+   */
+  it('leaves no empty rank between two occupied ones, at any budget', () => {
+    const random = mulberry32(77);
+    let hinted = 0;
+    for (let round = 0; round < 400; round += 1) {
+      const graph = randomDigraph(random);
+      const ids = graph.nodes().map((node) => node.id);
+      if (ids.length === 0) continue;
+      // A hint on one node, drawn from the same stream, so this covers the
+      // floored sweep as well as the cold one.
+      const target = ids[Math.floor(random() * ids.length)] ?? '';
+      const hint = new Map<NodeId, number>([[target, 1 + Math.floor(random() * 4)]]);
+      for (const options of [
+        { maxIterations: 0 },
+        { maxIterations: 2 },
+        { initialRanks: hint },
+        { maxIterations: 0, initialRanks: hint },
+      ] satisfies NetworkSimplexOptions[]) {
+        const state = networkSimplexRank(options).run(prepare(graph));
+        hinted += 1;
+        // Over the graph's own nodes, because the claim is about the RANKING.
+        // Taking it over the whole map would let the dummies the splitter minted
+        // fill in a gap and report it as absent.
+        const used = [...new Set(ids.map((id) => requireRank(state, id)))].sort(
+          (left, right) => left - right,
+        );
+        expect(used, `round ${String(round)}: ranks used`).toEqual(
+          used.map((_, index) => index),
+        );
+      }
+    }
+    expect(hinted).toBeGreaterThan(1_000);
+  });
+
   it('leaves both ends of a self loop on one rank and reverses nothing', () => {
     const graph = build(
       ['a', 'b'],
@@ -310,18 +385,52 @@ describe('networkSimplexRankStage', () => {
         ['a', 'c', 'ac'],
       ],
     );
-    expect(ranksOf(graph)).toEqual({ a: 0, b: 1, c: 2 });
+    expect(ranksOf(graph)).toEqual({ a: 0, b: 1, c: 2, '#dummy:ac:0': 1 });
     expect(totalEdgeLength(graph, rank(graph))).toBe(5);
   });
 
-  it('declares no virtual node, and contributes nothing but ranks and reversals', () => {
+  it('declares no virtual node for a graph with no long edge in it', () => {
+    // `tangled()` ranks into four layers with nothing spanning two of them, so
+    // there is nothing to split and both fields are omitted rather than handed
+    // back empty. The runner supplies the empty collections, and it leaves
+    // `PreparedState.sizes` alone because nothing was added to size.
     const state = rank(tangled());
     expect(state.virtualNodes).toBeUndefined();
     expect(state.virtualChains).toBeUndefined();
+    // The graph, the config and the sizes are not this stage's to return.
     expect(Object.keys(state).sort()).toEqual(['ranks', 'reversedEdges']);
   });
 
-  it('ranks exactly the graph, in graph order', () => {
+  it('declares a chain for a long edge, and says so in the fields the runner reads', () => {
+    // The gap M2.4b left open and M2.4c closed. This stage minted no dummy at
+    // all until the splitter moved to `chains.ts`, so a caller who selected it
+    // got multi-rank edges reaching the order stage, the position stage and the
+    // router, which is the one thing M2.4b's headline rule forbids.
+    // `layout.chains.test.ts` is where the chains themselves are tested.
+    const graph = build(
+      ['a', 'b', 'c', 'd'],
+      [
+        ['a', 'b', 'ab'],
+        ['b', 'c', 'bc'],
+        ['c', 'd', 'cd'],
+        ['a', 'd', 'ad'],
+      ],
+    );
+    const state = rank(graph);
+    expect([...(state.virtualChains ?? [])]).toEqual([['ad', ['#dummy:ad:0', '#dummy:ad:1']]]);
+    expect([...(state.virtualNodes ?? [])]).toEqual([
+      ['#dummy:ad:0', { width: 0, height: 0 }],
+      ['#dummy:ad:1', { width: 0, height: 0 }],
+    ]);
+    expect(Object.keys(state).sort()).toEqual([
+      'ranks',
+      'reversedEdges',
+      'virtualChains',
+      'virtualNodes',
+    ]);
+  });
+
+  it('ranks exactly the graph, in graph order, then whatever it declared', () => {
     const graph = tangled();
     expect([...rank(graph).ranks.keys()]).toEqual(graph.nodes().map((node) => node.id));
   });
@@ -411,7 +520,22 @@ describe('networkSimplexRankStage determinism', () => {
         ['v0', 'v8', 'e9'],
       ],
     );
-    const settled = { v0: 0, v3: 4, v6: 2, v8: 1, v14: 2, v15: 3, v16: 1, v18: 2, v19: 3 };
+    // `e4` runs from rank 1 to rank 4 in this ranking, so the shared splitter
+    // gives it two dummies and they are part of the ranks map. The tie-break
+    // this test is about is the nine real nodes.
+    const settled = {
+      v0: 0,
+      v3: 4,
+      v6: 2,
+      v8: 1,
+      v14: 2,
+      v15: 3,
+      v16: 1,
+      v18: 2,
+      v19: 3,
+      '#dummy:e4:0': 2,
+      '#dummy:e4:1': 3,
+    };
     const grown = networkSimplexRank({ maxIterations: 0 }).run(prepare(graph));
     expect(Object.fromEntries(grown.ranks), 'the tight tree alone').toEqual(settled);
     expect(ranksOf(graph), 'and every pivot after it').toEqual(settled);
@@ -600,6 +724,8 @@ describe('networkSimplexRankStage against longest path', () => {
       const random = mulberry32(seed);
       let improved = 0;
       let broken = 0;
+      let fewerDummies = 0;
+      let split = 0;
       for (let round = 0; round < 30; round += 1) {
         const graph = randomDigraph(random);
         const where = `seed ${String(seed)} round ${String(round)}`;
@@ -610,20 +736,41 @@ describe('networkSimplexRankStage against longest path', () => {
         // Both stages break cycles the same way, so the comparison is between
         // two rankings of one acyclic view rather than between two views.
         expect([...state.reversedEdges], `${where}: same view`).toEqual([...before.reversedEdges]);
-        expect([...state.ranks.keys()], `${where}: ranked exactly the graph`).toEqual(
-          graph.nodes().map((node) => node.id),
-        );
+        // Every node ranked, then every dummy the shared splitter declared, and
+        // nothing else: the roster, in the order the runner will read it. This
+        // read `graph.nodes()` alone until M2.4c, when the splitter this stage
+        // did not have became the splitter both stages call.
+        expect([...state.ranks.keys()], `${where}: ranked exactly the roster`).toEqual([
+          ...graph.nodes().map((node) => node.id),
+          ...(state.virtualNodes?.keys() ?? []),
+        ]);
         expectFeasible(graph, state, where);
         const after = totalEdgeLength(graph, state);
         expect(after, `${where}: total edge length`).toBeLessThanOrEqual(
           totalEdgeLength(graph, before),
         );
         if (after < totalEdgeLength(graph, before)) improved += 1;
+
+        // The saving in the currency it is spent in. Total edge length minus
+        // the edge count is exactly what a splitter mints, so a stage that
+        // shortens the total declares no more dummies than longest path does,
+        // and both counts are now real rather than hypothetical.
+        const mints = (output: RankOutput): number => output.virtualNodes?.size ?? 0;
+        expect(mints(state), `${where}: dummies declared`).toBeLessThanOrEqual(mints(before));
+        if (mints(state) < mints(before)) fewerDummies += 1;
+        if (mints(state) > 0) split += 1;
       }
       // Counted so that a stage which silently returned its input would not sit
       // here green: `<=` is satisfied by doing nothing at all.
       expect(improved, `seed ${String(seed)}: rounds it improved`).toBeGreaterThan(0);
       expect(broken, `seed ${String(seed)}: rounds that needed an edge reversed`).toBeGreaterThan(0);
+      expect(fewerDummies, `seed ${String(seed)}: rounds it minted fewer dummies`).toBeGreaterThan(
+        0,
+      );
+      // And "fewer" is not "none": a stage that declared no chain at all would
+      // satisfy every `<=` above, which is exactly what this one did until
+      // M2.4c gave it the splitter.
+      expect(split, `seed ${String(seed)}: rounds it declared a chain`).toBeGreaterThan(0);
     });
   }
 });
@@ -682,6 +829,52 @@ describe('networkSimplexRank and its iteration budget', () => {
     expectFeasible(graph, pivoted, 'one pivot');
     expect(totalEdgeLength(graph, pivoted)).toBe(13);
     expect(totalEdgeLength(graph, rank(graph))).toBe(13);
+  });
+
+  /**
+   * The restore path's contiguity, which is the half of `leaves no empty rank
+   * between two occupied ones, at any budget` that a random population does not
+   * reach: instrumented, that test fires this branch zero times in its 1,480
+   * runs.
+   *
+   * This graph fires it deterministically at a budget of zero, which is what
+   * the test above establishes from the other side (the tight tree leaves 16
+   * and the run returns 15, and 15 is what it started from). So what comes back
+   * here IS the longest-path sweep, reinstated, which is the ranking the
+   * tight-tree argument for gap-freeness says nothing about. Asserted both
+   * cold and with a floor, because the floor is the only thing that could
+   * spread a component out, and a floor of 3 on `v10` is one this graph's own
+   * ranking already satisfies plus a restore on top.
+   *
+   * What that does not do is rule the case out. A floor big enough to spread a
+   * component makes the ranking it saves LONG, and the tight tree then beats it
+   * and the restore does not fire, so the two conditions pull against each
+   * other: single-node floors from 1 to 8 on every node of this graph either
+   * fire the restore with no gap or produce no restore at all. That is an
+   * observation and not a proof, and it is why `chains.ts` walks the occupied
+   * ranks rather than trusting this.
+   */
+  it('leaves no empty rank when the restore hands back the ranking it started from', () => {
+    const graph = regressor();
+    const ids = graph.nodes().map((node) => node.id);
+    const longest = longestPathRankStage.run(prepare(graph));
+    for (const options of [
+      { maxIterations: 0 },
+      { maxIterations: 0, initialRanks: new Map([['v10', 3]]) },
+    ] satisfies NetworkSimplexOptions[]) {
+      const state = networkSimplexRank(options).run(prepare(graph));
+      // The observable signature of the restore: the ranking that comes back is
+      // the longest-path one, node for node, where one pivot would have moved
+      // four of these nodes (see the test above, which reaches 13 from 15).
+      const ranksOfGraph = (out: RankOutput): Record<NodeId, number> =>
+        Object.fromEntries(ids.map((id) => [id, requireRank(out, id)]));
+      expect(ranksOfGraph(state)).toEqual(ranksOfGraph(longest));
+      expect(totalEdgeLength(graph, state)).toBe(15);
+      const used = [...new Set(ids.map((id) => requireRank(state, id)))].sort(
+        (left, right) => left - right,
+      );
+      expect(used).toEqual(used.map((_, index) => index));
+    }
   });
 
   it('returns a feasible ranking when the budget runs out mid-solve', () => {
@@ -884,10 +1077,23 @@ describe('networkSimplexRank and its warm start', () => {
 
   it('lands on one of the two optima cold, and the other one hinted', () => {
     const graph = twoOptima();
-    expect(ranksOf(graph)).toEqual({ a: 0, b: 1, c: 3, d: 1, e: 2 });
+    // Two optima of equal cost cost the same number of dummies, since a
+    // splitter mints the total edge length minus the edge count, and they do
+    // not spend them on the same edge: `b` at rank 1 makes `bc` the long one,
+    // `b` at rank 2 makes `ab` the long one. Which is another way of saying
+    // that a warm start moves the chains as well as the ranks, which is exactly
+    // what M3.6 and M3.8 will be reading.
+    expect(ranksOf(graph)).toEqual({ a: 0, b: 1, c: 3, d: 1, e: 2, '#dummy:bc:0': 2 });
     expect(totalEdgeLength(graph, rank(graph))).toBe(6);
     const hinted = networkSimplexRank({ initialRanks: other }).run(prepare(graph));
-    expect(Object.fromEntries(hinted.ranks)).toEqual({ a: 0, b: 2, c: 3, d: 1, e: 2 });
+    expect(Object.fromEntries(hinted.ranks)).toEqual({
+      a: 0,
+      b: 2,
+      c: 3,
+      d: 1,
+      e: 2,
+      '#dummy:ab:0': 1,
+    });
     expect(totalEdgeLength(graph, hinted)).toBe(6);
   });
 
@@ -1022,11 +1228,21 @@ describe('networkSimplexRank and its warm start', () => {
         ['f', 'b', 'fb'],
       ],
     );
-    expect(ranksOf(graph)).toEqual({ a: 0, b: 1, c: 3, d: 1, e: 2, f: 0 });
+    expect(ranksOf(graph)).toEqual({ a: 0, b: 1, c: 3, d: 1, e: 2, f: 0, '#dummy:bc:0': 2 });
     const hint: ReadonlyMap<NodeId, number> = new Map([['f', 1]]);
     const hinted = networkSimplexRank({ initialRanks: hint }).run(prepare(graph));
     expectFeasible(graph, hinted, 'a floor on an ancestor');
-    expect(Object.fromEntries(hinted.ranks)).toEqual({ a: 0, b: 2, c: 3, d: 1, e: 2, f: 1 });
+    // `b` moving down turns `ab` into the long edge and `bc` into a short one,
+    // so the chain moves with the rank the hint chose.
+    expect(Object.fromEntries(hinted.ranks)).toEqual({
+      a: 0,
+      b: 2,
+      c: 3,
+      d: 1,
+      e: 2,
+      f: 1,
+      '#dummy:ab:0': 1,
+    });
     expect(totalEdgeLength(graph, hinted)).toBe(totalEdgeLength(graph, rank(graph)));
   });
 
