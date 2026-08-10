@@ -146,7 +146,9 @@ export interface RankedState extends PreparedState {
   /**
    * Ids the rank stage needs to lay out but the caller never added to the
    * graph. Filled since M2.4b, where the default ranker splits a long edge into
-   * a chain of one virtual node per rank it spans.
+   * a chain of one virtual node per rank it spans, and by both built-in rankers
+   * since M2.4c, which moved that splitter into `chains.ts` so the two share
+   * it.
    *
    * This carries exactly the argument `reversedEdges` carries: the source graph
    * is never mutated, so a stage that needs a node the user never added

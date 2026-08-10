@@ -166,8 +166,8 @@ function checkRanked(
     // This has to run before the roster loop, which would otherwise see the id
     // twice and report whichever failure the duplicate happened to cause.
     //
-    // `longestPathRankStage` mints dummy ids from edge ids, so a graph whose
-    // own node ids look like `#dummy:<edgeId>:<index>` lands here. That prefix
+    // Both built-in rankers mint dummy ids from edge ids, so a graph whose own
+    // node ids look like `#dummy:<edgeId>:<index>` lands here. That prefix
     // is reserved, not unforgeable. The splitter checks first and throws with
     // the reservation spelled out, so this is the catch-all for a third-party
     // ranker that mints ids some other way and collides anyway.
@@ -820,14 +820,15 @@ function assemble(graph: Graph, routed: RoutedState): LayoutResult {
  * one since M2.2: it breaks cycles with a least-squares feedback arc set and
  * ranks by longest path, so the layers are the ones the graph asks for, and as
  * of M2.4b it splits an edge that spans more than one rank into a chain of
- * dummy nodes, one per rank between its endpoints. The order stage has been one
- * since M2.6b: barycenter sweeps and a transpose pass, so within a layer the
- * horizontal order is one that has had its crossings reduced rather than the
- * graph's insertion order. The other two are still placeholders, so the
- * coordinates are a grid and an edge is a straight line from centre to centre,
- * bending through its chain where it has one, until coordinate assignment
- * (M2.7) and real routing (M2.8) replace them one at a time, against this
- * runner and its contract checks.
+ * dummy nodes, one per rank between its endpoints. `networkSimplexRankStage`,
+ * which a caller selects instead, calls the same splitter as of M2.4c. The
+ * order stage has been one since M2.6b: barycenter sweeps and a transpose pass,
+ * so within a layer the horizontal order is one that has had its crossings
+ * reduced rather than the graph's insertion order. The other two are still
+ * placeholders, so the coordinates are a grid and an edge is a straight line
+ * from centre to centre, bending through its chain where it has one, until
+ * coordinate assignment (M2.7) and real routing (M2.8) replace them one at a
+ * time, against this runner and its contract checks.
  *
  * @throws {InvalidConfigError} when a separation or a size is not a finite
  * number that is zero or greater.

@@ -1,6 +1,8 @@
 import { Graph } from '@dagr/graph';
 import type { EdgeId, NodeId } from '@dagr/graph';
+import { largeCorpus, smallCorpus } from '@dagr/bench';
 import { describe, expect, it } from 'vitest';
+import { splitLongEdges } from '../src/chains.js';
 import { measureNodes, resolveConfig } from '../src/config.js';
 import { StageContractError, defaultStages, layout } from '../src/index.js';
 import { longestPathRankStage } from '../src/rank.js';
@@ -455,28 +457,204 @@ describe('what the chains are consumed by', () => {
   });
 });
 
-describe('what M2.4b did not reach', () => {
+describe('the splitter both rank stages share', () => {
   /**
-   * The gap the milestone still leaves open, pinned so that it is visible in
-   * the suite rather than only in the ROADMAP, and so that a half-finished
-   * attempt to close it breaks a test rather than a drawing.
+   * The gap M2.4b left open and M2.4c closed, which was the last place in the
+   * package where a multi-rank edge could reach the order stage, the position
+   * stage and the router. The splitter was inside `longestPathRankStage` and
+   * nowhere else, `networkSimplexRankStage` declared no chain at all, and a
+   * chainless ranking is legal by design, so no contract check fired: selecting
+   * the other ranker quietly bought the drawing M2.4b exists to prevent.
+   *
+   * These are the tests that fail if the two rankers stop sharing `chains.ts`.
    */
-  it('leaves network-simplex-rank declaring no chain at all', () => {
-    // A caller who selects the other ranker gets multi-rank edges reaching the
-    // later stages, because the splitter is in `longest-path-rank` only and a
-    // chainless ranking is legal by design, so no contract check fires. When
-    // the two rankers share a splitter, this test is the one to delete.
-    const out = networkSimplexRankStage.run(prepare(detour()));
-    expect(out.virtualChains).toBeUndefined();
-    expect(out.virtualNodes).toBeUndefined();
-    // And the long edge really is long in that ranking, so there was something
-    // to split rather than nothing.
-    const from = out.ranks.get('a');
-    const to = out.ranks.get('z');
-    expect(from).toBeDefined();
-    expect(to).toBeDefined();
-    expect(Math.abs((to ?? 0) - (from ?? 0))).toBeGreaterThan(1);
+  it('gives network-simplex-rank the same chain the default ranker gets', () => {
+    const graph = detour();
+    const simplex = networkSimplexRankStage.run(prepare(graph));
+    expect(chainOf(simplex, 'az')).toEqual(['#dummy:az:0']);
+    // The id is a function of the edge and the position along the chain, so it
+    // does not carry which ranker asked for it. Here both rankers rank `a -> z`
+    // the same way, and the chain is the same chain rather than a second set of
+    // ids for the same three bends.
+    expect(chainOf(rank(graph), 'az')).toEqual(chainOf(simplex, 'az'));
+    expect([...(simplex.virtualNodes ?? [])]).toEqual([['#dummy:az:0', { width: 0, height: 0 }]]);
   });
+
+  it('names network-simplex-rank in the reserved-namespace error, not the other stage', () => {
+    // The stage name is a parameter of the splitter for exactly this reason: a
+    // `StageContractError` naming the wrong stage sends the reader to the wrong
+    // docstring, and both stages mint ids in the same reserved namespace.
+    const graph = build(
+      ['a', 'm', 'z', '#dummy:az:0'],
+      [
+        ['a', 'm', 'am'],
+        ['m', 'z', 'mz'],
+        ['a', 'z', 'az'],
+      ],
+    );
+    let thrown: unknown;
+    try {
+      layout({ graph }, { rank: networkSimplexRankStage });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(StageContractError);
+    const error = thrown as StageContractError;
+    expect(error.stage).toBe('network-simplex-rank');
+    expect(error.id).toBe('#dummy:az:0');
+    expect(error.message).toContain('reserved');
+  });
+
+  it('leaves no segment spanning more than one layer, under either ranker', () => {
+    // M2.4b's headline rule, which is the thing the gap broke: no multi-rank
+    // edge reaches the stages after the ranker. Checked over the SEGMENTS, which
+    // is what those stages actually read, so a chain with a hole in it fails
+    // here as loudly as no chain at all.
+    const graph = build(
+      ['a', 'b', 'm', 'n', 'z'],
+      [
+        ['a', 'b', 'ab'],
+        ['b', 'm', 'bm'],
+        ['m', 'n', 'mn'],
+        ['n', 'z', 'nz'],
+        ['a', 'z', 'az'],
+        ['b', 'z', 'bz'],
+        ['z', 'a', 'za'],
+      ],
+    );
+    for (const stage of [longestPathRankStage, networkSimplexRankStage]) {
+      const out = stage.run(prepare(graph));
+      const chains = out.virtualChains ?? new Map<EdgeId, readonly NodeId[]>();
+      const spans: number[] = [];
+      forEachSegment(graph, chains, (from, to) => {
+        const source = out.ranks.get(from);
+        const target = out.ranks.get(to);
+        expect(source, `${stage.name}: rank of ${from}`).toBeDefined();
+        expect(target, `${stage.name}: rank of ${to}`).toBeDefined();
+        spans.push(Math.abs((target ?? 0) - (source ?? 0)));
+      });
+      // A self loop is the one segment that spans nothing, and this graph has
+      // none, so every span is exactly one layer.
+      expect(new Set(spans), `${stage.name}: layers per segment`).toEqual(new Set([1]));
+      // Non-vacuity: there were long edges here to split, under both rankers.
+      expect(chains.size, `${stage.name}: edges split`).toBeGreaterThan(0);
+    }
+  });
+
+  it('takes the whole pipeline with the simplex ranker selected', () => {
+    // Every runner check runs against the chains this stage now declares, so
+    // reaching a result at all is most of the assertion, and the route through
+    // the dummy is the rest of it: before M2.4c this edge came back as a
+    // straight two-point line across two layers.
+    const graph = detour();
+    const result = layout({ graph }, { rank: networkSimplexRankStage });
+    expect([...result.nodes.keys()]).toEqual(['a', 'm', 'z']);
+    expect(result.edges.get('az')?.points).toHaveLength(3);
+    expect(result.edges.get('am')?.points).toHaveLength(2);
+  });
+
+  it('walks the occupied ranks rather than the integers between two endpoints', () => {
+    // The rule the runner checks completeness against is phrased over the ranks
+    // the LAYOUT ACTUALLY HAS, because those are exactly the layers the order
+    // stage builds. Neither shipping ranker leaves a gap, so this is asserted
+    // against the splitter directly, over a ranking that has one: the two walks
+    // differ only here, and this is what says which one is written.
+    const graph = build(
+      ['a', 'z'],
+      [['a', 'z', 'az']],
+    );
+    const ranks = new Map<NodeId, number>([
+      ['a', 0],
+      ['z', 20],
+    ]);
+    const split = splitLongEdges('gapped-rank', graph, ranks);
+    // No rank between 0 and 20 is occupied, so there is no layer between the
+    // two nodes to cross and no dummy to put in one. The integer walk would
+    // mint nineteen, every one of them a row of the drawing holding nothing but
+    // that one bend.
+    expect(split).toBeUndefined();
+    expect([...ranks]).toEqual([
+      ['a', 0],
+      ['z', 20],
+    ]);
+
+    // And with two ranks occupied in between, it is two dummies rather than
+    // nineteen, sitting on the ranks that exist.
+    const wider = build(
+      ['a', 'p', 'q', 'z'],
+      [['a', 'z', 'az']],
+    );
+    const widerRanks = new Map<NodeId, number>([
+      ['a', 0],
+      ['p', 7],
+      ['q', 13],
+      ['z', 20],
+    ]);
+    const chained = splitLongEdges('gapped-rank', wider, widerRanks);
+    expect([...(chained?.virtualChains ?? [])]).toEqual([['az', ['#dummy:az:0', '#dummy:az:1']]]);
+    expect(widerRanks.get('#dummy:az:0')).toBe(7);
+    expect(widerRanks.get('#dummy:az:1')).toBe(13);
+  });
+});
+
+describe('what each ranker mints on the bench corpora', () => {
+  /**
+   * The counts the two rankers' docstrings quote, pinned rather than left in
+   * prose, because a figure that lives only in prose goes stale: this package
+   * has found such a site after each of the last three milestones.
+   *
+   * A DIFF HERE IS A REVIEW ITEM. The default ranker's two figures are the
+   * TOTAL SPAN of the acyclic view, one dummy per rank per edge beyond the
+   * first, so they move when the cycle breaker moves and
+   * `layout.cycles.quality.test.ts` pins the same pair from the other end. The
+   * simplex ranker's two are what its pivots got to inside the default
+   * 20,000-pivot budget, which is the optimum on the 1k corpus and is not on
+   * the 10k, where ten times the budget reaches 99,698. Name the ranker AND the
+   * budget beside either of them, per M2.2b: an unqualified simplex figure
+   * means nothing.
+   *
+   * The 28% and 39% cuts those pairs represent were measured before M2.4c and
+   * quoted as what a splitter "would" mint. This test is the difference: they
+   * are what the roster holds.
+   */
+  const corpora = [
+    ['1k', smallCorpus(), 14_746, 10_660],
+    ['10k', largeCorpus(), 174_222, 105_975],
+  ] as const;
+
+  for (const [name, spec, byLongestPath, bySimplex] of corpora) {
+    it(`pins both rankers on the ${name} corpus`, () => {
+      const graph = new Graph();
+      for (const id of spec.nodes) graph.addNode(id);
+      for (const [source, target] of spec.edges) graph.addEdge(source, target);
+      const prepared = prepare(graph);
+
+      const longest = longestPathRankStage.run(prepared);
+      expect(longest.virtualNodes?.size, `${name}: longest-path-rank`).toBe(byLongestPath);
+
+      const simplex = networkSimplexRankStage.run(prepared);
+      expect(simplex.virtualNodes?.size, `${name}: network-simplex-rank at 20,000 pivots`).toBe(
+        bySimplex,
+      );
+
+      // Neither ranking has a gap in it, which is what makes the splitter's walk
+      // over the occupied ranks and a walk over the integers the same walk here.
+      // Taken over the graph's own nodes, so the dummies cannot fill a gap in
+      // and hide it.
+      for (const [stage, out] of [
+        ['longest-path-rank', longest],
+        ['network-simplex-rank', simplex],
+      ] as const) {
+        const used = new Set<number>();
+        for (const node of graph.nodes()) {
+          const rankOf = out.ranks.get(node.id);
+          if (rankOf !== undefined) used.add(rankOf);
+        }
+        const sorted = [...used].sort((left, right) => left - right);
+        expect(sorted, `${name}: ${stage} ranks used`).toEqual(sorted.map((_, index) => index));
+      }
+    }, 120_000);
+  }
 });
 
 describe('bounds around a bend', () => {

@@ -302,6 +302,14 @@ of doc prose.
   splitter between the two rankers is what makes the 105,975 real, and it is
   named in M2.4b's ROADMAP entry as the gap that milestone left open.
 
+  **M2.4c SHARED THE SPLITTER, so the paragraph above has expired in full.**
+  This stage declares chains like the other one, the 10,660 and the 105,975 are
+  what its `virtualNodes` holds rather than what a splitter over its ranking
+  would hold, and no run gets a multi-rank edge past the ranker any more. What
+  survives of that paragraph is the cost: switching still buys a rank stage that
+  costs several times more, and still risks a taller drawing. See the M2.4c
+  entry under Changed.
+
   **It cannot make a drawing shorter and it can make one taller**, because
   minimum total edge length and minimum height are different objectives and
   `longest-path-rank` already achieves the second exactly. Six nodes are enough
@@ -394,6 +402,46 @@ of doc prose.
   (M2.2 review)
 
 ### Changed
+
+- **`network-simplex-rank` now splits long edges into dummy chains, so a caller
+  who selects it gets a different drawing, with no type change to warn them.**
+  The splitter M2.4b put inside `longest-path-rank` moved to `src/chains.ts` and
+  both rank stages call it. What a caller selecting `networkSimplexRankStage` or
+  `networkSimplexRank(options)` sees: `virtualNodes` and `virtualChains` come
+  back filled where they were omitted, an edge spanning `n` ranks routes as
+  `n + 1` points instead of two, the rows those dummies join are wider,
+  `bounds` may be larger, and a graph holding a node id in the reserved
+  `#dummy:` namespace now throws a `StageContractError` naming
+  `network-simplex-rank` where it used to lay out. That last one is a throw on
+  input this ranker used to accept, and it is the same throw
+  `longest-path-rank` has raised since M2.4b: the namespace is reserved, not
+  unforgeable, and the fix is to rename the node. A run that never overrides
+  `rank` is untouched, since `defaultStages.rank` is `longest-path-rank` and
+  always has been. (M2.4c)
+
+  **This is a hole closed rather than a feature added.** A chainless ranking is
+  legal by design, so no contract check fired: selecting the other ranker
+  quietly bought multi-rank edges reaching the order stage, the position stage
+  and the router, which is the one thing M2.4b exists to prevent. The test that
+  pinned the gap named itself as the one to delete when this landed, and it is
+  deleted.
+
+  **What it mints**, naming the ranker and the budget beside every figure per
+  M2.2b: 10,660 dummies on the 1k benchmark corpus and 105,975 on the 10k, both
+  inside the default 20,000-pivot budget, against `longest-path-rank`'s 14,746
+  and 174,222 on the same two. Cuts of 28% and 39%, which this file has quoted
+  since M2.3 as what a splitter over this ranking WOULD mint. They are now what
+  the roster holds. Both pairs are pinned in `test/layout.chains.test.ts`.
+
+  **Nothing the default pipeline produces moved**, and that is checked rather
+  than assumed: no golden file, no pinned crossing count and no committed
+  benchmark entry changed, because `longest-path-rank` calls the same splitter
+  it always had and its output is byte-identical. The one difference inside the
+  shared code is that it now walks the OCCUPIED ranks between an edge's
+  endpoints rather than the integers, which is how the runner's completeness
+  rule is phrased. Neither shipping ranker leaves a gap in its ranks, so the two
+  walks agree on every graph in the suite; the difference is pinned directly
+  against the splitter, over a ranking with a gap in it.
 
 - **Both order-stage budgets changed, so `barycenterOrder()` and
   `barycenterOrderStage` return different layers than they did, with no type

@@ -11,7 +11,7 @@ sidebar_position: 3
 `LayoutResult`: where every node sits, how every edge runs, and the box around
 the lot.
 
-This page describes the pipeline as of M2.4b, plus M2.3's second ranker and the
+This page describes the pipeline as of M2.4c, plus M2.3's second ranker and the
 order stage M2.5 built and M2.6b made the default. Those numbers are not in
 landing order on purpose: M2.4a landed before M2.3's entry was written up here,
 and the milestones do not run in landing order.
@@ -421,9 +421,10 @@ out, and both are relied on:
   optimises for that, and neither stage in this package recovers it, because
   both break cycles with the same heuristic.
 - **Contiguity.** The ranks used are exactly `0..max`, with no gaps, because a
-  node at rank `r` only got there from a predecessor at rank `r - 1`. The order
-  stage turns ranks into layers and the runner rejects an empty layer, so a gap
-  would surface there.
+  node at rank `r` only got there from a predecessor at rank `r - 1`. It is a
+  property of this stage rather than something the runner enforces: the order
+  stage turns the distinct ranks it finds into layers, so a rank nothing sits at
+  is not an empty layer, it is not a layer at all.
 
 Every edge that is neither reversed nor a self loop runs **strictly** down:
 `rank(source) < rank(target)`. A reversed edge runs strictly up.
@@ -450,13 +451,12 @@ acyclic view, and then minimises the **total edge length**: the sum, over the
 edges of that view, of how many ranks each edge crosses. Gansner, Koutsofios,
 North and Vo (1993), section 2.
 
-That sum, minus the edge count, is exactly how many dummy nodes a splitter over
-this ranking would mint, which is why it is the quantity worth optimising. On
-the 1k benchmark corpus it would take the default ranker's 14,746 dummies down
-to 10,660, a 28% cut, and that is as far as it goes: ten times the budget
-returns the same 10,660. On the 10k corpus it would reach 105,975 from 174,222
-inside its default budget, a 39% cut, and 99,698 given ten times it. Would,
-because this stage does not split: see the paragraph below.
+That sum, minus the edge count, is exactly how many dummy nodes the splitter
+over this ranking mints, which is why it is the quantity worth optimising. On
+the 1k benchmark corpus it takes the default ranker's 14,746 dummies down to
+10,660, a 28% cut, and that is as far as it goes: ten times the budget returns
+the same 10,660. On the 10k corpus it reaches 105,975 from 174,222 inside its
+default budget, a 39% cut, and 99,698 given ten times it.
 
 That 28% read 31% in the previous release and 57% in the one before, and this
 stage did not get worse either time. Its INPUT got better: the cycle breaker
@@ -478,16 +478,19 @@ The newer view of any such pair is the cheaper of the two to solve at both
 budgets.
 This is why a simplex figure quoted without its pivot budget says nothing.
 
-**None of that saving is collectable, and M2.4b did not change that.** M2.4b
-put the splitter in `longest-path-rank` and nowhere else, so this stage still
-omits `virtualNodes`, still mints no dummy, and the counts above are still a
-cost nobody is paying. Read the conditional in "would mint" literally. What a
-caller who switches today actually gets is a rank stage that costs far more
-(tens of milliseconds against the seconds the budget caps it at on the 10k
-corpus), a drawing that is never shorter and may be taller, zero dummy nodes
-saved because it mints none to save, and long edges reaching the later stages
-unsplit. The 28% is real and it reproduces; it becomes a saving when the two
-rankers share a splitter, which M2.4b named as the gap it left open.
+**That saving became collectable in M2.4c and was not before it.** M2.4b put
+the splitter in `longest-path-rank` and nowhere else, so until M2.4c this stage
+omitted `virtualNodes`, minted no dummy, and the counts above were a cost nobody
+was paying: what a caller who switched actually got was a drawing whose long
+edges reached the order stage, the position stage and the router unsplit, which
+is the one thing [dummy chains](#dummy-chains) exist to prevent. The splitter now
+lives in one place and both rank stages call it, so the counts above are what
+this stage puts in the roster.
+
+What has not changed is the rest of the trade. Switching still buys a rank stage
+that costs far more (tens of milliseconds against the seconds the budget caps it
+at on the 10k corpus) and a drawing that is never shorter and may be taller. The
+dummies saved are what you are buying with that.
 
 **It cannot make the drawing shorter, and it can make it taller.** Minimum total
 edge length and minimum height are different objectives, and this stage
@@ -605,19 +608,27 @@ applied to, which is the state a long-running M3 session drifts into one patch
 at a time.
 
 Ranks still come out contiguous from zero per connected component, as the
-default stage's do, but the two halves of that get there by different routes and
-only one of them is conditional.
+default stage's do, and both halves of that hold whatever stopped the run.
 
-Gap-freeness is a consequence. A ranking with an empty rank between two occupied
+Gap-freeness comes from the tight tree. This page said until M2.4c that it was a
+consequence of optimality (a ranking with an empty rank between two occupied
 ones is never optimal, because sliding everything below the gap up by one
-shortens every edge that crossed it and breaks none. Nothing constructs it, so a
-budget that runs out before the solver gets there can leave a gap, and nothing
-downstream minds: the order stage sorts the distinct ranks it finds.
+shortens every edge that crossed it and breaks none) and therefore that an
+exhausted budget could leave a gap. That was wrong. The solver keeps a **tight
+spanning tree** of each component, growing it to span whatever the budget is,
+since the budget bounds the pivots and not the growth, and every edge of that
+tree spans exactly one rank. Any two nodes of a component are therefore joined
+by a walk of single-rank steps, which leaves no rank between them empty.
 
 Starting at zero is a construction. Each component is re-based on its own lowest
 rank at the very end of the run, after the keep-the-better-ranking restore, and
-that runs whatever the budget did. An exhausted budget can leave a gap; it
-cannot leave a component floating at a nonzero floor.
+that runs whatever the budget did.
+
+If you write a rank stage of your own, note that the runner does not require
+either property: a ranking with gaps is legal, the order stage sorts the
+distinct ranks it finds, and the chain-completeness rule is phrased over the
+ranks the layout actually has rather than over the integers between two
+endpoints. See [The stage contract](#the-stage-contract).
 
 ### Dummy chains
 
@@ -625,6 +636,11 @@ An edge whose endpoints are more than one rank apart is split into a **chain**
 of virtual nodes, one per rank strictly between them. `a -> d` alongside
 `a -> b -> c -> d` becomes `a -> ? -> ? -> d` through two dummies on ranks 1 and
 2, and the router rejoins the three segments into one polyline for `a -> d`.
+
+**Both rank stages do this**, through one shared splitter, as of M2.4c. It was
+`longest-path-rank`'s alone when M2.4b built it, which meant that selecting
+`network-simplex-rank` bought exactly the drawing this section describes as the
+thing to avoid. Nothing here is a property of which ranker you chose.
 
 Nothing downstream of the ranker then meets an edge crossing a layer it has no
 node in, which is what lets the crossing counter and the positioner have an
@@ -689,8 +705,10 @@ stable under everything and nothing here claims one is.
 
 **The `#dummy:` prefix is reserved, which is not the same as unforgeable.** If
 your graph holds a node whose id is one the splitter would mint, the splitter
-throws a `StageContractError` naming `longest-path-rank`, the colliding id, and
-the reservation, and telling you to rename your node. The runner's own
+throws a `StageContractError` naming the rank stage that called it
+(`longest-path-rank` or `network-simplex-rank`: both call the same splitter as
+of M2.4c), the colliding id, and the reservation, and telling you to rename your
+node. The runner's own
 declaration check would catch the same collision one step later and still does
 for a third-party ranker that mints ids some other way, so the collision is
 reported once rather than twice. There is no claim that a collision is
@@ -1788,8 +1806,8 @@ without being selectable at all, `brandes-koepf-position`, for the reason below.
 
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
-| rank | `longest-path-rank` | Breaks cycles with a least-squares feedback arc set, ranks by longest path, then splits every long edge into a [dummy chain](#dummy-chains). Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height, and it does NOT split. | Sharing the splitter with `network-simplex-rank`. |
-| order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass, over every segment of the drawing including the pieces of a split long edge. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). Its two budgets were re-derived in M2.6c and are now 4 sweeps and a cap of 16. | Its tie rule re-derived: it is the last decision here still measured over a population twenty times smaller than the one the stage sees. |
+| rank | `longest-path-rank` | Breaks cycles with a least-squares feedback arc set, ranks by longest path, then splits every long edge into a [dummy chain](#dummy-chains). Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height, and since M2.4c it splits through the same shared splitter. | Nothing outstanding. |
+| order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass, over every segment of the drawing including the pieces of a split long edge. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). Its two budgets were re-derived in M2.6c and are now 4 sweeps and a cap of 16, and its transpose tie rule was re-derived in M2.6d and kept. | Nothing outstanding. |
 | position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. `brandes-koepf-position` is a real algorithm that is implemented but not exported, for the reason below this table. | A compaction that is not the longest-path substitute, which is what now blocks Brandes-Koepf, and then a decision about the default. |
 | route | `straight-route` | Straight segments from the source centre through each of the edge's dummies to the target centre, which is two points for an edge with no chain. | Border attachment, obstacle detours and splines, monotone in the rank axis (M2.8). |
 
