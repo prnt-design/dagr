@@ -36,15 +36,15 @@ import type {
 // stages below.
 import type { RoutedState } from '../src/types.js';
 // The stages that are deliberately not part of the public surface, so the tests
-// that name them reach into the module that defines them: the two remaining
-// placeholders, `insertionOrderStage`, which stopped being the default in M2.6b
+// that name them reach into the module that defines them: the one remaining
+// placeholder, `insertionOrderStage`, which stopped being the default in M2.6b
 // and stayed module-local because the ordering evidence still runs it, and
 // `brandesKoepfPositionStage`, which M2.7 implemented and left unexported
 // because its own measurements say no caller should choose it yet. The stages
 // a caller does choose between are exported, and are reached below through
 // `api`.
 import { brandesKoepfPositionStage } from '../src/position.js';
-import { gridPositionStage, insertionOrderStage, straightRouteStage } from '../src/stages.js';
+import { gridPositionStage, insertionOrderStage } from '../src/stages.js';
 
 describe('@dagr/layout public surface', () => {
   it('exports the entry point', () => {
@@ -55,7 +55,7 @@ describe('@dagr/layout public surface', () => {
     expect(api.defaultStages.rank).toBe(api.longestPathRankStage);
     expect(api.defaultStages.order).toBe(api.barycenterOrderStage);
     expect(api.defaultStages.position).toBe(gridPositionStage);
-    expect(api.defaultStages.route).toBe(straightRouteStage);
+    expect(api.defaultStages.route).toBe(api.polylineRouteStage);
     // The stage `order` used to point at is still in the package and still not
     // exported from it, which is the export rule holding in the one direction
     // it had not been asked to hold in yet: a stage that stops being the
@@ -155,6 +155,7 @@ describe('@dagr/layout public surface', () => {
       'longestPathRankStage',
       'networkSimplexRank',
       'networkSimplexRankStage',
+      'polylineRouteStage',
     ]);
   });
 

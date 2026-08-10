@@ -215,7 +215,7 @@ function checkRanked(
     }
   }
 
-  // A stale or invented id here would sit invisible until M2.8 tried to
+  // A stale or invented id here would sit invisible until a router tried to
   // un-reverse a route and quietly did nothing.
   for (const id of ranked.reversedEdges) {
     if (!graph.hasEdge(id)) {
@@ -612,12 +612,22 @@ function assertBounds(result: LayoutResult): void {
  * The form is proximity rather than equality: each end has to be at least as
  * close to its own node as to the other one. Equality of the endpoints against
  * the node positions is the check this would obviously be, and it is the wrong
- * one, because it would have to be relaxed in M2.8 as soon as routes attach at
- * box borders and detour around obstacles, and a contract that loses rules is
- * worse than one that never claimed them. Proximity survives both: a route that
- * leaves its source's border and arrives at its target's is still nearer its
- * own node at each end under any routing scheme planned. What it does not
- * constrain is the shape between the endpoints, which is the router's business.
+ * one: it would have had to be relaxed in M2.8, which is where routes started
+ * attaching at box borders, and it would have to be relaxed again for obstacle
+ * detours, and a contract that loses rules is worse than one that never claimed
+ * them. THE FIRST HALF OF THAT IS NOW HISTORY RATHER THAN FORECAST. Proximity
+ * survived it untouched, because a route that leaves its source's border and
+ * arrives at its target's is still nearer its own node at each end, and the
+ * router is what keeps it so: an attachment travels at most half the way to the
+ * node at the OTHER end of its edge, so an end can reach the midpoint between
+ * the two and never pass it. That cap exists for this rule specifically, and
+ * `route.ts` says so, because the obvious cap of half the current SEGMENT is
+ * the wrong distance on a chained edge and this rule is what catches it. What this
+ * does not constrain is the shape between the endpoints, which is the router's
+ * business, and that includes monotonicity in the rank axis. The reason it is
+ * not checked here is in `route.ts`: the property belongs to the position stage
+ * and the router jointly, and a caller may supply a position stage that stacks
+ * ranks any way it likes.
  *
  * The comparison is deliberately not strict, so a self loop passes: both
  * endpoints are the same node, every distance in the comparison is equal, and a
@@ -638,8 +648,10 @@ function checkRouted(stage: string, graph: Graph, routed: RoutedState): void {
     // The last numbers reaching the caller without a finiteness check, and the
     // same argument the config makes about NaN applies: it does not fail, it
     // propagates through every sum downstream and surfaces as a scene that will
-    // not draw. Cheap now, and doing real work from M2.8, where this map stops
-    // holding two copied endpoints and starts holding computed geometry.
+    // not draw. It stopped being a check on copied numbers in M2.8, which is
+    // where a route's ends became computed geometry: an attachment divides by
+    // the distance to the next point, so a position stage handing back an
+    // infinity now arrives here as a `NaN` rather than as that infinity.
     for (const [index, point] of route.entries()) {
       if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
         throw new StageContractError(
@@ -699,8 +711,8 @@ function checkRouted(stage: string, graph: Graph, routed: RoutedState): void {
  * boxes and nothing grows either. One reachable counterexample is all this needs
  * (`test/layout.chains.test.ts` is that counterexample), and the rule on this
  * project is to make a claim true rather than to soften it, so the formulation
- * covers the case rather than the common case. It is also what M2.8 needs anyway
- * once a route detours around an obstacle.
+ * covers the case rather than the common case. It is also what a router needs
+ * anyway once a route detours around an obstacle, which M2.8 did not bring.
  */
 function boundsOf(
   nodes: ReadonlyMap<NodeId, PositionedNode>,
@@ -824,11 +836,11 @@ function assemble(graph: Graph, routed: RoutedState): LayoutResult {
  * which a caller selects instead, calls the same splitter as of M2.4c. The
  * order stage has been one since M2.6b: barycenter sweeps and a transpose pass,
  * so within a layer the horizontal order is one that has had its crossings
- * reduced rather than the graph's insertion order. The other two are still
- * placeholders, so the coordinates are a grid and an edge is a straight line
- * from centre to centre, bending through its chain where it has one, until
- * coordinate assignment (M2.7) and real routing (M2.8) replace them one at a
- * time, against this runner and its contract checks.
+ * reduced rather than the graph's insertion order. The route stage has been one
+ * since M2.8: a polyline through the edge's chain, attached at the endpoint
+ * boxes' borders and monotone in the rank axis. The position stage is the last
+ * placeholder, so the coordinates are still a grid, until the compaction work
+ * `position.ts` names replaces it against this runner and its contract checks.
  *
  * @throws {InvalidConfigError} when a separation or a size is not a finite
  * number that is zero or greater.

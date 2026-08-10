@@ -76,9 +76,14 @@ describe('virtual nodes', () => {
     // Three rows of a 40-tall node with the default rankSep of 50.
     expect(result.nodes.get('a')?.y).toBe(20);
     expect(result.nodes.get('b')?.y).toBe(200);
+    // Two points because this ranker declares the dummy without declaring a
+    // chain, which stays legal, and they sit on the two boxes' facing borders
+    // rather than at their centres as of M2.8. The route runs straight through
+    // the middle row and takes no notice of the node sitting in it, which is
+    // what an orphan dummy means.
     expect(result.edges.get('ab')?.points).toEqual([
-      { x: 0, y: 20 },
-      { x: 0, y: 200 },
+      { x: 0, y: 40 },
+      { x: 0, y: 180 },
     ]);
   });
 

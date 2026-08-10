@@ -240,6 +240,6 @@ describe('layout pipeline plumbing', () => {
     expect(defaultStages.rank.name).toBe('longest-path-rank');
     expect(defaultStages.order.name).toBe('barycenter-order');
     expect(defaultStages.position.name).toBe('grid-position');
-    expect(defaultStages.route.name).toBe('straight-route');
+    expect(defaultStages.route.name).toBe('polyline-route');
   });
 });

@@ -131,7 +131,9 @@ function dummyId(edge: EdgeId, index: number): NodeId {
  * so it takes no room of its own and the `nodeSep` on either side of it is what
  * keeps a route clear of the boxes it runs between. `edgeSep` is deliberately
  * not used here: it is the gap between two routes running alongside each other,
- * which is a router's business in M2.8, and not a width.
+ * which is a router's business and not a width. M2.8 brought the router and
+ * left `edgeSep` unhonoured, for the reason `route.ts` gives, so this stays a
+ * statement about where the setting belongs rather than about where it is read.
  *
  * One object, shared by every dummy on every chain, and frozen because it is:
  * a `Size` is read-only to everything downstream, and a stage that cast its way
