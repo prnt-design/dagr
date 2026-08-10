@@ -1,31 +1,34 @@
-import type { EdgeId, NodeId } from '@dagr/graph';
+import type { NodeId } from '@dagr/graph';
 import { InternalLayoutError } from './errors.js';
 import { barycenterOrderStage } from './order.js';
 import { longestPathRankStage } from './rank.js';
-import type { LayoutStages, OrderStage, Point, PositionStage, RouteStage, Size } from './types.js';
+import { polylineRouteStage } from './route.js';
+import type { LayoutStages, OrderStage, Point, PositionStage, Size } from './types.js';
 
 /**
- * The position and route stages the pipeline uses when the caller supplies
- * none, the roster-order stage the ordering evidence is measured against, and
- * the stage set that binds all of them to the stages the other modules define.
+ * The position stage the pipeline uses when the caller supplies none, the
+ * roster-order stage the ordering evidence is measured against, and the stage
+ * set that binds both of them to the stages the other modules define.
  *
- * Neither default here is a real algorithm yet. They exist so that the pipeline
- * produces a well formed `LayoutResult` for any graph, and so that every later
- * milestone can be a one-stage swap against a runner and a test suite that
- * already work: polyline routing replaces {@link straightRouteStage} (M2.8).
- * M2.7 did the same for `position` and stopped short of the swap: Brandes-Koepf
- * landed beside {@link gridPositionStage} rather than over it, and this one is
- * still the default, because on today's graphs it draws the better picture.
- * `position.ts` is where the two are compared and where that is measured. Two
- * phases have been through the swap already and neither is defined here any
- * more. M2.2 replaced the single-rank placeholder with `longestPathRankStage`,
- * which breaks cycles and ranks by longest path, and M2.3 left it exactly where
- * it was and added a second rank stage beside it, `networkSimplexRankStage`,
- * which a caller selects; the two optimise different things, so neither
- * replaces the other, and `simplex.ts` is where they are compared. M2.6b did
- * the same for `order`, which now runs `barycenterOrderStage` from `order.ts`:
- * sweeps and a transpose pass rather than the roster order
- * {@link insertionOrderStage} lays out.
+ * ONE PLACEHOLDER IS LEFT HERE, and it is the position one. They exist so that
+ * the pipeline produces a well formed `LayoutResult` for any graph, and so that
+ * every later milestone can be a one-stage swap against a runner and a test
+ * suite that already work. M2.7 did its half and stopped short of the swap:
+ * Brandes-Koepf landed beside {@link gridPositionStage} rather than over it,
+ * and this one is still the default, because on today's graphs it draws the
+ * better picture. `position.ts` is where the two are compared and where that is
+ * measured. Three phases have been through the swap and none of them is defined
+ * here any more. M2.2 replaced the single-rank placeholder with
+ * `longestPathRankStage`, which breaks cycles and ranks by longest path, and
+ * M2.3 left it exactly where it was and added a second rank stage beside it,
+ * `networkSimplexRankStage`, which a caller selects; the two optimise different
+ * things, so neither replaces the other, and `simplex.ts` is where they are
+ * compared. M2.6b did the same for `order`, which now runs
+ * `barycenterOrderStage` from `order.ts`: sweeps and a transpose pass rather
+ * than the roster order {@link insertionOrderStage} lays out. M2.8 did it for
+ * `route`, which now runs `polylineRouteStage` from `route.ts`: the same
+ * polyline through the same dummies, attached at the endpoint boxes' borders
+ * rather than at their centres.
  *
  * What the defaults do guarantee, and what their tests hold them to, is the
  * pipeline contract: every node in exactly one layer, every node positioned,
@@ -35,9 +38,9 @@ import type { LayoutStages, OrderStage, Point, PositionStage, RouteStage, Size }
  * Each stage here is exported from this module, for the tests, and none of them
  * is exported from the package, which is the rule `index.ts` states: every
  * stage a caller chooses between is exported by name, no placeholder is, and
- * `defaultStages` is exported whatever a stage is. The two placeholders are
- * scheduled for replacement, and a public name now is a choice later between
- * breaking callers and keeping a dead placeholder exported forever;
+ * `defaultStages` is exported whatever a stage is. The placeholder is scheduled
+ * for replacement, and a public name now is a choice later between breaking
+ * callers and keeping a dead placeholder exported forever;
  * {@link insertionOrderStage} has its own reason to stay unexported, which is
  * on it, and `brandesKoepfPositionStage` has its own, which is on that.
  * `defaultStages` covers the use case the individual names would serve,
@@ -58,13 +61,6 @@ function requireRank(ranks: ReadonlyMap<NodeId, number>, id: NodeId): number {
   const rank = ranks.get(id);
   if (rank === undefined) throw new InternalLayoutError(`node "${id}" was never ranked`);
   return rank;
-}
-
-/** A position that must be present. Absence is a runner bug, see above. */
-function requirePoint(positions: ReadonlyMap<NodeId, Point>, id: NodeId): Point {
-  const point = positions.get(id);
-  if (point === undefined) throw new InternalLayoutError(`node "${id}" was never positioned`);
-  return point;
 }
 
 /**
@@ -178,53 +174,6 @@ export const gridPositionStage: PositionStage = {
 };
 
 /**
- * Routes every edge as straight segments: the source centre, the centre of each
- * dummy on the edge's chain, and the target centre.
- *
- * Every SEGMENT is straight, which is what the name means, and since M2.4b a
- * polyline may have more than one of them: an edge the ranker split into a
- * chain bends through each of its dummies, so it crosses every layer between
- * its endpoints at a coordinate that layer chose, rather than wherever the
- * straight line between two distant centres happened to fall. An edge with no
- * chain keeps the two-point line it always had.
- *
- * The routes are built by walking the graph rather than the roster, so a route
- * exists for every edge the caller added and for nothing else, and the points
- * run from `source` to `target` because that is where they are read from. That
- * direction is a contract, not an accident of this implementation: see
- * {@link RoutedEdge.points}. The chain needs no reversal bookkeeping for the
- * same reason: `RankedState.virtualChains` lists a chain source to target as the
- * caller authored it, and the coordinates are looked up by id, so an edge the
- * ranker reversed comes out running the caller's way with nothing to undo.
- *
- * A self loop routes to two identical points, which is degenerate but well
- * formed; M2.8 gives it a real shape along with everything else, and gives
- * these polylines a proper monotone shape and border attachment.
- *
- * It returns the routes and nothing else. The runner assembles the
- * {@link LayoutResult} from them and from the graph, so a router states the
- * polyline and never the identity of what it routed.
- */
-export const straightRouteStage: RouteStage = {
-  name: 'straight-route',
-  run(input) {
-    const routes = new Map<EdgeId, readonly Point[]>();
-    for (const edge of input.graph.edges()) {
-      const from = requirePoint(input.positions, edge.source);
-      const to = requirePoint(input.positions, edge.target);
-      const points: Point[] = [{ x: from.x, y: from.y }];
-      for (const id of input.virtualChains.get(edge.id) ?? []) {
-        const bend = requirePoint(input.positions, id);
-        points.push({ x: bend.x, y: bend.y });
-      }
-      points.push({ x: to.x, y: to.y });
-      routes.set(edge.id, points);
-    }
-    return { routes };
-  },
-};
-
-/**
  * The stage set a run uses for any phase the caller does not override. Frozen,
  * because it is shared by every default run in the process.
  */
@@ -232,5 +181,5 @@ export const defaultStages: LayoutStages = Object.freeze({
   rank: longestPathRankStage,
   order: barycenterOrderStage,
   position: gridPositionStage,
-  route: straightRouteStage,
+  route: polylineRouteStage,
 });

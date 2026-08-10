@@ -14,6 +14,26 @@ of doc prose.
 
 ### Added
 
+- `polylineRouteStage`, exported, `name: 'polyline-route'`, and it is
+  `defaultStages.route`. The route phase's first real algorithm and the third of
+  the four stages to go from a placeholder to one, after `rank` in M2.2 and
+  `order` in M2.6b. It is exported on arrival for the same reason
+  `barycenterOrderStage` was: a placeholder's name is a name to delete tomorrow
+  and a real stage's is how a caller wraps or composes it. No factory beside it,
+  because it has nothing to configure yet. (M2.8)
+
+  **Read what it added against what M2.4b already shipped, not against the
+  milestone's title.** "Polyline routes through dummy-node coordinates" was
+  M2.4b's work: the router this replaces already walked `virtualChains` and
+  emitted a point per dummy. What M2.8 added is the two ENDS.
+
+- `edgeSep` is still not honoured by any stage, and that is recorded here as an
+  Added entry's small print because `LayoutConfig.edgeSep` promised M2.8 would.
+  It governs the two cases where routes coincide exactly: parallel edges, which
+  get identical polylines, and self loops, which get two identical points at
+  their node's centre. Both are pinned in `test/layout.route.test.ts` as they
+  stand so the milestone that fans them out has a before. (M2.8)
+
 - `virtualChains` on `Layering`, the argument type of `countCrossings`, optional
   and defaulting to none. Pass the rank stage's chains and a long edge is
   counted as the segments it is drawn as; omit them and it is counted as
@@ -355,6 +375,16 @@ of doc prose.
   reader is most likely to act on and fail. See the M2.6b entry under Changed
   for why it survives at all.
 
+  **`straight-route` left that list at M2.8** and left it the other way, by
+  being deleted rather than kept, since nothing measured against it. The list
+  above is now one item long: `grid-position`. The rule this paragraph states
+  has now been asked all three of the questions it was written against and
+  changed for none of them: `barycenter-order` was exported a milestone before
+  it took the default, `brandes-koepf-position` is real and still has no public
+  name because no run should choose it, and `polyline-route` was exported on
+  arrival because it took the default at once. M2.7 is the one this paragraph
+  guessed wrong about, having assumed it would replace `grid-position`.
+
 - `RankOutput`, `OrderOutput`, `PositionOutput` and `RouteOutput`, exported as
   types. Each is what one stage contributes, and it is what that stage's `run`
   now returns. See the Changed entry below. (M2.4a)
@@ -402,6 +432,54 @@ of doc prose.
   (M2.2 review)
 
 ### Changed
+
+- **Every route now starts and finishes on a node box's BORDER rather than at
+  its centre, so every default run comes back with different edge coordinates
+  and no type changed to warn anyone.** This is the whole of what M2.8 moved.
+  Two nodes stacked at the defaults, 100 by 40 boxes with a `rankSep` of 50,
+  used to route as `[{0, 20}, {0, 110}]`, the two centres, and now route as
+  `[{0, 40}, {0, 90}]`, the 50 units of clear air between them. An arrowhead
+  drawn at the last point used to land underneath the target. (M2.8)
+
+  **Nothing between the ends moved, exactly.** Every interior point is still the
+  coordinate of a dummy on the edge's chain, byte for byte what `straight-route`
+  produced, and every route still has the same number of points as before.
+  `test/layout.route.test.ts` keeps the old router as `centreToCentreRouteStage`
+  and pins the two against each other over the two benchmark corpora and the six
+  golden graphs, rather than asserting a remembered figure: 14,746 interior
+  points on the 1k and 174,222 on the 10k, none of them differing.
+
+  **Node coordinates and `bounds` did not move either**, which they could not:
+  an attachment slides along a segment the router already had and lands on a
+  border inside a box the hull already contained. The full-result capture in
+  `test/layout.result.test.ts` is the witness, and only its `edges` needed
+  recapturing.
+
+  **What it is worth**, across those eight graphs, is between 0.6% and 5.9% off
+  the total length of the drawing's polylines, and every unit of it was ink
+  drawn underneath a node box. The saving is at most half a box diagonal per
+  end, 53.85 at the default box, so a drawing of long thin rows saves a smaller
+  share of a much larger number: the 10k corpus saves 3,965,122 of 632,523,805
+  and `tall-600` saves 162,181 of 2,740,824.
+
+  **Routes are monotone in the rank axis**, in the weak form stated on
+  `polylineRouteStage`: reading a route source to target, `y` never moves
+  against the direction the route runs as a whole. That is not a new property of
+  the drawing, since `y` is the position stage's answer and the points were
+  already monotone before M2.8; what is new is that it is stated and checked,
+  over both corpora, all six golden graphs and both position stages. The runner
+  does not check it, deliberately, because a caller may supply a position stage
+  that stacks ranks any way it likes.
+
+  **A self loop and two parallel edges are unchanged**, and that is the
+  `edgeSep` entry above rather than an oversight.
+
+- **`straight-route` is gone.** It was never exported, so no caller can have
+  named it, and nothing measured against it: the precedent is M2.2 deleting
+  `singleRankStage` rather than M2.6b keeping `insertion-order`. Its behaviour
+  is preserved where it was still worth having, as
+  `centreToCentreRouteStage` in `test/layout.route.test.ts`, which is what makes
+  the before-and-after above a measurement rather than a memory. (M2.8)
 
 - **`network-simplex-rank` now splits long edges into dummy chains, so a caller
   who selects it gets a different drawing, with no type change to warn them.**

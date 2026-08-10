@@ -8,15 +8,14 @@ export { DEFAULT_LAYOUT_CONFIG } from './config.js';
 // name to choose it by: the two rank stages optimise different things, minimum
 // height against minimum total edge length, and neither is a default a caller
 // should have to accept to get. Naming one of them "the default stage" is not a
-// handle on it either, because which one that is changes: M2.2 moved `rank` and
-// M2.6b moved `order`. A placeholder is the opposite. The defaults still
-// holding the position and route phases are stand-ins scheduled for replacement
-// (M2.8 brings the router, and the position default is waiting on the
-// compaction task named in `position.ts` rather than on a milestone),
-// and a name exported now is a name to delete later or to keep exported as a
-// dead placeholder forever. `defaultStages` covers what a caller wants from
-// those, wrapping whatever the current default is, and it keeps working when
-// the default behind one of its properties changes.
+// handle on it either, because which one that is changes: M2.2 moved `rank`,
+// M2.6b moved `order` and M2.8 moved `route`. A placeholder is the opposite.
+// The default still holding the position phase is a stand-in waiting on the
+// compaction task named in `position.ts` rather than on a milestone, and a name
+// exported now is a name to delete later or to keep exported as a dead
+// placeholder forever. `defaultStages` covers what a caller wants from it,
+// wrapping whatever the current default is, and it keeps working when the
+// default behind one of its properties changes.
 //
 // `barycenterOrderStage` arrived exported and non-default in M2.5 and took the
 // default in M2.6b without its name changing, which is the rule surviving the
@@ -43,6 +42,12 @@ export type { NetworkSimplexOptions } from './simplex.js';
 // compute, and M2.6's regression corpus is committed against this counter.
 export { barycenterOrder, barycenterOrderStage, countCrossings } from './order.js';
 export type { BarycenterOrderOptions, Layering } from './order.js';
+// No factory beside this one, because it has nothing to configure yet. It is
+// exported for the reason `barycenterOrderStage` is: it is a real stage rather
+// than the placeholder it replaced, and a caller wrapping or composing the
+// router needs to name it. `edgeSep` is the option it will grow first, and the
+// argument for what it would do is in `route.ts`.
+export { polylineRouteStage } from './route.js';
 export {
   DagrLayoutError,
   InternalLayoutError,

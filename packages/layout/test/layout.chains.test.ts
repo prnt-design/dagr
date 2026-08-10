@@ -303,7 +303,7 @@ describe('longestPathRankStage dummy chains', () => {
   });
 });
 
-describe('straightRouteStage over a chain', () => {
+describe('the router over a chain', () => {
   it('bends a long edge through its dummies and leaves a short edge two points', () => {
     let positions: ReadonlyMap<NodeId, Point> = new Map();
     const watching: PositionStage = {
@@ -315,13 +315,22 @@ describe('straightRouteStage over a chain', () => {
       },
     };
     const result = layout({ graph: detour() }, { position: watching });
-    expect(result.edges.get('az')?.points).toEqual([
-      positions.get('a'),
-      positions.get('#dummy:az:0'),
-      positions.get('z'),
-    ]);
-    // Every segment is still straight, which is what the stage's name means.
-    // What changed is that the polyline now has more than one of them.
+    // The dummy IS the interior point, exactly as it was under M2.4b's
+    // `straight-route`. What M2.8 moved is the two ENDS, which now sit on the
+    // endpoint boxes' borders rather than at their centres. Both boxes are the
+    // default 40 tall, `a` is centred at y 20 and `z` at y 200, so the route
+    // leaves `a` at its bottom edge and arrives at `z`'s top edge, and both
+    // ends slide along their own segment toward the dummy at x 75.
+    const points = result.edges.get('az')?.points ?? [];
+    expect(positions.get('a')).toEqual({ x: 0, y: 20 });
+    expect(positions.get('z')).toEqual({ x: 0, y: 200 });
+    expect(points[1]).toEqual(positions.get('#dummy:az:0'));
+    expect(points[0]?.y).toBe(40);
+    expect(points[2]?.y).toBe(180);
+    expect(points[0]?.x).toBeCloseTo(50 / 3, 10);
+    expect(points[2]?.x).toBeCloseTo(50 / 3, 10);
+    // Every segment is still straight. What M2.4b changed is that the polyline
+    // may have more than one of them.
     expect(result.edges.get('am')?.points).toHaveLength(2);
     expect(result.edges.get('mz')?.points).toHaveLength(2);
   });
@@ -339,10 +348,15 @@ describe('straightRouteStage over a chain', () => {
     const result = layout({ graph });
     const points = result.edges.get('da')?.points ?? [];
     expect(points).toHaveLength(4);
-    expect(points[0]).toEqual({ x: result.nodes.get('d')?.x, y: result.nodes.get('d')?.y });
-    expect(points.at(-1)).toEqual({ x: result.nodes.get('a')?.x, y: result.nodes.get('a')?.y });
+    // `d` is the bottom row and `a` the top, so this route runs UP the page and
+    // each end attaches at the border it faces: `d`'s top edge and `a`'s
+    // bottom. Both boxes are the default 40 tall.
+    expect(points[0]?.y).toBe((result.nodes.get('d')?.y ?? 0) - 20);
+    expect(points.at(-1)?.y).toBe((result.nodes.get('a')?.y ?? 0) + 20);
     // The chain was listed source to target, so the polyline climbs the page
-    // without the router reversing anything.
+    // without the router reversing anything, and it is monotone climbing
+    // rather than monotone descending. That is the whole reason the rule in
+    // `route.ts` names no sign of its own.
     const ys = points.map((point) => point.y);
     expect(ys).toEqual([...ys].sort((left, right) => right - left));
   });

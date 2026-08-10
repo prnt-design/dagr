@@ -43,8 +43,15 @@ export interface LayoutConfig {
 
   /**
    * Minimum gap between two edge routes running alongside each other. Default
-   * 10. Carried through the pipeline now and honoured once real routing lands
-   * in M2.8.
+   * 10. Carried through the pipeline and NOT YET HONOURED by any stage.
+   *
+   * M2.8 brought real routing and did not honour it, which is worth saying
+   * plainly because this docstring used to promise that milestone would. The
+   * cases it governs are the two where routes coincide exactly rather than
+   * merely run close, parallel edges and self loops, and fanning either of them
+   * out needs a rule this package has not chosen yet. `polylineRouteStage`'s
+   * docstring in `route.ts` is where that is argued and it is the named next
+   * step for the router.
    */
   readonly edgeSep?: number;
 
@@ -324,8 +331,10 @@ export interface LayoutResult {
    * a route ran centre to centre, and a centre is inside its own box. A route
    * that bends through a dummy does not agree, because a zero-width dummy at
    * the end of a row sits at that row's right extreme, outside every box in it.
-   * This is the formulation M2.8's obstacle detours need as well, so it is the
-   * durable one rather than a patch.
+   * This is the formulation obstacle detours need as well, so it is the durable
+   * one rather than a patch. M2.8's border attachment did not exercise it: an
+   * attachment lands ON a box the hull already contains, so a route's ENDS
+   * cannot grow it and only its bends ever could.
    */
   readonly bounds: Rect;
 }

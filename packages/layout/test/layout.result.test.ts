@@ -132,22 +132,30 @@ describe('layout result', () => {
     expect(result.nodes.get('c')).toEqual({ id: 'c', x: 75, y: 110, width: 100, height: 40 });
   });
 
-  it('routes every edge as two points at the endpoint centres', () => {
+  it('routes every edge as two points on the endpoint borders', () => {
+    // The before, for a reader comparing releases: through M2.7 this same
+    // graph came back with the endpoint CENTRES, `[{0, 20}, {-75, 110}]` and
+    // `[{0, 20}, {75, 110}]`. M2.8 slid each end along its own segment to the
+    // border of its box. Both boxes are 100 by 40, so `a` is left through its
+    // bottom edge at y 40 and `b` and `c` are entered through their top edges
+    // at y 90, and the x moves with the y because the segments are not
+    // vertical.
     const result = layout({ graph: fanOut() });
     expect([...result.edges.keys()]).toEqual(['ab', 'ac']);
-    expect(result.edges.get('ab')).toEqual({
-      id: 'ab',
-      source: 'a',
-      target: 'b',
-      points: [
-        { x: 0, y: 20 },
-        { x: -75, y: 110 },
-      ],
-    });
-    expect(result.edges.get('ac')?.points).toEqual([
-      { x: 0, y: 20 },
-      { x: 75, y: 110 },
-    ]);
+    const ab = result.edges.get('ab');
+    expect(ab?.id).toBe('ab');
+    expect(ab?.source).toBe('a');
+    expect(ab?.target).toBe('b');
+    expect(ab?.points).toHaveLength(2);
+    expect(ab?.points[0]?.y).toBe(40);
+    expect(ab?.points[1]?.y).toBe(90);
+    expect(ab?.points[0]?.x).toBeCloseTo(-50 / 3, 10);
+    expect(ab?.points[1]?.x).toBeCloseTo(-175 / 3, 10);
+    const ac = result.edges.get('ac')?.points ?? [];
+    // The mirror image, because the graph is: `ac` is `ab` reflected in x.
+    expect(ac.map((point) => point.y)).toEqual([40, 90]);
+    expect(ac[0]?.x).toBeCloseTo(50 / 3, 10);
+    expect(ac[1]?.x).toBeCloseTo(175 / 3, 10);
   });
 
   it('encloses every node box in the bounds', () => {
@@ -188,12 +196,15 @@ describe('layout result', () => {
     // put arrowheads on the wrong end for exactly the edges that were part of a
     // cycle. `reversedEdges` is the router's bookkeeping, never the consumer's.
     //
-    // The endpoint equality asserted below is a property of the DEFAULT router,
-    // which attaches routes at node centres, and it is tested here rather than
-    // checked in the runner for that reason: M2.8 attaches at box borders and
-    // the equality stops being true, while the source-to-target direction does
-    // not. A runner check that has to be deleted a milestone later is the
-    // failure mode this contract keeps having to avoid.
+    // The endpoint claim asserted below is a property of the DEFAULT router
+    // rather than of the runner, and it is tested here for that reason. It has
+    // already been through the change it was written in anticipation of: it
+    // used to be equality with the node CENTRES, and M2.8 moved the ends onto
+    // the box borders, so what is left is that each end sits on the border of
+    // its own node. The source-to-target direction did not move, which is why
+    // the runner checks that and not this. A runner check that has to be
+    // deleted a milestone later is the failure mode this contract keeps having
+    // to avoid.
     const reversingRank: RankStage = {
       name: 'reversing-rank',
       run: (input) => ({
@@ -212,8 +223,10 @@ describe('layout result', () => {
     const points = result.edges.get('ab')?.points ?? [];
     // The ranker really did put the target above the source.
     expect(b?.y).toBeLessThan(a?.y ?? 0);
-    expect(points[0]).toEqual({ x: a?.x, y: a?.y });
-    expect(points.at(-1)).toEqual({ x: b?.x, y: b?.y });
+    // So the route climbs, leaving `a` through its top edge and arriving at
+    // `b`'s bottom. Both boxes are the default 40 tall.
+    expect(points[0]?.y).toBe((a?.y ?? 0) - 20);
+    expect(points.at(-1)?.y).toBe((b?.y ?? 0) + 20);
   });
 
   it('lays out an empty graph without throwing', () => {
@@ -535,9 +548,26 @@ describe('layout result identity across refactors', () => {
    * order default happens to lay these seven nodes out exactly as roster order
    * did. M2.4b IS such a milestone and the capture did not survive it: a bend
    * appears on `da` and rank 1 gains a member, which is the paragraph above.
-   * M2.8 will not be gentle either. A test like this outliving its
-   * refactor is how a suite ends up asserting that a placeholder algorithm
-   * stays a placeholder.
+   * A test like this outliving its refactor is how a suite ends up asserting
+   * that a placeholder algorithm stays a placeholder.
+   *
+   * M2.8 WAS THE THIRD SUCH MILESTONE, and it moved exactly one thing: the two
+   * ENDS of every route. Every node coordinate and `bounds` itself came back
+   * byte for byte, which they had to, because an attachment slides along a
+   * segment the router already had and lands on a border that is inside a box
+   * the hull already contained. The bend on `da` is still at -11, 64, which is
+   * the dummy's own coordinate and never the router's to choose. What the
+   * endpoints look like now is computed geometry rather than copied
+   * coordinates, and the recurring decimals below are that in visible form:
+   * `ab` leaves `a` at -43.48, 20 rather than at its centre -47, 10.
+   *
+   * TWO ROUTES DELIBERATELY DID NOT MOVE and both are the `edgeSep` case
+   * `route.ts` names as its next step. `bb`, the self loop, is still two
+   * identical points at `b`'s centre: it has no direction to attach along, so
+   * there is no border for it to land on. And `pq` and `qp` are still the same
+   * two points in opposite orders, exactly coincident, because two edges
+   * between one pair of nodes have nothing but their ids to tell them apart
+   * until a router fans them out.
    */
   const captured = {
     nodes: [
@@ -555,8 +585,8 @@ describe('layout result identity across refactors', () => {
         source: 'a',
         target: 'b',
         points: [
-          { x: -47, y: 10 },
-          { x: -28, y: 64 },
+          { x: -43.48148148148148, y: 20 },
+          { x: -31.51851851851852, y: 54 },
         ],
       },
       {
@@ -564,8 +594,8 @@ describe('layout result identity across refactors', () => {
         source: 'a',
         target: 'c',
         points: [
-          { x: -47, y: 10 },
-          { x: 6, y: 64 },
+          { x: -42, y: 15.09433962264151 },
+          { x: 1, y: 58.90566037735849 },
         ],
       },
       {
@@ -573,8 +603,8 @@ describe('layout result identity across refactors', () => {
         source: 'b',
         target: 'd',
         points: [
-          { x: -28, y: 64 },
-          { x: 0, y: 118 },
+          { x: -23, y: 73.64285714285714 },
+          { x: -5, y: 108.35714285714286 },
         ],
       },
       {
@@ -582,8 +612,8 @@ describe('layout result identity across refactors', () => {
         source: 'c',
         target: 'd',
         points: [
-          { x: 6, y: 64 },
-          { x: 0, y: 118 },
+          { x: 4.888888888888889, y: 74 },
+          { x: 1.1111111111111112, y: 108 },
         ],
       },
       {
@@ -591,9 +621,9 @@ describe('layout result identity across refactors', () => {
         source: 'd',
         target: 'a',
         points: [
-          { x: 0, y: 118 },
+          { x: -2.0370370370370368, y: 108 },
           { x: -11, y: 64 },
-          { x: -47, y: 10 },
+          { x: -42, y: 17.5 },
         ],
       },
       {
@@ -610,8 +640,8 @@ describe('layout result identity across refactors', () => {
         source: 'p',
         target: 'q',
         points: [
-          { x: -25, y: 10 },
-          { x: 28, y: 64 },
+          { x: -20, y: 15.09433962264151 },
+          { x: 23, y: 58.90566037735849 },
         ],
       },
       {
@@ -619,8 +649,8 @@ describe('layout result identity across refactors', () => {
         source: 'q',
         target: 'p',
         points: [
-          { x: 28, y: 64 },
-          { x: -25, y: 10 },
+          { x: 23, y: 58.90566037735849 },
+          { x: -20, y: 15.09433962264151 },
         ],
       },
     ],

@@ -994,11 +994,20 @@ function applyHint(
  *
  * EVERY ROW OF IT IS PINNED, in `test/layout.transpose.test.ts`, which is not a
  * detail of where the numbers live: this is the milestone whose thesis is that
- * an unpinned figure goes stale without anyone noticing, and M2.8 will move all
- * eight of these. The first two are the bench corpora and the other six are the
- * golden regression corpus, rebuilt there from the same `test/golden-corpus.ts`
- * the golden file's own test uses, so the two files cannot end up pinning
- * numbers for different graphs.
+ * an unpinned figure goes stale without anyone noticing. The first two are the
+ * bench corpora and the other six are the golden regression corpus, rebuilt
+ * there from the same `test/golden-corpus.ts` the golden file's own test uses,
+ * so the two files cannot end up pinning numbers for different graphs.
+ *
+ * THIS PARAGRAPH USED TO SAY M2.8 WOULD MOVE ALL EIGHT AND THAT WAS WRONG. It
+ * landed and moved none of them, which was not luck: every one of these is a
+ * crossing count over the LAYERS this stage produces, routing is downstream of
+ * positions and positions are downstream of order, and no route stage is an
+ * input to any of it. The claim was inherited from M2.4b, where consuming the
+ * chains really did move the counted population from 13,131 segments to
+ * 214,222, and carried forward one milestone too many. What M2.8 does move is
+ * the pipeline TIMINGS, which is a different sentence in a different paragraph
+ * of this docstring and is still true.
  *
  * THE MARGIN IS NOT THE FINDING. THE STRICT RULE CAPTURES ABOUT AN EIGHTH OF
  * WHAT THE PASS IS WORTH: 12.1% of it on the 1k and 13.1% on the 10k, 8.9% to
@@ -1322,12 +1331,23 @@ function applyHint(
  * comparison, both layerings scored over the same population, is in
  * `test/layout.order.test.ts` and it is 74.7% on the 10k.
  *
+ * M2.8 EXPIRED TWO OF THE FOUR AND NOT THE OTHER TWO, and the split is worth
+ * stating because this docstring predicted the wrong half. Both timings are of
+ * the FULL pipeline, so both now include a router that attaches every route at
+ * a box border, which is arithmetic per edge that neither column paid when they
+ * were taken; the two crossing counts are of the layering THIS STAGE produces
+ * and no route stage is an input to it, so they are untouched and were verified
+ * untouched rather than assumed so. The timings are not re-derived here. What
+ * M2.8 adds is bounded and small, both pipeline benchmarks came back inside
+ * their own run-to-run drift on the gate, and both columns pay it equally, so a
+ * fresh pair taken on a machine under a different load would move these numbers
+ * for a reason that is not this milestone.
+ *
  * THOSE FOUR FIGURES ARE LIVE ADVICE HERE AND NOWHERE ELSE. Each is a
- * measurement with a scheduled expiry: a bench recapture moves the timings, and
- * M2.8's routing will move the pipeline again. So `index.ts`, `ROADMAP.md` and
- * `docs/docs/layout.md` describe the trade in a sentence and point back at this
- * section rather than copying the table, which leaves one paragraph to correct
- * rather than four. `CHANGELOG.md` is the deliberate exception: a dated entry
+ * measurement with a scheduled expiry: a bench recapture moves the timings. So
+ * `index.ts`, `ROADMAP.md` and `docs/docs/layout.md` describe the trade in a
+ * sentence and point back at this section rather than copying the table, which
+ * leaves one paragraph to correct rather than four. `CHANGELOG.md` is the deliberate exception: a dated entry
  * records what a past change measured at the time, so M2.6's entry keeps its
  * own 3,005 and 30,318 and is marked superseded in place rather than swept,
  * which is this file's own precedent. The crossing counts are pinned against

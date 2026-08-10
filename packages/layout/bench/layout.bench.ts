@@ -51,11 +51,17 @@ const preparedLarge = prepare(large);
  * The rank stage on its own, which is where the cost currently sits.
  *
  * Isolated from the full pipeline because the other stages keep being replaced:
- * two of them are still placeholders scheduled for it (M2.7, M2.8) and the
- * order stage was replaced in M2.6b. A combined number would move when any of
- * those lands and tell nobody which one moved, and the ranker itself is due to
- * be replaced by network simplex in M2.3, which is the change this baseline
- * exists to keep honest.
+ * the order stage was replaced in M2.6b and the route stage in M2.8, and the
+ * position default is still a placeholder scheduled for it. A combined number
+ * would move when any of those lands and tell nobody which one moved, and the
+ * ranker itself is due to be replaced by network simplex in M2.3, which is the
+ * change this baseline exists to keep honest.
+ *
+ * That isolation is what makes these two the CONTROLS for a route or position
+ * change rather than merely unaffected by one: they run the rank stage alone,
+ * so a milestone touching either of the later stages reads its own pipeline
+ * entries against two entries in the same file and the same worker that cannot
+ * have moved for a reason inside the package.
  */
 describe('rank', () => {
   bench('1k nodes, 4k edges', () => {

@@ -1596,11 +1596,13 @@ findings addressed or logged, docs land with the feature.
   and a cap of 16, over the drawing's 214,222 segments, on both bench corpora
   and all six golden graphs, and taking ties wins all eight.
   THE FIGURES ARE DELIBERATELY NOT COPIED HERE, which is the rule M2.6 set for
-  the cap curve two entries up and which applies with more force to a table that
-  M2.8 will move again: they live in the transpose section of `barycenterOrder`'s
-  docstring, the two bench-corpus rows are pinned in `layout.transpose.test.ts`,
-  and `docs/docs/layout.md` carries the reader-facing copy. Three places is the
-  standing cost; a fourth would make it four.
+  the cap curve two entries up: they live in the transpose section of
+  `barycenterOrder`'s docstring, the two bench-corpus rows are pinned in
+  `layout.transpose.test.ts`, and `docs/docs/layout.md` carries the
+  reader-facing copy. Three places is the standing cost; a fourth would make it
+  four. This entry gave a second reason, that M2.8 would move the table again,
+  and that reason was wrong: M2.8 landed and moved no row of it. See M2.8's own
+  entry for why it could not have. The rule stands on the first reason alone.
   WHAT A LATER READER NEEDS FROM THIS ENTRY RATHER THAN FROM THE DOCSTRING is
   the four things below.
   THE MARGIN WAS NEVER THE POINT. The strict rule captures about an eighth of
@@ -1704,15 +1706,121 @@ findings addressed or logged, docs land with the feature.
   THE NAMED NEXT STEP is the paper's erratum: resolve the shifts by longest path
   over a proper graph of classes. It is a task in its own right and it was not
   attempted here.
-- [ ] **M2.8** Edge routing: polyline routes through dummy-node coordinates,
-  monotone in the rank axis. Route invariant tests.
+- [x] **M2.8** Edge routing: polyline routes through dummy-node coordinates,
+  monotone in the rank axis. Route invariant tests. Touches `packages/layout`
+  and `docs`.
   From the M2.1 algorithms review: `bounds` had to stop being the hull of the
   node boxes, because a route that goes around an obstacle can leave them. The
   runner contracts containment rather than tightness for exactly that reason.
   M2.4b adopted the durable formulation early (the hull of the node boxes and
   the route points), because a route bending through a zero-width dummy can
   already leave the box hull, so nothing here changes when obstacle detours
-  land.
+  land. It did not change for border attachment either, which the paragraph
+  below is about: an attachment lands ON a box the hull already contains.
+  **THIS MILESTONE'S TITLE CLAIMS MORE THAN IT DELIVERED, and the honest
+  accounting is the first thing a later reader needs.** "Polyline routes through
+  dummy-node coordinates" SHIPPED IN M2.4b. `straightRouteStage` already walked
+  `virtualChains` and emitted a point per dummy, so the polyline and its bends
+  were two milestones old when this one started. What M2.8 added is the two
+  ENDS, plus the invariant the title's second clause names and the tests its
+  third does. A caller's routes before: from the source node's CENTRE, through
+  each dummy's centre, to the target node's centre, so a renderer drawing an
+  arrowhead at the last point drew it underneath the target. After: from the
+  source box's BORDER, through the same dummy centres unchanged, to the target
+  box's border. Two nodes stacked at the defaults went from `[{0, 20},
+  {0, 110}]` to `[{0, 40}, {0, 90}]`.
+  WHAT SHIPPED: `src/route.ts`, holding `polylineRouteStage`, exported by name
+  and installed as `defaultStages.route`. `straight-route` is deleted rather
+  than kept beside it, which is M2.2's precedent with `singleRankStage` rather
+  than M2.6b's with `insertion-order`: nothing measured against it. It is
+  preserved where it was still worth having, as `centreToCentreRouteStage` in
+  `test/layout.route.test.ts`, which is what turns the before-and-after above
+  into a measurement instead of a memory. `route` is the third of the four
+  stages to go from placeholder to algorithm, after `rank` in M2.2 and `order`
+  in M2.6b, and the position stage is now the only one left.
+  THE INVARIANT HAS A CHOICE IN IT AND THE CHOICE IS THE INTERESTING PART.
+  "Monotone in the rank axis" can be phrased four ways and three of them need a
+  special case for an edge the ranker reversed, whose route CLIMBS the page
+  because `RoutedEdge.points` runs source to target as the caller authored them.
+  What ships names no sign of its own: with `d` the sign of the last point's `y`
+  minus the first's, every consecutive pair steps by `d` or by zero. A reversed
+  edge is monotone climbing, a normal one is monotone descending, and neither is
+  a case in the checker. It is WEAK rather than strict for the same kind of
+  reason: a flat pair is a step and not a backtrack, which is what lets a self
+  loop, whose two ends are the same node at the same `y`, satisfy the rule
+  rather than be excused from it.
+  THE ROUTER DOES NOT CREATE THE PROPERTY AND THE ENTRY SHOULD NOT CLAIM IT
+  DOES. `y` is the position stage's answer: layers run in strictly increasing
+  rank order, both position stages here give a layer one shared `y`, and a chain
+  holds one node at every rank between its endpoints, so the points are monotone
+  before the router sees them. What the router promises is that it introduces no
+  reversal its input did not have, and that is not free. Both ends of a bendless
+  route are attached along the SAME segment, one from each end, so an attachment
+  allowed to travel the whole way could pass the other one and hand back a
+  polyline running backwards. Each is capped at the segment midpoint, which
+  makes crossing impossible by arithmetic rather than by an assumption about how
+  far apart a position stage puts things. Two witnesses, both of which fail with
+  a `StageContractError` when the cap is removed and both of which were watched
+  failing: `rankSep: 0` with a target of no height, reachable through the
+  shipping stages alone, and a third-party position stage that overlaps two
+  boxes outright.
+  NO CONTRACT CHECK WAS ADDED, which `docs/docs/layout.md` had already forecast
+  and which this entry confirms rather than revisits. Monotonicity belongs to
+  the position stage and the router jointly, a caller may supply a position
+  stage that stacks ranks any way it likes, and a rule a correct third-party
+  stage fails is worse than one never claimed. That is the same argument the
+  endpoint-proximity rule makes, and proximity itself survived border attachment
+  untouched, which is what it was written in M2.2 to do.
+  THE FIGURES ARE PINNED OVER EIGHT GRAPHS RATHER THAN ONE, the two bench
+  corpora and the six of `test/golden-corpus.ts`, which is the corpus the order
+  and transpose tests already share so that no two files pin numbers for graphs
+  nobody else has. Two of the six carry structure the bench corpora do not have
+  at all and this stage has a rule about: self loops and parallel edges. What is
+  pinned: every route monotone on all eight under both routers and both position
+  stages; every interior point identical between the two routers, 14,746 of them
+  on the 1k and 174,222 on the 10k, none differing; every end on its own box
+  border except the 80 belonging to `self-loops-800`'s 40 loops; and total
+  polyline length before and after, which is what the change is worth.
+  WHAT IT IS WORTH IS BETWEEN 0.6% AND 5.9% of the drawing's total polyline
+  length, and the spread is more use than the size. The saving is bounded by
+  half a box diagonal per END, 53.85 at the default 100 by 40, so a drawing of
+  long thin rows saves a smaller share of a much larger number: the 10k saves
+  3,965,122 of 632,523,805 and `tall-600` saves 162,181 of 2,740,824. Every unit
+  of it was ink drawn underneath a node box.
+  A CLAIM THIS PACKAGE HAD IN THREE PLACES WAS WRONG AND IS RETIRED. `order.ts`,
+  M2.6d's entry above and the docs page all said M2.8 would move the eight rows
+  of the strict-versus-ties transpose table. It moved none of them and could not
+  have: every row is a crossing count over the LAYERS the order stage produces,
+  routing is downstream of positions and positions are downstream of order, and
+  no route stage is an input to any of it. The claim was inherited from M2.4b,
+  where consuming the chains really did take the counted population from 13,131
+  segments to 214,222, and was carried forward one milestone too many. The half
+  of it that was true is the pipeline TIMINGS, which are of the full pipeline and
+  do include the router; those are annotated rather than re-derived, because
+  what a border attachment costs is bounded and small, both columns pay it, and
+  a fresh pair taken under a different load would move for a reason that is not
+  this milestone.
+  IT WAS NOT A BENCH CONVERSATION EITHER, and the prediction is recorded here
+  because `bench/README.md` requires one. The route stage IS on the pipeline
+  benchmark's path, unlike M2.4c's change, so both pipeline entries were this
+  run's to predict and the two rank entries are the controls: they run the rank
+  stage alone, so they cannot move for a reason inside this diff. Predicted both
+  pipeline entries flat, on the grounds that the added work is a fixed handful
+  of arithmetic per edge, 40,000 of them on the 10k against a pipeline that
+  takes hundreds of milliseconds, so well under 1%. No workload grew: the point
+  count per route is unchanged and no benchmark selects a different stage.
+  WHAT IS STILL NOT HERE, each with its reason rather than as a list. `edgeSep`
+  is carried and unhonoured, and `LayoutConfig.edgeSep` used to promise this
+  milestone would honour it, so that promise is corrected in place rather than
+  quietly dropped. It governs the two cases where routes coincide exactly rather
+  than merely run close, parallel edges and self loops, and both are pinned as
+  they stand so the milestone that fans them out has a before. It needs a
+  fan-out rule and, for a loop, a height, and a loop that bulges vertically is
+  the one shape in this package that would need an exception carved into the
+  monotone rule above. Obstacle detours and splines are not here: a route goes
+  where its dummies are and takes no notice of a box in the way. And a collinear
+  chain is not collapsed to two points, which M2.4b's entry allowed for and
+  which stays allowed for the router that wants it.
 - [ ] **M2.9** Golden corpus vs dagre: port a corpus of real graphs
   (including a prnt.design-shaped pattern-generator graph), assert
   structural parity metrics vs dagre output (rank counts, crossing counts
