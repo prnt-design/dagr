@@ -1347,8 +1347,9 @@ function applyHint(
  * measurement with a scheduled expiry: a bench recapture moves the timings. So
  * `index.ts`, `ROADMAP.md` and `docs/docs/layout.md` describe the trade in a
  * sentence and point back at this section rather than copying the table, which
- * leaves one paragraph to correct rather than four. `CHANGELOG.md` is the deliberate exception: a dated entry
- * records what a past change measured at the time, so M2.6's entry keeps its
+ * leaves one paragraph to correct rather than four. `CHANGELOG.md` is the
+ * deliberate exception: a dated entry records what a past change measured at
+ * the time, so M2.6's entry keeps its
  * own 3,005 and 30,318 and is marked superseded in place rather than swept,
  * which is this file's own precedent. The crossing counts are pinned against
  * both stages in `test/layout.order.test.ts`, so a stage that quietly gave the

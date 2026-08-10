@@ -187,11 +187,15 @@ The same hazard, from the other end: a milestone that grows the WORKLOAD a
 benchmark measures rebases that benchmark's entry just as surely, without
 touching a line of bench code. M2.4b was the first: dummy chains take the nodes
 the layout pipeline places on the 10k corpus from 10,000 to 184,222, and the
-segments it orders and counts crossings between from 13,131 to 214,222. M2.5
-through M2.8 will each do it again. Recapturing can be
-right in that case, and it is the same
-recipe: recapture in the same commit and say why in the message. What separates
-it from talking a gate out of a failure is one habit, so make it one: PREDICT
+segments it orders and counts crossings between from 13,131 to 214,222. It
+remains the only one. M2.5 through M2.8 were each expected to do it again and
+none of them did: replacing a later stage with a better algorithm changes what
+a benchmark COSTS, which is what the tolerance is for, and only a change to
+what a benchmark PROCESSES rebases it. M2.8's own entry in `ROADMAP.md` states
+that distinction, having had to make it. Recapturing can be right in the case
+this paragraph is about, and it is the same recipe: recapture in the same commit
+and say why in the message. What separates it from talking a gate out of a
+failure is one habit, so make it one: PREDICT
 THE MAGNITUDE BEFORE YOU MEASURE, from what the change actually does, and put
 the predicted figure next to the measured one in the commit message. A ratio
 near the prediction is a measurement of known extra work. A ratio well above it

@@ -1168,8 +1168,11 @@ findings addressed or logged, docs land with the feature.
   points-count rule ("a chain of n dummies needs a route of at least n + 2
   points") was considered and rejected: straightening a dummy chain is a primary
   goal of M2.7's Brandes-Koepf, so a collinear chain is what a GOOD positioner
-  produces and M2.8 could then legitimately emit two points, and a rule that has
-  to be withdrawn is worse here than one never claimed.
+  produces and a polyline router could then legitimately emit two points, and a
+  rule that has to be withdrawn is worse here than one never claimed. M2.8
+  brought the polyline router and it collapses nothing, so the allowance is
+  still an allowance rather than a thing being relied on. It stands for whatever
+  router wants it.
   **The deterministic-id requirement is met, but not by the id this entry
   suggested.** Ids are `#dummy:<edgeId>:<index>`, where the index is the dummy's
   0-based position along its chain counting from the source the CALLER authored,
@@ -1754,16 +1757,38 @@ findings addressed or logged, docs land with the feature.
   rank order, both position stages here give a layer one shared `y`, and a chain
   holds one node at every rank between its endpoints, so the points are monotone
   before the router sees them. What the router promises is that it introduces no
-  reversal its input did not have, and that is not free. Both ends of a bendless
-  route are attached along the SAME segment, one from each end, so an attachment
-  allowed to travel the whole way could pass the other one and hand back a
-  polyline running backwards. Each is capped at the segment midpoint, which
-  makes crossing impossible by arithmetic rather than by an assumption about how
-  far apart a position stage puts things. Two witnesses, both of which fail with
-  a `StageContractError` when the cap is removed and both of which were watched
-  failing: `rankSep: 0` with a target of no height, reachable through the
+  reversal its input did not have, and that is not free. It costs TWO CAPS on
+  how far an attachment may travel, and the second of them is the finding of
+  this milestone's algorithms review rather than something the first draft got
+  right.
+  CAP ONE IS HALF OF THIS SEGMENT. Both ends of a bendless route are attached
+  along the SAME one, from opposite ends, so an attachment allowed to travel the
+  whole way could pass the other and hand back a polyline running backwards. Two
+  points that each moved at most half way meet at worst in the middle. Two
+  witnesses, both watched failing with a `StageContractError` when the cap is
+  removed: `rankSep: 0` with a target of no height, reachable through the
   shipping stages alone, and a third-party position stage that overlaps two
   boxes outright.
+  CAP TWO IS HALF THE WAY TO THE EDGE'S OTHER ENDPOINT, and the first draft
+  shipped without it and was WRONG. The two are the same distance only on a
+  bendless route. On a chained edge an attachment walks toward the nearest
+  DUMMY, so cap one bounds the distance to that, while the runner's
+  endpoint-proximity rule compares the result against the far NODE. Nothing in
+  the eight-graph tables could see it, because every corpus graph is laid out at
+  one uniform 100 by 40 box and at that size neither cap ever binds. The review
+  found it by varying the box widths: four nodes at the default config with one
+  box 2000 wide make `layout()` throw a `StageContractError` on legal input, and
+  664 of 3,000 random 4 to 11 node DAGs with widths from 10 to 2010 threw, where
+  the centre-to-centre router threw none. Travelling at most half the way to the
+  other endpoint makes the rule true by the triangle inequality. Both the
+  four-node regressor and the seeded sweep are tests, the corpus tables gained a
+  ninth row at varied widths whose 282 bound attachments are the only ones in
+  the file, and removing the term fails six tests.
+  THE LESSON IS THE ONE ABOUT UNIFORM FIXTURES rather than the one about
+  geometry. Nine tables over eight graphs agreed, the property they agreed about
+  was real, and all eight were drawn at a single box size that put the whole
+  drawing outside the regime where the code could fail. A corpus that varies
+  what the code branches on is worth more than a corpus that is large.
   NO CONTRACT CHECK WAS ADDED, which `docs/docs/layout.md` had already forecast
   and which this entry confirms rather than revisits. Monotonicity belongs to
   the position stage and the router jointly, a caller may supply a position
@@ -1806,9 +1831,12 @@ findings addressed or logged, docs land with the feature.
   run's to predict and the two rank entries are the controls: they run the rank
   stage alone, so they cannot move for a reason inside this diff. Predicted both
   pipeline entries flat, on the grounds that the added work is a fixed handful
-  of arithmetic per edge, 40,000 of them on the 10k against a pipeline that
-  takes hundreds of milliseconds, so well under 1%. No workload grew: the point
-  count per route is unchanged and no benchmark selects a different stage.
+  of arithmetic per edge plus one square root per attachment, so 40,000 edges
+  and 80,000 roots on the 10k against a pipeline that takes hundreds of
+  milliseconds: well under 1%. No workload grew, which is the distinction
+  `bench/README.md` had blurred and now states: the point count per route is
+  unchanged and no benchmark selects a different stage, so this is a change to
+  what a benchmark COSTS rather than to what it processes.
   WHAT IS STILL NOT HERE, each with its reason rather than as a list. `edgeSep`
   is carried and unhonoured, and `LayoutConfig.edgeSep` used to promise this
   milestone would honour it, so that promise is corrected in place rather than

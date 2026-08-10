@@ -689,9 +689,13 @@ describe('bounds around a bend', () => {
   });
 
   it('leaves the bounds of a chainless layout exactly where they were', () => {
-    // A straight route's endpoints are node centres, always inside their own
-    // boxes, so the hull of the boxes and the points is the hull of the boxes.
-    // Nothing that was laid out before M2.4b moves.
+    // A chainless route has no point that is not an endpoint, and since M2.8
+    // an endpoint is an attachment ON its own node's box rather than that
+    // node's centre. Either way it is inside the box, so the hull of the boxes
+    // and the points is the hull of the boxes, and nothing that was laid out
+    // before M2.4b moves. The reason changed under this assertion in M2.8 and
+    // the assertion did not, which is worth the sentence: only a BEND can ever
+    // grow the bounds.
     const result = layout({ graph: build(['a', 'b'], [['a', 'b', 'ab']]) });
     expect(result.bounds).toEqual({ x: -50, y: 0, width: 100, height: 130 });
   });

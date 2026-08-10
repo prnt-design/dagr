@@ -618,8 +618,11 @@ function assertBounds(result: LayoutResult): void {
  * them. THE FIRST HALF OF THAT IS NOW HISTORY RATHER THAN FORECAST. Proximity
  * survived it untouched, because a route that leaves its source's border and
  * arrives at its target's is still nearer its own node at each end, and the
- * router is what keeps it so: an attachment travels at most half way along its
- * own segment, so an end can reach the midpoint and never pass it. What this
+ * router is what keeps it so: an attachment travels at most half the way to the
+ * node at the OTHER end of its edge, so an end can reach the midpoint between
+ * the two and never pass it. That cap exists for this rule specifically, and
+ * `route.ts` says so, because the obvious cap of half the current SEGMENT is
+ * the wrong distance on a chained edge and this rule is what catches it. What this
  * does not constrain is the shape between the endpoints, which is the router's
  * business, and that includes monotonicity in the rank axis. The reason it is
  * not checked here is in `route.ts`: the property belongs to the position stage

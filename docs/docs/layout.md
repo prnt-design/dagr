@@ -18,7 +18,7 @@ and the milestones do not run in landing order.
 
 The types, the runner, and the stage boundaries are real: they are what every
 later milestone is built against, and the roster below is why the one boundary
-that was going to have to move (dummy nodes) did not have to. Two of
+that was going to have to move (dummy nodes) did not have to. Three of
 the four default algorithms are real. The rank stage breaks cycles, ranks by
 longest path and splits every long edge into a chain of dummy nodes, so the
 layers are the ones the graph asks for and no edge crosses a layer without a
@@ -26,8 +26,11 @@ node in it, and M2.3 added a second ranker a caller can select instead. The
 order stage reduces edge crossings by barycenter sweeps and a transpose pass,
 which M2.6b made what you get when you name no order stage, at a price and for a
 saving that are
-[stated below](#what-the-default-order-stage-costs-and-buys). The other two
-defaults are placeholders that produce a well formed but naive result.
+[stated below](#what-the-default-order-stage-costs-and-buys). The route stage
+gives every edge a polyline through its dummies, attached at the endpoint boxes'
+borders and monotone in the rank axis, which M2.8 made the default. The
+remaining default, `grid-position`, is a placeholder that produces a well formed
+but naive result.
 
 Expect the contract to gain rules as real stages land. A rule leaves the list
 only when the mistake it caught stops being one a stage can make, never because
@@ -1354,12 +1357,19 @@ half height at another, and the border is whichever comes first, so a steep
 route leaves through the bottom edge and a flat one through a side. A node with
 no size attaches at its own centre, having no border to leave from.
 
-**The attachment never travels more than half way.** Both ends of a route with
-no bend in it slide along the same segment, one from each end, so a box wider
-than the gap to its neighbour could otherwise push its attachment past the other
-one and hand back a polyline that runs backwards. Capping each at the segment
-midpoint makes that impossible by arithmetic. At the shipped defaults the cap
-never binds; it binds where boxes nearly touch, which `rankSep: 0` reaches.
+**An attachment is held back by two caps, and they bound different distances.**
+It may not travel more than half of the segment it is walking along: both ends
+of a route with no bend in it slide along the same segment, one from each end,
+so a box wider than the gap to its neighbour could otherwise push its
+attachment past the other one and hand back a polyline that runs backwards. And
+it may not travel more than half the way to the edge's other ENDPOINT, which on
+a chained edge is a different distance, because the next point it walks toward
+is a dummy while [the runner's direction check](#route-direction) compares the
+result against the far node.
+
+At the default box size neither binds. They bind where a box is large against
+the gap it has to cross, which `rankSep: 0` reaches and so does an ordinary
+graph with one wide node in it.
 
 ### Monotone in the rank axis
 
@@ -1379,21 +1389,26 @@ layers run in strictly increasing rank order, both position stages in the
 package give a layer one shared `y`, and a chain holds one node at every rank
 between its endpoints, so the points are monotone before the router sees them.
 What the router promises is that it introduces no reversal its input did not
-have, which is what the half-way cap above buys. The runner does not check it,
+have, which is what the two caps above buy. The runner does not check it,
 for the reason [the stage contract](#the-stage-contract) gives.
 
 ### What routing does not do yet
 
 **`edgeSep` is carried and not honoured.** It is the gap between two routes
-running alongside each other, so the cases it governs are the two where routes
-coincide exactly rather than merely run close. Two parallel edges between one
-pair of nodes get identical polylines, having nothing but their ids to tell them
-apart. A self loop gets two identical points at its node's centre, having no
-direction to attach along and so no border to land on. Both are pinned in the
-test suite as they stand, so the milestone that fans them out has a before to
-measure against. Fanning them out needs a rule this package has not chosen, and
-for a loop it needs a height, and a loop that bulges vertically is the one shape
-here that would need an exception carved into the monotone rule above.
+running alongside each other, and the cases it governs are the ones where two
+routes coincide exactly rather than merely run close. A self loop gets two
+identical points at its node's centre, having no direction to attach along and
+so no border to land on. Two parallel edges get identical polylines when neither
+has a chain, which is to say when they span one rank: same endpoints, no bend,
+nothing but their ids to tell them apart. Over a longer span they come apart on
+their own, because the ranker mints each its own dummy and the order stage
+places those dummies at their own spots in the layer, so a long parallel pair is
+separated already by `nodeSep` and by a stage that was not trying to. All three
+cases are pinned in the test suite as they stand, so the milestone that fans
+them out has a before to measure against. Fanning them out needs a rule this
+package has not chosen, and for a loop it needs a height, and a loop that bulges
+vertically is the one shape here that would need an exception carved into the
+monotone rule above.
 
 **Obstacle detours and splines are not here either.** A route goes where its
 dummies are and takes no notice of a box in the way, and every segment is
@@ -1485,9 +1500,9 @@ const nudged: PositionStage = {
 
 **Every stage you choose between is exported by name; no placeholder is.** That
 is the whole rule, and it is why `longestPathRankStage`,
-`networkSimplexRankStage` and `barycenterOrderStage` are all importable while
-the two placeholders left in `stages.ts` are reachable only through
-`defaultStages`. A placeholder's name is a name to delete tomorrow. An
+`networkSimplexRankStage`, `barycenterOrderStage` and `polylineRouteStage` are
+all importable while the one placeholder left in `stages.ts` is reachable only
+through `defaultStages`. A placeholder's name is a name to delete tomorrow. An
 algorithm's name is how a caller says which objective it wants: the two rankers
 answer different questions, and "the default one" does not identify either,
 because which one is default can change and neither is chosen for being it. See
@@ -1496,8 +1511,9 @@ which is which. `order` gained its name that way in M2.5 and its default in
 M2.6b, without the name changing in between, and `route` followed the same way
 in M2.8, where `polylineRouteStage` replaced the unexported `straight-route` and
 was exported on arrival. Two stages in the package have no public name for a
-reason that is not placeholder-ness: `insertion-order`, kept because the ordering tests measure
-against it, and `brandes-koepf-position`, which M2.7 implemented and left
+reason that is not placeholder-ness: `insertion-order`, kept because the
+ordering tests measure against it, and `brandes-koepf-position`, which M2.7
+implemented and left
 unexported because there is no run today that should choose it, for
 [the reason below](#what-is-not-here-yet).
 
@@ -1617,9 +1633,10 @@ considered and rejected: straightening long-edge chains is a primary goal of
 Brandes-Koepf (M2.7), so a collinear chain is exactly what a good positioner
 produces, and a polyline router may then legitimately collapse it back to two
 points. M2.8's router does not collapse anything, and the allowance stands for
-the one that might. That is the same argument [route direction](#route-direction) makes
-about proximity against equality. A rule that would have to be withdrawn a
-milestone later is worse than one never claimed.
+the one that might. That is the same argument
+[route direction](#route-direction) makes about proximity against equality. A
+rule that would have to be withdrawn a milestone later is worse than one never
+claimed.
 
 ### Route direction
 
@@ -1924,9 +1941,9 @@ crossings reduced, and then evenly spaces each row and joins the lot with
 polylines that bend once per rank a long edge crosses and stop at the boxes'
 borders rather than running under them. The layers, the order within them, the
 number of bends and where each route attaches are worth reading; where along a
-row a node or a bend sits is not yet. What it is, is a run that always completes, never
-overlaps
-two boxes (see [Overlap, exactly](#overlap-exactly)), and satisfies every
+row a node or a bend sits is not yet. What it is, is a run that always
+completes, never overlaps two boxes
+(see [Overlap, exactly](#overlap-exactly)), and satisfies every
 guarantee this page makes about the result, which is what the later milestones
 are built against.
 

@@ -29,10 +29,14 @@ of doc prose.
 
 - `edgeSep` is still not honoured by any stage, and that is recorded here as an
   Added entry's small print because `LayoutConfig.edgeSep` promised M2.8 would.
-  It governs the two cases where routes coincide exactly: parallel edges, which
-  get identical polylines, and self loops, which get two identical points at
-  their node's centre. Both are pinned in `test/layout.route.test.ts` as they
-  stand so the milestone that fans them out has a before. (M2.8)
+  It governs the cases where two routes coincide EXACTLY: a self loop, which
+  gets two identical points at its node's centre whatever the graph looks like,
+  and two parallel edges that span ONE rank, which have identical endpoints and
+  no bend to tell them apart. Parallel edges spanning more than one rank are
+  already separated, incidentally: each gets its own dummy chain and the order
+  stage places those dummies apart, so the two routes differ at every point.
+  All three cases are pinned in `test/layout.route.test.ts` as they stand so the
+  milestone that fans them out has a before. (M2.8)
 
 - `virtualChains` on `Layering`, the argument type of `countCrossings`, optional
   and defaulting to none. Pass the rank stage's chains and a long edge is
@@ -445,9 +449,10 @@ of doc prose.
   coordinate of a dummy on the edge's chain, byte for byte what `straight-route`
   produced, and every route still has the same number of points as before.
   `test/layout.route.test.ts` keeps the old router as `centreToCentreRouteStage`
-  and pins the two against each other over the two benchmark corpora and the six
-  golden graphs, rather than asserting a remembered figure: 14,746 interior
-  points on the 1k and 174,222 on the 10k, none of them differing.
+  and pins the two against each other over nine graphs, the two benchmark
+  corpora, the six golden graphs and `dense-1200` again at varied box widths,
+  rather than asserting a remembered figure: 14,746 interior points on the 1k
+  and 174,222 on the 10k, none of them differing.
 
   **Node coordinates and `bounds` did not move either**, which they could not:
   an attachment slides along a segment the router already had and lands on a
@@ -455,7 +460,7 @@ of doc prose.
   `test/layout.result.test.ts` is the witness, and only its `edges` needed
   recapturing.
 
-  **What it is worth**, across those eight graphs, is between 0.6% and 5.9% off
+  **What it is worth**, across those nine graphs, is between 0.6% and 5.9% off
   the total length of the drawing's polylines, and every unit of it was ink
   drawn underneath a node box. The saving is at most half a box diagonal per
   end, 53.85 at the default box, so a drawing of long thin rows saves a smaller
@@ -471,8 +476,19 @@ of doc prose.
   does not check it, deliberately, because a caller may supply a position stage
   that stacks ranks any way it likes.
 
-  **A self loop and two parallel edges are unchanged**, and that is the
-  `edgeSep` entry above rather than an oversight.
+  **An attachment is held back by two caps** and they bound different distances:
+  half of the segment it walks along, which keeps the two ends of a bendless
+  route from crossing each other, and half the way to the edge's other ENDPOINT,
+  which on a chained edge is a different distance and is what keeps the runner's
+  route-direction check satisfiable. Neither binds at the default box size, and
+  both bind where a box is large against the gap it has to cross, which an
+  ordinary graph with one wide node in it reaches. Without the second,
+  `layout()` throws a `StageContractError` on four nodes at the default config
+  with one box 2000 wide. That is a caller-visible throw on legal input, so it
+  is here rather than only in the ROADMAP.
+
+  **A self loop and two parallel edges spanning one rank are unchanged**, and
+  that is the `edgeSep` entry above rather than an oversight.
 
 - **`straight-route` is gone.** It was never exported, so no caller can have
   named it, and nothing measured against it: the precedent is M2.2 deleting
@@ -690,9 +706,17 @@ of doc prose.
   hull depends on the rest of the drawing (at `nodeSep: 0` it lands exactly on
   that box's edge, and a wider row elsewhere can swallow it), but one reachable
   case is enough to make the old claim false. The claim was made true rather
-  than softened, in the formulation M2.8's obstacle detours need anyway. A
+  than softened, in the formulation obstacle detours will need anyway. A
   layout with no chain in it has exactly the bounds it had before, since a
   straight route's endpoints are node centres. (M2.4b)
+
+  **This paragraph attributed the detours to M2.8 and M2.8 brought none.** It
+  brought border attachment, which does not exercise the formulation either
+  way: an attachment lands ON a box the hull already contains, so only a bend
+  can grow the bounds. The last sentence above is now history rather than
+  present tense, since a route's endpoints stopped being node centres in M2.8,
+  and the bounds of a chainless layout are unchanged by that for the same
+  reason. (M2.8)
 
 - **Cycle breaking is now a least-squares vertex order rather than the greedy
   heuristic of Eades, Lin and Smyth, so every graph with a cycle in it ranks

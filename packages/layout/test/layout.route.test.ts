@@ -5,7 +5,8 @@ import { layout } from '../src/pipeline.js';
 import { brandesKoepfPositionStage } from '../src/position.js';
 import { defaultStages } from '../src/stages.js';
 import { buildCorpusGraph, goldenCorpus } from './golden-corpus.js';
-import type { EdgeId, NodeId } from '@dagr/graph';
+import { mulberry32 } from './random.js';
+import type { EdgeId, Node, NodeId } from '@dagr/graph';
 import type { GraphSpec } from '@dagr/bench';
 import type {
   LayoutConfig,
@@ -35,8 +36,10 @@ import type {
  * longer ships the thing being compared against.
  *
  * The second is that a route invariant is worth nothing pinned against one
- * hand-built graph. Every property here is checked over eight graphs, the two
- * bench corpora and the six of `golden-corpus.ts`, which is the same corpus
+ * hand-built graph. Every property here is checked over nine graphs, the two
+ * bench corpora, the six of `golden-corpus.ts` and one of those six again under
+ * varied box widths, for the reason `variedWidths` gives. The golden six are the
+ * same corpus
  * `layout.order.golden.test.ts` and `layout.transpose.test.ts` use and is
  * shared for the reason that file gives: two files declaring their own would
  * drift, and then they would be pinning numbers for graphs nobody else has. Two
@@ -167,13 +170,25 @@ function reach(point: Point, centre: Point, size: Size): number {
   );
 }
 
-/** Where an end of a route sits relative to its own node's box. */
+/**
+ * Where an end of a route sits relative to its own node's box.
+ *
+ * The tolerance is scaled the way `assertBounds` scales its own, by the
+ * magnitude of the coordinates involved and then divided back through the half
+ * extent that {@link reach} divided by. A flat `1e-9` on the ratio is what this
+ * had first and it is safe on the eight graphs below only by accident: with 100
+ * by 40 boxes the error at an `x` of 6e8 is exactly zero. It stops being safe
+ * the moment a box extent is SMALL at a large coordinate, where a width of
+ * 5e-3 at an `x` of 2.8e8 puts a genuine border hit 4e-6 off the ratio and this
+ * would report it as `inside`.
+ */
 function endKind(point: Point, centre: Point, size: Size): 'centre' | 'border' | 'inside' {
   const out = reach(point, centre, size);
   if (out === 0) return 'centre';
-  // A relative tolerance, because the attachment is a centre plus a ratio times
-  // a difference and the last bit of that is not free.
-  if (Math.abs(out - 1) <= 1e-9) return 'border';
+  const extent = Math.max(size.width, size.height) / 2;
+  const scale = Math.max(1, Math.abs(centre.x), Math.abs(centre.y), Math.abs(point.x));
+  const epsilon = extent === 0 ? 1e-9 : (scale * 1e-9) / extent;
+  if (Math.abs(out - 1) <= epsilon) return 'border';
   return 'inside';
 }
 
@@ -189,11 +204,40 @@ function polylineLength(points: readonly Point[]): number {
   return total;
 }
 
-/** The eight graphs every invariant below is checked over, built once. */
-const corpora: readonly (readonly [string, Graph])[] = [
-  ['1k', build(smallCorpus())],
-  ['10k', build(largeCorpus())],
-  ...goldenCorpus.map((entry) => [entry.name, buildCorpusGraph(entry)] as const),
+/**
+ * A width per node, deterministic and spread wide enough to matter.
+ *
+ * THE NINTH ROW EXISTS BECAUSE THE FIRST EIGHT COULD NOT SEE THE BUG. Every
+ * corpus graph is laid out at one uniform 100 by 40 box, and at that size a box
+ * is never large against the gap it has to cross, so neither cap in
+ * {@link attachment} ever binds and no table below can reach the case the M2.8
+ * review found. Widths from 10 to 2010 put a box wider than a row's spacing in
+ * every drawing, which is the regime where an attachment travels far enough for
+ * the caps to be the thing keeping the route legal.
+ */
+function variedWidths(graph: Graph, seed: number): (node: Node) => Size {
+  const random = mulberry32(seed);
+  const widths = new Map<NodeId, number>();
+  for (const node of graph.nodes()) widths.set(node.id, 10 + Math.floor(random() * 2_001));
+  return (node) => ({ width: widths.get(node.id) ?? 100, height: 40 });
+}
+
+const denseEntry = goldenCorpus.find((entry) => entry.name === 'dense-1200');
+if (denseEntry === undefined) throw new Error('the golden corpus no longer holds dense-1200');
+const variedBase = buildCorpusGraph(denseEntry);
+
+/**
+ * The nine graphs every invariant below is checked over, built once: the two
+ * bench corpora, the six of `golden-corpus.ts`, and `dense-1200` again under
+ * varied box widths. `dense-1200` is the one re-run because it has the largest
+ * long-edge share of the six, so it is where a chained edge's attachment gets
+ * the most exercise.
+ */
+const corpora: readonly (readonly [string, Graph, LayoutConfig | undefined])[] = [
+  ['1k', build(smallCorpus()), undefined],
+  ['10k', build(largeCorpus()), undefined],
+  ...goldenCorpus.map((entry) => [entry.name, buildCorpusGraph(entry), undefined] as const),
+  ['dense-1200-varied', variedBase, { nodeSize: variedWidths(variedBase, 0xd15) }] as const,
 ];
 
 describe('polylineRouteStage, what a route looks like', () => {
@@ -256,10 +300,11 @@ describe('polylineRouteStage, what a route looks like', () => {
     ]);
   });
 
-  it('gives two parallel edges the same polyline, which is the edgeSep case', () => {
-    // Two edges between one pair of nodes have nothing but their ids to tell
-    // them apart, so they coincide exactly. Pinned as it stands for the same
-    // reason the self loop above is.
+  it('gives two parallel edges the same polyline when neither has a chain', () => {
+    // The `edgeSep` case, and it is narrower than "parallel edges coincide".
+    // Over ONE rank two edges between the same pair have identical endpoints,
+    // no bend, and nothing but their ids to tell them apart, so they coincide
+    // exactly. Pinned as it stands for the same reason the self loop above is.
     const graph = scripted(
       ['a', 'b'],
       [
@@ -269,6 +314,39 @@ describe('polylineRouteStage, what a route looks like', () => {
     );
     const result = layout({ graph });
     expect(result.edges.get('first')?.points).toEqual(result.edges.get('second')?.points);
+  });
+
+  it('separates two parallel edges that each span a rank, without meaning to', () => {
+    // And over more than one rank they come apart on their own. The ranker
+    // mints each of them its own chain, those dummies are separate members of
+    // the layers they join, and the order stage gives each its own place, so
+    // the two routes differ at their bends AND at their attachments, which aim
+    // at those bends. `nodeSep` does the separating and no router asked it to.
+    //
+    // This is why the `edgeSep` case above is stated with its condition. The
+    // golden corpus's `parallel-800` carries long parallel edges, so the
+    // unconditional claim would have been false on the very corpus this file
+    // pins its tables over.
+    const graph = scripted(
+      ['a', 'm', 'n', 'b'],
+      [
+        ['a', 'm', 'am'],
+        ['m', 'n', 'mn'],
+        ['n', 'b', 'nb'],
+        ['a', 'b', 'first'],
+        ['a', 'b', 'second'],
+      ],
+    );
+    const result = layout({ graph });
+    const first = result.edges.get('first')?.points ?? [];
+    const second = result.edges.get('second')?.points ?? [];
+    expect(first).toHaveLength(4);
+    expect(second).toHaveLength(4);
+    // Every point differs, not merely the bends.
+    expect(first.map((point) => point.x)).toEqual([50 / 4.5, 50, 50, 50 / 4.5]);
+    expect(second.map((point) => point.x)).toEqual([100 / 4.5, 100, 100, 100 / 4.5]);
+    expect(first.map((point) => point.y)).toEqual([40, 110, 200, 270]);
+    expect(second.map((point) => point.y)).toEqual([40, 110, 200, 270]);
   });
 
   it('attaches a zero-size node at its own centre, there being no border', () => {
@@ -285,22 +363,22 @@ describe('polylineRouteStage, what a route looks like', () => {
   });
 });
 
-describe('the half-way cap on an attachment', () => {
+describe('the two caps on an attachment', () => {
   /**
-   * THE CAP IS NOT DECORATION and these two cases are why it is in the code.
+   * NEITHER CAP IS DECORATION, and they bound different distances.
    *
-   * An attachment slides from a centre toward the next point along the route
-   * and stops at the box border, and both ends of a route with no bend in it
-   * slide along the SAME segment. Let either of them travel more than half way
-   * and the two cross over, and the polyline handed back runs the wrong way on
-   * a drawing where nothing else is wrong. `route.ts` caps each at the segment
-   * midpoint, which makes crossing impossible by arithmetic rather than by an
-   * assumption about how far apart a position stage puts things.
+   * An attachment slides from a centre toward the NEXT POINT on the route and
+   * stops at the box border. The first cap holds it to half of that segment,
+   * because on a bendless route both ends slide along the same one and two
+   * attachments that pass each other hand back a polyline running the wrong
+   * way. The second holds it to half the distance to the edge's OTHER
+   * ENDPOINT, which on a chained edge is a different distance entirely, and it
+   * exists because the runner's endpoint-proximity rule compares this end
+   * against that endpoint rather than against the dummy it walked toward.
    *
-   * Both cases below FAIL WITH A `StageContractError` when the cap is removed,
-   * which is the runner's endpoint-proximity rule catching an end that has
-   * ended up nearer the node it is not attached to. That was verified by
-   * removing it, not by reasoning about it.
+   * Every case below FAILS WITH A `StageContractError` when its cap is removed,
+   * which is that rule catching an end nearer the node it is not attached to.
+   * Verified by removing them, not by reasoning about it.
    */
   it('stops half way when a box reaches its neighbour, rather than passing it', () => {
     // Reachable through the shipping stages alone: `rankSep: 0` puts the rows
@@ -349,11 +427,84 @@ describe('the half-way cap on an attachment', () => {
       { x: 0, y: 5 },
     ]);
   });
+
+  it('holds a chained edge back to half way to its TARGET, not to its first bend', () => {
+    // THE M2.8 ALGORITHMS REVIEW'S REGRESSOR, kept verbatim because it is the
+    // case the first cap does not cover and the one that shipped broken in the
+    // first draft. Four nodes, default config, one box 2000 wide. `st` spans
+    // two ranks, so its source end walks toward a dummy in the wide row rather
+    // than toward `t`, the first cap bounds the distance to THAT, and the
+    // runner's proximity rule compares the result against `t`. With only the
+    // first cap `layout()` throws a `StageContractError` on this graph.
+    const widths: Record<string, number> = { a: 100, s: 100, m: 2000, t: 700 };
+    const graph = scripted(
+      ['a', 's', 'm', 't'],
+      [
+        ['s', 'm', 'sm'],
+        ['m', 't', 'mt'],
+        ['s', 't', 'st'],
+        ['a', 'm', 'am'],
+      ],
+    );
+    const result = layout({
+      graph,
+      config: { nodeSize: (node) => ({ width: widths[node.id] ?? 100, height: 40 }) },
+    });
+    const points = result.edges.get('st')?.points ?? [];
+    const source = result.nodes.get('s');
+    const target = result.nodes.get('t');
+    expect(points).toHaveLength(3);
+    // The property the runner checks, asserted here as the thing this cap is
+    // for rather than left to the fact that `layout()` returned at all.
+    const gap = Math.hypot((source?.x ?? 0) - (target?.x ?? 0), (source?.y ?? 0) - (target?.y ?? 0));
+    const travelled = Math.hypot(
+      (points[0]?.x ?? 0) - (source?.x ?? 0),
+      (points[0]?.y ?? 0) - (source?.y ?? 0),
+    );
+    expect(travelled).toBeLessThanOrEqual(gap / 2);
+    // And it really is the second cap doing the work: the first one would have
+    // allowed half the way to the dummy, which is further than this.
+    const toBend = Math.hypot(
+      (points[1]?.x ?? 0) - (source?.x ?? 0),
+      (points[1]?.y ?? 0) - (source?.y ?? 0),
+    );
+    expect(travelled).toBeLessThan(toBend / 2);
+  });
+
+  it('survives 3,000 random DAGs with box widths from 10 to 2010', () => {
+    // The population behind the regressor above, and it is here as the SWEEP
+    // that found the shape rather than as the evidence: the deterministic case
+    // is the evidence. 664 of these 3,000 threw before the second cap landed
+    // and none of them threw under the centre-to-centre router, which is what
+    // said the fault was new and was the router's. Uniform 100 by 40 finds
+    // nothing, which is why the eight-graph tables below could not have.
+    const random = mulberry32(0x2b8);
+    let laid = 0;
+    for (let run = 0; run < 3_000; run += 1) {
+      const count = 4 + Math.floor(random() * 8);
+      const graph = new Graph();
+      for (let node = 0; node < count; node += 1) graph.addNode(`n${String(node)}`);
+      for (let from = 0; from < count; from += 1) {
+        for (let to = from + 1; to < count; to += 1) {
+          if (random() < 0.35) graph.addEdge(`n${String(from)}`, `n${String(to)}`);
+        }
+      }
+      const widths = new Map<NodeId, number>();
+      for (const node of graph.nodes()) widths.set(node.id, 10 + Math.floor(random() * 2_001));
+      const result = layout({
+        graph,
+        config: { nodeSize: (node) => ({ width: widths.get(node.id) ?? 100, height: 40 }) },
+      });
+      for (const edge of result.edges.values()) expect(monotone(edge.points)).toBe(true);
+      laid += 1;
+    }
+    expect(laid).toBe(3_000);
+  }, 300_000);
 });
 
-describe('the route invariants, over both bench corpora and the golden six', () => {
+describe('the route invariants, over both bench corpora and the golden six plus one', () => {
   it('has a monotonicity check that can actually fail', () => {
-    // Eight zeroes below are worth nothing if the predicate producing them
+    // Nine zeroes below are worth nothing if the predicate producing them
     // cannot say no, and a weak rule is exactly the kind that quietly cannot.
     // So: what it accepts, and what it rejects.
     expect(monotone([{ x: 0, y: 0 }, { x: 1, y: 5 }, { x: 2, y: 9 }])).toBe(true);
@@ -367,23 +518,27 @@ describe('the route invariants, over both bench corpora and the golden six', () 
   });
 
   const runs = new Map<string, ReturnType<typeof routedBothWays>>();
-  function run(name: string, graph: Graph): ReturnType<typeof routedBothWays> {
+  function run(
+    name: string,
+    graph: Graph,
+    config: LayoutConfig | undefined,
+  ): ReturnType<typeof routedBothWays> {
     const cached = runs.get(name);
     if (cached !== undefined) return cached;
-    const fresh = routedBothWays(graph);
+    const fresh = routedBothWays(graph, config);
     runs.set(name, fresh);
     return fresh;
   }
 
-  it('routes every edge monotone in the rank axis, on all eight', () => {
+  it('routes every edge monotone in the rank axis, on all nine', () => {
     // The headline invariant, in the weak form `route.ts` states, so that a
-    // self loop and a flat pair are steps and not backtracks. Both corpora and
-    // all six golden graphs, and the two routers alike, because monotonicity is
+    // self loop and a flat pair are steps and not backtracks. All nine graphs,
+    // and the two routers alike, because monotonicity is
     // a property this stage INHERITS from the position stage rather than one it
     // creates: what M2.8 promises is that border attachment does not break it,
     // and a column that only checked the new router could not say that.
-    const table = corpora.map(([name, graph]) => {
-      const { result, before } = run(name, graph);
+    const table = corpora.map(([name, graph, config]) => {
+      const { result, before } = run(name, graph, config);
       const after = [...result.edges.values()].filter((edge) => !monotone(edge.points));
       const centres = [...before.values()].filter((points) => !monotone(points));
       return [name, result.edges.size, after.length, centres.length];
@@ -397,6 +552,7 @@ describe('the route invariants, over both bench corpora and the golden six', () 
       ['sparse-2000', 3_000, 0, 0],
       ['self-loops-800', 2_440, 0, 0],
       ['parallel-800', 2_600, 0, 0],
+      ['dense-1200-varied', 6_000, 0, 0],
     ]);
   }, 300_000);
 
@@ -406,8 +562,8 @@ describe('the route invariants, over both bench corpora and the golden six', () 
     // is the coordinate of a dummy, which is the order and position stages'
     // decision and never the router's, so the two routers have to agree about
     // all of them, exactly, and about how many there are.
-    const table = corpora.map(([name, graph]) => {
-      const { result, before } = run(name, graph);
+    const table = corpora.map(([name, graph, config]) => {
+      const { result, before } = run(name, graph, config);
       let interior = 0;
       let differing = 0;
       for (const edge of result.edges.values()) {
@@ -434,16 +590,22 @@ describe('the route invariants, over both bench corpora and the golden six', () 
       ['sparse-2000', 9_206, 0],
       ['self-loops-800', 6_948, 0],
       ['parallel-800', 6_353, 0],
+      // Same graph as `dense-1200`, so the same chains and the same bends. Only
+      // the boxes differ, and a box is not something an interior point knows
+      // about.
+      ['dense-1200-varied', 27_068, 0],
     ]);
   }, 300_000);
 
-  it('lands every end on its own box border, bar the self loops', () => {
+  it('lands every end on its own box border, bar the self loops and the capped', () => {
     // The other half of the same difference: where the ends went. `centre` is
-    // the self loops, which have no direction to attach along, and `inside` is
-    // the half-way cap binding, which needs boxes nearly touching and so does
-    // not happen anywhere on these eight at the default separations.
-    const table = corpora.map(([name, graph]) => {
-      const { result, state } = run(name, graph);
+    // the self loops, which have no direction to attach along. `inside` is a
+    // cap binding before the border is reached, which happens where a box is
+    // large against the gap it has to cross: never on the eight uniform
+    // graphs, and 282 times on the ninth, whose boxes run up to 2010 wide at
+    // the same default separations.
+    const table = corpora.map(([name, graph, config]) => {
+      const { result, state } = run(name, graph, config);
       const tally = { border: 0, centre: 0, inside: 0 };
       for (const edge of result.edges.values()) {
         const ends: readonly (readonly [Point | undefined, NodeId])[] = [
@@ -468,6 +630,13 @@ describe('the route invariants, over both bench corpora and the golden six', () 
       ['sparse-2000', 6_000, 0, 0],
       ['self-loops-800', 4_800, 80, 0],
       ['parallel-800', 5_200, 0, 0],
+      // THE ONLY ROW WITH ANYTHING IN THE `inside` COLUMN, and it is the reason
+      // this row exists. 282 of its 12,000 ends belong to a box big enough
+      // against the gap it has to cross that a cap binds before the border is
+      // reached. Every one of the other eight is uniform 100 by 40, where
+      // neither cap ever binds, so eight zeroes here would have said the caps
+      // were untested rather than that they were not needed.
+      ['dense-1200-varied', 11_718, 0, 282],
     ]);
   }, 300_000);
 
@@ -475,11 +644,13 @@ describe('the route invariants, over both bench corpora and the golden six', () 
     // What the change is worth, as one number per corpus rather than as an
     // adjective. Total polyline length, centre to centre against border to
     // border, on the same coordinates. The saving is bounded below by nothing
-    // and above by two box half-heights per edge, so it falls as the share of
-    // long edges rises: a chain's interior segments are untouched and only its
-    // two ends move.
-    const table = corpora.map(([name, graph]) => {
-      const { result, before } = run(name, graph);
+    // and above by half a box DIAGONAL per end, 53.85 at the default 100 by 40,
+    // because an attachment leaving through a side travels up to half a width
+    // and one leaving through the bottom up to half a height. It is not
+    // bounded by the height alone: `tall-600` saves 90 per edge below, which a
+    // 40-tall box could not account for.
+    const table = corpora.map(([name, graph, config]) => {
+      const { result, before } = run(name, graph, config);
       let after = 0;
       let centres = 0;
       for (const edge of result.edges.values()) {
@@ -497,13 +668,16 @@ describe('the route invariants, over both bench corpora and the golden six', () 
       ['sparse-2000', 19_784_217, 19_496_115],
       ['self-loops-800', 10_325_617, 10_093_752],
       ['parallel-800', 10_259_013, 10_007_327],
+      ['dense-1200-varied', 159_138_358, 154_193_400],
     ]);
     // Between 0.6% and 5.9% of the total, and the spread is the point rather
     // than the size: the saving is at most half a box diagonal per END, 53.85
     // at the default 100 by 40, so a drawing of long thin rows saves a smaller
     // share of a much larger number. The 10k saves 3,965,122 of 632,523,805,
     // which is 0.63%; `tall-600` saves 162,181 of 2,740,824, which is 5.92%.
-    // Every unit of it was ink drawn underneath a node box.
+    // The varied row is 3.11%, of a drawing whose boxes run up to 2010 wide, so
+    // its bound per end is far higher than 53.85 and its rows are far wider
+    // too. Every unit of every one of them was ink drawn underneath a node box.
     for (const [, centres, after] of table) {
       expect(Number(after)).toBeLessThan(Number(centres));
     }
