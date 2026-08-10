@@ -1840,6 +1840,23 @@ findings addressed or logged, docs land with the feature.
   `bench/README.md` had blurred and now states: the point count per route is
   unchanged and no benchmark selects a different stage, so this is a change to
   what a benchmark COSTS rather than to what it processes.
+  MEASURED, on the first attempt at a 1-minute load of 3.45, nothing `noisy`,
+  the gate green: pipeline 10k +5.7% of +24.1% allowed and pipeline 1k -4.0% of
+  +21.5%. READ AGAINST THE UNTOUCHED ENTRIES IN THE SAME WORKER RATHER THAN
+  AGAINST ZERO, which is the only way those two numbers mean anything. The rank
+  entries are in the same file and this diff does not touch the rank stage, and
+  they came back at +6.4% and +1.3%. So the pipeline 10k moved LESS than an
+  entry that cannot have moved for a reason inside this change, and the four
+  layout entries span 10.4 points between them on code where only one stage
+  changed. The `@dagr/graph` block in the same run spanned 55 points, -42.3% to
+  +12.6%. The prediction of flat holds: both pipeline entries are inside the
+  drift of things nobody touched.
+  FOUR `@dagr/graph` ENTRIES READ FASTER THAN BASELINE AGAIN and the gate
+  printed its refresh note for each, at -28.8%, -29.5%, -34.4% and -42.3%. That
+  is a package these milestones do not touch, a recapture rewrites all fifteen
+  entries, and per `bench/README.md` it is the maintainer's call rather than the
+  agent's. Recorded here, not acted on. It has now been noted across M2.4c and
+  this one.
   WHAT IS STILL NOT HERE, each with its reason rather than as a list. `edgeSep`
   is carried and unhonoured, and `LayoutConfig.edgeSep` used to promise this
   milestone would honour it, so that promise is corrected in place rather than

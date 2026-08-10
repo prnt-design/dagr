@@ -1338,10 +1338,12 @@ function applyHint(
  * were taken; the two crossing counts are of the layering THIS STAGE produces
  * and no route stage is an input to it, so they are untouched and were verified
  * untouched rather than assumed so. The timings are not re-derived here. What
- * M2.8 adds is bounded and small, both pipeline benchmarks came back inside
- * their own run-to-run drift on the gate, and both columns pay it equally, so a
- * fresh pair taken on a machine under a different load would move these numbers
- * for a reason that is not this milestone.
+ * M2.8 adds is bounded and small, and it was measured rather than asserted: on
+ * the gate the two pipeline benchmarks came back at +5.7% and -4.0% while the
+ * two rank benchmarks, which this diff cannot have touched, came back at +6.4%
+ * and +1.3% in the same worker. Both columns of the table above pay the same
+ * cost anyway, so a fresh pair taken on a machine under a different load would
+ * move these numbers for a reason that is not this milestone.
  *
  * THOSE FOUR FIGURES ARE LIVE ADVICE HERE AND NOWHERE ELSE. Each is a
  * measurement with a scheduled expiry: a bench recapture moves the timings. So
