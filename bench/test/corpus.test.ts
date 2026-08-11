@@ -3,10 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { largeCorpus, layeredDag, smallCorpus } from '../src/corpus.js';
 
 /**
- * The corpora are inputs to committed baselines, and later to committed golden
- * files (ROADMAP M2.9) and to a frame budget (M4.10). A generator that changed
- * shape would invalidate all three at once and look like a code regression, so
- * the properties those artefacts rely on are pinned here.
+ * The corpora are inputs to committed baselines, to M2.9's published cost table,
+ * and later to a frame budget (M4.10). A generator that changed shape would
+ * invalidate all three at once and look like a code regression, so the
+ * properties those artefacts rely on are pinned here. M2.9's dagre parity golden
+ * file is NOT one of them and runs on its own corpus; see `src/corpus.ts`.
  */
 
 describe('the layered corpus generator', () => {

@@ -168,13 +168,28 @@ importing it would make the kit and the package it measures depend on each
 other, and `@dagr/render` wants the same corpus as coordinates with no graph
 model near it.
 
-The shapes are pinned here because they propagate: M2.9 commits golden files
-against a corpus, M3.9 states its fast-path targets as absolute latencies on the
-10k one, and M4.10 measures a frame budget on it laid out. Those three only
-compare to each other if they are looking at the same graph. A share of edges
-spans several layers, because those become the dummy chains that outnumber real
-nodes on a real layout, and a small share point backwards so cycle breaking has
-something to find.
+The shapes are pinned here because they propagate: M3.9 states its fast-path
+targets as absolute latencies on the 10k one, and M4.10 measures a frame budget
+on it laid out. Those two only compare to each other if they are looking at the
+same graph. A share of edges spans several layers, because those become the
+dummy chains that outnumber real nodes on a real layout, and a small share point
+backwards so cycle breaking has something to find.
+
+**M2.9 split, and this paragraph used to say it commits golden files against
+these two.** It commits two different artefacts against two different corpora,
+and which is which matters to anyone reading either. Its published cost table,
+`packages/layout/test/layout-cost.json`, is measured on THESE corpora, so it is
+the one M3.9 and M4.10 compare against and the reason a stage-by-stage
+millisecond figure for the 10k now exists. Its dagre parity corpus is a separate
+set of nine hand-authored graphs at varied box sizes, in
+`packages/layout/test/dagre-parity-corpus.ts`, and is not these. Two reasons,
+and the first one is not negotiable: parity's crossing metric is a geometric
+count over emitted polylines, which is quadratic in segments and does not run at
+the 214,222 segments the 10k produces. The second is that every graph here is a
+seeded layered random graph drawn at one uniform box size, which is the
+distribution this package's own stages were tuned against and the regime M2.8's
+review found a real bug hiding outside of. Neither corpus substitutes for the
+other and neither is going away.
 
 ## What must not change quietly
 
