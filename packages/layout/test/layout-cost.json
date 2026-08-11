@@ -1,0 +1,45 @@
+{
+  "measure": "MEASURE_COST=1 pnpm --filter @dagr/layout test layout.cost",
+  "isNotABaseline": "Wall-clock milliseconds on one machine, published so a reader can size a budget. Nothing gates on it and pnpm bench:ci never reads it. The gate lives in bench/baseline.json and holds ratios, which are the right thing to catch a regression with and the wrong thing to publish as a cost.",
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1 Pro",
+    "cores": 10,
+    "node": "v23.11.0",
+    "loadAverage": 3.21
+  },
+  "runs": 11,
+  "stageNames": {
+    "rank": "longest-path-rank",
+    "order": "barycenter-order",
+    "position": "grid-position",
+    "route": "polyline-route"
+  },
+  "corpora": {
+    "1k nodes, 4k edges": {
+      "nodes": 1000,
+      "edges": 4000,
+      "routePoints": 22746,
+      "stages": {
+        "rank": 5.216,
+        "order": 50.916,
+        "position": 2.571,
+        "route": 1.936
+      },
+      "total": 76.419
+    },
+    "10k nodes, 40k edges": {
+      "nodes": 10000,
+      "edges": 40000,
+      "routePoints": 254222,
+      "stages": {
+        "rank": 102.666,
+        "order": 685.019,
+        "position": 35.452,
+        "route": 47.379
+      },
+      "total": 1161.504
+    }
+  }
+}

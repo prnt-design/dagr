@@ -539,17 +539,18 @@ describe('layout result identity across refactors', () => {
    * and rank 1 holds exactly one. So the rename is free here whatever the order
    * stage does with the slot.
    *
-   * It is one graph rather than a corpus on purpose. M2.9 commits golden files
-   * against dagre and that is where a corpus belongs; this is a single pin for a
-   * single refactor, and it is expected to be REPLACED, not preserved, the first
-   * time a milestone deliberately changes what a default run draws. M2.6b was
-   * such a milestone and this capture survived it untouched, which is a fact
-   * about this graph and not a guarantee: the barycenter stage that took the
-   * order default happens to lay these seven nodes out exactly as roster order
-   * did. M2.4b IS such a milestone and the capture did not survive it: a bend
-   * appears on `da` and rank 1 gains a member, which is the paragraph above.
-   * A test like this outliving its refactor is how a suite ends up asserting
-   * that a placeholder algorithm stays a placeholder.
+   * It is one graph rather than a corpus on purpose. M2.9 commits a golden file
+   * against dagre, on its own corpus of nine graphs, and that is where a corpus
+   * belongs; this is a single pin for a single refactor, and it is expected to
+   * be REPLACED, not preserved, the first time a milestone deliberately changes
+   * what a default run draws. M2.6b was such a milestone and this capture
+   * survived it untouched, which is a fact about this graph and not a
+   * guarantee: the barycenter stage that took the order default happens to lay
+   * these seven nodes out exactly as roster order did. M2.4b IS such a
+   * milestone and the capture did not survive it: a bend appears on `da` and
+   * rank 1 gains a member, which is the paragraph above. A test like this
+   * outliving its refactor is how a suite ends up asserting that a placeholder
+   * algorithm stays a placeholder.
    *
    * M2.8 WAS THE THIRD SUCH MILESTONE, and it moved exactly one thing: the two
    * ENDS of every route. Every node coordinate and `bounds` itself came back

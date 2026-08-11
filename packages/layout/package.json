@@ -24,7 +24,8 @@
   },
   "devDependencies": {
     "@dagr/bench": "workspace:*",
-    "@dagr/graph": "workspace:^"
+    "@dagr/graph": "workspace:^",
+    "@dagrejs/dagre": "3.1.1"
   },
   "repository": {
     "type": "git",

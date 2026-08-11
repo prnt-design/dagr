@@ -773,22 +773,27 @@ attachment unchanged. See [Route direction](#route-direction).
 Both steps of the default stage are O(V + E) in time and space. Cycle breaking
 gets there by keeping vertices in degree buckets rather than rescanning what is
 left each round, and ranking is a Kahn-style sweep that visits each node and
-edge once. No timing figure is quoted for the default stage, and the reason is
-no longer that none exists: the repo commits benchmark medians for the rank
-stage at 1k and 10k nodes and gates changes against them locally. They are
-machine-matched numbers, captured on one maintainer's machine and only
-comparable to themselves, so they are the right thing to gate a regression on
-and the wrong thing to publish as what the stage will cost you. M2.9 is where a
-figure a reader can use comes from, on a committed corpus. Until then the
-complexity is the claim.
+edge once. A timing figure IS quoted for the default stage, as of M2.9, and it
+is a different artefact from the one the gate uses. The repo commits benchmark
+medians for the rank stage at 1k and 10k nodes and gates changes against them
+locally, and those are RATIOS against a control workload: machine-matched,
+comparable only to themselves, the right thing to gate a regression on and the
+wrong thing to publish as what the stage will cost you. M2.9 added the other
+one, wall clock on a named machine, in
+[What a run costs](#what-a-run-costs). The rank stage is 5.2ms on the 1k corpus
+and 103ms on the 10k there. Read those as one machine's, and the complexity
+above as the claim that travels.
 
 The exception is
 [Minimum total edge length](#minimum-total-edge-length-and-what-it-costs), which
 quotes several, because a pivot count is not a complexity a reader can size a
 budget against. Read those as one machine's measurements of two generated
 corpora, taken to justify a default budget and a warning about height. They are
-not baselines and they are not machine independent: M2.9's committed numbers are
-the ones anything is allowed to regress against.
+not baselines and they are not machine independent, and neither is
+[What a run costs](#what-a-run-costs), which M2.9 added: nothing regresses
+against either. The numbers anything is allowed to regress against are the
+ratios in `bench/baseline.json`, and they are not quoted on this page because a
+ratio against a control workload is not a figure a reader can use.
 Both steps are fully deterministic: vertices are numbered in `graph.nodes()`
 order, edges are walked in `graph.edges()` order, and a tie is broken by bucket
 arrival order, which is itself fixed by the graph's order.
@@ -1922,6 +1927,125 @@ try {
 }
 ```
 
+## What a run costs
+
+Wall-clock milliseconds for one `layout()` call at the defaults, on the two
+committed benchmark corpora, measured on an Apple M1 Pro under Node 23.11 at a
+one-minute load average of 3.2. Each figure is the median of eleven runs after
+three warmups, and the load is quoted because an absolute timing taken on a busy
+machine is not worth much and a reader has no other way to tell.
+
+| Phase | 1k nodes, 4k edges | 10k nodes, 40k edges |
+| --- | --- | --- |
+| `longest-path-rank` | 5.2ms | 103ms |
+| `barycenter-order` | 50.9ms | 685ms |
+| `grid-position` | 2.6ms | 35.5ms |
+| `polyline-route` | 1.9ms | 47.4ms |
+| stage contract checks | 15.8ms | 291ms |
+| **whole call** | **76.4ms** | **1,162ms** |
+
+**These are a measurement and not a baseline.** Nothing gates on them, `pnpm
+bench:ci` never reads them, and a number moving here fails no build. The gate
+lives in `bench/baseline.json` and holds ratios against a control workload,
+which is what lets it survive a busy machine and what makes it useless as a cost
+figure. The two artefacts answer different questions and neither can be derived
+from the other.
+
+Read the shape rather than the milliseconds. The order stage is 67% of the 1k
+run and 59% of the 10k, which is where an optimisation is worth having and where
+one is not. The whole call is 15.2x the 1k for 10x the nodes, while the drawing
+it produces is 11.2x the size in route points, so the cost tracks the drawing
+rather than the graph. And the contract checks are 21% of the 1k and 25% of the
+10k: that is the price of the guarantees on this page, it is paid on every run,
+and it is stated rather than folded into the stage rows because a reader sizing
+a budget is paying it too.
+
+Two caveats that are not hedges. The position phase is still a placeholder, so
+its row is a floor and not a cost, and the milestone that replaces it moves that
+row and no other. And the 10k corpus has 40,000 edges that become 174,222 dummy
+nodes on the way through, so the stages are sized by the drawing rather than by
+the graph. See [Dummy chains](#dummy-chains).
+
+Regenerate them on your own machine with:
+
+```
+MEASURE_COST=1 pnpm --filter @dagr/layout test layout.cost
+```
+
+The corpora are committed generators rather than committed results, which is
+what makes that possible. The numbers land in
+`packages/layout/test/layout-cost.json` with your machine and your load average
+recorded beside them.
+
+## What it draws against dagre
+
+Dagr is a dagre successor, so what it draws is compared against what dagre
+draws, on nine hand-authored graphs shaped after real ones, at box sizes that
+are not all the same. The corpus, the metrics and the committed numbers are in
+`packages/layout/test/`, against an exactly pinned `@dagrejs/dagre` 3.1.1.
+
+**Neither engine is the reference.** dagre is not a specification and this
+package is not trying to reproduce it: different cycle breaker, different
+default ranker, different position stage, different routing style. So the point
+of the comparison is not agreement. It is to separate the differences that are
+choices from the differences that are this package being worse at something a
+well-known implementation does well, which means every metric gets a verdict
+before it gets a number.
+
+| Measure | This package | dagre | Read it as |
+| --- | --- | --- | --- |
+| Crossings between node centres | 147 | 109 | **dagre wins, by 35%** |
+| Crossings between drawn polylines | 51 | 98 | Routing style, not quality |
+| Layers | 64 | 68 | Equal on eight of nine graphs |
+| Total polyline length | 157,177 | 156,783 | Level |
+| Total drawing width | 21,778 | 23,683 | 8% narrower |
+| Overlapping node boxes | 0 | 0 | |
+| Non-finite coordinates | 0 | 1 | A dagre defect, below |
+
+**The first two rows disagree, and the first one is the one to believe.**
+Counting crossings between the drawn polylines says this package has half
+dagre's, and reading that as better layout would be wrong. dagre halves its rank
+separation and doubles every edge's minimum length to leave room for an edge
+label, so every edge picks up a bend in every rank gap: 1,015 segments and 774
+bends across this corpus against 525 and 284 here. More elbows sweep more ink
+and cross more things, and none of that is about where the nodes went.
+
+The first row throws the routes away entirely and counts crossings between the
+straight lines joining the endpoint node centres, which is a function of the
+node positions and the topology alone. There this package is 147 against dagre's
+109, **thirty-five percent worse**, and that is the number to read. It is the
+one measure in the table dagre wins and it is the most important one, because
+keeping two edges from crossing between two nodes is what a layout engine is
+for.
+
+**The cause is the position placeholder and the same corpus proves it.** Run the
+identical pipeline with `brandes-koepf-position` in place of `grid-position` and
+the count falls from 147 to 96, which is 0.88x dagre rather than 1.35x. The
+order stage is not what is losing here; the phase that has never had a real
+algorithm is. See [What is not here yet](#what-is-not-here-yet).
+
+Where this package wins outright is depth. On the cyclic graph in the corpus it
+produces 6 layers against dagre's 10, which is the least-squares feedback arc
+set described in [Ranking](#ranking-and-what-it-does-with-a-cycle) against
+dagre's greedy one. A shallower acyclic view is the thing that ranker was chosen
+for.
+
+One graph is a known gap rather than a comparison: `scattered-suite`, five
+disconnected components, where this package draws 2.49x dagre's polyline length.
+`grid-position` centres every row on `x = 0`, so the components are laid one on
+top of another and every edge crosses the drawing to reach its own. It is the
+same placeholder as the paragraph above, it is exempted from that one bound with
+its reason recorded, and `brandes-koepf-position` draws the same graph at 1.02x.
+
+The one place dagre does not produce a drawing at all is a box of zero width. A
+route leaving one travelling straight up or down makes dagre 3.1.1 compute
+`width * dy / dx` with both terms zero and emit a coordinate that is not a
+number. That is legal input here and this package draws it, attaching at the
+box's own centre. It is recorded in the committed file rather than routed
+around: the point is dropped from the measurements and counted, so that a `NaN`
+cannot poison a sum silently, and the graph it belongs to stays inside every
+cross-engine bound except the one edge-length exemption described above.
+
 ## What is not here yet
 
 Three of the four default stages are layout algorithms. The fourth is a
@@ -1933,7 +2057,7 @@ without being selectable at all, `brandes-koepf-position`, for the reason below.
 | --- | --- | --- | --- |
 | rank | `longest-path-rank` | Breaks cycles with a least-squares feedback arc set, ranks by longest path, then splits every long edge into a [dummy chain](#dummy-chains). Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height, and since M2.4c it splits through the same shared splitter. | Nothing outstanding. |
 | order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass, over every segment of the drawing including the pieces of a split long edge. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). Its two budgets were re-derived in M2.6c and are now 4 sweeps and a cap of 16, and its transpose tie rule was re-derived in M2.6d and kept. | Nothing outstanding. |
-| position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. `brandes-koepf-position` is a real algorithm that is implemented but not exported, for the reason below this table. | A compaction that is not the longest-path substitute, which is what now blocks Brandes-Koepf, and then a decision about the default. |
+| position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. `brandes-koepf-position` is a real algorithm that is implemented but not exported, for the reason below this table. | A compaction that is not the longest-path substitute, which is what now blocks Brandes-Koepf, and then a decision about the default. M2.9 added the first evidence on graphs that are not generated, and it points the other way from the bench corpora. |
 | route | `polyline-route` | A polyline out of the source box's border, through the centre of each of the edge's dummies, and into the target box's border, which is two points for an edge with no chain. Monotone in the rank axis. Real, and described in [Routing](#routing-and-where-a-route-attaches). It took the default from `straight-route` in M2.8, which also deleted that placeholder. | `edgeSep`, which would fan out parallel edges and give a self loop a shape, then obstacle detours and splines. |
 
 So a default run of a real graph gives you the right number of rows with the
@@ -1988,9 +2112,40 @@ back left, so **any** alignment propagates the widest row's packing pressure
 into every row it touches. The fix is a contraction pass, which is the class
 shift's real job in the paper. So the stage stays unexported on a stronger
 reason than it had, and what blocks it is that contraction rather than the
-ranker. The full table,
-what the stage costs, what four alignments buy over
-one, and why its compaction is not the paper's are all in
+ranker.
+
+**M2.9 measured the same pair on graphs that are not generated, and got a
+different answer. Both results stand.** Every figure above is over the two
+benchmark corpora, which are seeded layered random graphs at one uniform box
+size. On [dagre's nine hand-authored graphs](#what-it-draws-against-dagre) at
+varied box sizes:
+
+- **Crossings, and this is the robust half.** Brandes-Koepf takes crossings
+  between node centres from 147 to 96, a 35% fall, winning five graphs, losing
+  one and drawing three. At 96 against dagre's 109 it is a placement this
+  package does not currently ship, where `grid-position` is 1.35x dagre. That
+  result is spread across the corpus rather than resting on any one graph.
+- **Edge length, and this half is not robust.** The corpus total is 0.99x
+  `grid-position` rather than 2.7x or 4.4x, but that total is two graphs
+  cancelling: `module-imports` at +11,880 against `etl-fanout` at -8,592 on a
+  corpus delta of -1,190, so dropping either reads 1.05x or 0.90x. The median
+  per-graph ratio is 0.98 and the range is 0.41 to 1.55. What survives is "not
+  2.7x, and level on this corpus", not a figure to three significant places.
+- **Width, unchanged.** It is still wider on eight of the nine and by up to
+  1.64x, which is the compaction above doing exactly what the compaction above
+  does.
+
+So the trade the generated corpora reported is not the trade these graphs
+report, and the crossing result in particular runs the other way. Why remains
+open. The obvious extension, that a layered random graph carries more long-edge
+chain per node for the packing pressure to propagate through, is a hypothesis
+this corpus does not confirm: `service-mesh` has 1.07 bends per node and the
+worst edge-length ratio at 1.55x, while `module-imports` has 8.40 and comes in
+at 1.37x. None of this is enough on its own to move the default, and it is
+enough that the default should not be settled on generated graphs alone.
+
+The full table, what the stage costs, what four alignments buy over one, and why
+its compaction is not the paper's are all in
 `brandesKoepfPosition`'s docstring in `packages/layout/src/position.ts`, and
 carry the same expiry.
 
@@ -2008,8 +2163,7 @@ its own and ahead of the chains. `virtualChains` was declared on the same
 argument and with its checks already written, so M2.4b filled it and added one
 rule (completeness) rather than designing it.
 
-Also still to come: a golden corpus compared against dagre with layout
-benchmarks (M2.9), and running the same API in a worker (M2.10). Incremental
+Also still to come: running the same API in a worker (M2.10). Incremental
 relayout, the flagship feature, is all of M3, and arrives as a
 `createLayout({ stages, config })` engine rather than as another free function:
 warm-starting a relayout from a previous run only makes sense if the stages and

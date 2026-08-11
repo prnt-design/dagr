@@ -10,10 +10,17 @@
  * all three.
  *
  * The shapes are pinned here rather than in each bench file because they
- * propagate: M2.9 commits golden files against a corpus, M3.9 states its
- * fast-path targets as absolute latencies on the 10k one, and M4.10 measures a
- * frame budget on it laid out. Those three only compare to each other if they
- * are looking at the same graph.
+ * propagate: M2.9 publishes its stage-by-stage cost table on both of these,
+ * M3.9 states its fast-path targets as absolute latencies on the 10k one, and
+ * M4.10 measures a frame budget on it laid out. Those three only compare to
+ * each other if they are looking at the same graph.
+ *
+ * M2.9's OTHER artefact is not measured here and it is worth saying so, because
+ * this paragraph used to imply it was. Its dagre parity golden file runs on a
+ * separate corpus of hand-authored graphs at varied box sizes: a geometric
+ * crossing count is quadratic in segments and does not run at the 214,222 the
+ * 10k produces, and every graph here is drawn at one uniform box size.
+ * `bench/README.md` says which corpus each downstream milestone inherits.
  */
 
 export interface GraphSpec {
@@ -148,12 +155,13 @@ export function smallCorpus(): GraphSpec {
 }
 
 /**
- * The 10k corpus, and the one that matters. M2.9 commits golden files against
- * this size, M3.9 states its fast-path targets as absolute latencies on it, and
- * M4.10 measures a frame budget on it laid out. The 40k edges are the figure
- * the existing 33ms rank-stage measurement was taken at, so a baseline captured
- * here is measuring the same size of problem. It is not comparable to that
- * number as a figure, which came off a different machine; see `layeredDag`.
+ * The 10k corpus, and the one that matters. M2.9 publishes its stage-by-stage
+ * cost table on this size, M3.9 states its fast-path targets as absolute
+ * latencies on it, and M4.10 measures a frame budget on it laid out. The 40k
+ * edges are the figure the existing 33ms rank-stage measurement was taken at,
+ * so a baseline captured here is measuring the same size of problem. It is not
+ * comparable to that number as a figure, which came off a different machine;
+ * see `layeredDag`.
  */
 export function largeCorpus(): GraphSpec {
   return memoise('large', () =>

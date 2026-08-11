@@ -14,6 +14,29 @@ of doc prose.
 
 ### Added
 
+- Nothing in the public API. M2.9 added no exported name, changed no type and
+  moved no coordinate: what a `layout()` call returns for a given graph is
+  bit-identical across it. It is recorded here anyway because this file's
+  heading is "behaviour changed, types did not" and the honest entry for this
+  milestone is that NEITHER did, which is worth a reader's time to know when
+  they are deciding whether to upgrade past it. What it added is evidence:
+  a committed comparison against `@dagrejs/dagre` 3.1.1 on nine hand-authored
+  graphs, and a published stage-by-stage cost table in milliseconds on a named
+  machine. Both are in `packages/layout/test/`, both are described on the docs
+  page, and the second is the number `docs/docs/layout.md` had been promising
+  since M2.3 and pointing at this milestone for. (M2.9)
+
+  **The parity numbers are not a promise about future output.** The cross-engine
+  bounds in `test/layout.dagre-parity.test.ts` are one-sided ceilings on what
+  this package draws relative to dagre, they are gates on this repo rather than
+  guarantees to a caller, and a later milestone that draws a better picture will
+  move every one of them. Read the docs page's table as what the current
+  pipeline does, dated, and not as a compatibility statement.
+
+  `@dagrejs/dagre` is a `devDependency` of this package at an exact version and
+  is not a runtime dependency of anything. A published `@dagr/layout` still
+  depends on `@dagr/graph` and nothing else.
+
 - `polylineRouteStage`, exported, `name: 'polyline-route'`, and it is
   `defaultStages.route`. The route phase's first real algorithm and the third of
   the four stages to go from a placeholder to one, after `rank` in M2.2 and
