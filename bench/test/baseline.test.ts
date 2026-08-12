@@ -50,5 +50,9 @@ describe('recording a baseline', () => {
     const merged = mergeBaseline(undefined, { a: stat(1) }, AT);
     expect(merged.capturedAt).toBe(AT);
     expect(merged.machine?.node).toBe(process.version);
+    // `bench/README.md` now tells a reader to consult this field when a number
+    // looks wrong, so a refactor of `machineInfo` that dropped it would make
+    // that instruction a lie without failing anything else.
+    expect(typeof merged.machine?.loadAverageAtCapture).toBe('number');
   });
 });

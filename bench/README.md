@@ -230,6 +230,111 @@ out. An agent measures, states both options and asks; it does not run
 record is a machine mismatch, where the baseline names a machine that is not the
 one in front of you, and that is a different fact about a different thing.
 
+## The third reason to recapture: the baseline itself was mis-measured
+
+The two cases above are both about the RUN moving. This one is about the
+BASELINE having been wrong when it was taken, and it is worth its own section
+because it took four milestones to recognise and because the gate's own advice
+points the wrong way on it.
+
+The symptom is the harness printing `is N% faster than baseline. Refresh the
+baseline so the gain is protected` on the same handful of entries, run after
+run, in a package the milestones taking those measurements never touched.
+M2.4c, M2.6d, M2.8 and M2.9 each recorded it on four `@dagr/graph` entries and
+each declined to act, correctly, because a recapture is the maintainer's call.
+That note is written for a real gain. There was no gain: `git log` over
+`packages/graph/src` since the capture is empty, so there was nothing to
+protect.
+
+**The diagnostic is the margin of error, not the median.** Sort the entries by
+the rme the BASELINE run recorded and the pattern is unmistakable. Measured
+across the eleven `@dagr/graph` entries on a machine at a 1-minute load of 3.46,
+against a baseline captured at an unrecorded and evidently higher one: every rme
+fell, the five entries whose baseline rme was above 2% came in 29.0% faster on
+average, and the six below 2% came in 1.7% faster.
+
+The mechanism is intermittent interference inflating the TAIL of a run, and the
+floor is what shows it. Three consecutive runs of `2.5k successors` on an idle
+machine recorded minima of 1.927, 1.883 and 1.829ms, a spread of 5.4%, while
+their maxima were 4.68, 2.46 and 2.89 and their 99th percentiles 4.58, 2.35 and
+2.49. The work itself takes the same time every run. What changes is how often
+something else on the machine interrupts it, and a benchmark drawing its median
+from a few hundred samples inherits more of that than one drawing from tens of
+thousands. That is the same fact as the rme correlation above, seen from the
+other end, and it is one explanation rather than two.
+
+The counter-case to rule out is control drift, and it is one division. Every
+ratio is `median / control median`, so a control that got slower makes every
+entry look faster without anything moving. Divide any entry's `medianMs` by its
+`ratio` to recover the control the baseline was taken against and compare it to
+the one being shipped. Here it is 0.06525ms against 0.06337ms, a control 2.9%
+FASTER, which pushes ratios the other way and so rules that explanation out
+rather than supporting it.
+
+That division is also the difference between the two ways an entry can be
+quoted, and they can disagree by enough to matter. `2.5k outEdges` moved -8.6%
+by median and -5.9% by ratio across this recapture, and the 2.9% between them is
+exactly the control. The gate reads ratios. A prediction written in medians has
+to be scored in medians.
+
+### How to take the replacement
+
+**Gate on reproducibility, which is what a baseline is for.** Run the suite
+three times and require the medians to agree before capturing. One clean-looking
+run cannot demonstrate that a second run will land near it, and that is the only
+property that matters: the gate's entire job is to compare a later run to this
+file.
+
+**Compare the MEDIAN, and check you are reading it.** A vitest bench report has
+a `median` field and does not have `p50`. `1000 / hz` is the MEAN, and a
+fallback chain that reaches for it silently produces a table of means, which is
+precisely the statistic this harness gates on the median to avoid: a single
+interrupted sample moves it a long way and moves the median barely at all. A
+three-run comparison built on means was what first suggested a cold-start effect
+here, and the effect disappeared when the same runs were read at their floors:
+the minima were flat while the maxima were not.
+
+**Record the load average you captured at.** `machineInfo` in `src/baseline.mjs`
+writes `loadAverageAtCapture` as of the M2.9 follow-up. The baseline it replaced
+carried nothing of the kind, so answering "was that taken on a busy machine"
+meant inferring it from rme. The name is deliberately narrow and the docstring
+says why: it is sampled by `bench:baseline`, a process that runs after the
+benchmarks, so it includes the run's own load and describes the moment of
+capture rather than the moment of measurement.
+
+### What not to gate the capture on
+
+Two instruments that look right and are not.
+
+**The 1-minute load average, alone.** It lags, so a capture that starts under
+the ceiling can finish above it. A capture gated only on load produced a file
+whose own margins of error were WORSE than the run it replaced on five entries,
+topping out at 5.48%.
+
+**Every entry's rme under a ceiling.** Three of the fifteen benchmarks draw
+their median from 10, 10 and 30 samples, because one iteration takes 73ms to
+1.1s and vitest samples for a fixed wall clock. None of the three is reliably
+under 3%: across six rejected runs on an idle machine `rank > 10k` recorded
+3.65% to 5.36% and `pipeline > 1k` 2.90% to 4.64%, and the shipped capture has
+them at 4.26% and 3.11%. They can each land under 3% and cannot be counted on
+to, so requiring all fifteen under 3% in one run is a bet those three lose, and
+a capture gated that way was rejected six times running before the ceiling was
+recognised as unreachable rather than the machine as busy. rme was the EVIDENCE
+that the old baseline was taken badly; it is not the property a good baseline
+has to have.
+
+### The weakest entry in the current file, named rather than left to be found
+
+`build > 1k nodes and 4k edges from empty` carries 6.65% rme at 213 samples, the
+highest in the file, and more samples will not fix it: its median is 2.07ms and
+its maximum 18.2ms, so one interrupted sample in a couple of hundred sets the
+figure. Because the tolerance formula adds both runs' rme, that entry gates at
+about +24.9%, which is close to ungated. It is left that way deliberately for
+now, because turning it off reduces real coverage and switching the gate to a
+trimmed statistic changes every entry in the file. Both are decisions to take on
+purpose rather than side effects of a recapture.
+
+
 ## Layout
 
 `src/control.ts`, `src/corpus.ts` and `src/register.ts` are TypeScript, compiled
