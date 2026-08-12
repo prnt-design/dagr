@@ -17,10 +17,29 @@ import os from 'node:os';
  * reading a raw millisecond figure a year from now knows what it was measured
  * on, which is the question the raw figures exist to answer.
  *
+ * `loadAverageAtCapture` is here because its absence cost a run. Four
+ * `@dagr/graph` entries read 26% to 41% faster than the committed baseline
+ * across M2.4c, M2.6d, M2.8 and M2.9 with no commit to `packages/graph/src`
+ * between them, and answering "was that baseline taken on a busy machine" meant
+ * inferring it from the margins of error the entries happened to record. See
+ * `bench/README.md`, "The third reason to recapture".
+ *
+ * READ IT FOR WHAT IT IS, WHICH IS LESS THAN THE NAME `loadAverage` WOULD
+ * PROMISE, and that is why it is not called that. It is sampled HERE, in
+ * `bench:baseline`, which is a separate process that runs after the benchmarks
+ * and only reads their reports. So it includes the benchmark run's own load,
+ * and if a capture happens long after the run it describes an unrelated moment.
+ * What it can settle is whether a capture was taken on an otherwise idle
+ * machine; what it cannot settle on its own is what the machine was doing while
+ * the numbers were being measured. Recording it at run start instead would need
+ * the load carried through the vitest report, which is a change to the
+ * collection path rather than to this function.
+ *
  * @returns {MachineInfo}
  */
 export function machineInfo() {
   const cpus = os.cpus();
+  const [oneMinute] = os.loadavg();
   return {
     platform: process.platform,
     arch: process.arch,
@@ -28,6 +47,7 @@ export function machineInfo() {
     cores: cpus.length,
     node: process.version,
     ci: process.env['CI'] === 'true' || process.env['CI'] === '1',
+    loadAverageAtCapture: Math.round((oneMinute ?? 0) * 100) / 100,
   };
 }
 

@@ -25,6 +25,35 @@ import type { NodeId } from '../src/types.js';
 
 registerControl();
 
+/**
+ * A longer sampling window for the two benchmarks that need one, matching
+ * `layout.bench.ts`'s `HEAVY` and for the reason `bench/README.md` gives under
+ * "Adding a benchmark": vitest samples for a fixed wall clock, so a heavy
+ * iteration inside the default 500ms yields a handful of samples and a median
+ * drawn from a handful of samples is not a number worth gating on.
+ *
+ * IT WAS ADDED BECAUSE THE GATE FLAKED, not on principle. `topologicalOrder`
+ * ran about 15ms an iteration, which is 33 samples in the default window, and
+ * one gate run against a freshly captured baseline failed it while the runs
+ * either side of it passed comfortably.
+ *
+ * WHAT THE LONGER WINDOW DOES IS EXPOSE A SECOND MODE that the short one was
+ * missing, and saying it "reduces sampling noise" would be wrong. At 33 samples
+ * three consecutive runs of this entry differed by 2.8% in the MEAN, so the
+ * failing run was a slow run rather than an unlucky draw, and a wider window
+ * does not prevent one. What changes is the shape: p75 runs 16.2ms to 20.9ms
+ * across five wide-window runs against 15.4ms to 15.8ms at 500ms, and p99
+ * reaches 26ms. The gate then reads it steadily, at -0.5%, +0.4% and -2.6% over
+ * three consecutive checks against the baseline captured here.
+ * `isAcyclic on an acyclic graph` is the other one at about 8ms, and both go
+ * from tens of samples to a few hundred.
+ *
+ * The other nine benchmarks in this file already run about 2ms or less an
+ * iteration and draw from at least 200 samples, so they are left on the default
+ * window. A longer window costs wall clock on every run and buys them nothing.
+ */
+const HEAVY = { time: 3_000 };
+
 /** Build a `Graph` from a corpus description. */
 function build(spec: GraphSpec): Graph {
   const graph = new Graph();
@@ -177,7 +206,7 @@ describe('traversal', () => {
 
   bench('topologicalOrder, 10k nodes', () => {
     acyclic.topologicalOrder();
-  });
+  }, HEAVY);
 
   bench('isAcyclic on a cyclic graph, 10k nodes', () => {
     cyclic.isAcyclic();
@@ -185,7 +214,7 @@ describe('traversal', () => {
 
   bench('isAcyclic on an acyclic graph, 10k nodes', () => {
     acyclic.isAcyclic();
-  });
+  }, HEAVY);
 
   bench('descendants, 10k nodes', () => {
     acyclic.descendants(deepestSource);

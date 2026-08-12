@@ -67,6 +67,7 @@
  * @property {number} cores
  * @property {string} node
  * @property {boolean} ci
+ * @property {number} [loadAverageAtCapture]
  */
 
 /**
