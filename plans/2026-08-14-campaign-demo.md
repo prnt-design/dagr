@@ -216,6 +216,12 @@ proper in-canvas glyph pipeline (MSDF atlas, shaping, wrapping) is weeks, not
 an increment. The demo does not wait for it: labels and cards are a DOM
 overlay, positioned by the camera transform.
 
+Update, same day: Nii wants the overlay to be a library feature with
+rich-node support, not demo code, and a dedicated session is building it; see
+`plans/2026-08-14-html-overlay.md`. The tiers and caps below stand as the
+behavior P6 needs, and P6 becomes consumption of that feature rather than
+implementation of it.
+
 - The overlay container gets one CSS transform per frame (the camera's
   world-to-screen matrix), so panning moves every card without touching
   per-card styles.
@@ -244,7 +250,7 @@ independent of each other and of everything after them.
 | P3 | M4.3 instancing with per-kind color and size | nothing |
 | P4 | M4.4: campaign tiles laid out in the worker, drawn instanced, fit on load | P1, P2, P3 |
 | P5 | M4.5 edge ribbons; overlay edges behind their zoom gate | P4 |
-| P6 | Label and card DOM overlay with the three zoom tiers | P4 |
+| P6 | Labels and cards via the library HTML overlay (`plans/2026-08-14-html-overlay.md`), three zoom tiers | P4, overlay feature |
 | P7 | Polish: `#node=` deep links, hover highlight (M4.8 or DOM), committed screenshots, a docs page on the schema | P5, P6 |
 
 ## Deliberately not in this plan
