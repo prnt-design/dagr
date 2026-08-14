@@ -145,7 +145,10 @@ export default function Home(): ReactNode {
               the same seeded generator and laid out by{' '}
               <code>@dagr/layout</code> while you read this, in a worker so the
               page keeps answering. The time it reports was measured on your
-              machine, not on ours.
+              machine, not on ours. On a narrow screen it opens on a quarter of
+              that graph, because a thousand nodes across a phone is a texture
+              rather than a drawing. The size control on the figure changes it
+              either way.
             </p>
             <p className={styles.exampleBody}>
               Every change is benchmarked before it merges on one machine,

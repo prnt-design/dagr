@@ -46,6 +46,18 @@ const BASE_NODE_SEP = 4;
 /** Padding around the fitted drawing, in layout units. */
 const PAD = 16;
 
+/**
+ * Where the demo opens smaller, and the width it happens at.
+ *
+ * A thousand nodes across a phone is 0.74 pixels a node, which is a texture
+ * and not a graph: the ranks are there and nothing in them is. At 250 the ranks
+ * and the nodes are both visible at that width. The query matches the breakpoint
+ * the stylesheet already turns the figure at, so the drawing and its chrome
+ * change shape together, and the size control is right there for a reader who
+ * wants the bench corpus anyway.
+ */
+const NARROW = '(max-width: 600px)';
+
 /** How long a run in the worker may take before the page gives up on it. */
 const WORKER_TIMEOUT_MS = 10_000;
 
@@ -344,6 +356,16 @@ export default function LiveLayout(): ReactNode {
     },
     [],
   );
+
+  // The opening size, once the page knows how wide it is. It runs before the
+  // first run leaves the debounce below, and it is a mount-time choice rather
+  // than a live one: a reader who has picked a size, or turned a phone
+  // sideways, is not asking for their choice to be replaced.
+  useEffect(() => {
+    if (!window.matchMedia(NARROW).matches) return;
+    const smallest = CORPUS_PRESETS[0];
+    if (smallest !== undefined) setPreset(smallest);
+  }, []);
 
   // The settings as of this render, for the worker's error handler below: it
   // is installed once and would otherwise re-run whatever was selected when the
