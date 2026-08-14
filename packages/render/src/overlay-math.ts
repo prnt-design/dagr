@@ -397,7 +397,18 @@ export interface CapCandidate {
 }
 
 /**
- * The candidates that fit under the cap, nearest to the camera first.
+ * Narrows a candidate list to what fits under the cap, nearest the camera
+ * kept, IN PLACE.
+ *
+ * **It sorts and truncates the array it is given, and returns that same
+ * array.** That is unusual enough to state twice: a caller who needs their list
+ * afterwards passes a copy. The reason is that this runs on every frame a
+ * caller draws, from the one function in the overlay that must not generate
+ * garbage: at ten thousand entries against a cap of two hundred, a version that
+ * copied and sliced would put a ten thousand element array and a two hundred
+ * element array into the young generation sixty times a second, which is a
+ * collector pause in the middle of a pan. The overlay rebuilds its candidate
+ * list each sync, so sorting it in place costs it nothing.
  *
  * **The cap is not a tuning knob.** A degenerate zoom qualifies every label in
  * a graph at once, and the DOM must not be the thing that falls over: a hundred
@@ -416,12 +427,9 @@ export interface CapCandidate {
  * survived culling; a partial selection would be O(n) and is the change to make
  * if a scene ever qualifies enough entries for it to matter.
  */
-export function selectWithinCap<T extends CapCandidate>(
-  candidates: readonly T[],
-  cap: number,
-): readonly T[] {
+export function selectWithinCap<T extends CapCandidate>(candidates: T[], cap: number): readonly T[] {
   if (candidates.length <= cap) return candidates;
-  return [...candidates]
-    .sort((a, b) => a.distanceSq - b.distanceSq || a.order - b.order)
-    .slice(0, cap);
+  candidates.sort((a, b) => a.distanceSq - b.distanceSq || a.order - b.order);
+  candidates.length = cap;
+  return candidates;
 }

@@ -298,10 +298,16 @@ describe('selectWithinCap', () => {
     expect(kept.map((c) => c.order)).toEqual([3, 5]);
   });
 
-  it('does not mutate what it was given', () => {
-    const all = [candidate(0, 90), candidate(1, 1)];
-    selectWithinCap(all, 1);
-    expect(all.map((c) => c.order)).toEqual([0, 1]);
+  it('narrows the caller array in place, and says so', () => {
+    // Deliberate, and the opposite of what a pure helper usually promises: this
+    // runs every frame from the one function in the overlay that must not
+    // allocate, so it sorts and truncates rather than copying and slicing. A
+    // caller who needs their list afterwards passes a copy.
+    const all = [candidate(0, 90), candidate(1, 1), candidate(2, 40)];
+    const kept = selectWithinCap(all, 2);
+    expect(kept).toBe(all);
+    expect(all.length).toBe(2);
+    expect(all.map((c) => c.order)).toEqual([1, 2]);
   });
 
   it('measures a box from its centre and a point from itself', () => {
