@@ -28,7 +28,7 @@ not" is the category this file has a heading for.
   and a card is authored as it should look at zoom 1. A 1px border is one world
   unit and thickens as you zoom in. Content that should stay a constant size
   counter-scales with `--dagr-overlay-inv-zoom`, which the layer publishes
-  (unitless, alongside `--dagr-overlay-zoom`) on every sync.
+  (unitless, alongside `--dagr-overlay-zoom`) whenever the zoom changes.
 
   **`sync()` belongs on the caller's draw path.** The overlay has no animation
   loop of its own, deliberately: a second `requestAnimationFrame` is a second
@@ -223,10 +223,10 @@ not" is the category this file has a heading for.
 
 - `RendererDisposedError` now extends `DagrRenderError` and carries
   `code: 'RENDERER_DISPOSED'`. Additive: its name, its message and
-  `instanceof Error` are unchanged, so a caller catching it today sees no
-  difference. It is here because a prototype chain is exactly the kind of thing
-  this file exists to record. Nothing in the types changed, and the value a
-  caller catches is not quite the object it was. (M4.11)
+  `instanceof Error` are unchanged. It is here because a prototype chain is
+  exactly the kind of thing this file exists to record. The type gained a public
+  `readonly code` and the runtime object gained one link in its prototype chain;
+  nothing a caller catches today behaves differently. (M4.11)
 
 - The three value checks that lived in `camera.ts` (`requireFinite`,
   `requirePositive`, `requireFinitePoint`) are in `validate.ts` now, with the

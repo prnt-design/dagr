@@ -12,8 +12,9 @@ sidebar_position: 4
 layout and the next, and, from M4.3, one draw call per shape family. Today it is
 one per shape, which is six.
 
-This page describes the package as of M4.2. Rounded rectangles and circles are
-on screen, drawn as signed distance fields. What is real is the seam everything
+This page describes the package as of M4.11. Rounded rectangles and circles are
+on screen, drawn as signed distance fields, and there is an HTML overlay for the
+text a signed distance field cannot draw. What is real is the seam everything
 else plugs into: the `Renderer` interface, the camera, the distance fields and
 the shading that reads them, and the decisions that had to be made before a
 single test in this milestone could be written. They are argued below rather
@@ -340,8 +341,11 @@ is none for a zoom of `NaN`.
 The rule for which error you get is meant to be applicable without judgement,
 so that the next task in this milestone does not have to re-run the argument:
 **an out-of-range value is a `RangeError` naming the field, and anything else
-this package throws gets a named class.** Today that means one class,
-`RendererDisposedError`. The split is not about counting failure kinds, it is
+this package throws gets a named class.** Today that means three, under an
+abstract `DagrRenderError` that carries a `code` for a caller who would rather
+switch on a value than on a class: `RendererDisposedError` for use after a
+renderer's dispose, and `OverlayParentError` and `OverlayDisposedError` from the
+overlay. The split is not about counting failure kinds, it is
 about what a caller can do: a bad number is on a line the caller can see and the
 field name is the best possible report of it, while use after dispose arrives
 from a lifecycle race in somebody else's framework and is the one a caller
@@ -709,6 +713,10 @@ overlay.add({
 
 // From the same callback that renders a frame, never from a rAF of its own.
 overlay.sync();
+
+// On unmount. Idempotent, releases every element, and takes the overlay's own
+// two divs with it, which nothing else can remove.
+overlay.dispose();
 ```
 
 ![The demo at zoom 4: the 10 unit rect and the 100 unit rect each carry a
@@ -727,7 +735,11 @@ same number of pixels as before](../../assets/screenshots/m4.11-overlay-labels-1
 
 Both are 1102 by 598 CSS pixels of canvas at device pixel ratio 1, captured
 through the WebGL2 fallback rather than WebGPU, which is what a headless
-Chromium on a machine with no GPU has.
+Chromium on a machine with no GPU has. That bears on the shapes and not on the
+overlay, which never touches a GPU: what these frames are evidence for is the
+transform composition and the counter-scale, and those are the browser's
+compositor either way. Whether the two backends draw the same shapes is M4.9's
+question, and it is on the untested list above.
 
 ### What one sync does, and what it costs
 
@@ -741,9 +753,13 @@ The origin is rebased to the centre of the visible region whenever it falls
 outside it. Compositor transforms are single precision: at zoom 100 over a
 100,000 unit graph, an absolute offset reaches 1e7 CSS pixels against float32's
 roughly 1.7e7 of integer resolution, and cards start to jitter against the
-shapes they label. Rebasing bounds every number in the composed matrix by about
-a viewport, and it cannot thrash, because a fresh origin sits at the centre with
-half a viewport of slack on every side.
+shapes they label. Rebasing bounds the layer's own translation by the viewport
+and an entry's coordinates by the larger of the viewport and that entry's own
+extent, so a scene of ordinary nodes stays well inside the precision. One entry
+the size of the whole graph is the case it does not rescue, since a box is
+placed by its top-left corner and a box wider than the view stays on screen
+while that corner is arbitrarily far away. Rebasing cannot thrash, because a
+fresh origin sits at the centre with half a viewport of slack on every side.
 
 `sync()` reads no layout. No `getBoundingClientRect`, no `offsetWidth`, no
 `getComputedStyle` inside the loop (there is one call, at creation, to check the
@@ -765,9 +781,11 @@ promotes it to a compositor layer that is rasterised once and then scaled as a
 bitmap, so the text goes soft under a zoom. The overlay does not set it.
 
 For content that should stay a constant size while its ENTRY is gated by the
-node's size on screen, the layer publishes two custom properties on every sync:
-`--dagr-overlay-zoom` and `--dagr-overlay-inv-zoom`, both unitless. A label
-inside a box entry counter-scales with
+node's size on screen, the layer publishes two custom properties, both unitless
+and both rewritten whenever the zoom changes: `--dagr-overlay-zoom` and
+`--dagr-overlay-inv-zoom`, exported as `OVERLAY_ZOOM_PROPERTY` and
+`OVERLAY_INV_ZOOM_PROPERTY` so a stylesheet is not the only place their names
+exist. A label inside a box entry counter-scales with
 `transform: scale(var(--dagr-overlay-inv-zoom))` and nothing in JavaScript
 touches it per frame. That is how the demo's labels stay the same size from
 zoom 0.1 to zoom 100 while their boxes grow by a factor of a thousand.

@@ -71,7 +71,11 @@ export {
   RendererDisposedError,
 } from './errors.js';
 export type { DagrRenderErrorCode } from './errors.js';
-export { createHtmlOverlay } from './html-overlay.js';
+export {
+  OVERLAY_INV_ZOOM_PROPERTY,
+  OVERLAY_ZOOM_PROPERTY,
+  createHtmlOverlay,
+} from './html-overlay.js';
 export type { HtmlOverlay, HtmlOverlayOptions, OverlayEntry, OverlayEntryInit } from './html-overlay.js';
 export { CENTRE_ANCHOR } from './overlay-math.js';
 export type { ElementAnchor, OverlayPlacement } from './overlay-math.js';

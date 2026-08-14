@@ -54,8 +54,8 @@ import { requireAtLeast } from './validate.js';
 const DEFAULT_MAX_ELEMENTS = 200;
 
 /**
- * The custom properties the layer publishes on every sync, so that CONTENT can
- * counter-scale without the overlay growing a third placement mode.
+ * The custom properties the layer publishes whenever the zoom changes, so that
+ * CONTENT can counter-scale without the overlay growing a third placement mode.
  *
  * The problem they solve is the one the three-tier semantic zoom runs into
  * immediately. A title label wants to be GATED by how big its node is on screen
@@ -68,20 +68,39 @@ const DEFAULT_MAX_ELEMENTS = 200;
  * descendant that wants constant size writes
  * `transform: scale(var(--dagr-overlay-inv-zoom))`. Custom properties inherit,
  * so the whole card gets it, and the browser does the arithmetic on the
- * compositor. The cost is two extra style writes per sync on ONE element, which
- * is the same order as the transform write that has to happen anyway.
+ * compositor. The cost is two extra style writes on ONE element, and only on
+ * the syncs where the zoom moved, so a pan stays the one write it was.
  *
  * Unitless, so both are usable inside `calc()` as multipliers.
+ *
+ * **Exported, because a name that only prose carries is not part of a
+ * contract.** These two strings are the one piece of this API that lives in a
+ * stylesheet rather than in a call, so a consumer who reads them out of the
+ * documentation hardcodes them, and a rename here would be silent in every
+ * stylesheet that used them. As values they can be asserted in a test and read
+ * by a build step, and a caller setting them from JavaScript names the same
+ * constant the overlay writes.
  */
-const ZOOM_PROPERTY = '--dagr-overlay-zoom';
-const INVERSE_ZOOM_PROPERTY = '--dagr-overlay-inv-zoom';
+export const OVERLAY_ZOOM_PROPERTY = '--dagr-overlay-zoom';
+
+/** The reciprocal of {@link OVERLAY_ZOOM_PROPERTY}, for counter-scaling. */
+export const OVERLAY_INV_ZOOM_PROPERTY = '--dagr-overlay-inv-zoom';
 
 /** What `createHtmlOverlay` needs. */
 export interface HtmlOverlayOptions {
   /**
-   * The element the overlay mounts into, which has to establish a containing
-   * block: see {@link OverlayParentError}. It is the caller's element and the
+   * The element the overlay mounts into. It is the caller's element and the
    * overlay does not style it.
+   *
+   * Two requirements, and the second is the one a consumer gets wrong first.
+   * It has to establish a containing block, or the layer resolves against
+   * something else entirely: see {@link OverlayParentError}. And **its padding
+   * box has to coincide with the canvas box the camera describes**, because the
+   * layer is placed at `camera.worldToScreen(origin)`, which is CSS pixels from
+   * the CANVAS top-left, while the clip div is `inset: 0` on this element's
+   * padding box. A padding or a border here, or a canvas that does not fill it,
+   * offsets every entry by that much at every zoom, with nothing to see but
+   * labels that are consistently a few pixels out.
    */
   readonly parent: HTMLElement;
 
@@ -115,6 +134,12 @@ export interface OverlayEntryInit {
    * and on {@link HtmlOverlay.dispose}. The default drops the element for the
    * collector; a pool implements this and hands the same element back from
    * `create` later.
+   *
+   * **The element arrives with every inline style the overlay wrote taken back
+   * off it** (`position`, `left`, `top`, `margin`, `transform-origin`,
+   * `pointer-events`, `box-sizing`, `width`, `height`, `transform`), so a pool
+   * can hand it to a different entry without inheriting the last one's size or
+   * position. Its content is untouched: what `create` built is the caller's.
    */
   readonly release?: (element: HTMLElement) => void;
 
@@ -186,6 +211,16 @@ interface EntryState extends CapCandidate {
   /** Set by `place`, cleared once the new placement has been written out. */
   dirty: boolean;
   distanceSq: number;
+  /**
+   * The sync that last kept this entry, which is how the detach pass asks "did
+   * this survive?" without a `Set` of the survivors.
+   *
+   * A stamp rather than a membership test because `sync` runs every frame: a
+   * fresh `Set` of up to the cap, plus the array it is built from, is garbage
+   * generated sixty times a second in the one function that must not generate
+   * any. Zero is a safe initial value because the counter starts at one.
+   */
+  keptFrame: number;
 }
 
 /**
@@ -213,8 +248,17 @@ export function createHtmlOverlay(options: HtmlOverlayOptions): HtmlOverlay {
   // this call is not detected, which is the price of not reading layout every
   // frame; the failure it does catch is the common one, which is a parent whose
   // stylesheet never said `position` at all.
+  //
+  // The connectivity check is not belt and braces. `getComputedStyle` on a
+  // disconnected element returns an EMPTY declaration, so its `position` is the
+  // empty string rather than `static`, and a `=== 'static'` test alone would
+  // wave through every caller who builds an overlay before mounting its parent,
+  // which is exactly the case the error exists to name.
+  if (!parent.isConnected) throw new OverlayParentError('is not in a document');
   const parentPosition = parent.ownerDocument.defaultView?.getComputedStyle(parent).position ?? '';
-  if (parentPosition === 'static') throw new OverlayParentError(parentPosition);
+  if (parentPosition === 'static' || parentPosition === '') {
+    throw new OverlayParentError(`has a computed position of "${parentPosition}"`);
+  }
 
   const document = parent.ownerDocument;
   const clip = document.createElement('div');
@@ -233,6 +277,21 @@ export function createHtmlOverlay(options: HtmlOverlayOptions): HtmlOverlay {
 
   const entries = new Set<EntryState>();
   const attached = new Set<EntryState>();
+
+  /**
+   * The candidate list, reused across frames rather than rebuilt.
+   *
+   * `sync` runs on every frame a caller draws, and at M4.10's ten thousand
+   * nodes with most of them in view this array holds ten thousand entries. A
+   * fresh one per frame is that much straight into the young generation sixty
+   * times a second, which is a garbage collector pause in the middle of a pan.
+   * `length = 0` keeps the backing store.
+   */
+  const candidates: EntryState[] = [];
+
+  /** Counts syncs, for {@link EntryState.keptFrame}. Starts above zero. */
+  let frameStamp = 0;
+
   let nextOrder = 0;
   let activeCount = 0;
   let disposed = false;
@@ -267,21 +326,65 @@ export function createHtmlOverlay(options: HtmlOverlayOptions): HtmlOverlay {
     style.pointerEvents = state.init.interactive === true ? 'auto' : 'none';
   };
 
-  /** Writes the size of a box entry, which only its placement can change. */
+  /**
+   * Writes the size a box entry gets from its bounds, and CLEARS it for a point.
+   *
+   * The clearing half is not defensive tidiness, it is the correctness half.
+   * `place()` can change an entry's kind, and a point's anchor is expressed as a
+   * percentage of the element's own box, so a width left over from the box the
+   * entry used to be is a phantom the anchor still resolves against: the element
+   * lands half that stale box away from its world point, at every zoom, and the
+   * error grows with the box. Writing one kind's styles without clearing the
+   * other's is how a placement change becomes a silent offset.
+   */
   const applySize = (state: EntryState, element: HTMLElement): void => {
-    if (state.placement.kind !== 'box') return;
+    const style = element.style;
+    if (state.placement.kind !== 'box') {
+      style.boxSizing = '';
+      style.width = '';
+      style.height = '';
+      return;
+    }
     const { bounds } = state.placement;
     // Border-box, so a card's own border and padding stay inside the node's
     // layout box. Content-box would make a 1 unit border draw 2 units wider
     // than the box the layout engine reserved, and the overlap would be with
     // the neighbour the layout engine spaced it away from.
-    element.style.boxSizing = 'border-box';
-    element.style.width = cssPx(bounds.maxX - bounds.minX, 'bounds.width');
-    element.style.height = cssPx(bounds.maxY - bounds.minY, 'bounds.height');
+    style.boxSizing = 'border-box';
+    style.width = cssPx(bounds.maxX - bounds.minX, 'bounds.width');
+    style.height = cssPx(bounds.maxY - bounds.minY, 'bounds.height');
   };
 
   const applyTransform = (state: EntryState, element: HTMLElement, at: Vec2): void => {
     element.style.transform = entryTransform(state.placement, at, camera.zoom);
+  };
+
+  /**
+   * Takes back every inline style the overlay wrote, so an element leaves in the
+   * state it arrived in.
+   *
+   * A pool is the reason. Without this, an element released by a 1000 unit card
+   * and handed back from another entry's `create` carries that card's width,
+   * height and transform, and the attach path rewrites the size only for a box,
+   * so a point entry would inherit a phantom box (see {@link applySize}) and any
+   * entry would draw at the old position for one frame. It also means a caller
+   * who reuses the element somewhere else does not get an absolutely positioned
+   * one with a transform on it.
+   *
+   * The element's CONTENT is untouched: what the caller built is the caller's.
+   */
+  const clearOverlayStyles = (element: HTMLElement): void => {
+    const style = element.style;
+    style.position = '';
+    style.left = '';
+    style.top = '';
+    style.margin = '';
+    style.transformOrigin = '';
+    style.pointerEvents = '';
+    style.boxSizing = '';
+    style.width = '';
+    style.height = '';
+    style.transform = '';
   };
 
   const detach = (state: EntryState): void => {
@@ -290,6 +393,7 @@ export function createHtmlOverlay(options: HtmlOverlayOptions): HtmlOverlay {
     state.element = null;
     attached.delete(state);
     element.remove();
+    clearOverlayStyles(element);
     state.init.release?.(element);
   };
 
@@ -305,6 +409,7 @@ export function createHtmlOverlay(options: HtmlOverlayOptions): HtmlOverlay {
         element: null,
         dirty: false,
         distanceSq: 0,
+        keptFrame: 0,
       };
       entries.add(state);
 
@@ -343,11 +448,12 @@ export function createHtmlOverlay(options: HtmlOverlayOptions): HtmlOverlay {
 
       layer.style.transform = layerTransform(camera.worldToScreen(at), zoom);
       if (zoomChanged) {
-        layer.style.setProperty(ZOOM_PROPERTY, cssNumber(zoom, 'zoom'));
-        layer.style.setProperty(INVERSE_ZOOM_PROPERTY, cssNumber(1 / zoom, 'zoom'));
+        layer.style.setProperty(OVERLAY_ZOOM_PROPERTY, cssNumber(zoom, 'zoom'));
+        layer.style.setProperty(OVERLAY_INV_ZOOM_PROPERTY, cssNumber(1 / zoom, 'zoom'));
       }
 
-      const candidates: EntryState[] = [];
+      frameStamp += 1;
+      candidates.length = 0;
       for (const state of entries) {
         if (!placementInView(state.placement, visible)) continue;
         if (!passesGate(state.placement, zoom)) continue;
@@ -356,13 +462,14 @@ export function createHtmlOverlay(options: HtmlOverlayOptions): HtmlOverlay {
       }
       const kept = selectWithinCap(candidates, maxElements);
 
-      // A Set of what survived, so the detach pass below is a membership test
-      // rather than a scan of `kept` per attached entry. That matters at the
-      // cap: 200 attached against 200 kept is 40,000 comparisons a frame the
-      // naive way.
-      const keptSet = new Set<EntryState>(kept);
+      // Stamp first, then detach whatever is not stamped. The stamp is what
+      // makes the detach pass a field comparison rather than a scan of `kept`
+      // per attached entry, which at the cap would be 200 by 200 comparisons a
+      // frame, and it costs no allocation where a `Set` of the survivors costs
+      // one per frame.
+      for (const state of kept) state.keptFrame = frameStamp;
       for (const state of attached) {
-        if (!keptSet.has(state)) detach(state);
+        if (state.keptFrame !== frameStamp) detach(state);
       }
 
       for (const state of kept) {

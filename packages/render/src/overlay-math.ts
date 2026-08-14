@@ -36,8 +36,15 @@ export interface ElementAnchor {
   readonly down: number;
 }
 
-/** The centre of an element, which is what a point entry anchors by default. */
-export const CENTRE_ANCHOR: ElementAnchor = { across: 0.5, down: 0.5 };
+/**
+ * The centre of an element, which is what a point entry anchors by default.
+ *
+ * Frozen, because `readonly` is a compile-time claim and this is one shared
+ * object every default-anchored entry reads: a caller who wrote to it would
+ * move every such entry in the scene, in a way no type checker would have
+ * mentioned and no stack would point at.
+ */
+export const CENTRE_ANCHOR: ElementAnchor = Object.freeze({ across: 0.5, down: 0.5 });
 
 /**
  * Where an overlay entry sits in the world, as a discriminated union rather
@@ -347,11 +354,19 @@ export function boundsCentre(bounds: WorldBounds): Vec2 {
  * about 1.7e7 of integer resolution, so neighbouring positions stop being
  * distinguishable and cards visibly jitter against the shapes they label.
  *
- * Rebasing on this rule bounds an entry's local coordinates by the visible
- * region and the layer's own translation by the viewport, so nothing in the
- * composed matrix is large. It also cannot thrash: a fresh origin sits at the
- * centre with half a viewport of slack on every side, so one gesture cannot
- * trigger two rebases without moving a viewport's worth in between.
+ * Rebasing on this rule bounds the layer's own translation by the viewport, and
+ * an entry's local coordinates by the LARGER of the visible region and that
+ * entry's own extent. The second half is the honest version, and an earlier
+ * draft of this paragraph left it out: a box is placed by its TOP-LEFT corner,
+ * so a box wider than the view stays a culling candidate while its corner is
+ * arbitrarily far from the origin, and one 1e5 unit entry at zoom 100 still puts
+ * 1e7 CSS pixels into the composed matrix. Rebasing bounds what a scene of
+ * ordinary nodes produces. It does not rescue a single entry the size of the
+ * whole graph, and nothing short of splitting that entry would.
+ *
+ * It cannot thrash: a fresh origin sits at the centre with half a viewport of
+ * slack on every side, so one gesture cannot trigger two rebases without moving
+ * a viewport's worth in between.
  */
 export function needsRebase(origin: Vec2, visible: WorldBounds): boolean {
   return !boundsContain(visible, origin);

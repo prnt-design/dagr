@@ -21,6 +21,8 @@ describe('@dagr/render', () => {
       'CENTRE_ANCHOR',
       'Camera2D',
       'DagrRenderError',
+      'OVERLAY_INV_ZOOM_PROPERTY',
+      'OVERLAY_ZOOM_PROPERTY',
       'OverlayDisposedError',
       'OverlayParentError',
       'RendererDisposedError',

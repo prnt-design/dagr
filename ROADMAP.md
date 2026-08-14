@@ -3139,10 +3139,11 @@ it settled rather than restating the argument.
   of the package's untested surface on `docs/docs/render.md`.
   SHIPPED, and three things the task learned that were not in the plan. THE
   LAYER PUBLISHES `--dagr-overlay-zoom` AND `--dagr-overlay-inv-zoom`, unitless,
-  on each sync. The three-tier zoom runs straight into a label wanting to be
-  GATED by its node's size on screen (which needs a box) and DRAWN at a constant
-  size (which is what a point does), and the union has no member for a box that
-  does not scale, because such a thing is not a world rectangle. A custom
+  whenever the zoom changes. The three-tier zoom runs straight into a label
+  wanting to be GATED by its node's size on screen (which needs a box) and
+  DRAWN at a constant size (which is what a point does), and the union has no
+  member for a box that does not scale, because such a thing is not a world
+  rectangle. A custom
   property splits the two cleanly: the entry stays a box and a descendant writes
   `transform: scale(var(--dagr-overlay-inv-zoom))`, so the browser does the
   arithmetic and no JavaScript touches a font size per frame. The demo's two

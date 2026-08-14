@@ -69,10 +69,11 @@ interface CameraReadout {
  * The OUTER element is what the overlay positions and sizes, so it is the
  * shape's world box and it scales with the zoom. The INNER element carries the
  * text and counter-scales through `--dagr-overlay-inv-zoom`, which the overlay
- * publishes on its layer each sync. That split is the answer to a label wanting
- * two things at once: to be GATED by how big its node is on screen, which needs
- * a world box, and to be READ at a constant size, which a box cannot do. The
- * stylesheet does the second half, so nothing here reads the camera.
+ * publishes on its layer whenever the zoom changes. That split is the answer to
+ * a label wanting two things at once: to be GATED by how big its node is on
+ * screen, which needs a world box, and to be READ at a constant size, which a
+ * box cannot do. The stylesheet does the second half, so nothing here reads the
+ * camera.
  */
 function createLabel(shape: LadderShape): HTMLElement {
   const box = document.createElement('div');

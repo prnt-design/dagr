@@ -101,9 +101,9 @@ body {
  * what `@dagr/render`'s overlay positions and sizes: it IS the shape's world
  * box, so it scales with the zoom and there is nothing to set here beyond where
  * the text hangs off it. `.stage__label-text` counter-scales through
- * `--dagr-overlay-inv-zoom`, which the overlay publishes on its layer every
- * sync, so the text is the same number of CSS pixels at zoom 0.1 and at 100
- * while the box under it grows by a factor of a thousand.
+ * `--dagr-overlay-inv-zoom`, which the overlay publishes on its layer whenever
+ * the zoom changes, so the text is the same number of CSS pixels at zoom 0.1
+ * and at 100 while the box under it grows by a factor of a thousand.
  *
  * Nothing here reads the camera, and nothing in the demo's JavaScript touches
  * these styles per frame. The browser does the arithmetic on the compositor,
@@ -156,6 +156,10 @@ body {
   position: absolute;
   left: 1rem;
   bottom: 1rem;
+  /* Above the overlay, which the library appends to this container after
+     React's children and therefore paints later. Without this, panning a
+     labelled shape into the bottom-left corner puts its label over the HUD. */
+  z-index: 1;
   /* The panel is sized by its widest child, and since M4.2 that child is the
      hint rather than a readout row: naming the zoom range and `#zoom=` takes 58
      characters, which on one line is about 440 CSS pixels, 40% of the 1102 pixel
@@ -200,6 +204,9 @@ body {
 .stage__failure {
   position: absolute;
   inset: 0;
+  /* Same reason as the readout, and it matters more here: a failure message
+     overprinted by labels is the one screen a reader most needs to read. */
+  z-index: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;

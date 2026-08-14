@@ -67,7 +67,7 @@ export class RendererDisposedError extends DagrRenderError {
 }
 
 /**
- * Thrown when `createHtmlOverlay` is given a parent that is not positioned.
+ * Thrown when `createHtmlOverlay` is given a parent it cannot mount into.
  *
  * The overlay's two divs are `position: absolute`, which resolves against the
  * nearest POSITIONED ancestor. Given a `static` parent, the layer would find
@@ -76,18 +76,26 @@ export class RendererDisposedError extends DagrRenderError {
  * plausible-looking but entirely wrong places. Since a caller cannot see that
  * from the overlay's own code, this is checked once at creation.
  *
+ * A parent that is not in a document fails the same check for a different
+ * reason: `getComputedStyle` on a disconnected element returns an empty
+ * declaration, so its `position` is neither `static` nor anything else, and
+ * accepting that would mean accepting the exact case this class exists to name
+ * whenever a caller builds an overlay before mounting. It is also not a state
+ * the overlay can work in, since the layer is placed in the canvas's coordinate
+ * space and a disconnected element has none.
+ *
  * Not a `RangeError`, because nothing here is out of range: the parent is a
- * perfectly good element with a stylesheet that has to change. And the overlay
- * does not set `position: relative` on it instead, because silently restyling
- * an element the caller owns is how a library ends up in the middle of somebody
- * else's layout bug.
+ * perfectly good element in the wrong state. And the overlay does not set
+ * `position: relative` on it instead, because silently restyling an element the
+ * caller owns is how a library ends up in the middle of somebody else's layout
+ * bug.
  */
 export class OverlayParentError extends DagrRenderError {
   readonly code = 'OVERLAY_PARENT';
 
-  constructor(position: string) {
+  constructor(problem: string) {
     super(
-      `the overlay parent has to establish a containing block, but its computed position is "${position}". Give it position: relative (or absolute, fixed or sticky).`,
+      `the overlay parent ${problem}. It has to be in the document and establish a containing block: give it position: relative (or absolute, fixed or sticky).`,
     );
     this.name = 'OverlayParentError';
     Object.setPrototypeOf(this, OverlayParentError.prototype);

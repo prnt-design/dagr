@@ -2,7 +2,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Camera2D } from '../src/camera.js';
 import { OverlayDisposedError, OverlayParentError } from '../src/errors.js';
-import { createHtmlOverlay } from '../src/html-overlay.js';
+import {
+  OVERLAY_INV_ZOOM_PROPERTY,
+  OVERLAY_ZOOM_PROPERTY,
+  createHtmlOverlay,
+} from '../src/html-overlay.js';
 import type { HtmlOverlay } from '../src/html-overlay.js';
 import type { OverlayPlacement } from '../src/overlay-math.js';
 
@@ -104,6 +108,19 @@ describe('createHtmlOverlay', () => {
     // overlay's own code, and the symptom without the check is a layer over the
     // whole document with labels in plausible but wrong places.
     expect(() => createHtmlOverlay({ parent, camera })).toThrow(/position: relative/);
+  });
+
+  it('refuses a parent that is not in a document', () => {
+    // `getComputedStyle` on a disconnected element returns an EMPTY declaration
+    // in a browser, so a `position === 'static'` test alone would wave through
+    // every caller who builds an overlay before mounting its parent, which is
+    // the case the error exists to name. jsdom reports `static` for the same
+    // element, so this test would pass either way here and the browser case is
+    // the one being guarded.
+    const parent = document.createElement('div');
+    parent.style.position = 'relative';
+    expect(() => createHtmlOverlay({ parent, camera: makeCamera() })).toThrow(OverlayParentError);
+    expect(() => createHtmlOverlay({ parent, camera: makeCamera() })).toThrow(/not in a document/);
   });
 
   it('rejects a cap below one element', () => {
@@ -252,14 +269,20 @@ describe('createHtmlOverlay', () => {
     overlay.sync();
 
     const layer = layerOf(parent);
-    expect(layer.style.getPropertyValue('--dagr-overlay-zoom')).toBe('1');
-    expect(layer.style.getPropertyValue('--dagr-overlay-inv-zoom')).toBe('1');
+    // Asserted through the exported constants, because these two strings are
+    // the one part of the contract that lives in a stylesheet: a test that
+    // spelled them out by hand would agree with a rename that broke every
+    // consumer.
+    expect(OVERLAY_ZOOM_PROPERTY).toBe('--dagr-overlay-zoom');
+    expect(OVERLAY_INV_ZOOM_PROPERTY).toBe('--dagr-overlay-inv-zoom');
+    expect(layer.style.getPropertyValue(OVERLAY_ZOOM_PROPERTY)).toBe('1');
+    expect(layer.style.getPropertyValue(OVERLAY_INV_ZOOM_PROPERTY)).toBe('1');
 
     camera.setZoom(4);
     overlay.sync();
-    expect(layer.style.getPropertyValue('--dagr-overlay-zoom')).toBe('4');
+    expect(layer.style.getPropertyValue(OVERLAY_ZOOM_PROPERTY)).toBe('4');
     // Unitless, so a stylesheet can use it as a multiplier inside `calc()`.
-    expect(layer.style.getPropertyValue('--dagr-overlay-inv-zoom')).toBe('0.25');
+    expect(layer.style.getPropertyValue(OVERLAY_INV_ZOOM_PROPERTY)).toBe('0.25');
   });
 
   it('rewrites entry transforms when the origin is rebased', () => {
@@ -352,6 +375,56 @@ describe('createHtmlOverlay', () => {
     // Both the transform and the size follow, since a new box can change either.
     expect(element.style.width).toBe('200px');
     expect(element.style.transform).toBe('translate(-100px, -10px)');
+  });
+
+  it('clears the box size when an entry is re-placed as a point', () => {
+    // A point's anchor is a percentage of the element's OWN box, so a width
+    // left over from the box it used to be is a phantom the anchor resolves
+    // against: the element lands half that stale box away from its world point,
+    // at every zoom, and the error grows with the box.
+    const parent = makeParent();
+    const overlay = createHtmlOverlay({ parent, camera: makeCamera() });
+    const handle = overlay.add({
+      placement: box(-50, 50),
+      create: () => document.createElement('div'),
+    });
+    overlay.sync();
+
+    const element = layerOf(parent).children[0];
+    if (!(element instanceof HTMLElement)) throw new Error('no element');
+    expect(element.style.width).toBe('100px');
+
+    handle.place({ kind: 'point', at: { x: 0, y: 0 } });
+    overlay.sync();
+    expect(element.style.width).toBe('');
+    expect(element.style.height).toBe('');
+    expect(element.style.boxSizing).toBe('');
+  });
+
+  it('gives an element back without the styles it was lent', () => {
+    // The pool contract M4.12 builds on: an element released by a 1000 unit
+    // card and handed back from another entry's `create` must not carry that
+    // card's size or transform, and a caller reusing it elsewhere should not
+    // get an absolutely positioned element.
+    const parent = makeParent();
+    const camera = makeCamera();
+    const overlay = createHtmlOverlay({ parent, camera });
+    const released: HTMLElement[] = [];
+    overlay.add({
+      placement: box(-50, 50),
+      create: () => document.createElement('div'),
+      release: (element) => {
+        released.push(element);
+      },
+    });
+    overlay.sync();
+    camera.panByScreen(-5000, 0);
+    overlay.sync();
+
+    const element = released[0];
+    expect(element).toBeInstanceOf(HTMLElement);
+    if (element === undefined) return;
+    expect(element.style.cssText).toBe('');
   });
 
   it('detaches and releases on remove', () => {
