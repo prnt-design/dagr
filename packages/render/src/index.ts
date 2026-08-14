@@ -77,8 +77,12 @@ export {
   createHtmlOverlay,
 } from './html-overlay.js';
 export type { HtmlOverlay, HtmlOverlayOptions, OverlayEntry, OverlayEntryInit } from './html-overlay.js';
+export { measureHtmlSizes } from './measure-html.js';
+export type { MeasureItem, MeasureOptions } from './measure-html.js';
 export { CENTRE_ANCHOR } from './overlay-math.js';
 export type { ElementAnchor, OverlayPlacement } from './overlay-math.js';
+export { createRichNodes } from './rich-nodes.js';
+export type { RichNode, RichNodeTier, RichNodes } from './rich-nodes.js';
 export { createRenderer } from './webgpu-renderer.js';
 export type {
   OrthoFrustum,

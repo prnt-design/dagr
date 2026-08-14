@@ -14,6 +14,34 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- `createRichNodes`: a node's visual as arbitrary HTML sized to its layout box,
+  with semantic zoom. New surface: `createRichNodes`, `measureHtmlSizes`, and
+  the types `RichNode`, `RichNodeTier`, `RichNodes`, `MeasureItem` and
+  `MeasureOptions`. (M4.12)
+
+  **Tiers are gates, and there is no tier machinery.** A node registers ONE
+  OVERLAY ENTRY PER TIER, all with the same bounds and adjacent half-open gates,
+  so at most one is ever visible and the bottom tier is the ABSENCE of an entry,
+  which is the GPU drawing the shape. The three-tier semantic zoom the campaign
+  demo asked for is three lines of configuration over M4.11 rather than a
+  level-of-detail system.
+
+  **`create` and `update` are separate so elements can be pooled**, which relies
+  on the overlay detaching everything that left the view before it creates
+  anything that entered it. The cost is that `update` has to replace what it
+  wrote last time, since the element it is handed may have belonged to a
+  different node a frame ago. `setNodes` diffs by id, and a node whose `data` is
+  a NEW REFERENCE is re-rendered when it has an element on screen: reference
+  equality rather than a deep comparison, because a deep comparison of arbitrary
+  card data is neither cheap nor decidable.
+
+  **`measureHtmlSizes` mounts everything, then reads everything**, in one layout
+  flush. Interleaving a mount and a read per node forces a flush per node, which
+  is the quadratic that turns a startup into seconds. Its `parent` is required
+  rather than defaulted, because inherited font and custom properties decide the
+  answer and a card measured under the page's styles and drawn under the
+  overlay's is measured wrong silently.
+
 - `createHtmlOverlay`: a layer of DOM elements positioned in world coordinates
   over the canvas and kept registered with a `Camera2D`, with culling against
   the visible world, a half-open screen-width gate per entry, and a hard element

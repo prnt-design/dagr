@@ -152,6 +152,80 @@ body {
   color: var(--ink-dim);
 }
 
+/*
+ * The card tier, which the same box gets once it is 160 CSS pixels wide.
+ *
+ * It hangs off the box's top-left corner exactly as the label does and
+ * counter-scales the same way, so growing the shape does not grow the card. The
+ * only difference between the tiers is how much there is to read, which is the
+ * whole idea of semantic zoom: the fields below are worth pixels when you are
+ * close enough to read them and worth none when you are not.
+ */
+
+.stage__card {
+  position: absolute;
+  /* INSIDE the box's top-left corner, where the label hangs above it, and the
+     reason is what a card is for. A card only shows once its shape is 160 CSS
+     pixels wide, and by the time it is a thousand, the box's top edge is off
+     screen and anything above it is off screen with it. Inside, the card is
+     visible for as long as the corner it sits in is. It covers part of the
+     shape, which is the right trade at the zoom where the shape is mostly
+     one flat colour. */
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  /* The inset is INSIDE the transform, and that is not a style preference. Any
+     layout length on this element (margin, left, top) is in the layer's own
+     units, which are world units, so `margin: 0.5rem` is 8 world units and
+     pushes the card 800 CSS pixels away at zoom 100. A translate composed after
+     the counter-scale is 8 CSS pixels at every zoom, which is what an inset
+     means. Same reason the card's own padding and border work: they are inside
+     an element that has already been scaled back. */
+  transform: scale(var(--dagr-overlay-inv-zoom, 1)) translate(0.5rem, 0.5rem);
+  min-width: 13rem;
+  padding: 0.5rem 0.625rem 0.5625rem;
+  border: 1px solid var(--rule);
+  border-radius: 0.25rem;
+  background: rgba(7, 8, 10, 0.9);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.stage__card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1ch;
+  padding-bottom: 0.375rem;
+  margin-bottom: 0.375rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.stage__card-kind {
+  color: var(--ink-dim);
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+}
+
+.stage__card-rows {
+  display: grid;
+  /* Sized by the longest key rather than a guessed column: "outline" is seven
+     characters and a 5.5ch column ran its value into it. */
+  grid-template-columns: max-content 1fr;
+  gap: 0.125rem 1.5ch;
+  margin: 0;
+}
+
+.stage__card-rows dt {
+  color: var(--ink-dim);
+}
+
+.stage__card-rows dd {
+  margin: 0;
+  color: var(--ink);
+}
+
 .stage__readout {
   position: absolute;
   left: 1rem;
