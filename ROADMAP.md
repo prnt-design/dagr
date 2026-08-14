@@ -2122,12 +2122,18 @@ findings addressed or logged, docs land with the feature.
   this is before: nothing is published. It earns the place on the family's own
   organising principle, which is whose bug it is. Until there was a boundary,
   every failure was the caller's config, a stage's contract, or this package's
-  invariant; a port that answers with something unrecognised, two ends built
-  from different versions, and a foreign error that cannot arrive with its class
-  are none of the three, and all three are wiring. `StageContractError` and
-  `InternalLayoutError` DO arrive as themselves, because both carry nothing but
-  strings, so a stage that left work undone reads the same whether it ran here
-  or there, down to which id it dropped.
+  invariant; two ends built from different versions, and a foreign error that
+  cannot arrive with its class, are neither, and both are wiring.
+  `StageContractError` and `InternalLayoutError` DO arrive as themselves,
+  because both carry nothing but strings, so a stage that left work undone reads
+  the same whether it ran here or there, down to which id it dropped. An answer
+  this package does not RECOGNISE is deliberately not a third case, and the docs
+  review caught the first draft claiming it was at three separate sites: both
+  ends ignore what they cannot identify, because serving layout on a port does
+  not claim it, so an unrecognised reply leaves the run PENDING rather than
+  raising. Saying otherwise would have sent a caller hunting for an error that
+  never arrives, and the honest text names the hang and points at a worker that
+  never called `serveLayout`.
   `LayoutPort` is four structural members rather than a class, so a browser
   `Worker`, a dedicated worker's own `self`, and a `MessagePort` from either
   runtime all satisfy it with no cast (checked against the DOM and WebWorker
@@ -2148,13 +2154,46 @@ findings addressed or logged, docs land with the feature.
   because the two rankers agree on a graph that small, so the test that proves
   the run happened over there uses a corpus graph and asserts BOTH that the
   answer matches the worker's stages and that it differs from the default's.
+  **REVIEW FOUND TWO WAYS TO GET A SILENTLY WRONG LAYOUT, AND BOTH WERE THE SAME
+  MISTAKE: TRUSTING SOMETHING THAT CAN CHANGE BETWEEN THE ASK AND THE ANSWER.**
+  The API review and the general code review reproduced both independently, over
+  a real channel, which is why they are recorded here rather than merely fixed.
+  First, `nextRequest` counted from 1 inside each engine, and this protocol
+  INVITES two engines onto one port. Both would send id 1, both listeners would
+  match the first answer, and the loser would decode the winner's numbers under
+  its own ids: with equal node and edge counts no length check fires, so the
+  result is a layout with everything in the wrong place and no error at all. The
+  counter now lives at module scope, which is the only scope two engines share.
+  Second, and worse because the caller does nothing unusual to provoke it, the
+  pending entry held the caller's `Graph` and decoded the id-less answer by
+  walking it when the answer landed. `Graph` is mutable and this package is
+  animation first, so editing one mid-run is an ORDINARY sequence, and a node
+  swapped for another while a run was in flight produced coordinates on the
+  wrong ids. Both fixes are the same shape: the answer is decoded against a
+  `RunSnapshot` of the ids as they were AT THE SEND, which `encodeRun` already
+  builds, so an answer means what it meant when it was asked for. Each has a
+  test, and each test was mutation checked against the old code.
+  A third, smaller: `isLayoutMessage` checks a tag and not a shape, so an answer
+  wearing the right tag with the wrong contents reached the decoder and came
+  back as a bare `TypeError`. Decode failures are now wrapped, so what a caller
+  catches is this family's member. Members that already are one pass through.
   Two small things and one absence. The engine attaches its listener only while
   runs are in flight, so an engine sharing a port it does not own leaves nothing
   behind on it; nothing can arrive for it while nothing is pending. Both ends
   tag their messages and ignore what they do not recognise, so serving layout on
   a port does not claim the port. And there is no timeout: how long is too long
   belongs to the caller and to the graph, and a terminated worker is an event on
-  the caller's own object rather than something this package can see.
+  the caller's own object rather than something this package can see. The review
+  corrected one belief here too: posting to a CLOSED port or a terminated worker
+  is a silent no-op in both runtimes rather than a throw, so the `catch` around
+  `postMessage` is the port object objecting and not those cases, and that run
+  stays pending like any other slow one. The comment said otherwise and now
+  does not.
+  `LayoutEngineOptions` spells every field `?: T | undefined`, which is
+  redundant by default and is not under `exactOptionalPropertyTypes`, a flag
+  this repo sets. Without it `createLayout({ worker })` where `worker` is
+  `LayoutPort | undefined` does not compile, and that is the ordinary shape: a
+  port in a ref, or absent while rendering on a server.
   NOT DONE HERE, deliberately. No benchmark: the crossing's cost is a message
   size and a clone, both linear in the graph, and measuring it would mean a
   bench entry whose baseline is a machine-matched number for something no

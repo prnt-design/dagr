@@ -218,6 +218,77 @@ describe('a run that crosses a worker boundary', () => {
     expect(second).toEqual(engine.run(pair));
   });
 
+  // Two engines on one port is a case this protocol invites, and request ids
+  // counted per engine would have made it silently wrong: both would send id 1,
+  // both listeners would match the first answer, and the loser would decode the
+  // winner's numbers against its own ids. The sizes are what catch it. Equal
+  // node and edge counts on both sides mean no length check can fire, so a
+  // shared counter is the only thing standing between this and a layout with
+  // every id present, every number finite, and everything in the wrong place.
+  it('keeps two engines sharing one port apart', async () => {
+    const { engineSide } = served();
+    const wide = createLayout({ worker: engineSide, config: { defaultNodeSize: { width: 200, height: 10 } } });
+    const narrow = createLayout({ worker: engineSide, config: { defaultNodeSize: { width: 20, height: 10 } } });
+    const pair = (first: string, second: string): Graph => {
+      const graph = new Graph();
+      graph.addNode(first);
+      graph.addNode(second);
+      graph.addEdge(first, second, `${first}${second}`);
+      return graph;
+    };
+    const [a, b] = await Promise.all([
+      wide.runAsync(pair('a', 'b')),
+      narrow.runAsync(pair('x', 'y')),
+    ]);
+    expect(a.nodes.get('a')).toMatchObject({ width: 200 });
+    expect(b.nodes.get('x')).toMatchObject({ width: 20 });
+    expect(b.nodes.get('a')).toBeUndefined();
+  });
+
+  // The graph is the caller's and is mutable, and this package is animation
+  // first, so editing one while a run is in flight is an ordinary sequence. The
+  // answer describes the graph that was ASKED about, so it is decoded against
+  // the ids that were sent rather than against whatever the graph holds by the
+  // time it lands. Without the snapshot this resolves to `b` wearing `a`'s box.
+  it('answers the graph it was asked about, not the graph as it now stands', async () => {
+    const { engineSide } = served();
+    const engine = createLayout({
+      worker: engineSide,
+      config: { nodeSize: (node) => ({ width: node.id === 'a' ? 200 : 20, height: 10 }) },
+    });
+    const graph = new Graph();
+    graph.addNode('a');
+    graph.addNode('b');
+    graph.addEdge('a', 'b', 'ab');
+    const answer = engine.runAsync(graph);
+    // Same node and edge count afterwards, so no length check can catch this.
+    graph.removeNode('a');
+    graph.addNode('c');
+    graph.addEdge('c', 'b', 'cb');
+    const result = await answer;
+    expect([...result.nodes.keys()]).toEqual(['a', 'b']);
+    expect(result.nodes.get('a')).toMatchObject({ width: 200 });
+    expect(result.nodes.get('b')).toMatchObject({ width: 20 });
+    expect([...result.edges.keys()]).toEqual(['ab']);
+  });
+
+  // `isLayoutMessage` checks a tag and not a shape, so an answer wearing the
+  // right tag with the wrong contents reaches the decoder. What the caller gets
+  // is this family's own member rather than a bare `TypeError` about a property
+  // of undefined, which would say nothing about where the run went wrong.
+  it('rejects with a transport error when an answer is tagged but malformed', async () => {
+    const wired = served();
+    const engine = createLayout({ worker: wired.engineSide });
+    const answer = engine.runAsync(diamond());
+    // The engine counts request ids for the whole module, so the id this run
+    // was given is not knowable here. Reply to every plausible one: the entry
+    // that matches settles the run, and the rest are dropped as unmatched.
+    for (let id = 1; id < 200; id += 1) {
+      wired.workerSide.postMessage({ dagr: 'layout-result', id }, []);
+    }
+    await expect(answer).rejects.toThrow(WorkerTransportError);
+  });
+
   // Serving layout on a port does not claim the port, so a caller who already
   // had a worker can put layout on it rather than starting a second one.
   it('ignores traffic that is not its own', async () => {

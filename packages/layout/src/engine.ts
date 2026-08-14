@@ -5,9 +5,25 @@
 
 import type { Graph } from '@dagr/graph';
 import { resolveConfig } from './config.js';
+import { DagrLayoutError, WorkerTransportError } from './errors.js';
 import { prepare, runPrepared } from './pipeline.js';
 import type { LayoutConfig, LayoutResult, LayoutStageOverrides } from './types.js';
+import type { RunSnapshot } from './wire.js';
 import { decodeFailure, decodeResult, encodeRun, isLayoutMessage } from './wire.js';
+
+/**
+ * Request ids, counted once for the whole module rather than once per engine.
+ *
+ * Module scope is the only scope in which this is correct, because it is the
+ * only one two engines can share, and sharing a port is a case this protocol
+ * invites rather than tolerates. Two engines that each counted from 1 would
+ * hand out the same id for their first run, both listeners would match the
+ * first answer, and the loser would decode the winner's numbers against its own
+ * ids: with equal node and edge counts that is a wrong layout and NO error,
+ * which is the failure this whole file checks lengths to avoid. Counting here
+ * costs nothing and makes the ids disjoint by construction.
+ */
+let nextRequest = 1;
 
 /**
  * The part of a worker this package uses: post a message, hear the answer.
@@ -49,13 +65,25 @@ export interface LayoutPort {
   start?(): void;
 }
 
-/** What {@link createLayout} binds for the life of an engine. */
+/**
+ * What {@link createLayout} binds for the life of an engine.
+ *
+ * Every field is `?: T | undefined` rather than plain `?: T`, which is
+ * redundant under a default tsconfig and is not under
+ * `exactOptionalPropertyTypes`, which this repo sets and which a careful
+ * consumer sets too. Under that flag `?: T` means the key may be ABSENT but may
+ * not be present holding `undefined`, and `createLayout({ worker })` where
+ * `worker` is `LayoutPort | undefined` stops compiling. That is precisely the
+ * ordinary shape here: a port held in a ref, or absent while rendering on the
+ * server, which is the case the docs point a reader at. Widening is safe to do
+ * later and pointless to postpone.
+ */
 export interface LayoutEngineOptions {
   /** Any subset of the four stages; the rest fall back to `defaultStages`. */
-  readonly stages?: LayoutStageOverrides;
+  readonly stages?: LayoutStageOverrides | undefined;
 
   /** Resolved once, when the engine is built, and reused by every run. */
-  readonly config?: LayoutConfig;
+  readonly config?: LayoutConfig | undefined;
 
   /**
    * Where `runAsync` sends its work. Without one, `runAsync` runs the pipeline
@@ -63,7 +91,7 @@ export interface LayoutEngineOptions {
    * before deciding whether the run belongs off the main thread. See
    * {@link LayoutEngine.runAsync}.
    */
-  readonly worker?: LayoutPort;
+  readonly worker?: LayoutPort | undefined;
 }
 
 /**
@@ -71,10 +99,19 @@ export interface LayoutEngineOptions {
  *
  * Two entry points, one pipeline. `run` is the same call `layout` makes and
  * returns the same thing; `runAsync` returns a promise for it, and is where a
- * bound worker changes anything. Whether a run crossed a boundary is not
- * supposed to be visible in its result, and the tests hold both entry points to
- * that: the same graph through `run` and through `runAsync` over a real port
- * produces the same node boxes, the same routes and the same bounds.
+ * bound worker changes anything. Crossing a boundary is not supposed to be
+ * visible in a result, and the tests hold both entry points to that: the same
+ * graph through `run` and through `runAsync` over a real port produces the same
+ * node boxes, the same routes and the same bounds.
+ *
+ * WHEN THE SAME STAGES RUN ON BOTH SIDES, which is a condition rather than a
+ * given. Stages are functions and cannot cross, so the worker module names its
+ * own set, and an engine bound to a worker serving a different ranker will
+ * disagree with its own `run` and nothing will report it. That is not a defect
+ * to fix here: a caller who puts a different ranker in the worker has asked for
+ * a different layout. It is a thing to know when reaching for `run` as the
+ * fallback path, and the docs page says so where it suggests naming the stages
+ * in the worker module alone.
  */
 export interface LayoutEngine {
   /**
@@ -135,12 +172,16 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
   const pending = new Map<
     number,
     {
-      readonly graph: Graph;
+      /**
+       * The ids the run was SENT with, not the graph they came from. See
+       * {@link RunSnapshot}: the graph is the caller's and is mutable, and an
+       * answer means what it meant when it was asked for.
+       */
+      readonly snapshot: RunSnapshot;
       readonly resolve: (result: LayoutResult) => void;
       readonly reject: (error: unknown) => void;
     }
   >();
-  let nextRequest = 1;
   let listening = false;
 
   const receive = (event: { readonly data: unknown }): void => {
@@ -153,14 +194,28 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
     pending.delete(message.id);
     try {
       if (message.dagr === 'layout-result') {
-        waiting.resolve(decodeResult(message, waiting.graph));
+        waiting.resolve(decodeResult(message, waiting.snapshot));
       } else {
         waiting.reject(decodeFailure(message));
       }
     } catch (error) {
-      // `decodeResult` refusing a malformed answer. The run is the caller's, so
-      // the refusal is theirs to see rather than this listener's to swallow.
-      waiting.reject(error);
+      // A malformed answer. The run is the caller's, so the refusal is theirs
+      // to see rather than this listener's to swallow, and it arrives as this
+      // family's own member: `isLayoutMessage` checks a tag and not a shape, so
+      // an answer wearing the right tag with the wrong contents reaches the
+      // decoder and fails there in whatever way it fails. Wrapping is what
+      // keeps that a `WorkerTransportError` rather than a bare `TypeError`
+      // about a property of undefined, which would say nothing about where the
+      // run went wrong. Members of the family that arrive as themselves, which
+      // is what `decodeResult` raises for a length that disagrees, pass through.
+      waiting.reject(
+        error instanceof DagrLayoutError
+          ? error
+          : new WorkerTransportError(
+              `the answer to run ${String(message.id)} carried the right tag and could not be ` +
+                `read: ${error instanceof Error ? error.message : String(error)}`,
+            ),
+      );
     }
     idle();
   };
@@ -198,8 +253,11 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
       // Prepared, and so measured, on this thread: see `wire.ts` for why that
       // is the point rather than a step on the way to posting.
       const { message, transfer } = encodeRun(request, prepare(graph, config, nodeSize));
+      // The ids as they were at the moment of the send. `encodeRun` built them
+      // already, so the snapshot is those same arrays rather than a second walk.
+      const { nodes, edges, sources, targets } = message;
       const answer = new Promise<LayoutResult>((resolve, reject) => {
-        pending.set(request, { graph, resolve, reject });
+        pending.set(request, { snapshot: { nodes, edges, sources, targets }, resolve, reject });
       });
       listen(worker);
       try {
@@ -208,8 +266,13 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
         // A port that refuses the message never answers it, so the entry it
         // would have been matched against has to go with it. Nothing this
         // package puts in a message can be refused (ids are strings, the rest
-        // is numbers), which is what makes this the closed port and the
-        // terminated worker rather than a cloning failure.
+        // is numbers), so a throw here is the port object itself objecting.
+        //
+        // A CLOSED PORT AND A TERMINATED WORKER DO NOT COME THROUGH HERE:
+        // posting to either is a silent no-op in both runtimes, not a throw. So
+        // that run stays pending, which is the same outcome as a worker that is
+        // simply slow, and is the outcome "there is no timeout" chooses on
+        // purpose. A caller who needs to give up races the promise themselves.
         pending.delete(request);
         idle();
         throw error;

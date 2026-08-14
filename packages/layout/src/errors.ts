@@ -150,14 +150,25 @@ export class StageContractError extends DagrLayoutError {
  * This is the fourth culprit the family sorts by, and M2.10 is what made it a
  * culprit at all: before worker mode there was no boundary between the caller
  * and the pipeline, so a run either produced a result or threw one of the three
- * above, in the caller's own stack. Once a run crosses a port, three things
- * that are nobody's stage and nobody's config become possible: the port answers
- * with a message this package does not recognise, the two ends disagree about
- * the wire format because they were built from different versions, or the
- * stages on the far side threw something that is not a member of this family at
- * all. None of those is a config to fix or a stage contract that was broken
- * here, and none of them is an invariant of this package: the wiring is what is
+ * above, in the caller's own stack. Once a run crosses a port, two things that
+ * are nobody's stage and nobody's config become possible: the two ends disagree
+ * about the wire format, because they were built from different versions, or
+ * the stages on the far side threw something that is not a member of this
+ * family at all. Neither is a config to fix or a stage contract that was broken
+ * here, and neither is an invariant of this package: the wiring is what is
  * wrong, and the wiring is the caller's.
+ *
+ * A message this package does not RECOGNISE is deliberately not among them, and
+ * the distinction matters to anyone debugging with this class in hand. Both
+ * ends tag their messages and ignore what they cannot identify, because serving
+ * layout on a port does not claim the port and somebody else's traffic is
+ * allowed to be on it. So an answer that never arrives, or arrives unrecognised,
+ * is a promise that stays pending rather than an error: there is no timeout, for
+ * the reasons `engine.runAsync` gives. What this class catches is the answer
+ * that IS recognised and is wrong, a `layout-result` whose box, count or point
+ * lengths disagree with the graph it answers, because the alternative to
+ * checking is a layout with every id present, every number finite, and
+ * everything in the wrong place.
  *
  * A foreign error is the interesting case, and it is why `detail` carries text
  * rather than a cause. Structured cloning does not carry a class, so a

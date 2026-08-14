@@ -63,11 +63,20 @@ import type {
   Size,
 } from './types.js';
 
-/** A run on its way to a worker: the graph as ids, the config, the sizes. */
-export interface LayoutRunMessage {
-  readonly dagr: 'layout-run';
-  readonly id: number;
-
+/**
+ * The ids a run was sent with, in the order that fixes every buffer's meaning.
+ *
+ * The calling side keeps one of these for each run in flight and decodes the
+ * answer against it rather than against the `Graph` it was built from. The
+ * graph is MUTABLE and this package is animation first, so a node added or
+ * removed while a run is in flight is an ordinary sequence rather than a misuse.
+ * Decoding against the live graph would answer that sequence with a
+ * {@link WorkerTransportError} blaming the wire, or, when an addition and a
+ * removal happen to leave the counts alone, with coordinates mapped onto the
+ * wrong ids and no error at all. The snapshot costs one array of strings per
+ * run in flight and makes the answer mean what it meant when it was asked for.
+ */
+export interface RunSnapshot {
   /** Node ids in graph insertion order. Fixes the order of everything else. */
   readonly nodes: readonly NodeId[];
 
@@ -75,6 +84,12 @@ export interface LayoutRunMessage {
   readonly edges: readonly EdgeId[];
   readonly sources: readonly NodeId[];
   readonly targets: readonly NodeId[];
+}
+
+/** A run on its way to a worker: the graph as ids, the config, the sizes. */
+export interface LayoutRunMessage extends RunSnapshot {
+  readonly dagr: 'layout-run';
+  readonly id: number;
 
   /** The config already resolved, so both sides read the same numbers. */
   readonly config: ResolvedLayoutConfig;
@@ -287,33 +302,38 @@ export function encodeResult(id: number, result: LayoutResult): Encoded<LayoutRe
 }
 
 /**
- * Rebuilds a {@link LayoutResult} from the numbers, against the graph the run
- * was sent for.
+ * Rebuilds a {@link LayoutResult} from the numbers, against the ids the run was
+ * SENT with.
  *
- * Every count is checked against that graph rather than trusted, because the
+ * A {@link RunSnapshot} rather than the caller's `Graph`, and that is a
+ * correctness matter rather than a convenience: see the snapshot's own
+ * docstring. The graph a run came from can have changed by the time the answer
+ * lands, and an answer describes the graph that was asked about.
+ *
+ * Every count is checked against the snapshot rather than trusted, because the
  * failure this catches is two ends built from different versions of this
  * package, and the symptom without the check is a layout whose coordinates
  * belong to other nodes: every id present, every number finite, everything in
  * the wrong place.
  */
-export function decodeResult(message: LayoutResultMessage, graph: Graph): LayoutResult {
-  if (message.boxes.length !== graph.nodeCount * 4) {
+export function decodeResult(message: LayoutResultMessage, sent: RunSnapshot): LayoutResult {
+  if (message.boxes.length !== sent.nodes.length * 4) {
     throw new WorkerTransportError(
-      `a result for ${String(graph.nodeCount)} nodes arrived with ` +
+      `a result for ${String(sent.nodes.length)} nodes arrived with ` +
         `${String(message.boxes.length)} box numbers, and there are four per node`,
     );
   }
-  if (message.counts.length !== graph.edgeCount) {
+  if (message.counts.length !== sent.edges.length) {
     throw new WorkerTransportError(
-      `a result for ${String(graph.edgeCount)} edges arrived with ` +
+      `a result for ${String(sent.edges.length)} edges arrived with ` +
         `${String(message.counts.length)} point counts, and there is one per edge`,
     );
   }
   const nodes = new Map<NodeId, PositionedNode>();
   let box = 0;
-  for (const node of graph.nodes()) {
-    nodes.set(node.id, {
-      id: node.id,
+  for (const id of sent.nodes) {
+    nodes.set(id, {
+      id,
       x: at(message.boxes, box, 'a node box'),
       y: at(message.boxes, box + 1, 'a node box'),
       width: at(message.boxes, box + 2, 'a node box'),
@@ -323,7 +343,7 @@ export function decodeResult(message: LayoutResultMessage, graph: Graph): Layout
   }
   const edges = new Map<EdgeId, RoutedEdge>();
   let point = 0;
-  for (const [index, edge] of [...graph.edges()].entries()) {
+  for (const [index, id] of sent.edges.entries()) {
     const count = at(message.counts, index, 'a point count');
     const route: Point[] = [];
     for (let step = 0; step < count; step += 1) {
@@ -333,7 +353,12 @@ export function decodeResult(message: LayoutResultMessage, graph: Graph): Layout
       });
       point += 2;
     }
-    edges.set(edge.id, { id: edge.id, source: edge.source, target: edge.target, points: route });
+    edges.set(id, {
+      id,
+      source: at(sent.sources, index, 'an edge source'),
+      target: at(sent.targets, index, 'an edge target'),
+      points: route,
+    });
   }
   if (point !== message.points.length) {
     throw new WorkerTransportError(
