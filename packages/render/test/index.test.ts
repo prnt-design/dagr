@@ -13,7 +13,7 @@ import * as api from '../src/index.js';
  * package unusable in any server-rendered application.
  */
 describe('@dagr/render', () => {
-  it('exports exactly the runtime surface, through M4.11', () => {
+  it('exports exactly the runtime surface, through M4.12', () => {
     // Types are erased, so only the runtime exports can be checked here. The
     // type surface is exercised by the other files in the suite importing from
     // it.
@@ -28,6 +28,8 @@ describe('@dagr/render', () => {
       'RendererDisposedError',
       'createHtmlOverlay',
       'createRenderer',
+      'createRichNodes',
+      'measureHtmlSizes',
     ]);
   });
 

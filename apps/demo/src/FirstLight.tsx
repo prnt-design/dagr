@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
-import { Camera2D, createHtmlOverlay, createRenderer } from '@dagr/render';
-import type { Renderer, Vec2, ViewportSize, WorldBounds } from '@dagr/render';
+import { Camera2D, createHtmlOverlay, createRenderer, createRichNodes } from '@dagr/render';
+import type { RichNodeTier, Renderer, Vec2, ViewportSize, WorldBounds } from '@dagr/render';
 import {
   INITIAL_ZOOM,
   MAX_ZOOM,
@@ -10,7 +10,7 @@ import {
   initialZoomFromHash,
   wheelZoomFactor,
 } from './camera-input.js';
-import { LABEL_MIN_SCREEN_WIDTH, LADDER_SHAPES } from './ladder.js';
+import { CARD_MIN_SCREEN_WIDTH, LABEL_MIN_SCREEN_WIDTH, LADDER_SHAPES } from './ladder.js';
 import type { LadderShape } from './ladder.js';
 
 /**
@@ -25,10 +25,12 @@ import type { LadderShape } from './ladder.js';
  * {@link initialZoomFromHash}) so the committed screenshots are reproducible.
  *
  * M4.11 added a second thing over the same camera: an HTML overlay, from
- * `@dagr/render`, labelling each ladder shape once it is at least
- * {@link LABEL_MIN_SCREEN_WIDTH} CSS pixels wide. It is the demo's first text,
- * and it arrives without a glyph pipeline: the GPU draws the shapes and the DOM
- * draws the tens of readable things, with the camera keeping them registered.
+ * `@dagr/render`, and M4.12 made it three tiers of one. Under
+ * {@link LABEL_MIN_SCREEN_WIDTH} CSS pixels wide a shape gets nothing and the
+ * GPU has it to itself; from there to {@link CARD_MIN_SCREEN_WIDTH} it gets a
+ * title tag; above that, a card. It is the demo's only text, and it arrives
+ * without a glyph pipeline: the GPU draws the shapes and the DOM draws the tens
+ * of readable things, with the camera keeping them registered.
  *
  * There is no test file for this component, and that is the same decision
  * `@dagr/render` documents for its own renderer rather than a gap. Everything
@@ -58,42 +60,103 @@ interface CameraReadout {
   readonly center: Vec2;
   readonly world: WorldBounds;
   readonly viewport: ViewportSize;
-  /** How many overlay elements the last sync left attached. */
+  /** How many overlay elements the last sync left attached, across all tiers. */
   readonly labels: number;
 }
 
 /**
- * One label for one ladder shape: the element the overlay asks for when the
- * shape crosses {@link LABEL_MIN_SCREEN_WIDTH} on screen.
+ * What each tier's `create` built, keyed by the element it built it into.
  *
- * The OUTER element is what the overlay positions and sizes, so it is the
- * shape's world box and it scales with the zoom. The INNER element carries the
- * text and counter-scales through `--dagr-overlay-inv-zoom`, which the overlay
- * publishes on its layer whenever the zoom changes. That split is the answer to
- * a label wanting two things at once: to be GATED by how big its node is on
- * screen, which needs a world box, and to be READ at a constant size, which a
- * box cannot do. The stylesheet does the second half, so nothing here reads the
+ * `update` is handed the root and nothing else, so the alternative is a
+ * `querySelector` per field on every bind. That is not free: `update` runs on
+ * every pop-in during a pan, not only when data changes, so a five field card
+ * would be five tree walks per shape per pass across it. A `WeakMap` keyed by
+ * the root holds nothing alive that the pool has dropped.
+ */
+const labelRefs = new WeakMap<HTMLElement, { name: HTMLElement; detail: HTMLElement }>();
+const cardRefs = new WeakMap<HTMLElement, { name: HTMLElement; kind: HTMLElement; rows: HTMLElement }>();
+
+/** An element with a class, which is most of what building these tiers is. */
+function div(className: string, tag: 'div' | 'dl' | 'span' = 'div'): HTMLElement {
+  const element = document.createElement(tag);
+  element.className = className;
+  return element;
+}
+
+/**
+ * The two tiers the ladder gets, and the split every rich node is built on.
+ *
+ * `create` returns a BLANK element of the tier's shape and `update` fills it in
+ * with one shape's content. That is what lets a tier pool its elements: a card
+ * leaving the view goes back to the pool and the next shape to reach card tier
+ * gets it with new content rather than a new subtree. It also means `update`
+ * has to REPLACE everything it wrote last time, since the element it is handed
+ * may have belonged to a different shape a frame ago.
+ *
+ * In both tiers the OUTER element is what the overlay positions and sizes, so
+ * it is the shape's world box and scales with the zoom, and the INNER element
+ * counter-scales through `--dagr-overlay-inv-zoom` so its text is the same
+ * number of CSS pixels at every zoom. That split is the answer to a label
+ * wanting two things at once: to be GATED by how big its node is on screen,
+ * which needs a world box, and to be READ at a constant size, which a box
+ * cannot do. The stylesheet does the second half, so nothing here reads the
  * camera.
  */
-function createLabel(shape: LadderShape): HTMLElement {
-  const box = document.createElement('div');
-  box.className = 'stage__label';
-
-  const text = document.createElement('div');
-  text.className = 'stage__label-text';
-
-  const name = document.createElement('span');
-  name.className = 'stage__label-name';
-  name.textContent = shape.label;
-
-  const detail = document.createElement('span');
-  detail.className = 'stage__label-detail';
-  detail.textContent = shape.detail;
-
-  text.append(name, detail);
-  box.appendChild(text);
-  return box;
-}
+const LADDER_TIERS: readonly RichNodeTier<LadderShape>[] = [
+  {
+    name: 'label',
+    minScreenWidth: LABEL_MIN_SCREEN_WIDTH,
+    maxScreenWidth: CARD_MIN_SCREEN_WIDTH,
+    create: () => {
+      const box = div('stage__label');
+      const text = div('stage__label-text');
+      const name = div('stage__label-name', 'span');
+      const detail = div('stage__label-detail', 'span');
+      text.append(name, detail);
+      box.appendChild(text);
+      labelRefs.set(box, { name, detail });
+      return box;
+    },
+    update: (element, node) => {
+      const refs = labelRefs.get(element);
+      if (refs === undefined) return;
+      refs.name.textContent = node.data.label;
+      refs.detail.textContent = node.data.detail;
+    },
+  },
+  {
+    name: 'card',
+    minScreenWidth: CARD_MIN_SCREEN_WIDTH,
+    create: () => {
+      const box = div('stage__label');
+      const card = div('stage__card');
+      const head = div('stage__card-head');
+      const name = div('stage__label-name', 'span');
+      const kind = div('stage__card-kind', 'span');
+      head.append(name, kind);
+      const rows = div('stage__card-rows', 'dl');
+      card.append(head, rows);
+      box.appendChild(card);
+      cardRefs.set(box, { name, kind, rows });
+      return box;
+    },
+    update: (element, node) => {
+      const refs = cardRefs.get(element);
+      if (refs === undefined) return;
+      refs.name.textContent = node.data.label;
+      refs.kind.textContent = node.data.kind;
+      // Replaced wholesale rather than appended to, because this element may
+      // have been a different shape's card one frame ago.
+      refs.rows.replaceChildren();
+      for (const [key, value] of node.data.card) {
+        refs.rows.append(
+          Object.assign(document.createElement('dt'), { textContent: key }),
+          Object.assign(document.createElement('dd'), { textContent: value }),
+        );
+      }
+    },
+  },
+];
 
 /**
  * The canvas's size in CSS pixels and the current device pixel ratio, or `null`
@@ -206,16 +269,15 @@ export function FirstLight(): JSX.Element {
      * which already clips (`overflow: hidden` in `styles.css`).
      */
     const overlay = createHtmlOverlay({ parent: container, camera });
-    for (const shape of LADDER_SHAPES) {
-      overlay.add({
-        placement: {
-          kind: 'box',
-          bounds: shape.bounds,
-          minScreenWidth: LABEL_MIN_SCREEN_WIDTH,
-        },
-        create: () => createLabel(shape),
-      });
-    }
+
+    // The shapes' sizes are declared rather than measured, which is the default
+    // the design argues for: this content is templated per shape, so its box is
+    // known by construction and it is the SHAPE's box anyway. `measureHtmlSizes`
+    // is for the other case, where a node's size is a fact about its text.
+    const richNodes = createRichNodes<LadderShape>({ overlay, tiers: LADDER_TIERS });
+    richNodes.setNodes(
+      LADDER_SHAPES.map((shape) => ({ id: shape.label, bounds: shape.bounds, data: shape })),
+    );
 
     /**
      * Copies the camera's state into React, for {@link Overlay}.
@@ -415,6 +477,7 @@ export function FirstLight(): JSX.Element {
       // no GPU resource, so nothing has to be awaited before its two divs can
       // go. Leaving it would show a second StrictMode mount two layers of
       // labels, one of them belonging to a camera nobody is driving any more.
+      richNodes.dispose();
       overlay.dispose();
       observer.disconnect();
       ratioQuery?.removeEventListener('change', onPixelRatioChange);
@@ -509,7 +572,7 @@ function Overlay({ readout }: { readout: CameraReadout | null }): JSX.Element {
         looks the same as a picture that never had any.
       */}
       <p className="stage__readout-row">
-        <span className="stage__readout-key">labels</span>
+        <span className="stage__readout-key">overlay</span>
         {labels} of {LADDER_SHAPES.length} in DOM
       </p>
       {/*

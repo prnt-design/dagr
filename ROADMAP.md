@@ -3050,7 +3050,10 @@ it settled rather than restating the argument.
   the demo has until M4.4 gives it a laid-out graph, with the label tier's own
   screenshot committed rather than deferred to M4.12's three-tier one, because
   the `apps/demo` tag on this line is what the M4 header means by a task that
-  lands a scene.
+  lands a scene. (Those two frames were REPLACED by M4.12's a day later, when
+  the demo they showed stopped existing. Nothing about this task's claims went
+  with them: they showed the label tier and the counter-scale, and M4.12's show
+  the same two things with a third tier in the frame.)
   DECIDED IN THE SPEC, and these are the ones later tasks inherit rather than
   re-argue. IT LIVES IN `@dagr/render` and is exported from it. M4.6 NAMED that
   option for the spring integrator to keep a choice open rather than to settle
@@ -3164,7 +3167,7 @@ it settled rather than restating the argument.
   three's automatic fallback is what drew the committed frames. That is a fact
   about the capture and about M4.9's eventual parity check, not about the
   overlay, which never touches a GPU.
-- [ ] **M4.12** (`@dagr/render`, `apps/demo`) Rich nodes: a node's visual as
+- [x] **M4.12** (`@dagr/render`, `apps/demo`) Rich nodes: a node's visual as
   arbitrary HTML sized to its layout box, with the campaign plan's three-tier
   semantic zoom (instanced shape below ~24 CSS px, title label to ~160 px, full
   card above) as library policy rather than demo code. Demo consumer: cards on
@@ -3200,10 +3203,56 @@ it settled rather than restating the argument.
   staying synchronous because `nodeSize` is.
   ALSO HERE, from the direction plan: a written recommendation on in-canvas
   text (an MSDF atlas) for the label tier at M4.10 scale, spike only, with the
-  element count where the DOM label tier stops being honest measured on the
-  demo rather than reasoned about. The card tier is HTML by nature and should
+  element count where the DOM label tier stops being honest measured rather than
+  reasoned about. MEASURED, in `bench/browser/`, which is a browser harness and
+  deliberately NOT part of `bench:ci` for the reason M4.10 already gives about
+  GPU frame times. Not on the demo page, which has six shapes and cannot make a
+  thousand labels: the harness runs the library's own modules with the demo's
+  label markup. THE OVERLAY'S OWN WORK IS NOT WHAT RUNS OUT (`sync` is 0.2 to
+  0.6 ms at a thousand elements) AND NEITHER IS HOLDING THE ELEMENTS (744 of
+  them with a still camera hold 60 fps). What costs is repainting text under a
+  MOVING transform, about 0.2 ms per element per frame on this box, and
+  promoting the layer removes most of it: 357 elements go from 83.3 ms to 16.7,
+  at the price of text that softens under a zoom, which is why the overlay
+  refuses to set `will-change` for a caller and now says what setting it buys.
+  The other bound is legibility and it is arithmetic: a 100 by 18 CSS pixel
+  label tiles a 1200 by 800 viewport 530 times with no gaps, so a readable scene
+  shows one or two hundred, which is the same order as where the frame budget
+  goes and is what makes the default cap of 200 a number rather than a guess. The card tier is HTML by nature and should
   stay DOM; the label tier is one line per node, which is what an atlas does
   well, and an atlas takes the tier over by taking its gate over.
+  SHIPPED, and three things worth carrying forward. WHAT THE TIERS COST is
+  entries scaling with tiers times nodes: the overlay's per-frame cull tests
+  every entry, so a 2,800 node campaign over three tiers scans 8,400 candidates
+  a frame rather than 2,800, each a few comparisons with no allocation. What
+  does NOT triple is what reaches the cap or the DOM, because the gates are
+  disjoint, and `createRichNodes` rejects overlapping gates rather than trusting
+  a caller with the invariant the cap depends on. The alternative, one entry per
+  node with tier selection inside the overlay, saves that scan and buys a
+  level-of-detail concept every consumer pays for; if the scan ever matters the
+  fix is a spatial index in `sync`, which helps both shapes equally.
+  THE POOL DEPENDS ON AN
+  ORDERING M4.11 ONLY IMPLIES: one sync detaches everything that left the view
+  BEFORE it creates anything that entered, so an element released this frame is
+  already back in its pool when the next entry asks for one. Reverse those two
+  passes in `html-overlay.ts` and pooling silently stops working, with nothing
+  failing except an allocation count nobody is watching. It is asserted in
+  `test/rich-nodes.test.ts` by panning one node out and another in on the same
+  sync and checking that `create` ran once.
+  A LAYOUT LENGTH ON A COUNTER-SCALED ELEMENT IS STILL IN WORLD UNITS, which
+  cost this task a frame to find: the demo's card used `margin: 0.5rem` for its
+  inset and landed 800 CSS pixels away at zoom 100, because margin is applied
+  before the element's own transform. An inset composed INTO the transform after
+  the counter-scale is 8 CSS pixels at every zoom. Padding and borders inside
+  the scaled element are fine, since they are inside something already scaled
+  back. The demo's stylesheet carries that as a comment, and it is the first
+  thing to check when overlay content is in the wrong place by a factor of the
+  zoom.
+  The three tiers are one committed frame: at zoom 4 the 4 unit circle is 16 CSS
+  pixels and carries nothing, the 10 unit rect is 40 and carries a tag, and the
+  100 unit rect is 400 and carries a card. The M4.11 label-only frames were
+  replaced rather than added to, since the demo they showed no longer exists and
+  the M4 header caps what `assets/` may grow by.
 
 ## M5: React + demo = v0.1
 

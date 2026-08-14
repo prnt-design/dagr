@@ -1,0 +1,137 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  html, body { margin: 0; background: #0b0d10; color: #d7dbe1; font: 12px ui-monospace, monospace; }
+  #stage { position: relative; width: 1200px; height: 800px; overflow: hidden; }
+  .lbl { position: absolute; }
+  .lbl-text {
+    position: absolute; left: 0; bottom: 100%;
+    transform-origin: 0 100%;
+    transform: scale(var(--dagr-overlay-inv-zoom, 1));
+    padding: 2px 6px; border: 1px solid rgba(255,255,255,0.09);
+    background: rgba(7,8,10,0.82); white-space: nowrap;
+  }
+  .lbl-name { color: #ffb703; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script type="module">
+import { Camera2D } from '../../packages/render/dist/camera.js';
+import { createHtmlOverlay } from '../../packages/render/dist/html-overlay.js';
+import { createRichNodes } from '../../packages/render/dist/rich-nodes.js';
+
+const stage = document.getElementById('stage');
+
+function grid(count) {
+  const cols = Math.ceil(Math.sqrt(count));
+  const nodes = [];
+  for (let i = 0; i < count; i += 1) {
+    const cx = (i % cols) * 160;
+    const cy = Math.floor(i / cols) * 80;
+    nodes.push({
+      id: `n${i}`,
+      bounds: { minX: cx, minY: -cy - 40, maxX: cx + 120, maxY: -cy },
+      data: { title: `node ${i}`, detail: '120 x 40' },
+    });
+  }
+  return nodes;
+}
+
+const refs = new WeakMap();
+const tier = {
+  name: 'label',
+  // No gate: the gate is not what this harness measures, and holding it at 24
+  // would cap the element count at whatever a screen can show at readable size,
+  // which is the other half of the question and is answered by arithmetic.
+  minScreenWidth: 0,
+  create: () => {
+    const box = document.createElement('div');
+    box.className = 'lbl';
+    const text = document.createElement('div');
+    text.className = 'lbl-text';
+    const name = document.createElement('span');
+    name.className = 'lbl-name';
+    const detail = document.createElement('span');
+    text.append(name, detail);
+    box.appendChild(text);
+    refs.set(box, { name, detail });
+    return box;
+  },
+  update: (element, node) => {
+    const r = refs.get(element);
+    r.name.textContent = node.data.title;
+    r.detail.textContent = ` ${node.data.detail}`;
+  },
+};
+
+const median = (v) => [...v].sort((a, b) => a - b)[Math.floor(v.length / 2)];
+const p95 = (v) => [...v].sort((a, b) => a - b)[Math.min(v.length - 1, Math.floor(v.length * 0.95))];
+
+async function run(count, cap, zoom, panScale = 1, willChange = false, frames = 90, warmup = 30) {
+  stage.replaceChildren();
+  const camera = new Camera2D({
+    zoom,
+    center: { x: 600, y: -400 },
+    viewport: { width: 1200, height: 800, devicePixelRatio: 1 },
+  });
+  const overlay = createHtmlOverlay({ parent: stage, camera, maxElements: cap });
+  const nodes = createRichNodes({ overlay, tiers: [tier] });
+  // The trade the overlay refuses to make for a caller: promoting the layer
+  // makes a pan a compositor job and rasterises the text once, so it goes soft
+  // under a zoom.
+  if (willChange) stage.firstElementChild.firstElementChild.style.willChange = 'transform';
+  nodes.setNodes(grid(count));
+
+  const syncMs = [];
+  const frameMs = [];
+  let previous = 0;
+  let active = 0;
+
+  await new Promise((resolve) => {
+    let i = 0;
+    const step = (now) => {
+      if (previous !== 0) frameMs.push(now - previous);
+      previous = now;
+      camera.panByScreen(-2 * panScale, -1 * panScale);
+      const t0 = performance.now();
+      overlay.sync();
+      syncMs.push(performance.now() - t0);
+      active = overlay.activeCount;
+      i += 1;
+      if (i < frames) requestAnimationFrame(step);
+      else resolve();
+    };
+    requestAnimationFrame(step);
+  });
+
+  nodes.dispose();
+  overlay.dispose();
+
+  const ks = syncMs.slice(warmup);
+  const kf = frameMs.slice(warmup);
+  return {
+    count,
+    cap,
+    zoom,
+    pan: panScale,
+    willChange,
+    active,
+    syncMedian: Number(median(ks).toFixed(3)),
+    syncP95: Number(p95(ks).toFixed(3)),
+    frameMedian: Number(median(kf).toFixed(2)),
+    frameP95: Number(p95(kf).toFixed(2)),
+  };
+}
+
+window.runBench = async (plan) => {
+  const results = [];
+  await run(200, 200, 1, 1, false, 60, 30);
+  for (const step of plan) results.push(await run(step.count, step.cap, step.zoom ?? 1, step.pan ?? 1, step.willChange ?? false));
+  return results;
+};
+</script>
+</body>
+</html>

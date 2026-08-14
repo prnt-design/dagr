@@ -12,7 +12,7 @@ sidebar_position: 4
 layout and the next, and, from M4.3, one draw call per shape family. Today it is
 one per shape, which is six.
 
-This page describes the package as of M4.11. Rounded rectangles and circles are
+This page describes the package as of M4.12. Rounded rectangles and circles are
 on screen, drawn as signed distance fields, and there is an HTML overlay for the
 text a signed distance field cannot draw. What is real is the seam everything
 else plugs into: the `Renderer` interface, the camera, the distance fields and
@@ -719,19 +719,27 @@ overlay.sync();
 overlay.dispose();
 ```
 
-![The demo at zoom 4: the 10 unit rect and the 100 unit rect each carry a
-label, and the 4 unit circle between them, 16 CSS pixels wide, carries
-nothing](../../assets/screenshots/m4.11-overlay-labels-4x.png)
+![The demo at zoom 4: the 4 unit circle carries nothing, the 10 unit rect
+carries a one line tag, and the 100 unit rect carries a full card of
+fields](../../assets/screenshots/m4.12-rich-nodes-three-tiers.png)
 
-The two committed frames are the whole demonstration, and they are one gesture
-apart. Above is zoom 4, where the readout says two labels of six are in the DOM:
-the circle beside the small rect is 16 CSS pixels wide, under the 24 pixel gate,
-so the GPU draws it and it says nothing. Below is zoom 100, where the same
-rect's box has grown from 40 CSS pixels to 1000 and its label is the same size
-it was.
+That is all three tiers in one frame, at zoom 4, and the readout says two
+overlay elements of six. The 4 unit circle is 16 CSS pixels wide, under the 24
+pixel gate, so the GPU has it to itself and it says nothing. The 10 unit rect is
+40 pixels and carries a tag. The 100 unit rect is 400 pixels and carries a card.
+Nothing in the demo decides that: each shape registered one entry per tier, and
+the gates picked.
 
-![The same demo at zoom 100: the rect fills the canvas and its label is the
-same number of pixels as before](../../assets/screenshots/m4.11-overlay-labels-100x.png)
+![The same demo at zoom 100: the smallest rect fills the canvas and its card,
+the same size it was, sits inside its top-left
+corner](../../assets/screenshots/m4.12-rich-nodes-card.png)
+
+Zoom in to 100 and the 10 unit rect's box has grown from 40 CSS pixels to 1000,
+its tag has been replaced by its card, and the card is the same number of pixels
+it would be at any other zoom. That is the counter-scale, and it is also why the
+card sits INSIDE the box's top-left corner rather than above it: by the time a
+box is a thousand pixels wide its top edge is off screen, and anything anchored
+above it is off screen too.
 
 Both are 1102 by 598 CSS pixels of canvas at device pixel ratio 1, captured
 through the WebGL2 fallback rather than WebGPU, which is what a headless
@@ -821,15 +829,178 @@ Everything else is tested: the transform composition, the anchor percentages,
 the CSS number formatting (CSS has no exponential notation, and a fixed decimal
 count would round a small zoom's scale to zero), the gate, the culling, the
 rebase rule and the cap ranking are pure functions with a suite; the element
-lifetime, eviction, `create` and `release`, and the lifecycle run against jsdom.
+lifetime, eviction, `create` and `release`, the tier bookkeeping and the
+lifecycle run against jsdom.
+
+One more thing jsdom cannot do, since it bears on the section after next: it has
+no layout engine, so `offsetWidth` and `offsetHeight` there are always zero.
+`measureHtmlSizes` is therefore tested for its plumbing (everything mounted
+before anything is read, the container styled and then removed, ids mapped to
+the elements they came from) with the sizes themselves stubbed. That a real
+browser returns the size the content will have where it is drawn is not
+established anywhere in this repo.
+
+### Rich nodes, and why there is no tier machinery
+
+`createRichNodes` binds a set of nodes to an overlay, and the whole of semantic
+zoom is that **a node registers one entry per tier, all with the same bounds and
+adjacent gates**. Disjoint half-open gates mean at most one of them is ever
+visible, so the bottom tier is the ABSENCE of an entry, which is the GPU drawing
+the shape. There is no level-of-detail machinery anywhere in the overlay, and
+the three tiers the demo shows are three lines of configuration.
+
+```ts
+import { createRichNodes } from '@dagr/render';
+
+const nodes = createRichNodes({
+  overlay,
+  tiers: [
+    { name: 'label', minScreenWidth: 24, maxScreenWidth: 160, create, update },
+    { name: 'card', minScreenWidth: 160, create, update },
+  ],
+});
+
+// Diffs by id: new nodes register, gone nodes release, moved boxes are
+// re-placed, and a node whose `data` is a NEW REFERENCE is re-rendered if it
+// currently has an element on screen.
+nodes.setNodes(laidOutNodes);
+```
+
+`create` returns a blank element and `update` fills it in, and the split is what
+lets a tier pool its elements: a card leaving the view goes back to its pool and
+the next node to reach card tier gets that element with new content rather than
+a fresh subtree. It relies on an ordering the overlay guarantees, that one
+`sync()` detaches everything that left the view before it creates anything that
+entered it. Two things follow for a tier's own code. `update` has to REPLACE
+what it wrote last time, since the element it is handed may have belonged to a
+different node a frame ago. And `update` runs on every pop-in during a pan
+rather than only when data changes, so a tier that wants its own children back
+should stash them in a `WeakMap` keyed by the root in `create`, instead of
+re-querying the DOM each time.
+
+`setNode` is beside `setNodes` for the single-node case: a hover, a selection,
+one field going live. Moving one node through the bulk setter means allocating a
+record per node and walking every tier to change one, which is the wrong shape
+at a few thousand nodes. `setNodes` stays the bulk path and the only one that
+can remove.
+
+Tier gates have to be disjoint, and `createRichNodes` rejects overlapping ones
+rather than trusting it. Two elements on one node would make the overlay's cap
+count entries rather than nodes, and a card would draw under its own title. A
+caller who genuinely wants two elements on one node at one zoom registers a
+second binding, which keeps both intentions visible in the code.
+
+The cost of putting tiers in the entries is that entries scale with tiers times
+nodes, so a 2,800 node scene over three tiers scans 8,400 candidates a frame
+rather than 2,800. That scan is a few comparisons each and allocates nothing.
+What does not triple is what reaches the cap or the DOM, because the gates are
+disjoint.
+
+Content in a tier faces the same choice the demo's labels do: it is laid out in
+world units, so a card that should stay readable counter-scales through
+`--dagr-overlay-inv-zoom`. One thing to know before writing that CSS, because it
+is invisible until it is wrong: a LAYOUT length on the counter-scaled element
+(`margin`, `left`, `top`) is still in world units, so a `0.5rem` margin is 8
+world units and throws the card 800 CSS pixels away at zoom 100. An inset
+composed into the transform after the scale is 8 CSS pixels at every zoom.
+
+### Sizes for layout: declare, or measure in one flush
+
+`@dagr/layout` takes sizes through `LayoutConfig.nodeSize`, called once per node
+during prepare and on the caller's thread even when the run itself is in a
+worker. So a DOM measurement can feed a layout, and the recommendation is to
+declare where you can and measure only where you cannot. Declaring is right when
+content is templated per node kind, where the size is known by construction and
+2,800 offscreen mounts at startup buy nothing. Measuring is right when the size
+is a fact about the text, which no constant stands in for.
+
+`measureHtmlSizes` is the second case, and it batches:
+
+```ts
+const sizes = measureHtmlSizes(
+  nodes.map((node) => ({ id: node.id, create: () => buildCard(node), maxWidth: 220 })),
+  { parent: stage },
+);
+layout({ graph, config: { nodeSize: (node) => sizes.get(node.id) } });
+```
+
+It mounts everything, then reads everything. Interleaving a mount and a read per
+node forces a layout flush per node, which is the classic quadratic that turns a
+startup into seconds. Three details it makes the caller's business: `parent` is
+required, because inherited font and custom properties decide the answer and a
+card measured under the wrong styles is measured wrong silently; `maxWidth` is
+how wrapping content says what width it will finally have, since an
+unconstrained paragraph measures as one very long line; and a web font that has
+not loaded measures in the fallback face, so await `document.fonts.ready` first.
+
+It reads `offsetWidth` and `offsetHeight` rather than a bounding rect, and the
+difference matters here more than it usually would. A rect is measured after
+every transform in the ancestor chain, and the section above teaches content to
+carry `transform: scale(var(--dagr-overlay-inv-zoom))`, so a rect would return a
+card's counter-scaled size and a card measured inside a layer would come back
+multiplied by the zoom. Neither is the box a layout should reserve. The cost is
+that the sizes are integers, which against a default `nodeSep` of 50 world units
+is not a number anybody can see.
+
+## In-canvas text: when the DOM stops being the answer
+
+The overlay exists because this package has no glyph pipeline, and the question
+it leaves open is when it should get one. That was measured rather than argued,
+with `bench/browser/label-throughput.html`, which drives the real overlay in a
+real browser. The full table and the procedure are in `bench/browser/README.md`;
+the numbers below are from the dispatch box, headless Chromium with NO GPU and
+software rasterisation, at 1200 by 800 CSS pixels and device pixel ratio 1.
+
+| Elements attached | `sync` median | Frame, panning | Frame, still | Frame, panning, promoted |
+| --- | --- | --- | --- | --- |
+| 120 | 0.2 ms | 33.3 ms | | |
+| 357 | 0.2 ms | 83.3 ms | | 16.7 ms |
+| 744 | 0.6 ms | | 16.7 ms | |
+| 1073 | 0.5 ms | 216.7 ms | | 83.3 ms |
+
+Every frame figure is a multiple of 16.7 ms because the browser paints on a
+vsync tick, so a row is a frame count rather than a time: 83.3 ms is five ticks.
+Run to run, a row moves by one tick.
+
+**The overlay's own work is not what runs out.** `sync()` costs 0.2 to 0.6 ms at
+up to a thousand elements, which is under 4% of a 16.7 ms frame. Neither is
+holding the elements: 744 of them with a still camera hold sixty frames a
+second. What costs is repainting text under a MOVING transform, about 0.2 ms per
+element per frame on this box, and that is the number the label tier is bounded
+by. Promoting the layer with `will-change: transform` removes most of it, taking
+357 elements from 83.3 ms to 16.7, at the price this page names two sections up:
+a promoted layer is rasterised once and then scaled, so the text softens under a
+zoom. The overlay does not set it, and a consumer who pans far more than they
+zoom now knows what setting it themselves buys.
+
+The other bound is legibility, and it is arithmetic rather than measurement. A
+label around 100 by 18 CSS pixels tiles a 1200 by 800 viewport 530 times with no
+gaps at all, so a scene a person can read shows one or two hundred. That is the
+same order as where the frame budget goes, which is why the default element cap
+of 200 is not an awkward number.
+
+### The recommendation
+
+**Keep the DOM for both tiers, and schedule an atlas when a scene wants names on
+thousands of nodes while the camera is moving.** That is a real case rather than
+a hypothetical: it is M4.10's target, ten thousand animating nodes, and if that
+scene is ever asked to show names the measurement above says the DOM cannot,
+promoted or not. It is also a different visual product from the label tier as it
+stands, closer to a wall of text as texture than to a hundred readable tags.
+
+The card tier should stay DOM permanently. Its content is arbitrary markup with
+links, wrapped prose, images and per-kind structure, and reimplementing that over
+a glyph atlas is reimplementing a browser. At card zoom only tens of nodes fit on
+screen, so it never approaches a count where any of this bites.
+
+Nothing in the overlay's design changes either way, which is the useful part: the
+label tier is one entry per node with a gate, so an atlas takes the tier over by
+taking its gate over, and the tier above and the tier below stay exactly as they
+are.
 
 ## What is not here yet
 
 Most of it. M4.2 is six shapes, drawn correctly, one draw call each.
-
-- Rich nodes: a node's visual as arbitrary HTML sized to its layout box, with
-  the three-tier semantic zoom (shape, label, card) as library policy, and the
-  measurement helper that feeds authored content back into layout (M4.12).
 
 - Instancing, so ten thousand nodes are one draw call rather than ten thousand
   (M4.3). This is also the task that chooses between one material with a

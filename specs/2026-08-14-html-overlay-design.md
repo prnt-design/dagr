@@ -1,8 +1,9 @@
 # HTML overlay and rich nodes
 
 Date: 2026-08-14
-Status: proposed, implementation in progress on
-`agt_8829415e7e5c/html-overlay-rich-nodes`
+Status: implemented. M4.11 shipped as PR #25 and M4.12 as PR #26; this file is
+kept as the argument behind them, revised where the implementation disagreed
+with it (see the increments table and the measurement at the end).
 Asked for by: Nii, 2026-08-14, on reading the campaign demo plan
 (`plans/2026-08-14-campaign-demo.md`). The direction is
 `plans/2026-08-14-html-overlay.md`; this spec is the design that plan asked
@@ -610,7 +611,7 @@ entry.
 | 1 | This spec, and the ROADMAP entries for the two tasks below | M4.11, M4.12 added |
 | 2 | `createHtmlOverlay`, `overlay-math.ts`, the errors base, the jsdom tests, labels on the demo's ladder, a committed screenshot, `docs/docs/render.md` section | M4.11 |
 | 3 | `createRichNodes`, `measureHtmlSizes`, three-tier cards on the demo, a committed screenshot per tier | M4.12 |
-| 4 | The in-canvas text recommendation below, with its measurement | M4.12 |
+| 4 | The in-canvas text recommendation below, with its measurement, and the browser harness that took it | M4.12 |
 
 Both M4.11 and M4.12 are tagged `apps/demo`, and the M4 header says a task so
 tagged lands a scene and a screenshot without repeating the requirement per
@@ -636,10 +637,38 @@ Deliverable from the direction plan, spike only. At what visible-node count
 does the DOM label tier stop being honest, and what would an MSDF atlas task
 cost?
 
-The measurement, taken on the demo page rather than reasoned about: raise the
-element cap, drive a pan at a fixed zoom, and record the frame time against the
-number of active label elements. Procedure and numbers land with increment 4;
-this section states the shape of the answer and will carry the numbers.
+MEASURED, and the numbers are below. The harness is
+`bench/browser/label-throughput.html`, which drives the real overlay in a real
+browser; `bench/browser/README.md` carries the procedure and the full table. It
+is NOT the demo page, and that is a deviation from what this section first
+promised, for a plain reason: the demo has six shapes, so it cannot produce a
+thousand labels. The harness uses the library's own modules and the demo's label
+markup, at 1200 by 800 CSS pixels, on the dispatch box, in headless Chromium
+with no GPU and software rasterisation.
+
+| Elements attached | `sync` median | Frame, panning | Frame, still | Frame, panning, promoted |
+| --- | --- | --- | --- | --- |
+| 120 | 0.2 ms | 33.3 ms | | |
+| 357 | 0.2 ms | 83.3 ms | | 16.7 ms |
+| 744 | 0.6 ms | | 16.7 ms | |
+| 1073 | 0.5 ms | 216.7 ms | | 83.3 ms |
+
+Every frame figure is a multiple of 16.7 ms because the browser paints on a
+vsync tick, so a row is a frame count rather than a time: 83.3 ms is five ticks.
+Run to run, a row moves by one tick.
+
+**The overlay's own work is not what runs out**: `sync()` is 0.2 to 0.6 ms at a
+thousand elements, under 4% of a frame. Neither is holding the elements, since
+744 of them with a still camera hold sixty frames a second. What costs is
+repainting text under a MOVING transform, about 0.2 ms per element per frame
+here, and promoting the layer removes most of it (357 elements go from 83.3 ms
+to 16.7) at the cost of text sharpness under a zoom, which is why the overlay
+still refuses to set `will-change` for a caller.
+
+The second bound is legibility, and it is arithmetic: a label around 100 by 18
+CSS pixels tiles this viewport 530 times with no gaps at all, so a readable
+scene shows one or two hundred. That the two bounds land in the same order is
+what makes the default cap of 200 the right number rather than a guess.
 
 The argument that does not need numbers: the tiers have different futures. The
 CARD tier is HTML by nature. Its content is arbitrary markup with links,
@@ -651,11 +680,12 @@ node, and it is exactly what an atlas does well. If M4.10's 10k-node target is
 ever asked to show names, the DOM label tier is the wrong answer at that count
 and an atlas is the right one.
 
-So the recommendation, ahead of the numbers: keep the DOM for both tiers now,
-and schedule an atlas task only when a scene wants names on more nodes than the
-measurement supports. The overlay's design does not change either way, because
-the label tier is one entry per node with a gate, and an atlas takes the tier
-over by taking the gate over.
+So the recommendation, now with the numbers behind it: keep the DOM for both
+tiers, and schedule an atlas when a scene wants names on thousands of nodes
+WHILE THE CAMERA IS MOVING. That is M4.10's target rather than a hypothetical,
+and the measurement says the DOM cannot serve it, promoted or not. The overlay's
+design does not change either way, because the label tier is one entry per node
+with a gate, and an atlas takes the tier over by taking the gate over.
 
 ## Not in scope
 
