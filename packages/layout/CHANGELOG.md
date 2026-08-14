@@ -14,6 +14,27 @@ of doc prose.
 
 ### Added
 
+- `createLayout`, `serveLayout`, the `LayoutPort` type and the
+  `WorkerTransportError` class, which together are worker mode. `createLayout`
+  binds stages and config once and offers `run` and `runAsync`; `serveLayout` is
+  what a worker module calls to answer; `LayoutPort` is the four structural
+  members between them, so a browser `Worker`, a worker's own `self` and a
+  `MessagePort` from either runtime all satisfy it and this package still
+  imports no DOM and no Node type. `layout()` is unchanged and returns exactly
+  what it did: worker mode adds a door, it does not move a coordinate. (M2.10)
+
+  **`DagrLayoutErrorCode` gained a fourth member, `'WORKER'`, and that is a
+  breaking change to anything switching exhaustively over it.** It is made now
+  on that type's own recorded terms, which say widening the union is a thing to
+  do before v0.1 rather than after, and nothing is published. A caller with a
+  `switch` that the compiler had checked as complete will find it incomplete;
+  the fix is one `case`, and the docs page's error example now shows the four.
+
+  `wire.ts`, the message format the two halves speak, is deliberately NOT
+  exported. Both speakers ship from this package and are upgraded together, so
+  publishing it would freeze an agreement nobody outside can hold either end of.
+  A caller who needs to write the boundary down annotates it with `LayoutPort`.
+
 - Nothing in the public API. M2.9 added no exported name, changed no type and
   moved no coordinate: what a `layout()` call returns for a given graph is
   bit-identical across it. It is recorded here anyway because this file's

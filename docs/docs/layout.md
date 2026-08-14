@@ -1727,6 +1727,219 @@ for (const edge of result.edges.values()) {
 result.bounds; // { x, y, width, height } around every box and every route point
 ```
 
+## The engine
+
+`layout()` is the one-shot door. A caller who lays out more than one graph with
+the same stages and the same config, or who wants the run to happen off the main
+thread, builds an engine instead:
+
+```ts
+import { createLayout, networkSimplexRankStage } from '@dagr/layout';
+
+const engine = createLayout({
+  stages: { rank: networkSimplexRankStage },
+  config: { nodeSep: 20, rankSep: 60 },
+});
+
+const first = engine.run(graphA);
+const second = engine.run(graphB);
+const third = await engine.runAsync(graphC);
+```
+
+Both entry points go through the same runner, so `layout()` is sugar rather than
+a second implementation. What the engine adds is that the stages and the config
+are bound once instead of passed again and hoped over. Two things follow
+immediately. The config is resolved when the engine is built, so an unusable
+separation is refused where it was named rather than on whichever later run
+happened to be the first. And the `nodeSize` callback stays on the calling side
+of any worker boundary, which is what makes the next section possible at all.
+
+M3 is the reason the object exists. `engine.relayout(patch)` warm starts from
+the state the previous run left behind, and a warm start only means anything if
+the stages and the config are the ones that produced that state. That is a thing
+to bind once. Until then the engine binds two of the three.
+
+## Worker mode
+
+`engine.runAsync(graph)` resolves to exactly what `engine.run(graph)` returns.
+Without a worker it runs the pipeline on the calling thread and resolves, so a
+consumer can write against the async API before deciding whether the run belongs
+off the main thread. Give the engine a port and the same call sends the work
+across it:
+
+```ts
+// layout.worker.ts, the module you point a Worker at
+import { serveLayout, networkSimplexRankStage } from '@dagr/layout';
+
+serveLayout(self, { rank: networkSimplexRankStage });
+```
+
+```ts
+// the main thread
+import { createLayout } from '@dagr/layout';
+
+const worker = new Worker(new URL('./layout.worker.ts', import.meta.url), {
+  type: 'module',
+});
+const engine = createLayout({ worker, config: { nodeSep: 20 } });
+
+const result = await engine.runAsync(graph);
+```
+
+`engine.run` still runs on the calling thread when a worker is bound. A caller
+who asked for the sync call wants the answer in hand, and an engine whose sync
+method silently stopped working once a worker was attached would be a trap.
+
+### What a port is
+
+`LayoutPort` is four members, not a class: `postMessage`, `addEventListener`,
+`removeEventListener`, and an optional `start`. A browser `Worker`, a dedicated
+worker's own `self`, a `MessagePort` from either a browser `MessageChannel` or
+Node's `worker_threads`, and anything else that speaks the same four all satisfy
+it, none of them needing a cast. `@dagr/layout` imports none of them, because it
+has no DOM dependency and no Node dependency and naming a parameter type is a
+strange thing to spend one on.
+
+`start` is optional because only some of them have it. A `MessagePort` queues
+its messages until something calls `start`, and adding a listener does not imply
+it; a `Worker` has no such method and needs none. Both ends here call it when it
+is there, which is the one line that makes both work.
+
+Node's `worker_threads.Worker` is the one that does not fit: it is an
+`EventEmitter`, with `on` rather than `addEventListener`. Hand it a
+`MessagePort` and it does. Both halves, because the worker module is a different
+one from the browser's: there is no `self` to serve on in `worker_threads`, so
+the port arrives as a message instead of being the global.
+
+```ts
+// the main thread
+import { MessageChannel, Worker } from 'node:worker_threads';
+import { createLayout } from '@dagr/layout';
+
+const { port1, port2 } = new MessageChannel();
+const worker = new Worker(new URL('./layout.worker.js', import.meta.url));
+worker.postMessage({ port: port2 }, [port2]);
+const engine = createLayout({ worker: port1 });
+```
+
+```ts
+// layout.worker.js, the module the Worker above runs
+import { parentPort } from 'node:worker_threads';
+import { serveLayout, networkSimplexRankStage } from '@dagr/layout';
+
+parentPort.once('message', ({ port }) => {
+  serveLayout(port, { rank: networkSimplexRankStage });
+});
+```
+
+Serving layout on a port does not claim the port. Both ends tag their messages
+and ignore anything they do not recognise, so a caller who already has a worker
+can put layout on it rather than starting a second one. That caller is also the
+one who wants the return value: `serveLayout` hands back the function that stops
+serving.
+
+```ts
+const stop = serveLayout(port, { rank: networkSimplexRankStage });
+// later, when the port has other work to get on with
+stop();
+```
+
+A worker module that serves layout for its whole life can ignore it. The
+listener is the caller's to remove rather than this package's to hold forever.
+
+### What crosses, and what does not
+
+The stages never cross, because they are functions. The worker module has its
+own set, which is why `serveLayout` takes one, and a worker serving stages that
+disagree with what the calling side expects produces a different layout rather
+than an error. Bind the same stages on both sides, or, better, name them in the
+worker module alone and let the engine stay silent about them.
+
+The second of those has one consequence worth stating, because it is the only
+place where `run` and `runAsync` on one engine can disagree: an engine that
+names no stages runs the DEFAULTS when you call `run`, whatever its worker
+serves. If `run` is your fallback for when the worker is unavailable, and the
+worker serves a ranker you chose, name that ranker on the engine too. The cost
+is saying it twice; the alternative is a fallback path that quietly draws a
+different picture.
+
+The config crosses already resolved, and the sizes cross already measured. Every
+node is sized on the CALLING side, by the `nodeSize` callback, before anything is
+posted. That is not a workaround for a callback that cannot be cloned, it is
+where the measuring belongs: a callback that measures text or reads the DOM has
+to run where the DOM is. Once it has run, what is left of a run is numbers and
+ids. `InvalidConfigError` therefore has no path across the boundary either: a
+bad separation or a bad size is reported by the calling side, from the code that
+would have thrown it for a sync run.
+
+The graph crosses as ids and endpoints, not as a `Graph.toJSON` document.
+Attribute bags and ports are left behind, because layout reads neither. That
+saves copying every bag on a graph the far side has no use for, and it means a
+caller who keeps a React element, a DOM node or a callback in a node's bag can
+still lay that graph out in a worker. `@dagr/graph` never reads an attribute, so
+anything at all is legal in one; structured cloning is less relaxed, and sending
+the document would have turned a legal graph into a run that fails for a reason
+nothing about layout explains.
+
+### Transferable data
+
+Everything in a message whose size grows with the graph is a typed array, and
+every one of them is transferred rather than copied. Out goes one buffer, the
+node sizes. Back come three: the node boxes, the point count per edge, and the
+route points. The sending side's copies are detached, which is what transferred
+means.
+
+What stays cloned is the ids, which are strings and cannot be transferred, and
+`bounds`, which is four numbers and would cost more in buffer overhead than the
+copy it saves. The answer carries no ids at all: the request already fixed an
+order, the calling side kept the ids it sent, and the reply is matched to them
+by request id. So a finished layout on the wire is three buffers and a
+rectangle.
+
+Kept, rather than re-read from the graph, and that is a guarantee worth stating
+because this package is animation first: **you may add and remove nodes while a
+run is in flight.** The result you get back describes the graph as it was SENT,
+which is the only thing the answer could honestly describe. Nothing is dropped
+and nothing is misplaced; a node added mid-run simply is not in that result, and
+the next run picks it up. The alternative, decoding against the graph as it
+stands when the answer lands, gives a `WorkerTransportError` when the counts have
+moved and, when an addition and a removal happen to cancel out, coordinates
+sitting on the wrong ids with no error at all.
+
+Runs may overlap. Each carries a request id and answers are matched back by it.
+Request ids are counted across the whole module rather than per engine, so two
+engines sharing one port never collide.
+
+### When a run fails over there
+
+A run that fails comes back as a failure message and rejects the promise. The
+worker never throws into its own global scope, because a caller left with a
+promise that is pending forever is worse than the error.
+
+`StageContractError` and `InternalLayoutError` arrive as themselves, because
+both carry nothing but strings: a stage that left work undone reads the same
+whether it ran here or there, down to which id it dropped. Anything else cannot,
+because structured cloning does not carry a class, so a `TypeError` out of a
+third-party stage arrives as a `WorkerTransportError` quoting its name and its
+message. That class is also what you get when the two sides were built from
+different versions and disagree about how many numbers a result has: a count
+that does not match the graph it answers is refused, because the alternative is
+a layout with every id present, every number finite, and everything in the wrong
+place.
+
+An answer this package does not RECOGNISE is a different matter, and it is worth
+knowing which you are looking at. Both ends ignore what they cannot identify, so
+an unrecognised reply is dropped rather than raised, and the run it should have
+answered stays pending. That is the price of not claiming the port, and it is
+why a hang rather than a `WorkerTransportError` is the symptom of a worker that
+is not serving layout at all: check that the module really called `serveLayout`
+on the port you handed over.
+
+There is no timeout. How long is too long belongs to the caller and to the
+graph, and a worker that has been terminated is an event on the caller's own
+object rather than something this package can see. A caller who wants a run to
+give up needs to race the promise themselves.
+
 ## Config
 
 Every field is optional. What the caller leaves out comes from
@@ -1903,22 +2116,38 @@ the whole thing and every member carries a `code`.
 | `DagrLayoutError` | abstract | Base class, abstract, never thrown directly. |
 | `InvalidConfigError` | `INVALID_CONFIG` | A number a caller supplied is not one the pipeline can use. Two kinds reach it. A separation or a size that is not finite and zero or greater, which reads `Invalid layout config:` and carries `field` as a path such as `nodeSize("n1").width`. And an option a stage factory validates, which reads `Invalid layout option:` and names the option, `maxIterations` being the only one today. Both carry the offending `value`. |
 | `StageContractError` | `STAGE_CONTRACT` | A stage broke one of the rules in [The stage contract](#the-stage-contract). Carries the offending stage's `name`, the `id` it dropped, and a `detail`. One check is about the layers rather than one id, and uses a plain label instead: `layer 3`. The `graph` label is gone as of M2.4a, along with the check that raised it. |
+| `WorkerTransportError` | `WORKER` | A run sent to a worker came back, and what came back was not a layout. Carries a `detail`. Two things reach it, and both are wiring: the two ends were built from different versions and disagree about the shape of a result, so a box, count or point length does not match the graph it answers, or the stages on the far side threw something that is not a member of this family and so could not survive the crossing with its class. An answer this package does not recognise is NOT one of them: it is ignored, and the run stays pending. See [When a run fails over there](#when-a-run-fails-over-there). |
 | `InternalLayoutError` | `INTERNAL` | The pipeline caught itself breaking one of its own invariants. Carries a `detail`. Always a bug in `@dagr/layout`, never in your graph, your config, or a stage you supplied, which is why it is not a `StageContractError`: that class names a stage, and naming one here would blame whoever was plugged in. Nothing to fix on your side. Please report it. |
 
-The three sort by whose bug it is, which is the only question a caller catching
-one has to answer: fix the input, fix the stage, or file the bug.
+They sort by whose bug it is, which is the only question a caller catching one
+has to answer: fix the input, fix the stage, fix the worker wiring, or file the
+bug. The fourth arrived with M2.10, because until there was a boundary to cross
+there was no run that could fail without being somebody's config, somebody's
+stage, or this package's own mistake.
+
+The example below runs through an engine rather than through `layout()`, because
+only three of the four codes are reachable from a synchronous call: `WORKER`
+comes back from `engine.runAsync` and comes back as a REJECTION rather than a
+throw. Note where the engine is built, which is outside the `try`: a separation
+this engine could never have accepted is refused at construction, so a caller
+who builds an engine from config they did not write wants that call inside a
+`try` of its own.
 
 ```ts
-import { DagrLayoutError, layout } from '@dagr/layout';
+import { DagrLayoutError, createLayout } from '@dagr/layout';
+
+const engine = createLayout({ stages: { rank: myRankStage }, worker });
 
 try {
-  layout({ graph }, { rank: myRankStage });
+  await engine.runAsync(graph);
 } catch (error) {
   if (error instanceof DagrLayoutError) {
     switch (error.code) {
       case 'INVALID_CONFIG':
         break;
       case 'STAGE_CONTRACT':
+        break;
+      case 'WORKER':
         break;
       case 'INTERNAL':
         break;
@@ -2163,13 +2392,17 @@ its own and ahead of the chains. `virtualChains` was declared on the same
 argument and with its checks already written, so M2.4b filled it and added one
 rule (completeness) rather than designing it.
 
-Also still to come: running the same API in a worker (M2.10). Incremental
-relayout, the flagship feature, is all of M3, and arrives as a
-`createLayout({ stages, config })` engine rather than as another free function:
+Running the same API in a worker is no longer on this list. M2.10 shipped it,
+along with the `createLayout({ stages, config })` engine it hangs off. See
+[Worker mode](#worker-mode). Incremental relayout, the flagship feature, is all
+of M3, and arrives on that same engine rather than as another free function:
 warm-starting a relayout from a previous run only makes sense if the stages and
 the config are the same ones that produced it, which is a thing to bind once
 rather than to pass again and hope. `layout()` stays as the one-shot sugar, and
 `LayoutResult` stays small and serializable because the engine keeps the
-pipeline state, not the result. See
+pipeline state, not the result. What that leaves open is `relayoutAsync`: a
+worker-backed engine will keep its retained state in the worker, so the consumer
+who reached for `runAsync` on a 10k graph is exactly the one who will want a
+relayout that crosses the same boundary. See
 [ROADMAP.md](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md) for the
 order they arrive in.

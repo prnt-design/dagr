@@ -2065,7 +2065,7 @@ findings addressed or logged, docs land with the feature.
   generated graphs alone. The column carries NO cross-engine ceilings, because
   holding a stage no caller gets to a parity gate would turn a comparison into a
   promise, and it is pinned exactly in the golden file like everything else.
-- [ ] **M2.10** Worker mode: same layout API sync or in a worker
+- [x] **M2.10** Worker mode: same layout API sync or in a worker
   (`layoutAsync`), transferable-friendly data. Worker mode section added to the
   layout docs page (the page itself shipped with M2.1).
   From the M2.1 API review: the async entry point is the same
@@ -2074,6 +2074,133 @@ findings addressed or logged, docs land with the feature.
   deliberate and this is why: that object crosses a worker boundary and has to
   survive structured cloning, so stages and the `nodeSize` callback stay
   arguments of the call and of the engine, never fields of the input.
+  Shipped as `createLayout` with `run` and `runAsync`, `serveLayout` for the far
+  side, and `LayoutPort` for the thing between them. **THE ENGINE ARRIVES HERE
+  AND NOT IN M3.2, WHICH IS THE SAME ARGUMENT M2.1 MADE FOR NOT BUILDING IT.**
+  M2.1 refused a binding object with nothing to bind. `runAsync` is the first
+  thing that has to be bound rather than passed: a port and a stage set that
+  changed between two runs would describe two different workers, and there is
+  nowhere to pass them that makes that a caller error rather than a silent one.
+  So the object is built now, binding two of the three things it will bind, and
+  M3.2 adds `relayout` to it rather than introducing it. `layout()` stays as
+  one-shot sugar over the same runner.
+  **PREPARE SPLIT OFF FROM THE RUNNER, AND THAT SPLIT IS THE WHOLE PROTOCOL.**
+  `runPrepared(prepared, stages)` is now the pipeline and `prepare` is its own
+  function, because the two halves have to run in different places: resolving
+  the config and sizing every node are the only parts of a run that call
+  anything the caller wrote, so they run on the CALLING side, where a `nodeSize`
+  callback that measures text can reach the DOM. Everything from there down is
+  numbers and ids, which is exactly what can cross. Three callers share the
+  runner and none of them can disagree about what a stage sees. It also decides
+  where a bad config is reported: `InvalidConfigError` has no path across the
+  boundary at all, because the config is resolved before anything is posted.
+  **WHAT CROSSES IS THE LAYOUT'S VIEW OF THE GRAPH, NOT `Graph.toJSON`.** The
+  document was right there and is deliberately not used. It carries attribute
+  bags and ports, layout reads neither, and sending them would copy every bag on
+  a graph the far side has no use for. The failure it avoids is worse than the
+  copy: `@dagr/graph` never reads an attribute, so a React element, a DOM node
+  or a callback in a bag is legal there and is NOT structured-cloneable, and the
+  document form would have turned a legal graph into a run that fails for a
+  reason nothing about layout explains. A test lays out a graph whose every
+  attribute is a function.
+  Transferable-friendly came out as: every part of a message whose size grows
+  with the graph is a typed array, and the encoder hands back the transfer list
+  beside the message so that what moves rather than being copied is a property
+  of the encoding rather than of whoever wrote the call. One buffer out (sizes),
+  three back (node boxes, point counts, route points). What stays cloned is the
+  ids, which are strings and cannot be transferred, and `bounds`, which is four
+  numbers and would cost more in buffer overhead than the copy it saves. **THE
+  ANSWER CARRIES NO IDS AT ALL**: the request fixed an order, the calling side
+  still holds the graph it sent, and the reply is matched by request id, so a
+  finished layout on the wire is three buffers and a rectangle. The cost of that
+  is a coupling between request and response ordering, which is checked rather
+  than trusted: a count that disagrees with the graph is refused, because the
+  symptom otherwise is a layout with every id present, every number finite, and
+  everything in the wrong place.
+  **THE ERROR UNION GAINED A FOURTH MEMBER, `WORKER`.** `DagrLayoutErrorCode`
+  says widening it is a breaking change to do before v0.1 rather than after, and
+  this is before: nothing is published. It earns the place on the family's own
+  organising principle, which is whose bug it is. Until there was a boundary,
+  every failure was the caller's config, a stage's contract, or this package's
+  invariant; two ends built from different versions, and a foreign error that
+  cannot arrive with its class, are neither, and both are wiring.
+  `StageContractError` and `InternalLayoutError` DO arrive as themselves,
+  because both carry nothing but strings, so a stage that left work undone reads
+  the same whether it ran here or there, down to which id it dropped. An answer
+  this package does not RECOGNISE is deliberately not a third case, and the docs
+  review caught the first draft claiming it was at three separate sites: both
+  ends ignore what they cannot identify, because serving layout on a port does
+  not claim it, so an unrecognised reply leaves the run PENDING rather than
+  raising. Saying otherwise would have sent a caller hunting for an error that
+  never arrives, and the honest text names the hang and points at a worker that
+  never called `serveLayout`.
+  `LayoutPort` is four structural members rather than a class, so a browser
+  `Worker`, a dedicated worker's own `self`, and a `MessagePort` from either
+  runtime all satisfy it with no cast (checked against the DOM and WebWorker
+  libs, not assumed). Node's `worker_threads.Worker` does not: it is an
+  `EventEmitter`. That is a documented one-liner (hand it a `MessagePort`) and
+  not a shim, because a package that has no DOM dependency and no Node
+  dependency should not take one to name a parameter type. The transfer list is
+  a required mutable `ArrayBuffer[]` for a reason that looks like an oversight
+  and is not: a `readonly` list or a widened element type stops a real
+  `MessagePort` satisfying the interface at all.
+  **TESTED OVER A REAL `MessageChannel` RATHER THAN A SPAWNED THREAD.** Both
+  ends sit in one process and every message still goes through the same
+  serialiser a real `Worker` would, so the claims that matter (no function in
+  the message, buffers transferred and detached rather than copied, an error a
+  caller can catch) are all under test without a worker bundle to point a thread
+  at. A mutation check drove one test's design: an engine that ignored its
+  worker entirely still passed the parity assertion on a four-node diamond,
+  because the two rankers agree on a graph that small, so the test that proves
+  the run happened over there uses a corpus graph and asserts BOTH that the
+  answer matches the worker's stages and that it differs from the default's.
+  **REVIEW FOUND TWO WAYS TO GET A SILENTLY WRONG LAYOUT, AND BOTH WERE THE SAME
+  MISTAKE: TRUSTING SOMETHING THAT CAN CHANGE BETWEEN THE ASK AND THE ANSWER.**
+  The API review and the general code review reproduced both independently, over
+  a real channel, which is why they are recorded here rather than merely fixed.
+  First, `nextRequest` counted from 1 inside each engine, and this protocol
+  INVITES two engines onto one port. Both would send id 1, both listeners would
+  match the first answer, and the loser would decode the winner's numbers under
+  its own ids: with equal node and edge counts no length check fires, so the
+  result is a layout with everything in the wrong place and no error at all. The
+  counter now lives at module scope, which is the only scope two engines share.
+  Second, and worse because the caller does nothing unusual to provoke it, the
+  pending entry held the caller's `Graph` and decoded the id-less answer by
+  walking it when the answer landed. `Graph` is mutable and this package is
+  animation first, so editing one mid-run is an ORDINARY sequence, and a node
+  swapped for another while a run was in flight produced coordinates on the
+  wrong ids. Both fixes are the same shape: the answer is decoded against a
+  `RunSnapshot` of the ids as they were AT THE SEND, which `encodeRun` already
+  builds, so an answer means what it meant when it was asked for. Each has a
+  test, and each test was mutation checked against the old code.
+  A third, smaller: `isLayoutMessage` checks a tag and not a shape, so an answer
+  wearing the right tag with the wrong contents reached the decoder and came
+  back as a bare `TypeError`. Decode failures are now wrapped, so what a caller
+  catches is this family's member. Members that already are one pass through.
+  Two small things and one absence. The engine attaches its listener only while
+  runs are in flight, so an engine sharing a port it does not own leaves nothing
+  behind on it; nothing can arrive for it while nothing is pending. Both ends
+  tag their messages and ignore what they do not recognise, so serving layout on
+  a port does not claim the port. And there is no timeout: how long is too long
+  belongs to the caller and to the graph, and a terminated worker is an event on
+  the caller's own object rather than something this package can see. The review
+  corrected one belief here too: posting to a CLOSED port or a terminated worker
+  is a silent no-op in both runtimes rather than a throw, so the `catch` around
+  `postMessage` is the port object objecting and not those cases, and that run
+  stays pending like any other slow one. The comment said otherwise and now
+  does not.
+  `LayoutEngineOptions` spells every field `?: T | undefined`, which is
+  redundant by default and is not under `exactOptionalPropertyTypes`, a flag
+  this repo sets. Without it `createLayout({ worker })` where `worker` is
+  `LayoutPort | undefined` does not compile, and that is the ordinary shape: a
+  port in a ref, or absent while rendering on a server.
+  NOT DONE HERE, deliberately. No benchmark: the crossing's cost is a message
+  size and a clone, both linear in the graph, and measuring it would mean a
+  bench entry whose baseline is a machine-matched number for something no
+  existing entry regresses against. No `engine.dispose()`: the listener is
+  already transient, and engine lifetime is M3.2's, where retained state gives
+  it something to release. No `relayoutAsync`, which is M3.2's to add and whose
+  argument is already recorded there.
 
 ## M3: Incremental layout
 
