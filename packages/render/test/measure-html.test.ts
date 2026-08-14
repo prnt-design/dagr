@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { measureHtmlSizes } from '../src/measure-html.js';
 
 /**
  * The measurement helper's plumbing.
  *
- * **jsdom has no layout engine, so it cannot measure anything: every
- * `getBoundingClientRect` there is zeros.** That is a real limit on what this
+ * **jsdom has no layout engine, so it cannot measure anything: `offsetWidth`
+ * and `offsetHeight` there are always zero.** That is a real limit on what this
  * file can claim and it is worth being plain about rather than dressing it up.
  * What IS checkable without layout is the part most likely to be wrong and the
  * part the docstring makes promises about: that every element is mounted before
@@ -26,20 +26,24 @@ function makeParent(): HTMLElement {
   return parent;
 }
 
-/** An element whose measured size is fixed, so the mapping can be asserted. */
-function sized(width: number, height: number): HTMLElement {
+/**
+ * An element whose measured size is fixed, so the mapping can be asserted.
+ *
+ * `offsetWidth` and `offsetHeight` are what the helper reads, because they are
+ * layout box sizes that no transform touches where a rect is measured after
+ * every transform in the ancestor chain. jsdom reports 0 for both, so they are
+ * defined here per element.
+ */
+function sized(width: number, height: number, onRead?: (element: HTMLElement) => void): HTMLElement {
   const element = document.createElement('div');
-  vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({
-    width,
-    height,
-    x: 0,
-    y: 0,
-    top: 0,
-    left: 0,
-    right: width,
-    bottom: height,
-    toJSON: () => ({}),
+  Object.defineProperty(element, 'offsetWidth', {
+    configurable: true,
+    get: () => {
+      onRead?.(element);
+      return width;
+    },
   });
+  Object.defineProperty(element, 'offsetHeight', { configurable: true, get: () => height });
   return element;
 }
 
@@ -74,12 +78,7 @@ describe('measureHtmlSizes', () => {
       id,
       create: () => {
         order.push(`create:${id}`);
-        const element = document.createElement('div');
-        vi.spyOn(element, 'getBoundingClientRect').mockImplementation(() => {
-          order.push(`read:${id}`);
-          return new DOMRect(0, 0, 10, 10);
-        });
-        return element;
+        return sized(10, 10, () => order.push(`read:${id}`));
       },
     });
 
@@ -109,17 +108,13 @@ describe('measureHtmlSizes', () => {
       [
         {
           id: 'a',
-          create: () => {
-            const element = sized(10, 10);
-            vi.spyOn(element, 'getBoundingClientRect').mockImplementation(() => {
+          create: () =>
+            sized(10, 10, (element) => {
               const container = element.parentElement;
               if (container !== null) containers.push(container);
               const grandparent = container?.parentNode;
               if (grandparent != null) grandparents.push(grandparent);
-              return new DOMRect(0, 0, 10, 10);
-            });
-            return element;
-          },
+            }),
         },
       ],
       { parent, className: 'measuring' },
@@ -146,18 +141,16 @@ describe('measureHtmlSizes', () => {
 
   it('constrains an item that says how wide it will be', () => {
     const parent = makeParent();
-    let maxWidth = '';
+    const widths: string[] = [];
+    const kept: HTMLElement[] = [];
     measureHtmlSizes(
       [
         {
           id: 'a',
           maxWidth: 180,
           create: () => {
-            const element = sized(180, 60);
-            vi.spyOn(element, 'getBoundingClientRect').mockImplementation(() => {
-              maxWidth = element.style.maxWidth;
-              return new DOMRect(0, 0, 180, 60);
-            });
+            const element = sized(180, 60, (measuring) => widths.push(measuring.style.maxWidth));
+            kept.push(element);
             return element;
           },
         },
@@ -165,7 +158,10 @@ describe('measureHtmlSizes', () => {
       { parent },
     );
 
-    expect(maxWidth).toBe('180px');
+    expect(widths[0]).toBe('180px');
+    // And it comes back off, along with the positioning, because a caller may
+    // keep the element they built and hand it to a tier's `create` later.
+    expect(kept[0]?.style.cssText).toBe('');
   });
 
   it('refuses two items with the same id', () => {

@@ -97,9 +97,11 @@ const CONTAINER_WIDTH = 100000;
  * rather than `display: none`, because a `display: none` subtree has no box at
  * all and measures zero on every axis.
  *
- * The container is created, used and removed inside this call. There is nothing
- * for a caller to own, since it does not outlive the function, and a measuring
- * harness that left its container attached is a leak nobody sees.
+ * The container is created, used and removed inside this call, and the styles
+ * this function put on each element come back off before it returns. There is
+ * nothing for a caller to own: the container does not outlive the call, and an
+ * element a caller keeps is the element they built rather than an absolutely
+ * positioned one carrying a measurement's `max-width`.
  *
  * @throws {RangeError} when two items share an id. The alternative is keeping
  * one of them silently, and a duplicate id means the caller's node ids collide,
@@ -149,9 +151,39 @@ export function measureHtmlSizes(
 
   // Then every read. The first one flushes layout for the whole container and
   // the rest are free.
+  //
+  // `offsetWidth` and `offsetHeight` rather than `getBoundingClientRect`, and
+  // the difference is the whole reason this reads what it reads. A rect is
+  // measured AFTER every transform in the ancestor chain, and this package
+  // spends a section teaching content to carry
+  // `transform: scale(var(--dagr-overlay-inv-zoom))`, so a card measured
+  // through a rect would return its counter-scaled size, and one measured
+  // inside an overlay layer would come back multiplied by the zoom. Neither is
+  // the box a layout should reserve. The offset properties are layout box
+  // sizes and no transform touches them.
+  //
+  // What that costs is precision: they are integers, so a box 120.4 wide
+  // measures 120. Against `nodeSep` defaults of 50 world units that is not a
+  // number anybody can see, and it is the right trade for removing a whole
+  // class of silently wrong answers.
   for (const entry of measured) {
-    const rect = entry.element.getBoundingClientRect();
-    sizes.set(entry.id, { width: rect.width, height: rect.height });
+    sizes.set(entry.id, {
+      width: entry.element.offsetWidth,
+      height: entry.element.offsetHeight,
+    });
+  }
+
+  // And then the styles come back off, on the same argument the overlay's own
+  // `release` path makes: a caller may keep the element it built here and hand
+  // it to a tier's `create` later, measuring the real card rather than a stand
+  // in, and an absolutely positioned element with a `max-width` from the
+  // measurement is not what they built.
+  for (const entry of measured) {
+    const style = entry.element.style;
+    style.position = '';
+    style.left = '';
+    style.top = '';
+    style.maxWidth = '';
   }
 
   container.remove();

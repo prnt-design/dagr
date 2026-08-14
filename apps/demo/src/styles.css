@@ -153,10 +153,10 @@ body {
 }
 
 /*
- * The card tier, which the same box gets once it is 160 CSS pixels wide.
+ * The card tier, which the same box gets once it is wide enough to hold one.
  *
- * It hangs off the box's top-left corner exactly as the label does and
- * counter-scales the same way, so growing the shape does not grow the card. The
+ * It counter-scales the way the label does, so growing the shape does not grow
+ * the card, and it sits INSIDE the box where the label hangs above it. The
  * only difference between the tiers is how much there is to read, which is the
  * whole idea of semantic zoom: the fields below are worth pixels when you are
  * close enough to read them and worth none when you are not.
@@ -165,9 +165,10 @@ body {
 .stage__card {
   position: absolute;
   /* INSIDE the box's top-left corner, where the label hangs above it, and the
-     reason is what a card is for. A card only shows once its shape is 160 CSS
-     pixels wide, and by the time it is a thousand, the box's top edge is off
-     screen and anything above it is off screen with it. Inside, the card is
+     reason is what a card is for. A card only shows once its shape is wider
+     than the card itself, and by the time it is a thousand pixels wide, the
+     box's top edge is off screen and anything above it is off screen with it.
+     Inside, the card is
      visible for as long as the corner it sits in is. It covers part of the
      shape, which is the right trade at the zoom where the shape is mostly
      one flat colour. */

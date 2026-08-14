@@ -3207,7 +3207,17 @@ it settled rather than restating the argument.
   demo rather than reasoned about. The card tier is HTML by nature and should
   stay DOM; the label tier is one line per node, which is what an atlas does
   well, and an atlas takes the tier over by taking its gate over.
-  SHIPPED, and two things worth carrying forward. THE POOL DEPENDS ON AN
+  SHIPPED, and three things worth carrying forward. WHAT THE TIERS COST is
+  entries scaling with tiers times nodes: the overlay's per-frame cull tests
+  every entry, so a 2,800 node campaign over three tiers scans 8,400 candidates
+  a frame rather than 2,800, each a few comparisons with no allocation. What
+  does NOT triple is what reaches the cap or the DOM, because the gates are
+  disjoint, and `createRichNodes` rejects overlapping gates rather than trusting
+  a caller with the invariant the cap depends on. The alternative, one entry per
+  node with tier selection inside the overlay, saves that scan and buys a
+  level-of-detail concept every consumer pays for; if the scan ever matters the
+  fix is a spatial index in `sync`, which helps both shapes equally.
+  THE POOL DEPENDS ON AN
   ORDERING M4.11 ONLY IMPLIES: one sync detaches everything that left the view
   BEFORE it creates anything that entered, so an element released this frame is
   already back in its pool when the next entry asks for one. Reverse those two

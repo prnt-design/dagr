@@ -871,9 +871,30 @@ lets a tier pool its elements: a card leaving the view goes back to its pool and
 the next node to reach card tier gets that element with new content rather than
 a fresh subtree. It relies on an ordering the overlay guarantees, that one
 `sync()` detaches everything that left the view before it creates anything that
-entered it. The cost of pooling is that `update` has to REPLACE what it wrote
-last time, since the element it is handed may have belonged to a different node
-a frame ago.
+entered it. Two things follow for a tier's own code. `update` has to REPLACE
+what it wrote last time, since the element it is handed may have belonged to a
+different node a frame ago. And `update` runs on every pop-in during a pan
+rather than only when data changes, so a tier that wants its own children back
+should stash them in a `WeakMap` keyed by the root in `create`, instead of
+re-querying the DOM each time.
+
+`setNode` is beside `setNodes` for the single-node case: a hover, a selection,
+one field going live. Moving one node through the bulk setter means allocating a
+record per node and walking every tier to change one, which is the wrong shape
+at a few thousand nodes. `setNodes` stays the bulk path and the only one that
+can remove.
+
+Tier gates have to be disjoint, and `createRichNodes` rejects overlapping ones
+rather than trusting it. Two elements on one node would make the overlay's cap
+count entries rather than nodes, and a card would draw under its own title. A
+caller who genuinely wants two elements on one node at one zoom registers a
+second binding, which keeps both intentions visible in the code.
+
+The cost of putting tiers in the entries is that entries scale with tiers times
+nodes, so a 2,800 node scene over three tiers scans 8,400 candidates a frame
+rather than 2,800. That scan is a few comparisons each and allocates nothing.
+What does not triple is what reaches the cap or the DOM, because the gates are
+disjoint.
 
 Content in a tier faces the same choice the demo's labels do: it is laid out in
 world units, so a card that should stay readable counter-scales through
@@ -911,6 +932,15 @@ card measured under the wrong styles is measured wrong silently; `maxWidth` is
 how wrapping content says what width it will finally have, since an
 unconstrained paragraph measures as one very long line; and a web font that has
 not loaded measures in the fallback face, so await `document.fonts.ready` first.
+
+It reads `offsetWidth` and `offsetHeight` rather than a bounding rect, and the
+difference matters here more than it usually would. A rect is measured after
+every transform in the ancestor chain, and the section above teaches content to
+carry `transform: scale(var(--dagr-overlay-inv-zoom))`, so a rect would return a
+card's counter-scaled size and a card measured inside a layer would come back
+multiplied by the zoom. Neither is the box a layout should reserve. The cost is
+that the sizes are integers, which against a default `nodeSep` of 50 world units
+is not a number anybody can see.
 
 ## What is not here yet
 

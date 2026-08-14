@@ -115,11 +115,22 @@ export const LADDER_SHAPES: readonly LadderShape[] = [
  * wall of text. From there to {@link CARD_MIN_SCREEN_WIDTH} it gets a title
  * tag, and above that a card with the fields `shape-scene.ts` gave it.
  *
- * The two numbers meet exactly, and the overlay's gate is half-open, so at 160
- * CSS pixels the card shows and the label does not. There is no zoom at which a
- * shape carries both and none at which it briefly carries neither.
+ * The two numbers meet exactly, and the overlay's gate is half-open, so at the
+ * card threshold the card shows and the label does not. There is no zoom at
+ * which a shape carries both and none at which it briefly carries neither.
  */
 export const LABEL_MIN_SCREEN_WIDTH = 24;
 
-/** Where the label tier ends and the card tier begins. */
-export const CARD_MIN_SCREEN_WIDTH = 160;
+/**
+ * Where the label tier ends and the card tier begins.
+ *
+ * The campaign plan says about 160 CSS pixels, and this demo uses 240 for a
+ * reason worth carrying into it: **a card should not be wider than the node it
+ * describes.** These cards are 208 pixels of content plus padding, a border and
+ * an 8 pixel inset, so at a 160 pixel node the card would hang 60 pixels past
+ * the right edge of the shape it belongs to, at exactly the moment a reader is
+ * watching a tag turn into a card. The threshold that matters is the card's own
+ * width, not a round number, and a consumer whose cards are narrower can move
+ * it down.
+ */
+export const CARD_MIN_SCREEN_WIDTH = 240;

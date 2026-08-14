@@ -118,7 +118,12 @@ export class OverlayDisposedError extends DagrRenderError {
   readonly code = 'OVERLAY_DISPOSED';
 
   constructor(method: string) {
-    super(`cannot call ${method}() on a disposed overlay`);
+    // "after dispose()" rather than "on a disposed overlay", because M4.12's
+    // `createRichNodes` throws this too and a rich-node binding is not an
+    // overlay. One class rather than two: the failure, the cause and what a
+    // caller does about it are identical, and the method name in the message
+    // says which object it was.
+    super(`cannot call ${method}() after dispose()`);
     this.name = 'OverlayDisposedError';
     Object.setPrototypeOf(this, OverlayDisposedError.prototype);
   }

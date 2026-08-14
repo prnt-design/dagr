@@ -1,3 +1,4 @@
+import { OverlayDisposedError } from './errors.js';
 import type { HtmlOverlay, OverlayEntry } from './html-overlay.js';
 import type { OverlayPlacement } from './overlay-math.js';
 import type { WorldBounds } from './types.js';
@@ -14,9 +15,22 @@ import type { WorldBounds } from './types.js';
  * title label to about 160, a full card above) fall out of `html-overlay.ts`
  * with no level-of-detail machinery anywhere in it.
  *
- * What is left for this file is bookkeeping, and it is worth being clear that
- * it is only bookkeeping: a pool per tier, a diff by id, and the rule for when
- * an element that is already on screen has to be told its data changed.
+ * What is left for this file is bookkeeping: a pool per tier, a diff by id, and
+ * the rule for when an element that is already on screen has to be told its
+ * data changed.
+ *
+ * **The cost of putting the tiers in the entries is that entries scale with
+ * tiers times nodes**, and it is worth a number rather than a shrug. The
+ * overlay's per-frame cull tests every entry, so a 2,800 node campaign over
+ * three tiers scans 8,400 candidates a frame rather than 2,800: three
+ * comparisons and a multiply each, and no allocation, since the candidate array
+ * is reused. What does NOT triple is what reaches the cap or the DOM, because
+ * the gates are disjoint, so at most one entry per node survives. The
+ * alternative, one entry per node with tier selection inside the overlay, saves
+ * that scan and buys a level-of-detail concept in the layer every consumer
+ * pays for. If a scene ever makes the scan matter, the fix is a spatial index
+ * in `sync`, which is a change to one function and helps the one-entry case
+ * just as much.
  */
 
 /** One node: where it is, and whatever the caller's tiers render. */
@@ -43,6 +57,15 @@ export interface RichNode<T> {
  * `create` is therefore expected to build a BLANK element of this tier's shape,
  * and `update` to put one node's content into it. An `update` that only adds is
  * a bug that shows up as a card with the previous node's fields still in it.
+ *
+ * **`update` is handed the root element and nothing else, so a tier that wants
+ * its own children back should keep a `WeakMap` from root to references,
+ * filled in `create`.** Re-querying the DOM inside `update` works and is what a
+ * first draft writes, and it is worth knowing what it costs: `update` runs on
+ * every pop-in during a pan, not only when data changes, so a card with five
+ * fields is five tree walks per node per pan across it. A `WeakMap` keyed by
+ * the element holds nothing alive that the pool has dropped. The demo's card
+ * tier is the worked example.
  */
 export interface RichNodeTier<T> {
   /** For a caller's own debugging. Not read by this module. */
@@ -79,8 +102,30 @@ export interface RichNodes<T> {
    * arbitrary card data is neither cheap nor decidable, and this runs over
    * every node. A caller who mutates `data` in place gets no re-render, on the
    * same terms as every other one-way data flow in this project.
+   *
+   * @throws {RangeError} when two nodes in one call share an id. The same rule
+   * as `measureHtmlSizes`, deliberately: two id-keyed APIs in one package with
+   * opposite duplicate policies is a rule a consumer has to learn twice, and
+   * last-wins here would silently re-place the first node's entries onto the
+   * second node's box.
+   * @throws {OverlayDisposedError} after {@link dispose}.
    */
   setNodes(nodes: Iterable<RichNode<T>>): void;
+
+  /**
+   * Registers, re-places or re-renders ONE node, leaving every other node
+   * alone.
+   *
+   * {@link setNodes} is the bulk path and the only one that can remove a node,
+   * which makes it the wrong tool for a hover, a selection, or one card field
+   * going live: at the campaign demo's 2,800 nodes, moving one node through
+   * `setNodes` means allocating 2,800 wrapper records and walking every node in
+   * every tier to change one. This does the same register, re-place and
+   * re-render for a single id.
+   *
+   * @throws {OverlayDisposedError} after {@link dispose}.
+   */
+  setNode(node: RichNode<T>): void;
 
   /** How many nodes are registered. Not how many are on screen. */
   readonly nodeCount: number;
@@ -126,6 +171,41 @@ function sameBounds(a: WorldBounds, b: WorldBounds): boolean {
 }
 
 /**
+ * Rejects tiers whose gates overlap, which is the invariant everything here
+ * rests on.
+ *
+ * "At most one tier of a node is ever visible" is stated by this module, by the
+ * changelog and by the docs, and until this check it was a CALLER OBLIGATION
+ * dressed as a property. A label ending at 160 against a card starting at 150
+ * attaches two elements to one node between those widths, which makes the
+ * overlay's cap count entries rather than nodes and puts a card and its own
+ * title on top of each other, with nothing failing anywhere.
+ *
+ * Gates are half-open, so two tiers overlap exactly when each starts before the
+ * other ends. A caller who genuinely wants two elements on one node at one zoom
+ * (a card AND a badge, say) has them by registering a second binding or a
+ * direct overlay entry, which keeps both intentions visible in the code rather
+ * than one of them hiding in a threshold.
+ *
+ * @throws {RangeError} naming both tiers and the overlap.
+ */
+function requireDisjointGates<T>(tiers: readonly RichNodeTier<T>[]): void {
+  for (const [index, a] of tiers.entries()) {
+    const aMin = a.minScreenWidth ?? 0;
+    const aMax = a.maxScreenWidth ?? Number.POSITIVE_INFINITY;
+    for (const b of tiers.slice(index + 1)) {
+      const bMin = b.minScreenWidth ?? 0;
+      const bMax = b.maxScreenWidth ?? Number.POSITIVE_INFINITY;
+      if (aMin < bMax && bMin < aMax) {
+        throw new RangeError(
+          `tiers ${JSON.stringify(a.name)} and ${JSON.stringify(b.name)} have overlapping gates, ${String(aMin)} to ${String(aMax)} and ${String(bMin)} to ${String(bMax)}: a node would show both between ${String(Math.max(aMin, bMin))} and ${String(Math.min(aMax, bMax))} CSS pixels`,
+        );
+      }
+    }
+  }
+}
+
+/**
  * Binds a set of nodes to an overlay, one entry per node per tier.
  *
  * ```ts
@@ -158,6 +238,7 @@ export function createRichNodes<T>(options: {
   if (tiers.length === 0) {
     throw new RangeError('tiers has to name at least one tier, got an empty list');
   }
+  requireDisjointGates(tiers);
 
   /** One pool per tier, by tier index. Elements a tier built and got back. */
   const pools: HTMLElement[][] = tiers.map(() => []);
@@ -195,35 +276,43 @@ export function createRichNodes<T>(options: {
 
   let disposed = false;
 
+  /** Registers, re-places or re-renders one node. Shared by both setters. */
+  const apply = (node: RichNode<T>): void => {
+    const existing = nodes.get(node.id);
+    if (existing === undefined) {
+      nodes.set(node.id, register(node));
+      return;
+    }
+
+    const boundsChanged = !sameBounds(existing.node.bounds, node.bounds);
+    const dataChanged = existing.node.data !== node.data;
+    existing.node = node;
+
+    for (const [index, tierState] of existing.tiers.entries()) {
+      const tier = tiers[index];
+      if (tier === undefined) continue;
+      if (boundsChanged) tierState.entry.place(placementFor(node.bounds, tier));
+      // Only what is on screen is re-rendered. An element that is not attached
+      // will be filled by `create` from the node's current data whenever it
+      // next appears, so updating it here would be work nobody can see, once
+      // per node per tier, on every call.
+      if (dataChanged && tierState.element !== null) {
+        tier.update(tierState.element, node);
+      }
+    }
+  };
+
   return {
     setNodes(incoming: Iterable<RichNode<T>>): void {
-      if (disposed) return;
+      if (disposed) throw new OverlayDisposedError('setNodes');
 
       const seen = new Set<string>();
       for (const node of incoming) {
+        if (seen.has(node.id)) {
+          throw new RangeError(`two nodes share the id ${JSON.stringify(node.id)}`);
+        }
         seen.add(node.id);
-        const existing = nodes.get(node.id);
-        if (existing === undefined) {
-          nodes.set(node.id, register(node));
-          continue;
-        }
-
-        const boundsChanged = !sameBounds(existing.node.bounds, node.bounds);
-        const dataChanged = existing.node.data !== node.data;
-        existing.node = node;
-
-        for (const [index, tierState] of existing.tiers.entries()) {
-          const tier = tiers[index];
-          if (tier === undefined) continue;
-          if (boundsChanged) tierState.entry.place(placementFor(node.bounds, tier));
-          // Only what is on screen is re-rendered. An element that is not
-          // attached will be filled by `create` from the node's current data
-          // whenever it next appears, so updating it here would be work nobody
-          // can see, once per node per tier, on every call.
-          if (dataChanged && tierState.element !== null) {
-            tier.update(tierState.element, node);
-          }
-        }
+        apply(node);
       }
 
       for (const [id, state] of nodes) {
@@ -231,6 +320,11 @@ export function createRichNodes<T>(options: {
         for (const tierState of state.tiers) tierState.entry.remove();
         nodes.delete(id);
       }
+    },
+
+    setNode(node: RichNode<T>): void {
+      if (disposed) throw new OverlayDisposedError('setNode');
+      apply(node);
     },
 
     get nodeCount(): number {

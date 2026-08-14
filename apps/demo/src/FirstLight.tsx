@@ -83,62 +83,73 @@ interface CameraReadout {
  * cannot do. The stylesheet does the second half, so nothing here reads the
  * camera.
  */
+/**
+ * What each tier's `create` built, keyed by the element it built it into.
+ *
+ * `update` is handed the root and nothing else, so the alternative is a
+ * `querySelector` per field on every bind. That is not free: `update` runs on
+ * every pop-in during a pan, not only when data changes, so a five field card
+ * would be five tree walks per shape per pass across it. A `WeakMap` keyed by
+ * the root holds nothing alive that the pool has dropped.
+ */
+const labelRefs = new WeakMap<HTMLElement, { name: HTMLElement; detail: HTMLElement }>();
+const cardRefs = new WeakMap<HTMLElement, { name: HTMLElement; kind: HTMLElement; rows: HTMLElement }>();
+
+/** An element with a class, which is most of what building these tiers is. */
+function div(className: string, tag: 'div' | 'dl' | 'span' = 'div'): HTMLElement {
+  const element = document.createElement(tag);
+  element.className = className;
+  return element;
+}
+
 const LADDER_TIERS: readonly RichNodeTier<LadderShape>[] = [
   {
     name: 'label',
     minScreenWidth: LABEL_MIN_SCREEN_WIDTH,
     maxScreenWidth: CARD_MIN_SCREEN_WIDTH,
     create: () => {
-      const box = document.createElement('div');
-      box.className = 'stage__label';
-      const text = document.createElement('div');
-      text.className = 'stage__label-text';
-      text.append(
-        Object.assign(document.createElement('span'), { className: 'stage__label-name' }),
-        Object.assign(document.createElement('span'), { className: 'stage__label-detail' }),
-      );
+      const box = div('stage__label');
+      const text = div('stage__label-text');
+      const name = div('stage__label-name', 'span');
+      const detail = div('stage__label-detail', 'span');
+      text.append(name, detail);
       box.appendChild(text);
+      labelRefs.set(box, { name, detail });
       return box;
     },
     update: (element, node) => {
-      const [name, detail] = element.querySelectorAll('span');
-      if (name !== undefined) name.textContent = node.data.label;
-      if (detail !== undefined) detail.textContent = node.data.detail;
+      const refs = labelRefs.get(element);
+      if (refs === undefined) return;
+      refs.name.textContent = node.data.label;
+      refs.detail.textContent = node.data.detail;
     },
   },
   {
     name: 'card',
     minScreenWidth: CARD_MIN_SCREEN_WIDTH,
     create: () => {
-      const box = document.createElement('div');
-      box.className = 'stage__label';
-      const card = document.createElement('div');
-      card.className = 'stage__card';
-      const head = document.createElement('div');
-      head.className = 'stage__card-head';
-      head.append(
-        Object.assign(document.createElement('span'), { className: 'stage__label-name' }),
-        Object.assign(document.createElement('span'), { className: 'stage__card-kind' }),
-      );
-      const rows = document.createElement('dl');
-      rows.className = 'stage__card-rows';
+      const box = div('stage__label');
+      const card = div('stage__card');
+      const head = div('stage__card-head');
+      const name = div('stage__label-name', 'span');
+      const kind = div('stage__card-kind', 'span');
+      head.append(name, kind);
+      const rows = div('stage__card-rows', 'dl');
       card.append(head, rows);
       box.appendChild(card);
+      cardRefs.set(box, { name, kind, rows });
       return box;
     },
     update: (element, node) => {
-      const name = element.querySelector('.stage__label-name');
-      if (name !== null) name.textContent = node.data.label;
-      const kind = element.querySelector('.stage__card-kind');
-      if (kind !== null) kind.textContent = node.data.kind;
-
-      const rows = element.querySelector('.stage__card-rows');
-      if (rows === null) return;
+      const refs = cardRefs.get(element);
+      if (refs === undefined) return;
+      refs.name.textContent = node.data.label;
+      refs.kind.textContent = node.data.kind;
       // Replaced wholesale rather than appended to, because this element may
       // have been a different shape's card one frame ago.
-      rows.replaceChildren();
+      refs.rows.replaceChildren();
       for (const [key, value] of node.data.card) {
-        rows.append(
+        refs.rows.append(
           Object.assign(document.createElement('dt'), { textContent: key }),
           Object.assign(document.createElement('dd'), { textContent: value }),
         );

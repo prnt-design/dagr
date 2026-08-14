@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { Camera2D } from '../src/camera.js';
 import { createHtmlOverlay } from '../src/html-overlay.js';
 import type { HtmlOverlay } from '../src/html-overlay.js';
+import { OverlayDisposedError } from '../src/errors.js';
 import { createRichNodes } from '../src/rich-nodes.js';
 import type { RichNode, RichNodeTier } from '../src/rich-nodes.js';
 import type { WorldBounds } from '../src/types.js';
@@ -88,6 +89,66 @@ describe('createRichNodes', () => {
     // A node with no tier has no visual at any zoom, and the likelier cause is
     // a list filtered to nothing than a caller who meant it.
     expect(() => createRichNodes<Card>({ overlay, tiers: [] })).toThrow(RangeError);
+  });
+
+  it('refuses tiers whose gates overlap', () => {
+    // "At most one tier of a node is visible" is the invariant everything here
+    // rests on, and without this check it was a caller obligation dressed as a
+    // property: a label ending at 160 against a card starting at 150 attaches
+    // two elements to one node, which makes the overlay's cap count entries
+    // rather than nodes, with nothing failing anywhere.
+    const label = countingTier('label', { min: 24, max: 160 });
+    const card = countingTier('card', { min: 150 });
+    expect(() => createRichNodes<Card>({ overlay, tiers: [label.tier, card.tier] })).toThrow(
+      RangeError,
+    );
+    expect(() => createRichNodes<Card>({ overlay, tiers: [label.tier, card.tier] })).toThrow(
+      /overlapping gates/,
+    );
+  });
+
+  it('accepts tiers that meet exactly, since the gate is half-open', () => {
+    const label = countingTier('label', { min: 24, max: 160 });
+    const card = countingTier('card', { min: 160 });
+    expect(() => createRichNodes<Card>({ overlay, tiers: [label.tier, card.tier] })).not.toThrow();
+  });
+
+  it('refuses two nodes with the same id in one call', () => {
+    // The same rule `measureHtmlSizes` applies, deliberately: two id-keyed APIs
+    // with opposite duplicate policies is a rule a consumer learns twice, and
+    // last-wins here re-places the first node's entries onto the second's box.
+    const label = countingTier('label');
+    const nodes = createRichNodes<Card>({ overlay, tiers: [label.tier] });
+    expect(() =>
+      nodes.setNodes([
+        { id: 'n1', bounds: bounds(-20, 20), data: { title: 'One' } },
+        { id: 'n1', bounds: bounds(40, 80), data: { title: 'Two' } },
+      ]),
+    ).toThrow(RangeError);
+  });
+
+  it('moves one node without touching the rest', () => {
+    // `setNodes` is the bulk path and the only one that removes, which makes it
+    // the wrong tool for a hover or a selection: at 2,800 nodes it would mean
+    // allocating 2,800 records and walking every tier to change one.
+    const label = countingTier('label');
+    const nodes = createRichNodes<Card>({ overlay, tiers: [label.tier] });
+    nodes.setNodes([
+      { id: 'n1', bounds: bounds(-40, -20), data: { title: 'One' } },
+      { id: 'n2', bounds: bounds(20, 40), data: { title: 'Two' } },
+    ]);
+    overlay.sync();
+    expect(label.updates).toEqual(['label:n1:One', 'label:n2:Two']);
+
+    nodes.setNode({ id: 'n2', bounds: bounds(20, 40), data: { title: 'Renamed' } });
+    expect(label.updates).toEqual(['label:n1:One', 'label:n2:Two', 'label:n2:Renamed']);
+    expect(nodes.nodeCount).toBe(2);
+
+    // And it registers one that is new, without removing anything.
+    nodes.setNode({ id: 'n3', bounds: bounds(60, 80), data: { title: 'Three' } });
+    overlay.sync();
+    expect(nodes.nodeCount).toBe(3);
+    expect(overlay.activeCount).toBe(3);
   });
 
   it('shows one tier at a time, and the bottom tier is no element at all', () => {
@@ -255,11 +316,20 @@ describe('createRichNodes', () => {
     expect(() => {
       overlay.sync();
     }).not.toThrow();
-    // And a disposed binding stays quiet rather than throwing into whatever
-    // unmount ordering a framework happens to have.
+    // Both setters throw after dispose, on the line `html-overlay.ts` draws:
+    // the mutating methods throw because they are called from the caller's own
+    // code, and only the per-frame method the platform calls stays quiet.
+    expect(() =>
+      nodes.setNodes([{ id: 'n2', bounds: bounds(-20, 20), data: { title: 'Two' } }]),
+    ).toThrow(OverlayDisposedError);
     expect(() => {
-      nodes.setNodes([{ id: 'n2', bounds: bounds(-20, 20), data: { title: 'Two' } }]);
-    }).not.toThrow();
+      nodes.setNode({ id: 'n2', bounds: bounds(-20, 20), data: { title: 'Two' } });
+    }).toThrow(/setNode\(\)/);
     expect(nodes.nodeCount).toBe(0);
+    // Dispose stays idempotent, since a component that unmounts twice is
+    // ordinary rather than a bug worth crashing for.
+    expect(() => {
+      nodes.dispose();
+    }).not.toThrow();
   });
 });

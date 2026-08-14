@@ -40,7 +40,19 @@ not" is the category this file has a heading for.
   is the quadratic that turns a startup into seconds. Its `parent` is required
   rather than defaulted, because inherited font and custom properties decide the
   answer and a card measured under the page's styles and drawn under the
-  overlay's is measured wrong silently.
+  overlay's is measured wrong silently. It reads `offsetWidth` and
+  `offsetHeight` rather than a bounding rect, because a rect is measured after
+  every transform in the ancestor chain and this package teaches content to
+  counter-scale; the cost is that the sizes are integers.
+
+  **Overlapping tier gates are rejected**, with a `RangeError` naming both
+  tiers. "At most one tier of a node is visible" is what the cap counting nodes
+  rather than entries depends on, and until it was checked it was a caller
+  obligation dressed as a property.
+
+  `setNode` is the single-node path beside `setNodes`. Changing one node through
+  the bulk setter means allocating a record per node and walking every tier to
+  move one, which at 2,800 nodes is the wrong shape for a hover or a selection.
 
 - `createHtmlOverlay`: a layer of DOM elements positioned in world coordinates
   over the canvas and kept registered with a `Camera2D`, with culling against
@@ -248,6 +260,12 @@ not" is the category this file has a heading for.
   being answered, and a culling test gets the shape it wants.
 
 ### Changed
+
+- `OverlayDisposedError`'s message is now `cannot call X() after dispose()`,
+  where it named an overlay. `createRichNodes` throws the same class from
+  `setNodes` and `setNode`, and a rich-node binding is not an overlay. One class
+  rather than two, because the failure, the cause and the fix are identical and
+  the method name says which object it was. (M4.12)
 
 - `RendererDisposedError` now extends `DagrRenderError` and carries
   `code: 'RENDERER_DISPOSED'`. Additive: its name, its message and
