@@ -3047,14 +3047,56 @@ of M3 would leave the second runner idle for a milestone.
   from the theme tokens. Committed rather than generated during the docs
   build, because the Render deploy builds only the `docs` workspace and must
   not depend on the packages building first.
-  A second figure carries the scale claim: `generate-perf-graph.mjs` lays out
-  the 1k bench corpus (`smallCorpus()`, the spec the committed baseline gates
-  on), writes one static SVG per theme at about 218KB each (one path for the
-  4,000 edges, one for the 1,000 nodes; element-per-edge markup would be
-  megabytes), and records the median layout time of 15 runs beside the
-  machine that produced it in `perfStats.json`. The page quotes that number
-  with its machine and points at the M2.9 cost table rather than quoting the
-  repo's Apple M4 figures as if they were this page's own.
+  A second figure carries the scale claim. It shipped as a committed SVG of
+  the 1k bench corpus with a quoted median beside the machine that produced
+  it, and was replaced two days later by a live demo; see the revision below.
+  REVISED 2026-08-14, on the maintainer's reading of the merged page. Two
+  changes, both about the same thing: a claim a visitor cannot check is worth
+  less than a smaller one they can.
+  The static figure is gone. `docs/src/components/LiveLayout/` generates the
+  same corpus in the visitor's browser, lays it out with `@dagr/layout` in a
+  web worker, draws the result, and reports the time it took on their machine,
+  with controls for corpus size (250, 1,000, 2,500 nodes at the bench corpora's
+  four edges per node) and spacing, and drag-to-pan and zoom over the drawing.
+  The first run of a page is a warm-up and is not reported, which is the rule
+  `bench/README.md` already states for a capture. Deleted with it:
+  `generate-perf-graph.mjs`, `perfStats.json`, and `static/img/bench-1k-*.svg`.
+  The hero figure and `generate-hero-graph.mjs` stay exactly as above, and are
+  now also the no-JS story: with scripting off the demo hides its controls and
+  says what it would have done, and the hero remains committed engine output on
+  the same page.
+  THE DEPLOY PROBLEM THIS CREATED, and the choice made. Render built only the
+  `docs` workspace, so `@dagr/layout` had no `dist` at deploy time; that
+  constraint is what made both figures committed output in the first place.
+  `render.yaml` now runs `pnpm --filter docs... build`, which builds
+  `@dagr/graph` and `@dagr/layout` first, and its `buildFilter` gained both
+  package paths because the site ships their code now. The alternative,
+  compiling the packages' TypeScript source into the docs bundle, was rejected:
+  it would give the site a second build path for code that publishes from
+  `dist`, and a demo built differently from what a consumer installs is a demo
+  of something else.
+  TWO THINGS THE DEMO NEEDED FROM THE BUNDLER, both invisible until the worker
+  threw. Docusaurus sets `optimization.runtimeChunk: true`, which lifts each
+  entrypoint's runtime into a separate file; a worker loads exactly one script,
+  so its runtime has to ride in its own bundle. And Docusaurus's
+  ChunkAssetPlugin adds a `__webpack_require__.gca` runtime module to every
+  runtime chunk without declaring that it needs `__webpack_require__`, which
+  every chunk the site loads happens to need anyway and a worker entrypoint
+  does not. Both are handled by the `dagr-worker-runtime` plugin in
+  `docusaurus.config.ts`. The symptom either way was a demo that said it was
+  laying out, forever, because a worker that dies never answers and an
+  unanswered run never settles, by design.
+  The demo's corpus generator is a port of the bench kit's, since the bench kit
+  is private and never built. `bench/test/docs-corpus-port.test.ts` runs both
+  and fails when they disagree, so the 1k preset stays the graph the committed
+  baseline gates on rather than merely a graph of the same size.
+  The benchmark copy was rewritten at the same time. The merged page described
+  the gate as comparing medians as ratios against a control workload; the
+  maintainer, who wrote the harness, could not follow it. It now says that
+  every change is benchmarked before it merges, on one machine, against the
+  numbers the change before it recorded, and that a change making layout slower
+  does not merge. The detail stays in `bench/README.md`, where a reader who
+  wants ratios and tolerances will look.
   ALSO DECIDED HERE: `docs/src/css/custom.css` was re-ported to muslin as it
   now stands, because the landing page was about to be the first consumer of
   a token set that had drifted three moves behind the design system it claims

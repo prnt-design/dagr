@@ -14,14 +14,27 @@ services:
     # typechecks and lints clean is the only thing that reaches the domain.
     autoDeployTrigger: checksPass
 
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter docs build
+    # `--filter docs...` builds the site and everything it depends on, in
+    # dependency order. The trailing `...` is what changed when the landing
+    # page stopped quoting a committed benchmark figure and started running
+    # @dagr/layout in the visitor's browser: the site now imports the engine,
+    # so `@dagr/graph` and `@dagr/layout` have to have a `dist` before webpack
+    # resolves them. The alternative was compiling the packages' TypeScript
+    # source inside the docs bundle, which would have given the site a second
+    # build path for code that publishes from `dist`, and a demo built
+    # differently from what a consumer installs is a demo of something else.
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter docs... build
     staticPublishPath: docs/build
 
     # Skip deploys for commits that cannot change the site. Paths are globs
-    # relative to the repo root.
+    # relative to the repo root. The two packages are listed because the site
+    # ships their code now: a layout change with no docs change does change
+    # what a visitor runs.
     buildFilter:
       paths:
         - docs/**
+        - packages/graph/**
+        - packages/layout/**
         - package.json
         - pnpm-lock.yaml
         - pnpm-workspace.yaml

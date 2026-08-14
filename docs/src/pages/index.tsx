@@ -1,10 +1,9 @@
 import Link from '@docusaurus/Link';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import HeroGraph from '@site/src/components/HeroGraph';
-import perfStats from '@site/src/components/perfStats.json';
+import LiveLayout from '@site/src/components/LiveLayout';
 import CodeBlock from '@theme/CodeBlock';
 import Layout from '@theme/Layout';
-import ThemedImage from '@theme/ThemedImage';
 import clsx from 'clsx';
 import type { ReactNode } from 'react';
 import styles from './index.module.css';
@@ -61,9 +60,10 @@ const FEATURES: Feature[] = [
     title: 'Measured, then merged',
     body: (
       <>
-        Strict TypeScript, property-based tests, and a benchmark gate that
-        compares medians as ratios against a control workload, with a
-        tolerance that widens with measured noise instead of crying wolf.
+        Strict TypeScript, property-based tests, and a benchmark gate that runs
+        before every merge on one machine: work that got slower does not ship,
+        and a machine too busy to measure is told apart from a regression
+        rather than failing at random.
       </>
     ),
   },
@@ -138,30 +138,29 @@ export default function Home(): ReactNode {
           <div className={styles.perfHead}>
             <h2 className={styles.exampleTitle}>Scale is a measured claim</h2>
             <p className={styles.exampleBody}>
-              This is <code>smallCorpus()</code> from the repository&apos;s
-              benchmark harness, 1,000 nodes and 4,000 edges, laid out in{' '}
-              {perfStats.medianMs}&thinsp;ms: the median of {perfStats.runs}{' '}
-              back-to-back runs at this drawing&apos;s node size and spacing,
-              full pipeline, contract checks included, on an{' '}
-              {perfStats.machine} virtual machine under Node{' '}
-              {perfStats.node}. That figure is this drawing&apos;s, not the
-              gate&apos;s: every merge is gated by the same harness comparing
-              medians as ratios against a control workload, and the{' '}
-              <Link to="/docs/layout">layout docs</Link> publish the cost of
-              each stage on both bench corpora rather than a single flattering
-              number.
+              The figure below is not a picture of a benchmark run. It is{' '}
+              <code>smallCorpus()</code> from the repository&apos;s bench kit,
+              1,000 nodes and 4,000 edges, generated and laid out by{' '}
+              <code>@dagr/layout</code> in your browser while you read this, in
+              a worker so the page keeps answering. The time it reports was
+              measured on your machine, not on ours.
+            </p>
+            <p className={styles.exampleBody}>
+              Every change is benchmarked before it merges, on one machine,
+              against the numbers the change before it recorded, and a change
+              that makes layout slower does not merge. A timing means something
+              only beside the machine that produced it, which is why the{' '}
+              <Link to="/docs/layout#what-a-run-costs">layout docs</Link>{' '}
+              publish what each stage costs on this corpus and on one ten times
+              its size instead of a single flattering number. How that gate
+              tells a real regression from a busy machine is written up in{' '}
+              <Link href="https://github.com/prnt-design/dagr/blob/main/bench/README.md">
+                the harness README
+              </Link>
+              .
             </p>
           </div>
-          <figure className={clsx('selvedge', styles.perfFigure)}>
-            <ThemedImage
-              className={styles.perfImage}
-              alt="The 1,000 node, 4,000 edge benchmark corpus laid out by Dagr: 64 ranks drawn left to right."
-              sources={{
-                light: useBaseUrl('/img/bench-1k-light.svg'),
-                dark: useBaseUrl('/img/bench-1k-dark.svg'),
-              }}
-            />
-          </figure>
+          <LiveLayout />
         </section>
 
         <section className={styles.example} aria-label="Example">
