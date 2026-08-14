@@ -6,7 +6,10 @@ import type {
   DagrLayoutErrorCode,
   Layering,
   LayoutConfig,
+  LayoutEngine,
+  LayoutEngineOptions,
   LayoutInput,
+  LayoutPort,
   LayoutResult,
   LayoutStageOverrides,
   LayoutStages,
@@ -49,6 +52,19 @@ import { gridPositionStage, insertionOrderStage } from '../src/stages.js';
 describe('@dagr/layout public surface', () => {
   it('exports the entry point', () => {
     expect(typeof api.layout).toBe('function');
+  });
+
+  // Three names for two sides of one boundary: the engine a caller builds, and
+  // the call a worker module makes to answer it. The messages between them are
+  // not exported, the way `traversal.ts` is not exported from `@dagr/graph`:
+  // both speakers ship here and are upgraded together, so publishing the format
+  // would freeze an agreement nobody outside can hold either end of.
+  it('exports the engine and the worker side of it', () => {
+    expect(typeof api.createLayout).toBe('function');
+    expect(typeof api.serveLayout).toBe('function');
+    const engine: LayoutEngine = api.createLayout();
+    expect(typeof engine.run).toBe('function');
+    expect(typeof engine.runAsync).toBe('function');
   });
 
   it('exports the default stages as a set, which is what they are reachable as', () => {
@@ -102,6 +118,7 @@ describe('@dagr/layout public surface', () => {
     expect(typeof api.InvalidConfigError).toBe('function');
     expect(typeof api.StageContractError).toBe('function');
     expect(typeof api.InternalLayoutError).toBe('function');
+    expect(typeof api.WorkerTransportError).toBe('function');
   });
 
   // The two stages exported by name, because neither is a placeholder waiting
@@ -147,15 +164,18 @@ describe('@dagr/layout public surface', () => {
       'InternalLayoutError',
       'InvalidConfigError',
       'StageContractError',
+      'WorkerTransportError',
       'barycenterOrder',
       'barycenterOrderStage',
       'countCrossings',
+      'createLayout',
       'defaultStages',
       'layout',
       'longestPathRankStage',
       'networkSimplexRank',
       'networkSimplexRankStage',
       'polylineRouteStage',
+      'serveLayout',
     ]);
   });
 
@@ -201,8 +221,9 @@ describe('@dagr/layout public surface', () => {
       new api.InvalidConfigError('nodeSep', -1).code,
       new api.StageContractError('rank', 'a', 'why').code,
       new api.InternalLayoutError('why').code,
+      new api.WorkerTransportError('why').code,
     ];
-    expect(codes).toEqual(['INVALID_CONFIG', 'STAGE_CONTRACT', 'INTERNAL']);
+    expect(codes).toEqual(['INVALID_CONFIG', 'STAGE_CONTRACT', 'INTERNAL', 'WORKER']);
   });
 
   it('exports every type the pipeline is described in', () => {
@@ -250,6 +271,18 @@ describe('@dagr/layout public surface', () => {
     const stages: LayoutStages = { rank, order, position, route };
     const overrides: LayoutStageOverrides = { position };
 
+    // The engine's own three. `LayoutPort` is the one a caller most has to be
+    // able to write down: it is what they annotate the worker or the channel
+    // end they are handing over as, and this package names no class it could
+    // have been spelled with.
+    const port: LayoutPort = {
+      postMessage: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    };
+    const engineOptions: LayoutEngineOptions = { stages: overrides, config, worker: port };
+    const engine: LayoutEngine = api.createLayout(engineOptions);
+
     // The runner assembles the result from the last record's `positions` and
     // `sizes`. The position comes from the stage above, and the size does NOT:
     // it is what the runner measured during prepare, because a stage has no
@@ -259,6 +292,9 @@ describe('@dagr/layout public surface', () => {
     const handBuilt: PositionedNode = { id: 'a', x: 0, y: 0, width: 100, height: 40 };
     expect(api.layout(input, stages).nodes.get('a')).toEqual(handBuilt);
     expect(api.layout(input, overrides).nodes.get('a')).toEqual(handBuilt);
+    // The sync entry point of an engine that has a worker bound still runs
+    // here, so this needs nothing from the port above.
+    expect(engine.run(graph).nodes.get('a')).toEqual(handBuilt);
     expect(positioned).toEqual({ id: 'a', x: 0, y: 20, width: 100, height: 40 });
     expect(routed).toBeUndefined();
     expect(bounds).toEqual({ x: -50, y: 0, width: 100, height: 40 });

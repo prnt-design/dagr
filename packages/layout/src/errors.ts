@@ -10,14 +10,15 @@
  * restores its own prototype explicitly, so `instanceof` stays correct even
  * when the output is downlevelled below the ES2022 target.
  *
- * The three members cover the three ways a layout run can go wrong, split by
- * whose bug each one is: the caller handed in nonsense
- * ({@link InvalidConfigError}), a stage did not hold up its end of the pipeline
- * contract ({@link StageContractError}), or this package broke one of its own
+ * The members cover the ways a layout run can go wrong, split by whose bug each
+ * one is: the caller handed in nonsense ({@link InvalidConfigError}), a stage
+ * did not hold up its end of the pipeline contract
+ * ({@link StageContractError}), the worker boundary a run crossed did not
+ * behave ({@link WorkerTransportError}), or this package broke one of its own
  * invariants ({@link InternalLayoutError}). Sorting them that way is the point
- * of having three rather than one, because it is the only question a caller
- * catching one actually has to answer: fix the input, fix the stage, or file
- * the bug.
+ * of having several rather than one, because it is the only question a caller
+ * catching one actually has to answer: fix the input, fix the stage, fix the
+ * worker wiring, or file the bug.
  */
 
 /**
@@ -28,7 +29,7 @@
  * serve. Adding a member is therefore something to do before v0.1 rather than
  * after.
  */
-export type DagrLayoutErrorCode = 'INVALID_CONFIG' | 'STAGE_CONTRACT' | 'INTERNAL';
+export type DagrLayoutErrorCode = 'INVALID_CONFIG' | 'STAGE_CONTRACT' | 'INTERNAL' | 'WORKER';
 
 /**
  * Base class for every error the layout pipeline throws. Abstract on purpose,
@@ -140,6 +141,48 @@ export class StageContractError extends DagrLayoutError {
     super(`Layout stage "${stage}" left work undone for "${id}": ${detail}`);
     this.name = 'StageContractError';
     Object.setPrototypeOf(this, StageContractError.prototype);
+  }
+}
+
+/**
+ * Thrown when a run sent to a worker did not come back as a layout.
+ *
+ * This is the fourth culprit the family sorts by, and M2.10 is what made it a
+ * culprit at all: before worker mode there was no boundary between the caller
+ * and the pipeline, so a run either produced a result or threw one of the three
+ * above, in the caller's own stack. Once a run crosses a port, three things
+ * that are nobody's stage and nobody's config become possible: the port answers
+ * with a message this package does not recognise, the two ends disagree about
+ * the wire format because they were built from different versions, or the
+ * stages on the far side threw something that is not a member of this family at
+ * all. None of those is a config to fix or a stage contract that was broken
+ * here, and none of them is an invariant of this package: the wiring is what is
+ * wrong, and the wiring is the caller's.
+ *
+ * A foreign error is the interesting case, and it is why `detail` carries text
+ * rather than a cause. Structured cloning does not carry a class, so a
+ * `TypeError` from a third-party stage cannot arrive as one. What CAN arrive
+ * faithfully is a {@link StageContractError} or an {@link InternalLayoutError},
+ * because both carry nothing but strings, and the worker rebuilds those as
+ * themselves rather than wrapping them: a stage that left work undone reads the
+ * same whether it ran here or there. Anything else arrives as its reported name
+ * and message quoted inside this error, which keeps the text and admits the
+ * class is gone rather than inventing one.
+ *
+ * {@link InvalidConfigError} deliberately has no path across. The config is
+ * resolved and every node is measured on the CALLING side, before anything is
+ * posted, precisely so that the `nodeSize` callback never has to cross a
+ * boundary it cannot survive. So a bad separation or a bad size is thrown at
+ * the caller, synchronously, by the same code that would have thrown it for a
+ * sync run.
+ */
+export class WorkerTransportError extends DagrLayoutError {
+  readonly code = 'WORKER';
+
+  constructor(readonly detail: string) {
+    super(`Layout worker: ${detail}`);
+    this.name = 'WorkerTransportError';
+    Object.setPrototypeOf(this, WorkerTransportError.prototype);
   }
 }
 

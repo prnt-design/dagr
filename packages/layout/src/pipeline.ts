@@ -3,6 +3,7 @@ import { measureNodes, resolveConfig } from './config.js';
 import { InternalLayoutError, StageContractError } from './errors.js';
 import { defaultStages } from './stages.js';
 import type {
+  LayoutConfig,
   LayoutInput,
   LayoutResult,
   LayoutStageOverrides,
@@ -13,6 +14,7 @@ import type {
   PreparedState,
   RankedState,
   Rect,
+  ResolvedLayoutConfig,
   RoutedEdge,
   RoutedState,
   Size,
@@ -787,12 +789,20 @@ function assemble(graph: Graph, routed: RoutedState): LayoutResult {
 }
 
 /**
- * Runs a graph through the layout pipeline and returns where everything goes.
+ * The pipeline proper: four stages and assemble, over a {@link PreparedState}
+ * somebody else built.
  *
- * The run is prepare, rank, order, position, route, assemble. The first and the
- * last belong to the runner. Prepare resolves the config once and sizes every
- * node once, so no stage re-applies a default or measures a node twice.
- * Assemble turns the last record into the {@link LayoutResult}: the node map
+ * Prepare is split off rather than done here because of where its two halves
+ * have to run. Resolving the config and sizing every node are the only parts of
+ * a run that touch caller functions (`nodeSize`), and M2.10 put a worker
+ * boundary in the middle of the pipeline: the calling side prepares, because
+ * that is where a callback that measures text can run, and the far side runs
+ * this, because everything from here down is numbers and ids. Three callers
+ * share it and no two of them can disagree about what a stage sees:
+ * {@link layout}, `engine.run`, and the worker's own request handler.
+ *
+ * The run is rank, order, position, route, assemble. The last belongs to the
+ * runner: it turns the last record into the {@link LayoutResult}, the node map
  * from `positions` and `sizes`, the edge map from `routes`, and `bounds`
  * computed once here rather than by each router in turn. The four stages
  * between them are swappable, and `stages` overrides any subset of them; the
@@ -842,21 +852,16 @@ function assemble(graph: Graph, routed: RoutedState): LayoutResult {
  * placeholder, so the coordinates are still a grid, until the compaction work
  * `position.ts` names replaces it against this runner and its contract checks.
  *
- * @throws {InvalidConfigError} when a separation or a size is not a finite
- * number that is zero or greater.
  * @throws {StageContractError} when a stage breaks the pipeline contract.
  * @throws {InternalLayoutError} when the pipeline catches itself breaking one of
  * its own invariants, which is a bug in this package and nothing the caller can
  * fix or provoke.
  */
-export function layout(input: LayoutInput, stages?: LayoutStageOverrides): LayoutResult {
-  const config = resolveConfig(input.config);
-  const { graph } = input;
-  const prepared: PreparedState = {
-    graph,
-    config,
-    sizes: measureNodes(graph, config, input.config?.nodeSize),
-  };
+export function runPrepared(
+  prepared: PreparedState,
+  stages?: LayoutStageOverrides,
+): LayoutResult {
+  const { graph, config } = prepared;
 
   // Every field a stage contributes is named here, one at a time. The spreads
   // below carry the runner's OWN previous record forward; nothing a stage
@@ -896,4 +901,51 @@ export function layout(input: LayoutInput, stages?: LayoutStageOverrides): Layou
   const result = assemble(graph, routed);
   assertBounds(result);
   return result;
+}
+
+/**
+ * Prepare: the config resolved once and every node sized once, which is the
+ * record every later stage reads and the only part of a run that calls anything
+ * the caller wrote.
+ *
+ * The two arguments are separate rather than a {@link LayoutConfig} because of
+ * the engine. A `createLayout` engine binds its config for its lifetime and
+ * resolves it at construction, so a bad separation is refused where it was
+ * named rather than on the first run, and every later run reuses the one
+ * resolved record. It still has to size each graph it is handed, and the
+ * callback that does that lives on the unresolved config, which
+ * {@link ResolvedLayoutConfig} deliberately drops. So the engine keeps the
+ * callback and passes it back in here, and {@link layout} resolves and prepares
+ * in one breath.
+ */
+export function prepare(
+  graph: Graph,
+  config: ResolvedLayoutConfig,
+  nodeSize: LayoutConfig['nodeSize'],
+): PreparedState {
+  return { graph, config, sizes: measureNodes(graph, config, nodeSize) };
+}
+
+/**
+ * Runs a graph through the layout pipeline and returns where everything goes.
+ *
+ * The one-shot door, and the whole API for a caller who lays a graph out once
+ * and does nothing else with it: prepare, then {@link runPrepared}, whose
+ * docstring describes the run itself. A caller who wants the same stages and
+ * config over more than one graph, or who wants the run to happen off the main
+ * thread, builds a `createLayout` engine instead and calls `run` or `runAsync`
+ * on it. Both go through the same runner, so this is sugar rather than a second
+ * implementation, and the sugar is worth keeping: an engine for a single call
+ * is an object to name for no reason.
+ *
+ * @throws {InvalidConfigError} when a separation or a size is not a finite
+ * number that is zero or greater.
+ * @throws {StageContractError} when a stage breaks the pipeline contract.
+ * @throws {InternalLayoutError} when the pipeline catches itself breaking one of
+ * its own invariants, which is a bug in this package and nothing the caller can
+ * fix or provoke.
+ */
+export function layout(input: LayoutInput, stages?: LayoutStageOverrides): LayoutResult {
+  const config = resolveConfig(input.config);
+  return runPrepared(prepare(input.graph, config, input.config?.nodeSize), stages);
 }
