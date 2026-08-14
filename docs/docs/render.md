@@ -833,7 +833,7 @@ lifetime, eviction, `create` and `release`, the tier bookkeeping and the
 lifecycle run against jsdom.
 
 One more thing jsdom cannot do, since it bears on the section after next: it has
-no layout engine, so every `getBoundingClientRect` there is zeros.
+no layout engine, so `offsetWidth` and `offsetHeight` there are always zero.
 `measureHtmlSizes` is therefore tested for its plumbing (everything mounted
 before anything is read, the container styled and then removed, ids mapped to
 the elements they came from) with the sizes themselves stubbed. That a real

@@ -65,25 +65,6 @@ interface CameraReadout {
 }
 
 /**
- * The two tiers the ladder gets, and the split every rich node is built on.
- *
- * `create` returns a BLANK element of the tier's shape and `update` fills it in
- * with one shape's content. That is what lets a tier pool its elements: a card
- * leaving the view goes back to the pool and the next shape to reach card tier
- * gets it with new content rather than a new subtree. It also means `update`
- * has to REPLACE everything it wrote last time, since the element it is handed
- * may have belonged to a different shape a frame ago.
- *
- * In both tiers the OUTER element is what the overlay positions and sizes, so
- * it is the shape's world box and scales with the zoom, and the INNER element
- * counter-scales through `--dagr-overlay-inv-zoom` so its text is the same
- * number of CSS pixels at every zoom. That split is the answer to a label
- * wanting two things at once: to be GATED by how big its node is on screen,
- * which needs a world box, and to be READ at a constant size, which a box
- * cannot do. The stylesheet does the second half, so nothing here reads the
- * camera.
- */
-/**
  * What each tier's `create` built, keyed by the element it built it into.
  *
  * `update` is handed the root and nothing else, so the alternative is a
@@ -102,6 +83,25 @@ function div(className: string, tag: 'div' | 'dl' | 'span' = 'div'): HTMLElement
   return element;
 }
 
+/**
+ * The two tiers the ladder gets, and the split every rich node is built on.
+ *
+ * `create` returns a BLANK element of the tier's shape and `update` fills it in
+ * with one shape's content. That is what lets a tier pool its elements: a card
+ * leaving the view goes back to the pool and the next shape to reach card tier
+ * gets it with new content rather than a new subtree. It also means `update`
+ * has to REPLACE everything it wrote last time, since the element it is handed
+ * may have belonged to a different shape a frame ago.
+ *
+ * In both tiers the OUTER element is what the overlay positions and sizes, so
+ * it is the shape's world box and scales with the zoom, and the INNER element
+ * counter-scales through `--dagr-overlay-inv-zoom` so its text is the same
+ * number of CSS pixels at every zoom. That split is the answer to a label
+ * wanting two things at once: to be GATED by how big its node is on screen,
+ * which needs a world box, and to be READ at a constant size, which a box
+ * cannot do. The stylesheet does the second half, so nothing here reads the
+ * camera.
+ */
 const LADDER_TIERS: readonly RichNodeTier<LadderShape>[] = [
   {
     name: 'label',
