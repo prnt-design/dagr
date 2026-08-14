@@ -345,9 +345,9 @@ this package throws gets a named class.** Today that means three, under an
 abstract `DagrRenderError` that carries a `code` for a caller who would rather
 switch on a value than on a class: `RendererDisposedError` for use after a
 renderer's dispose, and `OverlayParentError` and `OverlayDisposedError` from the
-overlay. The split is not about counting failure kinds, it is
-about what a caller can do: a bad number is on a line the caller can see and the
-field name is the best possible report of it, while use after dispose arrives
+overlay. The split is not about counting failure kinds, it is about what a
+caller can do: a bad number is on a line the caller can see and the field name
+is the best possible report of it, while use after dispose arrives
 from a lifecycle race in somebody else's framework and is the one a caller
 actually writes a `catch` for. Matching a message string is not a way to catch
 anything. `clearColor` is validated on the same terms, because three validates

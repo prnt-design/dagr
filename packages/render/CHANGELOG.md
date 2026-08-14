@@ -19,9 +19,9 @@ not" is the category this file has a heading for.
   the visible world, a half-open screen-width gate per entry, and a hard element
   cap. This is the package's answer to having no text renderer, and the first
   thing it exports that no GPU draws. New surface: `createHtmlOverlay`,
-  `CENTRE_ANCHOR`, the types `HtmlOverlay`, `HtmlOverlayOptions`,
-  `OverlayEntry`, `OverlayEntryInit`, `OverlayPlacement` and `ElementAnchor`.
-  (M4.11)
+  `CENTRE_ANCHOR`, `OVERLAY_ZOOM_PROPERTY`, `OVERLAY_INV_ZOOM_PROPERTY`, and the
+  types `HtmlOverlay`, `HtmlOverlayOptions`, `OverlayEntry`, `OverlayEntryInit`,
+  `OverlayPlacement` and `ElementAnchor`. (M4.11)
 
   **The unit inside the layer is the thing to know before writing content.** The
   layer carries the camera's scale, so one CSS pixel inside it is one world unit
