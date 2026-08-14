@@ -107,7 +107,9 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          routeBasePath: '/',
+          // The site root is the landing page (src/pages/index.tsx); the
+          // docs moved from `/` to `/docs` when it landed.
+          routeBasePath: '/docs',
           editUrl: 'https://github.com/prnt-design/dagr/tree/main/docs/',
         },
         blog: false,
@@ -115,6 +117,22 @@ const config: Config = {
           customCss: './src/css/custom.css',
         },
       } satisfies Preset.Options,
+    ],
+  ],
+
+  plugins: [
+    [
+      '@docusaurus/plugin-client-redirects',
+      {
+        // The docs lived at the site root before the landing page. These are
+        // the URLs that existed then; the intro's old home is the root
+        // itself, which the landing page now owns, so it is not redirected.
+        redirects: [
+          { from: '/graph-model', to: '/docs/graph-model' },
+          { from: '/layout', to: '/docs/layout' },
+          { from: '/render', to: '/docs/render' },
+        ],
+      },
     ],
   ],
 
@@ -128,6 +146,11 @@ const config: Config = {
         src: 'img/logo.svg',
       },
       items: [
+        {
+          to: '/docs/',
+          label: 'Docs',
+          position: 'left',
+        },
         {
           href: 'https://github.com/prnt-design/dagr',
           label: 'GitHub',

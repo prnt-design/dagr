@@ -1,0 +1,208 @@
+/* Landing page. Muslin throughout: achromatic chrome, the seed only where it
+   means something (the CTA, the selvedge hairline, the hero spine), square
+   shapes with the cut carried by the shared utilities in custom.css. */
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 3.5rem;
+  align-items: center;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 4.5rem 1.5rem 3.5rem;
+}
+
+.heroCopy {
+  max-width: 34rem;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 1.25rem;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8125rem;
+  letter-spacing: 0.09em;
+  color: var(--dagr-text-muted);
+}
+
+.title {
+  font-size: 2.75rem;
+  line-height: 1.12;
+  letter-spacing: -0.022em;
+  font-weight: 650;
+  margin: 0 0 1.1rem;
+}
+
+.lede {
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  color: var(--dagr-text-muted);
+  margin: 0 0 1.75rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.6rem 1.4rem;
+  font-size: 0.9375rem;
+  font-weight: 550;
+  transition:
+    background-color var(--dagr-duration-base) var(--dagr-ease-out),
+    border-color var(--dagr-duration-base) var(--dagr-ease-out),
+    color var(--dagr-duration-base) var(--dagr-ease-out);
+}
+
+.buttonPrimary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.buttonPrimary:hover {
+  background: var(--primary-hover);
+  color: var(--primary-foreground);
+  text-decoration: none;
+}
+
+.buttonPrimary:active {
+  background: var(--primary-active);
+}
+
+.buttonGhost {
+  border: 1px solid var(--contrast-20pct);
+  color: var(--dagr-foreground);
+}
+
+.buttonGhost:hover {
+  border-color: var(--contrast-50pct);
+  color: var(--dagr-foreground);
+  text-decoration: none;
+}
+
+.status {
+  font-size: 0.875rem;
+  color: var(--dagr-text-muted);
+  margin: 0;
+}
+
+/* The figure wears the selvedge; padding clears the band on the left and
+   matches it elsewhere. */
+.heroFigure {
+  margin: 0;
+  padding: 1.25rem 1.25rem 1rem calc(var(--selvedge-band) + 1.1rem);
+  border: 1px solid var(--contrast-10pct);
+  background-color: var(--dagr-surface);
+}
+
+.heroCaption {
+  margin-top: 0.9rem;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--dagr-text-muted);
+}
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.5rem 3rem;
+}
+
+.card {
+  padding: 1.4rem 1.4rem 1.3rem calc(var(--selvedge-band) + 1.2rem);
+  border: 1px solid var(--contrast-10pct);
+}
+
+.cardTitle {
+  font-size: 1.0625rem;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.55rem;
+}
+
+.cardBody {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--dagr-text-muted);
+  margin: 0;
+}
+
+.perf {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.5rem 3rem;
+}
+
+.perfHead {
+  max-width: 44rem;
+  margin-bottom: 1.5rem;
+}
+
+.perfFigure {
+  margin: 0;
+  padding: 1rem 1rem 0.75rem calc(var(--selvedge-band) + 0.9rem);
+  border: 1px solid var(--contrast-10pct);
+  background-color: var(--dagr-surface);
+}
+
+.perfImage {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.example {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 3rem;
+  align-items: center;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.5rem 4.5rem;
+}
+
+.exampleTitle {
+  font-size: 1.5rem;
+  letter-spacing: -0.018em;
+  margin: 0 0 0.9rem;
+}
+
+.exampleBody {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--dagr-text-muted);
+  margin: 0 0 0.9rem;
+}
+
+.exampleCopy {
+  min-width: 0;
+}
+
+.exampleCode {
+  min-width: 0;
+}
+
+@media (max-width: 996px) {
+  .hero,
+  .example {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  .hero {
+    padding-top: 3rem;
+  }
+
+  .title {
+    font-size: 2.125rem;
+  }
+}

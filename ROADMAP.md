@@ -2905,6 +2905,48 @@ of M3 would leave the second runner idle for a milestone.
 
 ## M5: React + demo = v0.1
 
+- [x] **M5.0** Landing page and the muslin re-port. Touches `docs` only.
+  Done out of milestone order on the maintainer's instruction (2026-08-14):
+  the layout engine is worth showing before M5's components exist, and the
+  docs site previously served the intro doc at the site root with no pitch,
+  no visual, and no "why Dagr" anywhere.
+  WHAT SHIPPED. A landing page at `/`, with the docs moved from `/` to
+  `/docs` and `@docusaurus/plugin-client-redirects` covering the three doc
+  URLs that existed before the move (the intro's old home is the root itself,
+  which the landing page now owns, so it is not redirected). The hero image
+  is output from the engine it advertises: `docs/scripts/generate-hero-graph.mjs`
+  builds a 20 node DAG, runs `layout`, and commits coordinates and routes to
+  `heroGraphData.json`, which the page draws inline so every color resolves
+  from the theme tokens. Committed rather than generated during the docs
+  build, because the Render deploy builds only the `docs` workspace and must
+  not depend on the packages building first.
+  A second figure carries the scale claim: `generate-perf-graph.mjs` lays out
+  the 1k bench corpus (`smallCorpus()`, the spec the committed baseline gates
+  on), writes one static SVG per theme at about 218KB each (one path for the
+  4,000 edges, one for the 1,000 nodes; element-per-edge markup would be
+  megabytes), and records the median layout time of 15 runs beside the
+  machine that produced it in `perfStats.json`. The page quotes that number
+  with its machine and points at the M2.9 cost table rather than quoting the
+  repo's Apple M4 figures as if they were this page's own.
+  ALSO DECIDED HERE: `docs/src/css/custom.css` was re-ported to muslin as it
+  now stands, because the landing page was about to be the first consumer of
+  a token set that had drifted three moves behind the design system it claims
+  to mirror. The contrast ramp goes achromatic (the old green-tinted
+  `--contrast-70pct` measured near 3:1 on white, which is what the file's
+  `--dagr-text-muted` workaround compensated for; neutral, the same step
+  clears AA with room), the primary family derives from one seed with a
+  relative-color-syntax tier clamping lightness and chroma, radii go to zero
+  with shape carried by the 45 degree corner cut, and the selvedge replaces
+  the accent left-border on blockquotes. The port stays a port, not a
+  dependency: `@muslin/ui` is a private workspace package whose stylesheet
+  needs Tailwind to compile, and the docs site has no reason to grow either.
+  The daybreak code palette in `docusaurus.config.ts` is untouched: code is
+  the one place the docs are allowed to be colorful, and that decision
+  predates this task.
+  KNOWN AND ACCEPTED: the docs build's CSS minimizer warns on the
+  relative-color-syntax `calc()` channels (`postcss-calc` cannot lex `l - 0.05`).
+  Verified against the built output rather than assumed: the expressions
+  survive minification verbatim, so the warnings are noise, not damage.
 - [ ] **M5.1** `@dagr/react`: `<DagrCanvas>` + `useDagr` hook, controlled
   graph prop, mocked-renderer component tests.
 - [ ] **M5.2** Interaction hooks: `useSelection`, hover and drag wiring to
