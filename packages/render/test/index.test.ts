@@ -13,15 +13,34 @@ import * as api from '../src/index.js';
  * package unusable in any server-rendered application.
  */
 describe('@dagr/render', () => {
-  it('exports exactly the M4.1 runtime surface', () => {
+  it('exports exactly the runtime surface, through M4.11', () => {
     // Types are erased, so only the runtime exports can be checked here. The
     // type surface is exercised by the other files in the suite importing from
     // it.
     expect(Object.keys(api).sort()).toEqual([
+      'CENTRE_ANCHOR',
       'Camera2D',
+      'DagrRenderError',
+      'OVERLAY_INV_ZOOM_PROPERTY',
+      'OVERLAY_ZOOM_PROPERTY',
+      'OverlayDisposedError',
+      'OverlayParentError',
       'RendererDisposedError',
+      'createHtmlOverlay',
       'createRenderer',
     ]);
+  });
+
+  it('does not export the overlay arithmetic', () => {
+    // `overlay-math.ts` holds the transform composition, the gate and the cap
+    // ranking, and it stays internal for the reason `sdf.ts` does: exporting it
+    // would be a promise to keep a set of helpers stable for callers who are
+    // not writing this package's overlay, and nobody has asked. `CENTRE_ANCHOR`
+    // is the exception because a caller writing an anchor by hand needs the
+    // default to compare against, and it is one frozen record rather than an
+    // interface with behaviour.
+    expect('entryTransform' in api).toBe(false);
+    expect('selectWithinCap' in api).toBe(false);
   });
 
   it('does not export the renderer implementation class', () => {

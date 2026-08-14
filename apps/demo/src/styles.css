@@ -94,10 +94,72 @@ body {
   cursor: grabbing;
 }
 
+/*
+ * The HTML overlay's labels.
+ *
+ * Two elements per label, and the split is the whole trick. `.stage__label` is
+ * what `@dagr/render`'s overlay positions and sizes: it IS the shape's world
+ * box, so it scales with the zoom and there is nothing to set here beyond where
+ * the text hangs off it. `.stage__label-text` counter-scales through
+ * `--dagr-overlay-inv-zoom`, which the overlay publishes on its layer whenever
+ * the zoom changes, so the text is the same number of CSS pixels at zoom 0.1
+ * and at 100 while the box under it grows by a factor of a thousand.
+ *
+ * Nothing here reads the camera, and nothing in the demo's JavaScript touches
+ * these styles per frame. The browser does the arithmetic on the compositor,
+ * which is the point of publishing the number as a custom property rather than
+ * writing a font size per element per frame.
+ */
+
+/*
+ * Position, size and transform all come from the overlay, so there is nothing
+ * to set here. It draws NOTHING of its own, and the reason is worth keeping:
+ * a border on this element would be in world units, so the 1px that reads as a
+ * hairline at zoom 1 is 100 pixels of amber at zoom 100. The shapes are the
+ * canvas's job anyway. What hangs off this box is the text below.
+ */
+.stage__label {
+  position: absolute;
+}
+
+.stage__label-text {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  /* Anchored at the box's top-left corner, so the counter-scale pins that
+     corner and the text grows away from it rather than drifting across the
+     shape as the zoom changes. */
+  transform-origin: 0 100%;
+  transform: scale(var(--dagr-overlay-inv-zoom, 1));
+  display: flex;
+  align-items: baseline;
+  gap: 0.5ch;
+  padding: 0.125rem 0.375rem;
+  border: 1px solid var(--rule);
+  border-bottom: none;
+  background: rgba(7, 8, 10, 0.82);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.stage__label-name {
+  color: var(--amber);
+}
+
+.stage__label-detail {
+  color: var(--ink-dim);
+}
+
 .stage__readout {
   position: absolute;
   left: 1rem;
   bottom: 1rem;
+  /* Above the overlay, which the library appends to this container after
+     React's children and therefore paints later. Without this, panning a
+     labelled shape into the bottom-left corner puts its label over the HUD. */
+  z-index: 1;
   /* The panel is sized by its widest child, and since M4.2 that child is the
      hint rather than a readout row: naming the zoom range and `#zoom=` takes 58
      characters, which on one line is about 440 CSS pixels, 40% of the 1102 pixel
@@ -142,6 +204,9 @@ body {
 .stage__failure {
   position: absolute;
   inset: 0;
+  /* Same reason as the readout, and it matters more here: a failure message
+     overprinted by labels is the one screen a reader most needs to read. */
+  z-index: 1;
   display: flex;
   flex-direction: column;
   justify-content: center;

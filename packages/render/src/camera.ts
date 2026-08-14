@@ -1,4 +1,5 @@
 import type { OrthoFrustum, Size, Vec2, ViewportSize, WorldBounds } from './types.js';
+import { requireFinite, requireFinitePoint, requirePositive } from './validate.js';
 
 /**
  * The 2D camera every Dagr view is drawn through, and the only part of
@@ -17,48 +18,14 @@ import type { OrthoFrustum, Size, Vec2, ViewportSize, WorldBounds } from './type
 const DEFAULT_VIEWPORT: ViewportSize = { width: 300, height: 150, devicePixelRatio: 1 };
 
 /**
- * Rejects a value that is not a finite number, naming the field.
+ * Rejects a viewport with a non-positive width, height or device pixel ratio.
  *
- * `RangeError` rather than a package-specific error class, which is the
- * package's rule and not a local judgement: **an out-of-range value is a
- * `RangeError` naming the field, and anything else this package throws gets a
- * named class.** The second half is not hypothetical, and this docstring used
- * to imply it was: `RendererDisposedError` in `errors.ts` is the other kind
- * already, thrown for use after dispose. The split is not by how many kinds
- * there are, it is by what a caller can do with the error. A bad number is on
- * a line the caller can see, and the field name in the message is the best
- * possible report of it; a lifecycle failure arrives from a race in somebody
- * else's framework and is the one a caller actually writes a `catch` for.
- *
- * Nothing here falls back to a default. The repo's rule is that a fallback is
- * only acceptable where there is a NEUTRAL answer, and there is none here: a
- * zoom of `NaN` has no sensible substitute, and picking one turns a caller's
- * arithmetic bug into a view that is silently in the wrong place, three frames
- * and one animation loop away from the line that caused it.
+ * The three checks this file used to define (`requireFinite`,
+ * `requirePositive`, `requireFinitePoint`, with the paragraph on why a bad
+ * number is a `RangeError` and why nothing falls back to a default) moved to
+ * `validate.ts` when the overlay needed the same three. The rule is unchanged
+ * and lives there now.
  */
-function requireFinite(value: number, field: string): number {
-  if (!Number.isFinite(value)) {
-    throw new RangeError(`${field} has to be a finite number, got ${String(value)}`);
-  }
-  return value;
-}
-
-/** Rejects a value that is not a finite number strictly greater than zero. */
-function requirePositive(value: number, field: string): number {
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new RangeError(`${field} has to be a finite number above zero, got ${String(value)}`);
-  }
-  return value;
-}
-
-/** Rejects a point with a non-finite coordinate, naming which one. */
-function requireFinitePoint(point: Vec2, field: string): Vec2 {
-  requireFinite(point.x, `${field}.x`);
-  requireFinite(point.y, `${field}.y`);
-  return { x: point.x, y: point.y };
-}
-
-/** Rejects a viewport with a non-positive width, height or device pixel ratio. */
 function requireViewport(viewport: ViewportSize, field: string): ViewportSize {
   requirePositive(viewport.width, `${field}.width`);
   requirePositive(viewport.height, `${field}.height`);
