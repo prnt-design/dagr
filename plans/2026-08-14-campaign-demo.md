@@ -216,20 +216,42 @@ proper in-canvas glyph pipeline (MSDF atlas, shaping, wrapping) is weeks, not
 an increment. The demo does not wait for it: labels and cards are a DOM
 overlay, positioned by the camera transform.
 
-Update, same day: Nii wants the overlay to be a library feature with
-rich-node support, not demo code, and a dedicated session is building it; see
-`plans/2026-08-14-html-overlay.md`. The tiers and caps below stand as the
-behavior P6 needs, and P6 becomes consumption of that feature rather than
-implementation of it.
+Update, same day: Nii wanted the overlay as a library feature with rich-node
+support, and a dedicated session shipped it to `main` the same day as M4.11
+and M4.12 (PRs #24 to #26; see `plans/2026-08-14-html-overlay.md` and the
+spec in `specs/`). P6 is now consumption: `createRichNodes({ overlay, tiers })`
+plus `setNodes(nodes)` IS the three-tier semantic zoom. Facts P6 inherits:
+
+- Tiers are the overlay's screen-width gates, half-open and required to be
+  disjoint (`createRichNodes` throws a `RangeError` naming both tiers
+  otherwise). The bottom tier is the absence of an entry: the GPU shape.
+- Card sizes are declared per kind, not measured. `measureHtmlSizes` exists
+  for content whose size is a fact about its text; 2,800 offscreen mounts at
+  startup buy nothing for templated cards.
+- Readable-at-any-zoom content counter-scales with
+  `var(--dagr-overlay-inv-zoom)`. A layout length (margin, padding offsets)
+  on a counter-scaled element is still in world units, because margin
+  applies before the element's own transform: compose insets into the
+  transform after the scale, or a card sits 800 CSS px off at zoom 100.
+- `overlay.sync()` rides the existing `requestDraw` path, never its own
+  animation loop.
+- The default element cap of 200 is measured, not guessed: repainting text
+  under a moving transform costs about 0.2 ms per element per frame on the
+  dev box (still camera holds ~744 at 60fps), and a 100x18 label tiles a
+  1200x800 viewport ~530 times. `bench/browser` holds the harness,
+  deliberately outside `bench:ci`.
 
 - The overlay container gets one CSS transform per frame (the camera's
   world-to-screen matrix), so panning moves every card without touching
   per-card styles.
 - Culling: only nodes inside `visibleWorldBounds()` get DOM at all, and what
   they get depends on screen size. Under ~24 CSS px wide, nothing (the
-  instanced shape alone). From ~24 to ~160 px, a title label. Above ~160 px,
-  the full card: name, kind badge, one-liner, and the kind-specific fields
-  from the schema. At card size only tens of nodes fit in a viewport, so the
+  instanced shape alone). From ~24 px up to the card gate, a title label;
+  above it, the full card: name, kind badge, one-liner, and the kind-specific
+  fields from the schema. The card gate follows the overlay demo's rule that
+  a card should not be wider than the node it describes (240 px there; tune
+  per campaign node sizes rather than copying either number). At card size
+  only tens of nodes fit in a viewport, so the
   DOM stays small; a hard cap of 200 overlay elements guards the degenerate
   zoom where thousands of labels would qualify.
 
@@ -250,7 +272,7 @@ independent of each other and of everything after them.
 | P3 | M4.3 instancing with per-kind color and size | nothing |
 | P4 | M4.4: campaign tiles laid out in the worker, drawn instanced, fit on load | P1, P2, P3 |
 | P5 | M4.5 edge ribbons; overlay edges behind their zoom gate | P4 |
-| P6 | Labels and cards via the library HTML overlay (`plans/2026-08-14-html-overlay.md`), three zoom tiers | P4, overlay feature |
+| P6 | Labels and cards: consume `createRichNodes` (M4.11/M4.12, on `main`) with campaign card content and per-kind declared sizes | P4 |
 | P7 | Polish: `#node=` deep links, hover highlight (M4.8 or DOM), committed screenshots, a docs page on the schema | P5, P6 |
 
 ## Deliberately not in this plan

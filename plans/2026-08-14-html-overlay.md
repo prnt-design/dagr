@@ -1,7 +1,13 @@
 # HTML overlay and rich nodes: a library feature, not a demo hack
 
 **Date:** 2026-08-14
-**Status:** approved direction, delegated to a dedicated session (Opus)
+**Status:** delivered. Shipped to `main` as M4.11 and M4.12 the same day, by
+the delegated session (Opus): PR #24 (spec plus ROADMAP entries), #25
+(overlay core, labels on the ladder), #26 (rich nodes, `measureHtmlSizes`,
+and the measured in-canvas text recommendation). One question stays open with
+the maintainer, pinned and in the spec: whether `@dagr/react` gets an `<Html>`
+component now or with M5.1, since a React `Html` finds the overlay through a
+context `<DagrCanvas>` owns.
 **Asked for by:** Nii, 2026-08-14, reacting to the campaign demo plan's card
 section: the overlay should be part of the library, "similar to the
 react-konva html util", and nodes should be able to carry rich content.
