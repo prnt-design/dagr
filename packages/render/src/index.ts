@@ -31,6 +31,22 @@
  * Shapes are therefore M4.2's contribution to what is on screen; real layout
  * arrives in M4.4, both behind the `Renderer` seam exported here.
  *
+ * **M4.11 added the second thing this package can put on screen, and it is not
+ * drawn by a GPU at all.** `createHtmlOverlay` positions DOM elements in world
+ * coordinates over the canvas and keeps them registered with a `Camera2D`. It
+ * is exported where the shape scene is not, and the difference is that the
+ * overlay is a feature rather than a demonstration: a caller supplies the
+ * elements, so nothing hard-coded becomes part of the contract. It fills this
+ * package's text gap without a glyph pipeline, since the GPU draws thousands of
+ * shapes and the DOM draws the tens of readable things.
+ *
+ * The overlay has no three.js in it, which raises a boundary question this
+ * package answers deliberately: it lives here rather than in a package of its
+ * own, on the option M4.6 named for the spring integrator, and the cost is that
+ * a consumer who wants only the overlay still installs the `three` peer. See
+ * `specs/2026-08-14-html-overlay-design.md` for the escape hatch and what
+ * taking it would cost.
+ *
  * Not one three.js type appears in anything exported from this file. See
  * `types.ts` for why: three is a peer dependency, so it stays an implementation
  * detail of `webgpu-renderer.ts`.
@@ -48,7 +64,17 @@
 
 export { Camera2D } from './camera.js';
 export type { Camera2DInit } from './camera.js';
-export { RendererDisposedError } from './errors.js';
+export {
+  DagrRenderError,
+  OverlayDisposedError,
+  OverlayParentError,
+  RendererDisposedError,
+} from './errors.js';
+export type { DagrRenderErrorCode } from './errors.js';
+export { createHtmlOverlay } from './html-overlay.js';
+export type { HtmlOverlay, HtmlOverlayOptions, OverlayEntry, OverlayEntryInit } from './html-overlay.js';
+export { CENTRE_ANCHOR } from './overlay-math.js';
+export type { ElementAnchor, OverlayPlacement } from './overlay-math.js';
 export { createRenderer } from './webgpu-renderer.js';
 export type {
   OrthoFrustum,

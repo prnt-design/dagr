@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
-import { Camera2D, createRenderer } from '@dagr/render';
+import { Camera2D, createHtmlOverlay, createRenderer } from '@dagr/render';
 import type { Renderer, Vec2, ViewportSize, WorldBounds } from '@dagr/render';
 import {
   INITIAL_ZOOM,
@@ -10,6 +10,8 @@ import {
   initialZoomFromHash,
   wheelZoomFactor,
 } from './camera-input.js';
+import { LABEL_MIN_SCREEN_WIDTH, LADDER_SHAPES } from './ladder.js';
+import type { LadderShape } from './ladder.js';
 
 /**
  * `@dagr/render` on a canvas, with pan and zoom wired to a real
@@ -22,13 +24,21 @@ import {
  * from 0.1x to 100x, and a way to arrive at a named zoom without a gesture (see
  * {@link initialZoomFromHash}) so the committed screenshots are reproducible.
  *
+ * M4.11 added a second thing over the same camera: an HTML overlay, from
+ * `@dagr/render`, labelling each ladder shape once it is at least
+ * {@link LABEL_MIN_SCREEN_WIDTH} CSS pixels wide. It is the demo's first text,
+ * and it arrives without a glyph pipeline: the GPU draws the shapes and the DOM
+ * draws the tens of readable things, with the camera keeping them registered.
+ *
  * There is no test file for this component, and that is the same decision
  * `@dagr/render` documents for its own renderer rather than a gap. Everything
  * here needs a GPU adapter, a laid-out canvas and live input events; a jsdom
  * suite could only assert that a mock was called, which would pass just as
  * happily if nothing were ever drawn. The arithmetic and the hash parsing that
- * CAN be checked live in `camera-input.ts` and are tested there, and what is
- * left is wiring, verified by the committed screenshots.
+ * CAN be checked live in `camera-input.ts`, the overlay's own arithmetic and
+ * wiring are tested in `@dagr/render`, the ladder geometry copied into
+ * `ladder.ts` is checked in `test/ladder.test.ts`, and what is left is wiring,
+ * verified by the committed screenshots.
  *
  * The name is M4.1's and outlives its accuracy on purpose: M4.4 replaces this
  * scene with real layout, and renaming a file twice costs more review than it
@@ -48,6 +58,40 @@ interface CameraReadout {
   readonly center: Vec2;
   readonly world: WorldBounds;
   readonly viewport: ViewportSize;
+  /** How many overlay elements the last sync left attached. */
+  readonly labels: number;
+}
+
+/**
+ * One label for one ladder shape: the element the overlay asks for when the
+ * shape crosses {@link LABEL_MIN_SCREEN_WIDTH} on screen.
+ *
+ * The OUTER element is what the overlay positions and sizes, so it is the
+ * shape's world box and it scales with the zoom. The INNER element carries the
+ * text and counter-scales through `--dagr-overlay-inv-zoom`, which the overlay
+ * publishes on its layer each sync. That split is the answer to a label wanting
+ * two things at once: to be GATED by how big its node is on screen, which needs
+ * a world box, and to be READ at a constant size, which a box cannot do. The
+ * stylesheet does the second half, so nothing here reads the camera.
+ */
+function createLabel(shape: LadderShape): HTMLElement {
+  const box = document.createElement('div');
+  box.className = 'stage__label';
+
+  const text = document.createElement('div');
+  text.className = 'stage__label-text';
+
+  const name = document.createElement('span');
+  name.className = 'stage__label-name';
+  name.textContent = shape.label;
+
+  const detail = document.createElement('span');
+  detail.className = 'stage__label-detail';
+  detail.textContent = shape.detail;
+
+  text.append(name, detail);
+  box.appendChild(text);
+  return box;
 }
 
 /**
@@ -147,6 +191,32 @@ export function FirstLight(): JSX.Element {
     });
 
     /**
+     * The HTML overlay, over the same camera.
+     *
+     * Built here rather than after `createRenderer` resolves, and disposed in
+     * the cleanup below rather than in the teardown chain, because it needs no
+     * GPU: it is two divs and a camera. That independence is worth noticing,
+     * since it means labels are on screen and following a drag while the
+     * adapter is still being acquired, and they survive a renderer that never
+     * arrives at all.
+     *
+     * The parent is the CONTAINER and not the canvas. A canvas cannot have
+     * children, and the container is the element whose box the canvas fills and
+     * which already clips (`overflow: hidden` in `styles.css`).
+     */
+    const overlay = createHtmlOverlay({ parent: container, camera });
+    for (const shape of LADDER_SHAPES) {
+      overlay.add({
+        placement: {
+          kind: 'box',
+          bounds: shape.bounds,
+          minScreenWidth: LABEL_MIN_SCREEN_WIDTH,
+        },
+        create: () => createLabel(shape),
+      });
+    }
+
+    /**
      * Copies the camera's state into React, for {@link Overlay}.
      *
      * Still a `useState` update, and still on the frame path, which is a choice
@@ -166,12 +236,23 @@ export function FirstLight(): JSX.Element {
         center: camera.center,
         world: camera.visibleWorldBounds(),
         viewport: camera.viewport,
+        labels: overlay.activeCount,
       });
     };
 
-    /** Draws one frame and refreshes the overlay. Only ever called from a frame. */
+    /**
+     * Draws one frame and refreshes the readout. Only ever called from a frame.
+     *
+     * `overlay.sync()` goes HERE, on the same callback as `render()`, and not
+     * on a `requestAnimationFrame` of its own. Two loops would be two frame
+     * budgets, and worse, a frame of skew: the labels would trail the shapes
+     * during a pan, which reads as the text swimming over the graph. Syncing
+     * before the readout is what makes `activeCount` describe the frame the
+     * user is looking at rather than the one before it.
+     */
     const draw = (): void => {
       renderer?.render();
+      overlay.sync();
       publish();
     };
 
@@ -329,6 +410,11 @@ export function FirstLight(): JSX.Element {
       // Any frame already scheduled would draw through a renderer that is about
       // to be disposed, and publish into an unmounted component.
       cancelAnimationFrame(frame);
+      // Straight away rather than in the teardown chain below: the overlay owns
+      // no GPU resource, so nothing has to be awaited before its two divs can
+      // go. Leaving it would show a second StrictMode mount two layers of
+      // labels, one of them belonging to a camera nobody is driving any more.
+      overlay.dispose();
       observer.disconnect();
       ratioQuery?.removeEventListener('change', onPixelRatioChange);
       canvas.removeEventListener('pointerdown', onPointerDown);
@@ -391,7 +477,7 @@ function Overlay({ readout }: { readout: CameraReadout | null }): JSX.Element {
     );
   }
 
-  const { zoom, center, world, viewport } = readout;
+  const { zoom, center, world, viewport, labels } = readout;
   return (
     <div className="stage__readout">
       <p className="stage__readout-row">
@@ -414,6 +500,16 @@ function Overlay({ readout }: { readout: CameraReadout | null }): JSX.Element {
         <span className="stage__readout-key">canvas</span>
         {Math.round(viewport.width)} x {Math.round(viewport.height)} css at{' '}
         {fixed(viewport.devicePixelRatio, 2)}x
+      </p>
+      {/*
+        The overlay is invisible in a screenshot when it is doing its job and
+        showing nothing, so it says how many elements it has. It is also the
+        only place a cap that has been hit is visible: a picture missing labels
+        looks the same as a picture that never had any.
+      */}
+      <p className="stage__readout-row">
+        <span className="stage__readout-key">labels</span>
+        {labels} of {LADDER_SHAPES.length} in DOM
       </p>
       {/*
         The limits and the example are interpolated from the constants rather

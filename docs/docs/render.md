@@ -513,6 +513,17 @@ checks:
   was measured rather than assumed. The abort check before `init()` is tested.
 - That the two backends agree with each other. That one is M4.9's, by screenshot
   comparison.
+- That a browser composes the overlay's two transforms the way the algebra says.
+  The layer's `translate() scale()` and an entry's own transform are asserted as
+  strings by a suite that never renders them, so a wrong composition order or a
+  wrong `transform-origin` would be a green suite and a label half its own size
+  away from its shape. The screenshot is what checks it.
+- That the reason the overlay rebases its layer origin is quantitatively right.
+  Compositor transforms being single precision, and 1e7 CSS pixels being where
+  that starts to show, is a reading of how browsers work rather than something
+  measured here. What is tested is that the rebase happens when the rule says.
+- That text under a scaled ancestor stays sharp, which is the argument for the
+  overlay carrying no `will-change`.
 
 ### The one seam that is checked
 
@@ -665,9 +676,142 @@ thing rather than a bug worth crashing for. Every other method throws
 `RendererDisposedError` after disposal, because rendering into a released device
 gets whatever the driver feels like.
 
+## Text, without a glyph pipeline
+
+This package draws signed distance fields and has no text renderer. No task
+anywhere in M4 or M5 adds one, and an honest one (an atlas, shaping, wrapping,
+kerning, bidirectional runs) is weeks rather than an increment. Meanwhile a
+graph nobody can read the labels of is a picture of a graph.
+
+So `createHtmlOverlay` puts DOM elements in world coordinates over the canvas
+and keeps them registered with the camera. The GPU draws thousands of shapes,
+the DOM draws the tens of readable things, and the camera lines them up. The
+analogue is react-konva-utils' `Html`, which portals a div and syncs its
+transform to a Konva stage; this one answers to a `Camera2D` and carries no
+framework at all.
+
+```ts
+import { Camera2D, createHtmlOverlay } from '@dagr/render';
+
+// The parent has to establish a containing block, or the overlay throws
+// OverlayParentError naming the fix. It is the element the canvas fills.
+const overlay = createHtmlOverlay({ parent: stage, camera });
+
+overlay.add({
+  // A box scales with the zoom and is gated by how wide it is on screen. The
+  // gate is half-open, so a label ending at 160 and a card starting at 160 are
+  // never both shown and never both hidden.
+  placement: { kind: 'box', bounds, minScreenWidth: 24, maxScreenWidth: 160 },
+  // Called when it becomes visible, not when it is registered. A scene has far
+  // more entries than elements.
+  create: () => buildLabel(node),
+});
+
+// From the same callback that renders a frame, never from a rAF of its own.
+overlay.sync();
+```
+
+![The demo at zoom 4: the 10 unit rect and the 100 unit rect each carry a
+label, and the 4 unit circle between them, 16 CSS pixels wide, carries
+nothing](../../assets/screenshots/m4.11-overlay-labels-4x.png)
+
+The two committed frames are the whole demonstration, and they are one gesture
+apart. Above is zoom 4, where the readout says two labels of six are in the DOM:
+the circle beside the small rect is 16 CSS pixels wide, under the 24 pixel gate,
+so the GPU draws it and it says nothing. Below is zoom 100, where the same
+rect's box has grown from 40 CSS pixels to 1000 and its label is the same size
+it was.
+
+![The same demo at zoom 100: the rect fills the canvas and its label is the
+same number of pixels as before](../../assets/screenshots/m4.11-overlay-labels-100x.png)
+
+Both are 1102 by 598 CSS pixels of canvas at device pixel ratio 1, captured
+through the WebGL2 fallback rather than WebGPU, which is what a headless
+Chromium on a machine with no GPU has.
+
+### What one sync does, and what it costs
+
+An entry's transform is written in world units measured from a LAYER ORIGIN,
+and the layer carries the camera's transform. So a pan rewrites one string on
+one element, no matter how many entries are on screen, and an entry is only
+rewritten when it appears, when `place()` replaces its placement, or when the
+origin is rebased.
+
+The origin is rebased to the centre of the visible region whenever it falls
+outside it. Compositor transforms are single precision: at zoom 100 over a
+100,000 unit graph, an absolute offset reaches 1e7 CSS pixels against float32's
+roughly 1.7e7 of integer resolution, and cards start to jitter against the
+shapes they label. Rebasing bounds every number in the composed matrix by about
+a viewport, and it cannot thrash, because a fresh origin sits at the centre with
+half a viewport of slack on every side.
+
+`sync()` reads no layout. No `getBoundingClientRect`, no `offsetWidth`, no
+`getComputedStyle` inside the loop (there is one call, at creation, to check the
+parent). One layout read in there would make every frame pay for the styles it
+wrote a line earlier.
+
+### Inside the layer, one CSS pixel is one world unit
+
+The layer is scaled by the zoom, so an entry's content is authored as it should
+look at zoom 1, which is the same identity the camera already states. A 14px
+font is 14 world units of text. A 1px border is one world unit and gets thicker
+as you zoom in.
+
+Two things follow, and both are wanted. Text does not reflow while zooming,
+because layout happens in the layer's local units and the scale is applied
+after it. And text stays sharp, because the browser rasterises glyphs after the
+transform. The exception is `will-change: transform` on the layer, which
+promotes it to a compositor layer that is rasterised once and then scaled as a
+bitmap, so the text goes soft under a zoom. The overlay does not set it.
+
+For content that should stay a constant size while its ENTRY is gated by the
+node's size on screen, the layer publishes two custom properties on every sync:
+`--dagr-overlay-zoom` and `--dagr-overlay-inv-zoom`, both unitless. A label
+inside a box entry counter-scales with
+`transform: scale(var(--dagr-overlay-inv-zoom))` and nothing in JavaScript
+touches it per frame. That is how the demo's labels stay the same size from
+zoom 0.1 to zoom 100 while their boxes grow by a factor of a thousand.
+
+### The cap, and pointer events
+
+An overlay keeps at most `maxElements` elements attached, 200 by default, and
+the ones it keeps are the nearest to the camera centre with ties broken by
+registration order. This is not a tuning knob: a degenerate zoom qualifies every
+label in a graph at once, and a hundred thousand DOM elements is a locked-up
+tab, where a hundred thousand instanced quads is a frame. What it costs is
+visible: entries pop at the boundary rank as the camera moves.
+
+The layer is `pointer-events: none`, so the canvas keeps every gesture. An entry
+with `interactive: true` takes events again, and then swallows the wheel and the
+drag over its own area, because the overlay does not forward events to the
+canvas: forwarding synthesises input the browser did not send and gets the
+coordinate space wrong in exactly the cases (transforms, pointer capture) this
+feature is made of. The pattern that works is an inert card with interactive
+controls inside it.
+
+### What is untested here
+
+Two claims in this section are not executed by any test, and they belong on the
+list further up this page rather than being left implied. That a browser
+composes the layer's transform and an entry's the way the algebra says is
+verified by the committed screenshot and by nothing else. And the float32
+argument for rebasing is a reading of how compositors work plus the absence of
+jitter at the zoom the demo reaches, which is evidence rather than a
+measurement.
+
+Everything else is tested: the transform composition, the anchor percentages,
+the CSS number formatting (CSS has no exponential notation, and a fixed decimal
+count would round a small zoom's scale to zero), the gate, the culling, the
+rebase rule and the cap ranking are pure functions with a suite; the element
+lifetime, eviction, `create` and `release`, and the lifecycle run against jsdom.
+
 ## What is not here yet
 
 Most of it. M4.2 is six shapes, drawn correctly, one draw call each.
+
+- Rich nodes: a node's visual as arbitrary HTML sized to its layout box, with
+  the three-tier semantic zoom (shape, label, card) as library policy, and the
+  measurement helper that feeds authored content back into layout (M4.12).
 
 - Instancing, so ten thousand nodes are one draw call rather than ten thousand
   (M4.3). This is also the task that chooses between one material with a

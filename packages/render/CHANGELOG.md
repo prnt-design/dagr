@@ -14,6 +14,39 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- `createHtmlOverlay`: a layer of DOM elements positioned in world coordinates
+  over the canvas and kept registered with a `Camera2D`, with culling against
+  the visible world, a half-open screen-width gate per entry, and a hard element
+  cap. This is the package's answer to having no text renderer, and the first
+  thing it exports that no GPU draws. New surface: `createHtmlOverlay`,
+  `CENTRE_ANCHOR`, the types `HtmlOverlay`, `HtmlOverlayOptions`,
+  `OverlayEntry`, `OverlayEntryInit`, `OverlayPlacement` and `ElementAnchor`.
+  (M4.11)
+
+  **The unit inside the layer is the thing to know before writing content.** The
+  layer carries the camera's scale, so one CSS pixel inside it is one world unit
+  and a card is authored as it should look at zoom 1. A 1px border is one world
+  unit and thickens as you zoom in. Content that should stay a constant size
+  counter-scales with `--dagr-overlay-inv-zoom`, which the layer publishes
+  (unitless, alongside `--dagr-overlay-zoom`) on every sync.
+
+  **`sync()` belongs on the caller's draw path.** The overlay has no animation
+  loop of its own, deliberately: a second `requestAnimationFrame` is a second
+  frame budget and a frame of skew, which reads as the labels swimming over the
+  graph during a pan. It reads no layout, which is what keeps it off the forced
+  reflow path, and that is a property worth preserving in anything added to it.
+
+  **The element cap is 200 by default and is not a tuning knob.** A degenerate
+  zoom qualifies every label in a graph at once; a hundred thousand DOM elements
+  is a locked-up tab where a hundred thousand instanced quads is a frame. What
+  survives is what is nearest the camera centre, with ties broken by
+  registration order, so the picture does not depend on iteration order. The
+  visible cost is that entries pop at the boundary rank as the camera moves.
+
+- `OverlayParentError` and `OverlayDisposedError`, and with them the abstract
+  base `DagrRenderError` carrying a `code` (`DagrRenderErrorCode`), which this
+  package's `errors.ts` said it would grow on its second error class. (M4.11)
+
 - Signed distance fields for rounded rectangles and circles, authored in TSL,
   with fill, an inset outline and a glow all read from the SAME distance and
   antialiased from that distance's own screen-space derivative. `createRenderer`
@@ -187,6 +220,19 @@ not" is the category this file has a heading for.
   being answered, and a culling test gets the shape it wants.
 
 ### Changed
+
+- `RendererDisposedError` now extends `DagrRenderError` and carries
+  `code: 'RENDERER_DISPOSED'`. Additive: its name, its message and
+  `instanceof Error` are unchanged, so a caller catching it today sees no
+  difference. It is here because a prototype chain is exactly the kind of thing
+  this file exists to record. Nothing in the types changed, and the value a
+  caller catches is not quite the object it was. (M4.11)
+
+- The three value checks that lived in `camera.ts` (`requireFinite`,
+  `requirePositive`, `requireFinitePoint`) are in `validate.ts` now, with the
+  paragraph on why a bad number is a `RangeError` and why nothing falls back to
+  a default. Internal, so no caller sees it; recorded because the overlay is the
+  second module that needs them and a copy of a validator drifts. (M4.11)
 
 - `PKG_NAME` is no longer exported. It was scaffolding from the workspace's
   first commit and nothing imported it. (M4.1)

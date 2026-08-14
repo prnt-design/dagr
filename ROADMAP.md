@@ -3041,7 +3041,7 @@ so a graph it draws cannot say what any of its nodes are. The design is
 `specs/2026-08-14-html-overlay-design.md`, and both entries below record what
 it settled rather than restating the argument.
 
-- [ ] **M4.11** (`@dagr/render`, `apps/demo`) The HTML overlay: a layer of DOM
+- [x] **M4.11** (`@dagr/render`, `apps/demo`) The HTML overlay: a layer of DOM
   elements positioned in world coordinates over the canvas, transformed by
   `Camera2D`, culled against `visibleWorldBounds()` and capped. The analogue is
   react-konva-utils' `Html`, which portals a div and syncs its CSS transform to
@@ -3137,6 +3137,32 @@ it settled rather than restating the argument.
   browser composes the two transforms the way the algebra says and that the
   float32 argument above is quantitatively right; both are listed with the rest
   of the package's untested surface on `docs/docs/render.md`.
+  SHIPPED, and three things the task learned that were not in the plan. THE
+  LAYER PUBLISHES `--dagr-overlay-zoom` AND `--dagr-overlay-inv-zoom`, unitless,
+  on each sync. The three-tier zoom runs straight into a label wanting to be
+  GATED by its node's size on screen (which needs a box) and DRAWN at a constant
+  size (which is what a point does), and the union has no member for a box that
+  does not scale, because such a thing is not a world rectangle. A custom
+  property splits the two cleanly: the entry stays a box and a descendant writes
+  `transform: scale(var(--dagr-overlay-inv-zoom))`, so the browser does the
+  arithmetic and no JavaScript touches a font size per frame. The demo's two
+  committed frames are that claim: the same tag at the same pixel size while its
+  box grows from 40 CSS pixels to 1000.
+  CSS HAS NO EXPONENTIAL NOTATION, and a declaration containing `1e-7` is
+  DROPPED by the parser rather than clamped, so an element keeps its old
+  transform and one label silently stops following the camera. `String()`
+  switches to exponent form below 1e-6 and at or above 1e21, and a fixed decimal
+  count is not the fix either: four decimals turns a zoom of 1e-5 into
+  `scale(0)`, a singular matrix that collapses the layer, including the
+  screen-scaled entries that were the only readable thing left. So numbers are
+  formatted to seven significant digits with the fraction count chosen per
+  value, and the large end goes through `BigInt`, which is exact because every
+  double at or above 1e21 is an integer. Both ends are tested.
+  THE SCREENSHOTS WERE CAPTURED THROUGH THE WEBGL2 FALLBACK. Headless Chromium
+  on this box has no `navigator.gpu` at all and swiftshader gives it WebGL2, so
+  three's automatic fallback is what drew the committed frames. That is a fact
+  about the capture and about M4.9's eventual parity check, not about the
+  overlay, which never touches a GPU.
 - [ ] **M4.12** (`@dagr/render`, `apps/demo`) Rich nodes: a node's visual as
   arbitrary HTML sized to its layout box, with the campaign plan's three-tier
   semantic zoom (instanced shape below ~24 CSS px, title label to ~160 px, full
