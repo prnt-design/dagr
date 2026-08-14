@@ -61,9 +61,9 @@ const FEATURES: Feature[] = [
     body: (
       <>
         Strict TypeScript, property-based tests, and a benchmark gate that runs
-        before every merge on one machine: work that got slower does not ship,
-        and a machine too busy to measure is told apart from a regression
-        rather than failing at random.
+        before every merge against a baseline from the same machine: work that
+        measurably slowed down does not ship, and a machine too busy to measure
+        is told apart from a regression rather than failing at random.
       </>
     ),
   },
@@ -138,22 +138,23 @@ export default function Home(): ReactNode {
           <div className={styles.perfHead}>
             <h2 className={styles.exampleTitle}>Scale is a measured claim</h2>
             <p className={styles.exampleBody}>
-              The figure below is not a picture of a benchmark run. It is{' '}
-              <code>smallCorpus()</code> from the repository&apos;s bench kit,
-              1,000 nodes and 4,000 edges, generated and laid out by{' '}
-              <code>@dagr/layout</code> in your browser while you read this, in
-              a worker so the page keeps answering. The time it reports was
-              measured on your machine, not on ours.
+              The figure below is not a picture of a benchmark run. It starts
+              on <code>smallCorpus()</code> from the repository&apos;s bench
+              kit, 1,000 nodes and 4,000 edges, generated in your browser from
+              the same seeded generator and laid out by{' '}
+              <code>@dagr/layout</code> while you read this, in a worker so the
+              page keeps answering. The time it reports was measured on your
+              machine, not on ours.
             </p>
             <p className={styles.exampleBody}>
-              Every change is benchmarked before it merges, on one machine,
-              against the numbers the change before it recorded, and a change
-              that makes layout slower does not merge. A timing means something
-              only beside the machine that produced it, which is why the{' '}
+              Every change is benchmarked before it merges, against a baseline
+              recorded on that same machine, and a change that measurably slows
+              the work down does not merge. A timing means something only
+              beside the machine that produced it, which is why the{' '}
               <Link to="/docs/layout#what-a-run-costs">layout docs</Link>{' '}
               publish what each stage costs on this corpus and on one ten times
               its size instead of a single flattering number. How that gate
-              tells a real regression from a busy machine is written up in{' '}
+              tells a real slowdown from a busy machine is written up in{' '}
               <Link href="https://github.com/prnt-design/dagr/blob/main/bench/README.md">
                 the harness README
               </Link>

@@ -8,8 +8,8 @@
  * advertises do not use. The generator is forty lines and seeded, so a port is
  * cheap; what a port is not is self-maintaining. The 1k preset below has to
  * stay exactly the graph the committed baseline gates on, so
- * `bench/test/corpus.test.ts` runs both generators and fails when they
- * disagree.
+ * `bench/test/docs-corpus-port.test.ts` runs both generators and fails when
+ * they disagree.
  *
  * Generated rather than committed as data for the same reason: 4,000 edge
  * pairs are about 90KB of JSON that a seeded generator reproduces in a couple

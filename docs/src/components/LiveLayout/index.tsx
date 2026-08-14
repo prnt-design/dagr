@@ -46,6 +46,9 @@ const BASE_NODE_SEP = 4;
 /** Padding around the fitted drawing, in layout units. */
 const PAD = 16;
 
+/** How long a run in the worker may take before the page gives up on it. */
+const WORKER_TIMEOUT_MS = 10_000;
+
 /** How far the view may zoom out and in, as a multiple of the fitted box. */
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 40;
@@ -115,6 +118,55 @@ function drawingOf(result: LayoutResult): Drawing {
   };
 }
 
+/**
+ * The view a new drawing opens on: the fitted box, unless fitting it would
+ * waste most of the figure.
+ *
+ * The stage is a wide box and a Sugiyama drawing is usually wider still, so
+ * fitting is almost always right. The exception is the largest corpus, which
+ * has more layers than the others but many more nodes inside each one, so it
+ * comes out squarer than the stage: fitted at a 1440px viewport it filled 56%
+ * of the width and drew each node at 1.9 pixels, which reads as a smear rather
+ * than as a graph. Opening on the box that covers the stage instead shows the
+ * whole rank axis at 1.8 times the scale and crops the top and bottom, which
+ * Fit and a drag both undo. Fit stays honest: it is still the whole drawing.
+ *
+ * The threshold is a quarter of the stage's aspect off, which leaves the 250
+ * and 1,000 presets fitted where they already read well.
+ */
+function openingView(fit: Box, stageAspect: number): Box | null {
+  if (fit.width / fit.height >= stageAspect * 0.75) return null;
+  const width = Math.min(fit.width, fit.height * stageAspect);
+  const height = width / stageAspect;
+  return {
+    x: fit.x + (fit.width - width) / 2,
+    y: fit.y + (fit.height - height) / 2,
+    width,
+    height,
+  };
+}
+
+/**
+ * How to ink an edge: its width in CSS pixels, and how much of the stroke
+ * colour to use, from how many edges there are and how far the view is zoomed.
+ *
+ * One setting cannot serve both ends of this. A single route has to read as a
+ * line when a reader has zoomed in on it, and four thousand routes at that
+ * weight, fitted, are a silver field with the nodes lost inside it, which
+ * inverts the one rule the whole theme has: the accent is where the meaning
+ * is, and here that is the nodes. So an edge thins with density and thickens
+ * with zoom, and its ink starts near a quarter, which is roughly where the
+ * committed figure this replaced sat, and reaches full stroke by the time
+ * individual routes are what a reader is looking at.
+ */
+function edgeInk(edgeCount: number, zoom: number): { width: number; opacity: number } {
+  const forDensity = Math.min(0.8, Math.max(0.4, 0.55 * (4_000 / Math.max(1, edgeCount)) ** 0.3));
+  return {
+    width: forDensity * Math.min(2.5, Math.max(1, Math.sqrt(zoom))),
+    opacity: 0.55 + 0.45 * Math.min(1, Math.max(0, (zoom - 1) / 7)),
+  };
+}
+
 const count = (value: number): string => value.toLocaleString('en-US');
 
 // The gap before the unit is a narrow no-break space written as an escape, so
@@ -123,9 +175,37 @@ const count = (value: number): string => value.toLocaleString('en-US');
 const ms = (value: number): string =>
   `${(Math.round(value * 10) / 10).toLocaleString('en-US')}\u202fms`;
 
+/**
+ * The middle of an odd count, the mean of the two middles of an even one. The
+ * second half matters: the readout shows a median from three runs up, so it
+ * hits even counts, and taking the upper middle there would report the third
+ * smallest of four as the middle of four.
+ */
 function median(values: readonly number[]): number {
   const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)] ?? 0;
+  const middle = Math.floor(sorted.length / 2);
+  const upper = sorted[middle] ?? 0;
+  if (sorted.length % 2 === 1) return upper;
+  return ((sorted[middle - 1] ?? upper) + upper) / 2;
+}
+
+/**
+ * Runs `work` now if the run is going to a worker, and at the next idle moment
+ * if it is not.
+ *
+ * Idle scheduling does not shorten a long task, it only moves it, so this is
+ * about where the freeze lands rather than whether there is one: a
+ * three-hundred millisecond run on the main thread is a frame the visitor
+ * loses, and losing it while the browser has nothing else to do is the
+ * difference between a page that stutters under your scroll and one that does
+ * not. A run in a worker has nothing to schedule around.
+ */
+function schedule(hasWorker: boolean, work: () => void): () => void {
+  if (hasWorker) {
+    work();
+    return () => undefined;
+  }
+  return whenIdle(work);
 }
 
 /** Runs `work` when the browser is idle, so a main-thread run does not jank. */
@@ -165,6 +245,9 @@ export default function LiveLayout(): ReactNode {
   const runToken = useRef(0);
   const warmed = useRef(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  // The stage rather than the drawing, because the opening view is chosen
+  // before the first drawing exists to measure.
+  const stageRef = useRef<HTMLDivElement | null>(null);
 
   const settingsKey = `${preset.id}:${String(spacing)}`;
 
@@ -186,9 +269,10 @@ export default function LiveLayout(): ReactNode {
       const key = `${nextPreset.id}:${String(nextSpacing)}`;
       // A browser `Worker` satisfies `LayoutPort` structurally, so nothing is
       // cast here, and `undefined` is the whole of the fallback.
+      const port = workerRef.current;
       const engine = createLayout({
         config: configFor(nextSpacing),
-        worker: workerRef.current ?? undefined,
+        worker: port ?? undefined,
       });
 
       let graph = graphs.current.get(nextPreset.id);
@@ -197,9 +281,37 @@ export default function LiveLayout(): ReactNode {
         graphs.current.set(nextPreset.id, graph);
       }
 
+      // The caller racing its own promise, which is what `runAsync` says a
+      // caller who needs to give up has to do: it has no timeout, because how
+      // long is too long belongs to the caller. A worker that stops answering
+      // is not hypothetical. Its script is a hashed chunk, so a page held in a
+      // cache across a deploy asks for a file the deploy removed, the worker
+      // dies before `serveLayout` attaches, and nothing on this side hears
+      // about it. Ten seconds is far past any run this demo offers (the
+      // largest is half a second warm on a laptop) and short enough that the
+      // visitor is still looking at it.
+      let settled = false;
+      const watchdog =
+        port === null
+          ? null
+          : setTimeout(() => {
+              if (settled || runToken.current !== token) return;
+              workerRef.current = null;
+              setMode('main');
+              port.terminate();
+              schedule(false, () => {
+                run(nextPreset, nextSpacing);
+              });
+            }, WORKER_TIMEOUT_MS);
+      const stopWatchdog = (): void => {
+        settled = true;
+        if (watchdog !== null) clearTimeout(watchdog);
+      };
+
       const started = performance.now();
       engine.runAsync(graph).then(
         (result) => {
+          stopWatchdog();
           // A run whose settings have already been replaced is an answer to a
           // question nobody is asking any more.
           if (runToken.current !== token) return;
@@ -210,7 +322,9 @@ export default function LiveLayout(): ReactNode {
             // Straight into the measured run, from here rather than from an
             // effect, so the two are one page load's worth of work and not a
             // state change the visitor can interrupt halfway.
-            run(nextPreset, nextSpacing);
+            schedule(workerRef.current !== null, () => {
+              run(nextPreset, nextSpacing);
+            });
             return;
           }
           setMeasurement((previous) =>
@@ -221,6 +335,7 @@ export default function LiveLayout(): ReactNode {
           setBusy(false);
         },
         (error: unknown) => {
+          stopWatchdog();
           if (runToken.current !== token) return;
           setFailure(error instanceof Error ? error.message : String(error));
           setBusy(false);
@@ -230,10 +345,24 @@ export default function LiveLayout(): ReactNode {
     [],
   );
 
+  // The settings as of this render, for the worker's error handler below: it
+  // is installed once and would otherwise re-run whatever was selected when the
+  // page loaded.
+  const settings = useRef({ preset, spacing });
+  settings.current = { preset, spacing };
+
   // The worker, built once. A browser that refuses to construct one (an old
   // engine, a policy that blocks worker scripts) leaves the ref null, and
   // `runAsync` then runs the pipeline on this thread and resolves, which is the
   // fallback M2.10 designed in rather than a path this component invents.
+  //
+  // A worker that constructs and then dies takes the same path, and needs the
+  // listener to get there: its script failing to load, or throwing before
+  // `serveLayout` attaches, leaves a run that is never answered, and a run that
+  // is never answered never settles, on purpose (see `runAsync`). Without this
+  // the demo would sit saying it was measuring, forever. Dropping the port and
+  // running again is the whole recovery, because the fallback is a run with no
+  // port.
   useEffect(() => {
     let worker: Worker | null = null;
     try {
@@ -243,11 +372,25 @@ export default function LiveLayout(): ReactNode {
     }
     workerRef.current = worker;
     setMode(worker === null ? 'main' : 'worker');
+    if (worker === null) return;
+    const failed = (): void => {
+      if (workerRef.current === null) return;
+      workerRef.current = null;
+      setMode('main');
+      worker?.terminate();
+      schedule(false, () => {
+        run(settings.current.preset, settings.current.spacing);
+      });
+    };
+    worker.addEventListener('error', failed);
+    worker.addEventListener('messageerror', failed);
     return () => {
       workerRef.current = null;
-      worker?.terminate();
+      worker.removeEventListener('error', failed);
+      worker.removeEventListener('messageerror', failed);
+      worker.terminate();
     };
-  }, []);
+  }, [run]);
 
   // Every run the visitor did not ask for by name: the first one, and the ones
   // a changed control implies. Idle-scheduled so the page finishes painting
@@ -256,7 +399,7 @@ export default function LiveLayout(): ReactNode {
   useEffect(() => {
     let cancelIdle: (() => void) | null = null;
     const timer = setTimeout(() => {
-      cancelIdle = whenIdle(() => {
+      cancelIdle = schedule(workerRef.current !== null, () => {
         run(preset, spacing);
       });
     }, 160);
@@ -266,11 +409,21 @@ export default function LiveLayout(): ReactNode {
     };
   }, [preset, spacing, run]);
 
-  // A new fit box means a different drawing, so the view goes back to fitted.
-  // Re-running the same settings keeps wherever the visitor panned to.
+  // A new fit box means a different drawing, so the view goes back to its
+  // opening one. Re-running the same settings keeps wherever the visitor
+  // panned to.
   const fitKey = drawing === null ? '' : Object.values(drawing.fit).join(' ');
   useEffect(() => {
-    setView(null);
+    const fit = drawing?.fit ?? null;
+    const rect = stageRef.current?.getBoundingClientRect();
+    setView(
+      fit === null || rect === undefined || rect.height === 0
+        ? null
+        : openingView(fit, rect.width / rect.height),
+    );
+    // Keyed on `fitKey`, the drawing's box as a string, and deliberately not on
+    // `drawing` itself: a re-run of the same settings produces an equal box in
+    // a new object, and must not move the view.
   }, [fitKey]);
 
   const box = view ?? drawing?.fit ?? null;
@@ -346,6 +499,10 @@ export default function LiveLayout(): ReactNode {
   };
 
   const config = useMemo(() => configFor(spacing), [spacing]);
+  const ink =
+    drawing === null || box === null
+      ? { width: 0.55, opacity: 0.55 }
+      : edgeInk(drawing.edgeCount, drawing.fit.width / box.width);
   const times = measurement.key === settingsKey ? measurement.times : [];
   const latest = times[times.length - 1];
   const nodes = drawing?.nodeCount ?? preset.nodeCount;
@@ -365,23 +522,36 @@ export default function LiveLayout(): ReactNode {
             Nodes
           </span>
           <div className={styles.segmented} role="group" aria-labelledby="live-size">
-            {CORPUS_PRESETS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                className={clsx(
-                  'corner-cut-native-s',
-                  styles.segment,
-                  option.id === preset.id && styles.segmentOn,
-                )}
-                aria-pressed={option.id === preset.id}
-                onClick={() => {
-                  setPreset(option);
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
+            {CORPUS_PRESETS.map((option) => {
+              // Off the worker, the largest corpus is half a second of blocked
+              // main thread, and moving that to an idle moment does not make it
+              // shorter. The two smaller ones stay, so the demo still runs.
+              const tooBigForThisThread =
+                mode === 'main' && option.nodeCount > BENCH_1K.nodeCount;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={clsx(
+                    'corner-cut-native-s',
+                    styles.segment,
+                    option.id === preset.id && styles.segmentOn,
+                  )}
+                  aria-pressed={option.id === preset.id}
+                  disabled={tooBigForThisThread}
+                  title={
+                    tooBigForThisThread
+                      ? 'Needs a worker: this run would block the page for about half a second'
+                      : undefined
+                  }
+                  onClick={() => {
+                    setPreset(option);
+                  }}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -411,7 +581,9 @@ export default function LiveLayout(): ReactNode {
             type="button"
             className={clsx('bias-open-s', styles.action)}
             onClick={() => {
-              run(preset, spacing);
+              schedule(workerRef.current !== null, () => {
+                run(preset, spacing);
+              });
             }}
             disabled={busy}
           >
@@ -469,7 +641,7 @@ export default function LiveLayout(): ReactNode {
         </p>
       </noscript>
 
-      <div className={clsx('dagr-live-js-only', styles.stage)}>
+      <div ref={stageRef} className={clsx('dagr-live-js-only', styles.stage)}>
         {drawing === null || box === null ? (
           <p className={styles.placeholder}>{failure === null ? 'Laying out…' : null}</p>
         ) : (
@@ -484,7 +656,12 @@ export default function LiveLayout(): ReactNode {
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
           >
-            <path className={styles.edges} d={drawing.edgePath} />
+            <path
+              className={styles.edges}
+              strokeWidth={ink.width}
+              strokeOpacity={ink.opacity}
+              d={drawing.edgePath}
+            />
             <path className={styles.nodes} d={drawing.nodePath} />
           </svg>
         )}
@@ -513,6 +690,14 @@ export default function LiveLayout(): ReactNode {
         The page&apos;s first run is a warm-up and is not reported, which is the
         rule the repository&apos;s own benchmark captures follow. Drag to pan;
         the buttons zoom.
+        {mode === 'main' ? (
+          <>
+            {' '}
+            This browser has no worker to run in, so the layout happens on the
+            page&apos;s own thread when the browser is idle, and the largest
+            corpus is switched off.
+          </>
+        ) : null}
       </figcaption>
     </figure>
   );

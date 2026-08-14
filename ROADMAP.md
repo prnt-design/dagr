@@ -3093,10 +3093,14 @@ of M3 would leave the second runner idle for a milestone.
   The benchmark copy was rewritten at the same time. The merged page described
   the gate as comparing medians as ratios against a control workload; the
   maintainer, who wrote the harness, could not follow it. It now says that
-  every change is benchmarked before it merges, on one machine, against the
-  numbers the change before it recorded, and that a change making layout slower
-  does not merge. The detail stays in `bench/README.md`, where a reader who
-  wants ratios and tolerances will look.
+  every change is benchmarked before it merges against a baseline recorded on
+  that same machine, and that a change which measurably slows the work down
+  does not merge. Both halves of that sentence were rewritten once more after
+  the oss-docs review: "against the numbers the change before it recorded"
+  described a per-change baseline, which is the thing `bench/README.md` forbids,
+  and "makes layout slower" ignored a tolerance the same file calls an effective
+  floor nearer 15% than 10%. The detail stays in `bench/README.md`, where a
+  reader who wants ratios and tolerances will look.
   ALSO DECIDED HERE: `docs/src/css/custom.css` was re-ported to muslin as it
   now stands, because the landing page was about to be the first consumer of
   a token set that had drifted three moves behind the design system it claims

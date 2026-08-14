@@ -35,6 +35,9 @@ services:
         - docs/**
         - packages/graph/**
         - packages/layout/**
+        # Both packages' build configs extend it, so it decides what `dist` the
+        # site ships.
+        - tsconfig.base.json
         - package.json
         - pnpm-lock.yaml
         - pnpm-workspace.yaml

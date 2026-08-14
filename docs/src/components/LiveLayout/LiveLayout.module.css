@@ -144,11 +144,11 @@
 /* Hairlines that stay hairlines. Without `non-scaling-stroke` a stroke is in
    layout units, so it is sub-pixel and washed out at the fitted view and a
    fat ribbon at 40x; the boxes are meant to grow when you zoom in, and the
-   routes between them are not. */
+   routes between them are not. The width itself is set on the element, from
+   the zoom and the edge count: see `edgeStrokeWidth`. */
 .edges {
   fill: none;
-  stroke: var(--contrast-30pct);
-  stroke-width: 0.6px;
+  stroke: var(--contrast-50pct);
   vector-effect: non-scaling-stroke;
 }
 
