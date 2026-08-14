@@ -1,0 +1,49 @@
+.graph {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.edge {
+  fill: none;
+  stroke: var(--contrast-20pct);
+  stroke-width: 1.25;
+}
+
+.edgeSpine {
+  fill: none;
+  stroke: var(--primary-vivid);
+  stroke-width: 2;
+}
+
+.node {
+  fill: var(--background);
+  stroke: var(--contrast-30pct);
+  stroke-width: 1.25;
+}
+
+.nodeSpine {
+  fill: var(--primary);
+  stroke: none;
+}
+
+/* The spine draws itself in once, source to sink. Decoration, not meaning:
+   the finished frame is identical, and the global reduced-motion rule
+   flattens the animation to a frame. */
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .edgeSpine {
+    /* The polyline carries pathLength={1}, so dash units are the whole path. */
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: draw 900ms var(--dagr-ease-out) 250ms forwards;
+  }
+}

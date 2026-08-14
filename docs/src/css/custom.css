@@ -1,95 +1,209 @@
 /* Dagr docs theme.
  *
- * The palette is the same one the rest of prnt.design is dressed in. The
- * token values below are copied by hand rather than imported: the docs site
- * stays self contained and carries no dependency on the design system
- * package. If the brand tokens move over there, these are the values to
- * resync.
+ * A port of muslin, the design system the rest of prnt.design is dressed in
+ * (packages/muslin in prnt-design/monorepo). A port, not a dependency:
+ * @muslin/ui is a private workspace package whose stylesheet needs Tailwind
+ * to compile, and this site stays self contained. If the tokens move over
+ * there, these are the values to resync.
  *
- * The one idea worth knowing before reading further: the neutrals are not
- * grey. Every border, divider, and muted surface is the primary green at low
- * alpha, so the whole page carries a faint green cast instead of the usual
- * slate. That is the signature of the palette, and it is why the contrast
- * scale below is written as alphas of one colour rather than as a set of
- * independent greys.
+ * The system in two lines. The whole color identity derives from one seed
+ * and everything else is achromatic: the chrome stays black and white, and
+ * the seed is the only color in the system. Radii are zero, and shape is
+ * carried by a 45 degree corner cut plus a selvedge, the woven edge with an
+ * accent hairline set a few pixels in.
+ *
+ * An earlier version of this file tinted every neutral with the brand green.
+ * Muslin has since gone achromatic, and the tint was also what put
+ * --contrast-70pct near 3:1 on white; neutral, the same step measures 7.87:1,
+ * so the ramp now carries text it previously could not.
  */
 
 /* ==========================================================================
-   Brand tokens
-   ========================================================================== */
+   Muslin tokens
+   ==========================================================================
+   Canonical muslin names, with the --dagr-* names the component rules below
+   already use kept as aliases. The aliases resolve at use time, so the dark
+   block only redefines the canonical tokens. */
 
 :root {
-  /* Brand. #21785d, tuned in oklch for a perceptual match. */
-  --dagr-primary: oklch(0.49 0.08 161);
-  /* A darker cut of the same hue, for primary coloured text on white. */
-  --dagr-primary-text: oklch(0.42 0.08 161);
-  --dagr-primary-10pct: oklch(0.49 0.08 161 / 0.1);
-  --dagr-primary-50pct: oklch(0.49 0.08 161 / 0.5);
+  /* --- THE SEED ---
+     muslin green, #21785d in oklch. Dagr's brand is the house brand, so the
+     seed is not moved. The runtime accent engine is not ported: docs have no
+     patterns, one fixed seed. */
+  --primary-seed: oklch(0.49 0.08 161);
 
-  /* The contrast scale: neutrals tinted with the primary. */
-  --dagr-contrast-5pct: oklch(0.49 0.08 161 / 0.05);
-  --dagr-contrast-10pct: oklch(0.49 0.08 161 / 0.1);
-  --dagr-contrast-20pct: oklch(0.49 0.08 161 / 0.2);
-  --dagr-contrast-30pct: oklch(0.49 0.08 161 / 0.3);
-  --dagr-contrast-50pct: oklch(0.49 0.08 161 / 0.5);
-  --dagr-contrast-60pct: oklch(0.49 0.08 161 / 0.6);
-  --dagr-contrast-70pct: oklch(0.49 0.08 161 / 0.7);
-  --dagr-contrast-90pct: oklch(0.49 0.08 161 / 0.9);
+  /* --- PRIMARY FAMILY, all derived ---
+     Base tier is color-mix() and works everywhere; browsers with relative
+     color syntax get the @supports tier below, which clamps lightness and
+     chroma properly. */
+  --primary: var(--primary-seed);
+  --primary-foreground: oklch(0.99 0 0);
+  --primary-hover: color-mix(in oklch, var(--primary-seed) 88%, oklch(0 0 0));
+  --primary-active: color-mix(in oklch, var(--primary-seed) 80%, oklch(0 0 0));
+  /* decorative only: indicators, glyphs, rules. Never carries text. */
+  --primary-vivid: var(--primary-seed);
+  /* the accent used AS text, against --background */
+  --primary-text: color-mix(in oklch, var(--primary-seed) 82%, oklch(0.13 0 0));
+  --primary-wash: color-mix(in oklch, var(--primary-seed) 10%, var(--background));
+  --primary-line: color-mix(in oklch, var(--primary-seed) 45%, var(--background));
+  --primary-10pct: color-mix(in srgb, var(--primary-seed) 10%, transparent);
+  --primary-50pct: color-mix(in srgb, var(--primary-seed) 50%, transparent);
 
-  --dagr-background: oklch(1 0 0);
-  --dagr-foreground: oklch(0.13 0 0);
-  --dagr-surface: oklch(0.49 0.08 161 / 0.035);
+  /* --- SURFACES --- */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.13 0 0);
 
-  /* Secondary text needs its own value. The contrast scale above is an alpha
-     ramp, which is right for borders and surfaces but wrong for type: 70% of
-     the primary over white lands near 3:1, so nav labels and table headers
-     set from it would fail WCAG AA. This keeps the green cast and buys the
-     contrast back with lightness instead of alpha. */
-  --dagr-text-muted: oklch(0.42 0.03 161);
+  /* --- CONTRAST SCALE (achromatic) --- */
+  --contrast-5pct: oklch(0.13 0 0 / 0.05);
+  --contrast-10pct: oklch(0.13 0 0 / 0.1);
+  --contrast-20pct: oklch(0.13 0 0 / 0.2);
+  --contrast-30pct: oklch(0.13 0 0 / 0.3);
+  --contrast-50pct: oklch(0.13 0 0 / 0.5);
+  --contrast-60pct: oklch(0.13 0 0 / 0.6);
+  --contrast-70pct: oklch(0.13 0 0 / 0.7);
+  --contrast-90pct: oklch(0.13 0 0 / 0.9);
 
-  /* The slab behind a `:::note`, which is the admonition people actually
-     write. It renders off the *secondary* contrast pair, not the primary
-     one, and Infima's secondary is a flat grey: the one surface in the site
-     that would contradict the header's claim that the neutrals are tinted.
-     The semantic pairs are deliberately left stock. An amber warning should
-     stay amber, a red danger red, and info blue is worth keeping distinct
-     from tip green rather than collapsing everything into the brand. */
-  --dagr-callout: oklch(0.97 0.008 161);
-  --dagr-callout-text: oklch(0.3 0.03 161);
+  /* --- SHAPE ---
+     Square by default; shape is carried by the cut, not by radius. The
+     radius tokens stay declared so every var(--dagr-radius*) below resolves
+     to square instead of breaking. */
+  --corner-cut-xs: 5px;
+  --corner-cut-s: 8px;
+  --corner-cut-m: 14px;
+  --corner-cut-l: 22px;
+  --edge-width: 3px;
+  --cut-polygon: polygon(
+    var(--cut) 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%,
+    0 var(--cut)
+  );
 
-  --dagr-radius-s: 0.25rem;
-  --dagr-radius-m: 0.5rem;
-  --dagr-radius-l: 0.75rem;
+  /* --- SELVEDGE ---
+     A neutral band with the accent hairline woven a few pixels IN from the
+     edge. The accent is the hairline, not the band: inverted, this is an
+     accent left-border, the most reproduced device on the web. */
+  --selvedge-band: 11px;
+  --selvedge-inset: 4px;
+  --selvedge-line: 1.5px;
+  --selvedge-gradient: linear-gradient(
+    to right,
+    var(--contrast-10pct) 0 var(--selvedge-inset),
+    var(--primary) var(--selvedge-inset)
+      calc(var(--selvedge-inset) + var(--selvedge-line)),
+    var(--contrast-10pct) calc(var(--selvedge-inset) + var(--selvedge-line))
+      var(--selvedge-band),
+    transparent var(--selvedge-band)
+  );
+
+  /* --- ELEVATION --- */
+  --shadow-s: 0 2px 4px -1px oklch(0 0 0 / 0.06), 0 3px 12px -1px oklch(0 0 0 / 0.1);
+  --shadow-m: 0 4px 8px -2px oklch(0 0 0 / 0.08), 0 8px 24px -4px oklch(0 0 0 / 0.12);
+
+  /* --- ALIASES the component rules below use --- */
+  --dagr-primary: var(--primary);
+  --dagr-primary-text: var(--primary-text);
+  --dagr-primary-10pct: var(--primary-10pct);
+  --dagr-primary-50pct: var(--primary-50pct);
+  --dagr-contrast-5pct: var(--contrast-5pct);
+  --dagr-contrast-10pct: var(--contrast-10pct);
+  --dagr-contrast-20pct: var(--contrast-20pct);
+  --dagr-contrast-30pct: var(--contrast-30pct);
+  --dagr-contrast-50pct: var(--contrast-50pct);
+  --dagr-contrast-60pct: var(--contrast-60pct);
+  --dagr-contrast-70pct: var(--contrast-70pct);
+  --dagr-contrast-90pct: var(--contrast-90pct);
+  --dagr-background: var(--background);
+  --dagr-foreground: var(--foreground);
+  --dagr-surface: var(--contrast-5pct);
+  --dagr-text-muted: var(--contrast-70pct);
+
+  /* The slab behind a `:::note`. Neutral now, like every other surface; the
+     semantic admonition pairs (amber warning, red danger, info blue) are
+     deliberately left stock, since status must not shift with the brand. */
+  --dagr-callout: oklch(0.97 0 0);
+  --dagr-callout-text: oklch(0.3 0 0);
+
+  --dagr-radius-s: 0;
+  --dagr-radius-m: 0;
+  --dagr-radius-l: 0;
 
   --dagr-duration-fast: 100ms;
   --dagr-duration-base: 200ms;
   --dagr-ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
 }
 
-[data-theme='dark'] {
-  --dagr-primary: oklch(0.68 0.1 161);
-  --dagr-primary-text: oklch(0.75 0.1 161);
-  --dagr-primary-10pct: oklch(0.68 0.1 161 / 0.1);
-  --dagr-primary-50pct: oklch(0.68 0.1 161 / 0.5);
+/* Relative color syntax tier: clamps lightness and chroma properly. Light
+   theme clamps L to [0.42, 0.5]; muslin's measured floor across hues is
+   5.45:1 against --primary-foreground. Hue is never touched. */
+@supports (color: oklch(from white l c h)) {
+  :root {
+    --primary: oklch(from var(--primary-seed) clamp(0.42, l, 0.5) min(c, 0.19) h);
+    --primary-hover: oklch(from var(--primary) calc(l - 0.05) c h);
+    --primary-active: oklch(from var(--primary) calc(l - 0.09) c h);
+    --primary-vivid: oklch(from var(--primary-seed) clamp(0.45, l, 0.72) min(c, 0.22) h);
+    --primary-text: oklch(from var(--primary-seed) clamp(0.35, l, 0.5) min(c, 0.16) h);
+    --primary-wash: oklch(from var(--primary) 0.96 calc(c * 0.25) h);
+    --primary-line: oklch(from var(--primary) 0.86 calc(c * 0.45) h);
+    --primary-10pct: oklch(from var(--primary) l c h / 0.1);
+    --primary-50pct: oklch(from var(--primary) l c h / 0.5);
+  }
+}
 
-  /* On dark the scale flips to white alphas: green at low alpha over a green
-     tinted ground would be invisible. */
-  --dagr-contrast-5pct: oklch(1 0 0 / 0.05);
-  --dagr-contrast-10pct: oklch(1 0 0 / 0.1);
-  --dagr-contrast-20pct: oklch(1 0 0 / 0.2);
-  --dagr-contrast-30pct: oklch(1 0 0 / 0.3);
-  --dagr-contrast-50pct: oklch(1 0 0 / 0.5);
-  --dagr-contrast-60pct: oklch(1 0 0 / 0.6);
-  --dagr-contrast-70pct: oklch(1 0 0 / 0.7);
-  --dagr-contrast-90pct: oklch(1 0 0 / 0.9);
+/* Muslin ships dark under a .dark class; Docusaurus themes with
+   html[data-theme='dark'], so the values move here. Qualified with `html`
+   for the specificity reason documented at the Infima mapping below. */
+html[data-theme='dark'] {
+  /* Same hue, lifted into the dark band: the light-band seed on a dark
+     ground puts near-black text on an L 0.49 accent wherever the color-mix
+     tier is all there is. */
+  --primary-seed: oklch(0.68 0.08 161);
 
-  /* Not black: the dark neutrals keep a trace of the brand hue. */
-  --dagr-background: oklch(0.14 0.01 161);
-  --dagr-foreground: oklch(0.96 0 0);
-  --dagr-surface: oklch(0.18 0.01 161);
-  --dagr-text-muted: oklch(0.72 0.02 161);
-  --dagr-callout: oklch(0.22 0.012 161);
-  --dagr-callout-text: oklch(0.9 0.02 161);
+  --primary: var(--primary-seed);
+  --primary-foreground: oklch(0.15 0 0);
+  --primary-hover: color-mix(in oklch, var(--primary-seed) 88%, oklch(1 0 0));
+  --primary-active: color-mix(in oklch, var(--primary-seed) 80%, oklch(1 0 0));
+  --primary-vivid: var(--primary-seed);
+  --primary-text: color-mix(in oklch, var(--primary-seed) 80%, oklch(0.96 0 0));
+  --primary-wash: color-mix(in oklch, var(--primary-seed) 16%, var(--background));
+  --primary-line: color-mix(in oklch, var(--primary-seed) 50%, var(--background));
+
+  /* Achromatic: was green-tinted. */
+  --background: oklch(0.14 0 0);
+  --foreground: oklch(0.96 0 0);
+
+  --contrast-5pct: oklch(1 0 0 / 0.05);
+  --contrast-10pct: oklch(1 0 0 / 0.1);
+  --contrast-20pct: oklch(1 0 0 / 0.2);
+  --contrast-30pct: oklch(1 0 0 / 0.3);
+  --contrast-50pct: oklch(1 0 0 / 0.5);
+  --contrast-60pct: oklch(1 0 0 / 0.6);
+  --contrast-70pct: oklch(1 0 0 / 0.7);
+  --contrast-90pct: oklch(1 0 0 / 0.9);
+
+  --shadow-s: 0 2px 4px -1px oklch(0 0 0 / 0.25), 0 3px 12px -1px oklch(0 0 0 / 0.35);
+  --shadow-m: 0 4px 8px -2px oklch(0 0 0 / 0.3), 0 8px 24px -4px oklch(0 0 0 / 0.4);
+
+  --dagr-surface: oklch(0.18 0 0);
+  --dagr-callout: oklch(0.22 0 0);
+  --dagr-callout-text: oklch(0.9 0 0);
+}
+
+/* Dark band clamps L to [0.62, 0.8] against a near-black foreground;
+   muslin's measured floor is 4.94:1. Chroma runs lower than the light band:
+   dark grounds turn saturated accents neon. */
+@supports (color: oklch(from white l c h)) {
+  html[data-theme='dark'] {
+    --primary: oklch(from var(--primary-seed) clamp(0.62, l, 0.8) min(c, 0.17) h);
+    --primary-hover: oklch(from var(--primary) calc(l + 0.05) c h);
+    --primary-active: oklch(from var(--primary) calc(l + 0.09) c h);
+    --primary-vivid: oklch(from var(--primary-seed) clamp(0.6, l, 0.85) min(c, 0.2) h);
+    --primary-text: oklch(from var(--primary-seed) clamp(0.7, l, 0.88) min(c, 0.14) h);
+    --primary-wash: oklch(from var(--primary) 0.26 calc(c * 0.35) h);
+    --primary-line: oklch(from var(--primary) 0.4 calc(c * 0.5) h);
+  }
 }
 
 /* ==========================================================================
@@ -164,7 +278,6 @@ html[data-theme='dark'] {
   --ifm-table-head-font-weight: 500;
   --ifm-table-cell-padding: 0.7rem 1rem;
   --ifm-blockquote-color: var(--dagr-text-muted);
-  --ifm-blockquote-border-color: var(--dagr-primary-50pct);
 
   /* Infima's light value for this is a pure grey, which would make hover the
      one surface in the site where the neutrals are not tinted. */
@@ -288,9 +401,14 @@ body {
   text-decoration-color: currentcolor;
 }
 
+/* A quote wears the selvedge rather than the accent left-border Infima
+   ships: the band is neutral, the accent is the hairline set in from the
+   edge. The padding clears the band; the utility itself adds none. */
 .markdown blockquote {
-  border-left-width: 2px;
-  padding-left: 1.15rem;
+  border-left: 0;
+  background-image: var(--selvedge-gradient);
+  background-repeat: no-repeat;
+  padding-left: calc(var(--selvedge-band) + 0.9rem);
   font-style: normal;
 }
 
@@ -579,13 +697,18 @@ html.docs-doc-id-intro .theme-doc-breadcrumbs {
    Focus and motion
    ========================================================================== */
 
+/* Muslin's house focus treatment: two stacked box-shadow rings, one in the
+   surface color to hold the accent off the component's own edge, then the
+   accent. Box-shadow rather than outline because box-shadow follows
+   corner-shape around a bevel, where outline does not. */
 a:focus-visible,
 button:focus-visible,
 .menu__link:focus-visible,
 .navbar__link:focus-visible {
-  outline: 2px solid var(--dagr-primary);
-  outline-offset: 2px;
-  border-radius: var(--dagr-radius-s);
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 0 0 4px var(--primary);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -596,5 +719,98 @@ button:focus-visible,
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   Muslin shape utilities
+   ==========================================================================
+   Muslin's four, as plain classes; the landing page is the first consumer.
+   Two tiers everywhere: clip-path or square for the roughly one third of
+   browsers without corner-shape, the real bevel where it is native. The
+   border-radius lives INSIDE the @supports on purpose. A browser without
+   corner-shape still applies a radius, so hoisting it would round the
+   corners in Safari and Firefox, the exact opposite of this system. */
+
+.corner-cut-xs {
+  --cut: var(--corner-cut-xs);
+}
+.corner-cut-s {
+  --cut: var(--corner-cut-s);
+}
+.corner-cut-m {
+  --cut: var(--corner-cut-m);
+}
+.corner-cut-l {
+  --cut: var(--corner-cut-l);
+}
+
+.corner-cut-xs,
+.corner-cut-s,
+.corner-cut-m,
+.corner-cut-l {
+  clip-path: var(--cut-polygon);
+}
+
+@supports (corner-shape: bevel) {
+  .corner-cut-xs,
+  .corner-cut-s,
+  .corner-cut-m,
+  .corner-cut-l {
+    clip-path: none;
+    border-radius: var(--cut) 0 var(--cut) 0;
+    corner-shape: bevel;
+  }
+}
+
+/* Cut only where corner-shape is native; square everywhere else. For
+   anything focusable, bordered, or casting a shadow: the tier-1 clip-path
+   would shear the ring or shadow off, and square plus a visible ring beats
+   cut plus no ring. */
+.corner-cut-native-s {
+  --cut: var(--corner-cut-s);
+  border-radius: 0;
+}
+.corner-cut-native-m {
+  --cut: var(--corner-cut-m);
+  border-radius: 0;
+}
+.corner-cut-native-l {
+  --cut: var(--corner-cut-l);
+  border-radius: 0;
+}
+
+@supports (corner-shape: bevel) {
+  .corner-cut-native-s,
+  .corner-cut-native-m,
+  .corner-cut-native-l {
+    border-radius: var(--cut) 0 var(--cut) 0;
+    corner-shape: bevel;
+  }
+}
+
+.selvedge {
+  background-image: var(--selvedge-gradient);
+  background-repeat: no-repeat;
+}
+
+/* The bias cut as a response: at rest the same shape as corner-cut-native-s,
+   deeper on hover, deeper again on press. Enhancement only. Every state is
+   also carried by color, and focus never depends on it. */
+.bias-open-s {
+  border-radius: 0;
+  transition: border-radius var(--dagr-duration-base) var(--dagr-ease-out);
+}
+
+@supports (corner-shape: bevel) {
+  .bias-open-s {
+    corner-shape: bevel;
+    border-radius: var(--corner-cut-s) 0 var(--corner-cut-s) 0;
+  }
+  .bias-open-s:hover {
+    border-radius: calc(var(--corner-cut-s) * 1.5) 0 calc(var(--corner-cut-s) * 1.5) 0;
+  }
+  .bias-open-s:active {
+    border-radius: calc(var(--corner-cut-s) * 1.8) 0 calc(var(--corner-cut-s) * 1.8) 0;
   }
 }
