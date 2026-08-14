@@ -3030,6 +3030,154 @@ of M3 would leave the second runner idle for a milestone.
   Otherwise commit to re-measuring by hand at the end of the milestone and
   again at M5.4's v0.1 readiness review.
 
+The last two tasks were added on 2026-08-14, after the milestone was planned,
+on the maintainer's reading of the campaign demo plan. They are numbered after
+M4.10 and sequenced outside it: they block nothing in M4 and nothing in M4
+blocks them, since the overlay needs a camera (M4.1) and a parent element and
+the rich-node layer needs a box per node, which a caller supplies from wherever
+it has one. They are also the milestone's answer to a gap the roadmap never
+had a task for. `@dagr/render` has no text and no glyph pipeline is scheduled,
+so a graph it draws cannot say what any of its nodes are. The design is
+`specs/2026-08-14-html-overlay-design.md`, and both entries below record what
+it settled rather than restating the argument.
+
+- [ ] **M4.11** (`@dagr/render`, `apps/demo`) The HTML overlay: a layer of DOM
+  elements positioned in world coordinates over the canvas, transformed by
+  `Camera2D`, culled against `visibleWorldBounds()` and capped. The analogue is
+  react-konva-utils' `Html`, which portals a div and syncs its CSS transform to
+  the Konva stage transform; this one answers to a `Camera2D` and carries no
+  React. Demo consumer: labels on M4.2's crispness ladder, which is the scene
+  the demo has until M4.4 gives it a laid-out graph, with the label tier's own
+  screenshot committed rather than deferred to M4.12's three-tier one, because
+  the `apps/demo` tag on this line is what the M4 header means by a task that
+  lands a scene.
+  DECIDED IN THE SPEC, and these are the ones later tasks inherit rather than
+  re-argue. IT LIVES IN `@dagr/render` and is exported from it. M4.6 NAMED that
+  option for the spring integrator to keep a choice open rather than to settle
+  one, and its call is still open; this task takes the option first, on the
+  argument M4.6 wrote down: an internal module with no dependency on the rest of
+  the package, split into its own package when a second consumer exists. The
+  cost is that the overlay's consumer installs `three` to satisfy this package's
+  peer even if it never calls `createRenderer`. The escape hatch, if somebody
+  asks, is a `@dagr/render/overlay` subpath whose module graph has no three.js
+  in it PLUS `peerDependenciesMeta.three.optional`, because the subpath alone
+  keeps three out of the bundle and leaves the install demanding it.
+  TWO NESTED DIVS, ONE OF THEM TRANSFORMED. The outer clips (`overflow:
+  hidden`) and the inner carries `translate(X, Y) scale(z)` with
+  `transform-origin: 0 0`. The layer cannot clip itself, because clipping
+  applies in its own scaled space, so its clip rectangle would grow with the
+  zoom. Every entry element is `position: absolute; left: 0; top: 0` and the
+  overlay sets that itself, since a static element sits in normal flow and its
+  translate would then offset from wherever the flow put it. The parent has to
+  be positioned, and the overlay throws `OverlayParentError` naming the fix
+  rather than setting `position: relative` on an element it does not own.
+  `errors.ts` GROWS THE BASE IT SAID IT OWED: that file records that a second
+  member is when it grows one, and this task brings two (`OverlayParentError`,
+  and `OverlayDisposedError` for `add()` after dispose), so `DagrRenderError`
+  arrives with an abstract `code` like the sibling packages have, and
+  `RendererDisposedError` keeps its name and message under it.
+  ENTRY TRANSFORMS DO NOT DEPEND ON THE CAMERA. An entry is placed with its own
+  `transform: translate(u px, v px)` in coordinates measured from the layer
+  origin, so a pan is ONE style write on ONE element and entry transforms are
+  rewritten only when an entry appears, when its placement changes, or on a
+  rebase. `left` and `top` stay at zero: `transform` is a compositor property
+  and `left` is a layout property, so per-frame `left` writes on 200 elements
+  would be 200 layout invalidations.
+  THE LAYER ORIGIN IS REBASED to the centre of the visible bounds whenever it
+  falls outside them. Compositor transforms are single precision, and at zoom
+  100 over a 100,000 unit graph an absolute offset reaches 1e7 CSS pixels
+  against float32's ~1.7e7 of integer resolution, which is cards jittering
+  against the shapes they label. Rebasing bounds every number in the composed
+  matrix by roughly the viewport, and costs a rewrite of the visible entries at
+  most once per viewport-worth of pan.
+  PLACEMENT IS A DISCRIMINATED UNION, on `ShapeDescriptor`'s argument and
+  `readonly` throughout, since the overlay caches what it computed from one: a
+  point (with an anchor) or a box (with the screen width gate). A box scales
+  with the zoom by definition, so it has no screen mode; a point has no extent,
+  so the size gate is unwritable on it AND a point is always screen-scaled,
+  because a world-scaled point would grow with the zoom with nothing able to
+  gate it (the gate needs an extent, and the only extent it has is the authored
+  size of its own DOM, which `sync()` may not read). Content that should grow
+  with the graph has an extent, and an extent is a box. The anchor is its own
+  type with `across` and `down` rather than a `Vec2`, on the `WorldBounds`
+  argument: it is a y-DOWN unit fraction and `Vec2` is a y-up world point.
+  THE GATE IS HALF-OPEN, `min <= width * zoom < max`, so two tiers sharing a
+  threshold never both show and never both hide without either knowing the
+  other exists. THE CAP (default 200 elements) is not a tuning knob: a
+  degenerate zoom qualifies every label at once, and a hundred thousand
+  elements is a locked-up tab where a hundred thousand instanced quads is a
+  frame. Survivors are ranked by distance from the viewport centre, ties by
+  registration order, so the picture does not depend on iteration order.
+  `sync()` IS CALLED FROM THE DRAW PATH, never from its own
+  `requestAnimationFrame`: a second loop is a second frame budget and a frame
+  of skew, which reads as the labels swimming over the graph during a pan. It
+  writes styles and reads no layout, which is what keeps it off the forced
+  reflow path and is a property to preserve rather than an accident. It is also
+  a NO-OP after dispose, which is a knowing divergence from
+  `RendererDisposedError` being thrown from every renderer method: `sync()` is
+  the one method the platform calls, from inside a frame callback where a throw
+  reaches the global error handler and not the caller's `catch`. `add()` after
+  dispose does throw, on the original argument.
+  TESTING MOVES THE M4.1 LINE, and the move is the point. That line is "pure
+  modules in Node, a screenshot for anything needing a device"; a DOM is
+  available in Node where a GPU adapter is not. So the arithmetic AND the CSS
+  strings it produces are computed in a pure module and tested there (the M4.2
+  lesson: run the expression the browser runs, not a copy of it), and the
+  wiring is tested against jsdom for element counts, eviction, `create` and
+  `release`, and dispose. THIS IS THE WORKSPACE'S FIRST DOM TEST DEPENDENCY: no
+  package had jsdom or happy-dom, and `@dagr/render` had no vitest config and
+  ran in bare Node, so this task adds `jsdom` as a devDependency and selects it
+  for the one DOM test file through the per-file `@vitest-environment` docblock,
+  leaving the package's other suites in Node. jsdom over happy-dom because the
+  four behaviours the tests stand on were checked in jsdom 30 rather than
+  assumed (`style.transform` round-trips verbatim, `pointer-events` survives
+  `setProperty`, `getComputedStyle().position` resolves an inline value and
+  reports `static` without one, `remove()` detaches), and because `@dagr/react`
+  will want the same implementation at M5.1. What stays untested is that a
+  browser composes the two transforms the way the algebra says and that the
+  float32 argument above is quantitatively right; both are listed with the rest
+  of the package's untested surface on `docs/docs/render.md`.
+- [ ] **M4.12** (`@dagr/render`, `apps/demo`) Rich nodes: a node's visual as
+  arbitrary HTML sized to its layout box, with the campaign plan's three-tier
+  semantic zoom (instanced shape below ~24 CSS px, title label to ~160 px, full
+  card above) as library policy rather than demo code. Demo consumer: cards on
+  the ladder, one per shape, and the committed screenshot is the three tiers at
+  three zooms.
+  TIERS ARE GATES AND NOT A THIRD CONCEPT. A node registers one entry per tier,
+  same bounds, adjacent half-open gates, so at most one is ever active and the
+  bottom tier is the absence of an entry, which is the GPU drawing the shape.
+  The layer over that is bookkeeping: `create()` returns a blank element and
+  `update(element, node)` fills it in, which is the split that lets a tier pool
+  its elements instead of building a subtree per pop-in, and `setNodes` diffs
+  by id so a relayout moves boxes without rebuilding anything. A node whose
+  `data` is not the same REFERENCE as last time gets `update` called on it if it
+  has an element, which is reference equality rather than a deep comparison
+  because a deep comparison of arbitrary card data is neither cheap nor
+  decidable, and it makes mutating `data` in place a no-op the same way every
+  other one-way data flow in this project does.
+  MEASUREMENT: BOTH, AND THE DEFAULT IS TO DECLARE. `LayoutConfig.nodeSize` is
+  called once per node during prepare and stays on the main thread even in
+  M2.10's worker mode, so a DOM measurement CAN feed layout. It should when the
+  content is authored per node and its size is a fact about the text; it should
+  not when the content is templated per kind, where the size is known by
+  construction and 2,800 offscreen mounts at startup buy nothing. The opt-in
+  helper batches (mount all, then read all) because interleaving a mount and a
+  read per node forces a layout flush per node, and it names no `@dagr/graph`
+  type, so this package does not grow a dependency on the graph model. Three
+  details it carries rather than leaves to be discovered: its `parent` is
+  REQUIRED, because inherited font and custom properties decide the answer and a
+  card measured under the page's styles and drawn under the overlay's is
+  measured wrong silently; a wrapping card needs the width it will finally have,
+  passed per item; and a web font that has not loaded measures in the fallback
+  face, so a caller using one awaits `document.fonts.ready` first, the helper
+  staying synchronous because `nodeSize` is.
+  ALSO HERE, from the direction plan: a written recommendation on in-canvas
+  text (an MSDF atlas) for the label tier at M4.10 scale, spike only, with the
+  element count where the DOM label tier stops being honest measured on the
+  demo rather than reasoned about. The card tier is HTML by nature and should
+  stay DOM; the label tier is one line per node, which is what an atlas does
+  well, and an atlas takes the tier over by taking its gate over.
+
 ## M5: React + demo = v0.1
 
 - [x] **M5.0** Landing page and the muslin re-port. Touches `docs` only.
@@ -3123,6 +3271,15 @@ of M3 would leave the second runner idle for a milestone.
   survive minification verbatim, so the warnings are noise, not damage.
 - [ ] **M5.1** `@dagr/react`: `<DagrCanvas>` + `useDagr` hook, controlled
   graph prop, mocked-renderer component tests.
+  ALSO LANDS `<Html>`, the React sugar over M4.11's overlay, and the reason it
+  waits for this task rather than shipping with M4.11 is that it has to FIND
+  the overlay. Either it takes one as a prop, which nobody would accept for a
+  component used once per node, or it reads a context, and the context is
+  `<DagrCanvas>`'s to provide. Shipping `<Html>` first would mean inventing
+  that context in a package with no component to provide it, and then living
+  with the shape when this task arrives with the requirements that should have
+  decided it. The maintainer was asked on 2026-08-14 whether to reverse that
+  and bootstrap the package early; until they do, `@dagr/react` stays empty.
 - [ ] **M5.2** Interaction hooks: `useSelection`, hover and drag wiring to
   GPU picking. Component tests.
 - [ ] **M5.3** Demo app: animated living demo (grow/prune/relayout
