@@ -3203,8 +3203,22 @@ it settled rather than restating the argument.
   staying synchronous because `nodeSize` is.
   ALSO HERE, from the direction plan: a written recommendation on in-canvas
   text (an MSDF atlas) for the label tier at M4.10 scale, spike only, with the
-  element count where the DOM label tier stops being honest measured on the
-  demo rather than reasoned about. The card tier is HTML by nature and should
+  element count where the DOM label tier stops being honest measured rather than
+  reasoned about. MEASURED, in `bench/browser/`, which is a browser harness and
+  deliberately NOT part of `bench:ci` for the reason M4.10 already gives about
+  GPU frame times. Not on the demo page, which has six shapes and cannot make a
+  thousand labels: the harness runs the library's own modules with the demo's
+  label markup. THE OVERLAY'S OWN WORK IS NOT WHAT RUNS OUT (`sync` is 0.2 to
+  0.6 ms at a thousand elements) AND NEITHER IS HOLDING THE ELEMENTS (744 of
+  them with a still camera hold 60 fps). What costs is repainting text under a
+  MOVING transform, about 0.2 ms per element per frame on this box, and
+  promoting the layer removes most of it: 357 elements go from 83.3 ms to 16.7,
+  at the price of text that softens under a zoom, which is why the overlay
+  refuses to set `will-change` for a caller and now says what setting it buys.
+  The other bound is legibility and it is arithmetic: a 100 by 18 CSS pixel
+  label tiles a 1200 by 800 viewport 530 times with no gaps, so a readable scene
+  shows one or two hundred, which is the same order as where the frame budget
+  goes and is what makes the default cap of 200 a number rather than a guess. The card tier is HTML by nature and should
   stay DOM; the label tier is one line per node, which is what an atlas does
   well, and an atlas takes the tier over by taking its gate over.
   SHIPPED, and three things worth carrying forward. WHAT THE TIERS COST is

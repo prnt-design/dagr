@@ -942,6 +942,62 @@ multiplied by the zoom. Neither is the box a layout should reserve. The cost is
 that the sizes are integers, which against a default `nodeSep` of 50 world units
 is not a number anybody can see.
 
+## In-canvas text: when the DOM stops being the answer
+
+The overlay exists because this package has no glyph pipeline, and the question
+it leaves open is when it should get one. That was measured rather than argued,
+with `bench/browser/label-throughput.html`, which drives the real overlay in a
+real browser. The full table and the procedure are in `bench/browser/README.md`;
+the numbers below are from the dispatch box, headless Chromium with NO GPU and
+software rasterisation, at 1200 by 800 CSS pixels and device pixel ratio 1.
+
+| Elements attached | `sync` median | Frame, panning | Frame, still | Frame, panning, promoted |
+| --- | --- | --- | --- | --- |
+| 120 | 0.2 ms | 33.3 ms | | |
+| 357 | 0.2 ms | 83.3 ms | | 16.7 ms |
+| 744 | 0.6 ms | | 16.7 ms | |
+| 1073 | 0.5 ms | 216.7 ms | | 83.3 ms |
+
+Every frame figure is a multiple of 16.7 ms because the browser paints on a
+vsync tick, so a row is a frame count rather than a time: 83.3 ms is five ticks.
+Run to run, a row moves by one tick.
+
+**The overlay's own work is not what runs out.** `sync()` costs 0.2 to 0.6 ms at
+up to a thousand elements, which is under 4% of a 16.7 ms frame. Neither is
+holding the elements: 744 of them with a still camera hold sixty frames a
+second. What costs is repainting text under a MOVING transform, about 0.2 ms per
+element per frame on this box, and that is the number the label tier is bounded
+by. Promoting the layer with `will-change: transform` removes most of it, taking
+357 elements from 83.3 ms to 16.7, at the price this page names two sections up:
+a promoted layer is rasterised once and then scaled, so the text softens under a
+zoom. The overlay does not set it, and a consumer who pans far more than they
+zoom now knows what setting it themselves buys.
+
+The other bound is legibility, and it is arithmetic rather than measurement. A
+label around 100 by 18 CSS pixels tiles a 1200 by 800 viewport 530 times with no
+gaps at all, so a scene a person can read shows one or two hundred. That is the
+same order as where the frame budget goes, which is why the default element cap
+of 200 is not an awkward number.
+
+### The recommendation
+
+**Keep the DOM for both tiers, and schedule an atlas when a scene wants names on
+thousands of nodes while the camera is moving.** That is a real case rather than
+a hypothetical: it is M4.10's target, ten thousand animating nodes, and if that
+scene is ever asked to show names the measurement above says the DOM cannot,
+promoted or not. It is also a different visual product from the label tier as it
+stands, closer to a wall of text as texture than to a hundred readable tags.
+
+The card tier should stay DOM permanently. Its content is arbitrary markup with
+links, wrapped prose, images and per-kind structure, and reimplementing that over
+a glyph atlas is reimplementing a browser. At card zoom only tens of nodes fit on
+screen, so it never approaches a count where any of this bites.
+
+Nothing in the overlay's design changes either way, which is the useful part: the
+label tier is one entry per node with a gate, so an atlas takes the tier over by
+taking its gate over, and the tier above and the tier below stay exactly as they
+are.
+
 ## What is not here yet
 
 Most of it. M4.2 is six shapes, drawn correctly, one draw call each.

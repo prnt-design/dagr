@@ -34,4 +34,15 @@ export default tseslint.config(
       globals: { URL: 'readonly', console: 'readonly', process: 'readonly' },
     },
   },
+  {
+    // `bench/browser` drives a real browser, so parts of these files run in the
+    // PAGE rather than in node: the callback handed to `page.evaluate` is
+    // serialised and evaluated there. Declared as its own block rather than
+    // widening the node one above, which would stop `no-undef` catching a
+    // browser global used by mistake in a node script.
+    files: ['bench/browser/**/*.mjs'],
+    languageOptions: {
+      globals: { window: 'readonly' },
+    },
+  },
 );
