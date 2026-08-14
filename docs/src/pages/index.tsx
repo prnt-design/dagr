@@ -61,9 +61,10 @@ const FEATURES: Feature[] = [
     body: (
       <>
         Strict TypeScript, property-based tests, and a benchmark gate that runs
-        before every merge against a baseline from the same machine: work that
-        measurably slowed down does not ship, and a machine too busy to measure
-        is told apart from a regression rather than failing at random.
+        before every merge, against a baseline recorded on the machine running
+        it: work that measurably slowed down does not ship, and a machine too
+        busy to measure is told apart from a regression rather than failing at
+        random.
       </>
     ),
   },
@@ -147,9 +148,10 @@ export default function Home(): ReactNode {
               machine, not on ours.
             </p>
             <p className={styles.exampleBody}>
-              Every change is benchmarked before it merges, against a baseline
-              recorded on that same machine, and a change that measurably slows
-              the work down does not merge. A timing means something only
+              Every change is benchmarked before it merges on one machine,
+              against a baseline recorded on that same machine, and a change
+              that measurably slows the work down does not merge. A timing
+              means something only
               beside the machine that produced it, which is why the{' '}
               <Link to="/docs/layout#what-a-run-costs">layout docs</Link>{' '}
               publish what each stage costs on this corpus and on one ten times
