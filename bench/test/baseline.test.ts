@@ -32,13 +32,26 @@ describe('recording a baseline', () => {
     expect(merged.benchmarks['gpu']).toEqual(gpu);
   });
 
-  it('lets a run reclaim a key that used to be exempt', () => {
+  it('keeps an exemption on a key the run did produce, refreshing its stats', () => {
+    // An exemption is a decision someone wrote down, so lifting it takes a
+    // hand edit rather than being a side effect of the next capture. The entry
+    // that motivated this rule (`2.5k successors` on the dispatch box) is
+    // produced by every run and flakes anyway, and a capture that silently
+    // re-gated it would re-arm the flake with the reasoning deleted. This
+    // reverses the original rule, which let a run reclaim the key.
     const previous: BaselineReport = {
       schema: 1,
-      benchmarks: { a: { gate: 'off', reason: 'was unmeasurable' } },
+      benchmarks: {
+        a: { gate: 'off', reason: 'was unmeasurable', note: 'dispatch box, 2026-08-14' },
+      },
     };
     const merged = mergeBaseline(previous, { a: stat(3) }, AT);
-    expect(merged.benchmarks['a']).toEqual(stat(3));
+    expect(merged.benchmarks['a']).toEqual({
+      gate: 'off',
+      reason: 'was unmeasurable',
+      note: 'dispatch box, 2026-08-14',
+      ...stat(3),
+    });
   });
 
   it('sorts keys so a baseline diff shows the numbers that moved', () => {

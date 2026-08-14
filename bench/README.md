@@ -16,10 +16,23 @@ merge on a regression. CI does not run it.
 The gate lives here rather than on CI because the baseline is machine-matched.
 `bench/baseline.json` records the machine it was captured on, and a comparison
 is only meaningful against the same one. GitHub's x64 Ubuntu runners are not
-the maintainer's arm64 Apple M4, and the ratio normalization below corrects for
-a slower machine, not for a different architecture. Gating on CI reported
+the machine the baseline came from, and the ratio normalization below corrects
+for a slower machine, not for a different architecture. Gating on CI reported
 eleven regressions between +23% and +76% on a commit that changed one docs
 page.
+
+Which machine that is has changed once and can change again: the current file
+was captured on the dispatch box, an x64 AMD EPYC-Rome VM, replacing a capture
+from the maintainer's arm64 M1 Pro after `bench:ci` on the VM showed the
+mismatch signature (failures concentrated in a package the change never
+touched; every `@dagr/graph` ratio had moved +10.2% to +69.8% with no commits
+to its `src`, which is exactly the shift the control cannot cancel). The
+mismatch now points the other way: a run on the maintainer's arm64 machines
+will fail against this file the same way, and moving development back there
+means recapturing on the same terms, three agreeing runs on a quiet machine.
+The CI argument above is unchanged by the baseline being x64 Linux: the
+remaining reason the gate stays local is runner noise and runner identity, not
+which architecture the file happens to name.
 
 ## When the runner is too busy to measure
 
@@ -135,6 +148,13 @@ decision someone wrote down rather than the quiet way to stop a failing
 benchmark from failing. An exempt entry does not have to appear in the run at
 all, which is what lets a hand-measured number live here, and `pnpm
 bench:baseline` carries it across rather than deleting it on the next capture.
+A key the run does produce keeps its `gate` and `reason` too, with the stats
+beneath refreshed, so recapturing cannot silently re-gate an entry: lifting an
+exemption is the same kind of act as adding one, a hand edit with the reason
+for it in the commit. (The first rule here let a produced key reclaim its
+gate; it was reversed when the first produced-and-exempt entry arrived,
+because a capture that re-gated `2.5k successors` by side effect would re-arm
+the exact flake its exemption exists to prevent.)
 
 ## Adding a benchmark
 
@@ -283,7 +303,17 @@ to be scored in medians.
 three times and require the medians to agree before capturing. One clean-looking
 run cannot demonstrate that a second run will land near it, and that is the only
 property that matters: the gate's entire job is to compare a later run to this
-file.
+file. And compare the runs directly, entry by entry; a green `bench:check`
+between them is not the agreement test, because entries already sitting at the
+25% tolerance cap pass it with medians a quarter apart.
+
+**Throw away the first run after an idle spell.** On the dispatch box, the
+first suite run after the machine had been idle put `rank > 1k` at 13.29% rme
+and 39 samples where the two runs behind it recorded 1.5 to 2.5% at 57 to 60,
+read at the median, not the mean. The rejected single-run capture before it
+carried the same signature, 14.06% at 39 samples. Warm the machine with a
+discarded run, then take the three that count. The capture that shipped did
+this, and picked the run closest to the three runs' per-entry medians.
 
 **Compare the MEDIAN, and check you are reading it.** A vitest bench report has
 a `median` field and does not have `p50`. `1000 / hz` is the MEAN, and a
@@ -316,22 +346,29 @@ their median from 10, 10 and 30 samples, because one iteration takes 73ms to
 1.1s and vitest samples for a fixed wall clock. None of the three is reliably
 under 3%: across six rejected runs on an idle machine `rank > 10k` recorded
 3.65% to 5.36% and `pipeline > 1k` 2.90% to 4.64%, and the shipped capture has
-them at 4.26% and 3.11%. They can each land under 3% and cannot be counted on
+them at 7.15% and 4.45%. They can each land under 3% and cannot be counted on
 to, so requiring all fifteen under 3% in one run is a bet those three lose, and
 a capture gated that way was rejected six times running before the ceiling was
 recognised as unreachable rather than the machine as busy. rme was the EVIDENCE
 that the old baseline was taken badly; it is not the property a good baseline
 has to have.
 
-### The weakest entry in the current file, named rather than left to be found
+### The weakest entries in the current file, named rather than left to be found
 
-`build > 1k nodes and 4k edges from empty` carries 6.65% rme at 213 samples, the
-highest in the file, and more samples will not fix it: its median is 2.07ms and
-its maximum 18.2ms, so one interrupted sample in a couple of hundred sets the
-figure. Because the tolerance formula adds both runs' rme, that entry gates at
-about +24.9%, which is close to ungated. It is left that way deliberately for
-now, because turning it off reduces real coverage and switching the gate to a
-trimmed statistic changes every entry in the file. Both are decisions to take on
+One entry is exempt outright. `2.5k successors` carries `"gate": "off"` in the
+current file, because across nine quiet-machine runs on the dispatch box its
+control-normalized ratio ranged 37.7 to 61.8, a 64% band, while its within-run
+rme stayed under 6%: the between-run variance is real, exceeds the 25%
+tolerance cap, and a gate on it would flag noise rather than regressions. The
+full evidence is in the entry's own `reason`. Re-enable it if the baseline
+moves to a machine where three runs agree on it.
+
+Among the gated entries, `build > 1k nodes and 4k edges from empty` (7.46% rme
+at 99 samples, median 4.09ms) and `rank > 10k` (7.15% at 13 samples) are the
+weakest: the tolerance formula adds both runs' rme, so each gates at the 25%
+cap, which is close to ungated. They are left that way deliberately, because
+turning them off reduces real coverage and switching the gate to a trimmed
+statistic changes every entry in the file. Both are decisions to take on
 purpose rather than side effects of a recapture.
 
 

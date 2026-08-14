@@ -54,11 +54,23 @@ export function machineInfo() {
 /**
  * Fold a fresh run into the committed baseline.
  *
- * Exempt entries the run did not produce are carried over rather than dropped.
- * Some are measured by hand and only ever live here: ROADMAP M4.10's GPU frame
- * time is the first, and it never runs under `pnpm bench` at all, so a naive
- * overwrite would delete it on the next capture. Everything else is replaced,
- * so a benchmark deleted on purpose leaves the baseline the same way.
+ * An exemption survives a capture whether or not the run produced its key. A
+ * key the run never produces keeps its whole entry: some are measured by hand
+ * and only ever live here, ROADMAP M4.10's GPU frame time being the first,
+ * and a naive overwrite would delete it on the next capture. A key the run
+ * DID produce keeps its `gate` and `reason` while the stats beneath refresh,
+ * because an exemption is a decision someone wrote down and lifting it should
+ * take a hand edit, not be a side effect of the next capture: the first
+ * produced-and-exempt entry (`2.5k successors` on the dispatch box) flakes on
+ * the capture machine while measuring fine, and a capture that silently
+ * re-gated it would re-arm the flake with the reasoning deleted. This
+ * reverses the original rule, which let a run reclaim the key. Everything
+ * else is replaced, so a benchmark deleted on purpose leaves the baseline the
+ * same way.
+ *
+ * The `gate` field is preserved verbatim rather than validated here: a typo
+ * like `"offf"` is `isExempt`'s problem to surface at gate time, and a merge
+ * that dropped it would hide the file's error instead.
  *
  * @param {BaselineReport | undefined} previous
  * @param {Record<string, BenchStat>} benchmarks
@@ -69,7 +81,17 @@ export function mergeBaseline(previous, benchmarks, capturedAt) {
   /** @type {Record<string, BaselineEntry>} */
   const merged = { ...benchmarks };
   for (const [key, entry] of Object.entries(previous?.benchmarks ?? {})) {
-    if ('gate' in entry && !(key in merged)) merged[key] = entry;
+    if (!('gate' in entry)) continue;
+    const fresh = merged[key];
+    merged[key] =
+      fresh === undefined
+        ? entry
+        : {
+            gate: entry.gate,
+            ...('reason' in entry ? { reason: entry.reason } : {}),
+            ...('note' in entry ? { note: entry.note } : {}),
+            ...fresh,
+          };
   }
 
   // Sorted so a baseline diff reads as the numbers that moved rather than as a
