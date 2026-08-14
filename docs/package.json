@@ -10,10 +10,11 @@
     "serve": "docusaurus serve",
     "clear": "docusaurus clear",
     "typecheck": "tsc --noEmit",
-    "generate:hero": "node scripts/generate-hero-graph.mjs",
-    "generate:perf": "node --experimental-strip-types scripts/generate-perf-graph.mjs"
+    "generate:hero": "node scripts/generate-hero-graph.mjs"
   },
   "dependencies": {
+    "@dagr/graph": "workspace:*",
+    "@dagr/layout": "workspace:*",
     "@docusaurus/core": "3.10.2",
     "@docusaurus/plugin-client-redirects": "3.10.2",
     "@docusaurus/preset-classic": "3.10.2",

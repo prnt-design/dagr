@@ -1,5 +1,5 @@
 import type * as Preset from '@docusaurus/preset-classic';
-import type { Config } from '@docusaurus/types';
+import type { Config, Plugin } from '@docusaurus/types';
 import type { PrismTheme } from 'prism-react-renderer';
 
 // Syntax palette, lifted off the Dagr mark: the sun's vermilion for strings,
@@ -69,6 +69,66 @@ const daybreakDark: PrismTheme = {
   ],
 };
 
+/**
+ * What the landing page's live demo needs from the bundler to run its layout in
+ * a web worker.
+ *
+ * The demo builds one with `new Worker(new URL('./layout.worker.ts', ...))`,
+ * which webpack compiles into a second entrypoint. Two things in the stock
+ * Docusaurus client config stop that entrypoint from being loadable, and both
+ * of them are invisible until the worker's first line throws
+ * `__webpack_require__ is not defined`. The symptom is worse than the error: a
+ * worker that dies never answers, a run that is never answered never settles by
+ * design (see `runAsync` in @dagr/layout), and the demo sits saying it is
+ * laying out, forever.
+ *
+ * `runtimeChunk: true` lifts each entrypoint's runtime into a file of its own,
+ * which is a caching win for a page that can load two scripts and a broken
+ * worker for one that cannot: a worker loads exactly one. Off, the runtime
+ * rides in the bundle that needs it. It costs the site a couple of kilobytes
+ * that no longer cache separately, and webpack has no per-entrypoint form of
+ * the option.
+ *
+ * The second is a Docusaurus bug rather than a trade-off. Its ChunkAssetPlugin
+ * adds a `__webpack_require__.gca` runtime module to every runtime chunk
+ * without declaring that it needs `__webpack_require__`, the public path, or
+ * the chunk filename helper. Every chunk the site itself loads needs those
+ * anyway, so nothing shows. A worker entrypoint holding one concatenated module
+ * and no dynamic import needs none of them, so webpack emits no runtime
+ * bootstrap at all and the injected module references a function that was never
+ * written. Declaring the requirements is what the plugin should have done, and
+ * doing it here is additive: it can only add runtime pieces to a chunk, never
+ * remove one.
+ */
+function dagrWorkerRuntime(): Plugin {
+  return {
+    name: 'dagr-worker-runtime',
+    configureWebpack(_config, isServer, utils) {
+      if (isServer) return {};
+      const { RuntimeGlobals } = utils.currentBundler.instance;
+      return {
+        optimization: { runtimeChunk: false },
+        plugins: [
+          {
+            apply(compiler) {
+              compiler.hooks.thisCompilation.tap('DagrWorkerRuntime', (compilation) => {
+                compilation.hooks.additionalTreeRuntimeRequirements.tap(
+                  'DagrWorkerRuntime',
+                  (_chunk, requirements) => {
+                    requirements.add(RuntimeGlobals.require);
+                    requirements.add(RuntimeGlobals.publicPath);
+                    requirements.add(RuntimeGlobals.getChunkScriptFilename);
+                  },
+                );
+              });
+            },
+          },
+        ],
+      };
+    },
+  };
+}
+
 const config: Config = {
   title: 'Dagr',
   tagline: 'Directed graph layout, WebGPU rendering, and visual DSLs',
@@ -121,6 +181,7 @@ const config: Config = {
   ],
 
   plugins: [
+    dagrWorkerRuntime,
     [
       '@docusaurus/plugin-client-redirects',
       {

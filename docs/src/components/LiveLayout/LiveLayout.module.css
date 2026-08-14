@@ -1,0 +1,208 @@
+/* The live demo's chrome. Muslin: the controls are achromatic, the seed marks
+   the selected size and the drawing's nodes, and shape is the cut and the
+   selvedge the figure already wears.
+
+   Nothing here animates except two hover transitions and the drawing's
+   arrival. The reduced-motion rule in custom.css is a `*` rule with
+   `!important`, so it flattens all three without this file restating it. */
+
+.figure {
+  margin: 0;
+  padding: 0.9rem 1rem 0.8rem calc(var(--selvedge-band) + 0.9rem);
+  border: 1px solid var(--contrast-10pct);
+  background-color: var(--dagr-surface);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.groupLabel {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  color: var(--dagr-text-muted);
+}
+
+.segmented,
+.zoom {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.segment {
+  min-width: 2.75rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--contrast-20pct);
+  background: transparent;
+  color: var(--dagr-text-muted);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    border-color var(--dagr-duration-base) var(--dagr-ease-out),
+    color var(--dagr-duration-base) var(--dagr-ease-out);
+}
+
+.segment:hover:not(:disabled) {
+  border-color: var(--contrast-50pct);
+  color: var(--dagr-foreground);
+}
+
+.segment:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The one place the seed appears in the chrome: which size is being measured.
+   Carried by fill and by `aria-pressed`, never by color alone. */
+.segmentOn {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.segmentOn:hover:not(:disabled) {
+  border-color: var(--primary-hover);
+  color: var(--primary-foreground);
+}
+
+.slider {
+  width: 8rem;
+  accent-color: var(--primary);
+}
+
+.configEcho {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.4rem;
+  color: var(--dagr-text-muted);
+  background: var(--contrast-5pct);
+  border: none;
+  white-space: nowrap;
+}
+
+.action {
+  padding: 0.35rem 0.9rem;
+  border: 1px solid var(--contrast-20pct);
+  background: transparent;
+  color: var(--dagr-foreground);
+  font-size: 0.8125rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition:
+    border-color var(--dagr-duration-base) var(--dagr-ease-out),
+    color var(--dagr-duration-base) var(--dagr-ease-out);
+}
+
+.action:hover:not(:disabled) {
+  border-color: var(--contrast-50pct);
+}
+
+.action:disabled {
+  color: var(--dagr-text-muted);
+  cursor: default;
+}
+
+/* The drawing sits in a fixed aspect box so a re-run at another size does not
+   move the rest of the page. */
+.stage {
+  position: relative;
+  aspect-ratio: 16 / 7;
+  min-height: 12rem;
+  background: var(--dagr-background);
+  border: 1px solid var(--contrast-10pct);
+  overflow: hidden;
+}
+
+.drawing {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  /* Vertical page scroll keeps working over the figure; a horizontal drag
+     pans it. Wheel zoom is Ctrl-wheel only, for the same reason. */
+  touch-action: pan-y;
+}
+
+.drawing:active {
+  cursor: grabbing;
+}
+
+/* Hairlines that stay hairlines. Without `non-scaling-stroke` a stroke is in
+   layout units, so it is sub-pixel and washed out at the fitted view and a
+   fat ribbon at 40x; the boxes are meant to grow when you zoom in, and the
+   routes between them are not. The width itself is set on the element, from
+   the zoom and the edge count: see `edgeStrokeWidth`. */
+.edges {
+  fill: none;
+  stroke: var(--contrast-50pct);
+  vector-effect: non-scaling-stroke;
+}
+
+.nodes {
+  fill: var(--primary);
+}
+
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--dagr-text-muted);
+}
+
+.readout {
+  margin: 0.8rem 0 0;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: var(--dagr-text-muted);
+}
+
+.time {
+  color: var(--dagr-foreground);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.caption {
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--dagr-text-muted);
+}
+
+@media (max-width: 600px) {
+  .controls {
+    gap: 0.5rem 1rem;
+  }
+
+  .stage {
+    aspect-ratio: 4 / 3;
+  }
+
+  .slider {
+    width: 6rem;
+  }
+
+  /* The echo of the resolved config is a detail for a wide screen; the slider
+     and the readout carry the meaning on a narrow one. */
+  .configEcho {
+    display: none;
+  }
+}

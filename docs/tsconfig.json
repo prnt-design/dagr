@@ -2,7 +2,21 @@
   "extends": "@docusaurus/tsconfig",
   "compilerOptions": {
     "baseUrl": ".",
-    "noEmit": true
+    "noEmit": true,
+    // The live demo imports the engine it advertises. Both packages publish
+    // from `dist`, which does not exist in a fresh clone or in CI, where
+    // typecheck runs before build, so typecheck reads them from source the way
+    // every other workspace package does. The bundler still resolves the built
+    // `dist` through node_modules, which is why `render.yaml` builds them
+    // ahead of this site.
+    // `@site/*` is restated because `paths` replaces the inherited map rather
+    // than merging with it, and the Docusaurus base config is where it comes
+    // from.
+    "paths": {
+      "@site/*": ["./*"],
+      "@dagr/graph": ["../packages/graph/src/index.ts"],
+      "@dagr/layout": ["../packages/layout/src/index.ts"]
+    }
   },
   "include": ["docusaurus.config.ts", "sidebars.ts", "src"],
   "exclude": [".docusaurus", "build", "node_modules"]

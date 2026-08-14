@@ -1,9 +1,0 @@
-{
-  "nodes": 1000,
-  "edges": 4000,
-  "medianMs": 128.7,
-  "runs": 15,
-  "machine": "AMD EPYC-Rome Processor",
-  "node": "v22.23.2",
-  "generated": "2026-08-14"
-}

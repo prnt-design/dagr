@@ -147,19 +147,6 @@
   margin-bottom: 1.5rem;
 }
 
-.perfFigure {
-  margin: 0;
-  padding: 1rem 1rem 0.75rem calc(var(--selvedge-band) + 0.9rem);
-  border: 1px solid var(--contrast-10pct);
-  background-color: var(--dagr-surface);
-}
-
-.perfImage {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
 .example {
   display: grid;
   grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
