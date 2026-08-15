@@ -738,9 +738,9 @@ renderer.render();
 ```
 
 `Renderer` is a camera, a `setNodes`, a `setEdges`, a `setEdgeStyle`, a
-`resize`, a `render` and a `dispose`. Everything except the three setters was
-fixed at M4.1 and has not changed since; the lifecycle was always the part that
-would not.
+`setEdgeIntensity`, a `resize`, a `render` and a `dispose`. Everything except
+the four setters was fixed at M4.1 and has not changed since; the lifecycle was
+always the part that would not.
 
 `setNodes` was deliberately absent until M4.4. M4.1 drew a hard-coded quad and
 M4.2 a hard-coded ladder, and a `setLayout` designed at either point would have
@@ -1156,6 +1156,26 @@ moves the pattern and wraps it into one period.
 A solid ribbon is the ABSENCE of a dash rather than a duty cycle of 1: a
 zero-width gap is still a boundary to a distance field, so a duty of 1 draws a
 half-alpha seam once per period along a line that is supposed to be solid.
+
+**`setEdgeIntensity` is the per-edge call**, and it is what a highlight is made
+of. It takes a function from an edge's id to a number in `[0, 1]`, and the
+shader multiplies both the ribbon's width and its alpha by it: an edge at 1
+draws exactly as the group says, and an edge at 0.25 is a quarter as wide and a
+quarter as opaque. Hovering a node and fading everything not incident to it is
+one call, and only the values that changed are uploaded, as one merged range
+before the next draw.
+
+The split against `setEdgeStyle` is the split between what a FRAME decides and
+what a POINTER decides. A style is how a whole group is drawn at this zoom;
+an intensity is which of its members matter right now. Doing it through groups
+instead would mean a group per highlight state and a re-tessellation to move an
+edge between them, and doing it through `setEdges` would rebuild every buffer
+to change one float.
+
+Intensity is capped at 1 rather than open above it. A group's width is already
+a caller's number and raising it there says the same thing to every edge at
+once, so a channel that could exceed 1 would give a scene two ways to say how
+wide a ribbon is and no rule for which wins.
 
 ## What is not here yet
 

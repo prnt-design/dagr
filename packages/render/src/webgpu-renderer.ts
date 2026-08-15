@@ -304,6 +304,12 @@ export class WebGPUSceneRenderer implements Renderer {
     this.#edges.setEdges(groupId, edges);
   }
 
+  /** See {@link Renderer.setEdgeIntensity}. */
+  setEdgeIntensity(groupId: string, intensityOf: (edgeId: string) => number): void {
+    this.#assertLive('setEdgeIntensity');
+    this.#edges.setEdgeIntensity(groupId, intensityOf);
+  }
+
   /** See {@link Renderer.setEdgeStyle}. */
   setEdgeStyle(groupId: string, style: EdgeFrameStyle): void {
     this.#assertLive('setEdgeStyle');

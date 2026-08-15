@@ -3025,6 +3025,15 @@ of M3 would leave the second runner idle for a milestone.
   buffer-slot limit and its ceiling is `MAX_VERTEX_ATTRIBS`, at least 16. A
   channel past the eighth fails pipeline creation on one backend and draws fine
   on the other.
+  D3 (2026-08-15) DID NOT TAKE THE SEVENTH SLOT, recorded here because it added
+  the first per-vertex channel since this entry and the obvious reading is that
+  it did. The limit is PER PIPELINE, and D3's per-edge highlight is an attribute
+  on the RIBBON mesh: a different geometry, a different material, its own eight,
+  five of them used before and six after. This budget is untouched and M4.6's
+  spring velocity and M4.8's picking id are still competing for the same one
+  slot. The rule the two cases share, and the one worth carrying forward, is
+  that a slot belongs to the SHADER that reads the attribute, not to the package
+  or the scene.
   A COLOUR REACHING A SHADER AS AN ATTRIBUTE IS CONVERTED BY NOTHING. As a
   uniform it goes through three's `Color`, which does sRGB to linear on the way;
   an attribute is whatever floats are in the buffer. So `linearFromHex` does it
@@ -3532,6 +3541,19 @@ of M3 would leave the second runner idle for a milestone.
   passes local, which puts most of the number back under an automated check.
   Otherwise commit to re-measuring by hand at the end of the milestone and
   again at M5.4's v0.1 readiness review.
+  THE FREE VERTEX BUFFER SLOT IS STILL FREE, recorded here because D3 was the
+  first task since M4.3 to add a per-vertex channel and the obvious reading is
+  that it spent it. It did not: `maxVertexBuffers` is a PIPELINE limit, the
+  reserved slot is the instanced NODE pipeline's seventh of eight, and D3's
+  highlight is an attribute on the RIBBON mesh, which is a different material
+  and a different pipeline. That one went from five of eight to six. So M4.6's
+  spring velocity and M4.8's picking id are still competing for one slot with
+  each other and with the two ordinary scene changes M4.3's record names (a
+  material that comes to read `uv`, and a light or environment map that pulls in
+  the `normal` the quad already carries). What D3 does add to this task's
+  measurement is a second per-fragment multiply on every ribbon and a per-vertex
+  one on every ribbon vertex, which at the campaign's 7,100 routes is the cost
+  worth a line in the pass breakdown rather than a guess here.
 
 The last two tasks were added on 2026-08-14, after the milestone was planned,
 on the maintainer's reading of the campaign demo plan. They are numbered after

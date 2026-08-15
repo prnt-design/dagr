@@ -198,6 +198,28 @@ export interface Renderer {
   setEdgeStyle(groupId: string, style: EdgeFrameStyle): void;
 
   /**
+   * Writes one intensity per edge in a group: how much of the group's width and
+   * alpha that edge draws at, in `[0, 1]`.
+   *
+   * The per-EDGE seam beside {@link setEdgeStyle}'s per-GROUP one, and the
+   * distinction is what a caller is answering. A style is how a group is drawn
+   * at this zoom, which a frame decides. This is which members of it matter
+   * right now, which a pointer decides: hovering a node and brightening its
+   * incident edges while the rest fade back is one call here, where through
+   * groups it would be a group per state and a re-tessellation to move an edge
+   * between them.
+   *
+   * `intensityOf` is called once per edge of the group, in the order the last
+   * {@link setEdges} listed them. Only changed values are uploaded, as one
+   * merged range before the next draw. Returning 1 everywhere restores the
+   * group, which is what it draws at until this is called at all.
+   *
+   * Throws a `RangeError` naming a group that was never declared, or an
+   * intensity outside `[0, 1]`.
+   */
+  setEdgeIntensity(groupId: string, intensityOf: (edgeId: string) => number): void;
+
+  /**
    * Adopts a new canvas size. Call it from a `ResizeObserver` or a `resize`
    * listener. The camera's centre and zoom survive, so the visible world grows
    * with the window; see {@link Camera2D.setViewport}.
