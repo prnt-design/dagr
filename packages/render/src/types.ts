@@ -1,6 +1,7 @@
 import type { Camera2D } from './camera.js';
 import type { SceneStyle } from './instance-attributes.js';
 import type { SceneNode } from './scene-nodes.js';
+import type { EdgeFrameStyle, SceneEdge, SceneEdgeGroup } from './scene-edges.js';
 
 /**
  * The public vocabulary of `@dagr/render`.
@@ -165,6 +166,38 @@ export interface Renderer {
   setNodes(nodes: readonly SceneNode[]): void;
 
   /**
+   * Replaces one edge group's edges, which rebuilds that group's buffers.
+   *
+   * Groups are declared at construction, through
+   * {@link RendererOptions.edgeGroups}, and drawn in the order they were
+   * declared: that order is the only layering this package offers, because
+   * M4.3 established that blend order WITHIN a mesh is slot order and a slot is
+   * not durable across a removal. Dashed routed edges under solid overlay lines
+   * is two groups.
+   *
+   * Whole rather than incremental, unlike {@link setNodes}. An edge has no
+   * durable per-instance state to preserve across a rebuild, and its input is a
+   * layout's routes: a layout that moved has moved most of them.
+   *
+   * Throws a `RangeError` naming a group that was never declared.
+   */
+  setEdges(groupId: string, edges: readonly SceneEdge[]): void;
+
+  /**
+   * Writes one edge group's per-frame values: its width in device pixels, an
+   * alpha multiplier, and how far its dash has flowed. The pixels per world
+   * unit is NOT among them: the camera implies it and {@link render} supplies
+   * it, so a caller never re-derives what the renderer already holds.
+   *
+   * Touches no buffer, which is the point of it being a separate call. The
+   * screen-space width decision makes this a PER FRAME concern (see
+   * `ribbonWidthAt` for the clamp and the fade a scene owes its far view), and
+   * a seam that made width a property of the geometry would re-tessellate every
+   * route to change a uniform.
+   */
+  setEdgeStyle(groupId: string, style: EdgeFrameStyle): void;
+
+  /**
    * Adopts a new canvas size. Call it from a `ResizeObserver` or a `resize`
    * listener. The camera's centre and zoom survive, so the visible world grows
    * with the window; see {@link Camera2D.setViewport}.
@@ -254,6 +287,16 @@ export interface RendererOptions {
    * that already has its layout when it mounts should pass it.
    */
   readonly nodes?: readonly SceneNode[];
+
+  /**
+   * The edge groups to build, in DRAW ORDER. Omit it for a scene with no edges.
+   *
+   * Fixed at construction for the reason the two shape families are: a mesh
+   * created later would have to be added to a `Scene` the renderer owns and the
+   * edge scene does not, which is a reference pointing the wrong way. An
+   * unfilled group costs one material and an empty geometry.
+   */
+  readonly edgeGroups?: readonly SceneEdgeGroup[];
 
   /**
    * Abandons the renderer being built. Rejects with the signal's reason, having

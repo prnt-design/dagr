@@ -3119,7 +3119,7 @@ of M3 would leave the second runner idle for a milestone.
   0.070), so the pressure reds moved off the orange axis and the reference greys
   went neutral. That separation is the whole of what the stratum colouring
   claims to do at the far zoom.
-- [ ] **M4.5** (`@dagr/render`, `apps/demo`) Edge ribbons: polyline and bezier
+- [x] **M4.5** (`@dagr/render`, `apps/demo`) Edge ribbons: polyline and bezier
   tessellation from M2.8's route control points, joins that do not pinch at
   sharp angles, and a dash-flow uniform for animated direction. State whether
   width is in world space (scales with zoom, matches the node boxes) or screen
@@ -3127,9 +3127,14 @@ of M3 would leave the second runner idle for a milestone.
   is visible in every screenshot afterwards. Demo scene exercising a graph with
   edges spanning many ranks, which is what M2.4b's dummy chains turn into the
   multi-point polylines this task has to tessellate without pinching.
-  IN PROGRESS, split in two because the demo half waits on M4.4. The
-  tessellation core is merged (`ribbon.ts`, `ribbon-nodes.ts`, PR #31) and the
-  demo scene is the remaining half. The decisions the entry asked for, made:
+  DONE, in two PRs, because the demo half waited on M4.4: the tessellation
+  core is PR #31 (`ribbon.ts`, `ribbon-nodes.ts`) and the scene is PR #35
+  (`scene-edges.ts`, `campaign-edges.ts`, the `setEdges` seam). The committed
+  frame is `assets/screenshots/m4.5-ribbons.png`, a near view at 770x599 and
+  dpr 1 where the dash and the joins are visible; the fitted view is Dispatch
+  media rather than a committed asset, because `assets/` has a budget and a
+  picture of 7,100
+  antialiased lines does not compress. The decisions the entry asked for, made:
   **WIDTH IS IN SCREEN SPACE.** A ribbon is a fixed number of DEVICE pixels
   from its centreline at every zoom. The demo's derived range runs 0.45 to 134
   CSS pixels per world unit on the LADDER scene and the reference canvas (P2
@@ -3212,12 +3217,14 @@ of M3 would leave the second runner idle for a milestone.
   bridge returning numbers would go through `Arith.literal` and bake the period
   and the flow into the compiled shader as constants, so `advanceDashFlow`
   could never move the pattern without a rebuild. And the graphics review
-  measured the overview at the zoom floor: a 3 device pixel ribbon over the
-  campaign's 110.9M world units of centreline paints 196% of the fitted
-  viewport, 65% even at the 0.5 pixel minimum, so the far view is a mat of edge
-  ink. The width is already a uniform, so the fix is per frame and free:
-  clamp it against the world-space width and fade edge alpha below about one
-  pixel per world unit.
+  measured the overview at the zoom floor and the scene half re-measured it:
+  the campaign's edges are 21.1M world units of centreline (3.99M routed, 0.98M
+  cross-tile, 16.15M overlay), and at the fitted 0.05 device pixels per world
+  unit a 3 pixel ribbon would paint 529% of the viewport, 176% at one pixel.
+  The 110.9M quoted during the stage 1 review does not reproduce; the argument
+  is unchanged and the figure is corrected. The width is already a uniform, so
+  the fix is per frame and free: clamp it against the world-space width and
+  fade the alpha below the floor.
   **ONE INDEXED MESH, NOT INSTANCES.** M4.3 instances nodes because a node is
   one shape drawn many times. Every ribbon has its own point count, so the only
   thing an instance could be is a segment, and a per-segment instance computes
@@ -3246,6 +3253,52 @@ of M3 would leave the second runner idle for a milestone.
   flattening tolerance is a statement about zoom, since the geometry is baked:
   faceting stays under half a device pixel while
   `tolerance * pixelsPerWorldUnit <= 0.5`.
+  **THE SCENE HALF, PR #35.** Three groups, drawn in the order they are
+  declared, which is the only layering M4.3 leaves available: routed ribbons
+  under cross-tile lines under the overlay kinds. `setEdges(groupId, edges)`
+  rebuilds a group's buffers and `setEdgeStyle(groupId, style)` writes uniforms
+  and touches none, and that split is what the screen-space width makes
+  necessary: the width a frame draws at is a camera fact, so a seam that made
+  it a property of the geometry would re-tessellate every route to change a
+  uniform. Only the ROUTED group is dashed, because only it has a direction a
+  layout computed; the other two are lines this demo draws between two boxes,
+  so their direction is a fact about the data rather than about the drawing.
+  Routed edges take their polylines from `CampaignScene.edgeRoutes` and never
+  re-derive one: those points are the crossings the order stage chose, and a
+  straight line between the same two boxes looks entirely reasonable while
+  throwing the layout away. A routed edge whose ends fell in different tiles
+  was never routed at all, so it is a bowed line like the overlay kinds.
+  The lines are BOWED rather than straight, by a fraction of the chord so the
+  shape survives every distance, because two nodes joined by more than one
+  overlay kind would otherwise draw the same segment twice with the second
+  invisible under the first, and a reader counting relationships would count
+  one.
+  The far view's debt is paid: `ribbonWidthAt` draws a ribbon at the half-pixel
+  floor and fades its alpha by the same ratio, so `halfWidthPixels * alpha` is
+  exactly the honest sub-pixel width and the ink on screen is what the scene's
+  own world width asks for. At the campaign's fitted zoom, which the demo
+  prints as 0.05 and derives as 0.05 to 19.2 CSS pixels per world unit at
+  1003x597 (both ends move with the viewport), that is an alpha of about 0.15
+  at dpr 1, the difference between structure and a mat. The overlay kinds ramp
+  in over 1.5 to 4 CSS pixels per world unit rather than switching at a
+  threshold, and that band is keyed on the CSS zoom where every width here is
+  in device pixels: how crisply a line is drawn is a fact about the display,
+  while whether a KIND of edge is worth showing is a fact about apparent
+  scale, and a device-pixel band would show the social graph on a retina
+  laptop and hide it on an external monitor. It is a RAMP rather than a
+  threshold because a hard switch makes a thousand lines appear between two
+  frames of a pinch and reads as a glitch rather than as detail arriving.
+  THE DASH ADVANCES BY THE TIME BETWEEN DRAWN FRAMES, capped at a thirtieth of
+  a second, which is what lets a flowing dash exist in a demo that renders on
+  demand. Counting frames would tie the flow speed to how much the user moves
+  the camera. Reading the absolute clock, which this did first, is worse: wall
+  time accrues while the scene is idle and discharges into the first frame of
+  the next gesture, so at 18 px/s over a 14 px period any pause over 0.8
+  seconds teleports every dashed ribbon by up to a full period. An uncapped
+  delta between drawn frames has the same defect, because after an idle that
+  delta IS the idle. The cap never binds at 60fps and moves the pattern 0.6 px
+  on the frame after a pause, so it drifts during a pan, holds where it was at
+  rest, and animates on its own the moment M4.6 brings a loop.
   The tenth primitive is recorded here because `sdf.ts` counts nine: the dash
   needs a `fract` and periodicity cannot be built from the nine. `DashArith`
   extends `Arith` beside its only consumer, so the shape formulas keep their

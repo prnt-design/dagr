@@ -736,9 +736,10 @@ camera.zoomAtScreen(
 renderer.render();
 ```
 
-`Renderer` is a camera, a `setNodes`, a `resize`, a `render` and a `dispose`.
-Everything except `setNodes` was fixed at M4.1 and has not changed since; the
-lifecycle was always the part that would not.
+`Renderer` is a camera, a `setNodes`, a `setEdges`, a `setEdgeStyle`, a
+`resize`, a `render` and a `dispose`. Everything except the three setters was
+fixed at M4.1 and has not changed since; the lifecycle was always the part that
+would not.
 
 `setNodes` was deliberately absent until M4.4. M4.1 drew a hard-coded quad and
 M4.2 a hard-coded ladder, and a `setLayout` designed at either point would have
@@ -1116,12 +1117,50 @@ label tier is one entry per node with a gate, so an atlas takes the tier over by
 taking its gate over, and the tier above and the tier below stay exactly as they
 are.
 
+## Edges are ribbons, and their width is in screen space
+
+`setEdges(groupId, edges)` takes an edge as an id, a centreline in world units
+and a colour, and tessellates it into a ribbon: a polyline as a layout routed
+it, or a centripetal Catmull-Rom curve through the same points when the group
+asks for one. `RoutedEdge.points` from `@dagr/layout` is exactly the input,
+after the caller's own y flip.
+
+**A ribbon is a fixed number of DEVICE pixels wide at every zoom**, and that is
+the thing to know before drawing one, because a caller expecting a world width
+gets a line that does not thicken as they zoom in. A graph spans decades of
+zoom and no world width is legible at both ends of one; `@dagr/layout` gives an
+edge a polyline and no width at all, so any world width would be invented by
+the renderer rather than laid out. An outline is measured the same way and for
+the same reason.
+
+Three things follow. One tessellation is valid at every camera, so panning and
+zooming never rebuild a buffer. The antialiasing width is exactly one pixel by
+construction, so the ribbon shader holds no derivative at all. And a dash
+pattern is in pixels too, so it looks the same and flows at one apparent speed
+at every zoom.
+
+**Groups are the layering.** Blend order within one mesh is slot order, which
+is not durable across a removal, so a scene that wants ribbons under nodes, or
+a highlighted path over dimmed ones, declares its groups through
+`RendererOptions.edgeGroups` and relies on the order it declared them in. One
+group is one mesh and one material.
+
+**`setEdgeStyle` is the per-frame call and touches no buffer.** It carries the
+width, an alpha, and how far the dash has flowed. `ribbonWidthAt` is the
+arithmetic behind the first two: a clamp between a floor and a ceiling, plus
+the alpha that conserves ink below the floor, since a ribbon drawn wider than
+the scene says should be fainter in the same proportion. `advanceDashFlow`
+moves the pattern and wraps it into one period.
+
+A solid ribbon is the ABSENCE of a dash rather than a duty cycle of 1: a
+zero-width gap is still a boundary to a distance field, so a duty of 1 draws a
+half-alpha seam once per period along a line that is supposed to be solid.
+
 ## What is not here yet
 
 Most of it. M4.4 is a graph on screen, drawn correctly, one draw call per shape
 family, and nothing that moves.
 
-- Edge ribbons for polylines and beziers (M4.5).
 - Critically damped springs, and with them a real animation loop (M4.6).
 - Consuming `LayoutDelta` from `@dagr/layout`'s incremental path, which is the
   point of the whole exercise: untouched nodes stay still and touched ones

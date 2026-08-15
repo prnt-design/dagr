@@ -20,16 +20,17 @@ import { requireAtLeast, requireFinite, requirePositive } from './validate.js';
  * zoom. The ROADMAP asks for this to be stated because it is visible in every
  * screenshot afterwards, so here is the whole argument.
  *
- * The demo's derived zoom range runs from the whole campaign fitted on the
- * reference canvas (0.053 CSS pixels per world unit) to its smallest node framed
- * (19.9), which is what M4.4 drawing the campaign made of the range P2 built;
- * the ladder it replaced ran from about 0.45 to 134 on the same canvas, which is
- * the wider range and the one the argument below was first measured against. A
- * world-space ribbon wide enough to see at the floor is 300 times wider at the
- * ceiling, a slab across the card it was meant to connect; one that looks right
- * at the ceiling is a third of a pixel at the floor, which is the sub-pixel fade
- * M4.2 already documented. There is no width that survives both ends, and a
- * graph that spans decades of zoom is the only kind this engine is for.
+ * The demo's derived zoom range runs from the whole campaign fitted to its
+ * smallest node framed: 0.05 to 19.2 CSS pixels per world unit at 1003x597,
+ * both ends moving with the viewport, which is what M4.4 drawing the campaign
+ * made of the range P2 built. The ladder it replaced ran 0.45 to 134 on the
+ * same canvas, and the argument below was first measured against that.
+ * That is a factor of 384 for the campaign and 298 for the ladder, and no
+ * world width survives either: one wide enough to see at the floor is a slab
+ * across the card it was meant to connect at the ceiling, and one that looks
+ * right at the ceiling is under a hundredth of a pixel at the floor, which is
+ * the sub-pixel fade M4.2 already documented. A graph that spans decades of zoom
+ * is the only kind this engine is for.
  *
  * The second argument is about what an edge IS. `@dagr/layout` gives a node a
  * `Size` and gives an edge a polyline and nothing else, so any world width for
@@ -42,18 +43,19 @@ import { requireAtLeast, requireFinite, requirePositive } from './validate.js';
  * ribbon no longer scales with the boxes it joins, so at card zoom a 3 pixel
  * edge meets a node the size of the viewport and reads as a wire rather than
  * as a road. The far end is the worse one, and it is measured: the campaign's
- * 110.9M world units of centreline at a 3 device pixel width paint 196% of the
- * fitted viewport at the zoom floor, and 65% even at the 0.5 pixel minimum, so
- * the overview is a mat of edge ink rather than a drawing. A constant pixel
- * width is the right DEFAULT and not the right answer everywhere, and since the
- * half width is a uniform the remedy costs nothing here: a scene clamps it
- * against the world-space width and fades edge alpha out below about one pixel
- * per world unit, per frame. M4.5's demo half owes that. And the geometry
- * cannot carry world positions for its own boundary, since where the boundary
- * is depends on the zoom: what a vertex carries is a unit OFFSET, and the
- * vertex stage multiplies it by the half width in pixels over the pixels per
- * world unit. That is one multiply and one uniform, and it is the reason
- * nothing here has to be re-tessellated when the camera moves.
+ * edges come to 21.1M world units of centreline, and at the fitted 0.05 device
+ * pixels per world unit a 3 pixel width would paint 529% of the viewport, or
+ * 176% at 1 pixel. A drawing cannot be five times its own canvas, so a constant
+ * pixel width is the right DEFAULT and not the right answer everywhere. Since
+ * the half width is a uniform the remedy costs nothing here: a scene clamps it
+ * against the world-space width and fades the alpha below the floor, which
+ * {@link ribbonWidthAt} is. M4.5's demo half owes that, and pays it.
+ *
+ * The geometry also cannot carry world positions for its own boundary, since
+ * where the boundary is depends on the zoom: what a vertex carries is a unit
+ * OFFSET, and the vertex stage multiplies it by the half width in pixels over
+ * the pixels per world unit. That is one multiply and one uniform, and it is
+ * the reason nothing here has to be re-tessellated when the camera moves.
  *
  * Three things fall out of the decision, and they are why it is worth taking
  * rather than merely defensible:
@@ -143,6 +145,41 @@ export const DEFAULT_MITER_LIMIT = 2;
  * coordinate: 1e-9 of one is nothing any camera in this package can resolve.
  */
 export const MIN_SEGMENT_WORLD = 1e-9;
+
+/**
+ * How far the outer boundary of a fanned corner may fall short of the half
+ * width, as a fraction of it.
+ *
+ * A fan approximates a rounded corner with flat facets, so its boundary is the
+ * INSCRIBED polygon: exact at each facet's ends and short by `1 - cos(span / 2)`
+ * in the middle. The first version of this fan used one midpoint past 120
+ * degrees and nothing else, which left a 179 degree turn a single pair of 89.5
+ * degree facets and a boundary at 0.710 of the half width mid-facet, a 29%
+ * narrowing at exactly the hairpins the fan exists to serve. Worse, the
+ * midpoint's threshold was a hard-coded constant unrelated to the miter limit,
+ * so a limit between 1 and 2 bevelled some turns with NO midpoint at all: at a
+ * limit of 1.5 a 120 degree turn measured 0.500.
+ *
+ * The suite missed it because the no-pinch sweep samples VERTICES, where the
+ * offset is a unit vector by construction and the boundary is exact whatever
+ * the facet count. A tessellation is not its vertices, and a property that
+ * holds at every vertex can still fail everywhere between them.
+ *
+ * 5% is 0.075 of a device pixel on a 3 pixel ribbon, which is under a tenth of
+ * the pixel it would show up in. It costs facets: a 179 degree turn is 5 of
+ * them where a bound of 10% would be 4 and the old code was 2.
+ */
+export const FAN_RADIUS_TOLERANCE = 0.05;
+
+/**
+ * The widest one facet of a fan may span, derived from
+ * {@link FAN_RADIUS_TOLERANCE}: `2 * acos(1 - tolerance)`, which is 36.4
+ * degrees at 5%.
+ *
+ * Derived rather than written down, so the tolerance is the number a reader
+ * changes and the angle cannot drift out of agreement with it.
+ */
+export const MAX_FAN_FACET_RADIANS = 2 * Math.acos(1 - FAN_RADIUS_TOLERANCE);
 
 /**
  * The chord tolerance used when a caller states none: a fraction of the
@@ -832,17 +869,27 @@ function tessellateCentreline(
       const centre = pushVertex(out, segment.from, 0, 0, 0, segment.arcFrom);
       const first = cross > 0 ? incoming.right : incoming.left;
       const last = cross > 0 ? outgoing.right : outgoing.left;
+
+      // The turn, signed: the arc runs from the incoming outer normal to the
+      // outgoing one the short way round, and its facets are as many as
+      // MAX_FAN_FACET_RADIANS allows. Subdividing by ANGLE rather than at a
+      // fixed count is what bounds the boundary's dip mid-facet, which is the
+      // whole of FAN_RADIUS_TOLERANCE's argument.
+      const turn = Math.atan2(cross, previous.dx * segment.dx + previous.dy * segment.dy);
+      const count = Math.max(1, Math.ceil(Math.abs(turn) / MAX_FAN_FACET_RADIANS));
+      const step = turn / count;
+      const stepCos = Math.cos(step);
+      const stepSin = Math.sin(step);
+
       const facets: number[] = [first];
-      if (bisector < 1) {
-        // Past 120 degrees the arc gets a midpoint, which is the normalised
-        // bisector on the outer side, or the direction of travel when the two
-        // normals cancel and the bisector has no direction of its own. See the
-        // ramp paragraph in this function's docstring for the 120.
-        const midX = bisector > 0 ? sumX / bisector : previous.dx;
-        const midY = bisector > 0 ? sumY / bisector : previous.dy;
-        facets.push(
-          pushVertex(out, segment.from, side * midX, side * midY, side, segment.arcFrom),
-        );
+      let spokeX = side * inX;
+      let spokeY = side * inY;
+      for (let facet = 1; facet < count; facet += 1) {
+        const nextX = spokeX * stepCos - spokeY * stepSin;
+        const nextY = spokeX * stepSin + spokeY * stepCos;
+        spokeX = nextX;
+        spokeY = nextY;
+        facets.push(pushVertex(out, segment.from, spokeX, spokeY, side, segment.arcFrom));
       }
       facets.push(last);
       for (let facet = 1; facet < facets.length; facet += 1) {
@@ -1123,6 +1170,81 @@ export function ribbonCoverage<T>(m: DashArith<T>, input: RibbonCoverageInput<T>
   const across = m.sub(m.mul(m.abs(input.across), expand), input.halfWidthPixels);
   const distance = input.dash === undefined ? across : m.max(across, dashDistance(m, input.dash));
   return fillCoverage(m, distance, m.literal(1));
+}
+
+/** What {@link ribbonWidthAt} needs to decide a frame's width. */
+export interface RibbonWidthInput {
+  /**
+   * How wide the ribbon would be if it DID scale with the scene, as a half
+   * width in world units.
+   *
+   * The quantity a scene actually has an opinion about: an edge between boxes
+   * tens of units across is a world unit or two wide, and saying so is what
+   * lets the two rules below be arithmetic rather than taste.
+   */
+  readonly worldHalfWidth: number;
+
+  /** The camera's zoom times the device pixel ratio. */
+  readonly pixelsPerWorldUnit: number;
+
+  /** The thinnest the ribbon may be drawn. Below about 0.5 the ramp eats it. */
+  readonly minHalfWidthPixels: number;
+
+  /** The widest it may be drawn, which is what stops a deep zoom paving the viewport. */
+  readonly maxHalfWidthPixels: number;
+}
+
+/** A width to draw at, and the alpha that keeps it honest. See {@link ribbonWidthAt}. */
+export interface RibbonWidth {
+  readonly halfWidthPixels: number;
+  /** A multiplier for the ribbon's own alpha, at most 1. */
+  readonly alpha: number;
+}
+
+/**
+ * The half width and alpha for one frame: a constant pixel width is the right
+ * DEFAULT and this is the correction at the two ends where it is wrong.
+ *
+ * The module docstring records why the width is in screen space and what it
+ * costs, and this function is the remedy it names. Both rules are one line:
+ *
+ * ```
+ * halfWidthPixels = clamp(worldHalfWidth * pixelsPerWorldUnit, min, max)
+ * alpha           = min(1, ideal / min)
+ * ```
+ *
+ * **The fade is the half that matters, and it conserves ink.** Below the floor
+ * the ribbon is being drawn WIDER than the scene says it is, because a ramp
+ * needs half a pixel either side and a thinner band would fade out entirely
+ * rather than get thinner. Drawing it at the floor and fading its alpha by the
+ * same ratio puts the same total coverage on screen as the honest width would
+ * have: `halfWidthPixels * alpha` is exactly `ideal` everywhere the fade is
+ * engaged. That identity is the test, and it is what stops the far view being
+ * a mat of edge ink: the campaign's edges are 21.1M world units of centreline,
+ * which at the fitted 0.05 device pixels per world unit is 176% of the viewport
+ * at one pixel wide before the fade, and the fix is for each line to carry less
+ * ink rather than for any line to disappear.
+ *
+ * The ceiling is the duller end and needs no fade: a ribbon that would be forty
+ * pixels wide at card zoom is clamped to the maximum and stays opaque, because
+ * there is no ink being conserved, only a slab nobody asked for.
+ *
+ * Nothing here reads a camera: `pixelsPerWorldUnit` is passed in, so this is
+ * arithmetic a test can run at every zoom in one loop rather than behaviour
+ * that needs a frame.
+ */
+export function ribbonWidthAt(input: RibbonWidthInput): RibbonWidth {
+  requirePositive(input.worldHalfWidth, 'worldHalfWidth');
+  requirePositive(input.pixelsPerWorldUnit, 'pixelsPerWorldUnit');
+  requireAtLeast(input.minHalfWidthPixels, 0.5, 'minHalfWidthPixels');
+  requireAtLeast(input.maxHalfWidthPixels, input.minHalfWidthPixels, 'maxHalfWidthPixels');
+
+  const ideal = input.worldHalfWidth * input.pixelsPerWorldUnit;
+  const halfWidthPixels = Math.min(
+    Math.max(ideal, input.minHalfWidthPixels),
+    input.maxHalfWidthPixels,
+  );
+  return { halfWidthPixels, alpha: Math.min(1, ideal / input.minHalfWidthPixels) };
 }
 
 /**

@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
-import { Camera2D, createHtmlOverlay, createRenderer, createRichNodes } from '@dagr/render';
+import {
+  Camera2D,
+  advanceDashFlow,
+  createHtmlOverlay,
+  createRenderer,
+  createRichNodes,
+  ribbonWidthAt,
+} from '@dagr/render';
 import type { Renderer, Vec2, ViewportSize, WorldBounds } from '@dagr/render';
 import {
   FIT_PADDING,
@@ -12,6 +19,14 @@ import {
   zoomLimits,
 } from './camera-input.js';
 import type { CampaignScene } from './campaign-scene.js';
+import type { CampaignEdges } from './campaign-edges.js';
+import {
+  CROSS_TILE_GROUP,
+  EDGE_GROUPS,
+  OVERLAY_GROUP,
+  ROUTED_GROUP,
+  overlayFade,
+} from './campaign-edges.js';
 import { nodeColor } from './campaign-style.js';
 import { createCampaignTiers } from './campaign-tiers.js';
 import type { CampaignNode } from '@dagr/campaign';
@@ -106,16 +121,95 @@ function measureViewport(canvas: HTMLCanvasElement): ViewportSize | null {
   };
 }
 
+/**
+ * How wide an edge would be if it scaled with the scene, as a half width in
+ * world units.
+ *
+ * **This sets where the FADE begins, and nothing else.** Against the groups'
+ * maxima of 1.5, 1.2 and 1.0 device pixels, a world half width of 1.5 saturates
+ * at the ceiling from about 1 device pixel per world unit upward and only
+ * engages the fade below 0.33, so across the campaign's zoom range the
+ * proportional band is a narrow sliver in the middle. The maxima are the width
+ * at every zoom a reader spends time at; this number is the one that moves the
+ * fitted frame's ink, where the maxima do nothing at all.
+ */
+const EDGE_WORLD_HALF_WIDTH = 1.5;
+
+/**
+ * The longest a single frame may advance the dash, in seconds.
+ *
+ * `advanceDashFlow` deliberately does not clamp its own delta, saying the
+ * opinion belongs to the caller, and this is the opinion: a demo that renders
+ * on demand measures the gap between DRAWN frames, and after an idle that gap
+ * is the idle. Uncapped, the first frame of a gesture would land an arbitrary
+ * phase, which is the same defect as reading the absolute clock.
+ */
+const MAX_DASH_STEP_SECONDS = 1 / 30;
+
+/** The thinnest a ribbon is drawn before the fade takes over instead. */
+const MIN_EDGE_HALF_WIDTH_PIXELS = 0.5;
+
+/**
+ * The band, in CSS pixels per world unit, over which the overlay kinds arrive.
+ *
+ * CSS and not device pixels, unlike every width in this file: whether a KIND of
+ * edge is worth showing is a fact about apparent scale, so the same campaign at
+ * the same zoom shows the same graph on every display. Keyed on device pixels
+ * this band would halve on a retina screen, and measured at CSS zoom 2 the
+ * overlay alpha came out 0.20 at dpr 1 against 1.00 at dpr 2.
+ *
+ * The demo's derived range is about 0.05 to 19.2 CSS pixels per world unit at
+ * 1003x597, both ends moving with the viewport, so this band sits well above
+ * the overview and well below a card: the dense, cyclic kinds are absent while
+ * a reader is looking at the shape of the campaign, and fully there once they
+ * are asking about one node's neighbourhood.
+ */
+const OVERLAY_FADE_START = 1.5;
+const OVERLAY_FADE_FULL = 4;
+
+/**
+ * Hands one build of the campaign's edges to a renderer.
+ *
+ * One function and two call sites, because the two are unavoidable and
+ * duplicating the three calls between them is how they drift: `createRenderer`
+ * is asynchronous, so edges that arrived before it resolved have to be pushed
+ * when it does, and edges that arrive afterwards have to be pushed by the
+ * effect watching them.
+ */
+function applyEdges(renderer: Renderer, edges: CampaignEdges | null): void {
+  if (edges === null) return;
+  renderer.setEdges(ROUTED_GROUP, edges.routed);
+  renderer.setEdges(CROSS_TILE_GROUP, edges.crossTile);
+  renderer.setEdges(OVERLAY_GROUP, edges.overlay);
+}
+
 /** The message to show a user when `createRenderer` rejects. */
 function describeFailure(cause: unknown): string {
   if (cause instanceof Error) return cause.message;
   return String(cause);
 }
 
-export function FirstLight({ scene }: { scene: CampaignScene | null }): JSX.Element {
+export function FirstLight({
+  scene,
+  edges,
+}: {
+  scene: CampaignScene | null;
+  edges: CampaignEdges | null;
+}): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [readout, setReadout] = useState<CameraReadout | null>(null);
+  // The renderer and the frame request, reachable from the edges effect below.
+  // `createRenderer` is asynchronous, so the effect that builds it cannot also
+  // be the one that watches `edges`: the first `edges` may arrive before the
+  // renderer and the tenth after it.
+  const rendererRef = useRef<Renderer | null>(null);
+  const requestDrawRef = useRef<() => void>(() => undefined);
+  // Read by the construction effect, which must not re-run when the edges
+  // change: rebuilding a renderer to recolour a line would throw away the GPU
+  // resources and the camera's place.
+  const edgesRef = useRef<CampaignEdges | null>(edges);
+  edgesRef.current = edges;
   const [failure, setFailure] = useState<string | null>(null);
 
   /**
@@ -267,7 +361,96 @@ export function FirstLight({ scene }: { scene: CampaignScene | null }): JSX.Elem
      * before the readout is what makes `activeCount` describe the frame the
      * user is looking at rather than the one before it.
      */
+    /**
+     * The three edge groups' per-frame values: the width the zoom implies, the
+     * alpha that keeps the far view honest, and where the dash has flowed to.
+     *
+     * **The width and the fade are the debt M4.5's core recorded.** A ribbon is
+     * a constant number of device pixels wide, which is right in the middle of
+     * the range and wrong at both ends: at the fitted zoom the campaign has far
+     * more centreline than viewport, and a constant width paints a mat of edge
+     * ink over the structure it is supposed to reveal. `ribbonWidthAt` draws it
+     * at the floor and fades it by the same ratio, so the coverage on screen is
+     * the coverage the scene's own world width asks for.
+     *
+     * **The dash advances by the time between DRAWN frames**, which is the
+     * only phase that behaves in a demo with no animation loop. Counting
+     * frames would tie the flow speed to how much the user is moving the
+     * camera; reading the absolute clock, which this did first, is worse: wall
+     * time accrues while the scene sits idle and discharges into the first
+     * frame of the next gesture, so at 18 px/s over a 14 px period any pause
+     * over 0.8 seconds teleports every dashed ribbon by up to a full period
+     * while the picture moves one pixel. Accumulating the delta instead means
+     * the pattern drifts while you pan and holds where it was while you do
+     * not, which is what this comment claimed before the code did it, and it
+     * animates on its own the moment M4.6 brings a loop.
+     */
+    /** Where each dashed group's pattern has flowed to, wrapped into its period. */
+    const flowPixels = new Map<string, number>();
+    /** When the last frame was drawn, so the dash advances by drawn time only. */
+    let lastDrawSeconds: number | null = null;
+
+    const advanceFlow = (
+      groupId: string,
+      speed: number,
+      elapsed: number,
+      period: number,
+    ): number => {
+      const flow = advanceDashFlow(flowPixels.get(groupId) ?? 0, speed, elapsed, period);
+      flowPixels.set(groupId, flow);
+      return flow;
+    };
+
+    const styleEdges = (): void => {
+      if (renderer === null) return;
+      const pixelsPerWorldUnit = camera.zoom * camera.viewport.devicePixelRatio;
+      const now = performance.now() / 1000;
+      // The FIRST frame has no previous one to measure from, so it advances by
+      // nothing rather than by however long the page took to load.
+      // CAPPED, and the cap is the whole of what makes this hold still: the
+      // gap since the last drawn frame IS the idle, so an uncapped delta lands
+      // an arbitrary phase on a gesture's first frame exactly as reading the
+      // absolute clock did. At 18 px/s over a 14 px period any pause over 0.8
+      // seconds would wrap. A thirtieth of a second never binds at 60fps and
+      // moves the pattern 0.6 px on the frame after an idle.
+      const elapsed =
+        lastDrawSeconds === null ? 0 : Math.min(now - lastDrawSeconds, MAX_DASH_STEP_SECONDS);
+      lastDrawSeconds = now;
+      for (const group of EDGE_GROUPS) {
+        const width = ribbonWidthAt({
+          worldHalfWidth: EDGE_WORLD_HALF_WIDTH,
+          pixelsPerWorldUnit,
+          minHalfWidthPixels: MIN_EDGE_HALF_WIDTH_PIXELS,
+          maxHalfWidthPixels: group.style.halfWidthPixels,
+        });
+        // The band is keyed on the CSS zoom and not on device pixels, unlike
+        // the width above it, and the split is deliberate: how crisp a line is
+        // drawn is a fact about the display's pixels, while whether a KIND of
+        // edge is worth showing is a fact about apparent scale. Keyed on
+        // device pixels, the same campaign at the same zoom would show its
+        // social graph on a retina laptop and hide it on an external monitor.
+        const fade = group.id === OVERLAY_GROUP
+          ? overlayFade(camera.zoom, OVERLAY_FADE_START, OVERLAY_FADE_FULL)
+          : 1;
+        renderer.setEdgeStyle(group.id, {
+          halfWidthPixels: width.halfWidthPixels,
+          alpha: width.alpha * fade,
+          ...(group.style.dash === undefined
+            ? {}
+            : {
+                dashFlowPixels: advanceFlow(
+                  group.id,
+                  group.style.dash.speedPixelsPerSecond,
+                  elapsed,
+                  group.style.dash.periodPixels,
+                ),
+              }),
+        });
+      }
+    };
+
     const draw = (): void => {
+      styleEdges();
       renderer?.render();
       overlay.sync();
       publish();
@@ -489,7 +672,11 @@ export function FirstLight({ scene }: { scene: CampaignScene | null }): JSX.Elem
           camera,
           signal: abort.signal,
           nodes: scene.nodes,
+          edgeGroups: EDGE_GROUPS,
         });
+        rendererRef.current = renderer;
+        requestDrawRef.current = requestDraw;
+        applyEdges(renderer, edgesRef.current);
         setFailure(null);
         // Draws the first frame as a side effect, at whatever size the canvas
         // has now rather than the size it had when the effect started.
@@ -529,9 +716,27 @@ export function FirstLight({ scene }: { scene: CampaignScene | null }): JSX.Elem
       teardownRef.current = ready.then(() => {
         renderer?.dispose();
         renderer = null;
+        rendererRef.current = null;
+        requestDrawRef.current = () => undefined;
       });
     };
   }, [scene]);
+
+  /**
+   * Pushes new edges to a renderer that already exists.
+   *
+   * Separate from the effect above and keyed on `edges` alone, because the two
+   * change independently: P7's hover highlight rebuilds `edges` with the SAME
+   * scene by swapping the colour function, and an effect keyed on `[scene]`
+   * would never see it. Nothing would fail; the canvas would simply keep the
+   * old colours, which is the kind of staleness that survives a review.
+   */
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (renderer === null) return;
+    applyEdges(renderer, edges);
+    requestDrawRef.current();
+  }, [edges]);
 
   return (
     <div className="stage" ref={containerRef}>

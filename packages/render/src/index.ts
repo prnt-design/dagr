@@ -96,6 +96,9 @@ export type { ElementAnchor, OverlayPlacement } from './overlay-math.js';
 export { createRichNodes } from './rich-nodes.js';
 export type { RichNode, RichNodeTier, RichNodes } from './rich-nodes.js';
 export type { SceneStyle } from './instance-attributes.js';
+export { advanceDashFlow, ribbonWidthAt } from './ribbon.js';
+export type { RibbonDashStyle, RibbonStyle, RibbonWidth, RibbonWidthInput } from './ribbon.js';
+export type { EdgeFrameStyle, SceneEdge, SceneEdgeGroup } from './scene-edges.js';
 export type { NodeShape, SceneNode } from './scene-nodes.js';
 export { createRenderer } from './webgpu-renderer.js';
 export type {

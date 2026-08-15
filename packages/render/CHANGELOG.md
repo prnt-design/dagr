@@ -14,6 +14,51 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- Edge ribbons: `setEdges` and `setEdgeStyle` on `Renderer`, with the groups
+  declared through `RendererOptions.edgeGroups`. New surface: `advanceDashFlow`
+  and `ribbonWidthAt`, and the types `SceneEdge`, `SceneEdgeGroup`,
+  `EdgeFrameStyle`, `RibbonStyle`, `RibbonDashStyle`, `RibbonWidth` and
+  `RibbonWidthInput`. (M4.5)
+
+  **A RIBBON'S WIDTH IS IN SCREEN SPACE**, a fixed number of DEVICE pixels from
+  its centreline at every zoom, and that is the decision to know before drawing
+  anything: a caller who expected a world width gets a line that does not
+  thicken as they zoom in. The reasoning is in `ribbon.ts` and the ROADMAP's
+  M4.5 entry, and the short version is that a graph spanning decades of zoom
+  has no world width that is legible at both ends, while `@dagr/layout` gives
+  an edge a polyline and no width at all. Three things fall out: one
+  tessellation is valid at every camera, the antialiasing width is exactly one
+  pixel by construction so the ribbon shader holds no derivative, and dashes
+  flow at one apparent speed at every zoom.
+
+  **Groups are the layering, and there is no other.** Blend order within a mesh
+  is slot order (see M4.3), so a scene that wants ribbons under nodes, or a
+  highlighted path over dimmed ones, declares groups and relies on the order it
+  declared them in. One group is one mesh and one material.
+
+  **Geometry and style are separate calls.** `setEdges` rebuilds buffers,
+  `setEdgeStyle` writes uniforms and touches none. The screen-space width makes
+  the second a per-frame concern, and `ribbonWidthAt` is the arithmetic a frame
+  wants: a clamp between a floor and a ceiling, plus the alpha that conserves
+  ink below the floor, since a ribbon drawn wider than the scene says should be
+  fainter in the same proportion.
+
+  What a frame passes is only what a caller decides: a width, an alpha and a
+  dash phase. The pixels per world unit is NOT among them, because the camera
+  implies it and `render()` writes it, so nothing re-derives what the renderer
+  already holds. Both of the frame style's numbers throw rather than degrade:
+  `halfWidthPixels` carries the same 0.5 floor a declared style does, since
+  below it a ribbon does not get thinner but fainter and then invisible, and
+  `alpha` is rejected outside `[0, 1]`, since a shader clamps it and reports
+  nothing. An alpha of exactly 0 is legal and skips the group's draw.
+
+  **A solid ribbon is the ABSENCE of a dash, not a duty cycle of 1.** A
+  zero-width gap is still a boundary to a distance field, so a duty of 1 draws a
+  half-alpha seam once per period along a line that is supposed to be solid.
+  Omitting the dash removes the arithmetic from the compiled shader instead, so
+  a solid group carries no `fract`. `RibbonStyle.dash.duty` is rejected at 0 and at 1
+  for the two halves of that reason.
+
 - `Renderer.setNodes`: the seam a caller feeds a graph through. New surface:
   `setNodes` on `Renderer`, `sceneStyle` and `nodes` on `RendererOptions`, and
   the types `SceneNode`, `NodeShape` and `SceneStyle`. (M4.4)
