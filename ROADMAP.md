@@ -4433,15 +4433,23 @@ and are independent of D1 and of each other.
   nodes on a screen, so re-running that set now stops at its own gate. That is
   the convention `assets/screenshots/` already had (`m4.2` is a shape ladder the
   demo no longer contains at all): a prefix is one task's drawing, and a task
-  that wants today's frames adds a set, which is what D2 did. Evidence that the
-  shutter itself did not move: `d2-before-fit.png` and `p7-campaign-fit.png` are
-  the same git blob, one capture under two names.
+  that wants today's frames adds a set, which is what D2 did.
+  THE PAIR WAS RETAKEN AFTER D1 LANDED, and the reason is the whole point of a
+  before and after: the first pair took its before half from the pre-move demo,
+  where the fitted frame came out byte identical to `p7-campaign-fit.png`, and
+  D1's move changed the rendering enough that it no longer does. A pair with two
+  changes in it argues for neither, so both halves are now captured on one tree
+  lineage: `origin/main` at the move for the before, the same tree with D2 on top
+  for the after.
   BEFORE AND AFTER ARE COMMITTED, `assets/screenshots/d2-before-*.png` against
   `d2-after-*.png`, taken through the same shutter as P7's: the same viewport,
   the same font pin, the same `data-renderer-drawn` gate, and both anchored on
   `#node=` rather than a zoom, because the scene grows and two frames of two
   different places are not a comparison. `capture.mjs` grew a frame SET and a
   variant label for it, and P7's five frames keep their names and their paths.
+  The script is one file with two purposes now: its FRAME LIST is P7's and the
+  `d2` set is D2's, so somebody running it with no argument hits P7's gates
+  first. The header says which is which.
 
 ## Tracked, not promised
 

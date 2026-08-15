@@ -179,9 +179,11 @@ const SET_NOTES = {
     '  after:  nodeSep 120, rankSep 160, tile gutter 480, edges inked from the SOURCE node',
     '          kind, and both routed-role groups dashed. See CAMPAIGN_SPACING in tiles.ts',
     '          for the measurement that chose the numbers.',
-    'd2-before-fit.png is byte identical to p7-campaign-fit.png, one git blob under two',
-    'names: the same hash through the same shutter, so what differs in the pair is the',
-    'drawing and nothing about the capture.',
+    'Both halves are captured on the SAME tree lineage, after the stage moved into',
+    '@dagr/campaign-stage: before is main at that move, after is the same tree with D2 on',
+    'top. An earlier pair took its before half from the pre-move demo, where the fitted',
+    'frame came out byte identical to p7-campaign-fit.png; after the move it no longer',
+    'does, so the pair was retaken rather than left with two changes in it.',
   ],
 };
 
