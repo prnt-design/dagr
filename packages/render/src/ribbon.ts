@@ -1146,6 +1146,80 @@ export function ribbonCoverage<T>(m: DashArith<T>, input: RibbonCoverageInput<T>
  * somewhere else when the tab comes back, which they would be anyway. M4.6's
  * integrator is where a long frame does need an opinion.
  */
+/** What {@link ribbonWidthAt} needs to decide a frame's width. */
+export interface RibbonWidthInput {
+  /**
+   * How wide the ribbon would be if it DID scale with the scene, as a half
+   * width in world units.
+   *
+   * The quantity a scene actually has an opinion about: an edge between boxes
+   * tens of units across is a world unit or two wide, and saying so is what
+   * lets the two rules below be arithmetic rather than taste.
+   */
+  readonly worldHalfWidth: number;
+
+  /** The camera's zoom times the device pixel ratio. */
+  readonly pixelsPerWorldUnit: number;
+
+  /** The thinnest the ribbon may be drawn. Below about 0.5 the ramp eats it. */
+  readonly minHalfWidthPixels: number;
+
+  /** The widest it may be drawn, which is what stops a deep zoom paving the viewport. */
+  readonly maxHalfWidthPixels: number;
+}
+
+/** A width to draw at, and the alpha that keeps it honest. See {@link ribbonWidthAt}. */
+export interface RibbonWidth {
+  readonly halfWidthPixels: number;
+  /** A multiplier for the ribbon's own alpha, at most 1. */
+  readonly alpha: number;
+}
+
+/**
+ * The half width and alpha for one frame: a constant pixel width is the right
+ * DEFAULT and this is the correction at the two ends where it is wrong.
+ *
+ * The module docstring records why the width is in screen space and what it
+ * costs, and this function is the remedy it names. Both rules are one line:
+ *
+ * ```
+ * halfWidthPixels = clamp(worldHalfWidth * pixelsPerWorldUnit, min, max)
+ * alpha           = min(1, ideal / min)
+ * ```
+ *
+ * **The fade is the half that matters, and it conserves ink.** Below the floor
+ * the ribbon is being drawn WIDER than the scene says it is, because a ramp
+ * needs half a pixel either side and a thinner band would fade out entirely
+ * rather than get thinner. Drawing it at the floor and fading its alpha by the
+ * same ratio puts the same total coverage on screen as the honest width would
+ * have: `halfWidthPixels * alpha` is exactly `ideal` everywhere the fade is
+ * engaged. That identity is the test, and it is what stops the far view being
+ * a mat of edge ink: the campaign has 110.9M world units of centreline, which
+ * at the zoom floor is far more line than there is viewport, and the fix is
+ * for each line to carry less of it rather than for any line to disappear.
+ *
+ * The ceiling is the duller end and needs no fade: a ribbon that would be forty
+ * pixels wide at card zoom is clamped to the maximum and stays opaque, because
+ * there is no ink being conserved, only a slab nobody asked for.
+ *
+ * Nothing here reads a camera: `pixelsPerWorldUnit` is passed in, so this is
+ * arithmetic a test can run at every zoom in one loop rather than behaviour
+ * that needs a frame.
+ */
+export function ribbonWidthAt(input: RibbonWidthInput): RibbonWidth {
+  requirePositive(input.worldHalfWidth, 'worldHalfWidth');
+  requirePositive(input.pixelsPerWorldUnit, 'pixelsPerWorldUnit');
+  requireAtLeast(input.minHalfWidthPixels, 0.5, 'minHalfWidthPixels');
+  requireAtLeast(input.maxHalfWidthPixels, input.minHalfWidthPixels, 'maxHalfWidthPixels');
+
+  const ideal = input.worldHalfWidth * input.pixelsPerWorldUnit;
+  const halfWidthPixels = Math.min(
+    Math.max(ideal, input.minHalfWidthPixels),
+    input.maxHalfWidthPixels,
+  );
+  return { halfWidthPixels, alpha: Math.min(1, ideal / input.minHalfWidthPixels) };
+}
+
 export function advanceDashFlow(
   flowPixels: number,
   speedPixelsPerSecond: number,

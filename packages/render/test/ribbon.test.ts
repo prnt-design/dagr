@@ -5,6 +5,7 @@ import {
   RIBBON_AA_PADDING_PIXELS,
   advanceDashFlow,
   numberDashArith,
+  ribbonWidthAt,
   requireRibbonStyle,
   ribbonCoverage,
   smoothCentreline,
@@ -1023,5 +1024,63 @@ describe('requireRibbonStyle', () => {
     expect(() =>
       requireRibbonStyle({ ...style, dash: { ...style.dash, duty: 2 } }, 'edgeStyle'),
     ).toThrow(/edgeStyle\.dash\.duty/);
+  });
+});
+
+describe('ribbonWidthAt', () => {
+  const limits = { minHalfWidthPixels: 0.5, maxHalfWidthPixels: 4 };
+
+  it('draws the honest width between the floor and the ceiling', () => {
+    const width = ribbonWidthAt({ worldHalfWidth: 2, pixelsPerWorldUnit: 1, ...limits });
+    expect(width.halfWidthPixels).toBe(2);
+    expect(width.alpha).toBe(1);
+  });
+
+  it('conserves ink below the floor, which is the whole point of the fade', () => {
+    // The identity the far view depends on: a ribbon too thin to draw honestly
+    // is drawn at the floor and faded by the same ratio, so the coverage it
+    // puts on screen is the coverage the honest width would have. Swept across
+    // three decades of zoom below the floor, since that is the range the
+    // campaign's fitted view actually spans.
+    for (const pixelsPerWorldUnit of [0.001, 0.01, 0.05, 0.1, 0.2, 0.249]) {
+      const width = ribbonWidthAt({ worldHalfWidth: 2, pixelsPerWorldUnit, ...limits });
+      expect(width.halfWidthPixels).toBe(0.5);
+      expect(width.halfWidthPixels * width.alpha).toBeCloseTo(2 * pixelsPerWorldUnit, 12);
+      expect(width.alpha).toBeLessThan(1);
+    }
+  });
+
+  it('never fades above the floor, and never exceeds an alpha of 1', () => {
+    for (const pixelsPerWorldUnit of [0.25, 0.5, 1, 10, 1000]) {
+      expect(ribbonWidthAt({ worldHalfWidth: 2, pixelsPerWorldUnit, ...limits }).alpha).toBe(1);
+    }
+  });
+
+  it('clamps at the ceiling without fading, because no ink is being conserved', () => {
+    const width = ribbonWidthAt({ worldHalfWidth: 2, pixelsPerWorldUnit: 100, ...limits });
+    expect(width.halfWidthPixels).toBe(4);
+    expect(width.alpha).toBe(1);
+  });
+
+  it('is monotone in the zoom, so a pinch cannot make an edge jump', () => {
+    let previous = 0;
+    for (let zoom = 0.01; zoom < 20; zoom *= 1.2) {
+      const width = ribbonWidthAt({ worldHalfWidth: 2, pixelsPerWorldUnit: zoom, ...limits });
+      const drawn = width.halfWidthPixels * width.alpha;
+      expect(drawn).toBeGreaterThanOrEqual(previous - 1e-12);
+      previous = drawn;
+    }
+  });
+
+  it('rejects limits it cannot honour, naming the field', () => {
+    const base = { worldHalfWidth: 2, pixelsPerWorldUnit: 1, ...limits };
+    expect(() => ribbonWidthAt({ ...base, worldHalfWidth: 0 })).toThrow(/worldHalfWidth/);
+    expect(() => ribbonWidthAt({ ...base, pixelsPerWorldUnit: 0 })).toThrow(/pixelsPerWorldUnit/);
+    expect(() => ribbonWidthAt({ ...base, minHalfWidthPixels: 0.4 })).toThrow(
+      /minHalfWidthPixels/,
+    );
+    expect(() => ribbonWidthAt({ ...base, maxHalfWidthPixels: 0.4 })).toThrow(
+      /maxHalfWidthPixels/,
+    );
   });
 });
