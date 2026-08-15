@@ -1,71 +1,83 @@
 import type { JSX } from 'react';
 import { Graph } from '@dagr/graph';
+import { EDGE_ROLES, cardRows, generateCampaign } from '@dagr/campaign';
+import type { CampaignNode } from '@dagr/campaign';
 import { FirstLight } from './FirstLight.js';
 
-/** What the demo keeps on its nodes. */
-type NodeAttrs = { label: string };
-
-/** A small pipeline-shaped graph, built with the real `@dagr/graph` API. */
-function buildSampleGraph(): Graph<NodeAttrs> {
-  const graph = new Graph<NodeAttrs>();
-  const stages: [id: string, label: string][] = [
-    ['ingest', 'Ingest'],
-    ['parse', 'Parse'],
-    ['layout', 'Layout'],
-    ['render', 'Render'],
-    ['export', 'Export'],
-  ];
-  for (const [id, label] of stages) graph.addNode({ id, attrs: { label } });
-  graph.addEdge('ingest', 'parse');
-  graph.addEdge('parse', 'layout');
-  graph.addEdge('layout', 'render');
-  graph.addEdge('layout', 'export');
-  graph.addEdge('render', 'export');
-  return graph;
-}
+/** What the demo keeps on its nodes: the campaign node itself. */
+type NodeAttrs = { node: CampaignNode };
 
 /**
- * Built once at module load, not per render. Graph identity has to outlive a
- * render: rebuilding in the component body would hand every render a fresh
- * graph with fresh records, which is exactly what defeats the stable identity
- * the whole library is built on. Real apps will hold the graph in a store or a
- * ref; a module constant is the honest version of that for a static demo.
+ * The campaign dataset, generated at module load and loaded into a real
+ * `@dagr/graph`. Module scope for the same reason the old sample graph was:
+ * graph identity has to outlive a render, and a module constant is the honest
+ * version of a store for a static demo.
+ *
+ * Generating rather than importing JSON is the plan's P1 decision: the same
+ * seed reproduces the same campaign, and the bundle carries a generator
+ * measured in kilobytes instead of a dataset measured in megabytes.
  */
-const graph = buildSampleGraph();
-const successors = graph.successors('layout');
+const campaign = generateCampaign();
 
-/** A node's label, falling back to its id. Every attribute read is optional. */
-function labelOf(id: string): string {
-  return graph.requireNode(id).attrs.label ?? id;
+const graph = new Graph<NodeAttrs>();
+for (const node of campaign.nodes) graph.addNode({ id: node.id, attrs: { node } });
+for (const edge of campaign.edges) {
+  graph.addEdge({ id: edge.id, source: edge.source, target: edge.target });
 }
+
+/** Node counts by kind, in first-seen order, for the stats grid. */
+const kindCounts: readonly [string, number][] = (() => {
+  const counts = new Map<string, number>();
+  for (const node of campaign.nodes) {
+    counts.set(node.data.kind, (counts.get(node.data.kind) ?? 0) + 1);
+  }
+  return [...counts.entries()];
+})();
+
+const edgeRoleCounts = (() => {
+  let routed = 0;
+  let overlay = 0;
+  for (const edge of campaign.edges) {
+    if (EDGE_ROLES[edge.kind] === 'routed') routed += 1;
+    else overlay += 1;
+  }
+  return { routed, overlay };
+})();
+
+/** The root's successors through the real adjacency API: arcs and regions. */
+const rootChildren = graph
+  .successors('campaign-1')
+  .map((id) => graph.requireNode(id).attrs.node?.name ?? id);
+
+/** One card, rendered as text, so the page shows what P6 will show as HTML. */
+const sampleNode =
+  campaign.nodes.find((node) => node.data.kind === 'scene') ?? campaign.nodes[0];
 
 /**
  * The demo playground, in two halves that do not know about each other yet.
  *
- * The canvas is `@dagr/render`'s shape ladder: rounded rects and circles across
- * two orders of magnitude of world size, drawn through a real camera you can pan
- * and zoom. The facts underneath are `@dagr/graph` driving its real API, which is
- * what this page proved before there was anything to draw with and still proves
- * now. They are separate on purpose: nothing in M4.2 turns a graph into a scene,
- * and pretending otherwise by placing these shapes on graph coordinates here
- * would be a layout engine written in the demo. M4.4 is what joins them, and on
- * that day this file loses its second half rather than gaining a third.
+ * The canvas is `@dagr/render`'s shape ladder with the M4.11/M4.12 overlay on
+ * top. The facts underneath are the campaign dataset (`@dagr/campaign`, the
+ * plan's P1) loaded into a real `@dagr/graph`: 16 node kinds, a contains
+ * forest, quest DAGs and a clue web, none of it drawn yet. P4 is what puts it
+ * on the canvas, and on that day this file trades its stats for a scene.
  */
 export function App(): JSX.Element {
   return (
     <main className="page">
       <header className="page__header">
         <h1 className="page__title">Dagr demo</h1>
-        <p className="page__subtitle">M4.2 SDF shapes</p>
+        <p className="page__subtitle">SDF shapes, the HTML overlay, and the campaign dataset</p>
       </header>
 
       <FirstLight />
 
       <section className="facts">
-        <h2 className="facts__title">@dagr/graph</h2>
+        <h2 className="facts__title">@dagr/campaign, loaded into @dagr/graph</h2>
         <p className="facts__lead">
-          The graph model, running in the same page. Nothing below is drawn on the canvas above yet:
-          turning a graph into a scene is M4.4.
+          A deterministic mock D&D campaign (seed {campaign.seed}), generated in this page and
+          loaded into the graph model. Nothing below is drawn on the canvas above yet: that is the
+          campaign plan&apos;s P4.
         </p>
         <div className="facts__grid">
           <div>
@@ -73,22 +85,41 @@ export function App(): JSX.Element {
             <p className="facts__value">
               {graph.nodeCount} nodes, {graph.edgeCount} edges
             </p>
+            <p className="facts__label">edge roles</p>
+            <p className="facts__value">
+              {edgeRoleCounts.routed} routed, {edgeRoleCounts.overlay} overlay
+            </p>
+            <p className="facts__label">under the campaign root</p>
+            <p className="facts__value">{rootChildren.join(', ')}</p>
           </div>
           <div>
-            <p className="facts__label">successors of {labelOf('layout')}</p>
-            <p className="facts__value">{successors.map(labelOf).join(', ')}</p>
-          </div>
-          <div>
-            <p className="facts__label">edges</p>
+            <p className="facts__label">nodes by kind</p>
             <ul className="facts__list">
-              {graph.edges().map((edge) => (
-                <li key={edge.id}>
-                  {labelOf(edge.source)}
-                  <span className="facts__arrow">to</span>
-                  {labelOf(edge.target)}
+              {kindCounts.map(([kind, count]) => (
+                <li key={kind}>
+                  {kind}
+                  <span className="facts__arrow">x</span>
+                  {count}
                 </li>
               ))}
             </ul>
+          </div>
+          <div>
+            <p className="facts__label">one card, as data</p>
+            {sampleNode === undefined ? null : (
+              <>
+                <p className="facts__value">{sampleNode.name}</p>
+                <ul className="facts__list">
+                  {cardRows(sampleNode).map(([key, value]) => (
+                    <li key={key}>
+                      {key}
+                      <span className="facts__arrow">:</span>
+                      {value}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
           </div>
         </div>
       </section>

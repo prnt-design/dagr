@@ -8,6 +8,9 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      '@dagr/campaign': fileURLToPath(
+        new URL('../../packages/campaign/src/index.ts', import.meta.url),
+      ),
       '@dagr/graph': fileURLToPath(new URL('../../packages/graph/src/index.ts', import.meta.url)),
       // This alias is also why the demo does not depend on `three`, and why it
       // would prove nothing if it did. `@dagr/render` resolves to a file inside

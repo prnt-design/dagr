@@ -11,7 +11,7 @@ this plan stands alone.
 ## What
 
 Replace the demo's test geometry with a real dataset: a deterministic mock
-D&D campaign of roughly 2,800 nodes and 10,000 edges (arcs, chapters, scenes,
+D&D campaign of roughly 2,900 nodes and 7,000 edges (arcs, chapters, scenes,
 locations down to keyed rooms, NPCs, factions, quests with branch-and-merge
 outcomes, clues, items, weather and condition modifiers), laid out by
 `@dagr/layout`, drawn by `@dagr/render`, explorable by pan and zoom from the
@@ -291,6 +291,19 @@ independent of each other and of everything after them.
   synthesis of how published campaigns and existing tools structure the
   domain, offered as a starting point; if his real schema arrives, the
   generator retargets.
+
+## Follow-up, requested 2026-08-15
+
+More examples that show the animation and game-like feel the project was
+motivated by (the README's animation-first framing: incremental layout,
+stable identity, springs). The campaign demo is a static snapshot on purpose;
+the follow-up is the moving counterpart: nodes springing to new positions on
+relayout, grow-and-prune, a quest state rippling through the graph, a front's
+clock ticking. Not planned here: it wants M4.6 (springs), M3 (deltas) and
+M4.7 (delta consumer) under it, and the campaign dataset gives it something
+worth animating. Scope it when those exist; the demo candidates worth
+remembering are "a session being played" (scenes completing, clocks
+advancing) and "a campaign being authored" (subtrees appearing and settling).
 
 ## Open questions for the maintainer
 

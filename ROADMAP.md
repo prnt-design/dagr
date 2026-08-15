@@ -3419,6 +3419,42 @@ pattern-generator use case. Expected shape:
 - [ ] **M6.3** Drag-to-connect interactions.
 - [ ] **M6.4** Pattern-generator example built on the DSL.
 
+## Campaign demo track
+
+Maintainer-requested (2026-08-14), planned in
+`plans/2026-08-14-campaign-demo.md`, which carries the decision record the
+entries below only summarize. Runs beside the milestone numbering because it
+is a demo direction, not an engine milestone; where a phase IS an M4 task
+(P3 to P5), the M4 entry stays the record and the phase just names its
+consumer. Sequencing against M3 is the plan's open question 1.
+
+- [x] **P1** (`packages/campaign`, `apps/demo`) The dataset: `@dagr/campaign`,
+  a private zero-dependency package holding the schema types (16 node kinds,
+  23 edge kinds with a routed/overlay split the layout consumes) and a seeded
+  generator. Measured at the default seed: 2,949 nodes, 6,939 edges, spanning
+  2,664 to 3,871 nodes across `scale` 0.5 to 2. The structural claims are
+  tested as graph invariants across three seeds, not eyeballed: the contains
+  forest steps depth by exactly one, every revelation has three clues from
+  three distinct holders of at least two kinds, every dungeon's loop surplus
+  is at least a quarter of its rooms with the 88-room finale present, secret
+  and one-way door shares sit at module-like proportions, the settlement
+  layer holds average degree 2.5 to 4, over 55% of failure branches merge
+  back within two steps, and the bestiary reuse is Zipf-shaped. Determinism
+  is deep-equality over the whole structure, same seed same campaign.
+  Names and tables are original, so the dataset ships with no licensing
+  question. The demo generates the campaign at module load and loads it into
+  a real `@dagr/graph` (the sample pipeline graph retires); drawing it is P4.
+  Edge count honesty: the research proposal estimated 8,000 to 11,000 edges;
+  the built social layer is thinner and the suite gates the ratio (2 to 4
+  edges per node) rather than the estimate.
+- [ ] **P2** (`@dagr/render`, `apps/demo`) Content-derived zoom limits
+  (`fitBounds`, `setZoomLimits`) and keyboard zoom while the canvas has
+  focus.
+- [ ] **P6** (`apps/demo`) Campaign cards through `createRichNodes` with
+  per-kind declared sizes. P3 to P5 are M4.3 to M4.5 and live in M4.
+- [ ] **P7** (`apps/demo`, `docs`) Deep links, hover highlight, committed
+  screenshots, a docs page on the schema.
+
 ## Tracked, not promised
 
 Web-component wrapper, 3D camera experiment, Remotion tutorials, npm publish

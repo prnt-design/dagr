@@ -29,6 +29,9 @@ importers:
 
   apps/demo:
     dependencies:
+      '@dagr/campaign':
+        specifier: workspace:*
+        version: link:../../packages/campaign
       '@dagr/graph':
         specifier: workspace:*
         version: link:../../packages/graph
@@ -102,6 +105,8 @@ importers:
       '@docusaurus/types':
         specifier: 3.10.2
         version: 3.10.2(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.23))(html-minifier-terser@7.2.0)(postcss@8.5.23)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+
+  packages/campaign: {}
 
   packages/graph:
     devDependencies:
