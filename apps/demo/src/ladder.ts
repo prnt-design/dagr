@@ -123,16 +123,17 @@ export const LADDER_BOUNDS: WorldBounds = LADDER_SHAPES.reduce(
 );
 
 /**
- * The smallest extent any shape has on either axis, in world units: the "one
- * node" the zoom-in limit lets fill the viewport's short side. 4 today (the
- * small rect's height and the small circle's diameter), but computed, for the
- * same drift reason as {@link LADDER_BOUNDS}.
+ * The smallest shape by area, as a size: the "one node" the zoom-in limit
+ * frames. The whole box rather than a single extent, because the ceiling fits
+ * the node with its edges in view, and a box needs both dimensions for that.
+ * The 4 by 4 small circle today, but computed, for the same drift reason as
+ * {@link LADDER_BOUNDS}.
  */
-export const LADDER_SMALLEST_EXTENT = LADDER_SHAPES.reduce(
-  (acc, shape) =>
-    Math.min(acc, shape.bounds.maxX - shape.bounds.minX, shape.bounds.maxY - shape.bounds.minY),
-  Infinity,
-);
+export const LADDER_SMALLEST_NODE: { readonly width: number; readonly height: number } =
+  LADDER_SHAPES.map((shape) => ({
+    width: shape.bounds.maxX - shape.bounds.minX,
+    height: shape.bounds.maxY - shape.bounds.minY,
+  })).reduce((acc, size) => (size.width * size.height < acc.width * acc.height ? size : acc));
 
 /**
  * The three tiers, in CSS pixels of screen width, from the campaign demo plan.

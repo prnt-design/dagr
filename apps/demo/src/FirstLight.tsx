@@ -16,7 +16,7 @@ import {
   LABEL_MIN_SCREEN_WIDTH,
   LADDER_BOUNDS,
   LADDER_SHAPES,
-  LADDER_SMALLEST_EXTENT,
+  LADDER_SMALLEST_NODE,
 } from './ladder.js';
 import type { LadderShape } from './ladder.js';
 
@@ -383,10 +383,19 @@ export function FirstLight(): JSX.Element {
       // padding" and "the smallest shape filling the short side". This is the
       // call that clamps an out-of-range `#zoom=` on the first measurement,
       // and on every resize after it the camera is carried along.
-      const limits = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, viewport);
+      const limits = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, viewport);
       camera.setZoomLimits(limits.minZoom, limits.maxZoom);
       requestDraw();
     };
+
+    // Synchronously, before any listener attaches: the effect runs after the
+    // canvas has layout, so the measurement works here, and it closes the
+    // window in which the camera is unbounded. Without this, the first
+    // ResizeObserver delivery is what binds the limits, and the platform runs
+    // rAF callbacks BEFORE ResizeObserver observations in the same rendering
+    // update, so a queued wheel event could draw, and worse, derive an
+    // anchored centre from, an unclamped `#zoom=1e9` before the clamp landed.
+    applyViewport();
 
     // Observe the CONTAINER, and measure the CANVAS. The container is the
     // element page layout sizes; the canvas is the element with the pixels, and
@@ -479,6 +488,11 @@ export function FirstLight(): JSX.Element {
      * it is about focus, which is this component's business, not the camera's.
      */
     const onKeyDown = (event: KeyboardEvent): void => {
+      // Ctrl, Meta and Alt chords belong to the browser: Ctrl+'+'/'-'/'0' is
+      // accessibility page zoom and Alt+Arrow is history navigation, and a
+      // focused canvas hijacking either would block features a user cannot
+      // do without. Shift is not in this list because the key map binds it.
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.key === 'Escape') {
         canvas.blur();
         return;
@@ -654,6 +668,7 @@ function Overlay({ readout }: { readout: CameraReadout | null }): JSX.Element {
       */}
       <p className="stage__readout-hint">
         drag to pan, scroll to zoom ({fixed(minZoom, 2)} to {fixed(maxZoom, 1)}), or load #zoom=
+        {fixed(maxZoom, 1)}
       </p>
       <p className="stage__readout-hint">
         click the canvas, then arrows zoom and pan, 0 fits, Escape leaves

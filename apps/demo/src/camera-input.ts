@@ -1,3 +1,4 @@
+import { fitZoom } from '@dagr/render';
 import type { Vec2, WorldBounds } from '@dagr/render';
 
 /**
@@ -81,33 +82,38 @@ export const FIT_PADDING = 0.05;
 /**
  * The derived zoom range for a scene: zoom out stops where the whole content
  * is in frame with {@link FIT_PADDING}, zoom in stops where the smallest node
- * spans the viewport's short side.
+ * fills the frame with the same padding.
  *
- * The min is the same arithmetic as `Camera2D.fitBounds`, restated here
- * because the camera computes it as a state change and this caller needs it
- * as a number to hand `setZoomLimits`; `camera-input.test.ts` pins the two
- * against each other so they cannot drift apart.
+ * Both ends are `fitZoom` from `@dagr/render`, which is also what
+ * `Camera2D.fitBounds` adopts, so the "0" key, the floor, and the ceiling
+ * share one formula and one validation instead of three copies held together
+ * by tests. The validation matters here: a zero-extent scene or node reaches
+ * `fitZoom`'s RangeError with the field named, rather than deriving an
+ * `Infinity` that `setZoomLimits` rejects inside a ResizeObserver callback.
  *
- * The max is the smallest node rather than the median one, and the reason is
- * scenes like the ladder whose node sizes span decades: a median-derived max
- * would strand the small nodes below readable size. "Smallest fills the short
- * side" reads as "almost an individual node level" for uniform scenes and
- * stays generous for skewed ones.
+ * The ceiling fits the smallest node's WHOLE box rather than putting its
+ * short axis across the viewport, so fully zoomed in, the node's edges are in
+ * frame and the view cannot degenerate into the edge-free flat fill that
+ * looks exactly like a broken renderer, which is the invariant the fixed
+ * range's screenshot tests used to guard. Smallest node rather than median,
+ * because scenes like the ladder span decades of node size and a
+ * median-derived ceiling would strand the small nodes below readable size.
  *
- * Degenerate content (bounds tighter than the smallest node's own extent)
- * can invert the pair; the two are ordered before returning so the range is
+ * Degenerate content (bounds tighter than the smallest node's own box) can
+ * invert the pair; the two are ordered before returning so the range is
  * always one a camera accepts.
  */
 export function zoomLimits(
   content: WorldBounds,
-  smallestNodeExtent: number,
+  smallestNode: { readonly width: number; readonly height: number },
   viewport: { readonly width: number; readonly height: number },
 ): { readonly minZoom: number; readonly maxZoom: number } {
-  const width = content.maxX - content.minX;
-  const height = content.maxY - content.minY;
-  const fit =
-    (1 - 2 * FIT_PADDING) * Math.min(viewport.width / width, viewport.height / height);
-  const fill = Math.min(viewport.width, viewport.height) / smallestNodeExtent;
+  const fit = fitZoom(content, viewport, FIT_PADDING);
+  const fill = fitZoom(
+    { minX: 0, minY: 0, maxX: smallestNode.width, maxY: smallestNode.height },
+    viewport,
+    FIT_PADDING,
+  );
   return fit <= fill ? { minZoom: fit, maxZoom: fill } : { minZoom: fill, maxZoom: fit };
 }
 
@@ -115,9 +121,10 @@ export function zoomLimits(
  * One keyboard zoom step, as a factor. Exactly one wheel detent
  * ({@link WHEEL_MAX_PIXELS} / 2 pixels of travel at {@link WHEEL_ZOOM_SPEED}),
  * so holding a key and rolling the wheel move at the same speed and there is
- * one zoom feel, not two.
+ * one zoom feel, not two. Spelled in terms of the two constants it claims
+ * parity with, so retuning either retunes this with it.
  */
-export const KEY_ZOOM_FACTOR = Math.exp(100 * WHEEL_ZOOM_SPEED);
+export const KEY_ZOOM_FACTOR = Math.exp((WHEEL_MAX_PIXELS / 2) * WHEEL_ZOOM_SPEED);
 
 /** One keyboard pan step, in CSS pixels. */
 export const KEY_PAN_STEP = 64;

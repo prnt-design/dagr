@@ -16,7 +16,7 @@ import {
   wheelZoomFactor,
   zoomLimits,
 } from '../src/camera-input.js';
-import { LADDER_BOUNDS, LADDER_SMALLEST_EXTENT } from '../src/ladder.js';
+import { LADDER_BOUNDS, LADDER_SMALLEST_NODE } from '../src/ladder.js';
 
 /**
  * The only unit-testable part of the first light demo.
@@ -113,17 +113,18 @@ describe('the derived zoom range', () => {
    * stage at `clamp(600px, 62vh, 780px)` inside a `.page` capped at 72rem
    * with 1.5rem of padding, so 1102 by 598 is the widest page at the
    * shortest stage. The scene, unlike the fixed-range era, is NOT copied:
-   * `ladder.ts` exports its bounds and smallest extent, computed from the
+   * `ladder.ts` exports its bounds and smallest node, computed from the
    * shapes, so these tests move with the scene instead of drifting from it.
    */
   const CANVAS = { width: 1102, height: 598 };
 
   it('derives the range this scene and canvas actually produce', () => {
-    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, CANVAS);
+    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, CANVAS);
     // The floor: 90% of the width-limited fit of a 2205-unit-wide scene.
     expect(minZoom).toBeCloseTo(0.9 * (CANVAS.width / 2205), 6);
-    // The ceiling: the 4-unit smallest extent filling the 598px short side.
-    expect(maxZoom).toBeCloseTo(CANVAS.height / 4, 9);
+    // The ceiling: the 4 by 4 smallest shape framed at the same 5% padding,
+    // height-limited on this canvas.
+    expect(maxZoom).toBeCloseTo(0.9 * (CANVAS.height / 4), 9);
   });
 
   it('keeps the 100x crispness reference reachable and retires the 0.1x one', () => {
@@ -133,9 +134,19 @@ describe('the derived zoom range', () => {
     // the fitted scene is exactly the "too far out" state the derived range
     // exists to prevent. That frame stays reproducible from the M4.2 commit,
     // and its finding is recorded in the M4.2 ROADMAP entry.
-    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, CANVAS);
+    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, CANVAS);
     expect(maxZoom).toBeGreaterThanOrEqual(100);
     expect(minZoom).toBeGreaterThan(0.1);
+  });
+
+  it('keeps the smallest node edges in frame at the ceiling', () => {
+    // The invariant the fixed range's screenshot test guarded, restated for a
+    // derived ceiling: fully zoomed in, the smallest node is strictly inside
+    // the viewport on both axes, so the frame is an antialiased boundary and
+    // never the edge-free flat fill that reads as a broken renderer.
+    const { maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, CANVAS);
+    expect(LADDER_SMALLEST_NODE.width * maxZoom).toBeLessThan(CANVAS.width);
+    expect(LADDER_SMALLEST_NODE.height * maxZoom).toBeLessThan(CANVAS.height);
   });
 
   it('agrees with Camera2D.fitBounds on what the floor means', () => {
@@ -147,12 +158,12 @@ describe('the derived zoom range', () => {
       viewport: { ...CANVAS, devicePixelRatio: 1 },
     });
     camera.fitBounds(LADDER_BOUNDS, FIT_PADDING);
-    const { minZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, CANVAS);
+    const { minZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, CANVAS);
     expect(camera.zoom).toBeCloseTo(minZoom, 12);
   });
 
   it('contains the zoom the camera starts at', () => {
-    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, CANVAS);
+    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, CANVAS);
     expect(INITIAL_ZOOM).toBeGreaterThanOrEqual(minZoom);
     expect(INITIAL_ZOOM).toBeLessThanOrEqual(maxZoom);
   });
@@ -162,15 +173,15 @@ describe('the derived zoom range', () => {
     // fling, and wheelZoomFactor composes them exactly, which its own docstring
     // calls a feature. So the clamp that makes one event safe multiplies out to
     // a factor of about 8100 across a flick, and only the range stops it.
-    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, CANVAS);
+    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, CANVAS);
     const fling = wheelZoomFactor({ deltaY: -1e9, deltaMode: 0 }) ** 30;
     expect(INITIAL_ZOOM * fling).toBeGreaterThan(maxZoom);
     expect(INITIAL_ZOOM / fling).toBeLessThan(minZoom);
   });
 
   it('moves with the viewport, which is why the camera limits must be rebindable', () => {
-    const small = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, { width: 551, height: 299 });
-    const large = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, CANVAS);
+    const small = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, { width: 551, height: 299 });
+    const large = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, CANVAS);
     expect(small.minZoom).toBeCloseTo(large.minZoom / 2, 6);
     expect(small.maxZoom).toBeCloseTo(large.maxZoom / 2, 6);
   });
@@ -179,8 +190,19 @@ describe('the derived zoom range', () => {
     // Content tighter than its own smallest node inverts fit and fill; the
     // range is ordered before returning, so Camera2D.setZoomLimits accepts it.
     const bounds = { minX: 0, minY: 0, maxX: 2, maxY: 2 };
-    const { minZoom, maxZoom } = zoomLimits(bounds, 100, CANVAS);
+    const { minZoom, maxZoom } = zoomLimits(bounds, { width: 100, height: 100 }, CANVAS);
     expect(minZoom).toBeLessThanOrEqual(maxZoom);
+  });
+
+  it('rejects a zero-extent scene or node with the field named, not an Infinity', () => {
+    // fitZoom owns the validation, so a degenerate P6 scene fails loudly at
+    // derivation instead of handing setZoomLimits an Infinity to throw on
+    // inside a ResizeObserver callback.
+    const flat = { minX: 0, minY: 5, maxX: 10, maxY: 5 };
+    expect(() => zoomLimits(flat, { width: 4, height: 4 }, CANVAS)).toThrow(RangeError);
+    expect(() =>
+      zoomLimits(LADDER_BOUNDS, { width: 0, height: 4 }, CANVAS),
+    ).toThrow(RangeError);
   });
 });
 
@@ -191,8 +213,9 @@ describe('keyCommand', () => {
     expect(keyCommand('=')).toEqual({ kind: 'zoom', factor: KEY_ZOOM_FACTOR });
     expect(keyCommand('+')).toEqual({ kind: 'zoom', factor: KEY_ZOOM_FACTOR });
     expect(keyCommand('-')).toEqual({ kind: 'zoom', factor: 1 / KEY_ZOOM_FACTOR });
-    // One detent is 100 pixels of wheel travel, so key and wheel agree.
-    expect(KEY_ZOOM_FACTOR).toBeCloseTo(Math.exp(100 * WHEEL_ZOOM_SPEED), 12);
+    // One detent is half the per-event clamp of wheel travel, so key and
+    // wheel agree, and retuning either constant retunes the key step.
+    expect(KEY_ZOOM_FACTOR).toBeCloseTo(Math.exp((WHEEL_MAX_PIXELS / 2) * WHEEL_ZOOM_SPEED), 12);
   });
 
   it('takes three detents on the page keys', () => {

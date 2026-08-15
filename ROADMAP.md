@@ -3469,13 +3469,16 @@ consumer. Sequencing against M3 is the plan's open question 1.
   side, capped at 0.45, and rejects zero-area bounds rather than fitting a
   point at infinite zoom.
   The demo derives its range in `zoomLimits`: the floor is the whole scene
-  fitted at 5% padding, the ceiling is the SMALLEST node filling the
-  viewport's short side. Smallest rather than median, because a scene like
-  the ladder spans decades of node size and a median-derived ceiling strands
-  the small nodes below readable size. Both ends are viewport statements, so
-  the range rebinds on every resize, the readout hint prints the live values,
-  and a test pins `zoomLimits` against `fitBounds` so the "0" key and the
-  zoom-out floor cannot drift apart.
+  fitted at 5% padding, the ceiling is the SMALLEST node framed at the same
+  padding (134.6 on the reference canvas). Smallest rather than median,
+  because a scene like the ladder spans decades of node size and a
+  median-derived ceiling strands the small nodes below readable size; framed
+  rather than filling the short side, so the ceiling can never be an
+  edge-free flat fill, which is the invariant the fixed range's screenshot
+  test guarded. Both ends are the same exported `fitZoom` the camera's
+  `fitBounds` adopts, so the "0" key, the floor, and the ceiling share one
+  formula and one validation. Both ends are viewport statements, so the range
+  rebinds on every resize and the readout hint prints the live values.
   The keyboard, with focus as the mode switch: the canvas is focusable, and
   while focused ArrowUp/Down (and +/-) zoom one wheel detent per press so key
   and wheel share one speed, PageUp/Down take three detents, Left/Right pan,
@@ -3492,7 +3495,20 @@ consumer. Sequencing against M3 is the plan's open question 1.
   recorded in the M4.2 entry above; no future scene needs to re-demonstrate
   it. The hash parser now returns out-of-range values as parsed, and the
   camera clamps them when the derived limits land at the first viewport
-  measurement.
+  measurement, which happens SYNCHRONOUSLY in the effect before any listener
+  attaches: rAF callbacks run before ResizeObserver observations in a
+  rendering update, so waiting for the observer would leave a window in
+  which a queued gesture could draw at, and anchor a centre against, an
+  unclamped zoom.
+  A pre-PR review (8 finder angles) confirmed one live bug and shaped the
+  rest of this entry: the key handler originally hijacked Ctrl/Meta/Alt
+  chords (accessibility page zoom, history navigation), and now bails on any
+  of them; the readout hint had lost its `#zoom=` example; `docs/render.md`
+  still claimed the 0.1x frame was reproducible and its API table lacked the
+  new methods; `zoomLimits` yielded an Infinity for zero-extent content
+  instead of a named RangeError; the ceiling could flat-fill on the wide
+  small rect; and three duplications (fit formula, wheel-detent literal,
+  range validation) each now have a single authority.
 - [ ] **P6** (`apps/demo`) Campaign cards through `createRichNodes` with
   per-kind declared sizes. P3 to P5 are M4.3 to M4.5 and live in M4.
 - [ ] **P7** (`apps/demo`, `docs`) Deep links, hover highlight, committed
