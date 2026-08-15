@@ -323,7 +323,10 @@ describe('fronts and clocks', () => {
 });
 
 describe('condition modifiers', () => {
-  it('runs a hardcover share of scenes under a modifier and every region under weather', () => {
+  // The scope is deliberately not asserted: a region draws its standing
+  // modifier from all four scopes, so pinning it to weather would be a claim
+  // about one seed's draws rather than about the generator.
+  it('runs a hardcover share of scenes under a modifier and every region under one', () => {
     for (const { campaign, edgesByKind } of fixtures) {
       const modified = new Set((edgesByKind.get('modified_by') ?? []).map((e) => e.source));
       const scenes = campaign.nodes.filter((n) => n.data.kind === 'scene');

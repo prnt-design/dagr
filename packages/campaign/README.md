@@ -36,4 +36,5 @@ What a consumer needs to know:
 The structural claims (Three Clue Rule, jaquays loop quota, hub-and-spoke
 degree, branch-merge rate, Zipf bestiary reuse) are enforced by
 `test/invariants.test.ts` across multiple seeds. The design record is
-`plans/2026-08-14-campaign-demo.md`.
+`plans/2026-08-14-campaign-demo.md`, and the schema is written up for readers
+at https://dagr.prnt.design/docs/campaign (`docs/docs/campaign.md`).

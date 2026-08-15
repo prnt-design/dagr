@@ -28,6 +28,7 @@ now belongs, so a graph that changes reads as a graph that moved.
 | [`@dagr/layout`](./layout.md) | Headless Sugiyama layout pipeline, incremental and animation first |
 | [`@dagr/render`](./render.md) | WebGPU renderer: SDF shapes, instancing, spring animation |
 | `@dagr/react` | The `DagrCanvas` component and hooks |
+| [`@dagr/campaign`](./campaign.md) | The demo's dataset: a campaign schema and a seeded generator. Private, not published |
 
 ## Status
 

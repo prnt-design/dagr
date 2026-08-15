@@ -731,7 +731,9 @@ function buildStuff(build: Build, spine: Spine, geo: Geography, people: People):
       }),
     );
   }
-  // 40% of scenes run under a modifier; every region carries standing weather.
+  // 40% of scenes run under a modifier; every region carries a standing one,
+  // drawn from all four scopes rather than weather alone, so a region can be
+  // held by terrain or by a time of day the way a module's frame chapter is.
   for (const scene of spine.sceneIds) {
     if (rng.chance(0.4)) addEdge(build, 'modified_by', scene, rng.pick(conditionIds));
   }
