@@ -30,8 +30,13 @@ import {
 } from './campaign-edges.js';
 import { nodeAtPoint } from './hover.js';
 import { nodeColor } from './campaign-style.js';
-import { createCampaignTiers } from './campaign-tiers.js';
-import type { CampaignNode } from '@dagr/campaign';
+import {
+  LABEL_MIN_SCREEN_WIDTH,
+  createCampaignTiers,
+  createFarEndTiers,
+} from './campaign-tiers.js';
+import { edgeIntensity, edgeNeighbourhoods } from './edge-highlight.js';
+import type { Campaign, CampaignNode } from '@dagr/campaign';
 
 /**
  * `@dagr/render` on a canvas, with pan and zoom wired to a real
@@ -83,6 +88,15 @@ interface CameraReadout {
   readonly viewport: ViewportSize;
   /** How many overlay elements the last sync left attached, across all tiers. */
   readonly labels: number;
+  /**
+   * What the hover highlight is lighting: how many edges are at full intensity
+   * and how many far ends were given a name they had not earned.
+   *
+   * On the readout for the reason `labels` is: a highlight is invisible in a
+   * screenshot when it is doing its job on a dense tile, and a picture with
+   * eleven bright lines in it looks the same as one with eleven edges.
+   */
+  readonly highlight: { readonly edges: number; readonly labels: number };
   /** The derived zoom range, which moves with the viewport: see the hint. */
   readonly minZoom: number;
   readonly maxZoom: number;
@@ -103,6 +117,17 @@ interface CameraReadout {
  * set is replaced, which is what P4's own comment said P6 would do.
  */
 const CAMPAIGN_TIERS = createCampaignTiers({ nodeColor });
+
+/**
+ * The layer a hover hangs its neighbours' names off. See `createFarEndTiers`.
+ *
+ * A second `createRichNodes` over the SAME overlay, so both layers share one
+ * element cap, one cull and one `sync`: the cap ranks by distance from the
+ * camera centre, which means a hover near the middle of the frame keeps its
+ * labels and one at the edge yields to what a reader is looking at. That is the
+ * right precedence and it comes for free from sharing the overlay.
+ */
+const FAR_END_TIERS = createFarEndTiers({ nodeColor });
 
 /**
  * The canvas's size in CSS pixels and the current device pixel ratio, or `null`
@@ -192,10 +217,21 @@ function describeFailure(cause: unknown): string {
 }
 
 export function FirstLight({
+  campaign,
   scene,
   edges,
   sceneFailure,
 }: {
+  /**
+   * The dataset, for the one thing the SCENE cannot answer: which edges touch a
+   * node.
+   *
+   * A scene is geometry, and D3's hover is a question about topology, so the
+   * component takes both. Handed down rather than looked up here because
+   * `useCampaignScene` already holds it, and generating a second campaign to
+   * index would be a second dataset that happens to match.
+   */
+  campaign: Campaign;
   scene: CampaignScene | null;
   edges: CampaignEdges | null;
   /**
@@ -221,6 +257,17 @@ export function FirstLight({
   // renderer and the tenth after it.
   const rendererRef = useRef<Renderer | null>(null);
   const requestDrawRef = useRef<() => void>(() => undefined);
+  /**
+   * Forgets which node's edges are lit, without touching the GPU.
+   *
+   * The edges effect below calls it after a `setEdges`, which resets every
+   * edge's intensity in the renderer: the component's own idea of what is lit
+   * has to be reset with it or the next hover onto the same node is a no-op.
+   * A ref for the same reason `requestDrawRef` is one: the state it clears
+   * belongs to the effect that owns the renderer, and the effect that watches
+   * the edges must not re-run when that one does.
+   */
+  const invalidateHighlightRef = useRef<() => void>(() => undefined);
   // Read by the construction effect, which must not re-run when the edges
   // change: rebuilding a renderer to recolour a line would throw away the GPU
   // resources and the camera's place.
@@ -342,6 +389,29 @@ export function FirstLight({
     );
 
     /**
+     * The second overlay layer: a name on each far end of a hovered node's
+     * edges. See `createFarEndTiers`.
+     *
+     * Its node set is REPLACED on every change of hovered node, which is why it
+     * is its own layer: `setNodes` diffs by id, so handing it eleven entries
+     * costs eleven, where a third tier on the layer above would walk 3,010
+     * nodes to light them.
+     */
+    const farEndLabels = createRichNodes<CampaignNode>({ overlay, tiers: FAR_END_TIERS });
+
+    /**
+     * Which edges touch each node, and which nodes are at their far ends.
+     *
+     * Built once per scene rather than per hover: it is a function of the
+     * campaign's topology, which a layout does not move. See `edge-highlight.ts`
+     * for why this one is an index where `nodeAtPoint` is a scan.
+     */
+    const neighbourhoods = edgeNeighbourhoods(campaign);
+
+    /** Every node's overlay record by id, for turning a neighbour into a label. */
+    const overlayById = new Map(scene.overlayNodes.map((node) => [node.id, node]));
+
+    /**
      * Copies the camera's state into React, for {@link Overlay}.
      *
      * Still a `useState` update, and still on the frame path, which is a choice
@@ -362,6 +432,7 @@ export function FirstLight({
         world: camera.visibleWorldBounds(),
         viewport: camera.viewport,
         labels: overlay.activeCount,
+        highlight: highlightCounts,
         minZoom: camera.minZoom,
         maxZoom: camera.maxZoom,
       });
@@ -679,13 +750,106 @@ export function FirstLight({
       hoveredElement?.classList.add('is-hovered');
     };
 
+    /**
+     * The node whose edges are currently lit ON THE GPU, or `null`.
+     *
+     * Separate from {@link hoveredId} because the two can differ, and both
+     * reasons matter. A hover below the title gate lights nothing (see
+     * {@link isLegibleHover}), so the pointer can be over a node while the
+     * highlight is off. And the write is not free: it walks every edge of every
+     * group, so it happens on a CHANGE of this value rather than on every
+     * frame, which the per-frame `refreshHovered` would otherwise make it.
+     */
+    let highlightedId: string | null = null;
+
+    /**
+     * Whether a hovered node is big enough on screen for a highlight to mean
+     * anything: the title tier's own gate.
+     *
+     * **At the fitted campaign the pointer crosses hundreds of nodes and none
+     * of them is a pixel wide**, so dimming 7,100 edges to a twenty-fifth of
+     * their ink would fire on a node the reader cannot see and cannot have
+     * meant. The same gate the title tier opens at is the honest threshold: at
+     * or above it a reader can see what they are pointing at, and the highlight
+     * answers a question they could have asked.
+     *
+     * `hover.ts` answers at every zoom on purpose, and this is the consumer
+     * deciding what to do with an answer, which is exactly the split that file
+     * describes.
+     */
+    const isLegibleHover = (id: string): boolean => {
+      const bounds = overlayById.get(id)?.bounds;
+      if (bounds === undefined) return false;
+      return (bounds.maxX - bounds.minX) * camera.zoom >= LABEL_MIN_SCREEN_WIDTH;
+    };
+
+    /**
+     * What the readout says about the highlight: zero and zero when nothing is
+     * lit. On the readout because a screenshot of a highlight cannot otherwise
+     * say how much of the drawing it covers, which is the same argument the
+     * overlay's own element count is there for.
+     */
+    let highlightCounts = { edges: 0, labels: 0 };
+
+    /**
+     * Lights the hovered node's edges, dims the rest, and names the far ends.
+     *
+     * **One `setEdgeIntensity` per group and one `setNodes`, both only when the
+     * answer CHANGED.** Re-applying per frame would rewrite 7,100 floats and
+     * rebuild an overlay layer sixty times a second to say what it already
+     * said; the renderer's own write is a slice per edge with a merged upload,
+     * which is affordable per change and not per frame.
+     *
+     * Called from {@link setHovered}, which the draw callback runs after every
+     * frame, so a zoom that crosses the gate under a still pointer is picked up
+     * on the next frame rather than on the next pointer move.
+     */
+    const applyHighlight = (): void => {
+      // Nothing to write to yet. `highlightedId` stays where it is, so the
+      // first frame after `createRenderer` resolves applies whatever the
+      // pointer is over by then.
+      if (renderer === null) return;
+      const target = hoveredId !== null && isLegibleHover(hoveredId) ? hoveredId : null;
+      if (target === highlightedId) return;
+      highlightedId = target;
+
+      const incident =
+        target === null ? null : new Set(neighbourhoods.edgesByNode.get(target) ?? []);
+      const intensityOf = edgeIntensity(incident);
+      for (const group of EDGE_GROUPS) renderer.setEdgeIntensity(group.id, intensityOf);
+
+      // The far ends, as their own overlay layer. An id the scene does not hold
+      // is dropped rather than defaulted: `campaignEdges` already refuses to
+      // draw an edge whose ends are not both in the scene, so a name for one
+      // would label a box that is not on the canvas.
+      const neighbours = target === null ? [] : (neighbourhoods.neighboursByNode.get(target) ?? []);
+      farEndLabels.setNodes(
+        neighbours.flatMap((id) => {
+          const node = overlayById.get(id);
+          return node === undefined ? [] : [{ id: node.id, bounds: node.bounds, data: node.node }];
+        }),
+      );
+      highlightCounts = {
+        edges: incident === null ? 0 : incident.size,
+        labels: farEndLabels.nodeCount,
+      };
+      // The frame that is drawing now has already styled its edges, so the
+      // write above lands on the NEXT one. One extra frame per change of
+      // hovered node, on the same `requestAnimationFrame` everything else here
+      // uses: this cannot loop, because the next frame finds the answer
+      // unchanged and asks for nothing.
+      requestDraw();
+    };
+
     const setHovered = (id: string | null): void => {
       if (id === hoveredId) {
         applyHovered();
+        applyHighlight();
         return;
       }
       hoveredId = id;
       applyHovered();
+      applyHighlight();
     };
 
     /**
@@ -834,6 +998,10 @@ export function FirstLight({
         });
         rendererRef.current = renderer;
         requestDrawRef.current = requestDraw;
+        invalidateHighlightRef.current = () => {
+          highlightedId = null;
+          highlightCounts = { edges: 0, labels: 0 };
+        };
         applyEdges(renderer, edgesRef.current);
         setFailure(null);
         // Draws the first frame as a side effect, at whatever size the canvas
@@ -868,6 +1036,7 @@ export function FirstLight({
       // go. Leaving it would show a second StrictMode mount two layers of
       // labels, one of them belonging to a camera nobody is driving any more.
       richNodes.dispose();
+      farEndLabels.dispose();
       overlay.dispose();
       observer.disconnect();
       ratioQuery?.removeEventListener('change', onPixelRatioChange);
@@ -890,6 +1059,7 @@ export function FirstLight({
         renderer = null;
         rendererRef.current = null;
         requestDrawRef.current = () => undefined;
+        invalidateHighlightRef.current = () => undefined;
       });
     };
   }, [scene]);
@@ -907,6 +1077,13 @@ export function FirstLight({
     const renderer = rendererRef.current;
     if (renderer === null) return;
     applyEdges(renderer, edges);
+    // A `setEdges` rebuilds a group's buffers, which resets every edge to full
+    // intensity: the ids and their vertex counts both moved, so the renderer
+    // deliberately does not carry a highlight across one. The effect above
+    // therefore has to forget what it thinks is lit, or the next hover onto the
+    // same node would compare equal and write nothing, leaving a scene that is
+    // undimmed while the pointer sits on a node.
+    invalidateHighlightRef.current();
     requestDrawRef.current();
   }, [edges]);
 
@@ -991,7 +1168,7 @@ function Overlay({
     );
   }
 
-  const { zoom, center, world, viewport, labels, minZoom, maxZoom } = readout;
+  const { zoom, center, world, viewport, labels, highlight, minZoom, maxZoom } = readout;
   return (
     <div className="stage__readout">
       <p className="stage__readout-row">
@@ -1029,6 +1206,19 @@ function Overlay({
         <span className="stage__readout-key">overlay</span>
         {labels} of {scene.nodes.length} in DOM
       </p>
+      {/*
+        Only while something is lit, because a row reading "0 edges" on every
+        frame a reader is not hovering is a row that trains them to stop reading
+        it. What it is for is the screenshot: a highlight on a dense tile is a
+        picture of some bright lines, and this is what says how many of the
+        7,100 they are.
+      */}
+      {highlight.edges === 0 ? null : (
+        <p className="stage__readout-row">
+          <span className="stage__readout-key">highlight</span>
+          {highlight.edges} edges, {highlight.labels} far ends named
+        </p>
+      )}
       {/*
         The limits are read off the camera rather than typed out, because a
         hint that disagrees with the camera is worse than no hint, and these
