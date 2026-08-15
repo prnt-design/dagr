@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    // The build emits from `src` alone, so the source `paths` entries are
+    // dropped here, exactly as @dagr/layout drops its one: pulling
+    // ../render/src into the program puts files outside `rootDir` and tsc
+    // refuses to emit (TS6059, once per file the renderer imports). The build
+    // resolves the four Dagr packages through node_modules to their published
+    // types instead, which is why they are real workspace dependencies.
+    // Consequence: they have to be built before this package. The root
+    // `pnpm build` handles that, because `pnpm -r` is topological and the
+    // dependencies create the edges. Building this package alone against a
+    // fresh clone fails with TS2307 until they have a dist.
+    "paths": {}
+  },
+  "include": ["src"],
+  "exclude": ["test", "dist"]
+}

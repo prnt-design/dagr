@@ -32,15 +32,12 @@ importers:
       '@dagr/campaign':
         specifier: workspace:*
         version: link:../../packages/campaign
-      '@dagr/graph':
+      '@dagr/campaign-stage':
         specifier: workspace:*
-        version: link:../../packages/graph
+        version: link:../../packages/campaign-stage
       '@dagr/layout':
         specifier: workspace:*
         version: link:../../packages/layout
-      '@dagr/render':
-        specifier: workspace:*
-        version: link:../../packages/render
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -57,26 +54,29 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.0.4
         version: 6.0.4(vite@8.1.5(@types/node@26.1.1)(jiti@1.21.7)(terser@5.49.0))
-      jsdom:
-        specifier: ^30.0.1
-        version: 30.0.1
       vite:
         specifier: ^8.1.5
         version: 8.1.5(@types/node@26.1.1)(jiti@1.21.7)(terser@5.49.0)
-      vitest:
-        specifier: ^4.1.10
-        version: 4.1.10(@types/node@26.1.1)(jsdom@30.0.1)(vite@8.1.5(@types/node@26.1.1)(jiti@1.21.7)(terser@5.49.0))
 
   bench: {}
 
   docs:
     dependencies:
+      '@dagr/campaign':
+        specifier: workspace:*
+        version: link:../packages/campaign
+      '@dagr/campaign-stage':
+        specifier: workspace:*
+        version: link:../packages/campaign-stage
       '@dagr/graph':
         specifier: workspace:*
         version: link:../packages/graph
       '@dagr/layout':
         specifier: workspace:*
         version: link:../packages/layout
+      '@dagr/render':
+        specifier: workspace:*
+        version: link:../packages/render
       '@docusaurus/core':
         specifier: 3.10.2
         version: 3.10.2(@mdx-js/react@3.1.1(@types/react@19.2.17)(react@19.2.8))(postcss@8.5.23)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3)
@@ -101,6 +101,9 @@ importers:
       react-dom:
         specifier: ^19.2.8
         version: 19.2.8(react@19.2.8)
+      three:
+        specifier: ^0.185.1
+        version: 0.185.1
     devDependencies:
       '@docusaurus/module-type-aliases':
         specifier: 3.10.2
@@ -113,6 +116,31 @@ importers:
         version: 3.10.2(clean-css@5.3.3)(cssnano@6.1.2(postcss@8.5.23))(html-minifier-terser@7.2.0)(postcss@8.5.23)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
 
   packages/campaign: {}
+
+  packages/campaign-stage:
+    dependencies:
+      '@dagr/campaign':
+        specifier: workspace:*
+        version: link:../campaign
+      '@dagr/graph':
+        specifier: workspace:*
+        version: link:../graph
+      '@dagr/layout':
+        specifier: workspace:*
+        version: link:../layout
+      '@dagr/render':
+        specifier: workspace:*
+        version: link:../render
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      jsdom:
+        specifier: ^30.0.1
+        version: 30.0.1
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
 
   packages/graph:
     devDependencies:

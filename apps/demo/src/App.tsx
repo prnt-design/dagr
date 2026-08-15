@@ -1,107 +1,45 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { JSX } from 'react';
-import { EDGE_ROLES, generateCampaign } from '@dagr/campaign';
-import { FirstLight } from './FirstLight.js';
-import { campaignEdges, edgeColor } from './campaign-edges.js';
-import { buildCampaignScene } from './campaign-scene.js';
-import type { CampaignScene } from './campaign-scene.js';
+import { EDGE_ROLES } from '@dagr/campaign';
+import { FirstLight, useCampaignScene } from '@dagr/campaign-stage';
 
 /**
- * The demo page: the campaign on the canvas, and the few facts about it that a
+ * The playground page: the campaign stage, and the few facts about it that a
  * picture cannot show.
  *
- * P1 loaded the dataset and listed it. P4 DRAWS it, so most of what this file
- * used to say is now visible above rather than tabulated below, and the stats
- * shrank to what is still worth a sentence: how big the dataset is, what share
- * of its edges the layout actually saw, and the fact that the whole thing is
- * generated from a seed rather than shipped as a file.
+ * Everything on the canvas moved to `@dagr/campaign-stage` when the docs site
+ * started mounting the same thing, and what is left here is the page around it.
+ * That is the whole shape of this file now: the stage's own state comes from
+ * {@link useCampaignScene}, which this calls directly rather than mounting
+ * `CampaignStage`, because the facts below the canvas are written from the same
+ * scene the canvas draws and calling the hook twice would lay the campaign out
+ * twice.
  *
- * The campaign is generated at MODULE LOAD and the scene is built in an EFFECT,
- * and the split is not arbitrary. Generating is synchronous, deterministic and
- * about a millisecond, and graph identity has to outlive a render, so a module
- * constant is the honest version of a store for it. Laying it out is a hundred
- * worker round trips, which is not something to start while a module is being
- * evaluated: it needs a `Worker`, which needs a document, and it has to be
- * cancellable when the component goes away.
+ * The layout worker is built HERE, not in the package. `new Worker(new
+ * URL(...))` is an expression the bundler reads statically, and this app's
+ * bundler is Vite where the docs site's is webpack, so each host owns its
+ * worker entry. Vite emits `layout-worker.ts` as its own chunk from the
+ * expression below, which is what a worker needs: it loads exactly one script.
  */
-const campaign = generateCampaign();
-
-/** How many of the campaign's edges a layout is allowed to see. See EDGE_ROLES. */
-const edgeRoleCounts = campaign.edges.reduce(
-  (counts, edge) =>
-    EDGE_ROLES[edge.kind] === 'routed'
-      ? { ...counts, routed: counts.routed + 1 }
-      : { ...counts, overlay: counts.overlay + 1 },
-  { routed: 0, overlay: 0 },
-);
+function createWorker(): Worker {
+  return new Worker(new URL('./layout-worker.ts', import.meta.url), { type: 'module' });
+}
 
 export function App(): JSX.Element {
-  const [scene, setScene] = useState<CampaignScene | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const { campaign, scene, edges, failure } = useCampaignScene(createWorker);
 
-  // Built HERE rather than in the canvas component, because it needs the
-  // campaign and the scene together and the canvas is handed drawable data:
-  // `scene.nodes` arrives ready for `setNodes` and these arrive ready for
-  // `setEdges`. Memoised on the scene, since the split walks 7,100 edges and
-  // bows a line for most of them, and a re-render that has not laid anything
-  // out again would get the same answer.
-  const edges = useMemo(() => (scene === null ? null : campaignEdges(campaign, scene, edgeColor)), [scene]);
-
-  useEffect(() => {
-    // The worker is created here and terminated in the cleanup, so a StrictMode
-    // remount does not leave one running: a worker outlives the effect that made
-    // it unless something ends it, and a second one would double the layout work
-    // for a page that only draws once.
-    //
-    // `new URL(..., import.meta.url)` rather than a path string, because that is
-    // the form a bundler can see through: Vite emits `layout-worker.ts` as its
-    // own chunk from this expression, and a worker loads exactly one script.
-    const worker = new Worker(new URL('./layout-worker.ts', import.meta.url), {
-      type: 'module',
-    });
-    let cancelled = false;
-
-    /**
-     * A worker that dies is a run that is never answered.
-     *
-     * `@dagr/layout`'s engine has no timeout by design (how long is too long
-     * belongs to the caller and to the graph), and posting to a dead worker is a
-     * silent no-op in both runtimes rather than a throw. So a worker script that
-     * fails to load or throws while its module evaluates leaves every one of the
-     * hundred runs pending forever, `Promise.all` never settles, and the page
-     * sits on "laying out the campaign" with nothing thrown for the `catch`
-     * below to catch. The docs site learned this at PR #23 and carries the same
-     * listener; a listener is all this page needs, because it has a failure
-     * state of its own to show.
-     */
-    const onWorkerError = (event: ErrorEvent): void => {
-      if (cancelled) return;
-      setFailure(event.message === '' ? 'the layout worker failed to start' : event.message);
-    };
-    worker.addEventListener('error', onWorkerError);
-
-    buildCampaignScene(campaign, { worker })
-      .then((built) => {
-        // The component may have unmounted while a hundred layouts ran. Setting
-        // state then is a React warning and a scene nobody will draw.
-        if (!cancelled) setScene(built);
-      })
-      .catch((cause: unknown) => {
-        if (cancelled) return;
-        setFailure(cause instanceof Error ? cause.message : String(cause));
-      });
-
-    return () => {
-      cancelled = true;
-      worker.removeEventListener('error', onWorkerError);
-      // A worker that is never terminated keeps its thread and its module graph
-      // alive for the life of the page. There is no watchdog here, unlike the
-      // docs site's live demo: this page shows its own failure state and a
-      // layout that never answers leaves the readout saying so, where the docs
-      // site had a figure that would have sat empty with no explanation.
-      worker.terminate();
-    };
-  }, []);
+  /** How many of the campaign's edges a layout is allowed to see. See EDGE_ROLES. */
+  const edgeRoleCounts = useMemo(
+    () =>
+      campaign.edges.reduce(
+        (counts, edge) =>
+          EDGE_ROLES[edge.kind] === 'routed'
+            ? { ...counts, routed: counts.routed + 1 }
+            : { ...counts, overlay: counts.overlay + 1 },
+        { routed: 0, overlay: 0 },
+      ),
+    [campaign],
+  );
 
   return (
     <main className="page">
@@ -110,7 +48,14 @@ export function App(): JSX.Element {
         <p className="page__subtitle">A mock D&amp;D campaign, laid out in tiles and drawn</p>
       </header>
 
-      <FirstLight scene={scene} edges={edges} />
+      {/*
+        The stage fills the element it is given, so the height is set here: the
+        package deliberately does not carry one, because the docs route wants
+        the viewport and this page wants a band with the facts under it.
+      */}
+      <div className="page__stage">
+        <FirstLight scene={scene} edges={edges} sceneFailure={failure} />
+      </div>
 
       <section className="facts">
         <h2 className="facts__title">what is on the canvas</h2>
@@ -149,11 +94,12 @@ export function App(): JSX.Element {
             </p>
           </div>
         </div>
-        {failure === null ? null : (
-          <p className="facts__value" role="alert">
-            the layout failed: {failure}
-          </p>
-        )}
+        {/*
+          A failed layout is reported on the STAGE, in the readout over the
+          canvas, and not repeated here. It used to be the other way round,
+          which left the canvas saying it was still laying out while the only
+          explanation sat below the fold.
+        */}
       </section>
     </main>
   );

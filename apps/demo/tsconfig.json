@@ -7,13 +7,15 @@
     "types": ["node", "vite/client"],
     // The Dagr packages publish from dist, which does not exist in a fresh
     // clone. For local typecheck and for vite builds the demo reads package
-    // sources directly, mirrored by the alias in vite.config.ts.
+    // sources directly, mirrored by the alias in vite.config.ts, which also
+    // says why this map covers packages the demo does not import itself.
     "paths": {
       "@dagr/campaign": ["../../packages/campaign/src/index.ts"],
+      "@dagr/campaign-stage": ["../../packages/campaign-stage/src/index.ts"],
       "@dagr/graph": ["../../packages/graph/src/index.ts"],
       "@dagr/layout": ["../../packages/layout/src/index.ts"],
       "@dagr/render": ["../../packages/render/src/index.ts"]
     }
   },
-  "include": ["src", "test", "vite.config.ts"]
+  "include": ["src", "vite.config.ts"]
 }

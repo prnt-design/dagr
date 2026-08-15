@@ -102,14 +102,22 @@ export default function Home(): ReactNode {
               </Link>
               <Link
                 className={clsx('bias-open-s', styles.button, styles.buttonGhost)}
+                to="/demos/campaign"
+              >
+                Live demo
+              </Link>
+              <Link
+                className={clsx('bias-open-s', styles.button, styles.buttonGhost)}
                 href="https://github.com/prnt-design/dagr"
               >
                 GitHub
               </Link>
             </div>
             <p className={styles.status}>
-              Early days: the graph model and the layout core are shipped,
-              rendering has first light, and nothing is on npm yet. The{' '}
+              Early days: the graph model and the layout core are shipped, the
+              renderer draws a 3,010 node campaign in the{' '}
+              <Link to="/demos/campaign">live demo</Link>, incremental layout
+              has started, and nothing is on npm yet. The{' '}
               <Link href="https://github.com/prnt-design/dagr/blob/main/ROADMAP.md">
                 roadmap
               </Link>{' '}

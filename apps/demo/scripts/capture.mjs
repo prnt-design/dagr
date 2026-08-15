@@ -123,7 +123,16 @@ const page = await context.newPage();
 await context.addInitScript(() => {
   document.addEventListener('DOMContentLoaded', () => {
     const style = document.createElement('style');
-    style.textContent = ":root { --mono: 'Liberation Mono', monospace; }";
+    // TWO declarations, because the stage moved into `@dagr/campaign-stage` and
+    // took its own token with it: `--mono` is the page's, `--dagr-stage-mono`
+    // is the stage's and is declared on `.stage` rather than on `:root`, so
+    // that the stage can be mounted in a docs site without reading a variable
+    // the host happens to share a name with. Pinning only `:root` would leave
+    // every card and readout in the 6.000px fallback while the assertion below
+    // passed on the page's own text.
+    style.textContent =
+      ":root { --mono: 'Liberation Mono', monospace; }\n" +
+      ".stage { --dagr-stage-mono: 'Liberation Mono', monospace; }";
     document.head.appendChild(style);
   });
 });
@@ -131,11 +140,14 @@ await context.addInitScript(() => {
 await page.goto(base, { waitUntil: 'load' });
 
 // The advance this capture ran at, asserted rather than assumed. See the header.
+// Measured INSIDE the stage and through the stage's own variable, since that is
+// the text the frames are about: the cards and the readout.
 const advance = await page.evaluate(() => {
+  const stage = document.querySelector('.stage') ?? document.body;
   const probe = document.createElement('span');
-  probe.style.cssText = 'font: 12px var(--mono); position: absolute; white-space: pre';
+  probe.style.cssText = 'font: 12px var(--dagr-stage-mono); position: absolute; white-space: pre';
   probe.textContent = 'M'.repeat(100);
-  document.body.appendChild(probe);
+  stage.appendChild(probe);
   const width = probe.getBoundingClientRect().width / 100;
   probe.remove();
   return width;

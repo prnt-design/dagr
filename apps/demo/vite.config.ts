@@ -4,10 +4,28 @@ import { defineConfig } from 'vite';
 
 // Resolve Dagr packages to their sources. The packages build to dist, but the
 // demo should stay runnable in a fresh clone with nothing built yet.
+//
+// The map is LONGER than this app's dependency list, on purpose. The demo
+// imports `@dagr/campaign-stage`, and the stage's own source imports
+// `@dagr/graph`, `@dagr/layout` and `@dagr/render`; an alias is a path mapping
+// rather than a dependency, so those three entries are what keep the whole
+// tree on source. Drop one and that package alone falls back to its `dist`,
+// which a fresh clone does not have.
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      // FIRST, and it has to be. An alias key matches the specifier itself or
+      // anything under it as a path, so the bare entry below would rewrite
+      // `@dagr/campaign-stage/stage.css` into `.../src/index.ts/stage.css` and
+      // fail with "not a directory". Entries are tried in order, so the
+      // subpath is claimed before the package name is.
+      '@dagr/campaign-stage/stage.css': fileURLToPath(
+        new URL('../../packages/campaign-stage/src/stage.css', import.meta.url),
+      ),
+      '@dagr/campaign-stage': fileURLToPath(
+        new URL('../../packages/campaign-stage/src/index.ts', import.meta.url),
+      ),
       '@dagr/campaign': fileURLToPath(
         new URL('../../packages/campaign/src/index.ts', import.meta.url),
       ),

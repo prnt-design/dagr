@@ -13,8 +13,11 @@
     "generate:hero": "node scripts/generate-hero-graph.mjs"
   },
   "dependencies": {
+    "@dagr/campaign": "workspace:*",
+    "@dagr/campaign-stage": "workspace:*",
     "@dagr/graph": "workspace:*",
     "@dagr/layout": "workspace:*",
+    "@dagr/render": "workspace:*",
     "@docusaurus/core": "3.10.2",
     "@docusaurus/plugin-client-redirects": "3.10.2",
     "@docusaurus/preset-classic": "3.10.2",
@@ -22,7 +25,8 @@
     "clsx": "^2.1.1",
     "prism-react-renderer": "^2.4.1",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "3.10.2",

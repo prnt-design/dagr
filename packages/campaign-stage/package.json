@@ -1,0 +1,51 @@
+{
+  "name": "@dagr/campaign-stage",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The campaign demo as a mountable React component: the canvas, the camera, the overlay and the scene build, shared by apps/demo and the docs site.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./stage.css": "./src/stage.css"
+  },
+  "files": [
+    "dist",
+    "src/stage.css",
+    "src/campaign-cards.css"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "peerDependencies": {
+    "react": ">=19.0.0 <20.0.0"
+  },
+  "dependencies": {
+    "@dagr/campaign": "workspace:*",
+    "@dagr/graph": "workspace:*",
+    "@dagr/layout": "workspace:*",
+    "@dagr/render": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "jsdom": "^30.0.1",
+    "react": "^19.2.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prnt-design/dagr",
+    "directory": "packages/campaign-stage"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json"
+  }
+}

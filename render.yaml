@@ -1,14 +1,23 @@
 # Render blueprint: https://render.com/docs/blueprint-spec
 #
-# Two static sites, and the split is what each is for. `dagr-docs` is the
-# Docusaurus site at dagr.prnt.design: the project's public face, with the
-# landing page and the reference. `dagr-demo` is `apps/demo`, the playground the
-# engine is exercised in, on Render's own domain because it is a working
-# artifact rather than a published one.
+# ONE static site. `dagr-docs` is the Docusaurus site at dagr.prnt.design: the
+# landing page, the reference, and the campaign demo at /demos/campaign.
 #
-# Both build from the repo ROOT, not from their own directory, because both are
-# pnpm workspace members and their dependencies only resolve against the root
-# lockfile.
+# There was a second, `dagr-demo`, serving `apps/demo` on an `onrender.com`
+# subdomain. It was the cheapest thing that produced a URL and it did that; it
+# was also a demo a visitor to the docs never found, an outbound hop that lost
+# the site's chrome, and twice the deploy surface for one artifact. Removing the
+# block is what retires the service: Render syncs this file on a push, so the
+# service and `dagr-demo.onrender.com` stop existing after the sync. Every link
+# to that URL is retargeted at /demos/campaign in the same commit.
+#
+# `apps/demo` itself stays as the playground the engine is exercised in, and is
+# now a local dev tool with no deploy: it imports the same stage the site
+# mounts, so what it shows and what the site shows cannot drift.
+#
+# The build runs from the repo ROOT, not from the site's own directory, because
+# the site is a pnpm workspace member and its dependencies only resolve against
+# the root lockfile.
 
 services:
   - type: web
@@ -29,19 +38,26 @@ services:
     # source inside the docs bundle, which would have given the site a second
     # build path for code that publishes from `dist`, and a demo built
     # differently from what a consumer installs is a demo of something else.
+    # The campaign demo added three more packages behind the same `...`, and
+    # `@dagr/campaign-stage` is the reason it matters twice over: webpack reads
+    # its `dist`, so a stage change that is not built is a site that ships the
+    # last one.
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter docs... build
     staticPublishPath: docs/build
 
     # Skip deploys for commits that cannot change the site. Paths are globs
-    # relative to the repo root. The two packages are listed because the site
-    # ships their code now: a layout change with no docs change does change
-    # what a visitor runs.
+    # relative to the repo root. The packages are listed because the site ships
+    # their code now: a layout or a renderer change with no docs change does
+    # change what a visitor runs.
     buildFilter:
       paths:
         - docs/**
+        - packages/campaign/**
+        - packages/campaign-stage/**
         - packages/graph/**
         - packages/layout/**
-        # Both packages' build configs extend it, so it decides what `dist` the
+        - packages/render/**
+        # Every package's build config extends it, so it decides what `dist` the
         # site ships.
         - tsconfig.base.json
         - package.json
@@ -67,91 +83,6 @@ services:
       # hence `**` — a single `*` does not match across a slash. HTML is left on
       # Render's default revalidation so a deploy never serves a stale page.
       - path: /assets/**/*
-        name: Cache-Control
-        value: public, max-age=31536000, immutable
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
-      - path: /*
-        name: X-Frame-Options
-        value: SAMEORIGIN
-      - path: /*
-        name: Referrer-Policy
-        value: strict-origin-when-cross-origin
-
-  - type: web
-    name: dagr-demo
-    runtime: static
-    branch: main
-
-    # Same gate as the docs site: a build that typechecks, tests and lints clean
-    # is the only thing that reaches a URL.
-    autoDeployTrigger: checksPass
-
-    # `--filter demo...` builds the demo and everything it depends on, in
-    # dependency order, and the trailing `...` is belt to a brace rather than
-    # load bearing today: `apps/demo/vite.config.ts` aliases every `@dagr/*`
-    # import to the package's SOURCE, so a `dist` is not what the bundle reads.
-    # It is here because that alias is a demo convenience that could reasonably
-    # be dropped, and a deploy that starts failing the day it is dropped would
-    # fail somewhere nobody is looking.
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter demo... build
-    staticPublishPath: apps/demo/dist
-
-    # Skip deploys for commits that cannot change the demo. Every package it
-    # imports is listed, because it imports their sources: a render change with
-    # no demo change does change what a visitor runs.
-    buildFilter:
-      paths:
-        - apps/demo/**
-        - packages/campaign/**
-        - packages/graph/**
-        - packages/layout/**
-        - packages/render/**
-        # Every package's build config extends it.
-        - tsconfig.base.json
-        - package.json
-        - pnpm-lock.yaml
-        - pnpm-workspace.yaml
-        - render.yaml
-
-    # No `domains` block, so this serves on the `onrender.com` subdomain Render
-    # assigns. The demo is a working artifact rather than a published one, and a
-    # subdomain of prnt.design is a promise about permanence that a playground
-    # should not be making.
-
-    # NO `previews` BLOCK, which is how a service turns previews off: the spec
-    # says omitting the field disables pull request previews for the service,
-    # and the per-service field takes only `manual` or `automatic` (`off` is a
-    # value the BLUEPRINT-ROOT field takes, not this one). Writing `off` here
-    # would be a value the field does not have, and a rejected value fails
-    # validation for the whole file, which would take `dagr-docs` with it.
-    #
-    # Off rather than on, which is the one place this service deliberately
-    # differs from the docs site. Every increment in this repo is a pull request
-    # and this is the heavy bundle (three.js, about 1.1 MB), so a preview per PR
-    # is a real cost for an app whose reviewers read a diff rather than click a
-    # link. Adding `previews: {generation: automatic}` is how that changes.
-
-    envVars:
-      # Match CI (.github/workflows/ci.yml) so a green build there means a green
-      # build here.
-      - key: NODE_VERSION
-        value: '22'
-
-    headers:
-      # Vite fingerprints everything under /assets/, including the layout
-      # worker's own chunk, so those are safe to cache forever. HTML is left on
-      # Render's default revalidation so a deploy never serves a stale page.
-      #
-      # `/assets/*` and NOT the docs site's `/assets/**/*`, because Vite's output
-      # is ONE level deep (`assets/index-*.js`, `assets/layout-worker-*.js`)
-      # where Docusaurus nests `/assets/js/` and `/assets/files/`. A `**` that
-      # requires an intervening segment would match nothing here, and the whole
-      # 1.1 MB bundle would fall through to the default with nothing failing to
-      # say so: a cache header that silently does not apply is invisible until
-      # somebody measures a repeat visit.
-      - path: /assets/*
         name: Cache-Control
         value: public, max-age=31536000, immutable
       - path: /*

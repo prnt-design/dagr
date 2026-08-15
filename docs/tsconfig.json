@@ -3,19 +3,30 @@
   "compilerOptions": {
     "baseUrl": ".",
     "noEmit": true,
-    // The live demo imports the engine it advertises. Both packages publish
-    // from `dist`, which does not exist in a fresh clone or in CI, where
-    // typecheck runs before build, so typecheck reads them from source the way
-    // every other workspace package does. The bundler still resolves the built
-    // `dist` through node_modules, which is why `render.yaml` builds them
-    // ahead of this site.
+    // The site imports the engine it advertises: the landing page's benchmark
+    // runs @dagr/layout, and /demos/campaign mounts the renderer through
+    // @dagr/campaign-stage. Every one of these packages publishes from `dist`,
+    // which does not exist in a fresh clone or in CI, where typecheck runs
+    // before build, so typecheck reads them from source the way every other
+    // workspace package does. The bundler still resolves the built `dist`
+    // through node_modules, which is why `render.yaml` builds them ahead of
+    // this site.
+    // ADDING ONE IS TWO EDITS, the docs-site form of the rule in
+    // apps/demo/README.md: an entry here, so typecheck reads source, and a
+    // dependency in package.json, so webpack can resolve the package at all.
+    // The list is longer than what this site imports by name, because
+    // typecheck follows @dagr/campaign-stage's own source into @dagr/campaign,
+    // @dagr/graph and @dagr/render.
     // `@site/*` is restated because `paths` replaces the inherited map rather
     // than merging with it, and the Docusaurus base config is where it comes
     // from.
     "paths": {
       "@site/*": ["./*"],
+      "@dagr/campaign": ["../packages/campaign/src/index.ts"],
+      "@dagr/campaign-stage": ["../packages/campaign-stage/src/index.ts"],
       "@dagr/graph": ["../packages/graph/src/index.ts"],
-      "@dagr/layout": ["../packages/layout/src/index.ts"]
+      "@dagr/layout": ["../packages/layout/src/index.ts"],
+      "@dagr/render": ["../packages/render/src/index.ts"]
     }
   },
   "include": ["docusaurus.config.ts", "sidebars.ts", "src"],

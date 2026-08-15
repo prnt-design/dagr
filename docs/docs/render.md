@@ -55,9 +55,10 @@ amber narrative spine, violet grids of NPCs, green quest DAGs and red pressure
 clocks, packed into a 16:9
 canvas](../../assets/screenshots/m4.4-campaign-fit.png)
 
-That is `apps/demo`: 3,010 nodes of a mock D&D campaign, cut into 101 tiles, laid
-out by [`@dagr/layout`](./layout.md) in a worker one tile at a time, packed, and
-drawn in two instanced calls. The colour families are strata (spine, geography,
+That is the [campaign demo](/demos/campaign), which you can open and drive: 3,010
+nodes of a mock D&D campaign, cut into 101 tiles, laid out by
+[`@dagr/layout`](./layout.md) in a worker one tile at a time, packed, and drawn
+in two instanced calls. The colour families are strata (spine, geography,
 people, quests, pressure, reference), which is what makes the far view readable
 as structure rather than as confetti. The readout is live camera state rather
 than a caption.
@@ -790,7 +791,7 @@ an unchanged frame; M4.6's springs are what make a continuous loop necessary,
 and that is the task that should add one. Do coalesce, though: an input handler
 that calls `render()` synchronously runs at the event rate rather than the
 display rate, and a trackpad fling dispatches wheel events faster than the
-screen refreshes. `apps/demo` schedules one frame per `requestAnimationFrame`
+screen refreshes. The campaign demo schedules one frame per `requestAnimationFrame`
 and drops the rest, which keeps "every frame is one a user asked for" true while
 capping it at one per refresh.
 

@@ -10,7 +10,7 @@ identity, delta output) plus a high-fidelity WebGPU renderer (three.js
 WebGPURenderer, SDF shapes, spring physics) and a React component on top.
 
 **[Documentation](https://dagr.prnt.design)** ·
-**[Live demo](https://dagr-demo.onrender.com/)**
+**[Live demo](https://dagr.prnt.design/demos/campaign)**
 
 The demo draws a mock D&D campaign: 3,010 nodes and 7,100 edges, laid out a
 tile at a time in a worker, instanced on the GPU, with names and readable cards

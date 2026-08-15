@@ -194,9 +194,23 @@ function describeFailure(cause: unknown): string {
 export function FirstLight({
   scene,
   edges,
+  sceneFailure,
 }: {
   scene: CampaignScene | null;
   edges: CampaignEdges | null;
+  /**
+   * Why the scene will never arrive, from whoever is building it, or `null`
+   * while it still might.
+   *
+   * Shown in the readout rather than left to the page around the stage, which
+   * is where it used to be: a layout that fails leaves the canvas saying
+   * "laying out the campaign" forever, and a reader looking at a stalled canvas
+   * should not have to scroll to find out that it is not stalled but broken.
+   * Separate from this component's own `failure` state, which is about the
+   * renderer: one of them means there is nothing to draw, the other means there
+   * is nothing to draw WITH.
+   */
+  sceneFailure: string | null;
 }): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -306,7 +320,7 @@ export function FirstLight({
      *
      * The parent is the CONTAINER and not the canvas. A canvas cannot have
      * children, and the container is the element whose box the canvas fills and
-     * which already clips (`overflow: hidden` in `styles.css`).
+     * which already clips (`overflow: hidden` on `.stage` in `stage.css`).
      */
     const overlay = createHtmlOverlay({ parent: container, camera });
 
@@ -910,7 +924,7 @@ export function FirstLight({
         aria-label="Campaign viewport. Arrow keys zoom and pan, 0 fits the campaign, Escape leaves."
       />
       {failure === null ? (
-        <Overlay readout={readout} scene={scene} />
+        <Overlay readout={readout} scene={scene} sceneFailure={sceneFailure} />
       ) : (
         <div className="stage__failure" role="alert">
           <p className="stage__failure-title">No renderer</p>
@@ -943,11 +957,26 @@ function fixed(value: number, digits: number): string {
 function Overlay({
   readout,
   scene,
+  sceneFailure,
 }: {
   readout: CameraReadout | null;
   scene: CampaignScene | null;
+  sceneFailure: string | null;
 }): JSX.Element {
   if (scene === null) {
+    // The failure takes the same corner the progress line was in, because it is
+    // the answer to the question that line was asking a reader to wait for.
+    // `role="alert"` rather than a styled paragraph alone: the canvas gives a
+    // screen reader nothing, so this text is the whole of what it can know.
+    if (sceneFailure !== null) {
+      return (
+        <div className="stage__readout">
+          <p className="stage__readout-failure" role="alert">
+            the layout failed: {sceneFailure}
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="stage__readout">
         <p className="stage__readout-row">laying out the campaign</p>

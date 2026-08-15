@@ -1,0 +1,178 @@
+/*
+ * The stage's whole stylesheet: the canvas, the readout over it, the failure
+ * panel, and the overlay tiers it pulls in below.
+ *
+ * Not imported by any module in this package, and that is the part worth
+ * knowing before editing it. The package builds through `tsc`, which emits
+ * JavaScript and copies nothing, so a `import './stage.css'` in a component
+ * would survive into `dist` pointing at a file that is not there. The
+ * stylesheet is a named entry instead, `@dagr/campaign-stage/stage.css`, and
+ * each host imports it: apps/demo in `main.tsx`, the docs site in its demos
+ * component. A host that forgets gets an unstyled canvas, which is loud.
+ *
+ * EVERY COLOUR IS A TOKEN DECLARED ON `.stage`, not on `:root`, and that is
+ * what makes the stage portable. It grew up on a page whose `:root` carried
+ * `--ink`, `--amber` and friends; the docs site has no such variables and its
+ * own tokens mean other things, so inheriting from the host would have painted
+ * the readout in whatever the host happened to call the same name. Declared
+ * here, the stage looks the same wherever it is mounted, and it declares
+ * nothing outside itself.
+ *
+ * The palette is the renderer's own: amber on near black, from
+ * `webgpu-renderer.ts`. The stage is a viewport into a scene with its own
+ * colours, so it stays dark on a light page rather than following a theme.
+ */
+
+@import './campaign-cards.css';
+
+.stage {
+  --dagr-stage-ground: #0b0d10;
+  --dagr-stage-ink: #d7dbe1;
+  --dagr-stage-ink-dim: #79828d;
+  --dagr-stage-amber: #ffb703;
+  --dagr-stage-rule: rgba(255, 255, 255, 0.09);
+  --dagr-stage-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  position: relative;
+  /*
+   * The HOST decides how tall the stage is, by sizing the element this one
+   * sits in: the demo page gives it a band between 600 and 780 pixels, the
+   * docs route gives it the viewport under the navbar. A height baked in here
+   * would be one page's decision imposed on the other, and the two disagree
+   * about it for good reasons.
+   */
+  height: 100%;
+  /* The overlay's elements are positioned in this box and the canvas fills it,
+     so this is what keeps a label on a node panned past the edge from painting
+     over the page. `FirstLight` hands the overlay this element as its parent
+     precisely because it clips. */
+  overflow: hidden;
+  background: var(--dagr-stage-ground);
+  color: var(--dagr-stage-ink);
+}
+
+.stage__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* The pan gesture is ours. Without this, a touch drag scrolls the page and
+     the pointermove events stop arriving mid-gesture. */
+  touch-action: none;
+  cursor: grab;
+}
+
+.stage__canvas:active {
+  cursor: grabbing;
+}
+
+/* Focus is the keyboard's mode switch (focused, arrows zoom and pan), so it
+   has to be visible: an invisible mode is a mode nobody knows they are in.
+   focus-visible rather than focus, so a mouse click that focuses the canvas
+   for its own reasons does not paint a ring around a pointer gesture. Inset,
+   because the stage clips its corners with overflow: hidden. */
+.stage__canvas:focus-visible {
+  outline: 2px solid var(--dagr-stage-amber);
+  outline-offset: -2px;
+}
+
+.stage__readout {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  /* Above the overlay, which the library appends to this container after
+     React's children and therefore paints later. Without this, panning a
+     labelled shape into the bottom-left corner puts its label over the HUD. */
+  z-index: 1;
+  /* The panel is sized by its widest child, and since M4.2 that child is the
+     hint rather than a readout row: naming the zoom range and `#zoom=` takes 58
+     characters, which on one line is about 440 CSS pixels, 40% of the 1102 pixel
+     canvas the crispness screenshots are of. 18rem leaves the 31 character
+     `canvas` row (about 250 pixels with the padding) unwrapped, since
+     `.stage__readout-row` is `white-space: pre` and would overflow rather than
+     wrap, and lets the hint alone take two lines. */
+  max-width: 18rem;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--dagr-stage-rule);
+  border-radius: 0.375rem;
+  background: rgba(7, 8, 10, 0.72);
+  backdrop-filter: blur(8px);
+  font-family: var(--dagr-stage-mono);
+  font-size: 0.75rem;
+  line-height: 1.7;
+  color: var(--dagr-stage-ink);
+  /* The panel sits over the canvas, so it must not eat the drag. */
+  pointer-events: none;
+  user-select: none;
+}
+
+.stage__readout-row {
+  margin: 0;
+  white-space: pre;
+}
+
+.stage__readout-key {
+  display: inline-block;
+  width: 8ch;
+  color: var(--dagr-stage-ink-dim);
+}
+
+.stage__readout-hint {
+  margin: 0.5rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--dagr-stage-rule);
+  color: var(--dagr-stage-ink-dim);
+  letter-spacing: 0.02em;
+}
+
+/* The layout's own failure, in the readout's place: the scene never arrives, so
+   the rows that describe it never can either. Amber rather than a red the
+   palette does not have, and `pre` is dropped because this one is a sentence. */
+.stage__readout-failure {
+  margin: 0;
+  color: var(--dagr-stage-amber);
+}
+
+.stage__failure {
+  position: absolute;
+  inset: 0;
+  /* Same reason as the readout, and it matters more here: a failure message
+     overprinted by labels is the one screen a reader most needs to read. */
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.5rem;
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.stage__failure-title {
+  margin: 0;
+  color: var(--dagr-stage-amber);
+  font-family: var(--dagr-stage-mono);
+  font-size: 0.875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stage__failure-message {
+  margin: 0;
+  font-family: var(--dagr-stage-mono);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.stage__failure-hint {
+  margin: 0;
+  color: var(--dagr-stage-ink-dim);
+  font-size: 0.8125rem;
+}
+
+/* The failure panel quotes two package names, and the host's `code` rule is
+   whatever the host's is. Stated here so the stage reads the same on both. */
+.stage__failure code {
+  font-family: var(--dagr-stage-mono);
+  color: var(--dagr-stage-amber);
+}
