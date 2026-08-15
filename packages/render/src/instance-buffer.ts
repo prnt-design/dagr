@@ -1,5 +1,5 @@
 import { UnknownInstanceHandleError } from './errors.js';
-import { requireAtLeast } from './validate.js';
+import { requireIntegerAtLeast } from './validate.js';
 
 /**
  * Which slot of an instance buffer each live instance occupies, and how big the
@@ -26,6 +26,13 @@ import { requireAtLeast } from './validate.js';
  * CHANGED entry when a delta is applied, which is O(size of delta). Leaving
  * holes and compacting on a threshold is the alternative, and it wastes buffer
  * space and draw work for nothing the map does not already provide.
+ *
+ * What swap-with-last costs, stated because a consumer has to know it: SLOT
+ * ORDER IS NOT DURABLE, so anything a renderer derives from it is not either.
+ * The one that bites is blend order between two overlapping transparent
+ * instances in the same draw call, which is slot order and which therefore
+ * changes when an unrelated instance is removed. `instanced-scene.ts` carries
+ * that note where a caller meets it.
  *
  * ## THE INVARIANT: per-instance state is keyed by HANDLE, never by SLOT
  *
@@ -156,7 +163,7 @@ export class InstanceBuffer {
    * asked for.
    */
   constructor(capacity: number = DEFAULT_INSTANCE_CAPACITY) {
-    this.#minCapacity = requireAtLeast(Math.ceil(capacity), 1, 'capacity');
+    this.#minCapacity = requireIntegerAtLeast(capacity, 1, 'capacity');
     this.#capacity = this.#minCapacity;
   }
 
@@ -222,9 +229,22 @@ export class InstanceBuffer {
     }
 
     const count = this.#handleBySlot.length;
-    const shrunkTo = this.#capacity / INSTANCE_GROWTH_FACTOR;
+    // FLOORED, and the floor is not decoration. Capacity is a run of doublings
+    // from the constructed floor everywhere except after {@link compact}, which
+    // sets it to the live count and can leave it odd. An unfloored halving then
+    // produces a FRACTIONAL capacity, which passes every comparison a capacity
+    // has to pass and which `new Float32Array(n * components)` truncates PER
+    // CHANNEL, so a 1-component channel comes out a slot shorter than a
+    // 2-component one and the writes falling off the short one are discarded in
+    // silence. Reported by two reviewers with a repro each.
+    const shrunkTo = Math.floor(this.#capacity / INSTANCE_GROWTH_FACTOR);
     const shrank =
-      count * INSTANCE_SHRINK_THRESHOLD <= this.#capacity && shrunkTo >= this.#minCapacity;
+      count * INSTANCE_SHRINK_THRESHOLD <= this.#capacity &&
+      shrunkTo >= this.#minCapacity &&
+      // So `shrank` means the number CHANGED, rather than meaning a shrink was
+      // permitted. A caller acts on this flag by reallocating and rebuilding a
+      // geometry, which is not work to do for a capacity that stayed put.
+      shrunkTo < this.#capacity;
     if (shrank) this.#capacity = shrunkTo;
 
     return {

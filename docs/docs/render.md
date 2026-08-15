@@ -9,10 +9,11 @@ sidebar_position: 4
 `@dagr/render` draws a graph. It takes coordinates, not a `Graph`: whatever
 [`@dagr/layout`](./layout.md) works out goes on screen through a three.js
 `WebGPURenderer`, with an orthographic camera, springs carrying nodes between one
-layout and the next, and, from M4.3, one draw call per shape family. Today it is
-one per shape, which is six.
+layout and the next, and, as of M4.3, one draw call per shape family: the
+six-shape ladder draws in two.
 
-This page describes the package as of M4.12. Rounded rectangles and circles are
+This page describes the package as of M4.3, the last task to change what reaches
+a GPU. Rounded rectangles and circles are
 on screen, drawn as signed distance fields, and there is an HTML overlay for the
 text a signed distance field cannot draw. What is real is the seam everything
 else plugs into: the `Renderer` interface, the camera, the distance fields and
@@ -166,8 +167,9 @@ side, so all three are exact and the footprint comparison needs no tolerance at
 all.
 
 A glow is a property of the shape. The quad has to be padded to contain the halo,
-and that padding is baked into the geometry when the mesh is built, so a
-pixel-space glow would need the quad resized every time the camera moved. That is
+and that padding sizes the quad in the vertex stage, from the instance's own glow
+reach, so a pixel-space glow would need the quad resized every time the camera
+moved. That is
 a per-frame scene decision, and M4.4 owns it. A halo that stayed six pixels wide
 while its shape grew from one pixel to a thousand would also read as a different
 effect at each end of the range.
@@ -398,11 +400,16 @@ is none for a zoom of `NaN`.
 The rule for which error you get is meant to be applicable without judgement,
 so that the next task in this milestone does not have to re-run the argument:
 **an out-of-range value is a `RangeError` naming the field, and anything else
-this package throws gets a named class.** Today that means three, under an
+this package throws gets a named class.** Today that means five, under an
 abstract `DagrRenderError` that carries a `code` for a caller who would rather
 switch on a value than on a class: `RendererDisposedError` for use after a
-renderer's dispose, and `OverlayParentError` and `OverlayDisposedError` from the
-overlay. The split is not about counting failure kinds, it is about what a
+renderer's dispose, `OverlayParentError` and `OverlayDisposedError` from the
+overlay, and from the instanced path `UnknownInstanceHandleError` for a handle
+held past the removal of the instance it named, plus
+`InstancedShapesDisposedError` for a mesh used after its dispose. The last two
+are the whole of what instancing puts on the surface, and they are there because
+an error reaches a caller's `catch` whether or not the module that throws it was
+exported. The split is not about counting failure kinds, it is about what a
 caller can do: a bad number is on a line the caller can see and the field name
 is the best possible report of it, while use after dispose arrives
 from a lifecycle race in somebody else's framework and is the one a caller

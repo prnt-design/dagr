@@ -6,6 +6,7 @@ import {
   Mesh,
   MeshBasicNodeMaterial,
 } from 'three/webgpu';
+import { InstancedShapesDisposedError } from './errors.js';
 import { InstanceBuffer } from './instance-buffer.js';
 import {
   INSTANCE_CHANNELS,
@@ -244,10 +245,27 @@ function createInstancedMaterial(
   return material;
 }
 
-/** What {@link createInstancedShapes} needs to build one family's mesh. */
-export interface InstancedShapesOptions {
+/**
+ * The instances a mesh of family `F` accepts, narrowed by the discriminant.
+ *
+ * `Extract` rather than a second union, so the two spellings of a family (the
+ * mesh's and the instance's) cannot come apart: adding a shape kind to
+ * {@link ShapeInstance} widens both at once.
+ */
+export type FamilyInstance<F extends ShapeFamily> = Extract<ShapeInstance, { kind: F }>;
+
+/**
+ * What {@link createInstancedShapes} needs to build one family's mesh.
+ *
+ * Generic over the family so that a caller who names it at construction, which
+ * is every caller today, gets a COMPILE error for a circle handed to a rounded
+ * rect mesh rather than the `RangeError` {@link requireShapeInstance} raises.
+ * The runtime check stays for the data-driven caller M4.4 brings, where the
+ * family comes out of a node's kind and the compiler has nothing to narrow.
+ */
+export interface InstancedShapesOptions<F extends ShapeFamily = ShapeFamily> {
   /** Which distance function the mesh draws with, and which instances it takes. */
-  readonly family: ShapeFamily;
+  readonly family: F;
   /** The three uniforms every instance in this mesh shares. */
   readonly style: InstancedFamilyStyle;
   /**
@@ -270,18 +288,38 @@ export interface InstancedShapesOptions {
  * hold a stale geometry and leak the live one: the renderer disposes this object
  * and this object knows what it is holding now.
  */
-export class InstancedShapes implements GpuResource {
-  readonly family: ShapeFamily;
-  readonly mesh: Mesh;
+export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements GpuResource {
+  readonly family: F;
+  /**
+   * The mesh to add to a `Scene`, typed with the geometry and material it
+   * actually holds rather than as a bare `Mesh`.
+   *
+   * three's `Mesh` is generic over both, and naming them here is what lets a
+   * caller read `mesh.geometry.instanceCount` without an `instanceof` narrow
+   * first. `Mesh.material` is otherwise typed as one material OR an array of
+   * them, which is the type narrowing `webgpu-renderer.ts` says a renderer
+   * disposing resources should not be doing.
+   */
+  readonly mesh: Mesh<InstancedBufferGeometry, MeshBasicNodeMaterial>;
 
   readonly #label: string;
   readonly #buffer: InstanceBuffer;
   readonly #data: InstanceAttributeData;
   readonly #material: MeshBasicNodeMaterial;
   #geometry: InstancedBufferGeometry;
+  /**
+   * The six instance attributes of {@link #geometry}, in channel order.
+   *
+   * Cached rather than looked up per channel per write, because every write
+   * touches all six and a `getAttribute` is a property lookup on a record: at
+   * one write per node per frame under M4.6's springs that is six lookups
+   * multiplied by the node count, for six references that only change when the
+   * geometry does.
+   */
+  #attributes: InstancedBufferAttribute[] = [];
   #disposed = false;
 
-  constructor(options: InstancedShapesOptions) {
+  constructor(options: InstancedShapesOptions<F>) {
     this.family = options.family;
     this.#label = options.label ?? options.family;
     const style = requireFamilyStyle(options.style, `${this.#label}.style`);
@@ -315,11 +353,29 @@ export class InstancedShapes implements GpuResource {
    * downstream keys by. See the invariant in `instance-buffer.ts`: the slot it
    * happens to occupy is not durable and is not returned for that reason.
    */
-  add(instance: ShapeInstance): number {
+  add(instance: FamilyInstance<F>): number {
     this.#assertLive('add');
+    // **Validated BEFORE the slot is allocated, and the order is the fix rather
+    // than a preference.** Allocating first left a rejected instance owning a
+    // live handle over a slot nothing had written: `count` and the geometry's
+    // `instanceCount` came apart, the phantom slot drew whatever floats were in
+    // it, and a later removal swapped real data into it. Three reviewers found
+    // it independently, one with a repro where a removed shape reappeared at its
+    // old position after the next successful add. A caller that catches the
+    // `RangeError`, which is exactly what M4.4 applying a delta does, saw no
+    // error at all.
+    //
+    // The instance is validated once more inside `write`, which is a boundary of
+    // its own for callers reaching the data module directly. That second pass is
+    // comparisons rather than allocations, and buying atomicity with it is the
+    // right way round.
+    const field = this.#fieldForAdd(instance);
+    requireShapeInstance(instance, this.family, field);
+
     const allocation = this.#buffer.allocate();
     if (allocation.grew) this.#grow(allocation.capacity);
-    this.#writeSlot(allocation.slot, instance, allocation.handle);
+    this.#data.write(allocation.slot, instance, this.family, field);
+    this.#markDirty(allocation.slot);
     this.#geometry.instanceCount = this.#buffer.count;
     return allocation.handle;
   }
@@ -329,9 +385,12 @@ export class InstancedShapes implements GpuResource {
    * recoloured node takes: no slot changes, so nothing else in the buffer is
    * touched and no other handle is affected.
    */
-  set(handle: number, instance: ShapeInstance): void {
+  set(handle: number, instance: FamilyInstance<F>): void {
     this.#assertLive('set');
-    this.#writeSlot(this.#buffer.slotOf(handle), instance, handle);
+    const slot = this.#buffer.slotOf(handle);
+    const field = instance.label ?? `${this.#label}[handle ${String(handle)}]`;
+    this.#data.write(slot, instance, this.family, field);
+    this.#markDirty(slot);
   }
 
   /**
@@ -342,6 +401,17 @@ export class InstancedShapes implements GpuResource {
    * data follows it. Skipping the copy leaves one instance drawing another's
    * data with every handle still resolving correctly, which is a picture that is
    * wrong in a way no assertion about handles would catch.
+   *
+   * **BLEND ORDER WITHIN A FAMILY IS SLOT ORDER, AND A REMOVAL CHANGES IT.**
+   * These materials are transparent with `depthWrite: false`, so two overlapping
+   * instances blend in the order the draw call walks their slots, and
+   * swap-with-last moves the last instance to wherever the hole is. Removing an
+   * unrelated node can therefore flip which of two overlapping nodes reads as in
+   * front, with nothing thrown. The fixed family order in
+   * {@link createInstancedShapes} covers order BETWEEN families and cannot cover
+   * this. M4.5 layers edges behind nodes and selection in front: it gets that
+   * from separate meshes drawn in a chosen order, never from slot order within
+   * one.
    */
   remove(handle: number): void {
     this.#assertLive('remove');
@@ -356,7 +426,7 @@ export class InstancedShapes implements GpuResource {
       this.#replaceGeometry();
     }
     this.#geometry.instanceCount = removal.count;
-    this.#markDirty();
+    if (removal.movedFrom !== null) this.#markDirty(removal.slot);
   }
 
   /** Whether a handle is still live. */
@@ -409,15 +479,18 @@ export class InstancedShapes implements GpuResource {
   }
 
   /**
+   * What a `RangeError` from {@link add} names.
+   *
    * The instance's own label when it has one, and the mesh's label plus the
-   * handle when it does not. A caller that names its instances (the ladder names
-   * every rung, and a graph has node ids) gets `rect-100.cornerRadius` out of a
-   * `RangeError`; one that does not gets something it can at least count to.
+   * instance's position in the addition order when it does not. A caller that
+   * names its instances (the ladder names every rung, and a graph has node ids)
+   * gets `rect-100.cornerRadius`; one that does not gets the index of the add
+   * that failed, which is a number it can count to. Not the SLOT, even though it
+   * is the same integer here: a slot is not durable and naming one in a message
+   * a reader might keep would teach exactly the wrong lesson.
    */
-  #writeSlot(slot: number, instance: ShapeInstance, handle: number): void {
-    const field = instance.label ?? `${this.#label}[handle ${String(handle)}]`;
-    this.#data.write(slot, instance, this.family, field);
-    this.#markDirty();
+  #fieldForAdd(instance: ShapeInstance): string {
+    return instance.label ?? `${this.#label}[instance ${String(this.#buffer.count)}]`;
   }
 
   /**
@@ -452,36 +525,49 @@ export class InstancedShapes implements GpuResource {
     geometry.setAttribute('normal', new BufferAttribute(quad.normal, 3));
     geometry.setAttribute('uv', new BufferAttribute(quad.uv, 2));
     geometry.setIndex(new BufferAttribute(quad.index, 1));
-    for (const channel of INSTANCE_CHANNELS) {
-      geometry.setAttribute(
-        channel.name,
-        new InstancedBufferAttribute(this.#data.channel(channel.name), channel.components),
+    this.#attributes = INSTANCE_CHANNELS.map((channel) => {
+      const attributeObject = new InstancedBufferAttribute(
+        this.#data.channel(channel.name),
+        channel.components,
       );
-    }
+      geometry.setAttribute(channel.name, attributeObject);
+      return attributeObject;
+    });
     geometry.instanceCount = this.#buffer.count;
     return geometry;
   }
 
   /**
-   * Tells three the instance arrays changed.
+   * Tells three which slot of the instance arrays changed.
    *
    * Per write rather than through a `sync()` a caller has to remember: setting
    * `needsUpdate` bumps a version integer, and three compares versions once per
-   * frame and re-uploads the array at most once however many writes went into
-   * it. A batch of three thousand additions is therefore three thousand integer
-   * increments and one upload, and there is no state where the buffers and the
-   * picture disagree because somebody forgot the last call.
+   * frame and uploads at most once however many writes went into it. There is
+   * then no state where the buffers and the picture disagree because somebody
+   * forgot the last call.
+   *
+   * **The update RANGE is what keeps that affordable at M4.10's numbers.**
+   * `needsUpdate` alone re-uploads the whole of every channel, so one node
+   * moving in a 10k graph would re-upload 480 KB, and M4.6's spring pass would
+   * do it every frame however few nodes actually moved. Both backends honour
+   * ranges and clear them after the upload (`WebGPUAttributeUtils` and
+   * `WebGLAttributeUtils`), so a slot's twelve floats travel instead of the
+   * buffer's hundred and twenty thousand. Ranges accumulate, which is what makes
+   * a batch of additions one upload of a contiguous span rather than one per
+   * add.
    */
-  #markDirty(): void {
-    for (const channel of INSTANCE_CHANNELS) {
-      const attributeObject = this.#geometry.getAttribute(channel.name);
+  #markDirty(slot: number): void {
+    INSTANCE_CHANNELS.forEach((channel, index) => {
+      const attributeObject = this.#attributes[index];
+      if (attributeObject === undefined) return;
+      attributeObject.addUpdateRange(slot * channel.components, channel.components);
       attributeObject.needsUpdate = true;
-    }
+    });
   }
 
   #assertLive(method: string): void {
     if (this.#disposed) {
-      throw new Error(`cannot call ${method}() on a disposed ${this.#label} mesh`);
+      throw new InstancedShapesDisposedError(method, this.#label);
     }
   }
 }
@@ -502,7 +588,7 @@ export class InstancedShapes implements GpuResource {
  */
 export function createInstancedShapes(
   instances: readonly ShapeInstance[],
-  styles: Readonly<Record<ShapeFamily, InstancedFamilyStyle>>,
+  styles: Partial<Readonly<Record<ShapeFamily, InstancedFamilyStyle>>>,
   label = 'scene',
 ): InstancedShapes[] {
   const families: readonly ShapeFamily[] = ['roundedRect', 'circle'];
@@ -511,9 +597,19 @@ export function createInstancedShapes(
     for (const family of families) {
       const members = instances.filter((instance) => instance.kind === family);
       if (members.length === 0) continue;
+      const style = styles[family];
+      // PARTIAL, so a caller drawing only boxes does not have to invent a circle
+      // style. A style that is missing where instances need it is a
+      // `RangeError` naming the family, which is the case a required record
+      // turned into a fabricated default nobody validated and nothing read.
+      if (style === undefined) {
+        throw new RangeError(
+          `styles.${family} is required: ${label} has ${String(members.length)} ${family} instances to draw`,
+        );
+      }
       const shapes = new InstancedShapes({
         family,
-        style: styles[family],
+        style,
         capacity: members.length,
         label: `${label}.${family}`,
       });

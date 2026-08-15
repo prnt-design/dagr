@@ -60,6 +60,26 @@ export function requireAtLeast(value: number, min: number, field: string): numbe
   return value;
 }
 
+/**
+ * Rejects a value that is not an INTEGER at or above `min`.
+ *
+ * Separate from {@link requireAtLeast} because a fractional count is a
+ * different failure from a small one, and one that survives arithmetic. A
+ * capacity of 2.5 passes every comparison a capacity has to pass, and then
+ * `new Float32Array(2.5 * 1)` allocates two floats while `new Float32Array(2.5
+ * * 2)` allocates five, so two channels of the same buffer come out of step and
+ * the writes that fall off the short one are discarded in silence: a typed
+ * array's out-of-bounds assignment throws nothing.
+ */
+export function requireIntegerAtLeast(value: number, min: number, field: string): number {
+  if (!Number.isInteger(value) || value < min) {
+    throw new RangeError(
+      `${field} has to be an integer of at least ${String(min)}, got ${String(value)}`,
+    );
+  }
+  return value;
+}
+
 /** Rejects a value that is not a finite number at or above zero. */
 export function requireNonNegative(value: number, field: string): number {
   if (!Number.isFinite(value) || value < 0) {

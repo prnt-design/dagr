@@ -18,13 +18,15 @@ describe('@dagr/render', () => {
     // type surface is exercised by the other files in the suite importing from
     // it. `fitZoom` joined in P2: the pure fit arithmetic behind
     // `Camera2D.fitBounds`, exported so limit derivation shares its formula.
-    // `UnknownInstanceHandleError` joined in P3 (M4.3), and it is the only thing
-    // the instanced path puts on the surface: an error arrives in somebody
-    // else's `catch` whether or not the module that throws it was exported.
+    // `UnknownInstanceHandleError` and `InstancedShapesDisposedError` joined in
+    // P3 (M4.3), and they are the only things the instanced path puts on the
+    // surface: an error arrives in somebody else's `catch` whether or not the
+    // module that throws it was exported.
     expect(Object.keys(api).sort()).toEqual([
       'CENTRE_ANCHOR',
       'Camera2D',
       'DagrRenderError',
+      'InstancedShapesDisposedError',
       'OVERLAY_INV_ZOOM_PROPERTY',
       'OVERLAY_ZOOM_PROPERTY',
       'OverlayDisposedError',

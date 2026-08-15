@@ -31,18 +31,19 @@
  * Shapes are therefore M4.2's contribution to what is on screen; real layout
  * arrives in M4.4, both behind the `Renderer` seam exported here.
  *
- * **M4.3 added nothing callable either, and added one error class.** The six
+ * **M4.3 added nothing callable either, and added two error classes.** The six
  * shapes are now two instanced meshes, one per shape family, with position,
  * size, corner radius, glow reach and colours read per instance. The
  * bookkeeping under it (`instance-buffer.ts`, `instance-attributes.ts`) is pure
  * and exhaustively tested, and it stays internal for the same reason the shape
  * scene does: M4.4 owns the seam a caller feeds a graph through, and exporting
  * an instance handle API before there is anything to name with it would be
- * guessing at that seam. What does reach the surface is
- * {@link UnknownInstanceHandleError}, because a handle held past the removal of
- * its instance is a failure a caller catches rather than a number they can
- * inspect, and errors are the one part of an internal module that arrives in
- * somebody else's `catch` whether or not it was exported.
+ * guessing at that seam. What does reach the surface is the two ERRORS,
+ * {@link UnknownInstanceHandleError} and {@link InstancedShapesDisposedError},
+ * because an error is the one part of an internal module that arrives in
+ * somebody else's `catch` whether or not it was exported, and one that arrives
+ * as a bare `Error` gets there with no `code` and failing `instanceof
+ * DagrRenderError`.
  *
  * **M4.11 added the second thing this package can put on screen, and it is not
  * drawn by a GPU at all.** `createHtmlOverlay` positions DOM elements in world
@@ -79,6 +80,7 @@ export { Camera2D, fitZoom } from './camera.js';
 export type { Camera2DInit } from './camera.js';
 export {
   DagrRenderError,
+  InstancedShapesDisposedError,
   OverlayDisposedError,
   OverlayParentError,
   RendererDisposedError,

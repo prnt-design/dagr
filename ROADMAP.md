@@ -2949,12 +2949,40 @@ of M3 would leave the second runner idle for a milestone.
   instance of it, the moment the origin left the frustum. Culling worth having is
   per instance and belongs to M4.10, where there is a frame time to measure it
   against.
-  Nothing is exported but the error. `UnknownInstanceHandleError` reaches
-  `index.ts` because an error arrives in somebody else's `catch` whether or not
-  the module that throws it was exported; the instance API stays internal because
-  M4.4 owns the seam a caller feeds a graph through, and naming a handle API
-  before there is anything to name with it is a guess something comes to depend
-  on.
+  Nothing is exported but the two ERRORS. `UnknownInstanceHandleError` and
+  `InstancedShapesDisposedError` reach `index.ts` because an error arrives in
+  somebody else's `catch` whether or not the module that throws it was exported,
+  and one that arrives as a bare `Error` gets there with no `code` and failing
+  `instanceof DagrRenderError`; the instance API stays internal because M4.4 owns
+  the seam a caller feeds a graph through, and naming a handle API before there
+  is anything to name with it is a guess something comes to depend on.
+  A pre-PR review (four personas plus a general pass) found TWO live bugs, each
+  reproduced by more than one reviewer, and both are the shape this entry warns
+  about rather than typos. `add` ALLOCATED BEFORE IT VALIDATED, so a rejected
+  instance left a live handle over a slot nothing had written: `count` and
+  `instanceCount` came apart, the phantom slot drew whatever floats were in it,
+  and the next successful add resurrected a REMOVED shape at its old position. A
+  caller that catches the `RangeError`, which is exactly what M4.4 applying a
+  delta does, saw no error at all. And `compact` LEFT THE CAPACITY OFF THE
+  DOUBLING CHAIN, so a later halving produced a fractional capacity that passed
+  every comparison and that `new Float32Array(n * components)` truncated PER
+  CHANNEL, leaving a 1-component channel a slot shorter than a 2-component one
+  with the writes that fell off it discarded in silence. Both are fixed with the
+  tests that were missing: nothing had freed or allocated AFTER a compaction, and
+  no test paired the bookkeeping with the data under churn. There is now a
+  400-step model check over `InstancedShapes` asserting every live handle's own
+  floats after every step, which is the test that would have caught both.
+  Four smaller findings taken in the same pass: the styles record is PARTIAL, so
+  a caller drawing only boxes no longer fabricates a circle style nothing reads;
+  `InstancedShapes<F>` is generic over its family, so a circle handed to a rect
+  mesh is a compile error and the runtime check is left for the data-driven
+  caller M4.4 brings; `#markDirty` sets an UPDATE RANGE per slot rather than
+  re-uploading every channel whole, which at 10k nodes is twelve floats per moved
+  node instead of 480 KB per frame and is the item that was most in M4.10's way;
+  and `remove`'s docstring now states that BLEND ORDER WITHIN A FAMILY IS SLOT
+  ORDER, so removing an unrelated node can flip which of two overlapping nodes
+  reads as in front. M4.5 gets its layering from separate meshes in a chosen
+  order, never from slot order within one.
 - [ ] **M4.4** (`@dagr/render`, `apps/demo`) A real graph on screen: take a
   `LayoutResult` from `@dagr/layout` and draw its nodes, sized and positioned,
   with a node-id to instance-handle mapping that survives nodes being added and

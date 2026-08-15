@@ -354,12 +354,15 @@ function instanceOf(descriptor: ShapeDescriptor): ShapeInstance {
 function ladderFamilyStyle(
   descriptors: readonly ShapeDescriptor[],
   family: ShapeFamily,
-): InstancedFamilyStyle {
+): InstancedFamilyStyle | undefined {
   const members = descriptors.filter((descriptor) => descriptor.kind === family);
   const first = members[0];
-  if (first === undefined) {
-    return { outlineColor: OUTLINE, glowAlpha: GLOW_ALPHA, outlinePixels: OUTLINE_PIXELS };
-  }
+  // Nothing rather than a fabricated default, because `createInstancedShapes`
+  // takes a PARTIAL record and builds no mesh for a family with no instances. A
+  // default here would be a style that is never validated and never read, and
+  // the first reader to find it would reasonably believe it was drawing
+  // something.
+  if (first === undefined) return undefined;
   const style = requireShapeStyle(first.style, `${first.label}.style`);
   for (const member of members) {
     const other = requireShapeStyle(member.style, `${member.label}.style`);
@@ -411,12 +414,14 @@ export function createShapeMeshes(
   descriptors: readonly ShapeDescriptor[] = CRISPNESS_LADDER,
 ): readonly InstancedShapes[] {
   const instances = descriptors.map((descriptor) => instanceOf(descriptor));
-  return createInstancedShapes(
-    instances,
-    {
-      roundedRect: ladderFamilyStyle(descriptors, 'roundedRect'),
-      circle: ladderFamilyStyle(descriptors, 'circle'),
-    },
-    'ladder',
-  );
+  const styles: Partial<Record<ShapeFamily, InstancedFamilyStyle>> = {};
+  for (const family of ['roundedRect', 'circle'] as const) {
+    const style = ladderFamilyStyle(descriptors, family);
+    // Assigned only when there is one, rather than assigned `undefined`. The
+    // package compiles with `exactOptionalPropertyTypes`, so an explicit
+    // `undefined` is not the same thing as an absent key, and the distinction is
+    // the one this record is built to carry.
+    if (style !== undefined) styles[family] = style;
+  }
+  return createInstancedShapes(instances, styles, 'ladder');
 }

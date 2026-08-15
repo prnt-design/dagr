@@ -1,9 +1,10 @@
 import type { Size, Vec2 } from './types.js';
+import { requireCircleRadius, requireCornerRadius } from './sdf.js';
 import {
   requireColor,
   requireFinite,
+  requireIntegerAtLeast,
   requireNonNegative,
-  requirePositive,
 } from './validate.js';
 
 /**
@@ -239,25 +240,23 @@ export function requireShapeInstance(
   requireColor(instance.fillColor, `${field}.fillColor`);
   requireColor(instance.glowColor, `${field}.glowColor`);
 
+  // Delegated to `sdf.ts` rather than restated, and the field arguments are what
+  // make delegating possible: both checks take the name of the field the CALLER
+  // wrote, so the same bound reports through `chapter-3.cornerRadius` here and
+  // through `rect-100.cornerRadius` for a descriptor. Restating them was the
+  // first draft and it left two copies of "at most half the smaller dimension",
+  // which is the bound past which opposite corner arcs overlap and the field
+  // stops being a distance to anything.
   if (instance.kind === 'circle') {
-    requirePositive(instance.radius, `${field}.radius`);
+    requireCircleRadius(instance.radius, `${field}.radius`);
     return instance;
   }
-
-  const width = requirePositive(instance.size.width, `${field}.size.width`);
-  const height = requirePositive(instance.size.height, `${field}.size.height`);
-  // The same bound `requireCornerRadius` enforces on a descriptor, restated here
-  // rather than delegated, because that function reports through a size field a
-  // caller of this one did not write. Past half the smaller dimension the corner
-  // arcs of opposite corners overlap and the field stops being a distance to
-  // anything: the shape reads inside out.
-  const limit = Math.min(width, height) / 2;
-  requireNonNegative(instance.cornerRadius, `${field}.cornerRadius`);
-  if (instance.cornerRadius > limit) {
-    throw new RangeError(
-      `${field}.cornerRadius has to be at most half the smaller dimension (${String(limit)}), got ${String(instance.cornerRadius)}`,
-    );
-  }
+  requireCornerRadius(
+    instance.cornerRadius,
+    instance.size,
+    `${field}.cornerRadius`,
+    `${field}.size`,
+  );
   return instance;
 }
 
@@ -285,7 +284,7 @@ export class InstanceAttributeData {
   #arrays: Map<string, Float32Array>;
 
   constructor(capacity: number, channels: readonly InstanceChannel[] = INSTANCE_CHANNELS) {
-    this.#capacity = requirePositive(capacity, 'capacity');
+    this.#capacity = requireIntegerAtLeast(capacity, 1, 'capacity');
     this.channels = channels;
     this.#arrays = allocate(channels, this.#capacity);
   }
@@ -366,7 +365,13 @@ export class InstanceAttributeData {
    * are exactly the live ones, since `InstanceBuffer` never leaves a hole.
    */
   resize(capacity: number): void {
-    const next = requirePositive(capacity, 'capacity');
+    // An INTEGER, checked here as well as where the number is computed. A
+    // fractional capacity is truncated PER CHANNEL by `new Float32Array(n *
+    // components)`, so a 1-component channel comes out a slot shorter than a
+    // 2-component one and the writes falling off the short one are discarded
+    // with nothing thrown. `InstanceBuffer` floors its halving so it cannot
+    // produce one; this is the check that says so rather than assuming it.
+    const next = requireIntegerAtLeast(capacity, 1, 'capacity');
     if (next === this.#capacity) return;
     const grown = allocate(this.channels, next);
     const kept = Math.min(next, this.#capacity);
@@ -395,7 +400,7 @@ export class InstanceAttributeData {
   /**
    * A slot outside the arrays is a `RangeError` rather than a write JavaScript
    * discards. Out-of-bounds assignment to a typed array is a silent no-op, so an
-   * instance written past the end simply never appears, with nothing in the
+   * instance written past the end never appears at all, with nothing in the
    * console and a shape missing from a picture that has thousands.
    */
   #requireSlot(slot: number): void {

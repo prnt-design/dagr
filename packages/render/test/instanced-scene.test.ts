@@ -1,14 +1,18 @@
-import { InstancedBufferGeometry } from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
-import { UnknownInstanceHandleError } from '../src/errors.js';
+import {
+  DagrRenderError,
+  InstancedShapesDisposedError,
+  UnknownInstanceHandleError,
+} from '../src/errors.js';
 import { INSTANCE_CHANNELS, linearFromHex } from '../src/instance-attributes.js';
-import type { InstancedFamilyStyle, ShapeInstance } from '../src/instance-attributes.js';
+import type { InstancedFamilyStyle, ShapeFamily } from '../src/instance-attributes.js';
 import {
   InstancedShapes,
   createInstancedShapes,
   instanceBounds,
   requireFamilyStyle,
 } from '../src/instanced-scene.js';
+import type { FamilyInstance } from '../src/instanced-scene.js';
 
 /**
  * The seam between the bookkeeping and three.
@@ -25,7 +29,7 @@ import {
 const style: InstancedFamilyStyle = { outlineColor: 0x023047, glowAlpha: 0.45, outlinePixels: 2 };
 
 /** A rect whose every field is distinct, so a misplaced write is visible. */
-function rectAt(x: number, size = 10): ShapeInstance {
+function rectAt(x: number, size = 10): FamilyInstance<'roundedRect'> {
   return {
     kind: 'roundedRect',
     label: `rect-${String(x)}`,
@@ -38,7 +42,7 @@ function rectAt(x: number, size = 10): ShapeInstance {
   };
 }
 
-function offsets(shapes: InstancedShapes): number[] {
+function offsets<F extends ShapeFamily>(shapes: InstancedShapes<F>): number[] {
   const attribute = shapes.mesh.geometry.getAttribute('instanceOffset');
   return Array.from({ length: shapes.count }, (_, slot) => attribute.getX(slot));
 }
@@ -47,9 +51,7 @@ describe('a family mesh', () => {
   it('starts empty and draws nothing', () => {
     const shapes = new InstancedShapes({ family: 'roundedRect', style });
     expect(shapes.count).toBe(0);
-    const geometry = shapes.mesh.geometry;
-    if (!(geometry instanceof InstancedBufferGeometry)) throw new Error('unreachable');
-    expect(geometry.instanceCount).toBe(0);
+    expect(shapes.mesh.geometry.instanceCount).toBe(0);
     shapes.dispose();
   });
 
@@ -66,26 +68,29 @@ describe('a family mesh', () => {
   it('grows the draw count with every addition', () => {
     const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 8 });
     for (let i = 0; i < 5; i += 1) shapes.add(rectAt(i));
-    const geometry = shapes.mesh.geometry;
-    if (!(geometry instanceof InstancedBufferGeometry)) throw new Error('unreachable');
-    expect(geometry.instanceCount).toBe(5);
+    expect(shapes.mesh.geometry.instanceCount).toBe(5);
     expect(shapes.count).toBe(5);
     shapes.dispose();
   });
 
   it('refuses an instance of the wrong family, naming the kind', () => {
+    // The cast is the point rather than a workaround: `add` takes
+    // `FamilyInstance<'circle'>`, so this line does not compile without one and
+    // a caller who names the family at construction cannot reach this error at
+    // all. The runtime check is for the data-driven caller M4.4 brings, where
+    // the family comes out of a node's kind and the compiler has nothing to
+    // narrow, and it is asserted here through the only door left open to it.
     const shapes = new InstancedShapes({ family: 'circle', style });
-    expect(() => shapes.add(rectAt(0))).toThrow(RangeError);
-    expect(() => shapes.add(rectAt(0))).toThrow(/kind/);
+    const wrongFamily = rectAt(0) as unknown as FamilyInstance<'circle'>;
+    expect(() => shapes.add(wrongFamily)).toThrow(RangeError);
+    expect(() => shapes.add(wrongFamily)).toThrow(/kind/);
     shapes.dispose();
   });
 
-  it('names the instance a caller labelled, and the handle when it did not', () => {
+  it('names the instance a caller labelled, and its place in the adds when it did not', () => {
     const shapes = new InstancedShapes({ family: 'roundedRect', style, label: 'scene.rect' });
-    expect(() => shapes.add({ ...rectAt(0), cornerRadius: 90 } as ShapeInstance)).toThrow(
-      /rect-0\.cornerRadius/,
-    );
-    const anonymous: ShapeInstance = {
+    expect(() => shapes.add({ ...rectAt(0), cornerRadius: 90 })).toThrow(/rect-0\.cornerRadius/);
+    const anonymous: FamilyInstance<'roundedRect'> = {
       kind: 'roundedRect',
       center: { x: 0, y: 0 },
       size: { width: 10, height: 5 },
@@ -94,7 +99,10 @@ describe('a family mesh', () => {
       glowColor: 0xfb8500,
       glowWorld: 1,
     };
-    expect(() => shapes.add(anonymous)).toThrow(/scene\.rect\[handle/);
+    // Not a slot, even though the two are the same integer here: naming a slot
+    // in a message a reader might keep would teach the one lesson this module
+    // exists to unteach.
+    expect(() => shapes.add(anonymous)).toThrow(/scene\.rect\[instance 0\]\.cornerRadius/);
     shapes.dispose();
   });
 
@@ -193,10 +201,8 @@ describe('removal', () => {
     expect(shapes.capacity).toBe(8);
     shapes.set(handles[0] as number, rectAt(77));
     expect(offsets(shapes)).toEqual([77, 1, 2, 3]);
-    const geometry = shapes.mesh.geometry;
-    if (!(geometry instanceof InstancedBufferGeometry)) throw new Error('unreachable');
-    expect(geometry.instanceCount).toBe(4);
-    expect(geometry.getAttribute('instanceOffset').count).toBe(8);
+    expect(shapes.mesh.geometry.instanceCount).toBe(4);
+    expect(shapes.mesh.geometry.getAttribute('instanceOffset').count).toBe(8);
     shapes.dispose();
   });
 
@@ -224,15 +230,109 @@ describe('removal', () => {
   });
 });
 
+describe('a rejected add changes nothing', () => {
+  it('leaves no live handle behind, so nothing phantom is ever drawn', () => {
+    // Three reviewers found this independently. Allocating before validating
+    // left the rejected instance owning a live handle over a slot nothing had
+    // written: `count` and `instanceCount` came apart, the phantom slot drew
+    // whatever floats were in it, and the next successful add resurrected a
+    // removed shape at its old position. A caller that catches the `RangeError`,
+    // which is exactly what M4.4 applying a delta does, saw no error at all.
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 4 });
+    const a = shapes.add(rectAt(10));
+    const b = shapes.add(rectAt(20));
+    shapes.remove(a);
+
+    const before = shapes.handles();
+    expect(() => shapes.add({ ...rectAt(30), cornerRadius: 90 })).toThrow(RangeError);
+    expect(shapes.handles()).toEqual(before);
+    expect(shapes.count).toBe(1);
+    expect(shapes.mesh.geometry.instanceCount).toBe(1);
+
+    // And the next real add lands where it should rather than past a hole.
+    shapes.add(rectAt(40));
+    expect(offsets(shapes)).toEqual([20, 40]);
+    expect(shapes.has(b)).toBe(true);
+    shapes.dispose();
+  });
+
+  it('does not grow the buffer for an instance it refuses', () => {
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 2 });
+    shapes.add(rectAt(0));
+    shapes.add(rectAt(1));
+    expect(() => shapes.add({ ...rectAt(2), cornerRadius: 90 })).toThrow(RangeError);
+    expect(shapes.capacity).toBe(2);
+    expect(shapes.count).toBe(2);
+    shapes.dispose();
+  });
+});
+
+describe('the two halves under churn', () => {
+  it('keeps every live handle pointing at its own data, for 400 steps', () => {
+    // The model check the bookkeeping suite runs, extended across the seam. The
+    // pure module proves handles resolve; this proves the FLOATS follow them,
+    // which is the half a leaked slot or a fractional capacity corrupts without
+    // any handle assertion noticing. Deterministic rather than random: a failing
+    // seed nobody can reproduce is not a test.
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 2 });
+    const model = new Map<number, number>();
+    let next = 1;
+
+    for (let step = 0; step < 400; step += 1) {
+      if (step % 5 === 4 && model.size > 0) {
+        const handles = [...model.keys()];
+        const victim = handles[step % handles.length] as number;
+        shapes.remove(victim);
+        model.delete(victim);
+      } else if (step % 7 === 6 && model.size > 0) {
+        const handles = [...model.keys()];
+        const target = handles[step % handles.length] as number;
+        const x = 1000 + step;
+        shapes.set(target, rectAt(x));
+        model.set(target, x);
+      } else {
+        const x = next;
+        next += 1;
+        model.set(shapes.add(rectAt(x)), x);
+      }
+      if (step % 53 === 0) shapes.compact();
+
+      expect(shapes.count).toBe(model.size);
+      expect(shapes.mesh.geometry.instanceCount).toBe(model.size);
+      expect(shapes.capacity).toBeGreaterThanOrEqual(model.size);
+      const attribute = shapes.mesh.geometry.getAttribute('instanceOffset');
+      expect(attribute.count).toBe(shapes.capacity);
+      for (const [handle, x] of model) {
+        expect(shapes.has(handle)).toBe(true);
+        expect(attribute.getX(shapes.handles().indexOf(handle))).toBe(x);
+      }
+    }
+    shapes.dispose();
+  });
+});
+
 describe('disposal', () => {
-  it('is idempotent, and refuses every mutation afterwards', () => {
-    const shapes = new InstancedShapes({ family: 'roundedRect', style });
+  it('is idempotent, and refuses every mutation afterwards with a NAMED error', () => {
+    // A named class rather than a bare `Error`, on the rule in `errors.ts`: a
+    // call after dispose is the lifecycle case that rule was written for, and a
+    // bare `Error` lands in a caller's catch with no `code` and failing
+    // `instanceof DagrRenderError`.
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, label: 'scene.rect' });
     shapes.add(rectAt(0));
     shapes.dispose();
     shapes.dispose();
-    expect(() => shapes.add(rectAt(1))).toThrow(/disposed/);
-    expect(() => shapes.clear()).toThrow(/disposed/);
-    expect(() => shapes.compact()).toThrow(/disposed/);
+    for (const call of [
+      () => shapes.add(rectAt(1)),
+      () => shapes.set(1, rectAt(1)),
+      () => shapes.remove(1),
+      () => shapes.clear(),
+      () => shapes.compact(),
+    ]) {
+      expect(call).toThrow(InstancedShapesDisposedError);
+      expect(call).toThrow(/scene\.rect/);
+    }
+    expect(new InstancedShapesDisposedError('add', 'm')).toBeInstanceOf(DagrRenderError);
+    expect(new InstancedShapesDisposedError('add', 'm').code).toBe('INSTANCED_SHAPES_DISPOSED');
   });
 });
 
@@ -241,7 +341,7 @@ describe('createInstancedShapes', () => {
     // Fixed rather than first-seen: transparent coplanar geometry blends in draw
     // order, so a first-seen order would make the picture depend on the order a
     // caller happened to list its nodes in.
-    const circle: ShapeInstance = {
+    const circle: FamilyInstance<'circle'> = {
       kind: 'circle',
       center: { x: 0, y: 0 },
       radius: 4,
@@ -270,7 +370,7 @@ describe('createInstancedShapes', () => {
   it('disposes what it built when a later instance is rejected', () => {
     // The same guarantee `createRenderer` makes about an aborted mount, applied
     // one layer down: a caller never has to dispose a mesh it did not receive.
-    const bad = { ...rectAt(1), cornerRadius: 90 } as ShapeInstance;
+    const bad = { ...rectAt(1), cornerRadius: 90 };
     expect(() =>
       createInstancedShapes([rectAt(0), bad], { roundedRect: style, circle: style }),
     ).toThrow(RangeError);

@@ -80,6 +80,15 @@ import { requireColor, requireFinite, requireNonNegative } from './validate.js';
  * the first thing any style is used for. Every one of them takes the field name from
  * its caller, so the message says which shape and which field rather than which
  * variable.
+ *
+ * WHERE THAT BOUNDARY IS AS OF M4.3: `requireShapeInstance` in
+ * `instance-attributes.ts`, which is the last place an instance's numbers are a
+ * caller's numbers rather than twelve floats in a buffer. It DELEGATES the two
+ * shape checks here rather than restating them, which is what the field-name
+ * arguments buy: the same bound reports through `chapter-3.cornerRadius` for a
+ * campaign node and through `rect-100.cornerRadius` for a ladder descriptor.
+ * Restating them was the first draft and it left two copies of "at most half the
+ * smaller dimension" to drift apart.
  */
 
 /**

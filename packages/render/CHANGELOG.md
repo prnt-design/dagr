@@ -15,15 +15,23 @@ not" is the category this file has a heading for.
 ### Added
 
 - Instanced rendering: one mesh per shape family, with position, size, corner
-  radius, glow reach and two colours read per instance. New surface:
-  `UnknownInstanceHandleError` and its `UNKNOWN_INSTANCE_HANDLE` code, and
-  nothing else. (M4.3)
+  radius, glow reach and two colours read per instance. (M4.3)
 
-  **Behaviour changed, types did not, and the change is what is NOT drawn per
-  shape.** The crispness ladder is the same six shapes in the same places and
-  the same colours, drawn in two calls rather than six. The committed references
-  are therefore the regression test for the whole per-instance path: a factor of
-  two anywhere in the quad scaling puts every shape at half or twice its size.
+  **The drawing path changed and the picture did not.** The crispness ladder is
+  the same six shapes in the same places and the same colours, drawn in two
+  calls rather than six. The committed references are therefore the regression
+  test for the whole per-instance path: a factor of two anywhere in the quad
+  scaling puts every shape at half or twice its size.
+
+  The type delta, stated once because this file's preamble makes "behaviour
+  changed, types did not" a claim readers rely on: TWO exported classes are new,
+  `UnknownInstanceHandleError` and `InstancedShapesDisposedError`, and
+  `DagrRenderErrorCode` gains `UNKNOWN_INSTANCE_HANDLE` and
+  `INSTANCED_SHAPES_DISPOSED`. Widening that union is source-breaking for a
+  consumer switching over it exhaustively with a `never` fallback, so it is a
+  minor rather than a patch on the day a version is cut. Nothing else on the
+  surface moved: the instancing API itself is internal until M4.4 names the seam
+  a caller feeds a graph through.
 
   **The material decision M4.2 deferred is made, provisionally: ONE MATERIAL PER
   SHAPE FAMILY**, not one uber-material with a per-instance shape id. The

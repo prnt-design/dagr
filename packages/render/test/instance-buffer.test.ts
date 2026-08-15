@@ -208,6 +208,38 @@ describe('compaction', () => {
     expect(handles.map((handle) => buffer.slotOf(handle))).toEqual(before);
   });
 
+  it('keeps the capacity an INTEGER after a compaction leaves it odd', () => {
+    // The gap two reviewers found, with the repro they gave. Capacity is a run
+    // of doublings from the floor everywhere except after `compact`, which sets
+    // it to the live count; an unfloored halving of an odd capacity then gives
+    // 2.5, which passes every comparison a capacity has to pass and which
+    // `new Float32Array(n * components)` truncates PER CHANNEL, so a 1-component
+    // channel comes out a slot short of a 2-component one and the writes falling
+    // off it are discarded with nothing thrown. Nothing in this file used to
+    // free or allocate AFTER a compaction, which is why a green suite hid it.
+    const buffer = new InstanceBuffer(2);
+    const handles = fill(buffer, 5);
+    expect(buffer.capacity).toBe(8);
+    expect(buffer.compact().capacity).toBe(5);
+    for (let i = 4; i > 0; i -= 1) {
+      buffer.free(handles[i] as number);
+      expect(Number.isInteger(buffer.capacity)).toBe(true);
+      expect(buffer.capacity).toBeGreaterThanOrEqual(buffer.count);
+      expect(buffer.capacity).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('reports a shrink only when the number actually changed', () => {
+    // A caller acts on this flag by reallocating arrays and rebuilding a
+    // geometry, so a `shrank` that means "a shrink was permitted" rather than "a
+    // shrink happened" is a full re-upload for nothing.
+    const buffer = new InstanceBuffer(1);
+    const handle = buffer.allocate().handle;
+    const removal = buffer.free(handle);
+    expect(removal.shrank).toBe(false);
+    expect(buffer.capacity).toBe(1);
+  });
+
   it('keeps its capacity when cleared, so refilling costs no reallocation', () => {
     const buffer = new InstanceBuffer(2);
     fill(buffer, 64);
@@ -275,8 +307,13 @@ describe('the invariant: state is keyed by handle, never by slot', () => {
       } else {
         live.push(buffer.allocate().handle);
       }
+      // Folded in rather than tested apart, because a compaction is what takes
+      // the capacity off the doubling chain and every later halving has to stay
+      // integral from wherever it lands.
+      if (step % 37 === 0) buffer.compact();
       expect(buffer.count).toBe(live.length);
       expect(buffer.capacity).toBeGreaterThanOrEqual(live.length);
+      expect(Number.isInteger(buffer.capacity)).toBe(true);
       const seen = new Set<number>();
       for (const handle of live) {
         const slot = buffer.slotOf(handle);
