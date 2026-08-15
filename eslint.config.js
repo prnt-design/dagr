@@ -42,7 +42,7 @@ export default tseslint.config(
     // browser global used by mistake in a node script.
     files: ['bench/browser/**/*.mjs'],
     languageOptions: {
-      globals: { window: 'readonly' },
+      globals: { window: 'readonly', document: 'readonly' },
     },
   },
 );

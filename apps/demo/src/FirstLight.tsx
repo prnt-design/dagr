@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import { Camera2D, createHtmlOverlay, createRenderer, createRichNodes } from '@dagr/render';
-import type { RichNodeTier, Renderer, Vec2, ViewportSize, WorldBounds } from '@dagr/render';
+import type { Renderer, Vec2, ViewportSize, WorldBounds } from '@dagr/render';
 import {
   FIT_PADDING,
   INITIAL_ZOOM,
@@ -12,6 +12,9 @@ import {
   zoomLimits,
 } from './camera-input.js';
 import type { CampaignScene } from './campaign-scene.js';
+import { nodeColor } from './campaign-style.js';
+import { createCampaignTiers } from './campaign-tiers.js';
+import type { CampaignNode } from '@dagr/campaign';
 
 /**
  * `@dagr/render` on a canvas, with pan and zoom wired to a real
@@ -69,79 +72,20 @@ interface CameraReadout {
 }
 
 /**
- * How wide a node has to be on screen, in CSS pixels, before it gets a name.
+ * The campaign's tiers, from `campaign-tiers.ts`, which owns the card content,
+ * the per-kind declared sizes and both gates.
  *
- * Under this it gets nothing and the GPU has it to itself, which is what keeps
- * the far view readable as structure rather than as a wall of text. 24 is the
- * number M4.12 settled on: a label is about that tall, so a node narrower than
- * its own label's height cannot carry one legibly.
+ * This module passes the palette in rather than the tier module importing it:
+ * the instanced shapes and the card badges agree about what colour a scene is
+ * because they call ONE function, `nodeColor`, and it takes the node because
+ * `location` is one kind and four blues.
  *
- * There is no second tier here, deliberately. P6 owns the card tier and the
- * campaign's card content; a placeholder card now would be a tier set for P6 to
- * delete, and the overlay's gates have to be disjoint, so a placeholder would
- * also be a number P6 has to work around rather than choose.
+ * P4's single name tier is gone rather than kept beside these. Its gate opened
+ * at 24 with no upper bound, and `createRichNodes` throws a `RangeError` on
+ * gates that overlap, so a card tier could not be added next to it: the tier
+ * set is replaced, which is what P4's own comment said P6 would do.
  */
-const LABEL_MIN_SCREEN_WIDTH = 24;
-
-/** What a node's label shows: its name, and the colour of its kind. */
-interface LabelData {
-  readonly name: string;
-  readonly color: string;
-}
-
-/**
- * The element each tier's `create` built, keyed by the element it built it into.
- *
- * `update` is handed the root and nothing else, so the alternative is a
- * `querySelector` per field on every bind. That is not free: `update` runs on
- * every pop-in during a pan, not only when data changes. A `WeakMap` keyed by
- * the root holds nothing alive that the pool has dropped.
- */
-const labelRefs = new WeakMap<HTMLElement, HTMLElement>();
-
-/** An element with a class, which is most of what building a tier is. */
-function div(className: string, tag: 'div' | 'span' = 'div'): HTMLElement {
-  const element = document.createElement(tag);
-  element.className = className;
-  return element;
-}
-
-/**
- * The one tier the campaign gets in P4: a node's name, in its kind's colour.
- *
- * The OUTER element is what the overlay positions and sizes, so it is the
- * node's world box and scales with the zoom, and the INNER element
- * counter-scales through `--dagr-overlay-inv-zoom` so its text is the same
- * number of CSS pixels at every zoom. That split is the answer to a label
- * wanting two things at once: to be GATED by how big its node is on screen,
- * which needs a world box, and to be READ at a constant size, which a box
- * cannot do. The stylesheet does the second half, so nothing here reads the
- * camera.
- */
-const CAMPAIGN_TIERS: readonly RichNodeTier<LabelData>[] = [
-  {
-    name: 'label',
-    minScreenWidth: LABEL_MIN_SCREEN_WIDTH,
-    create: () => {
-      const box = div('stage__label');
-      const text = div('stage__label-text');
-      const name = div('stage__label-name', 'span');
-      text.appendChild(name);
-      box.appendChild(text);
-      labelRefs.set(box, name);
-      return box;
-    },
-    update: (element, node) => {
-      const name = labelRefs.get(element);
-      if (name === undefined) return;
-      name.textContent = node.data.name;
-      // The kind's own colour, as a CSS string out of the same table the GPU
-      // draws from. A second table would drift, and a name in one colour over a
-      // shape in another reads as a design choice rather than as a bug.
-      name.style.color = node.data.color;
-    },
-  },
-];
+const CAMPAIGN_TIERS = createCampaignTiers({ nodeColor });
 
 /**
  * The canvas's size in CSS pixels and the current device pixel ratio, or `null`
@@ -275,12 +219,15 @@ export function FirstLight({ scene }: { scene: CampaignScene | null }): JSX.Elem
     // by construction. `measureHtmlSizes` is for the other case, where a node's
     // size is a fact about its text. Three thousand offscreen mounts at startup
     // would buy nothing here and would cost a layout flush each.
-    const richNodes = createRichNodes<LabelData>({ overlay, tiers: CAMPAIGN_TIERS });
+    const richNodes = createRichNodes<CampaignNode>({ overlay, tiers: CAMPAIGN_TIERS });
     richNodes.setNodes(
+      // The record itself is the tier's data, which is what `cardRows` takes.
+      // No id-keyed lookup: `campaign-scene.ts` carries the record on the
+      // overlay node for exactly this, in the same pass that fixed its box.
       scene.overlayNodes.map((overlay) => ({
         id: overlay.id,
         bounds: overlay.bounds,
-        data: { name: overlay.node.name, color: overlay.color },
+        data: overlay.node,
       })),
     );
 

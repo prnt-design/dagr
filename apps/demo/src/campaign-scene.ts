@@ -3,7 +3,7 @@ import { createLayout } from '@dagr/layout';
 import type { LayoutPort } from '@dagr/layout';
 import type { Campaign, CampaignNode } from '@dagr/campaign';
 import type { SceneNode, Size, Vec2, WorldBounds } from '@dagr/render';
-import { SMALLEST_NODE_SIZE, glowReach, nodeColor, styleFor } from './campaign-style.js';
+import { SMALLEST_NODE_SIZE, glowReach, styleFor } from './campaign-style.js';
 import { assignTiles, gridPositions, isRouted, shelfPack } from './tiles.js';
 import type { Tile, TileKind } from './tiles.js';
 
@@ -53,17 +53,16 @@ export interface CampaignTilePlacement {
  * campaign's card rows and keeps the id and the bounds, which is why those two
  * are the part this record promises not to change.
  *
- * `color` is a CSS STRING rather than the `0xRRGGBB` the GPU takes, because it
- * is assigned to an element's `style` and a declaration whose value the CSS
- * parser rejects is dropped silently: the element keeps what it inherited and
- * nothing fails. Both come from the one table in `campaign-style.ts`.
+ * There is no `color` here, and there was. P4 carried the kind's colour as a
+ * CSS string for the tier to assign, and P6's tiers call `nodeColor` themselves
+ * instead, because the tier module takes the palette as a parameter rather than
+ * reading a value off its data. That left the field with no reader and 3,010
+ * eager palette calls per scene build, so it went with its last consumer.
  */
 export interface CampaignOverlayNode {
   readonly id: string;
   /** The node's box in WORLD space, y up. */
   readonly bounds: WorldBounds;
-  /** The kind's fill colour, as a CSS string. */
-  readonly color: string;
   /**
    * The campaign record itself, which is what a card tier reads: `cardRows`
    * takes one, and a title takes its `name`.
@@ -375,7 +374,6 @@ export async function buildCampaignScene(
       overlayNodes.push({
         id,
         bounds,
-        color: nodeColor(node),
         node,
       });
     }

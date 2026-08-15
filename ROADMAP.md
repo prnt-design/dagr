@@ -3851,7 +3851,7 @@ consumer. Sequencing against M3 is the plan's open question 1.
   instead of a named RangeError; the ceiling could flat-fill on the wide
   small rect; and three duplications (fit formula, wheel-detent literal,
   range validation) each now have a single authority.
-- [ ] **P6** (`apps/demo`) Campaign cards through `createRichNodes` with
+- [x] **P6** (`apps/demo`) Campaign cards through `createRichNodes` with
   per-kind declared sizes. P3 to P5 are M4.3 to M4.5 and live in M4.
   What P4 left it: `campaign-style.ts` holds the per-kind sizes and colours with
   `nodeColor(node)` giving the CSS string a badge needs, and
@@ -3860,6 +3860,85 @@ consumer. Sequencing against M3 is the plan's open question 1.
   screen width, so P6 owns the card gate and every threshold above it: the
   overlay rejects overlapping gates, so a placeholder card would have been a
   number to work around rather than choose.
+  What shipped: `campaign-tiers.ts`, a title tier (24 to 415 CSS pixels of
+  screen width) and a card tier above it, built on `cardRows` so all sixteen
+  kinds share one formatter. P4's single tier is REPLACED, not extended, and
+  its `stage__label*` and `stage__card*` rules retire with it; the tier's rules
+  live beside the tier in `campaign-cards.css`. `CampaignOverlayNode.color`
+  goes too: P6's tiers take the palette as a parameter and call `nodeColor`
+  themselves, which left that field with no reader and 3,010 eager palette
+  calls per scene build.
+  **The card gate is 460, and it is derived from BOTH dimensions.** Read as
+  width alone, the rule the ladder's 240 came from ("a card should not be wider
+  than the node it describes") is not enough: a card sits inside its node's
+  top-left corner, so a card TALLER than its node hangs over whatever is below
+  it, and at card zoom that is a neighbour the reader is also reading. So the
+  gate is `max(cardWidth, cardHeight * nodeAspect)` over every kind AND over
+  location's four subtypes, which are four node sizes under one kind. Quest
+  drives it at eight lines. Reachability is what makes that
+  affordable: the ceiling frames the smallest node, so the smallest node is
+  about 637 CSS pixels wide there, still clear of 460. Three tests hold it: the gate covers every
+  variant, it is the SMALLEST value that does (so it cannot drift upward and
+  delay every card silently), and the ceiling, derived through the demo's own
+  `zoomLimits` rather than a copied number, can still reach it.
+  **The size table is MEASURED, and the first two versions of it were wrong.**
+  Sizes are declared rather than measured at runtime, which is the overlay
+  design's rule for templated content. But what is declared is a LINE budget,
+  not a row count, and the numbers come from a browser. Version one counted
+  `cardRows` entries and assumed one rendered line each; a quest's objective is
+  76 characters, several lines in the value column. Version two computed lines
+  from character counts, which is wrong in kind rather than degree, because word
+  wrap breaks at word boundaries: it put `front` at six lines where the browser
+  draws seven, and the sampling check meant to catch that chose five other
+  cards. `bench/browser/card-heights.mjs` now renders EVERY card of three seeds,
+  8,946 of them, and reports the tallest per kind; the table is its output and
+  the harness is committed so the numbers can be disagreed with. Version three
+  was wrong too, in the harness rather than the table: it measured
+  `scrollHeight`, the PADDING box, which drops the card's two pixels of border
+  and is lenient in exactly the direction that lets a card overflow. Measuring
+  the border box then exposed the real defect, that the row grid carried a 2px
+  vertical gap a line-based height model has no term for, so every multi-row
+  card sat two pixels over its declared box. The gap is gone, and all sixteen
+  kinds now measure EQUAL to what they declare, with no slack anywhere.
+  Version four was wrong in the harness again, and this one is worth carrying
+  to any future browser measurement: a headless browser on a bare box has
+  almost no fonts, and resolves `ui-monospace`, `monospace` and even `serif`
+  to a 6.000px advance at 12px, about 20% narrower than any monospace a reader
+  actually has. Budgets taken there wrap later than reality: five kinds that
+  measured as fitting clipped in a real face, `quest_step` by two whole lines.
+  The harness now pins its probe to Liberation Mono, which is installed and
+  sits at the 0.6em the common faces cluster at, and ASSERTS the advance it
+  measured rather than trusting the font stack to resolve. That moved the gate
+  from 415 to 460. The card also
+  has a fixed height and clips its overflow, so a stale budget truncates a line
+  rather than occluding the node underneath.
+  One width for every kind, 320. Two widths were the first design, on the theory
+  that narrower cards let the gate open sooner. They do not: the gate is driven
+  by height against node aspect, and a narrower card wraps into more lines, so
+  narrowing raises the gate.
+  The palette is a PARAMETER, `nodeColor(node)`, not an import: the instanced
+  shapes and the cards agree because they call one function rather than holding
+  two copies, and the tier module stays testable without the demo's style
+  module. It takes the node because `location` is one kind and four blues; a
+  `(kind)` signature badged every room in its region's colour, which P4's review
+  and this session's found independently. The NAME carries the colour on both
+  tiers, because the name is the one element a reader sees on both sides of the
+  gate and it should not change appearance as they cross it.
+  A test asserts every kind's and every location subtype's colour survives a
+  `style.color` round trip, because the CSS parser DROPS a value it rejects and
+  leaves the element its inherited colour with nothing failing anywhere. Every
+  length the size table also states is written in the stylesheet as pixels, not
+  rem, so a reader whose browser default is not 16px cannot silently get cards
+  larger than the box the gate was derived from.
+  jsdom moves into `apps/demo`'s devDependencies: it was only in
+  `@dagr/render`'s, and pnpm is strict, so the demo could not resolve it.
+  DEFERRED, recorded rather than fixed: a node wider than the viewport (the
+  campaign node is about 7,000 CSS pixels across at the ceiling) has its card
+  anchored to a corner that is off screen, so panning into its middle shows a
+  blank fill where the reader zoomed in to read. The title tier has had the same
+  shape since M4.12. The fix is to clamp the placement against the viewport,
+  which belongs in the overlay's placement code in `@dagr/render` rather than in
+  a demo tier, and it wants its own task.
 - [ ] **P7** (`apps/demo`, `docs`) Deep links, hover highlight, committed
   screenshots, a docs page on the schema.
   The docs page landed early, on 2026-08-15, as its own increment

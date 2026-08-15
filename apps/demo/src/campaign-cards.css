@@ -1,0 +1,156 @@
+/*
+ * The campaign's overlay tiers.
+ *
+ * Two elements per node, and the split is the whole trick. `.campaign-node` is
+ * what `@dagr/render`'s overlay positions and sizes: it IS the node's world
+ * box, so it scales with the zoom and there is nothing to set here beyond
+ * where its content hangs. The inner element counter-scales through
+ * `--dagr-overlay-inv-zoom`, which the overlay publishes on its layer whenever
+ * the zoom changes, so text is the same number of CSS pixels at every zoom
+ * while the box under it grows by decades.
+ *
+ * THE INSET IS COMPOSED INTO THE TRANSFORM, AFTER THE SCALE. A margin or a
+ * padding offset on a counter-scaled element is still in WORLD units, because
+ * margin applies before the element's own transform, so `margin: 0.5rem` on a
+ * card at zoom 100 throws it 800 CSS pixels off its node. Everything that
+ * positions these elements is therefore a translate inside `transform`.
+ */
+
+/*
+ * Position, size and transform all come from the overlay, so there is nothing
+ * to set here. It draws nothing of its own: a node's visual is the instanced
+ * shape underneath it.
+ */
+.campaign-node {
+  position: absolute;
+}
+
+.campaign-title {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  /* Anchored at the box's top-left corner, so the counter-scale pins that
+     corner and the title grows away from it rather than drifting across the
+     node as the zoom changes. */
+  transform-origin: 0 100%;
+  transform: scale(var(--dagr-overlay-inv-zoom, 1));
+  max-width: 22ch;
+  overflow: hidden;
+  padding: 2px 6px;
+  border: 1px solid var(--rule);
+  border-bottom: none;
+  background: rgba(7, 8, 10, 0.82);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/*
+ * No colour here: the tier writes it per node from the palette, so a title and
+ * the shape under it are the one colour. A default here would win for a node
+ * whose update had not run yet and would be a second source of truth.
+ */
+.campaign-title-name {
+  font-weight: 500;
+}
+
+/*
+ * The card tier, which the same box gets once it is wide enough to hold one.
+ *
+ * INSIDE the box's top-left corner, where the title hangs above it. A card only
+ * shows once its node is wider than the card itself, and by then the box's top
+ * edge can be off screen with everything above it. Inside, the card is visible
+ * for as long as the corner it sits in is, and it covers part of a shape that
+ * is mostly one flat colour at that zoom.
+ */
+.campaign-card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  /* The translate rides AFTER the scale, so the 8px inset is 8 CSS pixels at
+     every zoom rather than 8 world units. See the file header. */
+  transform: scale(var(--dagr-overlay-inv-zoom, 1)) translate(8px, 8px);
+  box-sizing: border-box;
+  /* PIXELS, not rem, for every length the size table also states. The tier
+     writes this card's width and height from that table, and a reader whose
+     browser default is 20px would otherwise get a card 25% larger than the box
+     the gate was derived from, with nothing failing. Only lengths the
+     derivation does NOT read are free to be relative. */
+  padding: 8px 10px 9px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: rgba(7, 8, 10, 0.9);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  /* The declared box is what the gate was derived from, so the card may not
+     grow past it. Text beyond the budget is clipped rather than allowed to hang
+     over the node below: the line budget in `campaign-tiers.ts` is what keeps
+     the clip from biting, and this is what makes the box true when it does. */
+  overflow: hidden;
+}
+
+.campaign-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1ch;
+}
+
+/*
+ * The name takes the node's colour, exactly as the title tier's does.
+ *
+ * It is the one element present on BOTH sides of the gate, so it is the one
+ * that must not change appearance as a reader crosses it: a name that is its
+ * stratum's colour at 414 pixels and amber at 415 reads as the card being a
+ * different thing rather than the same node, closer.
+ */
+.campaign-card-name {
+  font-weight: 500;
+}
+
+/*
+ * The badge's colour is set per node by the tier, from the same palette the
+ * instanced nodes use, so a scene's badge and a scene's shape are the one
+ * colour. Everything except that colour is declared here.
+ */
+.campaign-card-badge {
+  flex: none;
+  color: var(--ink-dim);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.campaign-card-oneline {
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-dim);
+}
+
+.campaign-card-rows {
+  display: grid;
+  /* Sized by the longest key rather than a guessed column: "plot critical" is
+     thirteen characters and a fixed column ran its value into it. */
+  grid-template-columns: max-content 1fr;
+  /* NO vertical gap. The card's declared height is a whole number of text
+     lines, and a gap between rows is height the line model has no term for: it
+     put every multi-row card 2 pixels over its declared box, which is the
+     overflow the gate exists to prevent, arriving through the stylesheet
+     instead of through the text. Rows are separated by their key column's
+     dimmer ink instead. */
+  gap: 0 1.5ch;
+  margin: 0;
+}
+
+.campaign-card-rows dt {
+  color: var(--ink-dim);
+}
+
+.campaign-card-rows dd {
+  margin: 0;
+  color: var(--ink);
+}
