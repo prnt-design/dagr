@@ -3128,7 +3128,7 @@ of M3 would leave the second runner idle for a milestone.
   edges spanning many ranks, which is what M2.4b's dummy chains turn into the
   multi-point polylines this task has to tessellate without pinching.
   DONE, in two PRs, because the demo half waited on M4.4: the tessellation
-  core is PR #31 (`ribbon.ts`, `ribbon-nodes.ts`) and the scene is PR #34
+  core is PR #31 (`ribbon.ts`, `ribbon-nodes.ts`) and the scene is PR #35
   (`scene-edges.ts`, `campaign-edges.ts`, the `setEdges` seam). The committed
   frame is `assets/screenshots/m4.5-ribbons.png`, a near view at 770x599 and
   dpr 1 where the dash and the joins are visible; the fitted view is Dispatch
@@ -3253,7 +3253,7 @@ of M3 would leave the second runner idle for a milestone.
   flattening tolerance is a statement about zoom, since the geometry is baked:
   faceting stays under half a device pixel while
   `tolerance * pixelsPerWorldUnit <= 0.5`.
-  **THE SCENE HALF, PR #34.** Three groups, drawn in the order they are
+  **THE SCENE HALF, PR #35.** Three groups, drawn in the order they are
   declared, which is the only layering M4.3 leaves available: routed ribbons
   under cross-tile lines under the overlay kinds. `setEdges(groupId, edges)`
   rebuilds a group's buffers and `setEdgeStyle(groupId, style)` writes uniforms
