@@ -3860,6 +3860,8 @@ consumer. Sequencing against M3 is the plan's open question 1.
   screen width, so P6 owns the card gate and every threshold above it: the
   overlay rejects overlapping gates, so a placeholder card would have been a
   number to work around rather than choose.
+- [ ] **P7** (`apps/demo`, `docs`) Deep links, hover highlight, committed
+  screenshots, a docs page on the schema.
 - [x] **P8** (`render.yaml`) The demo on a public URL: a second static site,
   `dagr-demo`, building `apps/demo` from the repo root and publishing
   `apps/demo/dist`.
@@ -3871,14 +3873,14 @@ consumer. Sequencing against M3 is the plan's open question 1.
   ON RENDER'S OWN DOMAIN, with no `domains` block. A subdomain of prnt.design is
   a promise about permanence that a playground should not be making; the docs
   site is the published one and this is the working artifact.
-  PREVIEWS OFF, which is the one place it differs from the docs site. Every
-  increment in this repo is a pull request and this is the heavy bundle (three.js,
-  about 1.1 MB), so a preview per PR is a real cost for an app whose reviewers
-  read a diff. One line to turn on.
-  `generation: 'off'` is QUOTED, because YAML 1.1 reads a bare `off` as the
-  boolean false and Render's spec wants the string. A blueprint that hands the
-  API `false` fails validation at the dashboard, which is the one step in that
-  file nobody sees until they go looking.
+  PREVIEWS OFF BY OMISSION, which is the one place it differs from the docs
+  site, and the mechanism is worth stating because the obvious spelling is
+  wrong: the PER-SERVICE `previews.generation` takes only `manual` or
+  `automatic`, and `off` is a value the BLUEPRINT-ROOT field takes. Omitting the
+  block is how a service disables previews, and writing `off` would be a value
+  the field does not have, which fails validation for the WHOLE file and would
+  take `dagr-docs` down with it. Off rather than on because every increment here
+  is a pull request and this is the heavy bundle (three.js, about 1.1 MB).
   VERIFIED RATHER THAN ASSUMED, which the M4.4 review made the habit: every
   `dist` in the workspace was deleted, Render's exact `buildCommand` was run from
   the repo root, and `apps/demo/dist` was served by a plain static file server
@@ -3886,10 +3888,25 @@ consumer. Sequencing against M3 is the plan's open question 1.
   The `buildFilter` lists every package the demo imports, because it imports
   their SOURCES through the alias in `vite.config.ts`: a change to
   `@dagr/render` with no change to the demo does change what a visitor runs.
-  A Render blueprint change needs a one-time confirmation in the dashboard
-  before a new service is created, which is the maintainer's to give.
-- [ ] **P7** (`apps/demo`, `docs`) Deep links, hover highlight, committed
-  screenshots, a docs page on the schema.
+  WHAT A BLUEPRINT SYNC OVERWRITES IS THE RISK IN THIS CHANGE, and it is not the
+  new service. Render auto-syncs a blueprint on a push, and its docs say changes
+  made in the dashboard "are overwritten the next time you sync your Blueprint",
+  with `buildFilter` specifically REPLACING its previous value. So merging can
+  reconfigure the live `dagr-docs` service unattended, and anything set on it in
+  the dashboard rather than in this file is reverted. An earlier draft of this
+  entry asserted a one-time confirmation gate instead, which is not in the docs:
+  a review caught it. Creating a new service does prompt, but that prompt is not
+  what protects the existing one. The check before merging is therefore the
+  maintainer's: does `dagr-docs` carry any configuration this file does not
+  (an extra domain, a redirect or rewrite, a manually added env var)? It was
+  created from this blueprint, so the expected answer is no.
+  The `headers` glob is `/assets/*` and NOT the docs site's `/assets/**/*`,
+  because Vite's output is one level deep where Docusaurus nests. Render's `*`
+  does not cross a slash and `/**/*` wants at least two, so the docs pattern
+  would have matched NOTHING here and the 1.1 MB bundle would have lost its
+  immutable caching with nothing failing to say so. Two reviewers found it
+  independently.
+
   The docs page landed early, on 2026-08-15, as its own increment
   (`docs/docs/campaign.md`): it depends on P1 alone, and the rest of P7 depends
   on P5 and P6, so holding it back would have parked a finished page behind two

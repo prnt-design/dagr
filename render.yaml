@@ -120,18 +120,18 @@ services:
     # subdomain of prnt.design is a promise about permanence that a playground
     # should not be making.
 
-    # Previews OFF, which is the one place this service deliberately differs
-    # from the docs site. Every increment in this repo is a pull request, and
-    # this bundle is the heavy one (three.js, about 1.1 MB), so a preview per PR
-    # is a real cost for an app whose reviewers are reading a diff rather than
-    # clicking a link. Turning it on is one line if that stops being true.
+    # NO `previews` BLOCK, which is how a service turns previews off: the spec
+    # says omitting the field disables pull request previews for the service,
+    # and the per-service field takes only `manual` or `automatic` (`off` is a
+    # value the BLUEPRINT-ROOT field takes, not this one). Writing `off` here
+    # would be a value the field does not have, and a rejected value fails
+    # validation for the whole file, which would take `dagr-docs` with it.
     #
-    # QUOTED, because YAML 1.1 reads a bare `off` as the boolean false and
-    # Render's spec wants the string. A parser that hands the API `false` where
-    # it expects `"off"` is a blueprint that fails validation at the dashboard,
-    # which is the one step in this file nobody sees until they go looking.
-    previews:
-      generation: 'off'
+    # Off rather than on, which is the one place this service deliberately
+    # differs from the docs site. Every increment in this repo is a pull request
+    # and this is the heavy bundle (three.js, about 1.1 MB), so a preview per PR
+    # is a real cost for an app whose reviewers read a diff rather than click a
+    # link. Adding `previews: {generation: automatic}` is how that changes.
 
     envVars:
       # Match CI (.github/workflows/ci.yml) so a green build there means a green
@@ -141,10 +141,17 @@ services:
 
     headers:
       # Vite fingerprints everything under /assets/, including the layout
-      # worker's own chunk, so those are safe to cache forever. `**` because a
-      # single `*` does not match across a slash. HTML is left on Render's
-      # default revalidation so a deploy never serves a stale page.
-      - path: /assets/**/*
+      # worker's own chunk, so those are safe to cache forever. HTML is left on
+      # Render's default revalidation so a deploy never serves a stale page.
+      #
+      # `/assets/*` and NOT the docs site's `/assets/**/*`, because Vite's output
+      # is ONE level deep (`assets/index-*.js`, `assets/layout-worker-*.js`)
+      # where Docusaurus nests `/assets/js/` and `/assets/files/`. A `**` that
+      # requires an intervening segment would match nothing here, and the whole
+      # 1.1 MB bundle would fall through to the default with nothing failing to
+      # say so: a cache header that silently does not apply is invisible until
+      # somebody measures a repeat visit.
+      - path: /assets/*
         name: Cache-Control
         value: public, max-age=31536000, immutable
       - path: /*

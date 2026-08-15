@@ -9,10 +9,12 @@ pnpm --filter demo dev     # http://localhost:5173
 pnpm --filter demo build   # apps/demo/dist
 ```
 
-Render deploys `main` to `dagr-demo` on its own `onrender.com` subdomain when CI
-is green, from the `render.yaml` at the repo root. The docs site is the
-published one at dagr.prnt.design; this is a working artifact, and a subdomain
-of prnt.design is a promise about permanence a playground should not make.
+Once the service exists, `main` deploys to `dagr-demo` on its own
+`onrender.com` subdomain when CI is green, from the `render.yaml` at the repo
+root. Creating a service from a blueprint prompts in Render's dashboard, so
+until a maintainer answers that there is no URL and nothing here links to one. The docs site is the published one at
+dagr.prnt.design; this is a working artifact, and a subdomain of prnt.design is
+a promise about permanence a playground should not make.
 
 ## Adding a workspace dependency is TWO edits
 
@@ -43,6 +45,11 @@ has to be cancellable.
 | `FirstLight.tsx` | the canvas, the camera, the input, the overlay |
 | `camera-input.ts` | the arithmetic between a DOM event and a camera call |
 
+`main.tsx` mounts the app in StrictMode and `styles.css` holds every rule,
+including the overlay's two-element split: the outer element is the node's world
+box and scales with the zoom, and the inner one counter-scales through
+`--dagr-overlay-inv-zoom` so its text is a constant number of CSS pixels.
+
 The tiling is the plan's decision and `tiles.ts` carries the argument: one
 Sugiyama pass over the whole campaign ranks 750 rooms into a couple of layers
 and draws a ribbon 50 times wider than it is tall.
@@ -65,13 +72,20 @@ wrong way in between, which reads as a routing bug.
 
 ## What a test can reach
 
-`tiles.ts` and `campaign-style.ts` are pure, so `test/tiles.test.ts` decides
-every claim they make, against the real dataset across three seeds and three
-scales. `test/campaign-scene.test.ts` runs the whole build with no worker, which
-`@dagr/layout` supports by falling back to the calling thread, so the packing,
-the offsets and the flip are all checked without a browser.
+`tiles.ts`, `campaign-style.ts` and `camera-input.ts` are pure, and all three
+are covered: `test/tiles.test.ts` decides every claim the first two make against
+the real dataset across three seeds and three scales, and
+`test/camera-input.test.ts` covers the wheel arithmetic, the hash parsing, the
+key map and the derived zoom range. `test/campaign-scene.test.ts` runs the whole
+build with no worker, which `@dagr/layout` supports by falling back to the
+calling thread, so the packing, the offsets and the flip are all checked without
+a browser.
 
-`FirstLight.tsx` has no test file, and that is the same decision `@dagr/render`
-documents for its own renderer rather than a gap: it needs a GPU adapter, a
-laid-out canvas, a worker and live input events, and a jsdom suite could only
-assert that a mock was called.
+`camera-input.ts` exists BECAUSE of that coverage: it is what was extracted out
+of `FirstLight.tsx` so a suite could reach it without a canvas.
+
+What is left in `FirstLight.tsx` has no test file, and that is the same decision
+`@dagr/render` documents for its own renderer rather than a gap: it needs a GPU
+adapter, a laid-out canvas, a worker and live input events, and a jsdom suite
+could only assert that a mock was called. The extraction is what makes that
+remainder small enough to leave to a screenshot.
