@@ -13,7 +13,7 @@ import * as api from '../src/index.js';
  * package unusable in any server-rendered application.
  */
 describe('@dagr/render', () => {
-  it('exports exactly the runtime surface, through the campaign demo P3', () => {
+  it('exports exactly the runtime surface, through the campaign demo P5', () => {
     // Types are erased, so only the runtime exports can be checked here. The
     // type surface is exercised by the other files in the suite importing from
     // it. `fitZoom` joined in P2: the pure fit arithmetic behind
@@ -21,7 +21,11 @@ describe('@dagr/render', () => {
     // `UnknownInstanceHandleError` and `InstancedShapesDisposedError` joined in
     // P3 (M4.3), and they are the only things the instanced path puts on the
     // surface: an error arrives in somebody else's `catch` whether or not the
-    // module that throws it was exported.
+    // module that throws it was exported. `advanceDashFlow` and `ribbonWidthAt`
+    // joined in P5, and they are the two things a DRAW LOOP needs from the
+    // ribbon arithmetic: where the dash has flowed to, and the width and alpha
+    // the zoom implies. The tessellation itself stays internal, because
+    // `setEdges` takes points rather than geometry.
     expect(Object.keys(api).sort()).toEqual([
       'CENTRE_ANCHOR',
       'Camera2D',
@@ -33,11 +37,13 @@ describe('@dagr/render', () => {
       'OverlayParentError',
       'RendererDisposedError',
       'UnknownInstanceHandleError',
+      'advanceDashFlow',
       'createHtmlOverlay',
       'createRenderer',
       'createRichNodes',
       'fitZoom',
       'measureHtmlSizes',
+      'ribbonWidthAt',
     ]);
   });
 
@@ -65,13 +71,11 @@ describe('@dagr/render', () => {
     expect('SceneNodes' in api).toBe(false);
   });
 
-  it('does not export the ribbon arithmetic, which M4.5 landed with no consumer', () => {
-    // M4.5's first half is the tessellation core and the dash coverage, and it
-    // adds nothing to this list on purpose. The demo half of the task is what
-    // will need a seam, and it waits on M4.4; exporting `tessellateRibbons`
-    // now would be guessing at the shape of that seam with nothing to check
-    // the guess against, which is the argument M4.2 made about the shape scene
-    // and this project has since made twice more.
+  it('does not export the ribbon tessellation, only what a frame needs', () => {
+    // The seam M4.5's demo half named is `setEdges`, which takes POINTS. A
+    // caller never holds a `RibbonGeometry`, so the tessellator, the coverage
+    // and the arith interface stay internal and only the two per-frame helpers
+    // are on the surface.
     //
     // `ribbon-nodes.ts` stays internal for the stronger reason `sdf-nodes.ts`
     // does: a TSL node is a three.js type, and `types.ts` keeps every one of
@@ -79,6 +83,8 @@ describe('@dagr/render', () => {
     expect('tessellateRibbons' in api).toBe(false);
     expect('ribbonCoverage' in api).toBe(false);
     expect('ribbonWorldPosition' in api).toBe(false);
+    expect('numberDashArith' in api).toBe(false);
+    expect('SceneEdges' in api).toBe(false);
   });
 
   it('does not export the renderer implementation class', () => {

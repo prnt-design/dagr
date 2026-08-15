@@ -2,6 +2,8 @@ import { Color, OrthographicCamera, Scene, WebGPURenderer } from 'three/webgpu';
 import { Camera2D } from './camera.js';
 import { RendererDisposedError } from './errors.js';
 import type { SceneStyle } from './instance-attributes.js';
+import { SceneEdges } from './scene-edges.js';
+import type { EdgeFrameStyle, SceneEdge, SceneEdgeGroup } from './scene-edges.js';
 import { SceneNodes } from './scene-nodes.js';
 import type { SceneNode } from './scene-nodes.js';
 import type { GpuResource, Renderer, RendererOptions, Size, ViewportSize } from './types.js';
@@ -260,6 +262,7 @@ export class WebGPUSceneRenderer implements Renderer {
   readonly #threeCamera: ProjectionTarget;
   readonly #resources: readonly GpuResource[];
   readonly #nodes: SceneNodes;
+  readonly #edges: SceneEdges;
   #disposed = false;
 
   /**
@@ -283,6 +286,7 @@ export class WebGPUSceneRenderer implements Renderer {
     scene: OpaqueThreeObject,
     threeCamera: ProjectionTarget,
     nodes: SceneNodes,
+    edges: SceneEdges,
     resources: readonly GpuResource[],
   ) {
     this.camera = camera;
@@ -290,7 +294,20 @@ export class WebGPUSceneRenderer implements Renderer {
     this.#scene = scene;
     this.#threeCamera = threeCamera;
     this.#nodes = nodes;
+    this.#edges = edges;
     this.#resources = [...resources];
+  }
+
+  /** See {@link Renderer.setEdges}. */
+  setEdges(groupId: string, edges: readonly SceneEdge[]): void {
+    this.#assertLive('setEdges');
+    this.#edges.setEdges(groupId, edges);
+  }
+
+  /** See {@link Renderer.setEdgeStyle}. */
+  setEdgeStyle(groupId: string, style: EdgeFrameStyle): void {
+    this.#assertLive('setEdgeStyle');
+    this.#edges.setStyle(groupId, style);
   }
 
   /** See {@link Renderer.setNodes}. */
@@ -489,6 +506,7 @@ export function buildSceneRenderer(
   clearColor: number,
   sceneStyle?: SceneStyle,
   nodes?: readonly SceneNode[],
+  edgeGroups?: readonly SceneEdgeGroup[],
 ): Renderer {
   try {
     const scene = new Scene();
@@ -498,12 +516,20 @@ export function buildSceneRenderer(
     // meshes to add and the resource to give back: an `InstancedShapes` replaces
     // its own geometry when its buffer grows, so a geometry captured here would
     // be the stale one by the time anything disposed it.
+    // EDGES FIRST, and the order is the whole of the layering: three draws a
+    // scene's children in the order they were added for objects that share a
+    // depth, and every mesh in this package is transparent with `depthWrite`
+    // off, so ribbons added before nodes are drawn under them.
+    const sceneEdges = new SceneEdges(edgeGroups ?? []);
+    for (const mesh of sceneEdges.meshes) {
+      scene.add(mesh);
+    }
     const sceneNodes = new SceneNodes(sceneStyle ?? DEFAULT_SCENE_STYLE, countByShape(nodes));
     for (const mesh of sceneNodes.meshes) {
       scene.add(mesh);
     }
     if (nodes !== undefined) sceneNodes.setNodes(nodes);
-    const resources: readonly GpuResource[] = [sceneNodes];
+    const resources: readonly GpuResource[] = [sceneEdges, sceneNodes];
 
     const threeCamera = new OrthographicCamera(0, 0, 0, 0, CAMERA_NEAR, CAMERA_FAR);
     const instance = new WebGPUSceneRenderer(
@@ -512,6 +538,7 @@ export function buildSceneRenderer(
       scene,
       threeCamera,
       sceneNodes,
+      sceneEdges,
       resources,
     );
 
@@ -608,5 +635,12 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
   // `catch` for that reason: see {@link buildSceneRenderer}. What is drawn now
   // comes from `setNodes`, which is M4.4's whole point: the package stopped
   // shipping a hard-coded scene the day it could take a real one.
-  return buildSceneRenderer(camera, renderer, clearColor, options.sceneStyle, options.nodes);
+  return buildSceneRenderer(
+    camera,
+    renderer,
+    clearColor,
+    options.sceneStyle,
+    options.nodes,
+    options.edgeGroups,
+  );
 }

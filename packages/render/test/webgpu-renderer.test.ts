@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Camera2D } from '../src/camera.js';
 import { RendererDisposedError } from '../src/errors.js';
 import type { SceneStyle } from '../src/instance-attributes.js';
+import { SceneEdges } from '../src/scene-edges.js';
 import { SceneNodes } from '../src/scene-nodes.js';
 import type { SceneNode } from '../src/scene-nodes.js';
 import {
@@ -159,7 +160,7 @@ function harness(
   const threeCamera = new StubProjectionTarget();
   const resources = Array.from({ length: resourceCount }, () => new StubResource());
   const nodes = new SceneNodes(sceneStyle);
-  const renderer = new WebGPUSceneRenderer(camera, sink, {}, threeCamera, nodes, [
+  const renderer = new WebGPUSceneRenderer(camera, sink, {}, threeCamera, nodes, new SceneEdges([]), [
     ...resources,
     nodes,
   ]);
@@ -364,6 +365,7 @@ describe('WebGPUSceneRenderer disposal', () => {
       {},
       new StubProjectionTarget(),
       new SceneNodes(sceneStyle),
+      new SceneEdges([]),
       resources,
     ).dispose();
     expect(disposedBeforeSink).toBe(resources.length);
@@ -382,6 +384,7 @@ describe('WebGPUSceneRenderer disposal', () => {
       {},
       new StubProjectionTarget(),
       new SceneNodes(sceneStyle),
+      new SceneEdges([]),
       resources,
     );
     const late = new StubResource();
