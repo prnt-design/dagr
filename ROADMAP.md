@@ -4380,6 +4380,77 @@ and are independent of D1 and of each other.
   needs M4.8. Costs the one free vertex-buffer slot unless packed; the M4.10
   record should say so.
 
+- [x] **D2** (`apps/demo`) The campaign's own spacing, and edges coloured by
+  where they come from. From `plans/2026-08-15-demo-into-docs.md`, which is the
+  maintainer's second direction of 2026-08-15: more spacing between nodes, edges
+  colour coded to see where they are coming from, and an edge highlight (D3).
+  SPACING IS MEASURED, NOT PICKED, and `CAMPAIGN_SPACING` in `tiles.ts` carries
+  the table: the whole scene was built at four candidates and each was read at
+  both ends of the zoom range on the demo's own 1102 by 598 stage. 120 and 160
+  against the package defaults of 50 and 50. What the fitted view actually buys
+  is the gap AGAINST THE NODE, from 0.89 of a room's width to 2.1, because the
+  zoom floor is derived from the scene extent (P2) and a scene that grows is
+  drawn smaller, so the gap in PIXELS only moves from 2.57 to 3.09 and is within
+  3% of its plateau by 100. What keeps improving past that is the edge ink at the
+  far view, halved from 25.4% of the viewport to 12.6%, because centreline grows
+  linearly with the separations while the floor falls with them and coverage goes
+  as its square. THE COST IS NODE SIZE AT THE FITTED VIEW: a room goes from 2.88
+  CSS pixels wide to 1.44, and the zoom range widens from 374x to 748x. Both are
+  the price of a scene twice as wide, and both are why the tiles are tiles: a
+  reader reaches detail by framing one, not by zooming from orbit. Ranks are
+  separated a third more than nodes because the rank gap is the one with the
+  routed edges in it. Every other gap is DERIVED from the node separation (the
+  tile gutter at four times it, a grid tile's cells at exactly it), so raising
+  one carries the rest and no ratio can drift.
+  EDGES ARE INKED FROM THEIR SOURCE NODE, not by role: `colorOf(edge)` is the
+  source's own fill mixed a quarter of the way to the ground, so a ribbon out of
+  a quest is quest green and a reader traces provenance by hue across a tile
+  whose labels are not showing yet. The mix is calibrated against the ink it
+  replaces rather than chosen: the old routed ink sat at 0.76 to 0.86 per channel
+  of the sky blue it came from once the ground is subtracted. THE ROLE SPLIT MOVES
+  TO THE DASH, which is the part that would be a regression if it were dropped:
+  colour used to carry routed against overlay across all three groups, so the
+  cross-tile group is now dashed too, with the routed group's own pattern and
+  speed. A reader who learned "dashed is hierarchy" inside a tile is owed the
+  same reading across a tile boundary, and two dash shapes would read as three
+  kinds of edge where there are two.
+  THE SEAM HELD: `campaignEdges` already took a colour function and the `[edges]`
+  effect was already keyed on the prop, both put there by P5 and P7 for exactly
+  this, so nothing in `@dagr/render` changed except two measured figures in
+  `ribbon.ts`'s own record that this made stale (the campaign's centreline and
+  its fitted zoom). The conclusion in that record did not move, and the reason
+  is structural: coverage at a fixed pixel width is centreline times the floor,
+  and the spacing doubles the first while halving the second, so on one stage
+  42.0M at 0.0257 covers 164% of the viewport at one pixel where 21.1M at 0.0514
+  covered 165%. A first draft of this paragraph compared those two against the
+  record's own 529% and 176%, which were measured on M4.5's 1003 by 597 canvas
+  and are not the same comparison; the review that caught it re-derived the
+  product and landed 6% off, which is what a measured record is for.
+  P7's FIVE FRAMES ARE NOW A RECORD RATHER THAN A REPRODUCIBLE SET, which is
+  worth saying because the capture script's own header claims every frame is
+  regenerable. Their `expect` gates are written against the pre-D2 drawing, and
+  the one at `#zoom=1.4` wants twelve titles where the new spacing puts fewer
+  nodes on a screen, so re-running that set now stops at its own gate. That is
+  the convention `assets/screenshots/` already had (`m4.2` is a shape ladder the
+  demo no longer contains at all): a prefix is one task's drawing, and a task
+  that wants today's frames adds a set, which is what D2 did.
+  THE PAIR WAS RETAKEN AFTER D1 LANDED, and the reason is the whole point of a
+  before and after: the first pair took its before half from the pre-move demo,
+  where the fitted frame came out byte identical to `p7-campaign-fit.png`, and
+  D1's move changed the rendering enough that it no longer does. A pair with two
+  changes in it argues for neither, so both halves are now captured on one tree
+  lineage: `origin/main` at the move for the before, the same tree with D2 on top
+  for the after.
+  BEFORE AND AFTER ARE COMMITTED, `assets/screenshots/d2-before-*.png` against
+  `d2-after-*.png`, taken through the same shutter as P7's: the same viewport,
+  the same font pin, the same `data-renderer-drawn` gate, and both anchored on
+  `#node=` rather than a zoom, because the scene grows and two frames of two
+  different places are not a comparison. `capture.mjs` grew a frame SET and a
+  variant label for it, and P7's five frames keep their names and their paths.
+  The script is one file with two purposes now: its FRAME LIST is P7's and the
+  `d2` set is D2's, so somebody running it with no argument hits P7's gates
+  first. The header says which is which.
+
 ## Tracked, not promised
 
 Web-component wrapper, 3D camera experiment, Remotion tutorials, npm publish

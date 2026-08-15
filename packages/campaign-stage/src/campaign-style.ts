@@ -301,10 +301,96 @@ export function styleFor(kind: NodeKind, locationSubtype?: string): KindStyle {
  * Six hex digits, zero padded, which every CSS parser accepts.
  */
 export function nodeColor(node: CampaignNode): string {
-  return cssHex(
-    styleFor(node.data.kind, node.data.kind === 'location' ? node.data.subtype : undefined)
-      .fillColor,
-  );
+  return cssHex(nodeFill(node));
+}
+
+/**
+ * A node's fill as the `0xRRGGBB` the GPU takes, which is {@link nodeColor}'s
+ * number before it becomes a string.
+ *
+ * Extracted when D2 gave the edges a second consumer of the same value: an edge
+ * is drawn in its SOURCE node's colour, and `campaign-edges.ts` hands a number
+ * to `SceneEdge.color`. Going through `nodeColor` and parsing the hex back would
+ * be a round trip through a string for no reason, and writing the lookup out a
+ * second time is the drift this module exists to prevent.
+ */
+export function nodeFill(node: CampaignNode): number {
+  return styleFor(
+    node.data.kind,
+    node.data.kind === 'location' ? node.data.subtype : undefined,
+  ).fillColor;
+}
+
+/**
+ * The near-black the whole scene is drawn on, from M4.1, and what an edge ink is
+ * mixed towards.
+ *
+ * Here rather than in the stylesheet that also paints it, because this is the
+ * one use that is ARITHMETIC: mixing towards the ground is how an ink is
+ * derived, and a CSS variable is not readable from a colour function without a
+ * computed style. The two have to agree, and if the stage's background ever
+ * moves, an ink mixed towards the old one reads as a halo rather than as a dim
+ * line.
+ */
+export const GROUND_COLOR = 0x0b0d10;
+
+/**
+ * How much of a node's own colour an edge leaving it keeps: the rest is the
+ * ground.
+ *
+ * **An edge is drawn a step darker than the box it leaves**, which is the
+ * constraint the two role inks met by being written down dim and which sixteen
+ * derived inks have to meet by construction. An edge is the relation between two
+ * things a reader is looking AT, so the boxes stay the figure and the lines stay
+ * the structure under them.
+ *
+ * 0.75, calibrated against the ink it replaces rather than chosen: the old
+ * routed ink `0x6ea8c7` sits at 0.76, 0.82 and 0.86 of the three channels of the
+ * sky blue `0x8ecae6` it was derived from, once the ground is subtracted. So a
+ * step of about a quarter towards the ground is the step this drawing already
+ * looked right at, and applying it to each kind's own fill carries every family
+ * down by the same ratio rather than by sixteen numbers nobody could re-derive.
+ *
+ * **What it costs is at the dark end of the palette**, and the cost is worth
+ * stating: a room's fill is `0x1c6076` and its ink is `0x184b5d`, which is a line
+ * a reader sees at reading zoom and not one they pick out at the fitted view.
+ * That is the right order rather than a defect: at the fitted view the ribbon
+ * alpha ramp has already taken every edge to about 0.15, so no edge is picked
+ * out there by design.
+ *
+ * **"Under" is about the ink's VALUE and not about each of its channels**, which
+ * a review corrected here after the first version of this paragraph claimed the
+ * stronger thing. A mix towards the ground moves a channel TOWARDS the ground's
+ * own, so a channel already darker than it rises: the amber `0xffb703` has 3 of
+ * blue against the ground's 16 and inks to 6. The ink is still a third less
+ * bright (a relative luminance of 143 against 185) and the visible effect is
+ * that the warm families lose a little saturation as they dim, which is the same
+ * drift towards the cold ground this function is spelled to accept. The test
+ * samples the amber and the orange for exactly this reason.
+ */
+export const EDGE_INK_MIX = 0.75;
+
+/**
+ * A node fill as the ink an edge leaving that node is drawn in: the fill mixed
+ * towards {@link GROUND_COLOR} by {@link EDGE_INK_MIX}.
+ *
+ * **Mixed per channel in sRGB, deliberately, and it is worth saying which space
+ * because the alternative is defensible.** A perceptual mix would hold each
+ * family's hue more exactly at low values; this one drags saturated colours
+ * slightly towards the ground's blue as it darkens them. That is the cheaper
+ * arithmetic and, here, the more useful drift: the ground is a cold near-black,
+ * so every ink leans the same way and the FAMILY separations, which is what a
+ * reader is tracing, survive. `linearFromHex` in `@dagr/render` converts to
+ * linear on the way to the GPU, so this operates on the same numbers the palette
+ * is written in and nothing here is a second colour space.
+ */
+export function edgeInk(fill: number): number {
+  const mix = (shift: number): number => {
+    const from = (GROUND_COLOR >> shift) & 0xff;
+    const to = (fill >> shift) & 0xff;
+    return Math.round(from + (to - from) * EDGE_INK_MIX) << shift;
+  };
+  return mix(16) | mix(8) | mix(0);
 }
 
 /** `0xRRGGBB` as `#rrggbb`, zero padded so a dark colour is still six digits. */

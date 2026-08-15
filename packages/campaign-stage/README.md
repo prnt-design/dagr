@@ -42,9 +42,9 @@ route gives it the viewport under the navbar.
 | File | What it owns |
 | --- | --- |
 | `campaign-style.ts` | one table: the shape, size and colours of each node kind |
-| `tiles.ts` | cutting the campaign into tiles, and packing them |
+| `tiles.ts` | cutting the campaign into tiles, packing them, and every gap in the drawing |
 | `campaign-scene.ts` | the layout runs, the packing, and the y flip |
-| `campaign-edges.ts` | the three edge groups, the bows, and the colour function |
+| `campaign-edges.ts` | the three edge groups, the bows, and the ink an edge is drawn in |
 | `campaign-tiers.ts` | the overlay's title and card tiers, and both gates |
 | `use-campaign-scene.ts` | the campaign, the worker's lifetime, and the scene |
 | `FirstLight.tsx` | the canvas, the camera, the input, the overlay |
@@ -55,6 +55,29 @@ route gives it the viewport under the navbar.
 write prose about the scene calls the hook itself and passes the pieces down,
 which is what `apps/demo` does for its facts panel; calling the hook twice on
 one page would lay the campaign out twice.
+
+## How to read the drawing
+
+A node's colour is its STRATUM: amber is the narrative spine, blue the
+geography, violet the people, green the quests, red the pressure clocks, grey
+the reference material. Within a family the deeper kinds are darker, so a region
+reads as a heading over its rooms.
+
+An edge's colour is its SOURCE node's, a step darker, so a line says where it
+comes from: a ribbon out of a quest is quest green wherever it lands. An edge's
+DASH is its role, which is the split `@dagr/campaign`'s `EDGE_ROLES` makes:
+dashed for the hierarchy and flow kinds a layout routes, solid for the dense
+cyclic kinds it never sees, and the dash flows source to target, which is the
+arrowhead this renderer does not draw. Colour cannot carry both facts, because
+sixteen kinds times two roles is thirty-two inks nobody can tell apart.
+
+The overlay kinds fade in over 1.5 to 4 CSS pixels per world unit, so the social
+and clue webs are absent while a reader is looking at the shape of the campaign
+and there once they are asking about one node's neighbourhood.
+
+Spacing is the campaign's own rather than `@dagr/layout`'s default, and
+`CAMPAIGN_SPACING` in `tiles.ts` carries the measurement that chose it,
+including what the fitted view pays for it.
 
 ## The colour tokens are on `.stage`
 

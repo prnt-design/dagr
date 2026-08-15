@@ -27,64 +27,177 @@
  * python3 -m http.server 8734 --directory apps/demo/dist
  * npm --prefix apps/demo/scripts install --no-save playwright
  * npx --prefix apps/demo/scripts playwright install chromium
- * node apps/demo/scripts/capture.mjs http://localhost:8734
+ * node apps/demo/scripts/capture.mjs http://localhost:8734 p7
  * ```
  *
  * `playwright` rather than `playwright-core` because core downloads no browser,
  * and `CHROMIUM_PATH` overrides the executable for a machine that already has
  * one. An earlier version pinned this box's own chromium build number, which
  * made the four lines above false everywhere else.
+ *
+ * **A SET and an optional VARIANT**, which is what D2 added and why. A change to
+ * the drawing is argued for with a pair of frames taken from the same hash
+ * either side of it, and a pair is only evidence if the two frames came through
+ * the same shutter: the same viewport, the same font pin, the same gate. So the
+ * frames are grouped into named sets and a run takes one set plus a label:
+ *
+ * ```
+ * node apps/demo/scripts/capture.mjs http://localhost:8734 d2 before
+ * node apps/demo/scripts/capture.mjs http://localhost:8734 d2 after
+ * ```
+ *
+ * writes `d2-before-fit.png` and `d2-after-fit.png` beside each other. Without a
+ * variant the names are the set's own, which is what keeps P7's five frames at
+ * the paths they were committed at.
+ *
+ * **A SET IS A RECORD OF ONE TASK'S DRAWING, and that is why an old set can stop
+ * passing.** `assets/screenshots/` keeps a prefix per task (`m4.2` is a shape
+ * ladder that no longer exists in the demo at all), and a set's `expect` gates
+ * are written against the drawing of the day. D2's spacing changed how many
+ * nodes a given zoom puts on screen, so the `p7` set's floor of twelve titles at
+ * `#zoom=1.4` no longer holds against the current demo: re-running that set now
+ * captures the same hashes of a different drawing and stops at that gate. That
+ * is the gate doing its job, not a broken script. A task that wants frames of
+ * what the demo draws TODAY adds a set of its own, as D2 did, and leaves the
+ * older ones as the record they are.
  */
 
 import { chromium } from 'playwright';
 import { mkdir, writeFile } from 'fs/promises';
 
 const base = process.argv[2] ?? 'http://localhost:8734';
+const setName = process.argv[3] ?? 'p7';
+const variant = process.argv[4] ?? '';
 const outDir = new URL('../../../assets/screenshots/', import.meta.url).pathname;
+/** `p7-` or `d2-before-`: what every file this run writes is named after. */
+const prefix = variant === '' ? `${setName}-` : `${setName}-${variant}-`;
 
 /**
  * The frames, each named by what it shows and reproducible from its hash.
  *
- * `wait` is what has to be true before the shutter opens, expressed against the
- * page rather than as a sleep: a fixed delay is a race that passes on a fast
+ * `expect` is what has to be true before the shutter opens, expressed against
+ * the page rather than as a sleep: a fixed delay is a race that passes on a fast
  * box and commits a half-drawn frame on a slow one.
  */
-const FRAMES = [
-  {
-    name: 'p7-campaign-fit',
-    hash: '',
-    caption:
-      'The whole campaign fitted on load: 3,010 nodes over 101 tiles, routed edges as dashed ribbons and cross-tile edges bowed between them. No HTML overlay at all at this zoom.',
-    expect: { titles: 0, cards: 0 },
-  },
-  {
-    name: 'p7-campaign-names',
-    hash: '#zoom=1.4',
-    caption:
-      'Names, from about 24 CSS pixels of node width, over the room graph of a keyed site. No cards yet: nothing is 460 wide.',
-    expect: { titles: 12, cards: 0 },
-  },
-  {
-    name: 'p7-campaign-card-quest',
-    hash: '#node=quest-1',
-    caption:
-      'A quest framed by its own deep link. #node= fits the node, so the card sits in a corner that is on screen.',
-    expect: { titles: 0, cards: 1 },
-  },
-  {
-    name: 'p7-campaign-card-npc',
-    hash: '#node=npc-3',
-    caption: 'An NPC with a secret: the kind-specific rows are what cardRows formats.',
-    expect: { titles: 0, cards: 1 },
-  },
-  {
-    name: 'p7-campaign-finale',
-    hash: '#node=dungeon-21&zoom=2',
-    caption:
-      'The 88-room finale, the Osterdale Citadel, at a zoom the hash also names: #node= decides where, #zoom= how close. The titles here are SITES, the citadel and its neighbours; its rooms are still shapes at this zoom.',
-    expect: { titles: 8, cards: 0 },
-  },
-];
+const SETS = {
+  /**
+   * P7's five, which record the drawing as it was BEFORE D2's spacing. Their
+   * gates are written against it, so this set no longer passes against the
+   * current demo: see the header. Left exactly as committed, because a per-task
+   * frame is a record and `m4.2`'s ladder is not in the demo either.
+   */
+  p7: [
+    {
+      name: 'campaign-fit',
+      hash: '',
+      caption:
+        'The whole campaign fitted on load: 3,010 nodes over 101 tiles, routed edges as dashed ribbons and cross-tile edges bowed between them. No HTML overlay at all at this zoom.',
+      expect: { titles: 0, cards: 0 },
+    },
+    {
+      name: 'campaign-names',
+      hash: '#zoom=1.4',
+      caption:
+        'Names, from about 24 CSS pixels of node width, over the room graph of a keyed site. No cards yet: nothing is 460 wide.',
+      expect: { titles: 12, cards: 0 },
+    },
+    {
+      name: 'campaign-card-quest',
+      hash: '#node=quest-1',
+      caption:
+        'A quest framed by its own deep link. #node= fits the node, so the card sits in a corner that is on screen.',
+      expect: { titles: 0, cards: 1 },
+    },
+    {
+      name: 'campaign-card-npc',
+      hash: '#node=npc-3',
+      caption: 'An NPC with a secret: the kind-specific rows are what cardRows formats.',
+      expect: { titles: 0, cards: 1 },
+    },
+    {
+      name: 'campaign-finale',
+      hash: '#node=dungeon-21&zoom=2',
+      caption:
+        'The 88-room finale, the Osterdale Citadel, at a zoom the hash also names: #node= decides where, #zoom= how close. The titles here are SITES, the citadel and its neighbours; its rooms are still shapes at this zoom.',
+      expect: { titles: 8, cards: 0 },
+    },
+  ],
+  /**
+   * D2's pair: the two ends of the spacing measurement, taken before and after
+   * the separations were raised and the edges recoloured.
+   *
+   * Both are anchored on a NODE rather than on a zoom alone, because the scene
+   * grows when the spacing does: `#zoom=` at the scene's centre would frame a
+   * different part of a different campaign on either side of the change, and
+   * two frames of two places are not a comparison. `#node=` fixes what is in
+   * the middle and `#zoom=` fixes how close, so the only thing left to differ
+   * is the drawing.
+   *
+   * No tier expectation on either: the number of titles on screen is one of the
+   * things the change MOVES, so a floor on it would be a gate that has to be
+   * retuned to pass, which is the opposite of a gate.
+   */
+  d2: [
+    {
+      name: 'fit',
+      hash: '',
+      caption:
+        'The whole campaign fitted on load. What the spacing does at this end is trade node size for the gap between nodes: the zoom floor derives from the scene extent, so a wider scene is drawn smaller.',
+    },
+    {
+      name: 'tile',
+      hash: '#node=dungeon-21&zoom=0.7',
+      caption:
+        'The 88-room finale at a fixed zoom, anchored on the citadel itself. At a zoom a reader holds still, more separation is more separation: the nodes are the same size and the gaps between them are wider.',
+    },
+  ],
+};
+
+/**
+ * The first line of a set's caption file, so regenerating one set does not
+ * rewrite another's wording. P7's is the line its committed file already
+ * carries, byte for byte.
+ */
+const SET_TITLES = {
+  p7: 'P7 campaign screenshots.',
+  d2: 'D2 screenshots: the campaign spacing and the edge ink.',
+};
+
+/**
+ * What a set's variants MEAN, written into every caption file the set produces.
+ *
+ * A pair of frames labelled before and after says nothing on its own six months
+ * later: the label is a position in a sequence, not a description of a drawing.
+ * These lines are what let someone opening `d2-before-fit.png` know which
+ * numbers it was taken at without finding the commit.
+ */
+const SET_NOTES = {
+  d2: [
+    'D2, before and after: the campaign spacing and the edge ink.',
+    '  before: nodeSep 50, rankSep 50, tile gutter 200 (the @dagr/layout defaults), edges',
+    '          inked in two colours by ROLE, and only the routed group dashed.',
+    '  after:  nodeSep 120, rankSep 160, tile gutter 480, edges inked from the SOURCE node',
+    '          kind, and both routed-role groups dashed. See CAMPAIGN_SPACING in tiles.ts',
+    '          for the measurement that chose the numbers.',
+    'Both halves are captured on the SAME tree lineage, after the stage moved into',
+    '@dagr/campaign-stage: before is main at that move, after is the same tree with D2 on',
+    'top. An earlier pair took its before half from the pre-move demo, where the fitted',
+    'frame came out byte identical to p7-campaign-fit.png; after the move it no longer',
+    'does, so the pair was retaken rather than left with two changes in it.',
+  ],
+};
+
+// `Object.hasOwn` and not a truth test on the lookup, because a plain object
+// answers for what it INHERITS: `capture.mjs <base> toString` would otherwise
+// walk past this guard with a function in hand and die at the loop below, and
+// `__proto__` would iterate `Object.prototype`. A typo in an argument should
+// name the sets, not throw from somewhere else.
+if (!Object.hasOwn(SETS, setName)) {
+  throw new Error(
+    `unknown frame set "${setName}". The sets are ${Object.keys(SETS).join(', ')}, and the second argument names one.`,
+  );
+}
+const FRAMES = SETS[setName];
 
 const browser = await chromium.launch({
   ...(process.env.CHROMIUM_PATH === undefined
@@ -196,15 +309,24 @@ for (const frame of FRAMES) {
   await page.waitForSelector('[data-renderer-drawn="true"]', { timeout: 60_000 });
   // Then wait for the tiers this frame is ABOUT, counted off the DOM rather
   // than parsed out of the readout. A frame captured before its cards attach is
-  // a picture of the tier below it, and the whole point of these five is which
+  // a picture of the tier below it, and the whole point of P7's five is which
   // tier is showing, so the expectation is the wait rather than a comment.
-  await page.waitForFunction(
-    (want) =>
-      document.querySelectorAll('.campaign-card').length >= want.cards &&
-      document.querySelectorAll('.campaign-title').length >= want.titles,
-    frame.expect,
-    { timeout: 60_000 },
-  );
+  //
+  // A frame with NO `expect` waits for none of it, which is the right shape for
+  // a frame whose subject is the drawing rather than the overlay: the tier
+  // counts are one of the things a spacing change moves, so a floor on them
+  // would be a gate that has to be retuned until it passes. The renderer gate
+  // above still holds, and `overlay.sync()` runs on the same callback as
+  // `render()`, so a frame that has drawn has also synced at least once.
+  if (frame.expect !== undefined) {
+    await page.waitForFunction(
+      (want) =>
+        document.querySelectorAll('.campaign-card').length >= want.cards &&
+        document.querySelectorAll('.campaign-title').length >= want.titles,
+      frame.expect,
+      { timeout: 60_000 },
+    );
+  }
 
   // One more frame after the gate, so the shutter is never inside the frame the
   // gate observed.
@@ -219,14 +341,14 @@ for (const frame of FRAMES) {
   // And assert the frame is not showing a tier it should not. The wait above is
   // a floor; this is the ceiling, and without it the "no cards yet" frame would
   // pass while showing cards.
-  if (frame.expect.cards === 0 && shown.cards > 0) {
+  if (frame.expect?.cards === 0 && shown.cards > 0) {
     throw new Error(`${frame.name} was meant to show no cards and shows ${shown.cards}`);
   }
-  if (frame.expect.titles === 0 && shown.titles > 0) {
+  if (frame.expect?.titles === 0 && shown.titles > 0) {
     throw new Error(`${frame.name} was meant to show no titles and shows ${shown.titles}`);
   }
 
-  const path = `${outDir}${frame.name}.png`;
+  const path = `${outDir}${prefix}${frame.name}.png`;
   await page.screenshot({ path });
 
   // And check the canvas actually has something on it. The tier counts above
@@ -245,15 +367,15 @@ for (const frame of FRAMES) {
     );
   }
   captions.push(
-    `${frame.name}.png  [${frame.hash || 'no hash'}]  ${shown.titles} titles, ${shown.cards} cards\n    ${frame.caption}`,
+    `${prefix}${frame.name}.png  [${frame.hash || 'no hash'}]  ${shown.titles} titles, ${shown.cards} cards\n    ${frame.caption}`,
   );
-  console.error(`captured ${frame.name} (${shown.titles} titles, ${shown.cards} cards)`);
+  console.error(`captured ${prefix}${frame.name} (${shown.titles} titles, ${shown.cards} cards)`);
 }
 
 await writeFile(
-  `${outDir}p7-captions.txt`,
+  `${outDir}${prefix}captions.txt`,
   [
-    'P7 campaign screenshots.',
+    `${SET_TITLES[setName] ?? `${setName} screenshots.`}${variant === '' ? '' : ` (${variant})`}`,
     '',
     'Captured on the swiftshader WebGL2 fallback: this box has no WebGPU at all, navigator.gpu is absent.',
     `Text is Liberation Mono, pinned for the capture at ${advance.toFixed(3)}px per character at 12px,`,
@@ -264,6 +386,7 @@ await writeFile(
     'Viewport 1440x900 at device pixel ratio 1.',
     'Shapes are that fallback rasterising the same distance fields; the overlay never touches a GPU.',
     '',
+    ...(SET_NOTES[setName] === undefined ? [] : [...SET_NOTES[setName], '']),
     ...captions,
     '',
     'Regenerate with apps/demo/scripts/capture.mjs; see its header.',

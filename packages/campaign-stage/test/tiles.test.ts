@@ -9,9 +9,12 @@ import {
   styleFor,
 } from '../src/campaign-style.js';
 import {
+  CAMPAIGN_SPACING,
   TARGET_ASPECT,
   TILE_GUTTER,
+  TILE_GUTTER_RATIO,
   assignTiles,
+  campaignSpacing,
   containsParents,
   gridPositions,
   isRouted,
@@ -378,7 +381,11 @@ describe('shelfPack', () => {
     const boxes = Array.from({ length: 60 }, (_, i) =>
       box(`t${String(i)}`, 300, i % 2 === 0 ? 100 : 2000),
     );
-    const packing = shelfPack(boxes);
+    // An EXPLICIT gutter, because the bound below is about the sort and the
+    // default gutter is not: it is the campaign's, and D2 raised it with the
+    // node separation, at which point 480 units of gutter around a 300 unit tile
+    // is most of the area and this measured the gutter instead.
+    const packing = shelfPack(boxes, { gutter: 200 });
     const used = boxes.reduce((total, entry) => total + entry.width * entry.height, 0);
     expect(packing.width * packing.height).toBeLessThan(used * 2.5);
   });
@@ -547,7 +554,35 @@ describe('the per-kind style table', () => {
 
   it('has a gutter wider than layout separates two nodes by', () => {
     // Or a tile boundary would be closer than two nodes inside the same tile,
-    // and the tiling would read as noise rather than as chunking.
-    expect(TILE_GUTTER).toBeGreaterThan(50);
+    // and the tiling would read as noise rather than as chunking. Against the
+    // campaign's OWN separation rather than the package default of 50, which is
+    // the number this used to compare with and which the campaign no longer
+    // uses: a gutter that cleared 50 while the nodes were 120 apart would pass
+    // this test and fail the claim it exists to make.
+    expect(TILE_GUTTER).toBeGreaterThan(CAMPAIGN_SPACING.nodeSep);
+    expect(TILE_GUTTER).toBe(CAMPAIGN_SPACING.nodeSep * TILE_GUTTER_RATIO);
+  });
+
+  it('derives every gap from the two separations, so no ratio can drift', () => {
+    const spacing = campaignSpacing(70, 90);
+    expect(spacing).toEqual({
+      nodeSep: 70,
+      rankSep: 90,
+      tileGutter: 70 * TILE_GUTTER_RATIO,
+      // A grid tile IS one rank of nodes, so its cells are a node gap apart.
+      gridGap: 70,
+    });
+  });
+
+  it('separates the campaign by more than the package default, at both axes', () => {
+    // The D2 direction, as an assertion rather than as a number nobody would
+    // notice reverting: `@dagr/layout` defaults to 50 and 50, and the whole
+    // point of the measurement recorded on CAMPAIGN_SPACING is that the campaign
+    // is not a graph those defaults were chosen for.
+    expect(CAMPAIGN_SPACING.nodeSep).toBeGreaterThan(50);
+    expect(CAMPAIGN_SPACING.rankSep).toBeGreaterThan(50);
+    // And ranks by more than nodes, because the rank gap is the one with the
+    // routed edges in it.
+    expect(CAMPAIGN_SPACING.rankSep).toBeGreaterThan(CAMPAIGN_SPACING.nodeSep);
   });
 });

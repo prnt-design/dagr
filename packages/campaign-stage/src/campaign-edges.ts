@@ -1,7 +1,8 @@
 import { EDGE_ROLES } from '@dagr/campaign';
-import type { Campaign, CampaignEdge } from '@dagr/campaign';
+import type { Campaign, CampaignEdge, CampaignNode } from '@dagr/campaign';
 import type { SceneEdge, SceneEdgeGroup } from '@dagr/render';
 import type { CampaignScene } from './campaign-scene.js';
+import { edgeInk, nodeFill } from './campaign-style.js';
 
 /**
  * Which of the three ways an edge is drawn, and the geometry for the two that
@@ -38,22 +39,54 @@ import type { CampaignScene } from './campaign-scene.js';
 export const DEFAULT_BOW = 0.12;
 
 /**
- * What an edge is drawn in, by role.
+ * What an edge is drawn in: the SOURCE NODE's own colour, dimmed to an ink.
  *
- * Two colours rather than one per kind, and dimmer than any node: an edge is
- * the relation between two things a reader is looking at, so it has to be
- * legible against the near-black ground without competing with the boxes it
- * joins. The routed ink is the palette's sky blue brought down; the overlay ink
- * is cooler and dimmer again, because those lines arrive in bulk and only when
- * a reader has zoomed in far enough to have asked for them.
+ * **The question a reader asks of an edge is where it came from**, which is what
+ * D2's direction says and what two inks by role could not answer. Before this,
+ * every routed edge in the campaign was one sky blue and every overlay edge one
+ * cooler blue, so a line arriving at a room told a reader that it was a
+ * hierarchy edge and nothing else: not which region it descends from, not
+ * whether the quest step in front of them is fed by a faction or by a clue. The
+ * source node's colour is the answer already on screen, because the palette is
+ * by stratum: a ribbon out of a quest is quest green, out of a location is
+ * location blue, and a reader traces provenance by hue across a tile they cannot
+ * read the labels of.
  *
- * A function rather than a table, because `campaignEdges` takes one: P7's hover
- * highlight replaces it with one that brightens the hovered node's edges, and
- * the colour is per edge in `SceneEdge` for exactly that reason.
+ * **The role split survives as the DASH**, not as a second colour, and that is
+ * the whole of why both facts still reach a viewer. `EDGE_GROUPS` dashes the two
+ * routed groups and leaves the overlay kinds solid, so hue says where a line is
+ * from and pattern says what kind of relation it is. Colour cannot carry both:
+ * sixteen kinds times two roles is thirty-two inks nobody can tell apart.
+ *
+ * The source and not the target, of a directed edge whose direction the dataset
+ * fixes: `contains` runs parent to child, `leads_to` earlier to later. So a
+ * dense node is a node many colours converge ON, which reads as an inbound
+ * count, and the colours LEAVING it are all one, which is what makes a
+ * provenance trace possible at all.
+ *
+ * A curried lookup rather than a plain function, because a colour now depends on
+ * a node the edge only names. `campaignEdges` takes the function, so the demo
+ * binds this once per campaign and the seam is unchanged.
  */
-export function edgeColor(edge: CampaignEdge): number {
-  return EDGE_ROLES[edge.kind] === 'overlay' ? 0x4a6b82 : 0x6ea8c7;
+export function sourceEdgeColor(campaign: Campaign): (edge: CampaignEdge) => number {
+  const byId = new Map<string, CampaignNode>(campaign.nodes.map((node) => [node.id, node]));
+  return (edge) => {
+    const source = byId.get(edge.source);
+    // An edge whose source is not in the campaign is drawn in the neutral ink
+    // rather than dropped: `campaignEdges` decides what is drawable from the
+    // SCENE, which is the map that knows, and a colour function that threw here
+    // would make a palette lookup the thing that fails on a dataset defect.
+    return source === undefined ? UNSOURCED_INK : edgeInk(nodeFill(source));
+  };
 }
+
+/**
+ * The ink for an edge whose source node the campaign does not hold.
+ *
+ * The old routed ink, kept for exactly this: it is the colour the whole drawing
+ * was before D2, so a line in it is visibly not the colour of anything.
+ */
+export const UNSOURCED_INK = 0x6ea8c7;
 
 /** The routed group's id, and the first mesh drawn: everything else sits over it. */
 export const ROUTED_GROUP = 'routed';
@@ -70,12 +103,16 @@ export const OVERLAY_GROUP = 'overlay';
  * tiles and go over them, and the overlay kinds go on top because they are the
  * ones a reader is looking for when they are visible at all.
  *
- * **Only the routed group is dashed**, and that is the one place the dash earns
- * its cost: a routed edge has a DIRECTION that a layout computed, source to
- * target, and the flow is what shows it without an arrowhead. A cross-tile line
- * and an overlay line are drawn between two boxes by this file, so their
- * direction is a fact about the data rather than about the drawing, and dashing
- * them would be decoration.
+ * **The dash is now the ROLE, which is a job it did not have before D2.** It
+ * dashed the routed group alone, on the argument that a dash shows the direction
+ * a LAYOUT computed and that dashing a line this file drew between two boxes
+ * would be decoration. Colour carried the role: one ink for the routed kinds,
+ * another for the overlay kinds, across all three groups. D2 spent colour on
+ * where an edge comes from, so the role has nowhere else to go, and the dash is
+ * where it goes: the two routed-role groups are dashed and the overlay group is
+ * solid. A cross-tile line is dashed for what it IS, a `contains` or a
+ * `leads_to` that happened to cross a tile boundary, and its flow still runs
+ * source to target because `bowedLine` builds it in that order.
  *
  * The two line groups take `'smooth'` because their three control points ARE a
  * curve waiting to happen; the routed group stays a polyline, because its bends
@@ -90,7 +127,18 @@ export const EDGE_GROUPS: readonly SceneEdgeGroup[] = [
       dash: { periodPixels: 14, duty: 0.55, speedPixelsPerSecond: 18 },
     },
   },
-  { id: CROSS_TILE_GROUP, style: { halfWidthPixels: 1.2 }, curve: 'smooth' },
+  {
+    id: CROSS_TILE_GROUP,
+    style: {
+      halfWidthPixels: 1.2,
+      // The same pattern as the routed group, because it is the same fact: a
+      // second dash shape would read as a third kind of edge, and there are
+      // two. The flow speed is shared for the same reason, so two halves of one
+      // hierarchy that a tile boundary split do not march at different speeds.
+      dash: { periodPixels: 14, duty: 0.55, speedPixelsPerSecond: 18 },
+    },
+    curve: 'smooth',
+  },
   { id: OVERLAY_GROUP, style: { halfWidthPixels: 1 }, curve: 'smooth' },
 ];
 

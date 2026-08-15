@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_BOW,
   EDGE_GROUPS,
+  UNSOURCED_INK,
   borderPoint,
   bowedLine,
   campaignEdges,
   overlayFade,
+  sourceEdgeColor,
 } from '../src/campaign-edges.js';
+import { GROUND_COLOR, edgeInk, nodeFill } from '../src/campaign-style.js';
 import type { CampaignScene } from '../src/campaign-scene.js';
 
 /**
@@ -220,6 +223,100 @@ describe('campaignEdges', () => {
   });
 });
 
+describe('sourceEdgeColor', () => {
+  /** A campaign of two nodes and the one edge between them. */
+  const campaign = {
+    seed: 0,
+    nodes: [
+      { id: 'q', name: 'a quest', data: { kind: 'quest' } },
+      { id: 'r', name: 'a room', data: { kind: 'location', subtype: 'room' } },
+    ],
+    edges: [{ id: 'e-1', kind: 'contains', source: 'q', target: 'r' }],
+  } as unknown as Parameters<typeof sourceEdgeColor>[0];
+
+  it('inks an edge from the node it leaves, not the one it arrives at', () => {
+    // The whole feature: a reader tracing a line back to its origin reads the
+    // origin's colour on the line itself. Reversing the edge reverses the ink.
+    const colorOf = sourceEdgeColor(campaign);
+    const quest = campaign.nodes[0];
+    const room = campaign.nodes[1];
+    if (quest === undefined || room === undefined) throw new Error('unreachable');
+    expect(colorOf({ id: 'e-1', kind: 'contains', source: 'q', target: 'r' } as never)).toBe(
+      edgeInk(nodeFill(quest)),
+    );
+    expect(colorOf({ id: 'e-1', kind: 'contains', source: 'r', target: 'q' } as never)).toBe(
+      edgeInk(nodeFill(room)),
+    );
+  });
+
+  it('gives two kinds two inks, so a hue is a provenance', () => {
+    const colorOf = sourceEdgeColor(campaign);
+    expect(colorOf({ id: 'a', kind: 'contains', source: 'q', target: 'r' } as never)).not.toBe(
+      colorOf({ id: 'b', kind: 'contains', source: 'r', target: 'q' } as never),
+    );
+  });
+
+  it('falls back to the pre-D2 ink for an edge whose source is not in the campaign', () => {
+    // Rather than throwing: what is drawable is decided from the SCENE by
+    // `campaignEdges`, and a palette lookup should not be the thing that fails
+    // on a dataset defect.
+    const colorOf = sourceEdgeColor(campaign);
+    expect(colorOf({ id: 'x', kind: 'contains', source: 'gone', target: 'r' } as never)).toBe(
+      UNSOURCED_INK,
+    );
+  });
+});
+
+describe('edgeInk', () => {
+  /** Relative luminance, which is what "darker" has to mean here. See below. */
+  const luminance = (color: number): number =>
+    0.2126 * ((color >> 16) & 0xff) + 0.7152 * ((color >> 8) & 0xff) + 0.0722 * (color & 0xff);
+
+  it('draws an edge darker than the box it leaves, and lighter than the ground', () => {
+    // The constraint the two role inks met by being written down dim: the boxes
+    // are the figure and the lines are the structure under them.
+    //
+    // LUMINANCE and not each channel, and the sample is what makes the
+    // difference visible: a mix towards the ground moves a channel TOWARDS the
+    // ground's own, so the amber and the orange, whose blue channels sit below
+    // the ground's, come back with MORE blue than they went in with. A review
+    // found the per-channel version of this test passing only because every
+    // fill it sampled sat above the ground on all three.
+    for (const fill of [0xffb703, 0xfb8500, 0xffd166, 0x52b788, 0xe63946, 0x1c6076, 0x9aa0a6]) {
+      const ink = edgeInk(fill);
+      expect(luminance(ink)).toBeLessThan(luminance(fill));
+      expect(luminance(ink)).toBeGreaterThan(luminance(GROUND_COLOR));
+    }
+  });
+
+  it('puts every channel between the ground and the fill, which is what a mix is', () => {
+    // The invariant the per-channel claim was reaching for, stated so it holds
+    // in both directions: a channel below the ground's rises towards it and a
+    // channel above it falls, and neither leaves the interval.
+    for (const fill of [0xffb703, 0xfb8500, 0x1c6076, 0x9aa0a6]) {
+      const ink = edgeInk(fill);
+      for (const shift of [16, 8, 0]) {
+        const from = (GROUND_COLOR >> shift) & 0xff;
+        const to = (fill >> shift) & 0xff;
+        const got = (ink >> shift) & 0xff;
+        expect(got).toBeGreaterThanOrEqual(Math.min(from, to));
+        expect(got).toBeLessThanOrEqual(Math.max(from, to));
+      }
+    }
+  });
+
+  it('leaves the ground alone, which is the fixed point of the mix', () => {
+    expect(edgeInk(GROUND_COLOR)).toBe(GROUND_COLOR);
+  });
+
+  it('keeps two families apart after dimming', () => {
+    // The point of colouring by source at all. A mix that collapsed the palette
+    // towards the ground would pass the test above and say nothing.
+    expect(edgeInk(0x52b788)).not.toBe(edgeInk(0xe63946));
+    expect(edgeInk(0x8ecae6)).not.toBe(edgeInk(0x1c6076));
+  });
+});
+
 describe('EDGE_GROUPS', () => {
   it('draws the routed structure under the lines that cross it', () => {
     // The order IS the layering, because every mesh is transparent with
@@ -227,13 +324,22 @@ describe('EDGE_GROUPS', () => {
     expect(EDGE_GROUPS.map((group) => group.id)).toEqual(['routed', 'crossTile', 'overlay']);
   });
 
-  it('dashes only the group whose direction a layout computed', () => {
-    // A dash flowing source to target is the arrowhead this package does not
-    // draw. A cross-tile or overlay line is drawn between two boxes by
-    // `campaign-edges.ts`, so its direction is a fact about the data rather
-    // than about the drawing, and dashing it would be decoration.
+  it('dashes the routed-role groups and leaves the overlay kinds solid', () => {
+    // The dash carries the ROLE since D2 spent colour on where an edge comes
+    // from, so it has to fall exactly where `EDGE_ROLES` does: a routed kind is
+    // dashed whether or not the tiling let a layout see it, and an overlay kind
+    // is solid. A reader who has learned "dashed is hierarchy" on one tile is
+    // owed the same reading across a tile boundary.
     const dashed = EDGE_GROUPS.filter((group) => group.style.dash !== undefined);
-    expect(dashed.map((group) => group.id)).toEqual(['routed']);
+    expect(dashed.map((group) => group.id)).toEqual(['routed', 'crossTile']);
+  });
+
+  it('dashes the two routed groups with the same pattern and speed', () => {
+    // Two dash shapes would read as three kinds of edge, and there are two.
+    const patterns = EDGE_GROUPS.filter((group) => group.style.dash !== undefined).map(
+      (group) => group.style.dash,
+    );
+    expect(patterns[0]).toEqual(patterns[1]);
   });
 
   it('leaves the routed group a polyline and curves the two line groups', () => {

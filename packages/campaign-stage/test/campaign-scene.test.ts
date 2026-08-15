@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { buildCampaignScene } from '../src/campaign-scene.js';
 import type { CampaignScene } from '../src/campaign-scene.js';
 import { SMALLEST_NODE_SIZE, styleFor } from '../src/campaign-style.js';
-import { isRouted } from '../src/tiles.js';
+import { CAMPAIGN_SPACING, isRouted } from '../src/tiles.js';
 
 /**
  * The whole scene, built once and asserted from every angle.
@@ -188,6 +188,63 @@ describe('the campaign scene', () => {
     for (const edge of crossing) {
       expect(scene.edgeRoutes.has(edge.id)).toBe(false);
     }
+  });
+
+  it('LAYS THE CAMPAIGN OUT AT THE CAMPAIGN SPACING, NOT THE PACKAGE DEFAULT', () => {
+    // D2's whole change, at the one seam where it can be silently lost: the
+    // separations are a `LayoutConfig` field, so a build that dropped them would
+    // lay out perfectly well at 50 and 50 and the only symptom would be a
+    // drawing that looks the way it did before anyone measured.
+    //
+    // The assertion is on the GAP between two nodes that ended up side by side
+    // in a grid tile, which is the one tile kind whose spacing this file decides
+    // rather than the layout engine, and on the closest pair anywhere, which no
+    // layout may put closer than `nodeSep`.
+    let closest = Number.POSITIVE_INFINITY;
+    const boxes = [...scene.nodeBounds.values()];
+    // A grid hash, because 3,010 boxes pairwise is nine million comparisons and
+    // this suite already runs a hundred layouts.
+    //
+    // **The cell is DERIVED from the widest node and the separation**, which is
+    // what makes the ±1 scan below exhaustive for the pair this test is looking
+    // for: boxes are bucketed by their min corner, so two boxes at the minimum
+    // gap have corners at most `widest + nodeSep` apart, and a cell that size
+    // puts them in the same bucket or an adjacent one. A review caught the first
+    // version using the tile gutter, which is 480 and happens to equal exactly
+    // that sum today: correct by coincidence, and silently wrong the moment a
+    // kind grows or the separation is retuned, which is what CAMPAIGN_SPACING
+    // exists to invite.
+    const widest = boxes.reduce(
+      (max, box) => Math.max(max, box.maxX - box.minX, box.maxY - box.minY),
+      0,
+    );
+    const cell = widest + CAMPAIGN_SPACING.nodeSep;
+    const buckets = new Map<string, typeof boxes>();
+    for (const box of boxes) {
+      const key = `${String(Math.floor(box.minX / cell))}|${String(Math.floor(box.minY / cell))}`;
+      const bucket = buckets.get(key);
+      if (bucket === undefined) buckets.set(key, [box]);
+      else bucket.push(box);
+    }
+    for (const box of boxes) {
+      const cx = Math.floor(box.minX / cell);
+      const cy = Math.floor(box.minY / cell);
+      for (let dx = -1; dx <= 1; dx += 1) {
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (const other of buckets.get(`${String(cx + dx)}|${String(cy + dy)}`) ?? []) {
+            if (other === box) continue;
+            const gapX = Math.max(other.minX - box.maxX, box.minX - other.maxX, 0);
+            const gapY = Math.max(other.minY - box.maxY, box.minY - other.maxY, 0);
+            closest = Math.min(closest, Math.hypot(gapX, gapY));
+          }
+        }
+      }
+    }
+    expect(closest).toBeGreaterThanOrEqual(CAMPAIGN_SPACING.nodeSep - 1e-6);
+    // And not merely "at least", which a scene laid out at ten times the
+    // spacing would also satisfy: some pair is exactly a node gap apart,
+    // because that is what a rank of a full tile looks like.
+    expect(closest).toBeLessThan(CAMPAIGN_SPACING.nodeSep + 1e-6);
   });
 
   it('runs one layout per layout tile and none for a grid tile', () => {
