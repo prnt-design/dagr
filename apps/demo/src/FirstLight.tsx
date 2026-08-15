@@ -11,47 +11,42 @@ import {
   wheelZoomFactor,
   zoomLimits,
 } from './camera-input.js';
-import {
-  CARD_MIN_SCREEN_WIDTH,
-  LABEL_MIN_SCREEN_WIDTH,
-  LADDER_BOUNDS,
-  LADDER_SHAPES,
-  LADDER_SMALLEST_NODE,
-} from './ladder.js';
-import type { LadderShape } from './ladder.js';
+import type { CampaignScene } from './campaign-scene.js';
+import { kindColor } from './campaign-style.js';
 
 /**
  * `@dagr/render` on a canvas, with pan and zoom wired to a real
  * {@link Camera2D}.
  *
- * The scene is M4.2's crispness ladder: rounded rects and circles spanning two
- * orders of magnitude in world units, whose fill, outline and glow all come out
- * of one signed distance field. What this component owes it is a camera that can
- * reach both ends of that range, so a reader can watch a single edge stay crisp
- * from 0.1x to 100x, and a way to arrive at a named zoom without a gesture (see
- * {@link initialZoomFromHash}) so the committed screenshots are reproducible.
+ * **The scene is the campaign, as of M4.4.** Three thousand nodes of a mock D&D
+ * campaign, cut into about a hundred tiles, laid out one tile at a time by
+ * `@dagr/layout` in a worker, shelf-packed into a roughly 16:9 canvas and drawn
+ * instanced. `campaign-scene.ts` does all of that and hands back a list this
+ * component passes straight to `Renderer.setNodes`.
  *
- * M4.11 added a second thing over the same camera: an HTML overlay, from
- * `@dagr/render`, and M4.12 made it three tiers of one. Under
- * {@link LABEL_MIN_SCREEN_WIDTH} CSS pixels wide a shape gets nothing and the
- * GPU has it to itself; from there to {@link CARD_MIN_SCREEN_WIDTH} it gets a
- * title tag; above that, a card. It is the demo's only text, and it arrives
- * without a glyph pipeline: the GPU draws the shapes and the DOM draws the tens
- * of readable things, with the camera keeping them registered.
+ * What was here before was M4.2's crispness ladder: six shapes that existed to
+ * prove a shader claim. The module doc said the ladder died on the day a real
+ * layout arrived, and this is that day. Its evidence survives as the committed
+ * screenshots and in the M4.2 commit, which is what a placeholder should do.
+ *
+ * The overlay stays, and stays deliberately small. M4.11 and M4.12 shipped
+ * `createHtmlOverlay` and `createRichNodes`, and this component consumes them
+ * with ONE tier: a name over a node once the node is wide enough on screen to
+ * carry it. The campaign's cards are P6, which owns the tier set and the card
+ * content; what P4 owes it is the node bounds to bind to, which
+ * {@link CampaignScene.nodeBounds} is.
  *
  * There is no test file for this component, and that is the same decision
  * `@dagr/render` documents for its own renderer rather than a gap. Everything
- * here needs a GPU adapter, a laid-out canvas and live input events; a jsdom
- * suite could only assert that a mock was called, which would pass just as
- * happily if nothing were ever drawn. The arithmetic and the hash parsing that
- * CAN be checked live in `camera-input.ts`, the overlay's own arithmetic and
- * wiring are tested in `@dagr/render`, the ladder geometry copied into
- * `ladder.ts` is checked in `test/ladder.test.ts`, and what is left is wiring,
- * verified by the committed screenshots.
+ * here needs a GPU adapter, a laid-out canvas, a worker and live input events;
+ * a jsdom suite could only assert that a mock was called, which would pass just
+ * as happily if nothing were ever drawn. The arithmetic that CAN be checked
+ * lives in `camera-input.ts`, `tiles.ts` and `campaign-style.ts`, the overlay's
+ * own wiring is tested in `@dagr/render`, and what is left is wiring, verified
+ * by a committed screenshot.
  *
- * The name is M4.1's and outlives its accuracy on purpose: M4.4 replaces this
- * scene with real layout, and renaming a file twice costs more review than it
- * saves.
+ * The name is M4.1's and outlives its accuracy on purpose: renaming a file
+ * costs more review than it saves, and the history is where a name is explained.
  *
  * The one thing worth reading closely is the lifecycle in the effect below.
  */
@@ -75,36 +70,48 @@ interface CameraReadout {
 }
 
 /**
- * What each tier's `create` built, keyed by the element it built it into.
+ * How wide a node has to be on screen, in CSS pixels, before it gets a name.
+ *
+ * Under this it gets nothing and the GPU has it to itself, which is what keeps
+ * the far view readable as structure rather than as a wall of text. 24 is the
+ * number M4.12 settled on: a label is about that tall, so a node narrower than
+ * its own label's height cannot carry one legibly.
+ *
+ * There is no second tier here, deliberately. P6 owns the card tier and the
+ * campaign's card content; a placeholder card now would be a tier set for P6 to
+ * delete, and the overlay's gates have to be disjoint, so a placeholder would
+ * also be a number P6 has to work around rather than choose.
+ */
+const LABEL_MIN_SCREEN_WIDTH = 24;
+
+/** What a node's label shows: its name, and the colour of its kind. */
+interface LabelData {
+  readonly name: string;
+  readonly color: string;
+}
+
+/**
+ * The element each tier's `create` built, keyed by the element it built it into.
  *
  * `update` is handed the root and nothing else, so the alternative is a
  * `querySelector` per field on every bind. That is not free: `update` runs on
- * every pop-in during a pan, not only when data changes, so a five field card
- * would be five tree walks per shape per pass across it. A `WeakMap` keyed by
+ * every pop-in during a pan, not only when data changes. A `WeakMap` keyed by
  * the root holds nothing alive that the pool has dropped.
  */
-const labelRefs = new WeakMap<HTMLElement, { name: HTMLElement; detail: HTMLElement }>();
-const cardRefs = new WeakMap<HTMLElement, { name: HTMLElement; kind: HTMLElement; rows: HTMLElement }>();
+const labelRefs = new WeakMap<HTMLElement, HTMLElement>();
 
-/** An element with a class, which is most of what building these tiers is. */
-function div(className: string, tag: 'div' | 'dl' | 'span' = 'div'): HTMLElement {
+/** An element with a class, which is most of what building a tier is. */
+function div(className: string, tag: 'div' | 'span' = 'div'): HTMLElement {
   const element = document.createElement(tag);
   element.className = className;
   return element;
 }
 
 /**
- * The two tiers the ladder gets, and the split every rich node is built on.
+ * The one tier the campaign gets in P4: a node's name, in its kind's colour.
  *
- * `create` returns a BLANK element of the tier's shape and `update` fills it in
- * with one shape's content. That is what lets a tier pool its elements: a card
- * leaving the view goes back to the pool and the next shape to reach card tier
- * gets it with new content rather than a new subtree. It also means `update`
- * has to REPLACE everything it wrote last time, since the element it is handed
- * may have belonged to a different shape a frame ago.
- *
- * In both tiers the OUTER element is what the overlay positions and sizes, so
- * it is the shape's world box and scales with the zoom, and the INNER element
+ * The OUTER element is what the overlay positions and sizes, so it is the
+ * node's world box and scales with the zoom, and the INNER element
  * counter-scales through `--dagr-overlay-inv-zoom` so its text is the same
  * number of CSS pixels at every zoom. That split is the answer to a label
  * wanting two things at once: to be GATED by how big its node is on screen,
@@ -112,58 +119,27 @@ function div(className: string, tag: 'div' | 'dl' | 'span' = 'div'): HTMLElement
  * cannot do. The stylesheet does the second half, so nothing here reads the
  * camera.
  */
-const LADDER_TIERS: readonly RichNodeTier<LadderShape>[] = [
+const CAMPAIGN_TIERS: readonly RichNodeTier<LabelData>[] = [
   {
     name: 'label',
     minScreenWidth: LABEL_MIN_SCREEN_WIDTH,
-    maxScreenWidth: CARD_MIN_SCREEN_WIDTH,
     create: () => {
       const box = div('stage__label');
       const text = div('stage__label-text');
       const name = div('stage__label-name', 'span');
-      const detail = div('stage__label-detail', 'span');
-      text.append(name, detail);
+      text.appendChild(name);
       box.appendChild(text);
-      labelRefs.set(box, { name, detail });
+      labelRefs.set(box, name);
       return box;
     },
     update: (element, node) => {
-      const refs = labelRefs.get(element);
-      if (refs === undefined) return;
-      refs.name.textContent = node.data.label;
-      refs.detail.textContent = node.data.detail;
-    },
-  },
-  {
-    name: 'card',
-    minScreenWidth: CARD_MIN_SCREEN_WIDTH,
-    create: () => {
-      const box = div('stage__label');
-      const card = div('stage__card');
-      const head = div('stage__card-head');
-      const name = div('stage__label-name', 'span');
-      const kind = div('stage__card-kind', 'span');
-      head.append(name, kind);
-      const rows = div('stage__card-rows', 'dl');
-      card.append(head, rows);
-      box.appendChild(card);
-      cardRefs.set(box, { name, kind, rows });
-      return box;
-    },
-    update: (element, node) => {
-      const refs = cardRefs.get(element);
-      if (refs === undefined) return;
-      refs.name.textContent = node.data.label;
-      refs.kind.textContent = node.data.kind;
-      // Replaced wholesale rather than appended to, because this element may
-      // have been a different shape's card one frame ago.
-      refs.rows.replaceChildren();
-      for (const [key, value] of node.data.card) {
-        refs.rows.append(
-          Object.assign(document.createElement('dt'), { textContent: key }),
-          Object.assign(document.createElement('dd'), { textContent: value }),
-        );
-      }
+      const name = labelRefs.get(element);
+      if (name === undefined) return;
+      name.textContent = node.data.name;
+      // The kind's own colour, as a CSS string out of the same table the GPU
+      // draws from. A second table would drift, and a name in one colour over a
+      // shape in another reads as a design choice rather than as a bug.
+      name.style.color = node.data.color;
     },
   },
 ];
@@ -193,7 +169,7 @@ function describeFailure(cause: unknown): string {
   return String(cause);
 }
 
-export function FirstLight(): JSX.Element {
+export function FirstLight({ scene }: { scene: CampaignScene | null }): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [readout, setReadout] = useState<CameraReadout | null>(null);
@@ -230,7 +206,11 @@ export function FirstLight(): JSX.Element {
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
-    if (canvas === null || container === null) return;
+    // The scene arrives asynchronously, because a hundred layout runs do: the
+    // effect is a no-op until it does, and re-runs when it lands. Building a
+    // renderer over an empty scene first and calling `setNodes` after would
+    // draw one frame of nothing and size the instance buffers for it.
+    if (canvas === null || container === null || scene === null) return;
 
     // The OTHER half of the StrictMode problem: cleanup can run while
     // `createRenderer` is still in flight. `teardownRef` orders the mounts; this
@@ -264,8 +244,15 @@ export function FirstLight(): JSX.Element {
     // `applyViewport` below binds the real range and clamps whatever the hash
     // asked for into it, so an out-of-range `#zoom=` is corrected before
     // anything beyond one frame can be drawn at it.
+    //
+    // `NaN` as the fallback rather than `INITIAL_ZOOM`, because this component
+    // has to know whether the hash SPOKE, not only what it said.
+    // `initialZoomFromHash` returns its fallback as given, so a non-finite one
+    // is a usable "absent" signal, and comparing against `INITIAL_ZOOM` instead
+    // would read `#zoom=1` as silence.
+    const hashZoom = initialZoomFromHash(window.location.hash, Number.NaN);
     const camera = new Camera2D({
-      zoom: initialZoomFromHash(window.location.hash, INITIAL_ZOOM),
+      zoom: Number.isFinite(hashZoom) ? hashZoom : INITIAL_ZOOM,
     });
 
     /**
@@ -284,13 +271,18 @@ export function FirstLight(): JSX.Element {
      */
     const overlay = createHtmlOverlay({ parent: container, camera });
 
-    // The shapes' sizes are declared rather than measured, which is the default
-    // the design argues for: this content is templated per shape, so its box is
-    // known by construction and it is the SHAPE's box anyway. `measureHtmlSizes`
-    // is for the other case, where a node's size is a fact about its text.
-    const richNodes = createRichNodes<LadderShape>({ overlay, tiers: LADDER_TIERS });
+    // Sizes are DECLARED rather than measured, which is the default the overlay
+    // design argues for: a node's box is the box layout gave it, so it is known
+    // by construction. `measureHtmlSizes` is for the other case, where a node's
+    // size is a fact about its text. Three thousand offscreen mounts at startup
+    // would buy nothing here and would cost a layout flush each.
+    const richNodes = createRichNodes<LabelData>({ overlay, tiers: CAMPAIGN_TIERS });
     richNodes.setNodes(
-      LADDER_SHAPES.map((shape) => ({ id: shape.label, bounds: shape.bounds, data: shape })),
+      scene.overlayNodes.map((node) => ({
+        id: node.id,
+        bounds: node.bounds,
+        data: { name: node.name, color: node.color },
+      })),
     );
 
     /**
@@ -383,7 +375,7 @@ export function FirstLight(): JSX.Element {
       // padding" and "the smallest shape filling the short side". This is the
       // call that clamps an out-of-range `#zoom=` on the first measurement,
       // and on every resize after it the camera is carried along.
-      const limits = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, viewport);
+      const limits = zoomLimits(scene.bounds, scene.smallestNodeSize, viewport);
       camera.setZoomLimits(limits.minZoom, limits.maxZoom);
       requestDraw();
     };
@@ -396,6 +388,19 @@ export function FirstLight(): JSX.Element {
     // update, so a queued wheel event could draw, and worse, derive an
     // anchored centre from, an unclamped `#zoom=1e9` before the clamp landed.
     applyViewport();
+
+    // The whole campaign in frame on load, which is the first thing a reader
+    // should see: the shape of it, before any of the words. After
+    // `applyViewport`, so the fit is against a measured viewport and lands
+    // inside the range that measurement has just bound.
+    //
+    // **Unless the hash asked for a zoom**, and that exception is the whole
+    // reason `#zoom=` survived P4. A fit that ran unconditionally would
+    // override the hash on every load, which is not a smaller feature than it
+    // sounds: the hash is how a committed screenshot is reproduced by opening a
+    // link rather than by landing on a zoom with a trackpad, and it would have
+    // gone on advertising itself in the readout while doing nothing.
+    if (!Number.isFinite(hashZoom)) camera.fitBounds(scene.bounds, FIT_PADDING);
 
     // Observe the CONTAINER, and measure the CANVAS. The container is the
     // element page layout sizes; the canvas is the element with the pixels, and
@@ -510,7 +515,7 @@ export function FirstLight(): JSX.Element {
       } else if (command.kind === 'pan') {
         camera.panByScreen(command.dx, command.dy);
       } else {
-        camera.fitBounds(LADDER_BOUNDS, FIT_PADDING);
+        camera.fitBounds(scene.bounds, FIT_PADDING);
       }
       requestDraw();
     };
@@ -529,7 +534,16 @@ export function FirstLight(): JSX.Element {
         // adapter and again once it has one, giving the device back itself on
         // the second. Its guarantee is that a caller never has to dispose a
         // renderer it did not receive, so an abandoned mount here simply throws.
-        renderer = await createRenderer({ canvas, camera, signal: abort.signal });
+        // The nodes go in through the OPTION rather than through a `setNodes`
+        // after the await, so the instance buffers are allocated for exactly
+        // this many nodes and the first frame costs no reallocation. At three
+        // thousand nodes that is one allocation instead of eight.
+        renderer = await createRenderer({
+          canvas,
+          camera,
+          signal: abort.signal,
+          nodes: scene.nodes,
+        });
         setFailure(null);
         // Draws the first frame as a side effect, at whatever size the canvas
         // has now rather than the size it had when the effect started.
@@ -571,7 +585,7 @@ export function FirstLight(): JSX.Element {
         renderer = null;
       });
     };
-  }, []);
+  }, [scene]);
 
   return (
     <div className="stage" ref={containerRef}>
@@ -584,10 +598,10 @@ export function FirstLight(): JSX.Element {
         className="stage__canvas"
         ref={canvasRef}
         tabIndex={0}
-        aria-label="Graph viewport. Arrow keys zoom and pan, 0 fits the scene, Escape leaves."
+        aria-label="Campaign viewport. Arrow keys zoom and pan, 0 fits the campaign, Escape leaves."
       />
       {failure === null ? (
-        <Overlay readout={readout} />
+        <Overlay readout={readout} scene={scene} />
       ) : (
         <div className="stage__failure" role="alert">
           <p className="stage__failure-title">No renderer</p>
@@ -613,11 +627,24 @@ function fixed(value: number, digits: number): string {
  * This exists to make the screenshots mean something. Shapes on near black prove
  * a frame was drawn; only numbers that move when you drag prove the camera
  * behind them is real, that the world bounds it reports are the region you are
- * actually looking at, and, for the crispness reference, that the frame you are
- * looking at really is the 0.1x or 100x one and not a gesture that stopped
- * nearby. The zoom row is the caption of both screenshots.
+ * actually looking at, and that the zoom a caption claims is the zoom the frame
+ * was taken at. The campaign row is the one that says how much of the dataset
+ * reached the canvas, which a picture of three thousand dots cannot.
  */
-function Overlay({ readout }: { readout: CameraReadout | null }): JSX.Element {
+function Overlay({
+  readout,
+  scene,
+}: {
+  readout: CameraReadout | null;
+  scene: CampaignScene | null;
+}): JSX.Element {
+  if (scene === null) {
+    return (
+      <div className="stage__readout">
+        <p className="stage__readout-row">laying out the campaign</p>
+      </div>
+    );
+  }
   if (readout === null) {
     return (
       <div className="stage__readout">
@@ -629,6 +656,10 @@ function Overlay({ readout }: { readout: CameraReadout | null }): JSX.Element {
   const { zoom, center, world, viewport, labels, minZoom, maxZoom } = readout;
   return (
     <div className="stage__readout">
+      <p className="stage__readout-row">
+        <span className="stage__readout-key">campaign</span>
+        {scene.nodes.length} nodes, {scene.tiles.length} tiles, {scene.layoutRuns} layout runs
+      </p>
       <p className="stage__readout-row">
         <span className="stage__readout-key">zoom</span>
         {fixed(zoom, 3)} px/unit
@@ -658,7 +689,7 @@ function Overlay({ readout }: { readout: CameraReadout | null }): JSX.Element {
       */}
       <p className="stage__readout-row">
         <span className="stage__readout-key">overlay</span>
-        {labels} of {LADDER_SHAPES.length} in DOM
+        {labels} of {scene.nodes.length} in DOM
       </p>
       {/*
         The limits are read off the camera rather than typed out, because a

@@ -67,7 +67,7 @@ import type { Arith } from './sdf.js';
  * `types.ts` decided that no three.js type appears in this package's public
  * surface, because three is a peer dependency and an exported `Node<'float'>`
  * would make two copies of three in one tree a type error for every consumer.
- * These are internal to `shape-scene.ts` and to the tests.
+ * These are internal to `instanced-scene.ts` and to the tests.
  */
 
 /** A node carrying a single float. The value type every formula here is built over. */
@@ -76,7 +76,7 @@ export type FloatNode = Node<'float'>;
 /**
  * A node carrying a colour: either a `vec3` or three's own `color` type, which
  * are the same three components with different provenance. Accepting both is
- * what lets `shape-scene.ts` hand over a `Color` converted by three (so the sRGB
+ * what lets `instanced-scene.ts` hand over a `Color` converted by three (so the sRGB
  * to linear step is three's problem and not this file's) while a test can hand
  * over a literal `vec3`.
  */

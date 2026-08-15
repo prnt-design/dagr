@@ -14,9 +14,9 @@ import {
   instanceSize,
   requireShapeInstance,
 } from './instance-attributes.js';
-import type { InstancedFamilyStyle, ShapeFamily, ShapeInstance } from './instance-attributes.js';
-import { FILL_AA_PADDING_WORLD } from './sdf.js';
-import { circleSDF, roundedRectSDF, shapeShading } from './sdf-nodes.js';
+import type { NodeStyle, ShapeFamily, ShapeInstance } from './instance-attributes.js';
+import { quadPadding } from './sdf.js';
+import { circleSDF, roundedRectSDF, shapeShading, tslArith } from './sdf-nodes.js';
 import type { GpuResource, WorldBounds } from './types.js';
 import { requireColor, requireFinite, requireNonNegative } from './validate.js';
 
@@ -148,9 +148,9 @@ function unitQuadAttributes(): {
  * how a caller comes to believe a fill colour set on a family means something.
  */
 export function requireFamilyStyle(
-  style: InstancedFamilyStyle,
+  style: NodeStyle,
   field: string,
-): InstancedFamilyStyle {
+): NodeStyle {
   const glowAlpha = requireFinite(style.glowAlpha, `${field}.glowAlpha`);
   if (glowAlpha < 0 || glowAlpha > 1) {
     throw new RangeError(
@@ -171,7 +171,7 @@ export function requireFamilyStyle(
  * ## The vertex stage
  *
  * ```
- * padding  = instanceGlowWorld + FILL_AA_PADDING_WORLD   // per instance
+ * padding  = quadPadding(instanceGlowWorld)              // per instance
  * quad     = instanceSize + 2 * padding                  // per instance
  * local    = positionGeometry.xy * quad                  // world units from the centre
  * position = local + instanceOffset
@@ -202,7 +202,7 @@ export function requireFamilyStyle(
  */
 function createInstancedMaterial(
   family: ShapeFamily,
-  style: InstancedFamilyStyle,
+  style: NodeStyle,
 ): MeshBasicNodeMaterial {
   const offset = attribute<'vec2'>(OFFSET, 'vec2');
   const size = attribute<'vec2'>(SIZE, 'vec2');
@@ -211,7 +211,12 @@ function createInstancedMaterial(
   const fillColor = attribute<'vec3'>(FILL_COLOR, 'vec3');
   const glowColor = attribute<'vec3'>(GLOW_COLOR, 'vec3');
 
-  const padding = add(glowWorld, float(FILL_AA_PADDING_WORLD));
+  // Through `tslArith`, so the expression the vertex shader evaluates is the one
+  // `test/sdf.test.ts` executes over numbers. The `vec2` addition on the next
+  // line stays here for the reason `quadPadding`'s docstring gives: widening
+  // `Arith` with a vector operation for one call site is the cost the
+  // nine-primitive count exists to keep visible.
+  const padding = quadPadding(tslArith, glowWorld);
   const quad = add(size, mul(padding, 2));
   const local = varying(mul(positionGeometry.xy, quad));
 
@@ -267,7 +272,7 @@ export interface InstancedShapesOptions<F extends ShapeFamily = ShapeFamily> {
   /** Which distance function the mesh draws with, and which instances it takes. */
   readonly family: F;
   /** The three uniforms every instance in this mesh shares. */
-  readonly style: InstancedFamilyStyle;
+  readonly style: NodeStyle;
   /**
    * How many instances to allocate for up front. A caller that knows its node
    * count says so and never pays for a growth; the default is
@@ -647,7 +652,7 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
  */
 export function createInstancedShapes(
   instances: readonly ShapeInstance[],
-  styles: Partial<Readonly<Record<ShapeFamily, InstancedFamilyStyle>>>,
+  styles: Partial<Readonly<Record<ShapeFamily, NodeStyle>>>,
   label = 'scene',
 ): InstancedShapes[] {
   const families: readonly ShapeFamily[] = ['roundedRect', 'circle'];

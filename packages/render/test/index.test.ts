@@ -53,14 +53,16 @@ describe('@dagr/render', () => {
     expect('selectWithinCap' in api).toBe(false);
   });
 
-  it('does not export the instancing machinery', () => {
-    // M4.3's bookkeeping stays internal for the reason the shape scene does:
-    // M4.4 owns the seam a caller feeds a graph through, and an instance handle
-    // API exported before there is anything to name with it would be a guess at
-    // that seam that something comes to depend on.
+  it('does not export the instancing machinery, only the seam over it', () => {
+    // M4.3's bookkeeping stays internal and M4.4 did not change that. What M4.4
+    // added is `Renderer.setNodes` and the two TYPES a caller needs to call it,
+    // `SceneNode` and `NodeStyle`, which are erased at runtime and so cannot be
+    // asserted here. The instance handles underneath stay unnamed until M4.8
+    // knows what a picking pass needs from them.
     expect('InstanceBuffer' in api).toBe(false);
     expect('InstancedShapes' in api).toBe(false);
     expect('createInstancedShapes' in api).toBe(false);
+    expect('SceneNodes' in api).toBe(false);
   });
 
   it('does not export the ribbon arithmetic, which M4.5 landed with no consumer', () => {

@@ -22,7 +22,7 @@ import {
  *
  * Per INSTANCE: where the shape is, how big it is, its corner radius, its glow
  * reach, and TWO colours. Per MESH, as uniforms in
- * {@link InstancedFamilyStyle}: the outline colour, the outline width and the
+ * {@link NodeStyle}: the outline colour, the outline width and the
  * glow's alpha.
  *
  * The split is not arbitrary and it is the one the campaign demo needs. A node's
@@ -100,14 +100,19 @@ export const INSTANCE_FLOATS = INSTANCE_CHANNELS.reduce(
 );
 
 /**
- * What every instance drawn in ONE call shares, as uniforms.
+ * What every node drawn in one call shares, as uniforms: the parts of a shape's
+ * look that are a design decision rather than a fact about the node.
  *
  * The residue of `ShapeStyle` after the per-instance fields are taken out of it,
  * and it stays a separate type rather than a `Pick<ShapeStyle, ...>` because the
  * two records are read at different rates and by different code: this one is
  * three uniforms set once per mesh, and the rest is twelve floats per node.
+ *
+ * Public as of M4.4, because a caller supplying nodes has to be able to say what
+ * the outline and the halo look like. The per-node half arrives on each
+ * {@link SceneNode}.
  */
-export interface InstancedFamilyStyle {
+export interface NodeStyle {
   /** The inset outline's colour, as `0xRRGGBB`. */
   readonly outlineColor: number;
   /** The halo's alpha where it meets the boundary, in `[0, 1]`. */

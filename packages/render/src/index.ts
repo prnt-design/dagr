@@ -99,6 +99,8 @@ export { CENTRE_ANCHOR } from './overlay-math.js';
 export type { ElementAnchor, OverlayPlacement } from './overlay-math.js';
 export { createRichNodes } from './rich-nodes.js';
 export type { RichNode, RichNodeTier, RichNodes } from './rich-nodes.js';
+export type { NodeStyle } from './instance-attributes.js';
+export type { NodeShape, SceneNode } from './scene-nodes.js';
 export { createRenderer } from './webgpu-renderer.js';
 export type {
   OrthoFrustum,

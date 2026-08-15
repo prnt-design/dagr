@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Camera2D } from '../src/camera.js';
 import { RendererDisposedError } from '../src/errors.js';
-import { CRISPNESS_LADDER } from '../src/shape-scene.js';
-import type { ShapeDescriptor } from '../src/shape-scene.js';
+import type { NodeStyle } from '../src/instance-attributes.js';
+import { SceneNodes } from '../src/scene-nodes.js';
+import type { SceneNode } from '../src/scene-nodes.js';
 import {
   WebGPUSceneRenderer,
   adoptCanvasViewport,
@@ -125,6 +126,23 @@ interface Harness {
  */
 const initialViewport = { width: 800, height: 600, devicePixelRatio: 2 } as const;
 
+/** The three uniforms every node in a scene shares. Any valid set will do here. */
+const nodeStyle: NodeStyle = { outlineColor: 0x023047, glowAlpha: 0.45, outlinePixels: 2 };
+
+/** A node the scene can draw, so the tests below have something to hand `setNodes`. */
+function node(id: string, x = 0): SceneNode {
+  return {
+    id,
+    shape: 'roundedRect',
+    center: { x, y: 0 },
+    size: { width: 100, height: 40 },
+    cornerRadius: 4,
+    fillColor: 0xffb703,
+    glowColor: 0xfb8500,
+    glowWorld: 10,
+  };
+}
+
 /**
  * Builds a renderer over stubs, keeping every stub for assertions.
  *
@@ -140,7 +158,11 @@ function harness(
   const sink = new StubFrameSink();
   const threeCamera = new StubProjectionTarget();
   const resources = Array.from({ length: resourceCount }, () => new StubResource());
-  const renderer = new WebGPUSceneRenderer(camera, sink, {}, threeCamera, resources);
+  const nodes = new SceneNodes(nodeStyle);
+  const renderer = new WebGPUSceneRenderer(camera, sink, {}, threeCamera, nodes, [
+    ...resources,
+    nodes,
+  ]);
   return { camera, sink, threeCamera, resources, renderer };
 }
 
@@ -341,6 +363,7 @@ describe('WebGPUSceneRenderer disposal', () => {
       countingSink,
       {},
       new StubProjectionTarget(),
+      new SceneNodes(nodeStyle),
       resources,
     ).dispose();
     expect(disposedBeforeSink).toBe(resources.length);
@@ -358,6 +381,7 @@ describe('WebGPUSceneRenderer disposal', () => {
       new StubFrameSink(),
       {},
       new StubProjectionTarget(),
+      new SceneNodes(nodeStyle),
       resources,
     );
     const late = new StubResource();
@@ -476,68 +500,64 @@ describe('adoptCanvasViewport', () => {
 });
 
 describe('buildSceneRenderer', () => {
-  /** A descriptor that fails validation: a corner radius past half the smaller side. */
-  const impossible: ShapeDescriptor = {
-    kind: 'roundedRect',
-    label: 'too-round',
-    center: { x: 0, y: 0 },
-    size: { width: 100, height: 40 },
-    cornerRadius: 30,
-    style: {
-      fillColor: 0xffb703,
-      outlineColor: 0x023047,
-      glowColor: 0xfb8500,
-      glowAlpha: 0.45,
-      outlinePixels: 2,
-      glowWorld: 10,
-    },
-  };
+  /** A node that fails validation: a corner radius past half the smaller side. */
+  const impossible: SceneNode = { ...node('too-round'), cornerRadius: 30 };
 
   it('gives the device back when building the scene throws, and rethrows', () => {
     // The leak this function exists to close, and the reason it is a function.
     // Before M4.2 everything between `await renderer.init()` and the returned
-    // renderer was infallible literal construction; `createShapeMeshes` is not,
+    // renderer was infallible literal construction; building a scene is not,
     // because it validates, and a `RangeError` there used to propagate out of
     // `createRenderer` with the initialised device referenced only by a local in
-    // an unwinding frame. Nothing in the shipped ladder can trigger it. M4.4 can,
-    // since the descriptor list is a parameter so that a layout result can be
-    // passed in, and it contradicted this module's own promise either way: a
-    // caller never has to dispose a renderer it did not receive.
+    // an unwinding frame. M4.4 is the task that made it reachable in earnest: the
+    // nodes are a caller's, so their numbers are somebody else's arithmetic.
     const camera = new Camera2D({ viewport: initialViewport });
     const sink = new StubFrameSink();
-    expect(() => buildSceneRenderer(camera, sink, 0x0b0d10, [impossible])).toThrow(RangeError);
-    expect(sink.disposals).toBe(1);
-    // The error is the validation's own, not something invented here: a caller who
-    // wrote a bad number still gets told which shape and which field.
-    expect(() => buildSceneRenderer(camera, new StubFrameSink(), 0x0b0d10, [impossible])).toThrow(
-      /too-round\.cornerRadius/,
+    expect(() => buildSceneRenderer(camera, sink, 0x0b0d10, nodeStyle, [impossible])).toThrow(
+      RangeError,
     );
+    expect(sink.disposals).toBe(1);
+    // The error is the validation's own, not something invented here: a caller
+    // who wrote a bad number is told which node and which field, and the node's
+    // own id is what names it.
+    expect(() =>
+      buildSceneRenderer(camera, new StubFrameSink(), 0x0b0d10, nodeStyle, [impossible]),
+    ).toThrow(/too-round\.cornerRadius/);
   });
 
   it('disposes the device exactly once, not once per resource already built', () => {
-    // Two shapes, the second of which is impossible, so the family's mesh has
+    // Two nodes, the second of which is impossible, so a family's mesh has
     // already been built and the first instance written by the time the throw
-    // happens. `createInstancedShapes` disposes that mesh; the device is the one
-    // thing it cannot reach, and it has to be given back once rather than once
-    // per unwind.
-    const good = CRISPNESS_LADDER[0];
-    if (good === undefined) throw new Error('unreachable');
+    // happens. `SceneNodes` disposes those meshes; the device is the one thing it
+    // cannot reach, and it has to be given back once rather than once per unwind.
     const sink = new StubFrameSink();
     expect(() =>
-      buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 0x0b0d10, [
-        good,
+      buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 0x0b0d10, nodeStyle, [
+        node('good'),
         impossible,
       ]),
     ).toThrow(RangeError);
     expect(sink.disposals).toBe(1);
   });
 
-  it('wires up the whole ladder on the success path, with no device anywhere', () => {
+  it('rejects a node style that cannot be drawn, and still gives the device back', () => {
+    const sink = new StubFrameSink();
+    expect(() =>
+      buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 0x0b0d10, {
+        ...nodeStyle,
+        glowAlpha: 2,
+      }),
+    ).toThrow(RangeError);
+    expect(sink.disposals).toBe(1);
+  });
+
+  it('wires up an EMPTY scene on the success path, with no device anywhere', () => {
     // The other half of pulling this out of the `async` function: the assembly
     // past `init()` used to be unreachable in Node and therefore untested. It is
     // not the renderer three would build (the sink is a stub), but every line of
-    // this package's own wiring runs: one instanced mesh per shape family, a
-    // sized drawing buffer, and a frustum that is no longer four zeroes.
+    // this package's own wiring runs: both family meshes, a sized drawing buffer,
+    // and a frustum that is no longer four zeroes. Empty is the honest starting
+    // state as of M4.4: this package ships no scene of its own any more.
     const camera = new Camera2D({ viewport: initialViewport });
     const sink = new StubFrameSink();
     const renderer = buildSceneRenderer(camera, sink, 0x0b0d10);
@@ -545,20 +565,34 @@ describe('buildSceneRenderer', () => {
     expect(sink.sizes).toEqual([{ width: 1600, height: 1200, updateStyle: false }]);
     renderer.render();
     expect(sink.frames).toBe(1);
-    // And it owns the scene's resources: one `InstancedShapes` per family, each
-    // freeing its current geometry and its material through the one `dispose` a
-    // caller has.
     renderer.dispose();
     expect(sink.disposals).toBe(1);
   });
 
-  it('accepts an empty scene, which is a graph with no nodes', () => {
-    const sink = new StubFrameSink();
-    const renderer = buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 0, []);
+  it('draws the nodes it was built with, and sizes the buffers for exactly them', () => {
+    // Not the same thing as `setNodes` after construction, which is why the
+    // option exists: the buffers are allocated for this many nodes, so a caller
+    // that already has its layout when it mounts pays no reallocation.
+    const renderer = buildSceneRenderer(
+      new Camera2D({ viewport: initialViewport }),
+      new StubFrameSink(),
+      0x0b0d10,
+      nodeStyle,
+      [node('a'), node('b', 500)],
+    );
+    renderer.setNodes([node('a'), node('b', 500), node('c', 900)]);
     renderer.render();
-    expect(sink.frames).toBe(1);
     renderer.dispose();
-    expect(sink.disposals).toBe(1);
+  });
+
+  it('refuses setNodes and handleOf after dispose, on the same terms as render', () => {
+    const renderer = buildSceneRenderer(
+      new Camera2D({ viewport: initialViewport }),
+      new StubFrameSink(),
+      0x0b0d10,
+    );
+    renderer.dispose();
+    expect(() => renderer.setNodes([node('a')])).toThrow(RendererDisposedError);
   });
 });
 

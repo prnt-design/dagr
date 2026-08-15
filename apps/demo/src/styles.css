@@ -165,6 +165,11 @@ body {
 /*
  * The card tier, which the same box gets once it is wide enough to hold one.
  *
+ * NOT USED BY P4, which ships one tier (a name) and leaves the card gate and
+ * everything above it to P6. Kept rather than deleted because P6 is the next
+ * task on this file and these rules are what it consumes; the alternative is
+ * deleting them and adding them back unchanged one increment later.
+ *
  * It counter-scales the way the label does, so growing the shape does not grow
  * the card, and it sits INSIDE the box where the label hangs above it. The
  * only difference between the tiers is how much there is to read, which is the

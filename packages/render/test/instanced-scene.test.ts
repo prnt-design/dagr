@@ -6,7 +6,7 @@ import {
   UnknownInstanceHandleError,
 } from '../src/errors.js';
 import { INSTANCE_CHANNELS, linearFromHex } from '../src/instance-attributes.js';
-import type { InstancedFamilyStyle, ShapeFamily } from '../src/instance-attributes.js';
+import type { NodeStyle, ShapeFamily } from '../src/instance-attributes.js';
 import {
   InstancedShapes,
   createInstancedShapes,
@@ -27,7 +27,7 @@ import type { FamilyInstance } from '../src/instanced-scene.js';
  * for what stands in for it, which is the committed crispness references.
  */
 
-const style: InstancedFamilyStyle = { outlineColor: 0x023047, glowAlpha: 0.45, outlinePixels: 2 };
+const style: NodeStyle = { outlineColor: 0x023047, glowAlpha: 0.45, outlinePixels: 2 };
 
 /** A rect whose every field is distinct, so a misplaced write is visible. */
 function rectAt(x: number, size = 10): FamilyInstance<'roundedRect'> {
@@ -129,6 +129,43 @@ describe('a family mesh', () => {
     expect(() => new InstancedShapes({ family: 'circle', style: { ...style, glowAlpha: 2 } })).toThrow(
       RangeError,
     );
+  });
+
+  it('returns a COPY, so a validated style cannot be mutated behind its user', () => {
+    const source = { ...style };
+    const validated = requireFamilyStyle(source, 'f');
+    expect(validated).not.toBe(source);
+    expect(validated).toEqual(style);
+  });
+
+  it('rejects a colour that is not a 24-bit integer, as createRenderer does', () => {
+    // three's `Color.setHex` validates none of these: measured against 0.185.1,
+    // `NaN` and `Infinity` both come out #000000, `-1` and `0x1ffffff` both
+    // saturate to #ffffff, and `1.7` floors to #000001. An outline that silently
+    // turns black on a near-black background is an outline that is not there.
+    for (const bad of [-1, 0x1000000, 1.7, Number.NaN, Infinity]) {
+      expect(() => requireFamilyStyle({ ...style, outlineColor: bad }, 'f')).toThrow(RangeError);
+    }
+  });
+
+  it('rejects a glow alpha outside the unit interval, at both ends', () => {
+    for (const bad of [-0.01, 1.01, Number.NaN]) {
+      expect(() => requireFamilyStyle({ ...style, glowAlpha: bad }, 'f')).toThrow(RangeError);
+    }
+    expect(requireFamilyStyle({ ...style, glowAlpha: 0 }, 'f').glowAlpha).toBe(0);
+    expect(requireFamilyStyle({ ...style, glowAlpha: 1 }, 'f').glowAlpha).toBe(1);
+  });
+
+  it('rejects a negative outline width, which fails silently in two ways', () => {
+    // A negative width puts the band's inner edge outside its outer one, and it
+    // draws nothing a reviewer would question either way. At or below -1 pixel
+    // the band vanishes and the shape simply has no border. Between -1 and 0 it
+    // is worse: the band lands OUTSIDE the boundary and tints the fill's own
+    // outer antialiasing ramp with the outline colour.
+    for (const bad of [-0.5, -1, -2, Number.NaN]) {
+      expect(() => requireFamilyStyle({ ...style, outlinePixels: bad }, 'f')).toThrow(RangeError);
+    }
+    expect(requireFamilyStyle({ ...style, outlinePixels: 0 }, 'f').outlinePixels).toBe(0);
   });
 });
 

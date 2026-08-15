@@ -2993,13 +2993,82 @@ of M3 would leave the second runner idle for a milestone.
   `mesh.onBeforeRender`, which three calls at the top of `renderObject` before it
   touches the geometry. A span rather than a set, so scattered writes degrade to
   the whole-buffer upload and never to something worse.
-- [ ] **M4.4** (`@dagr/render`, `apps/demo`) A real graph on screen: take a
+- [x] **M4.4** (`@dagr/render`, `apps/demo`) A real graph on screen: take a
   `LayoutResult` from `@dagr/layout` and draw its nodes, sized and positioned,
   with a node-id to instance-handle mapping that survives nodes being added and
   removed. The first task where the demo shows an actual laid-out graph instead
   of test geometry, which makes its screenshot the milestone's first honest
   progress report. Wants M2.7 positions to be real: before that it would draw a
   correct picture of a degenerate layout, which is not worth a run.
+  THE SEAM TAKES NODES AND NOT A `LayoutResult`, which is the one place this
+  entry's own wording was not followed and the reason is a package boundary:
+  naming a `LayoutResult` in `@dagr/render` would make `@dagr/layout` a
+  dependency of it, and the two have been independent since M0. `setNodes` takes
+  an array of `SceneNode` (id, shape, centre, size, corner radius, fill, glow,
+  glow reach), the caller converts, and the conversion is where the y flip
+  happens, which `camera.ts` has said belongs to M4.4 since M4.1.
+  THE Y FLIP HAPPENS ONCE, in `campaign-scene.ts`'s `toWorld`, at the very end.
+  Layout is y-DOWN and `Camera2D` is y-UP; a tile's own layout, the shelf packing
+  and the grids all stay in y-down space so there is exactly ONE line where the
+  sign changes. Flipping per tile would be four sign changes and three chances to
+  get one wrong, and a missed one is a tile whose contents are upside down inside
+  a picture that is otherwise right, which reads as a layout bug rather than a
+  sign bug. `WorldBounds` being extents rather than `{x, y, width, height}` (M4.1)
+  is what makes the seam itself a compile error rather than a convention.
+  A NODE KEEPS ITS INSTANCE HANDLE ACROSS `setNodes` CALLS, which is the mapping
+  this entry asks for and is the property M4.6 and M4.8 actually need. The diff
+  is by id: a node in both lists is updated in place, one that left is freed, one
+  that arrived is allocated, and removals run before additions so a wholesale
+  swap does not grow the buffers to twice what it needs. The ONE case where the
+  handle cannot survive is a node that changes SHAPE, because the two families
+  are two meshes; that is stated rather than hidden. `SceneNodes.placementOf`
+  returns the pair (shape, handle) rather than a bare handle, because each family
+  runs its own counter and the first rounded rect and the first circle are both
+  handle 1: a test caught a `handleOf` claiming a shape change had reallocated
+  nothing. It is NOT on the `Renderer` interface, because M4.8 is the task that
+  knows what a picking pass needs.
+  THE CRISPNESS LADDER IS GONE, with `shape-scene.ts` and its suite. The renderer
+  ships no scene of its own now: `createRenderer` draws an empty one and
+  everything on screen arrives through `setNodes`. That also orphaned `ShapeStyle`,
+  `requireShapeStyle` and `shapeQuadSize`, which are deleted, and it moved
+  `quadPadding` onto the `Arith` interface: the padded quad is computed per
+  instance in the VERTEX stage now, so the choice was a second copy of that sum in
+  TSL or one formula both backends run, and M4.2's whole argument for the nine
+  primitives applies unchanged.
+  THE DEMO TILES, AND THE PLAN'S ARGUMENT SURVIVED CONTACT. One Sugiyama pass over
+  3,010 nodes ranks 750 rooms into a couple of layers and draws a ribbon; the demo
+  runs 95 layout calls instead, one per chapter, region, quest and front, plus a
+  spine, and shelf-packs the blocks. Measured at the default seed: 101 tiles, 95
+  of them laid out and 6 of them GRIDS. The grids are the honest half of the
+  scheme rather than an escape from it: NPCs, factions, items, stat blocks, clues
+  and weather sit outside the contains forest and no routed edge has both ends
+  inside any one of those groups, so a layer assignment would put all 550 NPCs in
+  rank 0 and the "layout" of a bestiary would be one row 550 nodes wide.
+  THE SHELF WIDTH IS SEARCHED, NOT COMPUTED, and the first version computed it.
+  `sqrt(totalArea * aspect)` is the width a packing of exactly the tile areas
+  would need, and a shelf packing is not that: each shelf is as tall as its
+  tallest member. On a hundred tiles of mixed height it produced 0.92 against a
+  1.78 target, which is a nearly square drawing in a 16:9 frame and a third of the
+  viewport wasted at the fitted zoom. A bisection on the width fixes it, because
+  the packed aspect is monotonic in the width.
+  ONE TABLE SIZES AND COLOURS A KIND, in `apps/demo/src/campaign-style.ts`, and it
+  has three readers rather than two: layout is told the same size the renderer
+  draws (a node laid out at one size and drawn at another overlaps its neighbours
+  in a picture whose layout says it does not), and the overlay places a card
+  against the same box. Colour is by STRATUM (amber spine, blue geography, violet
+  people, green quests, red pressure, grey reference) so the far view reads as
+  structure, and `kindColor` derives the CSS string the card tier needs from the
+  same numbers the GPU takes: a CSS declaration whose value the parser rejects is
+  DROPPED SILENTLY, so a second table would drift invisibly.
+  `#zoom=` SURVIVED, and nearly did not. The load-time `fitBounds` would have
+  overridden it on every load while the readout went on advertising it, so the
+  fit is skipped when the hash spoke. `initialZoomFromHash` returns its fallback
+  as given, which makes a non-finite fallback a usable "absent" signal; comparing
+  against `INITIAL_ZOOM` instead would read `#zoom=1` as silence.
+  The committed frames are `assets/screenshots/m4.4-campaign-fit.png` (the whole
+  campaign at the derived floor, 0.053 px/unit) and `m4.4-campaign-rooms.png`
+  (keyed rooms with their names at 2 px/unit). Both through the headless WebGL2
+  (swiftshader) path this box has, at dpr 1.
 - [ ] **M4.5** (`@dagr/render`, `apps/demo`) Edge ribbons: polyline and bezier
   tessellation from M2.8's route control points, joins that do not pinch at
   sharp angles, and a dash-flow uniform for animated direction. State whether
@@ -3734,6 +3803,13 @@ consumer. Sequencing against M3 is the plan's open question 1.
   range validation) each now have a single authority.
 - [ ] **P6** (`apps/demo`) Campaign cards through `createRichNodes` with
   per-kind declared sizes. P3 to P5 are M4.3 to M4.5 and live in M4.
+  What P4 left it: `campaign-style.ts` holds the per-kind sizes and colours with
+  `kindColor(kind, subtype)` giving the CSS string a badge needs, and
+  `CampaignScene.overlayNodes` is the `{id, bounds, name, kind, color}` list a
+  tier maps over. P4 ships ONE tier, a name above the node from 24 CSS pixels of
+  screen width, so P6 owns the card gate and every threshold above it: the
+  overlay rejects overlapping gates, so a placeholder card would have been a
+  number to work around rather than choose.
 - [ ] **P7** (`apps/demo`, `docs`) Deep links, hover highlight, committed
   screenshots, a docs page on the schema.
   The docs page landed early, on 2026-08-15, as its own increment

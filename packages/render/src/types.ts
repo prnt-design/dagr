@@ -1,4 +1,6 @@
 import type { Camera2D } from './camera.js';
+import type { NodeStyle } from './instance-attributes.js';
+import type { SceneNode } from './scene-nodes.js';
 
 /**
  * The public vocabulary of `@dagr/render`.
@@ -93,7 +95,7 @@ export interface OrthoFrustum {
  *
  * Here rather than in `webgpu-renderer.ts`, where it started, because the module
  * that BUILDS a scene is a lower layer than the module that renders one, and
- * `shape-scene.ts` naming a type out of `webgpu-renderer.ts` pointed the
+ * a scene module naming a type out of `webgpu-renderer.ts` pointed the
  * dependency the wrong way round and closed a cycle (the renderer imports
  * `createShapeMeshes`). Nothing broke, since it was `import type` and
  * `verbatimModuleSyntax` erases those, but M4.4 adds a second scene module on the
@@ -111,18 +113,20 @@ export interface GpuResource {
 }
 
 /**
- * What a Dagr renderer does, and, as of M4.2, all it does.
+ * What a Dagr renderer does.
  *
- * This is the seam every later M4 task plugs into. It deliberately says nothing
- * about scene contents: no node, no edge, no shape, no layout result. M4.1 drew a
- * single hard-coded quad to prove the pipeline lights up and M4.2 draws a
- * hard-coded set of SDF shapes, which is a change to what is DRAWN and not to
- * anything a caller can reach; giving this interface a `setGraph` or a `setLayout`
- * now would still be guessing at the shape of M4.4 with nothing to check the
- * guess against. What it does fix is the lifecycle, which is the part that will
- * not change: something owns a camera, something has to be told when the canvas
- * resizes, something draws a frame, and something has to give the GPU its memory
- * back.
+ * This is the seam every later M4 task plugs into, and M4.4 is the task that
+ * gave it scene contents. M4.1 drew a single hard-coded quad and M4.2 a
+ * hard-coded set of SDF shapes, and this interface deliberately said nothing
+ * about either: naming a `setGraph` then would have been guessing at M4.4's
+ * shape with nothing to check the guess against. {@link setNodes} is the answer
+ * that survived contact with a real dataset, and what it is NOT is as
+ * deliberate as what it is. It takes NODES and not a `LayoutResult`, so
+ * `@dagr/layout` is not a dependency of this package and the y-down to y-up
+ * conversion stays with the caller who owns the layout (see {@link Camera2D});
+ * it takes an ARRAY and not a graph, because a renderer has no use for
+ * adjacency; and every node carries its own colours and size, because those are
+ * the caller's decisions about their data rather than this package's.
  *
  * The camera is `readonly` because it is the object callers mutate. Pan and
  * zoom go through {@link Camera2D}'s own methods, which validate; swapping in a
@@ -137,6 +141,27 @@ export interface Renderer {
    * of it pulled and the rest pushed.
    */
   readonly camera: Camera2D;
+
+  /**
+   * Replaces the scene's nodes, keeping the instances of nodes that are in both
+   * this list and the last one.
+   *
+   * The diff is by `id` and it is the property M4.4 owed the tasks after it: a
+   * node present in two consecutive calls keeps its instance handle, so
+   * per-instance state keyed to it (M4.6's spring velocity, M4.8's picking id)
+   * survives a call that moved every other node in the graph. A node that
+   * changes SHAPE is the exception, and it is a removal and an addition, because
+   * the two shape families are two meshes.
+   *
+   * Idempotent in the sense that matters: calling it twice with the same list
+   * writes the same floats twice and changes nothing else. Not free, though, so
+   * a caller with a delta in hand should apply the delta rather than rebuilding
+   * the list.
+   *
+   * Rejects a list with two nodes sharing an id, because the second would
+   * silently take the first's place and the picture would be one node short.
+   */
+  setNodes(nodes: readonly SceneNode[]): void;
 
   /**
    * Adopts a new canvas size. Call it from a `ResizeObserver` or a `resize`
@@ -207,6 +232,27 @@ export interface RendererOptions {
    * "broken renderer" frame the default colours exist to rule out.
    */
   readonly clearColor?: number;
+
+  /**
+   * The outline, the halo strength and the outline width every node shares.
+   *
+   * Optional, with the ladder's numbers as the default: a caller who has nodes
+   * to draw should be able to draw them. The per-node half of a shape's look
+   * (its fill, its halo colour and how far the halo reaches) is on each
+   * {@link SceneNode}, because those are facts about the data.
+   */
+  readonly nodeStyle?: NodeStyle;
+
+  /**
+   * Nodes to draw immediately, equivalent to {@link Renderer.setNodes} on the
+   * renderer this returns.
+   *
+   * Here as well as on the interface because the two are not the same in one
+   * respect that matters at campaign scale: the buffers are allocated for
+   * exactly this many nodes, so the first frame costs no reallocation. A caller
+   * that already has its layout when it mounts should pass it.
+   */
+  readonly nodes?: readonly SceneNode[];
 
   /**
    * Abandons the renderer being built. Rejects with the signal's reason, having

@@ -9,11 +9,10 @@ sidebar_position: 4
 `@dagr/render` draws a graph. It takes coordinates, not a `Graph`: whatever
 [`@dagr/layout`](./layout.md) works out goes on screen through a three.js
 `WebGPURenderer`, with an orthographic camera, springs carrying nodes between one
-layout and the next, and, as of M4.3, one draw call per shape family: the
-six-shape ladder draws in two.
+layout and the next, and one draw call per shape family.
 
-This page describes the package as of M4.3, the last task to change what reaches
-a GPU. Rounded rectangles and circles are on screen, drawn as signed distance
+This page describes the package as of M4.4, the task that gave it a way to be
+told what to draw. Rounded rectangles and circles are on screen, drawn as signed distance
 fields, and there is an HTML overlay for the text a signed distance field cannot
 draw. What is real is the seam everything else plugs into: the `Renderer`
 interface, the camera, the distance fields and the shading that reads them, and
@@ -23,69 +22,77 @@ each is the kind of choice that is cheap now and expensive in six tasks' time.
 
 ## What is on screen
 
-`createRenderer` mounts a three.js `WebGPURenderer` on a canvas and draws six
-shapes: a rounded rectangle and a circle on each of three rungs a decade apart, on
-near-black. As of M4.3 it draws them in TWO calls rather than six, one per shape
-family, with every shape's position, size, corner radius, glow reach and colours
-read per instance. The rectangles are 10, 100 and 1000 world units across, and each
-circle's diameter matches its rung's height, so the circles are 4, 40 and 400.
-Every one of them gets its fill, its inset outline and its glow out of a single
-distance, and antialiases its own edges from the screen-space derivative of that
-distance.
+Whatever a caller passes to `setNodes`, and nothing else. `createRenderer` mounts
+a three.js `WebGPURenderer` on a canvas, draws an empty scene on near-black, and
+waits.
 
-The scene is a ladder rather than one shape, and the reason is what makes the
-screenshots evidence. A texture atlas baked at one size looks perfect at the
-zoom it was baked for, so a scene of same-sized shapes cannot tell the two
-approaches apart however many stills are taken of it. Shapes two orders of
-magnitude apart in size put both ends of the range in one frame.
+```ts
+const renderer = await createRenderer({ canvas });
+renderer.setNodes([
+  {
+    id: 'chapter-3',
+    shape: 'roundedRect',
+    center: { x: 0, y: 0 },
+    size: { width: 200, height: 80 },
+    cornerRadius: 16,
+    fillColor: 0xfb8500,
+    glowColor: 0xffb703,
+    glowWorld: 20,
+  },
+]);
+renderer.render();
+```
 
-![The demo at zoom 1: a 100 unit rounded rectangle in amber with a navy border and
-an orange halo, a blue circle beside it, the 10 unit rung as specks to the left and
-the 1000 unit rung entering from the
-right](../../assets/screenshots/m4.2-sdf-shapes-1x.png)
+That was not always true, and what it replaced is worth a sentence. M4.1 drew one
+hard-coded quad and M4.2 a hard-coded ladder of six SDF shapes a decade apart in
+size; both were demonstrations, and the ladder's job was to prove that a signed
+distance field is crisp at every zoom rather than at one. It did, the frames
+below are the evidence, and M4.4 retired it: a package that ships a picture
+cannot be handed one.
 
-That is `apps/demo` at zoom 1, one CSS pixel per world unit, where fill, outline
-and glow are all legible at once. The readout is live camera state rather than a
-caption: it is how a still shows that the camera behind it is real, and the zoom
-row is what makes the two references below checkable.
+![Three thousand campaign nodes at the fitted zoom: blue geography tiles, an
+amber narrative spine, violet grids of NPCs, green quest DAGs and red pressure
+clocks, packed into a 16:9
+canvas](../../assets/screenshots/m4.4-campaign-fit.png)
 
-Those two are the crispness pair, and they are the evidence for the claim in this
-task's name. At zoom 100 the 10 unit rung fills the view, so what you are looking
-at is one corner arc at a hundred pixels per world unit:
+That is `apps/demo`: 3,010 nodes of a mock D&D campaign, cut into 101 tiles, laid
+out by [`@dagr/layout`](./layout.md) in a worker one tile at a time, packed, and
+drawn in two instanced calls. The colour families are strata (spine, geography,
+people, quests, pressure, reference), which is what makes the far view readable
+as structure rather than as confetti. The readout is live camera state rather
+than a caption.
 
-![At zoom 100 the smallest rounded rectangle fills the canvas, its corner a smooth
-arc, with a two pixel navy border inside the
+![The same campaign at two CSS pixels per world unit: keyed rooms as rounded
+rectangles with names above them, each with a crisp inset outline and a
+halo](../../assets/screenshots/m4.4-campaign-rooms.png)
+
+The same scene zoomed in, where the nodes are wide enough to carry names. The
+names are DOM, positioned by the camera through the overlay described below; the
+shapes are the GPU's.
+
+Those two are what M4.4 has evidence for. The crispness pair from M4.2 is what
+the shader has evidence for, and it stays committed:
+
+![At zoom 100 the smallest rounded rectangle fills the canvas, its corner a
+smooth arc, with a two pixel navy border inside the
 edge](../../assets/screenshots/m4.2-sdf-shapes-100x.png)
 
-At zoom 0.1 the same scene is a thousand times smaller. The 1000 unit rung is 100
-CSS pixels and still visibly a rounded rectangle with a curved corner and its
-border; the 100 unit rung is 10 pixels and keeps both; the 10 unit rung is at the
-limit discussed below:
+At zoom 100 one 10 unit rounded rectangle fills the view, so what you are looking
+at is a single corner arc at a hundred pixels per world unit. The
+[0.1x frame](../../assets/screenshots/m4.2-sdf-shapes-0.1x.png) is the other end
+of that range, and it is no longer reachable in the live demo: the zoom floor is
+derived from the content now, and a view further out than the whole scene is the
+state that range exists to prevent. Reproduce it from the M4.2 commit; what it
+documented is recorded in that task's ROADMAP entry.
 
-![At zoom 0.1 the whole ladder is a small cluster: the 1000 unit rung at 100
-pixels, the 100 unit rung at 10, and the smallest rung at the
-limit](../../assets/screenshots/m4.2-sdf-shapes-0.1x.png)
-
-All three were captured against a real WebGPU adapter at a device pixel ratio of
-1, cropped to the canvas itself, so each frame is exactly the 1102 by 598 pixels
-the renderer drew and nothing else. The canvas is that size because its container
-caps it, not because of the window: it measures 1102 by 598 in a 1920 wide window
-as readily as in a 1200 wide one, and an earlier version of this paragraph claimed
-the window size caused it, which is wrong. Reproducing the 100x frame takes no
-gesture: run the demo and open `#zoom=100`. The 0.1x frame is no longer
-reachable in the live demo, and that is a decision, not drift: the campaign
-demo's P2 derives the zoom range from the scene and the viewport, and the floor
-(the whole ladder fitted at 5% padding, about 0.45 on this canvas) sits above
-0.1, because a view that far out is exactly the state the derived range exists
-to prevent. Reproduce the 0.1x reference from the M4.2 commit; the sub-pixel
-fade it documents is recorded in that task's ROADMAP entry. The frame is mostly
-background at 0.1, and that is inherent rather than a framing mistake, since
-the visible world there is 11020 world units across and the whole ladder fits
-inside it with room to spare.
-
-For the record, this is where the package started one task earlier:
+For the record, this is where the package started:
 [first light](../../assets/screenshots/m4.1-first-light.png) was a single amber
 quad, drawn to prove the pipeline lit up at all.
+
+Every frame here was captured at a device pixel ratio of 1, cropped to the canvas
+itself. The campaign pair came through a software WebGL2 rasteriser rather than a
+real WebGPU adapter, which is what the machine that runs the agents has; that is
+worth knowing for what a screenshot proves and does not.
 
 Creation is asynchronous, and that is a property of WebGPU rather than a style
 choice. Getting a device means requesting an adapter from the browser, which is
@@ -97,6 +104,24 @@ three's `WebGPURenderer` falls back to WebGL2 by itself when WebGPU is
 unavailable, so `createRenderer` resolving is not a promise that WebGPU is in
 use. Nothing here forces a backend or reports which one won. M4.9 owns the
 fallback, including telling the caller what they got.
+
+### A node keeps its handle
+
+`setNodes` diffs by `id`. A node present in two consecutive calls is updated in
+place, keeping the instance handle it had; one that left is freed, and one that
+arrived is allocated. That is not an optimisation, it is the property M4.6's
+springs and M4.8's picking ids are keyed on: a node that kept its id but got a
+new handle every relayout would lose its velocity and jump.
+
+The one case where the handle cannot survive is a node that changes SHAPE,
+because the two shape families are two meshes and an instance cannot move
+between them. It is a removal and an addition, and per-instance state keyed to
+that node has to be rebuilt.
+
+What `setNodes` deliberately does NOT take is a `LayoutResult`. Naming one would
+make `@dagr/layout` a dependency of this package, and the y-down to y-up
+conversion belongs to whoever owns the layout. See the conventions section below,
+which has said so since M4.1.
 
 ## Shapes are signed distance fields
 
@@ -263,7 +288,7 @@ selection in front on the same plane.
 One mesh per shape family, each drawing every shape of that family in a single
 call. A unit quad is scaled in the vertex stage by the instance's own padded quad
 size, so one geometry serves shapes four world units across and shapes a thousand
-across, and the six-shape ladder is two draw calls instead of six.
+across, and a campaign of three thousand nodes is two draw calls.
 
 What is per instance is what a graph varies: the centre, the size, the corner
 radius, the glow's reach in world units, and two colours. What stays a uniform is
@@ -702,13 +727,35 @@ camera.zoomAtScreen(
 renderer.render();
 ```
 
-`Renderer` is a camera, a `resize`, a `render` and a `dispose`. It deliberately
-says nothing about scene contents, and M4.2 did not change that: the shapes it
-draws are hard-coded, nothing about them is exported, and a `setLayout` designed
-now would be a guess at M4.4 with nothing to check the guess against. So M4.2
-changed what is DRAWN and not what is CALLABLE, which is why this section reads
-the same as it did before it. What the interface does fix is the lifecycle, which
-is the part that will not change.
+`Renderer` is a camera, a `setNodes`, a `resize`, a `render` and a `dispose`.
+Everything except `setNodes` was fixed at M4.1 and has not changed since; the
+lifecycle was always the part that would not.
+
+`setNodes` was deliberately absent until M4.4. M4.1 drew a hard-coded quad and
+M4.2 a hard-coded ladder, and a `setLayout` designed at either point would have
+been a guess with nothing to check the guess against. What it turned out to want
+was neither a graph nor a layout result: an ARRAY of nodes, each carrying its own
+centre, size, shape and colours, because a renderer has no use for adjacency and
+because a caller's colours are a decision about their data rather than about this
+package.
+
+```ts
+renderer.setNodes(
+  [...layout.nodes.values()].map((node) => ({
+    id: node.id,
+    shape: 'roundedRect' as const,
+    // Layout is y-down and the camera is y-up. The flip belongs here, to the
+    // caller who owns the layout, and it is worth doing in exactly one place.
+    center: { x: node.x, y: -node.y },
+    size: { width: node.width, height: node.height },
+    cornerRadius: 8,
+    fillColor: 0x219ebc,
+    glowColor: 0x8ecae6,
+    glowWorld: node.height / 4,
+  })),
+);
+renderer.render();
+```
 
 The distance fields and the shading node are internal for a reason worth naming:
 a TSL node is a three.js type, and no three.js type appears in this package's
@@ -1062,7 +1109,8 @@ are.
 
 ## What is not here yet
 
-Most of it. M4.3 is six shapes, drawn correctly, one draw call per family.
+Most of it. M4.4 is a graph on screen, drawn correctly, one draw call per shape
+family, and nothing that moves.
 
 - A real layout on screen, which is also where the y-up and y-down mismatch
   above gets resolved once, in one place (M4.4).

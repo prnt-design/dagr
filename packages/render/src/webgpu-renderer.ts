@@ -1,8 +1,9 @@
 import { Color, OrthographicCamera, Scene, WebGPURenderer } from 'three/webgpu';
 import { Camera2D } from './camera.js';
 import { RendererDisposedError } from './errors.js';
-import { createShapeMeshes } from './shape-scene.js';
-import type { ShapeDescriptor } from './shape-scene.js';
+import type { NodeStyle } from './instance-attributes.js';
+import { SceneNodes } from './scene-nodes.js';
+import type { SceneNode } from './scene-nodes.js';
 import type { GpuResource, Renderer, RendererOptions, Size, ViewportSize } from './types.js';
 
 /**
@@ -127,6 +128,29 @@ export type { GpuResource };
 const DEFAULT_CLEAR_COLOR = 0x0b0d10;
 
 /**
+ * The outline, the halo strength and the outline width a scene gets when its
+ * caller does not say.
+ *
+ * The ladder's numbers, carried over rather than re-argued, because the argument
+ * is unchanged and is written down in `sdf.ts` and in the M4.2 ROADMAP entry: an
+ * inset outline is always drawn over a fill rather than against the background,
+ * so the contrast that has to work is outline against fill and the set's darkest
+ * member is a large luminance step against every one of them; 2 DEVICE pixels is
+ * the smallest width whose edge reads as a deliberate line at dpr 1; and a halo
+ * over 0.45 alpha stops reading as a halo and starts reading as a second,
+ * blurrier shape behind the first.
+ *
+ * A default rather than a required option, because a caller who has nodes to
+ * draw should be able to draw them, and because these three are the parts of a
+ * shape's look that are least likely to be what a first-time caller cares about.
+ */
+const DEFAULT_NODE_STYLE: NodeStyle = {
+  outlineColor: 0x023047,
+  glowAlpha: 0.45,
+  outlinePixels: 2,
+};
+
+/**
  * Where the camera sits on the z axis, and the depth range it sees.
  *
  * An orthographic projection does not scale with distance, so the only job
@@ -234,6 +258,7 @@ export class WebGPUSceneRenderer implements Renderer {
   readonly #scene: OpaqueThreeObject;
   readonly #threeCamera: ProjectionTarget;
   readonly #resources: readonly GpuResource[];
+  readonly #nodes: SceneNodes;
   #disposed = false;
 
   /**
@@ -256,13 +281,21 @@ export class WebGPUSceneRenderer implements Renderer {
     renderer: FrameSink,
     scene: OpaqueThreeObject,
     threeCamera: ProjectionTarget,
+    nodes: SceneNodes,
     resources: readonly GpuResource[],
   ) {
     this.camera = camera;
     this.#renderer = renderer;
     this.#scene = scene;
     this.#threeCamera = threeCamera;
+    this.#nodes = nodes;
     this.#resources = [...resources];
+  }
+
+  /** See {@link Renderer.setNodes}. */
+  setNodes(nodes: readonly SceneNode[]): void {
+    this.#assertLive('setNodes');
+    this.#nodes.setNodes(nodes);
   }
 
   /**
@@ -432,24 +465,33 @@ export function buildSceneRenderer(
   camera: Camera2D,
   renderer: FrameSink,
   clearColor: number,
-  descriptors?: readonly ShapeDescriptor[],
+  nodeStyle?: NodeStyle,
+  nodes?: readonly SceneNode[],
 ): Renderer {
   try {
     const scene = new Scene();
     scene.background = new Color(clearColor);
 
-    // One entry per FAMILY now, not one per shape, and each entry is both the
-    // mesh to add and the resource to give back: an `InstancedShapes` replaces
+    // ONE OBJECT, not one per family and not one per shape, and it is both the
+    // meshes to add and the resource to give back: an `InstancedShapes` replaces
     // its own geometry when its buffer grows, so a geometry captured here would
     // be the stale one by the time anything disposed it.
-    const shapes = createShapeMeshes(descriptors);
-    for (const family of shapes) {
-      scene.add(family.mesh);
+    const sceneNodes = new SceneNodes(nodeStyle ?? DEFAULT_NODE_STYLE, nodes?.length);
+    for (const mesh of sceneNodes.meshes) {
+      scene.add(mesh);
     }
-    const resources: readonly GpuResource[] = shapes;
+    if (nodes !== undefined) sceneNodes.setNodes(nodes);
+    const resources: readonly GpuResource[] = [sceneNodes];
 
     const threeCamera = new OrthographicCamera(0, 0, 0, 0, CAMERA_NEAR, CAMERA_FAR);
-    const instance = new WebGPUSceneRenderer(camera, renderer, scene, threeCamera, resources);
+    const instance = new WebGPUSceneRenderer(
+      camera,
+      renderer,
+      scene,
+      threeCamera,
+      sceneNodes,
+      resources,
+    );
 
     // Adopt the camera's current viewport, which sizes the buffer and fills in
     // the frustum the `OrthographicCamera` was constructed with zeroes for. Not
@@ -539,9 +581,10 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     signal.throwIfAborted();
   }
 
-  // The crispness ladder, in place of M4.1's single quad, and the device handed
-  // back if building it throws. Everything from here to the returned renderer
-  // lives in one function with one `catch` for that reason: see
-  // {@link buildSceneRenderer}.
-  return buildSceneRenderer(camera, renderer, clearColor);
+  // An EMPTY scene, and the device handed back if building it throws.
+  // Everything from here to the returned renderer lives in one function with one
+  // `catch` for that reason: see {@link buildSceneRenderer}. What is drawn now
+  // comes from `setNodes`, which is M4.4's whole point: the package stopped
+  // shipping a hard-coded scene the day it could take a real one.
+  return buildSceneRenderer(camera, renderer, clearColor, options.nodeStyle, options.nodes);
 }

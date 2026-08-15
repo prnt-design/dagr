@@ -14,6 +14,31 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- `Renderer.setNodes`: the seam a caller feeds a graph through. New surface:
+  `setNodes` on `Renderer`, `nodeStyle` and `nodes` on `RendererOptions`, and
+  the types `SceneNode`, `NodeShape` and `NodeStyle`. (M4.4)
+
+  **A node keeps its instance handle across calls**, which is the property M4.6's
+  springs and M4.8's picking ids depend on rather than a convenience: the diff is
+  by `id`, so a node present in two consecutive calls is updated in place. The
+  one exception is a node that changes SHAPE, because the two shape families are
+  two meshes and an instance cannot move between them.
+
+  **It takes NODES and not a `LayoutResult`.** Naming one would make
+  `@dagr/layout` a dependency of this package, and the y-down to y-up conversion
+  belongs to whoever owns the layout, which `camera.ts` has said since M4.1.
+  `WorldBounds` being extents rather than a corner and a size is what makes that
+  seam a compile error rather than a convention.
+
+  **REMOVED: the crispness ladder.** `createRenderer` draws an empty scene now
+  and everything on screen arrives through `setNodes`, so `shape-scene.ts` and
+  its suite are gone. With them went `ShapeStyle`, `requireShapeStyle` and
+  `shapeQuadSize`, which had no callers left, and `quadPadding` moved onto the
+  `Arith` interface: the padded quad is computed per instance in the vertex stage
+  now, so the alternative was a second copy of that sum in TSL. None of the four
+  was ever exported; the ladder's frames stay in `assets/screenshots/` and in the
+  M4.2 commit.
+
 - Instanced rendering: one mesh per shape family, with position, size, corner
   radius, glow reach and two colours read per instance. (M4.3)
 
