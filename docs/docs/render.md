@@ -195,7 +195,8 @@ all.
 A glow is a property of the shape. The quad has to be padded to contain the
 halo, and that padding sizes the quad in the vertex stage, from the instance's
 own glow reach, so a pixel-space glow would need the quad resized every time the
-camera moved. That is a per-frame scene decision, and M4.4 owns it. A halo that
+camera moved. That is a per-frame scene decision and nobody owns it yet, for the
+reason the padding section above gives. A halo that
 stayed six pixels wide while its shape grew from one pixel to a thousand would
 also read as a different effect at each end of the range.
 
@@ -227,7 +228,8 @@ This works because the fields are TRUE euclidean distances outside the shape
 rather than a cheaper approximation. The gradient of such a field has magnitude 1
 in world space, so its screen-space gradient magnitude is world units per pixel
 and nothing else. It also means nothing reads the camera: the width follows
-whatever transform a mesh has picked up, including one M4.4 has not written yet.
+whatever transform a mesh has picked up, including the per-instance one M4.3
+writes in the vertex stage.
 
 ### Where the fade stops, measured
 
@@ -319,10 +321,11 @@ and picking IDs (M4.8) are keyed by handle for that reason, and a handle is neve
 reused, so a handle held past its instance's removal raises
 `UnknownInstanceHandleError` rather than addressing whatever took its place.
 
-None of this is exported yet. M4.4 owns the seam a caller feeds a graph through,
-and an instance handle API named before there is anything to name with it is a
-guess that something comes to depend on. The error class is exported, because an
-error arrives in a caller's `catch` whether or not the module that throws it did.
+None of this is exported. `setNodes` is the seam a caller feeds a graph through,
+and an instance HANDLE API on top of it would be a guess at what M4.8's picking
+pass wants, made before there is a picking pass. The error classes are exported,
+because an error arrives in a caller's `catch` whether or not the module that
+throws it did.
 
 ## The camera
 
@@ -360,11 +363,11 @@ So there is no `Rect` here. `Camera2D.visibleWorldBounds()` returns
 assignable from either rectangle, so the mistake is a type error rather than a
 naming convention, and "which corner is `x, y`" stops being a question instead
 of being answered. It is also the shape a culling test wants. Converting between
-the two spaces still belongs to whatever feeds a layout result into a scene,
-which is M4.4; the point of settling the type now is that M4.4 gets a compiler
-error at the seam rather than a review comment, and that M4.2 and M4.3, both
-written by someone who has just been reading `@dagr/layout`, cannot walk into it
-in the meantime.
+the two spaces belongs to whatever feeds a layout result into a scene, which is
+the caller, and settling the type early is what turned that into a compiler
+error at the seam rather than a review comment. The campaign demo does the flip
+in one function at the end of its build, so there is exactly one line where the
+sign changes.
 
 **Zoom is CSS pixels per world unit.** At zoom 2 a one-unit box draws two CSS
 pixels wide, and zooming in raises the number. The alternative reading (world

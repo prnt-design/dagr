@@ -10,7 +10,7 @@ import type { NodeShape, Size } from '@dagr/render';
  * (P6) wants a CSS colour string for a kind badge. A second table for the second
  * consumer is two tables that drift, and the drift is invisible: a badge in one
  * colour beside a shape in another reads as a design choice rather than a bug.
- * So the numbers are here and {@link kindColor} derives the string.
+ * So the numbers are here and {@link nodeColor} derives the string.
  *
  * Sizes are here for a third reason, and it is the one that would be a real bug
  * if it were got wrong. A node's size is an input to LAYOUT (`@dagr/layout` asks

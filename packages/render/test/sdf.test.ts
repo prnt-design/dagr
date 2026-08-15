@@ -381,7 +381,7 @@ describe('outlineCoverage', () => {
   });
 
   it('draws nothing at any pixel centre at width zero, and fades below one pixel', () => {
-    // The two claims `ShapeStyle.outlinePixels` makes to callers, asserted rather
+    // The two claims `SceneStyle.outlinePixels` makes to callers, asserted rather
     // than left in a docstring. Width 0 turns the outline off at every pixel a
     // rasteriser samples, which is the promise; the continuous function does not
     // vanish, since a zero width band still has two coincident 50% ramps and reads
@@ -636,7 +636,7 @@ describe('shapeAlpha', () => {
     // The precondition, stated as a range rather than as one number. Above 0.5 the
     // halo itself sets the floor at the boundary, which is a decision about how
     // strong a glow is (the renderer's default style picks 0.45) and not a
-    // compositing bug, so `requireShapeStyle` allows the whole unit interval.
+    // compositing bug, so `requireFamilyStyle` allows the whole unit interval.
     const { fill, outline, glow } = coverages(0);
     for (const alpha of [0, 0.1, 0.45, 0.5]) {
       expect(shapeAlpha(numberArith, alpha, glow, fill, outline)).toBe(0.5);

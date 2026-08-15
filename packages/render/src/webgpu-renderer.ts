@@ -428,6 +428,25 @@ export class WebGPUSceneRenderer implements Renderer {
 }
 
 /**
+ * How many nodes of each shape a list holds, for sizing the instance buffers.
+ *
+ * PER SHAPE, because the two families are two buffers: one count applied to both
+ * reserved twice what a mixed scene needs, which is not the "exactly this many"
+ * `RendererOptions.nodes` promises. `undefined` for an absent list, so the
+ * buffers keep their default capacity rather than being sized for nothing.
+ */
+function countByShape(
+  nodes: readonly SceneNode[] | undefined,
+): Readonly<Partial<Record<SceneNode['shape'], number>>> | undefined {
+  if (nodes === undefined) return undefined;
+  const counts: Partial<Record<SceneNode['shape'], number>> = {};
+  for (const node of nodes) {
+    counts[node.shape] = (counts[node.shape] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/**
  * Everything between a live device and a usable renderer: the scene, the meshes,
  * the projection camera, and the first viewport sync. **Gives the device back if
  * any of it throws.**
@@ -464,25 +483,6 @@ export class WebGPUSceneRenderer implements Renderer {
  * node; this function's job is to put the meshes in a scene and to remember what
  * has to be given back.
  */
-/**
- * How many nodes of each shape a list holds, for sizing the instance buffers.
- *
- * PER SHAPE, because the two families are two buffers: one count applied to both
- * reserved twice what a mixed scene needs, which is not the "exactly this many"
- * `RendererOptions.nodes` promises. `undefined` for an absent list, so the
- * buffers keep their default capacity rather than being sized for nothing.
- */
-function countByShape(
-  nodes: readonly SceneNode[] | undefined,
-): Readonly<Partial<Record<SceneNode['shape'], number>>> | undefined {
-  if (nodes === undefined) return undefined;
-  const counts: Partial<Record<SceneNode['shape'], number>> = {};
-  for (const node of nodes) {
-    counts[node.shape] = (counts[node.shape] ?? 0) + 1;
-  }
-  return counts;
-}
-
 export function buildSceneRenderer(
   camera: Camera2D,
   renderer: FrameSink,
