@@ -15,12 +15,11 @@ six-shape ladder draws in two.
 This page describes the package as of M4.3, the last task to change what reaches
 a GPU. Rounded rectangles and circles are on screen, drawn as signed distance
 fields, and there is an HTML overlay for the text a signed distance field cannot
-draw. What is real is the seam everything
-else plugs into: the `Renderer` interface, the camera, the distance fields and
-the shading that reads them, and the decisions that had to be made before a
-single test in this milestone could be written. They are argued below rather
-than left in a commit message, because each is the kind of choice that is cheap
-now and expensive in six tasks' time.
+draw. What is real is the seam everything else plugs into: the `Renderer`
+interface, the camera, the distance fields and the shading that reads them, and
+the decisions that had to be made before a single test in this milestone could
+be written. They are argued below rather than left in a commit message, because
+each is the kind of choice that is cheap now and expensive in six tasks' time.
 
 ## What is on screen
 
@@ -166,12 +165,12 @@ holds to 1.4e-16 rather than exactly. The `max` returns `d` unrounded on the out
 side, so all three are exact and the footprint comparison needs no tolerance at
 all.
 
-A glow is a property of the shape. The quad has to be padded to contain the halo,
-and that padding sizes the quad in the vertex stage, from the instance's own glow
-reach, so a pixel-space glow would need the quad resized every time the camera
-moved. That is a per-frame scene decision, and M4.4 owns it. A halo that stayed six pixels wide
-while its shape grew from one pixel to a thousand would also read as a different
-effect at each end of the range.
+A glow is a property of the shape. The quad has to be padded to contain the
+halo, and that padding sizes the quad in the vertex stage, from the instance's
+own glow reach, so a pixel-space glow would need the quad resized every time the
+camera moved. That is a per-frame scene decision, and M4.4 owns it. A halo that
+stayed six pixels wide while its shape grew from one pixel to a thousand would
+also read as a different effect at each end of the range.
 
 ### The antialiasing width is a gradient length, not `fwidth`
 
