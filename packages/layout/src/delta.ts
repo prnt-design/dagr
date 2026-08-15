@@ -207,8 +207,15 @@ function geometryOf(node: PositionedNode): NodeGeometry {
   return { x: node.x, y: node.y, width: node.width, height: node.height };
 }
 
-/** The same rule the config enforces, for the one number this module takes. */
-function requireEpsilon(epsilon: number | undefined): number {
+/**
+ * The same rule the config enforces, for the one number this module takes.
+ *
+ * Exported inside the package rather than kept private because M3.2's engine
+ * takes the same number on its own options and has to refuse it by the same
+ * rule, at construction rather than on the first relayout. One rule, one place,
+ * one error.
+ */
+export function requireEpsilon(epsilon: number | undefined): number {
   if (epsilon === undefined) return 0;
   if (typeof epsilon !== 'number' || !Number.isFinite(epsilon) || epsilon < 0) {
     throw new InvalidConfigError('epsilon', epsilon, 'option');

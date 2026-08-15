@@ -185,6 +185,7 @@ describe('@dagr/layout public surface', () => {
       'DEFAULT_LAYOUT_CONFIG',
       'DagrLayoutError',
       'DeltaMismatchError',
+      'EngineStateError',
       'InternalLayoutError',
       'InvalidConfigError',
       'StageContractError',

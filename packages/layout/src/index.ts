@@ -14,7 +14,19 @@ export { layout } from './pipeline.js';
 // is what puts this code in a worker bundle and the engine in the main one, and
 // that works from one entry point.
 export { createLayout } from './engine.js';
-export type { LayoutEngine, LayoutEngineOptions, LayoutPort } from './engine.js';
+export type {
+  LayoutEngine,
+  LayoutEngineOptions,
+  LayoutPort,
+  RelayoutResult,
+} from './engine.js';
+// M3.2's observable, exported from the run it ships in for the reason it ships
+// early: M3.4's stability contract and M3.5's property tests are both written
+// against this object, and its trivial whole-roster implementation is what makes
+// them writable before either task starts. `wholeRoster` is not exported: it is
+// the implementation this milestone is going to replace, not a thing a caller
+// chooses.
+export type { InfluenceSet } from './influence.js';
 export { serveLayout } from './worker.js';
 // `wire.ts` is not exported, the way `traversal.ts` is not exported from
 // `@dagr/graph`: the message shapes are an agreement between `createLayout` and
@@ -88,6 +100,7 @@ export { polylineRouteStage } from './route.js';
 export {
   DagrLayoutError,
   DeltaMismatchError,
+  EngineStateError,
   InternalLayoutError,
   InvalidConfigError,
   StageContractError,
@@ -110,6 +123,7 @@ export type {
   PositionedNode,
   PositionedState,
   PreparedState,
+  PreviousLayout,
   RankOutput,
   RankStage,
   RankedState,

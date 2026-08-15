@@ -14,6 +14,40 @@ of doc prose.
 
 ### Added
 
+- `engine.relayout(patch)` and `engine.relayoutAsync(patch)`, which lay the last
+  graph an engine ran out again after you have edited it and answer with a
+  `LayoutDelta`, the geometry that delta adds up to, and an `InfluenceSet`.
+  `engine.dispose()` releases what the engine retains and ends it.
+  `createLayout` takes an `epsilon`. No coordinate moved: a relayout re-runs the
+  whole pipeline and lands the same geometry a cold run of the same graph does,
+  which is what makes the delta contract testable before any incremental
+  algorithm exists. (M3.2)
+
+  **`relayout` does not apply the patch.** Your graph is already the graph you
+  changed, which is what `Graph.subscribe` hands a listener, so the patch is a
+  description rather than an instruction and the whole adoption is
+  `graph.subscribe((patch) => engine.relayout(patch))`. A patch that disagrees
+  with the graph the engine is holding is refused rather than quietly relaid.
+
+  **`DagrLayoutErrorCode` gained a sixth member, `'ENGINE_STATE'`, and that is a
+  breaking change to anything switching exhaustively over it.** Same terms as
+  the fifth: widening the union is a thing to do before v0.1, and nothing is
+  published. It is the code of the new `EngineStateError`, raised when an engine
+  is asked for something it cannot answer in the state it is in, which is a
+  `relayout` before any run, any call after `dispose`, or a patch describing a
+  graph the engine is not holding.
+
+  **`PreparedState` gained an optional `previous`,** the warm-start channel,
+  typed `Omit<RoutedState, 'graph' | 'config' | 'previous'>`, and the four
+  `...Output` types each gained a `previous?: never` refusing it. A stage that
+  spreads the record it was handed already failed to compile, so no correct
+  stage changes; a stage that spread its way past the compiler now has one more
+  field the runner does not read. Nothing in the package reads `previous` yet:
+  M3.6 is the first stage that will. It subtracts its own `previous` because the
+  runner carries the field forward, so an engine retaining the routed record
+  whole would chain one pipeline state onto the last on every relayout and grow
+  with edit count rather than with the graph.
+
 - `diffLayout`, `applyDelta`, `isEmptyDelta` and the `LayoutDelta` type, which
   together are the delta model. `diffLayout` is a pure function over two
   `LayoutResult`s: no engine, no graph, nothing retained between calls, which is

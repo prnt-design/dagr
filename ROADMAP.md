@@ -2362,7 +2362,7 @@ it.
   `PositionedNode` now extends `NodeGeometry`, the same four numbers without an
   id. Structurally identical, so no caller's code changes, and it exists so that
   a move's two halves do not each carry an id the entry already has.
-- [ ] **M3.2** (`@dagr/layout`) Layout engine and patch-driven relayout:
+- [x] **M3.2** (`@dagr/layout`) Layout engine and patch-driven relayout:
   `createLayout({ stages, config })` with `engine.run(graph)` and
   `engine.relayout(patch)`, emitting an M3.1 delta. `relayout` here re-runs the
   full pipeline from the retained warm-start state; no stage becomes
@@ -2435,6 +2435,143 @@ it.
   (This decision was pinned to M3.2 by M1.3 and stays on M3.2 through this
   expansion. Untouched-subgraph detection, which the M1.3 note reached for as
   M3.3, is now M3.5.)
+  SHIPPED 2026-08-15. `engine.relayout(patch)` and `engine.relayoutAsync(patch)`
+  returning a `RelayoutResult` of `{ result, delta, influence }`,
+  `engine.dispose()`, an `epsilon` on `LayoutEngineOptions`, an `InfluenceSet`
+  type, a `previous` warm-start channel on `PreparedState`, and a sixth error
+  code. The pipeline runs whole on every relayout and the tests hold it to
+  landing the same geometry a cold run of the same graph does, which is the
+  correct-and-slow baseline this entry asked for.
+  RELAYOUT DOES NOT APPLY THE PATCH, which is the decision the entry did not
+  name and everything else here rests on. `Graph.subscribe` hands a listener one
+  frozen patch per mutating call AFTER that call is committed, so the graph the
+  engine holds is already the graph the caller changed, and
+  `graph.subscribe((patch) => engine.relayout(patch))` is the whole adoption.
+  Applying it here would have meant this package mutating an object it does not
+  own, from the one method holding a long-lived reference to it, and would have
+  made a caller who reads their own graph between edits route every mutation
+  through layout. The cost is that the engine trusts a patch to describe the
+  graph it is holding, and the mistake that invites is calling `relayout` with a
+  patch you have NOT applied, which without a check is an empty delta and a
+  drawing that never changes. So the patch is checked against the graph: one
+  pass over its ops, last op wins so a caller may concatenate a frame's worth,
+  presence only for the four ops that have a presence question, and the first
+  disagreement raises. M3.5 inherits the trust: a lying patch is harmless while
+  the influence set is the whole roster and narrows it wrongly once it is not.
+  THE INFLUENCE SET IS SETS, NOT ARRAYS, which is the opposite of M3.1's choice
+  and rests on the opposite argument. A delta is a list of things that happened
+  and every consumer iterates it; an influence set is a PREDICATE, and every
+  consumer this roadmap names asks it either "is this id in you" (M3.4's
+  contract, M3.5's property test) or "how big are you" (the monotone shrink
+  across M3.5, M3.7 and M3.9). The structured-cloning argument that pushed the
+  delta to arrays does not reach it either, because nothing sends one across the
+  wire: see the async decision below. It names ONLY IDS THE CALLER CAN SEE, so
+  no dummy chain node, because half its membership questions would otherwise be
+  unaskable; M3.5's internal region may be wider than what it reports and that is
+  allowed. And IT SPANS BOTH SIDES OF THE PATCH, which is the non-obvious half: a
+  removal is a change and a removed node's id exists only in the previous
+  result, so a set built from the current graph alone cannot contain every change
+  in the delta beside it, and M3.5's property test would fail on its first
+  removal.
+  THE ENGINE REPORTS ONE GEOMETRY. `relayout` returns the previous REPORTED
+  geometry with this delta applied rather than the run it just did, so a consumer
+  that reads `result` and a consumer that accumulates deltas are never holding
+  different drawings. Under the default epsilon of 0 there is no difference at
+  all and the pipeline's own result is handed straight back, because nothing was
+  withheld and rebuilding an equal map in `applyDelta`'s iteration order would be
+  work spent making the common case worse. Under a nonzero one the difference is
+  exactly the sub-epsilon moves the caller asked not to be told about, and
+  retaining THAT rather than the raw run is the reported-geometry snapshot M3.1
+  required: the same fifty steps of 0.9 epsilon are in this task's suite at the
+  engine level, ending within one epsilon of the true position rather than 45
+  out.
+  relayoutAsync COMPUTES THE DELTA ON THE CALLING THREAD, so the M2.10 wire
+  protocol is untouched by this task: what crosses is a run and what comes back
+  is a result, exactly as for `runAsync`. The reported-geometry snapshot is this
+  side's bookkeeping and not the pipeline's, and the graph and the `nodeSize`
+  callback are already on this side. What that leaves is that THE WARM-START
+  STATE LIVES WHERE THE PIPELINE RAN: an engine holds none after a worker run, so
+  a relayout served over there is cold in a way one served here is not. In this
+  task that is a distinction with no consequence, because no stage reads the
+  state and the tests assert both paths produce the same deltas, and saying so
+  now is cheaper than discovering it in M3.6. M3.6 is the task that has to decide
+  whether the state crosses or the worker retains it and the patch crosses
+  instead, and it should decide it before it warm starts anything.
+  THE ENGINE DIFFS AGAINST WHAT IT LAST REPORTED AT THE MOMENT IT REPORTS, not
+  against what was current when the relayout started, which is the one finding of
+  this run's review of the merged tree. `relayoutAsync` has an await between the
+  patch check and the diff, and M2.10's protocol lets runs overlap, so another
+  one may settle inside it. Capturing the previous geometry before the run hands
+  the caller a delta that does not apply to what they are holding: a relayout
+  overtaken by a sync one produced a delta adding a node the caller's result
+  already had, which `applyDelta` refuses with a `DeltaMismatchError`. Reading it
+  at report time keeps the one promise the design rests on. The ANSWER is still
+  odd under overlap, because the worker laid out the graph as it was when the run
+  was sent; what it is not is inconsistent. `layout.relayout.test.ts` arranges
+  the overlap with a gated port rather than racing for it, and the test fails
+  against the capture-before version.
+  THE WARM-START CHANNEL IS A FIELD ON `PreparedState`, `previous`, typed as
+  `RoutedState` minus its `graph` and its `config`. On the record every stage
+  reads rather than an argument to one of them, because ranking, ordering and
+  positioning each have a previous answer to start from and a channel per stage
+  would be three contracts to keep in step. The two subtracted fields would both
+  have been traps: `previous.graph` would be TODAY's graph wearing yesterday's
+  label, since the caller mutates the object the engine holds, and the config is
+  bound for the engine's lifetime and already on the record this hangs off. It is
+  an `Omit` rather than a restated field list so it cannot drift from the record
+  it is a view of. Nothing reads it yet, which is the entry's own instruction:
+  the four `...Output` types each gained a `previous?: never` and
+  `stage-output.types.test.ts` is what caught that they had to.
+  RETAINED STATE IS THREE THINGS, held separately because they are retained for
+  three different reasons and are not always all present: the graph, the previous
+  run's pipeline state (absent after a worker run), and the reported-geometry
+  snapshot (not the same object as the last computed result once epsilon is
+  nonzero). All three are proportional to the live graph and never to patch
+  history, and THAT IS BY CARE RATHER THAN FOR FREE, which this task got wrong
+  the first time and is the second finding of the review of the merged tree.
+  `previous` is a field on the record every stage reads, so the runner carries it
+  forward and the `RoutedState` the engine retains holds the `previous` its own
+  run was given; feeding that back in as the next warm start puts one full
+  pipeline state on the front of the last on every relayout, each with its own
+  `sizes`, `ranks`, `layers`, `positions` and `routes`. Measured at depth 20
+  after 20 relayouts before the fix. That is growth in PATCH HISTORY, the exact
+  thing this entry says must not happen, arriving through the field this task
+  itself added rather than through the "never deletes a removed node's entry"
+  mechanism the entry predicted, and it is INVISIBLE TO ANY ASSERTION THAT LOOKS
+  ONLY AT THE NEWEST LINK, which is why the guard test for removed nodes passed
+  throughout. `PreviousLayout` subtracts its own `previous`, and the engine
+  builds the retained record field by field with that type as its return type, so
+  a field added to `RoutedState` stops the builder compiling rather than being
+  silently dropped. THE LESSON FOR M3.5 ONWARDS: an `Omit` narrows a view and
+  strips nothing, so a retention test has to walk the object rather than trust
+  the type. This task's suite now pins both forms (a removed node is in neither
+  the retained ranks nor the retained sizes, and the retained chain is one link
+  deep after twenty edits), and M3.10's churn sequence should assert depth as
+  well as size.
+  `dispose` REJECTS RUNS IN FLIGHT rather than leaving them pending, which M2.10's
+  "there is no timeout" argument does not cover: dispose detaches the port
+  listener, so an answer arriving afterwards reaches nobody, and a promise that
+  can never settle is worse than one that settles badly. Idempotent, and every
+  entry point after it raises, the asynchronous two as a rejection.
+  ORDER-FAITHFUL REPLAY IS NOT NEEDED AND THE QUESTION STOPS HERE, which is the
+  M1.3 deferral this entry inherited. Nothing in M3.2 replays a patch into a
+  graph: the engine reads the caller's own graph, which was mutated by the
+  caller's own calls and therefore already iterates in the order those calls
+  produced, and the warm start is driven from the retained `RoutedState`. M3.5
+  reads the patch's ids rather than a rebuilt graph, so it does not need it
+  either. `apply` stays as it is; a consumer who rebuilds a graph by replaying
+  patches and wants the original's iteration order is the one who would need the
+  change, and no such consumer exists in this repo. `remove-port` still carries
+  the `index` that change would need if one ever does.
+  M3.3's EVIDENCE IS ALREADY LANDED: `layout.relayout.test.ts` runs a sequence of
+  single patches through `relayout` against the equivalent combined edit and
+  asserts the same final layout. That is the test the M3.3 entry says settles it,
+  and it passes, so M3.3 opens with the composition question answered and only
+  the intermediate-states argument left to weigh.
+  ONE THING WORTH KNOWING FOR M3.4: a `relayout` whose patch changed nothing
+  about the drawing (an attribute update, say) emits an empty delta, and
+  `isEmptyDelta` says so. There is no separate no-op path and there should not
+  be, because as of M1.3 a call that changes nothing emits no patch at all.
 - [ ] **M3.3** (`@dagr/graph`, `@dagr/layout`) Patch batching, or the recorded
   decision not to have it. M1.3 declined to build batching and transactions on
   the grounds that M3 incremental layout is what will say what shape it wants:

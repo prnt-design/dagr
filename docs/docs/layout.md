@@ -89,7 +89,7 @@ runner merges an output into the next record.
 
 | Stage | Reads | Writes | Runner adds |
 | --- | --- | --- | --- |
-| rank | `PreparedState` | `RankOutput`: `ranks`, `reversedEdges`, optional `virtualNodes` and `virtualChains` | `graph`, `config`, and a roster-wide `sizes` |
+| rank | `PreparedState` | `RankOutput`: `ranks`, `reversedEdges`, optional `virtualNodes` and `virtualChains` | `graph`, `config`, `previous`, and a roster-wide `sizes` |
 | order | `RankedState` | `OrderOutput`: `layers` | everything upstream, unchanged |
 | position | `OrderedState` | `PositionOutput`: `positions` | everything upstream, unchanged |
 | route | `PositionedState` | `RouteOutput`: `routes` | everything upstream, unchanged |
@@ -98,6 +98,25 @@ runner merges an output into the next record.
 the runner builds after the last stage and hands to nobody, so it is not
 exported from the package; the other four are, because each is the parameter
 type of a `run` somebody writes. The four `...Output` types are exported too.
+
+`PreparedState` also carries `previous`, which is the previous run's
+`RoutedState` without its graph, its config and its own `previous`, or
+`undefined` on a cold run.
+That is the warm-start channel, and only an engine's
+[`relayout`](#relayout) ever fills it in: `layout()` has no previous run to
+offer, and `engine.run` deliberately does not either, because the graph it is
+handed need not be the one the last run saw. It is on the record every stage
+reads rather than passed to one of them, because ranking, ordering and
+positioning each have a previous answer to start from and a channel per stage
+would be three contracts to keep in step. No built-in stage reads it yet, which
+is what "a relayout that is correct and no faster than a cold run" means.
+
+Its own `previous` is subtracted for a reason worth knowing if you write a stage
+that reads it: the field is on the record, so the runner carries it forward and
+a `RoutedState` holds the one its own run was given. An engine that retained
+that whole record would put one full pipeline state on the front of the last on
+every relayout, growing with edit count rather than with the graph. A warm start
+reads the run before it and never the run before that.
 
 **Returning less is a stronger contract than returning more.** Until M2.4a a
 stage returned the whole next record, which meant every stage handed back a
@@ -243,6 +262,7 @@ interface RankOutput {
   readonly virtualChains?: ReadonlyMap<EdgeId, readonly NodeId[]>;
   readonly graph?: never;
   readonly config?: never;
+  readonly previous?: never;
   readonly sizes?: never;
 }
 ```
@@ -1757,7 +1777,100 @@ of any worker boundary, which is what makes the next section possible at all.
 M3 is the reason the object exists. `engine.relayout(patch)` warm starts from
 the state the previous run left behind, and a warm start only means anything if
 the stages and the config are the ones that produced that state. That is a thing
-to bind once. Until then the engine binds two of the three.
+to bind once, and as of M3.2 the engine binds all three.
+
+### Relayout
+
+`engine.relayout(patch)` lays the last graph this engine ran out again, after
+you have edited it:
+
+```ts
+const engine = createLayout();
+engine.run(graph);
+
+// Your own edits, and one line to tell the engine about them.
+graph.subscribe((patch) => {
+  const { result, delta, influence } = engine.relayout(patch);
+  scene.apply(delta);
+});
+
+graph.addNode('n42');
+graph.addEdge('n7', 'n42');
+```
+
+**It does not apply the patch.** Your graph is already the graph you changed:
+`Graph.subscribe` hands a listener one patch per mutating call, after that call
+is committed, so the patch is a description of what you did rather than an
+instruction for the engine to carry out. That is why the wiring above is one
+line. Applying it here would mean the layout package mutating an object it does
+not own, from the one method that holds a long-lived reference to it, and it
+would make anyone who wants to read their own graph between edits route every
+mutation through this package. A patch that disagrees with the graph the engine
+is holding is refused with an `EngineStateError` rather than quietly relaid,
+which is the trap that decision would otherwise set: without it, calling
+`relayout` with a patch you have not applied gets you an empty delta and a
+drawing that never changes.
+
+**It is no faster than a cold run.** The whole pipeline runs again, and the
+tests hold it to landing the same geometry a cold run of the same graph does.
+That is the point of shipping it in this shape first: it makes the delta
+contract, the engine lifetime and the retained state testable before any
+incremental algorithm exists, and it gives the stages that become incremental
+later a correct baseline to be measured against rather than nothing. Today the
+patch is read for exactly one thing, which is checking that it happened.
+
+Three fields come back. `delta` is a [`LayoutDelta`](#deltas) against the
+geometry the engine last reported. `result` is that geometry with the delta
+applied, so a consumer that reads it and a consumer that accumulates deltas are
+never holding different drawings. `influence` is the set of node and edge ids
+this relayout was entitled to move:
+
+```ts
+interface InfluenceSet {
+  readonly nodes: ReadonlySet<NodeId>;
+  readonly edges: ReadonlySet<EdgeId>;
+}
+```
+
+Today it names the whole roster, which makes the claim true and useless, and
+that is deliberate: it is the observable the stability contract and the
+influence-region work are both written against, so it ships before either of
+them and narrows without anything a caller reads changing shape. It names only
+ids you can see, never a dummy the router invented, and it spans **both sides**
+of the patch, so the id of a node you removed is in it. Sets rather than arrays,
+which is the opposite of what a delta chose and for the opposite reason: a delta
+is a list you iterate, and this is a predicate you ask.
+
+### The tolerance, on the engine
+
+`createLayout({ epsilon })` is the smallest move worth reporting, in node-size
+units, and defaults to 0. The engine is where that number gets named, because it
+is the first object that holds a config and two results at once; `diffLayout`
+still takes its own for a caller doing the comparison by hand.
+
+What the engine adds is what makes a nonzero one safe. It retains the geometry
+it last **reported** and diffs against that rather than against its last
+computed run, so fifty edits each moving a node by nine tenths of the tolerance
+report the move on every other one instead of reporting nothing fifty times and
+leaving you forty five tolerances behind the drawing. See
+[The tolerance, and why it is not transitive](#the-tolerance-and-why-it-is-not-transitive).
+At the default of 0 nothing is ever withheld, and `result` is the pipeline's own
+answer.
+
+An engine with a worker bound has `relayoutAsync`, which is the same call and
+answers with the same three fields; see
+[Relayout in a worker](#relayout-in-a-worker).
+
+### Ending an engine
+
+`engine.dispose()` releases the graph, the previous run's pipeline state and the
+reported-geometry snapshot, all of which are retained for the life of the engine
+and on a large graph are bigger than the result you can see. Every entry point
+after it raises `EngineStateError`, the asynchronous two as a rejection, and
+runs still in flight are rejected the same way rather than left pending: dispose
+detaches the port listener, so an answer arriving afterwards would reach nobody.
+Calling it twice is a no-op, which is what a `useEffect` cleanup and a `finally`
+both want.
 
 ## Worker mode
 
@@ -1939,6 +2052,29 @@ There is no timeout. How long is too long belongs to the caller and to the
 graph, and a worker that has been terminated is an event on the caller's own
 object rather than something this package can see. A caller who wants a run to
 give up needs to race the promise themselves.
+
+### Relayout in a worker
+
+`engine.relayoutAsync(patch)` is the same call for an engine with a port bound,
+and it answers with the same three fields. The delta is computed on the calling
+thread whatever the worker did, because the geometry the engine last reported is
+this side's bookkeeping rather than the pipeline's, so nothing about the
+[wire protocol](#what-crosses-and-what-does-not) changes: what crosses is a run,
+and what comes back is a result.
+
+Runs may overlap, here as for `runAsync`, so a relayout in a worker can be
+overtaken by one served on the calling thread. The delta you are handed is
+always against the geometry the engine last reported at the moment it reports,
+so it applies to what you are holding. The answer itself is still odd when that
+happens, because the worker laid out the graph as it was when the run was sent;
+what it will not be is inconsistent with the deltas you already applied.
+
+What does not cross is the warm-start state, because it lives where the pipeline
+ran. A relayout served by a worker is therefore cold in a way one served here is
+not, which today is a distinction with no consequence at all, since no stage
+reads that state yet and both paths produce the same deltas. The first stage
+that does read it is what has to decide whether the state crosses or the worker
+retains it and the patch crosses instead.
 
 ## Config
 
@@ -2254,15 +2390,17 @@ the whole thing and every member carries a `code`.
 | `StageContractError` | `STAGE_CONTRACT` | A stage broke one of the rules in [The stage contract](#the-stage-contract). Carries the offending stage's `name`, the `id` it dropped, and a `detail`. One check is about the layers rather than one id, and uses a plain label instead: `layer 3`. The `graph` label is gone as of M2.4a, along with the check that raised it. |
 | `WorkerTransportError` | `WORKER` | A run sent to a worker came back, and what came back was not a layout. Carries a `detail`. Two things reach it, and both are wiring: the two ends were built from different versions and disagree about the shape of a result, so a box, count or point length does not match the graph it answers, or the stages on the far side threw something that is not a member of this family and so could not survive the crossing with its class. An answer this package does not recognise is NOT one of them: it is ignored, and the run stays pending. See [When a run fails over there](#when-a-run-fails-over-there). |
 | `DeltaMismatchError` | `DELTA_MISMATCH` | A [`LayoutDelta`](#deltas) was applied to a result it was not computed against: it moves a node that result does not hold, removes an edge that is not there, or adds one that already is. Carries the `id` that did not fit and a `detail` saying what was being done to it, both quoted in the message, and names the first one rather than counting them. Your bookkeeping rather than this package's invariant: a delta carries no evidence of which two results it came from, so pairing it with the wrong one is a mistake nothing in the type system can refuse. It is loud because the alternative is a scene that is wrong, stays wrong, and drifts further wrong with every later delta. |
+| `EngineStateError` | `ENGINE_STATE` | An engine was asked for something it cannot answer in the state it is in. Three things reach it: a [`relayout`](#relayout) before this engine has run at all, any call after [`dispose`](#ending-an-engine), and a patch that describes a graph the engine is not holding. Carries a `detail`. The first five members sort by whose bug it is; this one sorts by WHEN, and every case is a call that would have been fine a moment earlier or a moment later. The patch case is the loud one on purpose: `relayout` does not apply your patch, so a caller expecting the other contract would otherwise get an empty delta and a drawing that never changes. |
 | `InternalLayoutError` | `INTERNAL` | The pipeline caught itself breaking one of its own invariants. Carries a `detail`. Always a bug in `@dagr/layout`, never in your graph, your config, or a stage you supplied, which is why it is not a `StageContractError`: that class names a stage, and naming one here would blame whoever was plugged in. Nothing to fix on your side. Please report it. |
 
 They sort by whose bug it is, which is the only question a caller catching one
 has to answer: fix the input, fix the stage, fix the worker wiring, fix the
-bookkeeping, or file the bug. The fourth arrived with M2.10, because until there
-was a boundary to cross there was no run that could fail without being
-somebody's config, somebody's stage, or this package's own mistake. The fifth
-arrived with M3.1 on the same argument one layer up: until there was a delta,
-there was nothing a caller could pair with the wrong thing.
+bookkeeping, fix the sequencing, or file the bug. The fourth arrived with M2.10,
+because until there was a boundary to cross there was no run that could fail
+without being somebody's config, somebody's stage, or this package's own
+mistake. The fifth arrived with M3.1 on the same argument one layer up: until
+there was a delta, there was nothing a caller could pair with the wrong thing.
+The sixth arrived with M3.2, when an engine first had a state to be in.
 
 The example below runs through an engine rather than through `layout()`, because
 `WORKER` is not reachable from a synchronous call: it comes back from
@@ -2289,6 +2427,8 @@ try {
       case 'WORKER':
         break;
       case 'DELTA_MISMATCH':
+        break;
+      case 'ENGINE_STATE':
         break;
       case 'INTERNAL':
         break;

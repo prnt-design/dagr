@@ -3,11 +3,21 @@
  * as you like, here or in a worker.
  */
 
-import type { Graph } from '@dagr/graph';
+import type { EdgeId, Graph, NodeId, Patch } from '@dagr/graph';
 import { resolveConfig } from './config.js';
-import { DagrLayoutError, WorkerTransportError } from './errors.js';
-import { prepare, runPrepared } from './pipeline.js';
-import type { LayoutConfig, LayoutResult, LayoutStageOverrides } from './types.js';
+import { applyDelta, diffLayout, requireEpsilon } from './delta.js';
+import type { LayoutDelta } from './delta.js';
+import { DagrLayoutError, EngineStateError, WorkerTransportError } from './errors.js';
+import type { InfluenceSet } from './influence.js';
+import { wholeRoster } from './influence.js';
+import { prepare, runPipeline } from './pipeline.js';
+import type {
+  LayoutConfig,
+  LayoutResult,
+  LayoutStageOverrides,
+  PreviousLayout,
+  RoutedState,
+} from './types.js';
 import type { RunSnapshot } from './wire.js';
 import { decodeFailure, decodeResult, encodeRun, isLayoutMessage } from './wire.js';
 
@@ -92,6 +102,160 @@ export interface LayoutEngineOptions {
    * {@link LayoutEngine.runAsync}.
    */
   readonly worker?: LayoutPort | undefined;
+
+  /**
+   * The smallest move worth reporting in a relayout's delta, in node-size
+   * units. Default 0, which reports any difference at all.
+   *
+   * The engine is where this number gets named, and M3.1 said so when it
+   * declined to put it on `LayoutConfig`: the number is about two results rather
+   * than about how to lay a graph out, and this is the first object that holds a
+   * config and two results at once. A caller names it once here instead of on
+   * every `diffLayout` call, and the engine is what makes a nonzero one safe,
+   * because it retains the geometry it last REPORTED and diffs against that
+   * rather than against its last computed run. See {@link LayoutEngine.relayout}.
+   *
+   * Refused at construction by the same rule a separation is, for the same
+   * reason: where it was named beats whichever later call happened to be first.
+   */
+  readonly epsilon?: number | undefined;
+}
+
+/**
+ * What a relayout produced: the drawing, what changed to get there, and what it
+ * was entitled to change.
+ *
+ * Three fields rather than a bare delta because a consumer needs all three and
+ * can derive none of them from the others. A renderer holding the previous
+ * result applies the `delta`; one that has just been mounted, or that dropped a
+ * frame, takes the `result` whole; and M3.4's stability contract is written
+ * against the `influence` set, which is the object M3.5 narrows without changing
+ * anything a caller reads.
+ */
+export interface RelayoutResult {
+  /**
+   * The geometry the engine is now reporting.
+   *
+   * At the default `epsilon` of 0 this is the pipeline's own result: nothing was
+   * withheld, so there is nothing to withhold. At a nonzero one it is the
+   * previous reported result with `delta` applied, which is the pipeline's
+   * result with the sub-epsilon moves left out, and is therefore exactly what a
+   * consumer applying every delta in order is holding. THE ENGINE REPORTS ONE
+   * GEOMETRY: a caller who reads this and a caller who accumulates deltas never
+   * disagree, which they would if this were the raw run and the delta were
+   * measured against something else.
+   *
+   * Its iteration order is the graph's, except under a nonzero epsilon, where it
+   * is the previous result's with additions appended. That is `applyDelta`'s one
+   * documented non-reproduction and nothing in this package's contract rests on
+   * it.
+   */
+  readonly result: LayoutResult;
+
+  /** What changed between the last reported geometry and this one. */
+  readonly delta: LayoutDelta;
+
+  /** What this relayout was entitled to move. See {@link InfluenceSet}. */
+  readonly influence: InfluenceSet;
+}
+
+/**
+ * What the engine retains from a run, which is that run and not the one before.
+ *
+ * A REBUILT RECORD RATHER THAN THE ROUTED ONE, and the difference is a leak. The
+ * warm-start channel is a field on the record every stage reads, so the runner
+ * carries it forward and a `RoutedState` holds the `previous` its own run was
+ * given. Retaining that whole record and feeding it back in as the next warm
+ * start puts one full pipeline state on the front of the last on every single
+ * relayout: twenty edits retained twenty runs, each with its own `sizes`,
+ * `ranks`, `layers`, `positions` and `routes`. That grows with PATCH HISTORY
+ * rather than with the live graph, which is exactly what this milestone says
+ * retained state must never do, and it is invisible to any assertion that looks
+ * only at the newest link, which is why the first version of this file shipped
+ * it and the review of the merged tree is what caught it.
+ *
+ * Written out field by field rather than by rest destructuring because the rule
+ * in this repo's lint config refuses the unused bindings that pattern needs. It
+ * cannot drift for it: {@link PreviousLayout} is an `Omit` of the record this
+ * reads, so a field added to `RoutedState` widens the return type and stops this
+ * function compiling until it is carried too.
+ */
+function warmStartOf(routed: RoutedState): PreviousLayout {
+  return {
+    sizes: routed.sizes,
+    ranks: routed.ranks,
+    reversedEdges: routed.reversedEdges,
+    virtualNodes: routed.virtualNodes,
+    virtualChains: routed.virtualChains,
+    layers: routed.layers,
+    positions: routed.positions,
+    routes: routed.routes,
+  };
+}
+
+/**
+ * Checks that a patch describes the graph the engine is holding.
+ *
+ * `relayout` does not APPLY a patch, and this is what keeps that decision from
+ * being a silent trap. The caller's graph is already mutated: `Graph.subscribe`
+ * hands a listener one patch per mutating call, after that call is committed, so
+ * `graph.subscribe((patch) => engine.relayout(patch))` is the whole adoption and
+ * the patch it delivers is a description rather than an instruction. A caller
+ * expecting the other contract hands over a patch nothing has applied, and
+ * without this check the engine relays out an unchanged graph, hands back an
+ * empty delta, and draws the same picture forever.
+ *
+ * Only the four ops with a presence question are checked, and only against what
+ * the patch says the graph should now show. Attribute updates and port moves
+ * have nothing to check against a graph that holds them either way, and checking
+ * them would mean the engine re-deriving what the caller's own mutation did.
+ *
+ * LAST OP WINS, because a patch is an ordered list and its ops can cancel: a
+ * caller who concatenates a frame's worth of patches into one call may well have
+ * added and removed the same node inside it, and the graph shows the net effect.
+ * Cost is one pass over the patch, which is proportional to the edit rather than
+ * to the graph.
+ *
+ * @throws {EngineStateError} at the first op the graph disagrees with.
+ */
+function checkPatchApplied(graph: Graph, patch: Patch): void {
+  const nodes = new Map<NodeId, boolean>();
+  const edges = new Map<EdgeId, boolean>();
+  for (const op of patch) {
+    switch (op.op) {
+      case 'add-node':
+        nodes.set(op.id, true);
+        break;
+      case 'remove-node':
+        nodes.set(op.id, false);
+        break;
+      case 'add-edge':
+        edges.set(op.id, true);
+        break;
+      case 'remove-edge':
+        edges.set(op.id, false);
+        break;
+      default:
+        break;
+    }
+  }
+  for (const [id, expected] of nodes) {
+    if (graph.hasNode(id) !== expected) throw mismatch('node', id, expected);
+  }
+  for (const [id, expected] of edges) {
+    if (graph.hasEdge(id) !== expected) throw mismatch('edge', id, expected);
+  }
+}
+
+/** The one message both halves of the patch check raise. */
+function mismatch(kind: 'node' | 'edge', id: string, expected: boolean): EngineStateError {
+  const verb = expected ? 'adds' : 'removes';
+  const state = expected ? 'does not hold it' : 'still holds it';
+  return new EngineStateError(
+    `the patch ${verb} ${kind} "${id}" and the graph ${state}. ` +
+      'relayout describes an edit you have already made to your own graph rather than ' +
+      'applying one, so apply the patch before handing it over',
+  );
 }
 
 /**
@@ -142,6 +306,85 @@ export interface LayoutEngine {
    * rather than something this package can see.
    */
   runAsync(graph: Graph): Promise<LayoutResult>;
+
+  /**
+   * Lays the last graph this engine ran out again, after you have edited it.
+   *
+   * IT DOES NOT APPLY THE PATCH. Your graph is already the graph you changed:
+   * `Graph.subscribe` hands a listener one patch per mutating call, after that
+   * call is committed, so `graph.subscribe((p) => engine.relayout(p))` is the
+   * whole of the wiring and the patch is a description of what you did rather
+   * than an instruction for the engine to carry out. Applying it here would mean
+   * the engine mutating an object it does not own, from the one method that
+   * holds a long-lived reference to it, and would make a caller who wants to
+   * read their own graph between edits route every mutation through the layout
+   * package. A patch that disagrees with the graph is refused rather than
+   * quietly relaid, which is the trap that decision would otherwise set.
+   *
+   * IT IS NO FASTER THAN A COLD RUN, on purpose, and the tests hold it to
+   * landing the same geometry a cold run of the same graph does. The whole
+   * pipeline runs again. That is what makes the delta contract, the engine
+   * lifetime and the retained state testable before any incremental algorithm
+   * exists, and it gives M3.5 through M3.9 a correct baseline to be measured
+   * against rather than nothing. The patch is read for one thing today, which is
+   * checking that it happened; M3.5 is where its contents start to confine the
+   * work.
+   *
+   * The delta is measured against the geometry this engine last REPORTED rather
+   * than against its last computed run, which is what makes a nonzero
+   * `epsilon` safe: fifty edits each moving a node by nine tenths of the
+   * tolerance report nothing each, and a consumer diffing against the last
+   * computed result would end forty five tolerances out of position with nothing
+   * able to notice. See {@link LayoutEngineOptions.epsilon}.
+   *
+   * @throws {EngineStateError} when this engine has never run, has been
+   * disposed, or is holding a graph the patch does not describe.
+   * @throws {StageContractError} when a stage breaks the pipeline contract.
+   */
+  relayout(patch: Patch): RelayoutResult;
+
+  /**
+   * {@link relayout}, in the bound worker, or on this thread when there is none.
+   *
+   * The call a consumer who adopted `runAsync` for a large graph reaches for,
+   * and it answers with the same three fields the synchronous one does. Rejects
+   * rather than throws, for every failure, on the same argument `runAsync`
+   * makes.
+   *
+   * THE DELTA IS COMPUTED ON THIS THREAD whatever the worker did, because the
+   * geometry the engine last reported is this side's bookkeeping and not the
+   * pipeline's. So the wire protocol is untouched by this method: what crosses
+   * is a run, and what comes back is a result, exactly as for `runAsync`.
+   *
+   * What does NOT cross is the warm-start state, because it lives where the
+   * pipeline ran. A relayout served by a worker is therefore cold in a way one
+   * served here is not, which in M3.2 is a distinction with no consequence at
+   * all: no stage reads that state yet, and the tests assert both paths produce
+   * the same deltas. M3.6 is the first task for which it will matter, and it is
+   * the task that has to decide whether the state crosses or the worker retains
+   * it and the patch crosses instead.
+   */
+  relayoutAsync(patch: Patch): Promise<RelayoutResult>;
+
+  /**
+   * Releases everything this engine is holding, and ends it.
+   *
+   * M2.10 declined to build this because the port listener is already transient
+   * and there was nothing else to release. M3.2 gives it something: the graph,
+   * the previous run's pipeline state, and the reported-geometry snapshot are
+   * all retained for the life of the engine, and on a large graph they are
+   * larger than the result a caller can see.
+   *
+   * Every entry point after this raises {@link EngineStateError}, the two
+   * asynchronous ones as a rejection. Runs still in flight are rejected the same
+   * way rather than left pending: this detaches the port listener, so an answer
+   * that arrived afterwards would reach nobody, and a promise that can never
+   * settle is worse than one that settles badly.
+   *
+   * Calling it twice is a no-op, which is what a `useEffect` cleanup and a
+   * `finally` both want.
+   */
+  dispose(): void;
 }
 
 /**
@@ -159,14 +402,40 @@ export interface LayoutEngine {
  * any worker boundary, which is what lets a run cross one at all. See
  * `wire.ts`.
  *
- * @throws {InvalidConfigError} when a separation or a size in `config` is not a
- * finite number that is zero or greater. Sizes from the `nodeSize` callback are
- * a per-run matter and are still reported by the run that asked for them.
+ * @throws {InvalidConfigError} when a separation or a size in `config`, or
+ * `epsilon`, is not a finite number that is zero or greater. Sizes from the
+ * `nodeSize` callback are a per-run matter and are still reported by the run
+ * that asked for them.
  */
 export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
   const config = resolveConfig(options.config);
   const nodeSize = options.config?.nodeSize;
+  const epsilon = requireEpsilon(options.epsilon);
   const { stages, worker } = options;
+
+  /**
+   * What the engine retains between runs, which is what M3.2 built it for.
+   *
+   * Three separate things rather than one record, because they are retained for
+   * three different reasons and are not always all present. `held` is the graph
+   * a relayout re-runs, kept by reference and never mutated here. `warm` is the
+   * previous run's pipeline state, absent after a run that happened in a worker
+   * because that is where it stayed. `reported` is the geometry the caller was
+   * last told about, which is what a delta is measured against and is NOT the
+   * same object as the last computed result once `epsilon` is nonzero.
+   *
+   * All three are proportional to the live graph and never to patch history:
+   * every relayout rebuilds them whole from the run it just did, which is what
+   * makes a removed node's entry impossible to leak rather than merely unlikely.
+   * That is a property of {@link warmStartOf} rather than a free consequence of
+   * rebuilding, and the first version of this file did not have it. The
+   * incremental implementations from M3.5 on will not have it for free either,
+   * and M3.10's churn sequence is written to catch it when they do not.
+   */
+  let held: Graph | undefined;
+  let warm: PreviousLayout | undefined;
+  let reported: LayoutResult | undefined;
+  let disposed = false;
 
   /** The runs waiting on an answer, by request id. */
   const pending = new Map<
@@ -241,43 +510,155 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
     worker.removeEventListener('message', receive);
   };
 
+  /** Refuses every entry point once the engine has been disposed. */
+  const requireLive = (): void => {
+    if (disposed) throw new EngineStateError('this engine has been disposed');
+  };
+
+  /**
+   * A run on this thread, retaining what it leaves behind.
+   *
+   * `previous` is the warm start, which only a relayout has: `run` lays out
+   * whatever graph it is handed and that need not be the graph the last run saw,
+   * so seeding it from the previous state would seed one graph's ordering from
+   * another graph's.
+   */
+  const runHere = (graph: Graph, previous: PreviousLayout | undefined): LayoutResult => {
+    const { result, routed } = runPipeline(prepare(graph, config, nodeSize, previous), stages);
+    held = graph;
+    warm = warmStartOf(routed);
+    return result;
+  };
+
+  /** The graph a relayout re-runs, or the refusal to do one. */
+  const forRelayout = (patch: Patch): Graph => {
+    requireLive();
+    if (held === undefined || reported === undefined) {
+      throw new EngineStateError(
+        'relayout was called before this engine ran, so there is no previous layout to ' +
+          'compute a delta against. Call run or runAsync first',
+      );
+    }
+    checkPatchApplied(held, patch);
+    return held;
+  };
+
+  /**
+   * The three fields a relayout answers with, from the run it just did.
+   *
+   * The reported geometry is the previous reported geometry with this delta
+   * applied, which at `epsilon` 0 is the new result itself: nothing was withheld,
+   * so rebuilding an equal map in a different iteration order would be work
+   * spent making the common case worse.
+   *
+   * `reported` IS READ HERE rather than captured before the run, and that is
+   * about the one case where the two differ: `relayoutAsync` has an await
+   * between the check and this, and the protocol lets runs overlap, so another
+   * one may have settled inside it. Diffing against the geometry that was
+   * current when this relayout STARTED would hand the caller a delta that does
+   * not apply to what they are holding, which is the one promise this whole
+   * design rests on. Overlapping a stale run with a fresh one still gives an odd
+   * ANSWER, because the worker laid out the graph as it was when the run was
+   * sent; what it does not give is an inconsistent one.
+   */
+  const report = (graph: Graph, next: LayoutResult): RelayoutResult => {
+    const previous = reported;
+    if (previous === undefined) {
+      throw new EngineStateError('this engine was reset while a relayout was in flight');
+    }
+    const delta = diffLayout(previous, next, { epsilon });
+    reported = epsilon === 0 ? next : applyDelta(previous, delta);
+    return { result: reported, delta, influence: wholeRoster(graph, previous) };
+  };
+
+  /**
+   * A run in the bound worker, retaining what a run over there leaves behind on
+   * this side, which is the graph and nothing else.
+   *
+   * The warm-start state stayed in the worker, so this engine holds none after
+   * one of these and the next `relayout` served here is cold. In M3.2 that is a
+   * distinction without a consequence, because no stage reads that state yet;
+   * see {@link LayoutEngine.relayoutAsync} for whose problem it becomes.
+   *
+   * Runs may overlap, so what an engine ends up holding belongs to whichever run
+   * SETTLED last rather than to whichever was sent last. That is the answer the
+   * caller most recently received, and therefore the one the next delta should
+   * be measured against.
+   */
+  const runThere = async (graph: Graph, port: LayoutPort): Promise<LayoutResult> => {
+    const request = nextRequest;
+    nextRequest += 1;
+    // Prepared, and so measured, on this thread: see `wire.ts` for why that
+    // is the point rather than a step on the way to posting.
+    const { message, transfer } = encodeRun(request, prepare(graph, config, nodeSize));
+    // The ids as they were at the moment of the send. `encodeRun` built them
+    // already, so the snapshot is those same arrays rather than a second walk.
+    const { nodes, edges, sources, targets } = message;
+    const answer = new Promise<LayoutResult>((resolve, reject) => {
+      pending.set(request, { snapshot: { nodes, edges, sources, targets }, resolve, reject });
+    });
+    listen(port);
+    try {
+      port.postMessage(message, transfer);
+    } catch (error) {
+      // A port that refuses the message never answers it, so the entry it
+      // would have been matched against has to go with it. Nothing this
+      // package puts in a message can be refused (ids are strings, the rest
+      // is numbers), so a throw here is the port object itself objecting.
+      //
+      // A CLOSED PORT AND A TERMINATED WORKER DO NOT COME THROUGH HERE:
+      // posting to either is a silent no-op in both runtimes, not a throw. So
+      // that run stays pending, which is the same outcome as a worker that is
+      // simply slow, and is the outcome "there is no timeout" chooses on
+      // purpose. A caller who needs to give up races the promise themselves.
+      pending.delete(request);
+      idle();
+      throw error;
+    }
+    const result = await answer;
+    held = graph;
+    warm = undefined;
+    return result;
+  };
+
   return {
     run(graph) {
-      return runPrepared(prepare(graph, config, nodeSize), stages);
+      requireLive();
+      reported = runHere(graph, undefined);
+      return reported;
     },
 
     async runAsync(graph) {
-      if (worker === undefined) return runPrepared(prepare(graph, config, nodeSize), stages);
-      const request = nextRequest;
-      nextRequest += 1;
-      // Prepared, and so measured, on this thread: see `wire.ts` for why that
-      // is the point rather than a step on the way to posting.
-      const { message, transfer } = encodeRun(request, prepare(graph, config, nodeSize));
-      // The ids as they were at the moment of the send. `encodeRun` built them
-      // already, so the snapshot is those same arrays rather than a second walk.
-      const { nodes, edges, sources, targets } = message;
-      const answer = new Promise<LayoutResult>((resolve, reject) => {
-        pending.set(request, { snapshot: { nodes, edges, sources, targets }, resolve, reject });
-      });
-      listen(worker);
-      try {
-        worker.postMessage(message, transfer);
-      } catch (error) {
-        // A port that refuses the message never answers it, so the entry it
-        // would have been matched against has to go with it. Nothing this
-        // package puts in a message can be refused (ids are strings, the rest
-        // is numbers), so a throw here is the port object itself objecting.
-        //
-        // A CLOSED PORT AND A TERMINATED WORKER DO NOT COME THROUGH HERE:
-        // posting to either is a silent no-op in both runtimes, not a throw. So
-        // that run stays pending, which is the same outcome as a worker that is
-        // simply slow, and is the outcome "there is no timeout" chooses on
-        // purpose. A caller who needs to give up races the promise themselves.
-        pending.delete(request);
-        idle();
-        throw error;
+      requireLive();
+      reported = worker === undefined ? runHere(graph, undefined) : await runThere(graph, worker);
+      return reported;
+    },
+
+    relayout(patch) {
+      const graph = forRelayout(patch);
+      return report(graph, runHere(graph, warm));
+    },
+
+    async relayoutAsync(patch) {
+      const graph = forRelayout(patch);
+      const next = worker === undefined ? runHere(graph, warm) : await runThere(graph, worker);
+      return report(graph, next);
+    },
+
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      held = undefined;
+      warm = undefined;
+      reported = undefined;
+      // Rejected before the listener goes, because an answer arriving afterwards
+      // reaches nobody and a promise that can never settle is worse than one
+      // that settles badly.
+      for (const [id, waiting] of [...pending]) {
+        pending.delete(id);
+        waiting.reject(new EngineStateError('this engine was disposed while a run was in flight'));
       }
-      return answer;
+      idle();
     },
   };
 }

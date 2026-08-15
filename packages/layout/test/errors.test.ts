@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DagrLayoutError,
   DeltaMismatchError,
+  EngineStateError,
   InternalLayoutError,
   InvalidConfigError,
   StageContractError,
@@ -15,6 +16,7 @@ describe('layout errors', () => {
       new StageContractError('rank', 'a', 'no rank was assigned'),
       new InternalLayoutError('no entry at index 3'),
       new DeltaMismatchError('a', 'is moved by this delta but the result does not hold it'),
+      new EngineStateError('this engine has been disposed'),
     ];
     for (const error of errors) {
       expect(error).toBeInstanceOf(DagrLayoutError);
@@ -28,8 +30,15 @@ describe('layout errors', () => {
       new StageContractError('rank', 'a', 'no rank was assigned').code,
       new InternalLayoutError('no entry at index 3').code,
       new DeltaMismatchError('a', 'why').code,
+      new EngineStateError('why').code,
     ];
-    expect(codes).toEqual(['INVALID_CONFIG', 'STAGE_CONTRACT', 'INTERNAL', 'DELTA_MISMATCH']);
+    expect(codes).toEqual([
+      'INVALID_CONFIG',
+      'STAGE_CONTRACT',
+      'INTERNAL',
+      'DELTA_MISMATCH',
+      'ENGINE_STATE',
+    ]);
   });
 
   it('keeps instanceof working for each subclass', () => {
@@ -37,6 +46,7 @@ describe('layout errors', () => {
     expect(new StageContractError('rank', 'a', 'why')).toBeInstanceOf(StageContractError);
     expect(new InternalLayoutError('why')).toBeInstanceOf(InternalLayoutError);
     expect(new DeltaMismatchError('a', 'why')).toBeInstanceOf(DeltaMismatchError);
+    expect(new EngineStateError('why')).toBeInstanceOf(EngineStateError);
     expect(new InvalidConfigError('nodeSep', -1)).not.toBeInstanceOf(StageContractError);
     // The distinction item B2 exists to draw: an invariant failure is this
     // package's bug, and a `StageContractError` names a stage the caller wrote.
@@ -48,6 +58,7 @@ describe('layout errors', () => {
     expect(new StageContractError('rank', 'a', 'why').name).toBe('StageContractError');
     expect(new InternalLayoutError('why').name).toBe('InternalLayoutError');
     expect(new DeltaMismatchError('a', 'why').name).toBe('DeltaMismatchError');
+    expect(new EngineStateError('why').name).toBe('EngineStateError');
   });
 
   it('reports the offending config field and value', () => {
