@@ -3008,6 +3008,129 @@ of M3 would leave the second runner idle for a milestone.
   is visible in every screenshot afterwards. Demo scene exercising a graph with
   edges spanning many ranks, which is what M2.4b's dummy chains turn into the
   multi-point polylines this task has to tessellate without pinching.
+  IN PROGRESS, split in two because the demo half waits on M4.4. The
+  tessellation core is merged (`ribbon.ts`, `ribbon-nodes.ts`, PR #31) and the
+  demo scene is the remaining half. The decisions the entry asked for, made:
+  **WIDTH IS IN SCREEN SPACE.** A ribbon is a fixed number of DEVICE pixels
+  from its centreline at every zoom. The demo's derived range runs 0.45 to 134
+  CSS pixels per world unit on the LADDER scene and the reference canvas (P2
+  measures both ends; the campaign restates them with its own bounds once M4.4
+  draws it), a factor of 300, and no world width survives both ends: one
+  visible at the floor is a slab across the card it connects at the ceiling,
+  one right at the ceiling is a third of a pixel at the floor, which
+  is the sub-pixel fade M4.2 measured. `@dagr/layout` gives a node a `Size` and
+  an edge only a polyline, so a world width would be invented by the renderer
+  rather than laid out; an outline is in device pixels here for the same
+  reason. Three things fall out and are the reason it is worth taking rather
+  than merely defensible: every join test is an ANGLE test, so one tessellation
+  is correct at every zoom and the camera never invalidates a buffer; the
+  antialiasing width is exactly 1, since the unit IS the device pixel, so the
+  ribbon shader has no derivative in it at all and `antialiasWidth`'s whole
+  subject does not arise; and dashes are in pixels too, so a pattern flows at
+  one apparent speed at every zoom. The cost, stated: a 3 pixel edge meeting a
+  viewport-sized card at deep zoom reads as a wire rather than as a road. World
+  space is one uniform's value away (multiply the half width by the pixels per
+  world unit), so the geometry does not close the door.
+  **JOINS: MITER WITH A LIMIT OF 2, A FAN PAST IT, AND THE FAN DOES NOT SHARE
+  ITS INNER VERTEX.** The miter length is `1 / cos(turn / 2)` and is computed
+  as `2 / |a + b|` over the two unit normals, so the branch that decides it
+  never evaluates the unbounded quantity. Past the limit each segment keeps its
+  OWN rib, which is what keeps every boundary vertex exactly one half width
+  from its own centreline (no narrowing anywhere, which is what a pinch is),
+  the outer wedge is filled from the centreline point, and the inner side
+  overlaps rather than gapping. A shared inner vertex is the alternative and at
+  a hairpin it sits far up the bisector inside the ribbon's own doubled-back
+  body, which is the fold this entry names. Overlap is invisible on a ribbon of
+  one colour. A 180 degree reversal is the same path with a zero bisector and
+  no wedge. The limit of 2 rather than SVG's 4: at 2 the last mitred turn is
+  120 degrees and the spike is never longer than the ribbon is wide, which
+  matters at 3 pixels and does not at 20.
+  The one bound a screen-space width cannot check on the CPU, stated the way
+  the tests measure it rather than the way it was first written, since the
+  first version understated it twice over: a mitred corner moves each vertex
+  along the segments it joins by `expand * tan(turn / 2)`, where `expand` is
+  the half width the VERTEX STAGE uses, the visible one plus the antialiasing
+  padding. A quad inverts into a bow tie once the segment is shorter on screen
+  than `expand * |tan(in / 2) + tan(out / 2)|`, with the turns SIGNED and the
+  sum taken before the absolute value. The algorithms review corrected that:
+  an earlier version claimed turns in opposite directions never invert, and
+  the test pinning it used 90 against 90, which is the one pair where the
+  cancellation is exact. Unequal opposite turns do invert, 119 against 30 back
+  at 3.57 pixels for an `expand` of 2.5, and the tests now pin four same-way
+  angles and three unequal opposite pairs to within 0.005 world units. Worst
+  case at the default limit is `3.46 * (halfWidth + 1)` pixels, 8.7 for a 3
+  pixel ribbon. M2.4b's dummy chains clear it, but on segment length rather
+  than on cancellation: a rank apart is 22 pixels at the ladder's fitted
+  zoom. The named fix if a
+  screenshot ever shows a hole: one per-vertex float carrying the corner's cap
+  in world units and a `min` in the vertex stage, which trades the hole for a
+  ribbon that narrows through a tight corner.
+  ONE boundary is knowingly not antialiased, recorded in `ribbonCoverage`: the
+  butt cap at a route's ends, since the padding is across the ribbon and there
+  is no along-axis term. M2.8 attaches both ends of a routed edge to a node's
+  border, so the cap is drawn against the box it arrives at; fixing it needs
+  the route's length at every vertex, which is another attribute and wants a
+  screenshot to justify it. The bevel's compressed ramp WAS the second such
+  deferral and is now fixed by the fan above rather than deferred.
+  **THE FLATTENING TOLERANCE IS ABSOLUTE, ITS DEFAULT IS RELATIVE.** The
+  option is world units of chord error, which is the quantity that turns into
+  pixels of faceting at a given zoom. No absolute default works for two scenes
+  at once: the ladder is 2,205 world units across and the campaign is 96,455
+  with a median gap near 2,000, and both reviews measured what a flat 0.05
+  costs there (2.2M vertices, 76 MB, near a second of single-threaded work at
+  24.8 points per span). The default is therefore a fraction of each route's
+  own mean segment length, which is scale free because a span's sagitta scales
+  with its length: 0.01 gives 6 points per span at every scale.
+  Measured on this box, 7,100 routes of 2 to 9 points: 77k vertices, 2.5 MB,
+  88 ms as polylines. The `number[]` accumulators hold their doubles live
+  alongside the typed arrays they are copied into, which a counting pass would
+  remove; not taken here because the count depends on which joins mitre and
+  which fan, so a counting pass would repeat the join decisions and could
+  disagree with the walk in a way that writes past an end.
+  Two obligations land on the demo half rather than here. `requireRibbonStyle`
+  has no caller until the stage 2 material builder validates a style and lifts
+  each field into a uniform, which is the shape that consumer needs: a generic
+  bridge returning numbers would go through `Arith.literal` and bake the period
+  and the flow into the compiled shader as constants, so `advanceDashFlow`
+  could never move the pattern without a rebuild. And the graphics review
+  measured the overview at the zoom floor: a 3 device pixel ribbon over the
+  campaign's 110.9M world units of centreline paints 196% of the fitted
+  viewport, 65% even at the 0.5 pixel minimum, so the far view is a mat of edge
+  ink. The width is already a uniform, so the fix is per frame and free:
+  clamp it against the world-space width and fade edge alpha below about one
+  pixel per world unit.
+  **ONE INDEXED MESH, NOT INSTANCES.** M4.3 instances nodes because a node is
+  one shape drawn many times. Every ribbon has its own point count, so the only
+  thing an instance could be is a segment, and a per-segment instance computes
+  its joins in the vertex shader, which puts the arithmetic this task is
+  actually about where no test in this repository can execute it. The
+  tessellator returns attribute arrays plus a range per route, so one draw
+  covers the scene and a caller can still colour or highlight one edge.
+  **DASHES ARE A DUTY CYCLE IN `(0, 1)`, AND SOLID IS THE ABSENCE OF A DASH.**
+  The dash distance is measured from the MIDDLE of the period, so both ends of
+  every dash get the same ramp; measured from the start, the distance across
+  the wrap belongs to the wrong dash and every leading edge is a hard step. A
+  duty of 1 is rejected rather than treated as solid, because a zero-width gap
+  is still a boundary to a distance field and reads as a half-alpha seam once
+  per period. Omitting the dash removes the arithmetic from the expression tree
+  when the material is built, so a solid ribbon's shader has no `fract` in it.
+  The flow uniform wraps into one period, which keeps a float32 varying from
+  quantising after an hour of an idle tab, and it advances towards the TARGET
+  because `RoutedEdge.points` runs source to target: the animation is the
+  direction cue, which is why nothing here draws an arrowhead.
+  **BEZIER IS CENTRIPETAL CATMULL-ROM THROUGH the control points**, converted
+  span by span to a cubic and flattened by adaptive subdivision. Through and
+  not near: a dummy's coordinate is the crossing the order stage chose, so a
+  curve using the points as a cage would undo the layout it came from. Uniform
+  parameterisation cusps on unevenly spaced points, which is every route that
+  leaves a wide box and then steps through evenly spaced dummies. The
+  flattening tolerance is a statement about zoom, since the geometry is baked:
+  faceting stays under half a device pixel while
+  `tolerance * pixelsPerWorldUnit <= 0.5`.
+  The tenth primitive is recorded here because `sdf.ts` counts nine: the dash
+  needs a `fract` and periodicity cannot be built from the nine. `DashArith`
+  extends `Arith` beside its only consumer, so the shape formulas keep their
+  count and `tslArith` gains no line no shape uses.
 - [ ] **M4.6** (`@dagr/render`) Spring integrator: critically damped springs
   driving scalar and vec2 targets, retargetable mid-flight with no
   discontinuity in position or velocity, and a fixed-timestep accumulator so
