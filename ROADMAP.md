@@ -4301,6 +4301,8 @@ and are independent of D1 and of each other.
 - [x] **D1** (`packages/campaign-stage`, `docs`, `apps/demo`, `render.yaml`)
   The campaign stage extracted to a shared package, mounted at
   `/demos/campaign` under a Demos tab, and the `dagr-demo` service retired.
+  MERGED as PR #40 on 2026-08-15. The service's own deletion is a maintainer
+  step in the Render dashboard, for the reason under P8 above.
   A DEMOS TAB RATHER THAN THE LANDING PAGE, which was the maintainer's own
   either/or resolved with a reason: the canvas wants the full viewport and its
   own keyboard focus, and the landing page has a hero, a live benchmark figure
