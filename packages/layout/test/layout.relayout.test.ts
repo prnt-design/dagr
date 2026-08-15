@@ -207,6 +207,10 @@ describe('the warm-start state the engine retains', () => {
     engine.relayout(last(patches));
     expect(recorder.inputs.rank?.previous?.ranks).toEqual(routed?.ranks);
     expect(recorder.inputs.rank?.previous?.positions.size).toBeGreaterThan(0);
+    // Every stage, not only the first. The channel is on the record the runner
+    // threads through, so the router reads the same object the ranker did, and
+    // the stages that warm start later are not all the first one.
+    expect(recorder.inputs.route?.previous).toBe(recorder.inputs.rank?.previous);
   });
 
   // The leak M3.10's churn sequence is written to catch, asserted here in the
