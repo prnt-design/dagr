@@ -1,4 +1,4 @@
-import { AttributeNode, Color } from 'three/webgpu';
+import { AttributeNode, BufferAttribute, Color } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
 import { SceneEdges } from '../src/scene-edges.js';
@@ -53,6 +53,17 @@ const straight: readonly Vec2[] = [
   { x: 0, y: 0 },
   { x: 100, y: 0 },
 ];
+
+/** The `BufferAttribute` object itself, for the update range and the version. */
+function bufferAttributeOf(scene: SceneEdges, index: number, name: string): BufferAttribute {
+  const mesh = scene.meshes[index];
+  if (mesh === undefined) throw new Error('unreachable: no mesh at that index');
+  const attribute = mesh.geometry.getAttribute(name);
+  // Narrowed rather than asserted: `getAttribute` answers with the interleaved
+  // kind too, and nothing here interleaves.
+  if (!(attribute instanceof BufferAttribute)) throw new Error(`no ${name} attribute`);
+  return attribute;
+}
 
 /** The attribute array a group's mesh carries, by name. */
 function attributeOf(scene: SceneEdges, index: number, name: string): Float32Array {
@@ -347,8 +358,7 @@ describe('SceneEdges', () => {
     scene.setEdges(ROUTED, [edge('e1', straight), edge('e2', straight), edge('e3', straight)]);
     const mesh = scene.meshes[0];
     if (mesh === undefined) throw new Error('unreachable');
-    const attribute = mesh.geometry.getAttribute('ribbonIntensity');
-    if (attribute === undefined) throw new Error('unreachable');
+    const attribute = bufferAttributeOf(scene, 0, 'ribbonIntensity');
 
     // The middle edge alone: vertices 4 to 7 of twelve.
     const version = attribute.version;
@@ -370,8 +380,7 @@ describe('SceneEdges', () => {
     scene.setEdges(ROUTED, [edge('e1', straight), edge('e2', straight)]);
     const mesh = scene.meshes[0];
     if (mesh === undefined) throw new Error('unreachable');
-    const attribute = mesh.geometry.getAttribute('ribbonIntensity');
-    if (attribute === undefined) throw new Error('unreachable');
+    const attribute = bufferAttributeOf(scene, 0, 'ribbonIntensity');
     scene.setEdgeIntensity(ROUTED, () => 1);
     mesh.onBeforeRender(
       ...([] as unknown as Parameters<typeof mesh.onBeforeRender>),
