@@ -6,7 +6,7 @@ import {
   UnknownInstanceHandleError,
 } from '../src/errors.js';
 import { INSTANCE_CHANNELS, linearFromHex } from '../src/instance-attributes.js';
-import type { NodeStyle, ShapeFamily } from '../src/instance-attributes.js';
+import type { SceneStyle, ShapeFamily } from '../src/instance-attributes.js';
 import {
   InstancedShapes,
   createInstancedShapes,
@@ -27,7 +27,7 @@ import type { FamilyInstance } from '../src/instanced-scene.js';
  * for what stands in for it, which is the committed crispness references.
  */
 
-const style: NodeStyle = { outlineColor: 0x023047, glowAlpha: 0.45, outlinePixels: 2 };
+const style: SceneStyle = { outlineColor: 0x023047, glowAlpha: 0.45, outlinePixels: 2 };
 
 /** A rect whose every field is distinct, so a misplaced write is visible. */
 function rectAt(x: number, size = 10): FamilyInstance<'roundedRect'> {

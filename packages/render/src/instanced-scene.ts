@@ -14,7 +14,7 @@ import {
   instanceSize,
   requireShapeInstance,
 } from './instance-attributes.js';
-import type { NodeStyle, ShapeFamily, ShapeInstance } from './instance-attributes.js';
+import type { SceneStyle, ShapeFamily, ShapeInstance } from './instance-attributes.js';
 import { quadPadding } from './sdf.js';
 import { circleSDF, roundedRectSDF, shapeShading, tslArith } from './sdf-nodes.js';
 import type { GpuResource, WorldBounds } from './types.js';
@@ -69,9 +69,10 @@ import { requireColor, requireFinite, requireNonNegative } from './validate.js';
  * under bare Node and does not evaluate, so the per-instance path (an attribute
  * reaching the vertex stage, a quad scaled by it, a varying reaching the
  * fragment stage) is proved by a picture and by nothing else. The picture is the
- * evidence M4.2 already committed: the crispness ladder draws through this file
- * as of M4.3, so the committed references are a regression test for the whole
- * per-instance path, and a factor of two anywhere in it is visible at a glance.
+ * evidence the demo commits: M4.3 drew the crispness ladder through this file and
+ * M4.4 draws the campaign through it, so the committed frames are a regression
+ * test for the whole per-instance path and a factor of two anywhere in it is
+ * visible at a glance.
  */
 
 /**
@@ -141,16 +142,16 @@ function unitQuadAttributes(): {
 /**
  * Rejects a family style that cannot be drawn, naming the field.
  *
- * The same three checks `requireShapeStyle` makes on the three fields it still
- * owns, and it is a separate function rather than a call into that one because
- * the record is a different shape: passing a `ShapeStyle` here would mean
- * inventing per-instance fields to satisfy it and then ignoring them, which is
- * how a caller comes to believe a fill colour set on a family means something.
+ * The three checks a whole-shape style record used to make on the three fields
+ * that are still shared, and it is its own function rather than a call into one
+ * because the record is a different shape now: a style carrying per-instance
+ * fields would mean inventing values to satisfy it and then ignoring them, which
+ * is how a caller comes to believe a fill colour set on a family means something.
  */
 export function requireFamilyStyle(
-  style: NodeStyle,
+  style: SceneStyle,
   field: string,
-): NodeStyle {
+): SceneStyle {
   const glowAlpha = requireFinite(style.glowAlpha, `${field}.glowAlpha`);
   if (glowAlpha < 0 || glowAlpha > 1) {
     throw new RangeError(
@@ -202,7 +203,7 @@ export function requireFamilyStyle(
  */
 function createInstancedMaterial(
   family: ShapeFamily,
-  style: NodeStyle,
+  style: SceneStyle,
 ): MeshBasicNodeMaterial {
   const offset = attribute<'vec2'>(OFFSET, 'vec2');
   const size = attribute<'vec2'>(SIZE, 'vec2');
@@ -243,8 +244,8 @@ function createInstancedMaterial(
   // The same two flags every shape in this package draws with, and the same
   // reasons: alpha for the glow and the antialiasing ramps, and no depth write
   // because a transparent fragment that writes depth occludes whatever is drawn
-  // behind it afterwards. See `shape-scene.ts` for the argument, which M4.5
-  // inherits when it layers edges behind nodes on the same z = 0 plane.
+  // behind it afterwards. The argument is M4.2's and M4.5 inherits it when it
+  // layers edges behind nodes on the same z = 0 plane.
   material.transparent = true;
   material.depthWrite = false;
   return material;
@@ -272,7 +273,7 @@ export interface InstancedShapesOptions<F extends ShapeFamily = ShapeFamily> {
   /** Which distance function the mesh draws with, and which instances it takes. */
   readonly family: F;
   /** The three uniforms every instance in this mesh shares. */
-  readonly style: NodeStyle;
+  readonly style: SceneStyle;
   /**
    * How many instances to allocate for up front. A caller that knows its node
    * count says so and never pays for a growth; the default is
@@ -652,7 +653,7 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
  */
 export function createInstancedShapes(
   instances: readonly ShapeInstance[],
-  styles: Partial<Readonly<Record<ShapeFamily, NodeStyle>>>,
+  styles: Partial<Readonly<Record<ShapeFamily, SceneStyle>>>,
   label = 'scene',
 ): InstancedShapes[] {
   const families: readonly ShapeFamily[] = ['roundedRect', 'circle'];

@@ -80,10 +80,12 @@ edge](../../assets/screenshots/m4.2-sdf-shapes-100x.png)
 At zoom 100 one 10 unit rounded rectangle fills the view, so what you are looking
 at is a single corner arc at a hundred pixels per world unit. The
 [0.1x frame](../../assets/screenshots/m4.2-sdf-shapes-0.1x.png) is the other end
-of that range, and it is no longer reachable in the live demo: the zoom floor is
-derived from the content now, and a view further out than the whole scene is the
-state that range exists to prevent. Reproduce it from the M4.2 commit; what it
-documented is recorded in that task's ROADMAP entry.
+of that range, and neither is reachable in the live demo any more, for the plain
+reason that the scene they show is gone: M4.4 retired the ladder. Reproduce both
+from the M4.2 commit; what the 0.1x frame documented is recorded in that task's
+ROADMAP entry. The campaign's own floor is 0.053 and its ceiling 19.9 on the
+reference canvas, which is a narrower range than the ladder's because a campaign
+node spans 12:1 in size where the ladder spanned 250:1.
 
 For the record, this is where the package started:
 [first light](../../assets/screenshots/m4.1-first-light.png) was a single amber
@@ -252,7 +254,11 @@ fill's ramp reaches half a pixel past the boundary, so the ramp survives above z
 the three crossovers at 0.25, 0.045 and 0.005: four of the six shapes are therefore
 clean at zoom 0.1 and the two 4-unit-tall ones are not. What is clipped there is the
 antialiasing of a shape already under a pixel across, which is why it is invisible
-in the frame, and a zoom-aware quad is M4.4's to add.
+in the frame, and a zoom-aware quad is nobody's yet: M4.4 scales the quad per
+instance in the vertex stage but its padding still has no zoom term, and the
+case it would fix is now handled where it costs nothing (the glow's ramp is
+capped at the quad, so the halo ends where the quad does rather than being cut
+by it).
 
 ### One material per family, provisionally
 
@@ -1112,8 +1118,6 @@ are.
 Most of it. M4.4 is a graph on screen, drawn correctly, one draw call per shape
 family, and nothing that moves.
 
-- A real layout on screen, which is also where the y-up and y-down mismatch
-  above gets resolved once, in one place (M4.4).
 - Edge ribbons for polylines and beziers (M4.5).
 - Critically damped springs, and with them a real animation loop (M4.6).
 - Consuming `LayoutDelta` from `@dagr/layout`'s incremental path, which is the

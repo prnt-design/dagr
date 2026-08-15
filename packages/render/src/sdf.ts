@@ -73,7 +73,7 @@ import { requireFinite, requireNonNegative } from './validate.js';
  * coverage function is called once per fragment per frame, which is millions of
  * times a second on the GPU and zero times in JavaScript for the path that
  * matters, so a check inside one costs real ALU on every pixel and cannot throw
- * anywhere a caller would see it. {@link requireShapeStyle},
+ * anywhere a caller would see it. `requireShapeInstance` in `instance-attributes.ts`,
  * {@link requireCornerRadius} and {@link requireCircleRadius} are the boundary
  * instead: they run once per shape, at the moment a caller's number is turned into
  * geometry, and {@link quadPadding} calls the first of them because sizing a quad is
@@ -374,11 +374,29 @@ export function outlineCoverage<T>(m: Arith<T>, distance: T, widthPixels: T, aaW
  * `aaWidth` floors the ramp at one pixel. A halo narrower than the sample
  * spacing is a hard step, which is the one thing this file exists to avoid. The
  * cost is that `radiusWorld === 0` still draws a one pixel halo rather than
- * nothing, which is why the scene expresses "no glow" through the glow colour or
+ * nothing, which is why a caller expresses "no glow" through the glow colour or
  * its alpha and not through a zero radius.
+ *
+ * **AND THE FLOOR IS CAPPED AT THE QUAD, which it was not until M4.4 drew three
+ * thousand small nodes at once.** A quad reaches {@link quadPadding} past the
+ * shape, which is `radiusWorld + 1` world unit; `aaWidth` is one DEVICE pixel
+ * measured in world units, so below a zoom of `1 / (dpr * (radiusWorld + 1))`
+ * the floor pushed the ramp's outer end PAST the quad's own edge and the halo
+ * was cut off by a straight line. Measured on the committed fit frame at 0.053
+ * CSS pixels per world unit: a room's halo still read alpha 0.276 where its quad
+ * ended and an NPC circle's 0.104, so about fifteen hundred of the smallest
+ * nodes were hard-edged rectangles of halo, and the circles wore square ones.
+ *
+ * Capping the widened edge at the padding is the whole fix, and it costs one
+ * `min`. It keeps the widening that matters (a sub-pixel radius still reaches a
+ * pixel, because a pixel is inside the padding whenever the padding is at least
+ * a pixel) and gives up only the case the quad could never have shown anyway.
+ * The alternative was a world-units-per-device-pixel uniform set per frame and a
+ * quad resized with it, which is a per-frame cost on every instance to widen a
+ * halo nobody can see at that zoom.
  */
 export function glowCoverage<T>(m: Arith<T>, distance: T, radiusWorld: T, aaWidth: T): T {
-  const edge = m.max(radiusWorld, aaWidth);
+  const edge = m.min(m.max(radiusWorld, aaWidth), quadPadding(m, radiusWorld));
   return smoothstepBetween(m, edge, m.literal(0), distance);
 }
 
@@ -408,7 +426,7 @@ export function glowCoverage<T>(m: Arith<T>, distance: T, radiusWorld: T, aaWidt
  * itself sets the floor at the boundary and the shape's edge reads as the glow's
  * alpha instead, which is a statement about how strong a halo is rather than
  * about compositing: the renderer's default node style picks 0.45 deliberately, and
- * {@link requireShapeStyle} allows the whole unit interval because a halo at 0.8
+ * `requireShapeInstance` in `instance-attributes.ts` allows the whole unit interval because a halo at 0.8
  * is a legitimate if unsubtle choice.
  *
  * Here rather than in `sdf-nodes.ts` because it is pure float arithmetic, so
@@ -472,7 +490,7 @@ export const FILL_AA_PADDING_WORLD = 1;
  * glow, plus {@link FILL_AA_PADDING_WORLD} for the fill's own ramp.
  *
  * Over {@link Arith} like every other formula here, and that is a change M4.4
- * made rather than a shape it always had. It used to take a `ShapeStyle` record
+ * made rather than a shape it always had. It used to take a whole style record
  * and validate it, because a quad was a `PlaneGeometry` built once per shape in
  * JavaScript. The quad is now scaled PER INSTANCE in the vertex stage, so the
  * expression runs on the GPU, and the choice was a second copy of it in TSL or

@@ -52,6 +52,25 @@ export function App(): JSX.Element {
     });
     let cancelled = false;
 
+    /**
+     * A worker that dies is a run that is never answered.
+     *
+     * `@dagr/layout`'s engine has no timeout by design (how long is too long
+     * belongs to the caller and to the graph), and posting to a dead worker is a
+     * silent no-op in both runtimes rather than a throw. So a worker script that
+     * fails to load or throws while its module evaluates leaves every one of the
+     * hundred runs pending forever, `Promise.all` never settles, and the page
+     * sits on "laying out the campaign" with nothing thrown for the `catch`
+     * below to catch. The docs site learned this at PR #23 and carries the same
+     * listener; a listener is all this page needs, because it has a failure
+     * state of its own to show.
+     */
+    const onWorkerError = (event: ErrorEvent): void => {
+      if (cancelled) return;
+      setFailure(event.message === '' ? 'the layout worker failed to start' : event.message);
+    };
+    worker.addEventListener('error', onWorkerError);
+
     buildCampaignScene(campaign, { worker })
       .then((built) => {
         // The component may have unmounted while a hundred layouts ran. Setting
@@ -65,6 +84,7 @@ export function App(): JSX.Element {
 
     return () => {
       cancelled = true;
+      worker.removeEventListener('error', onWorkerError);
       // A worker that is never terminated keeps its thread and its module graph
       // alive for the life of the page. There is no watchdog here, unlike the
       // docs site's live demo: this page shows its own failure state and a

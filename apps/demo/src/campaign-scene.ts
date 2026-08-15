@@ -1,9 +1,9 @@
 import { Graph } from '@dagr/graph';
 import { createLayout } from '@dagr/layout';
 import type { LayoutPort } from '@dagr/layout';
-import type { Campaign, CampaignNode, NodeKind } from '@dagr/campaign';
-import type { SceneNode, Size, WorldBounds } from '@dagr/render';
-import { SMALLEST_NODE_SIZE, glowReach, kindColor, styleFor } from './campaign-style.js';
+import type { Campaign, CampaignNode } from '@dagr/campaign';
+import type { SceneNode, Size, Vec2, WorldBounds } from '@dagr/render';
+import { SMALLEST_NODE_SIZE, glowReach, nodeColor, styleFor } from './campaign-style.js';
 import { assignTiles, gridPositions, isRouted, shelfPack } from './tiles.js';
 import type { Tile, TileKind } from './tiles.js';
 
@@ -60,12 +60,23 @@ export interface CampaignTilePlacement {
  */
 export interface CampaignOverlayNode {
   readonly id: string;
-  readonly name: string;
-  readonly kind: NodeKind;
   /** The node's box in WORLD space, y up. */
   readonly bounds: WorldBounds;
   /** The kind's fill colour, as a CSS string. */
   readonly color: string;
+  /**
+   * The campaign record itself, which is what a card tier reads: `cardRows`
+   * takes one, and a title takes its `name`.
+   *
+   * Carried rather than looked up by id, and NOT unpacked into a `name` and a
+   * `kind` beside it. This module already holds the record at the moment it
+   * builds this one, so carrying it costs a reference; the alternative is a
+   * second id-keyed lookup in whatever renders the card, which is the
+   * disagreement that building `nodeBounds` and this list in ONE pass exists to
+   * prevent. Copying two of its fields out would be the same duplication in
+   * miniature.
+   */
+  readonly node: CampaignNode;
 }
 
 /** Everything the demo needs from one build of the campaign. */
@@ -88,6 +99,22 @@ export interface CampaignScene {
   readonly overlayNodes: readonly CampaignOverlayNode[];
   /** Where each tile sits, for cross-tile edges (P5) and for a tile label. */
   readonly tiles: readonly CampaignTilePlacement[];
+  /**
+   * One polyline per routed edge whose two ends share a tile, keyed by the
+   * campaign's own edge id, in WORLD space with y up.
+   *
+   * What M4.5 tessellates. Kept from the layout pass rather than recovered
+   * later, because recovering it means running a hundred layouts again, and
+   * carried through the SAME `toWorld` the node boxes go through: a route
+   * flipped differently from its endpoints still starts and ends near the right
+   * nodes and only bulges the wrong way in between, which reads as a routing bug
+   * rather than as a sign bug.
+   *
+   * A routed edge whose ends are in DIFFERENT tiles is not here and never was
+   * routed: the Sugiyama pipeline only ever sees one tile. Those are the
+   * cross-tile lines, drawn against {@link tiles}.
+   */
+  readonly edgeRoutes: ReadonlyMap<string, readonly Vec2[]>;
   /** The whole scene's extent, which is what the camera fits on load. */
   readonly bounds: WorldBounds;
   /** The smallest box any node is drawn in, which the zoom-in limit frames. */
@@ -103,10 +130,12 @@ interface LocalPlacement {
   readonly size: Size;
 }
 
-/** One tile once its contents have positions: local placements plus an extent. */
+/** One tile once its contents have positions: placements, routes and an extent. */
 interface LaidTile {
   readonly tile: Tile;
   readonly placements: ReadonlyMap<string, LocalPlacement>;
+  /** One polyline per routed edge INSIDE the tile, in the tile's y-down space. */
+  readonly routes: ReadonlyMap<string, readonly Vec2[]>;
   readonly size: Size;
 }
 
@@ -156,9 +185,29 @@ async function layoutTile(
       size: { width: node.width, height: node.height },
     });
   }
+
+  // **The routes are kept, and translated by the SAME corner the nodes are.**
+  // They are M4.5's entire input, and re-running a hundred layouts to recover
+  // what this pass already computed is not an option. Every point rides the one
+  // y flip in `toWorld` with the node boxes, which is the correctness that
+  // matters: a route flipped differently from its endpoints reads as a ROUTING
+  // bug rather than as a sign bug, because the line still starts and ends near
+  // the right nodes and only bulges the wrong way in between.
+  const routes = new Map<string, readonly Vec2[]>();
+  for (const [id, edge] of result.edges) {
+    routes.set(
+      id,
+      edge.points.map((point) => ({
+        x: point.x - result.bounds.x,
+        y: point.y - result.bounds.y,
+      })),
+    );
+  }
+
   return {
     tile,
     placements,
+    routes,
     size: { width: result.bounds.width, height: result.bounds.height },
   };
 }
@@ -175,6 +224,24 @@ function gridTile(tile: Tile, byId: ReadonlyMap<string, CampaignNode>): LaidTile
   const first = byId.get(tile.nodeIds[0] ?? '');
   if (first === undefined) throw new Error(`unreachable: empty grid tile ${tile.id}`);
   const nodeSize = sizeOf(first);
+  // CHECKED rather than assumed, because the assumption is about the DATASET
+  // and not about this file: a grid tile is one kind (see `assignTiles`) and a
+  // kind is one size, except `location`, whose four subtypes are four sizes and
+  // which never reaches a grid tile only because every non-region location has a
+  // contains chain up to a region. If the generator ever emits one outside that
+  // forest, the whole tile would be laid out AND drawn at the first member's
+  // size, which is silently overlapping and mis-sized nodes that no test in
+  // either package could see.
+  for (const id of tile.nodeIds) {
+    const member = byId.get(id);
+    if (member === undefined) throw new Error(`unreachable: tile ${tile.id} names a missing node`);
+    const size = sizeOf(member);
+    if (size.width !== nodeSize.width || size.height !== nodeSize.height) {
+      throw new RangeError(
+        `grid tile ${tile.id} holds two sizes (${id} is ${String(size.width)} by ${String(size.height)}, ${first.id} is ${String(nodeSize.width)} by ${String(nodeSize.height)}), so a grid cannot size its cells`,
+      );
+    }
+  }
   const { positions, size } = gridPositions(tile.nodeIds.length, nodeSize);
   const placements = new Map<string, LocalPlacement>();
   tile.nodeIds.forEach((id, index) => {
@@ -182,7 +249,10 @@ function gridTile(tile: Tile, byId: ReadonlyMap<string, CampaignNode>): LaidTile
     if (position === undefined) throw new Error('unreachable: one position per node');
     placements.set(id, { x: position.x, y: position.y, size: nodeSize });
   });
-  return { tile, placements, size };
+  // No routes: a grid tile is the tiles with no routed edge among their own
+  // members, which is why it is a grid at all. An empty map rather than an
+  // absent field, so a consumer iterating every tile's routes needs no branch.
+  return { tile, placements, routes: new Map(), size };
 }
 
 /**
@@ -245,6 +315,7 @@ export async function buildCampaignScene(
   const nodes: SceneNode[] = [];
   const nodeBounds = new Map<string, WorldBounds>();
   const overlayNodes: CampaignOverlayNode[] = [];
+  const edgeRoutes = new Map<string, readonly Vec2[]>();
   const placedTiles: CampaignTilePlacement[] = [];
 
   for (const entry of laid) {
@@ -266,6 +337,15 @@ export async function buildCampaignScene(
       },
       nodeIds: entry.tile.nodeIds,
     });
+
+    // Through the same `toWorld` as the node boxes below, in the same pass, so
+    // there is no second place for the sign to be got wrong.
+    for (const [id, points] of entry.routes) {
+      edgeRoutes.set(
+        id,
+        points.map((point) => toWorld(offset.x + point.x, offset.y + point.y)),
+      );
+    }
 
     for (const [id, placement] of entry.placements) {
       const node = byId.get(id);
@@ -294,13 +374,9 @@ export async function buildCampaignScene(
       nodeBounds.set(id, bounds);
       overlayNodes.push({
         id,
-        name: node.name,
-        kind: node.data.kind,
         bounds,
-        color: kindColor(
-          node.data.kind,
-          node.data.kind === 'location' ? node.data.subtype : undefined,
-        ),
+        color: nodeColor(node),
+        node,
       });
     }
   }
@@ -309,6 +385,7 @@ export async function buildCampaignScene(
     nodes,
     nodeBounds,
     overlayNodes,
+    edgeRoutes,
     tiles: placedTiles,
     bounds: {
       minX: -halfWidth,

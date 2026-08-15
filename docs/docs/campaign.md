@@ -12,10 +12,12 @@ unpublished package with zero dependencies, `@dagr/graph` included, because it
 is a fixture rather than a product and a fixture that depended on the graph
 model would be unusable to anything that is not Dagr.
 
-The demo it feeds still draws six shapes on a crispness ladder. That scene
-proves a shader claim and says nothing about why anyone would want a graph
-engine, which is what this dataset is for and why the demo is being rebuilt
-around it. A campaign is a genuinely graph-shaped domain: a real hierarchy,
+The demo it feeds used to draw six shapes on a crispness ladder. That scene
+proved a shader claim and said nothing about why anyone would want a graph
+engine, which is what this dataset is for and why the demo was rebuilt around
+it: M4.4 draws the whole campaign, and the
+[renderer page](./render.md) has the two frames. A campaign is a genuinely
+graph-shaped domain: a real hierarchy,
 thousands of nodes, dense cross-links that are not the hierarchy, and content
 worth reading when you get close. That is the workload Dagr exists for,
 panning and zooming through a large structure, which is why the dataset is a

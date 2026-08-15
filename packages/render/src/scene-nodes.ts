@@ -1,5 +1,6 @@
 import { InstancedShapes } from './instanced-scene.js';
-import type { NodeStyle, ShapeFamily, ShapeInstance } from './instance-attributes.js';
+import { requireShapeInstance } from './instance-attributes.js';
+import type { SceneStyle, ShapeFamily, ShapeInstance } from './instance-attributes.js';
 import type { GpuResource, Size, Vec2 } from './types.js';
 
 /**
@@ -103,11 +104,19 @@ export class SceneNodes implements GpuResource {
    * object does not hold, which is a reference in the wrong direction for one
    * saved material.
    */
-  constructor(style: NodeStyle, capacity?: number) {
+  constructor(style: SceneStyle, capacity?: Readonly<Partial<Record<NodeShape, number>>>) {
     const families = new Map<NodeShape, InstancedShapes>();
     try {
       for (const shape of ['roundedRect', 'circle'] as const) {
-        // Spread rather than `capacity: capacity`, because the package compiles
+        const wanted = capacity?.[shape];
+        // PER FAMILY, and floored at 1. One count applied to both families
+        // reserved twice what a mixed scene needs, which is not the "exactly
+        // this many" the option promises, and a family with none of a scene's
+        // nodes in it asked for a capacity of 0, which `InstanceBuffer` rejects:
+        // `createRenderer({ canvas, nodes: [] })` threw a `RangeError` naming an
+        // option the caller never wrote.
+        //
+        // Spread rather than `capacity: wanted`, because the package compiles
         // with `exactOptionalPropertyTypes` and an explicit `undefined` is not
         // the same thing as an absent key.
         families.set(
@@ -116,7 +125,7 @@ export class SceneNodes implements GpuResource {
             family: shape,
             style,
             label: `nodes.${shape}`,
-            ...(capacity === undefined ? {} : { capacity }),
+            ...(wanted === undefined ? {} : { capacity: Math.max(1, wanted) }),
           }),
         );
       }
@@ -164,26 +173,36 @@ export class SceneNodes implements GpuResource {
    */
   setNodes(nodes: readonly SceneNode[]): void {
     this.#assertLive('setNodes');
-    const incoming = new Map<string, SceneNode>();
+    const incoming = new Map<string, { node: SceneNode; instance: ShapeInstance }>();
     for (const node of nodes) {
       if (incoming.has(node.id)) {
         throw new RangeError(`two nodes share the id ${node.id}, so one would replace the other`);
       }
-      incoming.set(node.id, node);
+      // **Converted AND validated before anything is touched.** The first
+      // version validated as it wrote, so a bad node halfway down the list threw
+      // after the removal loop had already run: a scene given a good node and a
+      // circle with a non-square size was left holding neither, one removed and
+      // one never added. A caller that catches the `RangeError`, which is the
+      // delta path this method exists for, then draws a silently short picture.
+      // Two passes over the list is the price of the call being all or nothing.
+      const instance = toInstance(node);
+      incoming.set(node.id, {
+        node,
+        instance: requireShapeInstance(instance, instance.kind, node.id),
+      });
     }
 
     for (const [id, placement] of this.#placements) {
-      const node = incoming.get(id);
-      if (node === undefined || node.shape !== placement.shape) {
+      const entry = incoming.get(id);
+      if (entry === undefined || entry.node.shape !== placement.shape) {
         this.#family(placement.shape).remove(placement.handle);
         this.#placements.delete(id);
       }
     }
 
-    for (const [id, node] of incoming) {
+    for (const [id, { node, instance }] of incoming) {
       const placement = this.#placements.get(id);
       const family = this.#family(node.shape);
-      const instance = toInstance(node);
       if (placement === undefined) {
         this.#placements.set(id, { shape: node.shape, handle: family.add(instance) });
       } else {

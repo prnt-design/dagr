@@ -1,6 +1,13 @@
 import { generateCampaign } from '@dagr/campaign';
 import { describe, expect, it } from 'vitest';
-import { CAMPAIGN_STYLE, SMALLEST_NODE_SIZE, cssHex, kindColor, styleFor } from '../src/campaign-style.js';
+import {
+  CAMPAIGN_STYLE,
+  LOCATION_STYLE,
+  SMALLEST_NODE_SIZE,
+  cssHex,
+  nodeColor,
+  styleFor,
+} from '../src/campaign-style.js';
 import {
   TARGET_ASPECT,
   TILE_GUTTER,
@@ -25,6 +32,15 @@ import type { TileBox } from '../src/tiles.js';
  */
 
 const SEEDS = [undefined, 7, 99] as const;
+
+/**
+ * The scale knob, which moves rooms per dungeon and NPCs per settlement
+ * together. Varied as well as the seed because the tiling is a claim about the
+ * campaign's SHAPE, and a shape that only holds at one size is a coincidence: a
+ * review swept seven seeds against these three and the partition held at all
+ * twenty-one.
+ */
+const SCALES = [0.5, 1, 2] as const;
 
 describe('the routed and overlay split', () => {
   it('keeps the dense cyclic layers out of layout entirely', () => {
@@ -69,22 +85,64 @@ describe('the contains forest', () => {
 });
 
 describe('assignTiles', () => {
-  it('PARTITIONS the campaign: every node in exactly one tile, at three seeds', () => {
+  it('PARTITIONS the campaign: every node in exactly one tile, at every seed and scale', () => {
     // The property the whole file exists for. A node in two tiles is drawn
     // twice at two positions and a node in none is missing from a picture of
     // three thousand, and neither is something a reader would report as a bug.
     for (const seed of SEEDS) {
+      for (const scale of SCALES) {
+        const campaign = generateCampaign({ ...(seed === undefined ? {} : { seed }), scale });
+        const tiles = assignTiles(campaign);
+        const seen = new Set<string>();
+        for (const tile of tiles) {
+          for (const id of tile.nodeIds) {
+            expect(seen.has(id)).toBe(false);
+            seen.add(id);
+          }
+        }
+        expect(seen.size).toBe(campaign.nodes.length);
+      }
+    }
+  });
+
+  it('keeps the spine closed under contains, so nothing joins it by accident', () => {
+    // A node lands in the spine when nothing above it is a tile root. That is
+    // stated as "the campaign and its arcs", and it holds at every seed today,
+    // but the rule is structural rather than by kind: if the generator ever gave
+    // a node outside the contains forest a contains child, that child would
+    // silently join the spine's LAYOUT tile and the partition assertion above
+    // would still pass. This is the assertion that would not.
+    for (const seed of SEEDS) {
       const campaign = seed === undefined ? generateCampaign() : generateCampaign({ seed });
       const tiles = assignTiles(campaign);
-      const seen = new Set<string>();
-      for (const tile of tiles) {
-        for (const id of tile.nodeIds) {
-          expect(seen.has(id)).toBe(false);
-          seen.add(id);
-        }
+      const parents = containsParents(campaign.edges);
+      const spine = tiles.find((tile) => tile.id === 'spine');
+      expect(spine).toBeDefined();
+      const members = new Set(spine?.nodeIds);
+      for (const id of members) {
+        const parent = parents.get(id);
+        if (parent !== undefined) expect(members.has(parent)).toBe(true);
       }
-      expect(seen.size).toBe(campaign.nodes.length);
     }
+  });
+
+  it('refuses a contains chain that loops rather than walking it forever', () => {
+    // The guard exists because a cycle here would hang the page rather than fail
+    // a test, and nothing in the real dataset can reach it.
+    const looped = {
+      seed: 0,
+      rootId: 'a',
+      nodes: [
+        { id: 'a', name: 'a', oneLine: '', depth: 0, tags: [], data: { kind: 'chapter', expectedOrder: 1, summary: '' } },
+        { id: 'b', name: 'b', oneLine: '', depth: 1, tags: [], data: { kind: 'scene', sceneType: 'social', trigger: '' } },
+        { id: 'c', name: 'c', oneLine: '', depth: 2, tags: [], data: { kind: 'scene', sceneType: 'social', trigger: '' } },
+      ],
+      edges: [
+        { id: 'e1', source: 'b', target: 'c', kind: 'contains' },
+        { id: 'e2', source: 'c', target: 'b', kind: 'contains' },
+      ],
+    } as unknown as Parameters<typeof assignTiles>[0];
+    expect(() => assignTiles(looped)).toThrow(/loops at/);
   });
 
   it('cuts a tile per chapter, region, quest and front, plus a spine', () => {
@@ -234,6 +292,31 @@ describe('shelfPack', () => {
           a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
         expect(apart).toBe(true);
       }
+    }
+  });
+
+  it('keeps a gutter between SHELVES, not only between neighbours on one', () => {
+    // The gap a review found: the overlap test accepts two tiles touching, and
+    // the neighbour test only checks x, so deleting `+ gutter` from the shelf
+    // advance left the whole file green while every shelf sat flush against the
+    // one above it.
+    const boxes = [
+      box('tall-a', 400, 900),
+      box('tall-b', 400, 900),
+      box('short-a', 400, 100),
+      box('short-b', 400, 100),
+    ];
+    const packing = shelfPack(boxes, { gutter: 70, aspect: 1 });
+    const shelves = new Map<number, number>();
+    for (const tile of packing.tiles) {
+      shelves.set(tile.y, Math.max(shelves.get(tile.y) ?? 0, tile.height));
+    }
+    const tops = [...shelves.keys()].sort((a, b) => a - b);
+    expect(tops.length).toBeGreaterThan(1);
+    for (let i = 1; i < tops.length; i += 1) {
+      const previousTop = tops[i - 1] as number;
+      const top = tops[i] as number;
+      expect(top - previousTop).toBe((shelves.get(previousTop) as number) + 70);
     }
   });
 
@@ -408,23 +491,58 @@ describe('the per-kind style table', () => {
     expect(styleFor('campaign').size.height).toBeGreaterThan(styleFor('encounter').size.height * 3);
   });
 
-  it('derives the smallest node from the tables rather than restating it', () => {
-    const every = [...Object.values(CAMPAIGN_STYLE)].map((style) => style.size);
-    const smallest = Math.min(...every.map((size) => size.width * size.height));
-    expect(SMALLEST_NODE_SIZE.width * SMALLEST_NODE_SIZE.height).toBeLessThanOrEqual(smallest);
+  it('bounds every drawn box PER AXIS, which taking the smallest by area does not', () => {
+    // The first version reduced by area and resolved to a clock tick's 32 by 32,
+    // while an item and a room are 56 by 28. `zoomLimits` frames this with
+    // `fitZoom`, which takes a minimum over both axes, so a height 14% too large
+    // silently lowered the zoom ceiling for the two most numerous kinds in the
+    // campaign. Both tables, because a location subtype is not in the kind one.
+    const every = [...Object.values(CAMPAIGN_STYLE), ...Object.values(LOCATION_STYLE)].map(
+      (style) => style.size,
+    );
+    for (const size of every) {
+      expect(SMALLEST_NODE_SIZE.width).toBeLessThanOrEqual(size.width);
+      expect(SMALLEST_NODE_SIZE.height).toBeLessThanOrEqual(size.height);
+    }
+    expect(SMALLEST_NODE_SIZE.width).toBe(Math.min(...every.map((size) => size.width)));
+    expect(SMALLEST_NODE_SIZE.height).toBe(Math.min(...every.map((size) => size.height)));
   });
 
   it('gives a CSS colour the parser accepts, from the same table the GPU reads', () => {
     // A CSS declaration whose value the parser rejects is DROPPED SILENTLY: the
     // element keeps what it inherited and nothing fails, so this is the one
     // conversion in the demo that has to be checked rather than eyeballed.
-    for (const kind of Object.keys(CAMPAIGN_STYLE)) {
-      expect(kindColor(kind as keyof typeof CAMPAIGN_STYLE)).toMatch(/^#[0-9a-f]{6}$/);
+    const campaign = generateCampaign();
+    for (const node of campaign.nodes) {
+      expect(nodeColor(node)).toMatch(/^#[0-9a-f]{6}$/);
     }
     expect(cssHex(0x000000)).toBe('#000000');
     expect(cssHex(0xffb703)).toBe('#ffb703');
-    expect(kindColor('location', 'room')).toBe(cssHex(styleFor('location', 'room').fillColor));
-    expect(kindColor('location', 'room')).not.toBe(kindColor('location', 'region'));
+  });
+
+  it('badges a node in the colour the GPU actually draws it, subtype included', () => {
+    // The reason `nodeColor` takes the NODE. Its first signature was
+    // `(kind, subtype?)`, and the optional argument decides the answer for the
+    // most numerous kind in the campaign: a room and a region are both
+    // `location` and two different blues, so a caller who passed the kind alone
+    // badged all 750 rooms in the region's colour while the GPU drew them in
+    // their own.
+    const campaign = generateCampaign();
+    for (const node of campaign.nodes) {
+      const style = styleFor(
+        node.data.kind,
+        node.data.kind === 'location' ? node.data.subtype : undefined,
+      );
+      expect(nodeColor(node)).toBe(cssHex(style.fillColor));
+    }
+    const rooms = campaign.nodes.filter(
+      (node) => node.data.kind === 'location' && node.data.subtype === 'room',
+    );
+    const regions = campaign.nodes.filter(
+      (node) => node.data.kind === 'location' && node.data.subtype === 'region',
+    );
+    expect(rooms.length).toBeGreaterThan(100);
+    expect(nodeColor(rooms[0] as never)).not.toBe(nodeColor(regions[0] as never));
   });
 
   it('has a gutter wider than layout separates two nodes by', () => {

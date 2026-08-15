@@ -1,4 +1,4 @@
-import type { NodeKind } from '@dagr/campaign';
+import type { CampaignNode, NodeKind } from '@dagr/campaign';
 import type { NodeShape, Size } from '@dagr/render';
 
 /**
@@ -33,6 +33,17 @@ import type { NodeShape, Size } from '@dagr/render';
  * because sixteen kinds in five colours is confetti, and the additions were
  * picked to sit at similar chroma against the same near-black so no family
  * shouts over the others.
+ *
+ * **The separations that matter are the CROSS-family ones, and the first draft
+ * got them wrong.** A review measured the fills in Oklab and found three pairs
+ * from different strata as close as the deliberate steps WITHIN a family: a
+ * scene against a clock tick at 0.075 and against a front at 0.093, a stat block
+ * against a settlement at 0.070, a weather modifier against a building at 0.095,
+ * where campaign against arc is 0.068. So the pressure family read as more
+ * narrative orange and the reference greys read as geography blue, which is
+ * precisely the work the stratum claim is supposed to be doing at the far zoom.
+ * The pressure reds are off the orange axis now (a clock tick is crimson rather
+ * than coral) and the greys are neutral rather than blue-leaning.
  *
  * ## Shape carries one bit, and only one
  *
@@ -168,8 +179,8 @@ export const CAMPAIGN_STYLE: Readonly<Record<NodeKind, KindStyle>> = {
     shape: 'circle',
     size: circle(32),
     cornerRadius: 0,
-    fillColor: 0xf07167,
-    glowColor: 0xffb3ab,
+    fillColor: 0xd11149,
+    glowColor: 0xf07167,
   },
   // Reference material, in grey, deliberately quiet: three hundred items and a
   // hundred and thirty stat blocks should not be the first thing anybody sees.
@@ -184,15 +195,15 @@ export const CAMPAIGN_STYLE: Readonly<Record<NodeKind, KindStyle>> = {
     shape: 'circle',
     size: circle(40),
     cornerRadius: 0,
-    fillColor: 0x8d99ae,
-    glowColor: 0xb9c2d0,
+    fillColor: 0x9aa0a6,
+    glowColor: 0xc3c7cb,
   },
   condition_modifier: {
     shape: 'roundedRect',
     size: { width: 72, height: 32 },
     cornerRadius: 8,
-    fillColor: 0x6d6875,
-    glowColor: 0x9d97a5,
+    fillColor: 0x76747a,
+    glowColor: 0xa5a3aa,
   },
 };
 
@@ -269,7 +280,7 @@ export function styleFor(kind: NodeKind, locationSubtype?: string): KindStyle {
 }
 
 /**
- * A kind's fill colour as a CSS string, for the card overlay's kind badge.
+ * A node's fill colour as a CSS string, for the card overlay's kind badge.
  *
  * **Derived rather than written down a second time**, which is the point of the
  * module. And a STRING rather than a number because that is what an element's
@@ -278,12 +289,22 @@ export function styleFor(kind: NodeKind, locationSubtype?: string): KindStyle {
  * That is the same class of failure `@dagr/render`'s `cssNumber` exists for, and
  * the reason the conversion lives here rather than at each badge.
  *
- * Six hex digits, zero padded, which every CSS parser accepts. A location's
- * subtype is accepted for the same reason `styleFor` takes it: a badge on a room
- * should be the room's blue and not the mid blue the kind table holds.
+ * **It takes the NODE and not its kind**, which is the second version of this
+ * signature. The first took `(kind, locationSubtype?)`, and the optional second
+ * argument is the one that decides the answer for the most numerous kind in the
+ * campaign: a room and a region are both `location` and are two different blues,
+ * so `kindColor('location')` badged all 750 rooms in the region's colour while
+ * the GPU drew them in their own. That is exactly the drift this module exists to
+ * prevent, reintroduced at the seam another session consumes. Taking the node
+ * means a caller cannot omit it.
+ *
+ * Six hex digits, zero padded, which every CSS parser accepts.
  */
-export function kindColor(kind: NodeKind, locationSubtype?: string): string {
-  return cssHex(styleFor(kind, locationSubtype).fillColor);
+export function nodeColor(node: CampaignNode): string {
+  return cssHex(
+    styleFor(node.data.kind, node.data.kind === 'location' ? node.data.subtype : undefined)
+      .fillColor,
+  );
 }
 
 /** `0xRRGGBB` as `#rrggbb`, zero padded so a dark colour is still six digits. */
@@ -292,18 +313,29 @@ export function cssHex(value: number): string {
 }
 
 /**
- * The smallest box any node is drawn in, which is what the zoom-in limit frames.
+ * A lower bound on every box any node is drawn in: the smallest WIDTH beside the
+ * smallest HEIGHT, which are not the same node's.
  *
- * Computed from the tables rather than typed out, for the drift reason the
- * ladder's version gave: a size lowered in the table above without this
- * following it would strand the new smallest kind below readable size, and the
- * symptom is a reader who cannot zoom in far enough to read one card.
+ * **Reduced per component rather than by area**, which is the second version of
+ * this constant. Taking the smallest by area resolved to a clock tick's 32 by 32,
+ * while an item and a room are 56 by 28, so the height was 14% too large on the
+ * axis that decides the fit for the two most numerous kinds in the campaign.
+ * `zoomLimits` frames this with `fitZoom`, which takes a MINIMUM over both axes,
+ * so an over-large height silently lowers the zoom ceiling and a reader cannot
+ * get as close to a room as the range claims.
+ *
+ * The pair is a box no node is, which is the point: it is a bound, and a bound
+ * that is not achieved is still correct. Computed from both tables rather than
+ * typed out, for the drift reason: a size lowered without this following it would
+ * strand the new smallest kind below readable size, and the symptom is a reader
+ * who cannot zoom in far enough to read one card.
  */
 export const SMALLEST_NODE_SIZE: Size = [
   ...Object.values(CAMPAIGN_STYLE),
   ...Object.values(LOCATION_STYLE),
 ]
   .map((style) => style.size)
-  .reduce((smallest, size) =>
-    size.width * size.height < smallest.width * smallest.height ? size : smallest,
-  );
+  .reduce((smallest, size) => ({
+    width: Math.min(smallest.width, size.width),
+    height: Math.min(smallest.height, size.height),
+  }));

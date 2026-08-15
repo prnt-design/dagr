@@ -508,6 +508,31 @@ describe('glowCoverage', () => {
     }
   });
 
+  it('never lets the ramp end past the QUAD, which cuts the halo with a straight line', () => {
+    // The bug M4.4 made visible by drawing three thousand small nodes at once.
+    // A quad reaches `quadPadding` past the shape, and the `aaWidth` floor used
+    // to push the ramp's outer end beyond that at low zoom, so the halo was cut
+    // off by the quad's own edge. Measured on the committed fit frame at 0.053
+    // CSS pixels per world unit: a room's halo still read 0.276 where its quad
+    // ended, so about fifteen hundred nodes wore hard-edged rectangles of halo.
+    const room = { glow: 7, zoom: 0.053 };
+    const aaWidth = 1 / room.zoom;
+    const padding = quadPadding(numberArith, room.glow);
+    // At the quad's edge the coverage is zero, so nothing is cut off.
+    expect(glowCoverage(numberArith, padding, room.glow, aaWidth)).toBe(0);
+    // And it was not, before the cap: the same numbers without it.
+    const uncapped = smoothstepBetween(numberArith, Math.max(room.glow, aaWidth), 0, padding);
+    expect(uncapped).toBeGreaterThan(0.25);
+
+    // At every zoom, for every glow reach the campaign uses.
+    for (const glow of [3, 7, 12, 16, 20, 30]) {
+      for (const zoom of [0.01, 0.053, 0.5, 1, 10, 100]) {
+        const edge = quadPadding(numberArith, glow);
+        expect(glowCoverage(numberArith, edge, glow, 1 / zoom)).toBe(0);
+      }
+    }
+  });
+
   it('widens a sub-pixel glow radius to one pixel rather than aliasing it', () => {
     // A halo narrower than the sample spacing is a hard step, which is the one
     // thing this whole file exists to avoid. The floor costs a caller who asked
@@ -610,7 +635,7 @@ describe('shapeAlpha', () => {
   it('is exactly a half at the boundary for every glow alpha at or below a half', () => {
     // The precondition, stated as a range rather than as one number. Above 0.5 the
     // halo itself sets the floor at the boundary, which is a decision about how
-    // strong a glow is (see `shape-scene.ts`, which picks 0.45) and not a
+    // strong a glow is (the renderer's default style picks 0.45) and not a
     // compositing bug, so `requireShapeStyle` allows the whole unit interval.
     const { fill, outline, glow } = coverages(0);
     for (const alpha of [0, 0.1, 0.45, 0.5]) {

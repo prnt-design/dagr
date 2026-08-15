@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Camera2D } from '../src/camera.js';
 import { RendererDisposedError } from '../src/errors.js';
-import type { NodeStyle } from '../src/instance-attributes.js';
+import type { SceneStyle } from '../src/instance-attributes.js';
 import { SceneNodes } from '../src/scene-nodes.js';
 import type { SceneNode } from '../src/scene-nodes.js';
 import {
@@ -36,7 +36,7 @@ import type { FrameSink, GpuResource, ProjectionTarget } from '../src/webgpu-ren
  * which takes its sink as a {@link FrameSink}, so the scene assembly is exercised
  * here over the same counting stub: the six shapes, the one resource per shape
  * family they now come to (M4.3 draws them instanced), the frustum, and the
- * branch that hands the device back when building the scene throws. That last one is a leak `createShapeMeshes` made possible by validating,
+ * branch that hands the device back when building the scene throws. That last one is a leak building a scene makes possible by validating,
  * and it is the reason the assembly is a function rather than four lines inside an
  * `async` one. What still needs a device is `init()` itself and the abort check
  * that follows it.
@@ -127,7 +127,7 @@ interface Harness {
 const initialViewport = { width: 800, height: 600, devicePixelRatio: 2 } as const;
 
 /** The three uniforms every node in a scene shares. Any valid set will do here. */
-const nodeStyle: NodeStyle = { outlineColor: 0x023047, glowAlpha: 0.45, outlinePixels: 2 };
+const sceneStyle: SceneStyle = { outlineColor: 0x023047, glowAlpha: 0.45, outlinePixels: 2 };
 
 /** A node the scene can draw, so the tests below have something to hand `setNodes`. */
 function node(id: string, x = 0): SceneNode {
@@ -158,7 +158,7 @@ function harness(
   const sink = new StubFrameSink();
   const threeCamera = new StubProjectionTarget();
   const resources = Array.from({ length: resourceCount }, () => new StubResource());
-  const nodes = new SceneNodes(nodeStyle);
+  const nodes = new SceneNodes(sceneStyle);
   const renderer = new WebGPUSceneRenderer(camera, sink, {}, threeCamera, nodes, [
     ...resources,
     nodes,
@@ -363,7 +363,7 @@ describe('WebGPUSceneRenderer disposal', () => {
       countingSink,
       {},
       new StubProjectionTarget(),
-      new SceneNodes(nodeStyle),
+      new SceneNodes(sceneStyle),
       resources,
     ).dispose();
     expect(disposedBeforeSink).toBe(resources.length);
@@ -381,7 +381,7 @@ describe('WebGPUSceneRenderer disposal', () => {
       new StubFrameSink(),
       {},
       new StubProjectionTarget(),
-      new SceneNodes(nodeStyle),
+      new SceneNodes(sceneStyle),
       resources,
     );
     const late = new StubResource();
@@ -513,7 +513,7 @@ describe('buildSceneRenderer', () => {
     // nodes are a caller's, so their numbers are somebody else's arithmetic.
     const camera = new Camera2D({ viewport: initialViewport });
     const sink = new StubFrameSink();
-    expect(() => buildSceneRenderer(camera, sink, 0x0b0d10, nodeStyle, [impossible])).toThrow(
+    expect(() => buildSceneRenderer(camera, sink, 0x0b0d10, sceneStyle, [impossible])).toThrow(
       RangeError,
     );
     expect(sink.disposals).toBe(1);
@@ -521,7 +521,7 @@ describe('buildSceneRenderer', () => {
     // who wrote a bad number is told which node and which field, and the node's
     // own id is what names it.
     expect(() =>
-      buildSceneRenderer(camera, new StubFrameSink(), 0x0b0d10, nodeStyle, [impossible]),
+      buildSceneRenderer(camera, new StubFrameSink(), 0x0b0d10, sceneStyle, [impossible]),
     ).toThrow(/too-round\.cornerRadius/);
   });
 
@@ -532,7 +532,7 @@ describe('buildSceneRenderer', () => {
     // cannot reach, and it has to be given back once rather than once per unwind.
     const sink = new StubFrameSink();
     expect(() =>
-      buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 0x0b0d10, nodeStyle, [
+      buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 0x0b0d10, sceneStyle, [
         node('good'),
         impossible,
       ]),
@@ -540,11 +540,45 @@ describe('buildSceneRenderer', () => {
     expect(sink.disposals).toBe(1);
   });
 
+  it('takes an empty node list rather than rejecting a capacity of zero', () => {
+    // `nodes` sizes the instance buffers, and one count applied to both families
+    // meant an empty list asked for a capacity of 0, which `InstanceBuffer`
+    // rejects: the caller got a `RangeError` naming an option they never wrote.
+    const sink = new StubFrameSink();
+    const renderer = buildSceneRenderer(
+      new Camera2D({ viewport: initialViewport }),
+      sink,
+      0x0b0d10,
+      sceneStyle,
+      [],
+    );
+    renderer.render();
+    expect(sink.frames).toBe(1);
+    renderer.dispose();
+  });
+
+  it('sizes each family for its OWN nodes, not for the whole list', () => {
+    const circle: SceneNode = {
+      ...node('c'),
+      shape: 'circle',
+      size: { width: 40, height: 40 },
+    };
+    const renderer = buildSceneRenderer(
+      new Camera2D({ viewport: initialViewport }),
+      new StubFrameSink(),
+      0x0b0d10,
+      sceneStyle,
+      [node('a'), node('b', 500), circle],
+    );
+    renderer.render();
+    renderer.dispose();
+  });
+
   it('rejects a node style that cannot be drawn, and still gives the device back', () => {
     const sink = new StubFrameSink();
     expect(() =>
       buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 0x0b0d10, {
-        ...nodeStyle,
+        ...sceneStyle,
         glowAlpha: 2,
       }),
     ).toThrow(RangeError);
@@ -577,7 +611,7 @@ describe('buildSceneRenderer', () => {
       new Camera2D({ viewport: initialViewport }),
       new StubFrameSink(),
       0x0b0d10,
-      nodeStyle,
+      sceneStyle,
       [node('a'), node('b', 500)],
     );
     renderer.setNodes([node('a'), node('b', 500), node('c', 900)]);

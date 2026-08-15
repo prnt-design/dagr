@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NodeStyle } from '../src/instance-attributes.js';
+import type { SceneStyle } from '../src/instance-attributes.js';
 import { SceneNodes } from '../src/scene-nodes.js';
 import type { SceneNode } from '../src/scene-nodes.js';
 
@@ -13,7 +13,7 @@ import type { SceneNode } from '../src/scene-nodes.js';
  * spring's velocity.
  */
 
-const style: NodeStyle = { outlineColor: 0x023047, glowAlpha: 0.45, outlinePixels: 2 };
+const style: SceneStyle = { outlineColor: 0x023047, glowAlpha: 0.45, outlinePixels: 2 };
 
 function node(id: string, x = 0, shape: SceneNode['shape'] = 'roundedRect'): SceneNode {
   return {
@@ -153,10 +153,41 @@ describe('setNodes', () => {
 
   it('holds a campaign-sized scene without growing, when told the count up front', () => {
     const nodes = Array.from({ length: 3010 }, (_, i) => node(`n${String(i)}`, i));
-    const scene = new SceneNodes(style, nodes.length);
+    const scene = new SceneNodes(style, { roundedRect: nodes.length });
     scene.setNodes(nodes);
     expect(scene.nodeCount).toBe(3010);
     expect(scene.meshes[0]?.geometry.getAttribute('instanceOffset').count).toBe(3010);
+    scene.dispose();
+  });
+
+  it('is ALL OR NOTHING: a bad node leaves the scene exactly as it was', () => {
+    // The first version validated as it wrote, so a bad node halfway down the
+    // list threw after the removal loop had run and left the scene holding
+    // neither the node that left nor the one that arrived. A caller that catches
+    // the RangeError, which is the delta path this method exists for, then draws
+    // a silently short picture.
+    const scene = new SceneNodes(style);
+    scene.setNodes([node('a'), node('b', 100)]);
+    const before = [scene.placementOf('a'), scene.placementOf('b')];
+
+    const oval: SceneNode = { ...node('c', 0, 'circle'), size: { width: 40, height: 20 } };
+    expect(() => scene.setNodes([node('a'), oval])).toThrow(RangeError);
+    expect(scene.nodeCount).toBe(2);
+    expect(scene.placementOf('b')).toEqual(before[1]);
+    expect(scene.placementOf('a')).toEqual(before[0]);
+    expect(scene.placementOf('c')).toBeUndefined();
+    expect(scene.meshes[0]?.geometry.instanceCount).toBe(2);
+
+    // And a bad NUMBER, not only a bad shape, on the same terms.
+    expect(() => scene.setNodes([{ ...node('a'), cornerRadius: 900 }])).toThrow(RangeError);
+    expect(scene.nodeCount).toBe(2);
+    scene.dispose();
+  });
+
+  it('takes an empty list, which is a graph with no nodes', () => {
+    const scene = new SceneNodes(style, { roundedRect: 0, circle: 0 });
+    expect(() => scene.setNodes([])).not.toThrow();
+    expect(scene.nodeCount).toBe(0);
     scene.dispose();
   });
 });

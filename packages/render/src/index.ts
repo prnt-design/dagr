@@ -2,43 +2,39 @@
  * `@dagr/render`: a WebGPU renderer for Dagr, built on three.js.
  *
  * M4.1 was first light: a camera, a way to get a renderer onto a canvas, and one
- * hard-coded quad to prove the pipeline works end to end.
+ * hard-coded quad to prove the pipeline works end to end. M4.2 replaced the quad
+ * with six signed-distance-field shapes, and M4.3 drew those in two instanced
+ * calls instead of six. Neither added anything callable, because a scene this
+ * package chose was a demonstration rather than a feature.
  *
- * **M4.2 changed what is drawn and not what is callable, and that is
- * deliberate.** `createRenderer` now puts six signed-distance-field shapes on
- * screen instead of one quad, on three rungs a decade apart so that one frame shows
- * what an SDF does at both ends of the zoom range. The RECTS are 10, 100 and 1000
- * world units across, which is the 100:1 the rest of the package quotes; the
- * circles are 4, 40 and 400, so the shapes themselves span 250:1. Both numbers are
- * true of different things and the tests assert them separately, so quote the one
- * you mean. Not one export was added for any of it.
- * Two reasons, and neither is an oversight:
+ * **M4.4 is where that ended: this package ships no scene at all now.**
+ * `createRenderer` draws an empty one and {@link Renderer.setNodes} is how
+ * anything reaches the canvas: an array of {@link SceneNode}, each carrying its
+ * own centre, size, shape and colours, with {@link SceneStyle} for the three
+ * uniforms every node in a scene shares. A node keeps its instance handle across
+ * calls, so per-instance state survives (M4.6's springs, M4.8's picking ids).
  *
- * - The TSL nodes stay internal because a TSL node is a three.js type, and
- *   `types.ts` decided that no three.js type appears in this package's public
- *   surface. Exporting `roundedRectSDF` would make two copies of three in one
- *   consumer's tree a type error rather than a bundle-size problem.
- * - The shape scene stays internal because it is a demonstration, not a feature.
- *   M4.4 owns feeding a real layout in, and exporting a hard-coded ladder of six
- *   shapes now would make a placeholder part of the contract, which is the kind
- *   of thing that survives three milestones because something depends on it.
+ * What `setNodes` deliberately does NOT take is a `LayoutResult`. Naming one
+ * would make `@dagr/layout` a dependency of this package, and the y-down to
+ * y-up conversion belongs to whoever owns the layout, which `camera.ts` has said
+ * since M4.1.
  *
- * The pure arithmetic in `sdf.ts` is a closer call, since it has no three.js in
- * it at all and is exhaustively tested. It stays internal too, because a public
- * `Arith<T>` would be a promise to keep nine primitives stable for callers who
- * are not writing this package's shaders, and nobody has asked.
+ * Three things stay internal, and the reasons differ:
  *
- * Shapes are therefore M4.2's contribution to what is on screen; real layout
- * arrives in M4.4, both behind the `Renderer` seam exported here.
+ * - The TSL nodes, because a TSL node is a three.js type and `types.ts` decided
+ *   that no three.js type appears in this package's public surface. Exporting
+ *   `roundedRectSDF` would make two copies of three in one consumer's tree a
+ *   type error rather than a bundle-size problem.
+ * - The instancing machinery (`instance-buffer.ts`, `instance-attributes.ts`,
+ *   `instanced-scene.ts`, `scene-nodes.ts`), because `setNodes` is the seam a
+ *   caller needs and an instance HANDLE API on top of it would be a guess at
+ *   what M4.8's picking pass wants, made before there is a picking pass.
+ * - The pure arithmetic in `sdf.ts`, which is the closest call since it has no
+ *   three.js in it at all and is exhaustively tested. A public `Arith<T>` would
+ *   be a promise to keep nine primitives stable for callers who are not writing
+ *   this package's shaders, and nobody has asked.
  *
- * **M4.3 added nothing callable either, and added two error classes.** The six
- * shapes are now two instanced meshes, one per shape family, with position,
- * size, corner radius, glow reach and colours read per instance. The
- * bookkeeping under it (`instance-buffer.ts`, `instance-attributes.ts`) is pure
- * and exhaustively tested, and it stays internal for the same reason the shape
- * scene does: M4.4 owns the seam a caller feeds a graph through, and exporting
- * an instance handle API before there is anything to name with it would be
- * guessing at that seam. What does reach the surface is the two ERRORS,
+ * What the instancing does put on the surface is its two ERRORS,
  * {@link UnknownInstanceHandleError} and {@link InstancedShapesDisposedError},
  * because an error is the one part of an internal module that arrives in
  * somebody else's `catch` whether or not it was exported, and one that arrives
@@ -99,7 +95,7 @@ export { CENTRE_ANCHOR } from './overlay-math.js';
 export type { ElementAnchor, OverlayPlacement } from './overlay-math.js';
 export { createRichNodes } from './rich-nodes.js';
 export type { RichNode, RichNodeTier, RichNodes } from './rich-nodes.js';
-export type { NodeStyle } from './instance-attributes.js';
+export type { SceneStyle } from './instance-attributes.js';
 export type { NodeShape, SceneNode } from './scene-nodes.js';
 export { createRenderer } from './webgpu-renderer.js';
 export type {

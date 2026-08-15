@@ -1,5 +1,5 @@
 import type { Camera2D } from './camera.js';
-import type { NodeStyle } from './instance-attributes.js';
+import type { SceneStyle } from './instance-attributes.js';
 import type { SceneNode } from './scene-nodes.js';
 
 /**
@@ -96,11 +96,12 @@ export interface OrthoFrustum {
  * Here rather than in `webgpu-renderer.ts`, where it started, because the module
  * that BUILDS a scene is a lower layer than the module that renders one, and
  * a scene module naming a type out of `webgpu-renderer.ts` pointed the
- * dependency the wrong way round and closed a cycle (the renderer imports
- * `createShapeMeshes`). Nothing broke, since it was `import type` and
- * `verbatimModuleSyntax` erases those, but M4.4 adds a second scene module on the
- * same layer and will copy whichever direction it finds. This file is already the
- * vocabulary both layers import, so it is where a type both of them name belongs.
+ * dependency the wrong way round and closed a cycle, since the renderer imports
+ * the scene. Nothing broke, because it was `import type` and
+ * `verbatimModuleSyntax` erases those, and there are three scene-side modules
+ * now that would each have copied whichever direction they found. This file is
+ * the vocabulary every layer imports, so it is where a type they all name
+ * belongs.
  *
  * Structural on purpose, and it keeps this file's no-three.js rule: `dispose` is
  * the whole of what a renderer does to a resource, three's `BufferGeometry` and
@@ -241,7 +242,7 @@ export interface RendererOptions {
    * (its fill, its halo colour and how far the halo reaches) is on each
    * {@link SceneNode}, because those are facts about the data.
    */
-  readonly nodeStyle?: NodeStyle;
+  readonly sceneStyle?: SceneStyle;
 
   /**
    * Nodes to draw immediately, equivalent to {@link Renderer.setNodes} on the

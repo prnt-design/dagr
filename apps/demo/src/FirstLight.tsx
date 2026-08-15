@@ -277,10 +277,10 @@ export function FirstLight({ scene }: { scene: CampaignScene | null }): JSX.Elem
     // would buy nothing here and would cost a layout flush each.
     const richNodes = createRichNodes<LabelData>({ overlay, tiers: CAMPAIGN_TIERS });
     richNodes.setNodes(
-      scene.overlayNodes.map((node) => ({
-        id: node.id,
-        bounds: node.bounds,
-        data: { name: node.name, color: node.color },
+      scene.overlayNodes.map((overlay) => ({
+        id: overlay.id,
+        bounds: overlay.bounds,
+        data: { name: overlay.node.name, color: overlay.color },
       })),
     );
 
