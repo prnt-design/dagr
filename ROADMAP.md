@@ -4426,6 +4426,16 @@ and are independent of D1 and of each other.
   record's own 529% and 176%, which were measured on M4.5's 1003 by 597 canvas
   and are not the same comparison; the review that caught it re-derived the
   product and landed 6% off, which is what a measured record is for.
+  P7's FIVE FRAMES ARE NOW A RECORD RATHER THAN A REPRODUCIBLE SET, which is
+  worth saying because the capture script's own header claims every frame is
+  regenerable. Their `expect` gates are written against the pre-D2 drawing, and
+  the one at `#zoom=1.4` wants twelve titles where the new spacing puts fewer
+  nodes on a screen, so re-running that set now stops at its own gate. That is
+  the convention `assets/screenshots/` already had (`m4.2` is a shape ladder the
+  demo no longer contains at all): a prefix is one task's drawing, and a task
+  that wants today's frames adds a set, which is what D2 did. Evidence that the
+  shutter itself did not move: `d2-before-fit.png` and `p7-campaign-fit.png` are
+  the same git blob, one capture under two names.
   BEFORE AND AFTER ARE COMMITTED, `assets/screenshots/d2-before-*.png` against
   `d2-after-*.png`, taken through the same shutter as P7's: the same viewport,
   the same font pin, the same `data-renderer-drawn` gate, and both anchored on

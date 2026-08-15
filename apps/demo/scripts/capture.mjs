@@ -49,6 +49,17 @@
  * writes `d2-before-fit.png` and `d2-after-fit.png` beside each other. Without a
  * variant the names are the set's own, which is what keeps P7's five frames at
  * the paths they were committed at.
+ *
+ * **A SET IS A RECORD OF ONE TASK'S DRAWING, and that is why an old set can stop
+ * passing.** `assets/screenshots/` keeps a prefix per task (`m4.2` is a shape
+ * ladder that no longer exists in the demo at all), and a set's `expect` gates
+ * are written against the drawing of the day. D2's spacing changed how many
+ * nodes a given zoom puts on screen, so the `p7` set's floor of twelve titles at
+ * `#zoom=1.4` no longer holds against the current demo: re-running that set now
+ * captures the same hashes of a different drawing and stops at that gate. That
+ * is the gate doing its job, not a broken script. A task that wants frames of
+ * what the demo draws TODAY adds a set of its own, as D2 did, and leaves the
+ * older ones as the record they are.
  */
 
 import { chromium } from 'playwright';
@@ -69,6 +80,12 @@ const prefix = variant === '' ? `${setName}-` : `${setName}-${variant}-`;
  * box and commits a half-drawn frame on a slow one.
  */
 const SETS = {
+  /**
+   * P7's five, which record the drawing as it was BEFORE D2's spacing. Their
+   * gates are written against it, so this set no longer passes against the
+   * current demo: see the header. Left exactly as committed, because a per-task
+   * frame is a record and `m4.2`'s ladder is not in the demo either.
+   */
   p7: [
     {
       name: 'campaign-fit',
@@ -137,6 +154,16 @@ const SETS = {
 };
 
 /**
+ * The first line of a set's caption file, so regenerating one set does not
+ * rewrite another's wording. P7's is the line its committed file already
+ * carries, byte for byte.
+ */
+const SET_TITLES = {
+  p7: 'P7 campaign screenshots.',
+  d2: 'D2 screenshots: the campaign spacing and the edge ink.',
+};
+
+/**
  * What a set's variants MEAN, written into every caption file the set produces.
  *
  * A pair of frames labelled before and after says nothing on its own six months
@@ -152,15 +179,23 @@ const SET_NOTES = {
     '  after:  nodeSep 120, rankSep 160, tile gutter 480, edges inked from the SOURCE node',
     '          kind, and both routed-role groups dashed. See CAMPAIGN_SPACING in tiles.ts',
     '          for the measurement that chose the numbers.',
+    'd2-before-fit.png is byte identical to p7-campaign-fit.png, one git blob under two',
+    'names: the same hash through the same shutter, so what differs in the pair is the',
+    'drawing and nothing about the capture.',
   ],
 };
 
-const FRAMES = SETS[setName];
-if (FRAMES === undefined) {
+// `Object.hasOwn` and not a truth test on the lookup, because a plain object
+// answers for what it INHERITS: `capture.mjs <base> toString` would otherwise
+// walk past this guard with a function in hand and die at the loop below, and
+// `__proto__` would iterate `Object.prototype`. A typo in an argument should
+// name the sets, not throw from somewhere else.
+if (!Object.hasOwn(SETS, setName)) {
   throw new Error(
     `unknown frame set "${setName}". The sets are ${Object.keys(SETS).join(', ')}, and the second argument names one.`,
   );
 }
+const FRAMES = SETS[setName];
 
 const browser = await chromium.launch({
   ...(process.env.CHROMIUM_PATH === undefined
@@ -338,7 +373,7 @@ for (const frame of FRAMES) {
 await writeFile(
   `${outDir}${prefix}captions.txt`,
   [
-    `${setName}${variant === '' ? '' : ` ${variant}`} campaign screenshots.`,
+    `${SET_TITLES[setName] ?? `${setName} screenshots.`}${variant === '' ? '' : ` (${variant})`}`,
     '',
     'Captured on the swiftshader WebGL2 fallback: this box has no WebGPU at all, navigator.gpu is absent.',
     `Text is Liberation Mono, pinned for the capture at ${advance.toFixed(3)}px per character at 12px,`,
@@ -349,8 +384,7 @@ await writeFile(
     'Viewport 1440x900 at device pixel ratio 1.',
     'Shapes are that fallback rasterising the same distance fields; the overlay never touches a GPU.',
     '',
-    ...(SET_NOTES[setName] ?? []),
-    '',
+    ...(SET_NOTES[setName] === undefined ? [] : [...SET_NOTES[setName], '']),
     ...captions,
     '',
     'Regenerate with apps/demo/scripts/capture.mjs; see its header.',

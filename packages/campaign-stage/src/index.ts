@@ -26,6 +26,6 @@ export type {
   CampaignScene,
   CampaignTilePlacement,
 } from './campaign-scene.js';
-export { campaignEdges, edgeColor } from './campaign-edges.js';
+export { campaignEdges, sourceEdgeColor } from './campaign-edges.js';
 export type { CampaignEdges } from './campaign-edges.js';
 export { SMALLEST_NODE_SIZE, nodeColor, styleFor } from './campaign-style.js';
