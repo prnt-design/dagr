@@ -43,6 +43,15 @@ not" is the category this file has a heading for.
   ink below the floor, since a ribbon drawn wider than the scene says should be
   fainter in the same proportion.
 
+  What a frame passes is only what a caller decides: a width, an alpha and a
+  dash phase. The pixels per world unit is NOT among them, because the camera
+  implies it and `render()` writes it, so nothing re-derives what the renderer
+  already holds. Both of the frame style's numbers throw rather than degrade:
+  `halfWidthPixels` carries the same 0.5 floor a declared style does, since
+  below it a ribbon does not get thinner but fainter and then invisible, and
+  `alpha` is rejected outside `[0, 1]`, since a shader clamps it and reports
+  nothing. An alpha of exactly 0 is legal and skips the group's draw.
+
   **A solid ribbon is the ABSENCE of a dash, not a duty cycle of 1.** A
   zero-width gap is still a boundary to a distance field, so a duty of 1 draws a
   half-alpha seam once per period along a line that is supposed to be solid.
