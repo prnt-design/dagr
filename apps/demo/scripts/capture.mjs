@@ -50,6 +50,13 @@
  * variant the names are the set's own, which is what keeps P7's five frames at
  * the paths they were committed at.
  *
+ * **THE FRAMES ARE REPRODUCIBLE IN CONTENT, NOT ALWAYS BYTE FOR BYTE.** The
+ * dashed groups flow their pattern by the time between DRAWN frames, so where a
+ * dash lands depends on how many frames the page took to reach the gate, and a
+ * re-run can produce a picture that is the same drawing and a different file. A
+ * diff of two captures is therefore a question for the eye or for the counts in
+ * the caption file, not for `cmp`.
+ *
  * **A SET IS A RECORD OF ONE TASK'S DRAWING, and that is why an old set can stop
  * passing.** `assets/screenshots/` keeps a prefix per task (`m4.2` is a shape
  * ladder that no longer exists in the demo at all), and a set's `expect` gates

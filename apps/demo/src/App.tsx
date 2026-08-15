@@ -26,7 +26,6 @@ function createWorker(): Worker {
 }
 
 /**
-/**
  * A count the scene carries, or what is standing between the reader and it.
  *
  * `undefined` and a failure are different absences and read differently: one is
