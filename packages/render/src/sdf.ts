@@ -1,5 +1,5 @@
 import type { Size } from './types.js';
-import { requireColor, requireFinite, requireNonNegative } from './validate.js';
+import { requireFinite, requireNonNegative } from './validate.js';
 
 /**
  * The signed distance fields M4.2 draws with, and the coverage functions that

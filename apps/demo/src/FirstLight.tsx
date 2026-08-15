@@ -12,7 +12,6 @@ import {
   zoomLimits,
 } from './camera-input.js';
 import type { CampaignScene } from './campaign-scene.js';
-import { kindColor } from './campaign-style.js';
 
 /**
  * `@dagr/render` on a canvas, with pan and zoom wired to a real

@@ -8,7 +8,6 @@ import {
   numberArith,
   outlineCoverage,
   quadPadding,
-  requireCircleRadius,
   requireCornerRadius,
   roundedRectDistance,
   shapeAlpha,
@@ -34,8 +33,10 @@ import {
  * input reaching a coverage function, and nothing should: the inputs that could
  * produce one are validated at the scene boundary instead, which as of M4.4 is
  * `requireShapeInstance` in `instance-attributes.ts`. The two checks this file
- * still owns, {@link requireCornerRadius} and {@link requireCircleRadius}, are
- * the ones that boundary delegates to.
+ * still owns, {@link requireCornerRadius} and `requireCircleRadius`, are the
+ * ones that boundary delegates to; the circle check is asserted through
+ * `requireShapeInstance` in `test/instance-attributes.test.ts`, where a caller
+ * actually reaches it.
  */
 
 /** A 100 by 40 rounded rect with a 4 unit corner radius, as half extents. */
