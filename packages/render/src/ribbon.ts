@@ -32,6 +32,11 @@ import { requireAtLeast, requireFinite, requirePositive } from './validate.js';
  * the sub-pixel fade M4.2 already documented. A graph that spans decades of zoom
  * is the only kind this engine is for.
  *
+ * The campaign's floor has moved DOWN since, and in the direction that makes the
+ * argument stronger: D2 raised the demo's node and rank separations, which grows
+ * the scene and therefore lowers the derived floor, so the range on its stage is
+ * now 0.026 to 19.2 and the factor is 748.
+ *
  * The second argument is about what an edge IS. `@dagr/layout` gives a node a
  * `Size` and gives an edge a polyline and nothing else, so any world width for
  * a ribbon would be invented here rather than laid out there. An edge is a
@@ -45,7 +50,16 @@ import { requireAtLeast, requireFinite, requirePositive } from './validate.js';
  * as a road. The far end is the worse one, and it is measured: the campaign's
  * edges come to 21.1M world units of centreline, and at the fitted 0.05 device
  * pixels per world unit a 3 pixel width would paint 529% of the viewport, or
- * 176% at 1 pixel. A drawing cannot be five times its own canvas, so a constant
+ * 176% at 1 pixel. D2's spacing moved both inputs and left the conclusion
+ * exactly where it was, which is worth the sentence because it is structural
+ * rather than lucky: coverage at a fixed pixel width is centreline times the
+ * floor, centreline grows with the separations and the floor falls with them,
+ * so on the demo's current 1102 by 598 stage 21.1M at 0.0514 is 165% at one
+ * pixel and 42.0M at 0.0257 is 164%. (The 529% and 176% above are the same
+ * arithmetic on M4.5's own 1003 by 597 canvas, which is what makes them a
+ * comparison against each other and not against these two.) What DOES fall with
+ * the spacing is the ink AFTER the fade, which goes as the square of the floor:
+ * a quarter of the viewport to an eighth. A drawing cannot be five times its own canvas, so a constant
  * pixel width is the right DEFAULT and not the right answer everywhere. Since
  * the half width is a uniform the remedy costs nothing here: a scene clamps it
  * against the world-space width and fades the alpha below the floor, which
@@ -1223,7 +1237,11 @@ export interface RibbonWidth {
  * a mat of edge ink: the campaign's edges are 21.1M world units of centreline,
  * which at the fitted 0.05 device pixels per world unit is 176% of the viewport
  * at one pixel wide before the fade, and the fix is for each line to carry less
- * ink rather than for any line to disappear.
+ * ink rather than for any line to disappear. D2's spacing does not change that
+ * number, because it doubles the centreline and halves the floor: 164% against
+ * 165% on one stage. What it changes is what this fade then makes of it, since
+ * the drawn coverage carries a second factor of the floor and so falls with its
+ * square, from a quarter of the viewport to an eighth.
  *
  * The ceiling is the duller end and needs no fade: a ribbon that would be forty
  * pixels wide at card zoom is clamped to the maximum and stays opaque, because

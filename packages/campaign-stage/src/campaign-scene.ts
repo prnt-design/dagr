@@ -4,8 +4,8 @@ import type { LayoutPort } from '@dagr/layout';
 import type { Campaign, CampaignNode } from '@dagr/campaign';
 import type { SceneNode, Size, Vec2, WorldBounds } from '@dagr/render';
 import { SMALLEST_NODE_SIZE, glowReach, styleFor } from './campaign-style.js';
-import { assignTiles, gridPositions, isRouted, shelfPack } from './tiles.js';
-import type { Tile, TileKind } from './tiles.js';
+import { CAMPAIGN_SPACING, assignTiles, gridPositions, isRouted, shelfPack } from './tiles.js';
+import type { CampaignSpacing, Tile, TileKind } from './tiles.js';
 
 /**
  * The campaign, laid out and packed into one scene the renderer can take.
@@ -219,7 +219,11 @@ async function layoutTile(
  * `location`, whose four subtypes are four sizes, and a location is never in a
  * grid tile: every location is inside a region tile.
  */
-function gridTile(tile: Tile, byId: ReadonlyMap<string, CampaignNode>): LaidTile {
+function gridTile(
+  tile: Tile,
+  byId: ReadonlyMap<string, CampaignNode>,
+  spacing: CampaignSpacing,
+): LaidTile {
   const first = byId.get(tile.nodeIds[0] ?? '');
   if (first === undefined) throw new Error(`unreachable: empty grid tile ${tile.id}`);
   const nodeSize = sizeOf(first);
@@ -241,7 +245,9 @@ function gridTile(tile: Tile, byId: ReadonlyMap<string, CampaignNode>): LaidTile
       );
     }
   }
-  const { positions, size } = gridPositions(tile.nodeIds.length, nodeSize);
+  const { positions, size } = gridPositions(tile.nodeIds.length, nodeSize, {
+    gap: spacing.gridGap,
+  });
   const placements = new Map<string, LocalPlacement>();
   tile.nodeIds.forEach((id, index) => {
     const position = positions[index];
@@ -267,13 +273,32 @@ function gridTile(tile: Tile, byId: ReadonlyMap<string, CampaignNode>): LaidTile
  */
 export async function buildCampaignScene(
   campaign: Campaign,
-  options: { readonly worker?: LayoutPort } = {},
+  options: {
+    readonly worker?: LayoutPort;
+    /**
+     * The four gaps, defaulting to {@link CAMPAIGN_SPACING}.
+     *
+     * A parameter rather than a constant this file reads directly, because the
+     * numbers in that constant were CHOSEN by building the scene at several
+     * candidates and measuring the result, and a sweep that has to edit a
+     * constant between runs is a sweep nobody repeats. `shelfPack` and
+     * `gridPositions` already take their gaps this way for the same reason.
+     */
+    readonly spacing?: CampaignSpacing;
+  } = {},
 ): Promise<CampaignScene> {
+  const spacing = options.spacing ?? CAMPAIGN_SPACING;
   const byId = new Map(campaign.nodes.map((node) => [node.id, node]));
   const tiles = assignTiles(campaign);
   const engine = createLayout({
     ...(options.worker === undefined ? {} : { worker: options.worker }),
     config: {
+      // The campaign's own separations rather than the package defaults, which
+      // are set for a graph of a few dozen boxes at reading zoom. See
+      // `CAMPAIGN_SPACING` for what the campaign's fitted view does to a 50
+      // unit gap, and what raising it costs at that end.
+      nodeSep: spacing.nodeSep,
+      rankSep: spacing.rankSep,
       // The SAME table the renderer draws from. A node laid out at one size and
       // drawn at another overlaps its neighbours in a picture whose layout says
       // it does not, and neither half's tests can see it.
@@ -287,14 +312,14 @@ export async function buildCampaignScene(
   const laid = await Promise.all(
     tiles.map(async (tile) =>
       tile.kind === 'grid'
-        ? gridTile(tile, byId)
+        ? gridTile(tile, byId, spacing)
         : layoutTile(tile, byId, campaign, engine),
     ),
   );
 
   const packing = shelfPack(
     laid.map((entry) => ({ id: entry.tile.id, ...entry.size })),
-    {},
+    { gutter: spacing.tileGutter },
   );
   const offsets = new Map(packing.tiles.map((tile) => [tile.id, tile]));
 

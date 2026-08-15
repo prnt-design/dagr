@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { generateCampaign } from '@dagr/campaign';
 import type { Campaign } from '@dagr/campaign';
-import { campaignEdges, edgeColor } from './campaign-edges.js';
+import { campaignEdges, sourceEdgeColor } from './campaign-edges.js';
 import { buildCampaignScene } from './campaign-scene.js';
 import type { CampaignScene } from './campaign-scene.js';
 import type { CampaignEdges } from './campaign-edges.js';
@@ -21,6 +21,17 @@ import type { CampaignEdges } from './campaign-edges.js';
  * and lay it out twice, which is the right trade for a page that has one.
  */
 const campaign = generateCampaign();
+
+/**
+ * Every edge's colour, bound to this campaign's nodes once.
+ *
+ * Beside the campaign rather than inside the memo below, because it is a
+ * function of the CAMPAIGN and the memo is keyed on the SCENE: an edge is drawn
+ * in its source node's colour, so the lookup it needs is over 3,010 nodes that
+ * a layout does not move, and rebuilding it every time a layout lands would be
+ * work that can only produce the same answer.
+ */
+const edgeColor = sourceEdgeColor(campaign);
 
 /** What {@link useCampaignScene} knows, at every stage of the build. */
 export interface CampaignSceneState {

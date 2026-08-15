@@ -207,16 +207,114 @@ export interface Packing {
 }
 
 /**
- * The gap between two tiles, in world units.
+ * Every gap in the campaign's drawing, from the two `@dagr/layout` separations
+ * the rest are derived from.
  *
- * Wide enough that two adjacent tiles read as two figures rather than one, which
- * takes more than the gap inside a tile: `@dagr/layout` separates nodes by 50 by
- * default, so a tile gutter under that would put a tile boundary closer than two
- * nodes in the same tile. 200 is four times the node gap, and at the zoom where
- * the whole campaign fits it is about two CSS pixels, which is a hairline of
- * background rather than an expanse.
+ * Four numbers rather than one, because they are read by three different pieces
+ * of arithmetic (a Sugiyama pass, the shelf packer, a grid) and the ratios
+ * between them are what makes a tile read as a figure. Derived rather than
+ * written down four times, so raising the node gap carries the tile gutter and
+ * the grid with it and no ratio can drift.
+ *
+ * `@dagr/layout`'s third separation, `edgeSep`, is deliberately NOT here and
+ * stays at the package default. It is the gap between two ROUTES sharing a rank
+ * gap, so it decides how a bundle of parallel edges fans rather than how two
+ * nodes sit, and D2's direction is about the nodes. Raising it is a separate
+ * measurement, and the frame to take it against is a dense tile at reading zoom
+ * rather than the fitted view.
  */
-export const TILE_GUTTER = 200;
+export interface CampaignSpacing {
+  /** Between two nodes in the same rank, in world units. `@dagr/layout`'s `nodeSep`. */
+  readonly nodeSep: number;
+  /** Between two ranks, in world units. `@dagr/layout`'s `rankSep`. */
+  readonly rankSep: number;
+  /** Between two packed tiles. See {@link TILE_GUTTER_RATIO}. */
+  readonly tileGutter: number;
+  /** Between two cells of a grid tile, which is the node gap: a grid IS a rank. */
+  readonly gridGap: number;
+}
+
+/**
+ * How much wider a tile gutter is than the gap between two nodes inside a tile.
+ *
+ * Four, so two adjacent tiles read as two figures rather than one. The rule is
+ * the ratio and not the number: a gutter at or under the node gap would put a
+ * tile boundary closer than two nodes in the same tile, so whatever the node gap
+ * becomes, the gutter has to clear it by enough that the eye groups the tile
+ * before it groups the row.
+ */
+export const TILE_GUTTER_RATIO = 4;
+
+/** The four gaps that follow from the two separations. See {@link CampaignSpacing}. */
+export function campaignSpacing(nodeSep: number, rankSep: number): CampaignSpacing {
+  return { nodeSep, rankSep, tileGutter: nodeSep * TILE_GUTTER_RATIO, gridGap: nodeSep };
+}
+
+/**
+ * The campaign's own separations, which are not `@dagr/layout`'s defaults.
+ *
+ * `@dagr/layout` defaults to 50 and 50, which is right for a graph of a few
+ * dozen boxes read at a zoom where a box is a box. The campaign is 3,010 nodes
+ * that a reader meets fitted into one viewport and then zooms into, and at both
+ * ends 50 was too tight: the tiles fuse into slabs of ink at the far view, and
+ * at a reading zoom a site's rooms sit closer to each other than their own
+ * labels are wide.
+ *
+ * **Measured rather than picked, on the demo's own 1102 by 598 stage**, by
+ * building the whole scene at each candidate. `roomPx` is a 56 unit room at the
+ * fitted zoom, `gapPx` is the in-rank gap at the same zoom, and `ink` is the
+ * share of the viewport the edges cover there, which is centreline times the
+ * width the alpha ramp holds them to:
+ *
+ * | nodeSep / rankSep | scene | fitted zoom | roomPx | gapPx | centreline | ink |
+ * | --- | --- | --- | --- | --- | --- | --- |
+ * | 50 / 50 | 18050 x 10474 | 0.0514 | 2.88 | 2.57 | 21.1M | 25.4% |
+ * | 100 / 130 | 32736 x 17856 | 0.0301 | 1.69 | 3.01 | 39.0M | 16.1% |
+ * | 120 / 160 | 38576 x 20332 | 0.0257 | 1.44 | 3.09 | 42.0M | 12.6% |
+ * | 160 / 200 | 49288 x 27944 | 0.0193 | 1.08 | 3.08 | 62.0M | 10.5% |
+ *
+ * **The fitted view is where the trade is, and the table is why 120 is the
+ * answer.** The zoom floor is derived from the scene extent (P2's limits), so a
+ * scene that grows is drawn smaller: the gap in PIXELS barely moves, because
+ * both the gap and the floor scale together, and what actually improves is the
+ * gap against the node, from 0.89 of a room's width to 2.1 of it. Past 120 even
+ * that stops: the gap in pixels is already within 3% of its plateau at 100, and
+ * every step after it spends node size on nothing. What DOES keep improving is
+ * the ink, halved from a quarter of the viewport to an eighth, because
+ * centreline grows linearly with the separations while the floor falls with them
+ * and the coverage goes as its square. That is what makes the far view read as
+ * structure rather than as a mat, and it is why 120 beats 100 at the same gap.
+ *
+ * **What it costs, stated rather than implied.** A room at the fitted zoom goes
+ * from 2.88 pixels wide to 1.44, so the smallest kinds are dots in the overview
+ * where they were small boxes. The zoom range widens from 374x to 748x, which is
+ * more scrolling between the overview and a card. Both are the price of a scene
+ * that is twice as wide in world units, and both are the reason the tiles are
+ * tiles: a reader gets at the detail by framing one, not by zooming from orbit.
+ *
+ * **Ranks are separated a third more than nodes**, and the asymmetry is the one
+ * number here that is not from the table: the rank gap is where the routed edges
+ * live, so it carries a ribbon, its two attachments and whatever dummies the
+ * order stage put between them, while the in-rank gap carries background. Equal
+ * separations spend the same room on a gap that has something in it and one that
+ * does not.
+ *
+ * One thing it improves for free: `@dagr/render`'s ribbon geometry inverts a
+ * quad when a segment on screen is shorter than about `3.46 * (halfWidth + 1)`
+ * pixels, which at the fitted view's floor width is 5.2. A rank step was 2.6
+ * pixels there and is now 4.1, so the hairpin corners that could bow-tie are
+ * fewer. It does not close the case, and M4.5's record already says the fix for
+ * that is a per-vertex cap rather than a separation.
+ */
+export const CAMPAIGN_SPACING: CampaignSpacing = campaignSpacing(120, 160);
+
+/**
+ * The gap between two tiles, in world units: {@link CAMPAIGN_SPACING}'s.
+ *
+ * Kept as its own export because it is what `shelfPack` defaults to, and a
+ * packer given no spacing at all should still pack the campaign's way.
+ */
+export const TILE_GUTTER = CAMPAIGN_SPACING.tileGutter;
 
 /**
  * The aspect the packing aims for, width over height.
@@ -349,7 +447,7 @@ export function gridPositions(
   options: { readonly gap?: number; readonly aspect?: number } = {},
 ): { readonly positions: readonly { x: number; y: number }[]; readonly size: Size } {
   if (count <= 0) return { positions: [], size: { width: 0, height: 0 } };
-  const gap = options.gap ?? TILE_GUTTER / 4;
+  const gap = options.gap ?? CAMPAIGN_SPACING.gridGap;
   const aspect = options.aspect ?? TARGET_ASPECT;
   const cellWidth = nodeSize.width + gap;
   const cellHeight = nodeSize.height + gap;

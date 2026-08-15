@@ -1,0 +1,24 @@
+d2 after campaign screenshots.
+
+Captured on the swiftshader WebGL2 fallback: this box has no WebGPU at all, navigator.gpu is absent.
+Text is Liberation Mono, pinned for the capture at 7.201px per character at 12px,
+because the capture box has none of the faces the demo names (ui-monospace, SFMono-Regular,
+'SF Mono', Menlo, Consolas) and Liberation Mono is not one of them either: it is a stand-in,
+chosen because it sits at the 0.6em those faces cluster at. Unpinned, this box falls back to a
+6.000px advance, about a sixth narrower than a reader sees.
+Viewport 1440x900 at device pixel ratio 1.
+Shapes are that fallback rasterising the same distance fields; the overlay never touches a GPU.
+
+D2, before and after: the campaign spacing and the edge ink.
+  before: nodeSep 50, rankSep 50, tile gutter 200 (the @dagr/layout defaults), edges
+          inked in two colours by ROLE, and only the routed group dashed.
+  after:  nodeSep 120, rankSep 160, tile gutter 480, edges inked from the SOURCE node
+          kind, and both routed-role groups dashed. See CAMPAIGN_SPACING in tiles.ts
+          for the measurement that chose the numbers.
+
+d2-after-fit.png  [no hash]  0 titles, 0 cards
+    The whole campaign fitted on load. What the spacing does at this end is trade node size for the gap between nodes: the zoom floor derives from the scene extent, so a wider scene is drawn smaller.
+d2-after-tile.png  [#node=dungeon-21&zoom=0.7]  11 titles, 0 cards
+    The 88-room finale at a fixed zoom, anchored on the citadel itself. At a zoom a reader holds still, more separation is more separation: the nodes are the same size and the gaps between them are wider.
+
+Regenerate with apps/demo/scripts/capture.mjs; see its header.
