@@ -25,7 +25,7 @@ import type { FrameSink, GpuResource, ProjectionTarget } from '../src/webgpu-ren
  * The stubs below are honest for one specific reason: the collaborator types
  * they implement are the ones the class actually declares, and `createRenderer`
  * passes a real `WebGPURenderer`, `Scene`, `OrthographicCamera` and a list of
- * real `PlaneGeometry` and `MeshBasicNodeMaterial` objects into those same
+ * real `InstancedShapes` objects into those same
  * parameters. So the typecheck of `createRenderer` is the proof that the real
  * three objects satisfy the interfaces these stubs satisfy, and no cast is
  * involved anywhere.
@@ -33,16 +33,16 @@ import type { FrameSink, GpuResource, ProjectionTarget } from '../src/webgpu-ren
  * The same argument reaches further than M4.2 first claimed. Everything
  * `createRenderer` does after `await renderer.init()` is `buildSceneRenderer`,
  * which takes its sink as a {@link FrameSink}, so the scene assembly is exercised
- * here over the same counting stub: the six shapes, their twelve resources, the
- * frustum, and the branch that hands the device back when building the scene
- * throws. That last one is a leak `createShapeMeshes` made possible by validating,
+ * here over the same counting stub: the six shapes, the one resource per shape
+ * family they now come to (M4.3 draws them instanced), the frustum, and the
+ * branch that hands the device back when building the scene throws. That last one is a leak `createShapeMeshes` made possible by validating,
  * and it is the reason the assembly is a function rather than four lines inside an
  * `async` one. What still needs a device is `init()` itself and the abort check
  * that follows it.
  *
  * M4.2 generalised the last two constructor parameters from a geometry and a
  * material to a LIST of resources, because a signature with one of each only
- * fitted a scene of exactly one mesh, and the scene is now six. Every lifecycle
+ * fitted a scene of exactly one mesh, and the scene is now two. Every lifecycle
  * assertion M4.1 made is still here, and the list added one: that every resource
  * in it is disposed exactly once, which a two-resource scene could not
  * distinguish from a hardcoded pair of `dispose()` calls.
@@ -282,9 +282,10 @@ describe('WebGPUSceneRenderer camera sync', () => {
 describe('WebGPUSceneRenderer disposal', () => {
   it('disposes every resource in the list exactly once, however many there are', () => {
     // The assertion the list made necessary. M4.1's scene had one geometry and one
-    // material, which two hardcoded `dispose()` calls satisfy; M4.2's has twelve,
-    // and a loop that stopped early or skipped one would leak a buffer per mount
-    // with no symptom until several mounts had accumulated.
+    // material, which two hardcoded `dispose()` calls satisfy; M4.2's had twelve
+    // and M4.3's is one per shape family, and a loop that stopped early or
+    // skipped one would leak a buffer per mount with no symptom until several
+    // mounts had accumulated.
     const { sink, resources, renderer } = harness();
     expect(resources).toHaveLength(5);
     renderer.dispose();
@@ -514,10 +515,11 @@ describe('buildSceneRenderer', () => {
   });
 
   it('disposes the device exactly once, not once per resource already built', () => {
-    // Two shapes, the second of which is impossible, so the first has already
-    // allocated a geometry and a material by the time the throw happens. Those are
-    // unreferenced and collectable; the device is not, and it has to be given back
-    // once rather than once per unwind.
+    // Two shapes, the second of which is impossible, so the family's mesh has
+    // already been built and the first instance written by the time the throw
+    // happens. `createInstancedShapes` disposes that mesh; the device is the one
+    // thing it cannot reach, and it has to be given back once rather than once
+    // per unwind.
     const good = CRISPNESS_LADDER[0];
     if (good === undefined) throw new Error('unreachable');
     const sink = new StubFrameSink();
@@ -534,8 +536,8 @@ describe('buildSceneRenderer', () => {
     // The other half of pulling this out of the `async` function: the assembly
     // past `init()` used to be unreachable in Node and therefore untested. It is
     // not the renderer three would build (the sink is a stub), but every line of
-    // this package's own wiring runs: twelve resources for six shapes, a sized
-    // drawing buffer, and a frustum that is no longer four zeroes.
+    // this package's own wiring runs: one instanced mesh per shape family, a
+    // sized drawing buffer, and a frustum that is no longer four zeroes.
     const camera = new Camera2D({ viewport: initialViewport });
     const sink = new StubFrameSink();
     const renderer = buildSceneRenderer(camera, sink, 0x0b0d10);
@@ -543,8 +545,9 @@ describe('buildSceneRenderer', () => {
     expect(sink.sizes).toEqual([{ width: 1600, height: 1200, updateStyle: false }]);
     renderer.render();
     expect(sink.frames).toBe(1);
-    // And it owns the scene's resources: six shapes, a geometry and a material
-    // each, all disposed by the one `dispose` a caller has.
+    // And it owns the scene's resources: one `InstancedShapes` per family, each
+    // freeing its current geometry and its material through the one `dispose` a
+    // caller has.
     renderer.dispose();
     expect(sink.disposals).toBe(1);
   });

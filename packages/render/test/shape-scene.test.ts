@@ -1,7 +1,7 @@
-import { MeshBasicNodeMaterial, PlaneGeometry } from 'three/webgpu';
+import { InstancedBufferGeometry, MeshBasicNodeMaterial } from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
 import { Camera2D } from '../src/camera.js';
-import { quadPadding, shapeQuadSize } from '../src/sdf.js';
+import { FILL_AA_PADDING_WORLD, quadPadding, shapeQuadSize } from '../src/sdf.js';
 import {
   CRISPNESS_LADDER,
   createShapeMeshes,
@@ -18,9 +18,12 @@ import type { ShapeDescriptor } from '../src/shape-scene.js';
  * big its quad is, whether two quads overlap, whether the whole thing fits in a
  * given camera's view), and all of it is checkable here. The MESHES are three.js
  * objects built with no device, so what can be checked is that the right number
- * of the right things were constructed, with the geometry sized from the padded
- * quad and not from the shape, and that every one of them turns up in the list
- * the renderer disposes.
+ * of the right things were constructed and that every one of them turns up in
+ * the list the renderer disposes. M4.3 moved one of those claims: the padded
+ * quad used to be a `PlaneGeometry` per shape and could be measured directly,
+ * and it is now computed in the vertex stage from per-instance data, so what is
+ * checkable is that the data reproduces `shapeQuadSize` rather than that a
+ * geometry equals it.
  *
  * What is on the far side of the line: whether any of it appears, in the right
  * colour, at the right crispness. The shader is the whole point of M4.2 and none
@@ -201,57 +204,113 @@ describe('the ladder as geometry', () => {
 });
 
 describe('createShapeMeshes', () => {
-  it('builds one mesh per descriptor, positioned on the z = 0 plane', () => {
-    const { meshes } = createShapeMeshes();
-    expect(meshes).toHaveLength(CRISPNESS_LADDER.length);
-    meshes.forEach((mesh, index) => {
-      const shape = CRISPNESS_LADDER[index];
-      expect(mesh.position.x).toBe(shape?.center.x);
-      expect(mesh.position.y).toBe(shape?.center.y);
-      expect(mesh.position.z).toBe(0);
+  it('builds one instanced mesh per family, not one mesh per shape', () => {
+    // The whole of M4.3 in one assertion. Six shapes were six meshes and six draw
+    // calls, which does not survive contact with a graph: the campaign demo's
+    // 3,010 nodes would be 3,010 meshes and 6,020 GPU resources.
+    const families = createShapeMeshes();
+    expect(families).toHaveLength(2);
+    expect(families.map((family) => family.family)).toEqual(['roundedRect', 'circle']);
+    expect(families.map((family) => family.count)).toEqual([3, 3]);
+  });
+
+  it('draws every shape from a UNIT quad, scaled per instance in the vertex stage', () => {
+    // The geometry is one square from -0.5 to 0.5 whatever the shape sizes are,
+    // and it is the per-instance size and glow that turn it into a padded quad.
+    // M4.2 baked the padded size into a `PlaneGeometry` per shape, which is the
+    // thing that cannot be shared.
+    const [rects] = createShapeMeshes();
+    if (rects === undefined) throw new Error('unreachable');
+    const geometry = rects.mesh.geometry;
+    expect(geometry).toBeInstanceOf(InstancedBufferGeometry);
+    const position = geometry.getAttribute('position');
+    expect(position.count).toBe(4);
+    const xs = Array.from({ length: 4 }, (_, index) => position.getX(index));
+    expect(xs.sort((a, b) => a - b)).toEqual([-0.5, -0.5, 0.5, 0.5]);
+  });
+
+  it('writes each shape\'s size, corner radius and glow reach into the instance buffer', () => {
+    // The per-instance data is what carries the ladder's three decades: a shared
+    // uniform could not, and a per-instance glow is what lets one geometry serve
+    // shapes whose padded quads differ by a factor of a hundred.
+    const [rects] = createShapeMeshes();
+    if (rects === undefined) throw new Error('unreachable');
+    const sizes = rects.mesh.geometry.getAttribute('instanceSize');
+    const radii = rects.mesh.geometry.getAttribute('instanceCornerRadius');
+    const glows = rects.mesh.geometry.getAttribute('instanceGlowWorld');
+    expect([sizes.getX(0), sizes.getX(1), sizes.getX(2)]).toEqual([10, 100, 1000]);
+    expect([sizes.getY(0), sizes.getY(1), sizes.getY(2)]).toEqual([4, 40, 400]);
+    expect([radii.getX(0), radii.getX(1), radii.getX(2)]).toEqual([1, 10, 100]);
+    expect([glows.getX(0), glows.getX(1), glows.getX(2)]).toEqual([1, 10, 100]);
+  });
+
+  it('carries enough per instance to rebuild the PADDED quad the shape needs', () => {
+    // The bug this test exists for, one layer further back than M4.2's version.
+    // A quad the size of the shape clips the glow entirely, since a halo lives
+    // outside the boundary by definition, and clips the outer half of the fill's
+    // own antialiasing ramp along a rectangle that has nothing to do with the
+    // shape. M4.2 baked the padded size into a `PlaneGeometry` where it could be
+    // measured; M4.3 computes it in the vertex stage, where it cannot. What is
+    // still checkable is that the two ingredients the shader adds are in the
+    // buffer and reproduce `shapeQuadSize`, which is the authority for it.
+    const [rects] = createShapeMeshes();
+    if (rects === undefined) throw new Error('unreachable');
+    const geometry = rects.mesh.geometry;
+    const sizes = geometry.getAttribute('instanceSize');
+    const glows = geometry.getAttribute('instanceGlowWorld');
+    CRISPNESS_LADDER.filter((shape) => shape.kind === 'roundedRect').forEach((shape, index) => {
+      const expected = shapeQuadSize(shapeSize(shape), shape.style);
+      const padding = glows.getX(index) + FILL_AA_PADDING_WORLD;
+      expect(sizes.getX(index) + 2 * padding).toBeCloseTo(expected.width, 12);
+      expect(sizes.getY(index) + 2 * padding).toBeCloseTo(expected.height, 12);
+      expect(sizes.getX(index)).not.toBe(expected.width);
     });
   });
 
-  it('sizes the plane from the PADDED quad and not from the shape', () => {
-    // The bug this test exists for. A plane the size of the shape clips the glow
-    // entirely, since a halo lives outside the boundary by definition, and clips
-    // the outer half of the fill's own antialiasing ramp along a rectangle that
-    // has nothing to do with the shape. Both look like a rendering artefact and
-    // neither throws.
-    const { meshes } = createShapeMeshes();
-    meshes.forEach((mesh, index) => {
-      const shape = CRISPNESS_LADDER[index];
-      if (shape === undefined) throw new Error('unreachable');
-      const quad = shapeQuadSize(shapeSize(shape), shape.style);
-      const geometry = mesh.geometry;
-      // `instanceof` rather than a cast, so the narrowing is checked at runtime
-      // and the assertion below is about a real `PlaneGeometry`. A cast here would
-      // also pass against a `BufferGeometry` with no `parameters` at all.
-      expect(geometry).toBeInstanceOf(PlaneGeometry);
-      if (!(geometry instanceof PlaneGeometry)) throw new Error('unreachable');
-      expect(geometry.parameters.width).toBeCloseTo(quad.width, 12);
-      expect(geometry.parameters.height).toBeCloseTo(quad.height, 12);
-      expect(geometry.parameters.width).not.toBe(shapeSize(shape).width);
+  it('puts each shape where its descriptor says, as a per-instance offset', () => {
+    const [rects, circles] = createShapeMeshes();
+    if (rects === undefined || circles === undefined) throw new Error('unreachable');
+    const rectCentres = CRISPNESS_LADDER.filter((shape) => shape.kind === 'roundedRect');
+    const offsets = rects.mesh.geometry.getAttribute('instanceOffset');
+    rectCentres.forEach((shape, index) => {
+      expect(offsets.getX(index)).toBe(shape.center.x);
+      expect(offsets.getY(index)).toBe(shape.center.y);
     });
+    expect(circles.mesh.geometry.getAttribute('instanceOffset').getX(0)).toBe(12);
   });
 
-  it('hands back every geometry and every material to be disposed, once each', () => {
-    // Two per shape, and no duplicates: the renderer disposes exactly this list,
-    // so a resource missing from it is a leak per mount and a resource in it twice
-    // is a double free.
-    const { meshes, resources } = createShapeMeshes();
-    expect(resources).toHaveLength(meshes.length * 2);
-    expect(new Set(resources).size).toBe(resources.length);
-    for (const mesh of meshes) {
-      expect(resources).toContain(mesh.geometry);
-      expect(resources).toContain(mesh.material);
+  it('draws every instance rather than culling the mesh against a unit quad', () => {
+    // The geometry's bounding sphere describes a shape 1.4 world units across at
+    // the origin, so three would cull the entire mesh, every instance of it, the
+    // moment the origin left the frustum.
+    for (const family of createShapeMeshes()) {
+      expect(family.mesh.frustumCulled).toBe(false);
+      const geometry = family.mesh.geometry;
+      if (!(geometry instanceof InstancedBufferGeometry)) throw new Error('unreachable');
+      expect(geometry.instanceCount).toBe(family.count);
+    }
+  });
+
+  it('hands back one disposable per family, each freeing its own geometry and material', () => {
+    // The list the renderer disposes. An `InstancedShapes` replaces its geometry
+    // when its buffer grows, so the list holds the OBJECT rather than the
+    // geometry: a geometry captured here would be the stale one by the time
+    // anything disposed it.
+    const families = createShapeMeshes();
+    expect(new Set(families).size).toBe(families.length);
+    for (const family of families) {
+      const geometry = family.mesh.geometry;
+      const material = family.mesh.material;
+      family.dispose();
+      expect(() => family.add(CRISPNESS_LADDER[0] as never)).toThrow();
+      expect(geometry).toBeInstanceOf(InstancedBufferGeometry);
+      expect(material).toBeInstanceOf(MeshBasicNodeMaterial);
     }
   });
 
   it('makes every material a transparent SDF material that does not write depth', () => {
-    const { meshes } = createShapeMeshes();
-    for (const mesh of meshes) {
-      const material = mesh.material;
+    for (const family of createShapeMeshes()) {
+      const material = family.mesh.material;
       expect(material).toBeInstanceOf(MeshBasicNodeMaterial);
       if (!(material instanceof MeshBasicNodeMaterial)) throw new Error('unreachable');
       expect(material.transparent).toBe(true);
@@ -263,6 +322,10 @@ describe('createShapeMeshes', () => {
       expect(material.depthWrite).toBe(false);
       expect(material.colorNode?.isNode).toBe(true);
       expect(material.opacityNode?.isNode).toBe(true);
+      // The vertex stage is new at M4.3: the quad is positioned from a
+      // per-instance offset rather than from the mesh's own transform, so one
+      // mesh can hold shapes that are a thousand world units apart.
+      expect(material.positionNode?.isNode).toBe(true);
     }
   });
 
@@ -272,8 +335,33 @@ describe('createShapeMeshes', () => {
     const rect = CRISPNESS_LADDER.find((shape) => shape.kind === 'roundedRect');
     const circle = CRISPNESS_LADDER.find((shape) => shape.kind === 'circle');
     if (rect === undefined || circle === undefined) throw new Error('unreachable');
-    const { meshes } = createShapeMeshes([rect, circle]);
-    expect(meshes).toHaveLength(2);
+    const families = createShapeMeshes([rect, circle]);
+    expect(families).toHaveLength(2);
+    expect(families.map((family) => family.count)).toEqual([1, 1]);
+  });
+
+  it('builds no mesh for a family with no shapes', () => {
+    const circle = CRISPNESS_LADDER.find((shape) => shape.kind === 'circle');
+    if (circle === undefined) throw new Error('unreachable');
+    const families = createShapeMeshes([circle]);
+    expect(families).toHaveLength(1);
+    expect(families[0]?.family).toBe('circle');
+  });
+
+  it('refuses a family whose members disagree about a uniform, naming the field', () => {
+    // One instanced mesh draws one family with ONE outline width, because that is
+    // a uniform. A set of descriptors that disagrees cannot be drawn in one call,
+    // and drawing it with whichever descriptor happened to be first is the kind of
+    // wrong that looks like a design decision.
+    const [first, , third] = CRISPNESS_LADDER;
+    if (first === undefined || third === undefined) throw new Error('unreachable');
+    const odd: ShapeDescriptor = {
+      ...third,
+      label: 'thick-outline',
+      style: { ...third.style, outlinePixels: 4 },
+    };
+    expect(() => createShapeMeshes([first, odd])).toThrow(RangeError);
+    expect(() => createShapeMeshes([first, odd])).toThrow(/thick-outline\.style\.outlinePixels/);
   });
 
   it('rejects a corner radius past half the smaller dimension, naming the shape', () => {

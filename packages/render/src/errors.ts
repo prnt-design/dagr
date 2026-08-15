@@ -33,7 +33,11 @@
  * A union rather than an enum, so it is a value a `switch` narrows exhaustively
  * and nothing has to be imported to compare against it.
  */
-export type DagrRenderErrorCode = 'RENDERER_DISPOSED' | 'OVERLAY_PARENT' | 'OVERLAY_DISPOSED';
+export type DagrRenderErrorCode =
+  | 'RENDERER_DISPOSED'
+  | 'OVERLAY_PARENT'
+  | 'OVERLAY_DISPOSED'
+  | 'UNKNOWN_INSTANCE_HANDLE';
 
 /** The base every error this package throws extends. */
 export abstract class DagrRenderError extends Error {
@@ -114,6 +118,30 @@ export class OverlayParentError extends DagrRenderError {
  * that unmounts with a frame already queued is the normal case rather than a
  * bug. See `html-overlay.ts`.
  */
+/**
+ * Thrown when an instance buffer is asked about a handle it does not hold.
+ *
+ * A class rather than a `RangeError`, on this file's own rule: nothing about the
+ * number is out of range, and the caller is almost never looking at the line
+ * that produced it. The cause is a handle that outlived the instance it named,
+ * which arrives from a graph delta removing a node while something else still
+ * holds its handle, or from a slot index stored where a handle belonged (see the
+ * invariant in `instance-buffer.ts`). Both are worth catching deliberately, and
+ * both are worth failing on rather than papering over: the alternative to a
+ * throw is a sentinel index that array arithmetic accepts, which writes one
+ * instance's data over another's and shows up as a shape in the wrong place
+ * several frames later.
+ */
+export class UnknownInstanceHandleError extends DagrRenderError {
+  readonly code = 'UNKNOWN_INSTANCE_HANDLE';
+
+  constructor(handle: number) {
+    super(`instance handle ${String(handle)} is not live: it was freed, or never allocated`);
+    this.name = 'UnknownInstanceHandleError';
+    Object.setPrototypeOf(this, UnknownInstanceHandleError.prototype);
+  }
+}
+
 export class OverlayDisposedError extends DagrRenderError {
   readonly code = 'OVERLAY_DISPOSED';
 

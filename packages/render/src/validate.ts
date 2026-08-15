@@ -18,6 +18,14 @@ import type { Vec2 } from './types.js';
  * These lived in `camera.ts` until the overlay needed the same three. Moved
  * rather than copied: two copies of a validator drift, and the one that drifts
  * is always the one whose error message a test does not assert.
+ *
+ * {@link requireNonNegative} and {@link requireColor} arrived the same way at
+ * M4.3, out of `sdf.ts`, which had grown its own private copy of
+ * {@link requireFinite} beside them. The instanced path validates the same
+ * colours and the same non-negative reaches that a `ShapeStyle` does, one
+ * instance at a time instead of one style at a time, so the choice was a third
+ * copy or a move. The messages are unchanged, which is what makes the move
+ * invisible to `test/sdf.test.ts`.
  */
 
 /** Rejects a value that is not a finite number, naming the field. */
@@ -47,6 +55,34 @@ export function requireAtLeast(value: number, min: number, field: string): numbe
   if (!Number.isFinite(value) || value < min) {
     throw new RangeError(
       `${field} has to be a finite number of at least ${String(min)}, got ${String(value)}`,
+    );
+  }
+  return value;
+}
+
+/** Rejects a value that is not a finite number at or above zero. */
+export function requireNonNegative(value: number, field: string): number {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(
+      `${field} has to be a finite number at or above zero, got ${String(value)}`,
+    );
+  }
+  return value;
+}
+
+/**
+ * Rejects a colour that is not a 24-bit `0xRRGGBB` integer.
+ *
+ * The same check `createRenderer` applies to `clearColor`, for the same measured
+ * reason: three's `Color.setHex` validates nothing, and against 0.185.1 `NaN`
+ * and `Infinity` both come out #000000 while `-1` and `0x1ffffff` both saturate
+ * to #ffffff. A shape that silently turns black on a near-black background is a
+ * shape that is not there.
+ */
+export function requireColor(value: number, field: string): number {
+  if (!Number.isInteger(value) || value < 0 || value > 0xffffff) {
+    throw new RangeError(
+      `${field} has to be an integer between 0x000000 and 0xffffff, got ${String(value)}`,
     );
   }
   return value;

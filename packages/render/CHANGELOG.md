@@ -14,6 +14,36 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- Instanced rendering: one mesh per shape family, with position, size, corner
+  radius, glow reach and two colours read per instance. New surface:
+  `UnknownInstanceHandleError` and its `UNKNOWN_INSTANCE_HANDLE` code, and
+  nothing else. (M4.3)
+
+  **Behaviour changed, types did not, and the change is what is NOT drawn per
+  shape.** The crispness ladder is the same six shapes in the same places and
+  the same colours, drawn in two calls rather than six. The committed references
+  are therefore the regression test for the whole per-instance path: a factor of
+  two anywhere in the quad scaling puts every shape at half or twice its size.
+
+  **The material decision M4.2 deferred is made, provisionally: ONE MATERIAL PER
+  SHAPE FAMILY**, not one uber-material with a per-instance shape id. The
+  uber-material's cost is per fragment and the per-family cost is per draw call,
+  the family count is small and known, and the union of uniforms an uber-material
+  pays for grows at the same rate as the calls it saves. The revisit gate is
+  M4.10, and reversing it rewires one assembly function and touches no formula.
+
+  **Removal is swap-with-last, so per-instance state is keyed by HANDLE and never
+  by SLOT.** A slot index is not durable across any removal and the failure is
+  silent, because the slot stays a valid index and merely belongs to a different
+  instance. Handles are never reused, so a handle held past its instance's
+  removal raises rather than addressing whatever took its place. M4.6's springs
+  and M4.8's picking IDs inherit this.
+
+  A colour reaching a shader as a UNIFORM is converted from sRGB by three's
+  `Color`; as a vertex ATTRIBUTE it is converted by nothing, so the conversion
+  now happens on the way into the buffer, spelled the way three spells it.
+  Skipping it does not throw: every colour comes out lighter and flatter.
+
 - `createRichNodes`: a node's visual as arbitrary HTML sized to its layout box,
   with semantic zoom. New surface: `createRichNodes`, `measureHtmlSizes`, and
   the types `RichNode`, `RichNodeTier`, `RichNodes`, `MeasureItem` and

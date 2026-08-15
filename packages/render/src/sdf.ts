@@ -1,4 +1,5 @@
 import type { Size } from './types.js';
+import { requireColor, requireFinite, requireNonNegative } from './validate.js';
 
 /**
  * The signed distance fields M4.2 draws with, and the coverage functions that
@@ -534,45 +535,6 @@ export const FILL_AA_PADDING_WORLD = 1;
  * bound and is why it is left at the dpr 1 figure rather than made dynamic.
  */
 export const FILL_AA_CROSSOVER_ZOOM = 1 / (2 * FILL_AA_PADDING_WORLD);
-
-/**
- * Rejects a value that is not a finite number, naming the field. The package
- * rule from `errors.ts`, spelled the same way `camera.ts` spells it.
- */
-function requireFinite(value: number, field: string): number {
-  if (!Number.isFinite(value)) {
-    throw new RangeError(`${field} has to be a finite number, got ${String(value)}`);
-  }
-  return value;
-}
-
-/** Rejects a value that is not a finite number at or above zero. */
-function requireNonNegative(value: number, field: string): number {
-  if (!Number.isFinite(value) || value < 0) {
-    throw new RangeError(
-      `${field} has to be a finite number at or above zero, got ${String(value)}`,
-    );
-  }
-  return value;
-}
-
-/**
- * Rejects a colour that is not a 24-bit `0xRRGGBB` integer.
- *
- * The same check `createRenderer` applies to `clearColor`, for the same measured
- * reason: three's `Color.setHex` validates nothing, and against 0.185.1 `NaN`
- * and `Infinity` both come out #000000 while `-1` and `0x1ffffff` both saturate
- * to #ffffff. A shape that silently turns black on a near-black background is a
- * shape that is not there.
- */
-function requireColor(value: number, field: string): number {
-  if (!Number.isInteger(value) || value < 0 || value > 0xffffff) {
-    throw new RangeError(
-      `${field} has to be an integer between 0x000000 and 0xffffff, got ${String(value)}`,
-    );
-  }
-  return value;
-}
 
 /**
  * Rejects a {@link ShapeStyle} that cannot describe a shape, naming the field

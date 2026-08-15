@@ -13,11 +13,14 @@ import * as api from '../src/index.js';
  * package unusable in any server-rendered application.
  */
 describe('@dagr/render', () => {
-  it('exports exactly the runtime surface, through the campaign demo P2', () => {
+  it('exports exactly the runtime surface, through the campaign demo P3', () => {
     // Types are erased, so only the runtime exports can be checked here. The
     // type surface is exercised by the other files in the suite importing from
     // it. `fitZoom` joined in P2: the pure fit arithmetic behind
     // `Camera2D.fitBounds`, exported so limit derivation shares its formula.
+    // `UnknownInstanceHandleError` joined in P3 (M4.3), and it is the only thing
+    // the instanced path puts on the surface: an error arrives in somebody
+    // else's `catch` whether or not the module that throws it was exported.
     expect(Object.keys(api).sort()).toEqual([
       'CENTRE_ANCHOR',
       'Camera2D',
@@ -27,6 +30,7 @@ describe('@dagr/render', () => {
       'OverlayDisposedError',
       'OverlayParentError',
       'RendererDisposedError',
+      'UnknownInstanceHandleError',
       'createHtmlOverlay',
       'createRenderer',
       'createRichNodes',
@@ -45,6 +49,16 @@ describe('@dagr/render', () => {
     // interface with behaviour.
     expect('entryTransform' in api).toBe(false);
     expect('selectWithinCap' in api).toBe(false);
+  });
+
+  it('does not export the instancing machinery', () => {
+    // M4.3's bookkeeping stays internal for the reason the shape scene does:
+    // M4.4 owns the seam a caller feeds a graph through, and an instance handle
+    // API exported before there is anything to name with it would be a guess at
+    // that seam that something comes to depend on.
+    expect('InstanceBuffer' in api).toBe(false);
+    expect('InstancedShapes' in api).toBe(false);
+    expect('createInstancedShapes' in api).toBe(false);
   });
 
   it('does not export the renderer implementation class', () => {
