@@ -1,3 +1,4 @@
+import { SceneDisposedError } from './errors.js';
 import { InstancedShapes } from './instanced-scene.js';
 import { requireShapeInstance } from './instance-attributes.js';
 import type { SceneStyle, ShapeFamily, ShapeInstance } from './instance-attributes.js';
@@ -173,7 +174,10 @@ export class SceneNodes implements GpuResource {
    */
   setNodes(nodes: readonly SceneNode[]): void {
     this.#assertLive('setNodes');
-    const incoming = new Map<string, { node: SceneNode; instance: ShapeInstance }>();
+    const incoming = new Map<
+      string,
+      { node: SceneNode; instance: ShapeInstance; family: InstancedShapes }
+    >();
     for (const node of nodes) {
       if (incoming.has(node.id)) {
         throw new RangeError(`two nodes share the id ${node.id}, so one would replace the other`);
@@ -186,9 +190,17 @@ export class SceneNodes implements GpuResource {
       // delta path this method exists for, then draws a silently short picture.
       // Two passes over the list is the price of the call being all or nothing.
       const instance = toInstance(node);
+      // The FAMILY is resolved here too, and that is not tidiness: it was the
+      // one fallible step left in the mutating half. `toInstance` falls through
+      // to the rounded rect branch for a shape it does not know, so a node whose
+      // `shape` is neither of the two (a data-driven field, or a JavaScript
+      // caller) validated clean and then threw out of `#family` with the
+      // removals already applied. Unreachable from this repo, where every shape
+      // is a literal, and a guarantee gap all the same.
       incoming.set(node.id, {
         node,
         instance: requireShapeInstance(instance, instance.kind, node.id),
+        family: this.#family(node.shape),
       });
     }
 
@@ -200,9 +212,8 @@ export class SceneNodes implements GpuResource {
       }
     }
 
-    for (const [id, { node, instance }] of incoming) {
+    for (const [id, { node, instance, family }] of incoming) {
       const placement = this.#placements.get(id);
-      const family = this.#family(node.shape);
       if (placement === undefined) {
         this.#placements.set(id, { shape: node.shape, handle: family.add(instance) });
       } else {
@@ -246,7 +257,7 @@ export class SceneNodes implements GpuResource {
 
   #assertLive(method: string): void {
     if (this.#disposed) {
-      throw new Error(`cannot call ${method}() on disposed scene nodes`);
+      throw new SceneDisposedError(method, 'scene nodes');
     }
   }
 }

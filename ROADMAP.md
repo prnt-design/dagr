@@ -2918,6 +2918,32 @@ of M3 would leave the second runner idle for a milestone.
   until the quad is considered: reach sizes the padded quad, so a shared reach
   clips a large shape's halo or wastes fill rate on a small one, and the ladder
   proves it with reaches of 1, 10 and 100 world units in ONE family.
+  THE BUDGET FOR A SEVENTH CHANNEL IS ONE, AND THE LIMIT IS `maxVertexBuffers`.
+  This entry first said nine slots were free, which counted
+  `maxVertexAttributes` (16). three allocates one vertex buffer slot per
+  non-interleaved attribute THE SHADER READS: `RenderObject.getAttributes` walks
+  the attributes the node graph references, so the six channels plus the quad's
+  own `position` bind SEVEN of WebGPU's default EIGHT, and the quad's `normal`
+  and `uv` cost nothing because this graph never references them. Stating the
+  rule as "per attribute on the geometry" gives nine of eight and describes a
+  scene that cannot build, which is the version a review sent back.
+  WHY THEY ARE UNREAD IS NOT THAT THE MATERIAL IS UNLIT, which is a second thing
+  a review corrected: `MeshBasicNodeMaterial` sets `lights = true` and DOES
+  override `setupNormal`. The guard is in `NodeMaterial.setupLighting`, which
+  builds a lighting context only when `materialLightings.length > 0 ||
+  lightsNode.getScope().hasLights`, and this scene has no lights and no light or
+  environment map, so `setupOutgoingLight` returns `diffuseColor.rgb` and
+  nothing asks for a normal. M4.6's spring velocity or M4.8's picking id is the
+  seventh channel and fits; an eighth needs interleaving or a raised
+  `requiredLimits`. Two ordinary SCENE changes take the last slot before a
+  channel does, and neither is renderer work: a material that comes to read
+  `uv`, and a light or an environment map, either of which satisfies that guard
+  and pulls in the `normal` the quad already carries.
+  EIGHT IS A WEBGPU NUMBER and M4.9 owns the divergence: three's WebGL2 path
+  binds each attribute into a VAO with `vertexAttribPointer`, so it has no
+  buffer-slot limit and its ceiling is `MAX_VERTEX_ATTRIBS`, at least 16. A
+  channel past the eighth fails pipeline creation on one backend and draws fine
+  on the other.
   A COLOUR REACHING A SHADER AS AN ATTRIBUTE IS CONVERTED BY NOTHING. As a
   uniform it goes through three's `Color`, which does sRGB to linear on the way;
   an attribute is whatever floats are in the buffer. So `linearFromHex` does it
@@ -2950,7 +2976,8 @@ of M3 would leave the second runner idle for a milestone.
   per instance and belongs to M4.10, where there is a frame time to measure it
   against.
   Nothing is exported but the two ERRORS. `UnknownInstanceHandleError` and
-  `InstancedShapesDisposedError` reach `index.ts` because an error arrives in
+  `SceneDisposedError` (named `InstancedShapesDisposedError` until M4.4 gave a
+  second object the same failure) reach `index.ts` because an error arrives in
   somebody else's `catch` whether or not the module that throws it was exported,
   and one that arrives as a bare `Error` gets there with no `code` and failing
   `instanceof DagrRenderError`; the instance API stays internal because M4.4 owns

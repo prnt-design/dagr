@@ -38,7 +38,7 @@ export type DagrRenderErrorCode =
   | 'OVERLAY_PARENT'
   | 'OVERLAY_DISPOSED'
   | 'UNKNOWN_INSTANCE_HANDLE'
-  | 'INSTANCED_SHAPES_DISPOSED';
+  | 'SCENE_DISPOSED';
 
 /** The base every error this package throws extends. */
 export abstract class DagrRenderError extends Error {
@@ -159,8 +159,8 @@ export class UnknownInstanceHandleError extends DagrRenderError {
 }
 
 /**
- * Thrown when an instanced mesh is added to, changed or cleared after its
- * `dispose()`.
+ * Thrown when anything holding GPU resources for a scene is used after its
+ * `dispose()`: a family's instanced mesh, or the node collection over them.
  *
  * A class rather than the bare `Error` this started as, on the rule at the top
  * of this file: a call after dispose is the lifecycle case that rule was
@@ -168,17 +168,26 @@ export class UnknownInstanceHandleError extends DagrRenderError {
  * failing `instanceof DagrRenderError`, which is the one thing this family
  * exists to prevent.
  *
- * The message names the mesh as well as the method, on
- * {@link OverlayDisposedError}'s terms: one class covering every object with
- * this failure, because the failure, the cause and what a caller does about it
- * are identical, and the label says which of a scene's meshes it was.
+ * ONE class for both, on {@link OverlayDisposedError}'s terms, and the name is
+ * the second one it has had: it was `InstancedShapesDisposedError` while a mesh
+ * was the only thing that threw it, and `SceneNodes` throwing the same failure a
+ * task later is exactly the case that argument covers. The failure, the cause
+ * and what a caller does about it are identical, and the label in the message
+ * says which object it was.
+ *
+ * **No consumer can see this today, which is the strongest form of that
+ * argument.** `Renderer.setNodes` asserts live before it delegates, so a
+ * disposed renderer throws {@link RendererDisposedError} and the scene is never
+ * asked; and both objects that throw this one are unexported. It is therefore a
+ * guard on the internals and a class in place for the day one of them is handed
+ * out, which is a reason to have exactly one of it rather than two.
  */
-export class InstancedShapesDisposedError extends DagrRenderError {
-  readonly code = 'INSTANCED_SHAPES_DISPOSED';
+export class SceneDisposedError extends DagrRenderError {
+  readonly code = 'SCENE_DISPOSED';
 
   constructor(method: string, label: string) {
-    super(`cannot call ${method}() on the disposed ${label} mesh`);
-    this.name = 'InstancedShapesDisposedError';
-    Object.setPrototypeOf(this, InstancedShapesDisposedError.prototype);
+    super(`cannot call ${method}() on the disposed ${label}`);
+    this.name = 'SceneDisposedError';
+    Object.setPrototypeOf(this, SceneDisposedError.prototype);
   }
 }

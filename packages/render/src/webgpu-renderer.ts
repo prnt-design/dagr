@@ -517,6 +517,17 @@ export function buildSceneRenderer(
   nodes?: readonly SceneNode[],
   edgeGroups?: readonly SceneEdgeGroup[],
 ): Renderer {
+  // BOTH held outside the `try` so the `catch` can free them, and the second is
+  // why this is a comment rather than a line. Building a scene validates, so a
+  // rejected node throws with GPU resources already allocated, and three's
+  // geometries and materials are not collectable: they hold buffers that only
+  // `dispose()` releases. The `catch` used to say everything but the device was
+  // "unreferenced and collectable", which stopped being true the moment a scene
+  // owned resources before the first fallible line. M4.5's edges then added a
+  // SECOND owner in front of that same line, which a rebase surfaced: a fix
+  // naming only the nodes would have been half a fix within a day of writing.
+  let sceneNodes: SceneNodes | null = null;
+  let sceneEdges: SceneEdges | null = null;
   try {
     const scene = new Scene();
     scene.background = new Color(clearColor);
@@ -529,11 +540,11 @@ export function buildSceneRenderer(
     // scene's children in the order they were added for objects that share a
     // depth, and every mesh in this package is transparent with `depthWrite`
     // off, so ribbons added before nodes are drawn under them.
-    const sceneEdges = new SceneEdges(edgeGroups ?? []);
+    sceneEdges = new SceneEdges(edgeGroups ?? []);
     for (const mesh of sceneEdges.meshes) {
       scene.add(mesh);
     }
-    const sceneNodes = new SceneNodes(sceneStyle ?? DEFAULT_SCENE_STYLE, countByShape(nodes));
+    sceneNodes = new SceneNodes(sceneStyle ?? DEFAULT_SCENE_STYLE, countByShape(nodes));
     for (const mesh of sceneNodes.meshes) {
       scene.add(mesh);
     }
@@ -559,12 +570,14 @@ export function buildSceneRenderer(
     instance.resize(camera.viewport);
     return instance;
   } catch (error) {
-    // The device, and nothing else. Whatever was built before the throw is
-    // unreferenced and collectable; the device is the one thing the garbage
-    // collector cannot give back, and this is the only remaining reference to it.
-    // Disposed here rather than in `createRenderer`, so it cannot be disposed
-    // twice: three's `WebGPURenderer.dispose` is not a documented no-op on a
-    // second call.
+    // The scene's GPU resources first, then the device that owns them, which is
+    // the order `WebGPUSceneRenderer.dispose` uses and for the same reason:
+    // freeing a buffer through a device that has already gone is at best a
+    // no-op. All of it is disposed here rather than in `createRenderer`, so
+    // nothing can be disposed twice: three's `WebGPURenderer.dispose` is not a
+    // documented no-op on a second call.
+    sceneEdges?.dispose();
+    sceneNodes?.dispose();
     renderer.dispose();
     throw error;
   }

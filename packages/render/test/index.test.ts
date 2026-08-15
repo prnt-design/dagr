@@ -18,24 +18,26 @@ describe('@dagr/render', () => {
     // type surface is exercised by the other files in the suite importing from
     // it. `fitZoom` joined in P2: the pure fit arithmetic behind
     // `Camera2D.fitBounds`, exported so limit derivation shares its formula.
-    // `UnknownInstanceHandleError` and `InstancedShapesDisposedError` joined in
-    // P3 (M4.3), and they are the only things the instanced path puts on the
-    // surface: an error arrives in somebody else's `catch` whether or not the
-    // module that throws it was exported. `advanceDashFlow` and `ribbonWidthAt`
-    // joined in P5, and they are the two things a DRAW LOOP needs from the
-    // ribbon arithmetic: where the dash has flowed to, and the width and alpha
-    // the zoom implies. The tessellation itself stays internal, because
-    // `setEdges` takes points rather than geometry.
+    // `UnknownInstanceHandleError` and `SceneDisposedError` joined in P3 (M4.3),
+    // and they are the only things the instanced path puts on the surface: an
+    // error arrives in somebody else's `catch` whether or not the module that
+    // throws it was exported. The second was `InstancedShapesDisposedError`
+    // until `SceneNodes` grew the same failure and one class covered both.
+    // `advanceDashFlow` and `ribbonWidthAt` joined in P5, and they are the two
+    // things a DRAW LOOP needs from the ribbon arithmetic: where the dash has
+    // flowed to, and the width and alpha the zoom implies. The tessellation
+    // itself stays internal, because `setEdges` takes points rather than
+    // geometry.
     expect(Object.keys(api).sort()).toEqual([
       'CENTRE_ANCHOR',
       'Camera2D',
       'DagrRenderError',
-      'InstancedShapesDisposedError',
       'OVERLAY_INV_ZOOM_PROPERTY',
       'OVERLAY_ZOOM_PROPERTY',
       'OverlayDisposedError',
       'OverlayParentError',
       'RendererDisposedError',
+      'SceneDisposedError',
       'UnknownInstanceHandleError',
       'advanceDashFlow',
       'createHtmlOverlay',
