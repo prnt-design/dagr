@@ -1,4 +1,5 @@
-import { Color } from 'three/webgpu';
+import { AttributeNode, Color } from 'three/webgpu';
+import type { Node } from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
 import { SceneEdges } from '../src/scene-edges.js';
 import type { SceneEdge, SceneEdgeGroup } from '../src/scene-edges.js';
@@ -61,6 +62,25 @@ function attributeOf(scene: SceneEdges, index: number, name: string): Float32Arr
   const array = attribute?.array;
   if (!(array instanceof Float32Array)) throw new Error(`no ${name} attribute`);
   return array;
+}
+
+/**
+ * Every geometry attribute a node graph reads, by name.
+ *
+ * `Node.traverse` walks the tree three itself walks when it decides which
+ * vertex buffers a pipeline binds, which is the same question the attribute
+ * table's slot count is an answer to. The name lives on a private field with a
+ * public getter that wants a builder, so this reads the getter with an empty
+ * one: what it needs is the declared name, and an `AttributeNode` given one
+ * returns it without consulting anything.
+ */
+function attributesIn(node: Node | null): string[] {
+  if (node === null) return [];
+  const names: string[] = [];
+  node.traverse((child) => {
+    if (child instanceof AttributeNode) names.push(child.getAttributeName({} as never));
+  });
+  return names;
 }
 
 describe('SceneEdges', () => {
@@ -260,6 +280,25 @@ describe('SceneEdges', () => {
     expect(() => scene.setPixelsPerWorldUnit(2.5)).not.toThrow();
     scene.dispose();
     expect(() => scene.setPixelsPerWorldUnit(2.5)).toThrow(/setPixelsPerWorldUnit/);
+  });
+
+  it('reads the intensity in BOTH stages, which no buffer assertion can see', () => {
+    // The one claim in this file that is about the SHADER rather than the
+    // buffers, and it is here because the failure it catches is silent: an
+    // intensity wired into the alpha and not the width dims an edge without
+    // thinning it, which is exactly the half-feature the channel exists to
+    // avoid, and every test above would still pass. A structural check in the
+    // spirit of `test/ribbon-nodes.test.ts`: the attribute has to be reachable
+    // from the vertex position AND from the opacity.
+    const scene = new SceneEdges(groups());
+    const material = scene.meshes[0]?.material;
+    if (material === undefined) throw new Error('unreachable: no material');
+    expect(attributesIn(material.positionNode)).toContain('ribbonIntensity');
+    expect(attributesIn(material.opacityNode)).toContain('ribbonIntensity');
+    // And the sanity check that the walk finds anything at all, so a broken
+    // traversal cannot make the two assertions above vacuous.
+    expect(attributesIn(material.positionNode)).toContain('ribbonPosition');
+    scene.dispose();
   });
 
   it('starts every edge at full intensity, which is the group\'s own drawing', () => {
