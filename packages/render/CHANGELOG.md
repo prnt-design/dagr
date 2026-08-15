@@ -14,6 +14,44 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- `Renderer.setNodes`: the seam a caller feeds a graph through. New surface:
+  `setNodes` on `Renderer`, `sceneStyle` and `nodes` on `RendererOptions`, and
+  the types `SceneNode`, `NodeShape` and `SceneStyle`. (M4.4)
+
+  **`setNodes` is ALL OR NOTHING.** Every node is converted and validated before
+  anything is touched, so a bad node in the middle of a list leaves the scene
+  exactly as it was. The first version validated as it wrote and left a scene
+  holding neither the node that had left nor the one that failed to arrive,
+  which a caller catching the `RangeError`, the delta path this exists for,
+  would have drawn as a silently short picture.
+
+  `sceneStyle` is named for the scene because that is its scope: three uniforms
+  every node shares, with the per-node half on each `SceneNode`. `nodes` sizes
+  the instance buffers PER SHAPE FAMILY, so a mixed scene reserves what it
+  needs rather than twice it, and an empty list is a scene with no nodes rather
+  than a `RangeError`.
+
+  **A node keeps its instance handle across calls**, which is the property M4.6's
+  springs and M4.8's picking ids depend on rather than a convenience: the diff is
+  by `id`, so a node present in two consecutive calls is updated in place. The
+  one exception is a node that changes SHAPE, because the two shape families are
+  two meshes and an instance cannot move between them.
+
+  **It takes NODES and not a `LayoutResult`.** Naming one would make
+  `@dagr/layout` a dependency of this package, and the y-down to y-up conversion
+  belongs to whoever owns the layout, which `camera.ts` has said since M4.1.
+  `WorldBounds` being extents rather than a corner and a size is what makes that
+  seam a compile error rather than a convention.
+
+  **REMOVED: the crispness ladder.** `createRenderer` draws an empty scene now
+  and everything on screen arrives through `setNodes`, so `shape-scene.ts` and
+  its suite are gone. With them went `ShapeStyle`, `requireShapeStyle` and
+  `shapeQuadSize`, which had no callers left, and `quadPadding` moved onto the
+  `Arith` interface: the padded quad is computed per instance in the vertex stage
+  now, so the alternative was a second copy of that sum in TSL. None of the four
+  was ever exported; the ladder's frames stay in `assets/screenshots/` and in the
+  M4.2 commit.
+
 - Instanced rendering: one mesh per shape family, with position, size, corner
   radius, glow reach and two colours read per instance. (M4.3)
 

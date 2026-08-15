@@ -35,6 +35,9 @@ importers:
       '@dagr/graph':
         specifier: workspace:*
         version: link:../../packages/graph
+      '@dagr/layout':
+        specifier: workspace:*
+        version: link:../../packages/layout
       '@dagr/render':
         specifier: workspace:*
         version: link:../../packages/render

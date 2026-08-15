@@ -1,8 +1,9 @@
 import { Color, OrthographicCamera, Scene, WebGPURenderer } from 'three/webgpu';
 import { Camera2D } from './camera.js';
 import { RendererDisposedError } from './errors.js';
-import { createShapeMeshes } from './shape-scene.js';
-import type { ShapeDescriptor } from './shape-scene.js';
+import type { SceneStyle } from './instance-attributes.js';
+import { SceneNodes } from './scene-nodes.js';
+import type { SceneNode } from './scene-nodes.js';
 import type { GpuResource, Renderer, RendererOptions, Size, ViewportSize } from './types.js';
 
 /**
@@ -108,23 +109,47 @@ export interface ProjectionTarget {
 }
 
 /**
- * A GPU resource this renderer owns and has to give back: a geometry or a
- * material. Defined in `types.ts` and re-exported here, so that this module's own
- * test keeps importing it from the module under test while `shape-scene.ts` names
- * it without importing the renderer. See {@link GpuResource} for why the direction
- * matters.
+ * A GPU resource this renderer owns and has to give back: a geometry, a material,
+ * or a whole family of instances. Defined in `types.ts` and re-exported here, so
+ * that this module's own test keeps importing it from the module under test while
+ * the scene modules name it without importing the renderer. See
+ * {@link GpuResource} for why the direction matters.
  */
 export type { GpuResource };
 
 /**
  * The background the scene is drawn on, as `0xRRGGBB`.
  *
- * Near-black, and the shape palette that goes with it lives in `shape-scene.ts`
- * with the reasoning for each colour. The pair is chosen to be obviously
- * deliberate: amber on near-black is nobody's default, so a frame that comes out
+ * Near-black, and the palette that went with it lived in the crispness ladder
+ * M4.4 retired: a caller's nodes carry their own colours now. The background
+ * stays chosen to be obviously deliberate, which is the half this package still
+ * owns: amber on near-black was nobody's default, so a frame that comes out
  * grey, white or black is a frame that did not come from this package.
  */
 const DEFAULT_CLEAR_COLOR = 0x0b0d10;
+
+/**
+ * The outline, the halo strength and the outline width a scene gets when its
+ * caller does not say.
+ *
+ * The ladder's numbers, carried over rather than re-argued, because the argument
+ * is unchanged and is written down in `sdf.ts` and in the M4.2 ROADMAP entry: an
+ * inset outline is always drawn over a fill rather than against the background,
+ * so the contrast that has to work is outline against fill and the set's darkest
+ * member is a large luminance step against every one of them; 2 DEVICE pixels is
+ * the smallest width whose edge reads as a deliberate line at dpr 1; and a halo
+ * over 0.45 alpha stops reading as a halo and starts reading as a second,
+ * blurrier shape behind the first.
+ *
+ * A default rather than a required option, because a caller who has nodes to
+ * draw should be able to draw them, and because these three are the parts of a
+ * shape's look that are least likely to be what a first-time caller cares about.
+ */
+const DEFAULT_SCENE_STYLE: SceneStyle = {
+  outlineColor: 0x023047,
+  glowAlpha: 0.45,
+  outlinePixels: 2,
+};
 
 /**
  * Where the camera sits on the z axis, and the depth range it sees.
@@ -234,6 +259,7 @@ export class WebGPUSceneRenderer implements Renderer {
   readonly #scene: OpaqueThreeObject;
   readonly #threeCamera: ProjectionTarget;
   readonly #resources: readonly GpuResource[];
+  readonly #nodes: SceneNodes;
   #disposed = false;
 
   /**
@@ -256,13 +282,21 @@ export class WebGPUSceneRenderer implements Renderer {
     renderer: FrameSink,
     scene: OpaqueThreeObject,
     threeCamera: ProjectionTarget,
+    nodes: SceneNodes,
     resources: readonly GpuResource[],
   ) {
     this.camera = camera;
     this.#renderer = renderer;
     this.#scene = scene;
     this.#threeCamera = threeCamera;
+    this.#nodes = nodes;
     this.#resources = [...resources];
+  }
+
+  /** See {@link Renderer.setNodes}. */
+  setNodes(nodes: readonly SceneNode[]): void {
+    this.#assertLive('setNodes');
+    this.#nodes.setNodes(nodes);
   }
 
   /**
@@ -394,6 +428,25 @@ export class WebGPUSceneRenderer implements Renderer {
 }
 
 /**
+ * How many nodes of each shape a list holds, for sizing the instance buffers.
+ *
+ * PER SHAPE, because the two families are two buffers: one count applied to both
+ * reserved twice what a mixed scene needs, which is not the "exactly this many"
+ * `RendererOptions.nodes` promises. `undefined` for an absent list, so the
+ * buffers keep their default capacity rather than being sized for nothing.
+ */
+function countByShape(
+  nodes: readonly SceneNode[] | undefined,
+): Readonly<Partial<Record<SceneNode['shape'], number>>> | undefined {
+  if (nodes === undefined) return undefined;
+  const counts: Partial<Record<SceneNode['shape'], number>> = {};
+  for (const node of nodes) {
+    counts[node.shape] = (counts[node.shape] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/**
  * Everything between a live device and a usable renderer: the scene, the meshes,
  * the projection camera, and the first viewport sync. **Gives the device back if
  * any of it throws.**
@@ -401,12 +454,12 @@ export class WebGPUSceneRenderer implements Renderer {
  * A function rather than four more lines in {@link createRenderer}, for two
  * reasons that are really one. The first is the `catch`: this is the window where
  * `createRenderer`'s promise (a caller never has to dispose a renderer it did not
- * receive) can be broken, because `createShapeMeshes` VALIDATES, so a bad
- * descriptor raises a `RangeError` at a point where the only reference to an
- * initialised `WebGPURenderer` is a local variable in an unwinding frame. Nothing
- * in the shipped ladder can trigger it, and it was still a leak waiting for M4.4:
- * the descriptor list is a parameter precisely so a layout result can be passed
- * in, and a layout result is somebody else's arithmetic. One `try` around the
+ * receive) can be broken, because building a scene VALIDATES, so a bad
+ * node raises a `RangeError` at a point where the only reference to an
+ * initialised `WebGPURenderer` is a local variable in an unwinding frame. That
+ * was a leak waiting for M4.4 while the scene was hard-coded, and M4.4 is what
+ * made it reachable: the nodes are a parameter precisely so a layout result can
+ * be converted into them, and a layout result is somebody else's arithmetic. One `try` around the
  * whole window, rather than one per fallible call, so a fallible line added later
  * is covered by construction.
  *
@@ -419,37 +472,48 @@ export class WebGPUSceneRenderer implements Renderer {
  * one resource per shape family and a filled-in frustum. `Scene`, `Color` and
  * `OrthographicCamera` are real three objects here: none of the three needs an
  * adapter, and the meshes are already built device-free (see
- * `test/shape-scene.test.ts`).
+ * `test/scene-nodes.test.ts`).
  *
- * The scene it builds is the crispness ladder by default: a rounded rect and a
- * circle on each of three rungs a decade apart, the rects 10, 100 and 1000 world
- * units across, so one frame shows what an SDF does at both ends of the zoom range.
- * What is drawn and how it is coloured is entirely `shape-scene.ts`'s business,
- * including the palette and the padding every quad needs; this function's job is to
- * put the meshes in a scene and to remember what has to be given back.
+ * The scene it builds is EMPTY by default, which is what M4.4 changed: this
+ * package used to ship a hard-coded crispness ladder and now ships nothing.
+ * {@link SceneNodes} builds one mesh per shape family with no instances in
+ * either, `nodes` fills them if the caller already has a layout, and
+ * `setNodes` is how anything arrives afterwards. What is drawn and how it is
+ * coloured is entirely the caller's business, down to the two colours on each
+ * node; this function's job is to put the meshes in a scene and to remember what
+ * has to be given back.
  */
 export function buildSceneRenderer(
   camera: Camera2D,
   renderer: FrameSink,
   clearColor: number,
-  descriptors?: readonly ShapeDescriptor[],
+  sceneStyle?: SceneStyle,
+  nodes?: readonly SceneNode[],
 ): Renderer {
   try {
     const scene = new Scene();
     scene.background = new Color(clearColor);
 
-    // One entry per FAMILY now, not one per shape, and each entry is both the
-    // mesh to add and the resource to give back: an `InstancedShapes` replaces
+    // ONE OBJECT, not one per family and not one per shape, and it is both the
+    // meshes to add and the resource to give back: an `InstancedShapes` replaces
     // its own geometry when its buffer grows, so a geometry captured here would
     // be the stale one by the time anything disposed it.
-    const shapes = createShapeMeshes(descriptors);
-    for (const family of shapes) {
-      scene.add(family.mesh);
+    const sceneNodes = new SceneNodes(sceneStyle ?? DEFAULT_SCENE_STYLE, countByShape(nodes));
+    for (const mesh of sceneNodes.meshes) {
+      scene.add(mesh);
     }
-    const resources: readonly GpuResource[] = shapes;
+    if (nodes !== undefined) sceneNodes.setNodes(nodes);
+    const resources: readonly GpuResource[] = [sceneNodes];
 
     const threeCamera = new OrthographicCamera(0, 0, 0, 0, CAMERA_NEAR, CAMERA_FAR);
-    const instance = new WebGPUSceneRenderer(camera, renderer, scene, threeCamera, resources);
+    const instance = new WebGPUSceneRenderer(
+      camera,
+      renderer,
+      scene,
+      threeCamera,
+      sceneNodes,
+      resources,
+    );
 
     // Adopt the camera's current viewport, which sizes the buffer and fills in
     // the frustum the `OrthographicCamera` was constructed with zeroes for. Not
@@ -539,9 +603,10 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     signal.throwIfAborted();
   }
 
-  // The crispness ladder, in place of M4.1's single quad, and the device handed
-  // back if building it throws. Everything from here to the returned renderer
-  // lives in one function with one `catch` for that reason: see
-  // {@link buildSceneRenderer}.
-  return buildSceneRenderer(camera, renderer, clearColor);
+  // An EMPTY scene, and the device handed back if building it throws.
+  // Everything from here to the returned renderer lives in one function with one
+  // `catch` for that reason: see {@link buildSceneRenderer}. What is drawn now
+  // comes from `setNodes`, which is M4.4's whole point: the package stopped
+  // shipping a hard-coded scene the day it could take a real one.
+  return buildSceneRenderer(camera, renderer, clearColor, options.sceneStyle, options.nodes);
 }

@@ -50,7 +50,7 @@ export const CENTRE_ANCHOR: ElementAnchor = Object.freeze({ across: 0.5, down: 0
  * Where an overlay entry sits in the world, as a discriminated union rather
  * than one record with unused fields.
  *
- * `ShapeDescriptor` in `shape-scene.ts` is the precedent and the argument is
+ * `ShapeInstance` in `instance-attributes.ts` is the precedent and the argument is
  * the same: a single record carrying every field would carry combinations that
  * have no meaning, and each of those has to be validated at runtime instead of
  * being unwritable. Three combinations are unwritable here.

@@ -67,7 +67,7 @@ import type { Arith } from './sdf.js';
  * `types.ts` decided that no three.js type appears in this package's public
  * surface, because three is a peer dependency and an exported `Node<'float'>`
  * would make two copies of three in one tree a type error for every consumer.
- * These are internal to `shape-scene.ts` and to the tests.
+ * These are internal to `instanced-scene.ts` and to the tests.
  */
 
 /** A node carrying a single float. The value type every formula here is built over. */
@@ -76,7 +76,7 @@ export type FloatNode = Node<'float'>;
 /**
  * A node carrying a colour: either a `vec3` or three's own `color` type, which
  * are the same three components with different provenance. Accepting both is
- * what lets `shape-scene.ts` hand over a `Color` converted by three (so the sRGB
+ * what lets `instanced-scene.ts` hand over a `Color` converted by three (so the sRGB
  * to linear step is three's problem and not this file's) while a test can hand
  * over a literal `vec3`.
  */
@@ -148,7 +148,7 @@ export const tslArith: Arith<FloatNode> = {
  * pixel, and `#syncSize` sizes the framebuffer from `Camera2D.drawingBufferSize()`,
  * which is the CSS size times the device pixel ratio. So this is `1 / (zoom * dpr)`
  * world units, and `1 / zoom` only at dpr 1. That is correct for antialiasing, which
- * wants device pixels, and it is why `ShapeStyle.outlinePixels` is documented in
+ * wants device pixels, and it is why `SceneStyle.outlinePixels` is documented in
  * device pixels too: making the outline a true CSS width would need the ratio in the
  * shader as a uniform, putting a second reader of `devicePixelRatio` beside
  * `drawingBufferSize` and breaking the rule `camera.ts` states.
@@ -197,7 +197,7 @@ export const circleSDF = Fn(([p, radius]: [Node<'vec2'>, FloatNode]): FloatNode 
   return circleDistance(tslArith, p.x, p.y, radius);
 });
 
-/** Everything {@link shapeShading} needs. See {@link ShapeStyle} for the units. */
+/** Everything {@link shapeShading} needs. See `SceneNode` for the units. */
 export interface ShapeShadingInput {
   /** The signed distance at this fragment, in world units. Any field will do. */
   readonly distance: FloatNode;

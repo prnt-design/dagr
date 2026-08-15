@@ -22,7 +22,7 @@ import {
  *
  * Per INSTANCE: where the shape is, how big it is, its corner radius, its glow
  * reach, and TWO colours. Per MESH, as uniforms in
- * {@link InstancedFamilyStyle}: the outline colour, the outline width and the
+ * {@link SceneStyle}: the outline colour, the outline width and the
  * glow's alpha.
  *
  * The split is not arbitrary and it is the one the campaign demo needs. A node's
@@ -37,8 +37,9 @@ import {
  * which looks inconsistent until the quad is considered: reach is in world units
  * and sizes the padded quad (see `quadPadding` in `sdf.ts`), so a shared reach
  * would either strand a small shape inside a huge quad or clip a large shape's
- * halo. The crispness ladder is the case that proves it, with glow reaches of 1,
- * 10 and 100 world units in one family.
+ * halo. The M4.2 crispness ladder was the case that proved it, with glow reaches
+ * of 1, 10 and 100 world units in one family, and the campaign is the case that
+ * needs it: a room's halo is 7 world units and a campaign node's is 30.
  *
  * ## Colours are converted here, and getting that wrong is silent
  *
@@ -100,27 +101,38 @@ export const INSTANCE_FLOATS = INSTANCE_CHANNELS.reduce(
 );
 
 /**
- * What every instance drawn in ONE call shares, as uniforms.
+ * What every node in a SCENE shares, as uniforms: the parts of a shape's look
+ * that are a design decision rather than a fact about the node.
  *
- * The residue of `ShapeStyle` after the per-instance fields are taken out of it,
- * and it stays a separate type rather than a `Pick<ShapeStyle, ...>` because the
- * two records are read at different rates and by different code: this one is
- * three uniforms set once per mesh, and the rest is twelve floats per node.
+ * Named for the scene rather than for a node, and the first name was
+ * `NodeStyle`, which reads as the style of ONE node the moment it sits beside
+ * `nodes: readonly SceneNode[]` in the same options record. It is the opposite:
+ * three uniforms every node shares, with the per-node half on {@link SceneNode}.
+ * A name that has to be corrected in a docstring is a name to change while it is
+ * still free to change.
+ *
+ * The residue of the whole-shape style record M4.2 had, after the per-instance
+ * fields are taken out of it, and it stays its own type because the two halves
+ * are read at different rates and by different code: this one is three uniforms
+ * set once per mesh, and the rest is twelve floats per node.
+ *
+ * Public as of M4.4, because a caller supplying nodes has to be able to say what
+ * the outline and the halo look like. The per-node half arrives on each
+ * {@link SceneNode}.
  */
-export interface InstancedFamilyStyle {
+export interface SceneStyle {
   /** The inset outline's colour, as `0xRRGGBB`. */
   readonly outlineColor: number;
   /** The halo's alpha where it meets the boundary, in `[0, 1]`. */
   readonly glowAlpha: number;
-  /** The inset outline's width, in DEVICE pixels. See `ShapeStyle`. */
+  /** The inset outline's width, in DEVICE pixels. See `outlineCoverage` in `sdf.ts`. */
   readonly outlinePixels: number;
 }
 
 /**
  * One instance's own data, as a discriminated union on the shape it draws.
  *
- * The same argument `ShapeDescriptor` makes in `shape-scene.ts`, and it holds
- * harder here. A circle carries a RADIUS and a rounded rect carries a SIZE and a
+ * The same argument the M4.2 shape descriptors made, and it holds harder here. A circle carries a RADIUS and a rounded rect carries a SIZE and a
  * corner radius, so there is no way to write a circle whose width and height
  * disagree. Flattened into one record with a rule that a circle's size is
  * square, the rule would be enforced by a runtime check at best, and violating
@@ -137,9 +149,9 @@ export type ShapeInstance =
       readonly kind: 'roundedRect';
       /**
        * What a `RangeError` about this instance names, if the caller has a name
-       * worth using. The same field {@link ShapeDescriptor} carries and for the
-       * same reason: `chapter-3.size` is a line somebody can find, and `size` in
-       * a scene of three thousand instances is a search. Optional, because a
+       * worth using, on the same argument the M4.2 shape descriptors made:
+       * `chapter-3.size` is a line somebody can find, and `size` in a scene of
+       * three thousand instances is a search. Optional, because a
        * caller with nothing better to say gets the instance's handle instead.
        */
       readonly label?: string;
@@ -194,8 +206,8 @@ export function linearFromHex(hex: number, field: string): [number, number, numb
  * The conversion without the check, for the one caller that has already made it:
  * {@link InstanceAttributeData.write} validates the whole instance before it
  * packs any of it, and re-checking each colour there would be the double
- * validation `shape-scene.ts` records as a cost at six shapes and would be
- * paying it three thousand times.
+ * validation M4.2 recorded as a cost at six shapes and would be paying it three
+ * thousand times.
  */
 function linearComponents(value: number): [number, number, number] {
   return [
@@ -215,7 +227,7 @@ function srgbToLinear(component: number): number {
  * Rejects an instance that cannot be drawn by a mesh of `family`, naming the
  * field and the instance it came from.
  *
- * The boundary, on the same terms `requireShapeStyle` sets in `sdf.ts`: this is
+ * The boundary, on the terms the module docstring in `sdf.ts` sets: this is
  * the last place an instance's numbers are a caller's numbers rather than twelve
  * floats in a buffer with no owner. Past here a `NaN` is an attribute a driver
  * accepts and a shape that does not appear.

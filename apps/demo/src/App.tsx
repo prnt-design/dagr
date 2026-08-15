@@ -1,142 +1,150 @@
+import { useEffect, useState } from 'react';
 import type { JSX } from 'react';
-import { Graph } from '@dagr/graph';
-import { EDGE_ROLES, cardRows, generateCampaign } from '@dagr/campaign';
-import type { CampaignEdge, CampaignNode } from '@dagr/campaign';
+import { EDGE_ROLES, generateCampaign } from '@dagr/campaign';
 import { FirstLight } from './FirstLight.js';
-
-/** What the demo keeps on its nodes and edges: the campaign records themselves. */
-type NodeAttrs = { node: CampaignNode };
-type EdgeAttrs = { edge: CampaignEdge };
+import { buildCampaignScene } from './campaign-scene.js';
+import type { CampaignScene } from './campaign-scene.js';
 
 /**
- * The campaign dataset, generated at module load and loaded into a real
- * `@dagr/graph`. Module scope for the same reason the old sample graph was:
- * graph identity has to outlive a render, and a module constant is the honest
- * version of a store for a static demo.
+ * The demo page: the campaign on the canvas, and the few facts about it that a
+ * picture cannot show.
  *
- * Generating rather than importing JSON is the plan's P1 decision: the same
- * seed reproduces the same campaign, and the bundle carries a generator
- * measured in kilobytes instead of a dataset measured in megabytes.
+ * P1 loaded the dataset and listed it. P4 DRAWS it, so most of what this file
+ * used to say is now visible above rather than tabulated below, and the stats
+ * shrank to what is still worth a sentence: how big the dataset is, what share
+ * of its edges the layout actually saw, and the fact that the whole thing is
+ * generated from a seed rather than shipped as a file.
+ *
+ * The campaign is generated at MODULE LOAD and the scene is built in an EFFECT,
+ * and the split is not arbitrary. Generating is synchronous, deterministic and
+ * about a millisecond, and graph identity has to outlive a render, so a module
+ * constant is the honest version of a store for it. Laying it out is a hundred
+ * worker round trips, which is not something to start while a module is being
+ * evaluated: it needs a `Worker`, which needs a document, and it has to be
+ * cancellable when the component goes away.
  */
 const campaign = generateCampaign();
 
-// Edges carry their campaign record just as nodes do: a graph that dropped
-// `kind` on load would be typologically blind, and every consumer downstream
-// (layout wants only the routed kinds) would have to re-join against the
-// campaign arrays to get it back.
-const graph = new Graph<NodeAttrs, EdgeAttrs>();
-for (const node of campaign.nodes) graph.addNode({ id: node.id, attrs: { node } });
-for (const edge of campaign.edges) {
-  graph.addEdge({ id: edge.id, source: edge.source, target: edge.target, attrs: { edge } });
-}
+/** How many of the campaign's edges a layout is allowed to see. See EDGE_ROLES. */
+const edgeRoleCounts = campaign.edges.reduce(
+  (counts, edge) =>
+    EDGE_ROLES[edge.kind] === 'routed'
+      ? { ...counts, routed: counts.routed + 1 }
+      : { ...counts, overlay: counts.overlay + 1 },
+  { routed: 0, overlay: 0 },
+);
 
-/** Node counts by kind, in first-seen order, for the stats grid. */
-const kindCounts: readonly [string, number][] = (() => {
-  const counts = new Map<string, number>();
-  for (const node of campaign.nodes) {
-    counts.set(node.data.kind, (counts.get(node.data.kind) ?? 0) + 1);
-  }
-  return [...counts.entries()];
-})();
-
-// Read back through the graph, not the campaign arrays, because the point of
-// the stats is that the graph loaded everything: an edge record without its
-// `kind` attr would show up here as an undercount, not pass silently.
-const edgeRoleCounts = (() => {
-  let routed = 0;
-  let overlay = 0;
-  for (const edge of graph.edges()) {
-    const kind = edge.attrs.edge?.kind;
-    if (kind !== undefined && EDGE_ROLES[kind] === 'routed') routed += 1;
-    else overlay += 1;
-  }
-  return { routed, overlay };
-})();
-
-/**
- * The root's `contains` children through the real adjacency API: arcs and
- * regions. Filtered by kind rather than taking `successors` raw, because the
- * root also sources overlay edges and a stat labeled "under the root" should
- * not silently change meaning the day the generator adds one.
- */
-const rootChildren = graph
-  .outEdges(campaign.rootId)
-  .filter((edge) => edge.attrs.edge?.kind === 'contains')
-  .map((edge) => graph.requireNode(edge.target).attrs.node?.name ?? edge.target);
-
-/** One card, rendered as text, so the page shows what P6 will show as HTML. */
-const sampleNode =
-  campaign.nodes.find((node) => node.data.kind === 'scene') ?? campaign.nodes[0];
-
-/**
- * The demo playground, in two halves that do not know about each other yet.
- *
- * The canvas is `@dagr/render`'s shape ladder with the M4.11/M4.12 overlay on
- * top. The facts underneath are the campaign dataset (`@dagr/campaign`, the
- * plan's P1) loaded into a real `@dagr/graph`: 16 node kinds, a contains
- * forest, quest DAGs and a clue web, none of it drawn yet. P4 is what puts it
- * on the canvas, and on that day this file trades its stats for a scene.
- */
 export function App(): JSX.Element {
+  const [scene, setScene] = useState<CampaignScene | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  useEffect(() => {
+    // The worker is created here and terminated in the cleanup, so a StrictMode
+    // remount does not leave one running: a worker outlives the effect that made
+    // it unless something ends it, and a second one would double the layout work
+    // for a page that only draws once.
+    //
+    // `new URL(..., import.meta.url)` rather than a path string, because that is
+    // the form a bundler can see through: Vite emits `layout-worker.ts` as its
+    // own chunk from this expression, and a worker loads exactly one script.
+    const worker = new Worker(new URL('./layout-worker.ts', import.meta.url), {
+      type: 'module',
+    });
+    let cancelled = false;
+
+    /**
+     * A worker that dies is a run that is never answered.
+     *
+     * `@dagr/layout`'s engine has no timeout by design (how long is too long
+     * belongs to the caller and to the graph), and posting to a dead worker is a
+     * silent no-op in both runtimes rather than a throw. So a worker script that
+     * fails to load or throws while its module evaluates leaves every one of the
+     * hundred runs pending forever, `Promise.all` never settles, and the page
+     * sits on "laying out the campaign" with nothing thrown for the `catch`
+     * below to catch. The docs site learned this at PR #23 and carries the same
+     * listener; a listener is all this page needs, because it has a failure
+     * state of its own to show.
+     */
+    const onWorkerError = (event: ErrorEvent): void => {
+      if (cancelled) return;
+      setFailure(event.message === '' ? 'the layout worker failed to start' : event.message);
+    };
+    worker.addEventListener('error', onWorkerError);
+
+    buildCampaignScene(campaign, { worker })
+      .then((built) => {
+        // The component may have unmounted while a hundred layouts ran. Setting
+        // state then is a React warning and a scene nobody will draw.
+        if (!cancelled) setScene(built);
+      })
+      .catch((cause: unknown) => {
+        if (cancelled) return;
+        setFailure(cause instanceof Error ? cause.message : String(cause));
+      });
+
+    return () => {
+      cancelled = true;
+      worker.removeEventListener('error', onWorkerError);
+      // A worker that is never terminated keeps its thread and its module graph
+      // alive for the life of the page. There is no watchdog here, unlike the
+      // docs site's live demo: this page shows its own failure state and a
+      // layout that never answers leaves the readout saying so, where the docs
+      // site had a figure that would have sat empty with no explanation.
+      worker.terminate();
+    };
+  }, []);
+
   return (
     <main className="page">
       <header className="page__header">
         <h1 className="page__title">Dagr demo</h1>
-        <p className="page__subtitle">SDF shapes, the HTML overlay, and the campaign dataset</p>
+        <p className="page__subtitle">A mock D&amp;D campaign, laid out in tiles and drawn</p>
       </header>
 
-      <FirstLight />
+      <FirstLight scene={scene} />
 
       <section className="facts">
-        <h2 className="facts__title">@dagr/campaign, loaded into @dagr/graph</h2>
+        <h2 className="facts__title">what is on the canvas</h2>
         <p className="facts__lead">
-          A deterministic mock D&D campaign (seed {campaign.seed}), generated in this page and
-          loaded into the graph model. Nothing below is drawn on the canvas above yet: that is the
-          campaign plan&apos;s P4.
+          A deterministic mock D&amp;D campaign (seed {campaign.seed}), generated in this page,
+          laid out one tile at a time by <code>@dagr/layout</code> in a worker, and drawn by{' '}
+          <code>@dagr/render</code> as two instanced draw calls. Drag to pan, scroll to zoom.
         </p>
         <div className="facts__grid">
           <div>
-            <p className="facts__label">size</p>
+            <p className="facts__label">dataset</p>
             <p className="facts__value">
-              {graph.nodeCount} nodes, {graph.edgeCount} edges
+              {campaign.nodes.length} nodes, {campaign.edges.length} edges
             </p>
-            <p className="facts__label">edge roles</p>
+            <p className="facts__label">edges the layout sees</p>
             <p className="facts__value">
               {edgeRoleCounts.routed} routed, {edgeRoleCounts.overlay} overlay
             </p>
-            <p className="facts__label">under the campaign root</p>
-            <p className="facts__value">{rootChildren.join(', ')}</p>
           </div>
           <div>
-            <p className="facts__label">nodes by kind</p>
-            <ul className="facts__list">
-              {kindCounts.map(([kind, count]) => (
-                <li key={kind}>
-                  {kind}
-                  <span className="facts__arrow">x</span>
-                  {count}
-                </li>
-              ))}
-            </ul>
+            <p className="facts__label">tiles</p>
+            <p className="facts__value">
+              {scene === null ? 'laying out' : `${scene.tiles.length} tiles`}
+            </p>
+            <p className="facts__label">layout runs</p>
+            <p className="facts__value">
+              {scene === null ? 'laying out' : `${scene.layoutRuns} Sugiyama passes`}
+            </p>
           </div>
           <div>
-            <p className="facts__label">one card, as data</p>
-            {sampleNode === undefined ? null : (
-              <>
-                <p className="facts__value">{sampleNode.name}</p>
-                <ul className="facts__list">
-                  {cardRows(sampleNode).map(([key, value]) => (
-                    <li key={key}>
-                      {key}
-                      <span className="facts__arrow">:</span>
-                      {value}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
+            <p className="facts__label">why tiles</p>
+            <p className="facts__value facts__value--prose">
+              One pass over the whole campaign ranks 750 rooms into a couple of layers and draws a
+              ribbon 50 times wider than it is tall. Chapters and regions are how a campaign is
+              chunked anyway, so each is laid out on its own and the blocks are packed.
+            </p>
           </div>
         </div>
+        {failure === null ? null : (
+          <p className="facts__value" role="alert">
+            the layout failed: {failure}
+          </p>
+        )}
       </section>
     </main>
   );

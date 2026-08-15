@@ -22,7 +22,7 @@ import type { Vec2 } from './types.js';
  * {@link requireNonNegative} and {@link requireColor} arrived the same way at
  * M4.3, out of `sdf.ts`, which had grown its own private copy of
  * {@link requireFinite} beside them. The instanced path validates the same
- * colours and the same non-negative reaches that a `ShapeStyle` does, one
+ * colours and the same non-negative reaches a style record did, one
  * instance at a time instead of one style at a time, so the choice was a third
  * copy or a move. The messages are unchanged, which is what makes the move
  * invisible to `test/sdf.test.ts`.

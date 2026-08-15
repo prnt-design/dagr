@@ -14,9 +14,9 @@ import {
   instanceSize,
   requireShapeInstance,
 } from './instance-attributes.js';
-import type { InstancedFamilyStyle, ShapeFamily, ShapeInstance } from './instance-attributes.js';
-import { FILL_AA_PADDING_WORLD } from './sdf.js';
-import { circleSDF, roundedRectSDF, shapeShading } from './sdf-nodes.js';
+import type { SceneStyle, ShapeFamily, ShapeInstance } from './instance-attributes.js';
+import { quadPadding } from './sdf.js';
+import { circleSDF, roundedRectSDF, shapeShading, tslArith } from './sdf-nodes.js';
 import type { GpuResource, WorldBounds } from './types.js';
 import { requireColor, requireFinite, requireNonNegative } from './validate.js';
 
@@ -69,9 +69,10 @@ import { requireColor, requireFinite, requireNonNegative } from './validate.js';
  * under bare Node and does not evaluate, so the per-instance path (an attribute
  * reaching the vertex stage, a quad scaled by it, a varying reaching the
  * fragment stage) is proved by a picture and by nothing else. The picture is the
- * evidence M4.2 already committed: the crispness ladder draws through this file
- * as of M4.3, so the committed references are a regression test for the whole
- * per-instance path, and a factor of two anywhere in it is visible at a glance.
+ * evidence the demo commits: M4.3 drew the crispness ladder through this file and
+ * M4.4 draws the campaign through it, so the committed frames are a regression
+ * test for the whole per-instance path and a factor of two anywhere in it is
+ * visible at a glance.
  */
 
 /**
@@ -141,16 +142,16 @@ function unitQuadAttributes(): {
 /**
  * Rejects a family style that cannot be drawn, naming the field.
  *
- * The same three checks `requireShapeStyle` makes on the three fields it still
- * owns, and it is a separate function rather than a call into that one because
- * the record is a different shape: passing a `ShapeStyle` here would mean
- * inventing per-instance fields to satisfy it and then ignoring them, which is
- * how a caller comes to believe a fill colour set on a family means something.
+ * The three checks a whole-shape style record used to make on the three fields
+ * that are still shared, and it is its own function rather than a call into one
+ * because the record is a different shape now: a style carrying per-instance
+ * fields would mean inventing values to satisfy it and then ignoring them, which
+ * is how a caller comes to believe a fill colour set on a family means something.
  */
 export function requireFamilyStyle(
-  style: InstancedFamilyStyle,
+  style: SceneStyle,
   field: string,
-): InstancedFamilyStyle {
+): SceneStyle {
   const glowAlpha = requireFinite(style.glowAlpha, `${field}.glowAlpha`);
   if (glowAlpha < 0 || glowAlpha > 1) {
     throw new RangeError(
@@ -171,7 +172,7 @@ export function requireFamilyStyle(
  * ## The vertex stage
  *
  * ```
- * padding  = instanceGlowWorld + FILL_AA_PADDING_WORLD   // per instance
+ * padding  = quadPadding(instanceGlowWorld)              // per instance
  * quad     = instanceSize + 2 * padding                  // per instance
  * local    = positionGeometry.xy * quad                  // world units from the centre
  * position = local + instanceOffset
@@ -202,7 +203,7 @@ export function requireFamilyStyle(
  */
 function createInstancedMaterial(
   family: ShapeFamily,
-  style: InstancedFamilyStyle,
+  style: SceneStyle,
 ): MeshBasicNodeMaterial {
   const offset = attribute<'vec2'>(OFFSET, 'vec2');
   const size = attribute<'vec2'>(SIZE, 'vec2');
@@ -211,7 +212,12 @@ function createInstancedMaterial(
   const fillColor = attribute<'vec3'>(FILL_COLOR, 'vec3');
   const glowColor = attribute<'vec3'>(GLOW_COLOR, 'vec3');
 
-  const padding = add(glowWorld, float(FILL_AA_PADDING_WORLD));
+  // Through `tslArith`, so the expression the vertex shader evaluates is the one
+  // `test/sdf.test.ts` executes over numbers. The `vec2` addition on the next
+  // line stays here for the reason `quadPadding`'s docstring gives: widening
+  // `Arith` with a vector operation for one call site is the cost the
+  // nine-primitive count exists to keep visible.
+  const padding = quadPadding(tslArith, glowWorld);
   const quad = add(size, mul(padding, 2));
   const local = varying(mul(positionGeometry.xy, quad));
 
@@ -238,8 +244,8 @@ function createInstancedMaterial(
   // The same two flags every shape in this package draws with, and the same
   // reasons: alpha for the glow and the antialiasing ramps, and no depth write
   // because a transparent fragment that writes depth occludes whatever is drawn
-  // behind it afterwards. See `shape-scene.ts` for the argument, which M4.5
-  // inherits when it layers edges behind nodes on the same z = 0 plane.
+  // behind it afterwards. The argument is M4.2's and M4.5 inherits it when it
+  // layers edges behind nodes on the same z = 0 plane.
   material.transparent = true;
   material.depthWrite = false;
   return material;
@@ -267,7 +273,7 @@ export interface InstancedShapesOptions<F extends ShapeFamily = ShapeFamily> {
   /** Which distance function the mesh draws with, and which instances it takes. */
   readonly family: F;
   /** The three uniforms every instance in this mesh shares. */
-  readonly style: InstancedFamilyStyle;
+  readonly style: SceneStyle;
   /**
    * How many instances to allocate for up front. A caller that knows its node
    * count says so and never pays for a growth; the default is
@@ -647,7 +653,7 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
  */
 export function createInstancedShapes(
   instances: readonly ShapeInstance[],
-  styles: Partial<Readonly<Record<ShapeFamily, InstancedFamilyStyle>>>,
+  styles: Partial<Readonly<Record<ShapeFamily, SceneStyle>>>,
   label = 'scene',
 ): InstancedShapes[] {
   const families: readonly ShapeFamily[] = ['roundedRect', 'circle'];

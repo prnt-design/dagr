@@ -1,5 +1,5 @@
 import type { Size } from './types.js';
-import { requireColor, requireFinite, requireNonNegative } from './validate.js';
+import { requireFinite, requireNonNegative } from './validate.js';
 
 /**
  * The signed distance fields M4.2 draws with, and the coverage functions that
@@ -73,7 +73,7 @@ import { requireColor, requireFinite, requireNonNegative } from './validate.js';
  * coverage function is called once per fragment per frame, which is millions of
  * times a second on the GPU and zero times in JavaScript for the path that
  * matters, so a check inside one costs real ALU on every pixel and cannot throw
- * anywhere a caller would see it. {@link requireShapeStyle},
+ * anywhere a caller would see it. `requireShapeInstance` in `instance-attributes.ts`,
  * {@link requireCornerRadius} and {@link requireCircleRadius} are the boundary
  * instead: they run once per shape, at the moment a caller's number is turned into
  * geometry, and {@link quadPadding} calls the first of them because sizing a quad is
@@ -368,17 +368,35 @@ export function outlineCoverage<T>(m: Arith<T>, distance: T, widthPixels: T, aaW
  * property of the shape rather than of the screen: a halo that stayed six pixels
  * wide while its shape grew from one pixel to a thousand would read as a
  * different effect at each end of the zoom range, and the shape ladder in
- * `shape-scene.ts` scales each shape's glow with the shape for exactly that
+ * a caller scales each node's glow with the node for exactly that
  * reason.
  *
  * `aaWidth` floors the ramp at one pixel. A halo narrower than the sample
  * spacing is a hard step, which is the one thing this file exists to avoid. The
  * cost is that `radiusWorld === 0` still draws a one pixel halo rather than
- * nothing, which is why the scene expresses "no glow" through the glow colour or
+ * nothing, which is why a caller expresses "no glow" through the glow colour or
  * its alpha and not through a zero radius.
+ *
+ * **AND THE FLOOR IS CAPPED AT THE QUAD, which it was not until M4.4 drew three
+ * thousand small nodes at once.** A quad reaches {@link quadPadding} past the
+ * shape, which is `radiusWorld + 1` world unit; `aaWidth` is one DEVICE pixel
+ * measured in world units, so below a zoom of `1 / (dpr * (radiusWorld + 1))`
+ * the floor pushed the ramp's outer end PAST the quad's own edge and the halo
+ * was cut off by a straight line. Measured on the committed fit frame at 0.053
+ * CSS pixels per world unit: a room's halo still read alpha 0.276 where its quad
+ * ended and an NPC circle's 0.104, so about fifteen hundred of the smallest
+ * nodes were hard-edged rectangles of halo, and the circles wore square ones.
+ *
+ * Capping the widened edge at the padding is the whole fix, and it costs one
+ * `min`. It keeps the widening that matters (a sub-pixel radius still reaches a
+ * pixel, because a pixel is inside the padding whenever the padding is at least
+ * a pixel) and gives up only the case the quad could never have shown anyway.
+ * The alternative was a world-units-per-device-pixel uniform set per frame and a
+ * quad resized with it, which is a per-frame cost on every instance to widen a
+ * halo nobody can see at that zoom.
  */
 export function glowCoverage<T>(m: Arith<T>, distance: T, radiusWorld: T, aaWidth: T): T {
-  const edge = m.max(radiusWorld, aaWidth);
+  const edge = m.min(m.max(radiusWorld, aaWidth), quadPadding(m, radiusWorld));
   return smoothstepBetween(m, edge, m.literal(0), distance);
 }
 
@@ -407,8 +425,8 @@ export function glowCoverage<T>(m: Arith<T>, distance: T, radiusWorld: T, aaWidt
  * Exactly 0.5 holds for any `glowAlpha` at or below 0.5. Above that the halo
  * itself sets the floor at the boundary and the shape's edge reads as the glow's
  * alpha instead, which is a statement about how strong a halo is rather than
- * about compositing: `shape-scene.ts` picks 0.45 deliberately, and
- * {@link requireShapeStyle} allows the whole unit interval because a halo at 0.8
+ * about compositing: the renderer's default node style picks 0.45 deliberately, and
+ * `requireShapeInstance` in `instance-attributes.ts` allows the whole unit interval because a halo at 0.8
  * is a legitimate if unsubtle choice.
  *
  * Here rather than in `sdf-nodes.ts` because it is pure float arithmetic, so
@@ -432,71 +450,6 @@ export function shapeAlpha<T>(
 }
 
 /**
- * How a shape is painted: three colours, an outline width in DEVICE pixels, and a
- * glow radius in world units.
- *
- * One record rather than a colour record and a geometry record, on the same
- * argument `ViewportSize` in `types.ts` makes for keeping a canvas size and its
- * device pixel ratio together: these five numbers always travel together,
- * because sizing a shape's quad needs the glow radius and painting it needs the
- * colours, and both happen in the same breath for the same shape. Splitting them
- * is how a scene ends up sizing one shape's quad from another shape's glow.
- *
- * Colours are 24-bit `0xRRGGBB` integers, which is what `createRenderer` already
- * takes for the clear colour, and they are converted through three's `Color` so
- * that the sRGB to linear step happens once, in three, rather than being got
- * wrong here.
- */
-export interface ShapeStyle {
-  /** The interior colour, as `0xRRGGBB`. */
-  readonly fillColor: number;
-
-  /** The inset outline's colour, as `0xRRGGBB`. */
-  readonly outlineColor: number;
-
-  /** The halo's colour, as `0xRRGGBB`. */
-  readonly glowColor: number;
-
-  /**
-   * The halo's alpha where it meets the boundary, in `[0, 1]`. Separate from
-   * {@link glowColor} because a glow at full alpha reads as a second, blurrier
-   * shape rather than as a halo, and because the colour is a palette decision
-   * while this is a strength decision.
-   */
-  readonly glowAlpha: number;
-
-  /**
-   * The inset outline's width in DEVICE PIXELS. Pixels rather than world units
-   * because a border that thickened as you zoomed in is a border drawn by a
-   * geometry pipeline, and not having to do that is the reason to use an SDF.
-   *
-   * DEVICE and not CSS: the width follows the framebuffer, so the same value is a
-   * finer line on a higher ratio display (2 device pixels is 1.00 CSS pixels at
-   * dpr 2 and 0.67 at dpr 3). That is a deliberate trade, made to keep a single
-   * reader of `devicePixelRatio`; the units section at the top of this file
-   * carries the argument.
-   *
-   * A width of `w` reaches full coverage at `w` pixel centres, so 1 is a crisp
-   * hairline and 2 is a crisp two pixel border. Below 1 the outline fades: half a
-   * pixel covers its one pixel centre at 0.5.
-   *
-   * **0 turns it off at every pixel a rasteriser samples**, which is the claim
-   * that matters and the one a caller can rely on. It is worth stating that
-   * precisely rather than as "0 draws nothing", because the continuous function
-   * does not vanish: with the band's outer ramp centred on the boundary (see
-   * {@link outlineCoverage}), a zero width band still has two coincident 50%
-   * ramps and reads 0.5 exactly ON the boundary. No pixel centre lands there,
-   * since centres sit half a pixel off it, so nothing is drawn. A caller
-   * sampling this function directly rather than from a fragment shader is the one
-   * who needs to know the difference.
-   */
-  readonly outlinePixels: number;
-
-  /** The halo's reach past the boundary, in WORLD units. See {@link glowCoverage}. */
-  readonly glowWorld: number;
-}
-
-/**
  * How much world space a shape's quad has to leave past the shape itself for the
  * FILL's own antialiasing ramp, on top of the glow.
  *
@@ -509,7 +462,7 @@ export interface ShapeStyle {
  * gets clipped.** The quad's edge is {@link quadPadding} out, which is `glowWorld +
  * FILL_AA_PADDING_WORLD` and not one unit, so the ramp is clipped by the quad only
  * below `1 / (2 * (glowWorld + 1))`. 0.5 is therefore the GLOW-FREE worst case, and
- * no shape in `shape-scene.ts` is glow-free: every rung's glow is a quarter of its
+ * no rung of the M4.2 ladder was glow-free: every rung's glow was a quarter of its
  * height, so the 40 unit tall rung clips below 0.0455 (eleven times lower) and the
  * 400 unit one below 0.00495. The 4 unit tall rungs are the exception worth
  * stating, because they are the ones with a real crossover: a 1 unit glow gives 2
@@ -523,11 +476,41 @@ export interface ShapeStyle {
  * per two world units.
  *
  * A quad sized from the camera's current zoom would remove the crossover
- * entirely, and that is M4.4's problem, not this one: it needs the geometry to
- * be rebuilt or scaled when the camera moves, which is a per-frame decision this
- * file has no camera to make.
+ * entirely, and M4.4 did NOT take it. The quad is now scaled per instance in the
+ * vertex stage rather than baked into a geometry, so resizing it per frame is
+ * cheaper than it was, and it is still a per-frame decision this file has no
+ * camera to make. What M4.4 changed is who computes the padding:
+ * {@link quadPadding} is built with `tslArith` and evaluated in the shader,
+ * which is what puts it back inside the tested half of this file.
  */
 export const FILL_AA_PADDING_WORLD = 1;
+
+/**
+ * How far a shape's quad has to reach past the shape on every side: the whole
+ * glow, plus {@link FILL_AA_PADDING_WORLD} for the fill's own ramp.
+ *
+ * Over {@link Arith} like every other formula here, and that is a change M4.4
+ * made rather than a shape it always had. It used to take a whole style record
+ * and validate it, because a quad was a `PlaneGeometry` built once per shape in
+ * JavaScript. The quad is now scaled PER INSTANCE in the vertex stage, so the
+ * expression runs on the GPU, and the choice was a second copy of it in TSL or
+ * this. The whole argument for the nine primitives applies unchanged: the suite
+ * executes the expression tree the vertex shader evaluates rather than a copy of
+ * it that never reaches a GPU.
+ *
+ * No validation, for the same reason no other formula here validates: this runs
+ * once per vertex on the GPU, where it cannot throw anywhere a caller would see.
+ * `requireShapeInstance` in `instance-attributes.ts` is the boundary, and it
+ * rejects a negative reach before one ever reaches a buffer.
+ *
+ * The quad's SIZE is the shape grown by twice this on each axis, and it is not a
+ * function here because it is a `vec2` operation: widening {@link Arith} for one
+ * call site is the cost the nine-primitive count exists to keep visible, and the
+ * addition is one line in `instanced-scene.ts` either way.
+ */
+export function quadPadding<T>(m: Arith<T>, glowWorld: T): T {
+  return m.add(glowWorld, m.literal(FILL_AA_PADDING_WORLD));
+}
 
 /**
  * The zoom, in CSS pixels per world unit, at and above which the fill's
@@ -545,57 +528,6 @@ export const FILL_AA_PADDING_WORLD = 1;
  */
 export const FILL_AA_CROSSOVER_ZOOM = 1 / (2 * FILL_AA_PADDING_WORLD);
 
-/**
- * Rejects a {@link ShapeStyle} that cannot describe a shape, naming the field
- * and the record it came from.
- *
- * **This is the boundary.** Every number in a style comes from a line somebody
- * wrote, and this is the first place one of them does anything, so it is the
- * place where a `RangeError` still points at the line. The alternative, checking
- * inside {@link fillCoverage} or {@link outlineCoverage}, is worse twice over: on
- * the GPU those functions run once per fragment and cannot throw anywhere a
- * caller would see, and in JavaScript they are the hot path of nothing at all.
- *
- * The record is validated whole rather than field by field at each use, so a
- * style that has been through {@link quadPadding} is known good everywhere
- * downstream and no later function has to ask again. The `field` argument is
- * what makes that usable in a scene of six shapes: the message says
- * `ladder[3].style.glowWorld`, not `glowWorld`.
- *
- * Returns a copy, so a caller cannot hold a reference and mutate a validated
- * style afterwards.
- */
-export function requireShapeStyle(style: ShapeStyle, field: string): ShapeStyle {
-  const glowAlpha = requireFinite(style.glowAlpha, `${field}.glowAlpha`);
-  if (glowAlpha < 0 || glowAlpha > 1) {
-    throw new RangeError(
-      `${field}.glowAlpha has to lie between 0 and 1, got ${String(glowAlpha)}`,
-    );
-  }
-  return {
-    fillColor: requireColor(style.fillColor, `${field}.fillColor`),
-    outlineColor: requireColor(style.outlineColor, `${field}.outlineColor`),
-    glowColor: requireColor(style.glowColor, `${field}.glowColor`),
-    glowAlpha,
-    // A negative width puts the band's inner edge outside its outer one, and it
-    // fails SILENTLY in two different ways rather than drawing anything a
-    // reviewer would question. At or below -1 pixel the band vanishes entirely
-    // and the shape simply has no border. Between -1 and 0 it is worse: the band
-    // lands OUTSIDE the boundary and tints the fill's own outer antialiasing ramp
-    // with the outline colour, peaking at 0.15625 coverage at `d = +0.25` pixels
-    // for a width of -0.5, which is exactly the fill's coverage there.
-    //
-    // Note what is NOT the reason. The footprint contract holds regardless of
-    // sign, because {@link outlineCoverage} is a `max` against `distance` and so
-    // can never exceed the fill's coverage whatever the width does. This check
-    // buys a `RangeError` naming the field instead of a missing or subtly tinted
-    // edge, and nothing else.
-    outlinePixels: requireNonNegative(style.outlinePixels, `${field}.outlinePixels`),
-    // A negative glow would SHRINK the quad below the shape it is drawn on, so
-    // the fill would be clipped by a straight line unrelated to the shape.
-    glowWorld: requireNonNegative(style.glowWorld, `${field}.glowWorld`),
-  };
-}
 
 /**
  * Rejects a corner radius that {@link roundedRectDistance} cannot honour on a
@@ -648,7 +580,7 @@ export function requireCornerRadius(
  * costs a reader more time than no message at all.
  *
  * Nothing else about a circle needs checking, which is the discriminated union in
- * `shape-scene.ts` paying for itself: a circle's radius IS half its smaller
+ * `instance-attributes.ts` paying for itself: a circle's radius IS half its smaller
  * dimension by construction, so the bound {@link requireCornerRadius} exists to
  * enforce cannot be violated and there is no second invariant to validate.
  */
@@ -660,39 +592,4 @@ export function requireCircleRadius(radius: number, field: string): number {
   return value;
 }
 
-/**
- * How far a shape's quad has to reach past the shape on every side: the whole
- * glow, plus {@link FILL_AA_PADDING_WORLD} for the fill's own ramp.
- *
- * Validates the style, because sizing the quad is the first thing any style is
- * used for and this is therefore the boundary described in the module docstring.
- * Once per shape, not once per fragment.
- *
- * `field` names the record in the `RangeError`, and it is a parameter rather than
- * the hardcoded `'style'` it used to be because this function has callers that know
- * a better name. `shapeQuadBounds` in `shape-scene.ts` is the one that matters:
- * `shape-scene.ts` advertises it for overlap and fits-in-view tests, and M4.4 will
- * call it on layout-derived descriptors, where `style.glowWorld` sends a caller to
- * look at six identical records and `rect-100.style.glowWorld` does not. Defaulted,
- * so a caller with nothing better to say says nothing.
- */
-export function quadPadding(style: ShapeStyle, field = 'style'): number {
-  return requireShapeStyle(style, field).glowWorld + FILL_AA_PADDING_WORLD;
-}
 
-/**
- * The size of the PLANE a shape is drawn on: the shape grown by
- * {@link quadPadding} on all four sides.
- *
- * Twice the padding on each axis, since the padding is per side. `field` is passed
- * straight through to {@link quadPadding}, which is where the validation and the
- * `RangeError` live. The quad is not the shape and confusing the two is the failure
- * this function exists to prevent: a plane the size of the shape clips the glow
- * entirely (the halo lives outside the boundary by definition) and clips the outer
- * half of the fill's own antialiasing ramp, which turns a soft edge into a hard one
- * along a rectangle that has nothing to do with the shape.
- */
-export function shapeQuadSize(size: Size, style: ShapeStyle, field = 'style'): Size {
-  const padding = quadPadding(style, field);
-  return { width: size.width + 2 * padding, height: size.height + 2 * padding };
-}

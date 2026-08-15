@@ -9,13 +9,10 @@ import {
   outlineCoverage,
   quadPadding,
   requireCornerRadius,
-  requireShapeStyle,
   roundedRectDistance,
   shapeAlpha,
-  shapeQuadSize,
   smoothstepBetween,
 } from '../src/sdf.js';
-import type { ShapeStyle } from '../src/sdf.js';
 
 /**
  * The whole of M4.2's arithmetic, executed.
@@ -34,8 +31,12 @@ import type { ShapeStyle } from '../src/sdf.js';
  * denormals, since WGSL leaves `min(NaN, x)` implementation defined where
  * `Math.min` returns `NaN`. Nothing below asserts anything about a non-finite
  * input reaching a coverage function, and nothing should: the inputs that could
- * produce one are validated at the scene boundary instead. See
- * {@link requireShapeStyle}.
+ * produce one are validated at the scene boundary instead, which as of M4.4 is
+ * `requireShapeInstance` in `instance-attributes.ts`. The two checks this file
+ * still owns, {@link requireCornerRadius} and `requireCircleRadius`, are the
+ * ones that boundary delegates to; the circle check is asserted through
+ * `requireShapeInstance` in `test/instance-attributes.test.ts`, where a caller
+ * actually reaches it.
  */
 
 /** A 100 by 40 rounded rect with a 4 unit corner radius, as half extents. */
@@ -45,16 +46,6 @@ const rect = { halfWidth: 50, halfHeight: 20, radius: 4 } as const;
 function rectAt(px: number, py: number, radius: number = rect.radius): number {
   return roundedRectDistance(numberArith, px, py, rect.halfWidth, rect.halfHeight, radius);
 }
-
-/** A style with every field distinct, so a test cannot pass by reading the wrong one. */
-const style: ShapeStyle = {
-  fillColor: 0xffb703,
-  outlineColor: 0xfff3d0,
-  glowColor: 0xff7a00,
-  glowAlpha: 0.4,
-  outlinePixels: 2,
-  glowWorld: 6,
-};
 
 describe('numberArith', () => {
   it('is the nine primitives and nothing else', () => {
@@ -390,7 +381,7 @@ describe('outlineCoverage', () => {
   });
 
   it('draws nothing at any pixel centre at width zero, and fades below one pixel', () => {
-    // The two claims `ShapeStyle.outlinePixels` makes to callers, asserted rather
+    // The two claims `SceneStyle.outlinePixels` makes to callers, asserted rather
     // than left in a docstring. Width 0 turns the outline off at every pixel a
     // rasteriser samples, which is the promise; the continuous function does not
     // vanish, since a zero width band still has two coincident 50% ramps and reads
@@ -517,6 +508,31 @@ describe('glowCoverage', () => {
     }
   });
 
+  it('never lets the ramp end past the QUAD, which cuts the halo with a straight line', () => {
+    // The bug M4.4 made visible by drawing three thousand small nodes at once.
+    // A quad reaches `quadPadding` past the shape, and the `aaWidth` floor used
+    // to push the ramp's outer end beyond that at low zoom, so the halo was cut
+    // off by the quad's own edge. Measured on the committed fit frame at 0.053
+    // CSS pixels per world unit: a room's halo still read 0.276 where its quad
+    // ended, so about fifteen hundred nodes wore hard-edged rectangles of halo.
+    const room = { glow: 7, zoom: 0.053 };
+    const aaWidth = 1 / room.zoom;
+    const padding = quadPadding(numberArith, room.glow);
+    // At the quad's edge the coverage is zero, so nothing is cut off.
+    expect(glowCoverage(numberArith, padding, room.glow, aaWidth)).toBe(0);
+    // And it was not, before the cap: the same numbers without it.
+    const uncapped = smoothstepBetween(numberArith, Math.max(room.glow, aaWidth), 0, padding);
+    expect(uncapped).toBeGreaterThan(0.25);
+
+    // At every zoom, for every glow reach the campaign uses.
+    for (const glow of [3, 7, 12, 16, 20, 30]) {
+      for (const zoom of [0.01, 0.053, 0.5, 1, 10, 100]) {
+        const edge = quadPadding(numberArith, glow);
+        expect(glowCoverage(numberArith, edge, glow, 1 / zoom)).toBe(0);
+      }
+    }
+  });
+
   it('widens a sub-pixel glow radius to one pixel rather than aliasing it', () => {
     // A halo narrower than the sample spacing is a hard step, which is the one
     // thing this whole file exists to avoid. The floor costs a caller who asked
@@ -529,18 +545,21 @@ describe('glowCoverage', () => {
 
 describe('shapeAlpha', () => {
   /**
-   * The scene's own glow alpha, which is what the claims below are about. Not
-   * `style.glowAlpha` above, deliberately: `shape-scene.ts` draws every shape at
-   * 0.45, and the numbers in `shapeAlpha`'s docstring are that shape's numbers.
+   * The renderer's default glow alpha, which is what the claims below are about:
+   * the numbers in `shapeAlpha`'s docstring are computed at this one.
    */
   const glowAlpha = 0.45;
+
+  /** The other two numbers those claims are about: a 2 pixel outline, a 6 unit glow. */
+  const outlinePixels = 2;
+  const glowWorld = 6;
 
   /** The three coverages at `d` pixels from the boundary, at one pixel per world unit. */
   function coverages(d: number): { fill: number; outline: number; glow: number } {
     return {
       fill: fillCoverage(numberArith, d, 1),
-      outline: outlineCoverage(numberArith, d, style.outlinePixels, 1),
-      glow: glowCoverage(numberArith, d, style.glowWorld, 1),
+      outline: outlineCoverage(numberArith, d, outlinePixels, 1),
+      glow: glowCoverage(numberArith, d, glowWorld, 1),
     };
   }
 
@@ -616,8 +635,8 @@ describe('shapeAlpha', () => {
   it('is exactly a half at the boundary for every glow alpha at or below a half', () => {
     // The precondition, stated as a range rather than as one number. Above 0.5 the
     // halo itself sets the floor at the boundary, which is a decision about how
-    // strong a glow is (see `shape-scene.ts`, which picks 0.45) and not a
-    // compositing bug, so `requireShapeStyle` allows the whole unit interval.
+    // strong a glow is (the renderer's default style picks 0.45) and not a
+    // compositing bug, so `requireFamilyStyle` allows the whole unit interval.
     const { fill, outline, glow } = coverages(0);
     for (const alpha of [0, 0.1, 0.45, 0.5]) {
       expect(shapeAlpha(numberArith, alpha, glow, fill, outline)).toBe(0.5);
@@ -810,171 +829,81 @@ describe('crisp at every zoom instead of at one', () => {
   });
 });
 
-describe('quadPadding and shapeQuadSize', () => {
+describe('quadPadding', () => {
+  /** The reach a shape's halo has past its boundary, in world units. */
+  const glowWorld = 6;
+
   it('leaves room for the whole glow plus one world unit for the fill ramp', () => {
-    expect(quadPadding(style)).toBe(style.glowWorld + FILL_AA_PADDING_WORLD);
-    expect(quadPadding(style)).toBe(7);
+    expect(quadPadding(numberArith, glowWorld)).toBe(glowWorld + FILL_AA_PADDING_WORLD);
+    expect(quadPadding(numberArith, glowWorld)).toBe(7);
   });
 
-  it('grows the shape by twice the padding on each axis', () => {
-    expect(shapeQuadSize({ width: 100, height: 40 }, style)).toEqual({
-      width: 114,
-      height: 54,
-    });
+  it('is the expression the VERTEX shader evaluates, not a copy of it', () => {
+    // The whole reason this moved onto `Arith` at M4.4. The quad used to be a
+    // `PlaneGeometry` sized in JavaScript once per shape; it is now scaled per
+    // instance in the vertex stage, so the alternative to this was a second
+    // spelling of the same sum in TSL that no test in Node could execute.
+    expect(quadPadding(numberArith, 0)).toBe(FILL_AA_PADDING_WORLD);
+    expect(quadPadding(numberArith, 0.5)).toBe(1.5);
   });
 
-  it('contains the glow on every side', () => {
+  it('contains the glow on every side once the quad is grown by twice it', () => {
     // The quad has to reach at least `glowWorld` past the shape's own edge, or
     // the halo is cut off by a straight line that has nothing to do with the
     // shape. This is the assertion that fails if the padding is applied once
-    // instead of twice.
+    // instead of twice, which is the mistake `instanced-scene.ts` makes on the
+    // line after it calls this.
     const size = { width: 100, height: 40 };
-    const quad = shapeQuadSize(size, style);
-    expect((quad.width - size.width) / 2).toBeGreaterThanOrEqual(style.glowWorld);
-    expect((quad.height - size.height) / 2).toBeGreaterThanOrEqual(style.glowWorld);
+    const padding = quadPadding(numberArith, glowWorld);
+    const quad = { width: size.width + 2 * padding, height: size.height + 2 * padding };
+    expect(quad).toEqual({ width: 114, height: 54 });
+    expect((quad.width - size.width) / 2).toBeGreaterThanOrEqual(glowWorld);
+    expect((quad.height - size.height) / 2).toBeGreaterThanOrEqual(glowWorld);
   });
 
   it('puts the crossover zoom at 0.5 CSS pixels per world unit', () => {
     // What the one world unit of fill padding buys, as a number. The fill's own
     // ramp reaches half an aaWidth past the boundary, which is `1 / (2 * zoom)`
     // world units, so the padding is exhausted at zoom 0.5 and the outer half of
-    // the ramp is clipped by the quad edge below it. A zoom-aware quad is M4.4's
-    // problem; M4.2 states the number instead of implying there is not one.
+    // the ramp is clipped by the quad edge below it.
     expect(FILL_AA_CROSSOVER_ZOOM).toBe(0.5);
     expect(1 / (2 * FILL_AA_CROSSOVER_ZOOM)).toBe(FILL_AA_PADDING_WORLD);
   });
 
   it('clips the fill ramp at the QUAD edge, which a glow puts much further out', () => {
-    // What the crossover zoom is, and what it is not. The previous version of this
-    // test compared a local `halfRamp` against `FILL_AA_PADDING_WORLD`, which just
+    // What the crossover zoom is, and what it is not. An earlier version of this
+    // test compared a local `halfRamp` against `FILL_AA_PADDING_WORLD`, which
     // restates the constant's definition and cannot notice the thing that was
-    // wrong: the quad's edge is `quadPadding` out, which is the glow PLUS the fill
-    // allowance, so 0.5 is the zoom at which the fill's own unit is spent and NOT
-    // the zoom at which anything is clipped. Below is the number that decides
-    // whether an edge hardens.
+    // wrong: the quad's edge is `quadPadding` out, which is the glow PLUS the
+    // fill allowance, so 0.5 is the zoom at which the fill's own unit is spent
+    // and NOT the zoom at which anything is clipped.
     const halfRamp = (zoom: number): number => 1 / (2 * zoom);
-    const clipZoom = (padded: ShapeStyle): number => 1 / (2 * quadPadding(padded));
+    const clipZoom = (reach: number): number => 1 / (2 * quadPadding(numberArith, reach));
 
-    // The sample style's 6 unit glow gives 7 units of padding, so its ramp survives
-    // to zoom 1/14, seven times further down than the constant suggests.
-    expect(quadPadding(style)).toBe(7);
-    expect(clipZoom(style)).toBe(1 / 14);
-    expect(clipZoom(style)).toBeLessThan(FILL_AA_CROSSOVER_ZOOM);
-    expect(FILL_AA_CROSSOVER_ZOOM / clipZoom(style)).toBe(quadPadding(style));
+    // A 6 unit glow gives 7 units of padding, so its ramp survives to zoom 1/14,
+    // seven times further down than the constant suggests.
+    expect(clipZoom(glowWorld)).toBe(1 / 14);
+    expect(clipZoom(glowWorld)).toBeLessThan(FILL_AA_CROSSOVER_ZOOM);
+    expect(FILL_AA_CROSSOVER_ZOOM / clipZoom(glowWorld)).toBe(quadPadding(numberArith, glowWorld));
 
-    // The constant describes exactly one style: a glow-free one, which is the
-    // worst case and which `shape-scene.ts` never draws.
-    expect(clipZoom({ ...style, glowWorld: 0 })).toBe(FILL_AA_CROSSOVER_ZOOM);
+    // The constant describes exactly one shape: a glow-free one, which is the
+    // worst case and which nothing in the campaign draws.
+    expect(clipZoom(0)).toBe(FILL_AA_CROSSOVER_ZOOM);
 
-    // The ladder's own two extremes, so the numbers in the docstring are asserted
-    // rather than asserted about a hypothetical style: a 1 unit glow (the 4 unit
-    // tall rung) clips below 0.25, which is ABOVE the 0.1 the committed screenshot
-    // is taken at, and a 100 unit glow (the 400 unit rung) survives to 0.00495.
-    expect(clipZoom({ ...style, glowWorld: 1 })).toBe(0.25);
-    expect(clipZoom({ ...style, glowWorld: 1 })).toBeGreaterThan(0.1);
-    expect(clipZoom({ ...style, glowWorld: 10 })).toBeCloseTo(0.0455, 4);
-    expect(clipZoom({ ...style, glowWorld: 100 })).toBeCloseTo(0.00495, 5);
+    // The M4.2 ladder's own two extremes, so the numbers in the docstring are
+    // asserted rather than asserted about a hypothetical shape: a 1 unit glow
+    // (the 4 unit tall rung) clipped below 0.25, which is ABOVE the 0.1 its
+    // committed screenshot was taken at, and a 100 unit glow (the 400 unit rung)
+    // survived to 0.00495.
+    expect(clipZoom(1)).toBe(0.25);
+    expect(clipZoom(1)).toBeGreaterThan(0.1);
+    expect(clipZoom(10)).toBeCloseTo(0.0455, 4);
+    expect(clipZoom(100)).toBeCloseTo(0.00495, 5);
 
-    // And the relation the constant does hold: half a ramp at the crossover zoom is
-    // exactly the fill's own allowance, which is what makes it a crossover at all.
+    // And the relation the constant does hold: half a ramp at the crossover zoom
+    // is exactly the fill's own allowance, which is what makes it a crossover.
     expect(halfRamp(FILL_AA_CROSSOVER_ZOOM)).toBe(FILL_AA_PADDING_WORLD);
-    expect(halfRamp(clipZoom(style))).toBe(quadPadding(style));
-  });
-
-  it('rejects a style whose numbers cannot describe a quad', () => {
-    // Validated here rather than inside a coverage function, because this is
-    // where a caller's number first does something, and a coverage function is
-    // called once per fragment per frame where a throw would be both meaningless
-    // and ruinously expensive. See the docstring on `requireShapeStyle`.
-    expect(() => quadPadding({ ...style, glowWorld: -1 })).toThrow(RangeError);
-    expect(() => quadPadding({ ...style, glowWorld: -1 })).toThrow(/glowWorld/);
-    expect(() => quadPadding({ ...style, glowWorld: Number.NaN })).toThrow(RangeError);
-    expect(() => shapeQuadSize({ width: 10, height: 4 }, { ...style, glowWorld: -1 })).toThrow(
-      RangeError,
-    );
-  });
-});
-
-describe('requireShapeStyle', () => {
-  it('accepts the style the scene uses', () => {
-    expect(requireShapeStyle(style, 'style')).toEqual(style);
-  });
-
-  it('returns a COPY, so a validated style cannot be mutated behind its user', () => {
-    // The docstring's copy contract, which `toEqual` above cannot see: it is
-    // structural, so `return style` passes it. Measured before this line existed:
-    // changing the body to return its argument left all 153 tests green. What the
-    // copy buys is that a caller holding the record it passed cannot turn a
-    // validated style into an invalid one after the fact, which matters because
-    // everything downstream of this function is entitled to skip re-checking.
-    expect(requireShapeStyle(style, 'style')).not.toBe(style);
-  });
-
-  it('rejects a colour that is not a 24-bit integer, as createRenderer does', () => {
-    for (const field of ['fillColor', 'outlineColor', 'glowColor'] as const) {
-      for (const bad of [-1, 0x1000000, 1.7, Number.NaN]) {
-        expect(() => requireShapeStyle({ ...style, [field]: bad }, 'style')).toThrow(RangeError);
-        expect(() => requireShapeStyle({ ...style, [field]: bad }, 'style')).toThrow(
-          new RegExp(field),
-        );
-      }
-    }
-  });
-
-  it('rejects a glow alpha outside the unit interval', () => {
-    expect(() => requireShapeStyle({ ...style, glowAlpha: -0.1 }, 'style')).toThrow(/glowAlpha/);
-    expect(() => requireShapeStyle({ ...style, glowAlpha: 1.1 }, 'style')).toThrow(/glowAlpha/);
-    expect(requireShapeStyle({ ...style, glowAlpha: 0 }, 'style').glowAlpha).toBe(0);
-    expect(requireShapeStyle({ ...style, glowAlpha: 1 }, 'style').glowAlpha).toBe(1);
-  });
-
-  it('rejects a negative outline width, which draws nothing or draws it outside', () => {
-    expect(() => requireShapeStyle({ ...style, outlinePixels: -2 }, 'style')).toThrow(
-      /outlinePixels/,
-    );
-    expect(requireShapeStyle({ ...style, outlinePixels: 0 }, 'style').outlinePixels).toBe(0);
-  });
-
-  it('is worth rejecting because a negative width fails silently, in two different ways', () => {
-    // The reason for the check above, pinned rather than asserted in a comment,
-    // because both failure modes are invisible on a screenshot review.
-    //
-    // NOT the footprint: `max(d, y)` is never less than `d` whatever the sign of
-    // `widthPixels`, so a negative width cannot enlarge a shape and the footprint
-    // contract needs no help from this validation.
-    for (const widthPixels of [-0.5, -1, -2]) {
-      for (let k = -6; k <= 3; k += 0.125) {
-        expect(outlineCoverage(numberArith, k, widthPixels, 1)).toBeLessThanOrEqual(
-          fillCoverage(numberArith, k, 1),
-        );
-      }
-    }
-
-    // At or below -1 pixel the band vanishes: the inner branch exceeds the outer
-    // end of the ramp everywhere, so the outline is silently not drawn at all and
-    // a caller who wrote a sign error sees a shape with no border rather than an
-    // error naming the field.
-    for (const widthPixels of [-1, -2, -11]) {
-      for (let k = -6; k <= 3; k += 0.125) {
-        expect(outlineCoverage(numberArith, k, widthPixels, 1)).toBe(0);
-      }
-    }
-
-    // Between -1 and 0 it is worse than nothing: the band lands OUTSIDE the
-    // boundary, painting the outline colour into the fill's own outer
-    // antialiasing ramp at up to the fill's alpha there. At width -0.5 the peak is
-    // 0.15625 at d = +0.25, which is exactly the fill's coverage at that distance,
-    // so the shape's soft edge is tinted with the border colour and its geometry
-    // has not moved. Nothing downstream can tell that apart from a design choice.
-    expect(outlineCoverage(numberArith, 0.25, -0.5, 1)).toBe(0.15625);
-    expect(outlineCoverage(numberArith, 0.25, -0.5, 1)).toBe(fillCoverage(numberArith, 0.25, 1));
-    expect(outlineCoverage(numberArith, -0.5, -0.5, 1)).toBe(0);
-  });
-
-  it('names the record it was given, so a scene with six shapes says which one', () => {
-    expect(() => requireShapeStyle({ ...style, glowWorld: -1 }, 'ladder[3].style')).toThrow(
-      /ladder\[3\]\.style\.glowWorld/,
-    );
+    expect(halfRamp(clipZoom(glowWorld))).toBe(quadPadding(numberArith, glowWorld));
   });
 });
 

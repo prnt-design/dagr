@@ -16,7 +16,7 @@ import {
   wheelZoomFactor,
   zoomLimits,
 } from '../src/camera-input.js';
-import { LADDER_BOUNDS, LADDER_SMALLEST_NODE } from '../src/ladder.js';
+import { SMALLEST_NODE_SIZE } from '../src/campaign-style.js';
 
 /**
  * The only unit-testable part of the first light demo.
@@ -112,31 +112,51 @@ describe('the derived zoom range', () => {
    * because it comes from CSS no module can read: `styles.css` holds the
    * stage at `clamp(600px, 62vh, 780px)` inside a `.page` capped at 72rem
    * with 1.5rem of padding, so 1102 by 598 is the widest page at the
-   * shortest stage. The scene, unlike the fixed-range era, is NOT copied:
-   * `ladder.ts` exports its bounds and smallest node, computed from the
-   * shapes, so these tests move with the scene instead of drifting from it.
+   * shortest stage.
+   *
+   * The SCENE is a fixture here as of P4, and that is a change worth stating.
+   * The ladder exported its own bounds, so these tests moved with it; the
+   * campaign's bounds are the output of a hundred layout runs and are not
+   * available to a suite that runs in bare Node. So the bounds below stand in
+   * for content and the arithmetic is what is asserted, which is what these
+   * tests were always about. The SMALLEST NODE is still the real one, out of
+   * `campaign-style.ts`, because it is a constant: it is what the zoom-in limit
+   * frames, and a size lowered in that table without this noticing would strand
+   * the new smallest kind below readable size.
    */
   const CANVAS = { width: 1102, height: 598 };
 
+  /**
+   * A stand-in for the campaign's extent: 20,000 by 11,250 world units, which
+   * is 16:9 and is the order of magnitude the packer produces for 3,010 nodes.
+   * Wider than it is tall, so the fit is width-limited on this canvas, which is
+   * the case the floor assertion below reads.
+   */
+  const SCENE = { minX: -10000, minY: -5625, maxX: 10000, maxY: 5625 };
+
   it('derives the range this scene and canvas actually produce', () => {
-    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, CANVAS);
-    // The floor: 90% of the width-limited fit of a 2205-unit-wide scene.
-    expect(minZoom).toBeCloseTo(0.9 * (CANVAS.width / 2205), 6);
-    // The ceiling: the 4 by 4 smallest shape framed at the same 5% padding,
-    // height-limited on this canvas.
-    expect(maxZoom).toBeCloseTo(0.9 * (CANVAS.height / 4), 9);
+    // Which AXIS limits a fit is the thing worth deriving rather than
+    // assuming: this canvas is 1.84:1 and the fixture scene is 1.78:1, so the
+    // scene is height-limited by a hair, and a test that asserted the width
+    // would pass on a 16:9 canvas and fail on this one for no reason a reader
+    // could see.
+    const fit = (content: { width: number; height: number }): number =>
+      0.9 * Math.min(CANVAS.width / content.width, CANVAS.height / content.height);
+
+    const { minZoom, maxZoom } = zoomLimits(SCENE, SMALLEST_NODE_SIZE, CANVAS);
+    expect(minZoom).toBeCloseTo(fit({ width: 20000, height: 11250 }), 9);
+    expect(maxZoom).toBeCloseTo(fit(SMALLEST_NODE_SIZE), 9);
   });
 
-  it('keeps the 100x crispness reference reachable and retires the 0.1x one', () => {
-    // The derived range supersedes the fixed 0.1 to 100. The 100x reference
-    // stays reachable (the ceiling lands near 150 on the reference canvas);
-    // the 0.1x frame is deliberately below the floor now, because a floor at
-    // the fitted scene is exactly the "too far out" state the derived range
-    // exists to prevent. That frame stays reproducible from the M4.2 commit,
-    // and its finding is recorded in the M4.2 ROADMAP entry.
-    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, CANVAS);
-    expect(maxZoom).toBeGreaterThanOrEqual(100);
-    expect(minZoom).toBeGreaterThan(0.1);
+  it('spans the decades a campaign needs: structure at one end, a card at the other', () => {
+    // The range is what a reader can traverse. The floor has to show the whole
+    // campaign and the ceiling has to make one node readable, which across a
+    // 20,000 unit scene and a 56 unit node is three decades of zoom. The fixed
+    // 0.1 to 100 range this replaced was four, chosen for two screenshots.
+    const { minZoom, maxZoom } = zoomLimits(SCENE, SMALLEST_NODE_SIZE, CANVAS);
+    expect(maxZoom / minZoom).toBeGreaterThan(100);
+    expect(minZoom).toBeLessThan(1);
+    expect(maxZoom).toBeGreaterThan(10);
   });
 
   it('keeps the smallest node edges in frame at the ceiling', () => {
@@ -144,9 +164,9 @@ describe('the derived zoom range', () => {
     // derived ceiling: fully zoomed in, the smallest node is strictly inside
     // the viewport on both axes, so the frame is an antialiased boundary and
     // never the edge-free flat fill that reads as a broken renderer.
-    const { maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, CANVAS);
-    expect(LADDER_SMALLEST_NODE.width * maxZoom).toBeLessThan(CANVAS.width);
-    expect(LADDER_SMALLEST_NODE.height * maxZoom).toBeLessThan(CANVAS.height);
+    const { maxZoom } = zoomLimits(SCENE, SMALLEST_NODE_SIZE, CANVAS);
+    expect(SMALLEST_NODE_SIZE.width * maxZoom).toBeLessThan(CANVAS.width);
+    expect(SMALLEST_NODE_SIZE.height * maxZoom).toBeLessThan(CANVAS.height);
   });
 
   it('agrees with Camera2D.fitBounds on what the floor means', () => {
@@ -157,13 +177,13 @@ describe('the derived zoom range', () => {
     const camera = new Camera2D({
       viewport: { ...CANVAS, devicePixelRatio: 1 },
     });
-    camera.fitBounds(LADDER_BOUNDS, FIT_PADDING);
-    const { minZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, CANVAS);
+    camera.fitBounds(SCENE, FIT_PADDING);
+    const { minZoom } = zoomLimits(SCENE, SMALLEST_NODE_SIZE, CANVAS);
     expect(camera.zoom).toBeCloseTo(minZoom, 12);
   });
 
   it('contains the zoom the camera starts at', () => {
-    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, CANVAS);
+    const { minZoom, maxZoom } = zoomLimits(SCENE, SMALLEST_NODE_SIZE, CANVAS);
     expect(INITIAL_ZOOM).toBeGreaterThanOrEqual(minZoom);
     expect(INITIAL_ZOOM).toBeLessThanOrEqual(maxZoom);
   });
@@ -173,15 +193,15 @@ describe('the derived zoom range', () => {
     // fling, and wheelZoomFactor composes them exactly, which its own docstring
     // calls a feature. So the clamp that makes one event safe multiplies out to
     // a factor of about 8100 across a flick, and only the range stops it.
-    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, CANVAS);
+    const { minZoom, maxZoom } = zoomLimits(SCENE, SMALLEST_NODE_SIZE, CANVAS);
     const fling = wheelZoomFactor({ deltaY: -1e9, deltaMode: 0 }) ** 30;
     expect(INITIAL_ZOOM * fling).toBeGreaterThan(maxZoom);
     expect(INITIAL_ZOOM / fling).toBeLessThan(minZoom);
   });
 
   it('moves with the viewport, which is why the camera limits must be rebindable', () => {
-    const small = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, { width: 551, height: 299 });
-    const large = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_NODE, CANVAS);
+    const small = zoomLimits(SCENE, SMALLEST_NODE_SIZE, { width: 551, height: 299 });
+    const large = zoomLimits(SCENE, SMALLEST_NODE_SIZE, CANVAS);
     expect(small.minZoom).toBeCloseTo(large.minZoom / 2, 6);
     expect(small.maxZoom).toBeCloseTo(large.maxZoom / 2, 6);
   });
@@ -195,13 +215,13 @@ describe('the derived zoom range', () => {
   });
 
   it('rejects a zero-extent scene or node with the field named, not an Infinity', () => {
-    // fitZoom owns the validation, so a degenerate P6 scene fails loudly at
+    // fitZoom owns the validation, so a degenerate scene fails loudly at
     // derivation instead of handing setZoomLimits an Infinity to throw on
     // inside a ResizeObserver callback.
     const flat = { minX: 0, minY: 5, maxX: 10, maxY: 5 };
     expect(() => zoomLimits(flat, { width: 4, height: 4 }, CANVAS)).toThrow(RangeError);
     expect(() =>
-      zoomLimits(LADDER_BOUNDS, { width: 0, height: 4 }, CANVAS),
+      zoomLimits(SCENE, { width: 0, height: 4 }, CANVAS),
     ).toThrow(RangeError);
   });
 });

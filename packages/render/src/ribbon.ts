@@ -20,10 +20,11 @@ import { requireAtLeast, requireFinite, requirePositive } from './validate.js';
  * zoom. The ROADMAP asks for this to be stated because it is visible in every
  * screenshot afterwards, so here is the whole argument.
  *
- * The demo's derived zoom range runs from the ladder scene fitted on the
- * reference canvas (about 0.45 CSS pixels per world unit) to its smallest node
- * framed (about 134), which P2 measures in `apps/demo/test/camera-input.test.ts`
- * and which the campaign will restate with its own bounds once M4.4 draws it. A
+ * The demo's derived zoom range runs from the whole campaign fitted on the
+ * reference canvas (0.053 CSS pixels per world unit) to its smallest node framed
+ * (19.9), which is what M4.4 drawing the campaign made of the range P2 built;
+ * the ladder it replaced ran from about 0.45 to 134 on the same canvas, which is
+ * the wider range and the one the argument below was first measured against. A
  * world-space ribbon wide enough to see at the floor is 300 times wider at the
  * ceiling, a slab across the card it was meant to connect; one that looks right
  * at the ceiling is a third of a pixel at the floor, which is the sub-pixel fade

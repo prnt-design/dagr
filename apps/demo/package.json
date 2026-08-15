@@ -15,6 +15,7 @@
   "dependencies": {
     "@dagr/campaign": "workspace:*",
     "@dagr/graph": "workspace:*",
+    "@dagr/layout": "workspace:*",
     "@dagr/render": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
