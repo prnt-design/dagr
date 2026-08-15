@@ -9,8 +9,15 @@
   /* Below this the readout and the canvas are fighting for the same corner, so
      the page scrolls instead. */
   min-height: 24rem;
-  display: flex;
-  flex-direction: column;
+  /* GRID, for one child, and the reason is percentage height resolution. The
+     stage asks for `height: 100%`, which resolves to `auto` unless its parent's
+     height is definite, and this box's height comes from `flex: 1` against a
+     page sized by `min-height`. A grid item is stretched to its row by the
+     default `align-items`, which does not care whether anything is definite, so
+     the stage fills this box either way. As a flex COLUMN it did not: stretch
+     there is the cross axis, so the stage collapsed to 479 pixels inside a 655
+     pixel frame with nothing failing. */
+  display: grid;
   /* The site's hairline token, and no radius, because the muslin tokens set
      every radius to zero: the stage should read as part of the page's own
      furniture even though what is inside it has its own palette. */

@@ -25,6 +25,19 @@ function createWorker(): Worker {
   return new Worker(new URL('./layout-worker.ts', import.meta.url), { type: 'module' });
 }
 
+/**
+ * A count the scene carries, or what is standing between the reader and it.
+ *
+ * `undefined` and a failure are different absences and read differently: one is
+ * a hundred layout runs still going, the other is a number that will never
+ * arrive. The failure's own text is on the stage, over the canvas, so this says
+ * only that the wait is over.
+ */
+function describe(count: number | undefined, unit: string, failure: string | null): string {
+  if (count !== undefined) return `${String(count)} ${unit}`;
+  return failure === null ? 'laying out' : 'layout failed';
+}
+
 export function App(): JSX.Element {
   const { campaign, scene, edges, failure } = useCampaignScene(createWorker);
 
@@ -76,13 +89,19 @@ export function App(): JSX.Element {
             </p>
           </div>
           <div>
+            {/*
+              Three states, not two. A scene that has not arrived is either on
+              its way or never coming, and a panel that says "laying out"
+              forever under a stage that says the layout failed is the same
+              contradiction the failure line moved out of here to avoid, with
+              the halves swapped. The stage says WHY; this says that these two
+              numbers are not coming.
+            */}
             <p className="facts__label">tiles</p>
-            <p className="facts__value">
-              {scene === null ? 'laying out' : `${scene.tiles.length} tiles`}
-            </p>
+            <p className="facts__value">{describe(scene?.tiles.length, 'tiles', failure)}</p>
             <p className="facts__label">layout runs</p>
             <p className="facts__value">
-              {scene === null ? 'laying out' : `${scene.layoutRuns} Sugiyama passes`}
+              {describe(scene?.layoutRuns, 'Sugiyama passes', failure)}
             </p>
           </div>
           <div>

@@ -126,10 +126,20 @@
 
 /* The layout's own failure, in the readout's place: the scene never arrives, so
    the rows that describe it never can either. Amber rather than a red the
-   palette does not have, and `pre` is dropped because this one is a sentence. */
+   palette does not have, and `pre` is dropped because this one is a sentence.
+
+   IT UNDOES BOTH OF THE READOUT'S GUARDS, and it is the one child that should.
+   The panel refuses the pointer and the selection so that it cannot eat a drag
+   over the canvas under it; this text is a message from a worker that is the
+   first thing anyone would paste into a bug report, and a sentence that cannot
+   be selected has to be retyped from a screenshot. There is no drag to protect
+   here anyway: the scene never arrived, so there is nothing under this to
+   pan. */
 .stage__readout-failure {
   margin: 0;
   color: var(--dagr-stage-amber);
+  pointer-events: auto;
+  user-select: text;
 }
 
 .stage__failure {

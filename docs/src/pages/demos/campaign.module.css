@@ -9,11 +9,17 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  height: calc(100vh - var(--ifm-navbar-height));
+  /* MIN height, not height. The stage should take the viewport under the navbar
+     and no more, which a fixed height also does, but a fixed height stops being
+     true from below: on a short viewport (a phone in landscape) the caption
+     plus the stage's own floor is taller than the box, and a flex column that
+     cannot grow overflows its children into the footer instead of pushing it
+     down the page. */
+  min-height: calc(100vh - var(--ifm-navbar-height));
   /* Dynamic viewport units where they exist: on a phone, `100vh` is the height
      with the browser chrome retracted, so the stage would hang below the fold
      by the height of the address bar until it was scrolled away. */
-  height: calc(100dvh - var(--ifm-navbar-height));
+  min-height: calc(100dvh - var(--ifm-navbar-height));
   max-width: 84rem;
   margin: 0 auto;
   padding: 1.5rem 1.5rem 2rem;

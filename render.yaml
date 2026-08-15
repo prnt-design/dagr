@@ -6,10 +6,18 @@
 # There was a second, `dagr-demo`, serving `apps/demo` on an `onrender.com`
 # subdomain. It was the cheapest thing that produced a URL and it did that; it
 # was also a demo a visitor to the docs never found, an outbound hop that lost
-# the site's chrome, and twice the deploy surface for one artifact. Removing the
-# block is what retires the service: Render syncs this file on a push, so the
-# service and `dagr-demo.onrender.com` stop existing after the sync. Every link
+# the site's chrome, and twice the deploy surface for one artifact. Every link
 # to that URL is retargeted at /demos/campaign in the same commit.
+#
+# REMOVING THE BLOCK IS HALF OF RETIRING THE SERVICE, and the other half is a
+# hand in the Render dashboard. A blueprint sync NEVER deletes an existing
+# resource, including one whose definition has gone from this file, and a
+# resource removed here but left in the dashboard is RECREATED by the next
+# sync. So the order is: this file first, then delete `dagr-demo` in the
+# dashboard. Until that second step happens the service keeps the config it was
+# last synced with, which means it keeps building `apps/demo` on any push
+# matching the `buildFilter` it still holds, and keeps serving a demo that
+# nothing links to and that drifts from the one on the docs site.
 #
 # `apps/demo` itself stays as the playground the engine is exercised in, and is
 # now a local dev tool with no deploy: it imports the same stage the site

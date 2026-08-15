@@ -143,7 +143,14 @@ await page.goto(base, { waitUntil: 'load' });
 // Measured INSIDE the stage and through the stage's own variable, since that is
 // the text the frames are about: the cards and the readout.
 const advance = await page.evaluate(() => {
-  const stage = document.querySelector('.stage') ?? document.body;
+  // A HARD FAILURE rather than a fallback to `body`, because a fallback would
+  // measure the wrong thing and blame the wrong cause: `--dagr-stage-mono` is
+  // declared on `.stage`, so off it the shorthand below is invalid at computed
+  // value time and the probe lands on the proportional inherited face. The
+  // assertion after this would then throw about a missing Liberation Mono when
+  // the real answer is that the stage was not on the page.
+  const stage = document.querySelector('.stage');
+  if (stage === null) throw new Error('no .stage on the page: nothing to measure the font in');
   const probe = document.createElement('span');
   probe.style.cssText = 'font: 12px var(--dagr-stage-mono); position: absolute; white-space: pre';
   probe.textContent = 'M'.repeat(100);

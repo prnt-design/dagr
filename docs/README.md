@@ -70,6 +70,15 @@ fresh clone or in CI, where typecheck runs before build. The bundler resolves
 the built `dist` through the workspace symlink, which is the same artefact a
 consumer installs.
 
+`three` is in `dependencies` and nothing here imports it by name. It is
+`@dagr/render`'s peer, and this site is the consumer that ships the renderer, so
+the dependency list says so. It is not what makes the build work: webpack
+resolves `three/webgpu` from inside `packages/render`, which has its own copy,
+and would keep doing that if this entry were deleted. KEEP THE RANGE IN STEP
+WITH `packages/render`'s. Diverge it and the workspace installs a second copy of
+a megabyte-class package that nothing here imports, and the day something here
+does import `three` the site bundles both.
+
 ADDING A WORKSPACE DEPENDENCY IS TWO EDITS, the same trap `apps/demo/README.md`
 documents in its own form: a `paths` entry here, so typecheck reads source, and
 a `dependencies` entry in `package.json`, so the bundler can resolve the package

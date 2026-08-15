@@ -125,6 +125,15 @@ a dependency that has to survive two bundlers. Verified by loading the built
 site: 3,010 nodes, 101 tiles, 95 layout runs, gated on `data-renderer-drawn`
 and a floor on the canvas-only PNG rather than on the readout.
 
+**The phasing table above is wrong about how the service goes away**, and the
+correction is the most useful thing D1 learned. It says
+`dagr-demo.onrender.com` can be "removed by the blueprint sync". A blueprint
+sync never deletes an existing resource, even one whose definition has gone
+from the file, and a resource removed from the blueprint but left in the
+dashboard is recreated by the next sync. Removing the block is still the first
+step, and the second is a hand in the Render dashboard. The claim came from
+reading the sync's overwrite behaviour, which is real, as a delete behaviour.
+
 The stylesheet is a named entry, `@dagr/campaign-stage/stage.css`, imported by
 the host: a package that builds through `tsc` copies no CSS into `dist`, so an
 import inside a module would resolve under Vite and point at nothing under

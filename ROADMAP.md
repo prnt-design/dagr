@@ -4272,12 +4272,22 @@ consumer. Sequencing against M3 is the plan's open question 1.
   for one artifact. What made the move cheap is that the docs site already
   compiled `@dagr/layout` into a visitor's browser for the landing page's
   benchmark, so adding the renderer was a dependency step and not an
-  architecture change. Removing the service is removing its block from
-  `render.yaml`: Render syncs the blueprint on a push, so `dagr-demo` and
-  `dagr-demo.onrender.com` stop existing after the sync, and every link to that
-  URL is retargeted at `/demos/campaign` in the same commit so the URL stops
-  existing with nothing pointing at it. `apps/demo` stays as the playground,
-  now with no deploy of its own.
+  architecture change. Every link to `dagr-demo.onrender.com` is retargeted at
+  `/demos/campaign` in the same commit, and `apps/demo` stays as the playground
+  with no deploy of its own.
+  REMOVING THE BLOCK FROM `render.yaml` IS HALF OF IT, and the D1 diff review
+  caught the other half being asserted wrongly in three places at once (this
+  file, the blueprint's own comment, and D1's plan). A blueprint sync NEVER
+  deletes an existing resource, including one whose definition has gone from
+  the file, and a resource removed from the blueprint but left in the dashboard
+  is RECREATED by the next sync. The order is therefore: merge the file, then
+  delete `dagr-demo` in the Render dashboard, which is the maintainer's hand
+  and not an agent's. Until that happens the service keeps the config it last
+  synced, so it keeps building `apps/demo` on a push matching the `buildFilter`
+  it still holds and keeps serving a demo nothing links to. The mistake is
+  worth keeping: it came from reading the sync's OVERWRITE behaviour (which is
+  real, and is why the dashboard is not where configuration lives) as a DELETE
+  behaviour, and the two are opposite.
 
 ## Demo into the docs site
 
@@ -4335,6 +4345,30 @@ and are independent of D1 and of each other.
   THE DEMO KEEPS ITS TESTS, which moved with the code they cover, so
   `apps/demo` has no test directory left and no test script. What is left there
   is the page around the stage: the header, the facts panel and the worker.
+  WHAT THE REVIEWS CAUGHT, beyond the blueprint claim in P8 above. The facts
+  panel read "laying out" forever when the layout failed, which is the same
+  contradiction that moving the failure onto the stage was meant to end, with
+  the halves swapped; it now says the wait is over and leaves the reason to the
+  stage. The failure message inherited the readout's `pointer-events: none` and
+  `user-select: none`, so the one sentence anybody would paste into a bug
+  report could not be selected; it is the single child that undoes both, and
+  there is no drag under it to protect because the scene never arrived. The
+  demos route sized itself with a fixed `height`, which is true from above and
+  false from below: on a short viewport the caption plus the stage's floor
+  overflowed into the footer, so it is a `min-height`. The capture script's
+  font probe fell back to `body`, where the stage's mono token does not
+  resolve, so a missing stage would have thrown an error blaming a missing
+  font. And `three` is in `docs/package.json` as `@dagr/render`'s peer while
+  webpack still resolves the renderer's own copy, which is worth stating
+  because the honest reason (the consumer declares what it ships) is not the
+  reason it works; `docs/README.md` carries it, with the rule that the range
+  tracks `packages/render`'s.
+  A MEASUREMENT TAKEN THROUGH ANOTHER SESSION'S SERVER: a probe of `apps/demo`
+  reported the campaign laid out at exactly twice the size, on a branch that
+  had touched no layout code. Port 8734 is the port `apps/demo/README.md`
+  names, and the sibling session doing D2's spacing had a server on it. On a
+  shared box a fixed port is somebody else's process, which is now in the
+  gate-lock protocol text with the one command that settles it.
 - [ ] **D2** (`packages/campaign-stage`) More spacing between nodes, and edges
   coloured by where they come from with the routed/overlay split kept as the
   dash. See the plan; owned by a parallel session, rebasing onto D1.
