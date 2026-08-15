@@ -317,6 +317,16 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
    * geometry does.
    */
   #attributes: InstancedBufferAttribute[] = [];
+
+  /**
+   * The span of slots written since the last frame, as two plain numbers.
+   *
+   * Inverted when there is nothing to upload, which is what makes "no writes
+   * since the last draw" a comparison rather than a length check on an array
+   * that had to be allocated to answer it.
+   */
+  #dirtyMin = Infinity;
+  #dirtyMax = -Infinity;
   #disposed = false;
 
   constructor(options: InstancedShapesOptions<F>) {
@@ -336,6 +346,12 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
     // every write; culling that is worth having is per instance and is M4.10's,
     // where there is a frame time to measure it against.
     this.mesh.frustumCulled = false;
+    // The instance writes are uploaded from here, one merged range per channel,
+    // because this is the last moment before a draw at which three will let this
+    // object speak. See {@link #flushDirty}.
+    this.mesh.onBeforeRender = (): void => {
+      this.#flushDirty();
+    };
   }
 
   /** How many instances are live, which is what the draw call covers. */
@@ -513,6 +529,11 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
     this.#geometry = this.#buildGeometry();
     this.mesh.geometry = this.#geometry;
     previous.dispose();
+    // Fresh attributes over fresh arrays, so every live slot is new to the GPU
+    // and any span accumulated against the old ones describes buffers that no
+    // longer exist.
+    this.#dirtyMin = 0;
+    this.#dirtyMax = Math.max(0, this.#buffer.count - 1);
   }
 
   #buildGeometry(): InstancedBufferGeometry {
@@ -557,10 +578,48 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
    * add.
    */
   #markDirty(slot: number): void {
+    if (slot < this.#dirtyMin) this.#dirtyMin = slot;
+    if (slot > this.#dirtyMax) this.#dirtyMax = slot;
+  }
+
+  /**
+   * Turns the span into ONE update range per channel, immediately before the
+   * draw that needs it.
+   *
+   * **Coalesced, and the first attempt at this was worse than no ranges at
+   * all.** `addUpdateRange` pushes a fresh record per call and neither backend
+   * merges them, so a range per write meant a 10k-node spring pass carried 60k
+   * range objects and 60k `writeBuffer` calls per frame in place of the one
+   * 480 KB upload it was meant to replace. Measured by the reviewer who caught
+   * it: 2,000 ranges after 1,000 adds and 1,000 sets. Two integers and one
+   * range per channel per frame is the version that pays.
+   *
+   * A span rather than a set: writes at slot 0 and slot 9,999 upload everything
+   * between them. That is the same buffer-wide upload the ranges exist to avoid,
+   * so the win is on clustered writes (one node moving, a subtree settling, a
+   * batch of additions, all of which are contiguous or nearly so) and the
+   * scattered case is never worse than having no ranges at all.
+   *
+   * On `onBeforeRender`, which three calls at the top of `renderObject` before
+   * it touches the geometry, so the ranges are in place for the upload that
+   * follows and a caller has nothing to remember. `needsUpdate` is set here too,
+   * which is what makes the whole path lazy: writes between two frames cost two
+   * comparisons and nothing else.
+   */
+  #flushDirty(): void {
+    if (this.#dirtyMax < this.#dirtyMin) return;
+    const first = this.#dirtyMin;
+    const span = this.#dirtyMax - first + 1;
+    this.#dirtyMin = Infinity;
+    this.#dirtyMax = -Infinity;
     INSTANCE_CHANNELS.forEach((channel, index) => {
       const attributeObject = this.#attributes[index];
       if (attributeObject === undefined) return;
-      attributeObject.addUpdateRange(slot * channel.components, channel.components);
+      // Cleared before adding, so a frame that never drew cannot leave a range
+      // behind for the next one to upload twice. Both backends clear after an
+      // upload, which makes this belt to their braces.
+      attributeObject.clearUpdateRanges();
+      attributeObject.addUpdateRange(first * channel.components, span * channel.components);
       attributeObject.needsUpdate = true;
     });
   }

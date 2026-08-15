@@ -1,3 +1,4 @@
+import { BufferAttribute } from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
 import {
   DagrRenderError,
@@ -45,6 +46,17 @@ function rectAt(x: number, size = 10): FamilyInstance<'roundedRect'> {
 function offsets<F extends ShapeFamily>(shapes: InstancedShapes<F>): number[] {
   const attribute = shapes.mesh.geometry.getAttribute('instanceOffset');
   return Array.from({ length: shapes.count }, (_, slot) => attribute.getX(slot));
+}
+
+/**
+ * One channel's attribute, narrowed. `getAttribute` is typed as a
+ * `BufferAttribute` OR an `InterleavedBufferAttribute`, and only the first has
+ * the update ranges these tests read.
+ */
+function channel<F extends ShapeFamily>(shapes: InstancedShapes<F>, name: string): BufferAttribute {
+  const attribute = shapes.mesh.geometry.getAttribute(name);
+  if (!(attribute instanceof BufferAttribute)) throw new Error('unreachable');
+  return attribute;
 }
 
 describe('a family mesh', () => {
@@ -307,6 +319,74 @@ describe('the two halves under churn', () => {
         expect(attribute.getX(shapes.handles().indexOf(handle))).toBe(x);
       }
     }
+    shapes.dispose();
+  });
+});
+
+describe('what reaches the GPU per frame', () => {
+  /** What three does before it draws this mesh, which is where the ranges land. */
+  function draw(shapes: InstancedShapes<'roundedRect'>): void {
+    shapes.mesh.onBeforeRender(
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+    );
+  }
+
+  it('leaves ONE update range per channel however many writes went into it', () => {
+    // The regression two reviewers found in the first version of this. three's
+    // `addUpdateRange` pushes a record per call and neither backend merges them,
+    // and each range is a `writeBuffer`, so a range per write turned a 10k-node
+    // spring pass into 60k range objects and 60k device writes per frame in
+    // place of the six whole-buffer uploads it was meant to replace.
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 64 });
+    const handles = Array.from({ length: 20 }, (_, i) => shapes.add(rectAt(i)));
+    for (let pass = 0; pass < 3; pass += 1) {
+      for (const handle of handles) shapes.set(handle, rectAt(100 + pass));
+    }
+    draw(shapes);
+    for (const { name, components } of INSTANCE_CHANNELS) {
+      const attribute = channel(shapes, name);
+      expect(attribute.updateRanges).toHaveLength(1);
+      expect(attribute.updateRanges[0]).toEqual({ start: 0, count: 20 * components });
+    }
+    shapes.dispose();
+  });
+
+  it('uploads only the slots that changed, not the whole buffer', () => {
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 64 });
+    const handles = Array.from({ length: 40 }, (_, i) => shapes.add(rectAt(i)));
+    draw(shapes);
+
+    shapes.set(handles[7] as number, rectAt(700));
+    draw(shapes);
+    expect(channel(shapes, 'instanceOffset').updateRanges).toEqual([{ start: 14, count: 2 }]);
+    shapes.dispose();
+  });
+
+  it('asks for nothing when nothing was written since the last frame', () => {
+    // Two comparisons per write and no allocation at all between frames, which
+    // is what makes the whole path affordable under a spring loop.
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 8 });
+    shapes.add(rectAt(0));
+    draw(shapes);
+    channel(shapes, 'instanceOffset').clearUpdateRanges();
+    draw(shapes);
+    expect(channel(shapes, 'instanceOffset').updateRanges).toHaveLength(0);
+    shapes.dispose();
+  });
+
+  it('re-uploads every live slot after a growth, because the arrays are new', () => {
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 2 });
+    shapes.add(rectAt(0));
+    shapes.add(rectAt(1));
+    draw(shapes);
+    shapes.add(rectAt(2));
+    draw(shapes);
+    expect(channel(shapes, 'instanceOffset').updateRanges).toEqual([{ start: 0, count: 6 }]);
     shapes.dispose();
   });
 });

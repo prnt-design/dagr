@@ -2976,13 +2976,23 @@ of M3 would leave the second runner idle for a milestone.
   a caller drawing only boxes no longer fabricates a circle style nothing reads;
   `InstancedShapes<F>` is generic over its family, so a circle handed to a rect
   mesh is a compile error and the runtime check is left for the data-driven
-  caller M4.4 brings; `#markDirty` sets an UPDATE RANGE per slot rather than
-  re-uploading every channel whole, which at 10k nodes is twelve floats per moved
-  node instead of 480 KB per frame and is the item that was most in M4.10's way;
-  and `remove`'s docstring now states that BLEND ORDER WITHIN A FAMILY IS SLOT
+  caller M4.4 brings; the instance writes reach the GPU as ONE MERGED UPDATE
+  RANGE per channel per frame rather than a whole-buffer upload, which is the
+  item that was most in M4.10's way; and `remove`'s docstring now states that BLEND ORDER WITHIN A FAMILY IS SLOT
   ORDER, so removing an unrelated node can flip which of two overlapping nodes
   reads as in front. M4.5 gets its layering from separate meshes in a chosen
   order, never from slot order within one.
+  THE RANGE FIX TOOK TWO ROUNDS AND THE FIRST ONE WAS WORSE THAN NO RANGES, which
+  is worth recording because it is not obvious from three's API. `addUpdateRange`
+  pushes a fresh record per call and NEITHER BACKEND MERGES THEM, and each range
+  is a `writeBuffer`, so a range per write turned a 10k-node spring pass into 60k
+  range objects and 60k device writes per frame in place of the six whole-buffer
+  uploads it was meant to replace. Two reviewers measured it independently (2,000
+  ranges after 1,000 adds and 1,000 sets). What works is two integers: the span of
+  slots written since the last frame, flushed to one range per channel from
+  `mesh.onBeforeRender`, which three calls at the top of `renderObject` before it
+  touches the geometry. A span rather than a set, so scattered writes degrade to
+  the whole-buffer upload and never to something worse.
 - [ ] **M4.4** (`@dagr/render`, `apps/demo`) A real graph on screen: take a
   `LayoutResult` from `@dagr/layout` and draw its nodes, sized and positioned,
   with a node-id to instance-handle mapping that survives nodes being added and
