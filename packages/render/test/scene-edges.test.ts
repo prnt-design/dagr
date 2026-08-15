@@ -373,6 +373,36 @@ describe('SceneEdges', () => {
     scene.dispose();
   });
 
+  it('uploads nothing the second time at a value float32 cannot hold exactly', () => {
+    // The case the first version of this got wrong, and the one the campaign
+    // demo actually dims with: 0.2 comes back out of a `Float32Array` as
+    // 0.20000000298023224, so a comparison against the caller's double is never
+    // equal and every dimmed edge re-marks itself on every hover. The other
+    // values in this file (1, 0.25, 0.5) are all exact in float32 and cannot
+    // see it.
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [edge('e1', straight), edge('e2', straight)]);
+    const mesh = scene.meshes[0];
+    if (mesh === undefined) throw new Error('unreachable');
+    const attribute = bufferAttributeOf(scene, 0, 'ribbonIntensity');
+    const dim = (id: string): number => (id === 'e1' ? 1 : 0.2);
+
+    scene.setEdgeIntensity(ROUTED, dim);
+    mesh.onBeforeRender(...([] as unknown as Parameters<typeof mesh.onBeforeRender>));
+    expect(attribute.updateRanges).toEqual([{ start: 4, count: 4 }]);
+
+    // The VERSION and not the range list, because a backend clears ranges after
+    // an upload and no backend has run here: a second flush that found nothing
+    // dirty leaves the first flush's range in place, so the range list cannot
+    // tell the two cases apart. `needsUpdate` bumps the version, and a second
+    // upload is exactly what must not happen.
+    const version = attribute.version;
+    scene.setEdgeIntensity(ROUTED, dim);
+    mesh.onBeforeRender(...([] as unknown as Parameters<typeof mesh.onBeforeRender>));
+    expect(attribute.version).toBe(version);
+    scene.dispose();
+  });
+
   it('uploads nothing when the values did not change', () => {
     // A pointer moving between two nodes leaves most edges exactly where they
     // were, and at 7,100 edges the alternative is a full upload per move.

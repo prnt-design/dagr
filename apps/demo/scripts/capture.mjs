@@ -144,35 +144,6 @@ const SETS = {
    * things the change MOVES, so a floor on it would be a gate that has to be
    * retuned to pass, which is the opposite of a gate.
    */
-  /**
-   * D3's pair: the same camera with the pointer off the canvas and then on the
-   * node in the middle of it.
-   *
-   * `#node=` centres the node it names, so hovering the CANVAS CENTRE is
-   * hovering that node exactly, with no DOM inspection and no coordinates to go
-   * stale when the layout moves. That is the whole reason the hover frames are
-   * anchored this way rather than aimed at a pixel.
-   *
-   * The zoom is chosen so the two ends of the feature are both visible at once:
-   * a settlement at 0.3 is 42 CSS pixels wide, above the title tier's gate, so
-   * the hovered node has a name of its own; its rooms are 17, below the gate, so
-   * the names on THEM are the ones the highlight put there.
-   */
-  d3: [
-    {
-      name: 'quiet',
-      hash: '#node=chapter-2&zoom=0.15',
-      caption:
-        'The settlement of Fenhaven and its quarter of the region, with the pointer off the canvas. Every edge at full intensity: this is the drawing D3 dims.',
-    },
-    {
-      name: 'hover',
-      hash: '#node=chapter-2&zoom=0.15',
-      hover: 'centre',
-      caption:
-        "The same camera with the pointer on Fenhaven itself. Its 19 incident edges stay at full width and alpha while every other edge falls to a fifth of both, which is a twenty-fifth of the ink; the far end of each highlighted edge is named even though nothing at this zoom is wide enough to have earned a label.",
-    },
-  ],
   d2: [
     {
       name: 'fit',
@@ -185,6 +156,36 @@ const SETS = {
       hash: '#node=dungeon-21&zoom=0.7',
       caption:
         'The 88-room finale at a fixed zoom, anchored on the citadel itself. At a zoom a reader holds still, more separation is more separation: the nodes are the same size and the gaps between them are wider.',
+    },
+  ],
+  /**
+   * D3's pair: the same camera with the pointer off the canvas and then on the
+   * node in the middle of it.
+   *
+   * `#node=` centres the node it names, so hovering the CANVAS CENTRE is
+   * hovering that node exactly, with no DOM inspection and no coordinates to go
+   * stale when the layout moves. That is the whole reason the hover frames are
+   * anchored this way rather than aimed at a pixel.
+   *
+   * The zoom is chosen so both ends of the feature are visible at once: a
+   * chapter at 0.15 is 30 CSS pixels wide, above the title tier's gate, so the
+   * hovered node has a name of its own and the highlight is allowed to fire at
+   * all; its scenes are 18, below the gate, so the names on THEM are the ones
+   * the hover put there.
+   */
+  d3: [
+    {
+      name: 'quiet',
+      hash: '#node=chapter-2&zoom=0.15',
+      caption:
+        'A chapter of the narrative spine and the tiles around it, with the pointer off the canvas. Every edge at full intensity, inked by the node it leaves: this is the drawing the hover dims.',
+    },
+    {
+      name: 'hover',
+      hash: '#node=chapter-2&zoom=0.15',
+      hover: 'centre',
+      caption:
+        'The same camera with the pointer on Chapter 2 itself. Its nine incident edges stay at full width and alpha while every other edge falls to a fifth of both, which is a twenty-fifth of the ink; the far end of each lit edge carries a name, which its own tier would not give it at this zoom because a scene is 18 CSS pixels wide against a gate of 24. The chapter titles in the frame are the tier doing its ordinary job: a chapter is 30 wide and has earned one.',
     },
   ],
 };

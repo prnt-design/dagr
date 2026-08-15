@@ -10,8 +10,8 @@ Viewport 1440x900 at device pixel ratio 1.
 Shapes are that fallback rasterising the same distance fields; the overlay never touches a GPU.
 
 d3-quiet.png  [#node=chapter-2&zoom=0.15]  3 titles, 0 cards
-    The settlement of Fenhaven and its quarter of the region, with the pointer off the canvas. Every edge at full intensity: this is the drawing D3 dims.
+    A chapter of the narrative spine and the tiles around it, with the pointer off the canvas. Every edge at full intensity, inked by the node it leaves: this is the drawing the hover dims.
 d3-hover.png  [#node=chapter-2&zoom=0.15]  11 titles, 8 of them far ends, 0 cards
-    The same camera with the pointer on Fenhaven itself. Its 19 incident edges stay at full width and alpha while every other edge falls to a fifth of both, which is a twenty-fifth of the ink; the far end of each highlighted edge is named even though nothing at this zoom is wide enough to have earned a label.
+    The same camera with the pointer on Chapter 2 itself. Its nine incident edges stay at full width and alpha while every other edge falls to a fifth of both, which is a twenty-fifth of the ink; the far end of each lit edge carries a name, which its own tier would not give it at this zoom because a scene is 18 CSS pixels wide against a gate of 24. The chapter titles in the frame are the tier doing its ordinary job: a chapter is 30 wide and has earned one.
 
 Regenerate with apps/demo/scripts/capture.mjs; see its header.

@@ -89,12 +89,15 @@ interface CameraReadout {
   /** How many overlay elements the last sync left attached, across all tiers. */
   readonly labels: number;
   /**
-   * What the hover highlight is lighting: how many edges are at full intensity
-   * and how many far ends were given a name they had not earned.
+   * What the hover highlight is lighting: how many edges are at full intensity,
+   * and how many far ends have a name ON SCREEN.
    *
    * On the readout for the reason `labels` is: a highlight is invisible in a
    * screenshot when it is doing its job on a dense tile, and a picture with
-   * eleven bright lines in it looks the same as one with eleven edges.
+   * eleven bright lines in it looks the same as one with eleven edges. The
+   * second number is counted off the DOM rather than off the layer's
+   * registrations, because a neighbour that already has a title of its own, or
+   * that the element cap evicted, is registered and not drawn.
    */
   readonly highlight: { readonly edges: number; readonly labels: number };
   /** The derived zoom range, which moves with the viewport: see the hint. */
@@ -432,7 +435,7 @@ export function FirstLight({
         world: camera.visibleWorldBounds(),
         viewport: camera.viewport,
         labels: overlay.activeCount,
-        highlight: highlightCounts,
+        highlight: { edges: highlightEdgeCount, labels: farEndsOnScreen() },
         minZoom: camera.minZoom,
         maxZoom: camera.maxZoom,
       });
@@ -784,12 +787,31 @@ export function FirstLight({
     };
 
     /**
-     * What the readout says about the highlight: zero and zero when nothing is
-     * lit. On the readout because a screenshot of a highlight cannot otherwise
-     * say how much of the drawing it covers, which is the same argument the
+     * How many edges the highlight is lighting, or zero.
+     *
+     * On the readout because a screenshot of a highlight cannot otherwise say
+     * how much of the drawing it covers, which is the same argument the
      * overlay's own element count is there for.
      */
-    let highlightCounts = { edges: 0, labels: 0 };
+    let highlightEdgeCount = 0;
+
+    /**
+     * How many far-end names are ON SCREEN, counted off the DOM.
+     *
+     * **Not `farEndLabels.nodeCount`**, which is what this said first and which
+     * a review sent back: that is how many nodes are REGISTERED, and the layer
+     * registers every neighbour while the overlay decides which of them get an
+     * element. A neighbour already wide enough for its own title is gated out
+     * of this tier, and one the element cap evicted never appears, so the
+     * committed frame said nine where eight names were drawn. A row that exists
+     * so a screenshot can testify has to count what the screenshot shows.
+     *
+     * A query per frame, over a container holding tens of elements, right after
+     * the sync that decided them. `overlay.activeCount` is the same idea one
+     * layer up and cannot answer this, because both layers share one overlay.
+     */
+    const farEndsOnScreen = (): number =>
+      container.querySelectorAll('.campaign-title--far').length;
 
     /**
      * Lights the hovered node's edges, dims the rest, and names the far ends.
@@ -829,10 +851,7 @@ export function FirstLight({
           return node === undefined ? [] : [{ id: node.id, bounds: node.bounds, data: node.node }];
         }),
       );
-      highlightCounts = {
-        edges: incident === null ? 0 : incident.size,
-        labels: farEndLabels.nodeCount,
-      };
+      highlightEdgeCount = incident === null ? 0 : incident.size;
       // The frame that is drawing now has already styled its edges, so the
       // write above lands on the NEXT one. One extra frame per change of
       // hovered node, on the same `requestAnimationFrame` everything else here
@@ -1000,7 +1019,7 @@ export function FirstLight({
         requestDrawRef.current = requestDraw;
         invalidateHighlightRef.current = () => {
           highlightedId = null;
-          highlightCounts = { edges: 0, labels: 0 };
+          highlightEdgeCount = 0;
         };
         applyEdges(renderer, edgesRef.current);
         setFailure(null);
@@ -1216,7 +1235,7 @@ function Overlay({
       {highlight.edges === 0 ? null : (
         <p className="stage__readout-row">
           <span className="stage__readout-key">highlight</span>
-          {highlight.edges} edges, {highlight.labels} far ends named
+          {highlight.edges} edges, {highlight.labels} far ends named on screen
         </p>
       )}
       {/*

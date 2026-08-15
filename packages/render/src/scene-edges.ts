@@ -364,7 +364,17 @@ class EdgeGroup implements GpuResource {
   /** Writes one intensity per edge. See {@link SceneEdges.setEdgeIntensity}. */
   setIntensity(intensityOf: (edgeId: string) => number): void {
     for (const range of this.#ranges) {
-      const value = requireIntensity(intensityOf(range.id), `intensity of edge "${range.id}"`);
+      // ROUNDED TO FLOAT32 BEFORE ANYTHING COMPARES IT, and this line is the
+      // whole of the "only what changed is uploaded" promise. The array stores
+      // float32 and reads back the rounded double, so a caller's 0.2 never
+      // equals the 0.20000000298023224 that came out of it: without the round,
+      // every value that is not exactly representable re-marks every one of its
+      // vertices on every call, the merged span grows to the whole buffer, and
+      // the ranges cost more than they save. A review caught it against the one
+      // number the campaign demo actually dims with.
+      const value = Math.fround(
+        requireIntensity(intensityOf(range.id), `intensity of edge "${range.id}"`),
+      );
       const end = range.vertexStart + range.vertexCount;
       // Compared before written, so a call that changes nothing uploads
       // nothing. That is the common case by construction: a hover moving from
