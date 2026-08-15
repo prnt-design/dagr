@@ -100,7 +100,8 @@ exported from the package; the other four are, because each is the parameter
 type of a `run` somebody writes. The four `...Output` types are exported too.
 
 `PreparedState` also carries `previous`, which is the previous run's
-`RoutedState` without its graph and its config, or `undefined` on a cold run.
+`RoutedState` without its graph, its config and its own `previous`, or
+`undefined` on a cold run.
 That is the warm-start channel, and only an engine's
 [`relayout`](#relayout) ever fills it in: `layout()` has no previous run to
 offer, and `engine.run` deliberately does not either, because the graph it is
@@ -109,6 +110,13 @@ reads rather than passed to one of them, because ranking, ordering and
 positioning each have a previous answer to start from and a channel per stage
 would be three contracts to keep in step. No built-in stage reads it yet, which
 is what "a relayout that is correct and no faster than a cold run" means.
+
+Its own `previous` is subtracted for a reason worth knowing if you write a stage
+that reads it: the field is on the record, so the runner carries it forward and
+a `RoutedState` holds the one its own run was given. An engine that retained
+that whole record would put one full pipeline state on the front of the last on
+every relayout, growing with edit count rather than with the graph. A warm start
+reads the run before it and never the run before that.
 
 **Returning less is a stronger contract than returning more.** Until M2.4a a
 stage returned the whole next record, which meant every stage handed back a

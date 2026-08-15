@@ -151,26 +151,31 @@ export interface PreparedState {
 /**
  * The previous run's pipeline state, as a warm start reads it.
  *
- * {@link RoutedState} without its `graph` and its `config`, and that subtraction
- * is the whole point rather than tidiness. Both of those fields would be traps
- * here. The graph would be the CURRENT graph, since a caller mutates the object
- * the engine is holding and `relayout` describes what they did to it, so a stage
+ * {@link RoutedState} without its `graph`, its `config` and its own `previous`,
+ * and all three subtractions are load bearing rather than tidiness.
+ *
+ * The graph would be the CURRENT graph, since a caller mutates the object the
+ * engine is holding and `relayout` describes what they did to it, so a stage
  * reading `previous.graph` would get today's graph wearing yesterday's label.
  * The config is bound for the engine's lifetime and is already on the record
- * this hangs off. What is left is exactly the maps and sets a warm start has any
- * use for.
+ * this hangs off.
+ *
+ * `previous` IS SUBTRACTED BECAUSE IT WOULD OTHERWISE BE A CHAIN, which is the
+ * one finding of this task's review pass and is worth stating where the type
+ * is. The field is on the record every stage reads, so the runner carries it
+ * forward to the `RoutedState` the engine retains, and feeding that back in as
+ * the next warm start puts one full pipeline state on the front of the last on
+ * every relayout. Twenty edits retained twenty runs, growing with PATCH HISTORY
+ * rather than with the live graph, which is precisely the leak this milestone
+ * says must not exist. A warm start reads the run before it and never the run
+ * before that, so the type says so and `engine.ts` builds a record that is so.
  *
  * Spelled as an `Omit` rather than restated field by field so it cannot drift
- * from the record it is a view of: a stage output added to `RoutedState` is
- * available to the next run's warm start on the day it lands, without a second
- * declaration to remember.
- *
- * A VIEW, not a copy. The engine retains the routed record itself and narrows
- * it here, on the same terms as every other type-level guard in this pipeline:
- * the compiler stops the mistake at the keyboard, and a stage that casts its way
- * past the compiler was never going to be stopped by an allocation.
+ * from the record it is a view of, and that is what makes the explicit builder
+ * in `engine.ts` safe: a stage output added to `RoutedState` widens this type,
+ * and the builder stops compiling until it carries the new field too.
  */
-export type PreviousLayout = Omit<RoutedState, 'graph' | 'config'>;
+export type PreviousLayout = Omit<RoutedState, 'graph' | 'config' | 'previous'>;
 
 /** {@link PreparedState} plus the output of the rank stage. */
 export interface RankedState extends PreparedState {

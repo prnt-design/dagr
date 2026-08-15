@@ -16,6 +16,7 @@ import type {
   LayoutResult,
   LayoutStageOverrides,
   PreviousLayout,
+  RoutedState,
 } from './types.js';
 import type { RunSnapshot } from './wire.js';
 import { decodeFailure, decodeResult, encodeRun, isLayoutMessage } from './wire.js';
@@ -156,6 +157,40 @@ export interface RelayoutResult {
 
   /** What this relayout was entitled to move. See {@link InfluenceSet}. */
   readonly influence: InfluenceSet;
+}
+
+/**
+ * What the engine retains from a run, which is that run and not the one before.
+ *
+ * A REBUILT RECORD RATHER THAN THE ROUTED ONE, and the difference is a leak. The
+ * warm-start channel is a field on the record every stage reads, so the runner
+ * carries it forward and a `RoutedState` holds the `previous` its own run was
+ * given. Retaining that whole record and feeding it back in as the next warm
+ * start puts one full pipeline state on the front of the last on every single
+ * relayout: twenty edits retained twenty runs, each with its own `sizes`,
+ * `ranks`, `layers`, `positions` and `routes`. That grows with PATCH HISTORY
+ * rather than with the live graph, which is exactly what this milestone says
+ * retained state must never do, and it is invisible to any assertion that looks
+ * only at the newest link, which is why the first version of this file shipped
+ * it and the review of the merged tree is what caught it.
+ *
+ * Written out field by field rather than by rest destructuring because the rule
+ * in this repo's lint config refuses the unused bindings that pattern needs. It
+ * cannot drift for it: {@link PreviousLayout} is an `Omit` of the record this
+ * reads, so a field added to `RoutedState` widens the return type and stops this
+ * function compiling until it is carried too.
+ */
+function warmStartOf(routed: RoutedState): PreviousLayout {
+  return {
+    sizes: routed.sizes,
+    ranks: routed.ranks,
+    reversedEdges: routed.reversedEdges,
+    virtualNodes: routed.virtualNodes,
+    virtualChains: routed.virtualChains,
+    layers: routed.layers,
+    positions: routed.positions,
+    routes: routed.routes,
+  };
 }
 
 /**
@@ -392,7 +427,9 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * All three are proportional to the live graph and never to patch history:
    * every relayout rebuilds them whole from the run it just did, which is what
    * makes a removed node's entry impossible to leak rather than merely unlikely.
-   * The incremental implementations from M3.5 on will not have that for free,
+   * That is a property of {@link warmStartOf} rather than a free consequence of
+   * rebuilding, and the first version of this file did not have it. The
+   * incremental implementations from M3.5 on will not have it for free either,
    * and M3.10's churn sequence is written to catch it when they do not.
    */
   let held: Graph | undefined;
@@ -489,12 +526,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
   const runHere = (graph: Graph, previous: PreviousLayout | undefined): LayoutResult => {
     const { result, routed } = runPipeline(prepare(graph, config, nodeSize, previous), stages);
     held = graph;
-    // The routed record itself, narrowed to {@link PreviousLayout} by the
-    // assignment. Copying it to strip the two fields that type subtracts would
-    // be an allocation per run buying nothing: the narrowing is what keeps a
-    // stage from reading them, and it holds no reference this engine is not
-    // already holding.
-    warm = routed;
+    warm = warmStartOf(routed);
     return result;
   };
 

@@ -2527,11 +2527,27 @@ it.
   run's pipeline state (absent after a worker run), and the reported-geometry
   snapshot (not the same object as the last computed result once epsilon is
   nonzero). All three are proportional to the live graph and never to patch
-  history, for free and not by care: every run rebuilds them whole, so a removed
-  node's entry is impossible to leak rather than merely unlikely. M3.5 onwards
-  will not have that for free, which is what M3.10's churn sequence is written to
-  catch, and this task's suite pins the M3.2 form of it (a removed node is in
-  neither the retained ranks nor the retained sizes on the next run).
+  history, and THAT IS BY CARE RATHER THAN FOR FREE, which this task got wrong
+  the first time and is the second finding of the review of the merged tree.
+  `previous` is a field on the record every stage reads, so the runner carries it
+  forward and the `RoutedState` the engine retains holds the `previous` its own
+  run was given; feeding that back in as the next warm start puts one full
+  pipeline state on the front of the last on every relayout, each with its own
+  `sizes`, `ranks`, `layers`, `positions` and `routes`. Measured at depth 20
+  after 20 relayouts before the fix. That is growth in PATCH HISTORY, the exact
+  thing this entry says must not happen, arriving through the field this task
+  itself added rather than through the "never deletes a removed node's entry"
+  mechanism the entry predicted, and it is INVISIBLE TO ANY ASSERTION THAT LOOKS
+  ONLY AT THE NEWEST LINK, which is why the guard test for removed nodes passed
+  throughout. `PreviousLayout` subtracts its own `previous`, and the engine
+  builds the retained record field by field with that type as its return type, so
+  a field added to `RoutedState` stops the builder compiling rather than being
+  silently dropped. THE LESSON FOR M3.5 ONWARDS: an `Omit` narrows a view and
+  strips nothing, so a retention test has to walk the object rather than trust
+  the type. This task's suite now pins both forms (a removed node is in neither
+  the retained ranks nor the retained sizes, and the retained chain is one link
+  deep after twenty edits), and M3.10's churn sequence should assert depth as
+  well as size.
   `dispose` REJECTS RUNS IN FLIGHT rather than leaving them pending, which M2.10's
   "there is no timeout" argument does not cover: dispose detaches the port
   listener, so an answer arriving afterwards reaches nobody, and a promise that

@@ -37,12 +37,16 @@ of doc prose.
   `relayout` before any run, any call after `dispose`, or a patch describing a
   graph the engine is not holding.
 
-  **`PreparedState` gained an optional `previous`,** the warm-start channel, and
-  the four `...Output` types each gained a `previous?: never` refusing it. A
-  stage that spreads the record it was handed already failed to compile, so no
-  correct stage changes; a stage that spread its way past the compiler now has
-  one more field the runner does not read. Nothing in the package reads
-  `previous` yet: M3.6 is the first stage that will.
+  **`PreparedState` gained an optional `previous`,** the warm-start channel,
+  typed `Omit<RoutedState, 'graph' | 'config' | 'previous'>`, and the four
+  `...Output` types each gained a `previous?: never` refusing it. A stage that
+  spreads the record it was handed already failed to compile, so no correct
+  stage changes; a stage that spread its way past the compiler now has one more
+  field the runner does not read. Nothing in the package reads `previous` yet:
+  M3.6 is the first stage that will. It subtracts its own `previous` because the
+  runner carries the field forward, so an engine retaining the routed record
+  whole would chain one pipeline state onto the last on every relayout and grow
+  with edit count rather than with the graph.
 
 - `diffLayout`, `applyDelta`, `isEmptyDelta` and the `LayoutDelta` type, which
   together are the delta model. `diffLayout` is a pure function over two

@@ -231,6 +231,39 @@ describe('the warm-start state the engine retains', () => {
     expect(recorder.inputs.rank?.previous?.sizes.has('b')).toBe(false);
   });
 
+  // The leak this task's entry predicted, arriving through the mechanism it did
+  // not: `previous` is a field on the record every stage reads, so the runner
+  // carries it forward to the RoutedState the engine then retains, and a warm
+  // start feeding that back in chains one full pipeline state onto the front of
+  // the last on every single relayout. Twenty edits retained twenty runs. It is
+  // proportional to PATCH HISTORY rather than to the live graph, which is the
+  // exact shape M3.10's churn sequence exists to catch, and no assertion that
+  // looks only at the newest link can see it.
+  it('does not chain, so an editing session retains one run and not all of them', () => {
+    const recorder = recordingStages();
+    const { graph, patches } = watched(diamond());
+    const engine = createLayout({ stages: recorder.stages });
+    engine.run(graph);
+
+    for (let step = 0; step < 20; step += 1) {
+      graph.updateNodeAttrs('a', { touched: step });
+      engine.relayout(last(patches));
+    }
+
+    // Walked at RUNTIME rather than trusted to the type. `PreviousLayout` now
+    // subtracts `previous`, so a type-level check here would assert what the
+    // compiler already knows and would say nothing about the object, which is
+    // where the chain actually was: an `Omit` narrows a view and strips nothing.
+    type Link = { previous?: unknown } | undefined;
+    let depth = 0;
+    let link = recorder.inputs.rank?.previous as unknown as Link;
+    while (link !== undefined) {
+      depth += 1;
+      link = link.previous as Link;
+    }
+    expect(depth).toBe(1);
+  });
+
   it('is not carried across a cold run of another graph', () => {
     const recorder = recordingStages();
     const engine = createLayout({ stages: recorder.stages });
