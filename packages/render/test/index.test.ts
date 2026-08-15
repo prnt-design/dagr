@@ -13,10 +13,11 @@ import * as api from '../src/index.js';
  * package unusable in any server-rendered application.
  */
 describe('@dagr/render', () => {
-  it('exports exactly the runtime surface, through M4.12', () => {
+  it('exports exactly the runtime surface, through the campaign demo P2', () => {
     // Types are erased, so only the runtime exports can be checked here. The
     // type surface is exercised by the other files in the suite importing from
-    // it.
+    // it. `fitZoom` joined in P2: the pure fit arithmetic behind
+    // `Camera2D.fitBounds`, exported so limit derivation shares its formula.
     expect(Object.keys(api).sort()).toEqual([
       'CENTRE_ANCHOR',
       'Camera2D',
@@ -29,6 +30,7 @@ describe('@dagr/render', () => {
       'createHtmlOverlay',
       'createRenderer',
       'createRichNodes',
+      'fitZoom',
       'measureHtmlSizes',
     ]);
   });

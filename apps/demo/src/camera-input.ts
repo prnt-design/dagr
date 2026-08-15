@@ -1,4 +1,5 @@
-import type { Vec2 } from '@dagr/render';
+import { fitZoom } from '@dagr/render';
+import type { Vec2, WorldBounds } from '@dagr/render';
 
 /**
  * The arithmetic between a DOM input event and a {@link Camera2D} call.
@@ -44,78 +45,134 @@ export const WHEEL_ZOOM_SPEED = 0.0015;
 export const WHEEL_MAX_PIXELS = 200;
 
 /**
- * The zoom the demo's camera starts at, and how far the wheel may take it, in
- * CSS pixels per world unit.
+ * The zoom the demo's camera starts at, in CSS pixels per world unit.
  *
- * Next to {@link WHEEL_MAX_PIXELS} rather than in `FirstLight.tsx` because the
- * two are halves of one decision and neither is right on its own. That clamp
- * bounds ONE event and cannot bound a gesture: {@link wheelZoomFactor} is
- * exponential and exponentials compose exactly, which its docstring rightly
- * calls a feature. Thirty saturated events are an ordinary trackpad fling and
- * multiply the zoom by e^9, about 8100x. **So the RANGE is what stops a fling,
- * and it is the only thing that does.**
+ * 1 for the reason that survives from the fixed-range era: one CSS pixel per
+ * world unit makes the overlay's world bounds and the sizes on screen
+ * literally the same numbers, which is the cheapest way for a first-time
+ * reader to believe the readout, and the 100-unit rung is at its natural
+ * size, where fill, outline and glow are all legible at once.
  *
- * The limits are 0.1 and 100 because those are the two zooms M4.2 owes a
- * committed screenshot at. The claim the task has to demonstrate is that one
- * signed distance field keeps an edge crisp at EVERY zoom rather than at one,
- * and the evidence is the same shape photographed at 0.1x and at 100x. A range
- * that stopped short of either end could not produce the reference at all, and
- * {@link initialZoomFromHash} clamps, so `#zoom=100` against a smaller MAX_ZOOM
- * would answer with something else and make the reference quietly
- * unreproducible.
+ * MIN_ZOOM and MAX_ZOOM used to live beside this, at 0.1 and 100, chosen for
+ * M4.2's two crispness screenshots. The campaign demo's P2 replaces them with
+ * {@link zoomLimits}, derived from the content and the viewport, because a
+ * fixed range answers the wrong question: the range a wheel fling needs to be
+ * stopped at depends on what is on screen, and "the whole graph with padding"
+ * to "one node filling the view" is that answer for any scene. The 100x
+ * reference stays reachable under the derived range (the max lands near 150
+ * on the reference canvas); the 0.1x reference does not, deliberately, since
+ * a floor at the fitted scene is exactly the "too far out" state the range
+ * now exists to prevent. The 0.1x frame remains reproducible from the M4.2
+ * commit, and its finding (the sub-pixel fade) is recorded in the M4.2
+ * ROADMAP entry rather than re-demonstrated by every future scene.
  *
- * They still have to pass the older test, which is that neither end can be
- * mistaken for a broken renderer, and that is a claim about this specific scene:
- * `@dagr/render` draws a crispness ladder of rounded rects and circles about 10,
- * 100 and 1000 world units across, the smallest at or beside the world origin,
- * on a canvas that measures 1102 by 598 CSS pixels at the demo's full page width
- * (`styles.css` caps `.page` at 72rem and holds the stage at least 600 tall).
- *
- * At 0.1 the 1000-unit rung is 100 CSS pixels and still visibly a rounded
- * rectangle with a curved corner, the 100-unit rung is 10, and the 10-unit rung
- * is exactly 1. As a shape shrinks towards a pixel a distance field FADES toward
- * the background instead of aliasing into a flickering speck, because the
- * coverage the screen-space derivative computes falls away with the shape. That
- * is measured rather than assumed, and so is where it stops: at zoom 0.2 the
- * 10-unit rung draws as a 2 by 2 block of #7e4d1b, a dim amber against the
- * #ffb703 it is at full coverage, which is the fade. At zoom 0.1 that same rung
- * does not appear at all. Its padded quad is 1.4 by 0.8 CSS pixels there, and
- * whether a footprint that small covers a sample point at all depends on where it
- * falls on the grid: the 10-unit CIRCLE beside it survives as one dim pixel in the
- * same frame. That is a rasterisation limit rather than a shading one, and no
- * distance field can fix it, because the fragment that would have faded is never
- * shaded. The visible world is then 11020 by 5980 units, nearly six times the
- * largest rung on the short axis, which is the headroom the ladder needs to be in
- * frame.
- *
- * At 100 the 10-unit rung is 1000 CSS pixels: taller than the 598-pixel stage,
- * so it fills the view the way the 100x reference wants, and still 9% narrower
- * than the 1102-pixel canvas, so both of its side edges and two of its rounded
- * corners stay on screen and the frame is an antialiased boundary rather than a
- * flat fill. That second half holds only while the scene keeps a rung near 10
- * units and only at the demo's full page width: a narrower window pushes the
- * side edges out of frame, which is why the reference is taken maximised.
- *
- * INITIAL_ZOOM is 1, the middle of the ladder rather than the whole of it, for
- * three reasons. One CSS pixel per world unit makes the overlay's world bounds
- * and the sizes on screen literally the same numbers, which is the cheapest way
- * for a first-time reader to believe the readout. The 100-unit rung is then at
- * its natural size, which is the one size where fill, outline and glow are all
- * legible at once, and that trio is what M4.2 claims. And it is neither limit,
- * so a first flick in either direction visibly does something: about 8 saturated
- * wheel events reach 0.1 and about 16 reach 100. Framing the whole ladder
- * instead would take a number this file cannot honestly pick, because the
- * ladder's layout lives in `@dagr/render` and is not exported.
- *
- * 0.2 to 12 from zoom 3 was the range before, argued against M4.1's single 100
- * by 40 quad. Those numbers were right for that scene and are wrong for this
- * one: 12 cannot reach the magnification the crispness claim is about, and 0.2
- * puts the smallest rung at 2 pixels, which is inside the fade rather than past
- * it and therefore proves nothing about aliasing either way.
+ * A range is still the ONLY thing that stops a fling, exactly as before:
+ * {@link WHEEL_MAX_PIXELS} clamps one event, exponentials compose, and
+ * thirty saturated events are an ordinary trackpad gesture worth e^9.
  */
 export const INITIAL_ZOOM = 1;
-export const MIN_ZOOM = 0.1;
-export const MAX_ZOOM = 100;
+
+/**
+ * The fraction of the viewport left empty on each side when fitting the whole
+ * scene, passed to both `Camera2D.fitBounds` and {@link zoomLimits} so the
+ * "0" key and the zoom-out limit agree on what "the whole graph" looks like.
+ */
+export const FIT_PADDING = 0.05;
+
+/**
+ * The derived zoom range for a scene: zoom out stops where the whole content
+ * is in frame with {@link FIT_PADDING}, zoom in stops where the smallest node
+ * fills the frame with the same padding.
+ *
+ * Both ends are `fitZoom` from `@dagr/render`, which is also what
+ * `Camera2D.fitBounds` adopts, so the "0" key, the floor, and the ceiling
+ * share one formula and one validation instead of three copies held together
+ * by tests. The validation matters here: a zero-extent scene or node reaches
+ * `fitZoom`'s RangeError with the field named, rather than deriving an
+ * `Infinity` that `setZoomLimits` rejects inside a ResizeObserver callback.
+ *
+ * The ceiling fits the smallest node's WHOLE box rather than putting its
+ * short axis across the viewport, so fully zoomed in, the node's edges are in
+ * frame and the view cannot degenerate into the edge-free flat fill that
+ * looks exactly like a broken renderer, which is the invariant the fixed
+ * range's screenshot tests used to guard. Smallest node rather than median,
+ * because scenes like the ladder span decades of node size and a
+ * median-derived ceiling would strand the small nodes below readable size.
+ *
+ * Degenerate content (bounds tighter than the smallest node's own box) can
+ * invert the pair; the two are ordered before returning so the range is
+ * always one a camera accepts.
+ */
+export function zoomLimits(
+  content: WorldBounds,
+  smallestNode: { readonly width: number; readonly height: number },
+  viewport: { readonly width: number; readonly height: number },
+): { readonly minZoom: number; readonly maxZoom: number } {
+  const fit = fitZoom(content, viewport, FIT_PADDING);
+  const fill = fitZoom(
+    { minX: 0, minY: 0, maxX: smallestNode.width, maxY: smallestNode.height },
+    viewport,
+    FIT_PADDING,
+  );
+  return fit <= fill ? { minZoom: fit, maxZoom: fill } : { minZoom: fill, maxZoom: fit };
+}
+
+/**
+ * One keyboard zoom step, as a factor. Exactly one wheel detent
+ * ({@link WHEEL_MAX_PIXELS} / 2 pixels of travel at {@link WHEEL_ZOOM_SPEED}),
+ * so holding a key and rolling the wheel move at the same speed and there is
+ * one zoom feel, not two. Spelled in terms of the two constants it claims
+ * parity with, so retuning either retunes this with it.
+ */
+export const KEY_ZOOM_FACTOR = Math.exp((WHEEL_MAX_PIXELS / 2) * WHEEL_ZOOM_SPEED);
+
+/** One keyboard pan step, in CSS pixels. */
+export const KEY_PAN_STEP = 64;
+
+/** What one keypress asks the camera to do. */
+export type KeyCommand =
+  | { readonly kind: 'zoom'; readonly factor: number }
+  | { readonly kind: 'pan'; readonly dx: number; readonly dy: number }
+  | { readonly kind: 'fit' };
+
+/**
+ * The key map, while the canvas has focus. `null` means "not ours": the
+ * caller must not `preventDefault`, so keys like Tab keep their meaning.
+ *
+ * Up and Down ZOOM rather than pan, because that is the ask this map exists
+ * to satisfy: with the visualization focused, the keys that would scroll the
+ * page zoom the scene instead. Vertical panning moves to Shift+Up/Down;
+ * Left and Right pan horizontally, since nothing else wants them. The pan
+ * deltas are in `panByScreen`'s drag convention (the content follows the
+ * delta), so panning the VIEW left means a positive dx.
+ */
+export function keyCommand(key: string, shift = false): KeyCommand | null {
+  if (shift && key === 'ArrowUp') return { kind: 'pan', dx: 0, dy: KEY_PAN_STEP };
+  if (shift && key === 'ArrowDown') return { kind: 'pan', dx: 0, dy: -KEY_PAN_STEP };
+  switch (key) {
+    case 'ArrowUp':
+    case '+':
+    case '=':
+      return { kind: 'zoom', factor: KEY_ZOOM_FACTOR };
+    case 'ArrowDown':
+    case '-':
+    case '_':
+      return { kind: 'zoom', factor: 1 / KEY_ZOOM_FACTOR };
+    case 'PageUp':
+      return { kind: 'zoom', factor: KEY_ZOOM_FACTOR ** 3 };
+    case 'PageDown':
+      return { kind: 'zoom', factor: 1 / KEY_ZOOM_FACTOR ** 3 };
+    case 'ArrowLeft':
+      return { kind: 'pan', dx: KEY_PAN_STEP, dy: 0 };
+    case 'ArrowRight':
+      return { kind: 'pan', dx: -KEY_PAN_STEP, dy: 0 };
+    case '0':
+    case 'Home':
+      return { kind: 'fit' };
+    default:
+      return null;
+  }
+}
 
 /**
  * The zoom to start at, taken from a URL hash like `#zoom=100`, falling back to
@@ -134,21 +191,26 @@ export const MAX_ZOOM = 100;
  * which gets percent decoding, other keys, key order and a repeated key right
  * for free; the FIRST `zoom` wins, as it would in a query string.
  *
- * An out-of-range number clamps into [{@link MIN_ZOOM}, {@link MAX_ZOOM}] rather
- * than falling back, because somebody who typed `#zoom=500` wants the closest
- * thing this camera can do, and `Camera2D` throws a `RangeError` on 500 rather
- * than clamping it: the alternative to clamping here is a red overlay where the
- * demo was. Zero and negatives are NOT in that group. A scale of 0 or -5 is not
- * an extreme view this camera can approximate, it is a typo or a mangled link,
- * and answering it with 0.1 would show a plausible frame and hide the mistake.
+ * An out-of-range number is returned AS PARSED rather than clamped here, which
+ * is a change from the fixed-range era with the same outcome for the user who
+ * typed `#zoom=500`: the demo's limits are now derived from the scene at the
+ * first viewport measurement (see {@link zoomLimits}), and `setZoomLimits`
+ * clamps the camera's current zoom when they land. This function cannot clamp
+ * correctly any more, because at parse time the viewport has not been measured
+ * and the limits do not exist yet. The camera is built with its default
+ * unbounded range, so any positive finite zoom is legal to start at, for the
+ * one frame at most that can be drawn before the first measurement.
  *
- * So the `zoom <= 0` test does double duty, and its second job is the classic
- * hole here: `Number('')` is 0 rather than NaN, so `#zoom=` walks straight
- * through `Number.isFinite` and would otherwise clamp to MIN_ZOOM as though a
- * user had asked for it.
+ * Zero and negatives still fall back. A scale of 0 or -5 is not an extreme
+ * view a camera can approximate, it is a typo or a mangled link, and clamping
+ * it would show a plausible frame and hide the mistake. The `zoom <= 0` test
+ * does double duty, and its second job is the classic hole here: `Number('')`
+ * is 0 rather than NaN, so `#zoom=` walks straight through `Number.isFinite`
+ * and would otherwise read as a request for the minimum.
  *
- * The fallback is returned as given rather than clamped: it is the caller's own
- * constant, and clamping it would hide a bad one behind a working camera.
+ * The fallback is returned as given rather than validated: it is the caller's
+ * own constant, and second-guessing it would hide a bad one behind a working
+ * camera.
  */
 export function initialZoomFromHash(hash: string, fallback: number): number {
   const body = hash.startsWith('#') ? hash.slice(1) : hash;
@@ -156,7 +218,7 @@ export function initialZoomFromHash(hash: string, fallback: number): number {
   if (raw === null) return fallback;
   const zoom = Number(raw);
   if (!Number.isFinite(zoom) || zoom <= 0) return fallback;
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
+  return zoom;
 }
 
 /** The part of a `WheelEvent` that {@link wheelPixels} reads. */

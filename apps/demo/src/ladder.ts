@@ -107,6 +107,35 @@ export const LADDER_SHAPES: readonly LadderShape[] = [
 ];
 
 /**
+ * The union of every shape's bounds: what "the whole scene" means to the
+ * camera's derived zoom limits and to the fit key. Computed from
+ * {@link LADDER_SHAPES} rather than typed out, so it cannot drift from the
+ * shapes the way a copied number could.
+ */
+export const LADDER_BOUNDS: WorldBounds = LADDER_SHAPES.reduce(
+  (acc, shape) => ({
+    minX: Math.min(acc.minX, shape.bounds.minX),
+    minY: Math.min(acc.minY, shape.bounds.minY),
+    maxX: Math.max(acc.maxX, shape.bounds.maxX),
+    maxY: Math.max(acc.maxY, shape.bounds.maxY),
+  }),
+  { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
+);
+
+/**
+ * The smallest shape by area, as a size: the "one node" the zoom-in limit
+ * frames. The whole box rather than a single extent, because the ceiling fits
+ * the node with its edges in view, and a box needs both dimensions for that.
+ * The 4 by 4 small circle today, but computed, for the same drift reason as
+ * {@link LADDER_BOUNDS}.
+ */
+export const LADDER_SMALLEST_NODE: { readonly width: number; readonly height: number } =
+  LADDER_SHAPES.map((shape) => ({
+    width: shape.bounds.maxX - shape.bounds.minX,
+    height: shape.bounds.maxY - shape.bounds.minY,
+  })).reduce((acc, size) => (size.width * size.height < acc.width * acc.height ? size : acc));
+
+/**
  * The three tiers, in CSS pixels of screen width, from the campaign demo plan.
  *
  * Below {@link LABEL_MIN_SCREEN_WIDTH} a shape gets NO overlay element at all,

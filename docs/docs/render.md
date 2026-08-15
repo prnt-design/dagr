@@ -69,9 +69,15 @@ All three were captured against a real WebGPU adapter at a device pixel ratio of
 the renderer drew and nothing else. The canvas is that size because its container
 caps it, not because of the window: it measures 1102 by 598 in a 1920 wide window
 as readily as in a 1200 wide one, and an earlier version of this paragraph claimed
-the window size caused it, which is wrong. Reproducing one takes no gesture: run
-the demo and open `#zoom=100`. The frame is
-mostly background at 0.1, and that is inherent rather than a framing mistake, since
+the window size caused it, which is wrong. Reproducing the 100x frame takes no
+gesture: run the demo and open `#zoom=100`. The 0.1x frame is no longer
+reachable in the live demo, and that is a decision, not drift: the campaign
+demo's P2 derives the zoom range from the scene and the viewport, and the floor
+(the whole ladder fitted at 5% padding, about 0.45 on this canvas) sits above
+0.1, because a view that far out is exactly the state the derived range exists
+to prevent. Reproduce the 0.1x reference from the M4.2 commit; the sub-pixel
+fade it documents is recorded in that task's ROADMAP entry. The frame is mostly
+background at 0.1, and that is inherent rather than a framing mistake, since
 the visible world there is 11020 world units across and the whole ladder fits
 inside it with room to spare.
 
@@ -312,9 +318,18 @@ developer is not using.
 | `drawingBufferSize()` | how big the drawing buffer should be, in device pixels |
 | `panByScreen(dx, dy)` | drag: the world follows the pointer |
 | `zoomAtScreen(anchor, factor)` | wheel or pinch: zoom towards the cursor |
+| `fitBounds(bounds, padding?)` | frame a region: centre on it at the padded fit zoom |
 | `setCenter`, `setZoom`, `setViewport` | move it, scale it, tell it the canvas resized |
+| `setZoomLimits(min, max)` | rebind the zoom range, clamping the current zoom into it |
 
-Two of those have a decision inside them worth knowing about.
+The zoom range is set at construction and can be rebound later with
+`setZoomLimits`, which is what content-derived limits need: the fit zoom
+depends on the viewport, so a window resize has to be able to move the range.
+The pure fit arithmetic is also exported as `fitZoom(bounds, viewport,
+padding)`, so a caller deriving limits and a `fitBounds` call cannot disagree
+about what "fits" means.
+
+Two of the methods above have a decision inside them worth knowing about.
 
 `zoomAtScreen` keeps the world point under `anchor` exactly where it is on
 screen, which is what makes a wheel feel like zooming towards the cursor rather

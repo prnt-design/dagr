@@ -62,7 +62,7 @@
  * is a different thing from putting it on the package's surface.
  */
 
-export { Camera2D } from './camera.js';
+export { Camera2D, fitZoom } from './camera.js';
 export type { Camera2DInit } from './camera.js';
 export {
   DagrRenderError,
