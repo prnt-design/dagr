@@ -87,7 +87,7 @@ await page.setContent(html);
  *
  * A headless browser on a bare box has almost no fonts: `ui-monospace`,
  * `monospace` and even `serif` all resolve to a 6.000px advance at 12px here,
- * which is about 20% narrower than any monospace a reader actually has, so
+ * which is about a sixth narrower than any monospace a reader actually has, so
  * budgets taken against it wrap later than reality and every long card clips.
  * The probe therefore names Liberation Mono, which is installed and sits at
  * 0.6em, the width the common monospace faces (SF Mono, Menlo, DejaVu Sans

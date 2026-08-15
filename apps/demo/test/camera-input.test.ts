@@ -1,6 +1,7 @@
 import { Camera2D } from '@dagr/render';
 import { describe, expect, it } from 'vitest';
 import {
+  nodeIdFromHash,
   FIT_PADDING,
   INITIAL_ZOOM,
   KEY_PAN_STEP,
@@ -390,5 +391,53 @@ describe('canvasPoint', () => {
       x: -40,
       y: -120,
     });
+  });
+});
+
+describe('nodeIdFromHash', () => {
+  it('reads the id a link names', () => {
+    // The point of the feature: a link to one node lands on that node, so a
+    // maintainer can point at "the 88-room finale" rather than describing how
+    // to pan to it.
+    expect(nodeIdFromHash('#node=dungeon-22')).toBe('dungeon-22');
+  });
+
+  it('takes the hash with or without its leading hash mark', () => {
+    // `window.location.hash` yields the mark; a hand-built string may not.
+    expect(nodeIdFromHash('node=scene-3')).toBe('scene-3');
+  });
+
+  it('answers null when no node is named', () => {
+    expect(nodeIdFromHash('')).toBeNull();
+    expect(nodeIdFromHash('#')).toBeNull();
+    expect(nodeIdFromHash('#zoom=100')).toBeNull();
+  });
+
+  it('treats an empty id as no id rather than as the empty-string id', () => {
+    // `#node=` is a mangled link, not a request for the node called ''. The
+    // distinction matters because the caller looks the id up: '' would be a
+    // miss that reads as "that node is gone" rather than "no node was named".
+    expect(nodeIdFromHash('#node=')).toBeNull();
+  });
+
+  it('percent-decodes, so a hand-written link to an awkward id works', () => {
+    expect(nodeIdFromHash('#node=room%20K37')).toBe('room K37');
+  });
+
+  it('takes the first node when a link repeats the key', () => {
+    // The same rule a query string would follow, and the same one the zoom
+    // parser follows, so a reader learns it once.
+    expect(nodeIdFromHash('#node=arc-1&node=arc-2')).toBe('arc-1');
+  });
+
+  it('reads a node beside other keys, in either order', () => {
+    expect(nodeIdFromHash('#zoom=12&node=npc-4')).toBe('npc-4');
+    expect(nodeIdFromHash('#node=npc-4&zoom=12')).toBe('npc-4');
+  });
+
+  it('returns the id verbatim rather than validating it', () => {
+    // This module has no campaign to check against, and the caller resolves it
+    // in one lookup. An id that does not exist comes back as written.
+    expect(nodeIdFromHash('#node=not-a-real-id')).toBe('not-a-real-id');
   });
 });

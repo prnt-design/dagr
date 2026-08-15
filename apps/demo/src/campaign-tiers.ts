@@ -88,7 +88,8 @@ const CARD_INSET = 8;
  *
  * The harness pins its probe to a 0.6em monospace and asserts the advance,
  * because a headless browser on a bare box resolves every font family to a
- * 6.000px advance at 12px, about 20% narrower than any monospace a reader has.
+ * 6.000px advance at 12px, about a sixth narrower than any monospace a reader
+ * has.
  * Budgets taken against that wrap later than reality: five kinds measured as
  * fitting there clip in a real face, quest_step by two whole lines.
  *
@@ -251,6 +252,17 @@ export function createCampaignTiers(
       update: (element, node) => {
         const refs = titleRefs.get(element);
         if (refs === undefined) return;
+        // The id on the element is how the hover controller finds what to
+        // highlight. Written here rather than tracked in a map beside the
+        // overlay, because the overlay owns these elements: it creates,
+        // recycles and detaches them, and a map beside it would be a second
+        // record of which element belongs to which node, kept in step by hand.
+        element.dataset.nodeId = node.id;
+        // Cleared on every bind, because elements are POOLED: an element that
+        // was hovered when it left the view comes back for a different node,
+        // and the class would ride along and highlight the wrong one. The hover
+        // controller re-applies it after each sync while a node is hovered.
+        element.classList.remove('is-hovered');
         refs.name.textContent = node.data.name;
         // The kind's own colour, from the same function the instanced shapes
         // read. A title in one colour over a shape in another reads as a design
@@ -281,6 +293,9 @@ export function createCampaignTiers(
         const campaignNode = node.data;
         const kind = campaignNode.data.kind;
 
+        element.dataset.nodeId = node.id;
+        // See the title tier: pooled elements must not carry a highlight over.
+        element.classList.remove('is-hovered');
         refs.name.textContent = campaignNode.name;
         // The NAME takes the colour, on both tiers, because the name is the one
         // element a reader sees on both sides of the gate. The badge stays the

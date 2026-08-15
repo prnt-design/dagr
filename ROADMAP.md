@@ -3983,8 +3983,9 @@ consumer. Sequencing against M3 is the plan's open question 1.
   Version four was wrong in the harness again, and this one is worth carrying
   to any future browser measurement: a headless browser on a bare box has
   almost no fonts, and resolves `ui-monospace`, `monospace` and even `serif`
-  to a 6.000px advance at 12px, about 20% narrower than any monospace a reader
-  actually has. Budgets taken there wrap later than reality: five kinds that
+  to a 6.000px advance at 12px, about a sixth narrower than any monospace a
+  reader actually has. Budgets taken there wrap later than reality: five kinds
+  that
   measured as fitting clipped in a real face, `quest_step` by two whole lines.
   The harness now pins its probe to Liberation Mono, which is installed and
   sits at the 0.6em the common faces cluster at, and ASSERTS the advance it
@@ -4033,6 +4034,103 @@ consumer. Sequencing against M3 is the plan's open question 1.
   says 16 node kinds where the plan's own schema section still says 15 above a
   list of 16, and why its per-group edge counts are the built ones rather than
   the research proposal's estimate the P1 entry above already disowns.
+  `#node=` is an ENTRY POINT, not a live binding, which is the same decision
+  `#zoom=` records and is worth restating because the temptation differs: a
+  `#zoom=` that tracked the camera would fight the wheel, while a `#node=` that
+  tracked it has no honest moment to update, since no single node is where a
+  viewport is. So it is read once at load and never written back. The two keys
+  compose rather than compete: `#node=` decides WHERE through the node's own
+  box, `#zoom=` still decides HOW CLOSE when present, so
+  `#node=dungeon-21&zoom=8` centres the finale at 8x. An id the scene does not
+  hold falls back to the whole campaign, because a mangled link should show the
+  scene rather than an empty patch of world. The parser returns the id verbatim
+  rather than validating it: it has no campaign to check against, and the
+  caller resolves it in one lookup, which keeps "does this node exist" where
+  the nodes are. An empty `#node=` is no id rather than the empty-string id.
+  HOVER WITHOUT PICKING. M4.8 will put an id per pixel on the GPU, which is
+  what arbitrary shapes need; a campaign node is an axis-aligned box whose
+  extents the demo already holds, because the overlay is positioned from the
+  same boxes, so `hover.ts` answers the same question with arithmetic and no
+  readback, no extra target, and nothing to keep in step with the camera. It
+  answers for the BOX rather than the drawn shape, which is right for a hover
+  that says which node you are near and wrong for a click target, so it is not
+  quietly reused as one when picking lands. The smallest containing box wins,
+  so the answer cannot depend on scene order. A linear scan over 3,010 boxes on
+  pointer moves is microseconds; an index would be a structure to keep in step
+  for no measurable gain.
+  The highlight is a CLASS on the overlay element, found by a `data-node-id`
+  the tiers write, which costs one lookup per CHANGE of hovered node rather
+  than a React render per pointer move. Elements are POOLED, so a tier clears
+  the class on every bind (or a recycled element carries the highlight to
+  another node) and the demo re-applies it after each sync while something is
+  hovered. That re-apply sits inside the ONE `draw` callback beside
+  `overlay.sync()`, never on a listener of its own, which is M4.11's rule and
+  the thing the 0.2 ms per element per frame panning cost is there to protect.
+  `pointerleave` clears it, or a node stays lit while the reader is reading the
+  page below, which reads as a selection. A pan clears it too: the move handler
+  returns early while panning, so a held highlight would light a node the
+  pointer left hundreds of pixels ago and would cost a lookup per frame to keep
+  doing it.
+  The README and the docs intro now link the live demo at
+  `https://dagr-demo.onrender.com/`, which P8 below deployed.
+  WHAT THAT URL SHOWED WHEN THIS ENTRY WAS WRITTEN, 2026-08-15, because it
+  keeps changing under the link and a reader later deserves a dated snapshot
+  rather than a promise: the campaign's 3,010 nodes drawn instanced, one mesh
+  per shape family, over about 101 tiles laid out a tile at a time in the
+  worker; the whole scene fitted on load with a zoom range derived from it;
+  names from about 24 CSS pixels of node width and full cards from 460; the
+  `#zoom=` entry point; and, as of P5's second stage, routed edges as dashed
+  ribbons along the layout's polylines, cross-tile and overlay edges bowed
+  between tiles, three groups drawn in declaration order. NOT the `#node=`
+  entry point and NOT hover: both are new in this entry's own commit, so the
+  deployed site does not have them until this merges and Render rebuilds.
+  SCREENSHOTS, five of them, in `assets/screenshots/` beside `p7-captions.txt`,
+  taken by `apps/demo/scripts/capture.mjs` so somebody who did not take them can
+  take them again. Each frame is a URL hash, which is what makes it checkable:
+  the fitted campaign, names at `#zoom=1.4`, a quest and an NPC card at
+  `#node=quest-1` and `#node=npc-3`, and the 88-room finale at
+  `#node=dungeon-21&zoom=2`. Every frame asserts the tier it is about, a floor
+  AND a ceiling, because the first version of the script captured a picture of
+  the loading state and passed: it waited on body text containing "nodes,",
+  which the copy BELOW the canvas says whatever the canvas is doing. It now
+  waits on the readout, which only renders once a camera has been published.
+  The captions say what a reader needs to not misread them later: captured on
+  the swiftshader WebGL2 fallback, because this box has no WebGPU at all, with
+  Liberation Mono PINNED at 7.201 px per character, because the capture box has
+  none of the faces the demo's font stack names and falls back to a 6.000 px
+  advance, about a sixth narrower than any reader sees. Pinning is a departure
+  from what this box would serve and it is the honest one: the missing fonts are
+  a fact about the machine, not about the demo.
+  A WRONG OBSERVATION, corrected here rather than quietly dropped, because the
+  mistake is more useful than the fix. This entry first recorded that at device
+  pixel ratio 2 the fitted campaign drew NOTHING on the capture box, and
+  wondered aloud whether the renderer's device-pixel path was at fault. It was
+  not. The capture was racing the renderer: the shutter waited on the readout,
+  and `publish` runs from the same `draw` as `render`, so the first draw
+  publishes live camera numbers while `renderer` is still null and nothing has
+  been drawn. A larger drawing buffer takes a software rasteriser longer, so
+  dpr 2 lost that race more often, which looked exactly like a dpr-dependent
+  bug. Behind the gate the demo now publishes (`data-renderer-drawn`, set after
+  `createRenderer` resolves and a frame has gone through it), dpr 1, 2 and 3 all
+  draw the fitted campaign. Two reviewers caught the blank frame independently
+  and both named the race; the committed frame had shipped blank under a caption
+  describing 3,010 nodes and ribbons.
+  NOT TAKEN, and worth the sentence: P5's `campaignEdges` takes a colour
+  FUNCTION whose identity keys the effect, so swapping it reaches the GPU, which
+  makes highlighting the hovered node's own edges a small change. It is a small
+  change with a per-hover cost: every hover would re-upload a colour for all
+  7,100 edges, and hover changes as fast as a pointer moves. Worth doing behind
+  a per-edge attribute write for the few edges that change, which is a different
+  piece of work from this one.
+  FOLLOW-UP, not done here: a node wider than the viewport has its card
+  anchored to a corner that is off screen, so panning into its middle shows a
+  blank fill exactly where a reader has zoomed in to read. It bites on CARDS
+  specifically rather than being inherited from the title tier, because the
+  card only opens at a width where the large kinds exceed the viewport (the
+  campaign node is about 7,000 CSS pixels across at the ceiling). The fix is to
+  clamp the placement against the viewport, which needs the camera per frame
+  and therefore belongs in `@dagr/render`'s overlay placement rather than in a
+  demo tier that deliberately never reads it. It wants its own task.
 - [x] **P8** (`render.yaml`) The demo on a public URL: a second static site,
   `dagr-demo`, building `apps/demo` from the repo root and publishing
   `apps/demo/dist`.

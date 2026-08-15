@@ -154,3 +154,33 @@
   margin: 0;
   color: var(--ink);
 }
+
+/*
+ * The hovered node.
+ *
+ * The class goes on the OUTER box, which is the element the overlay positions,
+ * so both tiers get the highlight from one rule each and neither needs to know
+ * it is hovered. `campaign-tiers.ts` clears the class on every bind because the
+ * elements are pooled, and the demo re-applies it after each sync.
+ *
+ * The rules below sit on the INNER elements, which carry the counter-scale, so
+ * a length here is in CSS pixels and does not grow with the zoom: that is the
+ * same reason the base rules can say `border: 1px` and `font-size: 12px`. The
+ * outer `.campaign-node` is the world box, and a length on THAT would scale.
+ *
+ * A ring drawn with `box-shadow` rather than a wider border, because the card's
+ * height is DECLARED and the gate is derived from it: growing a border would
+ * change the box the whole derivation rests on, while a shadow paints outside
+ * the layout entirely. At title tier the ring is most of what makes the
+ * highlight visible on a tag only twelve pixels tall.
+ */
+.campaign-node.is-hovered .campaign-title,
+.campaign-node.is-hovered .campaign-card {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 1px var(--amber);
+  background: rgba(12, 14, 18, 0.96);
+}
+
+.campaign-node.is-hovered .campaign-card-oneline {
+  color: var(--ink);
+}

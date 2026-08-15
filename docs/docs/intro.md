@@ -20,6 +20,11 @@ patches, and the layout engine emits deltas rather than a fresh set of
 coordinates. A renderer can spring every node from where it was to where it
 now belongs, so a graph that changes reads as a graph that moved.
 
+The [live demo](https://dagr-demo.onrender.com/) draws a mock D&D campaign:
+3,010 nodes and 7,100 edges, laid out a tile at a time in a worker, instanced
+on the GPU, with names and then readable cards appearing as you zoom in. The
+[campaign dataset](./campaign.md) page describes what it is drawing.
+
 ## Packages
 
 | Package | What it does |
