@@ -15,6 +15,7 @@ import {
   canvasPoint,
   initialZoomFromHash,
   keyCommand,
+  nodeIdFromHash,
   wheelZoomFactor,
   zoomLimits,
 } from './camera-input.js';
@@ -27,6 +28,7 @@ import {
   ROUTED_GROUP,
   overlayFade,
 } from './campaign-edges.js';
+import { nodeAtPoint } from './hover.js';
 import { nodeColor } from './campaign-style.js';
 import { createCampaignTiers } from './campaign-tiers.js';
 import type { CampaignNode } from '@dagr/campaign';
@@ -453,6 +455,13 @@ export function FirstLight({
       styleEdges();
       renderer?.render();
       overlay.sync();
+      // AFTER the sync, because the sync is what attaches, detaches and
+      // recycles elements, and a tier's `update` clears the highlight class
+      // precisely so a pooled element cannot carry it to another node. Doing it
+      // here rather than only on `pointermove` is also what keeps the answer
+      // TRUE: the world moves under a still pointer on every zoom, pan and fit,
+      // so hover has to be recomputed per frame, not per gesture.
+      refreshHovered();
       publish();
     };
 
@@ -490,9 +499,30 @@ export function FirstLight({
     };
 
     /** Re-measures the canvas and pushes the new size through to the camera. */
+    /**
+     * Where the canvas sits on the page, for turning a client point into a
+     * world point without a layout flush per frame.
+     *
+     * Refreshed on RESIZE and on SCROLL, and the second one is not optional:
+     * the rect is viewport-relative, a `ResizeObserver` never fires for a
+     * scroll, and a page scrolled between two pointer moves leaves every hover
+     * answer offset by the scroll delta, which at title tier is several nodes
+     * over. `onWheel` reads the rect per event for the same reason.
+     *
+     * Declared HERE rather than beside the hover state that reads it, because
+     * `applyViewport` runs synchronously further down this effect and a `let`
+     * below that call would be in its temporal dead zone.
+     */
+    let canvasRect: DOMRect = canvas.getBoundingClientRect();
+
     const applyViewport = (): void => {
       const viewport = measureViewport(canvas);
       if (viewport === null) return;
+      // The canvas's position on the page, cached for the hover recompute.
+      // Reading it per frame would be a layout flush per frame, and the read
+      // would land right after `overlay.sync()` has written a transform per
+      // element, which is the worst moment to ask the browser to settle.
+      canvasRect = canvas.getBoundingClientRect();
       // Onto the camera rather than through `Renderer.resize`, which is this
       // call plus the sync the next `render` does anyway. The camera is the
       // durable half of the pair and outlives a pending `createRenderer`, so
@@ -529,7 +559,26 @@ export function FirstLight({
     // sounds: the hash is how a committed screenshot is reproduced by opening a
     // link rather than by landing on a zoom with a trackpad, and it would have
     // gone on advertising itself in the readout while doing nothing.
-    if (!Number.isFinite(hashZoom)) camera.fitBounds(scene.bounds, FIT_PADDING);
+    // `#node=` frames ONE node instead of the whole campaign, which is what
+    // makes a link to "the 88-room finale" possible. An entry point, not a live
+    // binding: read once here, never written back, exactly as `#zoom=` is, and
+    // `camera-input.ts` carries the argument for that pattern.
+    //
+    // The two hash keys compose rather than compete. `#node=` decides WHERE,
+    // through the node's own box; `#zoom=` still decides HOW CLOSE when it is
+    // present, so `#node=dungeon-21&zoom=8` centres the finale at 8x. An id the
+    // scene does not hold falls back to the whole campaign, the same frame a
+    // reader would have got with no hash at all: a mangled link should show the
+    // scene rather than an empty patch of world where nothing is.
+    const hashNodeId = nodeIdFromHash(window.location.hash);
+    const hashNodeBounds =
+      hashNodeId === null ? undefined : scene.nodeBounds.get(hashNodeId);
+    if (hashNodeBounds !== undefined) {
+      camera.fitBounds(hashNodeBounds, FIT_PADDING);
+      if (Number.isFinite(hashZoom)) camera.setZoom(hashZoom);
+    } else if (!Number.isFinite(hashZoom)) {
+      camera.fitBounds(scene.bounds, FIT_PADDING);
+    }
 
     // Observe the CONTAINER, and measure the CANVAS. The container is the
     // element page layout sizes; the canvas is the element with the pixels, and
@@ -576,8 +625,85 @@ export function FirstLight({
       canvas.setPointerCapture(event.pointerId);
     };
 
+    /**
+     * Which node the pointer is over, and the element wearing the highlight.
+     *
+     * Held here rather than in React state: this changes on pointer moves, and
+     * one `setState` per move would reconcile the whole component to add a
+     * class. The overlay owns the elements, so the highlight is found by the id
+     * the tiers write onto them and applied with a class, which costs one
+     * lookup per CHANGE of hovered node rather than per move.
+     */
+    let hoveredId: string | null = null;
+    let hoveredElement: HTMLElement | null = null;
+    /**
+     * The last place the pointer was, in client coordinates, or null if it has
+     * never been over the canvas or has left it.
+     *
+     * Kept because hover is a question about where the pointer is in WORLD
+     * space, and the world moves under a still pointer: a wheel zoom, a
+     * keyboard pan, a fit. Recomputing only on `pointermove` leaves the
+     * highlight on a node the pointer stopped being over, and the per-frame
+     * re-apply then follows that wrong node faithfully, across the tier gate
+     * and into its card.
+     */
+    let lastHoverPoint: { readonly clientX: number; readonly clientY: number } | null = null;
+
+    /** Puts the class on whatever element currently answers for the hovered id. */
+    const applyHovered = (): void => {
+      const next =
+        hoveredId === null
+          ? null
+          : container.querySelector<HTMLElement>(`[data-node-id="${hoveredId}"]`);
+      if (next !== hoveredElement) hoveredElement?.classList.remove('is-hovered');
+      hoveredElement = next;
+      // Added unconditionally, even when the element is the one already held.
+      // A tier's `update` clears this class on every bind, and an element that
+      // is already attached is re-bound in place when its data changes, so an
+      // early return here would leave the highlight cleared until the pointer
+      // moved to a different node.
+      hoveredElement?.classList.add('is-hovered');
+    };
+
+    const setHovered = (id: string | null): void => {
+      if (id === hoveredId) {
+        applyHovered();
+        return;
+      }
+      hoveredId = id;
+      applyHovered();
+    };
+
+    /**
+     * Answers "what is under the pointer" from where the pointer last was.
+     *
+     * Called from the draw callback, so it is correct after ANY camera change
+     * rather than only after a pointer move, and it costs the same linear scan
+     * the move handler was already paying for.
+     */
+    const refreshHovered = (): void => {
+      if (lastHoverPoint === null) {
+        setHovered(null);
+        return;
+      }
+      const point = camera.screenToWorld(canvasPoint(lastHoverPoint, canvasRect));
+      setHovered(nodeAtPoint(point, scene.overlayNodes));
+    };
+
     const onPointerMove = (event: PointerEvent): void => {
-      if (!panning) return;
+      // Recorded whether or not this is a drag, because the pointer's position
+      // is what hover is a question about and the draw callback answers it from
+      // here every frame. Hover during a drag is therefore correct rather than
+      // suppressed: the world moves, the pointer does not, and the node under
+      // it changes.
+      lastHoverPoint = { clientX: event.clientX, clientY: event.clientY };
+      if (!panning) {
+        // Hover, from the same boxes the overlay is positioned from. No picking
+        // pass and no readback: see `hover.ts` for why a box test is the right
+        // answer here and the wrong one for a click target.
+        refreshHovered();
+        return;
+      }
       // `panByScreen` takes the pointer's OWN delta and moves the camera the
       // other way, so drag right and the content goes right. Checked on screen,
       // not inferred: see Camera2D.panByScreen for the sign, which is a minus
@@ -649,6 +775,24 @@ export function FirstLight({
       requestDraw();
     };
 
+    // The pointer leaving the canvas has to clear the highlight: without it a
+    // node stays lit while the reader is reading the page below, which reads as
+    // a selection rather than as a hover.
+    const onPointerLeave = (): void => {
+      lastHoverPoint = null;
+      setHovered(null);
+    };
+
+    // Capture, so a scrolling ANCESTOR is caught too: a scroll event from an
+    // element between the canvas and the document does not bubble to the
+    // window, and it moves the canvas just as a page scroll does. Passive,
+    // because this only reads.
+    const onScroll = (): void => {
+      canvasRect = canvas.getBoundingClientRect();
+    };
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true });
+
+    canvas.addEventListener('pointerleave', onPointerLeave);
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
@@ -681,6 +825,16 @@ export function FirstLight({
         // Draws the first frame as a side effect, at whatever size the canvas
         // has now rather than the size it had when the effect started.
         applyViewport();
+        // A signal that a REAL frame has been drawn, for anything watching from
+        // outside: `apps/demo/scripts/capture.mjs` waits on it before opening
+        // the shutter. The readout is not that signal, and the difference is
+        // what put a black canvas in a committed screenshot: `publish` runs from
+        // the first `draw`, which happens while `renderer` is still null and
+        // `renderer?.render()` is a no-op, so a readout full of live numbers can
+        // sit over a canvas nothing has drawn to yet. This attribute is set
+        // after `createRenderer` has resolved AND `applyViewport` has drawn
+        // through it.
+        container.dataset.rendererDrawn = 'true';
       })
       .catch((cause: unknown) => {
         // An abort is this component's own doing, so the reason is not news and
@@ -691,6 +845,7 @@ export function FirstLight({
 
     return () => {
       abort.abort();
+      delete container.dataset.rendererDrawn;
       // Any frame already scheduled would draw through a renderer that is about
       // to be disposed, and publish into an unmounted component.
       cancelAnimationFrame(frame);
@@ -703,7 +858,10 @@ export function FirstLight({
       observer.disconnect();
       ratioQuery?.removeEventListener('change', onPixelRatioChange);
       canvas.removeEventListener('pointerdown', onPointerDown);
+      window.removeEventListener('scroll', onScroll, { capture: true });
+      canvas.removeEventListener('pointerleave', onPointerLeave);
       canvas.removeEventListener('pointermove', onPointerMove);
+      setHovered(null);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
       canvas.removeEventListener('wheel', onWheel);

@@ -1,0 +1,23 @@
+P7 campaign screenshots.
+
+Captured on the swiftshader WebGL2 fallback: this box has no WebGPU at all, navigator.gpu is absent.
+Text is Liberation Mono, pinned for the capture at 7.201px per character at 12px,
+because the capture box has none of the faces the demo names (ui-monospace, SFMono-Regular,
+'SF Mono', Menlo, Consolas) and Liberation Mono is not one of them either: it is a stand-in,
+chosen because it sits at the 0.6em those faces cluster at. Unpinned, this box falls back to a
+6.000px advance, about a sixth narrower than a reader sees.
+Viewport 1440x900 at device pixel ratio 1.
+Shapes are that fallback rasterising the same distance fields; the overlay never touches a GPU.
+
+p7-campaign-fit.png  [no hash]  0 titles, 0 cards
+    The whole campaign fitted on load: 3,010 nodes over 101 tiles, routed edges as dashed ribbons and cross-tile edges bowed between them. No HTML overlay at all at this zoom.
+p7-campaign-names.png  [#zoom=1.4]  12 titles, 0 cards
+    Names, from about 24 CSS pixels of node width, over the room graph of a keyed site. No cards yet: nothing is 460 wide.
+p7-campaign-card-quest.png  [#node=quest-1]  0 titles, 1 cards
+    A quest framed by its own deep link. #node= fits the node, so the card sits in a corner that is on screen.
+p7-campaign-card-npc.png  [#node=npc-3]  0 titles, 1 cards
+    An NPC with a secret: the kind-specific rows are what cardRows formats.
+p7-campaign-finale.png  [#node=dungeon-21&zoom=2]  8 titles, 0 cards
+    The 88-room finale, the Osterdale Citadel, at a zoom the hash also names: #node= decides where, #zoom= how close. The titles here are SITES, the citadel and its neighbours; its rooms are still shapes at this zoom.
+
+Regenerate with apps/demo/scripts/capture.mjs; see its header.

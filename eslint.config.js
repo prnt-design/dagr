@@ -29,20 +29,24 @@ export default tseslint.config(
     // is not for the TypeScript sources, where the compiler resolves globals
     // through `types: ["node"]`. The globals they use, declared rather than
     // pulling in a globals package for them.
-    files: ['bench/**/*.mjs', 'docs/scripts/**/*.mjs'],
+    files: ['bench/**/*.mjs', 'docs/scripts/**/*.mjs', 'apps/demo/scripts/**/*.mjs'],
     languageOptions: {
       globals: { URL: 'readonly', console: 'readonly', process: 'readonly' },
     },
   },
   {
-    // `bench/browser` drives a real browser, so parts of these files run in the
-    // PAGE rather than in node: the callback handed to `page.evaluate` is
-    // serialised and evaluated there. Declared as its own block rather than
-    // widening the node one above, which would stop `no-undef` catching a
-    // browser global used by mistake in a node script.
-    files: ['bench/browser/**/*.mjs'],
+    // `bench/browser` and the demo's capture script drive a real browser, so
+    // parts of these files run in the PAGE rather than in node: the callback
+    // handed to `page.evaluate` is serialised and evaluated there. Declared as
+    // its own block rather than widening the node one above, which would stop
+    // `no-undef` catching a browser global used by mistake in a node script.
+    files: ['bench/browser/**/*.mjs', 'apps/demo/scripts/**/*.mjs'],
     languageOptions: {
-      globals: { window: 'readonly', document: 'readonly' },
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        requestAnimationFrame: 'readonly',
+      },
     },
   },
 );

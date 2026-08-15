@@ -12,6 +12,13 @@ baseline machine. What this directory is for is answering a question once, with
 numbers, and writing down how the numbers were taken so somebody can disagree
 with them later.
 
+**A harness only counts once it is in the repo.** These files are committed,
+and that is the point: a measurement script kept in a scratch directory is
+outside `pnpm lint`, outside `pnpm typecheck` and outside review, so every
+green gate while it lives there is true and says nothing about it.
+`card-heights.mjs` went red on its first lint the moment it was committed,
+having "passed" for an entire review cycle from a scratchpad.
+
 ## Running it
 
 ```

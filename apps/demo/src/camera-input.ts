@@ -221,6 +221,38 @@ export function initialZoomFromHash(hash: string, fallback: number): number {
   return zoom;
 }
 
+/**
+ * The node a `#node=` hash names, or `null` when it names none.
+ *
+ * **An entry point, not a live binding**, which is the same decision
+ * {@link initialZoomFromHash} records and is worth restating because the
+ * temptation is different here. A `#zoom=` that tracked the camera would fight
+ * the wheel; a `#node=` that tracked the camera has no obvious moment to
+ * update, since there is no single node a viewport is "at". So this is read
+ * ONCE, at load, and nothing writes the hash back. A reader who wants a link to
+ * where they are can still build one by hand, and a reader who follows one
+ * lands where it points and is then free to move.
+ *
+ * The id is returned verbatim, not validated against the campaign. This module
+ * knows nothing about which ids exist, and a caller that has the scene can
+ * answer that in one lookup; returning an id the scene will reject keeps the
+ * "does this node exist" decision where the nodes are. An EMPTY id is `null`
+ * rather than the empty string, because `#node=` with nothing after it is a
+ * mangled link rather than a request for the node whose id is `''`.
+ *
+ * Parsed with `URLSearchParams` for the same reasons the zoom parser gives:
+ * percent decoding, other keys, key order and repeats all come out right, and
+ * the first `node` wins. Ids in this dataset are ASCII (`scene-12`), but
+ * percent decoding is what makes a hand-written link to an id with a space or a
+ * slash work rather than silently missing.
+ */
+export function nodeIdFromHash(hash: string): string | null {
+  const body = hash.startsWith('#') ? hash.slice(1) : hash;
+  const raw = new URLSearchParams(body).get('node');
+  if (raw === null || raw === '') return null;
+  return raw;
+}
+
 /** The part of a `WheelEvent` that {@link wheelPixels} reads. */
 export interface WheelLike {
   readonly deltaY: number;
