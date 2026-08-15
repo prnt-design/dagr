@@ -13,9 +13,9 @@ layout and the next, and, as of M4.3, one draw call per shape family: the
 six-shape ladder draws in two.
 
 This page describes the package as of M4.3, the last task to change what reaches
-a GPU. Rounded rectangles and circles are
-on screen, drawn as signed distance fields, and there is an HTML overlay for the
-text a signed distance field cannot draw. What is real is the seam everything
+a GPU. Rounded rectangles and circles are on screen, drawn as signed distance
+fields, and there is an HTML overlay for the text a signed distance field cannot
+draw. What is real is the seam everything
 else plugs into: the `Renderer` interface, the camera, the distance fields and
 the shading that reads them, and the decisions that had to be made before a
 single test in this milestone could be written. They are argued below rather
@@ -169,8 +169,7 @@ all.
 A glow is a property of the shape. The quad has to be padded to contain the halo,
 and that padding sizes the quad in the vertex stage, from the instance's own glow
 reach, so a pixel-space glow would need the quad resized every time the camera
-moved. That is
-a per-frame scene decision, and M4.4 owns it. A halo that stayed six pixels wide
+moved. That is a per-frame scene decision, and M4.4 owns it. A halo that stayed six pixels wide
 while its shape grew from one pixel to a thousand would also read as a different
 effect at each end of the range.
 
