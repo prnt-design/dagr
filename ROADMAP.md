@@ -2497,6 +2497,19 @@ it.
   now is cheaper than discovering it in M3.6. M3.6 is the task that has to decide
   whether the state crosses or the worker retains it and the patch crosses
   instead, and it should decide it before it warm starts anything.
+  THE ENGINE DIFFS AGAINST WHAT IT LAST REPORTED AT THE MOMENT IT REPORTS, not
+  against what was current when the relayout started, which is the one finding of
+  this run's review of the merged tree. `relayoutAsync` has an await between the
+  patch check and the diff, and M2.10's protocol lets runs overlap, so another
+  one may settle inside it. Capturing the previous geometry before the run hands
+  the caller a delta that does not apply to what they are holding: a relayout
+  overtaken by a sync one produced a delta adding a node the caller's result
+  already had, which `applyDelta` refuses with a `DeltaMismatchError`. Reading it
+  at report time keeps the one promise the design rests on. The ANSWER is still
+  odd under overlap, because the worker laid out the graph as it was when the run
+  was sent; what it is not is inconsistent. `layout.relayout.test.ts` arranges
+  the overlap with a gated port rather than racing for it, and the test fails
+  against the capture-before version.
   THE WARM-START CHANNEL IS A FIELD ON `PreparedState`, `previous`, typed as
   `RoutedState` minus its `graph` and its `config`. On the record every stage
   reads rather than an argument to one of them, because ranking, ordering and

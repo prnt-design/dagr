@@ -498,8 +498,8 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
     return result;
   };
 
-  /** The graph and the geometry a relayout needs, or the refusal to do one. */
-  const forRelayout = (patch: Patch): { graph: Graph; previous: LayoutResult } => {
+  /** The graph a relayout re-runs, or the refusal to do one. */
+  const forRelayout = (patch: Patch): Graph => {
     requireLive();
     if (held === undefined || reported === undefined) {
       throw new EngineStateError(
@@ -508,7 +508,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
       );
     }
     checkPatchApplied(held, patch);
-    return { graph: held, previous: reported };
+    return held;
   };
 
   /**
@@ -518,8 +518,22 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * applied, which at `epsilon` 0 is the new result itself: nothing was withheld,
    * so rebuilding an equal map in a different iteration order would be work
    * spent making the common case worse.
+   *
+   * `reported` IS READ HERE rather than captured before the run, and that is
+   * about the one case where the two differ: `relayoutAsync` has an await
+   * between the check and this, and the protocol lets runs overlap, so another
+   * one may have settled inside it. Diffing against the geometry that was
+   * current when this relayout STARTED would hand the caller a delta that does
+   * not apply to what they are holding, which is the one promise this whole
+   * design rests on. Overlapping a stale run with a fresh one still gives an odd
+   * ANSWER, because the worker laid out the graph as it was when the run was
+   * sent; what it does not give is an inconsistent one.
    */
-  const report = (graph: Graph, previous: LayoutResult, next: LayoutResult): RelayoutResult => {
+  const report = (graph: Graph, next: LayoutResult): RelayoutResult => {
+    const previous = reported;
+    if (previous === undefined) {
+      throw new EngineStateError('this engine was reset while a relayout was in flight');
+    }
     const delta = diffLayout(previous, next, { epsilon });
     reported = epsilon === 0 ? next : applyDelta(previous, delta);
     return { result: reported, delta, influence: wholeRoster(graph, previous) };
@@ -589,14 +603,14 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
     },
 
     relayout(patch) {
-      const { graph, previous } = forRelayout(patch);
-      return report(graph, previous, runHere(graph, warm));
+      const graph = forRelayout(patch);
+      return report(graph, runHere(graph, warm));
     },
 
     async relayoutAsync(patch) {
-      const { graph, previous } = forRelayout(patch);
+      const graph = forRelayout(patch);
       const next = worker === undefined ? runHere(graph, warm) : await runThere(graph, worker);
-      return report(graph, previous, next);
+      return report(graph, next);
     },
 
     dispose() {

@@ -2054,6 +2054,13 @@ this side's bookkeeping rather than the pipeline's, so nothing about the
 [wire protocol](#what-crosses-and-what-does-not) changes: what crosses is a run,
 and what comes back is a result.
 
+Runs may overlap, here as for `runAsync`, so a relayout in a worker can be
+overtaken by one served on the calling thread. The delta you are handed is
+always against the geometry the engine last reported at the moment it reports,
+so it applies to what you are holding. The answer itself is still odd when that
+happens, because the worker laid out the graph as it was when the run was sent;
+what it will not be is inconsistent with the deltas you already applied.
+
 What does not cross is the warm-start state, because it lives where the pipeline
 ran. A relayout served by a worker is therefore cold in a way one served here is
 not, which today is a distinction with no consequence at all, since no stage

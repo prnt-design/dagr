@@ -11,7 +11,7 @@ import {
   layout,
   serveLayout,
 } from '../src/index.js';
-import type { LayoutEngine, LayoutResult, PositionStage } from '../src/index.js';
+import type { LayoutEngine, LayoutPort, LayoutResult, PositionStage } from '../src/index.js';
 import { recordingStages } from './fakes.js';
 
 function diamond(): Graph {
@@ -368,6 +368,78 @@ describe('engine.relayoutAsync', () => {
 
   it('rejects rather than throwing when there is nothing to relayout', async () => {
     await expect(createLayout().relayoutAsync([])).rejects.toBeInstanceOf(EngineStateError);
+  });
+
+  /**
+   * A port that holds the worker's answers until a test lets them through, so
+   * the overlap the protocol allows can be arranged rather than raced for.
+   */
+  function gated(port: LayoutPort): LayoutPort & {
+    readonly held: () => number;
+    readonly release: () => void;
+  } {
+    type Event = { readonly data: unknown };
+    const queued: Event[] = [];
+    const listeners = new Set<(event: Event) => void>();
+    let open = false;
+    const deliver = (event: Event): void => {
+      for (const listener of [...listeners]) listener(event);
+    };
+    port.addEventListener('message', (event: Event) => {
+      if (open) deliver(event);
+      else queued.push(event);
+    });
+    port.start?.();
+    return {
+      postMessage: (message: unknown, transfer: ArrayBuffer[]) => {
+        port.postMessage(message, transfer);
+      },
+      addEventListener: (_type: 'message', listener: (event: Event) => void) => {
+        listeners.add(listener);
+      },
+      removeEventListener: (_type: 'message', listener: (event: Event) => void) => {
+        listeners.delete(listener);
+      },
+      held: () => queued.length,
+      release: () => {
+        open = true;
+        for (const event of queued.splice(0)) deliver(event);
+      },
+    };
+  }
+
+  // Runs may overlap, which M2.10 decided and this task inherits, so a relayout
+  // in a worker can be overtaken by one served here. The answer is odd either
+  // way, because the worker laid out the graph as it was when the run was sent.
+  // What must not happen is an INCONSISTENT one: the delta a caller is handed
+  // has to apply to the geometry they are currently holding, and it does only
+  // because the engine diffs against what it last reported at the moment it
+  // reports rather than against what was current when the relayout started.
+  it('hands back a delta that applies to what the caller is holding, even when overtaken', async () => {
+    const { port1, port2 } = new MessageChannel();
+    const stop = serveLayout(port2);
+    const hold = gated(port1);
+    closers.push(() => {
+      stop();
+      port1.close();
+      port2.close();
+    });
+
+    const { graph, patches } = watched(diamond());
+    const engine = createLayout({ worker: hold });
+    engine.run(graph);
+
+    graph.addNode('e');
+    const inFlight = engine.relayoutAsync(last(patches));
+    graph.addNode('f');
+    const overtaking = engine.relayout(last(patches));
+
+    // The worker's answer crosses the channel on its own schedule, so the
+    // overlap is arranged by waiting for it to be held rather than assumed.
+    while (hold.held() === 0) await new Promise((resolve) => setTimeout(resolve, 5));
+    hold.release();
+    const late = await inFlight;
+    expect(boxes(applyDelta(overtaking.result, late.delta))).toEqual(boxes(late.result));
   });
 });
 
