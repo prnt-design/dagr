@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MITER_LIMIT,
+  FAN_RADIUS_TOLERANCE,
+  MAX_FAN_FACET_RADIANS,
   MIN_SEGMENT_WORLD,
   RIBBON_AA_PADDING_PIXELS,
   advanceDashFlow,
@@ -193,12 +195,12 @@ describe('tessellateRibbons: joins', () => {
   it('falls back past the miter limit, into two ribs and a fan', () => {
     // A 150 degree turn wants a miter of `1 / cos(75 degrees)` = 3.86, which is
     // over the limit of 2, so the corner becomes two ribs (four vertices), the
-    // centreline vertex the fan is drawn from, and the fan's own midpoint,
-    // which a turn past 120 degrees earns: ten in all, and two triangles of
-    // fan rather than one of chord.
+    // centreline vertex the fan is drawn from, and the arc between them: 150
+    // degrees at `MAX_FAN_FACET_RADIANS` is five facets, so four more
+    // vertices, thirteen in all and five triangles of fan.
     const geometry = ribbonOf(corner(150));
-    expect(geometry.vertexCount).toBe(10);
-    expect(geometry.indexCount).toBe(18);
+    expect(geometry.vertexCount).toBe(13);
+    expect(geometry.indexCount).toBe(27);
     for (let i = 0; i < geometry.vertexCount; i += 1) {
       const length = Math.hypot(at(geometry.offset, i * 2), at(geometry.offset, i * 2 + 1));
       expect(length).toBeLessThanOrEqual(1);
@@ -232,39 +234,53 @@ describe('tessellateRibbons: joins', () => {
     expect(uses(second)).toBeGreaterThan(1);
   });
 
-  it('splits the fan so no facet spans more than 120 degrees', () => {
-    // The reason the fan has a midpoint. `across` runs 0 to 1 across a facet
-    // over a geometric distance of `expand * cos(facet / 2)`, so the one pixel
-    // coverage ramp is compressed by that cosine: at 120 degrees it is half a
-    // pixel, and a flat chord across a 170 degree turn would leave a
-    // seventeenth of one, which is a hard edge.
+  it('keeps a fanned corner within the stated tolerance of the half width', () => {
+    // The property the fan exists for, sampled where it can actually FAIL. A
+    // fan is an inscribed polygon, so its boundary is exact at each facet's
+    // ends and short by `1 - cos(span / 2)` in the middle: sampling vertices
+    // only, as the no-pinch sweep does, cannot see it, because an offset is a
+    // unit vector there by construction whatever the facet count.
     //
-    // Measured as the angle between consecutive fan directions, ordered by
-    // their angle to the FIRST of them rather than by `atan2`, which would put
-    // a false gap wherever the arc crosses the branch cut at pi.
-    for (const degrees of [130, 150, 170, 179, -130, -170]) {
-      const geometry = ribbonOf(corner(degrees));
-      const outward = degrees < 0 ? 1 : -1;
-      const fan: Vec2[] = [];
-      for (let vertex = 0; vertex < geometry.vertexCount; vertex += 1) {
-        const atCorner =
-          at(geometry.position, vertex * 2) === 0 && at(geometry.position, vertex * 2 + 1) === 0;
-        if (!atCorner || at(geometry.across, vertex) !== outward) continue;
-        fan.push({ x: at(geometry.offset, vertex * 2), y: at(geometry.offset, vertex * 2 + 1) });
-      }
-      // Both rib ends of the arc, plus the midpoint a turn past 120 earns.
-      expect(fan).toHaveLength(3);
+    // The first version of this fan used one midpoint past a hard-coded 120
+    // degrees, which left a 179 degree turn two 89.5 degree facets and a
+    // boundary at 0.710 of the half width, a 29% narrowing at exactly the
+    // hairpins the fan was added for. The threshold was also unrelated to the
+    // miter limit, so a limit between 1 and 2 bevelled some turns with no
+    // midpoint at all: at 1.5 a 120 degree turn measured 0.500. Hence the
+    // sweep over limits as well as angles.
+    for (const miterLimit of [1, 1.5, 2, 4]) {
+      for (const degrees of [30, 90, 120, 150, 170, 179, -150, -179]) {
+        const geometry = ribbonOf(corner(degrees), { miterLimit });
+        const outward = degrees < 0 ? 1 : -1;
+        const fan: Vec2[] = [];
+        for (let vertex = 0; vertex < geometry.vertexCount; vertex += 1) {
+          const atCorner =
+            at(geometry.position, vertex * 2) === 0 && at(geometry.position, vertex * 2 + 1) === 0;
+          if (!atCorner || at(geometry.across, vertex) !== outward) continue;
+          fan.push({ x: at(geometry.offset, vertex * 2), y: at(geometry.offset, vertex * 2 + 1) });
+        }
+        if (fan.length < 2) continue;
 
-      const first = fan[0];
-      if (first === undefined) throw new Error('unreachable');
-      const angleTo = (v: Vec2): number =>
-        Math.acos(Math.min(1, Math.max(-1, (first.x * v.x + first.y * v.y) / Math.hypot(v.x, v.y))));
-      const angles = fan.map(angleTo).sort((a, b) => a - b);
-      for (let i = 1; i < angles.length; i += 1) {
-        const previous = angles[i - 1];
-        const current = angles[i];
-        if (previous === undefined || current === undefined) throw new Error('unreachable');
-        expect(current - previous).toBeLessThanOrEqual((2 * Math.PI) / 3 + 1e-6);
+        // Ordered by angle to the first spoke, which is branch-cut safe where
+        // `atan2` is not, then measured pair by pair: the boundary mid-facet
+        // sits at `cos(span / 2)` of the half width.
+        const first = fan[0];
+        if (first === undefined) throw new Error('unreachable');
+        const angles = fan
+          .map((v) =>
+            Math.acos(
+              Math.min(1, Math.max(-1, (first.x * v.x + first.y * v.y) / Math.hypot(v.x, v.y))),
+            ),
+          )
+          .sort((a, b) => a - b);
+        for (let i = 1; i < angles.length; i += 1) {
+          const previous = angles[i - 1];
+          const current = angles[i];
+          if (previous === undefined || current === undefined) throw new Error('unreachable');
+          const span = current - previous;
+          expect(span).toBeLessThanOrEqual(MAX_FAN_FACET_RADIANS + 1e-9);
+          expect(Math.cos(span / 2)).toBeGreaterThanOrEqual(1 - FAN_RADIUS_TOLERANCE - 1e-9);
+        }
       }
     }
   });

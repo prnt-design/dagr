@@ -160,10 +160,58 @@ describe('campaignEdges', () => {
     expect(all.map((edge) => edge.id)).not.toContain('dangling');
   });
 
-  it('is deterministic, because the bow\'s side comes from the id', () => {
+  it('is deterministic, because the side comes from position in a fixed order', () => {
     const again = campaignEdges(campaign, scene, () => 0xffb703);
     expect(again.overlay[0]?.points).toEqual(edges.overlay[0]?.points);
     expect(again.crossTile[0]?.points).toEqual(edges.crossTile[0]?.points);
+  });
+
+  it('bows two lines between the same pair to OPPOSITE sides', () => {
+    // The property the bow exists for, and the one the first version never
+    // achieved: it keyed the side on `edge.id.length % 2`, and this dataset
+    // mints ids as `e-<n>`, so 6,101 of 7,100 share a length and all 26 pairs
+    // with more than one overlay edge got the same side. Two lines drew
+    // exactly on top of each other and a reader counting relationships counted
+    // one.
+    const pairCampaign = {
+      edges: [
+        { id: 'e-1500', kind: 'knows', source: 'a', target: 'c' },
+        { id: 'e-2500', kind: 'ally_of', source: 'a', target: 'c' },
+        // Back the other way, which is the same pair of boxes to look at.
+        { id: 'e-3500', kind: 'hostile_to', source: 'c', target: 'a' },
+      ],
+    } as unknown as Parameters<typeof campaignEdges>[0];
+    const drawn = campaignEdges(pairCampaign, scene, () => 0xffb703).overlay;
+    expect(drawn).toHaveLength(3);
+
+    // The chord runs a to c, so the bow's sign shows up in which side of the
+    // straight line the middle control point falls.
+    const sideOf = (edge: { points: readonly { x: number; y: number }[] }): number => {
+      const start = edge.points[0];
+      const middle = edge.points[1];
+      const end = edge.points.at(-1);
+      if (start === undefined || middle === undefined || end === undefined) {
+        throw new Error('unreachable');
+      }
+      const dx = end.x - start.x;
+      const dy = end.y - start.y;
+      return Math.sign(dx * (middle.y - start.y) - dy * (middle.x - start.x));
+    };
+    const sides = drawn.map(sideOf);
+    expect(sides[0]).not.toBe(sides[1]);
+    expect(sides[0]).not.toBe(0);
+
+    // The third steps its magnitude rather than landing back on the first.
+    const height = (edge: { points: readonly { x: number; y: number }[] }): number => {
+      const start = edge.points[0];
+      const middle = edge.points[1];
+      const end = edge.points.at(-1);
+      if (start === undefined || middle === undefined || end === undefined) {
+        throw new Error('unreachable');
+      }
+      return Math.hypot(middle.x - (start.x + end.x) / 2, middle.y - (start.y + end.y) / 2);
+    };
+    expect(height(drawn[2]!)).toBeGreaterThan(height(drawn[0]!) * 1.5);
   });
 });
 

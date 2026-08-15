@@ -6,7 +6,7 @@ import { ribbonAlpha, ribbonArcPixels, ribbonWorldPosition } from './ribbon-node
 import { requireRibbonStyle, tessellateRibbons } from './ribbon.js';
 import type { RibbonGeometry, RibbonOptions, RibbonStyle } from './ribbon.js';
 import type { GpuResource, Vec2 } from './types.js';
-import { requireFinite, requirePositive } from './validate.js';
+import { requireAtLeast, requireFinite } from './validate.js';
 
 /**
  * The seam M4.5 exists to name: a caller hands over EDGES, and this keeps a
@@ -70,14 +70,22 @@ export interface SceneEdge {
 
 /** One draw group: an id, how its edges are drawn, and the curve they take. */
 export interface SceneEdgeGroup {
-  /** The name {@link SceneEdges.setEdges} and {@link SceneEdges.setStyle} address it by. */
+  /** The name `Renderer.setEdges` and `Renderer.setEdgeStyle` address it by. */
   readonly id: string;
 
   /** The width and dash pattern. See {@link RibbonStyle}. */
   readonly style: RibbonStyle;
 
-  /** How the control points are treated. See {@link RibbonOptions.curve}. */
-  readonly curve?: RibbonOptions['curve'];
+  /**
+   * How the control points are treated: `'polyline'`, the default, draws them
+   * as they are, and `'smooth'` runs a curve THROUGH every one of them.
+   *
+   * A routed edge wants the default, because its bends are where a layout put
+   * a dummy and rounding them off would second-guess the crossing the order
+   * stage chose. A line a caller drew between two boxes wants `'smooth'`,
+   * because its control points are a curve waiting to happen.
+   */
+  readonly curve?: 'polyline' | 'smooth' | undefined;
 }
 
 /** The attribute names the ribbon material reads. Local to this file's material. */
@@ -178,7 +186,6 @@ class EdgeGroup implements GpuResource {
   readonly id: string;
   readonly mesh: Mesh<BufferGeometry, MeshBasicNodeMaterial>;
   readonly #uniforms: RibbonUniforms;
-  readonly #geometry: BufferGeometry;
   #curve: RibbonOptions['curve'];
   #disposed = false;
 
@@ -188,13 +195,13 @@ class EdgeGroup implements GpuResource {
     this.id = group.id;
     this.#uniforms = uniforms;
     this.#curve = group.curve;
-    this.#geometry = new BufferGeometry();
     // Explicitly nothing, because three defaults a draw range's count to
     // Infinity: a group declared before its edges arrive has no attributes to
     // read either, and "draw everything" over an empty buffer is a different
     // kind of nothing from "draw nothing".
-    this.#geometry.setDrawRange(0, 0);
-    this.mesh = new Mesh(this.#geometry, material);
+    const geometry = new BufferGeometry();
+    geometry.setDrawRange(0, 0);
+    this.mesh = new Mesh(geometry, material);
     // The bounding sphere three would compute is of the CENTRELINE, and a
     // ribbon is drawn up to its half width outside that, in pixels, which no
     // geometry knows. Rather than inflate a sphere by a quantity that depends
@@ -204,42 +211,88 @@ class EdgeGroup implements GpuResource {
     this.mesh.frustumCulled = false;
   }
 
-  /** Replaces this group's geometry. See {@link SceneEdges.setEdges}. */
+  /**
+   * Replaces this group's geometry with a NEW one, and disposes the old.
+   *
+   * Not `setAttribute` onto the retained geometry, and that is the hazard
+   * `instanced-scene.ts` documents for the same reason: three keys a GPU buffer
+   * to the attribute OBJECT and frees buffers only on the geometry's dispose
+   * event, and then only for the attributes it holds at that moment. Replacing
+   * an attribute therefore leaves the old buffer alive with nothing referencing
+   * it, and this method is called on every re-layout and on every recolour P7
+   * asks for, so the leak is five buffers times the whole tessellation per
+   * call.
+   *
+   * Building the whole geometry before swapping it in also makes the update
+   * atomic. `colorsFor` validates every colour and throws on a bad one; done in
+   * place, a rejected colour would leave the vertex attributes replaced and the
+   * index still the previous build's, so the group would draw old triangles
+   * over new vertices, and on a smaller rebuild those indices run past the
+   * arrays.
+   */
   setEdges(edges: readonly SceneEdge[]): void {
     const tessellated = tessellateRibbons(
       edges.map((edge) => ({ id: edge.id, points: edge.points })),
       this.#curve === undefined ? undefined : { curve: this.#curve },
     );
-    this.#geometry.setAttribute(POSITION, new BufferAttribute(tessellated.position, 2));
-    this.#geometry.setAttribute(OFFSET, new BufferAttribute(tessellated.offset, 2));
-    this.#geometry.setAttribute(ACROSS, new BufferAttribute(tessellated.across, 1));
-    this.#geometry.setAttribute(ARC, new BufferAttribute(tessellated.arc, 1));
-    this.#geometry.setAttribute(COLOR, new BufferAttribute(colorsFor(edges, tessellated), 3));
-    this.#geometry.setIndex(new BufferAttribute(tessellated.index, 1));
-    // three reads `position` for its own bookkeeping even where a material
-    // never uses it, and an empty group has no attributes at all, so the draw
-    // range is what says "nothing here" rather than a missing attribute.
-    this.#geometry.setDrawRange(0, tessellated.indexCount);
+    const colors = colorsFor(edges, tessellated);
+
+    const geometry = new BufferGeometry();
+    geometry.setAttribute(POSITION, new BufferAttribute(tessellated.position, 2));
+    geometry.setAttribute(OFFSET, new BufferAttribute(tessellated.offset, 2));
+    geometry.setAttribute(ACROSS, new BufferAttribute(tessellated.across, 1));
+    geometry.setAttribute(ARC, new BufferAttribute(tessellated.arc, 1));
+    geometry.setAttribute(COLOR, new BufferAttribute(colors, 3));
+    geometry.setIndex(new BufferAttribute(tessellated.index, 1));
+    // Explicit, because three defaults a draw range's count to Infinity and an
+    // empty group has no attributes to read either.
+    geometry.setDrawRange(0, tessellated.indexCount);
+
+    const previous = this.mesh.geometry;
+    this.mesh.geometry = geometry;
+    previous.dispose();
   }
 
   /** Writes this group's per-frame uniforms. See {@link SceneEdges.setStyle}. */
   setStyle(style: EdgeFrameStyle): void {
-    requirePositive(style.halfWidthPixels, 'style.halfWidthPixels');
-    requirePositive(style.pixelsPerWorldUnit, 'style.pixelsPerWorldUnit');
-    requireFinite(style.alpha, 'style.alpha');
+    // The same floor `requireRibbonStyle` puts on a group's width, applied to
+    // the frame's: below half a pixel the visible band is narrower than the
+    // ramp that draws it, so the ribbon does not get thinner, it gets fainter
+    // and then vanishes. A frame asking for 0.01 would otherwise walk straight
+    // through the check the declared style had to pass.
+    requireAtLeast(style.halfWidthPixels, 0.5, 'style.halfWidthPixels');
+    requireInRange(style.alpha, 'style.alpha');
     this.#uniforms.halfWidthPixels.value = style.halfWidthPixels;
-    this.#uniforms.pixelsPerWorldUnit.value = style.pixelsPerWorldUnit;
     this.#uniforms.alpha.value = style.alpha;
+    // Nothing to rasterise at zero alpha, and three skips a draw for an
+    // invisible mesh: at the campaign's fitted zoom the overlay group is faded
+    // out entirely, and that is 3,137 smooth routes transformed every frame to
+    // write nothing. The group keeps its buffers, so coming back is a uniform.
+    this.mesh.visible = style.alpha > 0;
     if (style.dashFlowPixels !== undefined) {
       requireFinite(style.dashFlowPixels, 'style.dashFlowPixels');
       this.#uniforms.dashFlowPixels.value = style.dashFlowPixels;
     }
   }
 
+  /**
+   * Writes the pixels per world unit, which is the CAMERA's business rather
+   * than a caller's.
+   *
+   * Separate from {@link setStyle} because the renderer knows this and a
+   * caller would have to re-derive it from a camera it also holds. Written on
+   * every frame from `render()`, so a group drawn without any style call is
+   * still drawn at the right scale rather than at world scale, which looks
+   * like nothing on screen and raises no error.
+   */
+  setPixelsPerWorldUnit(pixelsPerWorldUnit: number): void {
+    this.#uniforms.pixelsPerWorldUnit.value = pixelsPerWorldUnit;
+  }
+
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#geometry.dispose();
+    this.mesh.geometry.dispose();
     this.mesh.material.dispose();
   }
 }
@@ -251,7 +304,7 @@ class EdgeGroup implements GpuResource {
  * {@link linearFromHex} and not a copy of it, because a colour reaching a
  * shader as an ATTRIBUTE is converted by nothing: as a uniform three's `Color`
  * does sRGB to linear on the way in, and M4.3 found that skipping it does not
- * throw and does not look broken, it just makes every colour lighter and
+ * throw and does not look broken, it makes every colour lighter and
  * flatter.
  */
 function colorsFor(edges: readonly SceneEdge[], geometry: RibbonGeometry): Float32Array {
@@ -269,16 +322,35 @@ function colorsFor(edges: readonly SceneEdge[], geometry: RibbonGeometry): Float
   return colors;
 }
 
-/** What a frame says about how a group is drawn. Every field is a uniform. */
+/**
+ * What a frame says about how a group is drawn: only the things a CALLER
+ * decides.
+ *
+ * The pixels per world unit is deliberately not here. It is the camera's, the
+ * renderer holds the camera, and asking a caller for it would be asking them to
+ * re-derive `zoom * devicePixelRatio` from state the renderer already has, with
+ * a default that draws at world scale and so shows nothing while raising
+ * nothing. `render()` writes it every frame instead.
+ */
 export interface EdgeFrameStyle {
-  /** Half the visible width, in DEVICE pixels. See {@link ribbonWidthAt}. */
+  /**
+   * Half the visible width, in DEVICE pixels, floored at 0.5 as a declared
+   * style is. `ribbonWidthAt` is the arithmetic that decides it from a zoom,
+   * and the alpha below is the other half of its answer.
+   */
   readonly halfWidthPixels: number;
-  /** The camera's zoom times the device pixel ratio. */
-  readonly pixelsPerWorldUnit: number;
-  /** A multiplier on the ribbon's coverage, which is how a scene fades edges out. */
+  /** A multiplier on the ribbon's coverage, in `[0, 1]`. Zero skips the draw. */
   readonly alpha: number;
   /** How far the dash pattern has travelled towards the target. See `advanceDashFlow`. */
   readonly dashFlowPixels?: number | undefined;
+}
+
+/** Rejects an alpha outside `[0, 1]`, which a shader would clamp and never report. */
+function requireInRange(value: number, field: string): number {
+  if (!(value >= 0) || value > 1) {
+    throw new RangeError(`${field} has to be a number in [0, 1], got ${String(value)}`);
+  }
+  return value;
 }
 
 /**
@@ -319,7 +391,7 @@ export class SceneEdges implements GpuResource {
    * Replaces one group's edges, which rebuilds its buffers.
    *
    * Whole rather than incremental, because the input is a layout's routes and a
-   * layout that moved moved most of them. An edge's geometry has no durable
+   * layout that moved has moved most of them. An edge's geometry has no durable
    * per-instance state to preserve across the rebuild, which is the difference
    * from `SceneNodes.setNodes` and the reason there is no handle here.
    */
@@ -337,6 +409,18 @@ export class SceneEdges implements GpuResource {
   setStyle(groupId: string, style: EdgeFrameStyle): void {
     this.#assertLive('setStyle');
     this.#require(groupId, 'setStyle').setStyle(style);
+  }
+
+  /**
+   * Writes every group's pixels per world unit, from the renderer's own camera.
+   *
+   * Called once per frame by `render()`, which is what makes
+   * {@link SceneEdges.setStyle} optional: a group with edges and no style call
+   * is drawn at the right scale in the ribbon's default width.
+   */
+  setPixelsPerWorldUnit(pixelsPerWorldUnit: number): void {
+    this.#assertLive('setPixelsPerWorldUnit');
+    for (const group of this.#groups.values()) group.setPixelsPerWorldUnit(pixelsPerWorldUnit);
   }
 
   dispose(): void {

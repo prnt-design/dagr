@@ -166,12 +166,7 @@ describe('SceneEdges', () => {
     const scene = new SceneEdges(groups());
     scene.setEdges(ROUTED, [edge('e1', straight)]);
     const before = attributeOf(scene, 0, 'ribbonPosition');
-    scene.setStyle(ROUTED, {
-      halfWidthPixels: 4,
-      pixelsPerWorldUnit: 2.5,
-      alpha: 0.5,
-      dashFlowPixels: 30,
-    });
+    scene.setStyle(ROUTED, { halfWidthPixels: 4, alpha: 0.5, dashFlowPixels: 30 });
     expect(attributeOf(scene, 0, 'ribbonPosition')).toBe(before);
     scene.dispose();
   });
@@ -180,7 +175,7 @@ describe('SceneEdges', () => {
     const scene = new SceneEdges(groups());
     expect(() => scene.setEdges('nope', [])).toThrow(/"nope"/);
     expect(() =>
-      scene.setStyle('nope', { halfWidthPixels: 1, pixelsPerWorldUnit: 1, alpha: 1 }),
+      scene.setStyle('nope', { halfWidthPixels: 1, alpha: 1 }),
     ).toThrow(/"nope"/);
     scene.dispose();
   });
@@ -203,8 +198,45 @@ describe('SceneEdges', () => {
     scene.dispose();
     expect(() => scene.setEdges(ROUTED, [])).toThrow(/setEdges/);
     expect(() =>
-      scene.setStyle(ROUTED, { halfWidthPixels: 1, pixelsPerWorldUnit: 1, alpha: 1 }),
+      scene.setStyle(ROUTED, { halfWidthPixels: 1, alpha: 1 }),
     ).toThrow(/setStyle/);
+  });
+
+  it('hides a group faded to nothing rather than rasterising it', () => {
+    // At the campaign's fitted zoom the overlay group's alpha is zero, and
+    // that is 3,137 smooth routes transformed every frame to write nothing.
+    // The buffers stay, so coming back is a uniform write.
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [edge('e1', straight)]);
+    expect(scene.meshes[0]?.visible).toBe(true);
+    scene.setStyle(ROUTED, { halfWidthPixels: 2, alpha: 0 });
+    expect(scene.meshes[0]?.visible).toBe(false);
+    scene.setStyle(ROUTED, { halfWidthPixels: 2, alpha: 0.2 });
+    expect(scene.meshes[0]?.visible).toBe(true);
+    scene.dispose();
+  });
+
+  it('floors a frame\'s width where a declared style is floored', () => {
+    // A frame asking for 0.01 would otherwise walk straight through the check
+    // the group's own style had to pass.
+    const scene = new SceneEdges(groups());
+    expect(() => scene.setStyle(ROUTED, { halfWidthPixels: 0.1, alpha: 1 })).toThrow(
+      /halfWidthPixels/,
+    );
+    expect(() => scene.setStyle(ROUTED, { halfWidthPixels: 2, alpha: 1.5 })).toThrow(/alpha/);
+    expect(() => scene.setStyle(ROUTED, { halfWidthPixels: 2, alpha: -0.1 })).toThrow(/alpha/);
+    scene.dispose();
+  });
+
+  it('takes the pixels per world unit from the renderer, not from a caller', () => {
+    // The uniform a caller would otherwise have to re-derive from a camera the
+    // renderer already holds, with a default that draws at world scale and so
+    // shows nothing while raising nothing.
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [edge('e1', straight)]);
+    expect(() => scene.setPixelsPerWorldUnit(2.5)).not.toThrow();
+    scene.dispose();
+    expect(() => scene.setPixelsPerWorldUnit(2.5)).toThrow(/setPixelsPerWorldUnit/);
   });
 
   it('opts its meshes out of frustum culling', () => {

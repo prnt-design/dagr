@@ -334,6 +334,15 @@ export class WebGPUSceneRenderer implements Renderer {
     this.#assertLive('render');
     this.#syncSize();
     this.#syncCamera();
+    // The edges' one camera-derived uniform, written here rather than asked of
+    // a caller: a ribbon's width is in DEVICE pixels and the conversion needs
+    // the zoom and the ratio, both of which this object already holds. Left to
+    // a caller it would be a mandatory call with a default that draws at world
+    // scale, which at the campaign's fitted zoom is a third of a device pixel:
+    // nothing on screen and nothing raised.
+    this.#edges.setPixelsPerWorldUnit(
+      this.camera.zoom * this.camera.viewport.devicePixelRatio,
+    );
     this.#renderer.render(this.#scene, this.#threeCamera);
   }
 

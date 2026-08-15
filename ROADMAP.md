@@ -3130,8 +3130,8 @@ of M3 would leave the second runner idle for a milestone.
   DONE, in two PRs, because the demo half waited on M4.4: the tessellation
   core is PR #31 (`ribbon.ts`, `ribbon-nodes.ts`) and the scene is PR #34
   (`scene-edges.ts`, `campaign-edges.ts`, the `setEdges` seam). The committed
-  frame is `assets/screenshots/m4.5-ribbons.png`, a near view where the dash
-  and the joins are visible; the fitted view is Dispatch media rather than a
+  frame is `assets/screenshots/m4.5-ribbons.png`, a near view at 770x599 and
+  dpr 1 where the dash and the joins are visible; the fitted view is Dispatch media rather than a
   committed asset, because `assets/` has a budget and a picture of 7,100
   antialiased lines does not compress. The decisions the entry asked for, made:
   **WIDTH IS IN SCREEN SPACE.** A ribbon is a fixed number of DEVICE pixels
@@ -3216,12 +3216,14 @@ of M3 would leave the second runner idle for a milestone.
   bridge returning numbers would go through `Arith.literal` and bake the period
   and the flow into the compiled shader as constants, so `advanceDashFlow`
   could never move the pattern without a rebuild. And the graphics review
-  measured the overview at the zoom floor: a 3 device pixel ribbon over the
-  campaign's 110.9M world units of centreline paints 196% of the fitted
-  viewport, 65% even at the 0.5 pixel minimum, so the far view is a mat of edge
-  ink. The width is already a uniform, so the fix is per frame and free:
-  clamp it against the world-space width and fade edge alpha below about one
-  pixel per world unit.
+  measured the overview at the zoom floor and the scene half re-measured it:
+  the campaign's edges are 21.1M world units of centreline (3.99M routed, 0.98M
+  cross-tile, 16.15M overlay), and at the fitted 0.05 device pixels per world
+  unit a 3 pixel ribbon would paint 529% of the viewport, 176% at one pixel.
+  The 110.9M quoted during the stage 1 review does not reproduce; the argument
+  is unchanged and the figure is corrected. The width is already a uniform, so
+  the fix is per frame and free: clamp it against the world-space width and
+  fade the alpha below the floor.
   **ONE INDEXED MESH, NOT INSTANCES.** M4.3 instances nodes because a node is
   one shape drawn many times. Every ribbon has its own point count, so the only
   thing an instance could be is a segment, and a per-segment instance computes
@@ -3273,10 +3275,16 @@ of M3 would leave the second runner idle for a milestone.
   The far view's debt is paid: `ribbonWidthAt` draws a ribbon at the half-pixel
   floor and fades its alpha by the same ratio, so `halfWidthPixels * alpha` is
   exactly the honest sub-pixel width and the ink on screen is what the scene's
-  own world width asks for. At the campaign's fitted 0.051 px per world unit
-  that is an alpha of about 0.15, which is the difference between structure and
-  a mat. The overlay kinds ramp in over 1.5 to 4 px per world unit rather than
-  switching at a threshold, because a hard switch makes a thousand lines appear
+  own world width asks for. At the campaign's fitted zoom, which the demo
+  prints as 0.05 and derives as 0.05 to 19.2 CSS pixels per world unit at
+  1003x597 (both ends move with the viewport), that is an alpha of about 0.15
+  at dpr 1, the difference between structure and a mat. The overlay kinds ramp
+  in over 1.5 to 4 CSS pixels per world unit rather than switching at a
+  threshold, and that band is keyed on the CSS zoom where every width here is
+  in device pixels: how crisply a line is drawn is a fact about the display,
+  while whether a KIND of edge is worth showing is a fact about apparent
+  scale, and a device-pixel band would show the social graph on a retina
+  laptop and hide it on an external monitor. because a hard switch makes a thousand lines appear
   between two frames of a pinch and reads as a glitch rather than as detail.
   The DASH PHASE COMES FROM THE CLOCK, not from a frame counter, and that is
   what lets a flowing dash exist in a demo that renders on demand: counting

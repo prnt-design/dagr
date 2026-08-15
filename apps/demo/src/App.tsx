@@ -117,7 +117,7 @@ export function App(): JSX.Element {
         <p className="facts__lead">
           A deterministic mock D&amp;D campaign (seed {campaign.seed}), generated in this page,
           laid out one tile at a time by <code>@dagr/layout</code> in a worker, and drawn by{' '}
-          <code>@dagr/render</code> as two instanced draw calls. Drag to pan, scroll to zoom.
+          <code>@dagr/render</code> as two instanced draw calls and one mesh per edge group. Drag to pan, scroll to zoom.
         </p>
         <div className="facts__grid">
           <div>

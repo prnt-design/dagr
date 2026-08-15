@@ -188,11 +188,12 @@ export function borderPoint(box: Box, toward: Point): Point {
  * viewer sees is a curve and the shape this file has to reason about is a
  * triangle.
  *
- * Boxes that overlap, or a self edge, come back as an empty array rather than
- * as a degenerate line: the two borders would be inside each other and the
- * "line" would be a dot with a direction nobody can read. The tessellator would
- * drop it anyway, and dropping it here means the caller's counts agree with
- * what is on screen.
+ * A chord that would run BACKWARDS comes back as an empty array, along with a
+ * self edge. That is the case where one box's centre is inside the other, so
+ * the attachment caps put the far border behind the near one and the "line"
+ * would be drawn inside out. It is not the same claim as "overlapping boxes are
+ * dropped": two boxes can overlap in a corner and still have a perfectly
+ * sensible chord between their centres, and that line is drawn.
  */
 export function bowedLine(from: Box, to: Box, bow: number): readonly Point[] {
   const fromCentre = centreOf(from);
@@ -242,6 +243,8 @@ export function campaignEdges(
   const routed: SceneEdge[] = [];
   const crossTile: SceneEdge[] = [];
   const overlay: SceneEdge[] = [];
+  /** How many lines have already been drawn between each unordered node pair. */
+  const drawnPerPair = new Map<string, number>();
 
   for (const edge of campaign.edges) {
     const points = scene.edgeRoutes.get(edge.id);
@@ -252,11 +255,34 @@ export function campaignEdges(
     const from = scene.nodeBounds.get(edge.source);
     const to = scene.nodeBounds.get(edge.target);
     if (from === undefined || to === undefined) continue;
-    // Alternating sides by a stable property of the edge rather than by a
-    // counter, so two runs of the same campaign bow the same lines the same
-    // way: the id is what the dataset guarantees is stable, and its length's
-    // parity is the cheapest bit of it that varies.
-    const line = bowedLine(from, to, edge.id.length % 2 === 0 ? bow : -bow);
+    // Alternating by POSITION WITHIN THE PAIR, which is the only thing that
+    // separates the lines this bow exists to separate. The first version keyed
+    // the side on `edge.id.length % 2`, which is deterministic and useless
+    // here: `@dagr/campaign` mints ids as `e-<n>`, so the length only changes
+    // when the digit count does, and 6,101 of the campaign's 7,100 ids are the
+    // same length. Measured, all 26 node pairs joined by more than one overlay
+    // edge got the SAME side, so the two lines drew exactly on top of each
+    // other and a reader counting relationships counted one: the feature fired
+    // zero times on the real dataset.
+    //
+    // Still deterministic, because `campaign.edges` is in a fixed order. The
+    // key is unordered, so an edge back the other way counts as the same pair:
+    // two lines between the same boxes overlap whichever way they point.
+    const forward = edge.source < edge.target;
+    const pair = forward ? `${edge.source}|${edge.target}` : `${edge.target}|${edge.source}`;
+    const seen = drawnPerPair.get(pair) ?? 0;
+    drawnPerPair.set(pair, seen + 1);
+    // Sides alternate and the magnitude steps every second line, so a third and
+    // fourth line clear the first pair rather than landing back on them.
+    //
+    // The side is decided in the PAIR's canonical direction and then flipped
+    // for an edge authored the other way, which is not bookkeeping for its own
+    // sake: reversing a chord negates its perpendicular, so `a to c` bowed by
+    // `+b` and `c to a` bowed by `-b` are the SAME curve. Alternating without
+    // this put 4 of the campaign's 28 multi-line pairs back on top of each
+    // other, which is the defect this alternation exists to remove.
+    const step = (seen % 2 === 0 ? 1 : -1) * bow * (1 + Math.floor(seen / 2));
+    const line = bowedLine(from, to, forward ? step : -step);
     if (line.length === 0) continue;
     const sceneEdge: SceneEdge = { id: edge.id, points: line, color: colorOf(edge) };
     if (EDGE_ROLES[edge.kind] === 'overlay') overlay.push(sceneEdge);

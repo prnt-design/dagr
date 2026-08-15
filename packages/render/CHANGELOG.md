@@ -47,7 +47,7 @@ not" is the category this file has a heading for.
   zero-width gap is still a boundary to a distance field, so a duty of 1 draws a
   half-alpha seam once per period along a line that is supposed to be solid.
   Omitting the dash removes the arithmetic from the compiled shader instead, so
-  a solid group carries no `fract`. `RibbonStyle.dash` is rejected at 0 and at 1
+  a solid group carries no `fract`. `RibbonStyle.dash.duty` is rejected at 0 and at 1
   for the two halves of that reason.
 
 - `Renderer.setNodes`: the seam a caller feeds a graph through. New surface:

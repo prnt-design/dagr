@@ -177,7 +177,7 @@ export interface Renderer {
    *
    * Whole rather than incremental, unlike {@link setNodes}. An edge has no
    * durable per-instance state to preserve across a rebuild, and its input is a
-   * layout's routes: a layout that moved moved most of them.
+   * layout's routes: a layout that moved has moved most of them.
    *
    * Throws a `RangeError` naming a group that was never declared.
    */
