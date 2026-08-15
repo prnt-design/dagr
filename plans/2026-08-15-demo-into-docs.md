@@ -1,7 +1,10 @@
 # The campaign demo moves into the docs site, and reads its edges
 
 **Date:** 2026-08-15
-**Status:** proposed, from two maintainer messages the same day
+**Status:** approved 2026-08-15. D1 DELIVERED the same day as PR #40, except
+for the one step a blueprint cannot take (see below); D2 and D3 open,
+owned by a parallel session. The ROADMAP's "Demo into the docs site" section
+carries D1's decision record.
 **Supersedes:** the standalone `dagr-demo` Render service (PR #33) as the
 demo's home, and the P7 landing-page link that was never added.
 
@@ -101,6 +104,43 @@ edge directly stays deferred to M4.8.
 
 D2 and D3 are independent of D1 and of each other. D1 is the one Nii asked
 for first and the one with a deploy consequence.
+
+### What D1 did differently from the sketch above
+
+The shared package is `@dagr/campaign-stage`, a new private package rather
+than a `/react` entry on `@dagr/campaign`: the dataset package is
+zero-dependency by decision and a subpath export does not change what
+installing it pulls in, so React, the renderer and three would all have become
+its problem.
+
+**The layout worker did not move into the package**, which is the one real
+departure. `new Worker(new URL('./layout-worker.ts', import.meta.url))` is an
+expression the bundler resolves from the module that writes it, and the two
+hosts are Vite and webpack: a `new URL` inside `node_modules` would have to
+resolve, and emit a self-contained chunk, under both. So `CampaignStage` takes
+a `createWorker: () => Worker` prop and each host keeps its own worker entry.
+That is also what makes the verification above meaningful: the docs site's
+entry is a site-owned module of the same shape as the benchmark's, which the
+`dagr-worker-runtime` plugin already covers, rather than an expression inside
+a dependency that has to survive two bundlers. Verified by loading the built
+site: 3,010 nodes, 101 tiles, 95 layout runs, gated on `data-renderer-drawn`
+and a floor on the canvas-only PNG rather than on the readout.
+
+**The phasing table above is wrong about how the service goes away**, and the
+correction is the most useful thing D1 learned. It says
+`dagr-demo.onrender.com` can be "removed by the blueprint sync". A blueprint
+sync never deletes an existing resource, even one whose definition has gone
+from the file, and a resource removed from the blueprint but left in the
+dashboard is recreated by the next sync. Removing the block is still the first
+step, and the second is a hand in the Render dashboard. The claim came from
+reading the sync's overwrite behaviour, which is real, as a delete behaviour.
+
+The stylesheet is a named entry, `@dagr/campaign-stage/stage.css`, imported by
+the host: a package that builds through `tsc` copies no CSS into `dist`, so an
+import inside a module would resolve under Vite and point at nothing under
+webpack. Its colour tokens moved onto `.stage` in the same pass, since they
+were reading the demo page's `:root` and a docs site's `:root` means other
+things by the same names.
 
 ## Not in scope
 

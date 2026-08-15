@@ -4156,8 +4156,10 @@ consumer. Sequencing against M3 is the plan's open question 1.
   returns early while panning, so a held highlight would light a node the
   pointer left hundreds of pixels ago and would cost a lookup per frame to keep
   doing it.
-  The README and the docs intro now link the live demo at
-  `https://dagr-demo.onrender.com/`, which P8 below deployed.
+  The README and the docs intro now link the live demo. The URL in this entry
+  was `https://dagr-demo.onrender.com/`, which P8 below deployed; D1 retired
+  that service and the links point at `https://dagr.prnt.design/demos/campaign`
+  instead, which is the same stage under the docs site's own nav.
   WHAT THAT URL SHOWED WHEN THIS ENTRY WAS WRITTEN, 2026-08-15, because it
   keeps changing under the link and a reader later deserves a dated snapshot
   rather than a promise: the campaign's 3,010 nodes drawn instanced, one mesh
@@ -4260,6 +4262,123 @@ consumer. Sequencing against M3 is the plan's open question 1.
   would have matched NOTHING here and the 1.1 MB bundle would have lost its
   immutable caching with nothing failing to say so. Two reviewers found it
   independently.
+  RETIRED ON 2026-08-15 BY D1, one day after it shipped, and the box stays
+  ticked because the task was done rather than undone: the service existed, it
+  served the demo, and it was removed when the demo got a better home. Why it
+  was the wrong end state was visible while it was being built and was traded
+  for speed, which this entry should have said and did not: a visitor to the
+  docs site never found the demo, following the link lost the site's chrome and
+  its nav, and two static services on one blueprint is twice the deploy surface
+  for one artifact. What made the move cheap is that the docs site already
+  compiled `@dagr/layout` into a visitor's browser for the landing page's
+  benchmark, so adding the renderer was a dependency step and not an
+  architecture change. Every link to `dagr-demo.onrender.com` is retargeted at
+  `/demos/campaign` in the same commit, and `apps/demo` stays as the playground
+  with no deploy of its own.
+  REMOVING THE BLOCK FROM `render.yaml` IS HALF OF IT, and the D1 diff review
+  caught the other half being asserted wrongly in three places at once (this
+  file, the blueprint's own comment, and D1's plan). A blueprint sync NEVER
+  deletes an existing resource, including one whose definition has gone from
+  the file, and a resource removed from the blueprint but left in the dashboard
+  is RECREATED by the next sync. The order is therefore: merge the file, then
+  delete `dagr-demo` in the Render dashboard, which is the maintainer's hand
+  and not an agent's. Until that happens the service keeps the config it last
+  synced, so it keeps building `apps/demo` on a push matching the `buildFilter`
+  it still holds and keeps serving a demo nothing links to. The mistake is
+  worth keeping: it came from reading the sync's OVERWRITE behaviour (which is
+  real, and is why the dashboard is not where configuration lives) as a DELETE
+  behaviour, and the two are opposite.
+
+## Demo into the docs site
+
+Maintainer-requested on 2026-08-15, in one sentence: no separate `dagr-demo`
+site, the demo belongs on the docs site, on the landing page or on a demos
+tab. Planned in `plans/2026-08-15-demo-into-docs.md`, which carries the
+argument for the tab and the record these entries summarize. D2 and D3 are the
+second half of the same message, about spacing and about reading the edges,
+and are independent of D1 and of each other.
+
+- [x] **D1** (`packages/campaign-stage`, `docs`, `apps/demo`, `render.yaml`)
+  The campaign stage extracted to a shared package, mounted at
+  `/demos/campaign` under a Demos tab, and the `dagr-demo` service retired.
+  MERGED as PR #40 on 2026-08-15. The service's own deletion is a maintainer
+  step in the Render dashboard, for the reason under P8 above.
+  A DEMOS TAB RATHER THAN THE LANDING PAGE, which was the maintainer's own
+  either/or resolved with a reason: the canvas wants the full viewport and its
+  own keyboard focus, and the landing page has a hero, a live benchmark figure
+  and a pitch that would all be pushed under a canvas that ate the fold. A
+  route of its own also leaves the animated demos in the follow-up a home as
+  sibling pages under one tab, which is a better shape than a landing page that
+  grows a carousel. The landing page links it twice, from a `Live demo` action
+  next to `Get started` and from the status line, which is also where the
+  four-PR-old claim that "rendering has first light" was corrected.
+  A NEW PRIVATE PACKAGE, `@dagr/campaign-stage`, rather than a `/react` entry
+  on `@dagr/campaign`. The dataset package is deliberately zero-dependency (its
+  own entry above says so and a test holds it), and a subpath export does not
+  change what installing the package pulls in: React, the renderer and three
+  would all become its problem. The stage is a different thing from the data it
+  draws, so it is a different package, and it is private because it exists to
+  stop two pages drifting rather than because anybody should install it.
+  THE WORKER ENTRY DID NOT MOVE WITH THE STAGE, which is the one deviation from
+  the plan's sketch. `new Worker(new URL('./layout-worker.ts', import.meta.url))`
+  is an expression the bundler resolves from the module that writes it, and the
+  two hosts are Vite and webpack: a `new URL` inside `node_modules` would have
+  to resolve, and emit a self-contained chunk, under both. So `CampaignStage`
+  takes a `createWorker: () => Worker` prop and each host owns its entry, which
+  also puts the docs site's entry where the `dagr-worker-runtime` plugin
+  already covers one. The prop is read through a ref and its identity is never
+  compared, or an inline arrow would tear down a hundred layout runs on any
+  re-render.
+  THE STYLESHEET IS A NAMED ENTRY, `@dagr/campaign-stage/stage.css`, imported
+  by the host rather than by the component that owns the class names. A package
+  that builds through `tsc` copies no CSS into `dist`, so an import inside the
+  module would resolve under Vite and point at a missing file under webpack.
+  Its colour tokens moved from the demo page's `:root` onto `.stage` in the
+  same pass: the stage grew up on a page that owned the whole document, and a
+  docs site's `:root` means other things by the same names.
+  VERIFIED BY LOADING THE BUILT SITE, not by the readout, which was P7's
+  lesson: every `dist` deleted, `pnpm build` from the root, `docs/build` served
+  by a plain file server, and `/demos/campaign` loaded in headless chromium on
+  the swiftshader fallback. It gates on `data-renderer-drawn` plus a floor on
+  the canvas-only PNG, because the DOM tiers are satisfied by a blank canvas.
+  3,010 nodes, 101 tiles, 95 layout runs, the worker chunk resolving under
+  Docusaurus, `#node=quest-1` attaching its card, and the landing page's own
+  benchmark still answering, which is the other worker entry.
+  THE DEMO KEEPS ITS TESTS, which moved with the code they cover, so
+  `apps/demo` has no test directory left and no test script. What is left there
+  is the page around the stage: the header, the facts panel and the worker.
+  WHAT THE REVIEWS CAUGHT, beyond the blueprint claim in P8 above. The facts
+  panel read "laying out" forever when the layout failed, which is the same
+  contradiction that moving the failure onto the stage was meant to end, with
+  the halves swapped; it now says the wait is over and leaves the reason to the
+  stage. The failure message inherited the readout's `pointer-events: none` and
+  `user-select: none`, so the one sentence anybody would paste into a bug
+  report could not be selected; it is the single child that undoes both, and
+  there is no drag under it to protect because the scene never arrived. The
+  demos route sized itself with a fixed `height`, which is true from above and
+  false from below: on a short viewport the caption plus the stage's floor
+  overflowed into the footer, so it is a `min-height`. The capture script's
+  font probe fell back to `body`, where the stage's mono token does not
+  resolve, so a missing stage would have thrown an error blaming a missing
+  font. And `three` is in `docs/package.json` as `@dagr/render`'s peer while
+  webpack still resolves the renderer's own copy, which is worth stating
+  because the honest reason (the consumer declares what it ships) is not the
+  reason it works; `docs/README.md` carries it, with the rule that the range
+  tracks `packages/render`'s.
+  A MEASUREMENT TAKEN THROUGH ANOTHER SESSION'S SERVER: a probe of `apps/demo`
+  reported the campaign laid out at exactly twice the size, on a branch that
+  had touched no layout code. Port 8734 is the port `apps/demo/README.md`
+  names, and the sibling session doing D2's spacing had a server on it. On a
+  shared box a fixed port is somebody else's process, which is now in the
+  gate-lock protocol text with the one command that settles it.
+- [ ] **D2** (`packages/campaign-stage`) More spacing between nodes, and edges
+  coloured by where they come from with the routed/overlay split kept as the
+  dash. See the plan; owned by a parallel session, rebasing onto D1.
+- [ ] **D3** (`@dagr/render`, `packages/campaign-stage`) A per-edge highlight
+  attribute and the hover-driven highlight of a node's incident edges, so a
+  reader can see where an edge comes from and goes without picking edges, which
+  needs M4.8. Costs the one free vertex-buffer slot unless packed; the M4.10
+  record should say so.
 
 ## Tracked, not promised
 

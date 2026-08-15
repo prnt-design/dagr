@@ -1,7 +1,8 @@
 /**
  * What every campaign card actually renders at, in a real browser.
  *
- * `apps/demo/src/campaign-tiers.ts` declares a line budget per node kind, and
+ * `packages/campaign-stage/src/campaign-tiers.ts` declares a line budget per node
+ * kind, and
  * the card gate is derived from the heights those budgets give. A declared box
  * that is smaller than what the browser draws is a card hanging past its node's
  * bottom edge, over a neighbour the reader is also reading, so the budgets have
@@ -33,11 +34,10 @@ import { readFileSync } from 'fs';
 import { generateCampaign, cardRows } from '../../packages/campaign/dist/index.js';
 
 const ROOT = new URL('../..', import.meta.url).pathname;
-const css = readFileSync(`${ROOT}/apps/demo/src/campaign-cards.css`, 'utf8');
-const vars = readFileSync(`${ROOT}/apps/demo/src/styles.css`, 'utf8');
+const css = readFileSync(`${ROOT}/packages/campaign-stage/src/campaign-cards.css`, 'utf8');
 
 // The declared table, read out of the module rather than restated.
-const src = readFileSync(`${ROOT}/apps/demo/src/campaign-tiers.ts`, 'utf8');
+const src = readFileSync(`${ROOT}/packages/campaign-stage/src/campaign-tiers.ts`, 'utf8');
 const LINES = Object.fromEntries([...src.matchAll(/^\s{2}(\w+): \{ lines: (\d+) \},$/gm)].map(m => [m[1], +m[2]]));
 const CARD_WIDTH = +/const CARD_WIDTH = (\d+);/.exec(src)[1];
 const LINE = +/const CARD_LINE_HEIGHT = (\d+);/.exec(src)[1];
@@ -60,9 +60,22 @@ for (const seed of [20260814, 7, 999]) {
 }
 console.error(`measuring ${cards.length} cards`);
 
+// The card's tokens, declared here rather than lifted off a stylesheet. They
+// are the stage's own now (`--dagr-stage-*`, declared on `.stage` in
+// `stage.css` so the component can be mounted in a docs site), and the probe
+// cards below are not inside a `.stage`, so `:root` is what they inherit from.
+// The font is pinned rather than borrowed: see the advance assertion below.
+// A previous version also read `apps/demo/src/styles.css` and inlined it, which
+// contributed nothing: that file opens with a comment, so the split it used
+// returned an empty string, and these declarations were always the whole of it.
 const html = `<!doctype html><html><head><style>
-${vars.split('/*')[0]}
-:root { --mono: 'Liberation Mono', monospace; --rule: #333; --ink: #eee; --ink-dim: #999; --amber: #ffb703; }
+:root {
+  --dagr-stage-mono: 'Liberation Mono', monospace;
+  --dagr-stage-rule: #333;
+  --dagr-stage-ink: #eee;
+  --dagr-stage-ink-dim: #999;
+  --dagr-stage-amber: #ffb703;
+}
 body { margin: 0; background: #07080a; }
 .probe { position: relative; }
 ${css}

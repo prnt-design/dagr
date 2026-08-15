@@ -17,10 +17,11 @@ import type { LayoutPort } from '@dagr/layout';
  * the port interface rather than to `Worker`, so it claims exactly what is used.
  *
  * Its own module, and imported nowhere, because a bundler discovers it through
- * the `new URL(..., import.meta.url)` in `campaign-scene.ts`'s caller and emits
- * it as a separate chunk. A worker loads exactly one script, so that chunk has
- * to be self-contained: Vite does that by default for a module worker, and the
- * project brain records what it costs to get wrong under a bundler that does
- * not.
+ * the `new URL(..., import.meta.url)` in `App.tsx` and emits it as a separate
+ * chunk. A worker loads exactly one script, so that chunk has to be
+ * self-contained: Vite does that by default for a module worker, and the docs
+ * site needs a webpack plugin to get the same thing, which is exactly why this
+ * entry stayed with the app instead of moving into `@dagr/campaign-stage` with
+ * the rest of the stage. Each host owns the expression its own bundler reads.
  */
 serveLayout(self as unknown as LayoutPort);

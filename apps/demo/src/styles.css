@@ -1,5 +1,5 @@
 /*
- * The demo's whole stylesheet.
+ * The page around the stage.
  *
  * Plain CSS, one file, no framework and no build step beyond the one vite
  * already runs. The demo exists to look at a renderer, so the page around it is
@@ -7,6 +7,12 @@
  * black, from `webgpu-renderer.ts`) so that nothing on screen competes with the
  * canvas, and every measurement here is in rem or a viewport unit so the layout
  * has one job, which is to give the canvas as much room as it can.
+ *
+ * The stage itself is `@dagr/campaign-stage/stage.css`, imported by `main.tsx`
+ * before this file. The two share a palette by having the same values twice
+ * rather than by one reading the other's variables: these are declared on
+ * `:root` for a page that owns its whole document, and the stage's are declared
+ * on `.stage` so it can be mounted in a docs site that owns its own `:root`.
  */
 
 :root {
@@ -69,137 +75,24 @@ body {
   font-size: 0.8125rem;
 }
 
-/* The canvas and everything painted on top of it. */
+/*
+ * The frame around the stage.
+ *
+ * Everything INSIDE it belongs to `@dagr/campaign-stage`, whose `stage.css`
+ * this page imports first: the canvas, the readout, the overlay tiers and their
+ * colour tokens all travel with the component now, so the docs site's route
+ * gets the same stage without borrowing a variable off this page's `:root`.
+ * What is left here is the two decisions a HOST makes. The height, because the
+ * stage fills what it is given and this page wants a band with the facts under
+ * it where the docs route wants the viewport. And the border, because a
+ * playground panel on a page is a panel, while the docs route is full bleed.
+ */
 
-.stage {
-  position: relative;
+.page__stage {
   height: clamp(600px, 62vh, 780px);
   border: 1px solid var(--rule);
   border-radius: 0.5rem;
   overflow: hidden;
-  background: #0b0d10;
-}
-
-.stage__canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  /* The pan gesture is ours. Without this, a touch drag scrolls the page and
-     the pointermove events stop arriving mid-gesture. */
-  touch-action: none;
-  cursor: grab;
-}
-
-.stage__canvas:active {
-  cursor: grabbing;
-}
-
-/* Focus is the keyboard's mode switch (focused, arrows zoom and pan), so it
-   has to be visible: an invisible mode is a mode nobody knows they are in.
-   focus-visible rather than focus, so a mouse click that focuses the canvas
-   for its own reasons does not paint a ring around a pointer gesture. Inset,
-   because the stage clips its corners with overflow: hidden. */
-.stage__canvas:focus-visible {
-  outline: 2px solid var(--amber);
-  outline-offset: -2px;
-}
-
-/*
- * The overlay's tiers live in `campaign-cards.css`, which `campaign-tiers.ts`
- * imports: the title and the card are one feature with one set of rules, and
- * splitting them across two stylesheets is how the counter-scale rule gets
- * restated wrongly in the second one.
- *
- * What was here was P4's single name tier and the card rules it kept for P6.
- * P6 replaced the tier set rather than extending it, because the overlay's
- * gates have to be disjoint, so these rules have no elements left to style.
- */
-
-.stage__readout {
-  position: absolute;
-  left: 1rem;
-  bottom: 1rem;
-  /* Above the overlay, which the library appends to this container after
-     React's children and therefore paints later. Without this, panning a
-     labelled shape into the bottom-left corner puts its label over the HUD. */
-  z-index: 1;
-  /* The panel is sized by its widest child, and since M4.2 that child is the
-     hint rather than a readout row: naming the zoom range and `#zoom=` takes 58
-     characters, which on one line is about 440 CSS pixels, 40% of the 1102 pixel
-     canvas the crispness screenshots are of. 18rem leaves the 31 character
-     `canvas` row (about 250 pixels with the padding) unwrapped, since
-     `.stage__readout-row` is `white-space: pre` and would overflow rather than
-     wrap, and lets the hint alone take two lines. */
-  max-width: 18rem;
-  padding: 0.625rem 0.875rem;
-  border: 1px solid var(--rule);
-  border-radius: 0.375rem;
-  background: rgba(7, 8, 10, 0.72);
-  backdrop-filter: blur(8px);
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  line-height: 1.7;
-  color: var(--ink);
-  /* The panel sits over the canvas, so it must not eat the drag. */
-  pointer-events: none;
-  user-select: none;
-}
-
-.stage__readout-row {
-  margin: 0;
-  white-space: pre;
-}
-
-.stage__readout-key {
-  display: inline-block;
-  width: 8ch;
-  color: var(--ink-dim);
-}
-
-.stage__readout-hint {
-  margin: 0.5rem 0 0;
-  padding-top: 0.5rem;
-  border-top: 1px solid var(--rule);
-  color: var(--ink-dim);
-  letter-spacing: 0.02em;
-}
-
-.stage__failure {
-  position: absolute;
-  inset: 0;
-  /* Same reason as the readout, and it matters more here: a failure message
-     overprinted by labels is the one screen a reader most needs to read. */
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 0.5rem;
-  max-width: 34rem;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
-
-.stage__failure-title {
-  margin: 0;
-  color: var(--amber);
-  font-family: var(--mono);
-  font-size: 0.875rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.stage__failure-message {
-  margin: 0;
-  font-family: var(--mono);
-  font-size: 0.875rem;
-  overflow-wrap: anywhere;
-}
-
-.stage__failure-hint {
-  margin: 0;
-  color: var(--ink-dim);
-  font-size: 0.8125rem;
 }
 
 /* The `@dagr/graph` facts, below the canvas. */

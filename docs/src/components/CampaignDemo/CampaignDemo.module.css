@@ -1,0 +1,35 @@
+/* The box the stage fills, and the message that stands in for it before the
+   page has loaded. Everything inside the stage is styled by
+   `@dagr/campaign-stage/stage.css`, whose colours are its own: it is a viewport
+   into a scene the renderer paints on near black, so it stays dark under the
+   site's light theme rather than following it. */
+
+.frame {
+  flex: 1;
+  /* Below this the readout and the canvas are fighting for the same corner, so
+     the page scrolls instead. */
+  min-height: 24rem;
+  /* GRID, for one child, and the reason is percentage height resolution. The
+     stage asks for `height: 100%`, which resolves to `auto` unless its parent's
+     height is definite, and this box's height comes from `flex: 1` against a
+     page sized by `min-height`. A grid item is stretched to its row by the
+     default `align-items`, which does not care whether anything is definite, so
+     the stage fills this box either way. As a flex COLUMN it did not: stretch
+     there is the cross axis, so the stage collapsed to 479 pixels inside a 655
+     pixel frame with nothing failing. */
+  display: grid;
+  /* The site's hairline token, and no radius, because the muslin tokens set
+     every radius to zero: the stage should read as part of the page's own
+     furniture even though what is inside it has its own palette. */
+  border: 1px solid var(--dagr-contrast-20pct);
+  background: #0b0d10;
+}
+
+.pending {
+  margin: auto;
+  padding: 1.5rem;
+  max-width: 28rem;
+  text-align: center;
+  color: #79828d;
+  font-size: 0.9375rem;
+}

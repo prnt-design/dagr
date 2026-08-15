@@ -70,10 +70,15 @@ const daybreakDark: PrismTheme = {
 };
 
 /**
- * What the landing page's live demo needs from the bundler to run its layout in
- * a web worker.
+ * What the site's live demos need from the bundler to run their layout in a web
+ * worker.
  *
- * The demo builds one with `new Worker(new URL('./layout.worker.ts', ...))`,
+ * TWO ENTRIES USE THIS NOW: the landing page's benchmark, and the campaign at
+ * `/demos/campaign`. They are separate worker modules because webpack resolves
+ * `new Worker(new URL(...))` from the module that writes it, so each gets its
+ * own entrypoint and each needs the runtime this plugin puts back.
+ *
+ * A demo builds one with `new Worker(new URL('./layout.worker.ts', ...))`,
  * which webpack compiles into a second entrypoint. Two things in the stock
  * Docusaurus client config stop that entrypoint from being loadable, and both
  * of them are invisible until the worker's first line throws
@@ -210,6 +215,16 @@ const config: Config = {
         {
           to: '/docs/',
           label: 'Docs',
+          position: 'left',
+        },
+        {
+          // One demo today, and the label is plural because the tab is where
+          // the animated examples on the roadmap go: a sibling route under
+          // /demos/ rather than a second nav item each. Pointing at the one
+          // page rather than a /demos/ index, since an index listing a single
+          // link is a click a reader pays for nothing.
+          to: '/demos/campaign',
+          label: 'Demos',
           position: 'left',
         },
         {

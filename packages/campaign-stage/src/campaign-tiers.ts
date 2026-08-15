@@ -1,7 +1,12 @@
 import { cardRows } from '@dagr/campaign';
 import type { CampaignNode, NodeKind } from '@dagr/campaign';
 import type { RichNodeTier } from '@dagr/render';
-import './campaign-cards.css';
+// The rules these tiers write class names for live in `campaign-cards.css`,
+// which `stage.css` pulls in. NOT imported here, though this is the module that
+// owns them: the package builds through `tsc`, which copies no stylesheet into
+// `dist`, so an import here would resolve in the demo's Vite build and point at
+// a file that does not exist in the docs site's. The stylesheet is a named
+// package entry the host imports instead; see the header of `stage.css`.
 
 /**
  * The campaign's two overlay tiers, and the sizes the card gate is derived
