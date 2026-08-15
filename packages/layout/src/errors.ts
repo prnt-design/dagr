@@ -35,7 +35,8 @@ export type DagrLayoutErrorCode =
   | 'STAGE_CONTRACT'
   | 'INTERNAL'
   | 'WORKER'
-  | 'DELTA_MISMATCH';
+  | 'DELTA_MISMATCH'
+  | 'ENGINE_STATE';
 
 /**
  * Base class for every error the layout pipeline throws. Abstract on purpose,
@@ -238,6 +239,40 @@ export class DeltaMismatchError extends DagrLayoutError {
     super(`Layout delta does not fit the result it was applied to: "${id}" ${detail}`);
     this.name = 'DeltaMismatchError';
     Object.setPrototypeOf(this, DeltaMismatchError.prototype);
+  }
+}
+
+/**
+ * Thrown when an engine is asked for something it cannot answer in the state it
+ * is in: a `relayout` before any run, a call after `dispose`, or a patch that
+ * describes a graph the engine is not holding.
+ *
+ * The sixth culprit, and M3.2 is what made it one. The first five sort by whose
+ * bug it is; this one sorts by WHEN. Every case is a call that would have been
+ * fine a moment earlier or a moment later, and none of them is about the numbers
+ * in the argument, which is what separates it from
+ * {@link InvalidConfigError}: an engine that has never run refuses a perfectly
+ * good patch, and the same patch a moment after the first `run` is accepted.
+ *
+ * The patch case is the one worth spelling out, because it defends a decision
+ * rather than an invariant. `relayout(patch)` does not APPLY the patch: the
+ * caller's graph is already mutated, which is what `Graph.subscribe` hands a
+ * listener, so the patch is a description of what happened rather than an
+ * instruction. A caller who expects the other contract calls `relayout` with a
+ * patch they have not applied, and without this the engine cheerfully relays out
+ * a graph nothing changed about, returns an empty delta, and draws the same
+ * picture forever. That is the same silence {@link DeltaMismatchError} exists to
+ * break, one layer up.
+ *
+ * `detail` says which of the three it was, and quotes the id when there is one.
+ */
+export class EngineStateError extends DagrLayoutError {
+  readonly code = 'ENGINE_STATE';
+
+  constructor(readonly detail: string) {
+    super(`Layout engine: ${detail}`);
+    this.name = 'EngineStateError';
+    Object.setPrototypeOf(this, EngineStateError.prototype);
   }
 }
 

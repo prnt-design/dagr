@@ -12,6 +12,7 @@ import type {
   Point,
   PositionedState,
   PreparedState,
+  PreviousLayout,
   RankedState,
   Rect,
   ResolvedLayoutConfig,
@@ -861,6 +862,28 @@ export function runPrepared(
   prepared: PreparedState,
   stages?: LayoutStageOverrides,
 ): LayoutResult {
+  return runPipeline(prepared, stages).result;
+}
+
+/**
+ * {@link runPrepared}, plus the state the last stage left behind.
+ *
+ * The same run and the same checks; the only difference is what comes back. A
+ * one-shot caller wants the result and nothing else, and an engine wants the
+ * {@link RoutedState} too, because that record is where a warm start comes from
+ * (see {@link PreparedState.previous}). Keeping it internal is the M2.1 decision
+ * that `LayoutResult` carries no `state` field: the result stays small,
+ * serializable and free of a member every consumer would have to route around,
+ * and the pipeline state stays where the thing that can use it lives.
+ *
+ * @throws {StageContractError} when a stage breaks the pipeline contract.
+ * @throws {InternalLayoutError} when the pipeline catches itself breaking one of
+ * its own invariants.
+ */
+export function runPipeline(
+  prepared: PreparedState,
+  stages?: LayoutStageOverrides,
+): { readonly result: LayoutResult; readonly routed: RoutedState } {
   const { graph, config } = prepared;
 
   // Every field a stage contributes is named here, one at a time. The spreads
@@ -875,6 +898,10 @@ export function runPrepared(
   const ranked: RankedState = {
     graph,
     config,
+    // Carried forward by name like everything else the runner threads through,
+    // rather than by spreading `prepared`: this is the one field on the starting
+    // record that no stage writes and every stage may read.
+    previous: prepared.previous,
     ranks: rankOut.ranks,
     reversedEdges: rankOut.reversedEdges,
     virtualNodes: declaredRoster(rankOut.virtualNodes),
@@ -900,7 +927,7 @@ export function runPrepared(
 
   const result = assemble(graph, routed);
   assertBounds(result);
-  return result;
+  return { result, routed };
 }
 
 /**
@@ -922,8 +949,9 @@ export function prepare(
   graph: Graph,
   config: ResolvedLayoutConfig,
   nodeSize: LayoutConfig['nodeSize'],
+  previous?: PreviousLayout,
 ): PreparedState {
-  return { graph, config, sizes: measureNodes(graph, config, nodeSize) };
+  return { graph, config, sizes: measureNodes(graph, config, nodeSize), previous };
 }
 
 /**

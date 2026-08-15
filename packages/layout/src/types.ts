@@ -121,7 +121,56 @@ export interface PreparedState {
 
   /** Resolved size per node. Has an entry for every node in the graph. */
   readonly sizes: ReadonlyMap<NodeId, Size>;
+
+  /**
+   * What the engine's previous run left behind, or `undefined` on a cold one.
+   *
+   * The warm-start channel, added by M3.2 and read by nobody yet: no built-in
+   * stage consumes it in that task, on purpose, because a `relayout` that is
+   * correct and no faster than a cold run is what makes the delta contract and
+   * the engine lifetime testable before any incremental algorithm exists. M3.6
+   * is the first reader, seeding the order stage from `layers`, and M2.3 already
+   * shipped the other half, `networkSimplexRank({ initialRanks })`.
+   *
+   * It is a field on the record every stage reads rather than an argument to
+   * one of them, because warm starting is not one stage's business: ranking,
+   * ordering and positioning each have a previous answer to start from, and a
+   * channel per stage would be three contracts to keep in step.
+   *
+   * ONLY AN ENGINE EVER FILLS IT IN. `layout()` has no previous run to offer,
+   * and `engine.run` deliberately does not either: `run` lays out whatever graph
+   * it is handed, which need not be the one the last run saw, so a warm start
+   * there would seed a graph's ordering from another graph's. It is
+   * `engine.relayout` that has both, and a run whose work happened in a worker
+   * leaves none behind on this side, so a `relayout` after a `runAsync` is cold.
+   * See `engine.ts`.
+   */
+  readonly previous?: PreviousLayout | undefined;
 }
+
+/**
+ * The previous run's pipeline state, as a warm start reads it.
+ *
+ * {@link RoutedState} without its `graph` and its `config`, and that subtraction
+ * is the whole point rather than tidiness. Both of those fields would be traps
+ * here. The graph would be the CURRENT graph, since a caller mutates the object
+ * the engine is holding and `relayout` describes what they did to it, so a stage
+ * reading `previous.graph` would get today's graph wearing yesterday's label.
+ * The config is bound for the engine's lifetime and is already on the record
+ * this hangs off. What is left is exactly the maps and sets a warm start has any
+ * use for.
+ *
+ * Spelled as an `Omit` rather than restated field by field so it cannot drift
+ * from the record it is a view of: a stage output added to `RoutedState` is
+ * available to the next run's warm start on the day it lands, without a second
+ * declaration to remember.
+ *
+ * A VIEW, not a copy. The engine retains the routed record itself and narrows
+ * it here, on the same terms as every other type-level guard in this pipeline:
+ * the compiler stops the mistake at the keyboard, and a stage that casts its way
+ * past the compiler was never going to be stopped by an allocation.
+ */
+export type PreviousLayout = Omit<RoutedState, 'graph' | 'config'>;
 
 /** {@link PreparedState} plus the output of the rank stage. */
 export interface RankedState extends PreparedState {
@@ -458,6 +507,7 @@ export interface RankOutput {
   // Pinned case by case in `test/stage-output.types.test.ts`.
   readonly graph?: never;
   readonly config?: never;
+  readonly previous?: never;
   readonly sizes?: never;
 }
 
@@ -471,6 +521,7 @@ export interface OrderOutput {
   // handed carries the ranker's four fields as well as the runner's three.
   readonly graph?: never;
   readonly config?: never;
+  readonly previous?: never;
   readonly sizes?: never;
   readonly ranks?: never;
   readonly reversedEdges?: never;
@@ -486,6 +537,7 @@ export interface PositionOutput {
   // `{ ...input, positions }` fails to compile. Same rule as {@link RankOutput}.
   readonly graph?: never;
   readonly config?: never;
+  readonly previous?: never;
   readonly sizes?: never;
   readonly ranks?: never;
   readonly reversedEdges?: never;
@@ -502,6 +554,7 @@ export interface RouteOutput {
   // `{ ...input, routes }` fails to compile. Same rule as {@link RankOutput}.
   readonly graph?: never;
   readonly config?: never;
+  readonly previous?: never;
   readonly sizes?: never;
   readonly ranks?: never;
   readonly reversedEdges?: never;
