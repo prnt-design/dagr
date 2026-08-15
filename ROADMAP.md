@@ -3860,6 +3860,34 @@ consumer. Sequencing against M3 is the plan's open question 1.
   screen width, so P6 owns the card gate and every threshold above it: the
   overlay rejects overlapping gates, so a placeholder card would have been a
   number to work around rather than choose.
+- [x] **P8** (`render.yaml`) The demo on a public URL: a second static site,
+  `dagr-demo`, building `apps/demo` from the repo root and publishing
+  `apps/demo/dist`.
+  Numbered after P7 because it is not a phase of the plan: the plan never asked
+  for a deploy, and the maintainer did, on the day P4 put something worth
+  looking at on a canvas. It gates on `checksPass` like the docs site, so a
+  build that typechecks, tests and lints clean is the only thing that reaches a
+  URL.
+  ON RENDER'S OWN DOMAIN, with no `domains` block. A subdomain of prnt.design is
+  a promise about permanence that a playground should not be making; the docs
+  site is the published one and this is the working artifact.
+  PREVIEWS OFF, which is the one place it differs from the docs site. Every
+  increment in this repo is a pull request and this is the heavy bundle (three.js,
+  about 1.1 MB), so a preview per PR is a real cost for an app whose reviewers
+  read a diff. One line to turn on.
+  `generation: 'off'` is QUOTED, because YAML 1.1 reads a bare `off` as the
+  boolean false and Render's spec wants the string. A blueprint that hands the
+  API `false` fails validation at the dashboard, which is the one step in that
+  file nobody sees until they go looking.
+  VERIFIED RATHER THAN ASSUMED, which the M4.4 review made the habit: every
+  `dist` in the workspace was deleted, Render's exact `buildCommand` was run from
+  the repo root, and `apps/demo/dist` was served by a plain static file server
+  and loaded. 3,010 nodes, 101 tiles, 95 layout runs, the worker chunk resolving.
+  The `buildFilter` lists every package the demo imports, because it imports
+  their SOURCES through the alias in `vite.config.ts`: a change to
+  `@dagr/render` with no change to the demo does change what a visitor runs.
+  A Render blueprint change needs a one-time confirmation in the dashboard
+  before a new service is created, which is the maintainer's to give.
 - [ ] **P7** (`apps/demo`, `docs`) Deep links, hover highlight, committed
   screenshots, a docs page on the schema.
   The docs page landed early, on 2026-08-15, as its own increment
