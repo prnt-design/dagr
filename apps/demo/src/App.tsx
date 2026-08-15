@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { JSX } from 'react';
 import { EDGE_ROLES, generateCampaign } from '@dagr/campaign';
 import { FirstLight } from './FirstLight.js';
+import { campaignEdges, edgeColor } from './campaign-edges.js';
 import { buildCampaignScene } from './campaign-scene.js';
 import type { CampaignScene } from './campaign-scene.js';
 
@@ -37,6 +38,14 @@ const edgeRoleCounts = campaign.edges.reduce(
 export function App(): JSX.Element {
   const [scene, setScene] = useState<CampaignScene | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+
+  // Built HERE rather than in the canvas component, because it needs the
+  // campaign and the scene together and the canvas is handed drawable data:
+  // `scene.nodes` arrives ready for `setNodes` and these arrive ready for
+  // `setEdges`. Memoised on the scene, since the split walks 7,100 edges and
+  // bows a line for most of them, and a re-render that has not laid anything
+  // out again would get the same answer.
+  const edges = useMemo(() => (scene === null ? null : campaignEdges(campaign, scene, edgeColor)), [scene]);
 
   useEffect(() => {
     // The worker is created here and terminated in the cleanup, so a StrictMode
@@ -101,7 +110,7 @@ export function App(): JSX.Element {
         <p className="page__subtitle">A mock D&amp;D campaign, laid out in tiles and drawn</p>
       </header>
 
-      <FirstLight scene={scene} />
+      <FirstLight scene={scene} edges={edges} />
 
       <section className="facts">
         <h2 className="facts__title">what is on the canvas</h2>

@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
-import { Camera2D, createHtmlOverlay, createRenderer, createRichNodes } from '@dagr/render';
+import {
+  Camera2D,
+  advanceDashFlow,
+  createHtmlOverlay,
+  createRenderer,
+  createRichNodes,
+  ribbonWidthAt,
+} from '@dagr/render';
 import type { Renderer, Vec2, ViewportSize, WorldBounds } from '@dagr/render';
 import {
   FIT_PADDING,
@@ -12,6 +19,14 @@ import {
   zoomLimits,
 } from './camera-input.js';
 import type { CampaignScene } from './campaign-scene.js';
+import type { CampaignEdges } from './campaign-edges.js';
+import {
+  CROSS_TILE_GROUP,
+  EDGE_GROUPS,
+  OVERLAY_GROUP,
+  ROUTED_GROUP,
+  overlayFade,
+} from './campaign-edges.js';
 import { nodeColor } from './campaign-style.js';
 import { createCampaignTiers } from './campaign-tiers.js';
 import type { CampaignNode } from '@dagr/campaign';
@@ -106,13 +121,46 @@ function measureViewport(canvas: HTMLCanvasElement): ViewportSize | null {
   };
 }
 
+/**
+ * How wide an edge would be if it scaled with the scene, as a half width in
+ * world units.
+ *
+ * The campaign's boxes are tens of world units across, so this is the ribbon
+ * reading as a line between them rather than as a road. It is the number
+ * `ribbonWidthAt` fades against: what it buys is that the far view's ink is
+ * proportional to what the scene says an edge is, instead of to how many edges
+ * there happen to be.
+ */
+const EDGE_WORLD_HALF_WIDTH = 1.5;
+
+/** The thinnest a ribbon is drawn before the fade takes over instead. */
+const MIN_EDGE_HALF_WIDTH_PIXELS = 0.5;
+
+/**
+ * The band, in pixels per world unit, over which the overlay kinds arrive.
+ *
+ * The campaign's derived range runs from about 0.053 at the fitted scene to
+ * 19.9 at the smallest node framed, so this band sits well above the overview
+ * and well below a card: the dense, cyclic kinds are absent while a reader is
+ * looking at the shape of the campaign, and fully there once they are asking
+ * about one node's neighbourhood.
+ */
+const OVERLAY_FADE_START = 1.5;
+const OVERLAY_FADE_FULL = 4;
+
 /** The message to show a user when `createRenderer` rejects. */
 function describeFailure(cause: unknown): string {
   if (cause instanceof Error) return cause.message;
   return String(cause);
 }
 
-export function FirstLight({ scene }: { scene: CampaignScene | null }): JSX.Element {
+export function FirstLight({
+  scene,
+  edges,
+}: {
+  scene: CampaignScene | null;
+  edges: CampaignEdges | null;
+}): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [readout, setReadout] = useState<CameraReadout | null>(null);
@@ -267,7 +315,61 @@ export function FirstLight({ scene }: { scene: CampaignScene | null }): JSX.Elem
      * before the readout is what makes `activeCount` describe the frame the
      * user is looking at rather than the one before it.
      */
+    /**
+     * The three edge groups' per-frame values: the width the zoom implies, the
+     * alpha that keeps the far view honest, and where the dash has flowed to.
+     *
+     * **The width and the fade are the debt M4.5's core recorded.** A ribbon is
+     * a constant number of device pixels wide, which is right in the middle of
+     * the range and wrong at both ends: at the fitted zoom the campaign has far
+     * more centreline than viewport, and a constant width paints a mat of edge
+     * ink over the structure it is supposed to reveal. `ribbonWidthAt` draws it
+     * at the floor and fades it by the same ratio, so the coverage on screen is
+     * the coverage the scene's own world width asks for.
+     *
+     * **The dash phase comes from the CLOCK, not from a frame counter**, and
+     * that is what lets a flowing dash exist at all in a demo that renders on
+     * demand. There is no animation loop here (see `requestDraw`), so counting
+     * frames would make the flow speed depend on how much the user is moving
+     * the camera. Reading the clock instead means the pattern is wherever wall
+     * time says it should be on any frame anybody asks for: it drifts while you
+     * pan and holds still while you do not, and it will animate on its own for
+     * free the moment M4.6 brings a loop.
+     */
+    const styleEdges = (): void => {
+      if (renderer === null) return;
+      const pixelsPerWorldUnit = camera.zoom * camera.viewport.devicePixelRatio;
+      const seconds = performance.now() / 1000;
+      for (const group of EDGE_GROUPS) {
+        const width = ribbonWidthAt({
+          worldHalfWidth: EDGE_WORLD_HALF_WIDTH,
+          pixelsPerWorldUnit,
+          minHalfWidthPixels: MIN_EDGE_HALF_WIDTH_PIXELS,
+          maxHalfWidthPixels: group.style.halfWidthPixels,
+        });
+        const fade = group.id === OVERLAY_GROUP
+          ? overlayFade(pixelsPerWorldUnit, OVERLAY_FADE_START, OVERLAY_FADE_FULL)
+          : 1;
+        renderer.setEdgeStyle(group.id, {
+          halfWidthPixels: width.halfWidthPixels,
+          pixelsPerWorldUnit,
+          alpha: width.alpha * fade,
+          ...(group.style.dash === undefined
+            ? {}
+            : {
+                dashFlowPixels: advanceDashFlow(
+                  0,
+                  group.style.dash.speedPixelsPerSecond,
+                  seconds,
+                  group.style.dash.periodPixels,
+                ),
+              }),
+        });
+      }
+    };
+
     const draw = (): void => {
+      styleEdges();
       renderer?.render();
       overlay.sync();
       publish();
@@ -489,7 +591,13 @@ export function FirstLight({ scene }: { scene: CampaignScene | null }): JSX.Elem
           camera,
           signal: abort.signal,
           nodes: scene.nodes,
+          edgeGroups: EDGE_GROUPS,
         });
+        if (edges !== null) {
+          renderer.setEdges(ROUTED_GROUP, edges.routed);
+          renderer.setEdges(CROSS_TILE_GROUP, edges.crossTile);
+          renderer.setEdges(OVERLAY_GROUP, edges.overlay);
+        }
         setFailure(null);
         // Draws the first frame as a side effect, at whatever size the canvas
         // has now rather than the size it had when the effect started.
