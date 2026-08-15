@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Camera2D } from '../src/camera.js';
 import { RendererDisposedError } from '../src/errors.js';
 import type { SceneStyle } from '../src/instance-attributes.js';
@@ -575,6 +575,56 @@ describe('buildSceneRenderer', () => {
     );
     renderer.render();
     renderer.dispose();
+  });
+
+  it('frees the SCENE as well as the device when a node is rejected', () => {
+    // The scene owns two geometries and two materials before the first fallible
+    // line, and three's geometries and materials are not collectable: they hold
+    // GPU buffers that only dispose() releases. `FirstLight` passes its nodes to
+    // `createRenderer`, so under StrictMode a bad node would orphan two pairs
+    // per mount attempt.
+    //
+    // SPIED, because counting the sink's disposals does not distinguish the fix
+    // from its absence: the device-only path satisfied that too, and a reviewer
+    // proved the first version of this test passed with `sceneNodes?.dispose()`
+    // commented out. The scene's own disposal is the claim, so the scene's own
+    // disposal is what is asserted.
+    const disposed = vi.spyOn(SceneNodes.prototype, 'dispose');
+    const sink = new StubFrameSink();
+    const duplicated = [node('a'), node('a', 500)];
+    expect(() =>
+      buildSceneRenderer(
+        new Camera2D({ viewport: initialViewport }),
+        sink,
+        0x0b0d10,
+        sceneStyle,
+        duplicated,
+      ),
+    ).toThrow(RangeError);
+    expect(disposed).toHaveBeenCalledTimes(1);
+    expect(sink.disposals).toBe(1);
+    disposed.mockRestore();
+  });
+
+  it('frees the EDGES too, which is what a rebase caught', () => {
+    // M4.5 added a SECOND owner of GPU resources in front of the same fallible
+    // line, so a fix naming only the nodes was half a fix within a day of being
+    // written. The rejected node is still what throws; the edges are built
+    // before it and have to be given back as well.
+    const disposedEdges = vi.spyOn(SceneEdges.prototype, 'dispose');
+    const disposedNodes = vi.spyOn(SceneNodes.prototype, 'dispose');
+    const sink = new StubFrameSink();
+    expect(() =>
+      buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 0x0b0d10, sceneStyle, [
+        node('a'),
+        node('a', 500),
+      ]),
+    ).toThrow(RangeError);
+    expect(disposedEdges).toHaveBeenCalledTimes(1);
+    expect(disposedNodes).toHaveBeenCalledTimes(1);
+    expect(sink.disposals).toBe(1);
+    disposedEdges.mockRestore();
+    disposedNodes.mockRestore();
   });
 
   it('rejects a node style that cannot be drawn, and still gives the device back', () => {

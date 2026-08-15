@@ -35,7 +35,7 @@
  *   this package's shaders, and nobody has asked.
  *
  * What the instancing does put on the surface is its two ERRORS,
- * {@link UnknownInstanceHandleError} and {@link InstancedShapesDisposedError},
+ * {@link UnknownInstanceHandleError} and {@link SceneDisposedError},
  * because an error is the one part of an internal module that arrives in
  * somebody else's `catch` whether or not it was exported, and one that arrives
  * as a bare `Error` gets there with no `code` and failing `instanceof
@@ -76,10 +76,10 @@ export { Camera2D, fitZoom } from './camera.js';
 export type { Camera2DInit } from './camera.js';
 export {
   DagrRenderError,
-  InstancedShapesDisposedError,
   OverlayDisposedError,
   OverlayParentError,
   RendererDisposedError,
+  SceneDisposedError,
   UnknownInstanceHandleError,
 } from './errors.js';
 export type { DagrRenderErrorCode } from './errors.js';

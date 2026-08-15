@@ -437,8 +437,8 @@ abstract `DagrRenderError` that carries a `code` for a caller who would rather
 switch on a value than on a class: `RendererDisposedError` for use after a
 renderer's dispose, `OverlayParentError` and `OverlayDisposedError` from the
 overlay, and from the instanced path `UnknownInstanceHandleError` for a handle
-held past the removal of the instance it named, plus
-`InstancedShapesDisposedError` for a mesh used after its dispose. The last two
+held past the removal of the instance it named, plus `SceneDisposedError` for
+anything holding a scene's GPU resources used after its dispose. The last two
 are the whole of what instancing puts on the surface, and they are there because
 an error reaches a caller's `catch` whether or not the module that throws it was
 exported. The split is not about counting failure kinds, it is about what a

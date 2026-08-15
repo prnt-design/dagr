@@ -2,7 +2,7 @@ import { BufferAttribute } from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
 import {
   DagrRenderError,
-  InstancedShapesDisposedError,
+  SceneDisposedError,
   UnknownInstanceHandleError,
 } from '../src/errors.js';
 import { INSTANCE_CHANNELS, linearFromHex } from '../src/instance-attributes.js';
@@ -445,11 +445,11 @@ describe('disposal', () => {
       () => shapes.clear(),
       () => shapes.compact(),
     ]) {
-      expect(call).toThrow(InstancedShapesDisposedError);
+      expect(call).toThrow(SceneDisposedError);
       expect(call).toThrow(/scene\.rect/);
     }
-    expect(new InstancedShapesDisposedError('add', 'm')).toBeInstanceOf(DagrRenderError);
-    expect(new InstancedShapesDisposedError('add', 'm').code).toBe('INSTANCED_SHAPES_DISPOSED');
+    expect(new SceneDisposedError('add', 'm')).toBeInstanceOf(DagrRenderError);
+    expect(new SceneDisposedError('add', 'm').code).toBe('SCENE_DISPOSED');
   });
 });
 

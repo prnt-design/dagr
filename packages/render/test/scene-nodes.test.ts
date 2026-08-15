@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SceneStyle } from '../src/instance-attributes.js';
+import { DagrRenderError, SceneDisposedError } from '../src/errors.js';
 import { SceneNodes } from '../src/scene-nodes.js';
 import type { SceneNode } from '../src/scene-nodes.js';
 
@@ -184,6 +185,26 @@ describe('setNodes', () => {
     scene.dispose();
   });
 
+  it('changes NOTHING for a shape it does not know, rather than tearing', () => {
+    // The last fallible step that lived in the mutating half. `toInstance` falls
+    // through to the rounded rect branch for an unknown shape, so such a node
+    // validated clean and then threw out of the family lookup with the removals
+    // already applied. Unreachable from TypeScript, where the shapes are two
+    // string literals; reachable from a JavaScript caller or a data-driven
+    // field, which is what M4.7's delta path will be.
+    const scene = new SceneNodes(style);
+    scene.setNodes([node('a'), node('b', 100)]);
+    const before = [scene.placementOf('a'), scene.placementOf('b')];
+    const alien = { ...node('c'), shape: 'hexagon' } as unknown as SceneNode;
+
+    expect(() => scene.setNodes([node('a'), alien])).toThrow(RangeError);
+    expect(scene.nodeCount).toBe(2);
+    expect(scene.placementOf('a')).toEqual(before[0]);
+    expect(scene.placementOf('b')).toEqual(before[1]);
+    expect(scene.meshes[0]?.geometry.instanceCount).toBe(2);
+    scene.dispose();
+  });
+
   it('takes an empty list, which is a graph with no nodes', () => {
     const scene = new SceneNodes(style, { roundedRect: 0, circle: 0 });
     expect(() => scene.setNodes([])).not.toThrow();
@@ -194,11 +215,17 @@ describe('setNodes', () => {
 
 describe('lifecycle', () => {
   it('disposes both families once, and refuses to be added to afterwards', () => {
+    // A NAMED class, not a bare `Error`. errors.ts added one for exactly this
+    // case: a component unmounts, the renderer is disposed, a queued frame calls
+    // setNodes, and a caller's `catch (e) { if (e instanceof DagrRenderError) }`
+    // has to see it.
     const scene = new SceneNodes(style);
     scene.setNodes([node('a')]);
     scene.dispose();
     scene.dispose();
-    expect(() => scene.setNodes([node('b')])).toThrow(/disposed/);
+    expect(() => scene.setNodes([node('b')])).toThrow(SceneDisposedError);
+    expect(() => scene.setNodes([node('b')])).toThrow(DagrRenderError);
+    expect(() => scene.setNodes([node('b')])).toThrow(/scene nodes/);
   });
 
   it('disposes what it built when the style is rejected', () => {

@@ -108,13 +108,13 @@ not" is the category this file has a heading for.
 
   The type delta, stated once because this file's preamble makes "behaviour
   changed, types did not" a claim readers rely on: TWO exported classes are new,
-  `UnknownInstanceHandleError` and `InstancedShapesDisposedError`, and
-  `DagrRenderErrorCode` gains `UNKNOWN_INSTANCE_HANDLE` and
-  `INSTANCED_SHAPES_DISPOSED`. Widening that union is source-breaking for a
-  consumer switching over it exhaustively with a `never` fallback, so it is a
-  minor rather than a patch on the day a version is cut. Nothing else on the
-  surface moved: the instancing API itself is internal until M4.4 names the seam
-  a caller feeds a graph through.
+  `UnknownInstanceHandleError` and `SceneDisposedError`, and
+  `DagrRenderErrorCode` gains `UNKNOWN_INSTANCE_HANDLE` and `SCENE_DISPOSED`.
+  Widening that union is source-breaking for a consumer switching over it
+  exhaustively with a `never` fallback, so it is a minor rather than a patch
+  on the day a version is cut. Nothing else on the surface moved: the
+  instancing API itself is internal until M4.4 names the seam a caller feeds a
+  graph through.
 
   **The material decision M4.2 deferred is made, provisionally: ONE MATERIAL PER
   SHAPE FAMILY**, not one uber-material with a per-instance shape id. The
@@ -381,6 +381,19 @@ not" is the category this file has a heading for.
   being answered, and a culling test gets the shape it wants.
 
 ### Changed
+
+- Three fixes to what M4.3 and M4.4 shipped, found by a review of the merged
+  tree rather than of a diff. `SceneNodes.setNodes` resolves each node's shape
+  family in its validation pass, so a shape neither family draws cannot throw
+  with the removals already applied. `buildSceneRenderer` frees the scene it
+  built when a node is rejected, rather than only the device, because three's
+  geometries and materials hold GPU buffers a collector cannot release; a
+  rebase onto M4.5 then showed that the edges are a second owner in front of
+  the same fallible line, so both are freed. And
+  `InstancedShapesDisposedError` is `SceneDisposedError`, covering `SceneNodes`
+  as well as a mesh, because it was throwing a bare `Error` where this package
+  has a rule and a class. A rename inside one unreleased set of changes rather
+  than a break. (M4.4)
 
 - `OverlayDisposedError`'s message is now `cannot call X() after dispose()`,
   where it named an overlay. `createRichNodes` throws the same class from

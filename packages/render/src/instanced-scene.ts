@@ -6,7 +6,7 @@ import {
   Mesh,
   MeshBasicNodeMaterial,
 } from 'three/webgpu';
-import { InstancedShapesDisposedError } from './errors.js';
+import { SceneDisposedError } from './errors.js';
 import { InstanceBuffer } from './instance-buffer.js';
 import {
   INSTANCE_CHANNELS,
@@ -96,6 +96,17 @@ const GLOW_COLOR = 'instanceGlowColor';
  * The quad every instance is drawn on, before the per-instance scale: a unit
  * square from -0.5 to 0.5 on both axes, two triangles, with the `normal` and
  * `uv` attributes a node material expects to find.
+ *
+ * Those two are set and never READ, and they cost no vertex buffer slot for it:
+ * three derives its buffers from the attributes the shader references, and this
+ * graph references neither. Not because the material is unlit
+ * (`MeshBasicNodeMaterial` sets `lights = true` and overrides `setupNormal`)
+ * but because `NodeMaterial.setupLighting` builds a lighting context only for a
+ * scene with lights or a material with a light or environment map, and this has
+ * neither. They stay because a geometry handed to a node material without them
+ * is a bet on which of three's paths stay unevaluated, and losing that bet is a
+ * shader that fails to build rather than a slot reclaimed. See the channel
+ * budget in `instance-attributes.ts` for what does cost one.
  *
  * Built by hand rather than taken from a `PlaneGeometry`, for a reason that only
  * shows up on the second one: an `InstancedBufferGeometry` is rebuilt whenever
@@ -632,7 +643,7 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
 
   #assertLive(method: string): void {
     if (this.#disposed) {
-      throw new InstancedShapesDisposedError(method, this.#label);
+      throw new SceneDisposedError(method, `${this.#label} mesh`);
     }
   }
 }

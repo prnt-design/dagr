@@ -70,10 +70,44 @@ export interface InstanceChannel {
  *
  * Six attributes and twelve floats per instance, which is 48 bytes: the
  * campaign's 3,010 nodes are 144 KB of instance data. Six separate attributes
- * rather than three wider ones packed by hand, because a packed layout saves
- * attribute slots (WebGL2 guarantees 16 and a plane's own position, normal and
- * uv take three of them) and costs every reader of this file a swizzle to work
- * out which float is which. Nine free slots is not a budget under pressure.
+ * rather than three wider ones packed by hand, because a packed layout costs
+ * every reader of this file a swizzle to work out which float is which.
+ *
+ * **The limit that binds is `maxVertexBuffers`, not `maxVertexAttributes`, and
+ * an earlier version of this paragraph counted the wrong one.** three allocates
+ * one vertex buffer slot per non-interleaved attribute THE SHADER READS:
+ * `RenderObject.getAttributes` walks the attributes the node graph references,
+ * and only those reach `createShaderVertexBuffers`. This graph reads
+ * `positionGeometry` and the six channels, so it binds SEVEN of WebGPU's
+ * default eight, against the sixteen attributes the old claim was measured
+ * against.
+ *
+ * The quad's `normal` and `uv` cost NOTHING, which is why the rule has to name
+ * what the shader reads rather than what the geometry carries: counting every
+ * attribute on the geometry gives nine of eight and describes a scene that
+ * cannot build.
+ *
+ * WHY THEY ARE UNREAD IS NOT "THIS MATERIAL IS UNLIT", which is the reason a
+ * first draft gave and which a review sent back: `MeshBasicNodeMaterial` sets
+ * `lights = true` and DOES override `setupNormal`. The real guard is in
+ * `NodeMaterial.setupLighting`, which builds a lighting context only when
+ * `materialLightings.length > 0 || lightsNode.getScope().hasLights`. This scene
+ * has no lights and this material has no light map and no environment map, so
+ * neither holds, `setupOutgoingLight` returns `diffuseColor.rgb`, and nothing
+ * in the graph ever asks for a normal.
+ *
+ * One slot is left. M4.6's spring velocity or M4.8's picking id is the seventh
+ * channel and fits; an eighth needs interleaving or a raised `requiredLimits`.
+ * Two ordinary SCENE changes take that last slot before a channel does, and
+ * neither is renderer work: a material that comes to read `uv`, and a light or
+ * an environment map, either of which satisfies the guard above and pulls the
+ * `normal` this geometry already carries into the shader.
+ *
+ * EIGHT IS A WEBGPU NUMBER, and M4.9 owns what the other backend does. three's
+ * WebGL2 path binds each attribute with `vertexAttribPointer` into a VAO, so it
+ * has no buffer-slot limit at all and its ceiling is `MAX_VERTEX_ATTRIBS`, at
+ * least sixteen. A channel past the eighth therefore fails pipeline creation on
+ * one backend and draws fine on the other.
  *
  * `instanceColor` is deliberately NOT one of these names: three's `InstancedMesh`
  * uses it for its own per-instance colour, and a name collision on a geometry
