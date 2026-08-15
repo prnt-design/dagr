@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@dagr/campaign": "workspace:*",
     "@dagr/graph": "workspace:*",
     "@dagr/render": "workspace:*",
     "react": "^19.2.8",
