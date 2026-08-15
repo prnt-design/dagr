@@ -3009,8 +3009,8 @@ of M3 would leave the second runner idle for a milestone.
   edges spanning many ranks, which is what M2.4b's dummy chains turn into the
   multi-point polylines this task has to tessellate without pinching.
   IN PROGRESS, split in two because the demo half waits on M4.4. The
-  tessellation core is merged (`ribbon.ts`, `ribbon-nodes.ts`) and the demo
-  scene is the remaining half. The decisions the entry asked for, made:
+  tessellation core is merged (`ribbon.ts`, `ribbon-nodes.ts`, PR #31) and the
+  demo scene is the remaining half. The decisions the entry asked for, made:
   **WIDTH IS IN SCREEN SPACE.** A ribbon is a fixed number of DEVICE pixels
   from its centreline at every zoom. The demo's derived range runs 0.45 to 134
   CSS pixels per world unit on the LADDER scene and the reference canvas (P2
