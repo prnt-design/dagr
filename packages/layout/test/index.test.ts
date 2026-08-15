@@ -3,9 +3,13 @@ import { describe, expect, it } from 'vitest';
 import * as api from '../src/index.js';
 import type {
   BarycenterOrderOptions,
+  BoundsChange,
   DagrLayoutErrorCode,
+  EdgeDelta,
   Layering,
   LayoutConfig,
+  LayoutDelta,
+  LayoutDiffOptions,
   LayoutEngine,
   LayoutEngineOptions,
   LayoutInput,
@@ -13,7 +17,10 @@ import type {
   LayoutResult,
   LayoutStageOverrides,
   LayoutStages,
+  MovedNode,
   NetworkSimplexOptions,
+  NodeDelta,
+  NodeGeometry,
   OrderOutput,
   OrderStage,
   OrderedState,
@@ -27,6 +34,7 @@ import type {
   RankStage,
   RankedState,
   Rect,
+  ReroutedEdge,
   ResolvedLayoutConfig,
   RouteOutput,
   RoutedEdge,
@@ -119,6 +127,21 @@ describe('@dagr/layout public surface', () => {
     expect(typeof api.StageContractError).toBe('function');
     expect(typeof api.InternalLayoutError).toBe('function');
     expect(typeof api.WorkerTransportError).toBe('function');
+    expect(typeof api.DeltaMismatchError).toBe('function');
+  });
+
+  // The delta model, M3.1. Three functions, and the two beside `diffLayout` are
+  // there for reasons `index.ts` states: the round trip through `applyDelta` is
+  // what a delta MEANS, and `isEmptyDelta` is the question a consumer asks
+  // first.
+  it('exports the delta model', () => {
+    expect(typeof api.diffLayout).toBe('function');
+    expect(typeof api.applyDelta).toBe('function');
+    expect(typeof api.isEmptyDelta).toBe('function');
+    const graph = new Graph();
+    graph.addNode('a');
+    const first = api.layout({ graph });
+    expect(api.isEmptyDelta(api.diffLayout(first, first))).toBe(true);
   });
 
   // The two stages exported by name, because neither is a placeholder waiting
@@ -161,15 +184,19 @@ describe('@dagr/layout public surface', () => {
     expect(Object.keys(api).sort()).toEqual([
       'DEFAULT_LAYOUT_CONFIG',
       'DagrLayoutError',
+      'DeltaMismatchError',
       'InternalLayoutError',
       'InvalidConfigError',
       'StageContractError',
       'WorkerTransportError',
+      'applyDelta',
       'barycenterOrder',
       'barycenterOrderStage',
       'countCrossings',
       'createLayout',
       'defaultStages',
+      'diffLayout',
+      'isEmptyDelta',
       'layout',
       'longestPathRankStage',
       'networkSimplexRank',
@@ -222,8 +249,15 @@ describe('@dagr/layout public surface', () => {
       new api.StageContractError('rank', 'a', 'why').code,
       new api.InternalLayoutError('why').code,
       new api.WorkerTransportError('why').code,
+      new api.DeltaMismatchError('a', 'why').code,
     ];
-    expect(codes).toEqual(['INVALID_CONFIG', 'STAGE_CONTRACT', 'INTERNAL', 'WORKER']);
+    expect(codes).toEqual([
+      'INVALID_CONFIG',
+      'STAGE_CONTRACT',
+      'INTERNAL',
+      'WORKER',
+      'DELTA_MISMATCH',
+    ]);
   });
 
   it('exports every type the pipeline is described in', () => {
@@ -299,6 +333,20 @@ describe('@dagr/layout public surface', () => {
     expect(routed).toBeUndefined();
     expect(bounds).toEqual({ x: -50, y: 0, width: 100, height: 40 });
     expect(rect.width).toBe(1);
+    // M3.1's own types, which are the ones M4.7 and M5 are written against.
+    // `NodeGeometry` is the shape a `PositionedNode` is an id away from, so a
+    // positioned node is assignable to it and that is the whole relationship.
+    const geometry: NodeGeometry = handBuilt;
+    const move: MovedNode = { id: 'a', from: geometry, to: geometry };
+    const reroute: ReroutedEdge = { id: 'e', from: [point], to: [point] };
+    const grew: BoundsChange = { from: rect, to: rect };
+    const nodeDelta: NodeDelta = { added: [handBuilt], removed: [], moved: [move] };
+    const edgeDelta: EdgeDelta = { added: [], removed: ['e'], rerouted: [reroute] };
+    const delta: LayoutDelta = { nodes: nodeDelta, edges: edgeDelta, bounds: grew };
+    const diffOptions: LayoutDiffOptions = { epsilon: 0 };
+    expect(api.isEmptyDelta(delta)).toBe(false);
+    expect(api.isEmptyDelta(api.diffLayout(result, result, diffOptions))).toBe(true);
+
     // The read-side records still exist and still extend one another, which is
     // what lets a stage author name the argument its `run` is handed.
     expect(wired.graph).toBe(graph);

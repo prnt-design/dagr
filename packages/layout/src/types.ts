@@ -272,13 +272,26 @@ export interface RoutedState extends PositionedState {
   readonly routes: ReadonlyMap<EdgeId, readonly Point[]>;
 }
 
-/** A node with a place and a size. `x` and `y` are the node's centre. */
-export interface PositionedNode {
-  readonly id: NodeId;
+/**
+ * Where a node's box is and how big it is. `x` and `y` are the node's CENTRE,
+ * as everywhere else in this package.
+ *
+ * Split out from {@link PositionedNode} by M3.1, which needed the same four
+ * numbers without an id: a `LayoutDelta` reports a move as the box before and
+ * the box after, and an id repeated inside both halves of an entry that already
+ * carries one is a second copy to disagree with. `PositionedNode` is this plus
+ * the id, so nothing about a result changed shape.
+ */
+export interface NodeGeometry {
   readonly x: number;
   readonly y: number;
   readonly width: number;
   readonly height: number;
+}
+
+/** A node with a place and a size. `x` and `y` are the node's centre. */
+export interface PositionedNode extends NodeGeometry {
+  readonly id: NodeId;
 }
 
 /** An edge with a polyline route. */
@@ -308,10 +321,11 @@ export interface RoutedEdge {
  * What a layout run produces: where every node sits, how every edge runs, and
  * the box around the lot.
  *
- * Maps rather than arrays, keyed by the graph's own ids. M3.1 diffs two results
- * by id to produce a `LayoutDelta`, which is an O(n) map lookup per node rather
- * than an index scan, and Map iteration is still deterministic insertion order,
- * so nothing is given up: both maps iterate in graph insertion order.
+ * Maps rather than arrays, keyed by the graph's own ids. `diffLayout` compares
+ * two results by id to produce a `LayoutDelta`, which is an O(n) map lookup per
+ * node rather than an index scan, and Map iteration is still deterministic
+ * insertion order, so nothing is given up: both maps iterate in graph insertion
+ * order, and a delta's own groups inherit that order from them.
  *
  * The keys are exactly the caller's own ids, no more and no less. Whatever a
  * stage needed internally, including any node it declared in

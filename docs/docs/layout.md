@@ -2029,11 +2029,11 @@ that is what a viewport wants.
 
 Y grows downward, matching screen coordinates.
 
-Maps rather than arrays, keyed by the graph's own ids. M3.1 diffs two
-`LayoutResult`s by id to produce a `LayoutDelta`, which wants a map lookup per
-node rather than an index scan, and Map iteration is still deterministic
-insertion order, so nothing is given up: both maps iterate in graph insertion
-order.
+Maps rather than arrays, keyed by the graph's own ids. `diffLayout` compares two
+`LayoutResult`s by id to produce a [`LayoutDelta`](#deltas), which wants a map
+lookup per node rather than an index scan, and Map iteration is still
+deterministic insertion order, so nothing is given up: both maps iterate in
+graph insertion order.
 
 Maps are keyed by the caller's own ids, no more and no less. Whatever a stage
 needed internally, including anything it declared in `virtualNodes`, stops at
@@ -2059,6 +2059,142 @@ nothing here changes again when they arrive. M2.8's border attachment did not
 exercise it either way: an attachment lands ON a box the hull already contains,
 so only a bend can ever grow the bounds. A layout with no chain in it has
 exactly the bounds it had before.
+
+## Deltas
+
+`diffLayout(previous, next)` says what changed between two results, and that is
+the whole of it: a pure function over two `LayoutResult`s, no engine, no graph,
+nothing retained between calls.
+
+```ts
+import { applyDelta, diffLayout, isEmptyDelta } from '@dagr/layout';
+
+const before = layout({ graph });
+graph.addNode('d');
+const after = layout({ graph });
+
+const delta = diffLayout(before, after);
+// delta.nodes.added   -> [{ id: 'd', x, y, width, height }]
+// delta.nodes.moved   -> [{ id: 'b', from: { x, y, width, height }, to: { … } }]
+// delta.nodes.removed -> []
+// delta.bounds        -> { from: Rect, to: Rect } | undefined
+```
+
+```ts
+interface LayoutDelta {
+  readonly nodes: {
+    readonly added: readonly PositionedNode[];
+    readonly removed: readonly NodeId[];
+    readonly moved: readonly MovedNode[];
+  };
+  readonly edges: {
+    readonly added: readonly RoutedEdge[];
+    readonly removed: readonly EdgeId[];
+    readonly rerouted: readonly ReroutedEdge[];
+  };
+  readonly bounds: { readonly from: Rect; readonly to: Rect } | undefined;
+}
+
+interface MovedNode {
+  readonly id: NodeId;
+  readonly from: NodeGeometry; // x, y, width, height. x and y are the centre
+  readonly to: NodeGeometry;
+}
+
+interface ReroutedEdge {
+  readonly id: EdgeId;
+  readonly from: readonly Point[];
+  readonly to: readonly Point[];
+}
+```
+
+**Absent means unchanged.** A node that did not move is not in there at all, not
+even with a marker saying so. That is what makes a delta proportional to the
+change rather than to the graph, which is the entire point of the type and
+exactly what a spring consumer wants: nothing to animate is nothing to iterate.
+The cost is that a delta is not self-describing, so it cannot rebuild a scene on
+its own. It needs the result it was computed against, and `applyDelta` is the
+reference for what that means.
+
+**A resize is a move.** `from` and `to` are whole boxes, so a node whose label
+grew, and whose centre did not shift at all, is in `moved`. Leaving it out would
+have a consumer applying deltas draw the old size forever, which is the same
+desynchronisation a dropped move is, arriving through a field nobody thinks of
+as motion. One list rather than a `moved` and a `resized`, because the question
+a consumer asks per node is whether this box is materially different from the
+one it drew last, and splitting the answer in two makes every consumer join it
+back up.
+
+**Absolute, not relative.** The displacement is `to.x - from.x` and belongs to
+whoever wants it. A spring retargets to an absolute position, so `to` has to be
+there; a stability metric sums the displacement, which it can derive in the pass
+it sums it in. A third field carrying the difference would be a cache of two
+numbers that are right there, and a cache that can disagree with them.
+
+**Arrays, not records keyed by id.** Arrays are cheaper to build, they carry an
+order the type can promise, and they cross a worker boundary as arrays rather
+than as objects whose keys are caller strings. A consumer that wants O(1) lookup
+builds one map in a pass over a list that is already proportional to the change.
+
+**The order is part of the contract**, because deterministic and relied upon are
+different promises. `added` and `moved` come out in the next result's iteration
+order, `removed` in the previous one's, and both of those are graph insertion
+order.
+
+**An edge whose endpoints changed is a removal and an addition** under the one
+id, rather than a reroute. Nothing in `@dagr/graph` rebinds an edge's ends, but
+an edge id is your own string and two runs need not be of the same graph: a
+patch that removed `e1` from `a` to `b` and added `e1` from `a` to `c` produces
+exactly that, and calling it a reroute would leave you holding the old endpoints
+under the new polyline. It is the one case where an id is in two groups of one
+delta, so if you apply the lists yourself, **apply removals before additions**:
+the other order deletes the edge that just arrived. `applyDelta` does.
+
+### Applying one
+
+`applyDelta(previous, delta)` returns the result the delta describes.
+`applyDelta(a, diffLayout(a, b))` holds every node, edge and bound of `b`,
+exactly at `epsilon: 0` and to within epsilon otherwise.
+
+It is here because what a delta MEANS is that round trip, and the meaning ships
+as code you can check yourself against rather than only as a paragraph. A
+renderer applies deltas to a scene rather than to a result and cannot call this;
+what it can do is be tested against it.
+
+The one thing it does not reproduce is iteration order. The maps hold what
+survived in the previous result's order with what was added appended, because
+that is the only order a previous result and a delta have between them.
+
+A delta applied to a result it was not computed against throws a
+`DeltaMismatchError` naming the first node or edge that did not fit. That is the
+one failure the type cannot rule out, and silence would leave a scene that is
+wrong, stays wrong, and drifts further wrong with every later delta.
+
+### The tolerance, and why it is not transitive
+
+`diffLayout(previous, next, { epsilon })` is the smallest change worth
+reporting, in node-size units, and it defaults to 0, which reports any
+difference at all.
+
+The reason for a tolerance is consumer-facing and never numerical. A move too
+small to see is not worth animating. A move that appeared because the same stage
+given the same inputs returned different numbers is a determinism bug to fix,
+not a wobble to threshold away: IEEE 754 is deterministic, and this package
+[says so on purpose](#determinism).
+
+**A nonzero epsilon is not transitive, and that has a consequence you have to
+build for.** Fifty steps of 0.9 epsilon each report nothing, so a consumer that
+diffs every run against the last COMPUTED one ends 45 epsilon out of position
+with nothing in the system able to notice. So diff against the last REPORTED
+geometry instead: the result you were actually told about, which is the previous
+reported result with the last delta applied to it. That is a snapshot to retain
+alongside the true state, and it is why `applyDelta` returns a new result rather
+than mutating one.
+
+The number is named on the comparison rather than on `LayoutConfig`, because
+every field of the config answers "how should this graph be laid out", is
+resolved once per run, and is read by stages, and no stage can read a tolerance
+that is about two results.
 
 ## Overlap, exactly
 
@@ -2117,18 +2253,21 @@ the whole thing and every member carries a `code`.
 | `InvalidConfigError` | `INVALID_CONFIG` | A number a caller supplied is not one the pipeline can use. Two kinds reach it. A separation or a size that is not finite and zero or greater, which reads `Invalid layout config:` and carries `field` as a path such as `nodeSize("n1").width`. And an option a stage factory validates, which reads `Invalid layout option:` and names the option, `maxIterations` being the only one today. Both carry the offending `value`. |
 | `StageContractError` | `STAGE_CONTRACT` | A stage broke one of the rules in [The stage contract](#the-stage-contract). Carries the offending stage's `name`, the `id` it dropped, and a `detail`. One check is about the layers rather than one id, and uses a plain label instead: `layer 3`. The `graph` label is gone as of M2.4a, along with the check that raised it. |
 | `WorkerTransportError` | `WORKER` | A run sent to a worker came back, and what came back was not a layout. Carries a `detail`. Two things reach it, and both are wiring: the two ends were built from different versions and disagree about the shape of a result, so a box, count or point length does not match the graph it answers, or the stages on the far side threw something that is not a member of this family and so could not survive the crossing with its class. An answer this package does not recognise is NOT one of them: it is ignored, and the run stays pending. See [When a run fails over there](#when-a-run-fails-over-there). |
+| `DeltaMismatchError` | `DELTA_MISMATCH` | A [`LayoutDelta`](#deltas) was applied to a result it was not computed against: it moves a node that result does not hold, removes an edge that is not there, or adds one that already is. Carries the `id` that did not fit and a `detail` saying what was being done to it, both quoted in the message, and names the first one rather than counting them. Your bookkeeping rather than this package's invariant: a delta carries no evidence of which two results it came from, so pairing it with the wrong one is a mistake nothing in the type system can refuse. It is loud because the alternative is a scene that is wrong, stays wrong, and drifts further wrong with every later delta. |
 | `InternalLayoutError` | `INTERNAL` | The pipeline caught itself breaking one of its own invariants. Carries a `detail`. Always a bug in `@dagr/layout`, never in your graph, your config, or a stage you supplied, which is why it is not a `StageContractError`: that class names a stage, and naming one here would blame whoever was plugged in. Nothing to fix on your side. Please report it. |
 
 They sort by whose bug it is, which is the only question a caller catching one
-has to answer: fix the input, fix the stage, fix the worker wiring, or file the
-bug. The fourth arrived with M2.10, because until there was a boundary to cross
-there was no run that could fail without being somebody's config, somebody's
-stage, or this package's own mistake.
+has to answer: fix the input, fix the stage, fix the worker wiring, fix the
+bookkeeping, or file the bug. The fourth arrived with M2.10, because until there
+was a boundary to cross there was no run that could fail without being
+somebody's config, somebody's stage, or this package's own mistake. The fifth
+arrived with M3.1 on the same argument one layer up: until there was a delta,
+there was nothing a caller could pair with the wrong thing.
 
 The example below runs through an engine rather than through `layout()`, because
-only three of the four codes are reachable from a synchronous call: `WORKER`
-comes back from `engine.runAsync` and comes back as a REJECTION rather than a
-throw. Note where the engine is built, which is outside the `try`: a separation
+`WORKER` is not reachable from a synchronous call: it comes back from
+`engine.runAsync` and comes back as a REJECTION rather than a throw.
+`DELTA_MISMATCH` comes from `applyDelta` and not from a run at all. Note where the engine is built, which is outside the `try`: a separation
 this engine could never have accepted is refused at construction, so a caller
 who builds an engine from config they did not write wants that call inside a
 `try` of its own.
@@ -2148,6 +2287,8 @@ try {
       case 'STAGE_CONTRACT':
         break;
       case 'WORKER':
+        break;
+      case 'DELTA_MISMATCH':
         break;
       case 'INTERNAL':
         break;
@@ -2394,8 +2535,14 @@ rule (completeness) rather than designing it.
 
 Running the same API in a worker is no longer on this list. M2.10 shipped it,
 along with the `createLayout({ stages, config })` engine it hangs off. See
-[Worker mode](#worker-mode). Incremental relayout, the flagship feature, is all
-of M3, and arrives on that same engine rather than as another free function:
+[Worker mode](#worker-mode). Neither is the delta model: M3.1 shipped
+`diffLayout`, `applyDelta` and the `LayoutDelta` type it produces, which is what
+every later task in that milestone is judged by, and which is a pure function
+over two results rather than anything incremental. See [Deltas](#deltas). What
+is still outstanding is the engine that produces the two results without
+laying out the whole graph twice. Incremental relayout, the flagship feature, is
+the rest of M3, and arrives on that same engine rather than as another free
+function:
 warm-starting a relayout from a previous run only makes sense if the stages and
 the config are the same ones that produced it, which is a thing to bind once
 rather than to pass again and hope. `layout()` stays as the one-shot sugar, and

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DagrLayoutError,
+  DeltaMismatchError,
   InternalLayoutError,
   InvalidConfigError,
   StageContractError,
@@ -13,6 +14,7 @@ describe('layout errors', () => {
       new InvalidConfigError('nodeSep', -1),
       new StageContractError('rank', 'a', 'no rank was assigned'),
       new InternalLayoutError('no entry at index 3'),
+      new DeltaMismatchError('a', 'is moved by this delta but the result does not hold it'),
     ];
     for (const error of errors) {
       expect(error).toBeInstanceOf(DagrLayoutError);
@@ -25,14 +27,16 @@ describe('layout errors', () => {
       new InvalidConfigError('nodeSep', -1).code,
       new StageContractError('rank', 'a', 'no rank was assigned').code,
       new InternalLayoutError('no entry at index 3').code,
+      new DeltaMismatchError('a', 'why').code,
     ];
-    expect(codes).toEqual(['INVALID_CONFIG', 'STAGE_CONTRACT', 'INTERNAL']);
+    expect(codes).toEqual(['INVALID_CONFIG', 'STAGE_CONTRACT', 'INTERNAL', 'DELTA_MISMATCH']);
   });
 
   it('keeps instanceof working for each subclass', () => {
     expect(new InvalidConfigError('nodeSep', -1)).toBeInstanceOf(InvalidConfigError);
     expect(new StageContractError('rank', 'a', 'why')).toBeInstanceOf(StageContractError);
     expect(new InternalLayoutError('why')).toBeInstanceOf(InternalLayoutError);
+    expect(new DeltaMismatchError('a', 'why')).toBeInstanceOf(DeltaMismatchError);
     expect(new InvalidConfigError('nodeSep', -1)).not.toBeInstanceOf(StageContractError);
     // The distinction item B2 exists to draw: an invariant failure is this
     // package's bug, and a `StageContractError` names a stage the caller wrote.
@@ -43,6 +47,7 @@ describe('layout errors', () => {
     expect(new InvalidConfigError('nodeSep', -1).name).toBe('InvalidConfigError');
     expect(new StageContractError('rank', 'a', 'why').name).toBe('StageContractError');
     expect(new InternalLayoutError('why').name).toBe('InternalLayoutError');
+    expect(new DeltaMismatchError('a', 'why').name).toBe('DeltaMismatchError');
   });
 
   it('reports the offending config field and value', () => {
@@ -89,5 +94,20 @@ describe('layout errors', () => {
     // do about an invariant failure is report it, and nothing else in the
     // message says where to.
     expect(error.message).toContain('@dagr/layout');
+  });
+
+  // The fifth culprit, and the one whose whole value is that it is loud: a
+  // delta paired with the wrong result is a mistake no type can refuse, and
+  // silence would leave a scene wrong and drifting.
+  it('reports what did not fit and what was being done to it', () => {
+    const error = new DeltaMismatchError('n7', 'is moved by this delta but the result does not hold it');
+    expect(error.id).toBe('n7');
+    expect(error.detail).toBe('is moved by this delta but the result does not hold it');
+    expect(error.message).toContain('n7');
+    expect(error.message).toContain('does not hold it');
+    // Neither this package's invariant nor a stage's contract, so neither
+    // class, which is the distinction the family exists to draw.
+    expect(error).not.toBeInstanceOf(InternalLayoutError);
+    expect(error).not.toBeInstanceOf(StageContractError);
   });
 });

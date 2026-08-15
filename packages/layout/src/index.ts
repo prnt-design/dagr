@@ -22,6 +22,22 @@ export { serveLayout } from './worker.js';
 // format whose only two speakers are upgraded together. What a caller needs to
 // write down is the port, and `LayoutPort` is above.
 export { DEFAULT_LAYOUT_CONFIG } from './config.js';
+// The delta model (M3.1). Three functions rather than one, and the two beside
+// `diffLayout` earn their place on the same argument: what a delta MEANS is the
+// round trip through `applyDelta`, so the meaning ships as code a consumer can
+// check itself against rather than only as a paragraph, and `isEmptyDelta` is
+// the question every consumer asks first and the one a hand-written check stops
+// answering correctly the day the type grows a field.
+export { applyDelta, diffLayout, isEmptyDelta } from './delta.js';
+export type {
+  BoundsChange,
+  EdgeDelta,
+  LayoutDelta,
+  LayoutDiffOptions,
+  MovedNode,
+  NodeDelta,
+  ReroutedEdge,
+} from './delta.js';
 // The rule for stages: every one a caller CHOOSES BETWEEN is exported by name,
 // no PLACEHOLDER is, and the stage set is exported whatever a stage is.
 //
@@ -71,6 +87,7 @@ export type { BarycenterOrderOptions, Layering } from './order.js';
 export { polylineRouteStage } from './route.js';
 export {
   DagrLayoutError,
+  DeltaMismatchError,
   InternalLayoutError,
   InvalidConfigError,
   StageContractError,
@@ -83,6 +100,7 @@ export type {
   LayoutResult,
   LayoutStageOverrides,
   LayoutStages,
+  NodeGeometry,
   OrderOutput,
   OrderStage,
   OrderedState,

@@ -2235,7 +2235,7 @@ previous run's ranks, and a rank-stability test alongside the sum test proves it
 does something, because the same perturbation moves a node a whole rank without
 it.
 
-- [ ] **M3.1** (`@dagr/layout`) Delta model: `LayoutDelta` computed by diffing
+- [x] **M3.1** (`@dagr/layout`) Delta model: `LayoutDelta` computed by diffing
   two `LayoutResult`s: nodes added, removed and moved, edges added, removed and
   rerouted, and the changed bounds. A pure function over two results, so it
   needs no engine and no incremental algorithm, which is why it goes first:
@@ -2281,6 +2281,87 @@ it.
   `LayoutDelta` is public surface from the run it ships in, and both
   `@dagr/render` (M4.7) and `@dagr/react` (M5) consume it, so it is worth
   spending this run's API review on.
+  SHIPPED 2026-08-15 as `src/delta.ts`: `diffLayout`, `applyDelta`,
+  `isEmptyDelta`, the `LayoutDelta` type and the four types it is spelled with,
+  plus a `DeltaMismatchError` and a `NodeGeometry`. The four questions above,
+  answered, and a fifth the entry did not ask.
+  ABSENT, not flagged. A node that did not move is not in the delta at all,
+  which is what makes it proportional to the change rather than to the graph.
+  The rebuild path a flagged delta would have bought is `applyDelta` plus the
+  result the caller already has, and a caller who has not kept one can be handed
+  the next result whole, so the self-describing variant would have made every
+  delta the size of the graph to buy something that is already available two
+  other ways.
+  ARRAYS, not records keyed by id, which is also what the brain's note from
+  M2.10 asked for. They are cheaper to build, they carry an order (below), and
+  they cross a worker boundary as arrays rather than as objects whose keys are
+  caller-supplied strings, which is where `__proto__` stops being a curiosity. A
+  consumer wanting O(1) lookup builds one map in one pass over a list that is
+  already proportional to the change.
+  ABSOLUTE ONLY. `from` and `to`, no third displacement field. Springs need the
+  absolute target and M3.4's metric derives the displacement in the pass it sums
+  it in, so the third field would be a cache of two numbers sitting next to it.
+  THE TOLERANCE IS NAMED ON THE DIFF, NOT ON `LayoutConfig`, and that is a
+  DEPARTURE from what the paragraph above proposed. Its premise survives (the
+  number is in node-size units, so only the caller can pick it) and its
+  conclusion does not: every field of `LayoutConfig` answers "how should this
+  graph be laid out", is resolved once per RUN into `ResolvedLayoutConfig`, and
+  is threaded to stages, and no stage can read a tolerance that is about two
+  results. Putting it there would have carried a number nothing reads across the
+  M2.10 worker wire and into every one-shot `layout()` call, which has nothing
+  to compare itself against. It is `diffLayout(previous, next, { epsilon })`,
+  default 0, validated by the same rule the config's measurements get and
+  raising the same `InvalidConfigError` with `subject: 'option'`. M3.2's engine
+  is the first thing to hold a config and two results at once and is where a
+  caller names it once.
+  A RESIZE IS A MOVE, which is the fifth question and the one the entry did not
+  ask. `from` and `to` are whole boxes rather than centres, so a node whose label
+  grew and whose centre did not shift is in `moved`. Left out, a consumer
+  applying deltas draws the old size forever, which is the same
+  desynchronisation a dropped move is, arriving through a field nobody had
+  thought of as motion. One list rather than a `moved` and a `resized`, on the
+  same argument the single epsilon rests on: the question per node is whether
+  this box is materially different from the one last drawn, and splitting the
+  answer makes every consumer join it back up.
+  AN EDGE WHOSE ENDPOINTS CHANGED IS A REMOVAL AND AN ADDITION under the one id,
+  not a reroute. Nothing in `@dagr/graph` rebinds an edge's ends, but an edge id
+  is the caller's own string and two results need not come from the same graph:
+  a patch that removed `e1` from `a` to `b` and added `e1` from `a` to `c`
+  produces exactly this, and a reroute would leave a consumer holding the old
+  endpoints under the new polyline. Nodes have no matching case, a node being an
+  id and nothing else.
+  ORDER IS PART OF THE CONTRACT rather than merely deterministic, because only
+  the second lets a consumer commit a golden file: `added` and `moved` in the
+  NEXT result's iteration order, `removed` in the PREVIOUS one's, both of which
+  are graph insertion order.
+  `applyDelta` IS EXPORTED, and it is the reason the absent-means-unchanged
+  choice is safe rather than merely cheap: what a delta MEANS is that round trip,
+  so the meaning ships as code a consumer can check itself against rather than
+  only as a paragraph. M4.7 applies deltas to a scene rather than to a result and
+  cannot call it, but it can be tested against it. The one thing it does not
+  reproduce is ITERATION ORDER: the maps hold what survived in the previous
+  result's order with the additions appended, because the next result's order is
+  in neither of its two inputs. Nothing in the contract rests on that order and
+  a caller who needs the graph's has the graph.
+  A DELTA APPLIED TO THE WRONG RESULT THROWS, which widened
+  `DagrLayoutErrorCode` with a fifth member, `'DELTA_MISMATCH'`, on that type's
+  own recorded terms (widen before v0.1, not after) and exactly as M2.10 widened
+  it with `'WORKER'`. A delta carries no evidence of which two results it came
+  from, so the pairing is a mistake no type can refuse, and the alternative to
+  throwing is a scene that is wrong, stays wrong, and drifts further wrong with
+  every later delta. It names the first entry that did not fit rather than
+  counting them. It checks PRESENCE and deliberately not `from`, which
+  legitimately disagrees with what the result holds whenever the delta was taken
+  against reported geometry at a nonzero epsilon.
+  THE NON-TRANSITIVITY IS A TEST rather than a paragraph: `layout.delta.test.ts`
+  runs fifty steps of 0.9 epsilon through both loops side by side, and the one
+  that diffs against the last COMPUTED result ends more than 40 epsilon out
+  while the one that diffs against the last REPORTED result stays within one,
+  which is the measurement behind the retained-snapshot requirement M3.2
+  inherits.
+  `PositionedNode` now extends `NodeGeometry`, the same four numbers without an
+  id. Structurally identical, so no caller's code changes, and it exists so that
+  a move's two halves do not each carry an id the entry already has.
 - [ ] **M3.2** (`@dagr/layout`) Layout engine and patch-driven relayout:
   `createLayout({ stages, config })` with `engine.run(graph)` and
   `engine.relayout(patch)`, emitting an M3.1 delta. `relayout` here re-runs the
@@ -4020,8 +4101,12 @@ consumer. Sequencing against M3 is the plan's open question 1.
   shape since M4.12. The fix is to clamp the placement against the viewport,
   which belongs in the overlay's placement code in `@dagr/render` rather than in
   a demo tier, and it wants its own task.
-- [ ] **P7** (`apps/demo`, `docs`) Deep links, hover highlight, committed
+- [x] **P7** (`apps/demo`, `docs`) Deep links, hover highlight, committed
   screenshots, a docs page on the schema.
+  MERGED as PR #37 on 2026-08-15, which is when everything below was written.
+  The box itself was left unticked by that run and is ticked here, by the next
+  increment, because an entry with a full decision record above an empty box is
+  a task the run after it picks up again.
   The docs page landed early, on 2026-08-15, as its own increment
   (`docs/docs/campaign.md`): it depends on P1 alone, and the rest of P7 depends
   on P5 and P6, so holding it back would have parked a finished page behind two
