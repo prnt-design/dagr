@@ -63,6 +63,23 @@ describe('@dagr/render', () => {
     expect('createInstancedShapes' in api).toBe(false);
   });
 
+  it('does not export the ribbon arithmetic, which M4.5 landed with no consumer', () => {
+    // M4.5's first half is the tessellation core and the dash coverage, and it
+    // adds nothing to this list on purpose. The demo half of the task is what
+    // will need a seam, and it waits on M4.4; exporting `tessellateRibbons`
+    // now would be guessing at the shape of that seam with nothing to check
+    // the guess against, which is the argument M4.2 made about the shape scene
+    // and this project has since made twice more.
+    //
+    // `ribbon-nodes.ts` stays internal for the stronger reason `sdf-nodes.ts`
+    // does: a TSL node is a three.js type, and `types.ts` keeps every one of
+    // them off this package's surface.
+    expect('tessellateRibbons' in api).toBe(false);
+    expect('ribbonCoverage' in api).toBe(false);
+    expect('ribbonWorldPosition' in api).toBe(false);
+>>>>>>> 7b7be91 (feat(render): the ribbon tessellation core, at a screen-space width (P5))
+  });
+
   it('does not export the renderer implementation class', () => {
     // `WebGPUSceneRenderer` is exported from its own module so the lifecycle
     // bookkeeping can be tested with stub collaborators, and deliberately not
