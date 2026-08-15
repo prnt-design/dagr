@@ -14,6 +14,35 @@ of doc prose.
 
 ### Added
 
+- `diffLayout`, `applyDelta`, `isEmptyDelta` and the `LayoutDelta` type, which
+  together are the delta model. `diffLayout` is a pure function over two
+  `LayoutResult`s: no engine, no graph, nothing retained between calls, which is
+  why it lands before any incremental algorithm rather than after one. It
+  reports nodes added, removed and moved, edges added, removed and rerouted, and
+  the bounds when they changed, and nothing at all for anything unchanged.
+  `applyDelta(a, diffLayout(a, b))` reproduces `b`. No coordinate moved and no
+  existing type changed shape. (M3.1)
+
+  **`DagrLayoutErrorCode` gained a fifth member, `'DELTA_MISMATCH'`, and that is
+  a breaking change to anything switching exhaustively over it.** Made on that
+  type's own recorded terms, which say widening the union is a thing to do
+  before v0.1 rather than after, and nothing is published. It is the code of the
+  new `DeltaMismatchError`, thrown by `applyDelta` when a delta is applied to a
+  result it was not computed against. The fix for a caller is one `case`, and
+  the docs page's error example now shows the five.
+
+  `PositionedNode` now extends a new `NodeGeometry`, which is the same four
+  numbers without an id. Structurally identical, so nothing a caller wrote about
+  a result needs changing; it exists because a delta reports a move as the box
+  before and the box after, and an id repeated inside both halves of an entry
+  that already carries one is a second copy to disagree with.
+
+  The move tolerance is named on `diffLayout`'s options rather than on
+  `LayoutConfig`, which is a departure from what the M3.1 roadmap entry
+  proposed and is argued in that entry and in `LayoutDiffOptions`'s docstring.
+  Nothing about a run changed, so a caller who never diffs sees no new field
+  anywhere.
+
 - `createLayout`, `serveLayout`, the `LayoutPort` type and the
   `WorkerTransportError` class, which together are worker mode. `createLayout`
   binds stages and config once and offers `run` and `runAsync`; `serveLayout` is

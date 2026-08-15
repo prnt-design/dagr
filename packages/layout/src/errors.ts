@@ -14,11 +14,12 @@
  * one is: the caller handed in nonsense ({@link InvalidConfigError}), a stage
  * did not hold up its end of the pipeline contract
  * ({@link StageContractError}), the worker boundary a run crossed did not
- * behave ({@link WorkerTransportError}), or this package broke one of its own
- * invariants ({@link InternalLayoutError}). Sorting them that way is the point
- * of having several rather than one, because it is the only question a caller
- * catching one actually has to answer: fix the input, fix the stage, fix the
- * worker wiring, or file the bug.
+ * behave ({@link WorkerTransportError}), a delta was applied to a result it was
+ * not computed against ({@link DeltaMismatchError}), or this package broke one
+ * of its own invariants ({@link InternalLayoutError}). Sorting them that way is
+ * the point of having several rather than one, because it is the only question
+ * a caller catching one actually has to answer: fix the input, fix the stage,
+ * fix the worker wiring, fix the bookkeeping, or file the bug.
  */
 
 /**
@@ -29,7 +30,12 @@
  * serve. Adding a member is therefore something to do before v0.1 rather than
  * after.
  */
-export type DagrLayoutErrorCode = 'INVALID_CONFIG' | 'STAGE_CONTRACT' | 'INTERNAL' | 'WORKER';
+export type DagrLayoutErrorCode =
+  | 'INVALID_CONFIG'
+  | 'STAGE_CONTRACT'
+  | 'INTERNAL'
+  | 'WORKER'
+  | 'DELTA_MISMATCH';
 
 /**
  * Base class for every error the layout pipeline throws. Abstract on purpose,
@@ -194,6 +200,44 @@ export class WorkerTransportError extends DagrLayoutError {
     super(`Layout worker: ${detail}`);
     this.name = 'WorkerTransportError';
     Object.setPrototypeOf(this, WorkerTransportError.prototype);
+  }
+}
+
+/**
+ * Thrown when a {@link LayoutDelta} is applied to a result it was not computed
+ * against: it moves a node that result does not hold, removes an edge that is
+ * not there, or adds one that already is.
+ *
+ * The fifth culprit, and M3.1 is what made it one. A delta is a description of
+ * the difference between two results and carries no evidence of which two, so
+ * pairing it with the wrong one is a mistake nothing in the type system can
+ * refuse. What makes it worth an error class rather than a tolerated no-op is
+ * that the alternative is silence: applying a move for a node that is not there
+ * and carrying on leaves a scene that is wrong, stays wrong, and drifts further
+ * wrong with every later delta, which is exactly the desynchronisation the
+ * absent-means-unchanged delta shape has to be defended against elsewhere.
+ * Reported at the first entry that does not fit, so the message names a cause
+ * rather than a count.
+ *
+ * It is the CALLER's bookkeeping rather than this package's invariant, which is
+ * why it is not an {@link InternalLayoutError}: `diffLayout` and `applyDelta`
+ * are pure functions over results the caller chose to pair, and choosing is the
+ * whole of what can go wrong. It is not a {@link StageContractError} either,
+ * because there is no stage anywhere near it.
+ *
+ * `id` is the node or edge that did not fit, and `detail` says what was being
+ * done to it. Both are quoted in the message.
+ */
+export class DeltaMismatchError extends DagrLayoutError {
+  readonly code = 'DELTA_MISMATCH';
+
+  constructor(
+    readonly id: string,
+    readonly detail: string,
+  ) {
+    super(`Layout delta does not fit the result it was applied to: "${id}" ${detail}`);
+    this.name = 'DeltaMismatchError';
+    Object.setPrototypeOf(this, DeltaMismatchError.prototype);
   }
 }
 
