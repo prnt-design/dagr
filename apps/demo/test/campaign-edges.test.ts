@@ -93,10 +93,12 @@ describe('bowedLine', () => {
     }
   });
 
-  it('drops a line between overlapping boxes rather than drawing it inside out', () => {
-    // Both attachments are capped at the other box's centre, so an overlap
-    // REVERSES the chord rather than lengthening it: a length test cannot see
-    // that, which is what the direction test is for.
+  it('drops a chord that would run backwards rather than drawing it inside out', () => {
+    // One centre inside the other box, which is the case the attachment caps
+    // turn into a REVERSED chord rather than a longer one: a length test cannot
+    // see that, which is what the direction test is for. Not the same as
+    // overlap: two boxes can overlap at a corner and still have a sensible
+    // chord, and that one is drawn.
     expect(bowedLine(box(0, 0, 400), box(30, 0, 400), DEFAULT_BOW)).toEqual([]);
   });
 
@@ -176,26 +178,29 @@ describe('campaignEdges', () => {
     const pairCampaign = {
       edges: [
         { id: 'e-1500', kind: 'knows', source: 'a', target: 'c' },
-        { id: 'e-2500', kind: 'ally_of', source: 'a', target: 'c' },
-        // Back the other way, which is the same pair of boxes to look at.
-        { id: 'e-3500', kind: 'hostile_to', source: 'c', target: 'a' },
+        // Back the other way, and SECOND, which is the position where the
+        // naive alternation collides: reversing a chord negates its
+        // perpendicular, so `a to c` at +bow and `c to a` at -bow are the same
+        // curve. Third or later, the magnitude step would hide it.
+        { id: 'e-2500', kind: 'hostile_to', source: 'c', target: 'a' },
+        { id: 'e-3500', kind: 'ally_of', source: 'a', target: 'c' },
       ],
     } as unknown as Parameters<typeof campaignEdges>[0];
     const drawn = campaignEdges(pairCampaign, scene, () => 0xffb703).overlay;
     expect(drawn).toHaveLength(3);
 
-    // The chord runs a to c, so the bow's sign shows up in which side of the
-    // straight line the middle control point falls.
+    // Which side of the a-to-c line the middle control point falls, measured
+    // against ONE fixed reference rather than each edge's own direction: an
+    // edge authored backwards has its own chord reversed, so a side taken
+    // relative to itself reads the same for two curves that are on opposite
+    // sides of the pair. That is precisely the confusion the fix is about.
+    const reference = { x: 0 - 0, y: 100 - 0 };
     const sideOf = (edge: { points: readonly { x: number; y: number }[] }): number => {
-      const start = edge.points[0];
       const middle = edge.points[1];
-      const end = edge.points.at(-1);
-      if (start === undefined || middle === undefined || end === undefined) {
-        throw new Error('unreachable');
-      }
-      const dx = end.x - start.x;
-      const dy = end.y - start.y;
-      return Math.sign(dx * (middle.y - start.y) - dy * (middle.x - start.x));
+      if (middle === undefined) throw new Error('unreachable');
+      // The a-to-c line runs from (0,0) to (0,100), so the side is the sign of
+      // the middle point's x.
+      return Math.sign(reference.y * middle.x - reference.x * middle.y);
     };
     const sides = drawn.map(sideOf);
     expect(sides[0]).not.toBe(sides[1]);

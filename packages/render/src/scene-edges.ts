@@ -73,7 +73,17 @@ export interface SceneEdgeGroup {
   /** The name `Renderer.setEdges` and `Renderer.setEdgeStyle` address it by. */
   readonly id: string;
 
-  /** The width and dash pattern. See {@link RibbonStyle}. */
+  /**
+   * The width and dash pattern this group starts at. See {@link RibbonStyle}.
+   *
+   * The width here is a SEED, not a ceiling: the first `Renderer.setEdgeStyle`
+   * overwrites it, and a draw loop calling that every frame means this value is
+   * only ever seen before one arrives. Whether it also serves as a maximum is
+   * the caller's convention, and the campaign demo's is to pass it to
+   * `ribbonWidthAt` as one. The dash SHAPE is different: its period and duty
+   * are fixed here, and whether a group is dashed at all is decided when the
+   * material is built, so those cannot be changed per frame.
+   */
   readonly style: RibbonStyle;
 
   /**

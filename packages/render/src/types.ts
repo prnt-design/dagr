@@ -184,9 +184,10 @@ export interface Renderer {
   setEdges(groupId: string, edges: readonly SceneEdge[]): void;
 
   /**
-   * Writes one edge group's per-frame values: its width in device pixels, the
-   * pixels per world unit the camera implies, an alpha multiplier, and how far
-   * its dash has flowed.
+   * Writes one edge group's per-frame values: its width in device pixels, an
+   * alpha multiplier, and how far its dash has flowed. The pixels per world
+   * unit is NOT among them: the camera implies it and {@link render} supplies
+   * it, so a caller never re-derives what the renderer already holds.
    *
    * Touches no buffer, which is the point of it being a separate call. The
    * screen-space width decision makes this a PER FRAME concern (see

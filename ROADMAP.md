@@ -3131,8 +3131,9 @@ of M3 would leave the second runner idle for a milestone.
   core is PR #31 (`ribbon.ts`, `ribbon-nodes.ts`) and the scene is PR #34
   (`scene-edges.ts`, `campaign-edges.ts`, the `setEdges` seam). The committed
   frame is `assets/screenshots/m4.5-ribbons.png`, a near view at 770x599 and
-  dpr 1 where the dash and the joins are visible; the fitted view is Dispatch media rather than a
-  committed asset, because `assets/` has a budget and a picture of 7,100
+  dpr 1 where the dash and the joins are visible; the fitted view is Dispatch
+  media rather than a committed asset, because `assets/` has a budget and a
+  picture of 7,100
   antialiased lines does not compress. The decisions the entry asked for, made:
   **WIDTH IS IN SCREEN SPACE.** A ribbon is a fixed number of DEVICE pixels
   from its centreline at every zoom. The demo's derived range runs 0.45 to 134
@@ -3284,14 +3285,20 @@ of M3 would leave the second runner idle for a milestone.
   in device pixels: how crisply a line is drawn is a fact about the display,
   while whether a KIND of edge is worth showing is a fact about apparent
   scale, and a device-pixel band would show the social graph on a retina
-  laptop and hide it on an external monitor. because a hard switch makes a thousand lines appear
-  between two frames of a pinch and reads as a glitch rather than as detail.
-  The DASH PHASE COMES FROM THE CLOCK, not from a frame counter, and that is
-  what lets a flowing dash exist in a demo that renders on demand: counting
-  frames would tie the flow speed to how much the user is moving the camera.
-  Reading the clock means the pattern is wherever wall time says on any frame
-  anybody asks for, so it drifts during a pan, holds still at rest, and starts
-  animating on its own the moment M4.6 brings a loop.
+  laptop and hide it on an external monitor. It is a RAMP rather than a
+  threshold because a hard switch makes a thousand lines appear between two
+  frames of a pinch and reads as a glitch rather than as detail arriving.
+  THE DASH ADVANCES BY THE TIME BETWEEN DRAWN FRAMES, capped at a thirtieth of
+  a second, which is what lets a flowing dash exist in a demo that renders on
+  demand. Counting frames would tie the flow speed to how much the user moves
+  the camera. Reading the absolute clock, which this did first, is worse: wall
+  time accrues while the scene is idle and discharges into the first frame of
+  the next gesture, so at 18 px/s over a 14 px period any pause over 0.8
+  seconds teleports every dashed ribbon by up to a full period. An uncapped
+  delta between drawn frames has the same defect, because after an idle that
+  delta IS the idle. The cap never binds at 60fps and moves the pattern 0.6 px
+  on the frame after a pause, so it drifts during a pan, holds where it was at
+  rest, and animates on its own the moment M4.6 brings a loop.
   The tenth primitive is recorded here because `sdf.ts` counts nine: the dash
   needs a `fract` and periodicity cannot be built from the nine. `DashArith`
   extends `Arith` beside its only consumer, so the shape formulas keep their

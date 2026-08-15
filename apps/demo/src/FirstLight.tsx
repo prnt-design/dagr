@@ -135,6 +135,17 @@ function measureViewport(canvas: HTMLCanvasElement): ViewportSize | null {
  */
 const EDGE_WORLD_HALF_WIDTH = 1.5;
 
+/**
+ * The longest a single frame may advance the dash, in seconds.
+ *
+ * `advanceDashFlow` deliberately does not clamp its own delta, saying the
+ * opinion belongs to the caller, and this is the opinion: a demo that renders
+ * on demand measures the gap between DRAWN frames, and after an idle that gap
+ * is the idle. Uncapped, the first frame of a gesture would land an arbitrary
+ * phase, which is the same defect as reading the absolute clock.
+ */
+const MAX_DASH_STEP_SECONDS = 1 / 30;
+
 /** The thinnest a ribbon is drawn before the fade takes over instead. */
 const MIN_EDGE_HALF_WIDTH_PIXELS = 0.5;
 
@@ -396,7 +407,14 @@ export function FirstLight({
       const now = performance.now() / 1000;
       // The FIRST frame has no previous one to measure from, so it advances by
       // nothing rather than by however long the page took to load.
-      const elapsed = lastDrawSeconds === null ? 0 : now - lastDrawSeconds;
+      // CAPPED, and the cap is the whole of what makes this hold still: the
+      // gap since the last drawn frame IS the idle, so an uncapped delta lands
+      // an arbitrary phase on a gesture's first frame exactly as reading the
+      // absolute clock did. At 18 px/s over a 14 px period any pause over 0.8
+      // seconds would wrap. A thirtieth of a second never binds at 60fps and
+      // moves the pattern 0.6 px on the frame after an idle.
+      const elapsed =
+        lastDrawSeconds === null ? 0 : Math.min(now - lastDrawSeconds, MAX_DASH_STEP_SECONDS);
       lastDrawSeconds = now;
       for (const group of EDGE_GROUPS) {
         const width = ribbonWidthAt({

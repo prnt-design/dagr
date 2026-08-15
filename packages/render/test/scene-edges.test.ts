@@ -159,6 +159,29 @@ describe('SceneEdges', () => {
     scene.dispose();
   });
 
+  it('disposes the geometry it replaces, rather than leaking its buffers', () => {
+    // three keys a GPU buffer to the attribute OBJECT and frees buffers on the
+    // GEOMETRY's dispose event, for the attributes it holds at that moment.
+    // Replacing attributes in place therefore leaves five buffers alive per
+    // rebuild with nothing referencing them, on a call made at every re-layout
+    // and every recolour. `instanced-scene.ts` documents the same hazard and
+    // builds a new geometry for the same reason.
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [edge('e1', straight)]);
+    const first = scene.meshes[0]?.geometry;
+    if (first === undefined) throw new Error('unreachable');
+
+    let disposals = 0;
+    first.addEventListener('dispose', () => {
+      disposals += 1;
+    });
+    scene.setEdges(ROUTED, [edge('e1', straight), edge('e2', straight)]);
+
+    expect(disposals).toBe(1);
+    expect(scene.meshes[0]?.geometry).not.toBe(first);
+    scene.dispose();
+  });
+
   it('takes a style without touching a buffer, which is the per-frame path', () => {
     // The property the whole split exists for: a draw loop clamps the width
     // against the zoom on every frame, and re-tessellating 7,100 routes to

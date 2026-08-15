@@ -28,8 +28,8 @@ import { requireAtLeast, requireFinite, requirePositive } from './validate.js';
  * That is a factor of 384 for the campaign and 298 for the ladder, and no
  * world width survives either: one wide enough to see at the floor is a slab
  * across the card it was meant to connect at the ceiling, and one that looks
- * right at the ceiling is a twentieth of a pixel at the floor, which is the
- * sub-pixel fade M4.2 already documented. A graph that spans decades of zoom
+ * right at the ceiling is under a hundredth of a pixel at the floor, which is
+ * the sub-pixel fade M4.2 already documented. A graph that spans decades of zoom
  * is the only kind this engine is for.
  *
  * The second argument is about what an edge IS. `@dagr/layout` gives a node a
@@ -49,13 +49,13 @@ import { requireAtLeast, requireFinite, requirePositive } from './validate.js';
  * pixel width is the right DEFAULT and not the right answer everywhere. Since
  * the half width is a uniform the remedy costs nothing here: a scene clamps it
  * against the world-space width and fades the alpha below the floor, which
- * {@link ribbonWidthAt} is. M4.5's demo half owes that, and pays it. And the
- * geometry
- * cannot carry world positions for its own boundary, since where the boundary
- * is depends on the zoom: what a vertex carries is a unit OFFSET, and the
- * vertex stage multiplies it by the half width in pixels over the pixels per
- * world unit. That is one multiply and one uniform, and it is the reason
- * nothing here has to be re-tessellated when the camera moves.
+ * {@link ribbonWidthAt} is. M4.5's demo half owes that, and pays it.
+ *
+ * The geometry also cannot carry world positions for its own boundary, since
+ * where the boundary is depends on the zoom: what a vertex carries is a unit
+ * OFFSET, and the vertex stage multiplies it by the half width in pixels over
+ * the pixels per world unit. That is one multiply and one uniform, and it is
+ * the reason nothing here has to be re-tessellated when the camera moves.
  *
  * Three things fall out of the decision, and they are why it is worth taking
  * rather than merely defensible:

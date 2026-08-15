@@ -104,16 +104,23 @@ export const EDGE_GROUPS: readonly SceneEdgeGroup[] = [
  * once a viewer is close enough to be asking about one node's neighbourhood.
  *
  * A RAMP rather than a threshold because a hard switch at one zoom makes a
- * thousand lines appear between two frames of a pinch, which reads as a
- * glitch rather than as detail arriving. The band is in pixels per world unit,
- * the same unit the width clamp is keyed on, so both ends of the zoom story are
- * stated in one vocabulary.
+ * thousand lines appear between two frames of a pinch, which reads as a glitch
+ * rather than as detail arriving.
+ *
+ * **The band is in CSS pixels per world unit, where every width in this demo is
+ * in DEVICE pixels, and the two are deliberately different vocabularies.** How
+ * crisply a line is drawn is a fact about the display's pixels; whether a KIND
+ * of edge is worth showing is a fact about apparent scale. Keyed on device
+ * pixels this band halves on a retina screen, and measured at CSS zoom 2 the
+ * overlay alpha came out 0.20 at dpr 1 against 1.00 at dpr 2: the same campaign
+ * at the same zoom showing its social graph on one display and hiding it on
+ * another.
  */
-export function overlayFade(pixelsPerWorldUnit: number, start: number, full: number): number {
+export function overlayFade(cssPixelsPerWorldUnit: number, start: number, full: number): number {
   if (!(full > start)) {
     throw new RangeError(`overlayFade needs full above start, got ${String(start)} to ${String(full)}`);
   }
-  const t = (pixelsPerWorldUnit - start) / (full - start);
+  const t = (cssPixelsPerWorldUnit - start) / (full - start);
   return Math.min(1, Math.max(0, t));
 }
 
@@ -202,10 +209,13 @@ export function bowedLine(from: Box, to: Box, bow: number): readonly Point[] {
   const end = borderPoint(to, fromCentre);
   const dx = end.x - start.x;
   const dy = end.y - start.y;
-  // Overlapping boxes show up as a REVERSED chord, not a longer one: each
-  // attachment is capped at the other box's centre, so neither can travel
-  // further than the gap, and boxes that overlap put the far border behind the
-  // near one. A length test cannot see that, a direction test can.
+  // A chord that runs BACKWARDS, which is the case where one box's centre is
+  // inside the other: each attachment is capped at the other centre, so the far
+  // border ends up behind the near one and the line would be drawn inside out.
+  // A length test cannot see that, because neither attachment can travel
+  // further than the gap; a direction test can. Note this is not overlap
+  // detection: two boxes can overlap at a corner and still have a sensible
+  // chord between their centres, and that line is drawn.
   const alongChord =
     dx * (toCentre.x - fromCentre.x) + dy * (toCentre.y - fromCentre.y);
   if (alongChord <= 0) return [];
