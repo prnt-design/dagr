@@ -50,6 +50,13 @@
  * variant the names are the set's own, which is what keeps P7's five frames at
  * the paths they were committed at.
  *
+ * **THE FRAMES ARE REPRODUCIBLE IN CONTENT, NOT ALWAYS BYTE FOR BYTE.** The
+ * dashed groups flow their pattern by the time between DRAWN frames, so where a
+ * dash lands depends on how many frames the page took to reach the gate, and a
+ * re-run can produce a picture that is the same drawing and a different file. A
+ * diff of two captures is therefore a question for the eye or for the counts in
+ * the caption file, not for `cmp`.
+ *
  * **A SET IS A RECORD OF ONE TASK'S DRAWING, and that is why an old set can stop
  * passing.** `assets/screenshots/` keeps a prefix per task (`m4.2` is a shape
  * ladder that no longer exists in the demo at all), and a set's `expect` gates
@@ -81,10 +88,17 @@ const prefix = variant === '' ? `${setName}-` : `${setName}-${variant}-`;
  */
 const SETS = {
   /**
-   * P7's five, which record the drawing as it was BEFORE D2's spacing. Their
-   * gates are written against it, so this set no longer passes against the
-   * current demo: see the header. Left exactly as committed, because a per-task
-   * frame is a record and `m4.2`'s ladder is not in the demo either.
+   * P7's five, RETAKEN at D2's spacing and retuned to it.
+   *
+   * They were left alone through D2 as a record of the drawing before it, on
+   * the convention that a prefix is one task's frames. D3 takes them again for
+   * the reason that convention does not cover: unlike `m4.2`'s ladder, this
+   * scene still exists, and a committed frame of it that cannot be regenerated
+   * from the current build is the black-canvas lesson in slow motion. The
+   * numbers moved with the spacing (the finale's titles from eight to three)
+   * and one hash had to move with it too: `#zoom=1.4` alone framed the scene's
+   * CENTRE, which at twice the extent is a gap between tiles, so the names
+   * frame is anchored on a node like every other frame here.
    */
   p7: [
     {
@@ -96,10 +110,10 @@ const SETS = {
     },
     {
       name: 'campaign-names',
-      hash: '#zoom=1.4',
+      hash: '#node=dungeon-21&zoom=1.4',
       caption:
-        'Names, from about 24 CSS pixels of node width, over the room graph of a keyed site. No cards yet: nothing is 460 wide.',
-      expect: { titles: 12, cards: 0 },
+        'Names, from about 24 CSS pixels of node width, over the room graph of a keyed site. No cards yet: nothing is 460 wide. Anchored on the citadel since D2: the scene grew, and a zoom alone now frames the gap between two tiles.',
+      expect: { titles: 7, cards: 0 },
     },
     {
       name: 'campaign-card-quest',
@@ -118,8 +132,8 @@ const SETS = {
       name: 'campaign-finale',
       hash: '#node=dungeon-21&zoom=2',
       caption:
-        'The 88-room finale, the Osterdale Citadel, at a zoom the hash also names: #node= decides where, #zoom= how close. The titles here are SITES, the citadel and its neighbours; its rooms are still shapes at this zoom.',
-      expect: { titles: 8, cards: 0 },
+        'The 88-room finale, the Osterdale Citadel, at a zoom the hash also names: #node= decides where, #zoom= how close. The titles here are SITES, the citadel and its neighbours; its rooms are still shapes at this zoom. Three of them where P7 had eight, because D2 spread the tile out and fewer sites fit the frame.',
+      expect: { titles: 3, cards: 0 },
     },
   ],
   /**
@@ -151,6 +165,36 @@ const SETS = {
         'The 88-room finale at a fixed zoom, anchored on the citadel itself. At a zoom a reader holds still, more separation is more separation: the nodes are the same size and the gaps between them are wider.',
     },
   ],
+  /**
+   * D3's pair: the same camera with the pointer off the canvas and then on the
+   * node in the middle of it.
+   *
+   * `#node=` centres the node it names, so hovering the CANVAS CENTRE is
+   * hovering that node exactly, with no DOM inspection and no coordinates to go
+   * stale when the layout moves. That is the whole reason the hover frames are
+   * anchored this way rather than aimed at a pixel.
+   *
+   * The zoom is chosen so both ends of the feature are visible at once: a
+   * chapter at 0.15 is 30 CSS pixels wide, above the title tier's gate, so the
+   * hovered node has a name of its own and the highlight is allowed to fire at
+   * all; its scenes are 18, below the gate, so the names on THEM are the ones
+   * the hover put there.
+   */
+  d3: [
+    {
+      name: 'quiet',
+      hash: '#node=chapter-2&zoom=0.15',
+      caption:
+        'A chapter of the narrative spine and the tiles around it, with the pointer off the canvas. Every edge at full intensity, inked by the node it leaves: this is the drawing the hover dims.',
+    },
+    {
+      name: 'hover',
+      hash: '#node=chapter-2&zoom=0.15',
+      hover: 'centre',
+      caption:
+        'The same camera with the pointer on Chapter 2 itself. Its nine incident edges stay at full width and alpha while every other edge falls to a fifth of both, which is a twenty-fifth of the ink; the far end of each lit edge carries a name, which its own tier would not give it at this zoom because a scene is 18 CSS pixels wide against a gate of 24. The chapter titles in the frame are the tier doing its ordinary job: a chapter is 30 wide and has earned one.',
+    },
+  ],
 };
 
 /**
@@ -160,6 +204,7 @@ const SETS = {
  */
 const SET_TITLES = {
   p7: 'P7 campaign screenshots.',
+  d3: 'D3 screenshots: the hover highlight.',
   d2: 'D2 screenshots: the campaign spacing and the edge ink.',
 };
 
@@ -328,6 +373,32 @@ for (const frame of FRAMES) {
     );
   }
 
+  // A HOVER, for a frame whose subject is what the pointer does. The pointer
+  // goes to the CANVAS CENTRE, which `#node=` has already made the node's own
+  // centre, so this needs no coordinates of its own and cannot drift when the
+  // layout moves. The wait is on the readout row the highlight writes, for the
+  // same reason every other gate here is on the page rather than on a sleep:
+  // the pointer move, the frame it schedules and the frame that draws it are
+  // three separate turns of the loop.
+  if (frame.hover === 'centre') {
+    const canvasBox = await (await page.$('canvas'))?.boundingBox();
+    if (canvasBox === undefined || canvasBox === null) {
+      throw new Error(`${frame.name} wants a hover and the canvas has no box`);
+    }
+    await page.mouse.move(
+      canvasBox.x + canvasBox.width / 2,
+      canvasBox.y + canvasBox.height / 2,
+    );
+    await page.waitForFunction(
+      () =>
+        [...document.querySelectorAll('.stage__readout-row')].some((row) =>
+          row.textContent?.startsWith('highlight'),
+        ),
+      undefined,
+      { timeout: 30_000 },
+    );
+  }
+
   // One more frame after the gate, so the shutter is never inside the frame the
   // gate observed.
   await page.evaluate(
@@ -336,7 +407,15 @@ for (const frame of FRAMES) {
 
   const shown = await page.evaluate(() => ({
     cards: document.querySelectorAll('.campaign-card').length,
+    // Far-end labels carry `campaign-title` too, so they are counted here and
+    // reported separately: a frame that says "22 titles" when the tier gate
+    // allows 15 is a frame where seven of them came from a hover.
     titles: document.querySelectorAll('.campaign-title').length,
+    far: document.querySelectorAll('.campaign-title--far').length,
+    highlight:
+      [...document.querySelectorAll('.stage__readout-row')]
+        .map((row) => row.textContent ?? '')
+        .find((text) => text.startsWith('highlight')) ?? '',
   }));
   // And assert the frame is not showing a tier it should not. The wait above is
   // a floor; this is the ceiling, and without it the "no cards yet" frame would
@@ -366,10 +445,13 @@ for (const frame of FRAMES) {
         'The renderer gate passed, so this is a real blank frame rather than a race.',
     );
   }
+  const highlighted = shown.far === 0 ? '' : `, ${String(shown.far)} of them far ends`;
   captions.push(
-    `${prefix}${frame.name}.png  [${frame.hash || 'no hash'}]  ${shown.titles} titles, ${shown.cards} cards\n    ${frame.caption}`,
+    `${prefix}${frame.name}.png  [${frame.hash || 'no hash'}]  ${shown.titles} titles${highlighted}, ${shown.cards} cards\n    ${frame.caption}`,
   );
-  console.error(`captured ${prefix}${frame.name} (${shown.titles} titles, ${shown.cards} cards)`);
+  console.error(
+    `captured ${prefix}${frame.name} (${shown.titles} titles${highlighted}, ${shown.cards} cards${shown.highlight === '' ? '' : `, ${shown.highlight}`})`,
+  );
 }
 
 await writeFile(

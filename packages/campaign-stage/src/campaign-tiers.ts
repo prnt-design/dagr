@@ -332,3 +332,62 @@ export function createCampaignTiers(
     },
   ];
 }
+
+/** What a far-end label built, keyed by the element, as the tiers above do. */
+const farEndRefs = new WeakMap<HTMLElement, { name: HTMLElement }>();
+
+/**
+ * The tier D3 hangs a hovered node's NEIGHBOURS off: a name on a node that is
+ * too small to have earned one.
+ *
+ * **Its whole reason is the gate it does not have.** The title tier opens at
+ * {@link LABEL_MIN_SCREEN_WIDTH}, so at the zoom where a reader can see one
+ * node's edges fan out across a tile, the nodes at the far ends of those edges
+ * are shapes. "Where does this edge go" is then answerable only by following
+ * the line, which is what the highlight is trying to save them from. So this
+ * tier has no floor, and a node bound to it gets a name at any zoom.
+ *
+ * **It has a CEILING instead, and the ceiling is the title tier's floor**, so
+ * the two can never both draw. A far end wide enough to have its own title
+ * already has one, and the overlay's own per-frame gate is what decides that:
+ * keeping the rule here rather than filtering the node list means it stays
+ * right while a reader zooms with the pointer held still, which is exactly when
+ * a hand-filtered list would go stale.
+ *
+ * A SEPARATE `createRichNodes` layer rather than a third tier beside the other
+ * two, because its node set is different: the campaign's 3,010 nodes are bound
+ * to the tiers above once and never change, while this holds only the handful a
+ * hover is about and is replaced on every change of hovered node. One layer per
+ * lifetime is what keeps `setNodes` on this one from walking 3,010 entries to
+ * light eleven.
+ */
+export function createFarEndTiers(
+  options: CampaignTierOptions,
+): readonly RichNodeTier<CampaignNode>[] {
+  const { nodeColor } = options;
+  return [
+    {
+      name: 'far-end',
+      maxScreenWidth: LABEL_MIN_SCREEN_WIDTH,
+      create: () => {
+        const box = el('campaign-node');
+        const title = el('campaign-title campaign-title--far');
+        const name = el('campaign-title-name', 'span');
+        title.appendChild(name);
+        box.appendChild(title);
+        farEndRefs.set(box, { name });
+        return box;
+      },
+      update: (element, node) => {
+        const refs = farEndRefs.get(element);
+        if (refs === undefined) return;
+        // No `data-node-id` here, deliberately: that attribute is how the hover
+        // controller finds the element to put `is-hovered` on, and a far end
+        // carrying one would make a query for the hovered node ambiguous the
+        // moment a node is both hovered and somebody else's neighbour.
+        refs.name.textContent = node.data.name;
+        refs.name.style.color = nodeColor(node.data);
+      },
+    },
+  ];
+}

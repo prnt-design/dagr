@@ -26,7 +26,6 @@ function createWorker(): Worker {
 }
 
 /**
-/**
  * A count the scene carries, or what is standing between the reader and it.
  *
  * `undefined` and a failure are different absences and read differently: one is
@@ -68,7 +67,7 @@ export function App(): JSX.Element {
         the viewport and this page wants a band with the facts under it.
       */}
       <div className="page__stage">
-        <FirstLight scene={scene} edges={edges} sceneFailure={failure} />
+        <FirstLight campaign={campaign} scene={scene} edges={edges} sceneFailure={failure} />
       </div>
 
       <section className="facts">

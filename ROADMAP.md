@@ -3025,6 +3025,15 @@ of M3 would leave the second runner idle for a milestone.
   buffer-slot limit and its ceiling is `MAX_VERTEX_ATTRIBS`, at least 16. A
   channel past the eighth fails pipeline creation on one backend and draws fine
   on the other.
+  D3 (2026-08-15) DID NOT TAKE THE SEVENTH SLOT, recorded here because it added
+  the first per-vertex channel since this entry and the obvious reading is that
+  it did. The limit is PER PIPELINE, and D3's per-edge highlight is an attribute
+  on the RIBBON mesh: a different geometry, a different material, its own eight,
+  five of them used before and six after. This budget is untouched and M4.6's
+  spring velocity and M4.8's picking id are still competing for the same one
+  slot. The rule the two cases share, and the one worth carrying forward, is
+  that a slot belongs to the SHADER that reads the attribute, not to the package
+  or the scene.
   A COLOUR REACHING A SHADER AS AN ATTRIBUTE IS CONVERTED BY NOTHING. As a
   uniform it goes through three's `Color`, which does sRGB to linear on the way;
   an attribute is whatever floats are in the buffer. So `linearFromHex` does it
@@ -3532,6 +3541,19 @@ of M3 would leave the second runner idle for a milestone.
   passes local, which puts most of the number back under an automated check.
   Otherwise commit to re-measuring by hand at the end of the milestone and
   again at M5.4's v0.1 readiness review.
+  THE FREE VERTEX BUFFER SLOT IS STILL FREE, recorded here because D3 was the
+  first task since M4.3 to add a per-vertex channel and the obvious reading is
+  that it spent it. It did not: `maxVertexBuffers` is a PIPELINE limit, the
+  reserved slot is the instanced NODE pipeline's seventh of eight, and D3's
+  highlight is an attribute on the RIBBON mesh, which is a different material
+  and a different pipeline. That one went from five of eight to six. So M4.6's
+  spring velocity and M4.8's picking id are still competing for one slot with
+  each other and with the two ordinary scene changes M4.3's record names (a
+  material that comes to read `uv`, and a light or environment map that pulls in
+  the `normal` the quad already carries). What D3 does add to this task's
+  measurement is a second per-fragment multiply on every ribbon and a per-vertex
+  one on every ribbon vertex, which at the campaign's 7,100 routes is the cost
+  worth a line in the pass breakdown rather than a guess here.
 
 The last two tasks were added on 2026-08-14, after the milestone was planned,
 on the maintainer's reading of the campaign demo plan. They are numbered after
@@ -4371,17 +4393,8 @@ and are independent of D1 and of each other.
   names, and the sibling session doing D2's spacing had a server on it. On a
   shared box a fixed port is somebody else's process, which is now in the
   gate-lock protocol text with the one command that settles it.
-- [ ] **D2** (`packages/campaign-stage`) More spacing between nodes, and edges
-  coloured by where they come from with the routed/overlay split kept as the
-  dash. See the plan; owned by a parallel session, rebasing onto D1.
-- [ ] **D3** (`@dagr/render`, `packages/campaign-stage`) A per-edge highlight
-  attribute and the hover-driven highlight of a node's incident edges, so a
-  reader can see where an edge comes from and goes without picking edges, which
-  needs M4.8. Costs the one free vertex-buffer slot unless packed; the M4.10
-  record should say so.
-
-- [x] **D2** (`apps/demo`) The campaign's own spacing, and edges coloured by
-  where they come from. From `plans/2026-08-15-demo-into-docs.md`, which is the
+- [x] **D2** (`packages/campaign-stage`) The campaign's own spacing, and edges
+  coloured by where they come from. From `plans/2026-08-15-demo-into-docs.md`, which is the
   maintainer's second direction of 2026-08-15: more spacing between nodes, edges
   colour coded to see where they are coming from, and an edge highlight (D3).
   SPACING IS MEASURED, NOT PICKED, and `CAMPAIGN_SPACING` in `tiles.ts` carries
@@ -4450,6 +4463,69 @@ and are independent of D1 and of each other.
   The script is one file with two purposes now: its FRAME LIST is P7's and the
   `d2` set is D2's, so somebody running it with no argument hits P7's gates
   first. The header says which is which.
+
+- [x] **D3** (`@dagr/render`, `@dagr/campaign-stage`) The edge highlight: hover a
+  node and see where its edges come from and go. The last of the maintainer's
+  2026-08-15 direction, and the half of it that needed a renderer change.
+  THE MECHANISM IS A PER-EDGE CHANNEL, because `setEdgeStyle` is per GROUP and a
+  highlight is not a style: a style is how a whole group is drawn at this zoom,
+  which a frame decides, and this is which members of it matter right now, which
+  a pointer decides. Through groups it would be a group per highlight state and a
+  re-tessellation to move an edge between them; through `setEdges` it would
+  rebuild every buffer to change one float. `setEdgeIntensity(groupId,
+  intensityOf)` takes one number per edge in `[0, 1]`, the tessellator's per-route
+  `RibbonRange` makes writing it a slice, and only changed values are uploaded, as
+  ONE merged update range flushed from `onBeforeRender` (M4.3's finding that
+  `addUpdateRange` does not coalesce applies here unchanged).
+  IT MULTIPLIES BOTH THE WIDTH AND THE ALPHA, which is the decision inside the
+  decision. Alpha alone leaves a dimmed edge as wide as a highlighted one, so a
+  hairball stays a hairball at lower contrast; width alone leaves it as bright,
+  and a thin bright line still catches an eye. Together they are the idiom
+  `ribbonWidthAt` already uses for the far view, and the ink falls with the SQUARE
+  of the number: the demo's 0.2 is a twenty-fifth of the coverage. Above 1 is
+  refused rather than allowed as emphasis, because a group's width is already a
+  caller's number through `setEdgeStyle` and two ways to say how wide a ribbon is
+  have no rule for which wins.
+  THE CHANNEL BUDGET, which M4.3 asked to be told about and which the obvious
+  reading gets wrong: this does NOT spend the one free vertex-buffer slot.
+  `maxVertexBuffers` is a PIPELINE limit; the reserved slot is the instanced NODE
+  pipeline's seventh of eight, spoken for by M4.6's spring velocity or M4.8's
+  picking id; and a ribbon group is a different mesh with a different material and
+  its own eight, which went from five to six. The rule worth carrying forward is
+  that a slot belongs to the SHADER that reads the attribute, not to the package
+  or the scene. Recorded on M4.3 and M4.10 as well as here, in
+  `instance-attributes.ts`, in the CHANGELOG and as a `dagr` brain decision event.
+  WHAT THE DEMO DOES WITH IT: `edge-highlight.ts` indexes the campaign's edges by
+  the nodes they touch, in one pass, and a hover looks up a set. An index here
+  where `hover.ts` deliberately scans, because a hit test is over boxes a relayout
+  moves and this is over topology a relayout does not touch. The far end of each
+  lit edge gets a title from a SECOND `createRichNodes` layer over the same
+  overlay, whose tier has no minimum gate and a maximum equal to the title tier's
+  minimum, so the two can never both draw and a far end that is already wide
+  enough to have its own name does not get a second one. That gate is the
+  overlay's own, per frame, which is what keeps it right while a reader zooms with
+  the pointer held still.
+  THE HIGHLIGHT HAS A LEGIBILITY FLOOR and it is the title tier's gate again: at
+  the fitted campaign the pointer crosses hundreds of nodes, none of them a pixel
+  wide, and dimming 7,100 edges there would fire on a node the reader cannot see.
+  `hover.ts` still answers at every zoom, which is the split that file already
+  describes: it owns the geometry and a consumer owns what to do with the answer.
+  HOVERING AN EDGE DIRECTLY IS STILL M4.8's, and this changes nothing about that:
+  every id here comes from a node hit test, so an edge is reachable through the
+  nodes it joins and not by pointing at the line.
+  EVIDENCE: `assets/screenshots/d3-quiet.png` against `d3-hover.png`, the same
+  camera with the pointer off the canvas and then on the chapter in the middle of
+  it, 9 edges lit and 9 far ends named. The capture script learned to hover, and
+  it hovers the CANVAS CENTRE, which `#node=` has already made the node's own
+  centre: no coordinates to go stale when a layout moves.
+  P7's FIVE FRAMES WERE RETAKEN HERE at D2's spacing, which D2 had left as a
+  record it could not regenerate. Unlike `m4.2`'s ladder the scene still exists,
+  so a committed frame of it that no current build reproduces is the black-canvas
+  lesson in slow motion. The counts moved (the finale from eight titles to three)
+  and one hash moved with them: `#zoom=1.4` alone framed the scene's CENTRE, which
+  at twice the extent is the gap between two tiles, so that frame is anchored on a
+  node like every other one. `docs/docs/render.md` now embeds the retaken frames
+  and the hover frame, and its quoted zoom floor moved from 0.053 to 0.026.
 
 ## Tracked, not promised
 

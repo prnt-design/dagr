@@ -11,13 +11,13 @@ Shapes are that fallback rasterising the same distance fields; the overlay never
 
 p7-campaign-fit.png  [no hash]  0 titles, 0 cards
     The whole campaign fitted on load: 3,010 nodes over 101 tiles, routed edges as dashed ribbons and cross-tile edges bowed between them. No HTML overlay at all at this zoom.
-p7-campaign-names.png  [#zoom=1.4]  12 titles, 0 cards
-    Names, from about 24 CSS pixels of node width, over the room graph of a keyed site. No cards yet: nothing is 460 wide.
+p7-campaign-names.png  [#node=dungeon-21&zoom=1.4]  7 titles, 0 cards
+    Names, from about 24 CSS pixels of node width, over the room graph of a keyed site. No cards yet: nothing is 460 wide. Anchored on the citadel since D2: the scene grew, and a zoom alone now frames the gap between two tiles.
 p7-campaign-card-quest.png  [#node=quest-1]  0 titles, 1 cards
     A quest framed by its own deep link. #node= fits the node, so the card sits in a corner that is on screen.
 p7-campaign-card-npc.png  [#node=npc-3]  0 titles, 1 cards
     An NPC with a secret: the kind-specific rows are what cardRows formats.
-p7-campaign-finale.png  [#node=dungeon-21&zoom=2]  8 titles, 0 cards
-    The 88-room finale, the Osterdale Citadel, at a zoom the hash also names: #node= decides where, #zoom= how close. The titles here are SITES, the citadel and its neighbours; its rooms are still shapes at this zoom.
+p7-campaign-finale.png  [#node=dungeon-21&zoom=2]  3 titles, 0 cards
+    The 88-room finale, the Osterdale Citadel, at a zoom the hash also names: #node= decides where, #zoom= how close. The titles here are SITES, the citadel and its neighbours; its rooms are still shapes at this zoom. Three of them where P7 had eight, because D2 spread the tile out and fewer sites fit the frame.
 
 Regenerate with apps/demo/scripts/capture.mjs; see its header.

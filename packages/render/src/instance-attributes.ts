@@ -98,6 +98,13 @@ export interface InstanceChannel {
  *
  * One slot is left. M4.6's spring velocity or M4.8's picking id is the seventh
  * channel and fits; an eighth needs interleaving or a raised `requiredLimits`.
+ *
+ * **D3 DID NOT TAKE IT, and the reason is the counting rule above rather than
+ * restraint.** The per-edge highlight it added is an attribute on the RIBBON
+ * mesh, which is a different material and therefore a different pipeline with
+ * its own eight slots: `scene-edges.ts` went from five to six there and this
+ * budget did not move. A channel is only this file's business when the shader
+ * that reads it is this file's shader.
  * Two ordinary SCENE changes take that last slot before a channel does, and
  * neither is renderer work: a material that comes to read `uv`, and a light or
  * an environment map, either of which satisfies the guard above and pulls the

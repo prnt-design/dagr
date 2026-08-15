@@ -25,6 +25,8 @@ export function CampaignStage({
    */
   createWorker: () => Worker;
 }): JSX.Element {
-  const { scene, edges, failure } = useCampaignScene(createWorker);
-  return <FirstLight scene={scene} edges={edges} sceneFailure={failure} />;
+  const { campaign, scene, edges, failure } = useCampaignScene(createWorker);
+  return (
+    <FirstLight campaign={campaign} scene={scene} edges={edges} sceneFailure={failure} />
+  );
 }

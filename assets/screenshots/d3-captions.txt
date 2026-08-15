@@ -1,0 +1,17 @@
+D3 screenshots: the hover highlight.
+
+Captured on the swiftshader WebGL2 fallback: this box has no WebGPU at all, navigator.gpu is absent.
+Text is Liberation Mono, pinned for the capture at 7.201px per character at 12px,
+because the capture box has none of the faces the demo names (ui-monospace, SFMono-Regular,
+'SF Mono', Menlo, Consolas) and Liberation Mono is not one of them either: it is a stand-in,
+chosen because it sits at the 0.6em those faces cluster at. Unpinned, this box falls back to a
+6.000px advance, about a sixth narrower than a reader sees.
+Viewport 1440x900 at device pixel ratio 1.
+Shapes are that fallback rasterising the same distance fields; the overlay never touches a GPU.
+
+d3-quiet.png  [#node=chapter-2&zoom=0.15]  3 titles, 0 cards
+    A chapter of the narrative spine and the tiles around it, with the pointer off the canvas. Every edge at full intensity, inked by the node it leaves: this is the drawing the hover dims.
+d3-hover.png  [#node=chapter-2&zoom=0.15]  11 titles, 8 of them far ends, 0 cards
+    The same camera with the pointer on Chapter 2 itself. Its nine incident edges stay at full width and alpha while every other edge falls to a fifth of both, which is a twenty-fifth of the ink; the far end of each lit edge carries a name, which its own tier would not give it at this zoom because a scene is 18 CSS pixels wide against a gate of 24. The chapter titles in the frame are the tier doing its ordinary job: a chapter is 30 wide and has earned one.
+
+Regenerate with apps/demo/scripts/capture.mjs; see its header.

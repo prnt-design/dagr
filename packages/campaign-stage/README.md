@@ -45,7 +45,8 @@ route gives it the viewport under the navbar.
 | `tiles.ts` | cutting the campaign into tiles, packing them, and every gap in the drawing |
 | `campaign-scene.ts` | the layout runs, the packing, and the y flip |
 | `campaign-edges.ts` | the three edge groups, the bows, and the ink an edge is drawn in |
-| `campaign-tiers.ts` | the overlay's title and card tiers, and both gates |
+| `campaign-tiers.ts` | the overlay's title and card tiers, both gates, and the far-end labels a hover adds |
+| `edge-highlight.ts` | which edges touch a node, which nodes are at their far ends, and what a hover dims |
 | `use-campaign-scene.ts` | the campaign, the worker's lifetime, and the scene |
 | `FirstLight.tsx` | the canvas, the camera, the input, the overlay |
 | `camera-input.ts` | the arithmetic between a DOM event and a camera call |
@@ -74,6 +75,18 @@ sixteen kinds times two roles is thirty-two inks nobody can tell apart.
 The overlay kinds fade in over 1.5 to 4 CSS pixels per world unit, so the social
 and clue webs are absent while a reader is looking at the shape of the campaign
 and there once they are asking about one node's neighbourhood.
+
+HOVER A NODE and its own edges stay at full width and alpha while every other
+edge falls to a fifth of both, which is a twenty-fifth of the ink. The far end of
+each lit edge gets a name even when nothing at that zoom is wide enough to have
+earned one, which is what answers "where does this edge go" without following the
+line. It is one `setEdgeIntensity` call per edge group and one `setNodes` on a
+second overlay layer, both only when the hovered node changes.
+
+The highlight has a floor: it only fires once the hovered node is at least 24 CSS
+pixels wide, which is the same gate the title tier opens at. At the fitted
+campaign a pointer crosses hundreds of nodes and none of them is a pixel wide, so
+dimming 7,100 edges there would answer a question nobody asked.
 
 Spacing is the campaign's own rather than `@dagr/layout`'s default, and
 `CAMPAIGN_SPACING` in `tiles.ts` carries the measurement that chose it,

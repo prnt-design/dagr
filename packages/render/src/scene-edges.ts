@@ -4,7 +4,7 @@ import { attribute, uniform, varying, vec3 } from 'three/tsl';
 import { linearFromHex } from './instance-attributes.js';
 import { ribbonAlpha, ribbonArcPixels, ribbonWorldPosition } from './ribbon-nodes.js';
 import { requireRibbonStyle, tessellateRibbons } from './ribbon.js';
-import type { RibbonGeometry, RibbonOptions, RibbonStyle } from './ribbon.js';
+import type { RibbonGeometry, RibbonOptions, RibbonRange, RibbonStyle } from './ribbon.js';
 import type { GpuResource, Vec2 } from './types.js';
 import { requireAtLeast, requireFinite } from './validate.js';
 
@@ -98,12 +98,34 @@ export interface SceneEdgeGroup {
   readonly curve?: 'polyline' | 'smooth' | undefined;
 }
 
-/** The attribute names the ribbon material reads. Local to this file's material. */
+/**
+ * The attribute names the ribbon material reads. Local to this file's material.
+ *
+ * **SIX, and the sixth is the one with a budget question attached.** three binds
+ * one vertex buffer slot per non-interleaved attribute THE SHADER READS, and
+ * WebGPU's default `maxVertexBuffers` is eight, which is the limit
+ * `instance-attributes.ts` counts against for the instanced NODE pipeline: that
+ * one reads seven of eight and has a single slot left, spoken for by M4.6's
+ * spring velocity or M4.8's picking id.
+ *
+ * A ribbon is a different mesh with a different material, so it has its own
+ * eight. This graph reads these six and not `positionGeometry` (the position
+ * comes from {@link POSITION}, and `positionNode` replaces the built-in), so
+ * {@link INTENSITY} takes the ribbon pipeline from five of eight to six and
+ * spends nothing the instanced path was saving. That is the whole of the channel
+ * budget decision D3 had to make, and it is recorded on M4.3 and M4.10 as well
+ * as here, because the paragraph everyone reads about the free slot is the
+ * instanced one.
+ */
 const POSITION = 'ribbonPosition';
 const OFFSET = 'ribbonOffset';
 const ACROSS = 'ribbonAcross';
 const ARC = 'ribbonArc';
 const COLOR = 'ribbonColor';
+const INTENSITY = 'ribbonIntensity';
+
+/** What an edge draws at when nobody has said otherwise: the group's own width and alpha. */
+const FULL_INTENSITY = 1;
 
 /**
  * The uniforms one group's material carries, and the reason each is a uniform
@@ -148,6 +170,33 @@ function createRibbonMaterial(style: RibbonStyle): {
   const across = varying(attribute<'float'>(ACROSS, 'float'));
   const edgeColor = attribute<'vec3'>(COLOR, 'vec3');
 
+  /**
+   * The per-edge highlight, in `[0, 1]`, multiplying the group's width AND its
+   * alpha.
+   *
+   * **Both, and that is the decision this attribute exists to make.** Alpha
+   * alone leaves a dimmed edge exactly as wide as a highlighted one, so a
+   * hairball stays a hairball at a lower contrast; width alone leaves it as
+   * bright, and a thin bright line still catches an eye. Together they are the
+   * same idiom `ribbonWidthAt` already uses for the far view: an edge that
+   * matters less carries less ink, in both of the ways a ribbon can carry it.
+   *
+   * The width is scaled HERE rather than in the tessellation because the
+   * geometry carries a unit offset and the vertex stage multiplies it by the
+   * width in pixels, which is the whole reason nothing has to be rebuilt when
+   * the camera moves. Scaling the same uniform by this attribute costs one
+   * multiply per vertex and keeps that property: a highlight is a slice write
+   * into one float per vertex, not a re-tessellation.
+   */
+  const intensity = attribute<'float'>(INTENSITY, 'float');
+  const highlightedHalfWidth = uniforms.halfWidthPixels.mul(intensity);
+  // The fragment stage needs the SAME half width the vertex stage expanded by,
+  // or the coverage ramp and the triangles it runs inside disagree. Passing it
+  // as a varying rather than recomputing it there is exact, because the value is
+  // constant along a route: every vertex of one edge carries one intensity.
+  const fragmentHalfWidth = varying(highlightedHalfWidth);
+  const fragmentIntensity = varying(intensity);
+
   // The arc reaches the fragment stage already in device pixels: one multiply
   // per vertex against the same number computed per fragment, and exact under
   // an orthographic camera because its interpolation is affine.
@@ -158,13 +207,13 @@ function createRibbonMaterial(style: RibbonStyle): {
   const world = ribbonWorldPosition({
     position,
     offset,
-    halfWidthPixels: uniforms.halfWidthPixels,
+    halfWidthPixels: highlightedHalfWidth,
     pixelsPerWorldUnit: uniforms.pixelsPerWorldUnit,
   });
 
   const coverage = ribbonAlpha({
     across,
-    halfWidthPixels: uniforms.halfWidthPixels,
+    halfWidthPixels: fragmentHalfWidth,
     ...(style.dash === undefined
       ? {}
       : {
@@ -180,7 +229,11 @@ function createRibbonMaterial(style: RibbonStyle): {
   const material = new MeshBasicNodeMaterial();
   material.positionNode = vec3(world, 0);
   material.colorNode = edgeColor;
-  material.opacityNode = coverage.mul(uniforms.alpha);
+  // The group's frame alpha, then the edge's own. Multiplied rather than
+  // combined any other way because the two answer different questions and both
+  // have to be able to say no: the uniform is how far a group has faded at this
+  // zoom, and the attribute is how much this one edge matters right now.
+  material.opacityNode = coverage.mul(uniforms.alpha).mul(fragmentIntensity);
   // The two flags every shape in this package draws with, and the reasons M4.2
   // gave: alpha for the antialiasing ramps, and no depth write because a
   // transparent fragment that writes depth occludes whatever is drawn behind it
@@ -198,6 +251,22 @@ class EdgeGroup implements GpuResource {
   readonly #uniforms: RibbonUniforms;
   #curve: RibbonOptions['curve'];
   #disposed = false;
+  /**
+   * Where each edge's vertices are, from the last {@link setEdges}, so an
+   * intensity write is a slice rather than a search.
+   *
+   * The tessellator returns these already, one per route in input order, which
+   * is what makes a highlight cheap: the id a caller names maps to a contiguous
+   * span of the one attribute the shader multiplies by.
+   */
+  #ranges: readonly RibbonRange[] = [];
+  /** The live intensity values, one per vertex, mirrored by the GPU attribute. */
+  #intensity = new Float32Array(0);
+  /** The attribute wrapping {@link #intensity}, for the update range. */
+  #intensityAttribute: BufferAttribute | null = null;
+  /** The span of VERTICES written since the last flush. See {@link #flushIntensity}. */
+  #dirtyMin = Number.POSITIVE_INFINITY;
+  #dirtyMax = Number.NEGATIVE_INFINITY;
 
   constructor(group: SceneEdgeGroup) {
     requireRibbonStyle(group.style, `group "${group.id}".style`);
@@ -219,6 +288,15 @@ class EdgeGroup implements GpuResource {
     // frame's edge before their centreline does. `instanced-scene.ts` opts out
     // for the neighbouring reason, a unit quad whose sphere describes nothing.
     this.mesh.frustumCulled = false;
+    // Intensity writes are uploaded from here, as ONE merged range, because this
+    // is the last moment before a draw at which three lets this object speak.
+    // The same arrangement `instanced-scene.ts` uses, and for the same measured
+    // reason: `addUpdateRange` pushes a record per call and neither backend
+    // merges them, so a range per edge would put thousands of `writeBuffer`
+    // calls in front of the one upload the ranges exist to replace.
+    this.mesh.onBeforeRender = (): void => {
+      this.#flushIntensity();
+    };
   }
 
   /**
@@ -247,12 +325,22 @@ class EdgeGroup implements GpuResource {
     );
     const colors = colorsFor(edges, tessellated);
 
+    // Every edge at full intensity, which is the drawing a group has when
+    // nobody has highlighted anything, and it is REBUILT here rather than
+    // carried across: the ids and their vertex counts both changed, so an old
+    // highlight would land on whatever edge now occupies those vertices. A
+    // caller that wants a highlight to survive a re-layout re-applies it, which
+    // is one call over data it already holds.
+    const intensity = new Float32Array(tessellated.vertexCount).fill(FULL_INTENSITY);
+    const intensityAttribute = new BufferAttribute(intensity, 1);
+
     const geometry = new BufferGeometry();
     geometry.setAttribute(POSITION, new BufferAttribute(tessellated.position, 2));
     geometry.setAttribute(OFFSET, new BufferAttribute(tessellated.offset, 2));
     geometry.setAttribute(ACROSS, new BufferAttribute(tessellated.across, 1));
     geometry.setAttribute(ARC, new BufferAttribute(tessellated.arc, 1));
     geometry.setAttribute(COLOR, new BufferAttribute(colors, 3));
+    geometry.setAttribute(INTENSITY, intensityAttribute);
     geometry.setIndex(new BufferAttribute(tessellated.index, 1));
     // Explicit, because three defaults a draw range's count to Infinity and an
     // empty group has no attributes to read either.
@@ -261,6 +349,70 @@ class EdgeGroup implements GpuResource {
     const previous = this.mesh.geometry;
     this.mesh.geometry = geometry;
     previous.dispose();
+
+    this.#ranges = tessellated.ranges;
+    this.#intensity = intensity;
+    this.#intensityAttribute = intensityAttribute;
+    // Nothing pending against a buffer that no longer exists: the ranges below
+    // are vertex indices into the array this call just replaced, and carrying
+    // them over would upload a span of the new one for no reason, or past its
+    // end when the rebuild is smaller.
+    this.#dirtyMin = Number.POSITIVE_INFINITY;
+    this.#dirtyMax = Number.NEGATIVE_INFINITY;
+  }
+
+  /** Writes one intensity per edge. See {@link SceneEdges.setEdgeIntensity}. */
+  setIntensity(intensityOf: (edgeId: string) => number): void {
+    for (const range of this.#ranges) {
+      // ROUNDED TO FLOAT32 BEFORE ANYTHING COMPARES IT, and this line is the
+      // whole of the "only what changed is uploaded" promise. The array stores
+      // float32 and reads back the rounded double, so a caller's 0.2 never
+      // equals the 0.20000000298023224 that came out of it: without the round,
+      // every value that is not exactly representable re-marks every one of its
+      // vertices on every call, the merged span grows to the whole buffer, and
+      // the ranges cost more than they save. A review caught it against the one
+      // number the campaign demo actually dims with.
+      const value = Math.fround(
+        requireIntensity(intensityOf(range.id), `intensity of edge "${range.id}"`),
+      );
+      const end = range.vertexStart + range.vertexCount;
+      // Compared before written, so a call that changes nothing uploads
+      // nothing. That is the common case by construction: a hover moving from
+      // one node to the next leaves every edge incident to neither exactly
+      // where it was, and at 7,100 edges the alternative is a full 28 KB
+      // upload per pointer move.
+      for (let vertex = range.vertexStart; vertex < end; vertex += 1) {
+        if (this.#intensity[vertex] === value) continue;
+        this.#intensity[vertex] = value;
+        if (vertex < this.#dirtyMin) this.#dirtyMin = vertex;
+        if (vertex > this.#dirtyMax) this.#dirtyMax = vertex;
+      }
+    }
+  }
+
+  /**
+   * Turns the written span into ONE update range, immediately before the draw
+   * that needs it.
+   *
+   * A span and not a set, with the same trade `instanced-scene.ts` states: two
+   * edges at opposite ends of a group upload everything between them. The win is
+   * on clustered writes, and the scattered case is never worse than having no
+   * ranges at all. A highlight is as clustered as its scene: the edges incident
+   * to one node are contiguous exactly when the caller built them that way.
+   */
+  #flushIntensity(): void {
+    if (this.#dirtyMax < this.#dirtyMin) return;
+    const first = this.#dirtyMin;
+    const span = this.#dirtyMax - first + 1;
+    this.#dirtyMin = Number.POSITIVE_INFINITY;
+    this.#dirtyMax = Number.NEGATIVE_INFINITY;
+    const attribute = this.#intensityAttribute;
+    if (attribute === null) return;
+    // Cleared before adding, so a frame that never drew cannot leave a range
+    // behind for the next one to upload twice.
+    attribute.clearUpdateRanges();
+    attribute.addUpdateRange(first, span);
+    attribute.needsUpdate = true;
   }
 
   /** Writes this group's per-frame uniforms. See {@link SceneEdges.setStyle}. */
@@ -364,6 +516,24 @@ function requireInRange(value: number, field: string): number {
 }
 
 /**
+ * Rejects an intensity outside `[0, 1]`, naming the edge it came from.
+ *
+ * The same range as an alpha and for a sharper reason: this one also scales the
+ * WIDTH, and a negative value would fold a ribbon's two sides through each
+ * other rather than merely clamping somewhere invisible. Above 1 is refused
+ * instead of allowed as an emphasis, because a group's width is already a
+ * caller's number and raising it there says the same thing to every edge at
+ * once; a channel that could exceed 1 would give a scene two ways to say how
+ * wide a ribbon is and no rule for which wins.
+ */
+function requireIntensity(value: number, field: string): number {
+  if (!(value >= 0) || value > 1) {
+    throw new RangeError(`${field} has to be a number in [0, 1], got ${String(value)}`);
+  }
+  return value;
+}
+
+/**
  * The scene's edges, across one mesh per declared group.
  *
  * The groups are fixed at construction and their order is the draw order, for
@@ -419,6 +589,39 @@ export class SceneEdges implements GpuResource {
   setStyle(groupId: string, style: EdgeFrameStyle): void {
     this.#assertLive('setStyle');
     this.#require(groupId, 'setStyle').setStyle(style);
+  }
+
+  /**
+   * Writes one intensity per edge in a group: how much of the group's width and
+   * alpha that edge draws at, in `[0, 1]`.
+   *
+   * **The per-EDGE seam, where {@link setStyle} is the per-GROUP one, and both
+   * exist because a highlight is not a style.** A style says how a whole group
+   * is drawn at this zoom, which is what a frame decides; this says which
+   * members of it matter right now, which is what a pointer decides. Expressing
+   * a highlight through groups instead would mean a group per highlight state
+   * and a re-tessellation to move an edge between them, and expressing it
+   * through {@link setEdges} would rebuild every buffer to change one float.
+   *
+   * `intensityOf` is called once per edge of the group, in the order the last
+   * {@link setEdges} listed them, and its answer is written over that edge's own
+   * vertices. Two edges sharing an id get the same answer, as they get the same
+   * colour. Passing a function that returns 1 everywhere restores the group.
+   *
+   * Only the values that CHANGED are uploaded, as one merged range immediately
+   * before the next draw, so a pointer moving between two nodes costs the
+   * vertices of the edges those two nodes touch rather than the group.
+   *
+   * A group whose edges have not been set yet has nothing to write, and this is
+   * a no-op rather than an error: the ids a caller would name do not exist yet,
+   * so there is nothing it could have got wrong.
+   *
+   * @throws {RangeError} for a group that was never declared, for an intensity
+   * outside `[0, 1]`, and after {@link dispose}.
+   */
+  setEdgeIntensity(groupId: string, intensityOf: (edgeId: string) => number): void {
+    this.#assertLive('setEdgeIntensity');
+    this.#require(groupId, 'setEdgeIntensity').setIntensity(intensityOf);
   }
 
   /**

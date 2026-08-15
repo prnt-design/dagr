@@ -57,6 +57,31 @@
 }
 
 /*
+ * A FAR END's name, put there by a hover rather than earned by a zoom (D3).
+ *
+ * It has to read as an annotation and not as a label the node has, because the
+ * node next to it does not have one: at this zoom nothing is wide enough for
+ * the title tier, so a far-end name that looked identical would claim its node
+ * had crossed a gate it has not. Hence the dashed rule and the lighter ground,
+ * which is the same vocabulary the dashed edge uses for "this is a relation
+ * being pointed at" rather than a fact about the box.
+ *
+ * BELOW the node rather than above it, which is where the title tier sits. A
+ * hovered node's neighbours are frequently its own rank, so two of these on
+ * adjacent boxes would otherwise stack into the row above and overlap; putting
+ * them under the box separates the annotation from the tier that owns the space
+ * above it.
+ */
+.campaign-title--far {
+  top: 100%;
+  bottom: auto;
+  transform-origin: 0 0;
+  border: 1px dashed var(--dagr-stage-rule);
+  border-top: none;
+  background: rgba(7, 8, 10, 0.72);
+}
+
+/*
  * The card tier, which the same box gets once it is wide enough to hold one.
  *
  * INSIDE the box's top-left corner, where the title hangs above it. A card only

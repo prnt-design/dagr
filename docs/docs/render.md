@@ -53,25 +53,38 @@ cannot be handed one.
 ![Three thousand campaign nodes at the fitted zoom: blue geography tiles, an
 amber narrative spine, violet grids of NPCs, green quest DAGs and red pressure
 clocks, packed into a 16:9
-canvas](../../assets/screenshots/m4.4-campaign-fit.png)
+canvas](../../assets/screenshots/p7-campaign-fit.png)
 
 That is the [campaign demo](/demos/campaign), which you can open and drive: 3,010
 nodes of a mock D&D campaign, cut into 101 tiles, laid out by
 [`@dagr/layout`](./layout.md) in a worker one tile at a time, packed, and drawn
 in two instanced calls. The colour families are strata (spine, geography,
 people, quests, pressure, reference), which is what makes the far view readable
-as structure rather than as confetti. The readout is live camera state rather
-than a caption.
+as structure rather than as confetti. An EDGE takes the colour of the node it
+leaves, so a line says where it comes from, and its dash says whether a layout
+routed it. The readout is live camera state rather than a caption.
 
-![The same campaign at two CSS pixels per world unit: keyed rooms as rounded
-rectangles with names above them, each with a crisp inset outline and a
-halo](../../assets/screenshots/m4.4-campaign-rooms.png)
+![The same campaign at 1.4 CSS pixels per world unit: keyed sites as rounded
+rectangles with names above them, dashed ribbons fanning down to their
+rooms](../../assets/screenshots/p7-campaign-names.png)
 
 The same scene zoomed in, where the nodes are wide enough to carry names. The
 names are DOM, positioned by the camera through the overlay described below; the
-shapes are the GPU's.
+shapes and the ribbons are the GPU's.
 
-Those two are what M4.4 has evidence for. The crispness pair from M4.2 is what
+![The same tile with the pointer on one chapter: its nine edges at full width
+and alpha, every other edge faded back, and the far end of each highlighted edge
+carrying a name](../../assets/screenshots/d3-hover.png)
+
+And the same drawing with a pointer in it. Hovering a node lights the edges
+incident to it and dims the rest to a fifth of their width and alpha, which is a
+twenty-fifth of the ink, and gives the far end of each lit edge a name it has not
+earned at this zoom. That is `setEdgeIntensity` and the overlay, from the two
+sections below; the demo decides what to light, and the renderer is told one
+number per edge.
+
+Those two are what M4.4 has evidence for, retaken since at the spacing D2
+measured. The crispness pair from M4.2 is what
 the shader has evidence for, and it stays committed:
 
 ![At zoom 100 the smallest rounded rectangle fills the canvas, its corner a
@@ -84,9 +97,11 @@ at is a single corner arc at a hundred pixels per world unit. The
 of that range, and neither is reachable in the live demo any more, for the plain
 reason that the scene they show is gone: M4.4 retired the ladder. Reproduce both
 from the M4.2 commit; what the 0.1x frame documented is recorded in that task's
-ROADMAP entry. The campaign's own floor is 0.053 and its ceiling 19.9 on the
-reference canvas, which is a narrower range than the ladder's because a campaign
-node spans 12:1 in size where the ladder spanned 250:1.
+ROADMAP entry. The campaign's own floor is 0.026 and its ceiling 19.2 on the
+reference canvas: a wider range than it was, because D2 raised the separations
+and the floor is derived from the scene's extent, and still narrower than the
+ladder's because a campaign node spans 12:1 in size where the ladder spanned
+250:1.
 
 For the record, this is where the package started:
 [first light](../../assets/screenshots/m4.1-first-light.png) was a single amber
@@ -738,9 +753,9 @@ renderer.render();
 ```
 
 `Renderer` is a camera, a `setNodes`, a `setEdges`, a `setEdgeStyle`, a
-`resize`, a `render` and a `dispose`. Everything except the three setters was
-fixed at M4.1 and has not changed since; the lifecycle was always the part that
-would not.
+`setEdgeIntensity`, a `resize`, a `render` and a `dispose`. Everything except
+the four setters was fixed at M4.1 and has not changed since; the lifecycle was
+always the part that would not.
 
 `setNodes` was deliberately absent until M4.4. M4.1 drew a hard-coded quad and
 M4.2 a hard-coded ladder, and a `setLayout` designed at either point would have
@@ -1156,6 +1171,26 @@ moves the pattern and wraps it into one period.
 A solid ribbon is the ABSENCE of a dash rather than a duty cycle of 1: a
 zero-width gap is still a boundary to a distance field, so a duty of 1 draws a
 half-alpha seam once per period along a line that is supposed to be solid.
+
+**`setEdgeIntensity` is the per-edge call**, and it is what a highlight is made
+of. It takes a function from an edge's id to a number in `[0, 1]`, and the
+shader multiplies both the ribbon's width and its alpha by it: an edge at 1
+draws exactly as the group says, and an edge at 0.25 is a quarter as wide and a
+quarter as opaque. Hovering a node and fading everything not incident to it is
+one call, and only the values that changed are uploaded, as one merged range
+before the next draw.
+
+The split against `setEdgeStyle` is the split between what a FRAME decides and
+what a POINTER decides. A style is how a whole group is drawn at this zoom;
+an intensity is which of its members matter right now. Doing it through groups
+instead would mean a group per highlight state and a re-tessellation to move an
+edge between them, and doing it through `setEdges` would rebuild every buffer
+to change one float.
+
+Intensity is capped at 1 rather than open above it. A group's width is already
+a caller's number and raising it there says the same thing to every edge at
+once, so a channel that could exceed 1 would give a scene two ways to say how
+wide a ribbon is and no rule for which wins.
 
 ## What is not here yet
 

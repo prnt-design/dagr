@@ -14,6 +14,39 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- `setEdgeIntensity(groupId, intensityOf)` on `Renderer`: one number per edge in
+  `[0, 1]`, which the ribbon shader multiplies BOTH the width and the alpha by.
+  A type-level addition to the `Renderer` interface and no new exported name.
+  (D3)
+
+  **WHY A CHANNEL RATHER THAN A GROUP.** `setEdgeStyle` is per group, which is
+  the right grain for what a FRAME decides (the width a zoom implies, the fade
+  a far view owes) and the wrong one for what a POINTER decides. Highlighting
+  the edges incident to a hovered node through groups would mean a group per
+  highlight state and a re-tessellation to move an edge between them; through
+  `setEdges` it would rebuild every buffer to change one float. The tessellator
+  already returns a vertex range per route, so a highlight is a slice write into
+  one attribute.
+
+  **WIDTH AND ALPHA, NOT EITHER ALONE.** Alpha alone leaves a dimmed edge as wide
+  as a highlighted one, so a hairball stays a hairball at lower contrast; width
+  alone leaves it as bright, and a thin bright line still catches an eye.
+  Together they are the idiom `ribbonWidthAt` already uses for the far view: an
+  edge that matters less carries less ink, in both of the ways a ribbon can.
+
+  **THE CHANNEL BUDGET, which M4.3 asked to be told about.** The one free vertex
+  buffer slot recorded there is the INSTANCED NODE pipeline's (seven of eight,
+  reserved for M4.6's spring velocity or M4.8's picking id) and this does not
+  touch it: a ribbon is a different mesh with a different material and its own
+  eight, going from five to six. Nothing in M4 is closer to the limit than it
+  was.
+
+  Only changed values are uploaded, as one merged update range immediately
+  before the next draw, because `addUpdateRange` pushes a record per call and
+  neither backend merges them. A `setEdges` resets every edge to 1: the ids and
+  their vertex counts both moved, so a carried-over highlight would land on
+  whatever edge now occupies those vertices.
+
 - Edge ribbons: `setEdges` and `setEdgeStyle` on `Renderer`, with the groups
   declared through `RendererOptions.edgeGroups`. New surface: `advanceDashFlow`
   and `ribbonWidthAt`, and the types `SceneEdge`, `SceneEdgeGroup`,

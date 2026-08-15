@@ -1,4 +1,5 @@
-import { Color } from 'three/webgpu';
+import { AttributeNode, BufferAttribute, Color } from 'three/webgpu';
+import type { Node } from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
 import { SceneEdges } from '../src/scene-edges.js';
 import type { SceneEdge, SceneEdgeGroup } from '../src/scene-edges.js';
@@ -53,6 +54,17 @@ const straight: readonly Vec2[] = [
   { x: 100, y: 0 },
 ];
 
+/** The `BufferAttribute` object itself, for the update range and the version. */
+function bufferAttributeOf(scene: SceneEdges, index: number, name: string): BufferAttribute {
+  const mesh = scene.meshes[index];
+  if (mesh === undefined) throw new Error('unreachable: no mesh at that index');
+  const attribute = mesh.geometry.getAttribute(name);
+  // Narrowed rather than asserted: `getAttribute` answers with the interleaved
+  // kind too, and nothing here interleaves.
+  if (!(attribute instanceof BufferAttribute)) throw new Error(`no ${name} attribute`);
+  return attribute;
+}
+
 /** The attribute array a group's mesh carries, by name. */
 function attributeOf(scene: SceneEdges, index: number, name: string): Float32Array {
   const mesh = scene.meshes[index];
@@ -61,6 +73,25 @@ function attributeOf(scene: SceneEdges, index: number, name: string): Float32Arr
   const array = attribute?.array;
   if (!(array instanceof Float32Array)) throw new Error(`no ${name} attribute`);
   return array;
+}
+
+/**
+ * Every geometry attribute a node graph reads, by name.
+ *
+ * `Node.traverse` walks the tree three itself walks when it decides which
+ * vertex buffers a pipeline binds, which is the same question the attribute
+ * table's slot count is an answer to. The name lives on a private field with a
+ * public getter that wants a builder, so this reads the getter with an empty
+ * one: what it needs is the declared name, and an `AttributeNode` given one
+ * returns it without consulting anything.
+ */
+function attributesIn(node: Node | null): string[] {
+  if (node === null) return [];
+  const names: string[] = [];
+  node.traverse((child) => {
+    if (child instanceof AttributeNode) names.push(child.getAttributeName({} as never));
+  });
+  return names;
 }
 
 describe('SceneEdges', () => {
@@ -260,6 +291,165 @@ describe('SceneEdges', () => {
     expect(() => scene.setPixelsPerWorldUnit(2.5)).not.toThrow();
     scene.dispose();
     expect(() => scene.setPixelsPerWorldUnit(2.5)).toThrow(/setPixelsPerWorldUnit/);
+  });
+
+  it('reads the intensity in BOTH stages, which no buffer assertion can see', () => {
+    // The one claim in this file that is about the SHADER rather than the
+    // buffers, and it is here because the failure it catches is silent: an
+    // intensity wired into the alpha and not the width dims an edge without
+    // thinning it, which is exactly the half-feature the channel exists to
+    // avoid, and every test above would still pass. A structural check in the
+    // spirit of `test/ribbon-nodes.test.ts`: the attribute has to be reachable
+    // from the vertex position AND from the opacity.
+    const scene = new SceneEdges(groups());
+    const material = scene.meshes[0]?.material;
+    if (material === undefined) throw new Error('unreachable: no material');
+    expect(attributesIn(material.positionNode)).toContain('ribbonIntensity');
+    expect(attributesIn(material.opacityNode)).toContain('ribbonIntensity');
+    // And the sanity check that the walk finds anything at all, so a broken
+    // traversal cannot make the two assertions above vacuous.
+    expect(attributesIn(material.positionNode)).toContain('ribbonPosition');
+    scene.dispose();
+  });
+
+  it('starts every edge at full intensity, which is the group\'s own drawing', () => {
+    // A group nobody has highlighted draws exactly as it did before the channel
+    // existed: the shader multiplies width and alpha by this, so anything but
+    // one here would change every scene in the package.
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [edge('e1', straight), edge('e2', straight)]);
+    const intensity = attributeOf(scene, 0, 'ribbonIntensity');
+    expect(intensity).toHaveLength(8);
+    expect([...intensity]).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
+    scene.dispose();
+  });
+
+  it('writes one intensity over one edge\'s own vertices', () => {
+    // The whole feature: a highlight is a SLICE write, keyed by the id the
+    // caller already has, into the ranges the tessellator returned.
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [edge('e1', straight), edge('e2', straight)]);
+    scene.setEdgeIntensity(ROUTED, (id) => (id === 'e1' ? 1 : 0.25));
+    expect([...attributeOf(scene, 0, 'ribbonIntensity')]).toEqual([
+      1, 1, 1, 1, 0.25, 0.25, 0.25, 0.25,
+    ]);
+    scene.dispose();
+  });
+
+  it('touches no other buffer, which is what makes a hover affordable', () => {
+    // The same property `setStyle` has and for the same reason: at 7,100 routes
+    // a highlight that rebuilt geometry would re-tessellate the scene on every
+    // pointer move.
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [edge('e1', straight)]);
+    const position = attributeOf(scene, 0, 'ribbonPosition');
+    const color = attributeOf(scene, 0, 'ribbonColor');
+    scene.setEdgeIntensity(ROUTED, () => 0.5);
+    expect(attributeOf(scene, 0, 'ribbonPosition')).toBe(position);
+    expect(attributeOf(scene, 0, 'ribbonColor')).toBe(color);
+    scene.dispose();
+  });
+
+  it('uploads one merged range covering only what changed', () => {
+    // Two integers and one range, which is the lesson M4.3 paid for:
+    // `addUpdateRange` pushes a record per call and neither backend merges
+    // them, so a range per edge is worse than no ranges at all.
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [edge('e1', straight), edge('e2', straight), edge('e3', straight)]);
+    const mesh = scene.meshes[0];
+    if (mesh === undefined) throw new Error('unreachable');
+    const attribute = bufferAttributeOf(scene, 0, 'ribbonIntensity');
+
+    // The middle edge alone: vertices 4 to 7 of twelve.
+    const version = attribute.version;
+    scene.setEdgeIntensity(ROUTED, (id) => (id === 'e2' ? 0.5 : 1));
+    mesh.onBeforeRender(
+      ...([] as unknown as Parameters<typeof mesh.onBeforeRender>),
+    );
+    expect(attribute.updateRanges).toEqual([{ start: 4, count: 4 }]);
+    // `needsUpdate` is write-only on a `BufferAttribute` and bumps `version`,
+    // which is what three compares once per frame to decide on an upload.
+    expect(attribute.version).toBe(version + 1);
+    scene.dispose();
+  });
+
+  it('uploads nothing the second time at a value float32 cannot hold exactly', () => {
+    // The case the first version of this got wrong, and the one the campaign
+    // demo actually dims with: 0.2 comes back out of a `Float32Array` as
+    // 0.20000000298023224, so a comparison against the caller's double is never
+    // equal and every dimmed edge re-marks itself on every hover. The other
+    // values in this file (1, 0.25, 0.5) are all exact in float32 and cannot
+    // see it.
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [edge('e1', straight), edge('e2', straight)]);
+    const mesh = scene.meshes[0];
+    if (mesh === undefined) throw new Error('unreachable');
+    const attribute = bufferAttributeOf(scene, 0, 'ribbonIntensity');
+    const dim = (id: string): number => (id === 'e1' ? 1 : 0.2);
+
+    scene.setEdgeIntensity(ROUTED, dim);
+    mesh.onBeforeRender(...([] as unknown as Parameters<typeof mesh.onBeforeRender>));
+    expect(attribute.updateRanges).toEqual([{ start: 4, count: 4 }]);
+
+    // The VERSION and not the range list, because a backend clears ranges after
+    // an upload and no backend has run here: a second flush that found nothing
+    // dirty leaves the first flush's range in place, so the range list cannot
+    // tell the two cases apart. `needsUpdate` bumps the version, and a second
+    // upload is exactly what must not happen.
+    const version = attribute.version;
+    scene.setEdgeIntensity(ROUTED, dim);
+    mesh.onBeforeRender(...([] as unknown as Parameters<typeof mesh.onBeforeRender>));
+    expect(attribute.version).toBe(version);
+    scene.dispose();
+  });
+
+  it('uploads nothing when the values did not change', () => {
+    // A pointer moving between two nodes leaves most edges exactly where they
+    // were, and at 7,100 edges the alternative is a full upload per move.
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [edge('e1', straight), edge('e2', straight)]);
+    const mesh = scene.meshes[0];
+    if (mesh === undefined) throw new Error('unreachable');
+    const attribute = bufferAttributeOf(scene, 0, 'ribbonIntensity');
+    scene.setEdgeIntensity(ROUTED, () => 1);
+    mesh.onBeforeRender(
+      ...([] as unknown as Parameters<typeof mesh.onBeforeRender>),
+    );
+    expect(attribute.updateRanges).toEqual([]);
+    scene.dispose();
+  });
+
+  it('resets a highlight when the edges are replaced', () => {
+    // The ids and their vertex counts both changed, so a carried-over highlight
+    // would land on whatever edge now occupies those vertices.
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [edge('e1', straight)]);
+    scene.setEdgeIntensity(ROUTED, () => 0.25);
+    scene.setEdges(ROUTED, [edge('e1', straight)]);
+    expect([...attributeOf(scene, 0, 'ribbonIntensity')]).toEqual([1, 1, 1, 1]);
+    scene.dispose();
+  });
+
+  it('has nothing to write for a group whose edges have not arrived', () => {
+    // Not an error: the ids a caller would name do not exist yet, so there is
+    // nothing it could have got wrong.
+    const scene = new SceneEdges(groups());
+    expect(() => scene.setEdgeIntensity(ROUTED, () => 0.5)).not.toThrow();
+    scene.dispose();
+  });
+
+  it('rejects an intensity a ribbon cannot be drawn at, naming the edge', () => {
+    // The range matters more here than for an alpha: this one scales the WIDTH,
+    // and a negative value would fold a ribbon's two sides through each other
+    // rather than clamping somewhere invisible.
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [edge('e1', straight)]);
+    expect(() => scene.setEdgeIntensity(ROUTED, () => -0.1)).toThrow(/"e1"/);
+    expect(() => scene.setEdgeIntensity(ROUTED, () => 1.5)).toThrow(/\[0, 1\]/);
+    expect(() => scene.setEdgeIntensity(ROUTED, () => Number.NaN)).toThrow(/"e1"/);
+    expect(() => scene.setEdgeIntensity('nope', () => 1)).toThrow(/"nope"/);
+    scene.dispose();
+    expect(() => scene.setEdgeIntensity(ROUTED, () => 1)).toThrow(/setEdgeIntensity/);
   });
 
   it('opts its meshes out of frustum culling', () => {
