@@ -77,7 +77,6 @@ describe('@dagr/render', () => {
     expect('tessellateRibbons' in api).toBe(false);
     expect('ribbonCoverage' in api).toBe(false);
     expect('ribbonWorldPosition' in api).toBe(false);
->>>>>>> 7b7be91 (feat(render): the ribbon tessellation core, at a screen-space width (P5))
   });
 
   it('does not export the renderer implementation class', () => {

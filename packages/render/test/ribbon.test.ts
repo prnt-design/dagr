@@ -381,8 +381,10 @@ describe('tessellateRibbons: joins', () => {
     // wrong in two ways at once and both understated it: it quoted the visible
     // half width where the vertex stage uses the padded one, and it counted
     // ONE end of the segment where two same-direction turns pull back on the
-    // same side of it. Measured here at 0.01 world units, against
-    // `expand * (tan(in / 2) + tan(out / 2))`.
+    // same side of it, while opposite turns partly cancel. Measured here to
+    // 0.005 world units, against `expand * |tan(in / 2) + tan(out / 2)|`,
+    // where the absolute value comes AFTER the sum: writing it without the
+    // bars is the exact ambiguity that produced the original error.
     //
     // Opposite turns SUBTRACT rather than cancel, and only match exactly when
     // their magnitudes do. A Sugiyama dummy chain steps left, right, left as
