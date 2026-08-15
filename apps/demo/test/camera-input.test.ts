@@ -1,17 +1,22 @@
+import { Camera2D } from '@dagr/render';
 import { describe, expect, it } from 'vitest';
 import {
+  FIT_PADDING,
   INITIAL_ZOOM,
-  MAX_ZOOM,
-  MIN_ZOOM,
+  KEY_PAN_STEP,
+  KEY_ZOOM_FACTOR,
   WHEEL_LINE_HEIGHT,
   WHEEL_MAX_PIXELS,
   WHEEL_PAGE_HEIGHT,
   WHEEL_ZOOM_SPEED,
   canvasPoint,
   initialZoomFromHash,
+  keyCommand,
   wheelPixels,
   wheelZoomFactor,
+  zoomLimits,
 } from '../src/camera-input.js';
+import { LADDER_BOUNDS, LADDER_SMALLEST_EXTENT } from '../src/ladder.js';
 
 /**
  * The only unit-testable part of the first light demo.
@@ -101,44 +106,55 @@ describe('wheelZoomFactor', () => {
   });
 });
 
-describe('the zoom range', () => {
+describe('the derived zoom range', () => {
   /**
-   * The crispness ladder `@dagr/render` draws, in world units, and the canvas it
-   * lands on, in CSS pixels.
-   *
-   * Every number here is a copy, and every one is a copy on purpose. The ladder
-   * exports nothing (M4.2 draws it, M4.4 replaces the scene), and importing the
-   * module to reach its sizes would pull three.js and a GPU device into a node
-   * test to check three numbers. The canvas comes from CSS that no module can
-   * read: `styles.css` holds the stage at `clamp(600px, 62vh, 780px)` inside a
-   * `.page` capped at 72rem with 1.5rem of padding, so 1102 by 598 is the widest
-   * page at the shortest stage, and it is the size the committed screenshots are
-   * taken at.
-   *
-   * The worst cases differ by end of the range, which is why one canvas figure
-   * is not enough. A taller stage only makes the MIN_ZOOM claims truer. A
-   * NARROWER window is the single case that weakens the MAX_ZOOM claim, because
-   * the smallest rung's side edges leave the frame once the canvas is under 1000
-   * CSS pixels wide; that is a property of the screenshot, not of the camera.
+   * The canvas the committed screenshots are taken at, in CSS pixels. A copy,
+   * because it comes from CSS no module can read: `styles.css` holds the
+   * stage at `clamp(600px, 62vh, 780px)` inside a `.page` capped at 72rem
+   * with 1.5rem of padding, so 1102 by 598 is the widest page at the
+   * shortest stage. The scene, unlike the fixed-range era, is NOT copied:
+   * `ladder.ts` exports its bounds and smallest extent, computed from the
+   * shapes, so these tests move with the scene instead of drifting from it.
    */
-  const RUNG = { small: 10, medium: 100, large: 1000 };
   const CANVAS = { width: 1102, height: 598 };
 
-  it('reaches exactly the two zooms the crispness reference is taken at', () => {
-    // The ROADMAP asks M4.2 for the same shape at 0.1x and 100x, committed as
-    // the reference. Those are the limits rather than points inside a wider
-    // range because `#zoom=` clamps, so a range that stopped short would answer
-    // `#zoom=100` with something else and quietly make the reference
-    // unreproducible.
-    expect(MIN_ZOOM).toBe(0.1);
-    expect(MAX_ZOOM).toBe(100);
+  it('derives the range this scene and canvas actually produce', () => {
+    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, CANVAS);
+    // The floor: 90% of the width-limited fit of a 2205-unit-wide scene.
+    expect(minZoom).toBeCloseTo(0.9 * (CANVAS.width / 2205), 6);
+    // The ceiling: the 4-unit smallest extent filling the 598px short side.
+    expect(maxZoom).toBeCloseTo(CANVAS.height / 4, 9);
+  });
+
+  it('keeps the 100x crispness reference reachable and retires the 0.1x one', () => {
+    // The derived range supersedes the fixed 0.1 to 100. The 100x reference
+    // stays reachable (the ceiling lands near 150 on the reference canvas);
+    // the 0.1x frame is deliberately below the floor now, because a floor at
+    // the fitted scene is exactly the "too far out" state the derived range
+    // exists to prevent. That frame stays reproducible from the M4.2 commit,
+    // and its finding is recorded in the M4.2 ROADMAP entry.
+    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, CANVAS);
+    expect(maxZoom).toBeGreaterThanOrEqual(100);
+    expect(minZoom).toBeGreaterThan(0.1);
+  });
+
+  it('agrees with Camera2D.fitBounds on what the floor means', () => {
+    // The floor is fitBounds restated as a number, and this is the drift
+    // guard: the "0" key fits with FIT_PADDING, the limit is derived with
+    // FIT_PADDING, and if the two formulas ever diverge, zooming out would
+    // stop short of (or past) what the fit key shows.
+    const camera = new Camera2D({
+      viewport: { ...CANVAS, devicePixelRatio: 1 },
+    });
+    camera.fitBounds(LADDER_BOUNDS, FIT_PADDING);
+    const { minZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, CANVAS);
+    expect(camera.zoom).toBeCloseTo(minZoom, 12);
   });
 
   it('contains the zoom the camera starts at', () => {
-    // Camera2D throws rather than clamps an out-of-range initial zoom, so this
-    // is the difference between a demo and a blank page with a red overlay.
-    expect(INITIAL_ZOOM).toBeGreaterThanOrEqual(MIN_ZOOM);
-    expect(INITIAL_ZOOM).toBeLessThanOrEqual(MAX_ZOOM);
+    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, CANVAS);
+    expect(INITIAL_ZOOM).toBeGreaterThanOrEqual(minZoom);
+    expect(INITIAL_ZOOM).toBeLessThanOrEqual(maxZoom);
   });
 
   it('is what bounds a gesture, since the per-event clamp only bounds an event', () => {
@@ -146,49 +162,67 @@ describe('the zoom range', () => {
     // fling, and wheelZoomFactor composes them exactly, which its own docstring
     // calls a feature. So the clamp that makes one event safe multiplies out to
     // a factor of about 8100 across a flick, and only the range stops it.
+    const { minZoom, maxZoom } = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, CANVAS);
     const fling = wheelZoomFactor({ deltaY: -1e9, deltaMode: 0 }) ** 30;
-    expect(INITIAL_ZOOM * fling).toBeGreaterThan(MAX_ZOOM);
-    expect(INITIAL_ZOOM / fling).toBeLessThan(MIN_ZOOM);
+    expect(INITIAL_ZOOM * fling).toBeGreaterThan(maxZoom);
+    expect(INITIAL_ZOOM / fling).toBeLessThan(minZoom);
   });
 
-  it('fills the view with the smallest rung at MAX_ZOOM, edges included', () => {
-    // Both halves of what the 100x screenshot has to show, and they pull against
-    // each other. Taller than the stage is "fills the view", which is what makes
-    // a magnified edge worth photographing. No wider than the canvas is what
-    // keeps the rung's two side edges and two rounded corners in frame, so the
-    // picture is an antialiased boundary rather than a flat fill that looks
-    // exactly like a broken renderer. 10 units at 100 is 1000 CSS pixels, which
-    // clears 598 comfortably and clears 1102 by 9%.
-    expect(RUNG.small * MAX_ZOOM).toBeGreaterThanOrEqual(CANVAS.height);
-    expect(RUNG.small * MAX_ZOOM).toBeLessThanOrEqual(CANVAS.width);
+  it('moves with the viewport, which is why the camera limits must be rebindable', () => {
+    const small = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, { width: 551, height: 299 });
+    const large = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, CANVAS);
+    expect(small.minZoom).toBeCloseTo(large.minZoom / 2, 6);
+    expect(small.maxZoom).toBeCloseTo(large.maxZoom / 2, 6);
   });
 
-  it('leaves the largest rung a legible shape at MIN_ZOOM', () => {
-    // The other broken-renderer look: a whole scene reduced to specks of dust.
-    // The largest rung is 100 CSS pixels at 0.1, wide enough that its corner
-    // radius is still a curve and not a stair, so a reader can see it is the
-    // same shape they were just looking at at 100x.
-    expect(RUNG.large * MIN_ZOOM).toBeGreaterThanOrEqual(64);
+  it('orders a degenerate pair instead of handing the camera an empty range', () => {
+    // Content tighter than its own smallest node inverts fit and fill; the
+    // range is ordered before returning, so Camera2D.setZoomLimits accepts it.
+    const bounds = { minX: 0, minY: 0, maxX: 2, maxY: 2 };
+    const { minZoom, maxZoom } = zoomLimits(bounds, 100, CANVAS);
+    expect(minZoom).toBeLessThanOrEqual(maxZoom);
+  });
+});
+
+describe('keyCommand', () => {
+  it('zooms on the keys that would scroll the page, one wheel detent per press', () => {
+    expect(keyCommand('ArrowUp')).toEqual({ kind: 'zoom', factor: KEY_ZOOM_FACTOR });
+    expect(keyCommand('ArrowDown')).toEqual({ kind: 'zoom', factor: 1 / KEY_ZOOM_FACTOR });
+    expect(keyCommand('=')).toEqual({ kind: 'zoom', factor: KEY_ZOOM_FACTOR });
+    expect(keyCommand('+')).toEqual({ kind: 'zoom', factor: KEY_ZOOM_FACTOR });
+    expect(keyCommand('-')).toEqual({ kind: 'zoom', factor: 1 / KEY_ZOOM_FACTOR });
+    // One detent is 100 pixels of wheel travel, so key and wheel agree.
+    expect(KEY_ZOOM_FACTOR).toBeCloseTo(Math.exp(100 * WHEEL_ZOOM_SPEED), 12);
   });
 
-  it('gives the whole ladder room on the short axis at MIN_ZOOM', () => {
-    // Zoom is CSS pixels per world unit, so the visible world is the canvas
-    // divided by it: 5980 units tall at 0.1. The factor of four is headroom for
-    // the largest rung plus the rest of the ladder around it, and it is a bound
-    // rather than a measurement, because this file cannot see the scene's layout
-    // and should not: `@dagr/render` owns where the rungs sit.
-    expect(CANVAS.height / MIN_ZOOM).toBeGreaterThanOrEqual(4 * RUNG.large);
+  it('takes three detents on the page keys', () => {
+    expect(keyCommand('PageUp')).toEqual({ kind: 'zoom', factor: KEY_ZOOM_FACTOR ** 3 });
+    expect(keyCommand('PageDown')).toEqual({ kind: 'zoom', factor: KEY_ZOOM_FACTOR ** -3 });
   });
 
-  it('puts the smallest rung inside the sub-pixel fade at MIN_ZOOM', () => {
-    // 10 units at 0.1 is exactly 1 CSS pixel, and the middle rung is 10. Drawn
-    // at or under a pixel a signed distance field FADES toward the background
-    // instead of aliasing into a flickering speck, because the coverage the
-    // screen-space derivative computes falls with the shape. That fade is a
-    // result the 0.1x screenshot exists to show, so the range deliberately
-    // reaches into it rather than stopping above it.
-    expect(RUNG.small * MIN_ZOOM).toBeLessThanOrEqual(1);
-    expect(RUNG.medium * MIN_ZOOM).toBeGreaterThan(1);
+  it('pans horizontally on left and right, in panByScreen drag convention', () => {
+    // Panning the VIEW left means the content slides right on screen, and
+    // panByScreen takes the content delta, so ArrowLeft is a POSITIVE dx.
+    expect(keyCommand('ArrowLeft')).toEqual({ kind: 'pan', dx: KEY_PAN_STEP, dy: 0 });
+    expect(keyCommand('ArrowRight')).toEqual({ kind: 'pan', dx: -KEY_PAN_STEP, dy: 0 });
+  });
+
+  it('pans vertically when shift holds the zoom keys down', () => {
+    expect(keyCommand('ArrowUp', true)).toEqual({ kind: 'pan', dx: 0, dy: KEY_PAN_STEP });
+    expect(keyCommand('ArrowDown', true)).toEqual({ kind: 'pan', dx: 0, dy: -KEY_PAN_STEP });
+  });
+
+  it('fits on 0 and Home', () => {
+    expect(keyCommand('0')).toEqual({ kind: 'fit' });
+    expect(keyCommand('Home')).toEqual({ kind: 'fit' });
+  });
+
+  it('claims nothing else, so the page keeps its keys', () => {
+    for (const key of ['Tab', 'Enter', ' ', 'a', 'Escape', 'F5', 'ArrowLeft\t']) {
+      expect(keyCommand(key, false)).toBeNull();
+    }
+    // Shift changes nothing for keys the map does not shift-bind.
+    expect(keyCommand('ArrowLeft', true)).toEqual({ kind: 'pan', dx: KEY_PAN_STEP, dy: 0 });
   });
 });
 
@@ -201,13 +235,11 @@ describe('initialZoomFromHash', () => {
    */
   const FALLBACK = 7;
 
-  it('reads the two zooms the crispness screenshots are named by', () => {
-    // The whole point of the feature: `#zoom=100` has to give the zoom the
-    // reference image was taken at, exactly, with no gesture involved.
+  it('reads a named zoom exactly, with no gesture involved', () => {
+    // The point of the feature: `#zoom=100` has to give the zoom the 100x
+    // reference image was taken at, exactly.
     expect(initialZoomFromHash('#zoom=100', FALLBACK)).toBe(100);
     expect(initialZoomFromHash('#zoom=0.1', FALLBACK)).toBe(0.1);
-    expect(initialZoomFromHash('#zoom=100', FALLBACK)).toBe(MAX_ZOOM);
-    expect(initialZoomFromHash('#zoom=0.1', FALLBACK)).toBe(MIN_ZOOM);
   });
 
   it('takes the hash with or without its leading hash mark', () => {
@@ -217,13 +249,14 @@ describe('initialZoomFromHash', () => {
     expect(initialZoomFromHash('zoom=2.5', FALLBACK)).toBe(2.5);
   });
 
-  it('clamps an out-of-range zoom instead of rejecting it', () => {
-    // Somebody who typed 500 wants the closest thing this camera can do, and
-    // `Camera2D` throws a RangeError on 500 rather than clamping it, so the
-    // choice here is between clamping and a red overlay where the demo was.
-    expect(initialZoomFromHash('#zoom=500', FALLBACK)).toBe(MAX_ZOOM);
-    expect(initialZoomFromHash('#zoom=0.001', FALLBACK)).toBe(MIN_ZOOM);
-    expect(initialZoomFromHash('#zoom=1e9', FALLBACK)).toBe(MAX_ZOOM);
+  it('returns an out-of-range zoom as parsed, for the camera to clamp later', () => {
+    // The demo's limits are derived at the first viewport measurement, so at
+    // parse time there is nothing correct to clamp against. The camera starts
+    // unbounded and `setZoomLimits` clamps when the real range lands, which
+    // still gives the user who typed 500 the closest thing the camera can do.
+    expect(initialZoomFromHash('#zoom=500', FALLBACK)).toBe(500);
+    expect(initialZoomFromHash('#zoom=0.001', FALLBACK)).toBe(0.001);
+    expect(initialZoomFromHash('#zoom=1e9', FALLBACK)).toBe(1e9);
   });
 
   it('falls back when the hash names no zoom at all', () => {
@@ -238,15 +271,14 @@ describe('initialZoomFromHash', () => {
     }
   });
 
-  it('treats zero and negatives as not a zoom rather than as clamp to MIN_ZOOM', () => {
+  it('treats zero and negatives as not a zoom rather than as an extreme one', () => {
     // The distinction worth keeping: 500 is a view this camera can approximate,
     // while 0 and -5 are not extreme views at all. They are a typo or a mangled
-    // link, and answering them with 0.1 would show a plausible frame and hide
-    // the mistake. `#zoom=` lands here too, because `Number('')` is 0 rather
-    // than NaN, which is the coercion hole this function exists to plug.
+    // link, and answering them with a plausible frame would hide the mistake.
+    // `#zoom=` lands here too, because `Number('')` is 0 rather than NaN,
+    // which is the coercion hole this function exists to plug.
     for (const hash of ['#zoom=0', '#zoom=-0', '#zoom=-5', '#zoom=-1e9']) {
       expect(initialZoomFromHash(hash, FALLBACK)).toBe(FALLBACK);
-      expect(initialZoomFromHash(hash, FALLBACK)).not.toBe(MIN_ZOOM);
     }
   });
 
@@ -269,12 +301,11 @@ describe('initialZoomFromHash', () => {
     expect(initialZoomFromHash('#zoom=+2', FALLBACK)).toBe(2);
   });
 
-  it('never returns a zoom Camera2D would throw on', () => {
+  it('never returns a zoom an unbounded Camera2D would throw on', () => {
     // The property the call site depends on, stated once over everything above:
-    // whatever the hash says, the result is a zoom the camera accepts. The
-    // fallback is returned as given rather than clamped, so this holds for a
-    // caller whose fallback is in range, which the zoom range suite pins for
-    // INITIAL_ZOOM.
+    // whatever the hash says, the result is a positive finite number, which is
+    // what a camera with its default unbounded range accepts at construction.
+    // The derived limits then clamp it at the first viewport measurement.
     const hashes = [
       '',
       '#',
@@ -291,8 +322,8 @@ describe('initialZoomFromHash', () => {
     ];
     for (const hash of hashes) {
       const zoom = initialZoomFromHash(hash, INITIAL_ZOOM);
-      expect(zoom).toBeGreaterThanOrEqual(MIN_ZOOM);
-      expect(zoom).toBeLessThanOrEqual(MAX_ZOOM);
+      expect(Number.isFinite(zoom)).toBe(true);
+      expect(zoom).toBeGreaterThan(0);
     }
   });
 });

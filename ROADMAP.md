@@ -3457,9 +3457,42 @@ consumer. Sequencing against M3 is the plan's open question 1.
   zero-room dungeons at tiny scales (rooms now floor at 8), a reward bias
   that was stated but not built, edges loaded into the demo graph without
   their kind, and duplicate React keys latent in the location card rows.
-- [ ] **P2** (`@dagr/render`, `apps/demo`) Content-derived zoom limits
-  (`fitBounds`, `setZoomLimits`) and keyboard zoom while the canvas has
-  focus.
+- [x] **P2** (`@dagr/render`, `apps/demo`) Content-derived zoom limits and
+  keyboard zoom while the canvas has focus.
+  `Camera2D` gains `setZoomLimits` and `fitBounds`, and the constructor's
+  "range is fixed at construction" rule is repealed with its own argument
+  addressed: the drift hazard was limits changing between the read and the
+  write of one anchored zoom, and `setZoomLimits` is called from resize
+  handling, which no wheel event interleaves with on a single thread, while
+  `zoomAtScreen` still clamps first and derives the centre from the clamped
+  zoom. `fitBounds` takes padding as the viewport fraction left empty per
+  side, capped at 0.45, and rejects zero-area bounds rather than fitting a
+  point at infinite zoom.
+  The demo derives its range in `zoomLimits`: the floor is the whole scene
+  fitted at 5% padding, the ceiling is the SMALLEST node filling the
+  viewport's short side. Smallest rather than median, because a scene like
+  the ladder spans decades of node size and a median-derived ceiling strands
+  the small nodes below readable size. Both ends are viewport statements, so
+  the range rebinds on every resize, the readout hint prints the live values,
+  and a test pins `zoomLimits` against `fitBounds` so the "0" key and the
+  zoom-out floor cannot drift apart.
+  The keyboard, with focus as the mode switch: the canvas is focusable, and
+  while focused ArrowUp/Down (and +/-) zoom one wheel detent per press so key
+  and wheel share one speed, PageUp/Down take three detents, Left/Right pan,
+  Shift+Up/Down pan vertically, 0 and Home fit the scene, Escape blurs, and
+  a visible focus ring marks the mode because an invisible mode is a mode
+  nobody knows they are in. `preventDefault` fires only for claimed keys, so
+  Tab and unclaimed keys keep their page meaning; unfocused, every key does.
+  RETIRED: the fixed 0.1 to 100 range and `initialZoomFromHash`'s clamp. The
+  100x crispness reference stays reachable (the derived ceiling is 149.5 on
+  the reference canvas); the 0.1x reference is deliberately below the new
+  floor, because a floor at the fitted scene is exactly the "too far out"
+  state the maintainer asked the range to prevent. That frame remains
+  reproducible from the M4.2 commit, and the sub-pixel fade it documented is
+  recorded in the M4.2 entry above; no future scene needs to re-demonstrate
+  it. The hash parser now returns out-of-range values as parsed, and the
+  camera clamps them when the derived limits land at the first viewport
+  measurement.
 - [ ] **P6** (`apps/demo`) Campaign cards through `createRichNodes` with
   per-kind declared sizes. P3 to P5 are M4.3 to M4.5 and live in M4.
 - [ ] **P7** (`apps/demo`, `docs`) Deep links, hover highlight, committed

@@ -541,3 +541,97 @@ describe('Camera2D defaults', () => {
     expect(camera.zoom).toBe(1e9);
   });
 });
+
+describe('Camera2D.setZoomLimits', () => {
+  it('rebinds the range and reports it through the getters', () => {
+    const camera = new Camera2D({ minZoom: 0.1, maxZoom: 100 });
+    camera.setZoomLimits(0.5, 4);
+    expect(camera.minZoom).toBe(0.5);
+    expect(camera.maxZoom).toBe(4);
+  });
+
+  it('clamps the current zoom into the new range, from either side', () => {
+    const wide = new Camera2D({ zoom: 50 });
+    wide.setZoomLimits(0.5, 4);
+    expect(wide.zoom).toBe(4);
+    const narrow = new Camera2D({ zoom: 0.01 });
+    narrow.setZoomLimits(0.5, 4);
+    expect(narrow.zoom).toBe(0.5);
+  });
+
+  it('binds later gestures: an anchored zoom clamps at the rebound limit', () => {
+    const camera = new Camera2D({ zoom: 2 });
+    camera.setZoomLimits(1, 3);
+    camera.zoomAtScreen({ x: 10, y: 10 }, 1e6);
+    expect(camera.zoom).toBe(3);
+  });
+
+  it('rejects a range no zoom can satisfy', () => {
+    const camera = new Camera2D();
+    expect(() => camera.setZoomLimits(4, 0.5)).toThrow(RangeError);
+    expect(() => camera.setZoomLimits(0, 1)).toThrow(RangeError);
+    expect(() => camera.setZoomLimits(1, Number.NaN)).toThrow(RangeError);
+    // A rejected rebind leaves the old range in force rather than half of it.
+    expect(camera.minZoom).toBe(Number.MIN_VALUE);
+    expect(camera.maxZoom).toBe(Number.MAX_VALUE);
+  });
+});
+
+describe('Camera2D.fitBounds', () => {
+  const VIEWPORT = { width: 1000, height: 500, devicePixelRatio: 1 };
+
+  it('centres on the bounds and fits the limiting axis, width-limited', () => {
+    const camera = new Camera2D({ viewport: VIEWPORT });
+    camera.fitBounds({ minX: 0, minY: 0, maxX: 200, maxY: 10 }, 0);
+    expect(camera.center).toEqual({ x: 100, y: 5 });
+    // 1000 css over 200 units limits before 500 over 10 does.
+    expect(camera.zoom).toBe(5);
+  });
+
+  it('fits the limiting axis, height-limited', () => {
+    const camera = new Camera2D({ viewport: VIEWPORT });
+    camera.fitBounds({ minX: 0, minY: 0, maxX: 10, maxY: 200 }, 0);
+    expect(camera.zoom).toBe(2.5);
+  });
+
+  it('pads by leaving the stated fraction of the viewport empty on each side', () => {
+    const camera = new Camera2D({ viewport: VIEWPORT });
+    camera.fitBounds({ minX: 0, minY: 0, maxX: 200, maxY: 10 }, 0.05);
+    // 90% of the width-limited fit of 5.
+    expect(camera.zoom).toBeCloseTo(4.5, 12);
+    // The padded fit still shows the WHOLE bounds: the visible world is
+    // strictly wider than the content on both axes.
+    const world = camera.visibleWorldBounds();
+    expect(world.minX).toBeLessThan(0);
+    expect(world.maxX).toBeGreaterThan(200);
+    expect(world.minY).toBeLessThan(0);
+    expect(world.maxY).toBeGreaterThan(10);
+  });
+
+  it('clamps the fit into the camera range instead of escaping it', () => {
+    const camera = new Camera2D({ viewport: VIEWPORT, zoom: 7, minZoom: 6, maxZoom: 8 });
+    camera.fitBounds({ minX: 0, minY: 0, maxX: 200, maxY: 10 }, 0);
+    expect(camera.zoom).toBe(6);
+  });
+
+  it('rejects bounds spanning no area, and a padding past the cap', () => {
+    const camera = new Camera2D({ viewport: VIEWPORT });
+    expect(() => camera.fitBounds({ minX: 5, minY: 0, maxX: 5, maxY: 10 })).toThrow(RangeError);
+    expect(() => camera.fitBounds({ minX: 0, minY: 10, maxX: 5, maxY: 0 })).toThrow(RangeError);
+    expect(() =>
+      camera.fitBounds({ minX: 0, minY: 0, maxX: Number.NaN, maxY: 10 }),
+    ).toThrow(RangeError);
+    expect(() => camera.fitBounds({ minX: 0, minY: 0, maxX: 5, maxY: 10 }, 0.5)).toThrow(
+      RangeError,
+    );
+  });
+
+  it('round-trips with visibleWorldBounds at zero padding on the limiting axis', () => {
+    const camera = new Camera2D({ viewport: VIEWPORT });
+    const bounds = { minX: -70, minY: 20, maxX: 130, maxY: 30 };
+    camera.fitBounds(bounds, 0);
+    const world = camera.visibleWorldBounds();
+    expect(world.minX).toBeCloseTo(bounds.minX, 9);
+    expect(world.maxX).toBeCloseTo(bounds.maxX, 9);
+  });
+});

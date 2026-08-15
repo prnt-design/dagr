@@ -94,6 +94,16 @@ body {
   cursor: grabbing;
 }
 
+/* Focus is the keyboard's mode switch (focused, arrows zoom and pan), so it
+   has to be visible: an invisible mode is a mode nobody knows they are in.
+   focus-visible rather than focus, so a mouse click that focuses the canvas
+   for its own reasons does not paint a ring around a pointer gesture. Inset,
+   because the stage clips its corners with overflow: hidden. */
+.stage__canvas:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
 /*
  * The HTML overlay's labels.
  *

@@ -118,18 +118,29 @@ export class Camera2D {
   #center: Vec2;
   #zoom: number;
   #viewport: ViewportSize;
-  readonly #minZoom: number;
-  readonly #maxZoom: number;
+  #minZoom: number;
+  #maxZoom: number;
 
   /**
    * Builds a camera, rejecting anything that cannot describe one.
    *
-   * The zoom range is fixed at construction rather than settable later, because
-   * a range that moves under a live gesture is a source of exactly the drift
-   * {@link zoomAtScreen} works to avoid, and nothing in M4 needs it. The
-   * initial zoom has to lie inside the range: clamping it instead would mean a
-   * caller who asked for zoom 10 in a 0.5 to 4 camera silently gets 4, and the
-   * first they hear of it is the drawing being the wrong size.
+   * The zoom range was fixed at construction until the campaign demo's P2,
+   * on the argument that a range moving under a live gesture is a source of
+   * exactly the drift {@link zoomAtScreen} works to avoid. What P2 needs is
+   * content-derived limits, and the FIT zoom depends on the viewport, so a
+   * window resize has to be able to rebind the range: construction-time
+   * limits cannot follow it. {@link setZoomLimits} is that rebinding, and the
+   * drift argument survives it intact, because the hazard was never "limits
+   * that change" but limits that change BETWEEN the read and the write of one
+   * anchored zoom. `setZoomLimits` is called from resize handling, an event
+   * that no wheel event interleaves with on a single thread, and
+   * {@link zoomAtScreen} still clamps first and derives the centre from the
+   * clamped zoom, so a gesture arriving after a rebind anchors correctly
+   * under the new range.
+   *
+   * The initial zoom has to lie inside the range: clamping it instead would
+   * mean a caller who asked for zoom 10 in a 0.5 to 4 camera silently gets 4,
+   * and the first they hear of it is the drawing being the wrong size.
    */
   constructor(init: Camera2DInit = {}) {
     this.#minZoom = requirePositive(init.minZoom ?? Number.MIN_VALUE, 'minZoom');
@@ -193,6 +204,65 @@ export class Camera2D {
    */
   setZoom(zoom: number): void {
     this.#zoom = this.#clampZoom(requirePositive(zoom, 'zoom'));
+  }
+
+  /**
+   * Rebinds the zoom range, clamping the current zoom into it.
+   *
+   * Clamping rather than throwing, on {@link setZoom}'s reasoning: new limits
+   * arrive from a resize or from content changing underneath a camera that is
+   * already somewhere, and the useful behavior is to bring it along, not to
+   * make the caller order a read-modify-write correctly on every resize. What
+   * is still rejected is a range that cannot hold any zoom at all: a
+   * non-positive bound, a non-finite one, or a minimum above its maximum.
+   */
+  setZoomLimits(minZoom: number, maxZoom: number): void {
+    const min = requirePositive(minZoom, 'minZoom');
+    const max = requirePositive(maxZoom, 'maxZoom');
+    if (min > max) {
+      throw new RangeError(
+        `minZoom has to be at most maxZoom, got ${String(min)} and ${String(max)}`,
+      );
+    }
+    this.#minZoom = min;
+    this.#maxZoom = max;
+    this.#zoom = this.#clampZoom(this.#zoom);
+  }
+
+  /**
+   * Centres on `bounds` and adopts the zoom that fits them, padded, clamped
+   * into the camera's range.
+   *
+   * `padding` is the fraction of the viewport left empty on EACH side of the
+   * limiting axis, so 0.05 shows the bounds across 90% of that axis. It is
+   * capped at 0.45 because at 0.5 the content would occupy zero pixels and
+   * the implied zoom stops being a number a camera can hold.
+   *
+   * Degenerate bounds are rejected rather than defaulted: a zero or negative
+   * extent describes no region, and the zoom that "fits" it is an infinity.
+   * Callers fitting a single point should decide their own zoom and use
+   * {@link setCenter}, which is a decision this method cannot make for them.
+   */
+  fitBounds(bounds: WorldBounds, padding = 0.05): void {
+    requireFinite(bounds.minX, 'bounds.minX');
+    requireFinite(bounds.minY, 'bounds.minY');
+    requireFinite(bounds.maxX, 'bounds.maxX');
+    requireFinite(bounds.maxY, 'bounds.maxY');
+    requireFinite(padding, 'padding');
+    if (padding < 0 || padding > 0.45) {
+      throw new RangeError(`padding has to lie in [0, 0.45], got ${String(padding)}`);
+    }
+    const width = bounds.maxX - bounds.minX;
+    const height = bounds.maxY - bounds.minY;
+    if (width <= 0 || height <= 0) {
+      throw new RangeError(
+        `bounds have to span a positive area, got ${String(width)} by ${String(height)}`,
+      );
+    }
+    const fit =
+      (1 - 2 * padding) * Math.min(this.#viewport.width / width, this.#viewport.height / height);
+    this.#zoom = this.#clampZoom(fit);
+    this.#center = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
   }
 
   /**

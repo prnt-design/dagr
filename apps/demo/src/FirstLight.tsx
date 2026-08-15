@@ -3,14 +3,21 @@ import type { JSX } from 'react';
 import { Camera2D, createHtmlOverlay, createRenderer, createRichNodes } from '@dagr/render';
 import type { RichNodeTier, Renderer, Vec2, ViewportSize, WorldBounds } from '@dagr/render';
 import {
+  FIT_PADDING,
   INITIAL_ZOOM,
-  MAX_ZOOM,
-  MIN_ZOOM,
   canvasPoint,
   initialZoomFromHash,
+  keyCommand,
   wheelZoomFactor,
+  zoomLimits,
 } from './camera-input.js';
-import { CARD_MIN_SCREEN_WIDTH, LABEL_MIN_SCREEN_WIDTH, LADDER_SHAPES } from './ladder.js';
+import {
+  CARD_MIN_SCREEN_WIDTH,
+  LABEL_MIN_SCREEN_WIDTH,
+  LADDER_BOUNDS,
+  LADDER_SHAPES,
+  LADDER_SMALLEST_EXTENT,
+} from './ladder.js';
 import type { LadderShape } from './ladder.js';
 
 /**
@@ -62,6 +69,9 @@ interface CameraReadout {
   readonly viewport: ViewportSize;
   /** How many overlay elements the last sync left attached, across all tiers. */
   readonly labels: number;
+  /** The derived zoom range, which moves with the viewport: see the hint. */
+  readonly minZoom: number;
+  readonly maxZoom: number;
 }
 
 /**
@@ -248,10 +258,14 @@ export function FirstLight(): JSX.Element {
     // instant a user zooms, and a listener re-applying it would yank the camera
     // back out from under the gesture. So the hash is an entry point, not a
     // binding, and it is spelled that way in the overlay's hint.
+    //
+    // No limits at construction: the demo's range is derived from the scene
+    // and the viewport, and the viewport has not been measured yet. The first
+    // `applyViewport` below binds the real range and clamps whatever the hash
+    // asked for into it, so an out-of-range `#zoom=` is corrected before
+    // anything beyond one frame can be drawn at it.
     const camera = new Camera2D({
       zoom: initialZoomFromHash(window.location.hash, INITIAL_ZOOM),
-      minZoom: MIN_ZOOM,
-      maxZoom: MAX_ZOOM,
     });
 
     /**
@@ -300,6 +314,8 @@ export function FirstLight(): JSX.Element {
         world: camera.visibleWorldBounds(),
         viewport: camera.viewport,
         labels: overlay.activeCount,
+        minZoom: camera.minZoom,
+        maxZoom: camera.maxZoom,
       });
     };
 
@@ -362,6 +378,13 @@ export function FirstLight(): JSX.Element {
       // the size lands whether or not there is anything to draw with yet, and
       // the first frame is right the moment there is.
       camera.setViewport(viewport);
+      // The zoom range follows the viewport, because both of its ends are
+      // statements about the viewport: "the whole scene in frame with
+      // padding" and "the smallest shape filling the short side". This is the
+      // call that clamps an out-of-range `#zoom=` on the first measurement,
+      // and on every resize after it the camera is carried along.
+      const limits = zoomLimits(LADDER_BOUNDS, LADDER_SMALLEST_EXTENT, viewport);
+      camera.setZoomLimits(limits.minZoom, limits.maxZoom);
       requestDraw();
     };
 
@@ -442,11 +465,48 @@ export function FirstLight(): JSX.Element {
       requestDraw();
     };
 
+    /**
+     * The keyboard, while the canvas has focus. Attached to the CANVAS, which
+     * is what scopes it: `keydown` only fires here while the canvas is the
+     * focused element (it is focusable via `tabIndex` in the JSX below), so an
+     * unfocused canvas leaves every key, including the scrolling ones, to the
+     * page. That is the whole feature: focus is the mode switch, and there is
+     * no global listener to fight the rest of the page over arrows.
+     *
+     * `preventDefault` only for keys the map claims, so Tab still leaves and
+     * unclaimed keys still scroll. Escape blurs, which is the way back out
+     * that keyboard users are owed, and is deliberately not in `keyCommand`:
+     * it is about focus, which is this component's business, not the camera's.
+     */
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        canvas.blur();
+        return;
+      }
+      const command = keyCommand(event.key, event.shiftKey);
+      if (command === null) return;
+      event.preventDefault();
+      if (command.kind === 'zoom') {
+        // Anchored at the viewport centre: a keyboard zoom has no cursor, and
+        // the centre is the one point a reader can predict.
+        camera.zoomAtScreen(
+          { x: camera.viewport.width / 2, y: camera.viewport.height / 2 },
+          command.factor,
+        );
+      } else if (command.kind === 'pan') {
+        camera.panByScreen(command.dx, command.dy);
+      } else {
+        camera.fitBounds(LADDER_BOUNDS, FIT_PADDING);
+      }
+      requestDraw();
+    };
+
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
     canvas.addEventListener('pointercancel', onPointerUp);
     canvas.addEventListener('wheel', onWheel, { passive: false });
+    canvas.addEventListener('keydown', onKeyDown);
 
     const ready = teardownRef.current
       .then(async () => {
@@ -486,6 +546,7 @@ export function FirstLight(): JSX.Element {
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
       canvas.removeEventListener('wheel', onWheel);
+      canvas.removeEventListener('keydown', onKeyDown);
       // The next mount waits on this, so it has to cover both orders: a
       // renderer already installed is disposed here, and one still in flight is
       // disposed inside `ready` before this runs. Either way the promise
@@ -500,7 +561,17 @@ export function FirstLight(): JSX.Element {
 
   return (
     <div className="stage" ref={containerRef}>
-      <canvas className="stage__canvas" ref={canvasRef} />
+      {/*
+        Focusable, because focus is the keyboard's mode switch: focused, the
+        scrolling keys zoom and pan the scene; unfocused, they belong to the
+        page. A click focuses it natively, Tab reaches it, Escape leaves.
+      */}
+      <canvas
+        className="stage__canvas"
+        ref={canvasRef}
+        tabIndex={0}
+        aria-label="Graph viewport. Arrow keys zoom and pan, 0 fits the scene, Escape leaves."
+      />
       {failure === null ? (
         <Overlay readout={readout} />
       ) : (
@@ -541,7 +612,7 @@ function Overlay({ readout }: { readout: CameraReadout | null }): JSX.Element {
     );
   }
 
-  const { zoom, center, world, viewport, labels } = readout;
+  const { zoom, center, world, viewport, labels, minZoom, maxZoom } = readout;
   return (
     <div className="stage__readout">
       <p className="stage__readout-row">
@@ -576,14 +647,16 @@ function Overlay({ readout }: { readout: CameraReadout | null }): JSX.Element {
         {labels} of {LADDER_SHAPES.length} in DOM
       </p>
       {/*
-        The limits and the example are interpolated from the constants rather
-        than typed out, because a hint that disagrees with the camera is worse
-        than no hint: this is the only place a user is told what `#zoom=` does,
-        and the range moved once already.
+        The limits are read off the camera rather than typed out, because a
+        hint that disagrees with the camera is worse than no hint, and these
+        limits are derived from the scene and the viewport: they genuinely
+        move when the window does.
       */}
       <p className="stage__readout-hint">
-        drag to pan, scroll to zoom ({MIN_ZOOM} to {MAX_ZOOM}), or load #zoom=
-        {MAX_ZOOM}
+        drag to pan, scroll to zoom ({fixed(minZoom, 2)} to {fixed(maxZoom, 1)}), or load #zoom=
+      </p>
+      <p className="stage__readout-hint">
+        click the canvas, then arrows zoom and pan, 0 fits, Escape leaves
       </p>
     </div>
   );

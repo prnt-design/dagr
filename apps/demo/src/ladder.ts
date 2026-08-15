@@ -107,6 +107,34 @@ export const LADDER_SHAPES: readonly LadderShape[] = [
 ];
 
 /**
+ * The union of every shape's bounds: what "the whole scene" means to the
+ * camera's derived zoom limits and to the fit key. Computed from
+ * {@link LADDER_SHAPES} rather than typed out, so it cannot drift from the
+ * shapes the way a copied number could.
+ */
+export const LADDER_BOUNDS: WorldBounds = LADDER_SHAPES.reduce(
+  (acc, shape) => ({
+    minX: Math.min(acc.minX, shape.bounds.minX),
+    minY: Math.min(acc.minY, shape.bounds.minY),
+    maxX: Math.max(acc.maxX, shape.bounds.maxX),
+    maxY: Math.max(acc.maxY, shape.bounds.maxY),
+  }),
+  { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity },
+);
+
+/**
+ * The smallest extent any shape has on either axis, in world units: the "one
+ * node" the zoom-in limit lets fill the viewport's short side. 4 today (the
+ * small rect's height and the small circle's diameter), but computed, for the
+ * same drift reason as {@link LADDER_BOUNDS}.
+ */
+export const LADDER_SMALLEST_EXTENT = LADDER_SHAPES.reduce(
+  (acc, shape) =>
+    Math.min(acc, shape.bounds.maxX - shape.bounds.minX, shape.bounds.maxY - shape.bounds.minY),
+  Infinity,
+);
+
+/**
  * The three tiers, in CSS pixels of screen width, from the campaign demo plan.
  *
  * Below {@link LABEL_MIN_SCREEN_WIDTH} a shape gets NO overlay element at all,
