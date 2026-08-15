@@ -3862,6 +3862,18 @@ consumer. Sequencing against M3 is the plan's open question 1.
   number to work around rather than choose.
 - [ ] **P7** (`apps/demo`, `docs`) Deep links, hover highlight, committed
   screenshots, a docs page on the schema.
+  The docs page landed early, on 2026-08-15, as its own increment
+  (`docs/docs/campaign.md`): it depends on P1 alone, and the rest of P7 depends
+  on P5 and P6, so holding it back would have parked a finished page behind two
+  unrelated merges. It documents the 16 node kinds and 23 edge kinds with the
+  routed/overlay split and the argument for it, where the schema came from,
+  the generator's determinism and its measured scale (3,010 nodes and 7,100
+  edges at the default seed, 1.1 MB of JSON against 60 KB of source), and the
+  invariants the suite enforces. Every count in it is measured off the default
+  seed rather than copied from the plan's projections, which is how the page
+  says 16 node kinds where the plan's own schema section still says 15 above a
+  list of 16, and why its per-group edge counts are the built ones rather than
+  the research proposal's estimate the P1 entry above already disowns.
 - [x] **P8** (`render.yaml`) The demo on a public URL: a second static site,
   `dagr-demo`, building `apps/demo` from the repo root and publishing
   `apps/demo/dist`.
@@ -3906,19 +3918,6 @@ consumer. Sequencing against M3 is the plan's open question 1.
   would have matched NOTHING here and the 1.1 MB bundle would have lost its
   immutable caching with nothing failing to say so. Two reviewers found it
   independently.
-
-  The docs page landed early, on 2026-08-15, as its own increment
-  (`docs/docs/campaign.md`): it depends on P1 alone, and the rest of P7 depends
-  on P5 and P6, so holding it back would have parked a finished page behind two
-  unrelated merges. It documents the 16 node kinds and 23 edge kinds with the
-  routed/overlay split and the argument for it, where the schema came from,
-  the generator's determinism and its measured scale (3,010 nodes and 7,100
-  edges at the default seed, 1.1 MB of JSON against 60 KB of source), and the
-  invariants the suite enforces. Every count in it is measured off the default
-  seed rather than copied from the plan's projections, which is how the page
-  says 16 node kinds where the plan's own schema section still says 15 above a
-  list of 16, and why its per-group edge counts are the built ones rather than
-  the research proposal's estimate the P1 entry above already disowns.
 
 ## Tracked, not promised
 

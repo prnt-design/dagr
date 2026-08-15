@@ -9,12 +9,13 @@ pnpm --filter demo dev     # http://localhost:5173
 pnpm --filter demo build   # apps/demo/dist
 ```
 
-Once the service exists, `main` deploys to `dagr-demo` on its own
-`onrender.com` subdomain when CI is green, from the `render.yaml` at the repo
-root. Creating a service from a blueprint prompts in Render's dashboard, so
-until a maintainer answers that there is no URL and nothing here links to one. The docs site is the published one at
-dagr.prnt.design; this is a working artifact, and a subdomain of prnt.design is
-a promise about permanence a playground should not make.
+The service does not exist yet, so nothing here links to a URL. Once it does,
+`main` deploys to `dagr-demo` on its own `onrender.com` subdomain when CI is
+green, from the `render.yaml` at the repo root.
+
+The docs site is the published one at dagr.prnt.design; this is a working
+artifact, and a subdomain of prnt.design is a promise about permanence a
+playground should not make.
 
 ## Adding a workspace dependency is TWO edits
 
@@ -54,11 +55,11 @@ The tiling is the plan's decision and `tiles.ts` carries the argument: one
 Sugiyama pass over the whole campaign ranks 750 rooms into a couple of layers
 and draws a ribbon 50 times wider than it is tall.
 
-`campaign-style.ts` has THREE readers, which is why it is its own file. Layout is
-told the size the renderer draws, and the overlay places a card against the same
-box. A node laid out at one size and drawn at another overlaps its neighbours in
-a picture whose layout says it does not, and no test of either half alone can
-see it.
+`campaign-style.ts` has THREE readers, which is why it is its own file. Layout
+is told the size the renderer draws, and the overlay places a card against the
+same box. A node laid out at one size and drawn at another overlaps its
+neighbours in a picture whose layout says it does not, and no test of either
+half alone can see it.
 
 ## The y flip
 
