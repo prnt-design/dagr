@@ -2861,7 +2861,7 @@ of M3 would leave the second runner idle for a milestone.
   `apps/demo` grew a `#zoom=` URL hash for exactly one reason: the committed
   references are then reproducible by opening a link rather than by landing on
   100x with a trackpad.
-- [ ] **M4.3** (`@dagr/render`) Instanced rendering: one instanced mesh per
+- [x] **M4.3** (`@dagr/render`) Instanced rendering: one instanced mesh per
   shape family, with the instance buffer allocation, growth and compaction
   bookkeeping split out as a pure module that knows nothing about a GPU.
   Exhaustive unit tests on that module (allocate, free, reuse, grow, compact,
@@ -2893,6 +2893,106 @@ of M3 would leave the second runner idle for a milestone.
   and whatever M6's VDSL asks for), so the draw-call argument is weaker than it
   looks. Record the choice as provisional and revisit it at M4.10, which is the
   first point with the fill rate and instance count to judge it.
+  DECIDED, PROVISIONALLY, AND THE GATE IS M4.10: ONE MATERIAL PER SHAPE FAMILY.
+  The uber-material's cost is per FRAGMENT and the per-family cost is per DRAW
+  CALL, and a graph at readable zoom is mostly fill, so a shape id branch is
+  evaluated for every pixel every instance covers to save one call. The family
+  count is small and known, so the union of uniforms an uber-material pays for
+  grows at the same rate as the calls it saves. What makes the reversal cheap is
+  M4.2's own decision: the distance functions are composable nodes with no
+  opinion about material assembly, so reversing this rewires
+  `createInstancedMaterial` and touches no formula. The measurement to take at
+  M4.10 is draw-call overhead against per-fragment branch cost at 10k instances.
+  THE SPLIT IS THREE MODULES AND TWO OF THEM ARE PURE. `instance-buffer.ts` is
+  handles, slots and capacity; `instance-attributes.ts` is what a slot contains,
+  as floats, including the arrays; `instanced-scene.ts` is the only one that
+  imports three. A `Float32Array` is not a GPU resource, which is the line that
+  put the attribute assembly on the tested side: the two pure modules carry 52
+  tests deciding the packing, the slot moves and the reallocation, and the
+  untested residue is a node graph.
+  WHAT IS PER INSTANCE AND WHAT IS A UNIFORM, because the split is the design.
+  Per instance: centre, size, corner radius, glow REACH, fill colour, glow
+  colour, which is 12 floats and 48 bytes (the campaign's 3,010 nodes are 144
+  KB). Uniform: outline colour, outline width in device pixels, glow ALPHA. The
+  glow's reach is per instance and its alpha is not, which reads as inconsistent
+  until the quad is considered: reach sizes the padded quad, so a shared reach
+  clips a large shape's halo or wastes fill rate on a small one, and the ladder
+  proves it with reaches of 1, 10 and 100 world units in ONE family.
+  A COLOUR REACHING A SHADER AS AN ATTRIBUTE IS CONVERTED BY NOTHING. As a
+  uniform it goes through three's `Color`, which does sRGB to linear on the way;
+  an attribute is whatever floats are in the buffer. So `linearFromHex` does it
+  on the way in, spelled the way `ColorManagement.js` spells it, and the test
+  asserts agreement against a real `Color` rather than against a second copy of
+  the formula. Skipping it does not throw and does not look broken: every colour
+  comes out lighter and flatter, which a reviewer attributes to their monitor.
+  THE LADDER NOW DRAWS THROUGH THIS PATH, which is deliberate and is the whole of
+  the visual evidence. Six shapes in two calls, same places, same colours, so
+  M4.2's committed references are a regression test for the per-instance path and
+  a factor of two anywhere in the quad scaling is visible at a glance. Verified
+  at 1x and 100x through the headless WebGL2 (swiftshader) path this box has,
+  which is what the M4.12 captures came through; the 100x frame is the one that
+  exercises the varying, since the antialiasing width is the gradient of an
+  INTERPOLATED position and a gradient taken in unit-quad space would make every
+  outline a fraction of its shape instead of two device pixels.
+  GROWTH REBUILDS THE GEOMETRY RATHER THAN SWAPPING ATTRIBUTES. three keys a GPU
+  buffer to the attribute object that owns it, so replacing an attribute leaves
+  the old buffer alive with nothing referencing it, where `geometry.dispose()`
+  destroys every buffer it holds. That is also why the renderer's dispose list
+  holds the `InstancedShapes` OBJECT and not its geometry: a geometry captured at
+  construction is the stale one by the time anything disposes it. Capacity
+  doubles on growth and halves at a quarter full, and the gap is hysteresis: a
+  shrink at a half would make one add-remove pair at the boundary reallocate
+  twice per pair, forever.
+  `frustumCulled` IS OFF AND THAT IS NOT AN OPTIMISATION BEING DECLINED. The
+  geometry is a unit quad at the origin, so its bounding sphere describes a shape
+  1.4 world units across at (0, 0) and three would cull the entire mesh, every
+  instance of it, the moment the origin left the frustum. Culling worth having is
+  per instance and belongs to M4.10, where there is a frame time to measure it
+  against.
+  Nothing is exported but the two ERRORS. `UnknownInstanceHandleError` and
+  `InstancedShapesDisposedError` reach `index.ts` because an error arrives in
+  somebody else's `catch` whether or not the module that throws it was exported,
+  and one that arrives as a bare `Error` gets there with no `code` and failing
+  `instanceof DagrRenderError`; the instance API stays internal because M4.4 owns
+  the seam a caller feeds a graph through, and naming a handle API before there
+  is anything to name with it is a guess something comes to depend on.
+  A pre-PR review (four personas plus a general pass) found TWO live bugs, each
+  reproduced by more than one reviewer, and both are the shape this entry warns
+  about rather than typos. `add` ALLOCATED BEFORE IT VALIDATED, so a rejected
+  instance left a live handle over a slot nothing had written: `count` and
+  `instanceCount` came apart, the phantom slot drew whatever floats were in it,
+  and the next successful add resurrected a REMOVED shape at its old position. A
+  caller that catches the `RangeError`, which is exactly what M4.4 applying a
+  delta does, saw no error at all. And `compact` LEFT THE CAPACITY OFF THE
+  DOUBLING CHAIN, so a later halving produced a fractional capacity that passed
+  every comparison and that `new Float32Array(n * components)` truncated PER
+  CHANNEL, leaving a 1-component channel a slot shorter than a 2-component one
+  with the writes that fell off it discarded in silence. Both are fixed with the
+  tests that were missing: nothing had freed or allocated AFTER a compaction, and
+  no test paired the bookkeeping with the data under churn. There is now a
+  400-step model check over `InstancedShapes` asserting every live handle's own
+  floats after every step, which is the test that would have caught both.
+  Four smaller findings taken in the same pass: the styles record is PARTIAL, so
+  a caller drawing only boxes no longer fabricates a circle style nothing reads;
+  `InstancedShapes<F>` is generic over its family, so a circle handed to a rect
+  mesh is a compile error and the runtime check is left for the data-driven
+  caller M4.4 brings; the instance writes reach the GPU as ONE MERGED UPDATE
+  RANGE per channel per frame rather than a whole-buffer upload, which is the
+  item that was most in M4.10's way; and `remove`'s docstring now states that BLEND ORDER WITHIN A FAMILY IS SLOT
+  ORDER, so removing an unrelated node can flip which of two overlapping nodes
+  reads as in front. M4.5 gets its layering from separate meshes in a chosen
+  order, never from slot order within one.
+  THE RANGE FIX TOOK TWO ROUNDS AND THE FIRST ONE WAS WORSE THAN NO RANGES, which
+  is worth recording because it is not obvious from three's API. `addUpdateRange`
+  pushes a fresh record per call and NEITHER BACKEND MERGES THEM, and each range
+  is a `writeBuffer`, so a range per write turned a 10k-node spring pass into 60k
+  range objects and 60k device writes per frame in place of the six whole-buffer
+  uploads it was meant to replace. Two reviewers measured it independently (2,000
+  ranges after 1,000 adds and 1,000 sets). What works is two integers: the span of
+  slots written since the last frame, flushed to one range per channel from
+  `mesh.onBeforeRender`, which three calls at the top of `renderObject` before it
+  touches the geometry. A span rather than a set, so scattered writes degrade to
+  the whole-buffer upload and never to something worse.
 - [ ] **M4.4** (`@dagr/render`, `apps/demo`) A real graph on screen: take a
   `LayoutResult` from `@dagr/layout` and draw its nodes, sized and positioned,
   with a node-id to instance-handle mapping that survives nodes being added and

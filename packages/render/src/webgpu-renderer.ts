@@ -296,10 +296,11 @@ export class WebGPUSceneRenderer implements Renderer {
    * Every resource in the list, then the renderer, in that order: three's
    * `WebGPURenderer.dispose` tears down the device, and freeing a buffer through a
    * device that has already gone is at best a no-op and at worst a driver
-   * complaint. The list is a scene's worth of geometries and materials rather
-   * than the one pair M4.1 had, and it grew with the scene: M4.2 draws six shapes
-   * and therefore owns twelve resources, so a loop is the difference between one
-   * leak per mount and none.
+   * complaint. The list is a scene's worth of resources rather than the one pair
+   * M4.1 had, and what is in it changed at M4.3: one `InstancedShapes` per shape
+   * family, each of which frees its current geometry and its material, rather
+   * than two entries per shape. A loop is still the difference between one leak
+   * per mount and none.
    */
   dispose(): void {
     if (this.#disposed) return;
@@ -415,7 +416,7 @@ export class WebGPUSceneRenderer implements Renderer {
  * function takes the sink as a {@link FrameSink}, so `test/webgpu-renderer.test.ts`
  * builds the whole scene over a counting stub, with no device, and asserts both
  * that the failure path disposes exactly once and that the success path wires up
- * twelve resources and a filled-in frustum. `Scene`, `Color` and
+ * one resource per shape family and a filled-in frustum. `Scene`, `Color` and
  * `OrthographicCamera` are real three objects here: none of the three needs an
  * adapter, and the meshes are already built device-free (see
  * `test/shape-scene.test.ts`).
@@ -437,10 +438,15 @@ export function buildSceneRenderer(
     const scene = new Scene();
     scene.background = new Color(clearColor);
 
-    const { meshes, resources } = createShapeMeshes(descriptors);
-    for (const mesh of meshes) {
-      scene.add(mesh);
+    // One entry per FAMILY now, not one per shape, and each entry is both the
+    // mesh to add and the resource to give back: an `InstancedShapes` replaces
+    // its own geometry when its buffer grows, so a geometry captured here would
+    // be the stale one by the time anything disposed it.
+    const shapes = createShapeMeshes(descriptors);
+    for (const family of shapes) {
+      scene.add(family.mesh);
     }
+    const resources: readonly GpuResource[] = shapes;
 
     const threeCamera = new OrthographicCamera(0, 0, 0, 0, CAMERA_NEAR, CAMERA_FAR);
     const instance = new WebGPUSceneRenderer(camera, renderer, scene, threeCamera, resources);

@@ -1,14 +1,13 @@
-import { color, float, positionLocal, vec2 } from 'three/tsl';
-import { Mesh, MeshBasicNodeMaterial, PlaneGeometry } from 'three/webgpu';
-import {
-  requireCircleRadius,
-  requireCornerRadius,
-  requireShapeStyle,
-  shapeQuadSize,
-} from './sdf.js';
+import { createInstancedShapes } from './instanced-scene.js';
+import type { InstancedShapes } from './instanced-scene.js';
+import type {
+  InstancedFamilyStyle,
+  ShapeFamily,
+  ShapeInstance,
+} from './instance-attributes.js';
+import { requireShapeStyle, shapeQuadSize } from './sdf.js';
 import type { ShapeStyle } from './sdf.js';
-import { circleSDF, roundedRectSDF, shapeShading } from './sdf-nodes.js';
-import type { GpuResource, Size, Vec2, WorldBounds } from './types.js';
+import type { Size, Vec2, WorldBounds } from './types.js';
 
 /**
  * The scene M4.2 draws: a CRISPNESS LADDER of a rounded rect and a circle on each
@@ -34,6 +33,13 @@ import type { GpuResource, Size, Vec2, WorldBounds } from './types.js';
  * them overlap are all decidable in `test/shape-scene.test.ts` with no device;
  * whether the shader draws anything is not decidable anywhere in Node, so it is
  * kept in as few lines as possible and left to the orchestrator's screenshot.
+ *
+ * **M4.3 changed how it is drawn and not what is drawn.** The six shapes used to
+ * be six meshes and are now two instanced ones, a rounded rect family and a
+ * circle family, with everything that differs between rungs read per instance.
+ * The descriptors below are untouched, which is the point: the committed
+ * references are then evidence about the instanced path as well as about the
+ * shader. `instanced-scene.ts` holds the machinery and the material decision.
  *
  * Nothing here is exported from `index.ts`. The scene is a hard-coded
  * demonstration, and M4.4 owns feeding a real layout in; exporting it now would
@@ -299,167 +305,123 @@ export function shapeQuadBounds(descriptor: ShapeDescriptor): WorldBounds {
   };
 }
 
-/** The meshes to add to a scene, and every GPU resource they hold. */
-export interface ShapeSceneContents {
-  /**
-   * One mesh per descriptor, in descriptor order. Positioned in world space, so
-   * a caller adds them to a `Scene` and nothing else.
-   */
-  readonly meshes: readonly Mesh[];
-
-  /**
-   * Every geometry and every material the meshes hold, which is two per mesh.
-   * Handed back separately rather than left to be walked out of the scene graph,
-   * because `Mesh.material` is typed as one material or an array of them and a
-   * renderer disposing resources should not be doing type narrowing to find out
-   * what it owns. See `WebGPUSceneRenderer.dispose`.
-   */
-  readonly resources: readonly GpuResource[];
-}
-
 /**
- * Builds the mesh for one descriptor, and the two resources it owns.
+ * One descriptor's per-instance half: everything about it that varies from
+ * shape to shape within its family.
  *
- * ## Local space, and why the quad is bigger than the shape
- *
- * The SDF is evaluated at `positionLocal.xy`, the position within the mesh's OWN
- * geometry, which for a `PlaneGeometry` runs from minus half its size to plus
- * half on both axes. That is exactly the shape-centred space the distance
- * functions in `sdf.ts` are written in, so no transform is needed and no uniform
- * carries the shape's world position: moving the mesh moves the shape, and M4.4
- * can animate a position without touching a shader.
- *
- * The plane is `shapeQuadSize(...)` and NOT the shape's size. An unpadded quad
- * clips the glow entirely, since a halo lives outside the boundary by definition,
- * and it also clips the outer half of the fill's own antialiasing ramp, which
- * replaces a soft edge with a hard one along a rectangle that has nothing to do
- * with the shape. Both look like a driver bug and neither throws.
- *
- * ## Material
- *
- * `MeshBasicNodeMaterial`, because there is no lighting in a 2D graph and the
- * colour is computed per fragment anyway: a standard material would add a whole
- * BRDF to a shader whose output is `mix` of three constants.
- *
- * `transparent: true` because the glow, the antialiasing ramps and the region
- * outside the shape all need alpha blending; without it the quad is a hard
- * rectangle and the SDF is pointless.
- *
- * **`depthWrite: false`, deliberately.** three leaves `depthWrite` on when
- * `transparent` is set, and left on, a fragment with alpha 0 still writes depth,
- * so a transparent quad occludes anything drawn behind it afterwards. It makes no
- * visible difference to M4.2 (the ladder's quads are provably disjoint, so
- * nothing is behind anything), and it is exactly wrong for M4.5, which layers
- * edges behind nodes and selection in front on the same z = 0 plane. Turning it
- * off now means the layering decision M4.5 makes is about draw order, which it
- * controls, rather than about a flag set in a file it is not editing. The cost is
- * that coplanar overlapping transparent shapes then depend on draw order, which
- * is the normal state of affairs for transparent geometry and is what M4.5 has to
- * take on either way.
+ * The split is `instance-attributes.ts`'s and the argument is there. What this
+ * function does is apply it to a record that predates it: a {@link ShapeStyle}
+ * carries all six fields, three of which are now the family's, so the conversion
+ * drops those three here and {@link ladderFamilyStyle} picks them up.
  */
-function createShapeMesh(
-  descriptor: ShapeDescriptor,
-  style: ShapeStyle,
-): { mesh: Mesh; resources: GpuResource[] } {
-  const size = shapeSize(descriptor);
-  const p = positionLocal.xy;
-  const distance =
-    descriptor.kind === 'circle'
-      ? circleSDF(p, float(descriptor.radius))
-      : roundedRectSDF(p, vec2(size.width, size.height), float(descriptor.cornerRadius));
-
-  const shading = shapeShading({
-    distance,
-    position: p,
-    fillColor: color(style.fillColor),
-    outlineColor: color(style.outlineColor),
-    glowColor: color(style.glowColor),
-    glowAlpha: float(style.glowAlpha),
-    outlinePixels: float(style.outlinePixels),
-    glowWorld: float(style.glowWorld),
-  });
-
-  // Recorded rather than fixed, because fixing it is a restructuring and this is
-  // not the milestone for one: every style is validated TWICE per shape and a
-  // second validated copy is allocated. Once by `requireShapeDescriptor`, whose
-  // result is the `style` argument here, and again inside `shapeQuadSize`, which
-  // calls `quadPadding`, which validates because sizing a quad is the first thing
-  // any style is used for. Harmless at six shapes; at M4.4's node counts it is two
-  // validations and two allocations per node, and the fix (a `quadPadding` variant
-  // that trusts an already-validated style) is a second entry point whose whole
-  // job is to skip a check, which needs more thought than it needs here.
-  const quad = shapeQuadSize(size, style, `${descriptor.label}.style`);
-  const geometry = new PlaneGeometry(quad.width, quad.height);
-  const material = new MeshBasicNodeMaterial();
-  material.colorNode = shading.color;
-  material.opacityNode = shading.alpha;
-  material.transparent = true;
-  material.depthWrite = false;
-
-  const mesh = new Mesh(geometry, material);
-  mesh.position.set(descriptor.center.x, descriptor.center.y, 0);
-  return { mesh, resources: [geometry, material] };
-}
-
-/**
- * Rejects a descriptor that cannot be drawn, and returns its validated style.
- *
- * Both halves of a descriptor, named after the descriptor's own label, so the
- * message is `rect-100.cornerRadius` rather than `cornerRadius`. This is the
- * boundary the module docstring in `sdf.ts` describes: the last place a caller's
- * number is still a caller's number rather than a per-fragment expression.
- *
- * **One check per KIND, and not one check over `shapeSize`.** A circle goes through
- * `requireCircleRadius`, because it has a `radius` and no `size`: putting its radius
- * through the rect's check reported `circle-10.size.width has to be above zero, got
- * -2` for a caller who wrote `radius: -1`, which names a field a circle descriptor
- * does not have and quotes twice the number the caller typed. The union in
- * {@link ShapeDescriptor} is what makes the split cheap: after narrowing, each
- * branch validates exactly the fields its own kind carries.
- */
-function requireShapeDescriptor(descriptor: ShapeDescriptor): ShapeStyle {
+function instanceOf(descriptor: ShapeDescriptor): ShapeInstance {
   const style = requireShapeStyle(descriptor.style, `${descriptor.label}.style`);
   if (descriptor.kind === 'circle') {
-    requireCircleRadius(descriptor.radius, `${descriptor.label}.radius`);
-    return style;
+    return {
+      kind: 'circle',
+      label: descriptor.label,
+      center: descriptor.center,
+      radius: descriptor.radius,
+      fillColor: style.fillColor,
+      glowColor: style.glowColor,
+      glowWorld: style.glowWorld,
+    };
   }
-  requireCornerRadius(
-    descriptor.cornerRadius,
-    descriptor.size,
-    `${descriptor.label}.cornerRadius`,
-    `${descriptor.label}.size`,
-  );
-  return style;
+  return {
+    kind: 'roundedRect',
+    label: descriptor.label,
+    center: descriptor.center,
+    size: descriptor.size,
+    cornerRadius: descriptor.cornerRadius,
+    fillColor: style.fillColor,
+    glowColor: style.glowColor,
+    glowWorld: style.glowWorld,
+  };
 }
 
 /**
- * Builds the whole scene: one mesh per descriptor, plus the flat list of
- * resources to dispose.
+ * The family half of a set of descriptors' styles, and the check that they agree
+ * about it.
+ *
+ * One instanced mesh draws one family with ONE outline colour, ONE outline width
+ * and ONE glow alpha, because those three are uniforms (see
+ * `instanced-scene.ts`). A set of descriptors that disagrees about any of them
+ * cannot be drawn in one call, so it is rejected here rather than drawn with
+ * whichever descriptor happened to be first. The ladder agrees by construction:
+ * every rung's outline is the same deep blue at 2 device pixels and every glow
+ * is at 0.45, which is what {@link rungStyles} varies nothing about.
+ */
+function ladderFamilyStyle(
+  descriptors: readonly ShapeDescriptor[],
+  family: ShapeFamily,
+): InstancedFamilyStyle | undefined {
+  const members = descriptors.filter((descriptor) => descriptor.kind === family);
+  const first = members[0];
+  // Nothing rather than a fabricated default, because `createInstancedShapes`
+  // takes a PARTIAL record and builds no mesh for a family with no instances. A
+  // default here would be a style that is never validated and never read, and
+  // the first reader to find it would reasonably believe it was drawing
+  // something.
+  if (first === undefined) return undefined;
+  const style = requireShapeStyle(first.style, `${first.label}.style`);
+  for (const member of members) {
+    const other = requireShapeStyle(member.style, `${member.label}.style`);
+    for (const field of ['outlineColor', 'glowAlpha', 'outlinePixels'] as const) {
+      if (other[field] !== style[field]) {
+        throw new RangeError(
+          `${member.label}.style.${field} has to match the rest of the ${family} family (${String(style[field])} from ${first.label}), got ${String(other[field])}`,
+        );
+      }
+    }
+  }
+  return {
+    outlineColor: style.outlineColor,
+    glowAlpha: style.glowAlpha,
+    outlinePixels: style.outlinePixels,
+  };
+}
+
+/**
+ * Builds the scene: one instanced mesh per shape family present, each carrying
+ * every shape of that family as an instance.
+ *
+ * **Two meshes for six shapes, and the six are unchanged on screen.** M4.2 drew
+ * one `PlaneGeometry` and one material per descriptor, which is a draw call per
+ * shape and does not survive contact with a graph: the campaign demo's 3,010
+ * nodes would be 3,010 meshes and 6,020 GPU resources. M4.3 replaces that with a
+ * unit quad scaled per instance in the vertex stage, so the whole ladder is two
+ * draw calls and the position, size, corner radius, glow reach and colours all
+ * come out of per-instance attributes. See `instanced-scene.ts` for the material
+ * decision and for what is provable without a device.
+ *
+ * The picture is what makes that claim checkable: the ladder is the same six
+ * shapes in the same places, so M4.2's committed references at 0.1x, 1x and 100x
+ * are a regression test for the entire per-instance path. A factor of two
+ * anywhere in the quad scaling shows up as shapes at half or twice their size.
  *
  * Takes the descriptors rather than reading {@link CRISPNESS_LADDER} directly, so
  * a test can build one shape instead of six and so M4.4 has somewhere to put a
  * layout result.
  *
- * **Every descriptor is validated before any of them is constructed.** Validating
- * inside the build loop instead would leave three geometries and three materials
- * allocated with no owner when the fourth descriptor throws, and a caller that
- * never received a scene has nothing to dispose them with: the same guarantee
- * `createRenderer` makes about an aborted mount, applied here. The cost is one
- * extra pass over six records.
+ * **Every descriptor is validated before any mesh is built.** Validating inside
+ * the build loop instead would leave a geometry and a material allocated with no
+ * owner when a later descriptor throws, and a caller that never received a scene
+ * has nothing to dispose them with: the same guarantee `createRenderer` makes
+ * about an aborted mount. `createInstancedShapes` holds the second half of it,
+ * disposing the first family's mesh when the second family's data is bad.
  */
 export function createShapeMeshes(
   descriptors: readonly ShapeDescriptor[] = CRISPNESS_LADDER,
-): ShapeSceneContents {
-  const styles = descriptors.map((descriptor) => requireShapeDescriptor(descriptor));
-
-  const meshes: Mesh[] = [];
-  const resources: GpuResource[] = [];
-  descriptors.forEach((descriptor, index) => {
-    const style = styles[index];
-    if (style === undefined) throw new Error('unreachable: one style per descriptor');
-    const built = createShapeMesh(descriptor, style);
-    meshes.push(built.mesh);
-    resources.push(...built.resources);
-  });
-  return { meshes, resources };
+): readonly InstancedShapes[] {
+  const instances = descriptors.map((descriptor) => instanceOf(descriptor));
+  const styles: Partial<Record<ShapeFamily, InstancedFamilyStyle>> = {};
+  for (const family of ['roundedRect', 'circle'] as const) {
+    const style = ladderFamilyStyle(descriptors, family);
+    // Assigned only when there is one, rather than assigned `undefined`. The
+    // package compiles with `exactOptionalPropertyTypes`, so an explicit
+    // `undefined` is not the same thing as an absent key, and the distinction is
+    // the one this record is built to carry.
+    if (style !== undefined) styles[family] = style;
+  }
+  return createInstancedShapes(instances, styles, 'ladder');
 }

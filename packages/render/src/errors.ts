@@ -33,7 +33,12 @@
  * A union rather than an enum, so it is a value a `switch` narrows exhaustively
  * and nothing has to be imported to compare against it.
  */
-export type DagrRenderErrorCode = 'RENDERER_DISPOSED' | 'OVERLAY_PARENT' | 'OVERLAY_DISPOSED';
+export type DagrRenderErrorCode =
+  | 'RENDERER_DISPOSED'
+  | 'OVERLAY_PARENT'
+  | 'OVERLAY_DISPOSED'
+  | 'UNKNOWN_INSTANCE_HANDLE'
+  | 'INSTANCED_SHAPES_DISPOSED';
 
 /** The base every error this package throws extends. */
 export abstract class DagrRenderError extends Error {
@@ -126,5 +131,54 @@ export class OverlayDisposedError extends DagrRenderError {
     super(`cannot call ${method}() after dispose()`);
     this.name = 'OverlayDisposedError';
     Object.setPrototypeOf(this, OverlayDisposedError.prototype);
+  }
+}
+
+/**
+ * Thrown when an instance buffer is asked about a handle it does not hold.
+ *
+ * A class rather than a `RangeError`, on this file's own rule: nothing about the
+ * number is out of range, and the caller is almost never looking at the line
+ * that produced it. The cause is a handle that outlived the instance it named,
+ * which arrives from a graph delta removing a node while something else still
+ * holds its handle, or from a slot index stored where a handle belonged (see the
+ * invariant in `instance-buffer.ts`). Both are worth catching deliberately, and
+ * both are worth failing on rather than papering over: the alternative to a
+ * throw is a sentinel index that array arithmetic accepts, which writes one
+ * instance's data over another's and shows up as a shape in the wrong place
+ * several frames later.
+ */
+export class UnknownInstanceHandleError extends DagrRenderError {
+  readonly code = 'UNKNOWN_INSTANCE_HANDLE';
+
+  constructor(handle: number) {
+    super(`instance handle ${String(handle)} is not live: it was freed, or never allocated`);
+    this.name = 'UnknownInstanceHandleError';
+    Object.setPrototypeOf(this, UnknownInstanceHandleError.prototype);
+  }
+}
+
+/**
+ * Thrown when an instanced mesh is added to, changed or cleared after its
+ * `dispose()`.
+ *
+ * A class rather than the bare `Error` this started as, on the rule at the top
+ * of this file: a call after dispose is the lifecycle case that rule was
+ * written for, and a bare `Error` lands in a caller's `catch` with no `code` and
+ * failing `instanceof DagrRenderError`, which is the one thing this family
+ * exists to prevent.
+ *
+ * The message names the mesh as well as the method, on
+ * {@link OverlayDisposedError}'s terms: one class covering every object with
+ * this failure, because the failure, the cause and what a caller does about it
+ * are identical, and the label says which of a scene's meshes it was.
+ */
+export class InstancedShapesDisposedError extends DagrRenderError {
+  readonly code = 'INSTANCED_SHAPES_DISPOSED';
+
+  constructor(method: string, label: string) {
+    super(`cannot call ${method}() on the disposed ${label} mesh`);
+    this.name = 'InstancedShapesDisposedError';
+    Object.setPrototypeOf(this, InstancedShapesDisposedError.prototype);
   }
 }

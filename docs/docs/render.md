@@ -9,23 +9,25 @@ sidebar_position: 4
 `@dagr/render` draws a graph. It takes coordinates, not a `Graph`: whatever
 [`@dagr/layout`](./layout.md) works out goes on screen through a three.js
 `WebGPURenderer`, with an orthographic camera, springs carrying nodes between one
-layout and the next, and, from M4.3, one draw call per shape family. Today it is
-one per shape, which is six.
+layout and the next, and, as of M4.3, one draw call per shape family: the
+six-shape ladder draws in two.
 
-This page describes the package as of M4.12. Rounded rectangles and circles are
-on screen, drawn as signed distance fields, and there is an HTML overlay for the
-text a signed distance field cannot draw. What is real is the seam everything
-else plugs into: the `Renderer` interface, the camera, the distance fields and
-the shading that reads them, and the decisions that had to be made before a
-single test in this milestone could be written. They are argued below rather
-than left in a commit message, because each is the kind of choice that is cheap
-now and expensive in six tasks' time.
+This page describes the package as of M4.3, the last task to change what reaches
+a GPU. Rounded rectangles and circles are on screen, drawn as signed distance
+fields, and there is an HTML overlay for the text a signed distance field cannot
+draw. What is real is the seam everything else plugs into: the `Renderer`
+interface, the camera, the distance fields and the shading that reads them, and
+the decisions that had to be made before a single test in this milestone could
+be written. They are argued below rather than left in a commit message, because
+each is the kind of choice that is cheap now and expensive in six tasks' time.
 
 ## What is on screen
 
 `createRenderer` mounts a three.js `WebGPURenderer` on a canvas and draws six
 shapes: a rounded rectangle and a circle on each of three rungs a decade apart, on
-near-black. The rectangles are 10, 100 and 1000 world units across, and each
+near-black. As of M4.3 it draws them in TWO calls rather than six, one per shape
+family, with every shape's position, size, corner radius, glow reach and colours
+read per instance. The rectangles are 10, 100 and 1000 world units across, and each
 circle's diameter matches its rung's height, so the circles are 4, 40 and 400.
 Every one of them gets its fill, its inset outline and its glow out of a single
 distance, and antialiases its own edges from the screen-space derivative of that
@@ -163,12 +165,12 @@ holds to 1.4e-16 rather than exactly. The `max` returns `d` unrounded on the out
 side, so all three are exact and the footprint comparison needs no tolerance at
 all.
 
-A glow is a property of the shape. The quad has to be padded to contain the halo,
-and that padding is baked into the geometry when the mesh is built, so a
-pixel-space glow would need the quad resized every time the camera moved. That is
-a per-frame scene decision, and M4.4 owns it. A halo that stayed six pixels wide
-while its shape grew from one pixel to a thousand would also read as a different
-effect at each end of the range.
+A glow is a property of the shape. The quad has to be padded to contain the
+halo, and that padding sizes the quad in the vertex stage, from the instance's
+own glow reach, so a pixel-space glow would need the quad resized every time the
+camera moved. That is a per-frame scene decision, and M4.4 owns it. A halo that
+stayed six pixels wide while its shape grew from one pixel to a thousand would
+also read as a different effect at each end of the range.
 
 ### The antialiasing width is a gradient length, not `fwidth`
 
@@ -227,22 +229,27 @@ clean at zoom 0.1 and the two 4-unit-tall ones are not. What is clipped there is
 antialiasing of a shape already under a pixel across, which is why it is invisible
 in the frame, and a zoom-aware quad is M4.4's to add.
 
-### What this task deliberately did not decide
+### One material per family, provisionally
 
-Whether the package uses one material with a per-instance shape id or one
-material per shape family. That decision belongs to M4.3, which owns the
-per-instance attribute anyway, with an explicit revisit at M4.10. The deciding
-factor is per-fragment branch cost at ten thousand instances against real fill
-rate, and none of that can be measured while six shapes are on screen, so making
-the call here would be an irreversible choice at the point of minimum
-information.
+M4.2 left this open on purpose and named the deciding factor: per-fragment branch
+cost at ten thousand instances against real fill rate, which cannot be measured
+while six shapes are on screen. M4.3 owns the per-instance attribute, so it owns
+the assembly, and the call is one material per shape family rather than one
+uber-material with a per-instance shape id.
 
-What that means for the code is that the distance functions are composable nodes
-with no opinion about material assembly, and the shading node consumes a
-DISTANCE rather than a shape, so any field can go through it including one M4.5
-writes for an edge ribbon. Today's scene builds one material per shape because
-there is no instance attribute to carry a shape id yet. That is scene
-construction, not the architectural answer.
+The uber-material's cost is per FRAGMENT and the per-family cost is per DRAW
+CALL. A shape id branch is evaluated for every pixel every instance covers, and a
+graph at readable zoom is mostly fill; the draw call it saves is one call. The
+family count is small and known (a rounded rect, a circle, and whatever M6's VDSL
+asks for), so the union of uniforms an uber-material pays for grows at the same
+rate as the calls it saves.
+
+This is PROVISIONAL and the revisit gate is M4.10, which is the first point with
+the fill rate and the instance count to judge it. What makes it cheap to reverse
+is M4.2's own decision: the distance functions are composable nodes with no
+opinion about material assembly, and the shading node consumes a DISTANCE rather
+than a shape, so reversing this rewires one assembly function and touches no
+formula.
 
 `depthWrite` is off on these materials, which is worth stating because three
 leaves it on for transparent materials. Left on, a fragment with alpha 0 still
@@ -250,6 +257,41 @@ writes depth and a transparent quad occludes whatever is drawn behind it
 afterwards. It makes no visible difference today (the quads are provably
 disjoint) and it is exactly wrong for M4.5, which layers edges behind nodes and
 selection in front on the same plane.
+
+## Instancing, and the one invariant it imposes
+
+One mesh per shape family, each drawing every shape of that family in a single
+call. A unit quad is scaled in the vertex stage by the instance's own padded quad
+size, so one geometry serves shapes four world units across and shapes a thousand
+across, and the six-shape ladder is two draw calls instead of six.
+
+What is per instance is what a graph varies: the centre, the size, the corner
+radius, the glow's reach in world units, and two colours. What stays a uniform is
+what a design decides once for the whole drawing: the outline colour, the outline
+width in device pixels, and the glow's alpha. The glow's REACH is on the instance
+side and its ALPHA is not, which looks inconsistent until the quad is considered:
+reach sizes the padded quad, so a shared reach would either clip a large shape's
+halo or waste fill rate on a small one.
+
+A colour reaching a shader as a uniform is converted from sRGB by three's
+`Color`. A colour reaching it as a vertex attribute is converted by nothing, so
+the conversion happens on the way into the buffer instead. Skipping it does not
+throw and does not look broken: every colour comes out lighter and flatter.
+
+**Removing an instance is swap-with-last, so per-instance state is keyed by
+HANDLE and never by SLOT.** Freeing a slot moves the last live instance into it,
+which keeps live slots contiguous and keeps one draw call covering them with no
+holes and no per-slot liveness test. The cost is that a slot index is not durable
+across any removal, and the failure is silent: the slot stays a perfectly valid
+index, it merely belongs to a different instance now. Spring state (M4.6, M4.7)
+and picking IDs (M4.8) are keyed by handle for that reason, and a handle is never
+reused, so a handle held past its instance's removal raises
+`UnknownInstanceHandleError` rather than addressing whatever took its place.
+
+None of this is exported yet. M4.4 owns the seam a caller feeds a graph through,
+and an instance handle API named before there is anything to name with it is a
+guess that something comes to depend on. The error class is exported, because an
+error arrives in a caller's `catch` whether or not the module that throws it did.
 
 ## The camera
 
@@ -356,11 +398,16 @@ is none for a zoom of `NaN`.
 The rule for which error you get is meant to be applicable without judgement,
 so that the next task in this milestone does not have to re-run the argument:
 **an out-of-range value is a `RangeError` naming the field, and anything else
-this package throws gets a named class.** Today that means three, under an
+this package throws gets a named class.** Today that means five, under an
 abstract `DagrRenderError` that carries a `code` for a caller who would rather
 switch on a value than on a class: `RendererDisposedError` for use after a
-renderer's dispose, and `OverlayParentError` and `OverlayDisposedError` from the
-overlay. The split is not about counting failure kinds, it is about what a
+renderer's dispose, `OverlayParentError` and `OverlayDisposedError` from the
+overlay, and from the instanced path `UnknownInstanceHandleError` for a handle
+held past the removal of the instance it named, plus
+`InstancedShapesDisposedError` for a mesh used after its dispose. The last two
+are the whole of what instancing puts on the surface, and they are there because
+an error reaches a caller's `catch` whether or not the module that throws it was
+exported. The split is not about counting failure kinds, it is about what a
 caller can do: a bad number is on a line the caller can see and the field name
 is the best possible report of it, while use after dispose arrives
 from a lifecycle race in somebody else's framework and is the one a caller
@@ -1015,12 +1062,8 @@ are.
 
 ## What is not here yet
 
-Most of it. M4.2 is six shapes, drawn correctly, one draw call each.
+Most of it. M4.3 is six shapes, drawn correctly, one draw call per family.
 
-- Instancing, so ten thousand nodes are one draw call rather than ten thousand
-  (M4.3). This is also the task that chooses between one material with a
-  per-instance shape id and one material per family, which M4.2 left open on
-  purpose.
 - A real layout on screen, which is also where the y-up and y-down mismatch
   above gets resolved once, in one place (M4.4).
 - Edge ribbons for polylines and beziers (M4.5).

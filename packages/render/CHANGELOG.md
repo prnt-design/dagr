@@ -14,6 +14,44 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- Instanced rendering: one mesh per shape family, with position, size, corner
+  radius, glow reach and two colours read per instance. (M4.3)
+
+  **The drawing path changed and the picture did not.** The crispness ladder is
+  the same six shapes in the same places and the same colours, drawn in two
+  calls rather than six. The committed references are therefore the regression
+  test for the whole per-instance path: a factor of two anywhere in the quad
+  scaling puts every shape at half or twice its size.
+
+  The type delta, stated once because this file's preamble makes "behaviour
+  changed, types did not" a claim readers rely on: TWO exported classes are new,
+  `UnknownInstanceHandleError` and `InstancedShapesDisposedError`, and
+  `DagrRenderErrorCode` gains `UNKNOWN_INSTANCE_HANDLE` and
+  `INSTANCED_SHAPES_DISPOSED`. Widening that union is source-breaking for a
+  consumer switching over it exhaustively with a `never` fallback, so it is a
+  minor rather than a patch on the day a version is cut. Nothing else on the
+  surface moved: the instancing API itself is internal until M4.4 names the seam
+  a caller feeds a graph through.
+
+  **The material decision M4.2 deferred is made, provisionally: ONE MATERIAL PER
+  SHAPE FAMILY**, not one uber-material with a per-instance shape id. The
+  uber-material's cost is per fragment and the per-family cost is per draw call,
+  the family count is small and known, and the union of uniforms an uber-material
+  pays for grows at the same rate as the calls it saves. The revisit gate is
+  M4.10, and reversing it rewires one assembly function and touches no formula.
+
+  **Removal is swap-with-last, so per-instance state is keyed by HANDLE and never
+  by SLOT.** A slot index is not durable across any removal and the failure is
+  silent, because the slot stays a valid index and merely belongs to a different
+  instance. Handles are never reused, so a handle held past its instance's
+  removal raises rather than addressing whatever took its place. M4.6's springs
+  and M4.8's picking IDs inherit this.
+
+  A colour reaching a shader as a UNIFORM is converted from sRGB by three's
+  `Color`; as a vertex ATTRIBUTE it is converted by nothing, so the conversion
+  now happens on the way into the buffer, spelled the way three spells it.
+  Skipping it does not throw: every colour comes out lighter and flatter.
+
 - `createRichNodes`: a node's visual as arbitrary HTML sized to its layout box,
   with semantic zoom. New surface: `createRichNodes`, `measureHtmlSizes`, and
   the types `RichNode`, `RichNodeTier`, `RichNodes`, `MeasureItem` and
