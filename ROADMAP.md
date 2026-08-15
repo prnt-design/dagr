@@ -3049,15 +3049,18 @@ of M3 would leave the second runner idle for a milestone.
   first version understated it twice over: a mitred corner moves each vertex
   along the segments it joins by `expand * tan(turn / 2)`, where `expand` is
   the half width the VERTEX STAGE uses, the visible one plus the antialiasing
-  padding. Two turns in the SAME direction bracketing a segment both pull back
-  on the same side of it, so a quad inverts into a bow tie once the segment is
-  shorter on screen than `expand * (tan(in / 2) + tan(out / 2))`, which the
-  tests pin to two decimals at four angles. Worst case at the default limit is
-  `3.46 * (halfWidth + 1)` pixels, 8.7 for a 3 pixel ribbon, against segments
-  a rank apart which are 22 pixels at the demo's zoom floor. Turns in OPPOSITE
-  directions never invert at any length, and that is the zigzag M2.4b's dummy
-  chains produce as they step through the layers, so the shape this task was
-  written for is the shape that cannot reach the bound. The named fix if a
+  padding. A quad inverts into a bow tie once the segment is shorter on screen
+  than `expand * |tan(in / 2) + tan(out / 2)|`, with the turns SIGNED and the
+  sum taken before the absolute value. The algorithms review corrected that:
+  an earlier version claimed turns in opposite directions never invert, and
+  the test pinning it used 90 against 90, which is the one pair where the
+  cancellation is exact. Unequal opposite turns do invert, 119 against 30 back
+  at 3.57 pixels for an `expand` of 2.5, and the tests now pin four same-way
+  angles and three unequal opposite pairs to within 0.005 world units. Worst
+  case at the default limit is `3.46 * (halfWidth + 1)` pixels, 8.7 for a 3
+  pixel ribbon. M2.4b's dummy chains clear it, but on segment length rather
+  than on cancellation: a rank apart is 22 pixels at the ladder's fitted
+  zoom. The named fix if a
   screenshot ever shows a hole: one per-vertex float carrying the corner's cap
   in world units and a `min` in the vertex stage, which trades the hole for a
   ribbon that narrows through a tight corner.

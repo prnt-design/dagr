@@ -37,9 +37,17 @@ import { requireAtLeast, requireFinite, requirePositive } from './validate.js';
  * an outline's, and `sdf.ts` already measures outlines in device pixels for the
  * same reason.
  *
- * **What it costs, stated rather than implied.** A ribbon no longer scales with
- * the boxes it joins, so at card zoom a 3 pixel edge meets a node the size of
- * the viewport and reads as a wire rather than as a road. And the geometry
+ * **What it costs, stated rather than implied, at both ends of the range.** A
+ * ribbon no longer scales with the boxes it joins, so at card zoom a 3 pixel
+ * edge meets a node the size of the viewport and reads as a wire rather than
+ * as a road. The far end is the worse one, and it is measured: the campaign's
+ * 110.9M world units of centreline at a 3 device pixel width paint 196% of the
+ * fitted viewport at the zoom floor, and 65% even at the 0.5 pixel minimum, so
+ * the overview is a mat of edge ink rather than a drawing. A constant pixel
+ * width is the right DEFAULT and not the right answer everywhere, and since the
+ * half width is a uniform the remedy costs nothing here: a scene clamps it
+ * against the world-space width and fades edge alpha out below about one pixel
+ * per world unit, per frame. M4.5's demo half owes that. And the geometry
  * cannot carry world positions for its own boundary, since where the boundary
  * is depends on the zoom: what a vertex carries is a unit OFFSET, and the
  * vertex stage multiplies it by the half width in pixels over the pixels per
@@ -154,8 +162,9 @@ export const MIN_SEGMENT_WORLD = 1e-9;
  *
  * A fraction of the mean segment is scale free: the sagitta of a span scales
  * with its length, so segments per span comes out the same at every scale.
- * Measured at both scales for the same shape, this default gives 6 points per
- * span, where a tenth of it gives 32. That is the trade to make deliberately,
+ * Measured at both scales for the same shape, this default gives 6.0 points per
+ * span and a tenth of it gives 17.3, a ratio of 2.9 against the 3.16 the rule
+ * predicts. That is the trade to make deliberately,
  * because an adaptive subdivision's segment count grows as the INVERSE square
  * root of the tolerance: a tenth of this tolerance is about three times the
  * points, not a third.
@@ -1090,31 +1099,23 @@ export function dashDistance<T>(m: DashArith<T>, dash: RibbonDash<T>): T {
  * read 0.25 there where this reads 0.5, which is a notch at the end of every
  * dash in the drawing.
  *
- * ## The two boundaries this does NOT ramp, stated rather than discovered
+ * ## The one boundary this does NOT ramp, stated rather than discovered
  *
- * **The ends.** {@link RIBBON_AA_PADDING_PIXELS} pads the geometry ACROSS the
- * ribbon and nothing pads it along, so a route's first and last ribs sit
- * exactly on its endpoints and there is no along-axis term here to fade them.
- * A butt cap is therefore a hard edge, and on a route running at an angle it
- * is a staircase one pixel deep. It is the one boundary in this package that a
- * distance field does not soften. Tolerable because M2.8 attaches both ends of
- * every routed edge to a node's BORDER, so the cap is drawn against the box it
- * arrives at, and the overlay edges stage 2 draws between tiles end the same
- * way. Fixing it needs an along-axis distance, which needs the route's length
- * at every vertex: another attribute, and worth it only if a screenshot says
- * so.
+ * {@link RIBBON_AA_PADDING_PIXELS} pads the geometry ACROSS the ribbon and
+ * nothing pads it along, so a route's first and last ribs sit exactly on its
+ * endpoints and there is no along-axis term here to fade them. A butt cap is
+ * therefore a hard edge, and on a route running at an angle it is a staircase
+ * one pixel deep. It is the one boundary in this package that a distance field
+ * does not soften. Tolerable because M2.8 attaches both ends of every routed
+ * edge to a node's BORDER, so the cap is drawn against the box it arrives at,
+ * and the overlay edges stage 2 draws between tiles end the same way. Fixing it
+ * needs an along-axis distance, which needs the route's length at every vertex:
+ * another attribute, and worth it only if a screenshot says so.
  *
- * **The outer chord of a bevel.** On the wedge triangle `across` runs from 0
- * at the centreline to 1 at the chord over a distance of `expand *
- * cos(turn / 2)` rather than `expand`, because the chord's midpoint is
- * foreshortened by the half angle. The 50% contour still lands on the chord,
- * so the bevel is the right SIZE, but its ramp is compressed by that factor:
- * half a pixel at the 120 degree threshold where bevels begin, and a tenth of
- * one at 170 degrees, which is a hard edge. It is confined to the outer cut
- * across a corner sharper than 120 degrees, which is a chord a few pixels
- * long, and the honest fix is a round join whose fragments measure their own
- * distance from the corner rather than interpolate one. Not worth a second
- * distance function until a drawing asks for it.
+ * A bevel's outer chord used to be the second one, compressing this ramp by
+ * `cos(turn / 2)`. {@link tessellateCentreline} fans the corner instead, which
+ * holds every facet at 120 degrees or less and the ramp at half a pixel or
+ * better, so that deferral is closed rather than outstanding.
  */
 export function ribbonCoverage<T>(m: DashArith<T>, input: RibbonCoverageInput<T>): T {
   const expand = m.add(input.halfWidthPixels, m.literal(RIBBON_AA_PADDING_PIXELS));

@@ -27,18 +27,21 @@ import type { Vec2 } from '../src/types.js';
  * asks for and the ones a reviewer should check the assertions against:
  *
  * - **No pinch.** Every boundary vertex is exactly one half width from the
- *   centreline of a segment it belongs to, at every turn angle, at every miter
- *   limit. A ribbon that narrowed at a corner would fail that for the vertex
- *   that narrowed it.
+ *   SKELETON, at every turn angle and every miter limit: from the centreline of
+ *   a segment it belongs to, or, for the midpoint of a fan, from the corner
+ *   point the fan rounds. A ribbon that narrowed at a corner would fail that
+ *   for the vertex that narrowed it.
  * - **No inversion.** Every triangle is wound counter-clockwise, so none of
  *   them is invisible under `FrontSide`. Bounded rather than unconditional, and
  *   the bound is MEASURED below rather than asserted: a mitred corner moves
  *   each vertex along the segments it joins by `expand * tan(turn / 2)`, where
  *   `expand` is the half width plus the antialiasing padding, and two turns in
  *   the SAME direction bracketing one segment both pull back on the same side
- *   of it. The last length that inverts is pinned at four angles, and the
- *   opposite-direction case is pinned as never inverting, which is the zigzag
- *   a dummy chain produces.
+ *   of it while opposite turns partly cancel, so the sum is SIGNED and the
+ *   absolute value comes after it. The last length that inverts is pinned at
+ *   four same-way angles and three unequal opposite pairs. Equal and opposite
+ *   is the one pair that cancels exactly, and an earlier version of this suite
+ *   used it alone and read as proving that opposite turns never invert.
  * - **Scale freedom.** Nothing in the tessellation reads a zoom or a width, so
  *   the same vertices are correct at every camera. The tests exercise that by
  *   expanding one geometry at several half widths.
@@ -373,7 +376,7 @@ describe('tessellateRibbons: joins', () => {
     }
   });
 
-  it('inverts a quad only below the measured length, and never on a zigzag', () => {
+  it('inverts a quad only below the measured length, signed turn by signed turn', () => {
     // The bound stated exactly, because the previous version of this claim was
     // wrong in two ways at once and both understated it: it quoted the visible
     // half width where the vertex stage uses the padded one, and it counted
@@ -381,12 +384,10 @@ describe('tessellateRibbons: joins', () => {
     // same side of it. Measured here at 0.01 world units, against
     // `expand * (tan(in / 2) + tan(out / 2))`.
     //
-    // The opposite-direction case is the one worth having as a test rather
-    // than a sentence: each side is then pulled back at one end and pushed
-    // forward at the other, so nothing accumulates and no length inverts. A
-    // Sugiyama dummy chain steps left, right, left as it crosses the layers,
-    // so the shape most of this package's input has is the shape that cannot
-    // hit this at all.
+    // Opposite turns SUBTRACT rather than cancel, and only match exactly when
+    // their magnitudes do. A Sugiyama dummy chain steps left, right, left as
+    // it crosses the layers, so its turns do partly cancel, but what actually
+    // keeps it clear of this bound is that its segments are a rank apart.
     const expand = 2.5;
     const wellFormed = (points: readonly Vec2[]): boolean =>
       triangles(ribbonOf(points), expand).every((triangle) => signedArea(...triangle) > 0);
