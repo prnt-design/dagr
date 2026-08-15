@@ -1,11 +1,12 @@
 import type { JSX } from 'react';
 import { Graph } from '@dagr/graph';
 import { EDGE_ROLES, cardRows, generateCampaign } from '@dagr/campaign';
-import type { CampaignNode } from '@dagr/campaign';
+import type { CampaignEdge, CampaignNode } from '@dagr/campaign';
 import { FirstLight } from './FirstLight.js';
 
-/** What the demo keeps on its nodes: the campaign node itself. */
+/** What the demo keeps on its nodes and edges: the campaign records themselves. */
 type NodeAttrs = { node: CampaignNode };
+type EdgeAttrs = { edge: CampaignEdge };
 
 /**
  * The campaign dataset, generated at module load and loaded into a real
@@ -19,10 +20,14 @@ type NodeAttrs = { node: CampaignNode };
  */
 const campaign = generateCampaign();
 
-const graph = new Graph<NodeAttrs>();
+// Edges carry their campaign record just as nodes do: a graph that dropped
+// `kind` on load would be typologically blind, and every consumer downstream
+// (layout wants only the routed kinds) would have to re-join against the
+// campaign arrays to get it back.
+const graph = new Graph<NodeAttrs, EdgeAttrs>();
 for (const node of campaign.nodes) graph.addNode({ id: node.id, attrs: { node } });
 for (const edge of campaign.edges) {
-  graph.addEdge({ id: edge.id, source: edge.source, target: edge.target });
+  graph.addEdge({ id: edge.id, source: edge.source, target: edge.target, attrs: { edge } });
 }
 
 /** Node counts by kind, in first-seen order, for the stats grid. */
@@ -34,20 +39,30 @@ const kindCounts: readonly [string, number][] = (() => {
   return [...counts.entries()];
 })();
 
+// Read back through the graph, not the campaign arrays, because the point of
+// the stats is that the graph loaded everything: an edge record without its
+// `kind` attr would show up here as an undercount, not pass silently.
 const edgeRoleCounts = (() => {
   let routed = 0;
   let overlay = 0;
-  for (const edge of campaign.edges) {
-    if (EDGE_ROLES[edge.kind] === 'routed') routed += 1;
+  for (const edge of graph.edges()) {
+    const kind = edge.attrs.edge?.kind;
+    if (kind !== undefined && EDGE_ROLES[kind] === 'routed') routed += 1;
     else overlay += 1;
   }
   return { routed, overlay };
 })();
 
-/** The root's successors through the real adjacency API: arcs and regions. */
+/**
+ * The root's `contains` children through the real adjacency API: arcs and
+ * regions. Filtered by kind rather than taking `successors` raw, because the
+ * root also sources overlay edges and a stat labeled "under the root" should
+ * not silently change meaning the day the generator adds one.
+ */
 const rootChildren = graph
-  .successors('campaign-1')
-  .map((id) => graph.requireNode(id).attrs.node?.name ?? id);
+  .outEdges(campaign.rootId)
+  .filter((edge) => edge.attrs.edge?.kind === 'contains')
+  .map((edge) => graph.requireNode(edge.target).attrs.node?.name ?? edge.target);
 
 /** One card, rendered as text, so the page shows what P6 will show as HTML. */
 const sampleNode =

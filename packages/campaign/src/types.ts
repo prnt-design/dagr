@@ -237,6 +237,13 @@ export type CampaignEdge =
 /** A generated campaign: the seed that made it, and everything it contains. */
 export interface Campaign {
   readonly seed: number;
+  /**
+   * The id of the single `campaign` node, which roots the contains forest's
+   * main tree. Exposed rather than left to be guessed, because the id scheme
+   * is the generator's private business: a consumer that hardcodes
+   * `'campaign-1'` is one prefix rename away from a crash at load.
+   */
+  readonly rootId: string;
   readonly nodes: readonly CampaignNode[];
   readonly edges: readonly CampaignEdge[];
 }

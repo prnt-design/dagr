@@ -182,10 +182,14 @@ export function itemName(rng: Rng): string {
 
 export function monsterName(index: number): string {
   const base = MONSTERS[index % MONSTERS.length] ?? 'beast';
-  const prefixes = ['elder', 'dread', 'ancient'];
+  // Eight prefix tiers over fifteen bases is 135 distinct names, which covers
+  // the 130-statblock bestiary without falling back to NameBook numbering:
+  // the numbering fallback exists for rare collisions, not for the whole top
+  // half of a table.
+  const prefixes = ['elder', 'dread', 'ancient', 'fell', 'primal', 'spectral', 'abyssal', 'crowned'];
   const tier = Math.floor(index / MONSTERS.length);
   if (tier === 0) return base;
-  const prefix = prefixes[Math.min(tier - 1, prefixes.length - 1)] ?? 'ancient';
+  const prefix = prefixes[(tier - 1) % prefixes.length] ?? 'ancient';
   return `${prefix} ${base}`;
 }
 

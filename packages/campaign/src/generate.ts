@@ -51,8 +51,11 @@ export interface GenerateOptions {
   readonly seed?: number;
   /**
    * Scales the two knobs the plan names, rooms per dungeon and NPCs per
-   * settlement, moving the total across roughly 2,000 to 5,000 nodes without
-   * distorting the ratios. Default 1.
+   * settlement, moving the total across roughly 2,600 to 3,800 nodes over
+   * 0.5 to 2 without distorting the ratios. Rooms floor at 8 per keyed site
+   * whatever the scale: below that a "dungeon" cannot carry its loop quota
+   * or its entry point, so a tiny scale shrinks the count of things, never
+   * the integrity of a thing. Default 1.
    */
   readonly scale?: number;
 }
@@ -141,7 +144,6 @@ function weighted<T>(rng: Rng, entries: readonly (readonly [T, number])[]): T {
 
 interface Spine {
   readonly campaignId: string;
-  readonly chapterIds: readonly string[];
   readonly sceneIds: readonly string[];
   readonly encounterIds: readonly string[];
 }
@@ -160,7 +162,6 @@ function buildSpine(build: Build): Spine {
     },
   });
 
-  const chapterIds: string[] = [];
   const sceneIds: string[] = [];
   const encounterIds: string[] = [];
   let chapterOrder = 0;
@@ -193,13 +194,14 @@ function buildSpine(build: Build): Spine {
         },
       });
       addEdge(build, 'contains', arcId, chapterId);
-      chapterIds.push(chapterId);
 
-      // 6 to 10 scenes, chained with `next`. A scene with a check may also
-      // reroute its failure two scenes ahead, which braids the chapter chain
+      // 6 to 10 scenes, chained with `next`. A scene with a check also
+      // reroutes its failure two scenes ahead, which braids the chapter chain
       // the way the plan's branching table asks without doubling the count.
+      // The check rides alongside the id so the wiring loop below does not
+      // have to find the node it just built.
       const sceneCount = rng.int(6, 10);
-      const chapterScenes: string[] = [];
+      const chapterScenes: { readonly id: string; readonly check: SkillCheck | undefined }[] = [];
       for (let s = 0; s < sceneCount; s += 1) {
         const sceneType = weighted(rng, [
           ['combat', 45],
@@ -207,19 +209,19 @@ function buildSpine(build: Build): Spine {
           ['exploration', 20],
           ['puzzle', 10],
         ] as const);
-        const hasCheck = rng.chance(0.3);
-        const check = makeCheck(rng);
+        const check = rng.chance(0.3) ? makeCheck(rng) : undefined;
         const sceneId = addNode(build, {
           idPrefix: 'scene',
           name: book.unique('scene', `The ${roomName(rng)}`),
           oneLine: `A ${sceneType} scene.`,
           depth: 3,
-          data: hasCheck
-            ? { kind: 'scene', sceneType, trigger: `When the party arrives, ${omen(rng)}.`, check }
-            : { kind: 'scene', sceneType, trigger: `When the party arrives, ${omen(rng)}.` },
+          data:
+            check === undefined
+              ? { kind: 'scene', sceneType, trigger: `When the party arrives, ${omen(rng)}.` }
+              : { kind: 'scene', sceneType, trigger: `When the party arrives, ${omen(rng)}.`, check },
         });
         addEdge(build, 'contains', chapterId, sceneId);
-        chapterScenes.push(sceneId);
+        chapterScenes.push({ id: sceneId, check });
         sceneIds.push(sceneId);
 
         const encounterCount = rng.int(1, 3);
@@ -246,18 +248,17 @@ function buildSpine(build: Build): Spine {
         const here = chapterScenes[s];
         const after = chapterScenes[s + 1];
         if (here === undefined || after === undefined) continue;
-        addEdge(build, 'next', here, after);
-        const node = build.nodes.find((n) => n.id === here);
+        addEdge(build, 'next', here.id, after.id);
         const skip = chapterScenes[s + 2];
-        if (node !== undefined && node.data.kind === 'scene' && node.data.check !== undefined && skip !== undefined) {
-          addBranch(build, here, after, 'success', node.data.check);
-          addBranch(build, here, skip, 'failure', node.data.check);
+        if (here.check !== undefined && skip !== undefined) {
+          addBranch(build, here.id, after.id, 'success', here.check);
+          addBranch(build, here.id, skip.id, 'failure', here.check);
         }
       }
     }
   }
 
-  return { campaignId, chapterIds, sceneIds, encounterIds };
+  return { campaignId, sceneIds, encounterIds };
 }
 
 // ---------------------------------------------------------------------------
@@ -268,16 +269,22 @@ interface Geography {
   readonly regionIds: readonly string[];
   readonly settlementIds: readonly string[];
   readonly hubIds: readonly string[];
-  readonly buildingIds: readonly string[];
   readonly dungeonIds: readonly string[];
   readonly roomIds: readonly string[];
-  /** Rooms by their dungeon, for clue placement and unlock targets. */
+  /** Rooms by their dungeon, for clue placement and boss lairs. */
   readonly roomsByDungeon: ReadonlyMap<string, readonly string[]>;
 }
 
 function buildRoomGraph(build: Build, dungeonId: string, roomCount: number): string[] {
   const { rng, book } = build;
   const rooms: string[] = [];
+  // Corridors already dug, as unordered pairs, so an "extra" cannot land on a
+  // pair that is already connected: a doubled door is not a loop, and the
+  // quota below counts loops.
+  const corridors = new Set<string>();
+  const corridorKey = (a: number, b: number): string =>
+    a < b ? `${String(a)}:${String(b)}` : `${String(b)}:${String(a)}`;
+
   for (let r = 0; r < roomCount; r += 1) {
     const roomId = addNode(build, {
       idPrefix: 'room',
@@ -292,21 +299,32 @@ function buildRoomGraph(build: Build, dungeonId: string, roomCount: number): str
     // Spanning tree by attaching each room to a random earlier one, so the
     // site is connected by construction.
     if (r > 0) {
-      const parent = rooms[rng.int(0, r - 1)];
-      if (parent !== undefined) addPath(build, parent, roomId, roomPathKind(rng));
+      const parentIndex = rng.int(0, r - 1);
+      const parent = rooms[parentIndex];
+      if (parent !== undefined) {
+        addPath(build, parent, roomId, roomPathKind(rng));
+        corridors.add(corridorKey(parentIndex, r));
+      }
     }
   }
-  // The jaquays quota: extra edges beyond the tree are exactly the loops, so
-  // cycle rank >= 0.25 * rooms is enforced by counting, not hoped for.
+  // The jaquays quota: edges beyond the tree between DISTINCT unconnected
+  // pairs are exactly the loops, so cycle rank >= 0.25 * rooms is enforced by
+  // counting. The attempt cap only matters for a site so small the pairs run
+  // out, and the 8-room floor in buildGeography keeps sites above it.
   const extras = Math.ceil(roomCount * 0.25);
-  for (let x = 0; x < extras; x += 1) {
+  let added = 0;
+  let attempts = 0;
+  while (added < extras && attempts < extras * 20) {
+    attempts += 1;
     const [a, b] = rng.distinct(2, rooms.length);
     if (a === undefined || b === undefined) continue;
+    if (corridors.has(corridorKey(a, b))) continue;
     const from = rooms[a];
     const to = rooms[b];
-    if (from !== undefined && to !== undefined && from !== to) {
-      addPath(build, from, to, roomPathKind(rng));
-    }
+    if (from === undefined || to === undefined) continue;
+    addPath(build, from, to, roomPathKind(rng));
+    corridors.add(corridorKey(a, b));
+    added += 1;
   }
   const first = rooms[0];
   if (first !== undefined) addEdge(build, 'entry_point', dungeonId, first);
@@ -326,7 +344,6 @@ function buildGeography(build: Build, campaignId: string): Geography {
   const regionIds: string[] = [];
   const settlementIds: string[] = [];
   const hubIds: string[] = [];
-  const buildingIds: string[] = [];
   const dungeonIds: string[] = [];
   const roomIds: string[] = [];
   const roomsByDungeon = new Map<string, readonly string[]>();
@@ -372,7 +389,6 @@ function buildGeography(build: Build, campaignId: string): Geography {
           data: { kind: 'location', subtype: 'building' },
         });
         addEdge(build, 'contains', settlementId, buildingId);
-        buildingIds.push(buildingId);
         // Ordinary buildings still have interiors, 2 to 4 unkeyed rooms in a
         // simple chain of doors: no loop quota, that is what marks a dungeon.
         const roomCount = rng.int(2, 4);
@@ -408,9 +424,10 @@ function buildGeography(build: Build, campaignId: string): Geography {
         data: { kind: 'location', subtype: 'building', dungeon: true },
       });
       addEdge(build, 'contains', host, dungeonId);
-      buildingIds.push(dungeonId);
       dungeonIds.push(dungeonId);
-      const rooms = buildRoomGraph(build, dungeonId, Math.round(rng.int(15, 40) * scale));
+      // The 8-room floor is what keeps a keyed site a keyed site at any
+      // scale: entry point present, loop quota meaningful.
+      const rooms = buildRoomGraph(build, dungeonId, Math.max(8, Math.round(rng.int(15, 40) * scale)));
       roomsByDungeon.set(dungeonId, rooms);
       roomIds.push(...rooms);
     }
@@ -431,7 +448,6 @@ function buildGeography(build: Build, campaignId: string): Geography {
       data: { kind: 'location', subtype: 'building', dungeon: true },
     });
     addEdge(build, 'contains', host, finaleId);
-    buildingIds.push(finaleId);
     dungeonIds.push(finaleId);
     const rooms = buildRoomGraph(build, finaleId, 88);
     roomsByDungeon.set(finaleId, rooms);
@@ -476,18 +492,24 @@ function buildGeography(build: Build, campaignId: string): Geography {
     }
   }
 
-  return { regionIds, settlementIds, hubIds, buildingIds, dungeonIds, roomIds, roomsByDungeon };
+  return { regionIds, settlementIds, hubIds, dungeonIds, roomIds, roomsByDungeon };
 }
 
 // ---------------------------------------------------------------------------
 // People: NPCs and factions.
 
 interface People {
+  /** Every NPC with the one field downstream layers branch on. */
+  readonly npcs: readonly { readonly id: string; readonly attitude: string }[];
   readonly npcIds: readonly string[];
-  readonly factionIds: readonly string[];
+  readonly factions: readonly { readonly id: string; readonly name: string }[];
 }
 
-function addNpc(build: Build, home: string | undefined, boss: boolean): string {
+function addNpc(
+  build: Build,
+  home: string | undefined,
+  boss: boolean,
+): { id: string; attitude: string } {
   const { rng, book } = build;
   const attitude = boss
     ? 'hostile'
@@ -511,62 +533,71 @@ function addNpc(build: Build, home: string | undefined, boss: boolean): string {
   if (home !== undefined && rng.chance(boss ? 1 : 0.85)) {
     addEdge(build, 'located_at', npcId, home);
   }
-  return npcId;
+  return { id: npcId, attitude };
 }
 
 function buildPeople(build: Build, geo: Geography): People {
   const { rng, book, scale } = build;
-  const npcIds: string[] = [];
+  const npcs: { id: string; attitude: string }[] = [];
 
   for (const hub of geo.hubIds) {
     const count = Math.round(rng.int(12, 20) * scale);
-    for (let i = 0; i < count; i += 1) npcIds.push(addNpc(build, hub, false));
+    for (let i = 0; i < count; i += 1) npcs.push(addNpc(build, hub, false));
   }
   for (const settlement of geo.settlementIds) {
     if (geo.hubIds.includes(settlement)) continue;
     const count = Math.round(rng.int(6, 10) * scale);
-    for (let i = 0; i < count; i += 1) npcIds.push(addNpc(build, settlement, false));
+    for (let i = 0; i < count; i += 1) npcs.push(addNpc(build, settlement, false));
   }
   for (const dungeon of geo.dungeonIds) {
     const rooms = geo.roomsByDungeon.get(dungeon);
     const lair = rooms === undefined || rooms.length === 0 ? dungeon : rng.pick(rooms);
-    npcIds.push(addNpc(build, lair, true));
+    npcs.push(addNpc(build, lair, true));
     const lieutenants = rng.int(2, 4);
     for (let i = 0; i < lieutenants; i += 1) {
       const post = rooms === undefined || rooms.length === 0 ? dungeon : rng.pick(rooms);
-      npcIds.push(addNpc(build, post, false));
+      npcs.push(addNpc(build, post, false));
     }
   }
   for (const region of geo.regionIds) {
     const wanderers = rng.int(8, 14);
-    for (let i = 0; i < wanderers; i += 1) npcIds.push(addNpc(build, region, false));
+    for (let i = 0; i < wanderers; i += 1) npcs.push(addNpc(build, region, false));
   }
 
-  // Social fabric: 1 to 5 acquaintances each. Directed `knows`, self excluded.
-  for (const npc of npcIds) {
+  const npcIds = npcs.map((npc) => npc.id);
+
+  // Social fabric: 1 to 5 acquaintances each, self excluded by construction.
+  // Indices are drawn over a range one short of the roster and skip-adjusted
+  // past the NPC's own position, so the documented floor of one edge holds:
+  // drawing over the full roster and filtering self out afterwards could
+  // leave an NPC with zero.
+  for (let selfIndex = 0; selfIndex < npcIds.length; selfIndex += 1) {
+    const npc = npcIds[selfIndex];
+    if (npc === undefined) continue;
     const count = rng.int(1, 5);
-    for (const index of rng.distinct(count, npcIds.length)) {
-      const other = npcIds[index];
-      if (other !== undefined && other !== npc) addEdge(build, 'knows', npc, other);
+    for (const drawn of rng.distinct(count, npcIds.length - 1)) {
+      const other = npcIds[drawn >= selfIndex ? drawn + 1 : drawn];
+      if (other !== undefined) addEdge(build, 'knows', npc, other);
     }
   }
 
-  const factionIds: string[] = [];
+  const factions: { id: string; name: string }[] = [];
   for (let f = 0; f < 12; f += 1) {
     const stance = weighted(rng, [
       ['ally', 25],
       ['neutral', 35],
       ['hostile', 40],
     ] as const);
+    const name = book.unique('faction', factionName(rng));
     const factionId = addNode(build, {
       idPrefix: 'faction',
-      name: book.unique('faction', factionName(rng)),
+      name,
       oneLine: `A ${stance} power with its own design.`,
       depth: 2,
       tags: ['pattern:front-clock'],
       data: { kind: 'faction', goal: `To make sure ${omen(rng)}.`, stance },
     });
-    factionIds.push(factionId);
+    factions.push({ id: factionId, name });
 
     const memberCount = Math.min(rng.int(8, 40), npcIds.length);
     const members = rng.distinct(memberCount, npcIds.length);
@@ -579,26 +610,29 @@ function buildPeople(build: Build, geo: Geography): People {
     }
     if (leader !== undefined) addEdge(build, 'leads', leader, factionId);
   }
-  for (let a = 0; a < factionIds.length; a += 1) {
-    for (let b = a + 1; b < factionIds.length; b += 1) {
-      const from = factionIds[a];
-      const to = factionIds[b];
+  for (let a = 0; a < factions.length; a += 1) {
+    for (let b = a + 1; b < factions.length; b += 1) {
+      const from = factions[a];
+      const to = factions[b];
       if (from === undefined || to === undefined) continue;
       const roll = rng.next();
-      if (roll < 0.2) addEdge(build, 'ally_of', from, to);
-      else if (roll < 0.45) addEdge(build, 'hostile_to', from, to);
+      if (roll < 0.2) addEdge(build, 'ally_of', from.id, to.id);
+      else if (roll < 0.45) addEdge(build, 'hostile_to', from.id, to.id);
     }
   }
 
-  return { npcIds, factionIds };
+  return { npcs, npcIds, factions };
 }
 
 // ---------------------------------------------------------------------------
 // Stuff: statblocks, items, condition modifiers.
 
 interface Stuff {
-  readonly itemIds: readonly string[];
-  readonly statblockIds: readonly string[];
+  readonly items: readonly {
+    readonly id: string;
+    readonly rarity: string;
+    readonly plotCritical: boolean;
+  }[];
 }
 
 function buildStuff(build: Build, spine: Spine, geo: Geography, people: People): Stuff {
@@ -627,15 +661,14 @@ function buildStuff(build: Build, spine: Spine, geo: Geography, people: People):
     }
   }
   // Hostile NPCs fight with a statblock 60% of the time.
-  for (const npc of people.npcIds) {
-    const node = build.nodes.find((n) => n.id === npc);
-    if (node !== undefined && node.data.kind === 'npc' && node.data.attitude === 'hostile' && rng.chance(0.6)) {
+  for (const npc of people.npcs) {
+    if (npc.attitude === 'hostile' && rng.chance(0.6)) {
       const statblock = statblockIds[rng.zipf(statblockIds.length)];
-      if (statblock !== undefined) addEdge(build, 'uses_statblock', npc, statblock);
+      if (statblock !== undefined) addEdge(build, 'uses_statblock', npc.id, statblock);
     }
   }
 
-  const itemIds: string[] = [];
+  const items: { id: string; rarity: string; plotCritical: boolean }[] = [];
   for (let i = 0; i < 300; i += 1) {
     const rarity = weighted(rng, [
       ['common', 35],
@@ -652,7 +685,7 @@ function buildStuff(build: Build, spine: Spine, geo: Geography, people: People):
       depth: 4,
       data: { kind: 'item', rarity, plotCritical },
     });
-    itemIds.push(itemId);
+    items.push({ id: itemId, rarity, plotCritical });
     // Everything is somewhere: a room mostly, a person's pockets otherwise.
     addEdge(
       build,
@@ -663,11 +696,8 @@ function buildStuff(build: Build, spine: Spine, geo: Geography, people: People):
   }
   // What the plot-critical 10% unlock: dungeon rooms mostly, quest steps once
   // those exist (the quests layer wires that half).
-  for (let i = 0; i < 30; i += 1) {
-    const item = itemIds[i];
-    if (item !== undefined && rng.chance(0.6)) {
-      addEdge(build, 'unlocks', item, rng.pick(geo.roomIds));
-    }
+  for (const item of items.slice(0, 30)) {
+    if (rng.chance(0.6)) addEdge(build, 'unlocks', item.id, rng.pick(geo.roomIds));
   }
 
   const conditionIds: string[] = [];
@@ -709,7 +739,7 @@ function buildStuff(build: Build, spine: Spine, geo: Geography, people: People):
     addEdge(build, 'modified_by', region, rng.pick(conditionIds));
   }
 
-  return { itemIds, statblockIds };
+  return { items };
 }
 
 // ---------------------------------------------------------------------------
@@ -722,19 +752,24 @@ interface Quests {
 function buildQuests(build: Build, geo: Geography, people: People, stuff: Stuff): Quests {
   const { rng, book } = build;
   const questIds: string[] = [];
+  const allStepIds: string[] = [];
+  const revelationIds: string[] = [];
   let revelationsLeft = 40;
 
   for (let q = 0; q < 60; q += 1) {
     const subject = rng.chance(0.5) ? itemName(rng) : placeName(rng);
+    // The title is rolled once and the objective restates it, so the card
+    // cannot contradict the node's own name.
+    const title = questName(rng, subject);
     const questId = addNode(build, {
       idPrefix: 'quest',
-      name: book.unique('quest', questName(rng, subject)),
+      name: book.unique('quest', title),
       oneLine: 'A quest with steps that branch on how its checks go.',
       depth: 3,
       tags: ['pattern:branch-merge'],
       data: {
         kind: 'quest',
-        objective: `${questName(rng, subject)} before ${omen(rng)}.`,
+        objective: `${title} before ${omen(rng)}.`,
         state: weighted(rng, [
           ['available', 50],
           ['active', 30],
@@ -751,22 +786,21 @@ function buildQuests(build: Build, geo: Geography, people: People, stuff: Stuff)
     // 70% of complications merge back within 2 steps, which is the invariant
     // the tests measure; the rest are honest dead ends.
     const stepCount = rng.int(3, 5);
-    const steps: string[] = [];
+    const steps: { readonly id: string; readonly check: SkillCheck | undefined }[] = [];
     for (let s = 0; s < stepCount; s += 1) {
       const isRevelation = revelationsLeft > 0 && s === stepCount - 1 && rng.chance(0.8);
       if (isRevelation) revelationsLeft -= 1;
-      const hasCheck = rng.chance(0.4);
-      const check = makeCheck(rng);
+      const check = rng.chance(0.4) ? makeCheck(rng) : undefined;
       const base = {
         kind: 'quest_step' as const,
         objective: `Step ${String(s + 1)}: ${questName(rng, placeName(rng))}.`,
       };
       const data =
-        isRevelation && hasCheck
+        isRevelation && check !== undefined
           ? { ...base, revelation: true, check }
           : isRevelation
             ? { ...base, revelation: true }
-            : hasCheck
+            : check !== undefined
               ? { ...base, check }
               : base;
       const stepId = addNode(build, {
@@ -780,19 +814,17 @@ function buildQuests(build: Build, geo: Geography, people: People, stuff: Stuff)
         data,
       });
       addEdge(build, 'contains', questId, stepId);
-      steps.push(stepId);
+      steps.push({ id: stepId, check });
+      allStepIds.push(stepId);
+      if (isRevelation) revelationIds.push(stepId);
     }
     for (let s = 0; s + 1 < steps.length; s += 1) {
       const here = steps[s];
       const after = steps[s + 1];
       if (here === undefined || after === undefined) continue;
-      addEdge(build, 'next', here, after);
-      const node = build.nodes.find((n) => n.id === here);
-      if (node === undefined || node.data.kind !== 'quest_step' || node.data.check === undefined) {
-        continue;
-      }
-      const check = node.data.check;
-      addBranch(build, here, after, 'success', check);
+      addEdge(build, 'next', here.id, after.id);
+      if (here.check === undefined) continue;
+      addBranch(build, here.id, after.id, 'success', here.check);
       const complicationId = addNode(build, {
         idPrefix: 'step',
         name: book.unique('step', 'Complication'),
@@ -801,11 +833,12 @@ function buildQuests(build: Build, geo: Geography, people: People, stuff: Stuff)
         data: { kind: 'quest_step', objective: `Recover after ${omen(rng)}.` },
       });
       addEdge(build, 'contains', questId, complicationId);
-      addBranch(build, here, complicationId, 'failure', check);
-      addBranch(build, here, rng.chance(0.5) ? after : complicationId, 'partial', check);
+      allStepIds.push(complicationId);
+      addBranch(build, here.id, complicationId, 'failure', here.check);
+      addBranch(build, here.id, rng.chance(0.5) ? after.id : complicationId, 'partial', here.check);
       if (rng.chance(0.7)) {
         const mergeTarget = steps[Math.min(s + 2, steps.length - 1)] ?? after;
-        addEdge(build, 'merges_into', complicationId, mergeTarget);
+        addEdge(build, 'merges_into', complicationId, mergeTarget.id);
       }
     }
   }
@@ -820,34 +853,31 @@ function buildQuests(build: Build, geo: Geography, people: People, stuff: Stuff)
       addEdge(build, 'requires', late, early);
     }
   }
-  // Rewards, biased away from common items.
+  // Rewards, drawn from the full pool, plot-critical items included, and
+  // re-drawn up to twice while the pick is common: a stated bias has to be a
+  // built one. Roughly 4% of rewards stay common (0.35 cubed).
   for (const questId of questIds) {
     if (!rng.chance(0.75)) continue;
-    const item = stuff.itemIds[rng.int(30, stuff.itemIds.length - 1)];
-    if (item !== undefined) addEdge(build, 'rewards', questId, item);
+    let reward = rng.pick(stuff.items);
+    for (let retry = 0; retry < 2 && reward.rarity === 'common'; retry += 1) {
+      reward = rng.pick(stuff.items);
+    }
+    addEdge(build, 'rewards', questId, reward.id);
   }
   // The other half of the plot-critical unlocks, now that steps exist.
-  for (let i = 0; i < 30; i += 1) {
-    const item = stuff.itemIds[i];
-    if (item !== undefined && rng.chance(0.4)) {
-      const steps = build.nodes.filter((n) => n.data.kind === 'quest_step');
-      const step = rng.pick(steps);
-      addEdge(build, 'unlocks', item, step.id);
-    }
+  for (const item of stuff.items.slice(0, 30)) {
+    if (rng.chance(0.4)) addEdge(build, 'unlocks', item.id, rng.pick(allStepIds));
   }
 
   // The clue web. Every revelation gets exactly three clues, one held by a
   // room, one by an NPC, one by an item: three distinct holders of three
   // distinct kinds, which is the Three Clue Rule as a construction rule
   // rather than an aspiration.
-  const revelations = build.nodes.filter(
-    (n) => n.data.kind === 'quest_step' && n.data.revelation === true,
-  );
-  for (const revelation of revelations) {
+  for (const revelation of revelationIds) {
     const holders = [
       rng.pick(geo.roomIds),
       rng.pick(people.npcIds),
-      rng.pick(stuff.itemIds),
+      rng.pick(stuff.items).id,
     ];
     for (const holder of holders) {
       const clueId = addNode(build, {
@@ -859,7 +889,7 @@ function buildQuests(build: Build, geo: Geography, people: People, stuff: Stuff)
         data: { kind: 'clue', fact: `Someone saw that ${omen(rng)}.` },
       });
       addEdge(build, 'contains_clue', holder, clueId);
-      addEdge(build, 'points_to', clueId, revelation.id);
+      addEdge(build, 'points_to', clueId, revelation);
     }
   }
 
@@ -871,13 +901,11 @@ function buildQuests(build: Build, geo: Geography, people: People, stuff: Stuff)
 
 function buildPressure(build: Build, spine: Spine, people: People, quests: Quests): void {
   const { rng, book } = build;
-  for (const factionId of people.factionIds) {
-    const faction = build.nodes.find((n) => n.id === factionId);
-    const factionLabel = faction === undefined ? 'an unseen power' : faction.name;
+  for (const faction of people.factions) {
     const clockSize = rng.int(4, 6);
     const frontId = addNode(build, {
       idPrefix: 'front',
-      name: book.unique('front', `the design of ${factionLabel}`),
+      name: book.unique('front', `the design of ${faction.name}`),
       oneLine: `A ${String(clockSize)}-segment clock, ticking whether or not anyone watches.`,
       depth: 2,
       tags: ['pattern:front-clock'],
@@ -886,13 +914,17 @@ function buildPressure(build: Build, spine: Spine, people: People, quests: Quest
 
     let previousTick: string | undefined;
     for (let t = 0; t < clockSize; t += 1) {
+      // The portents escalate in sequence, so the last tick reads as the last
+      // warning rather than another first one.
+      const opener =
+        t === 0 ? 'First' : t === clockSize - 1 ? 'At the last' : rng.pick(['Then', 'Soon', 'Next']);
       const tickId = addNode(build, {
         idPrefix: 'tick',
         name: book.unique(`tick:${frontId}`, `portent ${String(t + 1)}`),
         oneLine: `Grim portent ${String(t + 1)} of ${String(clockSize)}.`,
         depth: 3,
         tags: ['pattern:front-clock'],
-        data: { kind: 'clock_tick', index: t + 1, portent: `First ${omen(rng)}.` },
+        data: { kind: 'clock_tick', index: t + 1, portent: `${opener}, ${omen(rng)}.` },
       });
       addEdge(build, 'contains', frontId, tickId);
       if (previousTick !== undefined) addEdge(build, 'next', previousTick, tickId);
@@ -917,13 +949,13 @@ function buildPressure(build: Build, spine: Spine, people: People, quests: Quest
 /**
  * Generates the mock campaign. Same options, same campaign, byte for byte.
  *
- * Measured, not projected: the default seed at scale 1 generates 2,949 nodes
- * and 6,939 edges (3,708 routed, 3,231 overlay); scale 0.5 gives 2,664 nodes
- * and scale 2 gives 3,871, because `scale` moves only rooms per dungeon and
- * NPCs per settlement while the spine, quests, and bestiary stay put. The
- * research proposal's 8,000-plus edge estimate assumed a denser social layer
- * than the one built here; the invariant suite gates the ratio at 2 to 4
- * edges per node rather than pinning either number.
+ * Measured, not projected: the default seed at scale 1 generates 3,010 nodes
+ * and 7,100 edges; scale 0.5 and 2 land at 2,581 and 3,752 nodes, because
+ * `scale` moves only rooms per dungeon and NPCs per settlement while the
+ * spine, quests, and bestiary stay put. The research proposal's 8,000-plus
+ * edge estimate assumed a denser social layer than the one built here; the
+ * invariant suite gates the ratio at 2 to 4 edges per node rather than
+ * pinning either number.
  */
 export function generateCampaign(options: GenerateOptions = {}): Campaign {
   const seed = options.seed ?? 20260814;
@@ -953,5 +985,5 @@ export function generateCampaign(options: GenerateOptions = {}): Campaign {
     addEdge(build, 'located_at', scene, build.rng.pick(scenePlaces));
   }
 
-  return { seed, nodes: build.nodes, edges: build.edges };
+  return { seed, rootId: spine.campaignId, nodes: build.nodes, edges: build.edges };
 }

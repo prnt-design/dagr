@@ -41,11 +41,14 @@ export function cardRows(node: CampaignNode): readonly (readonly [string, string
         ['xp budget', String(d.xpBudget)],
       ];
     case 'location': {
+      // Distinct keys even though the generator never sets both flags: the
+      // schema type permits it, external datasets are invited to retarget it,
+      // and the demo uses the row key as a React list key.
       const rows: (readonly [string, string])[] = [['type', d.subtype]];
       if (d.keyCode !== undefined) rows.push(['key', d.keyCode]);
       if (d.terrain !== undefined) rows.push(['terrain', d.terrain]);
       if (d.hub === true) rows.push(['role', 'hub']);
-      if (d.dungeon === true) rows.push(['role', 'keyed site']);
+      if (d.dungeon === true) rows.push(['site', 'keyed, looping']);
       return rows;
     }
     case 'npc': {

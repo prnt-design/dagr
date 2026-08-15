@@ -339,6 +339,114 @@ describe('condition modifiers', () => {
   });
 });
 
+describe('review regressions', () => {
+  it('exposes a rootId that resolves to the one campaign node', () => {
+    for (const { campaign, byId } of fixtures) {
+      const root = byId.get(campaign.rootId);
+      expect(root?.data.kind).toBe('campaign');
+    }
+  });
+
+  it('gives every NPC at least one acquaintance and none of them themselves', () => {
+    for (const { campaign, edgesByKind } of fixtures) {
+      const knowsBySource = new Map<string, number>();
+      for (const edge of edgesByKind.get('knows') ?? []) {
+        expect(edge.source).not.toBe(edge.target);
+        knowsBySource.set(edge.source, (knowsBySource.get(edge.source) ?? 0) + 1);
+      }
+      for (const npc of campaign.nodes.filter((n) => n.data.kind === 'npc')) {
+        expect(knowsBySource.get(npc.id) ?? 0).toBeGreaterThanOrEqual(1);
+      }
+    }
+  });
+
+  it('digs no two corridors between the same pair of rooms', () => {
+    for (const { campaign, edgesByKind } of fixtures) {
+      const rooms = new Set(
+        campaign.nodes
+          .filter((n) => n.data.kind === 'location' && n.data.subtype === 'room')
+          .map((n) => n.id),
+      );
+      const seen = new Set<string>();
+      for (const edge of edgesByKind.get('leads_to') ?? []) {
+        if (!rooms.has(edge.source) || !rooms.has(edge.target)) continue;
+        const key =
+          edge.source < edge.target
+            ? `${edge.source}:${edge.target}`
+            : `${edge.target}:${edge.source}`;
+        expect(seen.has(key)).toBe(false);
+        seen.add(key);
+      }
+    }
+  });
+
+  it('names all 130 statblocks distinctly, with no numbering fallback', () => {
+    for (const { byKind } of fixtures) {
+      const names = (byKind.get('statblock') ?? []).map((n) => n.name);
+      expect(new Set(names).size).toBe(130);
+    }
+  });
+
+  it('sequences portents: only the first tick is First, the last is the last warning', () => {
+    for (const { campaign } of fixtures) {
+      for (const node of campaign.nodes) {
+        if (node.data.kind !== 'clock_tick') continue;
+        expect(node.data.portent.startsWith('First')).toBe(node.data.index === 1);
+      }
+    }
+  });
+
+  it('states each quest objective in the quest own name terms', () => {
+    for (const { campaign } of fixtures) {
+      for (const node of campaign.nodes) {
+        if (node.data.kind !== 'quest') continue;
+        const title = node.name.replace(/ (II|III|IV|V|VI|VII|VIII|IX|X|\d+)$/, '');
+        expect(node.data.objective.startsWith(title)).toBe(true);
+      }
+    }
+  });
+
+  it('keeps common items rare among rewards, because the bias is built, not stated', () => {
+    let rewards = 0;
+    let common = 0;
+    for (const { byId, edgesByKind } of fixtures) {
+      for (const edge of edgesByKind.get('rewards') ?? []) {
+        const item = byId.get(edge.target);
+        if (item?.data.kind !== 'item') continue;
+        rewards += 1;
+        if (item.data.rarity === 'common') common += 1;
+      }
+    }
+    expect(rewards).toBeGreaterThan(80);
+    expect(common / rewards).toBeLessThanOrEqual(0.15);
+  });
+
+  it('keeps every keyed site a keyed site at a tiny scale: rooms floored, entry point present', () => {
+    const tiny = index(generateCampaign({ seed: 20260814, scale: 0.01 }));
+    const entered = new Set((tiny.edgesByKind.get('entry_point') ?? []).map((e) => e.source));
+    const roomCounts = new Map<string, number>();
+    for (const edge of tiny.edgesByKind.get('contains') ?? []) {
+      const source = tiny.byId.get(edge.source);
+      const target = tiny.byId.get(edge.target);
+      if (
+        source?.data.kind === 'location' &&
+        source.data.dungeon === true &&
+        target?.data.kind === 'location'
+      ) {
+        roomCounts.set(edge.source, (roomCounts.get(edge.source) ?? 0) + 1);
+      }
+    }
+    const dungeons = tiny.campaign.nodes.filter(
+      (n) => n.data.kind === 'location' && n.data.dungeon === true,
+    );
+    expect(dungeons.length).toBeGreaterThan(0);
+    for (const dungeon of dungeons) {
+      expect(roomCounts.get(dungeon.id) ?? 0).toBeGreaterThanOrEqual(8);
+      expect(entered.has(dungeon.id)).toBe(true);
+    }
+  });
+});
+
 describe('statblock reuse', () => {
   it('reuses the head of the bestiary far more than the tail, and leaves no encounter unarmed', () => {
     for (const { campaign, edgesByKind } of fixtures) {

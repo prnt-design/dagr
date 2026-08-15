@@ -69,10 +69,18 @@ export class Rng {
    * An index in [0, size), Zipf-distributed: index 0 is the goblin every
    * dungeon reuses, the tail is the vampire lord who appears once. Inverse-CDF
    * over the harmonic weights, linear scan because size stays near 130 here.
+   * The harmonic total is cached per size: the generator calls this several
+   * hundred times with one size, and the total is pure arithmetic on it.
    */
+  static readonly #harmonicTotals = new Map<number, number>();
+
   zipf(size: number): number {
-    let total = 0;
-    for (let i = 1; i <= size; i += 1) total += 1 / i;
+    let total = Rng.#harmonicTotals.get(size);
+    if (total === undefined) {
+      total = 0;
+      for (let i = 1; i <= size; i += 1) total += 1 / i;
+      Rng.#harmonicTotals.set(size, total);
+    }
     let roll = this.next() * total;
     for (let i = 1; i <= size; i += 1) {
       roll -= 1 / i;

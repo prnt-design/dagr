@@ -16,7 +16,6 @@
 export { cardRows } from './card.js';
 export { generateCampaign } from './generate.js';
 export type { GenerateOptions } from './generate.js';
-export { Rng } from './random.js';
 export { EDGE_ROLES } from './types.js';
 export type {
   Campaign,

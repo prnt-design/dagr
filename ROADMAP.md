@@ -3431,8 +3431,8 @@ consumer. Sequencing against M3 is the plan's open question 1.
 - [x] **P1** (`packages/campaign`, `apps/demo`) The dataset: `@dagr/campaign`,
   a private zero-dependency package holding the schema types (16 node kinds,
   23 edge kinds with a routed/overlay split the layout consumes) and a seeded
-  generator. Measured at the default seed: 2,949 nodes, 6,939 edges, spanning
-  2,664 to 3,871 nodes across `scale` 0.5 to 2. The structural claims are
+  generator. Measured at the default seed: 3,010 nodes, 7,100 edges, spanning
+  2,581 to 3,752 nodes across `scale` 0.5 to 2. The structural claims are
   tested as graph invariants across three seeds, not eyeballed: the contains
   forest steps depth by exactly one, every revelation has three clues from
   three distinct holders of at least two kinds, every dungeon's loop surplus
@@ -3447,6 +3447,16 @@ consumer. Sequencing against M3 is the plan's open question 1.
   Edge count honesty: the research proposal estimated 8,000 to 11,000 edges;
   the built social layer is thinner and the suite gates the ratio (2 to 4
   edges per node) rather than the estimate.
+  A pre-PR review (8 finder angles, execution-verified) found 10 confirmed
+  data-coherence and quota-integrity bugs, all fixed with regression tests:
+  the demo hardcoding the root id across the package boundary (Campaign now
+  exposes rootId), quest objectives contradicting their own titles, the
+  jaquays quota counting doubled doors as loops, the top half of the bestiary
+  collapsing into same-named clones, every clock tick claiming to be first,
+  NPCs able to end up with zero acquaintances despite the documented floor,
+  zero-room dungeons at tiny scales (rooms now floor at 8), a reward bias
+  that was stated but not built, edges loaded into the demo graph without
+  their kind, and duplicate React keys latent in the location card rows.
 - [ ] **P2** (`@dagr/render`, `apps/demo`) Content-derived zoom limits
   (`fitBounds`, `setZoomLimits`) and keyboard zoom while the canvas has
   focus.

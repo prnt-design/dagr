@@ -10,12 +10,12 @@ const campaign = generateCampaign();            // same seed, same campaign
 const campaign2 = generateCampaign({ seed: 7, scale: 2 });
 ```
 
-The default seed generates 2,949 nodes and 6,939 edges: a campaign spine
+The default seed generates 3,010 nodes and 7,100 edges: a campaign spine
 (arcs, chapters, scenes, encounters), a geography tree down to keyed rooms,
 NPCs and factions, branch-and-merge quest DAGs, a clue web, faction fronts
 with countdown clocks, and weather and condition modifiers. `scale` moves
 rooms per dungeon and NPCs per settlement together, spanning roughly 2,600 to
-3,900 nodes across 0.5 to 2.
+3,800 nodes across 0.5 to 2.
 
 Why a generator and not a JSON file: the dataset would be megabytes, the
 generator is kilobytes, and the same seed reproduces the same campaign byte
