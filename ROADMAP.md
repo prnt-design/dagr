@@ -3015,8 +3015,9 @@ of M3 would leave the second runner idle for a milestone.
   from its centreline at every zoom. The demo's derived range runs 0.45 to 134
   CSS pixels per world unit on the LADDER scene and the reference canvas (P2
   measures both ends; the campaign restates them with its own bounds once M4.4
-  draws it), a factor of 300, and no world width survives both ends: one visible at the floor is a slab across the card it connects at the
-  ceiling, one right at the ceiling is a third of a pixel at the floor, which
+  draws it), a factor of 300, and no world width survives both ends: one
+  visible at the floor is a slab across the card it connects at the ceiling,
+  one right at the ceiling is a third of a pixel at the floor, which
   is the sub-pixel fade M4.2 measured. `@dagr/layout` gives a node a `Size` and
   an edge only a polyline, so a world width would be invented by the renderer
   rather than laid out; an outline is in device pixels here for the same

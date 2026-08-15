@@ -762,7 +762,7 @@ export function smoothCentreline(points: readonly Vec2[], toleranceWorld: number
  * is the one case where the cancellation is exact.
  *
  * The formula is exact rather than an estimate: the tests measure the last
- * length that inverts at four same-way angles and two unequal opposite pairs,
+ * length that inverts at four same-way angles and three unequal opposite pairs,
  * to within 0.005 world units. With the default miter limit each term is at
  * most `tan(60 degrees)`, so the worst case is `3.46 * (halfWidth + 1)`
  * pixels, 8.7 for a 3 pixel ribbon. A route's FIRST and LAST segments have a
