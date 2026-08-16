@@ -84,6 +84,54 @@ findings addressed or logged, docs land with the feature.
   costs 6.1x `outEdges` over the same nodes (the array materialisation the M1.2
   review flagged and M2.5 deferred), and a watched attribute update costs 2.0x
   an unwatched one against the 1.8x M1.3 measured.
+  **TWO OF THREE, AND A SECOND RECAPTURE (2026-08-16), because the gate had
+  started measuring the box rather than the code.** The maintainer called both
+  halves after four sessions escalated the same symptom, and the evidence is
+  that branches which changed nothing the gate can see failed it: unmodified
+  `main` failed one run and passed the next a minute later; a markdown-only
+  branch passed at a 1-minute load of 4.56, failed at 5.07 and passed again at a
+  HIGHER 6.18; a branch with a zero-byte diff against `packages/graph`,
+  `packages/layout` and `bench` reported `descendants, 10k` at +94.9% and
+  `rank > 1k` at +59.9% on a run whose PIPELINE entry, which runs ranking, came
+  in at -5.5%. The cause is the machine rather than the file: PR #21's baseline
+  was captured when one agent ran on this box at a time, and it now carries
+  several sessions at once, some in an unrelated checkout that cannot read the
+  gate lock. Sessions coped by re-running until green, which is the habit that
+  hides a real regression.
+  `pnpm bench:ci` now measures up to three times and passes when two runs pass,
+  fails when two fail, and calls three runs that never agreed UNDECIDED, which
+  is not a pass: the property claimed is a repeatable pass. An unreadable run is
+  still neither, and counts towards neither two, so the old "retry once on exit
+  2" is the same rule with a budget. A harness error fails on the first attempt,
+  because a stale report is stale on the next run too. THE TOLERANCES ARE
+  UNTOUCHED, deliberately: a wider tolerance hides the drift and the regression
+  together, so a fresh baseline plus repetition is what replaces a looser
+  number. The command does not change, so AGENTS.md does not either.
+  **ON A FAILURE IT REPORTS WHETHER THE SAME ENTRY FAILED EVERY RUN**, which is
+  the cheapest real-versus-noise test available and costs nothing beyond runs
+  already taken: a regression is in the code, so it fails the same entry every
+  time, while noise picks a different one.
+  Proved rather than asserted, on this box, all four runs after the recapture.
+  Three runs of the gate on a branch whose diff is zero bytes against
+  `packages/graph` and `packages/layout`: PASS with run 2 failing `rank > 1k`,
+  PASS with run 1 failing `descendants, 10k` at +25.0% of +25.0%, and PASS in
+  two runs with nothing failing. A DIFFERENT ENTRY EACH TIME, and under the old
+  one-shot gate two of those three would have blocked a merge. Then the
+  historical example this harness was verified against in the first place, the
+  `diffAttrs` allocation guard reverted in a scratch commit: the gate FAILED in
+  two runs, both on `2k updateNodeAttrs, unwatched`, at +81.6% and +86.4%
+  against about +20.5% allowed, with no other entry failing and the report
+  reading "the same entry failed every failing run".
+  The recapture itself is in `bench/README.md`, and two things in it are worth
+  reading. FIVE MEASURED RUNS RATHER THAN THREE, because the first three
+  disagreed by 32.5% on `build > 1k` and three runs cannot say which is the odd
+  one out; the two extra runs cost 70 seconds each and moved the choice. AND THE
+  OLD FILE WAS NOT FAR WRONG: eleven of fifteen entries moved under 6%, so the
+  flakiness was never mostly a stale baseline. It is the between-run spread on
+  this machine, 30.6% on `build > 1k` and 40.7% on `isAcyclic, acyclic` across
+  five idle runs with no code changing, which a recapture re-centres and cannot
+  narrow. That is the standing argument for the second control workload
+  `bench/README.md` keeps naming, and `rank > 1k` is where to start.
 
 ## M1: Graph model (`@dagr/graph`)
 
