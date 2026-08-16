@@ -2720,7 +2720,14 @@ it.
   from either side of the gap and none from inside it, which is not a transition
   that ever happened, and replaying it onto a mirror asks for an edge to a node
   that never arrived. The cost is a batch nobody ends up reading collecting ops
-  that are then dropped at the close, which is bounded by the batch. The depth comes down before the emission, so a listener
+  that are then dropped at the close, which is bounded by the batch.
+  AND `apply` NOW REPLAYS INSIDE A BATCH, which is the review's other real
+  finding and fixes a seam that predates this task: `apply` is an ordinary
+  caller, so op by op it re-fanned one patch into one patch PER OP on the target.
+  A cascade left one graph as a single patch and arrived at the next as two, and
+  a mirror was the one place the intermediate states came back after the source
+  had removed them, which is precisely the failure this task is about, on the
+  path the docs recommend for mirroring. One line, and the seam closes for both. The depth comes down before the emission, so a listener
   mutating while it reads a batch emits its own patch rather than joining the one
   it is holding.
   WHAT WAS NOT BUILT: transactions, a batch-versus-patch listener choice, and any

@@ -142,6 +142,54 @@ describe('Graph batch', () => {
     expect(mirror.edges().map((edge) => edge.id)).toEqual(['ab']);
   });
 
+  // Mirroring is the use `subscribe` is documented around, and a mirror that
+  // re-fans one patch into several hands anything downstream of it the
+  // intermediate states this whole task exists to remove.
+  it('replays as one patch, so a mirror keeps the unit the source sent', () => {
+    const source = new Graph();
+    const mirror = new Graph();
+    const { patches, listener } = recorder();
+    const sourcePatches = recorder();
+    source.subscribe(sourcePatches.listener);
+    mirror.subscribe(listener);
+
+    source.batch(() => {
+      source.addNode('a');
+      source.addNode('b');
+      source.addEdge('a', 'b', 'ab');
+    });
+    apply(mirror, sourcePatches.patches[0] as Patch);
+
+    expect(patches).toHaveLength(1);
+    expect(tags(patches[0] as Patch)).toEqual(['add-node', 'add-node', 'add-edge']);
+  });
+
+  it('replays a cascade as one patch too', () => {
+    const source = new Graph();
+    const mirror = new Graph();
+    source.addNode('a');
+    source.addNode('b');
+    source.addEdge('a', 'b', 'ab');
+    apply(mirror, [
+      { op: 'add-node', id: 'a', attrs: {}, ports: [] },
+      { op: 'add-node', id: 'b', attrs: {}, ports: [] },
+      { op: 'add-edge', id: 'ab', source: 'a', target: 'b', attrs: {} },
+    ]);
+    const { patches, listener } = recorder();
+    const sourcePatches = recorder();
+    source.subscribe(sourcePatches.listener);
+    mirror.subscribe(listener);
+
+    // One call, one patch of two ops at the source. Op by op at the mirror,
+    // that used to be two patches, which made a cascade change shape every time
+    // it crossed a mirror.
+    source.removeNode('a');
+    apply(mirror, sourcePatches.patches[0] as Patch);
+
+    expect(patches).toHaveLength(1);
+    expect(tags(patches[0] as Patch)).toEqual(['remove-edge', 'remove-node']);
+  });
+
   it('makes a batch an ordinary patch: `invert` undoes it', () => {
     const graph = new Graph();
     graph.addNode('keep');

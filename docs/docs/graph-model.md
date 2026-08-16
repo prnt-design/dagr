@@ -411,9 +411,13 @@ stop(); // the mirror stops tracking here
 ```
 
 `apply` is an ordinary caller of the public API, so the mirror emits its own
-patches as it is written to and can be subscribed to in turn. Nothing is
-transactional either: an op the graph rejects throws that graph error out of
-`apply`, with the ops before it already applied.
+patch as it is written to and can be subscribed to in turn. It replays inside a
+[batch](#batching), so a patch of any op count arrives at the mirror's listeners
+as one patch, exactly as it left the source: without that, a cascade leaves one
+graph as a single patch and reaches the next as two, and mirroring a batched
+three-step edit re-fans it into the three intermediate states batching exists to
+remove. Nothing is transactional either: an op the graph rejects throws that
+graph error out of `apply`, with the ops before it already applied.
 
 ### The ops
 
@@ -636,7 +640,7 @@ queue outside the emission.
 `batch` runs a function and emits everything it changed as one patch:
 
 ```ts
-import { Graph, invert } from '@dagr/graph';
+import { Graph } from '@dagr/graph';
 
 const graph = new Graph();
 graph.subscribe((patch) => {

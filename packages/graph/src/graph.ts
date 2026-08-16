@@ -1529,8 +1529,12 @@ export class Graph<
     }
     try {
       this.#emit(ops);
-    } catch {
-      // Deliberately swallowed: see `bodyFailed` above.
+    } catch (error) {
+      // A listener failure is what `bodyFailed` is about, and it is the only
+      // thing dropped here. Anything else out of `#emit` is a failure this
+      // class did not predict, and swallowing it would hide the unpredicted one
+      // rather than the expected one.
+      if (!(error instanceof PatchListenerError)) throw error;
     }
   }
 

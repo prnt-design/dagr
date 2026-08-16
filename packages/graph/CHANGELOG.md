@@ -119,3 +119,12 @@ diffing five milestones of doc prose.
   `switch` over either that was previously complete now has a missing arm, which
   is a compile error rather than a silent fallthrough, and is the only way this
   release can break a build.
+
+### Changed
+
+- `apply(graph, patch)` replays inside a batch, so the target emits one patch
+  for the replay whatever the op count (M3.3). Content and ordering are
+  untouched; what changes is what the target's own listeners see. A cascade used
+  to leave one graph as a single patch and arrive at the next as two, and
+  mirroring a batched edit used to re-fan it into the intermediate states
+  batching exists to remove.
