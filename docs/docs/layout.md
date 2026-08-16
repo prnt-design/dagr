@@ -866,12 +866,14 @@ reference the ordering evidence is measured against.
 number only the stage can compute is a number nobody can hold the stage to.
 What it takes is a `Layering`, a graph plus the layers its nodes are drawn in,
 named for what it is rather than for this one consumer because the transpose
-pass refines one and M3.4's quality report will score one. An `OrderedState`
-satisfies it structurally, so a stage author holding one passes it straight in.
+pass refines one too. An `OrderedState` satisfies it structurally, so a stage
+author holding one passes it straight in.
 
 Layers are what an order stage returns, so scoring a run means wrapping one: a
 `LayoutResult` holds coordinates and not layers, and nothing exported today
-turns the first back into the second.
+turns the first back into the second. That is also why crossings are not part of
+[the stability report](#stability), which is a function of two results. They are
+a different axis in any case: a layout can be perfectly stable and badly drawn.
 
 ```ts
 import { barycenterOrderStage, countCrossings, layout } from '@dagr/layout';
@@ -1842,9 +1844,10 @@ interface InfluenceSet {
 ```
 
 Today it names the whole roster, which makes the claim true and useless, and
-that is deliberate: it is the observable the stability contract and the
-influence-region work are both written against, so it ships before either of
-them and narrows without anything a caller reads changing shape. It names only
+that is deliberate: it is the observable [the stability
+contract](#stability) and the influence-region work are both written against, so
+it shipped before either of them and narrows without anything a caller reads
+changing shape. It names only
 ids you can see, never a dummy the router invented, and it spans **both sides**
 of the patch, so the id of a node you removed is in it. Sets rather than arrays,
 which is the opposite of what a delta chose and for the opposite reason: a delta
@@ -2340,6 +2343,134 @@ The number is named on the comparison rather than on `LayoutConfig`, because
 every field of the config answers "how should this graph be laid out", is
 resolved once per run, and is read by stages, and no stage can read a tolerance
 that is about two results.
+
+## Stability
+
+Stability is the headline claim of incremental layout: edit the graph and the
+parts of the drawing you did not touch stay where they were. It is two things
+here, and both ship, because either one alone certifies the wrong thing.
+
+**A contract.** `stabilityViolations(previous, next, influence)` returns
+everything that changed and was not in the relayout's influence set. An empty
+list is the contract holding. It is exact, with no tolerance at all: a path
+entitled to keep a coordinate keeps it, which is to say copies it, so any
+difference whatsoever is a coordinate that was recomputed when it should have
+been kept.
+
+```ts
+import { createLayout, stabilityViolations } from '@dagr/layout';
+
+const engine = createLayout();
+let previous = engine.run(graph);
+
+graph.subscribe((patch) => {
+  const { result, influence } = engine.relayout(patch);
+  stabilityViolations(previous, result, influence); // -> []
+  previous = result;
+});
+```
+
+`previous` moves forward with every relayout, and it has to: an influence set
+describes the one relayout it came out of, so checking a new result against the
+geometry from three patches ago asks a set about changes it never claimed.
+
+**A metric.** `measureStability(previous, next)` says how much of the drawing
+moved, which is what a full relayout has to be judged by: a run that recomputes
+everything is entitled to move everything, so the contract passes without
+measuring a single coordinate.
+
+```ts
+import { measureStability } from '@dagr/layout';
+
+const report = measureStability(before, after);
+// report.nodes -> { shared, added, removed, moved, movedFraction,
+//                   meanDisplacement, maxDisplacement, rankChurn, orderChurn }
+// report.edges -> { shared, added, removed, rerouted, reroutedFraction,
+//                   meanRouteDistance, maxRouteDistance,
+//                   bendChurn, meanBendChange, maxBendChange }
+```
+
+It is a pure function over two results, computed on top of `diffLayout` and
+taking the same `epsilon`, so a report is scoped by the tolerance it was
+measured at, and the numbers you assert on are the numbers your consumers see.
+
+### What the numbers are taken over
+
+**The shared roster**, meaning the ids both results hold. Additions and removals
+are reported as their own counts beside the means rather than folded into them,
+because a node that did not exist before has no displacement.
+
+That includes the nodes that did not move, and it is worth saying why. An
+average taken over only the nodes that MOVED goes UP as a layout gets more
+stable, because the small moves drop out of the set and the large ones are what
+is left to average. A number that gets worse when the thing it measures gets
+better is not a regression gate.
+
+**Displacement is centre to centre.** A node whose label grew and whose centre
+did not shift counts in `moved`, because a consumer has to redraw it, and
+contributes zero to `meanDisplacement`, because nothing travelled.
+
+### Rank churn is absolute, order churn is relative
+
+`rankChurn` is the fraction of shared nodes that changed row. It is absolute,
+which has a consequence to know before you read it: a patch inserting a new row
+ABOVE the drawing renumbers every rank under it and reports total rank churn.
+That is true rather than a bug, since every node really is one row further down.
+The absolute form is still right, because a drawing has an anchored top: rows
+are stacked from `y = 0`, so a rank index is a fact about where a node is drawn.
+
+`orderChurn` is the fraction of rank-neighbour pairs that changed places, and it
+is relative. The absolute form, "did this node keep its index within its rank",
+calls a whole rank churned when one node is inserted at its head, which is the
+most common patch there is and a case where nothing changed places with
+anything. An index among siblings means nothing on its own: index 3 of 4 and
+index 4 of 5 are the same slot.
+
+Both are derived from the result rather than plumbed through from the pipeline,
+which is what keeps them a function of two results you can compute with no
+engine at all. Nodes sharing a `y` share a rank, because `gridPositionStage`
+gives every node of a row the same centre line; within a row, `x` ascending is
+the order.
+
+### Why the edges get their own metrics
+
+A layout can score perfectly on every node metric while every polyline in the
+drawing re-routes. That is exactly what an unstable dummy chain produces: node
+coordinates bit-identical, and the lines between them different on every patch.
+
+So there are two edge numbers, answering two questions:
+
+`maxRouteDistance` is the symmetric Hausdorff distance between the two
+polylines, the greatest distance from a vertex of either route to the other
+route taken as a curve. Hausdorff rather than a per-vertex sum, because a route
+that gained a bend has more vertices than it had, and a per-vertex comparison
+cannot be spelled between two lists of different lengths. Gaining a bend is the
+observable half of a long edge crossing one more rank, so a metric that gives up
+there measures nothing about the drawings that change most.
+
+`bendChurn` is the fraction of shared edges whose bend count changed, a bend
+being an interior point of the polyline. It catches what a distance cannot: a
+point added on the line the route already ran along draws the same picture and
+measures zero distance, while still being a different polyline to anything
+binding per segment.
+
+### Why the contract is scoped to the influence set
+
+Because the stronger form is infeasible, not merely hard. Take hard anchoring
+literally: untouched nodes hold their coordinates, the intra-rank order is
+fixed, and the layout requires a minimum separation. Now insert one node into a
+rank between two anchored neighbours exactly `nodeSep` apart. There is no
+coordinate for it. The only exits are moving an anchor, so stability was never
+exact, or overlapping two boxes, so the [separation
+invariant](#overlap-exactly) breaks. That is not an edge case: it is the most
+common patch a pattern generator emits.
+
+So the claim is the achievable one. A node outside the influence set keeps its
+coordinate exactly, where the influence set includes whatever an insertion
+widened. Today that set is [the whole roster](#relayout), which makes the
+contract true and useless on purpose: it is the observable M3.5 narrows, and the
+assertion is written against it now so that narrowing it is a change to one
+implementation rather than the arrival of a new idea.
 
 ## Overlap, exactly
 

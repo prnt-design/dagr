@@ -14,13 +14,15 @@ import type { LayoutResult } from './types.js';
  *
  * An observable output of `engine.relayout` from M3.2, where its implementation
  * reports the whole roster and the claim is therefore true and useless. That is
- * deliberate, and it is what breaks the circularity between M3.4 and M3.5:
- * M3.4's stability contract ("a node outside the influence set keeps its
- * coordinate exactly") becomes testable immediately, vacuously true against this
- * set; M3.5 becomes a narrowing of something already observable rather than a
- * new concept; and M3.9's fast paths assert against the same object. It also
- * buys a free regression guard, because this set should shrink monotonically
- * across M3.5, M3.7 and M3.9, and a set is a thing you can measure.
+ * deliberate, and it is what broke the circularity between M3.4 and M3.5. M3.4's
+ * stability contract ("a node outside the influence set keeps its coordinate
+ * exactly") shipped against this set and is vacuously true against it, which is
+ * exactly the intent: see `stabilityViolations` in `stability.ts`, and the test
+ * beside it that narrows the set by hand so the checker is shown failing as well
+ * as passing. M3.5 is therefore a narrowing of something already observable
+ * rather than a new concept, and M3.9's fast paths assert against the same
+ * object. It also buys a free regression guard, because this set should shrink
+ * monotonically across M3.5, M3.7 and M3.9, and a set is a thing you can measure.
  *
  * SETS RATHER THAN ARRAYS, which is the opposite of what `LayoutDelta` chose and
  * for the opposite reason. A delta is a list of things that happened and every

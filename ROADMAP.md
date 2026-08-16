@@ -2740,7 +2740,7 @@ it.
   are allowed to be laid out, so a stability metric measured over an unbatched
   multi-step edit is measuring states nobody meant to draw. Batch the edit in the
   corpus before the number means anything.
-- [ ] **M3.4** (`@dagr/layout`) Stability contract and metrics: write down what
+- [x] **M3.4** (`@dagr/layout`) Stability contract and metrics: write down what
   stable means, and make it measurable, before any stage tries to be stable. A
   stability module computing mean and max node displacement, the fraction of
   nodes that moved, and rank and order churn between two `LayoutResult`s, plus
@@ -2781,6 +2781,140 @@ it.
   relaxable from the start (one-sided, or large but finite weight), and a
   contract asserting the impossible form must not ship in this task's test
   helpers.
+  SHIPPED 2026-08-16 as `src/stability.ts`: `stabilityViolations` and
+  `measureStability`, the five types they are spelled with, and the two assertion
+  wrappers in `test/stability.ts`. 29 tests in `test/layout.stability.test.ts`
+  written before the implementation and failing against it. No coordinate moved
+  and no algorithm changed, which is the point of the ordering principle at the
+  top of this milestone: the measurement lands before the stages that are judged
+  by it.
+  BOTH, AND THE SPLIT IS THE ANSWER RATHER THAN A HEDGE. The entry predicted
+  "likely both" and the reason it is both is that each covers the other's blind
+  spot exactly. A CONTRACT SAYS NOTHING ABOUT A FULL RELAYOUT: a run that
+  recomputes everything is entitled to move everything, so the assertion passes
+  without measuring one coordinate, which is the state of this package today. A
+  METRIC LETS A REGRESSION LAND as long as it stays under the bar, which is how a
+  number goes up four percent a milestone and no run is the one that broke it.
+  Neither is a weaker version of the other, so neither waits for the other.
+  THE CONTRACT IS EXACT AND TAKES NO TOLERANCE, which is a decision and not an
+  omission. `diffLayout` has an epsilon because a move too small to see is not
+  worth animating, and none of that reasoning reaches here: a path entitled to
+  keep a coordinate KEEPS it, which is to say copies it, so the result is
+  bit-identical and any difference at all is a coordinate that was recomputed
+  when it should have been kept. A tolerance would let a fast path quietly
+  recompute the whole drawing and still pass, which is the one thing the
+  assertion exists to catch. The suite pins it with a one-ulp move.
+  THE IMPOSSIBLE FORM IS NOT AVAILABLE, per this entry's instruction, and the
+  demonstration ships as a test rather than as a paragraph: a batched one-node
+  insertion into the diamond moves nodes the patch never names, so a contract
+  written against the patch's own ids fails today, against the pipeline as it
+  stands, before M3.8 exists to discover it. What ships instead is scoped to the
+  INFLUENCE SET, which is vacuously satisfied by M3.2's whole-roster
+  implementation, and the suite therefore also runs the checker against a
+  DELIBERATELY NARROWED set and asserts it reports violations. Without that
+  second test the first one proves nothing.
+  IT CHECKS THE EDGES TOO, on this entry's own argument: node coordinates can be
+  bit-identical while every polyline re-routes. A contract over nodes alone
+  certifies a drawing nobody looked at.
+  WHAT IS RETURNED RATHER THAN THROWN, and it is what decides where the code
+  lives. `stabilityViolations` returns its findings, so it is usable by a test
+  asserting the list is empty, by a corpus runner printing it, and by a consumer
+  logging it; a throwing assertion is usable only inside a test runner, and this
+  package ships no testing entry point to put one behind. So the function is
+  public surface and the two `expect` wrappers (`expectStable`,
+  `expectStabilityWithin`) are in `test/`, shared the way `fakes.ts` and
+  `random.ts` are. `StabilityBounds` is all optional upper bounds, because a
+  stability metric only ever regresses upward and a task should be able to pin
+  the one number it is about without inheriting seven it is not.
+  EVERY NUMBER IS TAKEN OVER THE SHARED ROSTER, meaning the ids both results
+  hold, INCLUDING THE ONES THAT DID NOT MOVE. An average taken over only the
+  nodes that MOVED rises as a layout gets more stable, because the small moves
+  drop out of the set and the large ones are what is left to average, and a
+  number that gets worse when the thing it measures gets better is not a
+  regression gate. This is #48's lesson arriving in a second place: a number is
+  scoped by the set it was measured over. Additions and removals are counts
+  beside the means rather than inside them, since a node that did not exist
+  before has no displacement.
+  DISPLACEMENT IS CENTRE TO CENTRE, so a node whose label grew and whose centre
+  did not shift counts in `moved`, because a consumer has to redraw it, and
+  contributes zero to the mean, because nothing travelled. One number answering
+  two questions badly was the alternative.
+  RANK CHURN IS ABSOLUTE AND ORDER CHURN IS RELATIVE, which is the only place
+  the two churn metrics differ in kind and is worth the asymmetry. A drawing has
+  an anchored top, since `gridPositionStage` stacks rows from `y = 0`, so a rank
+  index is a fact about where a node is drawn; the consequence, recorded because
+  a reader will hit it, is that a patch inserting a row ABOVE the drawing
+  renumbers every rank under it and reports total rank churn, which is true
+  rather than a bug. A rank has no anchored left, and an index among siblings
+  means nothing on its own (index 3 of 4 and index 4 of 5 are the same slot), so
+  the absolute form there would call a whole rank churned when one node is
+  inserted at its head, which is the most common patch there is and a case where
+  nothing changed places with anything. Order churn is therefore counted over
+  pairs that were ADJACENT in the previous rank and that share a rank in the
+  next one: a pair whose members ended in different rows has no order left to
+  have kept, and counting it would report one rank change twice.
+  RANKS ARE DERIVED FROM THE RESULT RATHER THAN PLUMBED THROUGH, which is what
+  keeps every metric a pure function of two `LayoutResult`s, as this entry asks,
+  and lets a consumer measure two `layout()` calls with no engine at all. The
+  derivation is exact rather than a guess: `gridPositionStage` gives every node
+  of a row the same centre line, so nodes sharing a `y` share a rank and sorting
+  the distinct values gives the indices. THE COST, stated so a later task does
+  not trip on it: a position stage that stopped giving a row one centre line
+  would silently change what these two numbers mean, which is a thing for such a
+  stage to declare rather than a thing this module can check. M3.6 is the first
+  task with a reason to care.
+  THE ROUTE METRIC IS HAUSDORFF AND NOT A PER-VERTEX SUM, and the reason is the
+  case that matters most rather than a preference. A route that gained a bend has
+  more vertices than it had, and a per-vertex comparison cannot be spelled
+  between two lists of different lengths, let alone answer with a distance;
+  gaining a bend is the observable half of a long edge crossing one more rank, so
+  a metric that gives up exactly there measures nothing about the drawings that
+  change most. It is computed from the VERTICES of each route against the
+  SEGMENTS of the other, which lower-bounds the true Hausdorff distance between
+  two curves and is EXACT for the only question it decides: two polylines with
+  the same vertices are the same polyline, so zero means the same line was drawn.
+  BEND-COUNT CHURN SHIPS BESIDE IT AND IS NOT REDUNDANT: a point added on the
+  line the route already ran along draws the same picture and measures zero
+  distance, while still being a different polyline to anything binding per
+  segment. The suite holds that case as the argument for shipping both.
+  THE METRIC IS BUILT ON `diffLayout` RATHER THAN BESIDE IT. The delta already
+  answers what moved, what arrived, what left, and which ids are the same edge,
+  at the same epsilon and under the same rules, so a second implementation here
+  would be a second set of answers to keep agreeing with the first, and it means
+  the numbers a task asserts on are the numbers its consumers see. The delta is
+  RECOMPUTED rather than accepted as an argument, even though the engine holds
+  one: a delta passed in is a cache of two results that can disagree with them,
+  which is the field M3.1 refused on `MovedNode` for the same reason.
+  WHAT IS DELIBERATELY NOT HERE: a committed corpus with committed thresholds.
+  A threshold is only worth committing once there is something for it to catch,
+  and today every path is the fallback, so a number captured now would be a
+  ceiling on the one algorithm this milestone exists to replace. M3.5 is the
+  first task with a non-trivial influence set and is where the corpus and its
+  bounds belong; `expectStabilityWithin` is the helper waiting for it, and this
+  task's suite exercises it against the current fallback so that the helper is
+  not itself first run by the task that depends on it.
+  M3.3's HAND-OFF WAS TAKEN: every edit in this task's corpus is wrapped in
+  `graph.batch`, because a batch is the boundary saying which graph states were
+  meant to be drawn, and a stability number measured over the states in between
+  a multi-step edit is a number about drawings nobody asked for.
+  CROSSINGS ARE NOT IN THE REPORT, AND TWO PLACES PREDICTED THEY WOULD BE
+  (`order.ts`'s module docstring and its `Layering` docstring, and the docs
+  page's crossing section). Both are corrected rather than left standing, which
+  is this run's tree-review finding. The mechanical reason is that
+  `measureStability` is a function of two `LayoutResult`s and a result holds
+  coordinates rather than layers, so there is nothing to count crossings over.
+  The real reason is that they are a DIFFERENT AXIS: a layout can be perfectly
+  stable and badly drawn, or beautifully drawn and unstable, and folding a
+  quality number into a stability report makes one bar answer two questions.
+  M2.6's corpus is where a run that draws worse is caught, and it stays there.
+  THE FALLBACK'S OWN NUMBERS, MEASURED ON THE DIAMOND PLUS ONE NODE, batched,
+  and pinned as ceilings in the suite so M3.5 has something to beat: 4 shared
+  nodes, 2 moved (50%), mean displacement 37.5 and max 75, RANK CHURN 0 AND
+  ORDER CHURN 0, against 4 shared edges of which ALL FOUR REROUTED (100%) at a
+  mean route distance of 58.3 and no bend change. That is this entry's own
+  argument arriving as a measurement rather than as a prediction: a report over
+  the nodes alone would have called this relayout perfectly stable, and every
+  line in the drawing moved.
 - [ ] **M3.5** (`@dagr/layout`) Influence regions: given a patch and the
   retained pipeline state, compute the set of nodes and edges the patch can
   affect, and confine the relayout to it. Property tests: a patch confined to

@@ -128,7 +128,7 @@ export interface LayoutEngineOptions {
  * Three fields rather than a bare delta because a consumer needs all three and
  * can derive none of them from the others. A renderer holding the previous
  * result applies the `delta`; one that has just been mounted, or that dropped a
- * frame, takes the `result` whole; and M3.4's stability contract is written
+ * frame, takes the `result` whole; and M3.4's `stabilityViolations` is written
  * against the `influence` set, which is the object M3.5 narrows without changing
  * anything a caller reads.
  */

@@ -6,6 +6,8 @@ import type {
   BoundsChange,
   DagrLayoutErrorCode,
   EdgeDelta,
+  EdgeStability,
+  InfluenceSet,
   Layering,
   LayoutConfig,
   LayoutDelta,
@@ -21,6 +23,7 @@ import type {
   NetworkSimplexOptions,
   NodeDelta,
   NodeGeometry,
+  NodeStability,
   OrderOutput,
   OrderStage,
   OrderedState,
@@ -40,6 +43,9 @@ import type {
   RoutedEdge,
   RouteStage,
   Size,
+  StabilityReport,
+  StabilityViolation,
+  StabilityViolationKind,
 } from '../src/index.js';
 // `RoutedState` is not part of the public surface: it is the record the runner
 // builds after the last stage and hands to nobody, so no caller has a `run` to
@@ -144,6 +150,23 @@ describe('@dagr/layout public surface', () => {
     expect(api.isEmptyDelta(api.diffLayout(first, first))).toBe(true);
   });
 
+  // Stability, M3.4. Two functions because stability is two things: a contract
+  // over what a relayout was entitled to touch, and a metric over how much of
+  // the drawing moved. `stabilityViolations` returns its findings rather than
+  // throwing, which is what lets it ship here at all rather than in the test
+  // tree; the assertion wrappers live in `test/stability.ts`.
+  it('exports the stability contract and the stability metric', () => {
+    expect(typeof api.measureStability).toBe('function');
+    expect(typeof api.stabilityViolations).toBe('function');
+    const graph = new Graph();
+    graph.addNode('a');
+    const first = api.layout({ graph });
+    expect(api.measureStability(first, first).nodes).toMatchObject({ shared: 1, moved: 0 });
+    expect(api.stabilityViolations(first, first, { nodes: new Set(), edges: new Set() })).toEqual(
+      [],
+    );
+  });
+
   // The two stages exported by name, because neither is a placeholder waiting
   // for a real algorithm: they are two real algorithms with different
   // objectives, and a caller has to be able to name the one it wants. Naming
@@ -200,10 +223,12 @@ describe('@dagr/layout public surface', () => {
       'isEmptyDelta',
       'layout',
       'longestPathRankStage',
+      'measureStability',
       'networkSimplexRank',
       'networkSimplexRankStage',
       'polylineRouteStage',
       'serveLayout',
+      'stabilityViolations',
     ]);
   });
 
@@ -347,6 +372,21 @@ describe('@dagr/layout public surface', () => {
     const diffOptions: LayoutDiffOptions = { epsilon: 0 };
     expect(api.isEmptyDelta(delta)).toBe(false);
     expect(api.isEmptyDelta(api.diffLayout(result, result, diffOptions))).toBe(true);
+
+    // M3.4's types. `LayoutDiffOptions` is what `measureStability` takes as
+    // well, so a report is scoped by the same tolerance a delta is and there is
+    // one epsilon rule in the package rather than two.
+    const nodeStability: NodeStability = api.measureStability(result, result).nodes;
+    const edgeStability: EdgeStability = api.measureStability(result, result, diffOptions).edges;
+    const report: StabilityReport = { nodes: nodeStability, edges: edgeStability };
+    const kind: StabilityViolationKind = 'node-moved';
+    const violation: StabilityViolation = { id: 'a', kind };
+    expect(report.nodes.shared).toBe(1);
+    expect(violation.kind).toBe('node-moved');
+    // The influence set is what the contract is scoped to, and the trivial one
+    // this milestone ships makes every violation impossible on purpose.
+    const influence: InfluenceSet = { nodes: new Set(['a']), edges: new Set() };
+    expect(api.stabilityViolations(result, result, influence)).toEqual([]);
 
     // The read-side records still exist and still extend one another, which is
     // what lets a stage author name the argument its `run` is handed.
