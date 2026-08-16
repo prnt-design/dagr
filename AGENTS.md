@@ -49,10 +49,16 @@ directly.
    Rebasing is not a formality: the changes it pulls in are exactly the
    ones your local gate has never seen.
 3. Push the branch and open a pull request.
-4. The PR body records this run's persona reviews: which personas ran, what
-   each found, and how every finding was resolved, or accepted with a reason.
-   The PR is the consolidated record of the run, so someone reading it later
-   should not have to reconstruct the review from anywhere else.
+4. The PR body records this run's reviews: which reviews ran, what each
+   found, and how every finding was resolved, or accepted with a reason. Two
+   reviews are the floor: one over the DIFF, and one over the MERGED TREE the
+   diff produces. A diff review asks whether the change is right; a tree
+   review asks whether the result is, and it is the one that catches stale
+   numbers that predate the change, ordering bugs a diff cannot show, and a
+   defect the diff review's own fix introduced. Persona reviews are welcome
+   on top and are recorded the same way. The PR is the consolidated record of
+   the run, so someone reading it later should not have to reconstruct the
+   review from anywhere else.
 5. Wait for CI to conclude on the PR. A run takes about 90 seconds.
 6. Green CI merges the PR and deletes the branch. Red CI does not merge: fix
    it on the branch and push again. If green cannot be reached, leave the PR
@@ -60,13 +66,18 @@ directly.
    PR with a written blocker is a good outcome. A red `main` is not.
 
 If `main` moves while the PR is open, rebase onto it and let CI run again.
-Never force-push, and never merge a PR whose checks have not concluded.
+A rebase rewrites the branch, and pushing it to the open PR is the ONE
+force-push this workflow permits: `--force-with-lease`, to your own PR branch,
+never to `main`. Everything else stays append-only: review rounds are
+follow-up commits, never an amend, because a rewritten commit erases the
+record of what the review changed. Never merge a PR whose checks have not
+concluded.
 
 ## What agents must NOT do (queue for the human instead)
 
 - `npm publish`.
 - Changing GitHub repo settings.
-- Force-push or history rewrites.
+- Force-push `main`, or rewrite any commit that has been reviewed.
 - Major-version dependency bumps.
 - Editing `LICENSE`, `AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md`, or
   anything under `.claude/`.
