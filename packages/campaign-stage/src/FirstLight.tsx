@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import type { JSX } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { JSX, MouseEvent as ReactMouseEvent } from 'react';
 import {
   Camera2D,
   advanceDashFlow,
@@ -10,8 +10,11 @@ import {
 } from '@dagr/render';
 import type { Renderer, SceneEdge, Vec2, ViewportSize, WorldBounds } from '@dagr/render';
 import {
+  FIT,
   FIT_PADDING,
   INITIAL_ZOOM,
+  ZOOM_IN,
+  ZOOM_OUT,
   canvasPoint,
   initialZoomFromHash,
   keyCommand,
@@ -19,6 +22,7 @@ import {
   wheelZoomFactor,
   zoomLimits,
 } from './camera-input.js';
+import type { KeyCommand } from './camera-input.js';
 import type { CampaignScene } from './campaign-scene.js';
 import type { CampaignEdges } from './campaign-edges.js';
 import {
@@ -34,7 +38,11 @@ import {
   LABEL_MIN_SCREEN_WIDTH,
   createCampaignTiers,
   createFarEndTiers,
+  medianNodeWidth,
+  zoomLimitState,
+  zoomTier,
 } from './campaign-tiers.js';
+import type { ZoomTier } from './campaign-tiers.js';
 import { edgeIntensity, edgeNeighbourhoods } from './edge-highlight.js';
 import type { Campaign, CampaignNode } from '@dagr/campaign';
 
@@ -288,6 +296,23 @@ export function FirstLight({
    * the edges must not re-run when that one does.
    */
   const invalidateHighlightRef = useRef<() => void>(() => undefined);
+  /**
+   * Runs one {@link KeyCommand} against the camera, for the zoom control.
+   *
+   * A ref for the same reason `requestDrawRef` is one: the camera is built
+   * inside the effect below and the control is React around it, so the effect
+   * publishes the one function rather than the component holding a camera it
+   * would then have to keep in step with the effect's lifetime.
+   *
+   * It is a no-op until the EFFECT runs, not until a renderer exists: the
+   * camera is built synchronously and `applyCommand` is published with it, so a
+   * button pressed while `createRenderer` is still awaiting an adapter moves
+   * the camera and asks for a frame, and the first frame drawn is the one it
+   * asked for. The control is not on screen then anyway, since it needs a
+   * readout, but the ordering is worth stating because it is the opposite of
+   * what the name suggests.
+   */
+  const applyCommandRef = useRef<(command: KeyCommand) => void>(() => undefined);
   // Read by the construction effect, which must not re-run when the edges
   // change: rebuilding a renderer to recolour a line would throw away the GPU
   // resources and the camera's place.
@@ -322,6 +347,19 @@ export function FirstLight({
    * no signal.
    */
   const teardownRef = useRef<Promise<void>>(Promise.resolve());
+
+  /**
+   * The node width the zoom control's tier reading answers for.
+   *
+   * MEMOISED ON THE SCENE, which is not an optimisation to skip: `publish` runs
+   * `setReadout` from every drawn frame, so this component re-renders through a
+   * whole pan, and a median is a sort of 3,010 numbers. Keyed on `scene`
+   * because that is exactly when the boxes change.
+   */
+  const referenceWidth = useMemo(
+    () => (scene === null ? 0 : medianNodeWidth(scene.nodeBounds.values())),
+    [scene],
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -978,12 +1016,25 @@ export function FirstLight({
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     };
 
+    /**
+     * The wheel, anywhere over the STAGE rather than only over the canvas.
+     *
+     * On the container because the stage has panels on it now, and a panel is a
+     * SIBLING of the canvas rather than a descendant: a wheel over one reaches
+     * no canvas listener at all, and the host page scrolls instead. The readout
+     * refuses the pointer so its events land on the canvas anyway, but the zoom
+     * control's three buttons must take clicks, and they are exactly where the
+     * cursor is sitting when a reader has just pressed `+` and wants another
+     * notch. Bound to the container, every one of those is one listener's
+     * problem, and the anchor still comes off the CANVAS rect, which is the
+     * space `zoomAtScreen` reads.
+     */
     const onWheel = (event: WheelEvent): void => {
       // Stop the page scrolling under the gesture. This is why the listener is
-      // added here rather than through React's `onWheel` prop: React attaches
-      // wheel PASSIVELY at the root, and a passive listener's `preventDefault`
-      // is ignored with a console warning, so the canvas would zoom and the
-      // page would scroll at the same time.
+      // added directly rather than through React's `onWheel` prop: React
+      // attaches wheel PASSIVELY at the root, and a passive listener's
+      // `preventDefault` is ignored with a console warning, so the canvas would
+      // zoom and the page would scroll at the same time.
       event.preventDefault();
       // The anchor has to be canvas-relative, since that is the space
       // `zoomAtScreen` reads. Measured per event because a scroll or a layout
@@ -992,6 +1043,33 @@ export function FirstLight({
       camera.zoomAtScreen(anchor, wheelZoomFactor(event));
       requestDraw();
     };
+
+    /**
+     * Runs one {@link KeyCommand} against the camera and asks for a frame.
+     *
+     * Extracted from the handler below because D6's zoom buttons press the same
+     * three commands: a button is a key, so it takes the same path, and the
+     * anchor rule below is written once. Published on `applyCommandRef` for the
+     * control, which is React and lives outside this effect.
+     */
+    const applyCommand = (command: KeyCommand): void => {
+      if (command.kind === 'zoom') {
+        // Anchored at the viewport centre: a keyboard zoom has no cursor, and
+        // the centre is the one point a reader can predict. A button has no
+        // cursor over the canvas either, which is why it wants this same rule
+        // rather than the pointer position of the click.
+        camera.zoomAtScreen(
+          { x: camera.viewport.width / 2, y: camera.viewport.height / 2 },
+          command.factor,
+        );
+      } else if (command.kind === 'pan') {
+        camera.panByScreen(command.dx, command.dy);
+      } else {
+        camera.fitBounds(scene.bounds, FIT_PADDING);
+      }
+      requestDraw();
+    };
+    applyCommandRef.current = applyCommand;
 
     /**
      * The keyboard, while the canvas has focus. Attached to the CANVAS, which
@@ -1005,6 +1083,9 @@ export function FirstLight({
      * unclaimed keys still scroll. Escape blurs, which is the way back out
      * that keyboard users are owed, and is deliberately not in `keyCommand`:
      * it is about focus, which is this component's business, not the camera's.
+     *
+     * What it does with a command it claims is {@link applyCommand} above,
+     * which the zoom control's buttons call too.
      */
     const onKeyDown = (event: KeyboardEvent): void => {
       // Ctrl, Meta and Alt chords belong to the browser: Ctrl+'+'/'-'/'0' is
@@ -1019,19 +1100,7 @@ export function FirstLight({
       const command = keyCommand(event.key, event.shiftKey);
       if (command === null) return;
       event.preventDefault();
-      if (command.kind === 'zoom') {
-        // Anchored at the viewport centre: a keyboard zoom has no cursor, and
-        // the centre is the one point a reader can predict.
-        camera.zoomAtScreen(
-          { x: camera.viewport.width / 2, y: camera.viewport.height / 2 },
-          command.factor,
-        );
-      } else if (command.kind === 'pan') {
-        camera.panByScreen(command.dx, command.dy);
-      } else {
-        camera.fitBounds(scene.bounds, FIT_PADDING);
-      }
-      requestDraw();
+      applyCommand(command);
     };
 
     // The pointer leaving the canvas has to clear the highlight: without it a
@@ -1056,7 +1125,7 @@ export function FirstLight({
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
     canvas.addEventListener('pointercancel', onPointerUp);
-    canvas.addEventListener('wheel', onWheel, { passive: false });
+    container.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('keydown', onKeyDown);
 
     const ready = teardownRef.current
@@ -1139,7 +1208,7 @@ export function FirstLight({
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
-      canvas.removeEventListener('wheel', onWheel);
+      container.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('keydown', onKeyDown);
       // The next mount waits on this, so it has to cover both orders: a
       // renderer already installed is disposed here, and one still in flight is
@@ -1152,6 +1221,13 @@ export function FirstLight({
         rendererRef.current = null;
         requestDrawRef.current = () => undefined;
         invalidateHighlightRef.current = () => undefined;
+        // And this one, which is the ref a POINTER can reach: leaving it would
+        // keep a disposed effect's camera alive behind a button. Nothing can
+        // press it today, because the control unmounts with the scene and a new
+        // scene republishes this synchronously, but the other two are reset
+        // here and an asymmetry in a teardown is how the one that matters gets
+        // missed.
+        applyCommandRef.current = () => undefined;
       });
     };
   }, [scene]);
@@ -1193,7 +1269,18 @@ export function FirstLight({
         aria-label="Campaign viewport. Arrow keys zoom and pan, 0 fits the campaign, Escape leaves."
       />
       {failure === null ? (
-        <Overlay readout={readout} scene={scene} sceneFailure={sceneFailure} />
+        <>
+          <Overlay readout={readout} scene={scene} sceneFailure={sceneFailure} />
+          {readout === null || scene === null || referenceWidth <= 0 ? null : (
+            <ZoomControl
+              readout={readout}
+              referenceWidth={referenceWidth}
+              onCommand={(command) => {
+                applyCommandRef.current(command);
+              }}
+            />
+          )}
+        </>
       ) : (
         <div className="stage__failure" role="alert">
           <p className="stage__failure-title">No renderer</p>
@@ -1211,6 +1298,133 @@ export function FirstLight({
 /** Two decimals, or a compact exponent once a number stops fitting. */
 function fixed(value: number, digits: number): string {
   return Math.abs(value) >= 1e6 ? value.toExponential(2) : value.toFixed(digits);
+}
+
+/** What each tier is called to somebody who has not read `campaign-tiers.ts`. */
+const TIER_LABEL: Readonly<Record<ZoomTier, string>> = {
+  far: 'shapes',
+  titles: 'names',
+  cards: 'cards',
+};
+
+/**
+ * The zoom, as something a reader can read and press.
+ *
+ * The readout above already carries `zoom` as a number, and a number is the
+ * half of this that a reader cannot act on: 6.199 px/unit says nothing about
+ * whether zooming in twice would put names on screen. So this pairs the number
+ * with the TIER, which is what the semantic zoom actually does, and with the
+ * three commands that move it.
+ *
+ * **The buttons press keys.** Each one hands a {@link KeyCommand} to the same
+ * `applyCommand` the keyboard handler runs, so there is one path to the camera,
+ * one anchor rule, and nothing to keep in step when `KEY_ZOOM_FACTOR` is
+ * retuned. `keyCommand('+')` returns the very object `ZOOM_IN` is, which a test
+ * asserts by identity.
+ */
+function ZoomControl({
+  readout,
+  referenceWidth,
+  onCommand,
+}: {
+  readout: CameraReadout;
+  /** The world width the tier reading is about. See `medianNodeWidth`. */
+  referenceWidth: number;
+  onCommand: (command: KeyCommand) => void;
+}): JSX.Element {
+  const { zoom, minZoom, maxZoom } = readout;
+  const tier = zoomTier(zoom * referenceWidth);
+  const { atFloor, atCeiling } = zoomLimitState(zoom, minZoom, maxZoom);
+
+  /**
+   * A click is a command, unless the browser wanted the click or the limit says
+   * there is nothing to do.
+   *
+   * Ctrl, Meta and Alt are held off for the same reason the canvas's keydown
+   * holds them off: those chords open a link in a tab, or a context menu, and a
+   * control that zoomed as well would be a control fighting the browser.
+   *
+   * `spent` is the `aria-disabled` half of the pair below. A button at the end
+   * of the range still takes the click and does nothing with it, which is what
+   * keeps the focus where it is; see the buttons for why that is not the plain
+   * `disabled` attribute.
+   */
+  const press = (command: KeyCommand, spent = false) => (event: ReactMouseEvent) => {
+    if (spent) return;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    onCommand(command);
+  };
+
+  /**
+   * Keeps focus where the reader put it, on the WHOLE panel rather than on the
+   * three buttons.
+   *
+   * Focus is this stage's keyboard mode switch, so anything that moves it off
+   * the canvas leaves the next arrow key scrolling the page instead of zooming
+   * the scene: a zoom control that breaks zooming by keyboard. A mousedown on a
+   * BUTTON focuses the button, and a mousedown on a non-focusable element blurs
+   * whatever was focused unless the default is prevented, so either way the
+   * canvas loses the keyboard.
+   *
+   * On the panel rather than on each button, and reached by bubbling. As the
+   * stylesheet stands only the buttons can generate one of these, because the
+   * panel refuses the pointer and everything else in it is a label the canvas
+   * takes the event through. The guard is here anyway, so that it covers
+   * whatever the next person makes pressable rather than being one more thing
+   * they have to know to add.
+   */
+  const keepFocus = (event: ReactMouseEvent): void => {
+    event.preventDefault();
+  };
+
+  return (
+    <div className="stage__zoom" onMouseDown={keepFocus}>
+      <p className="stage__zoom-tier">
+        <span className="stage__zoom-tier-name">{TIER_LABEL[tier]}</span>
+        <span className="stage__zoom-value">{fixed(zoom, 3)} px/unit</span>
+      </p>
+      <div className="stage__zoom-buttons">
+        {/*
+          `aria-disabled` AND NOT `disabled`, on both of these. A `disabled`
+          attribute arriving under a keyboard user's finger is a focus loss:
+          Tab to `+`, press Enter until the ceiling, and the element being stood
+          on becomes disabled, which every browser answers by moving focus to
+          the body. The next Tab restarts at the top of the document and the
+          arrows scroll the page, which is the same mode-switch loss the
+          mousedown guard above exists to prevent, arriving through the other
+          input device. `aria-disabled` says the same thing to a screen reader,
+          keeps the element focusable, and leaves the click to be ignored by
+          `press`.
+        */}
+        <button
+          type="button"
+          className="stage__zoom-button"
+          onClick={press(ZOOM_OUT, atFloor)}
+          aria-disabled={atFloor}
+          aria-label="Zoom out"
+        >
+          &minus;
+        </button>
+        <button
+          type="button"
+          className="stage__zoom-button"
+          onClick={press(ZOOM_IN, atCeiling)}
+          aria-disabled={atCeiling}
+          aria-label="Zoom in"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          className="stage__zoom-button stage__zoom-button--fit"
+          onClick={press(FIT)}
+          aria-label="Fit the whole campaign"
+        >
+          fit
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**

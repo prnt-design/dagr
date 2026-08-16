@@ -4822,6 +4822,76 @@ the demo itself should show richer nodes and its zoom.
   argument further with them: a mark is one attribute the tier rewrites per
   node, and the same picture through a glyph atlas would be a second rasteriser.
 
+- [x] **D6** (`packages/campaign-stage`) The zoom as something a reader can read
+  and press. The last clause of the maintainer's 2026-08-16 message, "we could
+  add the html overlays and a zoom level".
+  THE READOUT ALREADY HAD THE NUMBER, and it still does: the px/unit figure is
+  on screen twice now, deliberately. The readout is the CAMERA'S STATE, and it
+  exists so a screenshot's caption can be checked against the frame it claims to
+  be; the control is the same number where a reader can act on it, next to the
+  word that says what acting would buy. `zoom 6.199 px/unit` has been on screen
+  since M4.1 and it says nothing a reader can act on. It does not answer "would one more notch put
+  names on this", which is the only question a zoom raises in a demo whose whole
+  subject is semantic zoom. So the control pairs the number with the TIER, and
+  the tier is the word that changes as you scroll: `shapes`, `names`, `cards`.
+  A TIER IS PER NODE AND A ZOOM IS ONE NUMBER, so anything reporting a tier has
+  to say which node it means. The campaign's node widths span 11:1, from a
+  clock tick at 32 to the campaign node at 360, against tier gates that span
+  19:1 from 24 to 460, so at almost every zoom some kinds have cards and some
+  have nothing, and naming the largest or the smallest would describe one node
+  in three thousand.
+  `medianNodeWidth` over the scene's own boxes is true of half of them by
+  construction and lands on 56 world units, a room and an item, which are the
+  two most numerous kinds. DERIVED FROM THE SCENE rather than declared, for the
+  reason every other derived number here is, and MEMOISED on the scene because
+  `publish` calls `setReadout` from every drawn frame and a median is a sort of
+  3,010 numbers.
+  THE BUTTONS PRESS KEYS. `keyCommand` now returns three exported constants,
+  `ZOOM_IN`, `ZOOM_OUT` and `FIT`, and the buttons hand those same objects to
+  the same `applyCommand` the keydown handler runs. One path to the camera, one
+  anchor rule (a zoom with no cursor is anchored at the viewport centre, which a
+  button needs exactly as a key does), and nothing to keep in step when
+  `KEY_ZOOM_FACTOR` is retuned. THE TEST ASSERTS IDENTITY, `toBe` and not
+  `toEqual`: two literals holding the same factor pass a shape comparison on the
+  day they are written and go on passing after one is retuned.
+  THEY DO NOT TAKE FOCUS, and that is the load-bearing line rather than a
+  nicety. Focus is this stage's keyboard mode switch: the canvas has to be
+  focused for arrows to zoom rather than scroll the page. A button that took
+  focus on click would be a zoom control that breaks zooming by keyboard, which
+  is the feature it is a control for. `onMouseDown` prevents the default, so the
+  pointer never moves focus; Tab still reaches the buttons for anyone driving
+  without one. Verified in a browser: click the canvas, click `+`, and
+  `document.activeElement` is still the canvas, with the next ArrowUp moving the
+  zoom by the same factor the button did.
+  GREYED AT THE LIMITS, which are the camera's own derived ones, with a relative
+  tolerance because the camera CLAMPS: a zoom held against the ceiling IS the
+  ceiling to within floating point, and a strict comparison would leave a button
+  that can do nothing looking as though it could. The tolerance is a thousandth,
+  far under one keyboard step of about 16%, and a test holds that relationship
+  rather than the number. `aria-disabled` AND NOT `disabled`: the real attribute
+  arriving under a keyboard user's finger is a focus loss, since Tab to `+` and
+  Enter to the ceiling makes the element being stood on disabled, which every
+  browser answers by moving focus to the body and restarting the next Tab at the
+  top of the document. The greying is a rule on the attribute and the click is
+  ignored by the handler.
+  THE PANEL REFUSES THE POINTER AND ITS THREE BUTTONS TAKE IT BACK, which is the
+  readout's `pointer-events: none` with a hole cut in it. A panel that took
+  pointer events would eat the wheel over the corner a reader puts the cursor in
+  when they want to zoom, and the gesture would scroll the host docs page away
+  from the demo instead. THE WHEEL LISTENER MOVED TO THE STAGE for the half that
+  does not fix: a button is the canvas's SIBLING, not its descendant, so a wheel
+  over one reaches no canvas listener at all whatever the panel's
+  `pointer-events` says. Bound to the container it is one listener's problem,
+  and the anchor still comes off the canvas rect.
+  WHAT IS TESTED IS THE ARITHMETIC: the tier against both gates and the
+  half-open rule, the median against a synthetic list and against the real
+  campaign (asserting the median IS some kind's width rather than a number
+  between two), the limit states, and that the range reaches every tier. The DOM
+  half is three buttons handing a command to a function, and a test that
+  asserted a button called a mock would pass just as happily if the camera never
+  moved. Verified in a browser instead, which is the same split `FirstLight`
+  already documents.
+
 ## Tracked, not promised
 
 Web-component wrapper, 3D camera experiment, Remotion tutorials, npm publish

@@ -136,6 +136,26 @@ export type KeyCommand =
   | { readonly kind: 'fit' };
 
 /**
+ * The three commands a POINTER can ask for too, as the objects {@link
+ * keyCommand} itself returns.
+ *
+ * D6's zoom control has three buttons, and they are wired to these rather than
+ * to `camera.zoomAtScreen` and `camera.fitBounds` directly. That is the whole
+ * shape of the decision: a button is a key being pressed, so it goes through
+ * the same `KeyCommand` and the same apply, and the anchor rule (a zoom with no
+ * cursor is anchored at the viewport centre) is written once. Two paths to the
+ * camera would agree on the day they were written and drift on the day one of
+ * them is retuned.
+ *
+ * Exported as CONSTANTS rather than rebuilt at each call site so the test can
+ * assert identity: `keyCommand('+') === ZOOM_IN` is the claim, and two object
+ * literals that happen to hold the same factor today is not.
+ */
+export const ZOOM_IN: KeyCommand = { kind: 'zoom', factor: KEY_ZOOM_FACTOR };
+export const ZOOM_OUT: KeyCommand = { kind: 'zoom', factor: 1 / KEY_ZOOM_FACTOR };
+export const FIT: KeyCommand = { kind: 'fit' };
+
+/**
  * The key map, while the canvas has focus. `null` means "not ours": the
  * caller must not `preventDefault`, so keys like Tab keep their meaning.
  *
@@ -153,11 +173,11 @@ export function keyCommand(key: string, shift = false): KeyCommand | null {
     case 'ArrowUp':
     case '+':
     case '=':
-      return { kind: 'zoom', factor: KEY_ZOOM_FACTOR };
+      return ZOOM_IN;
     case 'ArrowDown':
     case '-':
     case '_':
-      return { kind: 'zoom', factor: 1 / KEY_ZOOM_FACTOR };
+      return ZOOM_OUT;
     case 'PageUp':
       return { kind: 'zoom', factor: KEY_ZOOM_FACTOR ** 3 };
     case 'PageDown':
@@ -168,7 +188,7 @@ export function keyCommand(key: string, shift = false): KeyCommand | null {
       return { kind: 'pan', dx: -KEY_PAN_STEP, dy: 0 };
     case '0':
     case 'Home':
-      return { kind: 'fit' };
+      return FIT;
     default:
       return null;
   }

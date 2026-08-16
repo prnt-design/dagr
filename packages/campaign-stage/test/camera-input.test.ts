@@ -2,8 +2,11 @@ import { Camera2D } from '@dagr/render';
 import { describe, expect, it } from 'vitest';
 import {
   nodeIdFromHash,
+  FIT,
   FIT_PADDING,
   INITIAL_ZOOM,
+  ZOOM_IN,
+  ZOOM_OUT,
   KEY_PAN_STEP,
   KEY_ZOOM_FACTOR,
   WHEEL_LINE_HEIGHT,
@@ -267,6 +270,36 @@ describe('keyCommand', () => {
     }
     // Shift changes nothing for keys the map does not shift-bind.
     expect(keyCommand('ArrowLeft', true)).toEqual({ kind: 'pan', dx: KEY_PAN_STEP, dy: 0 });
+  });
+
+  /**
+   * The three commands D6's buttons press, asserted by IDENTITY.
+   *
+   * `toBe` and not `toEqual`, and the difference is the whole point of the
+   * three constants existing. Two object literals holding the same factor pass
+   * a `toEqual` on the day they are written and go on passing after one of them
+   * is retuned and the other is not. Identity says there is ONE zoom-in
+   * command, which is what makes "the button presses the key" a fact about the
+   * code rather than a claim in a comment.
+   */
+  it('returns the same command objects the zoom control presses', () => {
+    expect(keyCommand('+')).toBe(ZOOM_IN);
+    expect(keyCommand('=')).toBe(ZOOM_IN);
+    expect(keyCommand('ArrowUp')).toBe(ZOOM_IN);
+    expect(keyCommand('-')).toBe(ZOOM_OUT);
+    expect(keyCommand('_')).toBe(ZOOM_OUT);
+    expect(keyCommand('ArrowDown')).toBe(ZOOM_OUT);
+    expect(keyCommand('0')).toBe(FIT);
+    expect(keyCommand('Home')).toBe(FIT);
+  });
+
+  it('makes one button press undo the other', () => {
+    // A pair of buttons that did not compose to 1 would drift the zoom every
+    // time a reader pressed in and out, which is the kind of thing nobody
+    // reports and everybody feels.
+    if (ZOOM_IN.kind !== 'zoom' || ZOOM_OUT.kind !== 'zoom') throw new Error('not zooms');
+    expect(ZOOM_IN.factor * ZOOM_OUT.factor).toBeCloseTo(1, 12);
+    expect(ZOOM_IN.factor).toBeGreaterThan(1);
   });
 });
 
