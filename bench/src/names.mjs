@@ -14,3 +14,9 @@ export const CONTROL_GROUP = 'control';
 
 /** The benchmark name inside that group. */
 export const CONTROL_NAME = 'mixed';
+
+/** What each package's `bench` script writes its run to. */
+export const REPORT_NAME = 'bench-report.json';
+
+/** Where a package that writes one can live. */
+export const WORKSPACE_DIRS = ['packages', 'apps'];

@@ -67,8 +67,9 @@ export const AGREEING_RUNS = 2;
  * regression and lost half its remaining entries to noise still measured the
  * regression.
  *
- * `measuredNothing` accounts for exactly one of `gate.errors`, which is what
- * lets that one be subtracted out and the rest be read as hard errors.
+ * Everything in `gate.errors` is a hard error by construction: the gate keeps
+ * its unreadable-run message in `noiseError` instead, precisely so that this
+ * function does not have to know how many messages that case produces.
  *
  * @param {GateReport} gate
  * @param {string[]} harnessErrors Errors raised outside the gate, such as stale reports.
@@ -79,10 +80,12 @@ export function summarise(gate, harnessErrors) {
     .filter((result) => result.status === 'regressed' || result.status === 'missing')
     .map((result) => result.key);
 
-  const hardErrors = harnessErrors.length + gate.errors.length - (gate.measuredNothing ? 1 : 0);
-  if (hardErrors > 0) return { outcome: 'error', failing };
+  if (harnessErrors.length + gate.errors.length > 0) return { outcome: 'error', failing };
   if (failing.length > 0) return { outcome: 'regressed', failing };
   if (gate.measuredNothing) return { outcome: 'inconclusive', failing };
+  // Unreachable while the branches above cover every way `ok` goes false, and
+  // kept so that a later status cannot become a silent pass.
+  if (!gate.ok) return { outcome: 'error', failing };
   return { outcome: 'pass', failing };
 }
 

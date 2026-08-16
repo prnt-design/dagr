@@ -103,10 +103,16 @@ findings addressed or logged, docs land with the feature.
   is not a pass: the property claimed is a repeatable pass. An unreadable run is
   still neither, and counts towards neither two, so the old "retry once on exit
   2" is the same rule with a budget. A harness error fails on the first attempt,
-  because a stale report is stale on the next run too. THE TOLERANCES ARE
-  UNTOUCHED, deliberately: a wider tolerance hides the drift and the regression
-  together, so a fresh baseline plus repetition is what replaces a looser
-  number. The command does not change, so AGENTS.md does not either.
+  because a stale report is stale on the next run too. NO TOLERANCE CONSTANT
+  WAS LOOSENED, deliberately: a wider tolerance hides the drift and the
+  regression together, so a fresh baseline plus repetition is what replaces a
+  looser number. Said precisely, because the loose version of that sentence is
+  not true: the formula ADDS THE BASELINE'S OWN rme, so the recapture widened
+  the effective allowance on seven of the fourteen gated entries and put four at
+  the 25% cap where two were, `descendants, 10k` and `pipeline > 1k` joining
+  `build > 1k` and `rank > 10k`. Those four are named in `bench/README.md`
+  rather than left to be found. The command does not change, so AGENTS.md does
+  not either.
   **ON A FAILURE IT REPORTS WHETHER THE SAME ENTRY FAILED EVERY RUN**, which is
   the cheapest real-versus-noise test available and costs nothing beyond runs
   already taken: a regression is in the code, so it fails the same entry every
@@ -122,11 +128,14 @@ findings addressed or logged, docs land with the feature.
   two runs, both on `2k updateNodeAttrs, unwatched`, at +81.6% and +86.4%
   against about +20.5% allowed, with no other entry failing and the report
   reading "the same entry failed every failing run".
-  The recapture itself is in `bench/README.md`, and two things in it are worth
+  The recapture itself is in `bench/README.md`, and three things in it are worth
   reading. FIVE MEASURED RUNS RATHER THAN THREE, because the first three
   disagreed by 32.5% on `build > 1k` and three runs cannot say which is the odd
-  one out; the two extra runs cost 70 seconds each and moved the choice. AND THE
-  OLD FILE WAS NOT FAR WRONG: eleven of fifteen entries moved under 6%, so the
+  one out; the two extra runs cost 70 seconds each and moved the choice. PICK
+  THE RUN TO COMMIT BY CLOSENESS OVER THE GATED ENTRIES ONLY, since the exempt
+  `2.5k successors` swings further than anything else in the file and pulled the
+  first pick further than the fourteen entries that gate did. AND THE OLD FILE
+  WAS NOT FAR WRONG: eleven of the fourteen gated entries moved under 6%, so the
   flakiness was never mostly a stale baseline. It is the between-run spread on
   this machine, 30.6% on `build > 1k` and 40.7% on `isAcyclic, acyclic` across
   five idle runs with no code changing, which a recapture re-centres and cannot

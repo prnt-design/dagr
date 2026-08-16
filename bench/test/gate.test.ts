@@ -116,7 +116,11 @@ describe('noise handling', () => {
       current({ a: stat(4, noise), b: stat(4, noise), c: stat(4) }),
     );
     expect(report.ok).toBe(false);
-    expect(report.errors.join(' ')).toMatch(/too noisy/i);
+    expect(report.noiseError).toMatch(/too noisy/i);
+    // Reported apart from `errors`, which means "the harness rejected this run
+    // and would reject the next one the same way". An unreadable run is the
+    // opposite of that, and `bin/bench-ci.mjs` measures again on it.
+    expect(report.errors).toEqual([]);
   });
 
   it('separates an unreadable run from a regression', () => {
@@ -161,6 +165,30 @@ describe('the no-op guards', () => {
     const report = compareReports(baseline({ a: stat(4), b: stat(4) }), current({ a: stat(4) }));
     expect(statusOf(report, 'b')).toBe('missing');
     expect(report.ok).toBe(false);
+  });
+
+  it('calls a whole package vanishing a harness fault rather than N regressions', () => {
+    // One entry gone is a rename. Every entry of one package gone is that
+    // package not benchmarking at all, and the two want different responses:
+    // the second is deterministic, so `bench:ci` must fail on it at once
+    // instead of reproducing it twice and reporting the same entries both
+    // times, which is its strongest evidence for a REAL regression.
+    const report = compareReports(
+      baseline({ '@dagr/graph > f > g > a': stat(4), '@dagr/layout > f > g > b': stat(4) }),
+      current({ '@dagr/graph > f > g > a': stat(4) }),
+    );
+    expect(statusOf(report, '@dagr/layout > f > g > b')).toBe('missing');
+    expect(report.errors.join(' ')).toMatch(/@dagr\/layout produced no benchmarks/i);
+    expect(report.ok).toBe(false);
+  });
+
+  it('does not call one missing entry a vanished package', () => {
+    const report = compareReports(
+      baseline({ '@dagr/graph > f > g > a': stat(4), '@dagr/graph > f > g > b': stat(4) }),
+      current({ '@dagr/graph > f > g > a': stat(4) }),
+    );
+    expect(statusOf(report, '@dagr/graph > f > g > b')).toBe('missing');
+    expect(report.errors).toEqual([]);
   });
 
   it('reports a benchmark the baseline has never seen without failing', () => {

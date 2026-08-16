@@ -52,19 +52,33 @@ describe('reading one run', () => {
     const report = gate({
       ok: false,
       measuredNothing: true,
-      errors: ['8 of 10 benchmarks were too noisy to read'],
+      noiseError: '8 of 10 benchmarks were too noisy to read',
       results: [result('a', 'inconclusive')],
     });
     expect(summarise(report, []).outcome).toBe('inconclusive');
   });
 
   it('reads a harness error beside the noise as an error', () => {
-    // `measuredNothing` accounts for exactly one error. A second one is about
-    // the harness, and repeating the run cannot fix it.
+    // The unreadable-run message lives in `noiseError`, so anything in `errors`
+    // is about the harness and repeating the run cannot fix it. However many
+    // noise messages the gate grows, they cannot be miscounted as one of these.
     const report = gate({
       ok: false,
       measuredNothing: true,
-      errors: ['8 of 10 benchmarks were too noisy to read', 'x is exempt but records no reason'],
+      noiseError: '8 of 10 benchmarks were too noisy to read',
+      errors: ['x is exempt but records no reason'],
+    });
+    expect(summarise(report, []).outcome).toBe('error');
+  });
+
+  it('reads a package that stopped benchmarking as an error, not as a regression', () => {
+    // The gate raises the error; this pins that the error outranks the missing
+    // entries under it, so `bench:ci` says "that package is not benchmarking"
+    // once instead of "the same entries failed every run" twice.
+    const report = gate({
+      ok: false,
+      errors: ['@dagr/layout produced no benchmarks at all'],
+      results: [result('@dagr/layout > f > g > a', 'missing')],
     });
     expect(summarise(report, []).outcome).toBe('error');
   });

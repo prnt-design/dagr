@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { machineInfo, mergeBaseline } from '../src/baseline.mjs';
 import { normaliseRuns } from '../src/collect.mjs';
 import { compareReports } from '../src/gate.mjs';
+import { REPORT_NAME, WORKSPACE_DIRS } from '../src/names.mjs';
 import { summarise } from '../src/repeat.mjs';
 
 /**
@@ -33,8 +34,6 @@ import { summarise } from '../src/repeat.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const baselinePath = join(root, 'bench', 'baseline.json');
-const REPORT_NAME = 'bench-report.json';
-const WORKSPACE_DIRS = ['packages', 'apps'];
 
 /**
  * A run older than this almost certainly means `pnpm bench` was not run before
@@ -186,7 +185,9 @@ function main() {
   }
 
   for (const note of gate.notes) console.log(`\n  note   ${note}`);
-  for (const error of [...errors, ...gate.errors]) console.error(`\n  error  ${error}`);
+  const printable = [...errors, ...gate.errors];
+  if (gate.noiseError !== undefined) printable.push(gate.noiseError);
+  for (const error of printable) console.error(`\n  error  ${error}`);
 
   // Two failure kinds, two exit codes, because they want different responses. A
   // regression is a red build. A run too noisy to read says nothing about the

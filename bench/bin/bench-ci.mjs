@@ -1,11 +1,12 @@
 // @ts-check
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { REPORT_NAME, WORKSPACE_DIRS } from '../src/names.mjs';
 import { MAX_ATTEMPTS, decide, sharedFailures } from '../src/repeat.mjs';
 
 /**
@@ -53,17 +54,46 @@ const SETTLE_MS = 5_000;
 /** @typedef {import('../src/repeat.mjs').RunSummary} RunSummary */
 
 /**
+ * Run a command, reporting whether it CHOSE its exit code or was killed.
+ *
+ * The signal is the part that matters and the part `status` cannot carry: a
+ * process killed by SIGKILL reports a null status, and reading that as an exit
+ * 1 makes a machine that ran out of memory look exactly like a gate that
+ * rejected the run. Those two want opposite responses.
+ *
  * @param {string} command
  * @param {string[]} args
- * @returns {number}
+ * @returns {{ status: number, signal: NodeJS.Signals | null }}
  */
 function run(command, args) {
   const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', shell: false });
   if (result.error !== undefined) {
     console.error(`failed to run ${command}: ${result.error.message}`);
-    return 1;
+    return { status: 1, signal: null };
   }
-  return result.status ?? 1;
+  return { status: result.status ?? 1, signal: result.signal };
+}
+
+/**
+ * Delete every package's benchmark report before measuring again.
+ *
+ * Without this the attempts are not independent, and independence is the whole
+ * claim. `pnpm bench` is `pnpm -r --if-present bench`, so a package that stops
+ * writing a report while pnpm still exits zero (its bench script renamed or
+ * removed) leaves the PREVIOUS attempt's file on disk, minutes old and well
+ * inside the staleness ceiling `bench-check.mjs` enforces. The gate would then
+ * read one measurement twice and call it two agreeing runs. Deleting first
+ * turns that into the missing-report error it actually is.
+ */
+function clearReports() {
+  for (const workspace of WORKSPACE_DIRS) {
+    const workspacePath = join(root, workspace);
+    if (!existsSync(workspacePath)) continue;
+    for (const entry of readdirSync(workspacePath, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      rmSync(join(workspacePath, entry.name, REPORT_NAME), { force: true });
+    }
+  }
 }
 
 /**
@@ -77,17 +107,34 @@ function run(command, args) {
  * @returns {{ benchFailed: number } | { summary: RunSummary }}
  */
 function measure(summaryPath) {
+  clearReports();
   const benched = run('pnpm', ['bench']);
-  if (benched !== 0) return { benchFailed: benched };
+  if (benched.status !== 0) return { benchFailed: benched.status };
 
-  const status = run('node', [check, '--summary', summaryPath]);
-  if (!existsSync(summaryPath)) {
-    // The gate died before it could write one. Nothing to repeat and nothing to
-    // compare, so report it as the harness error it is.
-    console.error(`\nThe gate exited ${String(status)} without writing a summary.`);
-    return { summary: { outcome: 'error', failing: [] } };
+  const gated = run('node', [check, '--summary', summaryPath]);
+  if (existsSync(summaryPath)) {
+    return { summary: /** @type {RunSummary} */ (JSON.parse(readFileSync(summaryPath, 'utf8'))) };
   }
-  return { summary: /** @type {RunSummary} */ (JSON.parse(readFileSync(summaryPath, 'utf8'))) };
+
+  // No summary means the gate never reached the point where it writes one, and
+  // WHY it did not is the whole question. Killed by a signal is the machine
+  // running out of something, which is the transient this command exists to
+  // absorb, so it reads as an unreadable run: it counts towards neither two and
+  // the next attempt still happens. Any chosen exit code is the gate refusing
+  // the run before it could read it, which is what a missing or malformed
+  // bench/baseline.json does, and repeating that three times would spend ten
+  // minutes to print "nothing was measured" over a file with a conflict marker
+  // in it.
+  if (gated.signal !== null) {
+    console.error(
+      `\nThe gate was killed by ${gated.signal} before it could write a summary. Reading that as an unreadable run rather than a verdict, and measuring again.`,
+    );
+    return { summary: { outcome: 'inconclusive', failing: [] } };
+  }
+  console.error(
+    `\nThe gate exited ${String(gated.status)} without writing a summary, which means it refused the run before it could read it. Check bench/baseline.json.`,
+  );
+  return { summary: { outcome: 'error', failing: [] } };
 }
 
 /** A synchronous sleep: there is nothing else for this process to do, and the
