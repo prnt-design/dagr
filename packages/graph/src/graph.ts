@@ -452,6 +452,24 @@ export class Graph<
    */
   readonly #listeners = new Set<PatchListener<NodeAttrs, EdgeAttrs, GraphAttrs>>();
 
+  /**
+   * How many {@link batch} calls are open. Zero means a mutation emits as it
+   * always did, and anything above zero means it collects into {@link #batched}
+   * instead. Depth rather than a flag, because a nested batch joins the one
+   * around it: a caller composing two helpers that each batch must not have the
+   * inner one emit halfway through the outer one's edit.
+   */
+  #batchDepth = 0;
+
+  /**
+   * Ops collected by the open batch, in the order the calls made them. Replaced
+   * by a fresh array when the batch closes rather than emptied in place, so the
+   * patch handed to the listeners is not an array this graph still writes to.
+   * Only ever written while {@link #observed}, so an unwatched batch keeps no
+   * journal for the same reason an unwatched mutation does not.
+   */
+  #batched: PatchOp<NodeAttrs, EdgeAttrs, GraphAttrs>[] = [];
+
   /** Graph-level attributes. Frozen, replaced copy on write. */
   #attrs: ReadAttrs<GraphAttrs> = emptyAttrs<GraphAttrs>();
 
@@ -504,6 +522,62 @@ export class Graph<
     return () => {
       this.#listeners.delete(listener);
     };
+  }
+
+  /**
+   * Runs `body` and emits everything it changed as one {@link Patch}, returning
+   * whatever `body` returned.
+   *
+   * This holds the emission back and nothing else. Every call inside commits as
+   * it is made, so the graph a later call in the body reads is the graph the
+   * earlier ones made, and a batch is not a staging area, a transaction, or a
+   * second way to write. What it decides is which graph states a listener is
+   * shown: "add node, add edge, add edge" unbatched shows a layout consumer a
+   * disconnected singleton to place, then corrects it twice, and none of those
+   * states is a graph the caller meant to draw.
+   *
+   * A batch is a `Patch` and not a type of its own, which is what keeps the rest
+   * of the package unchanged: it is an ordered array of cascade-free ops, so
+   * {@link invert} reverses and inverts it into the undo of the whole edit, and
+   * {@link apply} replays it. A batch that changed nothing emits nothing, the
+   * same rule a single call follows.
+   *
+   * NOTHING ROLLS BACK. A call the graph refuses throws out of here with the
+   * calls before it already committed, and the ops they made are emitted on the
+   * way out rather than dropped, because a listener mirroring this graph would
+   * otherwise be silently wrong from that point on. All-or-nothing would mean
+   * undoing the committed part by replaying an inverse, and replay restores
+   * content but not insertion order (see {@link apply}), so the rollback would
+   * be a different graph while claiming to be the original one.
+   *
+   * There is one emission and it happens at the close, over the listener set as
+   * it is then. A listener that subscribed inside the body therefore reads the
+   * whole batch, ops that predate its subscription included, and a listener that
+   * unsubscribed inside the body reads none of it. Both follow from where the
+   * emission is, and both are reasons to leave a batch you did not open alone.
+   * The depth is back to zero before the emission, so a listener that mutates
+   * while reading a batch emits its own patch rather than joining the one it is
+   * being handed.
+   *
+   * `body` must be synchronous, for the reason {@link PatchListener} must be:
+   * the return type is generic, so an `async` function is accepted and nothing
+   * complains, but the batch closes at the first `await` and every mutation
+   * after it emits on its own. That degrades to unbatched rather than to wrong.
+   *
+   * O(ops collected) on top of what the calls themselves cost, and nothing at
+   * all on a graph nobody subscribed to.
+   */
+  batch<T>(body: () => T): T {
+    this.#batchDepth += 1;
+    let result: T;
+    try {
+      result = body();
+    } catch (error) {
+      this.#closeBatch(true);
+      throw error;
+    }
+    this.#closeBatch(false);
+    return result;
   }
 
   /**
@@ -1386,6 +1460,13 @@ export class Graph<
    * listener set to check for here.
    */
   #emit(ops: PatchOp<NodeAttrs, EdgeAttrs, GraphAttrs>[]): void {
+    if (this.#batchDepth > 0) {
+      // Appended one at a time rather than spread into `push`, because a
+      // `removeNode` on a high-degree node hands this an op per incident edge
+      // and a spread of those is an argument list.
+      for (const op of ops) this.#batched.push(op);
+      return;
+    }
     const patch: Patch<NodeAttrs, EdgeAttrs, GraphAttrs> = Object.freeze(ops);
     const failures: unknown[] = [];
     for (const listener of [...this.#listeners]) {
@@ -1396,6 +1477,40 @@ export class Graph<
       }
     }
     if (failures.length > 0) throw new PatchListenerError(failures);
+  }
+
+  /**
+   * Ends one level of {@link batch}, emitting the collected ops if that was the
+   * outermost one.
+   *
+   * The depth comes down before anything is emitted, so the emission and
+   * everything a listener does inside it are outside the batch. The buffer is
+   * taken and replaced rather than emptied, so the array that becomes the frozen
+   * patch is nobody's to write to afterwards, this graph included.
+   *
+   * `bodyFailed` is what decides who wins when both halves fail. A listener that
+   * throws while reading the ops of a batch its body aborted would replace the
+   * error saying why the batch ended with one saying a listener misbehaved
+   * afterwards, and the first is the one the caller asked about. So the listener
+   * failure is dropped in that case and in that case only.
+   */
+  #closeBatch(bodyFailed: boolean): void {
+    this.#batchDepth -= 1;
+    if (this.#batchDepth > 0) return;
+    const ops = this.#batched;
+    this.#batched = [];
+    // The listener set can have emptied during the body, and `#emit` is written
+    // against a set with something in it.
+    if (ops.length === 0 || !this.#observed) return;
+    if (!bodyFailed) {
+      this.#emit(ops);
+      return;
+    }
+    try {
+      this.#emit(ops);
+    } catch {
+      // Deliberately swallowed: see `bodyFailed` above.
+    }
   }
 
   /** The out-edge index for a node that must exist. */
