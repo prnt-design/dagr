@@ -11,9 +11,15 @@ import type { WorldBounds } from './types.js';
  * node registers ONE OVERLAY ENTRY PER TIER, all with the same bounds and
  * adjacent half-open gates, so at most one of them is ever visible and the
  * bottom tier is the ABSENCE of an entry, which is the GPU drawing the shape.
- * The campaign demo's three tiers (instanced shape below about 24 CSS pixels, a
- * title label to about 160, a full card above) fall out of `html-overlay.ts`
- * with no level-of-detail machinery anywhere in it.
+ * The campaign demo's tiers (the instanced shape below 24 CSS pixels, a title
+ * label to 460, a full card above) fall out of `html-overlay.ts` with no
+ * level-of-detail machinery anywhere in it. That 460 is the demo's number and
+ * not this package's: it is DERIVED in `campaign-tiers.ts` from the card's own
+ * declared box against the node aspect, which is why it is not the 160 an
+ * earlier draft of this paragraph carried. The demo also runs a fourth tier on
+ * a SECOND layer over the same overlay, for the names a hover puts on a
+ * highlighted edge's far end, which is what makes "one entry per tier" a rule
+ * about a layer rather than about a node.
  *
  * What is left for this file is bookkeeping: a pool per tier, a diff by id, and
  * the rule for when an element that is already on screen has to be told its

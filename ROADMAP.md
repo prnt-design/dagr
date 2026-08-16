@@ -3307,13 +3307,13 @@ of M3 would leave the second runner idle for a milestone.
   TSL or one formula both backends run, and M4.2's whole argument for the nine
   primitives applies unchanged.
   THE DEMO TILES, AND THE PLAN'S ARGUMENT SURVIVED CONTACT. One Sugiyama pass over
-  3,010 nodes ranks 750 rooms into a couple of layers and draws a ribbon; the demo
+  3,010 nodes ranks 1,023 rooms into a couple of layers and draws a ribbon; the demo
   runs 95 layout calls instead, one per chapter, region, quest and front, plus a
   spine, and shelf-packs the blocks. Measured at the default seed: 101 tiles, 95
   of them laid out and 6 of them GRIDS. The grids are the honest half of the
   scheme rather than an escape from it: NPCs, factions, items, stat blocks, clues
   and weather sit outside the contains forest and no routed edge has both ends
-  inside any one of those groups, so a layer assignment would put all 550 NPCs in
+  inside any one of those groups, so a layer assignment would put all 375 NPCs in
   rank 0 and the "layout" of a bestiary would be one row 550 nodes wide.
   THE SHELF WIDTH IS SEARCHED, NOT COMPUTED, and the first version computed it.
   `sqrt(totalArea * aspect)` is the width a packing of exactly the tile areas
@@ -3334,7 +3334,7 @@ of M3 would leave the second runner idle for a milestone.
   and not its kind, which is its second signature: the first was
   `(kind, subtype?)`, and the optional argument decides the answer for the most
   numerous kind in the campaign, so a caller passing the kind alone badged all
-  750 rooms in the region's colour while the GPU drew them in their own.
+  1,023 rooms in the region's colour while the GPU drew them in their own.
   `#zoom=` SURVIVED, and nearly did not. The load-time `fitBounds` would have
   overridden it on every load while the readout went on advertising it, so the
   fit is skipped when the hash spoke. `initialZoomFromHash` returns its fallback
@@ -4785,8 +4785,25 @@ the demo itself should show richer nodes and its zoom.
   186.83px on both before the fix. The far tier states 22ch of its own now. The
   general shape: a selector that carries a justification has to be checked
   against every selector that inherits it.
-  THE OTHER FOUR FINDINGS WERE COMMENTS DESCRIBING DECLARATIONS THAT WERE NOT
-  THERE, in a codebase where the comment is the spec. Three claimed a `display`
+  THE TREE REVIEW FOUND NO DEFECT AND FIVE STALE NUMBERS, four of them older
+  than this task and one of them made visible BY it: `campaign-style.ts` records
+  the location-subtype trap as "badged all 750 rooms" one file away from the new
+  glyph test recording the same trap as 1,023, which is the count the generator
+  actually produces. `tiles.ts` carried ~750 rooms and ~550 NPCs in the argument
+  for tiling at all, where the real figures are 1,023 and 375, and repeated 550
+  in the grid-tile argument and again in its worked example of the column
+  formula. The worked example is now MEASURED off the three real grid tiles (375
+  NPCs land in 26 columns at aspect 1.77 against the 1.78 asked for, 300 items in
+  22 at 1.92) rather than asserted from a count nothing produces.
+  `packages/render/src/rich-nodes.ts` described the demo's card gate as "about
+  160", which is the number `CARD_MIN_SCREEN_WIDTH`'s derivation exists to
+  replace, and described three tiers where D3 added a fourth on a second layer.
+  And `FirstLight.tsx` claimed its hover lookup costs "one lookup per CHANGE of
+  hovered node", where `applyHovered` runs a `querySelector` on EVERY drawn
+  frame, deliberately, because pooled elements make caching one wrong; the
+  comment 30 lines below it already said so, so the file stated both.
+  THE FOUR DIFF-REVIEW FINDINGS WERE COMMENTS DESCRIBING DECLARATIONS THAT WERE
+  NOT THERE, in a codebase where the comment is the spec. Three claimed a `display`
   or a `flex` this stylesheet never writes: the badge is a flex ITEM, so its
   used display is `block` whatever a `span` starts as, and it contributes its
   own line box's baseline, which is the text's; the marks are `inline` by SVG's

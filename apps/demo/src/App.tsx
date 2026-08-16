@@ -107,7 +107,7 @@ export function App(): JSX.Element {
           <div>
             <p className="facts__label">why tiles</p>
             <p className="facts__value facts__value--prose">
-              One pass over the whole campaign ranks 750 rooms into a couple of layers and draws a
+              One pass over the whole campaign ranks 1,023 rooms into a couple of layers and draws a
               ribbon 50 times wider than it is tall. Chapters and regions are how a campaign is
               chunked anyway, so each is laid out on its own and the blocks are packed.
             </p>
