@@ -192,7 +192,7 @@ const cardRefs = new WeakMap<
   HTMLElement,
   {
     name: HTMLElement;
-    badge: HTMLElement;
+    badgeText: HTMLElement;
     badgeIcon: GlyphElement;
     mark: GlyphElement;
     oneLine: HTMLElement;
@@ -360,9 +360,13 @@ export function createCampaignTiers(
         const badge = el('campaign-card-badge', 'span');
         const badgeIcon = glyph('campaign-card-badge-icon');
         badge.appendChild(badgeIcon.root);
-        // The kind's name follows its mark in its own span, because the badge
-        // is what `update` rewrites and `textContent` on the badge would take
-        // the mark with it.
+        // The kind's name follows its mark in its own span, and the ref kept
+        // below is that SPAN rather than the badge: `update` writes the kind
+        // through `textContent`, which replaces every child of whatever it is
+        // called on, so a ref pointing at the badge would delete the mark on
+        // the second bind. Named `badgeText` for the same reason, since a field
+        // called `badge` holding the text is a style write landing one element
+        // too deep the first time anybody adds one.
         const badgeText = el('campaign-card-badge-text', 'span');
         badge.appendChild(badgeText);
         head.append(name, badge);
@@ -374,7 +378,7 @@ export function createCampaignTiers(
         const mark = glyph('campaign-card-mark');
         card.append(mark.root, head, oneLine, rows);
         box.appendChild(card);
-        cardRefs.set(box, { name, badge: badgeText, badgeIcon, mark, oneLine, rows, card });
+        cardRefs.set(box, { name, badgeText, badgeIcon, mark, oneLine, rows, card });
         return box;
       },
       update: (element, node) => {
@@ -397,7 +401,7 @@ export function createCampaignTiers(
         refs.name.style.color = colour;
         bindGlyph(refs.badgeIcon, campaignNode, colour);
         bindGlyph(refs.mark, campaignNode, colour);
-        refs.badge.textContent = kind.replace('_', ' ');
+        refs.badgeText.textContent = kind.replace('_', ' ');
         refs.oneLine.textContent = campaignNode.oneLine;
 
         // The declared size, written onto the element rather than left to the

@@ -4776,6 +4776,27 @@ the demo itself should show richer nodes and its zoom.
   to it does nothing at all: no class, no rule matches, nothing fails. Same
   silent-drop family as a `style.color` the CSS parser rejects, and the tests
   hold both the namespace and the class attribute for it.
+  A RULE PAID FOR BY AN ELEMENT IS NOT A RULE FOR THE TIER WITHOUT THE ELEMENT,
+  which is the review finding worth carrying: the title tag went from 22ch to
+  24ch to buy room for its mark, and `.campaign-title--far` inherits from
+  `.campaign-title`, so the far-end annotations that D5 deliberately gives NO
+  mark got the widening anyway and ellipsized two characters later than they
+  were tuned for, at the densest zoom this demo draws. Measured at an identical
+  186.83px on both before the fix. The far tier states 22ch of its own now. The
+  general shape: a selector that carries a justification has to be checked
+  against every selector that inherits it.
+  THE OTHER FOUR FINDINGS WERE COMMENTS DESCRIBING DECLARATIONS THAT WERE NOT
+  THERE, in a codebase where the comment is the spec. Three claimed a `display`
+  or a `flex` this stylesheet never writes: the badge is a flex ITEM, so its
+  used display is `block` whatever a `span` starts as, and it contributes its
+  own line box's baseline, which is the text's; the marks are `inline` by SVG's
+  own initial value, and what actually holds their size is the width and height
+  a REPLACED element needs (drop those and a mark falls back to 300 by 150). The
+  fourth was in the harness: its `position: relative` override was justified as
+  containing the watermark, which the stylesheet's own `absolute` already does,
+  when what it really does is take 8,946 cards out of absolute positioning so
+  each lays out at its own height. Every one of them would have sent the next
+  editor somewhere wrong while the code kept working.
   EVIDENCE: the committed frames are retaken, and the retake IS the comparison,
   because the frames they replace are the before. `p7-campaign-fit.png` came out
   byte identical, correctly: there is no overlay at all at the fitted zoom. The
