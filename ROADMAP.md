@@ -117,17 +117,27 @@ findings addressed or logged, docs land with the feature.
   the cheapest real-versus-noise test available and costs nothing beyond runs
   already taken: a regression is in the code, so it fails the same entry every
   time, while noise picks a different one.
-  Proved rather than asserted, on this box, all four runs after the recapture.
-  Three runs of the gate on a branch whose diff is zero bytes against
-  `packages/graph` and `packages/layout`: PASS with run 2 failing `rank > 1k`,
-  PASS with run 1 failing `descendants, 10k` at +25.0% of +25.0%, and PASS in
-  two runs with nothing failing. A DIFFERENT ENTRY EACH TIME, and under the old
-  one-shot gate two of those three would have blocked a merge. Then the
-  historical example this harness was verified against in the first place, the
-  `diffAttrs` allocation guard reverted in a scratch commit: the gate FAILED in
-  two runs, both on `2k updateNodeAttrs, unwatched`, at +81.6% and +86.4%
-  against about +20.5% allowed, with no other entry failing and the report
-  reading "the same entry failed every failing run".
+  Proved rather than asserted, and the failures are reported with the passes.
+  Four runs of the gate against the shipped file, on a branch whose diff is zero
+  bytes against `packages/graph` and `packages/layout`. Three PASSED: one at 2
+  of 3 with `rank > 1k` failing a single run at +47.3%, and two at 2 of 2 with
+  nothing failing. Under the old one-shot gate that first one had a one-in-three
+  chance of blocking a merge over code that changed nothing measurable. The
+  fourth FAILED, and it is the honest limit of the design rather than a
+  footnote: it started at a 1-minute load of 2.37 and ran into a neighbour burst
+  that took the box to 6.37, and `sources, 10k` failed both runs, at +25.3% then
+  +40.4%. A BURST OUTLASTS A GATE. Two of three narrows the window noise can
+  fail a merge through and does not close it, so the same-entry report is
+  evidence rather than proof, which is why it says to read a repeat as real
+  UNTIL THE CODE SAYS OTHERWISE.
+  Then the historical example this harness was verified against in the first
+  place, the `diffAttrs` allocation guard reverted in a scratch commit that was
+  never pushed. On a quiet box the gate FAILED in two runs, both on `2k
+  updateNodeAttrs, unwatched`, at +89.3% and +100.7% against about +22%
+  allowed, with no other entry failing. Run at a load of 8.17 the same branch
+  failed the same entry at +92.4% and +90.4% with three other entries failing
+  alongside it, which is the two readings of the same fact: the regression is
+  visible either way, and a loud box adds names to the list.
   The recapture itself is in `bench/README.md`, and three things in it are worth
   reading. FIVE MEASURED RUNS RATHER THAN THREE, because the first three
   disagreed by 32.5% on `build > 1k` and three runs cannot say which is the odd
