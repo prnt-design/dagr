@@ -39,7 +39,7 @@ export default function CampaignDemoPage(): ReactNode {
             generated fixture rather than part of the toolkit: arcs and chapters down to keyed
             rooms, with quests, factions, clues and countdown clocks laid across them, and the
             package that makes it{' '}
-            <Link to="https://github.com/prnt-design/dagr/blob/main/packages/campaign/README.md">
+            <Link href="https://github.com/prnt-design/dagr/blob/main/packages/campaign/README.md">
               documents its schema
             </Link>
             .

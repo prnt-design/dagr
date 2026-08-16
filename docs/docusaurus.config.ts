@@ -197,6 +197,14 @@ const config: Config = {
           { from: '/graph-model', to: '/docs/graph-model' },
           { from: '/layout', to: '/docs/layout' },
           { from: '/render', to: '/docs/render' },
+          // The campaign schema page, which was published here for a day
+          // before D4 moved it into `packages/campaign/README.md`. A reader who
+          // followed the link the package used to carry lands on the demo the
+          // dataset exists for, which is the nearest live thing and is where
+          // the one-line pointer to the README now is. The broken-link check
+          // cannot cover this: it validates links the site still contains, and
+          // an external bookmark is not one of them.
+          { from: '/docs/campaign', to: '/demos/campaign' },
         ],
       },
     ],

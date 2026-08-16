@@ -31,20 +31,27 @@ campaign.edges.length; // 7100
 the generator's private business and a consumer that hardcodes `'campaign-1'`
 is one prefix rename away from a crash at load.
 
-Loading a campaign into a graph is one loop per array. The demo keeps the whole
-campaign record on the attribute bag at both ends, so nothing downstream has to
-re-join against the arrays to find out what a node is or what kind an edge has:
+Loading a campaign into a graph is one loop per array, and what rides on the
+attribute bag is the consumer's decision. The stage that draws this dataset
+puts the whole node record on each node, so a size function or an overlay tier
+reads a kind without re-joining against the arrays, and puts nothing on the
+edges, because it builds its ribbons from `campaign.edges` directly and never
+asks the graph what kind an edge is:
 
 ```ts
 import { Graph } from '@dagr/graph';
-import type { CampaignEdge, CampaignNode } from '@dagr/campaign';
+import type { CampaignNode } from '@dagr/campaign';
 
-const graph = new Graph<{ node: CampaignNode }, { edge: CampaignEdge }>();
+const graph = new Graph<{ node: CampaignNode }>();
 for (const node of campaign.nodes) graph.addNode({ id: node.id, attrs: { node } });
 for (const edge of campaign.edges) {
-  graph.addEdge({ id: edge.id, source: edge.source, target: edge.target, attrs: { edge } });
+  graph.addEdge({ id: edge.id, source: edge.source, target: edge.target });
 }
 ```
+
+A consumer that does want the record on both ends passes a second type
+parameter, `new Graph<{ node: CampaignNode }, { edge: CampaignEdge }>()`, and
+adds `attrs: { edge }` in the second loop.
 
 ## Exports
 
