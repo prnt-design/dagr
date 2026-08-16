@@ -12,7 +12,7 @@ import type { Size } from '@dagr/render';
  * ## Why tiles at all, which the plan settles and this restates
  *
  * One Sugiyama pass over the whole campaign produces a RIBBON. Ranking 3,010
- * nodes by hierarchy depth puts ~750 rooms and ~550 NPCs into a couple of ranks,
+ * nodes by hierarchy depth puts 1,023 rooms and 375 NPCs into a couple of ranks,
  * which at default spacing is a drawing on the order of 100,000 world units wide
  * and under 2,000 tall. Zoomed to fit, a 50:1 ribbon is a horizontal line on a
  * 16:9 viewport, and "the whole campaign in frame" would frame nothing legible.
@@ -27,10 +27,10 @@ import type { Size } from '@dagr/render';
  *
  * A LAYOUT tile has routed edges among its members and goes through
  * `@dagr/layout`. A GRID tile does not, and is arranged in a near-square grid
- * instead. That is not Sugiyama being avoided where it is inconvenient: 550
+ * instead. That is not Sugiyama being avoided where it is inconvenient: 375
  * NPCs with no routed edge between them (every social edge is an OVERLAY edge,
- * see `EDGE_ROLES`) is a graph of 550 components, and a layer assignment puts
- * every component in rank 0, so the "layout" of a bestiary is one row 550 nodes
+ * see `EDGE_ROLES`) is a graph of 375 components, and a layer assignment puts
+ * every component in rank 0, so the "layout" of a bestiary is one row 375 nodes
  * wide. A grid is what that data actually wants and it is the same shape a
  * reader expects a list of items to take.
  */
@@ -435,11 +435,17 @@ function layShelves(
  *
  * For the tiles with no routed edges at all. Near-square rather than square,
  * because the packer above works best on tiles that are not extreme: a column of
- * 550 NPCs is the ribbon problem in miniature. The column count is
- * `ceil(sqrt(count * aspect / nodeAspect))` so the GRID comes out near the
- * target aspect whatever shape its nodes are, which a plain `ceil(sqrt(count))`
- * does not: 550 circles at 48 across in 24 columns is a square of circles, and
- * 550 items at 56 by 28 in 24 columns is a block twice as wide as it is tall.
+ * 375 NPCs is the ribbon problem in miniature.
+ *
+ * The column count is `ceil(sqrt(count * aspect * cellHeight / cellWidth))`, so
+ * the GRID comes out near {@link TARGET_ASPECT} whatever shape its nodes are,
+ * which a plain `ceil(sqrt(count))` does not. Measured on the default campaign's
+ * three grid tiles: 375 NPCs, circles at 48, land in 26 columns at 1.77 against
+ * the 1.78 asked for, where a plain square root would give 20 columns and a
+ * block taller than the viewport it is packed for; 300 items at 56 by 28 land in
+ * 22 at 1.92, where 18 columns of a node twice as wide as it is tall would come
+ * out squarer than the target rather than wider. The node's own aspect is in the
+ * formula precisely because it is not 1 for half the kinds here.
  */
 export function gridPositions(
   count: number,

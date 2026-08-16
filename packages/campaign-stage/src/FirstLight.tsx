@@ -785,8 +785,15 @@ export function FirstLight({
      * Held here rather than in React state: this changes on pointer moves, and
      * one `setState` per move would reconcile the whole component to add a
      * class. The overlay owns the elements, so the highlight is found by the id
-     * the tiers write onto them and applied with a class, which costs one
-     * lookup per CHANGE of hovered node rather than per move.
+     * the tiers write onto them and applied with a class.
+     *
+     * WHAT THAT COSTS IS ONE `querySelector` PER DRAWN FRAME, not per change,
+     * and the reason is 30 lines down: the elements are POOLED, so the one
+     * wearing the class can be recycled onto another node by any sync, and
+     * `applyHovered` therefore re-finds and re-applies unconditionally from
+     * `draw`. `hoveredId` is the value that genuinely only changes on a change;
+     * this element reference does not, and a comment claiming otherwise would
+     * send somebody looking for a cache that must not exist.
      */
     let hoveredId: string | null = null;
     let hoveredElement: HTMLElement | null = null;

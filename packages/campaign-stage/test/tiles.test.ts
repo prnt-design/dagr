@@ -197,7 +197,7 @@ describe('assignTiles', () => {
   it('grids the strata a Sugiyama pass could do nothing with', () => {
     // NPCs, factions, items, stat blocks, clues and weather sit outside the
     // contains forest, and no routed edge has both ends inside one of these
-    // groups, so a layer assignment would put all 550 NPCs in rank 0 and the
+    // groups, so a layer assignment would put all 375 NPCs in rank 0 and the
     // "layout" of a bestiary would be one row 550 nodes wide. A grid is what
     // that data actually wants.
     const campaign = generateCampaign();
@@ -532,7 +532,7 @@ describe('the per-kind style table', () => {
     // `(kind, subtype?)`, and the optional argument decides the answer for the
     // most numerous kind in the campaign: a room and a region are both
     // `location` and two different blues, so a caller who passed the kind alone
-    // badged all 750 rooms in the region's colour while the GPU drew them in
+    // badged all 1,023 rooms in the region's colour while the GPU drew them in
     // their own.
     const campaign = generateCampaign();
     for (const node of campaign.nodes) {

@@ -68,6 +68,27 @@ console.error(`measuring ${cards.length} cards`);
 // A previous version also read `apps/demo/src/styles.css` and inlined it, which
 // contributed nothing: that file opens with a comment, so the split it used
 // returned an empty string, and these declarations were always the whole of it.
+// The two marks the card tier builds, as the probe's hand copy of them.
+//
+// The PATH does not matter to a height: every kind's mark is the same 12px box
+// on the badge and the same out-of-flow 44px block behind the text, so what
+// these reproduce is the SPACE, and one placeholder path stands in for all
+// twenty. The badge one is the half that moves a number: it takes 16px out of
+// the head, so a long name has that much less room before it wraps.
+//
+// The viewBox and the stroke are read out of the glyph module rather than typed
+// again here, on the same terms as the size constants above: this file is a
+// hand copy and every value it can read instead is one that cannot go stale.
+const glyphSrc = readFileSync(`${ROOT}/packages/campaign-stage/src/campaign-glyphs.ts`, 'utf8');
+const GLYPH_VIEWBOX = /GLYPH_VIEWBOX = '([^']+)'/.exec(glyphSrc)[1];
+const GLYPH_STROKE_WIDTH = +/GLYPH_STROKE_WIDTH = ([\d.]+);/.exec(glyphSrc)[1];
+const glyphSvg = (className) =>
+  `<svg class="${className}" viewBox="${GLYPH_VIEWBOX}" fill="none" stroke="currentColor" ` +
+  `stroke-width="${GLYPH_STROKE_WIDTH}" stroke-linecap="round" stroke-linejoin="round">` +
+  '<path d="M2.5 3h11v10h-11z"/></svg>';
+const BADGE_ICON = glyphSvg('campaign-card-badge-icon');
+const MARK = glyphSvg('campaign-card-mark');
+
 const html = `<!doctype html><html><head><style>
 :root {
   --dagr-stage-mono: 'Liberation Mono', monospace;
@@ -79,10 +100,19 @@ const html = `<!doctype html><html><head><style>
 body { margin: 0; background: #07080a; }
 .probe { position: relative; }
 ${css}
+/* RELATIVE, which takes 8,946 cards out of absolute positioning and stacks them
+   down the page so each one lays out at its own height. The stylesheet says
+   absolute, where the overlay positions every card on its own node; here they
+   would all pile up at the origin. The transform goes because the counter-scale
+   reads a zoom variable no page outside the stage publishes.
+   The watermark's containing block is this element either way, since both
+   values position it.
+   NOTE: no backticks in this block. It is inside a JS template literal. */
 .campaign-card { position: relative; transform: none; }
 </style></head><body>
 ${cards.map(c => `<div class="probe"><div class="campaign-card" data-kind="${c.kind}" style="width:${CARD_WIDTH}px">
-<div class="campaign-card-head"><span class="campaign-card-name">${c.name}</span><span class="campaign-card-badge">${c.kind.replace('_',' ')}</span></div>
+${MARK}
+<div class="campaign-card-head"><span class="campaign-card-name">${c.name}</span><span class="campaign-card-badge">${BADGE_ICON}<span class="campaign-card-badge-text">${c.kind.replace('_',' ')}</span></span></div>
 <div class="campaign-card-oneline">${c.oneLine}</div>
 <dl class="campaign-card-rows">${c.rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
 </div></div>`).join('')}

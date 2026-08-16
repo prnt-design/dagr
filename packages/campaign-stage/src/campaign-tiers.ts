@@ -1,6 +1,7 @@
 import { cardRows } from '@dagr/campaign';
 import type { CampaignNode, NodeKind } from '@dagr/campaign';
 import type { RichNodeTier } from '@dagr/render';
+import { GLYPH_STROKE_WIDTH, GLYPH_VIEWBOX, nodeGlyph } from './campaign-glyphs.js';
 // The rules these tiers write class names for live in `campaign-cards.css`,
 // which `stage.css` pulls in. NOT imported here, though this is the module that
 // owns them: the package builds through `tsc`, which copies no stylesheet into
@@ -186,10 +187,18 @@ export const CARD_MIN_SCREEN_WIDTH = 460;
  * each field would be a tree walk per field per node per pass. A `WeakMap`
  * keyed by the root holds nothing alive that the pool has dropped.
  */
-const titleRefs = new WeakMap<HTMLElement, { name: HTMLElement }>();
+const titleRefs = new WeakMap<HTMLElement, { name: HTMLElement; icon: GlyphElement }>();
 const cardRefs = new WeakMap<
   HTMLElement,
-  { name: HTMLElement; badge: HTMLElement; oneLine: HTMLElement; rows: HTMLElement; card: HTMLElement }
+  {
+    name: HTMLElement;
+    badgeText: HTMLElement;
+    badgeIcon: GlyphElement;
+    mark: GlyphElement;
+    oneLine: HTMLElement;
+    rows: HTMLElement;
+    card: HTMLElement;
+  }
 >();
 
 /** An element with a class, which is most of what building these tiers is. */
@@ -197,6 +206,64 @@ function el(className: string, tag: 'div' | 'dl' | 'span' = 'div'): HTMLElement 
   const element = document.createElement(tag);
   element.className = className;
   return element;
+}
+
+/** SVG elements are not in the HTML namespace, and `createElement` makes one. */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/**
+ * One kind's mark, built once and rewritten on every bind.
+ *
+ * The `svg` and its single `path` are held separately because `update` writes
+ * to both: the colour goes on the root, which the stroke reads through
+ * `currentColor`, and the shape goes on the path's `d`. Keeping the pair means
+ * a bind is two attribute writes rather than a `querySelector` per element per
+ * pass, which is the same reason the tiers hold every other ref.
+ */
+interface GlyphElement {
+  readonly root: SVGSVGElement;
+  readonly path: SVGPathElement;
+}
+
+/**
+ * A blank mark of one class: the `svg` with its drawing attributes and an empty
+ * `path`.
+ *
+ * The stroke is `currentColor`, so the mark takes the colour whoever binds it
+ * puts on the root, and this module needs no palette of its own. The attributes
+ * are set with `setAttribute` rather than through properties because an SVG
+ * element's `className` is an `SVGAnimatedString` and assigning a string to it
+ * does nothing at all: the element gets no class, no rule matches, and nothing
+ * anywhere fails, which is the same silent-drop failure `style.color` has and
+ * the reason `campaign-style.ts` round trips its colours in a test.
+ */
+function glyph(className: string): GlyphElement {
+  const root = document.createElementNS(SVG_NS, 'svg');
+  root.setAttribute('class', className);
+  root.setAttribute('viewBox', GLYPH_VIEWBOX);
+  root.setAttribute('fill', 'none');
+  root.setAttribute('stroke', 'currentColor');
+  root.setAttribute('stroke-width', String(GLYPH_STROKE_WIDTH));
+  root.setAttribute('stroke-linecap', 'round');
+  root.setAttribute('stroke-linejoin', 'round');
+  // The name beside it says what the node is, so the mark is decoration for
+  // anything reading the DOM rather than looking at it.
+  root.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(SVG_NS, 'path');
+  root.appendChild(path);
+  return { root, path };
+}
+
+/**
+ * Points one built mark at one node: its kind's path, in its own colour.
+ *
+ * Called on every bind, never conditionally, because the elements are POOLED
+ * and a mark that kept the last node's `d` would draw a room's four walls on an
+ * NPC. Both writes are unconditional for the same reason.
+ */
+function bindGlyph(element: GlyphElement, node: CampaignNode, colour: string): void {
+  element.path.setAttribute('d', nodeGlyph(node));
+  element.root.style.color = colour;
 }
 
 /** What the tiers need from the demo that this module does not decide. */
@@ -248,10 +315,11 @@ export function createCampaignTiers(
       create: () => {
         const box = el('campaign-node');
         const title = el('campaign-title');
+        const icon = glyph('campaign-title-icon');
         const name = el('campaign-title-name', 'span');
-        title.appendChild(name);
+        title.append(icon.root, name);
         box.appendChild(title);
-        titleRefs.set(box, { name });
+        titleRefs.set(box, { name, icon });
         return box;
       },
       update: (element, node) => {
@@ -272,7 +340,13 @@ export function createCampaignTiers(
         // The kind's own colour, from the same function the instanced shapes
         // read. A title in one colour over a shape in another reads as a design
         // choice rather than as the drift it would be.
-        refs.name.style.color = nodeColor(node.data);
+        const colour = nodeColor(node.data);
+        refs.name.style.color = colour;
+        // The mark takes the same colour rather than the rule's dim ink, so the
+        // tag reads as one object: at this tier the title is the only thing on
+        // screen that says what the node IS, and a grey mark beside a coloured
+        // name would read as two labels.
+        bindGlyph(refs.icon, node.data, colour);
       },
     },
     {
@@ -284,12 +358,27 @@ export function createCampaignTiers(
         const head = el('campaign-card-head');
         const name = el('campaign-card-name', 'span');
         const badge = el('campaign-card-badge', 'span');
+        const badgeIcon = glyph('campaign-card-badge-icon');
+        badge.appendChild(badgeIcon.root);
+        // The kind's name follows its mark in its own span, and the ref kept
+        // below is that SPAN rather than the badge: `update` writes the kind
+        // through `textContent`, which replaces every child of whatever it is
+        // called on, so a ref pointing at the badge would delete the mark on
+        // the second bind. Named `badgeText` for the same reason, since a field
+        // called `badge` holding the text is a style write landing one element
+        // too deep the first time anybody adds one.
+        const badgeText = el('campaign-card-badge-text', 'span');
+        badge.appendChild(badgeText);
         head.append(name, badge);
         const oneLine = el('campaign-card-oneline');
         const rows = el('campaign-card-rows', 'dl');
-        card.append(head, oneLine, rows);
+        // The same mark again at four times the size, which is this demo's
+        // answer to "or images maybe": see `campaign-cards.css` for why it is
+        // out of flow and why it is not a picture.
+        const mark = glyph('campaign-card-mark');
+        card.append(mark.root, head, oneLine, rows);
         box.appendChild(card);
-        cardRefs.set(box, { name, badge, oneLine, rows, card });
+        cardRefs.set(box, { name, badgeText, badgeIcon, mark, oneLine, rows, card });
         return box;
       },
       update: (element, node) => {
@@ -303,10 +392,16 @@ export function createCampaignTiers(
         element.classList.remove('is-hovered');
         refs.name.textContent = campaignNode.name;
         // The NAME takes the colour, on both tiers, because the name is the one
-        // element a reader sees on both sides of the gate. The badge stays the
-        // dim ink the stylesheet gives it.
-        refs.name.style.color = nodeColor(campaignNode);
-        refs.badge.textContent = kind.replace('_', ' ');
+        // element a reader sees on both sides of the gate. The badge's TEXT
+        // stays the dim ink the stylesheet gives it, and its mark does not: a
+        // coloured mark is what carries the kind at a glance once a card is
+        // dense with rows, and it is the one element the title tier and this
+        // one draw identically.
+        const colour = nodeColor(campaignNode);
+        refs.name.style.color = colour;
+        bindGlyph(refs.badgeIcon, campaignNode, colour);
+        bindGlyph(refs.mark, campaignNode, colour);
+        refs.badgeText.textContent = kind.replace('_', ' ');
         refs.oneLine.textContent = campaignNode.oneLine;
 
         // The declared size, written onto the element rather than left to the
@@ -353,6 +448,13 @@ const farEndRefs = new WeakMap<HTMLElement, { name: HTMLElement }>();
  * keeping the rule here rather than filtering the node list means it stays
  * right while a reader zooms with the pointer held still, which is exactly when
  * a hand-filtered list would go stale.
+ *
+ * **NO MARK ON THIS ONE**, which is the one place D5's icons stop. The other
+ * two tiers are a node saying what it is; this is an annotation a hover put on
+ * a node too small to have earned a name, and it is drawn at a zoom where the
+ * screen is mostly edges. A mark here would add sixteen more shapes to the
+ * densest picture the demo draws, to label nodes the reader did not ask about.
+ * The dashed rule and the lighter ground already say what this is.
  *
  * A SEPARATE `createRichNodes` layer rather than a third tier beside the other
  * two, because its node set is different: the campaign's 3,010 nodes are bound

@@ -46,6 +46,7 @@ route gives it the viewport under the navbar.
 | `campaign-scene.ts` | the layout runs, the packing, and the y flip |
 | `campaign-edges.ts` | the three edge groups, the bows, and the ink an edge is drawn in |
 | `campaign-tiers.ts` | the overlay's title and card tiers, both gates, and the far-end labels a hover adds |
+| `campaign-glyphs.ts` | one drawn mark per kind, as an SVG path, for a badge and a title |
 | `edge-highlight.ts` | which edges touch a node, which nodes are at their far ends, and what a hover dims |
 | `use-campaign-scene.ts` | the campaign, the worker's lifetime, and the scene |
 | `FirstLight.tsx` | the canvas, the camera, the input, the overlay |
@@ -71,6 +72,14 @@ dashed for the hierarchy and flow kinds a layout routes, solid for the dense
 cyclic kinds it never sees, and the dash flows source to target, which is the
 arrowhead this renderer does not draw. Colour cannot carry both facts, because
 sixteen kinds times two roles is thirty-two inks nobody can tell apart.
+
+A node's MARK is its kind, and it is the one thing drawn identically on both
+overlay tiers: a 12 pixel glyph before the name on a title, the same glyph on a
+card's kind badge, and the same glyph again at 44 pixels behind the card's rows.
+`campaign-glyphs.ts` holds twenty of them, one per kind with location's four
+subtypes taking their own, each a single SVG path in a 16 unit box that takes
+the node's colour through `currentColor`. A room and the region containing it are
+one kind and two marks, for the same reason they are two blues.
 
 The overlay kinds fade in over 1.5 to 4 CSS pixels per world unit, so the social
 and clue webs are absent while a reader is looking at the shape of the campaign

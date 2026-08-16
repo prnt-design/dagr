@@ -293,7 +293,7 @@ export function styleFor(kind: NodeKind, locationSubtype?: string): KindStyle {
  * signature. The first took `(kind, locationSubtype?)`, and the optional second
  * argument is the one that decides the answer for the most numerous kind in the
  * campaign: a room and a region are both `location` and are two different blues,
- * so `kindColor('location')` badged all 750 rooms in the region's colour while
+ * so `kindColor('location')` badged all 1,023 rooms in the region's colour while
  * the GPU drew them in their own. That is exactly the drift this module exists to
  * prevent, reintroduced at the seam another session consumes. Taking the node
  * means a caller cannot omit it.

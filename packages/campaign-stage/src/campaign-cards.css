@@ -34,7 +34,12 @@
      node as the zoom changes. */
   transform-origin: 0 100%;
   transform: scale(var(--dagr-overlay-inv-zoom, 1));
-  max-width: 22ch;
+  /* 24ch since the mark moved in, where it was 22: the mark and its gap take
+     about two characters of the tag, and this tier exists to show a name, so
+     paying for the mark by ellipsizing the name two characters earlier is the
+     wrong trade. `.campaign-title--far` puts 22 back, because it has no mark to
+     pay for. */
+  max-width: 24ch;
   overflow: hidden;
   padding: 2px 6px;
   border: 1px solid var(--dagr-stage-rule);
@@ -57,6 +62,34 @@
 }
 
 /*
+ * The kind's mark, on the tier where a name is all a reader gets.
+ *
+ * NO `display` HERE, which leaves the `svg` at its own initial `inline`, and
+ * that is what keeps `.campaign-title`'s `text-overflow: ellipsis` working:
+ * the ellipsis is a property of a block clipping its own INLINE content, so
+ * turning the tag into a flex container to hold the mark would leave the name
+ * overflowing with no ellipsis and nothing failing anywhere.
+ *
+ * THE WIDTH AND HEIGHT ARE LOAD BEARING, not decoration. An inline `svg` is a
+ * replaced element, so these two are its size; without them it falls back to
+ * the replaced default of 300 by 150 and pushes the name out of the tag. Do not
+ * drop them on the theory that a 16 unit viewBox implies 16 pixels.
+ *
+ * The colour comes from the tier, per node, as the name's does. There is no
+ * colour here for the reason `.campaign-title-name` has none: a default would
+ * win for an element whose `update` has not run and would be a second source of
+ * truth about the palette.
+ */
+.campaign-title-icon {
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  /* Sits on the text's baseline rather than above it: the tag is one line of
+     12px type and an icon aligned to the line box rides two pixels high. */
+  vertical-align: -2px;
+}
+
+/*
  * A FAR END's name, put there by a hover rather than earned by a zoom (D3).
  *
  * It has to read as an annotation and not as a label the node has, because the
@@ -76,6 +109,12 @@
   top: 100%;
   bottom: auto;
   transform-origin: 0 0;
+  /* 22ch, which is where the title tag was before D5 widened it to 24. That
+     widening bought room for a MARK, and this tier deliberately has none, so
+     inheriting it would let a far-end annotation run two characters wider than
+     it was tuned for at the densest zoom this demo draws. A rule paid for by an
+     element is not a rule for the tier without the element. */
+  max-width: 22ch;
   border: 1px dashed var(--dagr-stage-rule);
   border-top: none;
   background: rgba(7, 8, 10, 0.72);
@@ -126,6 +165,23 @@
 }
 
 /*
+ * The card's own content, over its watermark.
+ *
+ * An absolutely positioned element paints ABOVE its non-positioned in-flow
+ * siblings whatever the source order says, so the mark below would sit on the
+ * text without this. Positioning these three puts them in the same paint order
+ * as their `z-index` asks for, and none of them moves: `position: relative`
+ * with no offsets changes nothing about layout, which is what keeps the
+ * declared card height true.
+ */
+.campaign-card-head,
+.campaign-card-oneline,
+.campaign-card-rows {
+  position: relative;
+  z-index: 1;
+}
+
+/*
  * The name takes the node's colour, exactly as the title tier's does.
  *
  * It is the one element present on BOTH sides of the gate, so it is the one
@@ -144,9 +200,77 @@
  */
 .campaign-card-badge {
   flex: none;
+  /* NO `display` HERE, AND THAT IS THE RULE: the difference is three pixels on
+     every card in the campaign. This element is a flex ITEM of
+     `.campaign-card-head`, so whatever is written here is blockified (its used
+     display is `block`, `span` or not), and a block-level flex item aligned on
+     `baseline` contributes the baseline of its own line box, which is its TEXT.
+     The mark rides inline on that line exactly as the title tier's does.
+     Written as `inline-flex` instead, the badge becomes a flex CONTAINER and
+     takes its baseline from its first flex item: with the mark first that item
+     is an `svg`, which has no baseline, so the baseline falls to the badge's
+     bottom edge and the head grows 3px to align it against the name. Measured
+     that way, all sixteen kinds overflowed their declared box by exactly 3,
+     which is the card gate's own failure mode arriving through a display
+     value. */
+  white-space: nowrap;
   color: var(--dagr-stage-ink-dim);
   font-size: 11px;
   letter-spacing: 0.04em;
+}
+
+/*
+ * The kind's mark on the badge, in the node's own colour.
+ *
+ * The TEXT beside it stays dim and the mark does not, which is the one place
+ * this card spends colour outside the name. It is what a reader picks a kind
+ * out by once a card is dense with rows, and it is drawn identically on the
+ * title tier, so the mark is the element that does not change as a reader
+ * crosses the gate.
+ *
+ * The same two rules as `.campaign-title-icon` and for the same reasons: inline
+ * by its own initial display, and sized by a width and a height that a replaced
+ * element needs. These 16 pixels of badge (12 and the gap) are room the head's
+ * NAME does not have, which is a thing `bench/browser/card-heights.mjs`
+ * measures rather than a thing this file can promise.
+ */
+.campaign-card-badge-icon {
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
+/*
+ * The kind's mark again at 44px, low and behind the text.
+ *
+ * **This is the demo's answer to "or images maybe", and the answer is that the
+ * image is the icon.** A picture per node would be a raster pipeline for 3,010
+ * generated nodes that no artist has drawn, in a bundle that is already a
+ * megabyte of three.js; a picture per KIND would be sixteen files to say what
+ * sixteen paths already say. So the mark grows instead, and a card gets
+ * something to look at rather than a second asset system. A dataset that ships
+ * its own images can have a real image tier; this one does not have images.
+ *
+ * OUT OF FLOW, which is what makes it free: the card's height is DECLARED and
+ * the card gate is derived from it, so a 44px block in the flow would raise
+ * every card by its height and delay every card by the zoom that costs. Absolute
+ * positioning takes it out of the height entirely, and the card's own
+ * `overflow: hidden` clips the corner that hangs past.
+ *
+ * Bottom right, where the rows' value column runs out: the head already has the
+ * badge in the top right, and the keys column is the left. At 0.09 it reads at
+ * the size a reader is looking at the card from and disappears into the ground
+ * at a glance.
+ */
+.campaign-card-mark {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  z-index: 0;
+  width: 44px;
+  height: 44px;
+  opacity: 0.09;
 }
 
 .campaign-card-oneline {

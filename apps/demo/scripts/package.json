@@ -1,0 +1,6 @@
+{
+  "name": "dagr-demo-capture",
+  "private": true,
+  "type": "module",
+  "description": "Not a workspace package. It exists so that npm install in this directory does not walk up to apps/demo and fail on its workspace dependencies. See capture.mjs."
+}

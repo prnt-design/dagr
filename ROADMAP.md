@@ -3307,13 +3307,13 @@ of M3 would leave the second runner idle for a milestone.
   TSL or one formula both backends run, and M4.2's whole argument for the nine
   primitives applies unchanged.
   THE DEMO TILES, AND THE PLAN'S ARGUMENT SURVIVED CONTACT. One Sugiyama pass over
-  3,010 nodes ranks 750 rooms into a couple of layers and draws a ribbon; the demo
+  3,010 nodes ranks 1,023 rooms into a couple of layers and draws a ribbon; the demo
   runs 95 layout calls instead, one per chapter, region, quest and front, plus a
   spine, and shelf-packs the blocks. Measured at the default seed: 101 tiles, 95
   of them laid out and 6 of them GRIDS. The grids are the honest half of the
   scheme rather than an escape from it: NPCs, factions, items, stat blocks, clues
   and weather sit outside the contains forest and no routed edge has both ends
-  inside any one of those groups, so a layer assignment would put all 550 NPCs in
+  inside any one of those groups, so a layer assignment would put all 375 NPCs in
   rank 0 and the "layout" of a bestiary would be one row 550 nodes wide.
   THE SHELF WIDTH IS SEARCHED, NOT COMPUTED, and the first version computed it.
   `sqrt(totalArea * aspect)` is the width a packing of exactly the tile areas
@@ -3334,7 +3334,7 @@ of M3 would leave the second runner idle for a milestone.
   and not its kind, which is its second signature: the first was
   `(kind, subtype?)`, and the optional argument decides the answer for the most
   numerous kind in the campaign, so a caller passing the kind alone badged all
-  750 rooms in the region's colour while the GPU drew them in their own.
+  1,023 rooms in the region's colour while the GPU drew them in their own.
   `#zoom=` SURVIVED, and nearly did not. The load-time `fitBounds` would have
   overridden it on every load while the readout went on advertising it, so the
   fit is skipped when the hash spoke. `initialZoomFromHash` returns its fallback
@@ -4723,6 +4723,104 @@ the demo itself should show richer nodes and its zoom.
   contains. `plugin-client-redirects` already carries three entries for earlier
   moves and now carries a fourth, to `/demos/campaign`: the demo is the nearest
   live thing to the deleted page and it is where the pointer to the README is.
+
+- [x] **D5** (`packages/campaign-stage`, `bench/browser`, `docs`) A drawn mark
+  per kind, on the title tag and on the card. The second half of the
+  maintainer's 2026-08-16 message: "we could add the html overlays and a zoom
+  level and show even richer nodes with icons or images maybe." The overlays
+  were already there (M4.11 and M4.12 shipped, P6 and D3 consume them), so what
+  this adds is what a reader sees in them; the zoom level is D6 below.
+  INLINE SVG PATHS AUTHORED HERE, not an icon font and not fetched images. A
+  font is a network request the docs site does not otherwise make and a glyph
+  table nobody in this repo can read; an image set is twenty files to keep in
+  step with a palette that is computed. A path is text: it diffs, it takes
+  `currentColor`, it costs no request, and the element a tier builds is one
+  `svg` with one `path` whose `d` is rewritten on every bind, which is exactly
+  the shape a POOLED element needs. ONE PATH PER MARK, so `create` and `update`
+  cannot disagree about how many children an icon has; subpaths inside one `d`
+  cost nothing.
+  TWENTY MARKS FOR SIXTEEN KINDS, because `location` is one kind and four
+  things. `nodeGlyph` takes the NODE and reads the subtype, which is the same
+  signature `nodeColor` has and for the same reason recorded there: a lookup on
+  the kind alone drew the region's ridge line on all 1,023 rooms while the
+  palette drew them in the room's own blue.
+  "OR IMAGES MAYBE" IS ANSWERED BY THE SAME MARK AT 44 PIXELS, behind the card's
+  rows at 0.09 opacity, and the answer is recorded rather than assumed: a
+  picture per node is a raster pipeline for 3,010 generated nodes nobody has
+  drawn, in a bundle that already carries a megabyte of three.js, and a picture
+  per KIND is sixteen files saying what sixteen paths already say. A dataset
+  that SHIPS images can have a real image tier; this one generates its nodes
+  from a seed. The watermark is out of flow, so it costs the declared card box
+  nothing.
+  THE MEASUREMENT DISCIPLINE HELD AND CAUGHT THE ONE REAL DEFECT. The badge's
+  mark was first written as an `inline-flex` badge, and `bench/browser/card-heights.mjs`
+  reported ALL SIXTEEN KINDS OVER THEIR DECLARED BOX BY EXACTLY 3 PIXELS. A
+  uniform miss is not text wrapping: the head aligns its two items on their
+  BASELINES, and an inline-flex box takes its baseline from its first flex item,
+  which with the mark first is an `svg` and has none, so the badge's baseline
+  fell to its bottom edge and the head grew to align it. Left inline, the
+  badge's baseline is its text's. Re-measured over 8,946 cards of three seeds
+  after the fix: every kind fits at exactly its declared height, so `CARD_SIZES`
+  is unchanged and `CARD_MIN_SCREEN_WIDTH` is still 460. The marks cost the card
+  gate nothing, which is a measured result and not a design intention.
+  THE PROBE IS A HAND COPY AND HAD TO GROW: the harness renders its own markup,
+  so the badge mark and the watermark are in it now. The path does not matter to
+  a height and one stands in for all twenty; what has to be reproduced is the
+  SPACE, and the badge mark is the half that takes 16 pixels out of the head.
+  NO MARK ON THE FAR-END LABELS, which is where this stops. Those are
+  annotations a hover puts on nodes too small to have earned a name, drawn at a
+  zoom where the screen is mostly edges; sixteen more shapes there would label
+  nodes the reader did not ask about. The dashed rule already says what they
+  are.
+  AN SVG ELEMENT'S `className` IS AN `SVGAnimatedString`, so assigning a string
+  to it does nothing at all: no class, no rule matches, nothing fails. Same
+  silent-drop family as a `style.color` the CSS parser rejects, and the tests
+  hold both the namespace and the class attribute for it.
+  A RULE PAID FOR BY AN ELEMENT IS NOT A RULE FOR THE TIER WITHOUT THE ELEMENT,
+  which is the review finding worth carrying: the title tag went from 22ch to
+  24ch to buy room for its mark, and `.campaign-title--far` inherits from
+  `.campaign-title`, so the far-end annotations that D5 deliberately gives NO
+  mark got the widening anyway and ellipsized two characters later than they
+  were tuned for, at the densest zoom this demo draws. Measured at an identical
+  186.83px on both before the fix. The far tier states 22ch of its own now. The
+  general shape: a selector that carries a justification has to be checked
+  against every selector that inherits it.
+  THE TREE REVIEW FOUND NO DEFECT AND FIVE STALE NUMBERS, four of them older
+  than this task and one of them made visible BY it: `campaign-style.ts` records
+  the location-subtype trap as "badged all 750 rooms" one file away from the new
+  glyph test recording the same trap as 1,023, which is the count the generator
+  actually produces. `tiles.ts` carried ~750 rooms and ~550 NPCs in the argument
+  for tiling at all, where the real figures are 1,023 and 375, and repeated 550
+  in the grid-tile argument and again in its worked example of the column
+  formula. The worked example is now MEASURED off the three real grid tiles (375
+  NPCs land in 26 columns at aspect 1.77 against the 1.78 asked for, 300 items in
+  22 at 1.92) rather than asserted from a count nothing produces.
+  `packages/render/src/rich-nodes.ts` described the demo's card gate as "about
+  160", which is the number `CARD_MIN_SCREEN_WIDTH`'s derivation exists to
+  replace, and described three tiers where D3 added a fourth on a second layer.
+  And `FirstLight.tsx` claimed its hover lookup costs "one lookup per CHANGE of
+  hovered node", where `applyHovered` runs a `querySelector` on EVERY drawn
+  frame, deliberately, because pooled elements make caching one wrong; the
+  comment 30 lines below it already said so, so the file stated both.
+  THE FOUR DIFF-REVIEW FINDINGS WERE COMMENTS DESCRIBING DECLARATIONS THAT WERE
+  NOT THERE, in a codebase where the comment is the spec. Three claimed a `display`
+  or a `flex` this stylesheet never writes: the badge is a flex ITEM, so its
+  used display is `block` whatever a `span` starts as, and it contributes its
+  own line box's baseline, which is the text's; the marks are `inline` by SVG's
+  own initial value, and what actually holds their size is the width and height
+  a REPLACED element needs (drop those and a mark falls back to 300 by 150). The
+  fourth was in the harness: its `position: relative` override was justified as
+  containing the watermark, which the stylesheet's own `absolute` already does,
+  when what it really does is take 8,946 cards out of absolute positioning so
+  each lays out at its own height. Every one of them would have sent the next
+  editor somewhere wrong while the code kept working.
+  EVIDENCE: the committed frames are retaken, and the retake IS the comparison,
+  because the frames they replace are the before. `p7-campaign-fit.png` came out
+  byte identical, correctly: there is no overlay at all at the fitted zoom. The
+  tier counts and both caption files are unchanged, so the drawing is the same
+  drawing with marks in it. `docs/docs/render.md` takes the card tier's own
+  argument further with them: a mark is one attribute the tier rewrites per
+  node, and the same picture through a glyph atlas would be a second rasteriser.
 
 ## Tracked, not promised
 
