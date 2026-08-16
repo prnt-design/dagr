@@ -4724,6 +4724,66 @@ the demo itself should show richer nodes and its zoom.
   moves and now carries a fourth, to `/demos/campaign`: the demo is the nearest
   live thing to the deleted page and it is where the pointer to the README is.
 
+- [x] **D5** (`packages/campaign-stage`, `bench/browser`, `docs`) A drawn mark
+  per kind, on the title tag and on the card. The second half of the
+  maintainer's 2026-08-16 message: "we could add the html overlays and a zoom
+  level and show even richer nodes with icons or images maybe." The overlays
+  were already there (M4.11 and M4.12 shipped, P6 and D3 consume them), so what
+  this adds is what a reader sees in them; the zoom level is D6 below.
+  INLINE SVG PATHS AUTHORED HERE, not an icon font and not fetched images. A
+  font is a network request the docs site does not otherwise make and a glyph
+  table nobody in this repo can read; an image set is twenty files to keep in
+  step with a palette that is computed. A path is text: it diffs, it takes
+  `currentColor`, it costs no request, and the element a tier builds is one
+  `svg` with one `path` whose `d` is rewritten on every bind, which is exactly
+  the shape a POOLED element needs. ONE PATH PER MARK, so `create` and `update`
+  cannot disagree about how many children an icon has; subpaths inside one `d`
+  cost nothing.
+  TWENTY MARKS FOR SIXTEEN KINDS, because `location` is one kind and four
+  things. `nodeGlyph` takes the NODE and reads the subtype, which is the same
+  signature `nodeColor` has and for the same reason recorded there: a lookup on
+  the kind alone drew the region's ridge line on all 1,023 rooms while the
+  palette drew them in the room's own blue.
+  "OR IMAGES MAYBE" IS ANSWERED BY THE SAME MARK AT 44 PIXELS, behind the card's
+  rows at 0.09 opacity, and the answer is recorded rather than assumed: a
+  picture per node is a raster pipeline for 3,010 generated nodes nobody has
+  drawn, in a bundle that already carries a megabyte of three.js, and a picture
+  per KIND is sixteen files saying what sixteen paths already say. A dataset
+  that SHIPS images can have a real image tier; this one generates its nodes
+  from a seed. The watermark is out of flow, so it costs the declared card box
+  nothing.
+  THE MEASUREMENT DISCIPLINE HELD AND CAUGHT THE ONE REAL DEFECT. The badge's
+  mark was first written as an `inline-flex` badge, and `bench/browser/card-heights.mjs`
+  reported ALL SIXTEEN KINDS OVER THEIR DECLARED BOX BY EXACTLY 3 PIXELS. A
+  uniform miss is not text wrapping: the head aligns its two items on their
+  BASELINES, and an inline-flex box takes its baseline from its first flex item,
+  which with the mark first is an `svg` and has none, so the badge's baseline
+  fell to its bottom edge and the head grew to align it. Left inline, the
+  badge's baseline is its text's. Re-measured over 8,946 cards of three seeds
+  after the fix: every kind fits at exactly its declared height, so `CARD_SIZES`
+  is unchanged and `CARD_MIN_SCREEN_WIDTH` is still 460. The marks cost the card
+  gate nothing, which is a measured result and not a design intention.
+  THE PROBE IS A HAND COPY AND HAD TO GROW: the harness renders its own markup,
+  so the badge mark and the watermark are in it now. The path does not matter to
+  a height and one stands in for all twenty; what has to be reproduced is the
+  SPACE, and the badge mark is the half that takes 16 pixels out of the head.
+  NO MARK ON THE FAR-END LABELS, which is where this stops. Those are
+  annotations a hover puts on nodes too small to have earned a name, drawn at a
+  zoom where the screen is mostly edges; sixteen more shapes there would label
+  nodes the reader did not ask about. The dashed rule already says what they
+  are.
+  AN SVG ELEMENT'S `className` IS AN `SVGAnimatedString`, so assigning a string
+  to it does nothing at all: no class, no rule matches, nothing fails. Same
+  silent-drop family as a `style.color` the CSS parser rejects, and the tests
+  hold both the namespace and the class attribute for it.
+  EVIDENCE: the committed frames are retaken, and the retake IS the comparison,
+  because the frames they replace are the before. `p7-campaign-fit.png` came out
+  byte identical, correctly: there is no overlay at all at the fitted zoom. The
+  tier counts and both caption files are unchanged, so the drawing is the same
+  drawing with marks in it. `docs/docs/render.md` takes the card tier's own
+  argument further with them: a mark is one attribute the tier rewrites per
+  node, and the same picture through a glyph atlas would be a second rasteriser.
+
 ## Tracked, not promised
 
 Web-component wrapper, 3D camera experiment, Remotion tutorials, npm publish

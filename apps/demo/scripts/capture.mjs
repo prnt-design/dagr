@@ -35,6 +35,12 @@
  * one. An earlier version pinned this box's own chromium build number, which
  * made the four lines above false everywhere else.
  *
+ * THE `package.json` BESIDE THIS FILE IS WHAT MAKES THAT INSTALL WORK, and it
+ * is four fields of nothing on purpose. Without it npm walks up to
+ * `apps/demo/package.json`, finds `workspace:*` dependencies it cannot resolve,
+ * and fails before it downloads anything. It is not a workspace package: the
+ * root globs are `apps/*`, and this is a directory deeper.
+ *
  * **A SET and an optional VARIANT**, which is what D2 added and why. A change to
  * the drawing is argued for with a pair of frames taken from the same hash
  * either side of it, and a pair is only evidence if the two frames came through

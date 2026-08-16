@@ -65,12 +65,15 @@ leaves, so a line says where it comes from, and its dash says whether a layout
 routed it. The readout is live camera state rather than a caption.
 
 ![The same campaign at 1.4 CSS pixels per world unit: keyed sites as rounded
-rectangles with names above them, dashed ribbons fanning down to their
-rooms](../../assets/screenshots/p7-campaign-names.png)
+rectangles, each with a tag above it carrying a small mark and a name, dashed
+ribbons fanning down to their rooms](../../assets/screenshots/p7-campaign-names.png)
 
 The same scene zoomed in, where the nodes are wide enough to carry names. The
 names are DOM, positioned by the camera through the overlay described below; the
-shapes and the ribbons are the GPU's.
+shapes and the ribbons are the GPU's. The mark before each name is an inline
+`svg` the tier draws per kind, which is the cheapest illustration of what a DOM
+tier buys you: the same picture through a glyph atlas would be a second
+rasteriser.
 
 ![The same tile with the pointer on one chapter: its nine edges at full width
 and alpha, every other edge faded back, and the far end of each highlighted edge
@@ -1126,7 +1129,11 @@ stands, closer to a wall of text as texture than to a hundred readable tags.
 The card tier should stay DOM permanently. Its content is arbitrary markup with
 links, wrapped prose, images and per-kind structure, and reimplementing that over
 a glyph atlas is reimplementing a browser. At card zoom only tens of nodes fit on
-screen, so it never approaches a count where any of this bites.
+screen, so it never approaches a count where any of this bites. The campaign's
+cards are the argument in miniature: a per-kind mark on the badge and the same
+mark again at four times the size behind the rows are two inline `svg` elements
+whose shape is one attribute the tier rewrites per node, and an atlas would need
+a glyph, an upload and a cache for each.
 
 Nothing in the overlay's design changes either way, which is the useful part: the
 label tier is one entry per node with a gate, so an atlas takes the tier over by

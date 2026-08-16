@@ -68,6 +68,17 @@ console.error(`measuring ${cards.length} cards`);
 // A previous version also read `apps/demo/src/styles.css` and inlined it, which
 // contributed nothing: that file opens with a comment, so the split it used
 // returned an empty string, and these declarations were always the whole of it.
+// The two marks the card tier builds, as the probe's hand copy of them. The
+// PATH does not matter to a height: every kind's mark is the same 12px box on
+// the badge and the same out-of-flow 44px block behind the text, so what these
+// have to reproduce is the SPACE, and one path stands in for all twenty. The
+// badge one is the half that moves a number: it takes 16px out of the head, so
+// a long name has that much less room before it wraps.
+const BADGE_ICON =
+  '<svg class="campaign-card-badge-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3h11v10h-11z"/></svg>';
+const MARK =
+  '<svg class="campaign-card-mark" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3h11v10h-11z"/></svg>';
+
 const html = `<!doctype html><html><head><style>
 :root {
   --dagr-stage-mono: 'Liberation Mono', monospace;
@@ -79,10 +90,16 @@ const html = `<!doctype html><html><head><style>
 body { margin: 0; background: #07080a; }
 .probe { position: relative; }
 ${css}
+/* The card positions itself for real here, since the watermark inside it is
+   absolutely positioned and would otherwise escape to the nearest positioned
+   ancestor and take a scrollbar with it. The transform is dropped because the
+   counter-scale has no zoom to read outside the stage.
+   NOTE: no backticks in this block. It is inside a JS template literal. */
 .campaign-card { position: relative; transform: none; }
 </style></head><body>
 ${cards.map(c => `<div class="probe"><div class="campaign-card" data-kind="${c.kind}" style="width:${CARD_WIDTH}px">
-<div class="campaign-card-head"><span class="campaign-card-name">${c.name}</span><span class="campaign-card-badge">${c.kind.replace('_',' ')}</span></div>
+${MARK}
+<div class="campaign-card-head"><span class="campaign-card-name">${c.name}</span><span class="campaign-card-badge">${BADGE_ICON}<span class="campaign-card-badge-text">${c.kind.replace('_',' ')}</span></span></div>
 <div class="campaign-card-oneline">${c.oneLine}</div>
 <dl class="campaign-card-rows">${c.rows.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
 </div></div>`).join('')}

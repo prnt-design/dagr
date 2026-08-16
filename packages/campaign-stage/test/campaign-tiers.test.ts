@@ -4,6 +4,7 @@ import { cardRows, generateCampaign } from '@dagr/campaign';
 import type { CampaignNode, NodeKind } from '@dagr/campaign';
 import type { RichNode } from '@dagr/render';
 import { zoomLimits } from '../src/camera-input.js';
+import { GLYPH_VIEWBOX, nodeGlyph } from '../src/campaign-glyphs.js';
 import { SMALLEST_NODE_SIZE, nodeColor, styleFor } from '../src/campaign-style.js';
 import {
   CARD_MIN_SCREEN_WIDTH,
@@ -295,6 +296,85 @@ describe('the tiers themselves', () => {
     probe.style.color = 'not-a-colour';
     // Unchanged, not cleared and not thrown: the assignment did nothing at all.
     expect(probe.style.color).toBe('rgb(1, 2, 3)');
+  });
+
+  /**
+   * The marks, which are the part of a pooled element easiest to leave stale.
+   *
+   * A `textContent` that is not rewritten is visible in the very next assertion
+   * anybody writes about a card. A `d` that is not rewritten is a room's four
+   * walls drawn on an NPC, which no text assertion can see and which a
+   * screenshot only shows if the reader happens to look at that node.
+   */
+  it('gives the title tier a mark, in the name colour, that follows the node', () => {
+    const element = titleTier.create();
+    const icon = element.querySelector<SVGSVGElement>('.campaign-title-icon');
+    expect(icon).not.toBeNull();
+    // Blank until a node is bound: `create` builds the shape and `update` fills
+    // it, which is what lets the tier pool these at all.
+    expect(icon?.querySelector('path')?.getAttribute('d')).toBeNull();
+
+    titleTier.update(element, richNode(scene));
+    expect(icon?.querySelector('path')?.getAttribute('d')).toBe(nodeGlyph(scene));
+    const name = element.querySelector<HTMLElement>('.campaign-title-name');
+    expect(icon?.style.color).toBe(name?.style.color);
+    expect(icon?.style.color).not.toBe('');
+  });
+
+  it('rewrites both card marks when an element is recycled', () => {
+    const element = cardTier.create();
+    cardTier.update(element, richNode(scene));
+    cardTier.update(element, richNode(clue));
+
+    const badgeIcon = element.querySelector<SVGSVGElement>('.campaign-card-badge-icon');
+    const mark = element.querySelector<SVGSVGElement>('.campaign-card-mark');
+    expect(badgeIcon?.querySelector('path')?.getAttribute('d')).toBe(nodeGlyph(clue));
+    expect(mark?.querySelector('path')?.getAttribute('d')).toBe(nodeGlyph(clue));
+    expect(nodeGlyph(clue)).not.toBe(nodeGlyph(scene));
+  });
+
+  it('tints the badge mark and leaves the badge text dim', () => {
+    // The rule the card has followed since P6: the name carries the colour and
+    // the badge's TEXT stays the stylesheet's dim ink. The mark is the one
+    // element added to that rule, deliberately, because it is what a reader
+    // picks a kind out by on a card dense with rows.
+    const element = cardTier.create();
+    cardTier.update(element, richNode(scene));
+    const name = element.querySelector<HTMLElement>('.campaign-card-name');
+    const badgeIcon = element.querySelector<SVGSVGElement>('.campaign-card-badge-icon');
+    const badgeText = element.querySelector<HTMLElement>('.campaign-card-badge-text');
+    expect(badgeIcon?.style.color).toBe(name?.style.color);
+    expect(badgeText?.style.color).toBe('');
+    expect(badgeText?.textContent).toBe('scene');
+  });
+
+  it('keeps the badge text where a rewrite cannot take the mark with it', () => {
+    // The mark and the kind name are siblings inside the badge, so `update`
+    // writes the name into its OWN span: `badge.textContent = kind` would
+    // replace every child, and the mark would be gone from the second bind on.
+    const element = cardTier.create();
+    cardTier.update(element, richNode(scene));
+    cardTier.update(element, richNode(clue));
+    expect(element.querySelector('.campaign-card-badge-icon')).not.toBeNull();
+    expect(element.querySelector<HTMLElement>('.campaign-card-badge-text')?.textContent).toBe(
+      'clue',
+    );
+  });
+
+  it('builds the marks as SVG, which is the namespace that draws', () => {
+    // `createElement('svg')` makes an unknown HTML element that lays out and
+    // draws nothing, and nothing anywhere fails. The namespace is the whole
+    // difference between a mark and an empty box.
+    const element = cardTier.create();
+    for (const selector of ['.campaign-card-badge-icon', '.campaign-card-mark']) {
+      const svg = element.querySelector(selector);
+      expect(svg?.namespaceURI, selector).toBe('http://www.w3.org/2000/svg');
+      expect(svg?.getAttribute('viewBox')).toBe(GLYPH_VIEWBOX);
+      // The class has to arrive through `setAttribute`: assigning a string to
+      // an SVG element's `className` silently does nothing, and every rule in
+      // the stylesheet would miss.
+      expect(svg?.getAttribute('class'), selector).toBe(selector.slice(1));
+    }
   });
 
   it('writes the kind declared size onto the card', () => {
