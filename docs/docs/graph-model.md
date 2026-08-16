@@ -325,7 +325,10 @@ together, because there is no coherent graph left if it does not.
 
 Every state-changing call emits exactly one patch: an ordered, flat array of
 ops saying what that call did. A call that changes nothing emits nothing at
-all, not an empty patch.
+all, not an empty patch. The one thing that changes the unit is
+[`batch`](#batching), which holds the emission back and hands over the ops of
+several calls as one patch. That patch is the same type and the same shape, so
+nothing below reads differently for it.
 
 That second half is the emission-side twin of the copy-on-write identity rule
 the attributes section sets out. There, a merge that changes nothing hands back
@@ -346,6 +349,7 @@ node comes back before the edges that need it to exist.
 | Function | Behaviour |
 | --- | --- |
 | `graph.subscribe(listener)` | Registers a patch listener and returns the function that unregisters it. O(1). |
+| `graph.batch(body)` | Runs `body` and emits everything it changed as one patch, returning what `body` returned. O(ops collected). |
 | `apply(graph, patch)` | Replays a patch onto a graph, op by op, in order. O(op count). |
 | `invert(patch)` | The patch that undoes `patch`. Pure. O(op count). |
 
@@ -407,9 +411,13 @@ stop(); // the mirror stops tracking here
 ```
 
 `apply` is an ordinary caller of the public API, so the mirror emits its own
-patches as it is written to and can be subscribed to in turn. Nothing is
-transactional either: an op the graph rejects throws that graph error out of
-`apply`, with the ops before it already applied.
+patch as it is written to and can be subscribed to in turn. It replays inside a
+[batch](#batching), so a patch of any op count arrives at the mirror's listeners
+as one patch, exactly as it left the source: without that, a cascade leaves one
+graph as a single patch and reaches the next as two, and mirroring a batched
+three-step edit re-fans it into the three intermediate states batching exists to
+remove. Nothing is transactional either: an op the graph rejects throws that
+graph error out of `apply`, with the ops before it already applied.
 
 ### The ops
 
@@ -626,6 +634,84 @@ made. And ordering is gone, since a listener that returns at its first `await`
 has not finished when the next one starts. If the work has to be asynchronous,
 make the listener itself synchronous: push the patch onto a queue and drain the
 queue outside the emission.
+
+### Batching
+
+`batch` runs a function and emits everything it changed as one patch:
+
+```ts
+import { Graph } from '@dagr/graph';
+
+const graph = new Graph();
+graph.subscribe((patch) => {
+  patch.length; // 3, once, rather than 1 three times
+});
+
+const edge = graph.batch(() => {
+  graph.addNode('ingest');
+  graph.addNode('parse');
+  return graph.addEdge({ source: 'ingest', target: 'parse', id: 'first' });
+});
+
+edge.id; // 'first': `batch` returns what the body returned
+```
+
+**A batch holds the emission back and nothing else.** Every call inside commits
+as it is made, so a later call in the body reads the graph the earlier ones
+made. It is not a transaction, not a staging area, and not a second way to
+write. What it decides is which graph states a listener is shown.
+
+That is the whole reason it exists, and the reason is not performance. Building
+"add node, add edge, add edge" as three patches shows a layout consumer a
+disconnected singleton, which gets ranked and placed somewhere, and then
+corrects it as each edge arrives. `@dagr/layout`'s own suite measures it: a node
+added and then wired up unbatched is reported at two different positions, the
+first of which it does not end up in, while the same edit batched reports it
+once, where it stays. Under an animated renderer each of those reports is a
+retarget, so the unbatched form is a node flying in from the wrong place on
+every multi-step edit. None of those intermediate graphs is a state the caller
+meant to draw.
+
+**A batch is a `Patch`, not a type of its own.** It is an ordered array of
+cascade-free ops like any other, so `invert` reverses and inverts it into the
+undo of the whole edit and `apply` replays it, both without being told they are
+holding a batch. A batch that changed nothing emits nothing, the same rule a
+single call follows. Nested batches join the outermost one, so a helper that
+batches internally composes with a caller that batches around it.
+
+**Nothing rolls back.** A call the graph refuses throws out of `batch` with the
+calls before it already committed, and the ops they made are emitted on the way
+out rather than dropped, because a listener mirroring the graph would otherwise
+be silently wrong from that point on. All-or-nothing would mean undoing the
+committed part by replaying an inverse, and [replay restores content but not
+insertion order](#applying-and-what-replay-does-not-restore), so the rollback
+would hand back a different graph while claiming to be the original. If both the
+body and a listener fail, the body's error is the one that leaves: it says why
+the batch ended, and a listener misbehaving afterwards must not hide it.
+
+**There is one emission and it happens at the close, over the listener set as it
+is then.** A listener that subscribed inside the body reads everything collected
+by then, which on a graph something was already watching means ops that predate
+its own subscription. A listener that unsubscribed inside the body reads none of
+it. And "collected" is the word that matters: an unwatched graph builds no ops
+at all, so a listener that is the first to watch reads the batch from where it
+started watching and no further back. All three are reasons to leave a batch you
+did not open alone. The batch is closed before the emission, so a listener that
+mutates while reading one emits its own patch rather than joining the patch it
+is being handed.
+
+**What a batch will not do is hand you a patch with a hole in it.** Once it has
+collected an op it collects every op after it, including across a moment when
+nothing is subscribed, so the patch is always a contiguous run of the edit and
+`apply` can replay it on its own. Without that, a body that unsubscribed its
+last listener, added a node, and then subscribed a new one would emit the ops
+from either side of the gap and none from inside it, and replaying that on a
+mirror asks for an edge to a node that never arrived.
+
+**The body must be synchronous, and nothing stops you passing one that is not.**
+Same shape as the async-listener trap above, with a milder ending: the batch
+closes at the first `await` and every mutation after it emits on its own, so an
+async body degrades to unbatched rather than to wrong.
 
 ## Serialization
 
@@ -1241,12 +1327,13 @@ tie-break rule.
 
 ## Not here yet
 
-Patches describe single calls. There is no batching or transaction API, so
-several mutations cannot be coalesced into one patch, and no listener sees a
-half-finished edit: each call commits and emits on its own. That is deliberate
-rather than pending. Nothing needs the coalesced form yet, and incremental
-layout is what will say what shape it wants, so inventing it now would be
-guessing in the same way a port attribute bag would have been.
+There are no transactions. [`batch`](#batching) coalesces several mutations into
+one patch, which is the half incremental layout asked for, and it stops there:
+nothing rolls back, and a call the graph refuses leaves the calls before it
+committed. Rollback would mean replaying an inverse, and replay does not restore
+insertion order, so an all-or-nothing batch would hand back a graph that is not
+the one it started from. A caller who needs the stronger thing can keep the
+inverse patch and decide for themselves what to do with it.
 
 Ports carry an id and a direction, and nothing else. Port attribute bags are a
 deliberate later decision rather than an omission: layout is what will first

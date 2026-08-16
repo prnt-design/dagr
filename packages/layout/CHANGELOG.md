@@ -1031,6 +1031,14 @@ of doc prose.
 
 ### Notes
 
+- M3.3 changed no code here. `relayout` already took a patch of any length, so
+  `graph.batch` from `@dagr/graph` needed nothing widened: a batch arrives as one
+  patch and relays out once. What landed in this package is the measurement that
+  decided it, in `test/layout.relayout.test.ts`: a node added and then wired up
+  is reported at two positions unbatched, the first of which it does not keep,
+  and at one batched. `graph.batch` is the recommended shape for a multi-step
+  edit and the docs page says so.
+
 - `@dagr/graph` is a peer dependency, not a regular one. Its `#private` fields
   make `Graph` nominally typed, so two copies in a tree are not interchangeable.
 

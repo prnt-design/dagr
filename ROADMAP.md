@@ -190,7 +190,10 @@ findings addressed or logged, docs land with the feature.
   interacts with `invert`, whether a batch may span a failed call), so building
   it now would be the speculative surface this project has twice decided
   against. The addition is source compatible whenever it lands, so waiting
-  costs nothing.
+  costs nothing. (It landed at M3.3 as `graph.batch`, source compatible as
+  predicted, and the consumer that said what shape it wanted was M3.2's engine.
+  Transactions stayed declined, for a reason this entry already contains: replay
+  does not restore insertion order, so a rollback cannot be honest.)
 - [x] **M1.4** Traversal and invariants: topological sort, cycle detection,
   sources/sinks, reachability. Property tests on random DAGs and random
   digraphs with cycles.
@@ -2639,7 +2642,7 @@ it.
   about the drawing (an attribute update, say) emits an empty delta, and
   `isEmptyDelta` says so. There is no separate no-op path and there should not
   be, because as of M1.3 a call that changes nothing emits no patch at all.
-- [ ] **M3.3** (`@dagr/graph`, `@dagr/layout`) Patch batching, or the recorded
+- [x] **M3.3** (`@dagr/graph`, `@dagr/layout`) Patch batching, or the recorded
   decision not to have it. M1.3 declined to build batching and transactions on
   the grounds that M3 incremental layout is what will say what shape it wants:
   how a batch interacts with `invert` (one inverse patch, or a reversed list of
@@ -2674,6 +2677,69 @@ it.
   carry the question past M3.
   Widening `relayout(patch)` to accept a batch is source compatible in either
   direction, which is exactly why M3.2 does not wait for this.
+  BATCHING LANDED, as `graph.batch(body)`, and the argument that carried it is
+  the intermediate-states one this entry makes rather than any performance
+  claim. The composition half was already settled by M3.2, whose sequence test
+  passes, so the honest question left was whether the states in between are worth
+  a surface. They are, and the run measured it rather than asserting it:
+  `test/layout.relayout.test.ts` adds `e` to the diamond and then wires it up,
+  and unbatched the engine reports a place for `e` in two of the three deltas,
+  the first of which it does not keep (a disconnected singleton still gets a rank
+  and a position). Batched, one delta, one place, the place it keeps. Two rather
+  than three because the third edge moves nothing about it, which is the kind of
+  number this entry's argument was missing.
+  THE THREE QUESTIONS M1.3 LEFT, answered by what shipped. A BATCH IS A `Patch`
+  AND NOT A TYPE OF ITS OWN, so `invert` reverses and inverts it into the undo of
+  the whole edit, `apply` replays it, and a listener signature stays what it was.
+  That answers the invert question ("one inverse patch") and the listener
+  question ("the batch, and only the batch") in one decision instead of two, and
+  it is why the layout side needed no code: `relayout` already read a patch of
+  any length, so a batch arrives as one patch and relays out once. A FAILED CALL
+  COMMITS WHAT RAN BEFORE IT, and the ops that committed are emitted on the way
+  out. All-or-nothing was rejected on M1.3's own ground: rollback would mean
+  replaying an inverse, and replay restores content but not insertion order, so
+  the "restored" graph would be a different graph. Dropping the ops instead was
+  rejected because a mirror that never hears about a committed mutation is
+  silently wrong from that point on, and silence is the failure mode this package
+  has spent M1.3 and M3.2 designing against.
+  BATCH IS DEPTH, NOT A FLAG: a nested batch joins the one around it, so two
+  helpers that each batch compose. THE EMISSION IS AT THE CLOSE AND OVER THE
+  LISTENER SET AS IT IS THEN, which has three consequences worth knowing rather
+  than worth hiding: a listener that subscribes inside a batch reads everything
+  COLLECTED by then, one that unsubscribes inside a batch reads none of it, and
+  the first listener to watch reads only from where it started watching, because
+  an unwatched graph builds no ops and paying for a journal it will probably
+  never emit is the cost this package has refused since M1.3. The middle one is
+  the surprise and the third is the one a tree review caught in this run's own
+  first draft of the docs, which claimed the whole batch without qualification.
+  All three say the same thing, which is to leave a batch you did not open alone.
+  A BATCH IS CONTIGUOUS FROM ITS FIRST COLLECTED OP, which is the review round's
+  one code fix: `#observed` counts a batch that has already collected as watched,
+  so a body that unsubscribes its last listener, mutates, and subscribes a new
+  one still emits one unbroken run. Without it that listener is handed the ops
+  from either side of the gap and none from inside it, which is not a transition
+  that ever happened, and replaying it onto a mirror asks for an edge to a node
+  that never arrived. The cost is a batch nobody ends up reading collecting ops
+  that are then dropped at the close, which is bounded by the batch.
+  AND `apply` NOW REPLAYS INSIDE A BATCH, which is the review's other real
+  finding and fixes a seam that predates this task: `apply` is an ordinary
+  caller, so op by op it re-fanned one patch into one patch PER OP on the target.
+  A cascade left one graph as a single patch and arrived at the next as two, and
+  a mirror was the one place the intermediate states came back after the source
+  had removed them, which is precisely the failure this task is about, on the
+  path the docs recommend for mirroring. One line, and the seam closes for both. The depth comes down before the emission, so a listener
+  mutating while it reads a batch emits its own patch rather than joining the one
+  it is holding.
+  WHAT WAS NOT BUILT: transactions, a batch-versus-patch listener choice, and any
+  coalescing of ops inside a batch. The ops are concatenated in the order the
+  calls made them and nothing cancels, so `add` then `remove` of the same node
+  crosses as both, which is what `relayout`'s last-op-wins check is already
+  written for. Coalescing is a real optimisation and it belongs to whoever
+  measures a patch big enough to want it.
+  ONE THING FOR M3.4 AND M4.7: a batch is the boundary saying which graph states
+  are allowed to be laid out, so a stability metric measured over an unbatched
+  multi-step edit is measuring states nobody meant to draw. Batch the edit in the
+  corpus before the number means anything.
 - [ ] **M3.4** (`@dagr/layout`) Stability contract and metrics: write down what
   stable means, and make it measurable, before any stage tries to be stable. A
   stability module computing mean and max node displacement, the fraction of

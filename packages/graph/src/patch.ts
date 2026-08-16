@@ -5,7 +5,9 @@
  * an ordered array of cascade-free {@link PatchOp}s. A call that changes
  * nothing emits nothing at all, which is the emission-side twin of the copy on
  * write identity rule the records already keep: no change, no new object, no
- * patch.
+ * patch. The one thing that changes the unit is `Graph.batch`, which holds the
+ * emission back and hands over the ops of several calls as one patch. A batch
+ * is this same type and this same shape, so nothing here reads it differently.
  *
  * Cascade-free means an op names one thing and does one thing. `removeNode`
  * takes its incident edges with it, so it emits a `remove-edge` op per edge
@@ -328,10 +330,18 @@ function applyOp<N extends object, E extends object, G extends object>(
  * Replays a patch onto a graph, op by op, in order.
  *
  * This is an ordinary caller of the public API, with two consequences worth
- * knowing. The graph emits its own patches as it goes, so a mirror kept in step
- * by `source.subscribe((patch) => apply(mirror, patch))` can itself be
- * subscribed to. And nothing is transactional: an op that the graph rejects
- * throws that graph error out of here, with the ops before it already applied.
+ * knowing. The graph emits its own patch, so a mirror kept in step by
+ * `source.subscribe((patch) => apply(mirror, patch))` can itself be subscribed
+ * to. And nothing is transactional: an op that the graph rejects throws that
+ * graph error out of here, with the ops before it already applied.
+ *
+ * THE REPLAY IS ONE BATCH, so a patch of any op count arrives at the mirror's
+ * own listeners as one patch, exactly as it left the source. Op by op is what it
+ * does and never what it says: without the batch, mirroring re-fans a batched
+ * three-step edit into three patches, and a layout engine subscribed to the
+ * mirror rather than to the source would see the intermediate states that
+ * `Graph.batch` exists to remove. It fixes the same seam for a cascade, which
+ * left one graph as a single patch and arrived at the next as two.
  *
  * Replay restores every node, edge, port, and attribute exactly, ids and values
  * included, but not insertion order. A restored element takes its place at the
@@ -355,5 +365,7 @@ export function apply<
   graph: Graph<NodeAttrs, EdgeAttrs, GraphAttrs>,
   patch: Patch<NodeAttrs, EdgeAttrs, GraphAttrs>,
 ): void {
-  for (const op of patch) applyOp(graph, op);
+  graph.batch(() => {
+    for (const op of patch) applyOp(graph, op);
+  });
 }

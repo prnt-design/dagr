@@ -14,6 +14,41 @@ diffing five milestones of doc prose.
 
 ### Added
 
+- `graph.batch(body)`: runs `body` and emits everything it changed as one patch,
+  returning what `body` returned. Additive, and nothing an existing caller does
+  changes: a graph with no batch open emits exactly what it emitted before
+  (M3.3).
+
+  It holds the emission back and nothing else. Every call inside commits as it
+  is made, so a later call in the body reads the graph the earlier ones made.
+  The reason it exists is not performance: unbatched, "add node, add edge, add
+  edge" shows a layout consumer a disconnected singleton to place and then
+  corrects it, and `@dagr/layout`'s suite measures the same node being reported
+  at two positions where a batch reports it at one.
+
+  **A batch is a `Patch`**, not a type of its own, so `invert` reverses and
+  inverts it into the undo of the whole edit and `apply` replays it, neither
+  needing to know. A batch that changed nothing emits nothing. Nested batches
+  join the outermost one.
+
+  **Nothing rolls back.** A call the graph refuses throws out of `batch` with
+  the calls before it committed, and their ops are emitted on the way out rather
+  than dropped, because a mirror that never heard about them is silently wrong
+  from there on. All-or-nothing would mean replaying an inverse, and replay does
+  not restore insertion order. If both the body and a listener fail, the body's
+  error is the one that leaves.
+
+  **One emission, at the close, over the listener set as it is then.** A
+  listener that subscribed inside the body reads everything collected by then,
+  which on an already-watched graph means ops that predate its own
+  subscription; one that unsubscribed inside it reads none of it; and a listener
+  that is the first to watch reads the batch from where it started watching,
+  because an unwatched graph builds no ops. The batch is closed before the
+  emission, so a listener mutating while it reads one emits its own patch. What
+  a batch never emits is a patch with a hole in it: once it has collected an op
+  it collects every op after it, across a moment with nothing subscribed
+  included, so a batch is always contiguous and always replayable on its own.
+
 - Serialization: `graph.toJSON()` and the static `Graph.fromJSON(json)`, with
   the document types `GraphJSON`, `NodeJSON`, `EdgeJSON`, and `PortJSON` (M1.5).
   Additive again, so nothing under a caller moves.
@@ -84,3 +119,12 @@ diffing five milestones of doc prose.
   `switch` over either that was previously complete now has a missing arm, which
   is a compile error rather than a silent fallthrough, and is the only way this
   release can break a build.
+
+### Changed
+
+- `apply(graph, patch)` replays inside a batch, so the target emits one patch
+  for the replay whatever the op count (M3.3). Content and ordering are
+  untouched; what changes is what the target's own listeners see. A cascade used
+  to leave one graph as a single patch and arrive at the next as two, and
+  mirroring a batched edit used to re-fan it into the intermediate states
+  batching exists to remove.

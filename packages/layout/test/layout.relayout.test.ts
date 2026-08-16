@@ -11,7 +11,13 @@ import {
   layout,
   serveLayout,
 } from '../src/index.js';
-import type { LayoutEngine, LayoutPort, LayoutResult, PositionStage } from '../src/index.js';
+import type {
+  LayoutDelta,
+  LayoutEngine,
+  LayoutPort,
+  LayoutResult,
+  PositionStage,
+} from '../src/index.js';
 import { recordingStages } from './fakes.js';
 
 function diamond(): Graph {
@@ -43,6 +49,24 @@ function last(patches: readonly Patch[]): Patch {
   const patch = patches.at(-1);
   if (patch === undefined) throw new Error('the graph emitted no patch');
   return patch;
+}
+
+/**
+ * Where a delta says node `e` is, as `x,y`, once per delta that names it at all.
+ *
+ * A delta names a node either as an addition, carrying its whole box, or as a
+ * move, carrying where it went. Absent means unchanged, so an empty result here
+ * is a delta a consumer would not animate `e` for.
+ */
+function placeOf(delta: LayoutDelta): string[] {
+  const places: string[] = [];
+  for (const node of delta.nodes.added) {
+    if (node.id === 'e') places.push(`${String(node.x)},${String(node.y)}`);
+  }
+  for (const node of delta.nodes.moved) {
+    if (node.id === 'e') places.push(`${String(node.to.x)},${String(node.to.y)}`);
+  }
+  return places;
 }
 
 /** Node boxes as plain records, which is what two runs are compared on. */
@@ -132,6 +156,67 @@ describe('engine.relayout', () => {
     const unapplied: Patch = [{ op: 'add-node', id: 'e', attrs: {}, ports: [] }];
     expect(() => engine.relayout(unapplied)).toThrow(EngineStateError);
     expect(() => engine.relayout(unapplied)).toThrow(/"e"/u);
+  });
+
+  // M3.3's evidence, and the reason batching landed rather than being declined.
+  // The stepwise path already agrees with the combined one on the FINAL layout
+  // (the test above), so what a batch changes is the states in between, which
+  // these two measure rather than assert.
+  it('takes a batched patch as one relayout', () => {
+    const { graph, patches } = watched(diamond());
+    const engine = createLayout();
+    engine.run(graph);
+
+    graph.batch(() => {
+      graph.addNode('e');
+      graph.addEdge('d', 'e', 'de');
+      graph.addEdge('a', 'e', 'ae');
+    });
+
+    // One patch for the whole edit, which is the point: one relayout, one delta.
+    expect(patches).toHaveLength(1);
+    const batched = engine.relayout(last(patches));
+
+    const combined = diamond();
+    combined.addNode('e');
+    combined.addEdge('d', 'e', 'de');
+    combined.addEdge('a', 'e', 'ae');
+    expect(boxes(batched.result)).toEqual(boxes(layout({ graph: combined })));
+  });
+
+  it('reports the new node once, where an unbatched edit reports two places for it', () => {
+    const stepwise = watched(diamond());
+    const stepwiseEngine = createLayout();
+    stepwiseEngine.run(stepwise.graph);
+    const placements: string[] = [];
+    stepwise.graph.addNode('e');
+    placements.push(...placeOf(stepwiseEngine.relayout(last(stepwise.patches)).delta));
+    stepwise.graph.addEdge('d', 'e', 'de');
+    placements.push(...placeOf(stepwiseEngine.relayout(last(stepwise.patches)).delta));
+    stepwise.graph.addEdge('a', 'e', 'ae');
+    placements.push(...placeOf(stepwiseEngine.relayout(last(stepwise.patches)).delta));
+
+    const batched = watched(diamond());
+    const batchedEngine = createLayout();
+    batchedEngine.run(batched.graph);
+    batched.graph.batch(() => {
+      batched.graph.addNode('e');
+      batched.graph.addEdge('d', 'e', 'de');
+      batched.graph.addEdge('a', 'e', 'ae');
+    });
+    const once = placeOf(batchedEngine.relayout(last(batched.patches)).delta);
+
+    // Unbatched, two of the three deltas name a place for `e` and the first is
+    // not where it ends up: a disconnected singleton gets ranked and placed
+    // somewhere, then corrected when the edge that says where it belongs
+    // arrives. The third edge changes nothing about it, which is why this is
+    // two and not three. By M4.7 each of those is a spring retarget, so this is
+    // the node flying in from the wrong place that the M3.3 entry argues about,
+    // measured rather than described. Batched, there is one place and it is the
+    // one it keeps.
+    expect(placements).toHaveLength(2);
+    expect(placements[0]).not.toBe(placements[1]);
+    expect(once).toEqual([placements[1]]);
   });
 
   it('accepts a patch whose own ops cancel out', () => {

@@ -1811,6 +1811,15 @@ which is the trap that decision would otherwise set: without it, calling
 `relayout` with a patch you have not applied gets you an empty delta and a
 drawing that never changes.
 
+**Wrap a multi-step edit in `graph.batch`.** The wiring above relays out once
+per mutating call, so adding a node and then wiring it up is three relayouts and
+three deltas, and the first two place the node somewhere it does not stay: an
+unattached node still gets a rank and a position. `graph.batch(() => { ... })`
+emits the whole edit as one patch, so the engine sees one graph state, the one
+you meant, and reports the node once. The suite measures both paths side by side
+in `test/layout.relayout.test.ts`. See
+[Batching](./graph-model.md#batching) for what a batch is and what it is not.
+
 **It is no faster than a cold run.** The whole pipeline runs again, and the
 tests hold it to landing the same geometry a cold run of the same graph does.
 That is the point of shipping it in this shape first: it makes the delta
