@@ -22,8 +22,10 @@ now belongs, so a graph that changes reads as a graph that moved.
 
 The [live demo](/demos/campaign) draws a mock D&D campaign:
 3,010 nodes and 7,100 edges, laid out a tile at a time in a worker, instanced
-on the GPU, with names and then readable cards appearing as you zoom in. The
-[campaign dataset](./campaign.md) page describes what it is drawing.
+on the GPU, with names and then readable cards appearing as you zoom in. What
+it draws is a generated fixture rather than part of the toolkit, and it
+documents itself in
+[its own README](https://github.com/prnt-design/dagr/blob/main/packages/campaign/README.md).
 
 ## Packages
 
@@ -33,7 +35,6 @@ on the GPU, with names and then readable cards appearing as you zoom in. The
 | [`@dagr/layout`](./layout.md) | Headless Sugiyama layout pipeline, incremental and animation first |
 | [`@dagr/render`](./render.md) | WebGPU renderer: SDF shapes, instancing, spring animation |
 | `@dagr/react` | The `DagrCanvas` component and hooks |
-| [`@dagr/campaign`](./campaign.md) | The demo's dataset: a campaign schema and a seeded generator. Private, not published |
 
 ## Status
 

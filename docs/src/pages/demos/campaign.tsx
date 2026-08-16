@@ -35,8 +35,14 @@ export default function CampaignDemoPage(): ReactNode {
             A mock D&amp;D campaign of 3,010 nodes and 7,100 edges, generated in this page from a
             seed, cut into about a hundred tiles and laid out one tile at a time by{' '}
             <code>@dagr/layout</code> in a worker, then drawn by <code>@dagr/render</code>. Drag to
-            pan, scroll to zoom, click the canvas and the arrow keys take over. The dataset is
-            documented in <Link to="/docs/campaign">the campaign schema page</Link>.
+            pan, scroll to zoom, click the canvas and the arrow keys take over. The campaign is a
+            generated fixture rather than part of the toolkit: arcs and chapters down to keyed
+            rooms, with quests, factions, clues and countdown clocks laid across them, and the
+            package that makes it{' '}
+            <Link href="https://github.com/prnt-design/dagr/blob/main/packages/campaign/README.md">
+              documents its schema
+            </Link>
+            .
           </p>
         </header>
         <CampaignDemo />
