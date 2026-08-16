@@ -39,10 +39,12 @@ diffing five milestones of doc prose.
   error is the one that leaves.
 
   **One emission, at the close, over the listener set as it is then.** A
-  listener that subscribed inside the body reads the whole batch, ops that
-  predate its subscription included; one that unsubscribed inside it reads none
-  of it. The batch is closed before the emission, so a listener mutating while
-  it reads one emits its own patch.
+  listener that subscribed inside the body reads everything collected by then,
+  which on an already-watched graph means ops that predate its own
+  subscription; one that unsubscribed inside it reads none of it; and a listener
+  that is the first to watch reads the batch from where it started watching,
+  because an unwatched graph builds no ops. The batch is closed before the
+  emission, so a listener mutating while it reads one emits its own patch.
 
 - Serialization: `graph.toJSON()` and the static `Graph.fromJSON(json)`, with
   the document types `GraphJSON`, `NodeJSON`, `EdgeJSON`, and `PortJSON` (M1.5).

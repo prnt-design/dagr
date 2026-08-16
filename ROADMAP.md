@@ -2704,11 +2704,15 @@ it.
   has spent M1.3 and M3.2 designing against.
   BATCH IS DEPTH, NOT A FLAG: a nested batch joins the one around it, so two
   helpers that each batch compose. THE EMISSION IS AT THE CLOSE AND OVER THE
-  LISTENER SET AS IT IS THEN, which has two consequences worth knowing rather
-  than worth hiding: a listener that subscribes inside a batch reads the whole
-  batch, ops from before it subscribed included, and one that unsubscribes inside
-  a batch reads none of it. Both say the same thing, which is to leave a batch you
-  did not open alone. The depth comes down before the emission, so a listener
+  LISTENER SET AS IT IS THEN, which has three consequences worth knowing rather
+  than worth hiding: a listener that subscribes inside a batch reads everything
+  COLLECTED by then, one that unsubscribes inside a batch reads none of it, and
+  the first listener to watch reads only from where it started watching, because
+  an unwatched graph builds no ops and paying for a journal it will probably
+  never emit is the cost this package has refused since M1.3. The middle one is
+  the surprise and the third is the one a tree review caught in this run's own
+  first draft of the docs, which claimed the whole batch without qualification.
+  All three say the same thing, which is to leave a batch you did not open alone. The depth comes down before the emission, so a listener
   mutating while it reads a batch emits its own patch rather than joining the one
   it is holding.
   WHAT WAS NOT BUILT: transactions, a batch-versus-patch listener choice, and any

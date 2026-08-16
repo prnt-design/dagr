@@ -278,6 +278,23 @@ describe('Graph batch', () => {
     expect(tags(late.patches[0] as Patch)).toEqual(['add-node', 'add-node']);
   });
 
+  it('gives the first listener to watch only what was collected after it', () => {
+    const graph = new Graph();
+    const { patches, listener } = recorder();
+
+    graph.batch(() => {
+      graph.addNode('a');
+      graph.subscribe(listener);
+      graph.addNode('b');
+    });
+
+    // Not the same case as the one above, and the difference is the reason the
+    // rule is about what was COLLECTED rather than about the whole batch:
+    // nothing was watching when `a` was added, so no op for it was ever built,
+    // and an unwatched graph keeping a journal is what that would cost.
+    expect(tags(patches[0] as Patch)).toEqual(['add-node']);
+  });
+
   it('drops the batch for a listener that unsubscribed inside it', () => {
     const graph = new Graph();
     const { patches, listener } = recorder();

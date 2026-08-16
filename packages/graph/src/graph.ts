@@ -412,7 +412,9 @@ function normaliseNodeInit<A extends object>(
  * Every mutation that changes something emits one {@link Patch} to whatever
  * {@link subscribe} registered, and a mutation that changes nothing emits
  * none: the emission-side twin of the copy on write rule above. A graph nobody
- * subscribed to keeps no journal and costs nothing for it.
+ * subscribed to keeps no journal and costs nothing for it. {@link batch} is the
+ * one thing that changes the unit, holding the emission back so that a
+ * multi-step edit reaches a listener as the one state the caller meant.
  */
 export class Graph<
   NodeAttrs extends object = Attrs,
@@ -551,10 +553,14 @@ export class Graph<
    * be a different graph while claiming to be the original one.
    *
    * There is one emission and it happens at the close, over the listener set as
-   * it is then. A listener that subscribed inside the body therefore reads the
-   * whole batch, ops that predate its subscription included, and a listener that
-   * unsubscribed inside the body reads none of it. Both follow from where the
-   * emission is, and both are reasons to leave a batch you did not open alone.
+   * it is then. A listener that subscribed inside the body therefore reads
+   * everything collected by then, which on a graph something was already
+   * watching means ops that predate its own subscription, and a listener that
+   * unsubscribed inside the body reads none of it. Collected is the word that
+   * matters: an unwatched graph builds no ops, so a listener that is the first
+   * to watch reads the batch from where it started watching and no further back.
+   * All three follow from where the emission is, and all three are reasons to
+   * leave a batch you did not open alone.
    * The depth is back to zero before the emission, so a listener that mutates
    * while reading a batch emits its own patch rather than joining the one it is
    * being handed.

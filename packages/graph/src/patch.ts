@@ -5,7 +5,9 @@
  * an ordered array of cascade-free {@link PatchOp}s. A call that changes
  * nothing emits nothing at all, which is the emission-side twin of the copy on
  * write identity rule the records already keep: no change, no new object, no
- * patch.
+ * patch. The one thing that changes the unit is `Graph.batch`, which holds the
+ * emission back and hands over the ops of several calls as one patch. A batch
+ * is this same type and this same shape, so nothing here reads it differently.
  *
  * Cascade-free means an op names one thing and does one thing. `removeNode`
  * takes its incident edges with it, so it emits a `remove-edge` op per edge

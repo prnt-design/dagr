@@ -211,8 +211,9 @@ function warmStartOf(routed: RoutedState): PreviousLayout {
  * them would mean the engine re-deriving what the caller's own mutation did.
  *
  * LAST OP WINS, because a patch is an ordered list and its ops can cancel: a
- * caller who concatenates a frame's worth of patches into one call may well have
- * added and removed the same node inside it, and the graph shows the net effect.
+ * caller who concatenates a frame's worth of patches into one call, or wraps the
+ * frame in `graph.batch`, may well have added and removed the same node inside
+ * it, and the graph shows the net effect.
  * Cost is one pass over the patch, which is proportional to the edit rather than
  * to the graph.
  *
@@ -320,6 +321,12 @@ export interface LayoutEngine {
    * read their own graph between edits route every mutation through the layout
    * package. A patch that disagrees with the graph is refused rather than
    * quietly relaid, which is the trap that decision would otherwise set.
+   *
+   * WRAP A MULTI-STEP EDIT IN `graph.batch`. That wiring relays out once per
+   * mutating call, so adding a node and then wiring it up is three relayouts,
+   * and the first ones place the node somewhere it does not stay: an unattached
+   * node still gets a rank and a position. A batch emits the whole edit as one
+   * patch, so the engine sees the one graph state you meant.
    *
    * IT IS NO FASTER THAN A COLD RUN, on purpose, and the tests hold it to
    * landing the same geometry a cold run of the same graph does. The whole

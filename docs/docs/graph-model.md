@@ -686,12 +686,15 @@ body and a listener fail, the body's error is the one that leaves: it says why
 the batch ended, and a listener misbehaving afterwards must not hide it.
 
 **There is one emission and it happens at the close, over the listener set as it
-is then.** A listener that subscribed inside the body reads the whole batch, ops
-that predate its subscription included, and a listener that unsubscribed inside
-the body reads none of it. Both are reasons to leave a batch you did not open
-alone. The batch is closed before the emission, so a listener that mutates while
-reading one emits its own patch rather than joining the patch it is being
-handed.
+is then.** A listener that subscribed inside the body reads everything collected
+by then, which on a graph something was already watching means ops that predate
+its own subscription. A listener that unsubscribed inside the body reads none of
+it. And "collected" is the word that matters: an unwatched graph builds no ops
+at all, so a listener that is the first to watch reads the batch from where it
+started watching and no further back. All three are reasons to leave a batch you
+did not open alone. The batch is closed before the emission, so a listener that
+mutates while reading one emits its own patch rather than joining the patch it
+is being handed.
 
 **The body must be synchronous, and nothing stops you passing one that is not.**
 Same shape as the async-listener trap above, with a milder ending: the batch
