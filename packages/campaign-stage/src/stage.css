@@ -169,6 +169,29 @@
   user-select: none;
 }
 
+/*
+ * THE TWO BOTTOM PANELS DO NOT FIT ON A PHONE, so one of them moves.
+ *
+ * The readout is 18rem wide against the left edge and this one is about 7rem
+ * against the right, both an inch off the bottom: under about 27rem of stage
+ * they overlap, and since this panel is later in the DOM at the same z-index it
+ * paints over the readout's hints. The demo page tunes itself for 600px and
+ * the docs route gives the stage a phone's whole viewport, so this is a real
+ * width rather than a hypothetical one.
+ *
+ * The ZOOM control moves and the readout stays, because the readout is a column
+ * of eight rows that has nowhere else to be, and this is three lines that fit
+ * anywhere. The media query reads the VIEWPORT where the collision is about the
+ * STAGE, which is honest for both hosts today: each gives the stage the full
+ * width of the page.
+ */
+@media (max-width: 30rem) {
+  .stage__zoom {
+    top: 1rem;
+    bottom: auto;
+  }
+}
+
 .stage__zoom-tier {
   display: flex;
   flex-direction: column;

@@ -4835,9 +4835,11 @@ the demo itself should show richer nodes and its zoom.
   subject is semantic zoom. So the control pairs the number with the TIER, and
   the tier is the word that changes as you scroll: `shapes`, `names`, `cards`.
   A TIER IS PER NODE AND A ZOOM IS ONE NUMBER, so anything reporting a tier has
-  to say which node it means. The campaign spans 30:1 from a region to a room,
-  so at almost every zoom some kinds have cards and some have nothing, and
-  naming the largest or the smallest would describe one node in three thousand.
+  to say which node it means. The campaign's node widths span 11:1, from a
+  clock tick at 32 to the campaign node at 360, against tier gates that span
+  19:1 from 24 to 460, so at almost every zoom some kinds have cards and some
+  have nothing, and naming the largest or the smallest would describe one node
+  in three thousand.
   `medianNodeWidth` over the scene's own boxes is true of half of them by
   construction and lands on 56 world units, a room and an item, which are the
   two most numerous kinds. DERIVED FROM THE SCENE rather than declared, for the
@@ -4861,12 +4863,26 @@ the demo itself should show richer nodes and its zoom.
   without one. Verified in a browser: click the canvas, click `+`, and
   `document.activeElement` is still the canvas, with the next ArrowUp moving the
   zoom by the same factor the button did.
-  DISABLED AT THE LIMITS, which are the camera's own derived ones, with a
-  relative tolerance because the camera CLAMPS: a zoom held against the ceiling
-  IS the ceiling to within floating point, and a strict comparison would leave a
-  button that can do nothing looking as though it could. The tolerance is a
-  thousandth, far under one keyboard step of about 16%, and a test holds that
-  relationship rather than the number.
+  GREYED AT THE LIMITS, which are the camera's own derived ones, with a relative
+  tolerance because the camera CLAMPS: a zoom held against the ceiling IS the
+  ceiling to within floating point, and a strict comparison would leave a button
+  that can do nothing looking as though it could. The tolerance is a thousandth,
+  far under one keyboard step of about 16%, and a test holds that relationship
+  rather than the number. `aria-disabled` AND NOT `disabled`: the real attribute
+  arriving under a keyboard user's finger is a focus loss, since Tab to `+` and
+  Enter to the ceiling makes the element being stood on disabled, which every
+  browser answers by moving focus to the body and restarting the next Tab at the
+  top of the document. The greying is a rule on the attribute and the click is
+  ignored by the handler.
+  THE PANEL REFUSES THE POINTER AND ITS THREE BUTTONS TAKE IT BACK, which is the
+  readout's `pointer-events: none` with a hole cut in it. A panel that took
+  pointer events would eat the wheel over the corner a reader puts the cursor in
+  when they want to zoom, and the gesture would scroll the host docs page away
+  from the demo instead. THE WHEEL LISTENER MOVED TO THE STAGE for the half that
+  does not fix: a button is the canvas's SIBLING, not its descendant, so a wheel
+  over one reaches no canvas listener at all whatever the panel's
+  `pointer-events` says. Bound to the container it is one listener's problem,
+  and the anchor still comes off the canvas rect.
   WHAT IS TESTED IS THE ARITHMETIC: the tier against both gates and the
   half-open rule, the median against a synthetic list and against the real
   campaign (asserting the median IS some kind's width rather than a number

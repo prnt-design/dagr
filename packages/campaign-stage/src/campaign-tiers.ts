@@ -211,8 +211,9 @@ export function zoomTier(screenWidth: number): ZoomTier {
  * world units.
  *
  * **A tier is per NODE and a zoom is one number**, so anything reporting "you
- * are at title zoom" has to say which node it means. At the campaign's fitted
- * view a region is 30 times a room, so at almost every zoom some kinds have
+ * are at title zoom" has to say which node it means. The campaign's node widths
+ * span 11:1, from a clock tick at 32 to the campaign node at 360, against tier
+ * gates that span 19:1 from 24 to 460: so at almost every zoom some kinds have
  * cards, some have names and some have neither, and picking the largest or the
  * smallest would give a reading that is true of one node in three thousand.
  *

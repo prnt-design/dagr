@@ -302,9 +302,15 @@ export function FirstLight({
    * A ref for the same reason `requestDrawRef` is one: the camera is built
    * inside the effect below and the control is React around it, so the effect
    * publishes the one function rather than the component holding a camera it
-   * would then have to keep in step with the effect's lifetime. It is a no-op
-   * until a renderer exists, which is exactly what a button pressed while the
-   * campaign is still laying out should do.
+   * would then have to keep in step with the effect's lifetime.
+   *
+   * It is a no-op until the EFFECT runs, not until a renderer exists: the
+   * camera is built synchronously and `applyCommand` is published with it, so a
+   * button pressed while `createRenderer` is still awaiting an adapter moves
+   * the camera and asks for a frame, and the first frame drawn is the one it
+   * asked for. The control is not on screen then anyway, since it needs a
+   * readout, but the ordering is worth stating because it is the opposite of
+   * what the name suggests.
    */
   const applyCommandRef = useRef<(command: KeyCommand) => void>(() => undefined);
   // Read by the construction effect, which must not re-run when the edges
@@ -1010,12 +1016,25 @@ export function FirstLight({
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     };
 
+    /**
+     * The wheel, anywhere over the STAGE rather than only over the canvas.
+     *
+     * On the container because the stage has panels on it now, and a panel is a
+     * SIBLING of the canvas rather than a descendant: a wheel over one reaches
+     * no canvas listener at all, and the host page scrolls instead. The readout
+     * refuses the pointer so its events land on the canvas anyway, but the zoom
+     * control's three buttons must take clicks, and they are exactly where the
+     * cursor is sitting when a reader has just pressed `+` and wants another
+     * notch. Bound to the container, every one of those is one listener's
+     * problem, and the anchor still comes off the CANVAS rect, which is the
+     * space `zoomAtScreen` reads.
+     */
     const onWheel = (event: WheelEvent): void => {
       // Stop the page scrolling under the gesture. This is why the listener is
-      // added here rather than through React's `onWheel` prop: React attaches
-      // wheel PASSIVELY at the root, and a passive listener's `preventDefault`
-      // is ignored with a console warning, so the canvas would zoom and the
-      // page would scroll at the same time.
+      // added directly rather than through React's `onWheel` prop: React
+      // attaches wheel PASSIVELY at the root, and a passive listener's
+      // `preventDefault` is ignored with a console warning, so the canvas would
+      // zoom and the page would scroll at the same time.
       event.preventDefault();
       // The anchor has to be canvas-relative, since that is the space
       // `zoomAtScreen` reads. Measured per event because a scroll or a layout
@@ -1106,7 +1125,7 @@ export function FirstLight({
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
     canvas.addEventListener('pointercancel', onPointerUp);
-    canvas.addEventListener('wheel', onWheel, { passive: false });
+    container.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('keydown', onKeyDown);
 
     const ready = teardownRef.current
@@ -1189,7 +1208,7 @@ export function FirstLight({
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerUp);
-      canvas.removeEventListener('wheel', onWheel);
+      container.removeEventListener('wheel', onWheel);
       canvas.removeEventListener('keydown', onKeyDown);
       // The next mount waits on this, so it has to cover both orders: a
       // renderer already installed is disposed here, and one still in flight is
@@ -1202,6 +1221,13 @@ export function FirstLight({
         rendererRef.current = null;
         requestDrawRef.current = () => undefined;
         invalidateHighlightRef.current = () => undefined;
+        // And this one, which is the ref a POINTER can reach: leaving it would
+        // keep a disposed effect's camera alive behind a button. Nothing can
+        // press it today, because the control unmounts with the scene and a new
+        // scene republishes this synchronously, but the other two are reset
+        // here and an asymmetry in a teardown is how the one that matters gets
+        // missed.
+        applyCommandRef.current = () => undefined;
       });
     };
   }, [scene]);
@@ -1336,11 +1362,16 @@ function ZoomControl({
    * Focus is this stage's keyboard mode switch, so anything that moves it off
    * the canvas leaves the next arrow key scrolling the page instead of zooming
    * the scene: a zoom control that breaks zooming by keyboard. A mousedown on a
-   * non-focusable element BLURS the active element unless the default is
-   * prevented, so guarding only the buttons left the tier word, the button row
-   * and the panel's own padding as places a click quietly turned the keyboard
-   * off. Handled here and reached by bubbling, so there is one guard rather
-   * than one per element anybody adds later.
+   * BUTTON focuses the button, and a mousedown on a non-focusable element blurs
+   * whatever was focused unless the default is prevented, so either way the
+   * canvas loses the keyboard.
+   *
+   * On the panel rather than on each button, and reached by bubbling. As the
+   * stylesheet stands only the buttons can generate one of these, because the
+   * panel refuses the pointer and everything else in it is a label the canvas
+   * takes the event through. The guard is here anyway, so that it covers
+   * whatever the next person makes pressable rather than being one more thing
+   * they have to know to add.
    */
   const keepFocus = (event: ReactMouseEvent): void => {
     event.preventDefault();
