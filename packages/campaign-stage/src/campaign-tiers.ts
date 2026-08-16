@@ -180,6 +180,94 @@ export const LABEL_MIN_SCREEN_WIDTH = 24;
 export const CARD_MIN_SCREEN_WIDTH = 460;
 
 /**
+ * Which tier a node of a given screen width is in.
+ *
+ * The names a reader gets rather than the tier names: `far` is the absence of
+ * an overlay element, which is the instanced shape and nothing else.
+ */
+export type ZoomTier = 'far' | 'titles' | 'cards';
+
+/**
+ * The tier one node width in CSS pixels falls in, on the same half-open gates
+ * the tiers themselves declare.
+ *
+ * Written against the two gate constants rather than against 24 and 460, so a
+ * gate that moves moves this with it. That matters more here than it looks: the
+ * card gate is DERIVED from the size table, so it moves whenever a card grows,
+ * and a zoom indicator quoting a stale number would be a readout that disagrees
+ * with the thing it is reading.
+ */
+export function zoomTier(screenWidth: number): ZoomTier {
+  if (screenWidth < LABEL_MIN_SCREEN_WIDTH) return 'far';
+  if (screenWidth < CARD_MIN_SCREEN_WIDTH) return 'titles';
+  return 'cards';
+}
+
+/**
+ * The node width a tier readout answers for: the median of a scene's boxes, in
+ * world units.
+ *
+ * **A tier is per NODE and a zoom is one number**, so anything reporting "you
+ * are at title zoom" has to say which node it means. At the campaign's fitted
+ * view a region is 30 times a room, so at almost every zoom some kinds have
+ * cards, some have names and some have neither, and picking the largest or the
+ * smallest would give a reading that is true of one node in three thousand.
+ *
+ * The median is true of half of them by construction. On the default campaign
+ * it lands on 56 world units, which is a room and an item, the two most
+ * numerous kinds; 564 nodes are narrower and 1,323 are exactly it.
+ *
+ * DERIVED FROM THE SCENE rather than declared, for the reason every other
+ * derived number here is: `campaign-style.ts`'s sizes move, and a constant
+ * copied out of it would keep answering for the campaign it was copied from.
+ *
+ * Zero boxes is zero, which the caller treats as "no reading yet": a scene with
+ * no nodes has no median and inventing one would put a tier name over an empty
+ * canvas.
+ */
+export function medianNodeWidth(
+  boxes: Iterable<{ readonly minX: number; readonly maxX: number }>,
+): number {
+  const widths: number[] = [];
+  for (const box of boxes) widths.push(box.maxX - box.minX);
+  if (widths.length === 0) return 0;
+  widths.sort((a, b) => a - b);
+  // The LOWER median on an even count, deliberately: averaging the middle two
+  // invents a width no node has, and this number is supposed to name a node the
+  // reader can find on the screen.
+  return widths[(widths.length - 1) >> 1] ?? 0;
+}
+
+/**
+ * How close to a limit counts as being at it, as a fraction of the limit.
+ *
+ * The camera CLAMPS, so a zoom held against its ceiling is the ceiling to
+ * within floating point, and a strict comparison would leave the button that
+ * cannot do anything looking as though it could. A thousandth is far below one
+ * keyboard step (which is about 16%) and far above the rounding.
+ */
+export const ZOOM_LIMIT_TOLERANCE = 0.001;
+
+/**
+ * Whether a zoom has reached either end of its derived range.
+ *
+ * What it is for is the two buttons: a control offering a `+` that does nothing
+ * is worse than one that greys it out, because a reader presses it and blames
+ * the demo rather than the limit. The limits themselves are the camera's, which
+ * are derived from the scene and the viewport and move with the window.
+ */
+export function zoomLimitState(
+  zoom: number,
+  minZoom: number,
+  maxZoom: number,
+): { readonly atFloor: boolean; readonly atCeiling: boolean } {
+  return {
+    atFloor: zoom <= minZoom * (1 + ZOOM_LIMIT_TOLERANCE),
+    atCeiling: zoom >= maxZoom * (1 - ZOOM_LIMIT_TOLERANCE),
+  };
+}
+
+/**
  * What each tier's `create` built, keyed by the element it built it into.
  *
  * `update` is handed the root and nothing else, and it runs on every pop-in

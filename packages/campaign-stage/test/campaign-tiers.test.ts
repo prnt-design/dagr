@@ -3,17 +3,21 @@ import { describe, expect, it } from 'vitest';
 import { cardRows, generateCampaign } from '@dagr/campaign';
 import type { CampaignNode, NodeKind } from '@dagr/campaign';
 import type { RichNode } from '@dagr/render';
-import { zoomLimits } from '../src/camera-input.js';
+import { KEY_ZOOM_FACTOR, zoomLimits } from '../src/camera-input.js';
 import { GLYPH_VIEWBOX, nodeGlyph } from '../src/campaign-glyphs.js';
 import { SMALLEST_NODE_SIZE, nodeColor, styleFor } from '../src/campaign-style.js';
 import {
   CARD_MIN_SCREEN_WIDTH,
   CARD_SIZES,
   LABEL_MIN_SCREEN_WIDTH,
+  ZOOM_LIMIT_TOLERANCE,
   cardFootprint,
   cardHeight,
   cardWidth,
   createCampaignTiers,
+  medianNodeWidth,
+  zoomLimitState,
+  zoomTier,
 } from '../src/campaign-tiers.js';
 
 /**
@@ -66,6 +70,11 @@ if (titleTier === undefined || cardTier === undefined) {
  * check below is about the ceiling.
  */
 const SCENE_BOUNDS = { minX: 0, minY: 0, maxX: 40000, maxY: 24000 };
+
+/** A world box of one width, which is all `medianNodeWidth` reads. */
+function box(width: number): { minX: number; maxX: number } {
+  return { minX: 0, maxX: width };
+}
 
 /** A rich node wrapping a campaign node, which is what the tiers are handed. */
 function richNode(node: CampaignNode): RichNode<CampaignNode> {
@@ -180,6 +189,115 @@ describe('the tier gates', () => {
     // The ceiling frames the SMALLEST node, so that node is the tight case: if
     // it clears the gate, everything larger clears it earlier.
     expect(SMALLEST_NODE_SIZE.width * maxZoom).toBeGreaterThan(CARD_MIN_SCREEN_WIDTH);
+  });
+});
+
+describe('the zoom control arithmetic', () => {
+  /**
+   * The tier a zoom is in, which is the whole of what D6's control computes.
+   *
+   * The DOM half of that control is three buttons handing a `KeyCommand` to the
+   * function the keyboard already runs, which is why there is nothing else here
+   * to test: `camera-input.test.ts` holds the commands, and a test that
+   * asserted a button calls a mock would pass just as happily if the camera
+   * never moved.
+   */
+  it('names the tier on the same half-open gates the tiers declare', () => {
+    expect(zoomTier(0)).toBe('far');
+    expect(zoomTier(LABEL_MIN_SCREEN_WIDTH - 0.001)).toBe('far');
+    // Half-open at both gates, exactly as `createRichNodes` reads them: at the
+    // threshold the upper tier shows.
+    expect(zoomTier(LABEL_MIN_SCREEN_WIDTH)).toBe('titles');
+    expect(zoomTier(CARD_MIN_SCREEN_WIDTH - 0.001)).toBe('titles');
+    expect(zoomTier(CARD_MIN_SCREEN_WIDTH)).toBe('cards');
+    expect(zoomTier(1e6)).toBe('cards');
+  });
+
+  it('takes the median node width as the width it answers for', () => {
+    // The lower median on an even count, because this number is meant to name a
+    // node a reader can find rather than an average nothing is.
+    expect(medianNodeWidth([box(10), box(20), box(30)])).toBe(20);
+    expect(medianNodeWidth([box(10), box(20), box(30), box(40)])).toBe(20);
+    expect(medianNodeWidth([box(30), box(10), box(20)])).toBe(20);
+    // No boxes is no reading, which the caller shows as no tier rather than as
+    // a tier over an empty canvas.
+    expect(medianNodeWidth([])).toBe(0);
+  });
+
+  it('lands on a real campaign node, not a number between two', () => {
+    // 56 world units on the default seed: a room and an item, the two most
+    // numerous kinds. Derived here rather than asserted as a literal, because
+    // the claim is that the median IS some kind's width, and a literal would
+    // keep passing after the size table moved.
+    const campaign = generateCampaign();
+    const widths = campaign.nodes.map((node) =>
+      styleFor(
+        node.data.kind,
+        node.data.kind === 'location' ? node.data.subtype : undefined,
+      ).size.width,
+    );
+    const median = medianNodeWidth(widths.map((width) => box(width)));
+    expect(new Set(widths).has(median)).toBe(true);
+    // And it is in the small half of the range, which is what makes the reading
+    // useful: a tier named for the largest kind would say "cards" while three
+    // thousand nodes were still shapes.
+    expect(median).toBeLessThan(Math.max(...widths) / 2);
+  });
+
+  it('calls a zoom held at a derived limit AT the limit', () => {
+    // The camera clamps, so a zoom pressed against the ceiling is the ceiling
+    // to within floating point. A strict comparison would leave the button that
+    // can do nothing looking as though it could.
+    const { minZoom, maxZoom } = zoomLimits(SCENE_BOUNDS, SMALLEST_NODE_SIZE, {
+      width: 1440,
+      height: 900,
+    });
+    expect(zoomLimitState(minZoom, minZoom, maxZoom)).toEqual({
+      atFloor: true,
+      atCeiling: false,
+    });
+    expect(zoomLimitState(maxZoom, minZoom, maxZoom)).toEqual({
+      atFloor: false,
+      atCeiling: true,
+    });
+    expect(zoomLimitState(maxZoom * (1 - ZOOM_LIMIT_TOLERANCE / 2), minZoom, maxZoom).atCeiling).toBe(
+      true,
+    );
+    const middle = Math.sqrt(minZoom * maxZoom);
+    expect(zoomLimitState(middle, minZoom, maxZoom)).toEqual({
+      atFloor: false,
+      atCeiling: false,
+    });
+  });
+
+  it('leaves the tolerance far under one keyboard step', () => {
+    // Otherwise a button would grey out a notch before the limit, which is a
+    // control lying about a range the readout beside it states.
+    expect(ZOOM_LIMIT_TOLERANCE).toBeLessThan(KEY_ZOOM_FACTOR - 1);
+    expect(ZOOM_LIMIT_TOLERANCE).toBeGreaterThan(0);
+  });
+
+  it('reaches every tier inside the campaign zoom range', () => {
+    // A tier the range cannot reach is a word the control would never show.
+    // The median node is the one the reading is about, so it is the one the
+    // range has to carry across both gates.
+    const campaign = generateCampaign();
+    const median = medianNodeWidth(
+      campaign.nodes.map((node) =>
+        box(
+          styleFor(
+            node.data.kind,
+            node.data.kind === 'location' ? node.data.subtype : undefined,
+          ).size.width,
+        ),
+      ),
+    );
+    const { minZoom, maxZoom } = zoomLimits(SCENE_BOUNDS, SMALLEST_NODE_SIZE, {
+      width: 1440,
+      height: 900,
+    });
+    expect(zoomTier(minZoom * median)).toBe('far');
+    expect(zoomTier(maxZoom * median)).toBe('cards');
   });
 });
 

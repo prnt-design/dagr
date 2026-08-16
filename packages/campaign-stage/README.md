@@ -97,6 +97,17 @@ pixels wide, which is the same gate the title tier opens at. At the fitted
 campaign a pointer crosses hundreds of nodes and none of them is a pixel wide, so
 dimming 7,100 edges there would answer a question nobody asked.
 
+THE ZOOM CONTROL, bottom right, says which tier the zoom is in before it says
+the number: `shapes` under 24 CSS pixels of node width, `names` to 460, `cards`
+above. It answers for the scene's MEDIAN node, because a tier is per node and a
+zoom is one number, and at the campaign's range a region is 30 times a room, so
+any other choice describes one node in three thousand. Its three buttons hand
+the same `KeyCommand` objects to the same code the keyboard does, so there is
+one path to the camera; a test asserts that by identity rather than by shape.
+They do not take focus, which matters more than it sounds: focus is this stage's
+keyboard mode switch, so a button that stole it would leave the next arrow key
+scrolling the page.
+
 Spacing is the campaign's own rather than `@dagr/layout`'s default, and
 `CAMPAIGN_SPACING` in `tiles.ts` carries the measurement that chose it,
 including what the fitted view pays for it.
