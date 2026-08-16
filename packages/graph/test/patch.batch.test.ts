@@ -295,6 +295,29 @@ describe('Graph batch', () => {
     expect(tags(patches[0] as Patch)).toEqual(['add-node']);
   });
 
+  it('keeps collecting through a gap in the listener set, so no batch has a hole', () => {
+    const graph = new Graph();
+    const { patches, listener } = recorder();
+    const unsubscribe = graph.subscribe(() => undefined);
+
+    graph.batch(() => {
+      graph.addNode('a');
+      unsubscribe();
+      graph.addNode('b');
+      graph.subscribe(listener);
+      graph.addEdge('a', 'b', 'ab');
+    });
+
+    // Collection stops at the listener set only until a batch has started
+    // collecting. Otherwise this patch would hold `a` and the edge and not `b`,
+    // and a mirror replaying it would be asked for an edge to a node that
+    // never arrived.
+    expect(tags(patches[0] as Patch)).toEqual(['add-node', 'add-node', 'add-edge']);
+    const mirror = new Graph();
+    expect(() => apply(mirror, patches[0] as Patch)).not.toThrow();
+    expect(mirror.edgeCount).toBe(1);
+  });
+
   it('drops the batch for a listener that unsubscribed inside it', () => {
     const graph = new Graph();
     const { patches, listener } = recorder();

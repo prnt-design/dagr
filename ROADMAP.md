@@ -2712,7 +2712,15 @@ it.
   never emit is the cost this package has refused since M1.3. The middle one is
   the surprise and the third is the one a tree review caught in this run's own
   first draft of the docs, which claimed the whole batch without qualification.
-  All three say the same thing, which is to leave a batch you did not open alone. The depth comes down before the emission, so a listener
+  All three say the same thing, which is to leave a batch you did not open alone.
+  A BATCH IS CONTIGUOUS FROM ITS FIRST COLLECTED OP, which is the review round's
+  one code fix: `#observed` counts a batch that has already collected as watched,
+  so a body that unsubscribes its last listener, mutates, and subscribes a new
+  one still emits one unbroken run. Without it that listener is handed the ops
+  from either side of the gap and none from inside it, which is not a transition
+  that ever happened, and replaying it onto a mirror asks for an edge to a node
+  that never arrived. The cost is a batch nobody ends up reading collecting ops
+  that are then dropped at the close, which is bounded by the batch. The depth comes down before the emission, so a listener
   mutating while it reads a batch emits its own patch rather than joining the one
   it is holding.
   WHAT WAS NOT BUILT: transactions, a batch-versus-patch listener choice, and any

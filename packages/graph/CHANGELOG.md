@@ -44,7 +44,10 @@ diffing five milestones of doc prose.
   subscription; one that unsubscribed inside it reads none of it; and a listener
   that is the first to watch reads the batch from where it started watching,
   because an unwatched graph builds no ops. The batch is closed before the
-  emission, so a listener mutating while it reads one emits its own patch.
+  emission, so a listener mutating while it reads one emits its own patch. What
+  a batch never emits is a patch with a hole in it: once it has collected an op
+  it collects every op after it, across a moment with nothing subscribed
+  included, so a batch is always contiguous and always replayable on its own.
 
 - Serialization: `graph.toJSON()` and the static `Graph.fromJSON(json)`, with
   the document types `GraphJSON`, `NodeJSON`, `EdgeJSON`, and `PortJSON` (M1.5).

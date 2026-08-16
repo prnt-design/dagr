@@ -560,7 +560,10 @@ export class Graph<
    * matters: an unwatched graph builds no ops, so a listener that is the first
    * to watch reads the batch from where it started watching and no further back.
    * All three follow from where the emission is, and all three are reasons to
-   * leave a batch you did not open alone.
+   * leave a batch you did not open alone. What a batch will not do is emit a
+   * patch with a hole in it: once it has collected an op it collects every op
+   * after it, even across a moment when nothing is subscribed, so the patch is
+   * always a contiguous run of the edit and always replayable on its own.
    * The depth is back to zero before the emission, so a listener that mutates
    * while reading a batch emits its own patch rather than joining the one it is
    * being handed.
@@ -1441,9 +1444,21 @@ export class Graph<
    * attribute diff for its two report bags and the `removeNode` cascade for its
    * op array. So an unwatched graph pays one comparison per mutation and
    * allocates nothing towards a patch it is not going to emit.
+   *
+   * A BATCH THAT HAS ALREADY COLLECTED SOMETHING COUNTS AS WATCHED, whatever
+   * the listener set says, and that clause is what keeps a batch from emitting a
+   * patch with a hole in it. Without it, a body that unsubscribes the last
+   * listener, mutates, and then subscribes another one hands that listener a
+   * patch holding the ops from either side of the gap and nothing from inside
+   * it, which is not a transition that ever happened: replaying it onto a mirror
+   * builds an edge whose endpoint was in the missing middle. Collecting through
+   * the gap costs a batch that nobody ends up reading its ops, which
+   * {@link #closeBatch} then drops, and buys the promise that a batch is
+   * contiguous from its first collected op. A non-empty buffer means a batch is
+   * open, since it is emptied at the close.
    */
   get #observed(): boolean {
-    return this.#listeners.size > 0;
+    return this.#listeners.size > 0 || this.#batched.length > 0;
   }
 
   /**

@@ -696,6 +696,14 @@ did not open alone. The batch is closed before the emission, so a listener that
 mutates while reading one emits its own patch rather than joining the patch it
 is being handed.
 
+**What a batch will not do is hand you a patch with a hole in it.** Once it has
+collected an op it collects every op after it, including across a moment when
+nothing is subscribed, so the patch is always a contiguous run of the edit and
+`apply` can replay it on its own. Without that, a body that unsubscribed its
+last listener, added a node, and then subscribed a new one would emit the ops
+from either side of the gap and none from inside it, and replaying that on a
+mirror asks for an edge to a node that never arrived.
+
 **The body must be synchronous, and nothing stops you passing one that is not.**
 Same shape as the async-listener trap above, with a milder ending: the batch
 closes at the first `await` and every mutation after it emits on its own, so an
