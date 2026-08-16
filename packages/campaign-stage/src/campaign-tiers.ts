@@ -192,10 +192,13 @@ export type ZoomTier = 'far' | 'titles' | 'cards';
  * the tiers themselves declare.
  *
  * Written against the two gate constants rather than against 24 and 460, so a
- * gate that moves moves this with it. That matters more here than it looks: the
- * card gate is DERIVED from the size table, so it moves whenever a card grows,
- * and a zoom indicator quoting a stale number would be a readout that disagrees
- * with the thing it is reading.
+ * gate that moves moves this with it, and a control cannot end up quoting a
+ * threshold the overlay stopped using.
+ *
+ * Note what that does NOT mean: {@link CARD_MIN_SCREEN_WIDTH} is a literal that
+ * a test pins as the smallest value covering every kind's card, not a value
+ * computed from the size table. Growing a card's line budget does not move this
+ * number, it fails that test, and somebody then moves both.
  */
 export function zoomTier(screenWidth: number): ZoomTier {
   if (screenWidth < LABEL_MIN_SCREEN_WIDTH) return 'far';

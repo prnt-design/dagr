@@ -1026,19 +1026,6 @@ export function FirstLight({
     };
 
     /**
-     * The keyboard, while the canvas has focus. Attached to the CANVAS, which
-     * is what scopes it: `keydown` only fires here while the canvas is the
-     * focused element (it is focusable via `tabIndex` in the JSX below), so an
-     * unfocused canvas leaves every key, including the scrolling ones, to the
-     * page. That is the whole feature: focus is the mode switch, and there is
-     * no global listener to fight the rest of the page over arrows.
-     *
-     * `preventDefault` only for keys the map claims, so Tab still leaves and
-     * unclaimed keys still scroll. Escape blurs, which is the way back out
-     * that keyboard users are owed, and is deliberately not in `keyCommand`:
-     * it is about focus, which is this component's business, not the camera's.
-     */
-    /**
      * Runs one {@link KeyCommand} against the camera and asks for a frame.
      *
      * Extracted from the handler below because D6's zoom buttons press the same
@@ -1065,6 +1052,22 @@ export function FirstLight({
     };
     applyCommandRef.current = applyCommand;
 
+    /**
+     * The keyboard, while the canvas has focus. Attached to the CANVAS, which
+     * is what scopes it: `keydown` only fires here while the canvas is the
+     * focused element (it is focusable via `tabIndex` in the JSX below), so an
+     * unfocused canvas leaves every key, including the scrolling ones, to the
+     * page. That is the whole feature: focus is the mode switch, and there is
+     * no global listener to fight the rest of the page over arrows.
+     *
+     * `preventDefault` only for keys the map claims, so Tab still leaves and
+     * unclaimed keys still scroll. Escape blurs, which is the way back out
+     * that keyboard users are owed, and is deliberately not in `keyCommand`:
+     * it is about focus, which is this component's business, not the camera's.
+     *
+     * What it does with a command it claims is {@link applyCommand} above,
+     * which the zoom control's buttons call too.
+     */
     const onKeyDown = (event: KeyboardEvent): void => {
       // Ctrl, Meta and Alt chords belong to the browser: Ctrl+'+'/'-'/'0' is
       // accessibility page zoom and Alt+Arrow is history navigation, and a
@@ -1242,7 +1245,7 @@ export function FirstLight({
       {failure === null ? (
         <>
           <Overlay readout={readout} scene={scene} sceneFailure={sceneFailure} />
-          {readout === null || scene === null ? null : (
+          {readout === null || scene === null || referenceWidth <= 0 ? null : (
             <ZoomControl
               readout={readout}
               referenceWidth={referenceWidth}
@@ -1308,40 +1311,65 @@ function ZoomControl({
   const { atFloor, atCeiling } = zoomLimitState(zoom, minZoom, maxZoom);
 
   /**
-   * A click is a command, unless the browser wanted the click.
+   * A click is a command, unless the browser wanted the click or the limit says
+   * there is nothing to do.
    *
    * Ctrl, Meta and Alt are held off for the same reason the canvas's keydown
    * holds them off: those chords open a link in a tab, or a context menu, and a
    * control that zoomed as well would be a control fighting the browser.
    *
-   * `onMouseDown` preventing default is the load-bearing line. Focus is this
-   * demo's keyboard mode switch, so a button that took focus off the canvas
-   * would leave the next arrow key scrolling the page instead of zooming the
-   * scene, which is a control that breaks the feature it is a control for. A
-   * mousedown that does not default keeps focus where it is; Tab still reaches
-   * these buttons for anyone driving without a pointer.
+   * `spent` is the `aria-disabled` half of the pair below. A button at the end
+   * of the range still takes the click and does nothing with it, which is what
+   * keeps the focus where it is; see the buttons for why that is not the plain
+   * `disabled` attribute.
    */
-  const press = (command: KeyCommand) => (event: ReactMouseEvent) => {
+  const press = (command: KeyCommand, spent = false) => (event: ReactMouseEvent) => {
+    if (spent) return;
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     onCommand(command);
   };
+
+  /**
+   * Keeps focus where the reader put it, on the WHOLE panel rather than on the
+   * three buttons.
+   *
+   * Focus is this stage's keyboard mode switch, so anything that moves it off
+   * the canvas leaves the next arrow key scrolling the page instead of zooming
+   * the scene: a zoom control that breaks zooming by keyboard. A mousedown on a
+   * non-focusable element BLURS the active element unless the default is
+   * prevented, so guarding only the buttons left the tier word, the button row
+   * and the panel's own padding as places a click quietly turned the keyboard
+   * off. Handled here and reached by bubbling, so there is one guard rather
+   * than one per element anybody adds later.
+   */
   const keepFocus = (event: ReactMouseEvent): void => {
     event.preventDefault();
   };
 
   return (
-    <div className="stage__zoom">
+    <div className="stage__zoom" onMouseDown={keepFocus}>
       <p className="stage__zoom-tier">
         <span className="stage__zoom-tier-name">{TIER_LABEL[tier]}</span>
         <span className="stage__zoom-value">{fixed(zoom, 3)} px/unit</span>
       </p>
       <div className="stage__zoom-buttons">
+        {/*
+          `aria-disabled` AND NOT `disabled`, on both of these. A `disabled`
+          attribute arriving under a keyboard user's finger is a focus loss:
+          Tab to `+`, press Enter until the ceiling, and the element being stood
+          on becomes disabled, which every browser answers by moving focus to
+          the body. The next Tab restarts at the top of the document and the
+          arrows scroll the page, which is the same mode-switch loss the
+          mousedown guard above exists to prevent, arriving through the other
+          input device. `aria-disabled` says the same thing to a screen reader,
+          keeps the element focusable, and leaves the click to be ignored by
+          `press`.
+        */}
         <button
           type="button"
           className="stage__zoom-button"
-          onMouseDown={keepFocus}
-          onClick={press(ZOOM_OUT)}
-          disabled={atFloor}
+          onClick={press(ZOOM_OUT, atFloor)}
+          aria-disabled={atFloor}
           aria-label="Zoom out"
         >
           &minus;
@@ -1349,9 +1377,8 @@ function ZoomControl({
         <button
           type="button"
           className="stage__zoom-button"
-          onMouseDown={keepFocus}
-          onClick={press(ZOOM_IN)}
-          disabled={atCeiling}
+          onClick={press(ZOOM_IN, atCeiling)}
+          aria-disabled={atCeiling}
           aria-label="Zoom in"
         >
           +
@@ -1359,7 +1386,6 @@ function ZoomControl({
         <button
           type="button"
           className="stage__zoom-button stage__zoom-button--fit"
-          onMouseDown={keepFocus}
           onClick={press(FIT)}
           aria-label="Fit the whole campaign"
         >

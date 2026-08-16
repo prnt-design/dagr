@@ -4825,9 +4825,12 @@ the demo itself should show richer nodes and its zoom.
 - [x] **D6** (`packages/campaign-stage`) The zoom as something a reader can read
   and press. The last clause of the maintainer's 2026-08-16 message, "we could
   add the html overlays and a zoom level".
-  THE READOUT ALREADY HAD THE NUMBER, which is what made this worth doing rather
-  than a duplicate: `zoom 6.199 px/unit` has been on screen since M4.1 and it
-  says nothing a reader can act on. It does not answer "would one more notch put
+  THE READOUT ALREADY HAD THE NUMBER, and it still does: the px/unit figure is
+  on screen twice now, deliberately. The readout is the CAMERA'S STATE, and it
+  exists so a screenshot's caption can be checked against the frame it claims to
+  be; the control is the same number where a reader can act on it, next to the
+  word that says what acting would buy. `zoom 6.199 px/unit` has been on screen
+  since M4.1 and it says nothing a reader can act on. It does not answer "would one more notch put
   names on this", which is the only question a zoom raises in a demo whose whole
   subject is semantic zoom. So the control pairs the number with the TIER, and
   the tier is the word that changes as you scroll: `shapes`, `names`, `cards`.

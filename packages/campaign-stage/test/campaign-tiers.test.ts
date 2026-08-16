@@ -260,7 +260,14 @@ describe('the zoom control arithmetic', () => {
       atFloor: false,
       atCeiling: true,
     });
+    // BOTH ENDS, because the tolerance is the whole reason this function is not
+    // two comparisons at the call site: with only the ceiling case here, an
+    // `atFloor` rewritten as a strict `zoom <= minZoom` passes every test in
+    // the suite, including the exact-limit one above.
     expect(zoomLimitState(maxZoom * (1 - ZOOM_LIMIT_TOLERANCE / 2), minZoom, maxZoom).atCeiling).toBe(
+      true,
+    );
+    expect(zoomLimitState(minZoom * (1 + ZOOM_LIMIT_TOLERANCE / 2), minZoom, maxZoom).atFloor).toBe(
       true,
     );
     const middle = Math.sqrt(minZoom * maxZoom);

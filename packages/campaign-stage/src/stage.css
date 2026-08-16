@@ -155,6 +155,17 @@
   font-size: 0.75rem;
   line-height: 1.4;
   color: var(--dagr-stage-ink);
+  /*
+   * THE PANEL REFUSES THE POINTER AND ITS BUTTONS TAKE IT BACK, which is the
+   * readout's rule with a hole cut in it. A panel that took pointer events
+   * would eat the wheel over roughly ninety by sixty pixels of the corner, and
+   * that corner is where a reader puts the cursor when they want to zoom: the
+   * gesture would scroll the host page away from the demo instead. Drag to pan
+   * has the same problem in miniature. So only the three things a reader can
+   * press are pressable, and everything else in this box is a label the canvas
+   * can be dragged through.
+   */
+  pointer-events: none;
   user-select: none;
 }
 
@@ -191,6 +202,8 @@
  * took focus from the canvas would leave the next arrow key scrolling the page.
  */
 .stage__zoom-button {
+  /* The hole in the panel's `pointer-events: none`. */
+  pointer-events: auto;
   min-width: 1.75rem;
   padding: 0.125rem 0.375rem;
   border: 1px solid var(--dagr-stage-rule);
@@ -208,7 +221,7 @@
   letter-spacing: 0.04em;
 }
 
-.stage__zoom-button:hover:not(:disabled) {
+.stage__zoom-button:hover:not([aria-disabled='true']) {
   border-color: var(--dagr-stage-amber);
   color: var(--dagr-stage-amber);
 }
@@ -218,10 +231,15 @@
   outline-offset: 1px;
 }
 
-/* Disabled at the end of the range rather than left to do nothing: the limits
-   are derived from the scene and the viewport, so a `+` at the ceiling is a
-   button a reader would press and then blame the demo for. */
-.stage__zoom-button:disabled {
+/* Greyed at the end of the range rather than left to do nothing: the limits are
+   derived from the scene and the viewport, so a `+` at the ceiling is a button
+   a reader would press and then blame the demo for.
+
+   `aria-disabled` and not `:disabled`, which is the component's decision and is
+   argued at the buttons: the real attribute drops focus to the body when it
+   arrives under a keyboard user's finger. This rule is what makes the state
+   visible, and `press` is what makes the click do nothing. */
+.stage__zoom-button[aria-disabled='true'] {
   opacity: 0.35;
   cursor: default;
 }
