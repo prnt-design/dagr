@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "capturedAt": "2026-08-14T06:15:58.719Z",
+  "capturedAt": "2026-08-16T05:28:48.995Z",
   "machine": {
     "platform": "linux",
     "arch": "x64",
@@ -8,115 +8,115 @@
     "cores": 8,
     "node": "v22.23.2",
     "ci": false,
-    "loadAverageAtCapture": 0.44
+    "loadAverageAtCapture": 0.89
   },
   "benchmarks": {
     "@dagr/graph > bench/graph.bench.ts > adjacency > 2.5k outEdges": {
-      "medianMs": 0.7491620000000694,
-      "meanMs": 0.787458121259836,
-      "rme": 1.6800345097858174,
-      "samples": 635,
-      "ratio": 8.25131893429359
+      "medianMs": 0.6532720000013796,
+      "meanMs": 0.7056715796897061,
+      "rme": 1.6336354850131192,
+      "samples": 709,
+      "ratio": 7.0634690656026065
     },
     "@dagr/graph > bench/graph.bench.ts > adjacency > 2.5k successors": {
       "gate": "off",
-      "reason": "Not gateable on this box. Across nine quiet-machine runs on 2026-08-14 (AMD EPYC-Rome VM, no other agent, warmup discarded), its control-normalized ratio ranged 37.7 to 61.8, a 64% band, while within-run rme stayed under 6%; the between-run variance is real and exceeds the 25% tolerance cap, so gating it here flags noise, not regressions. The stats below are run 2 of the capture set, kept for humans. The path back is the second control workload for low-allocation work that bench/README.md already names for this symptom, or a baseline machine where three runs agree on it. Lifting this is a hand edit by design; a recapture refreshes the stats and keeps the exemption.",
-      "medianMs": 3.961844999999812,
-      "meanMs": 4.277648025641035,
-      "rme": 4.3444742382102985,
-      "samples": 117,
-      "ratio": 43.636018195305965
+      "reason": "Not gateable on this box. Across nine quiet-machine runs on 2026-08-14 (AMD EPYC-Rome VM, no other agent, warmup discarded), its control-normalized ratio ranged 37.7 to 61.8, a 64% band, while within-run rme stayed under 6%; the between-run variance is real and exceeds the 25% tolerance cap, so gating it here flags noise, not regressions. Re-measured on the 2026-08-16 recapture: five quiet runs put it at 37.51 to 50.71, a 35% band, so the exemption stands. The stats below are run 4 of that capture set, kept for humans. The path back is the second control workload for low-allocation work that bench/README.md already names for this symptom, or a baseline machine where three runs agree on it. Lifting this is a hand edit by design; a recapture refreshes the stats and keeps the exemption.",
+      "medianMs": 4.007434999999532,
+      "meanMs": 4.371305104347852,
+      "rme": 5.636745307081975,
+      "samples": 115,
+      "ratio": 43.33017970286511
     },
     "@dagr/graph > bench/graph.bench.ts > attributes > 2k updateNodeAttrs, no change": {
-      "medianMs": 1.1006199999992532,
-      "meanMs": 1.1459091121281748,
-      "rme": 1.2498294566697852,
-      "samples": 437,
-      "ratio": 12.122300177338422
+      "medianMs": 1.1352269999997588,
+      "meanMs": 1.2062067879518201,
+      "rme": 1.8098151538525156,
+      "samples": 415,
+      "ratio": 12.27458209890859
     },
     "@dagr/graph > bench/graph.bench.ts > attributes > 2k updateNodeAttrs, unwatched": {
-      "medianMs": 2.0663849999998547,
-      "meanMs": 2.160324396551722,
-      "rme": 1.7544667666919467,
-      "samples": 232,
-      "ratio": 22.759298624379614
+      "medianMs": 2.1113420000001497,
+      "meanMs": 2.3698248578199186,
+      "rme": 3.6958897536083306,
+      "samples": 211,
+      "ratio": 22.828774084725964
     },
     "@dagr/graph > bench/graph.bench.ts > attributes > 2k updateNodeAttrs, watched": {
-      "medianMs": 3.707060000000183,
-      "meanMs": 3.845178396946565,
-      "rme": 1.658805968438334,
-      "samples": 131,
-      "ratio": 40.829799654228424
+      "medianMs": 3.7773769999998876,
+      "meanMs": 4.068587936000007,
+      "rme": 4.324730187327443,
+      "samples": 125,
+      "ratio": 40.84268970438291
     },
     "@dagr/graph > bench/graph.bench.ts > build > 1k nodes and 4k edges from empty": {
-      "medianMs": 4.090220000000045,
-      "meanMs": 5.080211696969694,
-      "rme": 7.459721776781992,
-      "samples": 99,
-      "ratio": 45.049948784673504
+      "medianMs": 4.172598999999991,
+      "meanMs": 5.439407645161287,
+      "rme": 7.548551410787728,
+      "samples": 93,
+      "ratio": 45.11600674696308
     },
     "@dagr/graph > bench/graph.bench.ts > traversal > descendants, 10k nodes": {
-      "medianMs": 2.1753175000003466,
-      "meanMs": 2.2777797545455294,
-      "rme": 1.5982016594256128,
-      "samples": 220,
-      "ratio": 23.95908825574628
+      "medianMs": 2.5125694999996995,
+      "meanMs": 2.9768407559523613,
+      "rme": 5.792468755484375,
+      "samples": 168,
+      "ratio": 27.167025279496144
     },
     "@dagr/graph > bench/graph.bench.ts > traversal > isAcyclic on a cyclic graph, 10k nodes": {
-      "medianMs": 0.04878800000005867,
-      "meanMs": 0.055299769520015134,
-      "rme": 1.8693509532555004,
-      "samples": 9042,
-      "ratio": 0.5373542013166211
+      "medianMs": 0.046499000000039814,
+      "meanMs": 0.05465766200263391,
+      "rme": 1.8932247558504807,
+      "samples": 9148,
+      "ratio": 0.5027679865064525
     },
     "@dagr/graph > bench/graph.bench.ts > traversal > isAcyclic on an acyclic graph, 10k nodes": {
-      "medianMs": 19.370793500000218,
-      "meanMs": 19.798459026315808,
-      "rme": 2.5638063831805185,
-      "samples": 152,
-      "ratio": 213.35117795460553
+      "medianMs": 19.878198999999768,
+      "meanMs": 20.285943709459424,
+      "rme": 2.0074013849277974,
+      "samples": 148,
+      "ratio": 214.93197889408165
     },
     "@dagr/graph > bench/graph.bench.ts > traversal > sources, 10k nodes": {
-      "medianMs": 0.35697799999979907,
-      "meanMs": 0.39161385512920377,
-      "rme": 1.5195021197889367,
-      "samples": 1277,
-      "ratio": 3.931778881636183
+      "medianMs": 0.3513280000006489,
+      "meanMs": 0.3935578402832795,
+      "rme": 1.5701278636756881,
+      "samples": 1271,
+      "ratio": 3.798715481268714
     },
     "@dagr/graph > bench/graph.bench.ts > traversal > topologicalOrder, 10k nodes": {
-      "medianMs": 31.518633000000136,
-      "meanMs": 32.05026385106377,
-      "rme": 2.005729038675213,
-      "samples": 94,
-      "ratio": 347.14827134308445
+      "medianMs": 34.194941000000654,
+      "meanMs": 34.675290344827545,
+      "rme": 1.697533921334173,
+      "samples": 87,
+      "ratio": 369.73099712386386
     },
     "@dagr/layout > bench/layout.bench.ts > pipeline > 10k nodes, 40k edges": {
-      "medianMs": 2367.085547499997,
-      "meanMs": 2366.7841747999987,
-      "rme": 1.8929338242417413,
+      "medianMs": 2326.3265460000002,
+      "meanMs": 2329.276667000001,
+      "rme": 1.7976178677441839,
       "samples": 10,
-      "ratio": 25919.64376834524
+      "ratio": 24456.369443304346
     },
     "@dagr/layout > bench/layout.bench.ts > pipeline > 1k nodes, 4k edges": {
-      "medianMs": 126.25123050000002,
-      "meanMs": 126.9858139,
-      "rme": 4.4497767462573234,
+      "medianMs": 124.06022200000052,
+      "meanMs": 128.16453649999994,
+      "rme": 6.644523127485494,
       "samples": 10,
-      "ratio": 1382.4540153740463
+      "ratio": 1304.2290333948526
     },
     "@dagr/layout > bench/layout.bench.ts > rank > 10k nodes, 40k edges": {
-      "medianMs": 242.9694639999998,
-      "meanMs": 245.94369738461535,
-      "rme": 7.151626302456682,
+      "medianMs": 228.9802979999995,
+      "meanMs": 235.58318146153846,
+      "rme": 4.717407588906278,
       "samples": 13,
-      "ratio": 2660.521483947671
+      "ratio": 2407.240192807356
     },
     "@dagr/layout > bench/layout.bench.ts > rank > 1k nodes, 4k edges": {
-      "medianMs": 8.61860999999999,
-      "meanMs": 8.872879105263157,
-      "rme": 2.4755529685866007,
-      "samples": 57,
-      "ratio": 94.37398712278605
+      "medianMs": 9.469621999999845,
+      "meanMs": 9.806387627450984,
+      "rme": 4.170114082223402,
+      "samples": 51,
+      "ratio": 99.55290864846572
     }
   }
 }

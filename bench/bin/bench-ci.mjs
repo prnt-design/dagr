@@ -1,34 +1,56 @@
 // @ts-check
 
 import { spawnSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { MAX_ATTEMPTS, decide, sharedFailures } from '../src/repeat.mjs';
 
 /**
  * The single step the agent runs locally before opening a pull request:
- * measure, gate, and re-measure once if the runner was too busy to produce a
- * readable measurement.
+ * measure, repeat, and gate on whether two runs agreed.
  *
- * The retry is not a way to let a regression through. `bench-check.mjs` exits 1
- * for a regression and 2 only when the run was too noisy to read, and a real
- * regression reproduces on the second measurement, so only exit 2 is retried. A
- * regression fails on the first attempt and never reaches here.
+ * TWO OF THREE, since 2026-08-16. The gate measures up to three times and
+ * passes when two runs pass; it fails when two runs fail; and three runs that
+ * never agree are reported as undecided, which is not green either. It used to
+ * measure once and re-measure only an unreadable run, and the reason that
+ * stopped being enough is on the record rather than suspected. On this box,
+ * with several agent sessions resident and some of them in an unrelated
+ * checkout that cannot read the gate lock: unmodified `main` failed one run and
+ * passed the next a minute later; a markdown-only branch passed at a 1-minute
+ * load of 4.56, failed at 5.07, and passed again at a HIGHER 6.18; a branch
+ * whose diff was zero bytes against `packages/graph`, `packages/layout` and
+ * `bench` reported `descendants, 10k` at +94.9%. Sessions coped by re-running
+ * until green, by hand, which is precisely the habit that hides a real
+ * regression: the gate now does the repeating itself and says what it saw.
  *
- * This exists because the noise is predictable rather than hypothetical. The
- * agent runs this gate on the same machine that just ran its persona
- * reviewers, and a run started while those were still resident put 7 of 10
- * benchmarks past the readability ceiling, where the same benchmarks on a
- * settled machine a few seconds later came back with all 10 readable and
- * inside tolerance. Failing a merge over that would make the gate a flake
- * generator, which is the thing the design set out to avoid; passing it
- * silently would make the gate a no-op, which is the thing the harness was
- * written to fix. Measuring again is the only answer that is neither.
+ * The repetition is not a way to let a regression through, and the arithmetic
+ * is the argument. A regression fails the SAME entry every run, because the
+ * extra work is in the code, so it fails twice and the gate fails with it. Noise
+ * picks a different entry each run, which is exactly what the sessions above
+ * observed, so it rarely fails the same one twice. On a failure this prints
+ * which of the two it saw, because that sentence is what a reader needs and it
+ * costs nothing beyond runs already taken.
+ *
+ * The readability rules are unchanged. `bench-check.mjs` exits 2 when the run
+ * was too noisy to read, and such a run is neither a pass nor a fail: it does
+ * not count towards either two. What used to be "retry once on exit 2"
+ * generalises into the attempt budget below.
+ *
+ * A harness error is not re-measured. A stale report, a missing baseline or a
+ * malformed exemption reproduces on the next run by construction, so spending
+ * two more measurements on it buys nothing.
  */
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const check = fileURLToPath(new URL('./bench-check.mjs', import.meta.url));
 
-/** Let the machine settle before measuring, so the retry is not a repeat. */
+/** Let the machine settle between measurements, so a repeat is not a repeat of the load. */
 const SETTLE_MS = 5_000;
+
+/** @typedef {import('../src/repeat.mjs').RunSummary} RunSummary */
 
 /**
  * @param {string} command
@@ -44,28 +66,83 @@ function run(command, args) {
   return result.status ?? 1;
 }
 
-/** @returns {number} */
-function measure() {
+/**
+ * One measurement: benchmark, then gate, then read back what the gate concluded.
+ *
+ * `benchFailed` is separated from the gate's own verdict because `pnpm bench`
+ * exiting non-zero means the benchmarks did not run, which is a broken workspace
+ * rather than a slow one.
+ *
+ * @param {string} summaryPath
+ * @returns {{ benchFailed: number } | { summary: RunSummary }}
+ */
+function measure(summaryPath) {
   const benched = run('pnpm', ['bench']);
-  if (benched !== 0) return benched;
-  return run('node', [check]);
+  if (benched !== 0) return { benchFailed: benched };
+
+  const status = run('node', [check, '--summary', summaryPath]);
+  if (!existsSync(summaryPath)) {
+    // The gate died before it could write one. Nothing to repeat and nothing to
+    // compare, so report it as the harness error it is.
+    console.error(`\nThe gate exited ${String(status)} without writing a summary.`);
+    return { summary: { outcome: 'error', failing: [] } };
+  }
+  return { summary: /** @type {RunSummary} */ (JSON.parse(readFileSync(summaryPath, 'utf8'))) };
 }
 
-const first = measure();
-if (first !== 2) process.exit(first);
+/** A synchronous sleep: there is nothing else for this process to do, and the
+ * point is to stop competing with whatever made the last run noisy. */
+function settle() {
+  console.error(`\nLetting the machine settle for ${String(SETTLE_MS / 1000)}s before measuring again.`);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, SETTLE_MS);
+}
 
+const summaryDir = mkdtempSync(join(tmpdir(), 'dagr-bench-ci-'));
+// Registered rather than wrapped in a `finally`, because every exit below goes
+// through `process.exit`, which skips a `finally` and runs this.
+process.on('exit', () => {
+  rmSync(summaryDir, { recursive: true, force: true });
+});
+
+/** @type {RunSummary[]} */
+const runs = [];
+let verdict = decide(runs);
+
+for (let attempt = 1; attempt <= MAX_ATTEMPTS && verdict.status === 'pending'; attempt += 1) {
+  if (attempt > 1) settle();
+  console.error(`\nBenchmark gate, measurement ${String(attempt)} of at most ${String(MAX_ATTEMPTS)}.`);
+
+  const measured = measure(join(summaryDir, `run-${String(attempt)}.json`));
+  if ('benchFailed' in measured) process.exit(measured.benchFailed);
+  if (measured.summary.outcome === 'error') {
+    console.error(
+      '\nThe harness rejected this run, which is a fact about the harness rather than about the code. It would reject the next one the same way, so the gate is not measuring again.',
+    );
+    process.exit(1);
+  }
+
+  runs.push(measured.summary);
+  verdict = decide(runs);
+}
+
+console.log('\nWhat the runs concluded:');
+for (const [index, summary] of runs.entries()) {
+  const failing = summary.failing.length > 0 ? `: ${summary.failing.join(', ')}` : '';
+  console.log(`  run ${String(index + 1)}  ${summary.outcome}${failing}`);
+}
+console.log(`\n${verdict.reason}.`);
+
+if (verdict.status === 'pass') {
+  console.log('\nBenchmark gate passed.');
+  process.exit(0);
+}
+
+if (runs.some((summary) => summary.outcome === 'regressed')) {
+  console.log(`\n${sharedFailures(runs).verdict}.`);
+}
 console.error(
-  `\nThe run was too noisy to read. Letting the machine settle for ${String(SETTLE_MS / 1000)}s and measuring once more.`,
+  verdict.status === 'fail'
+    ? '\nBenchmark gate failed.'
+    : '\nBenchmark gate is undecided, which is not a pass. Re-run it, and if it stays undecided look at whether the box will go quiet at all and whether a benchmark has become too allocation-heavy to measure here.',
 );
-// A synchronous sleep, because there is nothing else for this process to do and
-// the whole point is to stop competing with whatever made the last run noisy.
-Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, SETTLE_MS);
-
-const second = measure();
-if (second === 2) {
-  console.error(
-    '\nTwo runs in a row were too noisy to read. That is a fact about this runner, not about the code: nothing was measured, so nothing is being claimed. Re-run the job, or look at whether a benchmark has become too allocation-heavy to measure here.',
-  );
-  process.exit(1);
-}
-process.exit(second);
+process.exit(1);
