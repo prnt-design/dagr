@@ -50,6 +50,25 @@ export type {
   NodeDelta,
   ReroutedEdge,
 } from './delta.js';
+// Stability (M3.4): the contract and the metric, one module, both exported from
+// the run they ship in for the reason `InfluenceSet` was. M3.5 through M3.9 are
+// each judged against these two, and a measurement a task defines for itself is
+// a measurement the next task redefines.
+//
+// `stabilityViolations` RETURNS what it found rather than throwing, which is
+// what keeps it here rather than in the test tree: a list is usable by a test
+// asserting it is empty, by a corpus runner printing it, and by a consumer
+// logging it, while a throw is usable only inside a test runner and this package
+// ships no testing entry point to put one behind. The assertion wrappers the
+// suites share live in `test/stability.ts`.
+export { measureStability, stabilityViolations } from './stability.js';
+export type {
+  EdgeStability,
+  NodeStability,
+  StabilityReport,
+  StabilityViolation,
+  StabilityViolationKind,
+} from './stability.js';
 // The rule for stages: every one a caller CHOOSES BETWEEN is exported by name,
 // no PLACEHOLDER is, and the stage set is exported whatever a stage is.
 //

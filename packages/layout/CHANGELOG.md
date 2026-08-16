@@ -14,6 +14,44 @@ of doc prose.
 
 ### Added
 
+- `stabilityViolations(previous, next, influence)` and
+  `measureStability(previous, next)`, which are what stable MEANS here, written
+  down before any stage tries to be it. No coordinate moved and no algorithm
+  changed: this is the measurement M3.5 through M3.9 are judged against. (M3.4)
+
+  **Stability is a contract AND a metric, and the split is the decision.**
+  `stabilityViolations` is the contract: everything that changed and was not in
+  the relayout's influence set, and an empty list is it holding. It is exact,
+  with no tolerance, because a path entitled to keep a coordinate copies it, so
+  any difference at all is a coordinate that was recomputed when it should have
+  been kept. `measureStability` is the metric: displacement, moved fraction,
+  rank and order churn over the nodes, and route distance and bend churn over
+  the edges. Either alone certifies the wrong thing. A contract says nothing
+  about a full relayout, which is entitled to move everything and passes without
+  measuring a coordinate; a metric lets a regression land as long as it stays
+  under the bar, which is how stability becomes a claim rather than a test.
+
+  **The contract is scoped to the influence set, not to the patch,** because the
+  stronger form is infeasible rather than hard. Insert a node into a rank
+  between two anchored neighbours exactly `nodeSep` apart: there is no
+  coordinate for it, and the exits are moving an anchor or overlapping two
+  boxes. Today the influence set is the whole roster, so the contract is true
+  and useless on purpose, which is what makes it the assertion M3.5 narrows into
+  rather than a new idea M3.5 has to arrive with.
+
+  **The edges have their own metrics because the node ones certify the wrong
+  thing alone.** A layout can score perfectly on all five node numbers while
+  every polyline re-routes, which is what an unstable dummy chain produces.
+  `maxRouteDistance` is the symmetric Hausdorff distance between two polylines,
+  which stays computable when a route gains a bend and a per-vertex comparison
+  cannot even be spelled; `bendChurn` catches the case a distance cannot, a
+  point added on the line the route already ran along.
+
+  **Every number is taken over the shared roster**, meaning the ids both results
+  hold, including the ones that did not move. An average over only the nodes
+  that moved rises as a layout gets more stable, because the small moves drop
+  out of the set and the large ones are what is left to average.
+
 - `engine.relayout(patch)` and `engine.relayoutAsync(patch)`, which lay the last
   graph an engine ran out again after you have edited it and answer with a
   `LayoutDelta`, the geometry that delta adds up to, and an `InfluenceSet`.
