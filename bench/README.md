@@ -7,7 +7,7 @@ reasoning that makes that rule survive contact with a busy machine.
 pnpm bench            # run every package's benchmarks, writing a report each
 pnpm bench:check      # compare that run to bench/baseline.json, non-zero on a regression
 pnpm bench:baseline   # record that run as the new baseline
-pnpm bench:ci         # both of the first two, re-measuring once if the run was unreadable
+pnpm bench:ci         # measure up to three times, and pass when two runs agree
 ```
 
 The agent runs `pnpm bench:ci` before it opens a pull request, and does not
@@ -34,12 +34,118 @@ The CI argument above is unchanged by the baseline being x64 Linux: the
 remaining reason the gate stays local is runner noise and runner identity, not
 which architecture the file happens to name.
 
-## When the runner is too busy to measure
+**The current file was captured on 2026-08-16 between 05:20 and 05:29 UTC and
+supersedes PR #21's capture of 2026-08-14.** Same machine, different conditions,
+which is the whole reason for it: PR #21 was taken when one agent ran on this
+box at a time, and the box now carries several sessions at once. The maintainer
+called the recapture after four sessions escalated the same symptom. It was
+taken in a trough between the neighbours' bursts, with the 1-minute load between
+0.40 and 2.13 for the whole set, a warmup run discarded, and FIVE measured runs
+rather than three: the first three disagreed by 32.5% on `build > 1k` and 26.7%
+on `isAcyclic, acyclic`, so two more were taken to find out which of them was
+representative. The file is run 3. `loadAverageAtCapture` reads 1.3 because
+`bench:baseline` sampled it when the file was written, half an hour after the
+runs it holds; the figures above are what the measurements were taken under, and
+that gap is the reason the field's name is as narrow as it is.
 
-A regression and an unreadable measurement are different facts and get
-different responses. `bench:check` exits 1 for a regression and 2 when the run
-was too noisy to read; `bench:ci` retries only on 2, after letting the machine
-settle, and a real regression fails on the first attempt and is never retried.
+**Measure closeness over the GATED entries only when picking which run to
+commit.** The first pick here was run 4, on a per-entry closeness computed over
+all fifteen: `2.5k successors` is exempt, it swings further than anything else
+in the file, and it pulled the choice by more than the gated entries did. Over
+the fourteen that actually gate, run 3 sits at 2.28% mean absolute deviation
+from the per-entry medians and run 4 at 2.94%. Run 4 was quieter WITHIN its runs
+by about 0.5 percentage points of rme per entry, which is a real cost, and
+centring still wins: a baseline off-centre by 10% moves every future comparison
+against that entry and prints `is N% faster than baseline` forever, while rme
+only widens the allowance and hits the same 25% cap either way.
+
+**The old file was not far wrong, and that is the finding.** Eleven of the
+fourteen gated entries moved less than 6%, the largest being `2.5k outEdges` at
+-11.0%, `sources, 10k` at -10.8% and `isAcyclic, acyclic` at +9.4%. So the
+flakiness that motivated this was never mostly a stale baseline: it is the
+between-run spread on this machine, measured over the five capture runs as a
+30.6% band on `build > 1k`, a 40.7% band on `isAcyclic, acyclic`, a 39.8% band
+on `rank > 1k` and a 35% band on the already-exempt `2.5k successors`, on an
+idle box with no code changing. A fresh baseline re-centres those bands; it
+cannot narrow them. Two of three is what keeps them from failing a merge, and
+the two changes ship together for that reason.
+
+**A recapture moves the effective tolerance even though it touches no
+constant**, and saying "the tolerances are unchanged" without that sentence
+would be a half-truth. The formula adds the BASELINE's margin of error, so a
+noisier baseline gates wider on that entry. Comparing each entry against an
+equally noisy re-run, seven of the fourteen widened and four now sit at the 25%
+cap where two did: `build > 1k`, `rank > 10k`, and now `descendants, 10k`
+(1.60% rme to 5.86%) and `pipeline > 1k` (4.45% to 12.70%). Those four are close
+to ungated, and they are named here for the same reason the weakest entries are
+named below: an allowance nobody wrote down is the kind that stops being
+noticed. Narrowing them is a capture on a quieter machine or a second control,
+not a smaller number asserted here.
+
+## Two of three
+
+`pnpm bench:ci` measures up to three times and passes when two runs pass. Two
+runs that fail fail it. Three runs that never agree are reported as undecided,
+which is not a pass either: the property this gate claims is a REPEATABLE pass,
+and a set of runs that never repeated has not shown one. A passing gate
+therefore costs two measurements, and a failing or undecided one costs two or
+three; a measurement here is about 70 seconds.
+
+It measured once before 2026-08-16, and what changed is not the code but the
+machine. This box now carries several agent sessions at a time, some of them in
+an unrelated checkout that cannot read the gate lock, and the committed baseline
+was captured when one agent ran at a time. The result, measured across five
+sessions on branches that changed nothing the gate can see: unmodified `main`
+failed a run and passed the next a minute later; a markdown-only branch passed
+at a 1-minute load of 4.56, failed at 5.07 and passed again at a HIGHER 6.18; a
+branch whose diff was zero bytes against `packages/graph`, `packages/layout` and
+`bench` reported `descendants, 10k` at +94.9% and `rank > 1k` at +59.9%, on a
+run where the pipeline entry that RUNS ranking came in at -5.5%. Sessions coped
+by re-running the gate until it went green, by hand, which is exactly the habit
+that hides a real regression. The gate does the repeating itself now, and says
+what it saw.
+
+Repeating is not a way to let a regression through, and the arithmetic is the
+argument. A regression is in the code, so it fails the SAME entry every run,
+which means it fails twice and the gate fails with it. Noise picks a different
+entry each run: across those five sessions the failures were `descendants, 10k`,
+`updateNodeAttrs, watched`, `build > 1k`, `rank > 1k`, `isAcyclic` and
+`topologicalOrder`, none of which the branches could have touched. So a failure
+prints which of the two shapes it saw, naming the entries: the same entry twice
+reads as real until the code says otherwise, and a different entry each time
+reads as this box. That sentence costs nothing beyond runs already taken, and it
+is the cheapest real-versus-noise test the project has.
+
+This is the other half of a bargain, and the halves only work together. No
+tolerance CONSTANT was loosened to absorb the noise, because a wider tolerance
+hides the drift and the regression together, and a fresh baseline plus
+repetition is what replaces a looser number. Say it that precisely, though: the
+formula adds the baseline's own margin of error, so recapturing on a noisier
+machine widens the effective allowance on the entries whose rme rose, seven of
+fourteen here. The numbers are in the baseline-machine section above, because an
+allowance that moved without anyone editing a constant is exactly the kind that
+stops being noticed.
+
+**What two of three does not fix, measured rather than guessed.** A burst of
+neighbour load on this box runs for about eight minutes and a whole gate takes
+two to four, so a burst that arrives mid-gate can fail the same entry twice. It
+did on 2026-08-16 at 06:00, on a branch whose diff was zero bytes against
+`packages/graph`: `sources, 10k` failed at +25.3% and then at +40.4% while the
+1-minute load went from 2.37 to 6.37, and the gate duly reported the same entry
+twice. The same-entry report is therefore evidence and not proof, which is why
+it says to read a repeat as real UNTIL THE CODE SAYS OTHERWISE rather than
+asserting it. Two checks settle it and both are cheap: read the failing entry
+against the rest of the same run, since a stage entry failing while the pipeline
+entry that runs that stage is negative cannot describe a regression, and re-run
+once the box is quiet. Repetition narrows the window that noise can fail a merge
+through. It does not close it, and nothing available here does.
+
+A regression and an unreadable measurement are still different facts and still
+get different responses. `bench:check` exits 1 for a regression and 2 when the
+run was too noisy to read, and an unreadable run is neither a pass nor a fail:
+it does not count towards either two. What used to be "retry once on exit 2"
+generalises into the attempt budget above, and three unreadable runs say plainly
+that nothing was measured, so nothing is being claimed about the code.
 
 The noise is predictable rather than hypothetical. The agent runs this gate on
 the same machine that just ran its persona reviewers, and a run started while
@@ -48,9 +154,14 @@ The same benchmarks on a settled machine a few seconds later came back with all
 10 readable and inside tolerance. Failing a merge over that would make the gate
 a flake generator, which is what this design set out to avoid; passing it
 silently would make the gate a no-op, which is what the harness was written to
-fix. Measuring again is the only answer that is neither. Two unreadable runs in
-a row fail the gate, and say plainly that nothing was measured, so nothing is
-being claimed about the code.
+fix. Measuring again is the only answer that is neither.
+
+A harness error is not measured again. A stale report, a missing baseline, a
+duplicate key or a malformed exemption reproduces on the next run by
+construction, so the gate fails on the first one rather than spending two more
+measurements reproducing it. That distinction is also why a stale package report
+is not read as a regression: a dropped package leaves every baseline entry under
+it looking `missing`, which has a regression's shape and none of its meaning.
 
 Run the gate after the reviewers have exited. They are themselves the load.
 
@@ -324,6 +435,16 @@ three-run comparison built on means was what first suggested a cold-start effect
 here, and the effect disappeared when the same runs were read at their floors:
 the minima were flat while the maxima were not.
 
+**Take a fourth and a fifth run when three do not agree, rather than picking
+one of the three.** The 2026-08-16 recapture had to: `build > 1k` sat 32.5%
+above its neighbours on run 2 and `isAcyclic, acyclic` spanned 26.7% across the
+set, and three runs cannot say which of them is the odd one out. Two more runs
+answered it in two minutes, and they also moved the choice, since the run that
+looked closest to the medians of three was not the one closest to the medians of
+five. The cost is 70 seconds a run; the alternative is committing a file that
+makes one entry print `is 31% faster than baseline` on every future run, which
+is the pathology this whole section is about.
+
 **Record the load average you captured at.** `machineInfo` in `src/baseline.mjs`
 writes `loadAverageAtCapture` as of the M2.9 follow-up. The baseline it replaced
 carried nothing of the kind, so answering "was that taken on a busy machine"
@@ -360,16 +481,32 @@ current file, because across nine quiet-machine runs on the dispatch box its
 control-normalized ratio ranged 37.7 to 61.8, a 64% band, while its within-run
 rme stayed under 6%: the between-run variance is real, exceeds the 25%
 tolerance cap, and a gate on it would flag noise rather than regressions. The
-full evidence is in the entry's own `reason`. Re-enable it if the baseline
-moves to a machine where three runs agree on it.
+full evidence is in the entry's own `reason`. The 2026-08-16 recapture measured
+it again over five quiet runs, at 37.51 to 50.71, a 35% band, so the exemption
+stands. Re-enable it if the baseline moves to a machine where three runs agree
+on it.
 
-Among the gated entries, `build > 1k nodes and 4k edges from empty` (7.46% rme
-at 99 samples, median 4.09ms) and `rank > 10k` (7.15% at 13 samples) are the
-weakest: the tolerance formula adds both runs' rme, so each gates at the 25%
-cap, which is close to ungated. They are left that way deliberately, because
-turning them off reduces real coverage and switching the gate to a trimmed
-statistic changes every entry in the file. Both are decisions to take on
-purpose rather than side effects of a recapture.
+Among the gated entries, four are weakest by margin of error, and the whole list
+is given rather than the top two, because each of them gates at the 25% cap
+against a similarly noisy re-run and a reader trusting a short list would not
+know the rest were there: `pipeline > 1k` (12.70% rme at 10 samples, median
+124.16ms), `rank > 10k` (9.49% at 13), `build > 1k nodes and 4k edges from
+empty` (8.31% at 91, median 4.02ms) and `descendants, 10k` (5.86% at 183). The
+cap is close to ungated. They are left that way deliberately, because turning
+them off reduces real coverage and switching the gate to a trimmed statistic
+changes every entry in the file. Both are decisions to take on purpose rather
+than side effects of a recapture.
+
+READ BETWEEN-RUN SPREAD AS A SEPARATE WEAKNESS FROM rme, because the two do not
+pick the same entries. Over the five runs of the 2026-08-16 capture, on an idle
+box with no code changing, `build > 1k` spanned 30.6%, `isAcyclic, acyclic`
+40.7% and `rank > 1k` 39.8%, while `rank > 1k` recorded rme between 1.3% and
+4.8% in those same runs: it is quiet WITHIN a run and moves BETWEEN runs, which
+is precisely the error the control is supposed to cancel and does not. Those
+three are what two of three is carrying, and they are the standing argument for
+the second control workload this file keeps naming. `rank > 1k` has now been the
+failing entry five times across six sessions, which makes it the entry to look
+at first.
 
 
 ## Layout

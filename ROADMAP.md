@@ -84,6 +84,73 @@ findings addressed or logged, docs land with the feature.
   costs 6.1x `outEdges` over the same nodes (the array materialisation the M1.2
   review flagged and M2.5 deferred), and a watched attribute update costs 2.0x
   an unwatched one against the 1.8x M1.3 measured.
+  **TWO OF THREE, AND A SECOND RECAPTURE (2026-08-16), because the gate had
+  started measuring the box rather than the code.** The maintainer called both
+  halves after four sessions escalated the same symptom, and the evidence is
+  that branches which changed nothing the gate can see failed it: unmodified
+  `main` failed one run and passed the next a minute later; a markdown-only
+  branch passed at a 1-minute load of 4.56, failed at 5.07 and passed again at a
+  HIGHER 6.18; a branch with a zero-byte diff against `packages/graph`,
+  `packages/layout` and `bench` reported `descendants, 10k` at +94.9% and
+  `rank > 1k` at +59.9% on a run whose PIPELINE entry, which runs ranking, came
+  in at -5.5%. The cause is the machine rather than the file: PR #21's baseline
+  was captured when one agent ran on this box at a time, and it now carries
+  several sessions at once, some in an unrelated checkout that cannot read the
+  gate lock. Sessions coped by re-running until green, which is the habit that
+  hides a real regression.
+  `pnpm bench:ci` now measures up to three times and passes when two runs pass,
+  fails when two fail, and calls three runs that never agreed UNDECIDED, which
+  is not a pass: the property claimed is a repeatable pass. An unreadable run is
+  still neither, and counts towards neither two, so the old "retry once on exit
+  2" is the same rule with a budget. A harness error fails on the first attempt,
+  because a stale report is stale on the next run too. NO TOLERANCE CONSTANT
+  WAS LOOSENED, deliberately: a wider tolerance hides the drift and the
+  regression together, so a fresh baseline plus repetition is what replaces a
+  looser number. Said precisely, because the loose version of that sentence is
+  not true: the formula ADDS THE BASELINE'S OWN rme, so the recapture widened
+  the effective allowance on seven of the fourteen gated entries and put four at
+  the 25% cap where two were, `descendants, 10k` and `pipeline > 1k` joining
+  `build > 1k` and `rank > 10k`. Those four are named in `bench/README.md`
+  rather than left to be found. The command does not change, so AGENTS.md does
+  not either.
+  **ON A FAILURE IT REPORTS WHETHER THE SAME ENTRY FAILED EVERY RUN**, which is
+  the cheapest real-versus-noise test available and costs nothing beyond runs
+  already taken: a regression is in the code, so it fails the same entry every
+  time, while noise picks a different one.
+  Proved rather than asserted, and the failures are reported with the passes.
+  Four runs of the gate against the shipped file, on a branch whose diff is zero
+  bytes against `packages/graph` and `packages/layout`. Three PASSED: one at 2
+  of 3 with `rank > 1k` failing a single run at +47.3%, and two at 2 of 2 with
+  nothing failing. Under the old one-shot gate that first one had a one-in-three
+  chance of blocking a merge over code that changed nothing measurable. The
+  fourth FAILED, and it is the honest limit of the design rather than a
+  footnote: it started at a 1-minute load of 2.37 and ran into a neighbour burst
+  that took the box to 6.37, and `sources, 10k` failed both runs, at +25.3% then
+  +40.4%. A BURST OUTLASTS A GATE. Two of three narrows the window noise can
+  fail a merge through and does not close it, so the same-entry report is
+  evidence rather than proof, which is why it says to read a repeat as real
+  UNTIL THE CODE SAYS OTHERWISE.
+  Then the historical example this harness was verified against in the first
+  place, the `diffAttrs` allocation guard reverted in a scratch commit that was
+  never pushed. On a quiet box the gate FAILED in two runs, both on `2k
+  updateNodeAttrs, unwatched`, at +89.3% and +100.7% against about +22%
+  allowed, with no other entry failing. Run at a load of 8.17 the same branch
+  failed the same entry at +92.4% and +90.4% with three other entries failing
+  alongside it, which is the two readings of the same fact: the regression is
+  visible either way, and a loud box adds names to the list.
+  The recapture itself is in `bench/README.md`, and three things in it are worth
+  reading. FIVE MEASURED RUNS RATHER THAN THREE, because the first three
+  disagreed by 32.5% on `build > 1k` and three runs cannot say which is the odd
+  one out; the two extra runs cost 70 seconds each and moved the choice. PICK
+  THE RUN TO COMMIT BY CLOSENESS OVER THE GATED ENTRIES ONLY, since the exempt
+  `2.5k successors` swings further than anything else in the file and pulled the
+  first pick further than the fourteen entries that gate did. AND THE OLD FILE
+  WAS NOT FAR WRONG: eleven of the fourteen gated entries moved under 6%, so the
+  flakiness was never mostly a stale baseline. It is the between-run spread on
+  this machine, 30.6% on `build > 1k` and 40.7% on `isAcyclic, acyclic` across
+  five idle runs with no code changing, which a recapture re-centres and cannot
+  narrow. That is the standing argument for the second control workload
+  `bench/README.md` keeps naming, and `rank > 1k` is where to start.
 
 ## M1: Graph model (`@dagr/graph`)
 

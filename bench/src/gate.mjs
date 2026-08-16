@@ -112,6 +112,14 @@
  *   code. Separated from `ok` because the two want different responses: a
  *   regression is a red build, and an unreadable measurement is a reason to
  *   measure again. `bin/bench-ci.mjs` is what acts on the difference.
+ * @property {string} [noiseError]
+ *   What to print when `measuredNothing` is set. It is NOT in `errors`, and
+ *   that separation is load bearing rather than tidy: `errors` means the
+ *   harness rejected the run and repeating it would reject it the same way,
+ *   which is what makes `bench:ci` stop measuring. An unreadable run is the
+ *   opposite of deterministic. Counting it among `errors` and subtracting it
+ *   back out again worked only while the gate raised exactly one such message,
+ *   and a second one would have turned a noisy run into a merge block.
  */
 
 /** @typedef {{ tolerance: number, controlDrift: number, maxRme: number, maxTolerance: number, maxInconclusiveFraction: number }} GateOptions */
@@ -293,6 +301,37 @@ export function compareReports(baselineReport, currentReport, overrides = {}) {
     });
   }
 
+  // A WHOLE PACKAGE MISSING IS A HARNESS FAULT, NOT N REGRESSIONS.
+  //
+  // A key is `package > file > group > name`, so one absent entry is a rename
+  // and every entry of one package absent is that package not benchmarking at
+  // all: its `bench` script renamed, `--if-present` skipping it, a filter
+  // dropping it. Both report as `missing` per entry, and the difference is what
+  // the operator should go and look at. Without this the run summarises as a
+  // regression, fails twice because it is deterministic, and the failure names
+  // the same entries both times, which reads as the strongest evidence the gate
+  // has for a REAL regression while the code is untouched.
+  //
+  // Only keys carrying the separator take part. `normaliseRuns` builds every
+  // real key with it, and a key without one cannot be split into a package and
+  // a benchmark, so guessing at where it divides would invent a package.
+  const packagesGated = new Set();
+  const packagesSeen = new Set();
+  for (const result of results) {
+    if (result.status === 'missing' && result.key.includes(' > ')) {
+      packagesGated.add(result.key.split(' > ')[0]);
+    }
+  }
+  for (const key of currentKeys) {
+    if (key.includes(' > ')) packagesSeen.add(key.split(' > ')[0]);
+  }
+  for (const name of packagesGated) {
+    if (packagesSeen.has(name)) continue;
+    errors.push(
+      `${String(name)} produced no benchmarks at all, so every entry it holds reads as missing. That is the package not benchmarking rather than a regression in it`,
+    );
+  }
+
   for (const [key, observed] of Object.entries(currentReport.benchmarks)) {
     if (key in baselineReport.benchmarks) continue;
     results.push({
@@ -308,15 +347,20 @@ export function compareReports(baselineReport, currentReport, overrides = {}) {
   }
 
   const measuredNothing = gated > 0 && inconclusive / gated > options.maxInconclusiveFraction;
-  if (measuredNothing) {
-    errors.push(
-      `${String(inconclusive)} of ${String(gated)} benchmarks were too noisy to read. The gate measured nothing this run`,
-    );
-  }
+  const noiseError = measuredNothing
+    ? `${String(inconclusive)} of ${String(gated)} benchmarks were too noisy to read. The gate measured nothing this run`
+    : undefined;
 
   const failed = results.some(
     (result) => result.status === 'regressed' || result.status === 'missing',
   );
 
-  return { ok: errors.length === 0 && !failed, results, errors, notes, measuredNothing };
+  return {
+    ok: errors.length === 0 && !failed && !measuredNothing,
+    results,
+    errors,
+    notes,
+    measuredNothing,
+    ...(noiseError === undefined ? {} : { noiseError }),
+  };
 }

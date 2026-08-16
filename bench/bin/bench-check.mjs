@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { machineInfo, mergeBaseline } from '../src/baseline.mjs';
 import { normaliseRuns } from '../src/collect.mjs';
 import { compareReports } from '../src/gate.mjs';
+import { REPORT_NAME, WORKSPACE_DIRS } from '../src/names.mjs';
+import { summarise } from '../src/repeat.mjs';
 
 /**
  * The benchmark gate's command line entry point.
@@ -14,6 +16,11 @@ import { compareReports } from '../src/gate.mjs';
  * `pnpm bench:check` compares the last `pnpm bench` run against the committed
  * baseline and exits non-zero on a regression. `pnpm bench:baseline` records
  * the run as the new baseline instead.
+ *
+ * `--summary <path>` writes what this run concluded as JSON, which is how
+ * `bin/bench-ci.mjs` reads one run's failing entries back and compares them to
+ * the next run's. Printing them and parsing the print would work and would
+ * couple the verdict to the layout of a table meant for a human.
  *
  * Plain `.mjs` rather than TypeScript because this runs under bare `node`, in
  * a job that has deliberately not built anything yet. `checkJs` in
@@ -27,8 +34,6 @@ import { compareReports } from '../src/gate.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const baselinePath = join(root, 'bench', 'baseline.json');
-const REPORT_NAME = 'bench-report.json';
-const WORKSPACE_DIRS = ['packages', 'apps'];
 
 /**
  * A run older than this almost certainly means `pnpm bench` was not run before
@@ -84,8 +89,26 @@ function percent(value) {
   return `${sign}${(value * 100).toFixed(1)}%`;
 }
 
+/**
+ * The path `--summary` names, or undefined when the flag is absent.
+ *
+ * @param {string[]} argv
+ * @returns {string | undefined}
+ */
+function summaryPathFrom(argv) {
+  const flag = argv.indexOf('--summary');
+  if (flag === -1) return undefined;
+  const path = argv[flag + 1];
+  if (path === undefined || path.startsWith('--')) {
+    console.error('  error  --summary needs a path to write to');
+    process.exit(1);
+  }
+  return path;
+}
+
 function main() {
   const update = process.argv.includes('--update');
+  const summaryPath = summaryPathFrom(process.argv);
   const { runs, stale } = collectRuns();
 
   /** @type {string[]} */
@@ -162,7 +185,9 @@ function main() {
   }
 
   for (const note of gate.notes) console.log(`\n  note   ${note}`);
-  for (const error of [...errors, ...gate.errors]) console.error(`\n  error  ${error}`);
+  const printable = [...errors, ...gate.errors];
+  if (gate.noiseError !== undefined) printable.push(gate.noiseError);
+  for (const error of printable) console.error(`\n  error  ${error}`);
 
   // Two failure kinds, two exit codes, because they want different responses. A
   // regression is a red build. A run too noisy to read says nothing about the
@@ -170,16 +195,20 @@ function main() {
   // which is what `bin/bench-ci.mjs` does with exit code 2. Passing an
   // unreadable run instead would be the silent no-op this harness exists to
   // prevent, so it is still not a pass.
-  const regressed = gate.results.some(
-    (result) => result.status === 'regressed' || result.status === 'missing',
-  );
-  const onlyNoise = gate.measuredNothing && !regressed && errors.length === 0 && gate.errors.length === 1;
+  //
+  // `summarise` decides which of the two this is, and `bench-ci.mjs` reads the
+  // same summary to decide whether two runs agreed. One definition, so the exit
+  // code and the verdict cannot drift apart.
+  const summary = summarise(gate, errors);
+  if (summaryPath !== undefined) {
+    writeFileSync(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
+  }
 
-  if (onlyNoise) {
+  if (summary.outcome === 'inconclusive') {
     console.error('\nBenchmark gate could not read this run. Re-measure before drawing a conclusion.');
     process.exit(2);
   }
-  if (!gate.ok || errors.length > 0) {
+  if (summary.outcome !== 'pass') {
     console.error('\nBenchmark gate failed.');
     process.exit(1);
   }
