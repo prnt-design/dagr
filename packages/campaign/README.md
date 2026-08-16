@@ -1,8 +1,8 @@
 # @dagr/campaign
 
 A deterministic mock D&D campaign dataset for Dagr demos: schema types and a
-seeded generator. Private, unpublished, zero dependencies, `@dagr/graph`
-included, because it is a fixture rather than a product and a fixture that
+seeded generator. Private, unpublished, and zero dependencies, including on
+`@dagr/graph`, because it is a fixture rather than a product and a fixture that
 depended on the graph model would be unusable to anything that is not Dagr.
 
 The demo it feeds is at https://dagr.prnt.design/demos/campaign. A campaign is
@@ -31,12 +31,10 @@ campaign.edges.length; // 7100
 the generator's private business and a consumer that hardcodes `'campaign-1'`
 is one prefix rename away from a crash at load.
 
-Loading a campaign into a graph is one loop per array, and what rides on the
-attribute bag is the consumer's decision. The stage that draws this dataset
-puts the whole node record on each node, so a size function or an overlay tier
-reads a kind without re-joining against the arrays, and puts nothing on the
-edges, because it builds its ribbons from `campaign.edges` directly and never
-asks the graph what kind an edge is:
+Loading a whole campaign into one graph is one loop per array, and what rides
+on the attribute bag is the consumer's decision. Put the node record on the
+node, as `@dagr/campaign-stage` does, and a size function or an overlay tier
+reads a kind without re-joining against the arrays:
 
 ```ts
 import { Graph } from '@dagr/graph';
@@ -51,7 +49,16 @@ for (const edge of campaign.edges) {
 
 A consumer that does want the record on both ends passes a second type
 parameter, `new Graph<{ node: CampaignNode }, { edge: CampaignEdge }>()`, and
-adds `attrs: { edge }` in the second loop.
+adds `attrs: { edge }` in the second loop. `@dagr/campaign-stage` passes only
+the first, because it tessellates its ribbons from `campaign.edges` directly
+and never asks the graph what kind an edge is.
+
+**The loop above is not what a consumer feeding LAYOUT writes**, and the
+difference is the routed and overlay split below. `@dagr/campaign-stage` cuts
+the campaign into about a hundred tiles and builds one graph per tile, adding
+an edge only when `EDGE_ROLES` calls it routed and both of its endpoints are in
+that tile. So layout sees a little over half the edges, in pieces, and the rest
+are drawn above the result.
 
 ## Exports
 
@@ -346,7 +353,8 @@ that later precisely because it is generated rather than committed.
 else. A pointcrawl drawn as an actual map is appealing and is a different
 renderer feature.
 
-**Not published, and not stable.** The package is private and the demo is its
-only consumer, so kinds and field names change when the demo learns something.
-If you want the shape rather than the package, the types file is 250 lines and
-copying it is a supported outcome.
+**Not published, and not stable.** The package is private and its only consumer
+is `@dagr/campaign-stage`, the component the demo page and the docs site both
+mount, so kinds and field names change when that stage learns something. If you
+want the shape rather than the package, the types file is 250 lines and copying
+it is a supported outcome.

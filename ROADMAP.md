@@ -4701,6 +4701,21 @@ the demo itself should show richer nodes and its zoom.
   VERIFIED BY THE BUILD: Docusaurus fails on a broken internal link, so a stale
   `./campaign.md` or `/docs/campaign` anywhere in the site is a red build rather
   than a 404 a visitor finds.
+  A MOVED PARAGRAPH CARRIES ITS OLD CONTEXT, which is what both reviews of this
+  change spent their findings on and is the lesson worth keeping. Every number
+  in the page survived the move (four independent derivations against the
+  generator now agree on the whole table), and what did not survive is the
+  prose around them: the loading example claimed the demo puts the campaign
+  record on both ends of every edge, when the stage builds
+  `Graph<{ node: CampaignNode }>` and adds no edge attrs at all; the same
+  example loops over `campaign.edges` unconditionally, when the stage feeds
+  layout one graph per TILE holding only the routed edges whose endpoints are
+  both in it, which contradicts this file's own routed and overlay split 130
+  lines down; the opening line's "zero dependencies, `@dagr/graph` included"
+  read as "ships with" three lines above a block that imports it; and "the demo
+  is its only consumer" was written before D1 made `@dagr/campaign-stage` the
+  consumer that two hosts mount. None of those was wrong on the page it came
+  from in the way it was wrong here.
   THE SIXTH LINK IS THE ONE THE BUILD CANNOT SEE, and a review caught it:
   `/docs/campaign` was live for a day and the published package README pointed
   at it, so a bookmark or an external link to it survives this change and the
