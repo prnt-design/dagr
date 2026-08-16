@@ -866,12 +866,14 @@ reference the ordering evidence is measured against.
 number only the stage can compute is a number nobody can hold the stage to.
 What it takes is a `Layering`, a graph plus the layers its nodes are drawn in,
 named for what it is rather than for this one consumer because the transpose
-pass refines one and M3.4's quality report will score one. An `OrderedState`
-satisfies it structurally, so a stage author holding one passes it straight in.
+pass refines one too. An `OrderedState` satisfies it structurally, so a stage
+author holding one passes it straight in.
 
 Layers are what an order stage returns, so scoring a run means wrapping one: a
 `LayoutResult` holds coordinates and not layers, and nothing exported today
-turns the first back into the second.
+turns the first back into the second. That is also why crossings are not part of
+[the stability report](#stability), which is a function of two results. They are
+a different axis in any case: a layout can be perfectly stable and badly drawn.
 
 ```ts
 import { barycenterOrderStage, countCrossings, layout } from '@dagr/layout';
@@ -2359,13 +2361,18 @@ been kept.
 import { createLayout, stabilityViolations } from '@dagr/layout';
 
 const engine = createLayout();
-const before = engine.run(graph);
+let previous = engine.run(graph);
 
 graph.subscribe((patch) => {
   const { result, influence } = engine.relayout(patch);
-  stabilityViolations(before, result, influence); // -> []
+  stabilityViolations(previous, result, influence); // -> []
+  previous = result;
 });
 ```
+
+`previous` moves forward with every relayout, and it has to: an influence set
+describes the one relayout it came out of, so checking a new result against the
+geometry from three patches ago asks a set about changes it never claimed.
 
 **A metric.** `measureStability(previous, next)` says how much of the drawing
 moved, which is what a full relayout has to be judged by: a run that recomputes

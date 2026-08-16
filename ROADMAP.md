@@ -2897,6 +2897,24 @@ it.
   `graph.batch`, because a batch is the boundary saying which graph states were
   meant to be drawn, and a stability number measured over the states in between
   a multi-step edit is a number about drawings nobody asked for.
+  CROSSINGS ARE NOT IN THE REPORT, AND TWO PLACES PREDICTED THEY WOULD BE
+  (`order.ts`'s module docstring and its `Layering` docstring, and the docs
+  page's crossing section). Both are corrected rather than left standing, which
+  is this run's tree-review finding. The mechanical reason is that
+  `measureStability` is a function of two `LayoutResult`s and a result holds
+  coordinates rather than layers, so there is nothing to count crossings over.
+  The real reason is that they are a DIFFERENT AXIS: a layout can be perfectly
+  stable and badly drawn, or beautifully drawn and unstable, and folding a
+  quality number into a stability report makes one bar answer two questions.
+  M2.6's corpus is where a run that draws worse is caught, and it stays there.
+  THE FALLBACK'S OWN NUMBERS, MEASURED ON THE DIAMOND PLUS ONE NODE, batched,
+  and pinned as ceilings in the suite so M3.5 has something to beat: 4 shared
+  nodes, 2 moved (50%), mean displacement 37.5 and max 75, RANK CHURN 0 AND
+  ORDER CHURN 0, against 4 shared edges of which ALL FOUR REROUTED (100%) at a
+  mean route distance of 58.3 and no bend change. That is this entry's own
+  argument arriving as a measurement rather than as a prediction: a report over
+  the nodes alone would have called this relayout perfectly stable, and every
+  line in the drawing moved.
 - [ ] **M3.5** (`@dagr/layout`) Influence regions: given a patch and the
   retained pipeline state, compute the set of nodes and edges the patch can
   affect, and confine the relayout to it. Property tests: a patch confined to

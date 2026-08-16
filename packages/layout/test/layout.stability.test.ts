@@ -547,10 +547,42 @@ describe('the stability contract, against a real relayout', () => {
 
     const report = measureStability(before, after);
 
-    // Not a threshold anybody tuned: what a full relayout produces today is
-    // whatever the pipeline produces, and the point of asserting a ceiling at
-    // all is that M3.5 through M3.9 lower it rather than raise it.
-    expectStabilityWithin(report, { maxMovedFraction: 1, maxRankChurn: 1, maxOrderChurn: 1 });
+    // What a full relayout costs on the smallest interesting graph, pinned as
+    // ceilings rather than as equalities: M3.5 through M3.9 lower these, and a
+    // task that raises one should have to say so.
+    expectStabilityWithin(report, {
+      maxMovedFraction: 0.5,
+      maxMeanDisplacement: 37.5,
+      maxMaxDisplacement: 75,
+      maxRankChurn: 0,
+      maxOrderChurn: 0,
+      maxReroutedFraction: 1,
+      maxMeanRouteDistance: 58.34,
+      maxBendChurn: 0,
+    });
     expect(report.nodes.shared).toBe(4);
+
+    // And this is the entry's own argument, measured rather than asserted:
+    // EVERY edge in the drawing re-routed while rank churn and order churn were
+    // both zero. A stability report over the nodes alone would have called this
+    // relayout perfectly stable.
+    expect(report.edges.reroutedFraction).toBe(1);
+    expect(report.nodes.rankChurn).toBe(0);
+    expect(report.nodes.orderChurn).toBe(0);
+  });
+
+  it('rejects a report that breaks a ceiling, so the helper is not a no-op', () => {
+    const graph = diamond();
+    const before = layout({ graph });
+    graph.batch(() => {
+      graph.addNode('e');
+      graph.addEdge('a', 'e', 'ae');
+    });
+    const report = measureStability(before, layout({ graph }));
+
+    expect(() => expectStabilityWithin(report, { maxMovedFraction: 0.25 })).toThrow();
+    expect(() => expectStabilityWithin(report, { maxMeanRouteDistance: 1 })).toThrow();
+    // A bound nobody named is a bound nobody checks.
+    expect(() => expectStabilityWithin(report, {})).not.toThrow();
   });
 });

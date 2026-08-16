@@ -8,9 +8,18 @@ import type { OrderStage, RankedState } from './types.js';
  *
  * The metric is {@link countCrossings} and it is exported, because a number
  * nobody outside this file can compute is a number nobody can hold this stage
- * to. M2.6 commits a regression corpus against it, M3.4 reports it as a quality
- * signal, and both need the same counter this stage optimises rather than a
- * second one that might disagree.
+ * to. M2.6 commits a regression corpus against it, and that corpus needs the
+ * same counter this stage optimises rather than a second one that might
+ * disagree.
+ *
+ * M3.4 WAS PREDICTED TO REPORT IT AND DOES NOT, which is worth recording where
+ * the prediction was made. `measureStability` is a function of two
+ * `LayoutResult`s, and a result holds coordinates rather than layers, so
+ * crossings are not in it to be counted. The deeper reason is that they are a
+ * different axis: a layout can be perfectly stable and badly drawn, or
+ * beautifully drawn and unstable, and folding a quality number into a stability
+ * report would make one bar answer two questions. Crossings stay gated by
+ * M2.6's corpus, which is where a run that draws worse is caught.
  */
 
 /** The sweep budget a stage built with no `maxSweeps` runs to. See D5 below. */
@@ -61,10 +70,10 @@ function requireRank(ranks: ReadonlyMap<NodeId, number>, id: NodeId): number {
  * bottom and each left to right.
  *
  * Named for what it is rather than for who takes it, because more than one
- * thing takes it. {@link countCrossings} scores one, M2.6's transpose pass
- * refines one, and M3.4 reports the crossings of one, and a type named after
- * the first of those would leave the others either borrowing a name that lies
- * or minting a structural twin the compiler cannot tell apart.
+ * thing takes it. {@link countCrossings} scores one and M2.6's transpose pass
+ * refines one, and a type named after the first of those would leave the second
+ * either borrowing a name that lies or minting a structural twin the compiler
+ * cannot tell apart.
  *
  * An `OrderedState` satisfies this structurally, so a caller holding one passes
  * it straight in. `ranks` is deliberately not part of it: which pairs of layers

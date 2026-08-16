@@ -20,12 +20,12 @@ export type {
   LayoutPort,
   RelayoutResult,
 } from './engine.js';
-// M3.2's observable, exported from the run it ships in for the reason it ships
-// early: M3.4's stability contract and M3.5's property tests are both written
-// against this object, and its trivial whole-roster implementation is what makes
-// them writable before either task starts. `wholeRoster` is not exported: it is
-// the implementation this milestone is going to replace, not a thing a caller
-// chooses.
+// M3.2's observable, exported from the run it shipped in for the reason it
+// shipped early: M3.4's stability contract is written against this object, as
+// M3.5's property tests will be, and its trivial whole-roster implementation is
+// what made the first of those writable before the second task starts.
+// `wholeRoster` is not exported: it is the implementation this milestone is
+// going to replace, not a thing a caller chooses.
 export type { InfluenceSet } from './influence.js';
 export { serveLayout } from './worker.js';
 // `wire.ts` is not exported, the way `traversal.ts` is not exported from

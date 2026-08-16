@@ -117,6 +117,12 @@ export interface NodeStability {
    * that share a rank in the next one: a pair whose two members ended up in
    * different rows has no order to have kept, and counting it here would report
    * one rank change twice.
+   *
+   * Adjacency is taken AFTER dropping the nodes that are not in both results, so
+   * two nodes with a removed node between them are a pair. That is the right
+   * reading: once the node between them is gone, they are neighbours, and the
+   * question this metric asks is whether the drawing kept the order it had for
+   * everything that is still in it.
    */
   readonly orderChurn: number;
 }
