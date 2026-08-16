@@ -14,8 +14,9 @@ WebGPURenderer, SDF shapes, spring physics) and a React component on top.
 
 The demo draws a mock D&D campaign: 3,010 nodes and 7,100 edges, laid out a
 tile at a time in a worker, instanced on the GPU, with names and readable cards
-appearing as you zoom in. The dataset behind it is
-[documented here](https://dagr.prnt.design/docs/campaign).
+appearing as you zoom in. The dataset behind it is a generated fixture, not a
+published package, and documents itself in
+[packages/campaign](./packages/campaign/README.md).
 
 > ⚠️ Early days. Expect rapid change until v0.1. The roadmap lives in
 > [ROADMAP.md](./ROADMAP.md).

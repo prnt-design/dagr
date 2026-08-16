@@ -4269,7 +4269,12 @@ consumer. Sequencing against M3 is the plan's open question 1.
   The docs page landed early, on 2026-08-15, as its own increment
   (`docs/docs/campaign.md`): it depends on P1 alone, and the rest of P7 depends
   on P5 and P6, so holding it back would have parked a finished page behind two
-  unrelated merges. It documents the 16 node kinds and 23 edge kinds with the
+  unrelated merges. IT WAS MOVED OUT OF THE DOCS SITE ON 2026-08-16 by D4
+  below, into `packages/campaign/README.md`, on the maintainer's reading that a
+  fixture explained beside Graph model and Renderer reads as part of the
+  library. The content survives the move and the paragraphs described here are
+  the ones it kept; what changed is where a reader finds them. It documents the
+  16 node kinds and 23 edge kinds with the
   routed/overlay split and the argument for it, where the schema came from,
   the generator's determinism and its measured scale (3,010 nodes and 7,100
   edges at the default seed, 1.1 MB of JSON against 60 KB of source), and the
@@ -4455,7 +4460,10 @@ site, the demo belongs on the docs site, on the landing page or on a demos
 tab. Planned in `plans/2026-08-15-demo-into-docs.md`, which carries the
 argument for the tab and the record these entries summarize. D2 and D3 are the
 second half of the same message, about spacing and about reading the edges,
-and are independent of D1 and of each other.
+and are independent of D1 and of each other. D4 onwards come from a second
+message on 2026-08-16, after the maintainer saw the result: the demo is good,
+the explainer that shipped beside it in the product docs is not wanted, and
+the demo itself should show richer nodes and its zoom.
 
 - [x] **D1** (`packages/campaign-stage`, `docs`, `apps/demo`, `render.yaml`)
   The campaign stage extracted to a shared package, mounted at
@@ -4663,6 +4671,36 @@ and are independent of D1 and of each other.
   at twice the extent is the gap between two tiles, so that frame is anchored on a
   node like every other one. `docs/docs/render.md` now embeds the retaken frames
   and the hover frame, and its quoted zoom floor moved from 0.053 to 0.026.
+
+- [ ] **D4** (`docs`, `packages/campaign`) The fixture out of the product docs
+  and into its own package. The maintainer's 2026-08-16 message opens with it:
+  the demo is awesome and a 361-line "Campaign dataset" page was not meant to
+  ship beside Graph model, Layout pipeline and Renderer in the docs sidebar.
+  WHAT A SIDEBAR ENTRY CLAIMS is the whole of the argument. `@dagr/campaign` is
+  a private zero-dependency fixture that nobody installs, and a page for it in
+  the product docs says the opposite: that reading it is part of learning the
+  library, and that its 16 node kinds are surface a consumer has to know. The
+  three pages beside it document packages a reader will import. So the page
+  goes and the knowledge does not: `docs/docs/campaign.md` is deleted and
+  `packages/campaign/README.md` absorbs it, which puts the schema, the
+  routed/overlay argument, the provenance, the generator's determinism and the
+  invariant table next to the code they describe. The README already linked OUT
+  to the docs page, so the link is inverted rather than dropped.
+  A FIXTURE DOCUMENTING ITSELF is the general rule this records, and it is
+  cheap to state: docs pages are for what a reader imports, package READMEs are
+  for what a contributor opens. The counts were re-derived by three reviewers at
+  P7 and are not worth losing, but they are facts about a generator, and a
+  generator's README is where a person goes for them.
+  INBOUND LINKS, all six of them: the demo page's lede now names what it draws
+  in one sentence and links the package README on GitHub rather than a docs
+  page; `docs/docs/intro.md` loses the `@dagr/campaign` row from the package
+  table, because a private fixture is not a package the table's reader can
+  install, and its live-demo paragraph carries the same one-line pointer; the
+  root `README.md` points at `packages/campaign`; and the P7 entry above records
+  the move rather than being rewritten to hide it.
+  VERIFIED BY THE BUILD: Docusaurus fails on a broken internal link, so a stale
+  `./campaign.md` or `/docs/campaign` anywhere in the site is a red build rather
+  than a 404 a visitor finds.
 
 ## Tracked, not promised
 
