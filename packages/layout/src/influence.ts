@@ -34,7 +34,11 @@ import type { LayoutResult, PreviousLayout, Size } from './types.js';
  * same type beside it, {@link influenceRegion}, which bounds the PATCH rather
  * than the run. The two converge when the stages are confined to the region,
  * which is M3.6 through M3.9, and the distance between them until then is a
- * measurement rather than a feeling.
+ * measurement rather than a feeling. M3.6 TOOK THAT MEASUREMENT TO ZERO ON THE
+ * CORPUS WITHOUT NARROWING THIS FIELD, and the split is the same one M3.5 made:
+ * a warm-started order stage happens not to leave the region, which is a
+ * measurement over thirty graphs, and a confined stage COULD NOT leave it,
+ * which is what this field would have to be narrowed against.
  *
  * SETS RATHER THAN ARRAYS, which is the opposite of what `LayoutDelta` chose and
  * for the opposite reason. A delta is a list of things that happened and every
@@ -94,7 +98,11 @@ export function wholeRoster(graph: Graph, previous: LayoutResult): InfluenceSet 
  * sweep carries it to the end of the drawing, so no finite window is a bound on
  * an UNCONFINED run. The window is a bound on what a CONFINED stage may touch,
  * which is what M3.6 to M3.9 are, and `test/layout.influence.test.ts` measures
- * what today's cold fallback does outside it at 0, 1 and 2.
+ * what a run does outside it. THE ESCAPES M3.5 MEASURED AT 0, 1 AND 2 WERE THE
+ * COLD SWEEP DOING EXACTLY THIS, and M3.6's warm start stopped it: what carried
+ * a reordering to the end of the drawing was the sweeps being free to reorder a
+ * retained rank, and they no longer are. The window itself is unchanged, since
+ * it bounds what the patch can REACH and not what a stage chooses to do there.
  */
 const DEFAULT_RANK_WINDOW = 1;
 
@@ -266,8 +274,9 @@ function requireRankWindow(rankWindow: number | undefined): number {
  * allowed to touch, computed before any of them exist so that each is written
  * against a bound rather than against its own opinion of one. The distance
  * between the two is the milestone, and it is a measurement rather than a
- * feeling: `test/layout.influence.test.ts` runs the cold fallback against this
- * region over a corpus and pins what escapes.
+ * feeling: `test/layout.influence.test.ts` runs a relayout against this region
+ * over a corpus and pins what escapes. Since M3.6 nothing does, on all four
+ * patch kinds, which closed the measurement without closing the guarantee.
  *
  * ## What widens it to everything
  *

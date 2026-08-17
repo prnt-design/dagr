@@ -284,8 +284,14 @@ export interface BarycenterOrderOptions {
   readonly maxTransposePasses?: number | undefined;
 
   /**
-   * A previous run's layers to start from. A HINT, never trusted: see the warm
-   * start section of {@link barycenterOrder}.
+   * A previous run's layers to hold to. A HINT, never trusted, and since M3.6 a
+   * CONSTRAINT rather than a starting point: see the warm start section of
+   * {@link barycenterOrder} for why seeding alone measured worse than a cold
+   * run, and {@link Cohorts} for what a hint is allowed to say.
+   *
+   * An engine fills `PreparedState.previous` in for itself and that wins over
+   * this when both are present, so this is for a caller running `layout()` who
+   * is holding a layering of their own.
    */
   readonly initialOrder?: readonly (readonly NodeId[])[] | undefined;
 }
@@ -568,6 +574,14 @@ function sideDelta(
  * anything moved would swap one pair back and forth forever. Two nodes sharing
  * a single neighbour are enough to produce it.
  *
+ * `cohortOf` is M3.6's warm-start constraint, and omitting it is the
+ * unconstrained pass every call written before M3.6 asks for. A pair whose two
+ * nodes carry the SAME non-negative entry is held in the order it is in and is
+ * skipped; -1 means free, and two different cohorts are free against each other
+ * because the hint said nothing about that pair. Skipping is what keeps this
+ * pass's own invariant true: it never raises the crossing count, and restoring
+ * a held order over its output could.
+ *
  * Exported for the test suite and NOT from `index.ts`. Two of the claims made
  * about it, that the delta is exact and that a pass never raises the crossing
  * count, are claims about the pass rather than about the stage, and the stage
@@ -592,6 +606,7 @@ export function transposeLayers(
   position: Int32Array,
   adjacency: TransposeAdjacency,
   maxPasses: number,
+  cohortOf?: Int32Array,
 ): number {
   let passes = 0;
   while (passes < maxPasses) {
@@ -601,6 +616,16 @@ export function transposeLayers(
       for (let slot = 0; slot + 1 < layer.length; slot += 1) {
         const before = at(layer, slot);
         const after = at(layer, slot + 1);
+        // A pair the warm start holds in a fixed relative order is not this
+        // pass's to reorder (M3.6). Skipping it here rather than swapping and
+        // restoring afterwards is what keeps the pass's own invariant true: it
+        // never raises the crossing count, and a restore run over its output
+        // could. Two nodes of DIFFERENT cohorts are free, because the hint says
+        // nothing about that pair, which is the same rule the sweeps run under.
+        if (cohortOf !== undefined) {
+          const cohort = at(cohortOf, before);
+          if (cohort !== -1 && cohort === at(cohortOf, after)) continue;
+        }
         // A node neither adjacent layer says anything about KEEPS ITS INDEX,
         // which is the rule `reorder` already keeps and this pass must not
         // quietly reverse. It matters here only because of the tie rule: such a
@@ -670,76 +695,123 @@ function seedWalk(index: OrderIndex): number[][] {
 }
 
 /**
- * Reorders each layer by a hint, in place, dropping everything unusable.
+ * The hint, as the constraint the sweeps and the pass are run under.
  *
- * An id's key is its index WITHIN ITS OWN HINT LAYER, first occurrence winning
- * and a repeat consuming nothing. Then each layer of the seed is reordered by
- * that key, and only the nodes the hint names move: they are collected with the
- * indices they hold, sorted, and written back into those same indices. A node
- * the hint does not name stays exactly where the walk put it, which is this
- * stage's own rule for silence stated once rather than twice: a node the fixed
- * layer has no opinion about does not move either, see {@link barycenterOrder}.
- * The alternative, keying an unnamed node after everything named, reads silence
- * as the assertion "put it last", and gets the M3.6 case it exists for exactly
- * backwards: the dominant warm start is a patch that ADDED nodes, so the hint
- * names every old node and no new one, and sweeping the new ones into a cluster
- * at one end of the layer throws away the walk that actually saw their edges.
+ * A HINT IS NOT A SEED, AND M3.6 IS WHERE THAT WAS MEASURED RATHER THAN
+ * ASSUMED. Every version of this before M3.6 applied the hint once, to the
+ * walk's permutation, and let four sweeps and sixteen transpose passes roam
+ * from there. That is not a warm start: the sweeps are exactly what wanders, so
+ * handing them a different starting point changes where they wander to and
+ * nothing else. Measured, seeding alone made stability WORSE than a cold run on
+ * every patch kind in `layout.influence.test.ts`, including the resize kind
+ * that changes no rank and no barycenter and had been perfect: a cold run of an
+ * unchanged structure reproduces itself exactly, and a run seeded from the
+ * previous OUTPUT is four sweeps away from a layering the previous run had
+ * already swept. The numbers are in {@link barycenterOrder}'s warm-start
+ * section. So the hint is carried THROUGH the run instead, and this record is
+ * what carries it.
  *
- * Keying within the hint layer rather than within the flattened hint is what
- * keeps the key about IDENTITY rather than position, which is what M3.6
- * requires of a warm start. Two ids listed in different hint layers say nothing
- * about each other, so when they land in one layer here they TIE, and the tie
- * falls through to the walk order, which means structure decides. A global
- * index would instead let a node whose rank rose carry a small key to the front
- * of its new layer and a node whose rank fell go to the back, which is the
- * `(rank, index)` coupling M3.6 names as the obvious and incorrect approach.
+ * WHAT IT CONSTRAINS is relative order within a COHORT, and nothing else. A
+ * cohort is a set of ids the hint listed in ONE layer, and it is the only thing
+ * a hint has an opinion about: two ids the previous drawing put in different
+ * layers were never side by side, so it expressed no relative order of theirs
+ * to keep. Comparing their two indices anyway is the `(rank, index)` coupling
+ * M3.6 names as the obvious and incorrect approach, arriving one step removed,
+ * since a node whose rank rose would carry a small index to the front of its
+ * new layer on the strength of a number measured in a different layer. So each
+ * cohort is permuted into THE SLOTS ITS OWN MEMBERS ALREADY HOLD, which is how
+ * a constraint on relative order is imposed without touching absolute index,
+ * and everything between cohorts is left to the sweeps.
  *
- * The tie falls through to the walk with no tiebreaking term to make it: `named`
- * is collected in slot order and `Array.prototype.sort` has been stable since
- * ES2019, so equal keys come out in the order they went in, which is the walk's.
- * A second term comparing the walk index would be that same order written twice.
+ * SO A NODE WHOSE RANK CHANGED IS A NEWCOMER AT ITS NEW RANK. Its cohort there
+ * is whatever else moved with it, usually nothing, and a cohort of one has one
+ * slot to be permuted within and therefore never moves. The sweeps place it at
+ * a barycenter-derived slot among the nodes that did keep theirs, which is
+ * M3.6's rule for it, and it needs no special case here because "a cohort is
+ * permuted within its own slots" already says it. A node the hint never named
+ * at all is free in exactly the same way.
+ *
+ * Within a cohort the ties fall through to whatever order the layer was already
+ * in, with no tiebreaking term to make it: members are collected in slot order
+ * and `Array.prototype.sort` has been stable since ES2019, so equal keys come
+ * out in the order they went in. Equal keys are impossible for two distinct
+ * members of one cohort, since a hint layer numbers its ids 0 upward, so this
+ * is a property of the sort rather than a rule anything relies on.
  *
  * An id the roster does not hold has no node to be a position for and is
- * ignored, and an id the hint puts in the wrong layer only ever contributes its
- * position among the ids of its own hint layer that landed in the same real
- * layer, because the reordering happens inside a layer built from the ranks. So
- * nothing here can produce an invalid layering, which is what makes "never
- * trusted" a property rather than a promise.
+ * ignored, a repeat consumes no index, and an id the hint puts in the wrong
+ * layer only ever meets the members of its own cohort that landed in the same
+ * real layer, because every reordering here happens inside a layer built from
+ * the ranks. So nothing a hint can say produces an invalid layering, which is
+ * what makes "never trusted" a property rather than a promise.
  */
-function applyHint(
-  layers: number[][],
-  ids: readonly NodeId[],
-  hint: readonly (readonly NodeId[])[],
-): void {
-  const hintIndex = new Map<NodeId, number>();
-  for (const layer of hint) {
+interface Cohorts {
+  /**
+   * The hint layer each node belongs to, or -1 for a node the hint never
+   * named. Two nodes with the same non-negative entry are the pair this
+   * constraint is about.
+   */
+  readonly cohortOf: Int32Array;
+  /** Where in its own hint layer a node was listed. Meaningless when free. */
+  readonly keyOf: Int32Array;
+  /** Whether the hint named anything the roster holds. */
+  readonly any: boolean;
+  /**
+   * Restores the hint's relative order within one layer, in place, and updates
+   * `position` for everything it moves.
+   */
+  readonly impose: (layer: number[], position: Int32Array) => void;
+}
+
+/** The constraint a hint imposes, or a free one when the hint says nothing. */
+function cohortsOf(ids: readonly NodeId[], hint: readonly (readonly NodeId[])[]): Cohorts {
+  const cohortOf = new Int32Array(ids.length).fill(-1);
+  const keyOf = new Int32Array(ids.length);
+  const numberOf = new Map<NodeId, number>();
+  for (const [number, id] of ids.entries()) numberOf.set(id, number);
+  let any = false;
+  for (const [layerNumber, layer] of hint.entries()) {
     let next = 0;
     for (const id of layer) {
-      if (hintIndex.has(id)) continue;
-      hintIndex.set(id, next);
+      const node = numberOf.get(id);
+      // An id the roster does not hold has no node to be a position for, and a
+      // repeat consumes no index: an id takes its FIRST position in its layer.
+      if (node === undefined || at(cohortOf, node) !== -1) continue;
+      cohortOf[node] = layerNumber;
+      keyOf[node] = next;
       next += 1;
+      any = true;
     }
   }
-  if (hintIndex.size === 0) return;
-  // Named by node number, the way the sweeps hold a barycenter, so that the
-  // comparator reads two array entries rather than two map lookups.
-  const key = new Int32Array(ids.length);
-  const named: number[] = [];
-  const slots: number[] = [];
-  for (const layer of layers) {
-    named.length = 0;
-    slots.length = 0;
+  // One entry per cohort present in the layer being imposed on, keyed by the
+  // hint layer it came from. Reused across layers rather than allocated per
+  // layer: a cohort's slots are slots of one layer, so it holds at most that
+  // layer's worth of entries at a time.
+  const cohorts = new Map<number, { readonly members: number[]; readonly slots: number[] }>();
+  const impose = (layer: number[], position: Int32Array): void => {
+    if (!any) return;
+    cohorts.clear();
     for (const [slot, node] of layer.entries()) {
-      const position = hintIndex.get(idAt(ids, node));
-      if (position === undefined) continue;
-      key[node] = position;
-      named.push(node);
-      slots.push(slot);
+      const cohort = at(cohortOf, node);
+      if (cohort === -1) continue;
+      const found = cohorts.get(cohort);
+      if (found === undefined) cohorts.set(cohort, { members: [node], slots: [slot] });
+      else {
+        found.members.push(node);
+        found.slots.push(slot);
+      }
     }
-    if (named.length < 2) continue;
-    named.sort((left, right) => at(key, left) - at(key, right));
-    for (const [rank, node] of named.entries()) layer[at(slots, rank)] = node;
-  }
+    for (const { members, slots } of cohorts.values()) {
+      if (members.length < 2) continue;
+      members.sort((left, right) => at(keyOf, left) - at(keyOf, right));
+      for (const [rank, node] of members.entries()) {
+        const slot = at(slots, rank);
+        layer[slot] = node;
+        position[node] = slot;
+      }
+    }
+  };
+  return { cohortOf, keyOf, any, impose };
 }
 
 /**
@@ -1279,20 +1351,77 @@ function applyHint(
  *
  * ## The warm start
  *
- * `initialOrder` is a previous run's layers, handed back so that a re-layout
- * does not churn an ordering the user has already read. It is a HINT and is
- * never taken on trust, exactly as `initialRanks` is a hint in `simplex.ts`:
- * see {@link applyHint} for what is dropped and why nothing it can say produces
- * an invalid layering.
+ * A previous run's layers, handed back so that a re-layout does not churn an
+ * ordering the user has already read. They arrive by one of two routes and mean
+ * the same thing on both: `PreparedState.previous.layers`, which only an engine
+ * fills in and which M3.6 made this stage read, or the `initialOrder` option,
+ * which is a caller's own. THE CHANNEL WINS WHEN BOTH ARE THERE, because
+ * `previous` is the run immediately before this one and `initialOrder` is a
+ * constant bound when the stage was built: a stage that preferred the constant
+ * would hand the same frozen permutation back on every relayout for the life of
+ * the engine, which is churn rather than stability.
+ *
+ * It is never taken on trust, exactly as `initialRanks` is a hint in
+ * `simplex.ts`: see {@link Cohorts} for what is dropped and why nothing it can
+ * say produces an invalid layering.
+ *
+ * A HINT IS NOT A SEED, AND THAT IS THE MEASUREMENT M3.6 IS BUILT ON. Every
+ * version of this before M3.6 applied the hint once, to the walk's permutation,
+ * and let the sweeps and the pass run from there. Measured on the thirty random
+ * layered graphs of `layout.influence.test.ts`, seeding alone made stability
+ * WORSE than a cold run on every patch kind: escapes from the M3.5 region went
+ * 8 to 15 on an added leaf and 0 to 11 on a resize, the kind that changes no
+ * rank and no barycenter and had been perfect. The reason is that a cold run of
+ * an unchanged structure reproduces itself exactly, and a run seeded from the
+ * previous OUTPUT is four sweeps and sixteen passes away from a layering the
+ * previous run had already swept. So the hint is carried THROUGH the run as a
+ * constraint: the sweeps re-impose it on each layer they reorder, and the
+ * transpose pass will not swap a pair it holds.
+ *
+ * WHAT IT BUYS, over the same corpus and the same four patch kinds, against
+ * M3.5's 8, 11, 15 and 0 escapes: ZERO, ZERO, ZERO AND ZERO, with zero
+ * violations in each. And the order of the caller's own nodes after one added
+ * leaf is the order the previous run drew on 30 of 30 graphs, against 17 of 30
+ * for a cold run. Both are asserted, in `layout.influence.test.ts` and
+ * `layout.warmstart.test.ts`.
+ *
+ * WHAT IT COSTS IS CROSSINGS, WHICH IS THE TENSION M3.6's ENTRY NAMES: a warm
+ * start holds pairs in an order chosen for continuity rather than for quality,
+ * so it cannot beat an unconstrained sweep. THE COMMITTED TOLERANCE IS 2% PER
+ * GRAPH over the M2.6 golden corpus and it was set by M3.6 from this
+ * measurement, warm against cold after one added leaf: 1.0012, 0.9969, 1.0053,
+ * 0.9960, 0.9981 and 1.0159 on tall-600, wide-600, dense-1200, sparse-2000,
+ * self-loops-800 and parallel-800. Three of the six are CHEAPER warm than cold,
+ * and the one entry that pays for the constraint pays 1.59%. On the thirty
+ * random layered graphs the warm run is 3.1% cheaper in aggregate, worst single
+ * graph 1.0545. `layout.warmstart.test.ts` holds the tolerance and the
+ * measurement.
+ *
+ * THE ALTERNATIVE THAT WAS MEASURED AND REJECTED is a softer constraint: let
+ * the transpose pass swap a held pair when the swap STRICTLY saves a crossing,
+ * on the argument that the pass's tie-taking is most of what wanders and a
+ * genuine crossing fix should get through. It buys about half a percentage
+ * point on the worst corpus entry, 1.0108 against 1.0159, and it costs the
+ * whole of the stability: escapes go from zero to 3, 2, 3 and 3 across the four
+ * patch kinds, the untouched-order figure falls from 30 of 30 to 25 of 30, and
+ * the resize kind stops being exact. A structure-preserving edit that moves the
+ * drawing is the thing this task exists to stop, so the hard rule ships.
+ *
+ * WHAT THE HARD RULE COSTS OVER A LONG SESSION IS NOT MEASURED HERE AND IS
+ * M3.10's. A hint naming every node in a layer freezes that layer, so an added
+ * edge whose crossing could be removed by swapping two retained nodes leaves
+ * that crossing in place, and nothing gives it back later. One patch costs at
+ * most 1.59% on this corpus; a hundred patches is a different question, and
+ * M3.10's churn sequence is the one written to ask it.
  *
  * Two of its rules are rules from the sections above rather than rules of their
- * own, and both are argued at {@link applyHint}. An id keys by its position
- * within its OWN hint layer, so two ids the hint listed in different layers tie
- * when they meet in one layer here and the walk breaks the tie, which is what
- * keeps the hint keyed by node identity rather than by the `(rank, index)`
- * position M3.6 rules out. And an id the hint does not name keeps the index the
- * walk gave it, exactly as a node the fixed layer says nothing about keeps its
- * index through a sweep.
+ * own, and both are argued at {@link Cohorts}. A cohort is the ids one hint
+ * layer named, and the hint constrains order WITHIN one, so two ids the hint
+ * listed in different layers are left to the walk, which is what keeps the hint
+ * keyed by node identity rather than by the `(rank, index)` position M3.6 rules
+ * out. And an id the hint does not name keeps the index the walk gave it,
+ * exactly as a node the fixed layer says nothing about keeps its index through
+ * a sweep.
  *
  * ## Determinism
  *
@@ -1385,7 +1514,14 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
     run(input) {
       const index = buildIndex(input);
       const layers = seedWalk(index);
-      if (hint !== undefined) applyHint(layers, index.ids, hint);
+      // THE FRESHEST LAYERING WINS, which is M3.6's precedence rule and is why
+      // the channel is read first. `previous` is the run immediately before
+      // this one; `initialOrder` is a constant bound when the stage was built,
+      // so a stage that preferred it would hand the same frozen permutation
+      // back on every relayout for the life of the engine. That is churn rather
+      // than stability, and it is the one thing the channel exists to stop.
+      const warm = input.previous?.layers ?? hint;
+      const held = cohortsOf(index.ids, warm ?? []);
 
       const count = index.ids.length;
       const position = new Int32Array(count);
@@ -1395,6 +1531,7 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
         }
       };
       reposition();
+      for (const layer of layers) held.impose(layer, position);
 
       let widest = 0;
       for (const layer of layers) widest = Math.max(widest, layer.length);
@@ -1480,16 +1617,27 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
         }
       };
 
+      // The constraint is re-imposed on a layer the moment the sweep has
+      // reordered it, rather than once over the whole layering at the end of a
+      // sweep, because the next layer's barycenters are read off THIS one:
+      // restoring afterwards would place every other layer against positions
+      // the drawing was about to leave. That ordering is what makes the newcomer
+      // rule true as stated, since the slots a cohort is permuted within are the
+      // slots the barycenter sort just chose for it.
+      const settle = (row: number[], fromAbove: boolean): void => {
+        reorder(row, fromAbove);
+        held.impose(row, position);
+      };
       const sweepDown = (): void => {
         for (let layer = 1; layer < layers.length; layer += 1) {
           const row = layers[layer];
-          if (row !== undefined) reorder(row, true);
+          if (row !== undefined) settle(row, true);
         }
       };
       const sweepUp = (): void => {
         for (let layer = layers.length - 2; layer >= 0; layer -= 1) {
           const row = layers[layer];
-          if (row !== undefined) reorder(row, false);
+          if (row !== undefined) settle(row, false);
         }
       };
 
@@ -1545,7 +1693,7 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
           for (const node of row) layer.push(node);
         }
         reposition();
-        transposeLayers(layers, position, index, passBudget);
+        transposeLayers(layers, position, index, passBudget, held.any ? held.cohortOf : undefined);
         // Scored and accepted on the same rule the sweeps run under, which is
         // the best seen and a STRICTLY lower score. The pass cannot raise the
         // count, so this never costs a crossing; what it rules out is a

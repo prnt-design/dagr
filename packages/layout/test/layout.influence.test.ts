@@ -360,14 +360,23 @@ describe('influence regions across components', () => {
 });
 
 /**
- * What the cold fallback does outside the bound, measured rather than guessed.
+ * What a relayout does outside the bound, measured rather than guessed.
  *
  * This is the distance between the two sets `RelayoutResult` carries, and it is
  * the number the rest of M3 closes: every violation here is a node or an edge
- * the region says a confined relayout may leave alone and today's full re-run
- * moved anyway. The ceilings are upper bounds in the sense M3.4's
- * `StabilityBounds` are, so a task that lowers one needs no test change and a
- * task that raises one past its ceiling stops the build.
+ * the region says a confined relayout may leave alone and the run moved anyway.
+ * The ceilings are upper bounds in the sense M3.4's `StabilityBounds` are, so a
+ * task that lowers one needs no test change and a task that raises one past its
+ * ceiling stops the build.
+ *
+ * ALL FOUR ARE ZERO SINCE M3.6, and this describe block is named for the cold
+ * fallback because that is what it measured when M3.5 wrote it. M3.5 recorded
+ * 8, 11, 15 and 0 escapes here and named the cause: every one of them was the
+ * cold barycenter sweep reordering a rank the patch never came near. M3.6's
+ * warm start is the constraint that stops exactly that, and it closed the gap
+ * outright rather than narrowing it. What is left inside the bound is still
+ * everything: the region is 48% to 86% of the roster on these graphs, so this
+ * says the run respects a wide bound and not that it is confined.
  *
  * The corpus is `randomLayered`, which is the population the crossing suites
  * already run over, at four patch kinds, all batched. It is not M3.10's
@@ -377,13 +386,13 @@ describe('influence regions across components', () => {
  */
 const CORPUS_CEILINGS: Record<PatchKind, { readonly escaped: number; readonly violations: number }> =
   {
-    'add-leaf': { escaped: 8, violations: 154 },
-    'remove-node': { escaped: 11, violations: 137 },
-    'remove-edge': { escaped: 15, violations: 119 },
-    // The one kind that is already inside its bound on every graph in the
-    // corpus, and it is the one that changes no rank and no barycenter: a
-    // wider node re-centres its own row and nothing else. M3.9's attribute
-    // fast path is written over exactly this case.
+    'add-leaf': { escaped: 0, violations: 0 },
+    'remove-node': { escaped: 0, violations: 0 },
+    'remove-edge': { escaped: 0, violations: 0 },
+    // The one kind that was inside its bound on every graph in the corpus
+    // before M3.6 as well, and it is the one that changes no rank and no
+    // barycenter: a wider node re-centres its own row and nothing else. M3.9's
+    // attribute fast path is written over exactly this case.
     resize: { escaped: 0, violations: 0 },
   };
 

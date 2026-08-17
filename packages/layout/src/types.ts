@@ -125,12 +125,19 @@ export interface PreparedState {
   /**
    * What the engine's previous run left behind, or `undefined` on a cold one.
    *
-   * The warm-start channel, added by M3.2 and read by nobody yet: no built-in
-   * stage consumes it in that task, on purpose, because a `relayout` that is
-   * correct and no faster than a cold run is what makes the delta contract and
-   * the engine lifetime testable before any incremental algorithm exists. M3.6
-   * is the first reader, seeding the order stage from `layers`, and M2.3 already
-   * shipped the other half, `networkSimplexRank({ initialRanks })`.
+   * The warm-start channel, added by M3.2 and first read by M3.6, which takes
+   * `layers` into the order stage. M2.3 had already shipped the other half,
+   * `networkSimplexRank({ initialRanks })`, and nothing reads that from here
+   * yet: M3.7 is the ranking task. Nothing reads `positions` either, which is
+   * M3.8's.
+   *
+   * READING IT IS NOT SEEDING FROM IT, which is M3.6's finding and is the thing
+   * to know before adding the second reader. The order stage holds its previous
+   * answer as a CONSTRAINT through the whole run rather than starting from it,
+   * because a stage that merely starts from it measured LESS stable than one
+   * that ignored it: the sweeps are what wander, so changing where they start
+   * changes where they wander to and nothing else. See the warm start section of
+   * `order.ts`.
    *
    * It is a field on the record every stage reads rather than an argument to
    * one of them, because warm starting is not one stage's business: ranking,

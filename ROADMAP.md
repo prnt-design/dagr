@@ -3050,7 +3050,7 @@ it.
   and deliberately unexported, and the docstring says a stage which did would
   have to declare it. Same shape as M3.4's rank-derivation dependency, and M3.8
   is where it lands.
-- [ ] **M3.6** (`@dagr/layout`) Warm-started ordering: seed the order stage
+- [x] **M3.6** (`@dagr/layout`) Warm-started ordering: seed the order stage
   from the previous layout's per-rank permutation instead of insertion order,
   so a node whose neighbourhood did not change keeps its slot. This is the
   highest-leverage stability lever in a Sugiyama pipeline: crossing reduction
@@ -3093,6 +3093,104 @@ it.
   including order warm start under rank churn and stable coordinates via a
   pinned and moveable partition. Several of M3's open decisions have published
   answers.
+  A HINT IS A CONSTRAINT AND NOT A SEED, WHICH IS THIS TASK'S WHOLE FINDING AND
+  IS THE OPPOSITE OF WHAT THIS ENTRY ASSUMED. The word "seed" above is left
+  standing because the entry was written before the measurement, and the
+  measurement is that seeding alone MADE THE DRAWING LESS STABLE THAN IGNORING
+  THE PREVIOUS RUN ALTOGETHER. `applyHint` had been applying the previous order
+  to the walk's permutation since M2.5 and letting four sweeps and sixteen
+  transpose passes run from there, so wiring `PreparedState.previous` into it
+  was a two-line change; it took escapes from M3.5's region from 8 to 15 on an
+  added leaf and FROM 0 TO 11 ON A RESIZE, the one kind that changes no rank and
+  no barycenter and was already exact. The sweeps are exactly what wanders, so
+  handing them a different starting point changes where they wander to and
+  nothing else, and a run seeded from the previous OUTPUT is a full budget away
+  from a layering the previous run had already swept. So the previous order is
+  carried THROUGH the run: each sweep re-imposes it on the layer it has just
+  reordered, and the transpose pass will not swap a pair it holds.
+  THE COHORT IS WHAT MAKES THE KEY AN IDENTITY, and it is this entry's own rule
+  arriving in the form the code needed. A cohort is the ids one previous layer
+  held, and each cohort is permuted ONLY INTO THE SLOTS ITS OWN MEMBERS ALREADY
+  HOLD, which is how a constraint on relative order is imposed without touching
+  absolute index. Two ids the previous drawing put in different layers are left
+  to the walk, because it never put them side by side and expressed no order of
+  theirs to keep; comparing their two indices anyway is the `(rank, index)`
+  coupling above, one step removed. A NODE WHOSE RANK CHANGED FALLS OUT OF THAT
+  RATHER THAN NEEDING A CASE: its cohort at the new rank is whatever moved with
+  it, usually nothing, and a cohort of one has one slot and never moves, so the
+  sweeps place it at a barycenter-derived slot among the nodes that kept theirs.
+  `applyHint` had CLAIMED the cohort rule since M2.5 and did not implement it:
+  its docstring said two ids from different hint layers "TIE", and they tied
+  only when their two indices happened to coincide. Second time this repo's
+  characteristic defect has been a comment describing a rule the code does not
+  keep.
+  THE NUMBERS. Over `test/layout.influence.test.ts`'s thirty random layered
+  graphs and its four patch kinds, escapes go from 0, 8, 11 and 15 to ZERO, with
+  zero violations in each, and those ceilings are lowered in place. The order of
+  the caller's own nodes after one added leaf is the order the previous run drew
+  on 30 OF 30 GRAPHS, against 17 of 30 cold, which is the test this entry asked
+  for and it is asserted with the cold figure as a ceiling so that the evidence
+  cannot go vacuous. Note what is NOT claimed: the untouched nodes keep their
+  ORDER and not their COORDINATES, because a row that gained a node got wider
+  and every row is centred on x = 0. That is M3.8's, and it is why the corpus
+  test asserts order and the coordinate half is measured against the region.
+  THE CROSSING TOLERANCE IS 2% PER GRAPH OVER THE M2.6 CORPUS AND M3.6 SET IT,
+  from this measurement rather than from a preference. Warm against cold after
+  one added leaf: 1.0012 tall-600, 0.9969 wide-600, 1.0053 dense-1200, 0.9960
+  sparse-2000, 0.9981 self-loops-800, 1.0159 parallel-800. THREE OF THE SIX ARE
+  CHEAPER WARM THAN COLD and the one entry that pays for the constraint pays
+  1.59%, so 2% is a ceiling with room rather than a target to spend. On the
+  thirty random graphs the warm run is 3.1% cheaper in aggregate, worst single
+  graph 1.0545. A SOFTER RULE WAS MEASURED AND REJECTED: letting the transpose
+  pass break a held pair on a STRICTLY improving swap, on the argument that the
+  pass's tie-taking is most of what churns and a genuine crossing fix should get
+  through. It buys half a percentage point on the worst entry (1.0108 against
+  1.0159) and gives back the whole of the stability, escapes going from zero to
+  3, 2, 3 and 3 and the untouched-order figure from 30 of 30 to 25 of 30. A
+  structure-preserving edit that moves the drawing is the thing this task exists
+  to stop.
+  WHAT IS LEFT UNMEASURED IS THE SESSION, AND IT IS M3.10's. A hint naming every
+  node in a layer FREEZES that layer, so an added edge whose crossing could be
+  removed by swapping two retained nodes leaves it there and nothing gives it
+  back. One patch costs at most 1.59% on this corpus. A hundred patches is a
+  different question and only a churn sequence can ask it.
+  THREE CASES IN `test/layout.order.test.ts` USED A COMPLETE HINT TO FORCE A
+  SEED and could not survive the change, which is worth recording because it is
+  a real loss of expressiveness rather than test churn. The walk CANNOT produce
+  a seed with an unanchored node between two anchored ones the sweep wants to
+  swap, searched exhaustively over every roster order and parent set at that
+  size, because the walk visits a layer left to right and pulls neighbours up in
+  that order, so the layer it builds is already in barycenter order. Two of the
+  three now hint the FIXED layer only, which leaves the swept layer free; the
+  third asserts the freezing directly. The corpus table loses its
+  roster-order-swept-eight-times column (210,611 and 9,150,607), removed rather
+  than re-measured because the configuration no longer exists, and gains an
+  assertion that a complete hint returns its own layering at corpus scale.
+  THE WORKER QUESTION, WHICH THIS TASK OWED A DECISION AND NOT AN
+  IMPLEMENTATION: THE WORKER RETAINS THE STATE AND THE PATCH CROSSES. Sending
+  the state loses on every reading. It is proportional to the DRAWING, and a
+  4k-node graph carries 233k dummies, so a one-attribute edit would post a whole
+  pipeline state across the boundary to ask for a run of the same size; it puts
+  the same state on both sides, which is two copies to disagree; and the patch
+  is already the unit this API is built on and already structured-cloneable.
+  What it costs is a SESSION on the worker side, an engine id and a run that
+  says "the graph you have, with this patch applied", plus a failure mode for a
+  worker that has lost it. That is M2.10's wire protocol reopened and it belongs
+  with M3.9, where the async path is what a frame budget is measured on. Until
+  it lands `relayoutAsync` over a worker is the unstable path and says so in its
+  own docstring, on the docs page and here.
+  WHAT M3.7 INHERITS. The constraint is keyed by node identity and reads
+  `previous.layers` only, so incremental ranking changes nothing about it: a
+  node whose rank the new ranker keeps is in the same cohort it was in, and one
+  whose rank moves is a newcomer either way. What M3.7 changes is HOW OFTEN a
+  node is a newcomer, which is the entry's own argument for building the warm
+  start against the noisy cold rank first, and it should expect the four zeros
+  above to stay zero rather than to improve. IT ALSO INHERITS A NEW REASON TO
+  CARE ABOUT THE REVERSED-EDGE SET: a flipped edge changes which layer a chain's
+  dummies sit in, every dummy is a node this constraint has never seen, and a
+  cohort that lost half its members to renamed dummies constrains half as much.
+  M3.8 inherits the coordinate half the corpus test above deliberately does not
+  assert.
 - [ ] **M3.7** (`@dagr/layout`) Incremental ranking: keep the previous ranks
   where the patch cannot have changed them, recompute the affected band, and
   fall back to a full rank when the patch changes the cycle structure (any
