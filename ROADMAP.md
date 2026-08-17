@@ -3025,6 +3025,31 @@ it.
   editing nothing would satisfy perfectly are four assertions about nothing. Same
   reason M3.4 ran its checker against a deliberately narrowed set, and that
   negative test is here too.
+  THE FIRST VERSION WALKED THE ROSTER AND THE ROSTER IS WHERE THE DUMMIES ARE,
+  which is this run's other review finding and the one that changed code rather
+  than prose. Collecting the band out of `previous.ranks` is a pass over every
+  ranked id, and a 4k-node graph whose edges span a few ranks each carries 233k
+  dummies: 87ms of a 90ms region, spent walking a quarter of a million entries to
+  collect a band of a dozen, which is a bound costing more than the thing it
+  exists to make cheap. `previous.layers` is already the members of each rank, so
+  the band is a slice of it and the roster is never walked. 87ms to 5.9ms at 4k,
+  6.8ms to 2.2ms at 1k. WHAT IS LEFT IS THE EDGE PASS, which is proportional to
+  the drawing rather than to the patch, and it is M3.9's to look at: a fast path
+  measured against a frame budget cannot afford one, and the band's own work
+  already avoids it.
+  THE TWO AXES REST ON DIFFERENT STAGES, WHICH IS THIS RUN'S OWN REVIEW FINDING
+  AND IS M3.8's TO INHERIT. The vertical rule holds for any position stage in
+  this package, because `rowCentres` is shared and `position.ts` says so:
+  swapping the position stage moves nodes sideways and never up or down. The
+  horizontal rule is `gridPositionStage`'s alone, because that stage lays each
+  row out independently and centres it on x = 0, so a rank whose membership
+  changed moves and no other rank does. BRANDES-KOEPF WOULD BREAK IT: it aligns
+  blocks that span ranks and compacts them together, so one node arriving in one
+  row can pull a block through several, which is further than any band reaches.
+  Nothing a caller can select does that today, since that stage is implemented
+  and deliberately unexported, and the docstring says a stage which did would
+  have to declare it. Same shape as M3.4's rank-derivation dependency, and M3.8
+  is where it lands.
 - [ ] **M3.6** (`@dagr/layout`) Warm-started ordering: seed the order stage
   from the previous layout's per-rank permutation instead of insertion order,
   so a node whose neighbourhood did not change keeps its slot. This is the

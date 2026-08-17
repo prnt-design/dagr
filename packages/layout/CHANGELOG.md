@@ -46,6 +46,14 @@ of doc prose.
   changed degree can reverse a different set of edges. On a DAG the reversed set
   is empty and stays empty, which is where the bound is sharp.
 
+  **It costs a slice of the rows, not a pass over the roster.** The band is read
+  out of `layers`, which is already the members of each rank, rather than out of
+  `ranks`, which is every id the pipeline has including the dummies: a 4k-node
+  graph whose edges span a few ranks each carries 233k of them, and walking them
+  to collect a band of a dozen was 87ms of a 90ms region. It is 5.9ms there now,
+  and 2.2ms on 1k nodes and 4k edges. What is left is the pass over the graph's
+  edges, which is proportional to the drawing rather than to the patch.
+
   **The gap is measured rather than assumed.** Over 30 random six-rank graphs of
   40 nodes, one batched patch each: an attribute resize left its region 0 times
   of 30, adding a leaf 8, removing a node 11, removing an edge 15. The resize is

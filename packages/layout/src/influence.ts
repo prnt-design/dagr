@@ -141,24 +141,68 @@ interface Row {
 }
 
 /**
- * The height of each row of the previous drawing, keyed by rank.
+ * The rows of the previous drawing, by rank, and how tall each one is on demand.
+ *
+ * THE ROWS ARE THE INDEX THIS WHOLE COMPUTATION TURNS ON, and it is why the band
+ * is read out of `previous.layers` rather than out of `previous.ranks`. Both
+ * answer "which nodes are at rank r", and the map answers it by being walked
+ * whole: a graph of 4k nodes whose edges span a few ranks each carries about
+ * 233k dummies, so a pass over the ranks is a pass over a quarter of a million
+ * entries to collect a band of a dozen. Measured on this run, that pass was 87ms
+ * of a 90ms region on that graph, which is a bound costing more than the thing it
+ * is supposed to make cheap. A layer is already the members of one rank, so the
+ * band is a slice, and the roster never gets walked at all.
  *
  * `tallest` is a count rather than a flag because removing one of two equally
  * tall nodes leaves the row exactly as tall as it was, and a region that
  * extended to the bottom of the drawing every time a node left a row would give
  * up the vertical half of its narrowing on the most ordinary patch there is.
+ *
+ * Heights are computed per row on request and remembered, because a patch asks
+ * about the rows it touched and there is no reason to measure the other
+ * thousand.
  */
-function rowHeights(previous: PreviousLayout): Map<number, Row> {
-  const rows = new Map<number, Row>();
-  for (const members of previous.layers) {
-    const first = members[0];
-    if (first === undefined) continue;
-    const rank = previous.ranks.get(first);
-    if (rank === undefined) continue;
+class Rows {
+  readonly #previous: PreviousLayout;
+  /** Layer index by rank, which is the lookup `previous` does not carry. */
+  readonly #index = new Map<number, number>();
+  /** The ranks the previous drawing had, in the order the layers ran. */
+  readonly #ranks: number[] = [];
+  readonly #heights = new Map<number, Row>();
+
+  constructor(previous: PreviousLayout) {
+    this.#previous = previous;
+    for (const [index, members] of previous.layers.entries()) {
+      const first = members[0];
+      if (first === undefined) continue;
+      const rank = previous.ranks.get(first);
+      if (rank === undefined) continue;
+      this.#index.set(rank, index);
+      this.#ranks.push(rank);
+    }
+  }
+
+  /** Every rank the previous drawing had, in increasing order. */
+  ranks(): readonly number[] {
+    return this.#ranks;
+  }
+
+  /** The members of one row, dummies included, or nothing if there was no row. */
+  members(rank: number): readonly NodeId[] | undefined {
+    const index = this.#index.get(rank);
+    return index === undefined ? undefined : this.#previous.layers[index];
+  }
+
+  /** How tall one row was, and how many of its nodes were that tall. */
+  height(rank: number): Row | undefined {
+    const known = this.#heights.get(rank);
+    if (known !== undefined) return known;
+    const members = this.members(rank);
+    if (members === undefined) return undefined;
     let height = 0;
     let tallest = 0;
     for (const id of members) {
-      const size = previous.sizes.get(id);
+      const size = this.#previous.sizes.get(id);
       if (size === undefined) continue;
       if (size.height > height) {
         height = size.height;
@@ -167,9 +211,10 @@ function rowHeights(previous: PreviousLayout): Map<number, Row> {
         tallest += 1;
       }
     }
-    rows.set(rank, { height, tallest });
+    const row = { height, tallest };
+    this.#heights.set(rank, row);
+    return row;
   }
-  return rows;
 }
 
 /**
@@ -181,7 +226,7 @@ function rowHeights(previous: PreviousLayout): Map<number, Row> {
  *
  * @throws {InvalidConfigError} naming `rankWindow` with `subject: 'option'`.
  */
-export function requireRankWindow(rankWindow: number | undefined): number {
+function requireRankWindow(rankWindow: number | undefined): number {
   if (rankWindow === undefined) return DEFAULT_RANK_WINDOW;
   if (!Number.isInteger(rankWindow) || rankWindow < 0) {
     throw new InvalidConfigError('rankWindow', rankWindow, 'option');
@@ -245,6 +290,39 @@ export function requireRankWindow(rankWindow: number | undefined): number {
  * ranks the patch cannot otherwise touch, and it is why {@link
  * InfluenceRegionInput.sizes} is an input.
  *
+ * ## What it assumes about the stages, which is not the same in both axes
+ *
+ * THE VERTICAL RULE HOLDS FOR ANY POSITION STAGE IN THIS PACKAGE. Rows stack
+ * from `y = 0`, a row is as tall as its tallest node, and rows are `rankSep`
+ * apart, which is `rowCentres` in `position.ts` and is shared rather than
+ * `gridPositionStage`'s alone: swapping the position stage moves nodes sideways
+ * and never up or down, which that module says where the arithmetic lives.
+ *
+ * THE HORIZONTAL RULE IS `gridPositionStage`'s. It holds because that stage lays
+ * each row out independently and centres it on `x = 0`, so a change to which
+ * nodes are in a rank moves that rank and no other. A stage that couples `x`
+ * ACROSS ranks does not respect that: Brandes-Koepf aligns blocks that span
+ * ranks and compacts them together, so one node arriving in one row can pull a
+ * block through several, which is further than any band. That stage is
+ * implemented here and deliberately not exported, so nothing a caller can
+ * select breaks this today, and it is a thing such a stage would have to
+ * declare rather than a thing this module can check. It is the same shape of
+ * dependency M3.4 recorded for its rank derivation, and M3.8 is the task that
+ * owns it.
+ *
+ * ## What it costs
+ *
+ * One pass over the ranks of the drawing, one over the members of the rows
+ * inside the band, and one over the graph's edges. NOT a pass over the roster,
+ * which is the thing worth stating because the roster is where the dummies are:
+ * see {@link Rows}. Measured on this run, a batched add-leaf patch cost 2.2ms on
+ * a graph of 1k nodes and 4k edges carrying 17k dummies, and 5.9ms on 4k nodes
+ * and 16k edges carrying 233k dummies, which is the edge pass rather than the
+ * dummies. THAT PASS IS WHAT M3.9 WILL HAVE TO LOOK AT: its budget is one frame
+ * on the 10k corpus, and an edge pass is proportional to the drawing where a
+ * fast path is supposed to be proportional to the patch. The band's own work
+ * already is.
+ *
  * ## What it names
  *
  * Ids a caller can see, on BOTH sides of the patch: dummy chain nodes are
@@ -261,7 +339,7 @@ export function requireRankWindow(rankWindow: number | undefined): number {
 export function influenceRegion(input: InfluenceRegionInput): InfluenceSet {
   const { graph, patch, previous, sizes } = input;
   const window = requireRankWindow(input.rankWindow);
-  const rows = rowHeights(previous);
+  const rows = new Rows(previous);
 
   /**
    * Whether the previous run had a cycle to break, which is what makes an edge
@@ -320,7 +398,7 @@ export function influenceRegion(input: InfluenceRegionInput): InfluenceSet {
   /** Whether the row at `rank` can end up a different height than it was. */
   const rowChanges = (rank: number | undefined, arriving?: Size, leaving?: Size): boolean => {
     if (rank === undefined) return true;
-    const row = rows.get(rank);
+    const row = rows.height(rank);
     // A rank the previous drawing had no row for is a row this patch creates,
     // and a new row pushes everything under it down by its whole height.
     if (row === undefined) return true;
@@ -451,9 +529,15 @@ export function influenceRegion(input: InfluenceRegionInput): InfluenceSet {
   const deepest = bottom + window;
 
   const nodes = new Set<NodeId>(seedNodes);
-  for (const [id, rank] of previous.ranks) {
-    if (previous.virtualNodes.has(id)) continue;
-    if (rank >= lowest && rank <= deepest) nodes.add(id);
+  // A slice of the rows rather than a pass over the roster: see {@link Rows}.
+  // The rank list is short (one entry per row of the drawing) and only the rows
+  // inside the band are descended into, so the dummies of a rank nothing
+  // touched are never looked at.
+  for (const rank of rows.ranks()) {
+    if (rank < lowest || rank > deepest) continue;
+    for (const id of rows.members(rank) ?? []) {
+      if (!previous.virtualNodes.has(id)) nodes.add(id);
+    }
   }
   // A node the previous run never ranked arrived with this patch or one the
   // engine has not laid out yet, and either way its coordinates are new.

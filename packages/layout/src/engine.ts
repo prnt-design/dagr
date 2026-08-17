@@ -620,7 +620,8 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
   };
 
   /**
-   * The three fields a relayout answers with, from the run it just did.
+   * The four fields a relayout answers with, from the run it just did, given
+   * the region computed before it.
    *
    * The reported geometry is the previous reported geometry with this delta
    * applied, which at `epsilon` 0 is the new result itself: nothing was withheld,

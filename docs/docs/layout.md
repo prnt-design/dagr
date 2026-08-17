@@ -1875,7 +1875,7 @@ At the default of 0 nothing is ever withheld, and `result` is the pipeline's own
 answer.
 
 An engine with a worker bound has `relayoutAsync`, which is the same call and
-answers with the same three fields; see
+answers with the same four fields; see
 [Relayout in a worker](#relayout-in-a-worker).
 
 ### Ending an engine
@@ -2073,7 +2073,7 @@ give up needs to race the promise themselves.
 ### Relayout in a worker
 
 `engine.relayoutAsync(patch)` is the same call for an engine with a port bound,
-and it answers with the same three fields. The delta is computed on the calling
+and it answers with the same four fields. The delta is computed on the calling
 thread whatever the worker did, because the geometry the engine last reported is
 this side's bookkeeping rather than the pipeline's, so nothing about the
 [wire protocol](#what-crosses-and-what-does-not) changes: what crosses is a run,
