@@ -1830,11 +1830,11 @@ incremental algorithm exists, and it gives the stages that become incremental
 later a correct baseline to be measured against rather than nothing. Today the
 patch is read for exactly one thing, which is checking that it happened.
 
-Three fields come back. `delta` is a [`LayoutDelta`](#deltas) against the
+Four fields come back. `delta` is a [`LayoutDelta`](#deltas) against the
 geometry the engine last reported. `result` is that geometry with the delta
 applied, so a consumer that reads it and a consumer that accumulates deltas are
-never holding different drawings. `influence` is the set of node and edge ids
-this relayout was entitled to move:
+never holding different drawings. `influence` and `region` are both sets of node
+and edge ids:
 
 ```ts
 interface InfluenceSet {
@@ -1843,15 +1843,20 @@ interface InfluenceSet {
 }
 ```
 
-Today it names the whole roster, which makes the claim true and useless, and
-that is deliberate: it is the observable [the stability
-contract](#stability) and the influence-region work are both written against, so
-it shipped before either of them and narrows without anything a caller reads
-changing shape. It names only
-ids you can see, never a dummy the router invented, and it spans **both sides**
-of the patch, so the id of a node you removed is in it. Sets rather than arrays,
-which is the opposite of what a delta chose and for the opposite reason: a delta
-is a list you iterate, and this is a predicate you ask.
+`influence` is what this relayout **was entitled to move**, and today it names
+the whole roster, which makes the claim true and useless. That is deliberate and
+it is still the honest answer: the whole pipeline ran, and a cold crossing sweep
+is entitled to reorder a rank the patch never came near. `region` is the other
+statement, added later: what the **patch** can affect, computed from the patch
+and the state of the previous run before this one starts. See [Influence
+regions](#influence-regions) for how it is bounded and for what the full re-run
+does outside it today.
+
+Both name only ids you can see, never a dummy the router invented, and both span
+**both sides** of the patch, so the id of a node you removed is in them. Sets
+rather than arrays, which is the opposite of what a delta chose and for the
+opposite reason: a delta is a list you iterate, and these are predicates you
+ask.
 
 ### The tolerance, on the engine
 
@@ -2467,10 +2472,96 @@ common patch a pattern generator emits.
 
 So the claim is the achievable one. A node outside the influence set keeps its
 coordinate exactly, where the influence set includes whatever an insertion
-widened. Today that set is [the whole roster](#relayout), which makes the
-contract true and useless on purpose: it is the observable M3.5 narrows, and the
-assertion is written against it now so that narrowing it is a change to one
-implementation rather than the arrival of a new idea.
+widened. Today `influence` is [the whole roster](#relayout), which makes the
+contract true and useless on purpose. It is not useless against the other set:
+`stabilityViolations(previous, result, region)` is exactly the list of nodes and
+edges the full re-run moved outside the bound the patch actually implies, which
+is the number [the next section](#influence-regions) reports and the rest of the
+incremental work drives to zero.
+
+## Influence regions
+
+`region` on a `RelayoutResult` is the set of nodes and edges the patch can
+affect. `influenceRegion` computes it, and the engine calls it for you:
+
+```ts
+import { influenceRegion, stabilityViolations } from '@dagr/layout';
+
+const { result, delta, region } = engine.relayout(patch);
+region.nodes.has('n42'); // could this node have moved?
+```
+
+It is a **band of ranks** around what the patch touched, and the band is the
+whole idea. Influence travels three ways in a layered pipeline and only one of
+them follows edges:
+
+- **Down through successors.** Ranking is a longest-path sweep, so one added
+  edge can push a node and every descendant it has.
+- **Up through predecessors.** Crossing reduction sweeps in both directions, so
+  a change below reaches the rank above.
+- **Sideways within a rank.** Ordering and coordinate assignment are per rank. A
+  node arriving in a row changes the barycenters, the order and the coordinates
+  of the nodes already there, **and those nodes need not be connected to the
+  patch at all**.
+
+That third direction is why the region is not "the nodes reachable from the
+patch", and why it is not scoped to a connected component either. Insert a node
+into a two-component drawing and the node in the other component that shares its
+rank moves, because the row it is drawn in got wider. A band of ranks cuts along
+the grain of the algorithm; `k` hops from the patch cuts across it unevenly.
+
+### What widens a region to the whole drawing
+
+Three things, and each of them is a case where a band would not be a bound:
+
+- **An added edge that does not already run downhill.** If the target sits below
+  the source, the constraint the edge adds is one the ranking already satisfies
+  and nothing moves. Otherwise the target is pushed down and takes its
+  descendants with it.
+- **A removal that frees its target to rise.** A longest-path rank is the
+  deepest predecessor plus one, so removing that predecessor lets the target
+  rise, possibly to the top. Any other predecessor one rank above pins it and
+  the region stays narrow.
+- **A row that changes height.** Rows stack from `y = 0` and a row is as tall as
+  its tallest node, so a taller node arriving, or the only tallest one leaving,
+  moves every row underneath. This is why `influenceRegion` takes the resolved
+  sizes: without them it could only ever answer about `x`.
+
+A graph the ranker had to break a cycle in widens on **any** edge the patch
+adds or removes. The feedback arc set is order dependent, so one edge can change
+a node's degree, change the whole sequence, and reverse a different set of edges
+for a graph whose cycle structure did not change. On a DAG the reversed set is
+empty and stays empty, which is where the region is sharp.
+
+`rankWindow` is how many ranks past the touched band to take, and it defaults to
+1: the ordering sweep re-barycenters the rank above and the rank below whatever
+changed, so those are where a reordering starts. Over the corpus below, widening
+it to 0, 1 and 2 ranks leaves the region on 43, 34 and 16 of 120 runs, for a
+region covering 47%, 66% and 82% of the drawing. There is no knee in that trade,
+and the absence is the point: a window is a margin against the sweep, not a fix
+for it.
+
+### What the full re-run does outside it
+
+Today nothing confines the relayout to its region, so the two sets on a
+`RelayoutResult` disagree, and the size of the disagreement is measured rather
+than assumed. Over a corpus of 30 random six-rank graphs of 40 nodes, one
+batched patch each, comparing the drawing before with the drawing after:
+
+| Patch            | Runs that left the region | Nodes and edges outside it | Region size |
+| ---------------- | ------------------------- | -------------------------- | ----------- |
+| Attribute resize | 0 of 30                   | 0                          | 48%         |
+| Add a leaf       | 8 of 30                   | 154                        | 57%         |
+| Remove a node    | 11 of 30                  | 137                        | 86%         |
+| Remove an edge   | 15 of 30                  | 119                        | 74%         |
+
+The one kind that never leaves its region is the one that changes no rank and no
+barycenter: a node that got wider re-centres its own row and nothing else. Every
+other row of that table is the cold crossing sweep, which is free to reorder any
+rank it likes: removing one edge from a 40-node drawing can reorder the top rank
+and move a node six hundred units sideways. That is the number the incremental
+ordering work exists to bring down, and it is pinned as a ceiling in
+`test/layout.influence.test.ts` so that it can only get better quietly.
 
 ## Overlap, exactly
 

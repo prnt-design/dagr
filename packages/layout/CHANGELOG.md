@@ -14,6 +14,44 @@ of doc prose.
 
 ### Added
 
+- `influenceRegion({ graph, patch, previous, sizes, rankWindow })`, the bound on
+  what a patch can affect, and a fourth field on `RelayoutResult` carrying it:
+  `region`, beside the `influence` set it does not replace. (M3.5)
+
+  **It is a band of ranks, not the nodes the patch names.** Influence travels
+  three ways in this pipeline and only one of them follows edges: down through
+  successors, because ranking is a longest-path sweep; up through predecessors,
+  because the crossing sweep runs both directions; and SIDEWAYS WITHIN A RANK,
+  because ordering and coordinate assignment are per rank. The third is the one
+  that decides the shape: a node in a completely separate component that happens
+  to share a rank with an insertion moves, so a region built from reachability,
+  or scoped to a connected component, is not a bound at all. The suite shows that
+  node moving rather than arguing it.
+
+  **Two sets rather than one, because they are two statements.** `influence` is
+  what the run that just happened was ENTITLED to move, and while `relayout`
+  re-runs the whole pipeline that is the whole roster and narrowing it would be a
+  promise the pipeline does not keep. `region` is what the PATCH can affect,
+  computed before the run from the retained pipeline state. They converge when
+  the stages are confined to the region, which is M3.6 onwards, and until then
+  `stabilityViolations(previous, result, region)` is exactly the distance
+  between them.
+
+  **What widens a region to everything**: an added edge that does not already run
+  downhill, since the target and its descendants get pushed down; a removal that
+  frees its target to rise, unless another predecessor one rank above pins it;
+  and a row that changes height, since rows stack from `y = 0` and a taller row
+  moves every row under it. On a graph the ranker had to break a cycle in, any
+  edge op widens it, because a greedy feedback arc set is order dependent and one
+  changed degree can reverse a different set of edges. On a DAG the reversed set
+  is empty and stays empty, which is where the bound is sharp.
+
+  **The gap is measured rather than assumed.** Over 30 random six-rank graphs of
+  40 nodes, one batched patch each: an attribute resize left its region 0 times
+  of 30, adding a leaf 8, removing a node 11, removing an edge 15. The resize is
+  the one kind that changes no rank and no barycenter. The rest is the cold
+  crossing sweep, which is free to reorder any rank it likes.
+
 - `stabilityViolations(previous, next, influence)` and
   `measureStability(previous, next)`, which are what stable MEANS here, written
   down before any stage tries to be it. No coordinate moved and no algorithm
