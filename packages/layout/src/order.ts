@@ -345,6 +345,8 @@ function resolveTransposeBudget(maxTransposePasses: number | undefined): number 
 interface OrderIndex {
   /** Node number to id, in roster order: graph nodes, then virtual ids. */
   readonly ids: readonly NodeId[];
+  /** The same map the other way, which the warm-start constraint reads. */
+  readonly numberOf: ReadonlyMap<NodeId, number>;
   /** Node number to layer index, layers being the distinct ranks sorted. */
   readonly layerOf: Int32Array;
   readonly layerCount: number;
@@ -477,6 +479,7 @@ function buildIndex(input: RankedState): OrderIndex {
 
   return {
     ids,
+    numberOf,
     layerOf,
     layerCount,
     outStart: out.start,
@@ -763,12 +766,21 @@ interface Cohorts {
   readonly impose: (layer: number[], position: Int32Array) => void;
 }
 
-/** The constraint a hint imposes, or a free one when the hint says nothing. */
-function cohortsOf(ids: readonly NodeId[], hint: readonly (readonly NodeId[])[]): Cohorts {
+/**
+ * The constraint a hint imposes, or a free one when the hint says nothing.
+ *
+ * `numberOf` is the index's own map rather than one built here, which matters
+ * because this runs on every run including the cold ones: rebuilding it would
+ * be a second walk over 184,222 ids on the 10k corpus to answer a question the
+ * index has already answered.
+ */
+function cohortsOf(
+  ids: readonly NodeId[],
+  numberOf: ReadonlyMap<NodeId, number>,
+  hint: readonly (readonly NodeId[])[],
+): Cohorts {
   const cohortOf = new Int32Array(ids.length).fill(-1);
   const keyOf = new Int32Array(ids.length);
-  const numberOf = new Map<NodeId, number>();
-  for (const [number, id] of ids.entries()) numberOf.set(id, number);
   let any = false;
   for (const [layerNumber, layer] of hint.entries()) {
     let next = 0;
@@ -822,7 +834,7 @@ function cohortsOf(ids: readonly NodeId[], hint: readonly (readonly NodeId[])[])
  * `defaultStages.order` points at, so a run that names no order stage gets it;
  * what that costs and what it buys is the last section here.
  *
- * ## The seed, which is the part M3.6 warm starts from
+ * ## The seed, which is where a cold run starts and a warm one is held over
  *
  * Barycenter sweeps are sensitive to where they start, so the starting
  * permutation is a decision rather than an implementation detail, and it is
@@ -1521,7 +1533,7 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
       // back on every relayout for the life of the engine. That is churn rather
       // than stability, and it is the one thing the channel exists to stop.
       const warm = input.previous?.layers ?? hint;
-      const held = cohortsOf(index.ids, warm ?? []);
+      const held = cohortsOf(index.ids, index.numberOf, warm ?? []);
 
       const count = index.ids.length;
       const position = new Int32Array(count);

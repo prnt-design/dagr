@@ -108,8 +108,10 @@ offer, and `engine.run` deliberately does not either, because the graph it is
 handed need not be the one the last run saw. It is on the record every stage
 reads rather than passed to one of them, because ranking, ordering and
 positioning each have a previous answer to start from and a channel per stage
-would be three contracts to keep in step. No built-in stage reads it yet, which
-is what "a relayout that is correct and no faster than a cold run" means.
+would be three contracts to keep in step. The order stage reads `layers`; the
+rankers and the position stages do not read theirs yet, so a relayout is still
+correct and no faster than a cold run. What the one reader buys is a stable
+answer rather than a cheaper one: see [the warm start](#the-warm-start).
 
 Its own `previous` is subtracted for a reason worth knowing if you write a stage
 that reads it: the field is on the record, so the runner carries it forward and
@@ -1061,22 +1063,23 @@ on both corpora and at both budgets.
 `initialOrder` is a previous run's layers, handed back so a re-layout does not
 churn an ordering somebody has already read. It is a hint and never a
 permutation taken on trust, exactly as `initialRanks` is on the simplex ranker.
-Each id takes its index **within its own hint layer**, and each layer of the
-seed is reordered by reading the nodes the hint names out of the indices they
-hold, sorting those by that index, and writing them back into the same indices.
-So a node the hint does not name keeps the index the walk gave it, which is the
-same rule the sweeps follow for a node the fixed layer says nothing about, and
-two ids the hint listed in different layers tie when they meet in one layer
-here, with the tie falling through to the walk. An id the roster does not hold
-is ignored, an id the hint puts in the wrong layer only ever contributes its
-position among the ids of its own hint layer that landed in the same real layer,
-and a hint that mentions nothing leaves the seed exactly as the walk computed
-it. Nothing it can say produces an invalid layering.
+It is also a **constraint carried through the run** rather than a starting
+point, and the whole of that argument, with the measurements that chose it, is
+[the warm start](#the-warm-start). Each id takes its index within its own hint
+layer, first occurrence winning, and each cohort (the ids one hint layer named)
+is permuted only into the slots its own members already hold. So a node the hint
+does not name keeps the index the walk gave it, which is the same rule the
+sweeps follow for a node the fixed layer says nothing about, and two ids the
+hint listed in different layers are left to the walk and the sweeps whatever
+their two indices are. An id the roster does not hold is ignored, an id the hint
+puts in the wrong layer only ever meets the members of its own cohort that
+landed in the same real layer, and a hint that mentions nothing leaves the seed
+exactly as the walk computed it. Nothing it can say produces an invalid
+layering.
 
-Keying within the hint layer is also what M3.6 needs of a warm start: the key is
-node identity and never `(rank, index)` position, so a node whose rank changed
-arrives at its new layer as a newcomer rather than carrying a stale slot to the
-front or the back of it.
+Keying by cohort is what makes the key node identity rather than `(rank, index)`
+position, so a node whose rank changed arrives at its new layer as a newcomer
+rather than carrying a stale slot to the front or the back of it.
 
 The stage is deterministic in the same way the rankers are: same graph, same
 layers, always. Every tie in the walk is edge insertion order, and every tie in
@@ -1889,8 +1892,20 @@ tests hold it to landing the same geometry a cold run of the same graph does.
 That is the point of shipping it in this shape first: it makes the delta
 contract, the engine lifetime and the retained state testable before any
 incremental algorithm exists, and it gives the stages that become incremental
-later a correct baseline to be measured against rather than nothing. Today the
-patch is read for exactly one thing, which is checking that it happened.
+later a correct baseline to be measured against rather than nothing. The patch
+is read for two things: checking that it happened, and computing the
+[region](#influence-regions) it can affect.
+
+**It is more stable than a cold run, which is a different claim.** Since M3.6
+the order stage holds the previous run's per-rank order, so a relayout costs
+what a cold run costs and lands somewhere a cold run would not: the nodes the
+patch did not reach keep their left-to-right order rather than being reshuffled
+by a crossing sweep that is free to start anywhere. On the corpus that is 30 of
+30 graphs against 17 of 30 cold, and it is what took the
+[region table](#what-a-relayout-does-outside-it) to four zeros. See
+[the warm start](#the-warm-start) for what it costs in crossings.
+`relayoutAsync` over a worker does NOT get it, because the state it reads stays
+in the worker.
 
 Four fields come back. `delta` is a [`LayoutDelta`](#deltas) against the
 geometry the engine last reported. `result` is that geometry with the delta
@@ -2879,7 +2894,7 @@ without being selectable at all, `brandes-koepf-position`, for the reason below.
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
 | rank | `longest-path-rank` | Breaks cycles with a least-squares feedback arc set, ranks by longest path, then splits every long edge into a [dummy chain](#dummy-chains). Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height, and since M2.4c it splits through the same shared splitter. | Nothing outstanding. |
-| order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass, over every segment of the drawing including the pieces of a split long edge. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). Its two budgets were re-derived in M2.6c and are now 4 sweeps and a cap of 16, and its transpose tie rule was re-derived in M2.6d and kept. | Nothing outstanding. |
+| order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass, over every segment of the drawing including the pieces of a split long edge. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). Its two budgets were re-derived in M2.6c and are now 4 sweeps and a cap of 16, and its transpose tie rule was re-derived in M2.6d and kept. Since M3.6 it also holds the previous run's order through a relayout, which is [the warm start](#the-warm-start). | Nothing outstanding. |
 | position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. `brandes-koepf-position` is a real algorithm that is implemented but not exported, for the reason below this table. | A compaction that is not the longest-path substitute, which is what now blocks Brandes-Koepf, and then a decision about the default. M2.9 added the first evidence on graphs that are not generated, and it points the other way from the bench corpora. |
 | route | `polyline-route` | A polyline out of the source box's border, through the centre of each of the edge's dummies, and into the target box's border, which is two points for an edge with no chain. Monotone in the rank axis. Real, and described in [Routing](#routing-and-where-a-route-attaches). It took the default from `straight-route` in M2.8, which also deleted that placeholder. | `edgeSep`, which would fan out parallel edges and give a self loop a shape, then obstacle detours and splines. |
 

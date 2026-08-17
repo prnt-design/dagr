@@ -2287,6 +2287,13 @@ only then do M3.5 through M3.9 make stages incremental, each judged against a
 baseline that already exists. The alternative (write the incremental stage
 first, then work out how to tell whether it is right) is how layout libraries
 end up with stability as a claim rather than a test.
+THE PRINCIPLE PAID FOR ITSELF AT M3.6 AND IT IS WORTH RECORDING WHERE IT IS
+STATED. The obvious implementation of that task, wiring the previous layers into
+the seed, is two lines and it made the drawing LESS STABLE than ignoring the
+previous run altogether. Nothing about the code says so; the only thing that
+said so was M3.4's contract and M3.5's corpus, both of which existed before the
+change did and both of which failed the moment it landed. A milestone that had
+built the incremental stage first would have shipped that version.
 
 M3.1, M3.2 and M3.3 need only what M2.1 already shipped. M3.4 onwards want the
 M2 pipeline to be real (M2.7 positions, M2.8 routes), because a stability metric
@@ -3330,6 +3337,24 @@ it.
   safe once M3.5's influence regions say what it is allowed to skip, and only
   demonstrable once M3.4's metrics can show it skipped work rather than
   correctness.
+  THIS TASK ALSO OWNS THE WORKER SESSION, HANDED TO IT BY M3.6, and it is here
+  rather than in its own entry because a frame budget on the 10k corpus is
+  exactly the case that wants a worker. M3.6 decided the direction: THE WORKER
+  RETAINS THE PIPELINE STATE AND THE PATCH CROSSES, because the state is
+  proportional to the drawing (233k dummies on a 4k-node graph) and the patch is
+  proportional to the edit. What is unbuilt is the protocol. Today `encodeRun`
+  posts the whole graph per run and the worker holds nothing between runs, so
+  this needs a session on that side: an engine id, a run that means "the graph
+  you have, with this patch applied", and an answer for a worker that has lost
+  it. Until it lands, `relayoutAsync` over a worker is cold, which since M3.6
+  means it is the UNSTABLE path and not merely the uncached one, and all three
+  of its docstring, the docs page and M3.6's entry say so. Note the interaction
+  with the fast paths above: an attribute patch that changes no geometry should
+  not cross a boundary at all, so the cheapest half of this is deciding what
+  never leaves the calling thread.
+  M3.5's REMAINING COST IS ALSO M3.9's: the region's edge pass is proportional
+  to the drawing rather than to the patch, 2.2ms on 1k nodes and 5.9ms on 4k,
+  and a frame is the budget that makes that worth looking at.
 - [ ] **M3.10** (`@dagr/layout`, `docs`) Stability golden corpus: scripted
   mutation sequences (grow, prune, reparent, rewire, sustained churn) run
   through the engine with their stability metrics committed as golden files, so
@@ -3350,6 +3375,21 @@ it.
   map sizes return to baseline after a balanced add and remove cycle, which is
   the cheap place to catch the M3.2 state leak, and the only place: it is
   invisible to every stability metric here.
+  THE ONE QUESTION M3.6 COULD NOT ANSWER AND HANDED HERE: WHAT THE WARM START
+  COSTS OVER A SESSION. Its constraint is absolute, so a hint naming every node
+  in a layer FREEZES that layer, and an added edge whose crossing could be
+  removed by swapping two retained nodes leaves that crossing there with nothing
+  to give it back. Measured over ONE patch it costs at most 1.59% on the M2.6
+  corpus, and three of the six entries came out cheaper warm than cold. Over a
+  hundred patches it is a different question and only a sequence can ask it, so
+  the three-configuration curve above is not an artefact this task happens to
+  produce: it is the measurement that says whether M3.6's rule should soften.
+  M3.6 already measured the softer rule it would soften TO, letting the
+  transpose pass break a held pair on a strictly improving swap, and rejected it
+  on one-patch evidence (half a point of crossings for escapes going from zero
+  to 3, 2, 3 and 3). A session that showed quality bleeding away is the evidence
+  that reopens it. The comparison to make is then the SAME sequence under both
+  rules, and not warm against cold, which M3.6 already answered.
 
 ## M4: Renderer (`@dagr/render`)
 
