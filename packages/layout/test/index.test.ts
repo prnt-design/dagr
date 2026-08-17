@@ -220,6 +220,7 @@ describe('@dagr/layout public surface', () => {
       'createLayout',
       'defaultStages',
       'diffLayout',
+      'influenceRegion',
       'isEmptyDelta',
       'layout',
       'longestPathRankStage',

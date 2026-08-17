@@ -26,7 +26,15 @@ export type {
 // what made the first of those writable before the second task starts.
 // `wholeRoster` is not exported: it is the implementation this milestone is
 // going to replace, not a thing a caller chooses.
-export type { InfluenceSet } from './influence.js';
+// M3.5's computed one ships beside it. `influenceRegion` is exported and
+// `wholeRoster` still is not, and the difference is what each one is: the
+// region is a bound a caller can compute, assert against and narrow with an
+// option, while the whole roster is the answer this milestone exists to stop
+// giving. `requireRankWindow` is not exported either, for the reason
+// `requireEpsilon` is not: it is how this package checks an option, not a
+// question a caller has.
+export { influenceRegion } from './influence.js';
+export type { InfluenceRegionInput, InfluenceSet } from './influence.js';
 export { serveLayout } from './worker.js';
 // `wire.ts` is not exported, the way `traversal.ts` is not exported from
 // `@dagr/graph`: the message shapes are an agreement between `createLayout` and

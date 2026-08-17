@@ -9,14 +9,16 @@ import { applyDelta, diffLayout, requireEpsilon } from './delta.js';
 import type { LayoutDelta } from './delta.js';
 import { DagrLayoutError, EngineStateError, WorkerTransportError } from './errors.js';
 import type { InfluenceSet } from './influence.js';
-import { wholeRoster } from './influence.js';
+import { influenceRegion, wholeRoster } from './influence.js';
 import { prepare, runPipeline } from './pipeline.js';
 import type {
   LayoutConfig,
   LayoutResult,
   LayoutStageOverrides,
+  PreparedState,
   PreviousLayout,
   RoutedState,
+  Size,
 } from './types.js';
 import type { RunSnapshot } from './wire.js';
 import { decodeFailure, decodeResult, encodeRun, isLayoutMessage } from './wire.js';
@@ -125,12 +127,13 @@ export interface LayoutEngineOptions {
  * What a relayout produced: the drawing, what changed to get there, and what it
  * was entitled to change.
  *
- * Three fields rather than a bare delta because a consumer needs all three and
- * can derive none of them from the others. A renderer holding the previous
- * result applies the `delta`; one that has just been mounted, or that dropped a
- * frame, takes the `result` whole; and M3.4's `stabilityViolations` is written
- * against the `influence` set, which is the object M3.5 narrows without changing
- * anything a caller reads.
+ * Four fields rather than a bare delta because a consumer needs them and can
+ * derive none of them from the others. A renderer holding the previous result
+ * applies the `delta`; one that has just been mounted, or that dropped a frame,
+ * takes the `result` whole; M3.4's `stabilityViolations` is written against the
+ * `influence` set; and `region` is the bound M3.5 added beside it, which is what
+ * the stages after it are confined to and what `influence` becomes once they
+ * are.
  */
 export interface RelayoutResult {
   /**
@@ -157,6 +160,34 @@ export interface RelayoutResult {
 
   /** What this relayout was entitled to move. See {@link InfluenceSet}. */
   readonly influence: InfluenceSet;
+
+  /**
+   * What the PATCH can affect, which is not the same claim as `influence`.
+   *
+   * Two fields rather than one because they are two different statements and
+   * today they disagree. `influence` is a GUARANTEE about the run that just
+   * happened, so while `relayout` re-runs the whole pipeline it has to name the
+   * whole roster: a cold sweep is entitled to reorder a rank the patch never
+   * came near. This is a BOUND ON THE PATCH, computed from the patch and the
+   * retained pipeline state before the run, and it is what M3.6's warm-started
+   * ordering, M3.7's incremental ranking, M3.8's anchored coordinates and M3.9's
+   * fast paths are each allowed to touch. The distance between the two is what
+   * is left of this milestone, and it is measurable rather than notional:
+   * `stabilityViolations(previous, result, region)` is exactly what the cold
+   * fallback did outside the bound.
+   *
+   * They converge rather than staying two. When every stage is confined to the
+   * region, the guarantee IS the region and this field becomes the same set as
+   * the one beside it. See {@link influenceRegion}.
+   *
+   * A relayout the engine cannot bound reports the whole roster here too, and
+   * there is one way to be in that state: the run before it was served by a
+   * worker, so it left no pipeline state on this side and there are no ranks to
+   * build a band out of. That is the same absence that makes such a relayout
+   * cold, and it is M3.6's to decide about. See
+   * {@link LayoutEngine.relayoutAsync}.
+   */
+  readonly region: InfluenceSet;
 }
 
 /**
@@ -332,10 +363,11 @@ export interface LayoutEngine {
    * landing the same geometry a cold run of the same graph does. The whole
    * pipeline runs again. That is what makes the delta contract, the engine
    * lifetime and the retained state testable before any incremental algorithm
-   * exists, and it gives M3.5 through M3.9 a correct baseline to be measured
-   * against rather than nothing. The patch is read for one thing today, which is
-   * checking that it happened; M3.5 is where its contents start to confine the
-   * work.
+   * exists, and it gives M3.6 through M3.9 a correct baseline to be measured
+   * against rather than nothing. The patch is read for two things today: whether
+   * it happened, and what it can affect, which is the `region` on the result.
+   * Nothing yet confines the run to that region, which is what M3.6 onwards are
+   * for and is measurable in the meantime.
    *
    * The delta is measured against the geometry this engine last REPORTED rather
    * than against its last computed run, which is what makes a nonzero
@@ -354,7 +386,7 @@ export interface LayoutEngine {
    * {@link relayout}, in the bound worker, or on this thread when there is none.
    *
    * The call a consumer who adopted `runAsync` for a large graph reaches for,
-   * and it answers with the same three fields the synchronous one does. Rejects
+   * and it answers with the same four fields the synchronous one does. Rejects
    * rather than throws, for every failure, on the same argument `runAsync`
    * makes.
    *
@@ -530,15 +562,52 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * so seeding it from the previous state would seed one graph's ordering from
    * another graph's.
    */
-  const runHere = (graph: Graph, previous: PreviousLayout | undefined): LayoutResult => {
-    const { result, routed } = runPipeline(prepare(graph, config, nodeSize, previous), stages);
+  const runPrepared = (graph: Graph, prepared: PreparedState): LayoutResult => {
+    const { result, routed } = runPipeline(prepared, stages);
     held = graph;
     warm = warmStartOf(routed);
     return result;
   };
 
-  /** The graph a relayout re-runs, or the refusal to do one. */
-  const forRelayout = (patch: Patch): Graph => {
+  const runHere = (graph: Graph, previous: PreviousLayout | undefined): LayoutResult =>
+    runPrepared(graph, prepare(graph, config, nodeSize, previous));
+
+  /**
+   * The band this patch is bounded to, or the whole roster when it cannot be
+   * bounded at all.
+   *
+   * READ BEFORE THE RUN, in both entry points, and in the asynchronous one that
+   * means before the await as well. The band is built out of the ranks of the
+   * run BEFORE this patch, and `runPrepared` replaces them, so a region computed
+   * afterwards would be a region computed against the answer. That is the
+   * opposite of the M3.2 rule about `reported`, which is read as late as
+   * possible because it is bookkeeping about what the caller was last told; this
+   * is a prediction, and a prediction read after the fact is a measurement.
+   *
+   * No retained pipeline state means no ranks, which is the state an engine is
+   * in after a run served by a worker. The honest answer there is the whole
+   * roster, and it is the same answer that engine's warm start gives.
+   */
+  const regionFor = (
+    graph: Graph,
+    patch: Patch,
+    previous: LayoutResult,
+    sizes: ReadonlyMap<NodeId, Size>,
+  ): InfluenceSet =>
+    warm === undefined
+      ? wholeRoster(graph, previous)
+      : influenceRegion({ graph, patch, previous: warm, sizes });
+
+  /**
+   * The graph a relayout re-runs and the geometry it starts from, or the
+   * refusal to do one.
+   *
+   * It hands back the reported geometry as well as the graph because the region
+   * needs one to fall back to when the engine retained no pipeline state, and
+   * reading `reported` again at that point would be reading a `let` the compiler
+   * has already forgotten this check narrowed.
+   */
+  const forRelayout = (patch: Patch): { readonly graph: Graph; readonly previous: LayoutResult } => {
     requireLive();
     if (held === undefined || reported === undefined) {
       throw new EngineStateError(
@@ -547,11 +616,12 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
       );
     }
     checkPatchApplied(held, patch);
-    return held;
+    return { graph: held, previous: reported };
   };
 
   /**
-   * The three fields a relayout answers with, from the run it just did.
+   * The four fields a relayout answers with, from the run it just did, given
+   * the region computed before it.
    *
    * The reported geometry is the previous reported geometry with this delta
    * applied, which at `epsilon` 0 is the new result itself: nothing was withheld,
@@ -568,14 +638,14 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * ANSWER, because the worker laid out the graph as it was when the run was
    * sent; what it does not give is an inconsistent one.
    */
-  const report = (graph: Graph, next: LayoutResult): RelayoutResult => {
+  const report = (graph: Graph, next: LayoutResult, region: InfluenceSet): RelayoutResult => {
     const previous = reported;
     if (previous === undefined) {
       throw new EngineStateError('this engine was reset while a relayout was in flight');
     }
     const delta = diffLayout(previous, next, { epsilon });
     reported = epsilon === 0 ? next : applyDelta(previous, delta);
-    return { result: reported, delta, influence: wholeRoster(graph, previous) };
+    return { result: reported, delta, influence: wholeRoster(graph, previous), region };
   };
 
   /**
@@ -592,12 +662,19 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
    * caller most recently received, and therefore the one the next delta should
    * be measured against.
    */
-  const runThere = async (graph: Graph, port: LayoutPort): Promise<LayoutResult> => {
+  const runThere = async (
+    graph: Graph,
+    prepared: PreparedState,
+    port: LayoutPort,
+  ): Promise<LayoutResult> => {
     const request = nextRequest;
     nextRequest += 1;
     // Prepared, and so measured, on this thread: see `wire.ts` for why that
-    // is the point rather than a step on the way to posting.
-    const { message, transfer } = encodeRun(request, prepare(graph, config, nodeSize));
+    // is the point rather than a step on the way to posting. The caller does
+    // the preparing since M3.5, because the sizes it produces are also what the
+    // region reads, and measuring every node twice per relayout to answer one
+    // question about row heights would be a strange way to pay for a bound.
+    const { message, transfer } = encodeRun(request, prepared);
     // The ids as they were at the moment of the send. `encodeRun` built them
     // already, so the snapshot is those same arrays rather than a second walk.
     const { nodes, edges, sources, targets } = message;
@@ -637,19 +714,37 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
 
     async runAsync(graph) {
       requireLive();
-      reported = worker === undefined ? runHere(graph, undefined) : await runThere(graph, worker);
+      reported =
+        worker === undefined
+          ? runHere(graph, undefined)
+          : await runThere(graph, prepare(graph, config, nodeSize), worker);
       return reported;
     },
 
     relayout(patch) {
-      const graph = forRelayout(patch);
-      return report(graph, runHere(graph, warm));
+      const { graph, previous } = forRelayout(patch);
+      const prepared = prepare(graph, config, nodeSize, warm);
+      const region = regionFor(graph, patch, previous, prepared.sizes);
+      return report(graph, runPrepared(graph, prepared), region);
     },
 
     async relayoutAsync(patch) {
-      const graph = forRelayout(patch);
-      const next = worker === undefined ? runHere(graph, warm) : await runThere(graph, worker);
-      return report(graph, next);
+      const { graph, previous } = forRelayout(patch);
+      if (worker === undefined) {
+        const prepared = prepare(graph, config, nodeSize, warm);
+        const region = regionFor(graph, patch, previous, prepared.sizes);
+        return report(graph, runPrepared(graph, prepared), region);
+      }
+      // The warm start does not cross, so the run over there is prepared
+      // without one, exactly as it was before this method had a region to
+      // compute. Both the region and the state it reads are taken before the
+      // await, since the pipeline state this engine holds belongs to whichever
+      // run settled last and the patch was described against the one it holds
+      // now.
+      const prepared = prepare(graph, config, nodeSize);
+      const region = regionFor(graph, patch, previous, prepared.sizes);
+      const next = await runThere(graph, prepared, worker);
+      return report(graph, next, region);
     },
 
     dispose() {

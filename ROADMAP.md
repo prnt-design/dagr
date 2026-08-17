@@ -2915,7 +2915,7 @@ it.
   argument arriving as a measurement rather than as a prediction: a report over
   the nodes alone would have called this relayout perfectly stable, and every
   line in the drawing moved.
-- [ ] **M3.5** (`@dagr/layout`) Influence regions: given a patch and the
+- [x] **M3.5** (`@dagr/layout`) Influence regions: given a patch and the
   retained pipeline state, compute the set of nodes and edges the patch can
   affect, and confine the relayout to it. Property tests: a patch confined to
   one weakly connected component produces an influence set naming nothing in
@@ -2948,6 +2948,108 @@ it.
   partly a consequence of the anchoring feasibility analysis rather than an
   independent graph computation, because a rank an insertion widens is
   influenced whether or not reachability says so.
+  SHIPPED 2026-08-17 as `influenceRegion` in `src/influence.ts`, a fourth field
+  `region` on `RelayoutResult`, and 25 tests in `test/layout.influence.test.ts`.
+  No stage changed and no coordinate moved, which is the same shape M3.4 shipped
+  in and the same reason: what this task decides is a bound, and a bound is worth
+  having before the stages that are confined to it rather than after.
+  A RANK-SPAN WINDOW, AS THIS ENTRY PREDICTED, and the third direction is what
+  settles it rather than the argument from the grain of the algorithm. Influence
+  travels sideways within a rank, so a node in a completely separate component
+  that happens to share a rank with an insertion MOVES: the row it is drawn in
+  got wider and every row is centred. That is measured in the suite rather than
+  asserted, on a graph of two components with a node of each on ranks 0, 1 and 2.
+  The consequence is that THE FIRST PROPERTY TEST THIS ENTRY ASKED FOR IS FALSE
+  AND SHIPS AS ITS OWN DEMONSTRATION: "a patch confined to one weakly connected
+  component produces an influence set naming nothing in another" cannot hold
+  while ranks are shared between components, and what ships in its place is the
+  true form, which is that the region names nothing in another component OUTSIDE
+  THE BAND. The entry predicted a reachability-based set would fail this test.
+  What it did not predict is that a component-based one fails it too, and for the
+  same reason.
+  TWO SETS RATHER THAN A NARROWING, WHICH IS THE DECISION THIS RUN MADE THAT THE
+  ENTRY DID NOT ASK FOR. M3.2 and M3.4 both recorded that M3.5 would narrow
+  `RelayoutResult.influence`, and it does not. `influence` is a statement about
+  the RUN: what it was entitled to move. This task changed no stage, so a
+  relayout still re-runs the whole pipeline, and a cold crossing sweep is
+  entitled to reorder a rank the patch never came near: narrowing that field
+  would have been a promise the pipeline does not keep, and it would have made
+  M3.4's contract vacuous by construction rather than by triviality, since a set
+  reported as a superset of the delta can never be violated by it. So `region` is
+  a second field of the same type carrying the other statement, a bound on the
+  PATCH, and the two converge when the stages are confined to it. Until they do,
+  `stabilityViolations(previous, result, region)` IS the distance between them,
+  which is how this task hands M3.6 to M3.9 a number rather than an intention.
+  WHAT WIDENS A REGION TO THE WHOLE DRAWING, each of them a case where a band
+  would not be a bound. An added edge that does not already run DOWNHILL, since
+  the target is pushed down and longest-path ranking takes its descendants with
+  it; an edge whose target already sits below its source adds a constraint the
+  ranking already satisfies and moves nothing, which is the ordinary shortcut
+  edge and stays narrow. A removal that frees its target to RISE, since a
+  longest-path rank is the deepest predecessor plus one, unless another
+  predecessor one rank above still pins it. And a row that changes HEIGHT, which
+  is the vertical half and the reason the resolved sizes are an input: rows stack
+  from y = 0 and a row is as tall as its tallest node, so a taller node arriving
+  moves every row underneath however unconnected. A row keeps its height when one
+  of two equally tall nodes leaves, which is why the row record counts its
+  tallest rather than flagging it.
+  ON A CYCLIC GRAPH ANY EDGE OP WIDENS IT TO EVERYTHING, which is M3.7's own
+  observation arriving early: M2.2's greedy feedback arc set is order dependent,
+  so one changed degree can move a node between buckets and reverse a DIFFERENT
+  set of edges for a graph whose cycle structure did not change, and no band
+  bounds that. On a DAG the reversed set is empty and stays empty, so the bound
+  is sharp exactly on the prnt.design pattern-generator case. M3.7's stable FAS
+  is what narrows this, and it now has a second consumer waiting on it.
+  THE WINDOW IS 1, THE ARGUMENT IS THE SWEEP, AND THE MEASUREMENT SAYS NO WINDOW
+  BUYS SOUNDNESS. A window of 0 takes only the touched ranks; the crossing sweep
+  re-barycenters the rank above and the rank below whatever changed, which is
+  where a reordering starts, so one rank of margin is the motivated default.
+  Measured over the committed corpus at 0, 1 and 2, the escaping cases go 43, 34
+  and 16 of 120 for a region of 47%, 66% and 82% of the roster. THERE IS NO KNEE
+  IN THAT TRADE, and the absence is the finding: escapes fall roughly as the
+  region grows towards the whole drawing, because what escapes is a cold sweep
+  reordering a distant rank rather than a spread the band is one rank short of
+  catching. A window is a margin, not a fix, and the fix is M3.6.
+  WHAT THE COLD FALLBACK DOES OUTSIDE THE BOUND, pinned as ceilings in the suite
+  the way M3.4 pinned the fallback's stability numbers. Over 30 random six-rank
+  40-node graphs, one batched patch each: an attribute resize left its region 0
+  times of 30 (0 violations, region 48% of the roster), adding a leaf 8 times
+  (154, 57%), removing a node 11 times (137, 86%), removing an edge 15 times
+  (119, 74%). THE RESIZE IS THE ONE KIND THAT IS ALREADY INSIDE ITS BOUND, and it
+  is the one that changes no rank and no barycenter, which is M3.9's attribute
+  fast path arriving as a measurement. Everything else in that table is the cold
+  crossing sweep: removing one edge from a 40-node drawing reorders the top rank
+  and moves a node 650 units sideways. M3.6 is what brings that down, and this is
+  the number it will be judged on.
+  THE CORPUS ASSERTS THAT IT MOVED SOMETHING, because four ceilings that a corpus
+  editing nothing would satisfy perfectly are four assertions about nothing. Same
+  reason M3.4 ran its checker against a deliberately narrowed set, and that
+  negative test is here too.
+  THE FIRST VERSION WALKED THE ROSTER AND THE ROSTER IS WHERE THE DUMMIES ARE,
+  which is this run's other review finding and the one that changed code rather
+  than prose. Collecting the band out of `previous.ranks` is a pass over every
+  ranked id, and a 4k-node graph whose edges span a few ranks each carries 233k
+  dummies: 87ms of a 90ms region, spent walking a quarter of a million entries to
+  collect a band of a dozen, which is a bound costing more than the thing it
+  exists to make cheap. `previous.layers` is already the members of each rank, so
+  the band is a slice of it and the roster is never walked. 87ms to 5.9ms at 4k,
+  6.8ms to 2.2ms at 1k. WHAT IS LEFT IS THE EDGE PASS, which is proportional to
+  the drawing rather than to the patch, and it is M3.9's to look at: a fast path
+  measured against a frame budget cannot afford one, and the band's own work
+  already avoids it.
+  THE TWO AXES REST ON DIFFERENT STAGES, WHICH IS THIS RUN'S OWN REVIEW FINDING
+  AND IS M3.8's TO INHERIT. The vertical rule holds for any position stage in
+  this package, because `rowCentres` is shared and `position.ts` says so:
+  swapping the position stage moves nodes sideways and never up or down. The
+  horizontal rule is `gridPositionStage`'s alone, because that stage lays each
+  row out independently and centres it on x = 0, so a rank whose membership
+  changed moves and no other rank does. BRANDES-KOEPF WOULD BREAK IT: it aligns
+  blocks that span ranks and compacts them together, so one node arriving in one
+  row can pull a block through several, which is further than any band reaches.
+  Nothing a caller can select does that today, since that stage is implemented
+  and deliberately unexported, and the docstring says a stage which did would
+  have to declare it. Same shape as M3.4's rank-derivation dependency, and M3.8
+  is where it lands.
 - [ ] **M3.6** (`@dagr/layout`) Warm-started ordering: seed the order stage
   from the previous layout's per-rank permutation instead of insertion order,
   so a node whose neighbourhood did not change keeps its slot. This is the

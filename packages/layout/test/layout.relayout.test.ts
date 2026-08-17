@@ -243,10 +243,10 @@ describe('the influence set', () => {
     expect([...influence.edges]).toEqual(['ab', 'ac', 'bd', 'cd']);
   });
 
-  // M3.5's property test is "every change in the emitted delta falls inside the
-  // influence set", and a removal is a change whose id exists only on the
+  // "Every change in the emitted delta falls inside the influence set" is what
+  // this set is for, and a removal is a change whose id exists only on the
   // previous side of the patch. A set built from the current graph alone cannot
-  // satisfy it.
+  // satisfy it. `layout.influence.test.ts` asks the same of M3.5's region.
   it('spans both sides of the patch, so a removed id is in it', () => {
     const { graph, patches } = watched(diamond());
     const engine = createLayout();

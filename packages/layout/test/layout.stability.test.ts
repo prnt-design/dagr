@@ -473,7 +473,7 @@ describe('the stability contract, against a real relayout', () => {
     return named;
   }
 
-  it('holds over a relayout, vacuously against the whole-roster set, which is the guard M3.5 narrows into', () => {
+  it('holds over a relayout, vacuously against the whole-roster set, which is what makes it a guard rather than a claim', () => {
     const graph = diamond();
     const engine = createLayout();
     const before = engine.run(graph);
@@ -536,7 +536,7 @@ describe('the stability contract, against a real relayout', () => {
     engine.dispose();
   });
 
-  it('measures what the fallback costs today, so M3.5 has a number to beat', () => {
+  it('measures what the fallback costs today, so the incremental stages have a number to beat', () => {
     const graph = diamond();
     const before = layout({ graph });
     graph.batch(() => {
@@ -548,7 +548,7 @@ describe('the stability contract, against a real relayout', () => {
     const report = measureStability(before, after);
 
     // What a full relayout costs on the smallest interesting graph, pinned as
-    // ceilings rather than as equalities: M3.5 through M3.9 lower these, and a
+    // ceilings rather than as equalities: M3.6 through M3.9 lower these, and a
     // task that raises one should have to say so.
     expectStabilityWithin(report, {
       maxMovedFraction: 0.5,

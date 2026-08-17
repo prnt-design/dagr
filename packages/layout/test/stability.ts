@@ -1,5 +1,5 @@
 /**
- * The two assertions M3.5 through M3.9 are written against.
+ * The two assertions M3.5 through M3.9 are written against, M3.5 included.
  *
  * They live in `test/` rather than in `src/` on the split M3.4 decided: what
  * ships is `stabilityViolations`, which RETURNS what it found, because a
