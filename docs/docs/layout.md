@@ -108,8 +108,10 @@ offer, and `engine.run` deliberately does not either, because the graph it is
 handed need not be the one the last run saw. It is on the record every stage
 reads rather than passed to one of them, because ranking, ordering and
 positioning each have a previous answer to start from and a channel per stage
-would be three contracts to keep in step. No built-in stage reads it yet, which
-is what "a relayout that is correct and no faster than a cold run" means.
+would be three contracts to keep in step. The order stage reads `layers`; the
+rankers and the position stages do not read theirs yet, so a relayout is still
+correct and no faster than a cold run. What the one reader buys is a stable
+answer rather than a cheaper one: see [the warm start](#the-warm-start).
 
 Its own `previous` is subtracted for a reason worth knowing if you write a stage
 that reads it: the field is on the record, so the runner carries it forward and
@@ -923,11 +925,12 @@ Mutzel's accumulator tree, O(E log V) rather than the O(E^2) of comparing every
 pair, and the test suite checks it against a brute-force pair loop on random
 layerings as well as against hand counts on small graphs.
 
-### The seed permutation, which M3.6 warm starts from
+### The seed permutation
 
 Barycenter sweeps are sensitive to where they start, so the starting
 permutation is a decision and it is recorded here rather than left to be
-inferred from a stage that will not exist by M3.6.
+inferred. It is the seed a cold run uses; a relayout also runs from it, and
+then holds the [warm start](#the-warm-start) on top of it.
 
 **The seed is a connected depth-first walk over adjacent-layer edges.** The
 roster is iterated in its own order (the graph's nodes in insertion order, then
@@ -1060,22 +1063,23 @@ on both corpora and at both budgets.
 `initialOrder` is a previous run's layers, handed back so a re-layout does not
 churn an ordering somebody has already read. It is a hint and never a
 permutation taken on trust, exactly as `initialRanks` is on the simplex ranker.
-Each id takes its index **within its own hint layer**, and each layer of the
-seed is reordered by reading the nodes the hint names out of the indices they
-hold, sorting those by that index, and writing them back into the same indices.
-So a node the hint does not name keeps the index the walk gave it, which is the
-same rule the sweeps follow for a node the fixed layer says nothing about, and
-two ids the hint listed in different layers tie when they meet in one layer
-here, with the tie falling through to the walk. An id the roster does not hold
-is ignored, an id the hint puts in the wrong layer only ever contributes its
-position among the ids of its own hint layer that landed in the same real layer,
-and a hint that mentions nothing leaves the seed exactly as the walk computed
-it. Nothing it can say produces an invalid layering.
+It is also a **constraint carried through the run** rather than a starting
+point, and the whole of that argument, with the measurements that chose it, is
+[the warm start](#the-warm-start). Each id takes its index within its own hint
+layer, first occurrence winning, and each cohort (the ids one hint layer named)
+is permuted only into the slots its own members already hold. So a node the hint
+does not name keeps the index the walk gave it, which is the same rule the
+sweeps follow for a node the fixed layer says nothing about, and two ids the
+hint listed in different layers are left to the walk and the sweeps whatever
+their two indices are. An id the roster does not hold is ignored, an id the hint
+puts in the wrong layer only ever meets the members of its own cohort that
+landed in the same real layer, and a hint that mentions nothing leaves the seed
+exactly as the walk computed it. Nothing it can say produces an invalid
+layering.
 
-Keying within the hint layer is also what M3.6 needs of a warm start: the key is
-node identity and never `(rank, index)` position, so a node whose rank changed
-arrives at its new layer as a newcomer rather than carrying a stale slot to the
-front or the back of it.
+Keying by cohort is what makes the key node identity rather than `(rank, index)`
+position, so a node whose rank changed arrives at its new layer as a newcomer
+rather than carrying a stale slot to the front or the back of it.
 
 The stage is deterministic in the same way the rankers are: same graph, same
 layers, always. Every tie in the walk is edge insertion order, and every tie in
@@ -1307,6 +1311,67 @@ The crossing counts the stage reaches on a fixed set of generated graphs, with
 the pass on and off, are committed as a golden file at
 `packages/layout/test/order-crossings.golden.json` and asserted exactly. The
 test file beside it says how to regenerate it and when doing so is legitimate.
+
+### The warm start
+
+`engine.relayout` hands the order stage the layers of the run before it, and the
+stage holds them. That is what stops a re-layout churning an ordering you have
+already read, and it is the reason the region table
+[further down](#what-a-relayout-does-outside-it) is four zeros.
+
+**A hint is a constraint, not a seed.** This is the finding the rest of the
+section rests on, and it went the other way from the obvious guess. Applying the
+previous order to the walk's permutation and then sweeping normally made the
+drawing LESS stable than ignoring it altogether: the sweeps are what wanders, so
+handing them a different starting point moves where they wander to and nothing
+else, and a run seeded from the previous output is four sweeps and sixteen
+transpose passes away from a layering the previous run had already swept. It
+even broke the attribute resize, which changes no rank and no barycenter and had
+been exact. So the previous order is carried through the whole run: every sweep
+re-imposes it on the layer it has just reordered, and the transpose pass will
+not swap a pair it holds.
+
+**It constrains relative order within a cohort, and nothing else.** A cohort is
+the set of ids the previous run drew in ONE layer. Each cohort is permuted only
+into the slots its own members already hold, so the constraint is about who is
+left of whom and never about an absolute index. Two ids the previous drawing put
+in different layers are left to the walk and the sweeps, because it never put
+them side by side and so expressed no order of theirs to keep.
+
+**A node whose rank changed is therefore a newcomer at its new rank.** Its
+cohort there is whatever moved with it, usually nothing, and a cohort of one has
+one slot to be permuted within, so it never moves. The sweeps place it at a
+barycenter-derived slot among the nodes that did keep theirs. A node the
+previous run never saw at all is free in exactly the same way.
+
+**What it costs is crossings**, which is the tension: an ordering held for
+continuity cannot beat an unconstrained search. The committed tolerance is **2%
+per graph** over the six-graph regression corpus, and it was set from this
+measurement rather than agreed later by whoever had to pass it. Warm against
+cold after one added leaf:
+
+| Corpus graph   | Warm crossings against cold |
+| -------------- | --------------------------- |
+| tall-600       | 1.0012                      |
+| wide-600       | 0.9969                      |
+| dense-1200     | 1.0053                      |
+| sparse-2000    | 0.9960                      |
+| self-loops-800 | 0.9981                      |
+| parallel-800   | 1.0159                      |
+
+Three of the six are cheaper warm than cold, and the one that pays for the
+constraint pays 1.59%. Over one patch, that is what continuity costs. Over a
+long editing session it is an open question and a real one: a held pair is held
+forever, so a crossing that could be removed by swapping two retained nodes
+stays, and nothing gives it back later. Measuring that needs a sequence rather
+than a single patch, which is what M3.10 is for.
+
+**A hint that names every node freezes the layering**, which is the same rule
+seen from the other side and is what makes a structure-preserving edit exact.
+If you pass `initialOrder` to `barycenter-order` yourself, that is what you are
+asking for. An engine's own channel wins over the option when both are present,
+because the channel is the run immediately before this one and the option is a
+constant bound when the stage was built.
 
 ### What the default order stage costs and buys
 
@@ -1827,8 +1892,20 @@ tests hold it to landing the same geometry a cold run of the same graph does.
 That is the point of shipping it in this shape first: it makes the delta
 contract, the engine lifetime and the retained state testable before any
 incremental algorithm exists, and it gives the stages that become incremental
-later a correct baseline to be measured against rather than nothing. Today the
-patch is read for exactly one thing, which is checking that it happened.
+later a correct baseline to be measured against rather than nothing. The patch
+is read for two things: checking that it happened, and computing the
+[region](#influence-regions) it can affect.
+
+**It is more stable than a cold run, which is a different claim.** Since M3.6
+the order stage holds the previous run's per-rank order, so a relayout costs
+what a cold run costs and lands somewhere a cold run would not: the nodes the
+patch did not reach keep their left-to-right order rather than being reshuffled
+by a crossing sweep that is free to start anywhere. On the corpus that is 30 of
+30 graphs against 17 of 30 cold, and it is what took the
+[region table](#what-a-relayout-does-outside-it) to four zeros. See
+[the warm start](#the-warm-start) for what it costs in crossings.
+`relayoutAsync` over a worker does NOT get it, because the state it reads stays
+in the worker.
 
 Four fields come back. `delta` is a [`LayoutDelta`](#deltas) against the
 geometry the engine last reported. `result` is that geometry with the delta
@@ -2087,11 +2164,22 @@ happens, because the worker laid out the graph as it was when the run was sent;
 what it will not be is inconsistent with the deltas you already applied.
 
 What does not cross is the warm-start state, because it lives where the pipeline
-ran. A relayout served by a worker is therefore cold in a way one served here is
-not, which today is a distinction with no consequence at all, since no stage
-reads that state yet and both paths produce the same deltas. The first stage
-that does read it is what has to decide whether the state crosses or the worker
-retains it and the patch crosses instead.
+ran. **A relayout served by a worker is cold, and that is now a real
+difference**: the order stage reads that state, so a relayout on this thread
+holds the drawing still and a relayout over there re-sweeps it freely. If you
+want the [warm start](#the-warm-start), call `relayout` rather than
+`relayoutAsync`. The same absence costs the region too, so such a relayout
+reports the whole roster there as well.
+
+The decision about closing that gap is taken: **the worker retains the state and
+the patch crosses instead of the state.** The state is proportional to the
+drawing, which is the thing a worker was reached for because it was large, so a
+one-attribute edit would post a whole pipeline state across the boundary to ask
+for a run of the same size; the patch is proportional to the edit and is already
+the unit this API is built on. What it needs is a session on the worker side, an
+engine id and a run that says "the graph you have, with this patch applied",
+which is a change to the wire protocol rather than to a stage. It is not built
+yet.
 
 ## Config
 
@@ -2541,27 +2629,36 @@ region covering 47%, 66% and 82% of the drawing. There is no knee in that trade,
 and the absence is the point: a window is a margin against the sweep, not a fix
 for it.
 
-### What the full re-run does outside it
+### What a relayout does outside it
 
-Today nothing confines the relayout to its region, so the two sets on a
-`RelayoutResult` disagree, and the size of the disagreement is measured rather
-than assumed. Over a corpus of 30 random six-rank graphs of 40 nodes, one
-batched patch each, comparing the drawing before with the drawing after:
+Nothing confines the relayout's WORK to its region, so the two sets on a
+`RelayoutResult` are still two statements, and the size of the disagreement is
+measured rather than assumed. Over a corpus of 30 random six-rank graphs of 40
+nodes, one batched patch each, comparing the drawing before with the drawing
+after:
 
 | Patch            | Runs that left the region | Nodes and edges outside it | Region size |
 | ---------------- | ------------------------- | -------------------------- | ----------- |
 | Attribute resize | 0 of 30                   | 0                          | 48%         |
-| Add a leaf       | 8 of 30                   | 154                        | 57%         |
-| Remove a node    | 11 of 30                  | 137                        | 86%         |
-| Remove an edge   | 15 of 30                  | 119                        | 74%         |
+| Add a leaf       | 0 of 30                   | 0                          | 57%         |
+| Remove a node    | 0 of 30                   | 0                          | 86%         |
+| Remove an edge   | 0 of 30                   | 0                          | 74%         |
 
-The one kind that never leaves its region is the one that changes no rank and no
-barycenter: a node that got wider re-centres its own row and nothing else. Every
-other row of that table is the cold crossing sweep, which is free to reorder any
-rank it likes: removing one edge from a 40-node drawing can reorder the top rank
-and move a node six hundred units sideways. That is the number the incremental
-ordering work exists to bring down, and it is pinned as a ceiling in
-`test/layout.influence.test.ts` so that it can only get better quietly.
+**Those were 0, 8, 11 and 15 before the order stage warm started**, and the
+three that were not zero were all the same thing: a cold crossing sweep is free
+to reorder any rank it likes, so removing one edge from a 40-node drawing could
+reorder the top rank and move a node six hundred units sideways. The resize row
+was already zero because it changes no rank and no barycenter, and a node that
+got wider re-centres its own row and nothing else. The
+[warm start](#the-warm-start) is what closed the other three, and all four are
+pinned as ceilings in `test/layout.influence.test.ts` so that they can only get
+better quietly.
+
+A zero column here is a measurement and not a guarantee, which is why
+`influence` still names the whole roster. No stage is confined yet, so a run is
+still ENTITLED to move anything; it happens not to. The region is also wide,
+48% to 86% of the roster on these graphs, so this says a run respects a loose
+bound rather than that it is tightly bounded.
 
 ## Overlap, exactly
 
@@ -2797,7 +2894,7 @@ without being selectable at all, `brandes-koepf-position`, for the reason below.
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
 | rank | `longest-path-rank` | Breaks cycles with a least-squares feedback arc set, ranks by longest path, then splits every long edge into a [dummy chain](#dummy-chains). Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height, and since M2.4c it splits through the same shared splitter. | Nothing outstanding. |
-| order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass, over every segment of the drawing including the pieces of a split long edge. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). Its two budgets were re-derived in M2.6c and are now 4 sweeps and a cap of 16, and its transpose tie rule was re-derived in M2.6d and kept. | Nothing outstanding. |
+| order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass, over every segment of the drawing including the pieces of a split long edge. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). Its two budgets were re-derived in M2.6c and are now 4 sweeps and a cap of 16, and its transpose tie rule was re-derived in M2.6d and kept. Since M3.6 it also holds the previous run's order through a relayout, which is [the warm start](#the-warm-start). | Nothing outstanding. |
 | position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. `brandes-koepf-position` is a real algorithm that is implemented but not exported, for the reason below this table. | A compaction that is not the longest-path substitute, which is what now blocks Brandes-Koepf, and then a decision about the default. M2.9 added the first evidence on graphs that are not generated, and it points the other way from the bench corpora. |
 | route | `polyline-route` | A polyline out of the source box's border, through the centre of each of the edge's dummies, and into the target box's border, which is two points for an edge with no chain. Monotone in the rank axis. Real, and described in [Routing](#routing-and-where-a-route-attaches). It took the default from `straight-route` in M2.8, which also deleted that placeholder. | `edgeSep`, which would fan out parallel edges and give a self loop a shape, then obstacle detours and splines. |
 

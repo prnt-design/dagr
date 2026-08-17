@@ -12,6 +12,70 @@ of doc prose.
 
 ## Unreleased
 
+### Changed
+
+- **`barycenterOrder` now holds the previous run's per-rank order, and
+  `engine.relayout` feeds it that order.** Behaviour changed, types did not, on
+  both halves. (M3.6)
+
+  **The channel.** `PreparedState.previous` has carried a whole pipeline state
+  since M3.2 and nothing read it. The order stage now reads `previous.layers`,
+  which is the field an engine fills in for itself, so a `relayout` starts from
+  the drawing the user is already looking at. A caller's own `initialOrder`
+  still works and the channel wins when both are present, because the channel is
+  the run immediately before this one and the option is a constant bound when
+  the stage was built.
+
+  **A hint is a constraint, not a seed, and that is the measurement this task
+  rests on.** Applying the previous order to the walk's permutation and then
+  sweeping made stability WORSE than a cold run on every patch kind: escapes
+  from M3.5's region went 8 to 15 on an added leaf and 0 to 11 on a resize, the
+  kind that changes no rank and no barycenter. The sweeps are what wander, so
+  changing where they start changes where they wander to and nothing else. The
+  previous order is therefore carried through the whole run: each sweep
+  re-imposes it on the layer it just reordered, and the transpose pass will not
+  swap a pair it holds.
+
+  **What it constrains is relative order within a cohort.** A cohort is the ids
+  the previous run drew in ONE layer, and each cohort is permuted only into the
+  slots its own members already hold. Two ids the previous drawing put in
+  different layers are left to the walk, because it never put them side by side
+  and expressed no order of theirs to keep; comparing their two indices anyway
+  is the `(rank, index)` coupling this task exists to avoid. A node whose rank
+  changed is therefore a newcomer at its new rank, a cohort of one, and the
+  sweeps place it at a barycenter-derived slot among the nodes that kept theirs.
+
+  **What it buys**, over the thirty random layered graphs of
+  `test/layout.influence.test.ts` and the same four patch kinds: escapes from
+  the region go from 8, 11, 15 and 0 to ZERO, with zero violations in each, and
+  the ceilings in that file are lowered to match. The order of the caller's own
+  nodes after one added leaf is the order the previous run drew on 30 of 30
+  graphs, against 17 of 30 cold.
+
+  **What it costs is crossings, and the tolerance is 2% per graph** over the
+  M2.6 golden corpus, set here from this measurement rather than left to be
+  agreed by whoever has to pass it. Warm against cold after one added leaf:
+  1.0012 tall-600, 0.9969 wide-600, 1.0053 dense-1200, 0.9960 sparse-2000,
+  0.9981 self-loops-800, 1.0159 parallel-800. Three of the six are cheaper warm
+  than cold and the worst pays 1.59%. A softer rule that let the transpose pass
+  break a held pair on a strict improvement was measured and rejected: it buys
+  half a point on the worst entry and gives back the whole of the stability.
+
+  **What a hint naming every node now does is freeze the layering**, which is
+  the same fact from the other side and is what makes a structure-preserving
+  edit exact. Three cases in `test/layout.order.test.ts` used a complete hint to
+  force a seed and now assert the frozen behaviour instead; one column of the
+  corpus table, the roster order swept eight times, is removed rather than
+  re-measured, because the configuration it described no longer exists.
+
+  **The worker path is the unstable one and says so.** A run served by a worker
+  leaves no pipeline state on this side, so a `relayoutAsync` over a worker is
+  cold where the synchronous one is not. The decision this task owed: THE WORKER
+  RETAINS THE STATE AND THE PATCH CROSSES, because the state is proportional to
+  the drawing (a 4k-node graph carries 233k dummies) and the patch is
+  proportional to the edit. It needs a session on the worker side, which is
+  M2.10's wire protocol reopened, and it lands with M3.9.
+
 ### Added
 
 - `influenceRegion({ graph, patch, previous, sizes, rankWindow })`, the bound on

@@ -20,10 +20,18 @@ import type { RankedState, Size } from '../src/types.js';
  *
  * Most of what is pinned here is pinned through `maxSweeps: 0`, which runs no
  * sweep at all and returns the seed permutation. That is deliberate. The seed
- * is the part M3.6 warm starts from, so it is the part a future change is most
- * likely to break by accident and least likely to be caught breaking: a
- * different seed still produces a legal layering with a plausible crossing
- * count, and only the M3 stability metrics would ever notice.
+ * is what a relayout starts from before the warm start is imposed on it, so it
+ * is the part a future change is most likely to break by accident and least
+ * likely to be caught breaking: a different seed still produces a legal
+ * layering with a plausible crossing count, and only the M3 stability metrics
+ * would ever notice.
+ *
+ * The warm start itself is `layout.warmstart.test.ts`, which is where M3.6 put
+ * it: `initialOrder` and `PreparedState.previous` are the same object arriving
+ * by two routes, and since M3.6 both are a CONSTRAINT carried through the run
+ * rather than a permutation the sweeps are free to leave. Several cases below
+ * used a complete hint to force a seed, and could not once a complete hint
+ * froze the layering; each one says how it was rewritten.
  */
 
 /** A graph from a script of `addNode`/`addEdge` calls, ids given explicitly. */
@@ -222,10 +230,12 @@ describe('barycenterOrder, the initialOrder hint', () => {
    * its first layer and `c` in its second. A flattened key would put `d` ahead
    * of `c` on the strength of `d` having been listed earlier, which is a
    * relation between two hint layers rather than one the hint ever expressed.
-   * Their keys tie instead, and the tie falls through to the walk, so structure
-   * decides.
+   * They are in different COHORTS instead, so the hint says nothing about the
+   * pair and the walk decides. Since M3.6 that holds whatever their two indices
+   * are; before it, it held only when the indices happened to coincide, as they
+   * do here.
    */
-  it('ties two ids the hint lists in different layers, and the walk breaks it', () => {
+  it('leaves two ids the hint lists in different layers to the walk', () => {
     const crossed = build(
       ['a', 'b', 'c', 'd'],
       [
@@ -289,22 +299,21 @@ describe('barycenterOrder, the initialOrder hint', () => {
   });
 
   /**
-   * Both halves of the rule that keys a hint layer: an id takes its FIRST
-   * position there, and a repeat consumes no index. `initialOrder` is untrusted
-   * input, so a hint that lists an id twice is a case rather than a curiosity.
+   * An id takes its FIRST position in a hint layer, and a repeat is
+   * unobservable. `initialOrder` is untrusted input, so a hint that lists an id
+   * twice is a case rather than a curiosity.
    *
-   * The witness needs a second hint layer before the second half is visible at
-   * all. Within one hint layer only the ORDER of the keys is ever read, so an
-   * index a repeat had eaten would push every later key up by one and change
-   * nothing. It is against a key from ANOTHER hint layer that the shift shows:
-   * `y` and `w` are keyed 1 apiece and therefore tie, the walk breaks the tie,
-   * and a consumed index would be what took that tie away.
-   *
-   * Pinned against the concrete layering as well as against the same hint with
-   * the duplicate removed, because two runs that broke the same way would agree
-   * with each other and say nothing.
+   * THE SECOND HALF USED TO BE OBSERVABLE AND M3.6 MADE IT NOT, which is worth
+   * recording rather than quietly restating: this case used to assert that a
+   * repeat consumed no INDEX, and it could only assert it across two hint
+   * layers, because within one layer only the ORDER of the keys is read and an
+   * eaten index shifts every later key equally. M3.6 stopped comparing keys
+   * across hint layers at all, so there is nothing left for an eaten index to
+   * change and both hints below produce the same layering by construction. What
+   * survives is the first half, and it is observable within one layer: if the
+   * LAST occurrence won, `[['y', 'x', 'y']]` would order `x` before `y`.
    */
-  it("takes an id's first position in a hint layer, and a repeat consumes no index", () => {
+  it("takes an id's first position in a hint layer, and a repeat is unobservable", () => {
     const fan = build(
       ['a', 'x', 'y', 'z', 'w'],
       [
@@ -316,6 +325,9 @@ describe('barycenterOrder, the initialOrder hint', () => {
     );
     const fanState = stateOf(fan, [['a'], ['x', 'y', 'z', 'w']]);
     expect(ordered(fanState, { maxSweeps: 0 })).toEqual([['a'], ['x', 'y', 'z', 'w']]);
+    const first = ordered(fanState, { maxSweeps: 0, initialOrder: [['y', 'x', 'y']] });
+    expect(first).toEqual([['a'], ['y', 'x', 'z', 'w']]);
+    expect(first).toEqual(ordered(fanState, { maxSweeps: 0, initialOrder: [['y', 'x']] }));
     const duplicated = ordered(fanState, {
       maxSweeps: 0,
       initialOrder: [
@@ -323,7 +335,7 @@ describe('barycenterOrder, the initialOrder hint', () => {
         ['z', 'w'],
       ],
     });
-    expect(duplicated).toEqual([['a'], ['x', 'z', 'y', 'w']]);
+    expect(duplicated).toEqual([['a'], ['x', 'y', 'z', 'w']]);
     expect(duplicated).toEqual(
       ordered(fanState, {
         maxSweeps: 0,
@@ -342,34 +354,73 @@ describe('barycenterOrder, the initialOrder hint', () => {
   });
 });
 
+/**
+ * The witness for the pinning rule, and the reason it looks the way it does.
+ *
+ * The rule is that a node the fixed layer says nothing about keeps its index
+ * while the nodes around it sort into the indices left over, so the witness
+ * needs an unanchored node BETWEEN two anchored ones that the sweep wants to
+ * swap. THE WALK CANNOT PRODUCE THAT SEED ON ITS OWN, which is a fact about the
+ * walk rather than an inconvenience: it visits a layer left to right and pulls
+ * each node's neighbours into the layer above in that same order, so the layer
+ * it builds is already in barycenter order and the first sweep has nothing to
+ * swap. Searched exhaustively over every roster order and every parent set of
+ * two anchored nodes and three fixed ones before it was written down.
+ *
+ * So the seed is arranged with a hint, and since M3.6 a hint is a CONSTRAINT
+ * rather than a starting point: a hint naming both `x` and `y` would hold them
+ * in the order it named them and there would be no swap to observe. The hint
+ * here therefore names the FIXED layer and only the fixed layer. It reverses
+ * `p q` into `q p`, which is what puts `x`'s parent at index 1 and `y`'s at
+ * index 0, and it leaves the swept layer entirely free.
+ *
+ * `u` is unanchored ABOVE and has a child below, which is what lets the walk
+ * reach it in the middle of its layer: a node with no edge at all is appended
+ * when the outer loop arrives at it and is therefore always last.
+ */
+function pinningWitness(): { readonly graph: Graph; readonly state: RankedState } {
+  const graph = build(
+    ['x', 'u', 'y', 'p', 'q', 'd'],
+    [
+      ['p', 'x'],
+      ['u', 'd'],
+      ['q', 'y'],
+    ],
+  );
+  return {
+    graph,
+    state: stateOf(graph, [
+      ['p', 'q'],
+      ['x', 'u', 'y'],
+      ['d'],
+    ]),
+  };
+}
+
 describe('barycenterOrder, the sweeps', () => {
   /**
-   * D2 on the smallest layering that shows it. Fixing `p q` above, `y` wants
+   * D2 on the smallest layering that shows it. Fixing `q p` above, `y` wants
    * index 0 and `x` wants index 1, so the pair has to swap; `u` has no
    * neighbour above at all, so it keeps index 1 and the pair sorts into the
    * indices left over, which are 0 and 2.
    */
   it('pins a node the fixed layer says nothing about at its own index', () => {
-    const graph = build(
-      ['p', 'q', 'x', 'u', 'y'],
-      [
-        ['p', 'y'],
-        ['q', 'x'],
-      ],
-    );
-    const state = stateOf(graph, [
-      ['p', 'q'],
+    const { graph, state } = pinningWitness();
+    // The hint names the FIXED layer and nothing else, which is what leaves the
+    // swept layer free to be swept. See `pinningWitness` for why the seed can
+    // only be arranged that way since M3.6.
+    const fixed = [['q', 'p']];
+    expect(ordered(state, { maxSweeps: 0, initialOrder: fixed })).toEqual([
+      ['q', 'p'],
       ['x', 'u', 'y'],
+      ['d'],
     ]);
-    const seed = [
-      ['p', 'q'],
-      ['x', 'u', 'y'],
-    ];
-    expect(ordered(state, { maxSweeps: 0, initialOrder: seed })).toEqual(seed);
-    expect(ordered(state, { maxSweeps: 1, initialOrder: seed })).toEqual([
-      ['p', 'q'],
+    expect(ordered(state, { maxSweeps: 1, initialOrder: fixed })).toEqual([
+      ['q', 'p'],
       ['y', 'u', 'x'],
+      ['d'],
     ]);
+    expect(graph.hasNode('u')).toBe(true);
   });
 
   /**
@@ -385,33 +436,23 @@ describe('barycenterOrder, the sweeps', () => {
    * through in the first place.
    */
   it('pins that node at its own index with the transpose pass on as well', () => {
-    const graph = build(
-      ['a', 'b', 'x', 'y', 'u'],
-      [
-        ['a', 'y'],
-        ['b', 'x'],
-      ],
-    );
-    const seed = [
-      ['a', 'b'],
-      ['x', 'y', 'u'],
-    ];
-    const state = stateOf(graph, seed);
+    const { state } = pinningWitness();
     expect(
-      barycenterOrder({ maxSweeps: 0, initialOrder: seed })
+      barycenterOrder({ initialOrder: [['q', 'p']] })
         .run(state)
         .layers.map((layer) => [...layer]),
     ).toEqual([
-      ['b', 'a'],
-      ['x', 'y', 'u'],
+      ['q', 'p'],
+      ['y', 'u', 'x'],
+      ['d'],
     ]);
   });
 
   /**
    * A hint that names nothing must stay silent at the default cap too, for the
-   * same reason: `applyHint` and the pass are the two things that can move a
-   * node without the sweeps asking, and turning one off to test the other
-   * leaves the pair untested together.
+   * same reason: the warm-start constraint and the pass are the two things that
+   * can move a node without the sweeps asking, and turning one off to test the
+   * other leaves the pair untested together.
    */
   it('ignores a hint that names nothing, with the transpose pass on', () => {
     const graph = build(
@@ -548,12 +589,13 @@ describe('barycenterOrder, the sweeps', () => {
       countCrossings({ graph, layers: ordered(state, { maxSweeps }) });
     expect(at(0)).toBeGreaterThan(at(2));
     expect(at(2)).toBeGreaterThanOrEqual(at(8));
-    // A budget of zero returns its seed untouched, at a size where a single
-    // sweep would move hundreds of nodes: the hint names every node, so the
-    // seed is exactly the hint, and it comes back exactly as it went in.
+    // A budget of zero runs no sweep at all, at a size where a single sweep
+    // moves hundreds of nodes. Pinned against the walk rather than against a
+    // hint fed back in, which is how this said it until M3.6: a hint naming
+    // every node now holds the layering at EVERY budget, so a hint-based
+    // version of this line would pass over a stage that had stopped sweeping.
     const seed = ordered(state, { maxSweeps: 0 });
-    expect(ordered(state, { maxSweeps: 0, initialOrder: seed })).toEqual(seed);
-    expect(ordered(state, { maxSweeps: 1, initialOrder: seed })).not.toEqual(seed);
+    expect(ordered(state, { maxSweeps: 1 })).not.toEqual(seed);
   });
 });
 
@@ -852,13 +894,24 @@ describe('barycenterOrder, on the bench corpora', () => {
   }, 300_000);
 
   /**
-   * The seed decision and the sweep budget, in one table. The roster-order row
-   * is `insertionOrderStage`'s permutation fed back in as a hint, which is both
-   * the comparison D1 was decided on and a test that a hint naming every node
-   * really does reproduce itself at this size. That stage is named rather than
-   * reached through `defaultStages`, which used to hold it: this column is the
-   * roster order specifically, and reading it off the default would have
-   * rewritten what the table compares the moment M2.6b moved the default here.
+   * The seed decision and the sweep budget, in one table. The roster-order
+   * column is `insertionOrderStage`'s own layering, scored directly. That stage
+   * is named rather than reached through `defaultStages`, which used to hold
+   * it: this column is the roster order specifically, and reading it off the
+   * default would have rewritten what the table compares the moment M2.6b moved
+   * the default here.
+   *
+   * THE COLUMN M3.6 REMOVED, and it is removed rather than re-measured because
+   * the configuration it described no longer exists. It was the roster
+   * permutation fed back in as `initialOrder` and swept eight times, 210,611 on
+   * the 1k and 9,150,607 on the 10k, and it was the comparison D1 chose the
+   * seed on. Since M3.6 a hint is a CONSTRAINT and not a starting point, so
+   * feeding a complete layering in and sweeping it returns that layering
+   * unchanged: the same call now scores 703,757 and 34,510,321, which is the
+   * roster column beside it and says nothing about seeds. That is asserted
+   * below as the fact it now is. The seed comparison itself survives in
+   * {@link barycenterOrder}'s own table, where it is what it always was, a
+   * measurement taken on a drawing this corpus no longer produces.
    *
    * THE SWEEP COLUMNS ARE WHY `maxSweeps` IS 4, and the two corpora reach that
    * floor at different sweeps: the 10k at ONE, which is why every column from 1
@@ -898,10 +951,14 @@ describe('barycenterOrder, on the bench corpora', () => {
       // after the floor ties it on either corpus; the strictness of that
       // comparison is a claim this case cannot make.
       expect(layersAt(state, 4)).toEqual(layersAt(state, 16));
+      // A complete hint is a complete constraint (M3.6): eight sweeps over the
+      // roster layering hand the roster layering back, at a size where a single
+      // sweep would otherwise move tens of thousands of nodes. This is the
+      // corpus-scale form of the small witnesses in `layout.warmstart.test.ts`.
+      expect(at(8, roster)).toBe(crossingsOf(state, roster));
       return [
         name,
         crossingsOf(state, roster),
-        at(8, roster),
         at(0),
         at(1),
         at(2),
@@ -912,11 +969,10 @@ describe('barycenterOrder, on the bench corpora', () => {
       ];
     });
     expect(table).toEqual([
-      ['1k', 703_757, 210_611, 456_261, 215_975, 215_975, 210_163, 210_163, 210_163, 210_163],
+      ['1k', 703_757, 456_261, 215_975, 215_975, 210_163, 210_163, 210_163, 210_163],
       [
         '10k',
         34_510_321,
-        9_150_607,
         19_753_239,
         8_972_421,
         8_972_421,

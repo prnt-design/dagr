@@ -173,8 +173,17 @@ export interface RelayoutResult {
    * ordering, M3.7's incremental ranking, M3.8's anchored coordinates and M3.9's
    * fast paths are each allowed to touch. The distance between the two is what
    * is left of this milestone, and it is measurable rather than notional:
-   * `stabilityViolations(previous, result, region)` is exactly what the cold
-   * fallback did outside the bound.
+   * `stabilityViolations(previous, result, region)` is exactly what a run does
+   * outside the bound.
+   *
+   * THAT DISTANCE IS NOW ZERO ON THE CORPUS AND THE FIELDS STILL DIFFER, which
+   * is worth stating because the two are easy to confuse. M3.6's warm start took
+   * `layout.influence.test.ts` from 8, 11, 15 and 0 escaping runs to none at
+   * all, so on those thirty graphs the run does respect the bound. `influence`
+   * still names the whole roster anyway, because it is a GUARANTEE and not a
+   * measurement: no stage is CONFINED yet, so a run is still entitled to move
+   * anything, and it happens not to. Narrowing it wants a stage that cannot
+   * reach outside the band rather than a corpus that says it did not.
    *
    * They converge rather than staying two. When every stage is confined to the
    * region, the guarantee IS the region and this field becomes the same set as
@@ -184,7 +193,8 @@ export interface RelayoutResult {
    * there is one way to be in that state: the run before it was served by a
    * worker, so it left no pipeline state on this side and there are no ranks to
    * build a band out of. That is the same absence that makes such a relayout
-   * cold, and it is M3.6's to decide about. See
+   * cold, and M3.6 decided what to do about it: the worker retains the state
+   * and the patch crosses, which is a protocol M3.9 owns. See
    * {@link LayoutEngine.relayoutAsync}.
    */
   readonly region: InfluenceSet;
@@ -366,8 +376,10 @@ export interface LayoutEngine {
    * exists, and it gives M3.6 through M3.9 a correct baseline to be measured
    * against rather than nothing. The patch is read for two things today: whether
    * it happened, and what it can affect, which is the `region` on the result.
-   * Nothing yet confines the run to that region, which is what M3.6 onwards are
-   * for and is measurable in the meantime.
+   * Nothing yet confines the WORK to that region, which is what M3.7 onwards are
+   * for and is measurable in the meantime. M3.6 confined the ANSWER without
+   * confining the work: the order stage holds the previous run's permutation, so
+   * a relayout costs what a cold run costs and lands inside the region anyway.
    *
    * The delta is measured against the geometry this engine last REPORTED rather
    * than against its last computed run, which is what makes a nonzero
@@ -397,11 +409,31 @@ export interface LayoutEngine {
    *
    * What does NOT cross is the warm-start state, because it lives where the
    * pipeline ran. A relayout served by a worker is therefore cold in a way one
-   * served here is not, which in M3.2 is a distinction with no consequence at
-   * all: no stage reads that state yet, and the tests assert both paths produce
-   * the same deltas. M3.6 is the first task for which it will matter, and it is
-   * the task that has to decide whether the state crosses or the worker retains
-   * it and the patch crosses instead.
+   * served here is not, and since M3.6 that is a real difference rather than a
+   * bookkeeping one: the order stage reads that state, so a relayout over there
+   * re-sweeps freely and a relayout here holds the drawing still. THIS METHOD
+   * IS THE UNSTABLE ONE, and it says so rather than pretending otherwise.
+   *
+   * M3.6's DECISION, which its entry owed: THE WORKER RETAINS THE STATE AND THE
+   * PATCH CROSSES INSTEAD. Sending the state the other way was the alternative
+   * and it loses on every reading. It is proportional to the DRAWING and not to
+   * the patch, and the drawing is the thing a worker was reached for because it
+   * was too big: a 4k-node graph carries 233k dummies (see `influence.ts`), so a
+   * one-attribute edit would post a whole pipeline state across the boundary to
+   * ask for a run of the same size. It also puts the same state on both sides,
+   * which is two copies to disagree, where retaining it over there is the same
+   * arrangement `run` already has. And the patch is already the unit this API is
+   * built on, already structured-cloneable, and already what `relayout` takes.
+   *
+   * WHAT IT COSTS IS A PROTOCOL, and that is why the decision ships here and the
+   * implementation does not. Today `encodeRun` posts the whole graph per run and
+   * the worker holds nothing between them, so retaining state over there means a
+   * session on that side: an engine id, a run that says "the graph you have,
+   * with this patch applied", and a failure mode for a worker that has lost it.
+   * That is M2.10's wire protocol reopened, it is a task rather than a
+   * paragraph, and it belongs with M3.9, where the async path is what the frame
+   * budget is measured on. Until it lands, a consumer who wants stability calls
+   * {@link relayout}.
    */
   relayoutAsync(patch: Patch): Promise<RelayoutResult>;
 
