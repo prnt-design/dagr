@@ -816,16 +816,29 @@ cycles are left in the view those held reversals leave, which means a new cycle
 gets exactly one new reversal and an edit that closes no cycle gets none. On a
 graph whose edits close no new cycles the set never moves at all.
 
-Two things this does not change. It is not a speed-up: the breaker does the same
-solve either way, plus one more components pass. And **on a DAG there is nothing
-to hold**: the set is empty, it stays empty, and every guarantee here is
-vacuously true. This is a story about cyclic input only.
+Retention is decided per ordered PAIR and not per edge, which matters only when
+your graph has parallel edges: adding a second copy of an edge that was reversed
+keeps the whole pair pointing the way it already pointed, rather than letting the
+new copy argue the pair back round. Measured over 1,299 random cyclic graphs each
+given one such copy, the reversal survives 1,237 times per pair against 1,129 per
+edge, and both readings leave a legal feedback arc set.
+
+Two things this does not change. **It is not a speed-up.** The breaker does the
+same solve either way and then pays for the seed: one more strongly connected
+components pass, two more walks of the edges and four array copies, measured at
+1.22x to 1.38x a cold break on the benchmark corpora. What it buys is a stable
+answer, not a cheaper one, which is the same trade the order stage's warm start
+makes. And **on a DAG there is nothing to hold**: the set is empty, it stays
+empty, and every guarantee here is vacuously true. This is a story about cyclic
+input only.
 
 Both rank stages do it, and neither trusts what it is handed: the result is a
 legal feedback arc set for any seed whatever, including one from a different
 graph, and a seed that would leave more than half the edges reversed is
-discarded for a cold answer. The seed can choose between equally good answers
-and can do nothing else.
+discarded for a cold answer, which is a guard you can observe: on a graph small
+enough for two arcs to be more than half of it, holding both copies of a pair
+trips it and the run answers cold. The seed can choose between equally good
+answers and can do nothing else.
 
 ### Determinism and cost
 
@@ -1948,9 +1961,13 @@ patch did not reach keep their left-to-right order rather than being reshuffled
 by a crossing sweep that is free to start anywhere. On the corpus that is 30 of
 30 graphs against 17 of 30 cold, and it is what took the
 [region table](#what-a-relayout-does-outside-it) to four zeros. See
-[the warm start](#the-warm-start) for what it costs in crossings.
-`relayoutAsync` over a worker does NOT get it, because the state it reads stays
-in the worker.
+[the warm start](#the-warm-start) for what it costs in crossings. Since M3.7a
+the rank stages hold the previous run's cycle-breaking decisions in the same
+spirit, so on a cyclic graph a relayout also stops re-deciding which edges are
+drawn backwards: see
+[the reversed set across a relayout](#the-reversed-set-across-a-relayout).
+`relayoutAsync` over a worker does NOT get either of them, because the state
+they read stays in the worker.
 
 Four fields come back. `delta` is a [`LayoutDelta`](#deltas) against the
 geometry the engine last reported. `result` is that geometry with the delta

@@ -207,8 +207,11 @@ function atFloat(values: Float64Array, index: number): number {
  * a strongly connected component of the INPUT graph. An entry naming an edge
  * the graph no longer holds is ignored, a self loop is never held, and an edge
  * that has stopped lying on a cycle is dropped rather than left drawn backwards
- * for a cycle that is gone. The rule is applied per ordered PAIR rather than
- * per edge, for the same reason the reversal decision is: see Parallel edges.
+ * for a cycle that is gone. The rule is applied per ordered PAIR rather than per
+ * edge, which is where the reversal decision is already taken, and it is a
+ * STABILITY rule rather than a correctness one: both readings return a legal
+ * feedback arc set, and the measurement that chose between them is beside the
+ * code.
  *
  * THE SEEDED RUN. Everything above then runs over the view those reversals
  * leave, and the one thing that changes is the partition the component rule is
@@ -242,7 +245,19 @@ function atFloat(values: Float64Array, index: number): number {
  * the same cycle walked backwards, and breaking that costs nine. So the answer
  * is size-checked and a seeded answer over the bound is discarded for the cold
  * one. The bound stays exact and unconditional, which is what the section below
- * claims, and the check costs one cold solve on the rare run that fires it.
+ * claims, and the check costs one cold solve on the run that fires it.
+ *
+ * WHAT THE GUARD COSTS IS STABILITY, AND IT IS NOT ONLY THE PATHOLOGICAL SEED
+ * THAT PAYS IT. Two nodes, `a -> b` and `b -> a`, with a second copy of the
+ * reversed pair arriving: holding both copies is two of three arcs, the guard
+ * refuses it, and the answer is a cold one that reverses the other direction
+ * instead. Both answers draw the same view and the count is what differs, which
+ * is the bound measuring edges where the decision is about pairs. It is kept
+ * anyway, because an unconditional bound is what rules out the degenerate
+ * answer entirely, and it is rare at any real size: over 1,299 random cyclic
+ * digraphs each given one added copy of an edge it had reversed, it fires 62
+ * times and every one of them is a graph small enough for two arcs to be more
+ * than half of it.
  *
  * WHAT A SEED IS NOT ALLOWED TO DO is make the answer wrong. Everything above
  * holds for any set of edge ids whatever, including one from a different graph
@@ -475,13 +490,17 @@ export function feedbackArcSet(
 
   if (previous === undefined || previous.size === 0) return cold();
 
-  // THE RETENTION RULE, taken per ordered PAIR and not per edge, for the reason
-  // the reversal decision is: every copy of `a -> b` has the same two
-  // endpoints, so holding one copy and not another would put `a -> b` and
-  // `b -> a` into the seeded view and hand the seeded run a two-cycle of this
-  // pass's own making. A pair is held when the previous set names ANY copy of
-  // it, which is what keeps a pair the caller has since added a copy to
-  // pointing the way it already pointed.
+  // THE RETENTION RULE, taken per ordered PAIR and not per edge, which is where
+  // the reversal decision is already taken and is worth a measurement rather
+  // than a symmetry argument. A pair is held when the previous set names ANY
+  // copy of it, so a pair the caller has since added a copy to keeps pointing
+  // the way it already pointed. Per edge instead, the new copy stays as
+  // authored, the seeded view gets a two-cycle, and the seeded run is free to
+  // resolve it by turning the HELD copy back round: measured over 1,299 random
+  // cyclic digraphs each given one added copy of an edge it had reversed, the
+  // reversal survives on 1,237 per pair against 1,129 per edge. It is not a
+  // correctness rule: both answers are legal feedback arc sets, and the suite
+  // says so.
   const heldPairs = new Set<number>();
   for (const [index, edge] of edges.entries()) {
     const source = at(arcSource, index);

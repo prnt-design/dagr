@@ -354,15 +354,25 @@ export function influenceRegion(input: InfluenceRegionInput): InfluenceSet {
    * Whether the previous run had a cycle to break, which is what makes an edge
    * op unboundable.
    *
-   * The feedback arc set moves under patches that changed no cycle. M2.2's
-   * greedy pass did it through degree buckets; the least-squares pass that
-   * replaced it at M2.2c does it through the solve, since every height is the
-   * balance of every arc around it and an arc whose two heights sit close
-   * together changes sides. Either way a different set comes back for a graph
-   * whose cycle structure did not change, edges flip, ranks flip under them, and
-   * no band bounds that. M3.7a is the task that stopped it, by seeding the
-   * breaker from the previous run, and this region is what it narrows. On a DAG
-   * the reversed set is empty and stays empty, which is the prnt.design
+   * A reversed edge is ranked the other way up, so an edge op that changes the
+   * set moves ranks the band cannot bound. THE SET USED TO CHANGE UNDER PATCHES
+   * THAT CHANGED NO CYCLE, which is what made this unboundable rather than
+   * merely wide: M2.2's greedy pass did it through degree buckets, and the
+   * least-squares pass that replaced it at M2.2c does it through the solve,
+   * since every height is the balance of every arc around it and an arc whose
+   * two heights sit close together changes sides. M3.7a stopped that by seeding
+   * the breaker from the previous run.
+   *
+   * THIS FLAG IS DELIBERATELY UNCHANGED BY THAT, and the reason is a fact about
+   * WHEN this function runs rather than about the breaker. A region is computed
+   * BEFORE the run it bounds, so the only reversed set available here is the
+   * previous one, and whether the patch changed it is not yet knowable. What
+   * M3.7a bought is that the answer would now MEAN something: comparing two sets
+   * would be a statement about cycle structure rather than about a solve. Doing
+   * the comparison needs the region computed after a cheap cycle-breaking pass
+   * rather than before it, which is M3.7b's bail trigger and M3.9's budget.
+   *
+   * On a DAG the reversed set is empty and stays empty, which is the prnt.design
    * pattern-generator case and the one this region is sharp on.
    */
   const broken = previous.reversedEdges.size > 0;

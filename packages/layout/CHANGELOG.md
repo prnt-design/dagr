@@ -35,9 +35,13 @@ of doc prose.
   endpoints still sharing a strongly connected component of the input graph. An
   entry naming an edge the graph no longer holds is ignored, a self loop is
   never held, and a reversal whose cycle is gone is released. Retention is taken
-  per ordered PAIR rather than per edge, for the reason the reversal decision
-  is: holding one copy of `a -> b` and not another would put a two-cycle into
-  the seeded view.
+  per ordered PAIR rather than per edge, which is where the reversal decision is
+  already taken, and it is a STABILITY rule rather than a correctness one: per
+  edge, a second copy of a reversed edge stays as authored, the seeded view gets
+  a two-cycle and the seeded run may resolve it by turning the held copy back
+  round. Over 1,299 random cyclic digraphs each given one such copy the reversal
+  survives 1,237 times per pair against 1,129 per edge, and both readings leave
+  a legal feedback arc set.
 
   **The one line it rests on.** The seeded run is scoped to the components of
   the SEEDED VIEW and not of the input. An already-acyclic seed has nothing but
@@ -47,13 +51,19 @@ of doc prose.
   components instead looks equivalent and is not, and the witness is in
   `test/layout.cycles.stable.test.ts`.
 
-  **What it does not change.** It is not a speed-up: the same solve runs either
-  way, plus one more components pass on a relayout. On a DAG the set is empty
-  and stays empty, so none of this touches acyclic input. A cold run answers
-  exactly as it did before, including every pinned corpus figure. And a seed
-  cannot make the answer wrong: the result is a legal feedback arc set for any
-  set of ids whatever, the `m/2` bound is size-checked rather than inherited,
-  and a seeded answer over the bound is discarded for a cold one.
+  **What it does not change.** It is not a speed-up. The same solve runs either
+  way and the seed then costs one more components pass, two more walks of the
+  edges and four array copies: 1.22x to 1.38x a cold break, measured interleaved
+  on both bench corpora. The COLD path is untouched and measured so, at 0.97x to
+  1.05x its previous cost over four interleaved runs, and the gate's rank
+  entries take no `previous` at all, so the warm path is not on any benched
+  path. On a DAG the set is empty and stays empty, so none of this touches
+  acyclic input. And a seed cannot make the answer wrong: the result is a legal
+  feedback arc set for any set of ids whatever, the `m/2` bound is size-checked
+  rather than inherited, and a seeded answer over the bound is discarded for a
+  cold one. That guard has an observable cost in stability, measured at 62 of
+  those 1,299 cases, all of them graphs small enough for two arcs to be more
+  than half of the whole.
 
 - **`barycenterOrder` now holds the previous run's per-rank order, and
   `engine.relayout` feeds it that order.** Behaviour changed, types did not, on

@@ -3005,9 +3005,15 @@ it.
   changed no cycle, so a different set of edges is reversed for a graph whose
   cycle structure did not change, and no band bounds that. On a DAG the reversed
   set is empty and stays empty, so the bound is sharp exactly on the prnt.design
-  pattern-generator case. M3.7a's stable FAS is what narrows this and it has
-  landed; the entry's reading of WHY the cold set moves was M2.2's greedy pass
-  and is corrected there.
+  pattern-generator case. M3.7a's stable FAS has landed and DID NOT NARROW THIS,
+  which is worth stating plainly because the sentence here used to predict it
+  would. A region is computed BEFORE the run it bounds, so the only reversed set
+  available to it is the previous one and whether the patch changed it is not
+  yet knowable; what M3.7a bought is that comparing two sets would now MEAN
+  something. Making the comparison needs the region computed after a
+  cycle-breaking pass rather than before one, which is M3.7b's trigger and
+  M3.9's budget. The entry's reading of WHY the cold set moved was M2.2's greedy pass
+  and is corrected in M3.7a's own entry.
   THE WINDOW IS 1, THE ARGUMENT IS THE SWEEP, AND THE MEASUREMENT SAYS NO WINDOW
   BUYS SOUNDNESS. A window of 0 takes only the touched ranks; the crossing sweep
   re-barycenters the rank above and the rank below whatever changed, which is
@@ -3197,6 +3203,10 @@ it.
   CARE ABOUT THE REVERSED-EDGE SET: a flipped edge changes which layer a chain's
   dummies sit in, every dummy is a node this constraint has never seen, and a
   cohort that lost half its members to renamed dummies constrains half as much.
+  M3.7a ANSWERED THAT ONE RATHER THAN LEAVING IT TO M3.7b: the reversed set now
+  holds across a patch that changed no cycle, so the flips that renamed those
+  dummies do not happen. What is left of it is the flips a real cycle change
+  causes, which are a fact about the edit.
   M3.8 inherits the coordinate half the corpus test above deliberately does not
   assert.
 - [x] **M3.7a** (`@dagr/layout`) Stable feedback arc set: seed the cycle breaker
@@ -3233,9 +3243,17 @@ it.
   than a cycle enumeration. An entry naming a deleted edge is ignored, a self
   loop is never held, and a reversal whose cycle is gone is released rather than
   left drawing an edge backwards for nothing. RETENTION IS PER ORDERED PAIR AND
-  NOT PER EDGE, the same rule the reversal decision already followed: holding one
-  copy of `a -> b` and not another puts a two-cycle into the seeded view, and a
-  caller adding a second copy of an existing edge is enough to reach it.
+  NOT PER EDGE, which is where the reversal decision is already taken, AND IT IS
+  A STABILITY RULE RATHER THAN A CORRECTNESS ONE, which is a correction to what
+  this task first wrote down. Per edge, a second copy of a reversed edge stays as
+  authored, the seeded view gets a two-cycle, and the seeded run resolves it: the
+  first version of this entry said that was a bug and it is not, because the
+  resolution is per pair and leaves a legal answer either way. What it costs is
+  the previous decision, measured over 1,299 random cyclic digraphs each given
+  one such copy: the reversal survives 1,237 times per pair against 1,129 per
+  edge. THE REASON IT NEEDED MEASURING IS THAT THE SYMMETRY ARGUMENT WAS WRONG,
+  and a rule argued from symmetry alone would have shipped with a false reason
+  attached to a right decision.
   THE ONE LINE IT ALL RESTS ON is which components the seeded run is scoped to,
   and it is THE SEEDED VIEW'S rather than the input's. An already-acyclic seed
   has nothing but singleton components in it, so no arc is in scope, nothing is
@@ -3259,9 +3277,20 @@ it.
   `m/2` bound is the one property that is GUARDED RATHER THAN INHERITED: a seeded
   answer is at most half the arcs plus whatever it was handed, and holding all
   ten arcs of a ten-cycle would cost nine, so the answer is size-checked and a
-  seeded answer over the bound is discarded for a cold one.
-  WHAT IT IS NOT is a speed-up: the same solve runs either way, plus one more
-  components pass on a relayout. Both rank stages read the channel, because a
+  seeded answer over the bound is discarded for a cold one. THAT GUARD HAS AN
+  OBSERVABLE COST AND IT IS PINNED RATHER THAN ASSUMED RARE: it fires on 62 of
+  those same 1,299 cases, every one of them a graph small enough for two arcs to
+  be more than half of it, and what it refuses there is a perfectly good answer
+  that the bound counts in edges where the decision is about pairs. Kept anyway,
+  because an unconditional bound is what rules out the degenerate answer, and
+  because 62 cases of a two-node graph is not a reason to weaken a guarantee the
+  whole module is claimed on.
+  WHAT IT IS NOT is a speed-up, and this is measured rather than waved at. The
+  same solve runs either way and the seed then costs one more components pass,
+  two more walks of the edges and four array copies: 1.22x to 1.38x a cold break
+  on the two bench corpora. THE COLD PATH IS UNTOUCHED AND WAS MEASURED SO, at
+  0.97x to 1.05x over four interleaved runs, which is what settled a gate that
+  named `rank > 1k` in its same-entry line. Both rank stages read the channel, because a
   warm start living in one ranker and not the other is the shape of bug M2.4c
   already fixed once for the splitter. On a DAG the set is empty and stays empty,
   so none of this touches the prnt.design pattern-generator case, exactly as the

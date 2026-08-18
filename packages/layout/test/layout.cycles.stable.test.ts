@@ -231,6 +231,54 @@ describe('the seeded feedback arc set holds what the previous run decided', () =
   });
 });
 
+/**
+ * The parallel-edge case, which is the one place the retention rule had a
+ * choice to make and the one place a measurement made it.
+ *
+ * A caller adds a second copy of an edge the previous run reversed. The new
+ * copy is an edge no previous set can name, so a rule taken per EDGE leaves it
+ * pointing as authored, which puts `a -> b` and `b -> a` into the seeded view
+ * and lets the seeded run resolve the pair by turning the HELD copy back round.
+ * A rule taken per PAIR holds every copy of a pair the previous set named, so
+ * the pair keeps pointing the way it already pointed.
+ *
+ * Neither is wrong: both leave a legal feedback arc set, which is why the
+ * assertion below is a stability count and not a correctness one. Measured over
+ * this population, the reversal survives on 1,237 of 1,299 per pair against
+ * 1,129 per edge, and the 62 that do not survive are ALL the `m/2` guard: at
+ * these sizes two arcs can be more than half the graph, so holding both copies
+ * breaks the bound and the answer falls back to a cold one.
+ */
+describe('a second copy of a reversed edge', () => {
+  it('keeps the pair pointing the way the previous run pointed it', () => {
+    const random = mulberry32(5);
+    let cases = 0;
+    let held = 0;
+    let guardFired = 0;
+    for (let seed = 0; seed < 4000; seed += 1) {
+      const graph = randomDigraph(random);
+      const cold = feedbackArcSet(graph);
+      if (cold.size === 0) continue;
+      const target = [...cold][Math.floor(random() * cold.size)];
+      if (target === undefined) continue;
+      const edge = graph.edges().find((candidate) => candidate.id === target);
+      if (edge === undefined) continue;
+
+      graph.addEdge(edge.source, edge.target, '#copy');
+      const warm = feedbackArcSet(graph, cold);
+      cases += 1;
+      if (warm.has(target)) {
+        held += 1;
+        // The copy goes with it, which is what makes it a rule about pairs.
+        expect(warm.has('#copy' as EdgeId)).toBe(true);
+        continue;
+      }
+      if (idsOf(warm).join() === idsOf(feedbackArcSet(graph)).join()) guardFired += 1;
+    }
+    expect({ cases, held, guardFired }).toEqual({ cases: 1299, held: 1237, guardFired: 62 });
+  });
+});
+
 describe('the seeded set is still a legal feedback arc set', () => {
   it('leaves an acyclic view on every random digraph, from every seed it is given', () => {
     const random = mulberry32(97);
