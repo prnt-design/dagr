@@ -1940,10 +1940,10 @@ findings addressed or logged, docs land with the feature.
   chain is not collapsed to two points, which M2.4b's entry allowed for and
   which stays allowed for the router that wants it.
 - [x] **M2.9** Golden corpus vs dagre: port a corpus of real graphs
-  (including a prnt.design-shaped pattern-generator graph), assert
-  structural parity metrics vs dagre output (rank counts, crossing counts
-  within tolerance). First layout benchmarks (1k and 10k node graphs) with
-  committed baselines. Touches `packages/layout`, `bench` and `docs`.
+  (including a pattern-generator-shaped graph), assert structural parity
+  metrics vs dagre output (rank counts, crossing counts within tolerance).
+  First layout benchmarks (1k and 10k node graphs) with committed baselines.
+  Touches `packages/layout`, `bench` and `docs`.
   **THIS ENTRY WAS FOUR LINES AND THE SHORTEST IN M2, and both of its clauses
   turned out to mean something other than what they say.** Every other M2 entry
   was written up after the run; this one was never touched between being drafted
@@ -1995,7 +1995,7 @@ findings addressed or logged, docs land with the feature.
   THE CORPUS IS NEW AND IS NOT THE BENCH CORPORA, which contradicted a sentence
   already in `bench/README.md` and that sentence is corrected rather than
   worked around. Nine hand-authored graphs shaped after real ones, in
-  `test/dagre-parity-corpus.ts`, including the prnt.design pattern generator
+  `test/dagre-parity-corpus.ts`, including the pattern-generator graph
   this entry asks for by name. Two reasons and the first is not negotiable: the
   only crossing count that means anything across two engines is a geometric one
   over the emitted polylines, that is quadratic in segments, and it does not run
@@ -3005,8 +3005,8 @@ it.
   so one changed degree can move a node between buckets and reverse a DIFFERENT
   set of edges for a graph whose cycle structure did not change, and no band
   bounds that. On a DAG the reversed set is empty and stays empty, so the bound
-  is sharp exactly on the prnt.design pattern-generator case. M3.7's stable FAS
-  is what narrows this, and it now has a second consumer waiting on it.
+  is sharp exactly on the pattern-generator case. M3.7's stable FAS is what
+  narrows this, and it now has a second consumer waiting on it.
   THE WINDOW IS 1, THE ARGUMENT IS THE SWEEP, AND THE MEASUREMENT SAYS NO WINDOW
   BUYS SOUNDNESS. A window of 0 takes only the touched ranks; the crossing sweep
   re-barycenters the rank above and the rank below whatever changed, which is
@@ -3220,8 +3220,8 @@ it.
   measures what it claims to, instead of observing the symptom of a non-stable
   FAS and firing on patches that needed nothing. Scope it honestly: on a DAG
   the reversed set is empty and stays empty, so none of this touches the
-  prnt.design pattern-generator case, and it bites cyclic input only. That is a
-  reason to plan it rather than to panic, and if the run needs splitting, the
+  pattern-generator case, and it bites cyclic input only. That is a reason to
+  plan it rather than to panic, and if the run needs splitting, the
   stable FAS is the half that unblocks the trigger.
   Decide here when to bail. Bail too eagerly and the fast path is rare enough
   that the feature is a lie; bail too reluctantly and a relayout costs more
@@ -3359,11 +3359,10 @@ it.
   mutation sequences (grow, prune, reparent, rewire, sustained churn) run
   through the engine with their stability metrics committed as golden files, so
   a later change that degrades stability arrives as a diff rather than as a
-  feeling. Include at least one prnt.design-shaped pattern-generator sequence,
-  since that is the first consumer and the reason the milestone exists. Docs
-  page on incremental layout, the flagship feature, carrying the numbers this
-  corpus produces and an honest statement of what the fallback costs when it
-  fires.
+  feeling. Include at least one pattern-generator-shaped sequence, since that
+  is the shape M6.6's first reference DSL takes. Docs page on incremental
+  layout, the flagship feature, carrying the numbers this corpus produces and
+  an honest statement of what the fallback costs when it fires.
   Two specific things the corpus must carry. Report the pair (crossings,
   displacement) for the same mutation sequence under three configurations, cold
   every time, warm-started ordering only, and the full incremental path, so the
@@ -4529,6 +4528,12 @@ it settled rather than restating the argument.
   GPU picking. Component tests.
 - [ ] **M5.3** Demo app: animated living demo (grow/prune/relayout
   scenarios) in `apps/demo`, deployed-ready build.
+  THIS IS THE TASK THAT DEMONSTRATES THE HEADLINE CLAIM, and nothing shipped
+  does. The campaign demo is read-only: `apps/demo/src/App.tsx` never mutates a
+  graph, so it proves scale, rendering and semantic zoom, and proves nothing at
+  all about layout staying stable under an edit — which is what M6's preamble
+  says the project competes on. A visitor currently cannot see the flagship
+  feature. Weight this accordingly against M5.1 and M5.2.
 - [ ] **M5.4** Docs: Docusaurus getting-started, API reference pages for all
   packages, v0.1 readiness review. Queue npm publish for the human.
   Pre-publish packaging checklist (from the M0.1 oss-docs review): add
@@ -4577,16 +4582,251 @@ it settled rather than restating the argument.
   `pnpm --filter @dagr/layout build` needs `@dagr/graph` built first (see the
   comment in `packages/layout/tsconfig.build.json`). Not worth the machinery at
   two packages, worth knowing about before the other decision is made.
+- [ ] **M5.5** Reserve containment in the graph model: `readonly parent?: NodeId`
+  on `Node` and on `NodeJSON`, an `update-node-parent` patch op, the invariants
+  (a node has at most one parent, containment is acyclic, an edge may cross a
+  boundary), and traversal coverage. `@dagr/layout` IGNORES `parent` in this
+  task — the point is the model, not the layout.
+  LANDS BEFORE M5.4 QUEUES THE PUBLISH. The api-design review of 2026-08-18
+  corrected the reason, and the corrected reason is the one that matters. The
+  field on `Node` is NOT the urgent part: it is optional and readonly, `Node` is
+  only ever produced by `Graph` and never structurally implemented by a
+  consumer, so adding it later is additive for readers. Two other surfaces
+  genuinely cannot move after v0.1:
+  - `PatchOp` is a discriminated union (`packages/graph/src/patch.ts`). A new
+    member breaks every exhaustive `switch` a consumer wrote with a `never`
+    arm. Do the cheaper general fix at the same time: DOCUMENT `PatchOp` AS AN
+    OPEN UNION, with a default arm required of consumers. That removes the
+    pressure for every future op rather than for this one. Note what it does
+    NOT do: an open union is a convention, not enforcement, and a consumer's
+    `never` exhaustiveness check still breaks. The doc has to tell consumers to
+    write `default:` rather than assert exhaustiveness, and that is the whole
+    mechanism. It works here only because `update-node-parent` lands before
+    v0.1, so no consumer has written the check yet.
+  - `GraphJSON.version` is the literal `1`
+    (`packages/graph/src/serialize.ts`). `parseGraphJSON` ignores unknown keys
+    by design, so a document carrying `parent` read by a build without
+    containment loses it silently rather than refusing — exactly the misread
+    `version` exists to prevent. Because this lands before v0.1 publishes, no
+    such reader will ever exist and `version` correctly STAYS `1`. Say so here
+    so nobody bumps it later out of caution.
+  ONE GRAPH, NOT NESTED GRAPHS. Containment is a reference on a node, not a
+  child `Graph` instance. This is settled here rather than in M6.4 because the
+  two models are not interchangeable: every `PatchOp` is scoped to a single
+  graph and `batch` is per-`Graph`, so with nested instances a child's edits
+  never reach a root subscriber and M6.5's boundary rebinding would span two
+  patch streams with no atomicity. The flat model keeps one patch stream, keeps
+  the graph → layout → deltas → render direction one-way, and is what makes
+  M6.5's claim to be a consumer of M3.3 and M3.6 true rather than aspirational.
+  DECISIONS THE TASK MUST NAME, or an implementer picks one silently:
+  - `apply` replays `add-node` through `graph.addNode`, so a parent must be
+    replayed before its children. Containment adds a node ordering constraint
+    that patches do not have today.
+  - `removeNode` is cascade-free by expansion for incident edges: it emits a
+    `remove-edge` op per incident edge. Containment takes the SAME answer —
+    emit a `remove-node` op per child — because it is the one consistent with
+    the rest of the model and it lets `invert` restore in order. "Refuse" was
+    the other candidate and is rejected: it would make `removeNode` partial in
+    a way nothing else in the API is.
+    THESE TWO BULLETS ARE ONE DECISION, not two constraints to satisfy
+    separately. Emitting the children DEPTH-FIRST POST-ORDER (children before
+    their parent) makes `invert` produce `add-node` for the parent before
+    `add-node` for each child, which IS the replay ordering the bullet above
+    requires. Get the removal order right and the replay order falls out; get
+    it wrong and the two fight.
+  - `update-node-parent` gets an explicit case in `influenceRegion`
+    (`packages/layout/src/influence.ts`) and in `checkPatchApplied`
+    (`packages/layout/src/engine.ts`). Both have a `default: break`, so a new
+    op is silently swallowed with no compile error and the influence region for
+    a reparent becomes whatever the other ops in the patch happened to widen.
+    A documented no-op case is fine; an implicit one is a wrong narrow bound
+    the moment M7 reads `parent`.
+  This is not a bet that nesting is wanted — M6.4 and M7 decide that. It is the
+  cheap half of an option whose expensive half is a coordinated release.
 
 ## M6: VDSL = v0.2 (`@dagr/vdsl`)
 
-Task breakdown is drafted when M5 completes, driven by the prnt.design
-pattern-generator use case. Expected shape:
+Task breakdown is finalised when M5 completes. The scope below replaces the
+original four-line sketch after a 2026-08-18 review of what the toolkit is
+actually for; the reasoning is recorded here because it changes what M6 is
+allowed to define.
 
-- [ ] **M6.1** Node-type schemas and typed ports.
-- [ ] **M6.2** Connection validation against schemas.
-- [ ] **M6.3** Drag-to-connect interactions.
-- [ ] **M6.4** Pattern-generator example built on the DSL.
+WHAT `@dagr/vdsl` IS. A toolkit for building a node-graph language, not a
+node-graph language. The distinction is the whole design: general-purpose
+visual *languages* have a long failure record (Prograph, the 80s and 90s VPL
+wave), while toolkits that let someone else build a domain-specific one have a
+good one — React Flow, Rete, Baklava, NodeGraphQt, imgui-node-editor, and most
+instructively LiteGraph.js, whose modest node-editor library is the substrate
+ComfyUI was built on. The toolkit never needed to guess the domain. It needed
+to be good enough that someone else's domain could land on it.
+
+WHAT IT MUST NOT DEFINE: an ontology. No built-in node kinds, no opinion about
+what a "source" or a "transform" is, no config schema format of Dagr's
+invention. A consumer brings its own node spec and Dagr validates against it
+through an adapter interface. The moment `@dagr/vdsl` decides what a node kind
+is, every adopter with a different answer is fighting the library, and the
+library has no way to know which of them is right. This reverses the original
+M6.1 wording ("node-type schemas"), which read as Dagr owning the schema.
+
+WHAT DAGR COMPETES ON, and it is not this milestone. Drag-to-connect, handles,
+minimaps and rich DOM nodes are solved, and solved well, by incumbents. What is
+not solved anywhere is a graph that stays legible when it changes: dagre and
+ELK are batch engines, neither preserves prior positions across an edit, and
+the common answer is to re-run layout and accept a reshuffle. M3.4 to M3.7
+is Dagr's answer to that, and it is the claim the project should lead with.
+M6 is the demonstration of the claim, not the claim.
+
+TWO CONSUMERS, NOT ONE. M6.6 exists because a toolkit validated against a
+single consumer is a library with extra indirection: the one consumer's
+assumptions become the API and nobody notices until the second arrives. Two
+consumers with genuinely different shapes is the cheapest available test of
+whether the generalisation holds.
+
+- [ ] **M6.1** Node spec adapter: the interface a consumer implements to
+  describe its own node kinds (ports, arity, config shape), and the registry
+  that resolves a node to a spec. Dagr defines the interface and nothing
+  behind it.
+  NOT an `attrs -> spec` predicate. `attrs` is `Readonly<Partial<A>>`, so
+  `attrs.kind` is `string | undefined` and the consumer's kind union is erased
+  at the boundary — every hover and drag callback downstream lands on `any` or
+  a cast, which defeats the point of a typed toolkit. Ship
+  `defineRegistry({ ... })` keyed on `K extends string`, inferred once from the
+  object literal and threaded through as `NodeSpec<K>`.
+  Packaging: `@dagr/vdsl` declares `@dagr/graph`, `@dagr/react` and `react` as
+  peerDependencies plus devDependencies, for the same `#private` nominal-typing
+  reason M5.4 records for `@dagr/layout`. Two copies of `@dagr/graph` in a
+  consumer's tree are not interchangeable.
+- [ ] **M6.2** Port typing and connection validation: a type token per port,
+  a compatibility predicate the consumer supplies, and validation of a
+  proposed connection against it.
+  CYCLE REJECTION IS A POLICY THE ADAPTER DECLARES, NOT A DEFAULT. `Graph`
+  permits cycles by design and M6.6 mandates a DSL with feedback, so a toolkit
+  that rejects cycles out of the box is wrong for half its own reference
+  consumers. When the adapter does declare it, the proposed-edge question is
+  `source === target || graph.canReach(target, source)` — already public on
+  `Graph` and O(V + E) over the reached subgraph. Name it in the task, because
+  the obvious wrong implementation is add-then-`findCycle`-then-remove, which
+  emits two patches and pollutes undo. One boundary: `canReach` throws
+  `NodeNotFoundError` when either endpoint is absent, so it answers for a
+  proposed edge between two EXISTING nodes and not for one aimed at a node the
+  drag has not created yet. That second case needs its own answer.
+  `findCycle` and `isAcyclic` answer over the whole graph AFTER insertion and
+  are the wrong tool here.
+- [ ] **M6.3** Drag-to-connect interactions on top of M5.2's hooks and M4.8's
+  GPU picking: port hit-testing, an in-flight edge, drop targets filtered by
+  M6.2's predicate.
+- [ ] **M6.4** Subgraph nodes, drill-down form: a node that CONTAINS other
+  nodes (M5.5's `parent`, one graph, not a nested `Graph` instance), and
+  navigation that replaces the canvas with the container's children.
+  NO LAYOUT ALGORITHM CHANGE — and that is a narrower claim than the one this
+  entry made before the 2026-08-18 algorithms review, which was wrong about
+  the engine. The stages need nothing. The ENGINE does: `createLayout` retains
+  exactly one graph and one warm start (`held` / `warm`), and `run(graph)`
+  always passes `previous: undefined`, so a run is always cold, on purpose.
+  A consumer that navigates in and back out by calling `run()` on each view
+  therefore gets a COLD RUN every time it re-enters — precisely the reshuffle
+  the incremental-layout docs sell against — and calling `relayout(patch)` for
+  the other view fails `checkPatchApplied` with `EngineStateError`. The real
+  requirement is ONE ENGINE PER CONTAINER, KEPT ALIVE ACROSS NAVIGATION, each
+  holding the derived view of its own children. Write that into the task; it
+  is the difference between drill-down feeling instant and feeling like a page
+  load.
+  AND THE ENGINE LIFETIME IS THE EASY HALF. `graph.subscribe` emits ops over
+  the WHOLE graph while each container engine holds a different derived `Graph`
+  instance, so feeding a root patch straight to a container engine fails
+  `checkPatchApplied` on the first op naming a node that view does not hold.
+  Each view's patch has to be DERIVED from the root patch, and that translation
+  is the task's real work. Three cases an implementer meets on day one:
+  ops outside the view are dropped; a boundary edge with one endpoint outside
+  is NOT droppable and needs whatever stands in for the outside endpoint in the
+  derived view; and `update-node-parent` is a removal from one view and an
+  addition to another, which is two patches to two engines.
+  BOUNDARY NODES ARE ORDINARY SOURCES AND SINKS in the child view. An earlier
+  draft said "the parent's ports become its boundary", which has no support in
+  the pipeline: there is no rank pinning and no fixed-order constraint, and
+  `networkSimplexRank({ initialRanks })` is a hint rather than a constraint.
+  Longest-path ranking pins each node as high as its predecessors allow and
+  never looks at what the node points at, so boundary INPUTS land on rank 0
+  for free while boundary OUTPUTS float up under their producer instead of
+  bottom-aligning. Bottom-aligning outputs is not available today and is not in
+  this task.
+  Every serious node tool has exactly this (Houdini subnets, Nuke Groups,
+  Blender node groups, Max subpatchers, Simulink subsystems, LabVIEW subVIs,
+  Substance subgraphs, Unreal collapsed graphs), which is the strongest
+  available evidence that encapsulation is table stakes rather than a
+  nice-to-have. It is also the answer to the one thing a flat DAG cannot
+  express: naming and reuse. A subgraph node is a function. Depends on M5.5.
+- [ ] **M6.5** Collapse and expand: turning a selection into a subgraph node
+  and back, with the boundary edges rebound to the new node's ports. The layout
+  consequence is a large structural patch, which is what M3.3 batched and M3.6
+  made order-stable, so this is a consumer of that work rather than new engine
+  work. Verified in the 2026-08-18 algorithms review: collapse does NOT fall
+  back to a cold run — `cohortsOf` skips hint ids the roster no longer holds
+  and stays engaged while any survivor is named, so the removed N cost nothing.
+  WITH TWO LIMITS the task has to carry, because the guarantee is narrower than
+  "collapse is stable". The order constraint is per hint LAYER, and a node
+  whose rank changed is a newcomer at its new rank with a cohort of one, placed
+  freely by the sweeps. Collapsing a mid-graph selection shortens paths and
+  shifts downstream ranks, so stability holds only for nodes whose rank
+  survives the collapse. And M3.7 has not landed, so a collapse on cyclic input
+  can still reshuffle through the FAS.
+- [ ] **M6.6** Two reference DSLs built on the toolkit, deliberately unalike:
+  one acyclic and value-shaped, one with feedback and a real-time evaluator.
+  The second is the one that finds the wrong assumptions, because a toolkit
+  written against acyclic dataflow alone will have baked that in.
+
+## M7: Compound layout (`@dagr/layout`)
+
+Inline nesting: parents and children drawn together as nested boxes, rather
+than M6.4's drill-down. Separated from M6 because it is a different and much
+harder problem, and it interacts with every M3 stability guarantee. Sugiyama
+and Misue's compound digraph paper (1991) is the origin; dagre's cluster
+support is its buggiest corner precisely because it was retrofitted, which is
+the case for doing this as its own milestone with its own tests rather than as
+an M6 sub-task.
+
+What it actually touches, corrected against the code by the 2026-08-18
+algorithms review rather than asserted:
+
+- CROSSING REDUCTION, yes. `barycenterOrder` is literally a barycentre-then-
+  median sweep, and that is the pass Forster's work on layered compound graphs
+  exists to replace.
+- RANKING, but NOT by replacing the ranker. Network simplex IS amenable to
+  containment constraints; this implementation just hardcodes both knobs —
+  minlen is the `- 1` in `slackOf`, and every weight is ±1 in `netInflow`,
+  with `AcyclicView` carrying only `from` and `to` per edge. Containment
+  edges need per-edge minlen and weight, so what M7 needs is A PER-EDGE
+  ATTRIBUTE CHANNEL ON THE VIEW, not a new ranking algorithm. That is a
+  smaller and better-shaped change than "replace ranking", and the roadmap
+  should not overstate it.
+- POSITIONING, yes.
+- THE WIRE PROTOCOL, which the earlier draft missed entirely. `decodeRun`
+  rebuilds nodes as bare ids, so `parent` would never reach a worker. M7
+  reopens `wire.ts`.
+
+THE CAMPAIGN DEMO IS ALREADY THIS MILESTONE, DONE BY HAND, and it is the best
+evidence M7 has. `packages/campaign` carries a `contains` forest rooted at
+`rootId` with a `depth` per node, which is M5.5's containment expressed as
+edges; `packages/campaign-stage/src/tiles.ts` cuts the campaign into about a
+hundred tiles because one Sugiyama pass over 3,010 nodes ranks 1,023 rooms into
+a couple of layers and draws a 50:1 ribbon; `campaign-scene.ts` runs a separate
+layout per tile and shelf-packs the blocks with a bisection-searched width. Per
+container layout plus a packing pass over the results IS compound layout. The
+demo built it by hand because the engine could not.
+
+That makes the success criterion concrete, and it should replace "inline
+nesting" as the way this milestone is judged: M7 reproduces the campaign
+drawing without the hand-rolled packer. Two honest limits on that. The demo
+today runs all 95 tile layouts through ONE engine (`campaign-scene.ts`), so
+every tile is a cold run and no tile can relayout incrementally — the problem
+M6.4 names above, already visible in shipped code. And the 6 GRID tiles are not
+a compound-layout problem at all: NPCs, factions, items, stat blocks, clues and
+weather have no routed edge with both ends inside a group, so a layer
+assignment puts every component in rank 0 and a grid is what the data actually
+wants. M7 must not claim those.
+
+Not scoped in task detail until M6.4 has shipped and the drill-down form has
+been used enough to say whether inline nesting is wanted as well.
 
 ## Campaign demo track
 
