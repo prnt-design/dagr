@@ -126,10 +126,12 @@ export interface PreparedState {
    * What the engine's previous run left behind, or `undefined` on a cold one.
    *
    * The warm-start channel, added by M3.2 and first read by M3.6, which takes
-   * `layers` into the order stage. M2.3 had already shipped the other half,
-   * `networkSimplexRank({ initialRanks })`, and nothing reads that from here
-   * yet: M3.7 is the ranking task. Nothing reads `positions` either, which is
-   * M3.8's.
+   * `layers` into the order stage. M3.7a added the second reader: both rank
+   * stages take `reversedEdges` into the cycle breaker, so a relayout stops
+   * re-deciding which edges point backwards. Nothing reads `ranks` yet, which is
+   * M3.7b's, and `networkSimplexRank({ initialRanks })` is not it: that is an
+   * option bound when the stage is constructed rather than a per-run hint.
+   * Nothing reads `positions` either, which is M3.8's.
    *
    * READING IT IS NOT SEEDING FROM IT, which is M3.6's finding and is the thing
    * to know before adding the second reader. The order stage holds its previous

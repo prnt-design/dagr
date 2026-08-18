@@ -108,10 +108,13 @@ offer, and `engine.run` deliberately does not either, because the graph it is
 handed need not be the one the last run saw. It is on the record every stage
 reads rather than passed to one of them, because ranking, ordering and
 positioning each have a previous answer to start from and a channel per stage
-would be three contracts to keep in step. The order stage reads `layers`; the
-rankers and the position stages do not read theirs yet, so a relayout is still
-correct and no faster than a cold run. What the one reader buys is a stable
-answer rather than a cheaper one: see [the warm start](#the-warm-start).
+would be three contracts to keep in step. The order stage reads `layers` and
+both rank stages read `reversedEdges`; nothing reads `ranks` or `positions` yet,
+so a relayout is still correct and no faster than a cold run. What those readers
+buy is a stable answer rather than a cheaper one: see
+[the warm start](#the-warm-start) for the order stage's and
+[the reversed set across a relayout](#the-reversed-set-across-a-relayout) for
+the rankers'.
 
 Its own `previous` is subtracted for a reason worth knowing if you write a stage
 that reads it: the field is on the record, so the runner carries it forward and
@@ -790,12 +793,60 @@ target-first is exactly how the guarantee above gets broken. The runner checks
 the direction for you as of M2.2, in a form that survived M2.8's border
 attachment unchanged. See [Route direction](#route-direction).
 
+### The reversed set across a relayout
+
+A cold run's reversed set is a fact about the *arithmetic* as much as about the
+graph. Every height is the balance of every edge in its connected component, so
+a patch anywhere moves every height a little, and an edge whose two heights sit
+close together can change sides. Two edges of a two-cycle are the extreme case:
+they are structurally interchangeable, so which one gets reversed is settled by
+the last bit of an iterative solve, and hanging a new leaf somewhere else in the
+graph is enough to swap them. Measured over dense random cyclic graphs, one
+added leaf moves the cold set on about a quarter of them, and a leaf can change
+no cycle at all.
+
+So as of M3.7a the rank stages hand the breaker the previous run's set, off the
+same `previous` channel the order stage reads, and a relayout keeps the
+reversals it can. **A previously reversed edge stays reversed while it still
+lies on a cycle**, which for an edge is exactly its two endpoints still sharing
+a strongly connected component; an edge that has stopped lying on one is
+released rather than left drawn backwards for a cycle that is gone, and an entry
+naming an edge you have since deleted is ignored. The run then breaks whatever
+cycles are left in the view those held reversals leave, which means a new cycle
+gets exactly one new reversal and an edit that closes no cycle gets none. On a
+graph whose edits close no new cycles the set never moves at all.
+
+Retention is decided per ordered PAIR and not per edge, which matters only when
+your graph has parallel edges: adding a second copy of an edge that was reversed
+keeps the whole pair pointing the way it already pointed, rather than letting the
+new copy argue the pair back round. Measured over 1,299 random cyclic graphs each
+given one such copy, the reversal survives 1,237 times per pair against 1,129 per
+edge, and both readings leave a legal feedback arc set.
+
+Two things this does not change. **It is not a speed-up.** The breaker does the
+same solve either way and then pays for the seed: one more strongly connected
+components pass, two more walks of the edges and four array copies, measured at
+1.22x to 1.38x a cold break on the benchmark corpora. What it buys is a stable
+answer, not a cheaper one, which is the same trade the order stage's warm start
+makes. And **on a DAG there is nothing to hold**: the set is empty, it stays
+empty, and every guarantee here is vacuously true. This is a story about cyclic
+input only.
+
+Both rank stages do it, and neither trusts what it is handed: the result is a
+legal feedback arc set for any seed whatever, including one from a different
+graph, and a seed that would leave more than half the edges reversed is
+discarded for a cold answer, which is a guard you can observe: on a graph small
+enough for two arcs to be more than half of it, holding both copies of a pair
+trips it and the run answers cold. The seed can choose between equally good
+answers and can do nothing else.
+
 ### Determinism and cost
 
-Both steps of the default stage are O(V + E) in time and space. Cycle breaking
-gets there by keeping vertices in degree buckets rather than rescanning what is
-left each round, and ranking is a Kahn-style sweep that visits each node and
-edge once. A timing figure IS quoted for the default stage, as of M2.9, and it
+Ranking is O(V + E) in time and space, a Kahn-style sweep that visits each node
+and edge once. Cycle breaking is the more expensive half and has been since
+M2.2c replaced the greedy pass with the least-squares one: O(k(V + E) + V log V)
+for k solver iterations, plus one Tarjan pass for the components and a second
+one on a relayout, for the seeded view. A timing figure IS quoted for the default stage, as of M2.9, and it
 is a different artefact from the one the gate uses. The repo commits benchmark
 medians for the rank stage at 1k and 10k nodes and gates changes against them
 locally, and those are RATIOS against a control workload: machine-matched,
@@ -817,8 +868,15 @@ against either. The numbers anything is allowed to regress against are the
 ratios in `bench/baseline.json`, and they are not quoted on this page because a
 ratio against a control workload is not a figure a reader can use.
 Both steps are fully deterministic: vertices are numbered in `graph.nodes()`
-order, edges are walked in `graph.edges()` order, and a tie is broken by bucket
-arrival order, which is itself fixed by the graph's order.
+order, edges are walked in `graph.edges()` order, and an exact tie between two
+heights is broken by vertex number, which is itself the graph's order. What that
+tie break settles is exact equality of two doubles and nothing more: two
+structurally interchangeable vertices do not generally come out of the solve
+equal, so which of them sorts first is the last bit of the solve rather than the
+tie break. That is reproducible, which is what a re-run needs, and it is
+arbitrary, which is why the reversed set is seeded across a relayout rather than
+re-derived. See
+[The reversed set across a relayout](#the-reversed-set-across-a-relayout).
 Determinism here is load bearing rather than tidy, for the reason in
 [Determinism](#determinism): a ranker that resolved a tie differently on a
 re-run would move nodes the user never touched.
@@ -1903,9 +1961,13 @@ patch did not reach keep their left-to-right order rather than being reshuffled
 by a crossing sweep that is free to start anywhere. On the corpus that is 30 of
 30 graphs against 17 of 30 cold, and it is what took the
 [region table](#what-a-relayout-does-outside-it) to four zeros. See
-[the warm start](#the-warm-start) for what it costs in crossings.
-`relayoutAsync` over a worker does NOT get it, because the state it reads stays
-in the worker.
+[the warm start](#the-warm-start) for what it costs in crossings. Since M3.7a
+the rank stages hold the previous run's cycle-breaking decisions in the same
+spirit, so on a cyclic graph a relayout also stops re-deciding which edges are
+drawn backwards: see
+[the reversed set across a relayout](#the-reversed-set-across-a-relayout).
+`relayoutAsync` over a worker does NOT get either of them, because the state
+they read stays in the worker.
 
 Four fields come back. `delta` is a [`LayoutDelta`](#deltas) against the
 geometry the engine last reported. `result` is that geometry with the delta
@@ -2893,7 +2955,7 @@ without being selectable at all, `brandes-koepf-position`, for the reason below.
 
 | Stage | `name` | What it does today | What comes next |
 | --- | --- | --- | --- |
-| rank | `longest-path-rank` | Breaks cycles with a least-squares feedback arc set, ranks by longest path, then splits every long edge into a [dummy chain](#dummy-chains). Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height, and since M2.4c it splits through the same shared splitter. | Nothing outstanding. |
+| rank | `longest-path-rank` | Breaks cycles with a least-squares feedback arc set, ranks by longest path, then splits every long edge into a [dummy chain](#dummy-chains). Real, and described in [Ranking](#ranking-and-what-it-does-with-a-cycle). `network-simplex-rank` is a second real ranker a caller can select instead, for [minimum total edge length](#minimum-total-edge-length-and-what-it-costs) rather than minimum height, and since M2.4c it splits through the same shared splitter. Since M3.7a both of them seed the cycle breaker from the previous run, which is [the reversed set across a relayout](#the-reversed-set-across-a-relayout). | The ranks themselves, which a relayout still recomputes in full. |
 | order | `barycenter-order` | Groups the roster by rank and reduces edge crossings within each layer, by barycenter sweeps and then a transpose pass, over every segment of the drawing including the pieces of a split long edge. Real, and described in [Ordering](#ordering-and-what-a-crossing-is-counted-between). It took the default from `insertion-order` in M2.6b, for [this trade](#what-the-default-order-stage-costs-and-buys). Its two budgets were re-derived in M2.6c and are now 4 sweeps and a cap of 16, and its transpose tie rule was re-derived in M2.6d and kept. Since M3.6 it also holds the previous run's order through a relayout, which is [the warm start](#the-warm-start). | Nothing outstanding. |
 | position | `grid-position` | Lays each layer out as a row, left to right, centred on `x = 0`, stacking rows downward from `y = 0`. `brandes-koepf-position` is a real algorithm that is implemented but not exported, for the reason below this table. | A compaction that is not the longest-path substitute, which is what now blocks Brandes-Koepf, and then a decision about the default. M2.9 added the first evidence on graphs that are not generated, and it points the other way from the bench corpora. |
 | route | `polyline-route` | A polyline out of the source box's border, through the centre of each of the edge's dummies, and into the target box's border, which is two points for an edge with no chain. Monotone in the rank axis. Real, and described in [Routing](#routing-and-where-a-route-attaches). It took the default from `straight-route` in M2.8, which also deleted that placeholder. | `edgeSep`, which would fan out parallel edges and give a self loop a shape, then obstacle detours and splines. |
