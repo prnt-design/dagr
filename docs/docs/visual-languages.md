@@ -54,9 +54,9 @@ wiring audio or compiling a query.
 ## What Dagr provides, and what you provide
 
 **Dagr provides** the graph model with stable node identity and patch-based
-mutation, layout that is incremental and does not reshuffle on edit, rendering
-at a scale DOM cannot reach, and the interaction primitives that go with those
-— picking, drag-to-connect, selection.
+mutation, layout that is incremental and does not reshuffle on edit, and
+rendering at a scale DOM cannot reach. Picking, selection and drag-to-connect
+are planned (M4.8, M5.2, M6.3).
 
 **You provide** the meaning. What node kinds exist, what a port carries,
 whether two ports may connect, what a config field is, and what evaluating the
@@ -76,9 +76,10 @@ if your predicate says so — not the vocabulary.
 ## Layout stability is the thesis
 
 The common way to lay out an editable node graph is to run a batch layout
-after every change. That is what `dagre` and ELK are for, and it works right up
-until the graph is something a person is editing, at which point adding one
-node rearranges the other forty and the user loses their place.
+after every change. `dagre` and ELK are both batch engines: neither preserves
+prior positions across an edit. That works right up until the graph is
+something a person is editing, at which point adding one node rearranges the
+other forty and the user loses their place.
 
 Dagr treats that as the central problem rather than a rough edge. Node identity
 is stable across layouts, ordering decisions are carried forward rather than
@@ -94,31 +95,37 @@ whether the editor feels like a document or like a slideshow.
 The one thing a flat DAG genuinely cannot express is naming and reuse. Past a
 screenful of nodes, a graph needs a way to say "this cluster is one thing,
 called this" — and every serious node tool converged on the same answer: a node
-that owns a child graph, which you navigate into.
+that contains other nodes, which you navigate into.
 
 Houdini calls them subnets, Nuke calls them Groups, Blender node groups, Max
-subpatchers, Simulink subsystems, LabVIEW subVIs, Unreal collapsed graphs. The
-shape is identical each time: the parent node's ports are the child graph's
-boundary, and a subgraph node is, functionally, a function.
+subpatchers, Simulink subsystems, LabVIEW subVIs, Unreal collapsed graphs. A
+subgraph node is, functionally, a function.
 
-Dagr treats this in two independent pieces, because they have very different
-costs:
+Containment in Dagr is a reference on a node, not a nested `Graph` instance.
+That keeps one patch stream and one delta flow, which is what lets collapse and
+expand rebind boundary edges in a single atomic patch.
 
-- **Drill-down**, planned for v0.2, replaces the canvas with the child graph.
-  The child is laid out as an ordinary graph on its own, so this needs no
-  layout engine changes at all.
+The two ways to draw it have very different costs:
+
+- **Drill-down**, planned for v0.2, replaces the canvas with the container's
+  children. This needs no layout *algorithm* change — the children lay out as
+  an ordinary graph. It does need one engine per container, kept alive across
+  navigation: an engine retains a single graph and a single warm start, so
+  re-running it on a different view is a cold run, and a cold run on every
+  drill-in is the reshuffle this page just argued against.
 - **Inline compound layout** draws parents and children together as nested
-  boxes. This is a much harder problem — containment constrains ranking, and
-  the standard crossing-reduction pass does not survive it — and is tracked
-  separately.
+  boxes. Much harder — containment constrains ranking, and the barycentre
+  crossing-reduction pass does not survive it — and is tracked separately.
 
-The graph model reserves the containment field before v0.1 so that neither
+M5.5 adds a `parent` field to `Node` before v0.1 publishes, so that neither
 choice is a breaking change later.
 
 ## Status
 
 `@dagr/vdsl` is planned for v0.2 and does not exist yet. `@dagr/graph` and
-`@dagr/layout` are usable today, and you can build a node editor on them now —
-the toolkit is convenience over those, not a separate engine. See the
+`@dagr/layout` are usable today: you can model and lay out a node graph on them
+now, and hit-testing, selection and drag-to-connect are yours to write until
+M4.8 and M5.2 land. The toolkit will be convenience over those, not a separate
+engine. See the
 [roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md) for the
 task breakdown.

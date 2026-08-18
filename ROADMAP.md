@@ -3359,8 +3359,9 @@ it.
   mutation sequences (grow, prune, reparent, rewire, sustained churn) run
   through the engine with their stability metrics committed as golden files, so
   a later change that degrades stability arrives as a diff rather than as a
-  feeling. Include at least one pattern-generator-shaped sequence,
-  since that is the first consumer and the reason the milestone exists. Docs
+  feeling. Include at least one pattern-generator-shaped sequence, since that
+  is the shape M6.6's first reference DSL takes and the reason the milestone
+  exists. Docs
   page on incremental layout, the flagship feature, carrying the numbers this
   corpus produces and an honest statement of what the fallback costs when it
   fires.
@@ -4577,29 +4578,55 @@ it settled rather than restating the argument.
   `pnpm --filter @dagr/layout build` needs `@dagr/graph` built first (see the
   comment in `packages/layout/tsconfig.build.json`). Not worth the machinery at
   two packages, worth knowing about before the other decision is made.
-- [ ] **M5.5** Reserve containment in the graph model: a `parent` on `Node`,
-  the invariants that go with it (a node has at most one parent, containment
-  is acyclic, an edge may cross a boundary), and patch, serialization and
-  traversal coverage for it. `@dagr/layout` IGNORES it in this task — the
-  point is the type, not the layout.
-  LANDS BEFORE M5.4 QUEUES THE PUBLISH, and that ordering is the whole reason
-  this task exists rather than sitting in M6. `Node` is
-  `{ id, attrs, ports }` today and is the central type of the project: it is
-  on `@dagr/graph`'s public surface, on `@dagr/layout`'s input, and about to
-  be on `@dagr/react`'s. Adding a field to it after v0.1 publishes it is a
-  breaking change to everything downstream, and 0.x caret ranges do not cross
-  a minor (see M5.4's note), so the cost is a coordinated release of every
-  package plus every consumer. Adding it now costs one field and its
-  invariants. This is not a bet that nesting is wanted — M6.4 and M7 decide
-  that. It is the cheap half of an option whose expensive half is a rewrite.
+- [ ] **M5.5** Reserve containment in the graph model: `readonly parent?: NodeId`
+  on `Node` and on `NodeJSON`, an `update-node-parent` patch op, the invariants
+  (a node has at most one parent, containment is acyclic, an edge may cross a
+  boundary), and traversal coverage. `@dagr/layout` IGNORES `parent` in this
+  task — the point is the model, not the layout.
+  LANDS BEFORE M5.4 QUEUES THE PUBLISH. The api-design review of 2026-08-18
+  corrected the reason, and the corrected reason is the one that matters. The
+  field on `Node` is NOT the urgent part: it is optional and readonly, `Node` is
+  only ever produced by `Graph` and never structurally implemented by a
+  consumer, so adding it later is additive for readers. Two other surfaces
+  genuinely cannot move after v0.1:
+  - `PatchOp` is a discriminated union (`packages/graph/src/patch.ts`). A new
+    member breaks every exhaustive `switch` a consumer wrote with a `never`
+    arm. Do the cheaper general fix at the same time: DOCUMENT `PatchOp` AS AN
+    OPEN UNION, with a default arm required of consumers. That removes the
+    pressure for every future op rather than for this one.
+  - `GraphJSON.version` is the literal `1`
+    (`packages/graph/src/serialize.ts`). `parseGraphJSON` ignores unknown keys
+    by design, so a document carrying `parent` read by a build without
+    containment loses it silently rather than refusing — exactly the misread
+    `version` exists to prevent. Because this lands before v0.1 publishes, no
+    such reader will ever exist and `version` correctly STAYS `1`. Say so here
+    so nobody bumps it later out of caution.
+  ONE GRAPH, NOT NESTED GRAPHS. Containment is a reference on a node, not a
+  child `Graph` instance. This is settled here rather than in M6.4 because the
+  two models are not interchangeable: every `PatchOp` is scoped to a single
+  graph and `batch` is per-`Graph`, so with nested instances a child's edits
+  never reach a root subscriber and M6.5's boundary rebinding would span two
+  patch streams with no atomicity. The flat model keeps one patch stream, keeps
+  the graph → layout → deltas → render direction one-way, and is what makes
+  M6.5's claim to be a consumer of M3.3 and M3.6 true rather than aspirational.
+  DECISIONS THE TASK MUST NAME, or an implementer picks one silently:
+  - `apply` replays `add-node` through `graph.addNode`, so a parent must be
+    replayed before its children. Containment adds a node ordering constraint
+    that patches do not have today.
+  - `removeNode` is cascade-free by expansion for incident edges. Containment
+    needs the same call made EXPLICITLY — remove children, orphan them, or
+    refuse — because `invert` has to restore them in the right order.
+  - `update-node-parent` gets an explicit case in `influenceRegion`
+    (`packages/layout/src/influence.ts`) and in `checkPatchApplied`
+    (`packages/layout/src/engine.ts`). Both have a `default: break`, so a new
+    op is silently swallowed with no compile error and the influence region for
+    a reparent becomes whatever the other ops in the patch happened to widen.
+    A documented no-op case is fine; an implicit one is a wrong narrow bound
+    the moment M7 reads `parent`.
+  This is not a bet that nesting is wanted — M6.4 and M7 decide that. It is the
+  cheap half of an option whose expensive half is a coordinated release.
   Nesting is also the answer to the one weakness a flat DAG genuinely has,
-  which is that it cannot name or reuse a subgraph; anything that grows past a
-  screenful needs encapsulation, and the compound-graph literature is old
-  enough that the shape of the eventual answer is not in doubt.
-  What is deliberately NOT decided here: whether layout draws containment
-  inline (M7) or only as drill-down (M6.4). The model has to support both, and
-  a `parent` reference does, which is why the reservation can be made without
-  settling the layout question.
+  which is that it cannot name or reuse a subgraph.
 
 ## M6: VDSL = v0.2 (`@dagr/vdsl`)
 
@@ -4627,9 +4654,9 @@ M6.1 wording ("node-type schemas"), which read as Dagr owning the schema.
 
 WHAT DAGR COMPETES ON, and it is not this milestone. Drag-to-connect, handles,
 minimaps and rich DOM nodes are solved, and solved well, by incumbents. What is
-not solved anywhere is a graph that stays legible when it changes: dagre is
-effectively unmaintained, ELK is not incremental, and the common answer is to
-re-run a batch layout on every edit and accept a full reshuffle. M3.4 to M3.7
+not solved anywhere is a graph that stays legible when it changes: dagre and
+ELK are batch engines, neither preserves prior positions across an edit, and
+the common answer is to re-run layout and accept a reshuffle. M3.4 to M3.7
 is Dagr's answer to that, and it is the claim the project should lead with.
 M6 is the demonstration of the claim, not the claim.
 
@@ -4641,30 +4668,78 @@ whether the generalisation holds.
 
 - [ ] **M6.1** Node spec adapter: the interface a consumer implements to
   describe its own node kinds (ports, arity, config shape), and the registry
-  that resolves a node's `attrs` to a spec. Dagr defines the interface and
-  nothing behind it.
+  that resolves a node to a spec. Dagr defines the interface and nothing
+  behind it.
+  NOT an `attrs -> spec` predicate. `attrs` is `Readonly<Partial<A>>`, so
+  `attrs.kind` is `string | undefined` and the consumer's kind union is erased
+  at the boundary — every hover and drag callback downstream lands on `any` or
+  a cast, which defeats the point of a typed toolkit. Ship
+  `defineRegistry({ ... })` keyed on `K extends string`, inferred once from the
+  object literal and threaded through as `NodeSpec<K>`.
+  Packaging: `@dagr/vdsl` declares `@dagr/graph`, `@dagr/react` and `react` as
+  peerDependencies plus devDependencies, for the same `#private` nominal-typing
+  reason M5.4 records for `@dagr/layout`. Two copies of `@dagr/graph` in a
+  consumer's tree are not interchangeable.
 - [ ] **M6.2** Port typing and connection validation: a type token per port,
   a compatibility predicate the consumer supplies, and validation of a
-  proposed connection against it. Cycle rejection reuses `@dagr/graph`'s
-  existing check rather than inventing a second one.
+  proposed connection against it.
+  CYCLE REJECTION IS A POLICY THE ADAPTER DECLARES, NOT A DEFAULT. `Graph`
+  permits cycles by design and M6.6 mandates a DSL with feedback, so a toolkit
+  that rejects cycles out of the box is wrong for half its own reference
+  consumers. When the adapter does declare it, the proposed-edge question is
+  `source === target || graph.canReach(target, source)` — already public on
+  `Graph` and O(V + E) over the reached subgraph. Name it in the task, because
+  the obvious wrong implementation is add-then-`findCycle`-then-remove, which
+  emits two patches and pollutes undo. `findCycle` and `isAcyclic` answer over
+  the whole graph AFTER insertion and are the wrong tool here.
 - [ ] **M6.3** Drag-to-connect interactions on top of M5.2's hooks and M4.8's
   GPU picking: port hit-testing, an in-flight edge, drop targets filtered by
   M6.2's predicate.
-- [ ] **M6.4** Subgraph nodes, drill-down form: a node that owns a child
-  graph, and navigation that replaces the canvas with that child. This is the
-  cheap half of nesting and needs no layout change — the child is laid out as
-  an ordinary graph, on its own, and the parent's ports become its boundary.
+- [ ] **M6.4** Subgraph nodes, drill-down form: a node that CONTAINS other
+  nodes (M5.5's `parent`, one graph, not a nested `Graph` instance), and
+  navigation that replaces the canvas with the container's children.
+  NO LAYOUT ALGORITHM CHANGE — and that is a narrower claim than the one this
+  entry made before the 2026-08-18 algorithms review, which was wrong about
+  the engine. The stages need nothing. The ENGINE does: `createLayout` retains
+  exactly one graph and one warm start (`held` / `warm`), and `run(graph)`
+  always passes `previous: undefined`, so a run is always cold, on purpose.
+  A consumer that navigates in and back out by calling `run()` on each view
+  therefore gets a COLD RUN every time it re-enters — precisely the reshuffle
+  the incremental-layout docs sell against — and calling `relayout(patch)` for
+  the other view fails `checkPatchApplied` with `EngineStateError`. The real
+  requirement is ONE ENGINE PER CONTAINER, KEPT ALIVE ACROSS NAVIGATION, each
+  holding the derived view of its own children. Write that into the task; it
+  is the difference between drill-down feeling instant and feeling like a page
+  load.
+  BOUNDARY NODES ARE ORDINARY SOURCES AND SINKS in the child view. An earlier
+  draft said "the parent's ports become its boundary", which has no support in
+  the pipeline: there is no rank pinning and no fixed-order constraint, and
+  `networkSimplexRank({ initialRanks })` is a hint rather than a constraint.
+  Longest-path ranking pins each node as high as its predecessors allow and
+  never looks at what the node points at, so boundary INPUTS land on rank 0
+  for free while boundary OUTPUTS float up under their producer instead of
+  bottom-aligning. Bottom-aligning outputs is not available today and is not in
+  this task.
   Every serious node tool has exactly this (Houdini subnets, Nuke Groups,
   Blender node groups, Max subpatchers, Simulink subsystems, LabVIEW subVIs,
   Substance subgraphs, Unreal collapsed graphs), which is the strongest
-  available evidence that a toolkit without it is a toy. It is also the
-  answer to the one thing a flat DAG cannot express: naming and reuse. A
-  subgraph node is a function. Depends on M5.5.
+  available evidence that encapsulation is table stakes rather than a
+  nice-to-have. It is also the answer to the one thing a flat DAG cannot
+  express: naming and reuse. A subgraph node is a function. Depends on M5.5.
 - [ ] **M6.5** Collapse and expand: turning a selection into a subgraph node
-  and back, with the boundary edges rebound to the new node's ports. The
-  layout consequence is a large structural patch, which is what M3.3 batched
-  and M3.6 made order-stable, so this is a consumer of that work rather than
-  new engine work.
+  and back, with the boundary edges rebound to the new node's ports. The layout
+  consequence is a large structural patch, which is what M3.3 batched and M3.6
+  made order-stable, so this is a consumer of that work rather than new engine
+  work. Verified in the 2026-08-18 algorithms review: collapse does NOT fall
+  back to a cold run — `cohortsOf` skips hint ids the roster no longer holds
+  and stays engaged while any survivor is named, so the removed N cost nothing.
+  WITH TWO LIMITS the task has to carry, because the guarantee is narrower than
+  "collapse is stable". The order constraint is per hint LAYER, and a node
+  whose rank changed is a newcomer at its new rank with a cohort of one, placed
+  freely by the sweeps. Collapsing a mid-graph selection shortens paths and
+  shifts downstream ranks, so stability holds only for nodes whose rank
+  survives the collapse. And M3.7 has not landed, so a collapse on cyclic input
+  can still reshuffle through the FAS.
 - [ ] **M6.6** Two reference DSLs built on the toolkit, deliberately unalike:
   one acyclic and value-shaped, one with feedback and a real-time evaluator.
   The second is the one that finds the wrong assumptions, because a toolkit
@@ -4674,13 +4749,30 @@ whether the generalisation holds.
 
 Inline nesting: parents and children drawn together as nested boxes, rather
 than M6.4's drill-down. Separated from M6 because it is a different and much
-harder problem — it changes ranking (children constrained within a parent's
-band), crossing reduction (the standard barycentre pass does not survive
-containment; see Forster on layered compound graphs), and positioning, and
-it interacts with every M3 stability guarantee. Sugiyama and Misue's compound
-digraph paper (1991) is the origin; dagre's cluster support is its buggiest
-corner precisely because it was retrofitted, which is the case for doing this
-as its own milestone with its own tests rather than as an M6 sub-task.
+harder problem, and it interacts with every M3 stability guarantee. Sugiyama
+and Misue's compound digraph paper (1991) is the origin; dagre's cluster
+support is its buggiest corner precisely because it was retrofitted, which is
+the case for doing this as its own milestone with its own tests rather than as
+an M6 sub-task.
+
+What it actually touches, corrected against the code by the 2026-08-18
+algorithms review rather than asserted:
+
+- CROSSING REDUCTION, yes. `barycenterOrder` is literally a barycentre-then-
+  median sweep, and that is the pass Forster's work on layered compound graphs
+  exists to replace.
+- RANKING, but NOT by replacing the ranker. Network simplex IS amenable to
+  containment constraints; this implementation just hardcodes both knobs —
+  minlen is the `- 1` in `slackOf`, and every weight is ±1 in `netInflow`,
+  with `AcyclicView` carrying only `from` and `to`. Containment constraint
+  edges need per-edge minlen and weight, so what M7 needs is A PER-EDGE
+  ATTRIBUTE CHANNEL ON THE VIEW, not a new ranking algorithm. That is a
+  smaller and better-shaped change than "replace ranking", and the roadmap
+  should not overstate it.
+- POSITIONING, yes.
+- THE WIRE PROTOCOL, which the earlier draft missed entirely. `decodeRun`
+  rebuilds nodes as bare ids, so `parent` would never reach a worker. M7
+  reopens `wire.ts`.
 
 Not scoped in task detail until M6.4 has shipped and the drill-down form has
 been used enough to say whether inline nesting is wanted as well.

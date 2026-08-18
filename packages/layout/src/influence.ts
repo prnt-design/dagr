@@ -361,7 +361,7 @@ export function influenceRegion(input: InfluenceRegionInput): InfluenceSet {
    * did not change. Edges flip, ranks flip under them, and no band bounds that.
    * M3.7 is the task that makes the cycle breaker incremental, and it is the
    * task that narrows this back down. On a DAG the reversed set is empty and
-   * stays empty, which is the prnt.design pattern-generator case and the one
+   * stays empty, which is the pattern-generator case and the one
    * this region is sharp on.
    */
   const broken = previous.reversedEdges.size > 0;
