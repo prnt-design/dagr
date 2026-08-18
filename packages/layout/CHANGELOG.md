@@ -14,6 +14,47 @@ of doc prose.
 
 ### Changed
 
+- **Both rank stages now seed the cycle breaker from the previous run, so a
+  relayout stops re-deciding which edges point backwards.** Behaviour changed,
+  types did not. (M3.7a)
+
+  **Why a cold answer moves at all.** M2.2c replaced the greedy feedback arc set
+  with a least-squares one, which is far steadier than the pass the M3.7 roadmap
+  entry was written against: a leaf added to either bench corpus moves nothing.
+  Steadier is not stable. Every height is the balance of every edge in its
+  connected component, so a patch anywhere moves every height a little and an
+  edge whose two heights sit close together changes sides. Measured over the
+  dense cyclic population of `test/random.ts`, ONE ADDED LEAF, which can change
+  no cycle, moves the cold set on 30 of 132 graphs. The smallest case is three
+  nodes: the two arcs of a two-cycle are structurally interchangeable, so which
+  one is reversed is the last bit of an iterative solve, and a leaf hung
+  somewhere else swaps them.
+
+  **The rule.** `feedbackArcSet(graph, previous)` holds a previously reversed
+  edge reversed while it still lies on a cycle, which for an edge is exactly its
+  endpoints still sharing a strongly connected component of the input graph. An
+  entry naming an edge the graph no longer holds is ignored, a self loop is
+  never held, and a reversal whose cycle is gone is released. Retention is taken
+  per ordered PAIR rather than per edge, for the reason the reversal decision
+  is: holding one copy of `a -> b` and not another would put a two-cycle into
+  the seeded view.
+
+  **The one line it rests on.** The seeded run is scoped to the components of
+  the SEEDED VIEW and not of the input. An already-acyclic seed has nothing but
+  singleton components in it, so nothing is in scope, nothing is reversed, and
+  the answer is the seed: an unchanged graph is a FIXED POINT and an edit that
+  closes no new cycle returns the previous set exactly. Scoping by the input's
+  components instead looks equivalent and is not, and the witness is in
+  `test/layout.cycles.stable.test.ts`.
+
+  **What it does not change.** It is not a speed-up: the same solve runs either
+  way, plus one more components pass on a relayout. On a DAG the set is empty
+  and stays empty, so none of this touches acyclic input. A cold run answers
+  exactly as it did before, including every pinned corpus figure. And a seed
+  cannot make the answer wrong: the result is a legal feedback arc set for any
+  set of ids whatever, the `m/2` bound is size-checked rather than inherited,
+  and a seeded answer over the bound is discarded for a cold one.
+
 - **`barycenterOrder` now holds the previous run's per-rank order, and
   `engine.relayout` feeds it that order.** Behaviour changed, types did not, on
   both halves. (M3.6)

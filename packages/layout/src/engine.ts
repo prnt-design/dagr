@@ -170,7 +170,7 @@ export interface RelayoutResult {
    * whole roster: a cold sweep is entitled to reorder a rank the patch never
    * came near. This is a BOUND ON THE PATCH, computed from the patch and the
    * retained pipeline state before the run, and it is what M3.6's warm-started
-   * ordering, M3.7's incremental ranking, M3.8's anchored coordinates and M3.9's
+   * ordering, M3.7b's incremental ranking, M3.8's anchored coordinates and M3.9's
    * fast paths are each allowed to touch. The distance between the two is what
    * is left of this milestone, and it is measurable rather than notional:
    * `stabilityViolations(previous, result, region)` is exactly what a run does
@@ -376,7 +376,7 @@ export interface LayoutEngine {
    * exists, and it gives M3.6 through M3.9 a correct baseline to be measured
    * against rather than nothing. The patch is read for two things today: whether
    * it happened, and what it can affect, which is the `region` on the result.
-   * Nothing yet confines the WORK to that region, which is what M3.7 onwards are
+   * Nothing yet confines the WORK to that region, which is what M3.7b onwards are
    * for and is measurable in the meantime. M3.6 confined the ANSWER without
    * confining the work: the order stage holds the previous run's permutation, so
    * a relayout costs what a cold run costs and lands inside the region anyway.

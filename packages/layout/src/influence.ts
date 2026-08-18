@@ -23,7 +23,7 @@ import type { LayoutResult, PreviousLayout, Size } from './types.js';
  * beside it that narrows the set by hand so the checker is shown failing as well
  * as passing. The same type is what M3.9's fast paths assert against, and it
  * buys a free regression guard, because it should shrink monotonically across
- * M3.7 and M3.9 and a set is a thing you can measure.
+ * M3.7b and M3.9 and a set is a thing you can measure.
  *
  * M3.2 AND M3.4 BOTH SAID M3.5 WOULD NARROW THIS SET, AND IT DID NOT, which is
  * worth recording where the prediction was made. What a relayout is ENTITLED to
@@ -269,7 +269,7 @@ function requireRankWindow(rankWindow: number | undefined): number {
  * M3.2's `relayout` re-runs the whole pipeline, and a cold sweep is entitled to
  * reorder a rank the patch never came near, so the honest set for that run is
  * still the whole roster and that is still what `RelayoutResult.influence`
- * reports. This is the other object: what M3.6's warm-started ordering, M3.7's
+ * reports. This is the other object: what M3.6's warm-started ordering, M3.7b's
  * incremental ranking, M3.8's anchored coordinates and M3.9's fast paths are
  * allowed to touch, computed before any of them exist so that each is written
  * against a bound rather than against its own opinion of one. The distance
@@ -354,15 +354,16 @@ export function influenceRegion(input: InfluenceRegionInput): InfluenceSet {
    * Whether the previous run had a cycle to break, which is what makes an edge
    * op unboundable.
    *
-   * M2.2's greedy feedback arc set is order dependent by construction: its
-   * sequence depends on degree-bucket membership, so one added or removed edge
-   * can change one node's degree, change the whole sequence, and produce a
-   * different reversed set of the same size for a graph whose cycle structure
-   * did not change. Edges flip, ranks flip under them, and no band bounds that.
-   * M3.7 is the task that makes the cycle breaker incremental, and it is the
-   * task that narrows this back down. On a DAG the reversed set is empty and
-   * stays empty, which is the prnt.design pattern-generator case and the one
-   * this region is sharp on.
+   * The feedback arc set moves under patches that changed no cycle. M2.2's
+   * greedy pass did it through degree buckets; the least-squares pass that
+   * replaced it at M2.2c does it through the solve, since every height is the
+   * balance of every arc around it and an arc whose two heights sit close
+   * together changes sides. Either way a different set comes back for a graph
+   * whose cycle structure did not change, edges flip, ranks flip under them, and
+   * no band bounds that. M3.7a is the task that stopped it, by seeding the
+   * breaker from the previous run, and this region is what it narrows. On a DAG
+   * the reversed set is empty and stays empty, which is the prnt.design
+   * pattern-generator case and the one this region is sharp on.
    */
   const broken = previous.reversedEdges.size > 0;
 

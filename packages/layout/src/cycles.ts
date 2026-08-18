@@ -1,4 +1,4 @@
-import type { EdgeId, Graph, NodeId } from '@dagr/graph';
+import type { Edge, EdgeId, Graph, NodeId } from '@dagr/graph';
 import { InternalLayoutError } from './errors.js';
 
 /**
@@ -181,6 +181,75 @@ function atFloat(values: Float64Array, index: number): number {
  * is a lead, and what would make it a result is a stopping rule that is about
  * the graph rather than about the count.
  *
+ * ## The warm start
+ *
+ * `previous` is the reversed set of the run before this one, and handing one in
+ * is what makes the answer a statement about the graph rather than about the
+ * arithmetic that produced it. M3.7a added it; M3.7b is the ranking task that
+ * needs it.
+ *
+ * WHY IT IS NEEDED IS NOT WHAT THE ROADMAP ENTRY SAID, and the correction is
+ * worth having here because the entry's reasoning was about a pass this module
+ * no longer runs. The entry describes M2.2's greedy heuristic, whose order is
+ * built vertex by vertex out of degree buckets, so a patch moving one node
+ * between buckets rewrites the whole sequence. M2.2c replaced that with the
+ * least-squares order above, which is far steadier: a leaf added to either
+ * bench corpus moves nothing at all. But steadier is not stable. Every height
+ * is the balance of every arc in its weakly connected component, so a patch
+ * anywhere moves every height a little, and an arc whose two heights sit close
+ * together flips with it. Measured on the dense cyclic population of
+ * `test/random.ts`, one added leaf, which can change no cycle, moves the cold
+ * set on 30 of 132 graphs. A bail trigger reading that set would fire on a
+ * quarter of the patches that needed nothing.
+ *
+ * THE RETENTION RULE. A previously reversed edge is held reversed while it
+ * still lies on a cycle, which for an edge is exactly its two endpoints sharing
+ * a strongly connected component of the INPUT graph. An entry naming an edge
+ * the graph no longer holds is ignored, a self loop is never held, and an edge
+ * that has stopped lying on a cycle is dropped rather than left drawn backwards
+ * for a cycle that is gone. The rule is applied per ordered PAIR rather than
+ * per edge, for the same reason the reversal decision is: see Parallel edges.
+ *
+ * THE SEEDED RUN. Everything above then runs over the view those reversals
+ * leave, and the one thing that changes is the partition the component rule is
+ * taken against: the components of the SEEDED VIEW rather than of the input.
+ * That single choice is what the guarantee rests on. A seed that already leaves
+ * an acyclic view has nothing but singleton components in it, so no arc is in
+ * scope, nothing is reversed, and the answer is the seed. So an unchanged graph
+ * is a FIXED POINT, and an edit that closes no new cycle, which is every added
+ * leaf and every forward edge, returns the previous set exactly. Scoping by the
+ * INPUT's components instead would look equivalent and is not: sigma is not a
+ * topological order of the seeded view, so intra-component arcs of an ALREADY
+ * ACYCLIC seed would come out reversed and the fixed point would be lost.
+ *
+ * The answer is the seed with the seeded run's set exclusive-or'd into it,
+ * because reversing an edge twice leaves it as authored.
+ *
+ * WHY THE RESULT IS STILL A FEEDBACK ARC SET. Two claims, both by the proof in
+ * the next section rather than by measurement. Acyclicity is that proof applied
+ * to the seeded view, which is a digraph like any other and whose components
+ * are the ones scoped to. The component rule needs one more step: the seed
+ * flips only intra-component arcs of the input, so every cross-component arc of
+ * the seeded view is an original one pointing the way the input's condensation
+ * orders it, so no seeded path returns across a component boundary and every
+ * component of the seeded view sits inside one component of the input. Both the
+ * held set and the seeded run's set are therefore intra-component in the input,
+ * and so is the answer.
+ *
+ * THE BOUND IS GUARDED RATHER THAN INHERITED. A seeded run is at most half the
+ * arcs plus whatever it was handed, and a seed naming most of a directed cycle
+ * is enough to exceed `m/2`: holding all ten arcs of a ten-cycle turns it into
+ * the same cycle walked backwards, and breaking that costs nine. So the answer
+ * is size-checked and a seeded answer over the bound is discarded for the cold
+ * one. The bound stays exact and unconditional, which is what the section below
+ * claims, and the check costs one cold solve on the rare run that fires it.
+ *
+ * WHAT A SEED IS NOT ALLOWED TO DO is make the answer wrong. Everything above
+ * holds for any set of edge ids whatever, including one from a different graph
+ * and one naming every edge, and the suite hands it all three. That is the
+ * property that lets `PreviousLayout` be plumbed through the pipeline without a
+ * validity check at the seam.
+ *
  * ## Why scoping to components is safe
  *
  * A proof rather than a measurement, because the neighbouring rule that looks
@@ -362,7 +431,10 @@ function atFloat(values: Float64Array, index: number): number {
  * pinned anyway because a number that moved between runs would be a number no
  * later reader could rely on.
  */
-export function feedbackArcSet(graph: Graph): ReadonlySet<EdgeId> {
+export function feedbackArcSet(
+  graph: Graph,
+  previous?: ReadonlySet<EdgeId> | undefined,
+): ReadonlySet<EdgeId> {
   const nodes = graph.nodes();
   const count = nodes.length;
   const edges = graph.edges();
@@ -398,6 +470,124 @@ export function feedbackArcSet(graph: Graph): ReadonlySet<EdgeId> {
   }
 
   const componentOf = stronglyConnected(count, arcCount, arcSource, arcTarget, outDegree);
+  const cold = (): Set<EdgeId> =>
+    backwardArcs(edges, arcSource, arcTarget, degree, load, componentOf, count, arcCount);
+
+  if (previous === undefined || previous.size === 0) return cold();
+
+  // THE RETENTION RULE, taken per ordered PAIR and not per edge, for the reason
+  // the reversal decision is: every copy of `a -> b` has the same two
+  // endpoints, so holding one copy and not another would put `a -> b` and
+  // `b -> a` into the seeded view and hand the seeded run a two-cycle of this
+  // pass's own making. A pair is held when the previous set names ANY copy of
+  // it, which is what keeps a pair the caller has since added a copy to
+  // pointing the way it already pointed.
+  const heldPairs = new Set<number>();
+  for (const [index, edge] of edges.entries()) {
+    const source = at(arcSource, index);
+    // A self loop is one of the edges `arcSource` left at NONE, so it can never
+    // be held: reversing it cannot break the one cycle it is.
+    if (source === NONE) continue;
+    if (!previous.has(edge.id)) continue;
+    const target = at(arcTarget, index);
+    // Still on a cycle, which for an edge is exactly its endpoints sharing a
+    // strongly connected component of the INPUT graph. This is also what keeps
+    // the component rule: a held edge is intra-component by construction, so
+    // the seeded view flips no cross-component arc and the condensation order
+    // it advances is the input's own.
+    if (at(componentOf, source) !== at(componentOf, target)) continue;
+    heldPairs.add(source * count + target);
+  }
+  if (heldPairs.size === 0) return cold();
+
+  // The seeded view: the same arcs with the held pairs turned round. `degree`
+  // is untouched because it is the UNDIRECTED degree and so the same either
+  // way, which is what makes the preconditioner shared rather than rebuilt.
+  const held = new Set<EdgeId>();
+  const seededSource = Int32Array.from(arcSource);
+  const seededTarget = Int32Array.from(arcTarget);
+  const seededLoad = Float64Array.from(load);
+  const seededOutDegree = Int32Array.from(outDegree);
+  for (const [index, edge] of edges.entries()) {
+    const source = at(arcSource, index);
+    if (source === NONE) continue;
+    const target = at(arcTarget, index);
+    if (!heldPairs.has(source * count + target)) continue;
+    held.add(edge.id);
+    seededSource[index] = target;
+    seededTarget[index] = source;
+    seededLoad[source] = at(seededLoad, source) + 2;
+    seededLoad[target] = at(seededLoad, target) - 2;
+    seededOutDegree[source] = at(seededOutDegree, source) - 1;
+    seededOutDegree[target] = at(seededOutDegree, target) + 1;
+  }
+
+  // Scoped to the components of the SEEDED view and not of the input, and this
+  // is the line the whole warm start rests on. A seed that already leaves an
+  // acyclic view has no non-trivial component in it, so nothing is in scope,
+  // nothing is broken, and the answer is the seed itself. That is what makes an
+  // untouched graph a fixed point and an edit that closes no cycle exact.
+  const seededComponentOf = stronglyConnected(
+    count,
+    arcCount,
+    seededSource,
+    seededTarget,
+    seededOutDegree,
+  );
+  const broken = backwardArcs(
+    edges,
+    seededSource,
+    seededTarget,
+    degree,
+    seededLoad,
+    seededComponentOf,
+    count,
+    arcCount,
+  );
+
+  // Reversed twice is not reversed: an edge the seeded run turns round is one
+  // the seed had already turned round, so it comes out of the answer pointing
+  // as the caller authored it.
+  const feedback = held;
+  for (const id of broken) {
+    if (feedback.has(id)) feedback.delete(id);
+    else feedback.add(id);
+  }
+
+  // THE BOUND IS UNCONDITIONAL AND THE SEED DOES NOT GET TO BREAK IT. The cold
+  // pass takes the smaller of an order and its reverse and so is at most half
+  // the arcs by construction; a seeded run is at most half the arcs PLUS
+  // whatever it was handed, and a seed naming most of a cycle is enough to
+  // exceed it. The guard is a size check on the answer rather than a bet on the
+  // seed being sane, and what it costs when it fires is one cold solve.
+  if (feedback.size * 2 > arcCount) return cold();
+  return feedback;
+}
+
+/**
+ * The arcs of one view that run backwards in the least-squares order of THAT
+ * view and stay inside one component of `scopeOf`, as the edge ids of the arcs.
+ *
+ * Both paths of {@link feedbackArcSet} are this function: the cold one over the
+ * graph as authored and scoped to its components, the warm one over the seeded
+ * view and scoped to the seeded view's. Sharing it is what makes the cold
+ * answer bit-identical to the one this module gave before there was a warm
+ * path, and what stops the two paths drifting into two heuristics.
+ *
+ * `scopeOf` is a parameter rather than something computed here because the two
+ * callers scope by different partitions and the difference is load bearing: see
+ * the warm start section of {@link feedbackArcSet}.
+ */
+function backwardArcs(
+  edges: readonly Edge[],
+  arcSource: Int32Array,
+  arcTarget: Int32Array,
+  degree: Float64Array,
+  load: Float64Array,
+  scopeOf: Int32Array,
+  count: number,
+  arcCount: number,
+): Set<EdgeId> {
   const height = solveHeights(count, arcSource, arcTarget, degree, load);
   const position = orderBy(height);
 
@@ -424,7 +614,7 @@ export function feedbackArcSet(graph: Graph): ReadonlySet<EdgeId> {
     const source = at(arcSource, index);
     if (source === NONE) continue;
     const target = at(arcTarget, index);
-    if (at(componentOf, source) !== at(componentOf, target)) continue;
+    if (at(scopeOf, source) !== at(scopeOf, target)) continue;
     const runsBackward = at(position, source) > at(position, target);
     if (runsBackward !== flipped) feedback.add(edge.id);
   }
