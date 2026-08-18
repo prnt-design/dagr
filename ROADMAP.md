@@ -151,6 +151,53 @@ findings addressed or logged, docs land with the feature.
   five idle runs with no code changing, which a recapture re-centres and cannot
   narrow. That is the standing argument for the second control workload
   `bench/README.md` keeps naming, and `rank > 1k` is where to start.
+  **THE GATE NOW CHECKS THE MACHINE IT IS COMPARING AGAINST (2026-08-18),
+  because the box changed CPU under it and nobody could see that from the
+  numbers.** `bench/baseline.json` names an AMD EPYC-Rome VM, captured
+  2026-08-16. `os.cpus()[0].model` on the dispatch box reads
+  `Intel Xeon Processor (Skylake, IBRS, no TSX)` two days later, with the same
+  platform, the same arch, the same eight cores and the same `node v22.23.2`.
+  The harness had recorded that field on both sides since it was written and
+  never once compared them, and `machineInfo`'s own docstring said the machine
+  is "never gated against, because the gate reads control-normalised ratios and
+  nothing else". A ratio corrects for a UNIFORMLY slower machine. It does not
+  correct for a machine that is slower at some things, and this one is: on
+  unmodified `main`, benched deliberately rather than in passing, the gate
+  failed 2 of 2 at a 1-minute load of 0.54 under a 5-minute 0.40, the quietest
+  start on record here, with `2.5k outEdges`, `descendants, 10k`, both
+  `pipeline` entries and both `rank` entries failing BOTH runs at +20.2% to
+  +48.3% while `2k updateNodeAttrs, no change` came in at +0.0% and the two
+  `isAcyclic` entries inside 3%. THE ENTRIES THAT FAIL ARE THE DIAGNOSIS:
+  memory-latency-bound work moves and allocation-heavy work does not, which is
+  the control drift `bench/README.md` already named, arriving as a step change
+  rather than as noise. The morning run of the same day had already failed
+  `main` 2 of 2 at 0.58, so this is twice.
+  `platform`, `arch`, `cpu`, `cores` and `node` are the identity, because each
+  changes the shape of the work rather than only its speed. `ci` and
+  `loadAverageAtCapture` are not, because they describe who ran it and how busy
+  the box was, and gating on them would block a merge over a neighbour's build.
+  A CPU model compares with its whitespace collapsed, since `os.cpus()` pads
+  some models and a merge blocked by two spaces teaches the next reader to
+  distrust the check. A report with no machine at all is a NOTE and not an
+  error: the field is optional in schema 1, so its absence is not evidence of a
+  mismatch.
+  IT IS A HARNESS ERROR RATHER THAN A REGRESSION, and that placement is the
+  point rather than a detail. A different machine reproduces on the next run by
+  construction, so `bench:ci` stops after ONE measurement instead of three, the
+  way it already stops on a stale report. It matters more here than anywhere
+  else in the harness, because a mismatched baseline moves whole families of
+  entries at once and therefore fails the SAME entries every run, which is
+  exactly what this gate calls its strongest evidence for a real regression.
+  The table still prints: rejecting the comparison is not a reason to hide the
+  numbers a human needs to decide on a recapture. THERE IS NO OVERRIDE FLAG, by
+  decision. It would be the silent no-op this harness exists to prevent, and it
+  would be reached for on exactly the runs whose numbers mean least.
+  WHAT IT DOES NOT DO IS MAKE A GATE GREEN. The recapture is the maintainer's
+  call, it is queued rather than taken, and until it happens no branch passes
+  `bench:ci` on this box. It is also NOT the second control workload: the
+  30.6% between-run spread on `build > 1k` was measured across five idle runs
+  on ONE machine, which a machine check cannot see and a recapture cannot
+  narrow.
 
 ## M1: Graph model (`@dagr/graph`)
 

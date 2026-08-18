@@ -30,6 +30,10 @@ to its `src`, which is exactly the shift the control cannot cancel). The
 mismatch now points the other way: a run on the maintainer's arm64 machines
 will fail against this file the same way, and moving development back there
 means recapturing on the same terms, three agreeing runs on a quiet machine.
+It has since changed again without anyone moving: the box became an Intel Xeon
+Skylake on 2026-08-18, this file still names the EPYC, and a recapture is queued
+rather than taken. See "The machine in the file" below for how the gate says so
+now, and for what it cost to find out by hand.
 The CI argument above is unchanged by the baseline being x64 Linux: the
 remaining reason the gate stays local is runner noise and runner identity, not
 which architecture the file happens to name.
@@ -81,6 +85,61 @@ to ungated, and they are named here for the same reason the weakest entries are
 named below: an allowance nobody wrote down is the kind that stops being
 noticed. Narrowing them is a capture on a quieter machine or a second control,
 not a smaller number asserted here.
+
+## The machine in the file
+
+**The baseline records the machine it was captured on, and since 2026-08-18 the
+gate reads it back.** If the machine that ran the benchmarks is not the machine
+the baseline names, `bench:check` rejects the comparison and says which fields
+differ, instead of printing the regressions it appears to have found.
+
+It reads back the fields that decide whether two runs are comparable at all:
+`platform`, `arch`, `cpu`, `cores` and `node`. It ignores `ci` and
+`loadAverageAtCapture`, which describe who started a run and how busy the box
+was, because gating on those would block a merge over a neighbour's build. A CPU
+model is compared with its whitespace collapsed, since `os.cpus()` pads some
+models to a fixed width and a merge blocked by two spaces would teach the next
+reader to distrust the check. A report that records no machine at all is noted
+rather than failed: the field is optional in schema 1, and a hand-written
+baseline without one is not evidence of a mismatch.
+
+**It is reported as a harness error and not as a regression**, which is the same
+distinction a stale package report gets and for the same reason. A different
+machine reproduces on the next run by construction, so `bench:ci` fails on the
+first measurement rather than spending three reproducing it. That matters more
+here than anywhere else in the harness: a mismatched baseline moves whole
+families of entries at once, so it fails the SAME entries every run, which is
+exactly the shape this gate calls its strongest evidence for a real regression.
+
+**Why it was worth adding, measured rather than supposed.** The dispatch box was
+an AMD EPYC-Rome VM when the committed baseline was captured on 2026-08-16 and
+an Intel Xeon Skylake on 2026-08-18. Nothing announced it, and the harness had
+recorded `machine.cpu` on both sides all along without ever comparing them, on
+the argument that the gate reads control-normalised ratios and a ratio corrects
+for a slower machine. It corrects for a UNIFORMLY slower machine. One control
+workload normalises one mix of arithmetic, allocation and cache behaviour, so a
+CPU with a different cache and memory profile moves everything whose mix differs
+from the control's, which is the control drift already named above arriving as a
+step change rather than as noise. Unmodified `main` failed its own gate 2 of 2 on
+2026-08-18 morning and again that evening at a 1-minute load of 0.54 under a
+5-minute 0.40, the quietest start on record here. Six entries failed both runs of
+the evening gate, at +20.2% to +48.3%: `2.5k outEdges`, `descendants, 10k`, both
+`pipeline` entries and both `rank` entries, every one of them memory-latency
+bound. `2k updateNodeAttrs, no change` came in at +0.0% on the same run, and the
+two `isAcyclic` entries within 3%. Two days of sessions read that as a regression
+in their own branch, and one of them spent four gates and a hand-written A/B
+proving that its own code was not the cause.
+
+**There is deliberately no way to compare across machines anyway.** An override
+flag would be the quiet no-op this harness exists to prevent, and it would be
+reached for on exactly the runs where the numbers mean least. The answer to a
+mismatch is a recapture, which is the section above and is the maintainer's
+call.
+
+**What this does not fix.** It does not make a gate green, and it is not the
+second control workload. The between-run spread measured for the recapture,
+30.6% on `build > 1k` across five idle runs with no code changing, was measured
+on ONE machine and is a separate problem that a machine check cannot see.
 
 ## Two of three
 
