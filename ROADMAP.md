@@ -164,14 +164,20 @@ findings addressed or logged, docs land with the feature.
   correct for a machine that is slower at some things, and this one is: on
   unmodified `main`, benched deliberately rather than in passing, the gate
   failed 2 of 2 at a 1-minute load of 0.54 under a 5-minute 0.40, the quietest
-  start on record here, with `2.5k outEdges`, `descendants, 10k`, both
-  `pipeline` entries and both `rank` entries failing BOTH runs at +20.2% to
-  +48.3% while `2k updateNodeAttrs, no change` came in at +0.0% and the two
-  `isAcyclic` entries inside 3%. THE ENTRIES THAT FAIL ARE THE DIAGNOSIS:
-  memory-latency-bound work moves and allocation-heavy work does not, which is
-  the control drift `bench/README.md` already named, arriving as a step change
-  rather than as noise. The morning run of the same day had already failed
-  `main` 2 of 2 at 0.58, so this is twice.
+  start on record here. SAY WHICH RUN, BECAUSE THE TWO SAY DIFFERENT THINGS.
+  Run 1 failed exactly six entries, `2.5k outEdges`, `descendants, 10k`, both
+  `pipeline` entries and both `rank` entries, at +27.1% to +44.3%, while every
+  allocation-heavy entry passed: `2k updateNodeAttrs` at +0.0%, +1.7% and -6.2%,
+  and both `isAcyclic` entries inside 0.3%. THAT RUN IS THE DIAGNOSIS, because
+  it separates the two families cleanly: memory-latency-bound work moves and
+  allocation-heavy work does not, which is the control drift `bench/README.md`
+  already named, arriving as a step change rather than as noise. Run 2 was the
+  louder of the two and failed eleven, adding the three `updateNodeAttrs`
+  entries, `build > 1k` at +61.9% and `topologicalOrder`, and taking
+  `descendants, 10k` to +69.8%. A loud box adds names to the list, which is the
+  same reading M0.2's `diffAttrs` verification recorded. The six that failed
+  BOTH runs are the six from run 1. The morning run of the same day had already
+  failed `main` 2 of 2 at 0.58, so this is twice.
   `platform`, `arch`, `cpu`, `cores` and `node` are the identity, because each
   changes the shape of the work rather than only its speed. `ci` and
   `loadAverageAtCapture` are not, because they describe who ran it and how busy

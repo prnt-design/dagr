@@ -125,11 +125,19 @@ CPU with a different cache and memory profile moves everything whose mix differs
 from the control's, which is the control drift already named above arriving as a
 step change rather than as noise. Unmodified `main` failed its own gate 2 of 2 on
 2026-08-18 morning and again that evening at a 1-minute load of 0.54 under a
-5-minute 0.40, the quietest start on record here. Six entries failed both runs of
-the evening gate, at +20.2% to +48.3%: `2.5k outEdges`, `descendants, 10k`, both
-`pipeline` entries and both `rank` entries, every one of them memory-latency
-bound. `2k updateNodeAttrs, no change` came in at +0.0% on the same run, and the
-two `isAcyclic` entries within 3%. Two days of sessions read that as a regression
+5-minute 0.40, the quietest start on record here.
+
+Which of the two evening runs is being quoted matters, so here are both. RUN 1
+IS THE DIAGNOSIS. It failed exactly six entries, at +27.1% to +44.3%: `2.5k
+outEdges`, `descendants, 10k`, both `pipeline` entries and both `rank` entries,
+every one of them memory-latency bound. Every allocation-heavy entry passed on
+that same run, `2k updateNodeAttrs` at +0.0%, +1.7% and -6.2% and both
+`isAcyclic` entries inside 0.3%, which is the two families separating cleanly.
+Run 2 was the louder of the two: it failed eleven, adding the three
+`updateNodeAttrs` entries, `build > 1k` at +61.9% and `topologicalOrder`, and
+taking `descendants, 10k` to +69.8%. A loud box adds names to the list, exactly
+as the `diffAttrs` verification in ROADMAP M0.2 recorded. The six that failed
+BOTH runs are run 1's six. Two days of sessions read all of this as a regression
 in their own branch, and one of them spent four gates and a hand-written A/B
 proving that its own code was not the cause.
 
