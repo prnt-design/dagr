@@ -3361,10 +3361,9 @@ it.
   a later change that degrades stability arrives as a diff rather than as a
   feeling. Include at least one pattern-generator-shaped sequence, since that
   is the shape M6.6's first reference DSL takes and the reason the milestone
-  exists. Docs
-  page on incremental layout, the flagship feature, carrying the numbers this
-  corpus produces and an honest statement of what the fallback costs when it
-  fires.
+  exists. Docs page on incremental layout, the flagship feature, carrying the
+  numbers this corpus produces and an honest statement of what the fallback
+  costs when it fires.
   Two specific things the corpus must carry. Report the pair (crossings,
   displacement) for the same mutation sequence under three configurations, cold
   every time, warm-started ordering only, and the full incremental path, so the
@@ -4530,6 +4529,12 @@ it settled rather than restating the argument.
   GPU picking. Component tests.
 - [ ] **M5.3** Demo app: animated living demo (grow/prune/relayout
   scenarios) in `apps/demo`, deployed-ready build.
+  THIS IS THE TASK THAT DEMONSTRATES THE HEADLINE CLAIM, and nothing shipped
+  does. The campaign demo is read-only: `apps/demo/src/App.tsx` never mutates a
+  graph, so it proves scale, rendering and semantic zoom, and proves nothing at
+  all about layout staying stable under an edit — which is what M6's preamble
+  says the project competes on. A visitor currently cannot see the flagship
+  feature. Weight this accordingly against M5.1 and M5.2.
 - [ ] **M5.4** Docs: Docusaurus getting-started, API reference pages for all
   packages, v0.1 readiness review. Queue npm publish for the human.
   Pre-publish packaging checklist (from the M0.1 oss-docs review): add
@@ -4593,7 +4598,12 @@ it settled rather than restating the argument.
     member breaks every exhaustive `switch` a consumer wrote with a `never`
     arm. Do the cheaper general fix at the same time: DOCUMENT `PatchOp` AS AN
     OPEN UNION, with a default arm required of consumers. That removes the
-    pressure for every future op rather than for this one.
+    pressure for every future op rather than for this one. Note what it does
+    NOT do: an open union is a convention, not enforcement, and a consumer's
+    `never` exhaustiveness check still breaks. The doc has to tell consumers to
+    write `default:` rather than assert exhaustiveness, and that is the whole
+    mechanism. It works here only because `update-node-parent` lands before
+    v0.1, so no consumer has written the check yet.
   - `GraphJSON.version` is the literal `1`
     (`packages/graph/src/serialize.ts`). `parseGraphJSON` ignores unknown keys
     by design, so a document carrying `parent` read by a build without
@@ -4613,9 +4623,12 @@ it settled rather than restating the argument.
   - `apply` replays `add-node` through `graph.addNode`, so a parent must be
     replayed before its children. Containment adds a node ordering constraint
     that patches do not have today.
-  - `removeNode` is cascade-free by expansion for incident edges. Containment
-    needs the same call made EXPLICITLY — remove children, orphan them, or
-    refuse — because `invert` has to restore them in the right order.
+  - `removeNode` is cascade-free by expansion for incident edges: it emits a
+    `remove-edge` op per incident edge. Containment takes the SAME answer —
+    emit a `remove-node` op per child — because it is the one consistent with
+    the rest of the model and it lets `invert` restore in order. "Refuse" was
+    the other candidate and is rejected: it would make `removeNode` partial in
+    a way nothing else in the API is.
   - `update-node-parent` gets an explicit case in `influenceRegion`
     (`packages/layout/src/influence.ts`) and in `checkPatchApplied`
     (`packages/layout/src/engine.ts`). Both have a `default: break`, so a new
@@ -4690,7 +4703,10 @@ whether the generalisation holds.
   `source === target || graph.canReach(target, source)` — already public on
   `Graph` and O(V + E) over the reached subgraph. Name it in the task, because
   the obvious wrong implementation is add-then-`findCycle`-then-remove, which
-  emits two patches and pollutes undo. `findCycle` and `isAcyclic` answer over
+  emits two patches and pollutes undo. One boundary: `canReach` throws
+  `NodeNotFoundError` when either endpoint is absent, so it answers for a
+  proposed edge between two EXISTING nodes and not for one aimed at a node the
+  drag has not created yet. That second case needs its own answer. `findCycle` and `isAcyclic` answer over
   the whole graph AFTER insertion and are the wrong tool here.
 - [ ] **M6.3** Drag-to-connect interactions on top of M5.2's hooks and M4.8's
   GPU picking: port hit-testing, an in-flight edge, drop targets filtered by
@@ -4711,6 +4727,16 @@ whether the generalisation holds.
   holding the derived view of its own children. Write that into the task; it
   is the difference between drill-down feeling instant and feeling like a page
   load.
+  AND THE ENGINE LIFETIME IS THE EASY HALF. `graph.subscribe` emits ops over
+  the WHOLE graph while each container engine holds a different derived `Graph`
+  instance, so feeding a root patch straight to a container engine fails
+  `checkPatchApplied` on the first op naming a node that view does not hold.
+  Each view's patch has to be DERIVED from the root patch, and that translation
+  is the task's real work. Three cases an implementer meets on day one:
+  ops outside the view are dropped; a boundary edge with one endpoint outside
+  is NOT droppable and needs whatever stands in for the outside endpoint in the
+  derived view; and `update-node-parent` is a removal from one view and an
+  addition to another, which is two patches to two engines.
   BOUNDARY NODES ARE ORDINARY SOURCES AND SINKS in the child view. An earlier
   draft said "the parent's ports become its boundary", which has no support in
   the pipeline: there is no rank pinning and no fixed-order constraint, and
@@ -4773,6 +4799,27 @@ algorithms review rather than asserted:
 - THE WIRE PROTOCOL, which the earlier draft missed entirely. `decodeRun`
   rebuilds nodes as bare ids, so `parent` would never reach a worker. M7
   reopens `wire.ts`.
+
+THE CAMPAIGN DEMO IS ALREADY THIS MILESTONE, DONE BY HAND, and it is the best
+evidence M7 has. `packages/campaign` carries a `contains` forest rooted at
+`rootId` with a `depth` per node, which is M5.5's containment expressed as
+edges; `packages/campaign-stage/src/tiles.ts` cuts the campaign into about a
+hundred tiles because one Sugiyama pass over 3,010 nodes ranks 1,023 rooms into
+a couple of layers and draws a 50:1 ribbon; `campaign-scene.ts` runs a separate
+layout per tile and shelf-packs the blocks with a bisection-searched width. Per
+container layout plus a packing pass over the results IS compound layout. The
+demo built it by hand because the engine could not.
+
+That makes the success criterion concrete, and it should replace "inline
+nesting" as the way this milestone is judged: M7 reproduces the campaign
+drawing without the hand-rolled packer. Two honest limits on that. The demo
+today runs all 95 tile layouts through ONE engine
+(`campaign-scene.ts`), so every tile is a cold run and no tile can relayout
+incrementally — the M6.4 finding above, already shipped. And the 6 GRID tiles
+are not a compound-layout problem at all: NPCs, factions, items, stat blocks,
+clues and weather have no routed edge with both ends inside a group, so a layer
+assignment puts every component in rank 0 and a grid is what the data actually
+wants. M7 must not claim those.
 
 Not scoped in task detail until M6.4 has shipped and the drill-down form has
 been used enough to say whether inline nesting is wanted as well.
