@@ -1941,9 +1941,9 @@ findings addressed or logged, docs land with the feature.
   which stays allowed for the router that wants it.
 - [x] **M2.9** Golden corpus vs dagre: port a corpus of real graphs
   (including a pattern-generator-shaped graph), assert structural parity
-  metrics vs dagre output (rank counts, crossing counts
-  within tolerance). First layout benchmarks (1k and 10k node graphs) with
-  committed baselines. Touches `packages/layout`, `bench` and `docs`.
+  metrics vs dagre output (rank counts, crossing counts within tolerance).
+  First layout benchmarks (1k and 10k node graphs) with committed baselines.
+  Touches `packages/layout`, `bench` and `docs`.
   **THIS ENTRY WAS FOUR LINES AND THE SHORTEST IN M2, and both of its clauses
   turned out to mean something other than what they say.** Every other M2 entry
   was written up after the run; this one was never touched between being drafted
@@ -3361,9 +3361,8 @@ it.
   a later change that degrades stability arrives as a diff rather than as a
   feeling. Include at least one pattern-generator-shaped sequence, since that
   is the shape M6.6's first reference DSL takes. Docs page on incremental
-  layout, the flagship feature, carrying the
-  numbers this corpus produces and an honest statement of what the fallback
-  costs when it fires.
+  layout, the flagship feature, carrying the numbers this corpus produces and
+  an honest statement of what the fallback costs when it fires.
   Two specific things the corpus must carry. Report the pair (crossings,
   displacement) for the same mutation sequence under three configurations, cold
   every time, warm-started ordering only, and the full incremental path, so the
