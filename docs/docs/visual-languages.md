@@ -117,15 +117,16 @@ The two ways to draw it have very different costs:
   boxes. Much harder — containment constrains ranking, and the barycentre
   crossing-reduction pass does not survive it — and is tracked separately.
 
-M5.5 adds a `parent` field to `Node` before v0.1 publishes, so that neither
-choice is a breaking change later.
+M5.5 reserves containment in the graph model before v0.1 publishes — the
+`parent` field, the `update-node-parent` patch op, and the invariants — so that
+neither choice needs a breaking change to `PatchOp` later.
 
 ## Status
 
 `@dagr/vdsl` is planned for v0.2 and does not exist yet. `@dagr/graph` and
 `@dagr/layout` are usable today: you can model and lay out a node graph on them
 now, and hit-testing, selection and drag-to-connect are yours to write until
-M4.8 and M5.2 land. The toolkit will be convenience over those, not a separate
+M4.8, M5.2 and M6.3 land. The toolkit will be convenience over those, not a separate
 engine. See the
 [roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md) for the
 task breakdown.

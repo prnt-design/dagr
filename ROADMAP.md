@@ -1940,8 +1940,8 @@ findings addressed or logged, docs land with the feature.
   chain is not collapsed to two points, which M2.4b's entry allowed for and
   which stays allowed for the router that wants it.
 - [x] **M2.9** Golden corpus vs dagre: port a corpus of real graphs
-  (including a pattern-generator-shaped graph), assert
-  structural parity metrics vs dagre output (rank counts, crossing counts
+  (including a pattern-generator-shaped graph), assert structural parity
+  metrics vs dagre output (rank counts, crossing counts
   within tolerance). First layout benchmarks (1k and 10k node graphs) with
   committed baselines. Touches `packages/layout`, `bench` and `docs`.
   **THIS ENTRY WAS FOUR LINES AND THE SHORTEST IN M2, and both of its clauses
@@ -3005,8 +3005,8 @@ it.
   so one changed degree can move a node between buckets and reverse a DIFFERENT
   set of edges for a graph whose cycle structure did not change, and no band
   bounds that. On a DAG the reversed set is empty and stays empty, so the bound
-  is sharp exactly on the pattern-generator case. M3.7's stable FAS
-  is what narrows this, and it now has a second consumer waiting on it.
+  is sharp exactly on the pattern-generator case. M3.7's stable FAS is what
+  narrows this, and it now has a second consumer waiting on it.
   THE WINDOW IS 1, THE ARGUMENT IS THE SWEEP, AND THE MEASUREMENT SAYS NO WINDOW
   BUYS SOUNDNESS. A window of 0 takes only the touched ranks; the crossing sweep
   re-barycenters the rank above and the rank below whatever changed, which is
@@ -3220,8 +3220,8 @@ it.
   measures what it claims to, instead of observing the symptom of a non-stable
   FAS and firing on patches that needed nothing. Scope it honestly: on a DAG
   the reversed set is empty and stays empty, so none of this touches the
-  pattern-generator case, and it bites cyclic input only. That is a
-  reason to plan it rather than to panic, and if the run needs splitting, the
+  pattern-generator case, and it bites cyclic input only. That is a reason to
+  plan it rather than to panic, and if the run needs splitting, the
   stable FAS is the half that unblocks the trigger.
   Decide here when to bail. Bail too eagerly and the fast path is rare enough
   that the feature is a lie; bail too reluctantly and a relayout costs more
@@ -3360,8 +3360,8 @@ it.
   through the engine with their stability metrics committed as golden files, so
   a later change that degrades stability arrives as a diff rather than as a
   feeling. Include at least one pattern-generator-shaped sequence, since that
-  is the shape M6.6's first reference DSL takes and the reason the milestone
-  exists. Docs page on incremental layout, the flagship feature, carrying the
+  is the shape M6.6's first reference DSL takes. Docs page on incremental
+  layout, the flagship feature, carrying the
   numbers this corpus produces and an honest statement of what the fallback
   costs when it fires.
   Two specific things the corpus must carry. Report the pair (crossings,
@@ -4644,8 +4644,6 @@ it settled rather than restating the argument.
     the moment M7 reads `parent`.
   This is not a bet that nesting is wanted — M6.4 and M7 decide that. It is the
   cheap half of an option whose expensive half is a coordinated release.
-  Nesting is also the answer to the one weakness a flat DAG genuinely has,
-  which is that it cannot name or reuse a subgraph.
 
 ## M6: VDSL = v0.2 (`@dagr/vdsl`)
 
@@ -4712,8 +4710,9 @@ whether the generalisation holds.
   emits two patches and pollutes undo. One boundary: `canReach` throws
   `NodeNotFoundError` when either endpoint is absent, so it answers for a
   proposed edge between two EXISTING nodes and not for one aimed at a node the
-  drag has not created yet. That second case needs its own answer. `findCycle` and `isAcyclic` answer over
-  the whole graph AFTER insertion and are the wrong tool here.
+  drag has not created yet. That second case needs its own answer.
+  `findCycle` and `isAcyclic` answer over the whole graph AFTER insertion and
+  are the wrong tool here.
 - [ ] **M6.3** Drag-to-connect interactions on top of M5.2's hooks and M4.8's
   GPU picking: port hit-testing, an in-flight edge, drop targets filtered by
   M6.2's predicate.
@@ -4796,7 +4795,7 @@ algorithms review rather than asserted:
 - RANKING, but NOT by replacing the ranker. Network simplex IS amenable to
   containment constraints; this implementation just hardcodes both knobs —
   minlen is the `- 1` in `slackOf`, and every weight is ±1 in `netInflow`,
-  with `AcyclicView` carrying only `from` and `to`. Containment constraint
+  with `AcyclicView` carrying only `from` and `to` per edge. Containment
   edges need per-edge minlen and weight, so what M7 needs is A PER-EDGE
   ATTRIBUTE CHANNEL ON THE VIEW, not a new ranking algorithm. That is a
   smaller and better-shaped change than "replace ranking", and the roadmap
@@ -4819,11 +4818,11 @@ demo built it by hand because the engine could not.
 That makes the success criterion concrete, and it should replace "inline
 nesting" as the way this milestone is judged: M7 reproduces the campaign
 drawing without the hand-rolled packer. Two honest limits on that. The demo
-today runs all 95 tile layouts through ONE engine
-(`campaign-scene.ts`), so every tile is a cold run and no tile can relayout
-incrementally — the M6.4 finding above, already shipped. And the 6 GRID tiles
-are not a compound-layout problem at all: NPCs, factions, items, stat blocks,
-clues and weather have no routed edge with both ends inside a group, so a layer
+today runs all 95 tile layouts through ONE engine (`campaign-scene.ts`), so
+every tile is a cold run and no tile can relayout incrementally — the problem
+M6.4 names above, already visible in shipped code. And the 6 GRID tiles are not
+a compound-layout problem at all: NPCs, factions, items, stat blocks, clues and
+weather have no routed edge with both ends inside a group, so a layer
 assignment puts every component in rank 0 and a grid is what the data actually
 wants. M7 must not claim those.
 
