@@ -1940,7 +1940,7 @@ findings addressed or logged, docs land with the feature.
   chain is not collapsed to two points, which M2.4b's entry allowed for and
   which stays allowed for the router that wants it.
 - [x] **M2.9** Golden corpus vs dagre: port a corpus of real graphs
-  (including a prnt.design-shaped pattern-generator graph), assert
+  (including a pattern-generator-shaped graph), assert
   structural parity metrics vs dagre output (rank counts, crossing counts
   within tolerance). First layout benchmarks (1k and 10k node graphs) with
   committed baselines. Touches `packages/layout`, `bench` and `docs`.
@@ -1995,7 +1995,7 @@ findings addressed or logged, docs land with the feature.
   THE CORPUS IS NEW AND IS NOT THE BENCH CORPORA, which contradicted a sentence
   already in `bench/README.md` and that sentence is corrected rather than
   worked around. Nine hand-authored graphs shaped after real ones, in
-  `test/dagre-parity-corpus.ts`, including the prnt.design pattern generator
+  `test/dagre-parity-corpus.ts`, including the pattern-generator graph
   this entry asks for by name. Two reasons and the first is not negotiable: the
   only crossing count that means anything across two engines is a geometric one
   over the emitted polylines, that is quadratic in segments, and it does not run
@@ -3005,7 +3005,7 @@ it.
   so one changed degree can move a node between buckets and reverse a DIFFERENT
   set of edges for a graph whose cycle structure did not change, and no band
   bounds that. On a DAG the reversed set is empty and stays empty, so the bound
-  is sharp exactly on the prnt.design pattern-generator case. M3.7's stable FAS
+  is sharp exactly on the pattern-generator case. M3.7's stable FAS
   is what narrows this, and it now has a second consumer waiting on it.
   THE WINDOW IS 1, THE ARGUMENT IS THE SWEEP, AND THE MEASUREMENT SAYS NO WINDOW
   BUYS SOUNDNESS. A window of 0 takes only the touched ranks; the crossing sweep
@@ -3220,7 +3220,7 @@ it.
   measures what it claims to, instead of observing the symptom of a non-stable
   FAS and firing on patches that needed nothing. Scope it honestly: on a DAG
   the reversed set is empty and stays empty, so none of this touches the
-  prnt.design pattern-generator case, and it bites cyclic input only. That is a
+  pattern-generator case, and it bites cyclic input only. That is a
   reason to plan it rather than to panic, and if the run needs splitting, the
   stable FAS is the half that unblocks the trigger.
   Decide here when to bail. Bail too eagerly and the fast path is rare enough
@@ -3359,7 +3359,7 @@ it.
   mutation sequences (grow, prune, reparent, rewire, sustained churn) run
   through the engine with their stability metrics committed as golden files, so
   a later change that degrades stability arrives as a diff rather than as a
-  feeling. Include at least one prnt.design-shaped pattern-generator sequence,
+  feeling. Include at least one pattern-generator-shaped sequence,
   since that is the first consumer and the reason the milestone exists. Docs
   page on incremental layout, the flagship feature, carrying the numbers this
   corpus produces and an honest statement of what the fallback costs when it
@@ -4577,16 +4577,113 @@ it settled rather than restating the argument.
   `pnpm --filter @dagr/layout build` needs `@dagr/graph` built first (see the
   comment in `packages/layout/tsconfig.build.json`). Not worth the machinery at
   two packages, worth knowing about before the other decision is made.
+- [ ] **M5.5** Reserve containment in the graph model: a `parent` on `Node`,
+  the invariants that go with it (a node has at most one parent, containment
+  is acyclic, an edge may cross a boundary), and patch, serialization and
+  traversal coverage for it. `@dagr/layout` IGNORES it in this task — the
+  point is the type, not the layout.
+  LANDS BEFORE M5.4 QUEUES THE PUBLISH, and that ordering is the whole reason
+  this task exists rather than sitting in M6. `Node` is
+  `{ id, attrs, ports }` today and is the central type of the project: it is
+  on `@dagr/graph`'s public surface, on `@dagr/layout`'s input, and about to
+  be on `@dagr/react`'s. Adding a field to it after v0.1 publishes it is a
+  breaking change to everything downstream, and 0.x caret ranges do not cross
+  a minor (see M5.4's note), so the cost is a coordinated release of every
+  package plus every consumer. Adding it now costs one field and its
+  invariants. This is not a bet that nesting is wanted — M6.4 and M7 decide
+  that. It is the cheap half of an option whose expensive half is a rewrite.
+  Nesting is also the answer to the one weakness a flat DAG genuinely has,
+  which is that it cannot name or reuse a subgraph; anything that grows past a
+  screenful needs encapsulation, and the compound-graph literature is old
+  enough that the shape of the eventual answer is not in doubt.
+  What is deliberately NOT decided here: whether layout draws containment
+  inline (M7) or only as drill-down (M6.4). The model has to support both, and
+  a `parent` reference does, which is why the reservation can be made without
+  settling the layout question.
 
 ## M6: VDSL = v0.2 (`@dagr/vdsl`)
 
-Task breakdown is drafted when M5 completes, driven by the prnt.design
-pattern-generator use case. Expected shape:
+Task breakdown is finalised when M5 completes. The scope below replaces the
+original four-line sketch after a 2026-08-18 review of what the toolkit is
+actually for; the reasoning is recorded here because it changes what M6 is
+allowed to define.
 
-- [ ] **M6.1** Node-type schemas and typed ports.
-- [ ] **M6.2** Connection validation against schemas.
-- [ ] **M6.3** Drag-to-connect interactions.
-- [ ] **M6.4** Pattern-generator example built on the DSL.
+WHAT `@dagr/vdsl` IS. A toolkit for building a node-graph language, not a
+node-graph language. The distinction is the whole design: general-purpose
+visual *languages* have a long failure record (Prograph, the 80s and 90s VPL
+wave), while toolkits that let someone else build a domain-specific one have a
+good one — React Flow, Rete, Baklava, NodeGraphQt, imgui-node-editor, and most
+instructively LiteGraph.js, whose modest node-editor library is the substrate
+ComfyUI was built on. The toolkit never needed to guess the domain. It needed
+to be good enough that someone else's domain could land on it.
+
+WHAT IT MUST NOT DEFINE: an ontology. No built-in node kinds, no opinion about
+what a "source" or a "transform" is, no config schema format of Dagr's
+invention. A consumer brings its own node spec and Dagr validates against it
+through an adapter interface. The moment `@dagr/vdsl` decides what a node kind
+is, every adopter with a different answer is fighting the library, and the
+library has no way to know which of them is right. This reverses the original
+M6.1 wording ("node-type schemas"), which read as Dagr owning the schema.
+
+WHAT DAGR COMPETES ON, and it is not this milestone. Drag-to-connect, handles,
+minimaps and rich DOM nodes are solved, and solved well, by incumbents. What is
+not solved anywhere is a graph that stays legible when it changes: dagre is
+effectively unmaintained, ELK is not incremental, and the common answer is to
+re-run a batch layout on every edit and accept a full reshuffle. M3.4 to M3.7
+is Dagr's answer to that, and it is the claim the project should lead with.
+M6 is the demonstration of the claim, not the claim.
+
+TWO CONSUMERS, NOT ONE. M6.6 exists because a toolkit validated against a
+single consumer is a library with extra indirection: the one consumer's
+assumptions become the API and nobody notices until the second arrives. Two
+consumers with genuinely different shapes is the cheapest available test of
+whether the generalisation holds.
+
+- [ ] **M6.1** Node spec adapter: the interface a consumer implements to
+  describe its own node kinds (ports, arity, config shape), and the registry
+  that resolves a node's `attrs` to a spec. Dagr defines the interface and
+  nothing behind it.
+- [ ] **M6.2** Port typing and connection validation: a type token per port,
+  a compatibility predicate the consumer supplies, and validation of a
+  proposed connection against it. Cycle rejection reuses `@dagr/graph`'s
+  existing check rather than inventing a second one.
+- [ ] **M6.3** Drag-to-connect interactions on top of M5.2's hooks and M4.8's
+  GPU picking: port hit-testing, an in-flight edge, drop targets filtered by
+  M6.2's predicate.
+- [ ] **M6.4** Subgraph nodes, drill-down form: a node that owns a child
+  graph, and navigation that replaces the canvas with that child. This is the
+  cheap half of nesting and needs no layout change — the child is laid out as
+  an ordinary graph, on its own, and the parent's ports become its boundary.
+  Every serious node tool has exactly this (Houdini subnets, Nuke Groups,
+  Blender node groups, Max subpatchers, Simulink subsystems, LabVIEW subVIs,
+  Substance subgraphs, Unreal collapsed graphs), which is the strongest
+  available evidence that a toolkit without it is a toy. It is also the
+  answer to the one thing a flat DAG cannot express: naming and reuse. A
+  subgraph node is a function. Depends on M5.5.
+- [ ] **M6.5** Collapse and expand: turning a selection into a subgraph node
+  and back, with the boundary edges rebound to the new node's ports. The
+  layout consequence is a large structural patch, which is what M3.3 batched
+  and M3.6 made order-stable, so this is a consumer of that work rather than
+  new engine work.
+- [ ] **M6.6** Two reference DSLs built on the toolkit, deliberately unalike:
+  one acyclic and value-shaped, one with feedback and a real-time evaluator.
+  The second is the one that finds the wrong assumptions, because a toolkit
+  written against acyclic dataflow alone will have baked that in.
+
+## M7: Compound layout (`@dagr/layout`)
+
+Inline nesting: parents and children drawn together as nested boxes, rather
+than M6.4's drill-down. Separated from M6 because it is a different and much
+harder problem — it changes ranking (children constrained within a parent's
+band), crossing reduction (the standard barycentre pass does not survive
+containment; see Forster on layered compound graphs), and positioning, and
+it interacts with every M3 stability guarantee. Sugiyama and Misue's compound
+digraph paper (1991) is the origin; dagre's cluster support is its buggiest
+corner precisely because it was retrofitted, which is the case for doing this
+as its own milestone with its own tests rather than as an M6 sub-task.
+
+Not scoped in task detail until M6.4 has shipped and the drill-down form has
+been used enough to say whether inline nesting is wanted as well.
 
 ## Campaign demo track
 
