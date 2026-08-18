@@ -4629,6 +4629,12 @@ it settled rather than restating the argument.
     the rest of the model and it lets `invert` restore in order. "Refuse" was
     the other candidate and is rejected: it would make `removeNode` partial in
     a way nothing else in the API is.
+    THESE TWO BULLETS ARE ONE DECISION, not two constraints to satisfy
+    separately. Emitting the children DEPTH-FIRST POST-ORDER (children before
+    their parent) makes `invert` produce `add-node` for the parent before
+    `add-node` for each child, which IS the replay ordering the bullet above
+    requires. Get the removal order right and the replay order falls out; get
+    it wrong and the two fight.
   - `update-node-parent` gets an explicit case in `influenceRegion`
     (`packages/layout/src/influence.ts`) and in `checkPatchApplied`
     (`packages/layout/src/engine.ts`). Both have a `default: break`, so a new
