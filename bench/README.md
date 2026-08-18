@@ -15,7 +15,10 @@ merge on a regression. CI does not run it.
 
 The gate lives here rather than on CI because the baseline is machine-matched.
 `bench/baseline.json` records the machine it was captured on, and a comparison
-is only meaningful against the same one. GitHub's x64 Ubuntu runners are not
+is only meaningful against the same one. Since 2026-08-18 that is enforced
+rather than only stated: run this gate on a runner the baseline does not name,
+CI's included, and it says so instead of reporting the regressions it appears to
+have found. GitHub's x64 Ubuntu runners are not
 the machine the baseline came from, and the ratio normalization below corrects
 for a slower machine, not for a different architecture. Gating on CI reported
 eleven regressions between +23% and +76% on a commit that changed one docs
@@ -237,7 +240,11 @@ control workload alongside its real ones and each benchmark is recorded as
 `median / control median`, measured in the same worker. A runner twice as slow
 as the baseline machine runs the control twice as slow too, so the ratio does
 not move. Measured across two runs here, two separate workers agreed on the
-control to within 1%.
+control to within 1%. That claim is about a runner that is UNIFORMLY slower, and
+it is the one claim in this file with a hard edge: a machine with a different
+cache and memory profile moves everything whose mix differs from the control's
+while the control looks fine, which is why the gate now refuses to compare
+across machines at all. See "The machine in the file".
 
 **It gates on the median, not the mean.** A single garbage collection or
 scheduler hiccup drags the mean a long way. In the run that motivated this, a

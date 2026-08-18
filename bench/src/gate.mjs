@@ -15,8 +15,12 @@
  *    control workload alongside its real ones, and each benchmark is recorded
  *    as `median / control median` measured in the same worker. A runner twice
  *    as slow as the baseline machine runs the control twice as slow too, and
- *    the ratio does not move. See `control.mjs` for what the control is and
- *    where the approximation breaks.
+ *    the ratio does not move. Read that sentence for exactly what it says: it
+ *    holds for a runner that is UNIFORMLY slower, and not for one with a
+ *    different cache and memory profile, which moves whole families of
+ *    benchmarks against a control that looks fine. That is what
+ *    `MACHINE_IDENTITY` below is for. See `control.mjs` for what the control is
+ *    and where the approximation breaks.
  *
  * 2. It gates on the MEDIAN, not the mean. A single GC pause or a scheduler
  *    hiccup drags the mean a long way: in the run that motivated this, a
@@ -310,14 +314,18 @@ export function compareReports(baselineReport, currentReport, overrides = {}) {
   const baselineMachine = baselineReport.machine;
   const currentMachine = currentReport.machine;
   if (baselineMachine === undefined || currentMachine === undefined) {
+    const missing = [
+      ...(baselineMachine === undefined ? ['the baseline'] : []),
+      ...(currentMachine === undefined ? ['this run'] : []),
+    ];
     notes.push(
-      `${baselineMachine === undefined ? 'the baseline' : 'this run'} records no machine, so the gate cannot tell whether these numbers are comparable`,
+      `${missing.join(' and ')} records no machine, so the gate cannot tell whether these numbers are comparable`,
     );
   } else {
     const differences = machineDifferences(baselineMachine, currentMachine);
     if (differences.length > 0) {
       errors.push(
-        `the baseline was captured on a different machine (${differences.join('; ')}). Control-normalised ratios correct for a slower machine and not for a different one, so this comparison says nothing about the code. Recapture on this machine, and read bench/README.md first for whose call that is`,
+        `the baseline was captured on a different machine (${differences.join('; ')}). Control-normalised ratios correct for a slower machine and not for a different one, so this comparison says nothing about the code. The answer is a recapture on this machine, and bench/README.md says whose call that is`,
       );
     }
   }
