@@ -12,9 +12,11 @@
  * Cascade-free means an op names one thing and does one thing. `removeNode`
  * takes its incident edges with it, so it emits a `remove-edge` op per edge
  * followed by the `remove-node` op, rather than one op that a consumer would
- * have to expand for itself. That is what makes {@link invert} a local
- * transformation: reversing the array and swapping each op's sense is the undo,
- * with the node coming back before the edges that need it.
+ * have to expand for itself. It takes the nodes it CONTAINS with it the same
+ * way, one `remove-node` op each, deepest first. That is what makes
+ * {@link invert} a local transformation: reversing the array and swapping each
+ * op's sense is the undo, with the node coming back before the edges that need
+ * it and a parent before the children that name it.
  */
 
 import type { Graph } from './graph.js';
@@ -35,6 +37,8 @@ export interface AddNodeOp<N extends object = Attrs> {
   readonly id: NodeId;
   readonly attrs: ReadAttrs<N>;
   readonly ports: readonly Port[];
+  /** Absent when the node has no parent, exactly as on the record. */
+  readonly parent?: NodeId;
 }
 
 /** A node was removed, with everything needed to declare it again. */
@@ -43,6 +47,8 @@ export interface RemoveNodeOp<N extends object = Attrs> {
   readonly id: NodeId;
   readonly attrs: ReadAttrs<N>;
   readonly ports: readonly Port[];
+  /** Absent when the node had no parent, exactly as on the record. */
+  readonly parent?: NodeId;
 }
 
 /** An edge was added, with the attributes and port bindings it was given. */
@@ -119,6 +125,28 @@ export interface UpdateGraphAttrsOp<G extends object = Attrs> {
 }
 
 /**
+ * A node's parent changed. `after` is where it is now and `before` where it
+ * was, with `undefined` meaning the node is or was a root.
+ *
+ * BOTH KEYS ARE ALWAYS PRESENT, which is the opposite of how the record and the
+ * add and remove ops spell the same field, and the difference is the difference
+ * between a state and a transition. A record says what a node IS, and "no
+ * parent" is best said by an absent key, the way an unbound port end is. This op
+ * says what MOVED, and both ends of a move have to be nameable: an op with no
+ * `before` key would leave "was a root" and "did not say" spelled the same, and
+ * a consumer reading it would have to test `'before' in op` before believing the
+ * value. `exactOptionalPropertyTypes` is what makes present-and-undefined
+ * expressible at all, and it is the same distinction {@link AttrsPatch} draws
+ * for a deleted key.
+ */
+export interface UpdateNodeParentOp {
+  readonly op: 'update-node-parent';
+  readonly id: NodeId;
+  readonly after: NodeId | undefined;
+  readonly before: NodeId | undefined;
+}
+
+/**
  * An edge's port bindings changed. `after` names exactly the ends that moved
  * and `before` where they were, with a key present and `undefined` meaning that
  * end was unbound.
@@ -130,7 +158,30 @@ export interface UpdateEdgePortsOp {
   readonly before: EdgePortsPatch;
 }
 
-/** One thing a mutation did, as a discriminated union on `op`. */
+/**
+ * One thing a mutation did, as a discriminated union on `op`.
+ *
+ * AN OPEN UNION. The members below are the ops this version emits, and a later
+ * version may emit ops that are not here: `update-node-parent` arrived in M5.5
+ * and containment will not be the last relation the model grows. So a consumer
+ * that switches on `op` should write a `default:` arm that ignores what it does
+ * not know, rather than an exhaustiveness check that asserts the value is
+ * `never`.
+ *
+ * Say precisely what that buys, because it is a convention rather than
+ * enforcement: a `default:` arm keeps a consumer COMPILING and RUNNING across a
+ * version that adds an op, and a `never` arm still breaks the day one lands.
+ * Nothing here can stop a consumer writing the second, which is why this is
+ * written down rather than typed. What it does remove is the pressure to hold a
+ * new op back forever once consumers exist, and this package is pre-v0.1, so
+ * there is no such consumer yet: the convention lands before the first one who
+ * could be broken by it.
+ *
+ * The ops this package's own code cannot ignore are a different case and stay
+ * exhaustive: {@link invert} and {@link apply} switch without a `default:` on
+ * purpose, so adding a member here fails their typecheck until both know what
+ * to do with it.
+ */
 export type PatchOp<
   NodeAttrs extends object = Attrs,
   EdgeAttrs extends object = Attrs,
@@ -145,7 +196,8 @@ export type PatchOp<
   | UpdateNodeAttrsOp<NodeAttrs>
   | UpdateEdgeAttrsOp<EdgeAttrs>
   | UpdateGraphAttrsOp<GraphAttrs>
-  | UpdateEdgePortsOp;
+  | UpdateEdgePortsOp
+  | UpdateNodeParentOp;
 
 /**
  * What one mutation did, in the order it did it. Frozen, ops included, so a
@@ -210,7 +262,7 @@ export class PatchListenerError extends Error {
  * The op that undoes one op.
  *
  * Adds and removes swap their tag and keep their payload, which works because
- * a remove op carries everything the matching add needs. The four update ops
+ * a remove op carries everything the matching add needs. The five update ops
  * swap `after` and `before`, which works because an emitted patch is
  * normalised: `after` names exactly the keys that changed and `before` their
  * prior values, with a key present and `undefined` meaning "was absent", which
@@ -243,6 +295,11 @@ function invertOp<N extends object, E extends object, G extends object>(
     case 'update-graph-attrs':
       return Object.freeze({ ...op, after: op.before, before: op.after });
     case 'update-edge-ports':
+      return Object.freeze({ ...op, after: op.before, before: op.after });
+    // The same swap again, and it needs no normalisation note: this op's two
+    // keys are always present, so swapping them cannot turn a stated value into
+    // an unstated one.
+    case 'update-node-parent':
       return Object.freeze({ ...op, after: op.before, before: op.after });
   }
 }
@@ -277,7 +334,14 @@ function applyOp<N extends object, E extends object, G extends object>(
 ): void {
   switch (op.op) {
     case 'add-node':
-      graph.addNode({ id: op.id, attrs: op.attrs, ports: op.ports });
+      // The parent is spread in conditionally for the same reason the port
+      // keys below are: `NodeInit` spells a root as an absent key.
+      graph.addNode({
+        id: op.id,
+        attrs: op.attrs,
+        ports: op.ports,
+        ...(op.parent === undefined ? {} : { parent: op.parent }),
+      });
       return;
     case 'remove-node':
       graph.removeNode(op.id);
@@ -315,6 +379,9 @@ function applyOp<N extends object, E extends object, G extends object>(
       return;
     case 'update-edge-ports':
       graph.updateEdgePorts(op.id, op.after);
+      return;
+    case 'update-node-parent':
+      graph.setNodeParent(op.id, op.after);
       return;
     default: {
       // Unreachable from typed code, so `op` is `never` here. Reachable from

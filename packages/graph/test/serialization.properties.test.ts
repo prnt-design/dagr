@@ -91,7 +91,8 @@ type Command =
   | { readonly kind: 'update-node-attrs'; readonly id: string; readonly attrs: readonly Entry[] }
   | { readonly kind: 'update-edge-attrs'; readonly id: string; readonly attrs: readonly Entry[] }
   | { readonly kind: 'update-graph-attrs'; readonly attrs: readonly Entry[] }
-  | { readonly kind: 'update-edge-ports'; readonly id: string; readonly ports: EdgePortsPatch };
+  | { readonly kind: 'update-edge-ports'; readonly id: string; readonly ports: EdgePortsPatch }
+  | { readonly kind: 'set-node-parent'; readonly id: string; readonly parent: string | undefined };
 
 const nodeId = fc.constantFrom(...NODE_POOL);
 const edgeId = fc.constantFrom(...EDGE_POOL);
@@ -200,6 +201,16 @@ function sequences(values: readonly unknown[]): fc.Arbitrary<readonly Command[]>
         .record({ id: nodeId })
         .map((fields): Command => ({ kind: 'remove-node', ...fields })),
     },
+    // Containment, and it is here rather than only in the patch suite because
+    // the document has its own version of the ordering problem: a node can be
+    // reparented long after it was added, so a `parent` naming a node written
+    // LATER in `nodes` is a document these sequences produce by construction.
+    {
+      weight: 5,
+      arbitrary: fc
+        .record({ id: nodeId, parent: fc.option(nodeId, { nil: undefined, freq: 4 }) })
+        .map((fields): Command => ({ kind: 'set-node-parent', ...fields })),
+    },
   );
   // Long enough to build something up and take part of it apart again.
   // fast-check biases array length small, and a run of two calls exercises
@@ -235,6 +246,9 @@ function run(graph: Graph, item: Command): void {
         return;
       case 'add-port':
         graph.addPort(item.nodeId, item.port);
+        return;
+      case 'set-node-parent':
+        graph.setNodeParent(item.id, item.parent);
         return;
       case 'remove-port':
         graph.removePort(item.nodeId, item.portId);
@@ -329,6 +343,9 @@ interface Coverage {
    */
   selfLoops: number;
   parallelEdges: number;
+  /** Nodes written with a `parent`, and the ones written BEFORE their parent. */
+  contained: number;
+  forwardParents: number;
 }
 
 const emptyCoverage = (): Coverage => ({
@@ -344,6 +361,8 @@ const emptyCoverage = (): Coverage => ({
   cyclic: 0,
   selfLoops: 0,
   parallelEdges: 0,
+  contained: 0,
+  forwardParents: 0,
 });
 
 /** Whether a listing is in ascending order, which the pools are generated in. */
@@ -365,7 +384,20 @@ function tally(coverage: Coverage, graph: Graph, json: GraphJSON): void {
     coverage.withAttrs += 1;
     if (Object.hasOwn(held, '__proto__')) coverage.withProto += 1;
   }
-  for (const node of json.nodes) if (node.ports !== undefined) coverage.withPorts += 1;
+  const written = new Set<string>();
+  for (const node of json.nodes) {
+    if (node.ports !== undefined) coverage.withPorts += 1;
+    if (node.parent === undefined) {
+      written.add(node.id);
+      continue;
+    }
+    coverage.contained += 1;
+    // The case a one-pass reader would refuse: this node names a parent the
+    // document has not written yet, which happens whenever a node was
+    // reparented into one that was added after it.
+    if (!written.has(node.parent)) coverage.forwardParents += 1;
+    written.add(node.id);
+  }
   const pairs = new Set<string>();
   for (const edge of json.edges) {
     if (edge.sourcePort !== undefined || edge.targetPort !== undefined) {
@@ -393,6 +425,8 @@ function accumulate(total: Coverage, one: Coverage): void {
   total.cyclic += one.cyclic;
   total.selfLoops += one.selfLoops;
   total.parallelEdges += one.parallelEdges;
+  total.contained += one.contained;
+  total.forwardParents += one.forwardParents;
 }
 
 describe('serialization properties over random mutation sequences', () => {
@@ -421,6 +455,13 @@ describe('serialization properties over random mutation sequences', () => {
     expect(total.reordered).toBeGreaterThan(80);
     expect(total.acyclic).toBeGreaterThan(80);
     expect(total.cyclic).toBeGreaterThan(40);
+    // Measured at 58 contained nodes and 26 forward references over these 200
+    // documents. The second is the one that matters: a forward reference is a
+    // document naming a parent it has not written yet, which is what a
+    // one-pass reader would refuse, and it is produced by the ordinary
+    // reparent rather than by anything the generator does on purpose.
+    expect(total.contained).toBeGreaterThan(35);
+    expect(total.forwardParents).toBeGreaterThan(15);
     // `cyclic` reads as a multi-node-cycle guard and is not one: only six of
     // the sixty-nine cyclic documents are cyclic without a self loop. These two
     // say which shapes the run really reached (measured: 72 self loops, 9

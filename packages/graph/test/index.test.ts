@@ -29,6 +29,7 @@ import type {
   UpdateEdgePortsOp,
   UpdateGraphAttrsOp,
   UpdateNodeAttrsOp,
+  UpdateNodeParentOp,
 } from '../src/index.js';
 
 describe('@dagr/graph public surface', () => {
@@ -69,6 +70,7 @@ describe('@dagr/graph public surface', () => {
 
   it('exports nothing else at runtime', () => {
     expect(Object.keys(api).sort()).toEqual([
+      'ContainmentCycleError',
       'CycleError',
       'DagrGraphError',
       'DuplicateEdgeError',
@@ -110,7 +112,7 @@ describe('@dagr/graph public surface', () => {
     api.apply(mirror, api.invert(log[0] ?? []));
     expect(mirror.hasNode('a')).toBe(false);
 
-    // Each of the ten per-op interfaces is annotated by hand rather than
+    // Each of the eleven per-op interfaces is annotated by hand rather than
     // narrowed out of the union, so the surface is pinned name by name:
     // dropping one from the export list fails the typecheck here rather than
     // going unnoticed until a consumer reaches for it.
@@ -150,6 +152,12 @@ describe('@dagr/graph public surface', () => {
       after: { sourcePort: 'p' },
       before: { sourcePort: undefined },
     };
+    const updateNodeParent: UpdateNodeParentOp = {
+      op: 'update-node-parent',
+      id: 'a',
+      after: undefined,
+      before: undefined,
+    };
 
     // Every one of them is a member of `PatchOp`, so a patch built out of them
     // replays through `apply` like any other.
@@ -161,6 +169,7 @@ describe('@dagr/graph public surface', () => {
       updateEdgeAttrs,
       updateGraphAttrs,
       updateEdgePorts,
+      updateNodeParent,
       removeEdge,
       removePort,
       removeNode,
@@ -175,6 +184,7 @@ describe('@dagr/graph public surface', () => {
       'update-edge-attrs',
       'update-graph-attrs',
       'update-edge-ports',
+      'update-node-parent',
       'remove-edge',
       'remove-port',
       'remove-node',
@@ -195,6 +205,7 @@ describe('@dagr/graph public surface', () => {
       new api.PortInUseError('a', 'p', ['e1']).code,
       new api.PortDirectionError('a', 'p', 'in', 'source').code,
       new api.CycleError(['a']).code,
+      new api.ContainmentCycleError(['a']).code,
       new api.InvalidGraphJSONError('nodes[0]', 'an object').code,
     ];
     expect(codes).toEqual([
@@ -208,6 +219,7 @@ describe('@dagr/graph public surface', () => {
       'PORT_IN_USE',
       'PORT_DIRECTION',
       'CYCLE',
+      'CONTAINMENT_CYCLE',
       'INVALID_GRAPH_JSON',
     ]);
   });

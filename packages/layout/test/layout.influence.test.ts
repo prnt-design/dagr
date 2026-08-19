@@ -294,6 +294,25 @@ describe('influenceRegion', () => {
     expect(ids(region.edges)).toEqual(['e2', 'e3']);
   });
 
+  // M5.5. Nothing in this package reads `parent`, so a reparent moves no node
+  // and the exact bound on it is the empty one. The case is explicit rather
+  // than left to the `default` arm so that M7, which is the task that does read
+  // `parent`, finds a case to change instead of a silence to notice.
+  it('names nothing for a reparent, because no stage reads containment', () => {
+    const graph = chain(6);
+    graph.addNode('box');
+    const region = regionOf(graph, () => {
+      graph.setNodeParent('n2', 'box');
+    });
+
+    // Empty, and empty is exact rather than optimistic: the drawing after the
+    // reparent is the drawing before it, down to the coordinate. `box` was in
+    // the previous run, so it is not named either, which is what makes this
+    // about containment rather than about a node the patch arrived with.
+    expect(ids(region.nodes)).toEqual([]);
+    expect(ids(region.edges)).toEqual([]);
+  });
+
   it('refuses a rank window it cannot use', () => {
     const graph = chain(6);
     const { previous, sizes } = pipelineState(graph);

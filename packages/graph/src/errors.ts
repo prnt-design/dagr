@@ -24,6 +24,7 @@ export type DagrGraphErrorCode =
   | 'PORT_IN_USE'
   | 'PORT_DIRECTION'
   | 'CYCLE'
+  | 'CONTAINMENT_CYCLE'
   | 'INVALID_GRAPH_JSON';
 
 /**
@@ -33,8 +34,8 @@ export type DagrGraphErrorCode =
  *
  * This is a catch base, not an extension point. It is exported so one
  * `instanceof` can catch the family and so `code` can be switched on through
- * it, and the family is exactly the eleven classes below.
- * {@link isDagrGraphError} narrows to a closed union of those eleven and rejects
+ * it, and the family is exactly the twelve classes below.
+ * {@link isDagrGraphError} narrows to a closed union of those twelve and rejects
  * anything else, a subclass declared elsewhere included. A sibling package
  * that wants the same `code` ergonomics should declare its own root class,
  * its own code union, and its own predicate rather than extending this one:
@@ -216,6 +217,33 @@ export class CycleError extends DagrGraphError {
 }
 
 /**
+ * Thrown when a containment change would put a node inside itself.
+ *
+ * A separate class from {@link CycleError} rather than a second use of it,
+ * because the two name different relations and a caller catching one has no way
+ * to ask which. `CycleError` is about edges, where a cycle is a fact the caller
+ * may well want to keep and break for themselves; this one is about
+ * containment, where the model refuses the call outright and nothing cyclic is
+ * ever stored. Sharing a class would also make `CycleError`'s "consecutive
+ * entries are joined by an edge" false of half its instances.
+ *
+ * `chain` is the containment path the accepted call would have closed, read as
+ * "is contained by": the node whose parent was being set comes first, then the
+ * parent, then that parent's parent, up to the one that closes back to the
+ * first. The endpoint is listed once, so setting a node as its own parent
+ * carries one entry.
+ */
+export class ContainmentCycleError extends DagrGraphError {
+  readonly code = 'CONTAINMENT_CYCLE';
+
+  constructor(readonly chain: readonly string[]) {
+    super(`Containment cycle: ${chain.join(' -> ')} -> ${chain[0] ?? ''}`);
+    this.name = 'ContainmentCycleError';
+    Object.setPrototypeOf(this, ContainmentCycleError.prototype);
+  }
+}
+
+/**
  * Thrown when a value handed to `Graph.fromJSON` is not the shape the
  * serialization format describes.
  *
@@ -277,6 +305,7 @@ export type DagrGraphErrorLike =
   | PortInUseError
   | PortDirectionError
   | CycleError
+  | ContainmentCycleError
   | InvalidGraphJSONError;
 
 /**
@@ -296,10 +325,11 @@ const KNOWN_CODES: Readonly<Record<DagrGraphErrorCode, true>> = {
   PORT_IN_USE: true,
   PORT_DIRECTION: true,
   CYCLE: true,
+  CONTAINMENT_CYCLE: true,
   INVALID_GRAPH_JSON: true,
 };
 
-/** The same eleven codes as a set, for the membership test in the predicate. */
+/** The same twelve codes as a set, for the membership test in the predicate. */
 const KNOWN_CODE_SET: ReadonlySet<string> = new Set(Object.keys(KNOWN_CODES));
 
 /**
@@ -307,7 +337,7 @@ const KNOWN_CODE_SET: ReadonlySet<string> = new Set(Object.keys(KNOWN_CODES));
  * union rather than to the abstract base.
  *
  * The check is `instanceof DagrGraphError` AND a membership test of `code`
- * against the eleven known codes. The second half is what makes the runtime test
+ * against the twelve known codes. The second half is what makes the runtime test
  * as closed as {@link DagrGraphErrorLike} claims to be: the base class is
  * exported, so a further subclass carrying a code of its own would pass the
  * `instanceof` alone and be narrowed to a union it is not a member of, at
