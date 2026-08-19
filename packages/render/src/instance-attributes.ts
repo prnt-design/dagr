@@ -96,8 +96,16 @@ export interface InstanceChannel {
  * neither holds, `setupOutgoingLight` returns `diffuseColor.rgb`, and nothing
  * in the graph ever asks for a normal.
  *
- * One slot is left. M4.6's spring velocity or M4.8's picking id is the seventh
- * channel and fits; an eighth needs interleaving or a raised `requiredLimits`.
+ * One slot is left. M4.8's picking id is the seventh channel and fits; an eighth
+ * needs interleaving or a raised `requiredLimits`.
+ *
+ * **M4.6 DID NOT TAKE IT EITHER, and that is now settled rather than pending.**
+ * The two candidates recorded here were a spring velocity and a picking id. The
+ * springs shipped as arithmetic on the CPU (`spring.ts`), so a stepped position
+ * arrives as an ordinary centre through the write this file already counts, and
+ * a velocity the shader never reads has no reason to be on the device at all.
+ * Uploading one would be paying a vertex buffer slot for a number that is
+ * cheaper to keep beside the layout it belongs to.
  *
  * **D3 DID NOT TAKE IT, and the reason is the counting rule above rather than
  * restraint.** The per-edge highlight it added is an attribute on the RIBBON

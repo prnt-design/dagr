@@ -21,8 +21,8 @@ import { requireIntegerAtLeast } from './validate.js';
  * covers them with no holes and no per-slot liveness test. The handle-to-slot
  * map is what makes that survivable, and the indirection's supposed cost does
  * not survive inspection: per-frame rendering iterates slots on the GPU and
- * never consults the map, per-frame spring integration (M4.6, M4.7) iterates
- * spring state which is keyed by handle anyway, and the map is touched once per
+ * never consults the map, the per-frame spring pass (M4.7) iterates spring
+ * state which is keyed by handle anyway, and the map is touched once per
  * CHANGED entry when a delta is applied, which is O(size of delta). Leaving
  * holes and compacting on a threshold is the alternative, and it wastes buffer
  * space and draw work for nothing the map does not already provide.
@@ -39,8 +39,9 @@ import { requireIntegerAtLeast } from './validate.js';
  * State this loudly, because the rest of the package relies on it and
  * swap-with-last corrupts slot-keyed data SILENTLY, without an error: the slot
  * stays a perfectly valid index, it merely belongs to a different instance now.
- * Per-instance spring state (M4.6, M4.7) and picking IDs (M4.8) are keyed by
- * handle. Slot indices are not durable across ANY removal, and
+ * Per-instance spring state (M4.7) and picking IDs (M4.8) are keyed by handle.
+ * M4.6 shipped the spring arithmetic itself as a pure function holding no state
+ * at all, which is why this invariant only starts costing anything at M4.7. Slot indices are not durable across ANY removal, and
  * {@link InstanceBuffer.slotOf} is a question with an answer that expires: read
  * it, use it, do not store it.
  *

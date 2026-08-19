@@ -14,6 +14,41 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- Critically damped springs: `stepSpring`, `stepSpring2D`, `omegaForHalfLife`,
+  the constants `HALF_LIFE_OMEGA` and `SETTLE_OMEGA_1_PERCENT`, and the types
+  `SpringState` and `Spring2DState`. Nothing in the renderer calls them; they
+  are the motion arithmetic M4.7 will drive from layout deltas, exported
+  because the caller owns the clock. (M4.6)
+
+  **THE STEP IS EXACT, AND THERE IS NO FIXED-TIMESTEP ACCUMULATOR.** The
+  ROADMAP's M4.6 entry asked for one, and the reason it usually exists is the
+  reason there is none: an accumulator bounds an approximate integrator's
+  error so behaviour does not change with the frame rate, and a closed-form
+  step has no such error to bound. Ten steps of a millisecond and one step of
+  ten agree to machine precision. Shipping one anyway would cost the property
+  it protects, since a fixed substep leaves a remainder that is either dropped
+  (a lag that differs per frame rate) or carried (a stagger at constant
+  velocity).
+
+  **A LONG FRAME IS SAFE WITHOUT A CLAMP.** A backgrounded tab's delta lands
+  the spring on its target with zero velocity, which is what a returning tab
+  should show. Past a `w * dt` of about 746 the decay underflows in a double
+  and the target is returned directly, rather than multiplying a possibly
+  infinite displacement by zero. A zero delta is an identity by construction
+  too: `target + (position - target)` is not `position` in a double, so a
+  paused clock would otherwise walk a resting spring off its own value.
+
+  **NO OVERSHOOT MEANS NO OSCILLATION AND NOT NO OVERSHOOT.** A spring
+  released from rest never passes its target; one retargeted while moving can
+  pass it once and come back, and once is the bound. Both are asserted over a
+  grid rather than argued.
+
+  It lives inside this package and is exported, which is the third option the
+  M4.6 entry named and the second time this package has taken it after the
+  HTML overlay. It imports the `Vec2` type and the shared validators and
+  nothing else, so a later split is a file that travels rather than code that
+  is rewritten.
+
 - `setEdgeIntensity(groupId, intensityOf)` on `Renderer`: one number per edge in
   `[0, 1]`, which the ribbon shader multiplies BOTH the width and the alpha by.
   A type-level addition to the `Renderer` interface and no new exported name.
