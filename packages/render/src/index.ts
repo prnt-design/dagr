@@ -57,6 +57,17 @@
  * `specs/2026-08-14-html-overlay-design.md` for the escape hatch and what
  * taking it would cost.
  *
+ * **M4.6 took that same option for the springs themselves, which are exported
+ * here and touch no GPU at all.** {@link stepSpring} and
+ * {@link stepSpring2D} are a critically damped integrator in closed form, and
+ * they are exported rather than internal because motion is a feature a caller
+ * drives: M4.7 will run them over `LayoutDelta`s, and `@dagr/react` in M5 wants
+ * the same curve for interaction animation that has no graph in it at all. The
+ * module imports nothing from this package but the `Vec2` type and the shared
+ * validators, so the day a second consumer makes a package of it, the move is a
+ * file rather than a rewrite. Its whole surface is five names and two records
+ * of numbers, and nothing in it needs a device to be tested.
+ *
  * Not one three.js type appears in anything exported from this file. See
  * `types.ts` for why: three is a peer dependency, so it stays an implementation
  * detail of `webgpu-renderer.ts`.
@@ -100,6 +111,14 @@ export { advanceDashFlow, ribbonWidthAt } from './ribbon.js';
 export type { RibbonDashStyle, RibbonStyle, RibbonWidth, RibbonWidthInput } from './ribbon.js';
 export type { EdgeFrameStyle, SceneEdge, SceneEdgeGroup } from './scene-edges.js';
 export type { NodeShape, SceneNode } from './scene-nodes.js';
+export {
+  HALF_LIFE_OMEGA,
+  SETTLE_OMEGA_1_PERCENT,
+  omegaForHalfLife,
+  stepSpring,
+  stepSpring2D,
+} from './spring.js';
+export type { Spring2DState, SpringState } from './spring.js';
 export { createRenderer } from './webgpu-renderer.js';
 export type {
   OrthoFrustum,
