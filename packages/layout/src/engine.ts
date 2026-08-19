@@ -246,10 +246,12 @@ function warmStartOf(routed: RoutedState): PreviousLayout {
  * without this check the engine relays out an unchanged graph, hands back an
  * empty delta, and draws the same picture forever.
  *
- * Only the four ops with a presence question are checked, and only against what
- * the patch says the graph should now show. Attribute updates and port moves
- * have nothing to check against a graph that holds them either way, and checking
- * them would mean the engine re-deriving what the caller's own mutation did.
+ * Only the ops that make a checkable claim are checked, and only against what
+ * the patch says the graph should now show: the four with a presence question,
+ * plus `update-node-parent`, which has no presence question and does say where
+ * a node now sits. Attribute updates and port moves have nothing to check
+ * against a graph that holds them either way, and checking them would mean the
+ * engine re-deriving what the caller's own mutation did.
  *
  * LAST OP WINS, because a patch is an ordered list and its ops can cancel: a
  * caller who concatenates a frame's worth of patches into one call, or wraps the

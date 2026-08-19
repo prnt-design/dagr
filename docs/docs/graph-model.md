@@ -320,8 +320,9 @@ Silently deleting edges the caller did not name is a bigger surprise than an
 error they can act on, and the error hands back exactly the list they need to
 rewire or remove before retrying: `updateEdgePorts` to move an edge off the
 port, `removeEdge` to drop it. The cascade already exists where it is
-unambiguous: `removeNode` takes the node, its ports, and every incident edge
-together, because there is no coherent graph left if it does not.
+unambiguous: `removeNode` takes the node, its ports, every incident edge, and
+every node it contains together, because there is no coherent graph left if it
+does not.
 
 ## Containment
 
@@ -399,10 +400,12 @@ Flat means the array is ops and nothing else, with no nesting and no grouping.
 Cascade-free means an op names one thing and does one thing. `removeNode` takes
 its incident edges with it, so it emits a `remove-edge` op per edge followed by
 the `remove-node` op, rather than one op a consumer would have to expand for
-itself. Two things follow, and both are load bearing. Replaying such a patch
-never re-triggers the cascade, because the edges are already gone by the time
-the node op runs. And reversing the array is the right undo order, because the
-node comes back before the edges that need it to exist.
+itself. It takes the nodes it contains the same way, one `remove-node` op each.
+Two things follow, and both are load bearing. Replaying such a patch never
+re-triggers the cascade, because the edges are already gone by the time the node
+op runs. And reversing the array is the right undo order, because the node comes
+back before the edges that need it to exist, and a parent before the children
+that name it.
 
 | Function | Behaviour |
 | --- | --- |

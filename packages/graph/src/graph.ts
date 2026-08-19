@@ -882,9 +882,15 @@ export class Graph<
    * `invert` and another in `apply`.
    */
   #removeSubtree(id: NodeId, ops: PatchOp<NodeAttrs, EdgeAttrs, GraphAttrs>[] | undefined): void {
-    // A fresh array, so removing each child out of the index below cannot
-    // disturb the walk.
-    for (const child of this.children(id)) this.#removeSubtree(child, ops);
+    // The index is read first so that a node containing nothing, which is every
+    // node in a graph that uses no containment, costs one lookup rather than
+    // the empty array {@link children} would build. When there is something to
+    // walk, it is walked through `children`, which sorts it and hands back a
+    // fresh array, so removing each child out of the index cannot disturb the
+    // walk and the ops come out in the same order the listing reports.
+    if (this.#children.get(id) !== undefined) {
+      for (const child of this.children(id)) this.#removeSubtree(child, ops);
+    }
     const node = this.requireNode(id);
     const outgoing = this.#requireOut(id);
     const incoming = this.#requireIn(id);
@@ -949,7 +955,7 @@ export class Graph<
    * surprise than an error they can act on, and the error carries the edge ids
    * so they can rewire or remove them and retry. Callers who do want the
    * cascade already have {@link removeNode}, which takes the node, its ports,
-   * and its incident edges together.
+   * its incident edges, and the nodes it contains together.
    *
    * @throws {NodeNotFoundError} when the node is not in the graph.
    * @throws {PortNotFoundError} when the node does not declare that port.

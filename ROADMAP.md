@@ -4689,6 +4689,15 @@ it settled rather than restating the argument.
   the format promises. GENERALISE IT: an ordering constraint on a REPLAY is
   payable by emitting in the right order; the same constraint on a DOCUMENT is
   not, because the document's order is already promised to something else.
+  THE FORWARD REFERENCE IS NOT A CORNER CASE, MEASURED RATHER THAN ASSUMED. Both
+  property suites gained a reparent command, and over the serialization suite's
+  200 random documents 58 nodes were written with a parent and 26 of those named
+  a parent the document had not written yet. A one-pass reader would have
+  refused one document in eight of the ones that use containment at all. The
+  patch suite's four properties (replay, invert, unwind to empty, invert twice)
+  hold over 160 reparents and 25 removals that took a contained node with them,
+  which is the ordering rule above checked by something other than the case that
+  was written for it.
   A TWELFTH ERROR, WHICH IS A THIRD SURFACE OF THE KIND THIS TASK EXISTS TO MOVE
   EARLY. The entry named `PatchOp` and `GraphJSON.version`; `DagrGraphErrorCode`
   is the same shape of commitment, since adding a code breaks an exhaustive
