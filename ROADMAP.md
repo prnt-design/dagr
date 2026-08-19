@@ -4582,7 +4582,7 @@ it settled rather than restating the argument.
   `pnpm --filter @dagr/layout build` needs `@dagr/graph` built first (see the
   comment in `packages/layout/tsconfig.build.json`). Not worth the machinery at
   two packages, worth knowing about before the other decision is made.
-- [ ] **M5.5** Reserve containment in the graph model: `readonly parent?: NodeId`
+- [x] **M5.5** Reserve containment in the graph model: `readonly parent?: NodeId`
   on `Node` and on `NodeJSON`, an `update-node-parent` patch op, the invariants
   (a node has at most one parent, containment is acyclic, an edge may cross a
   boundary), and traversal coverage. `@dagr/layout` IGNORES `parent` in this
@@ -4643,6 +4643,96 @@ it settled rather than restating the argument.
     the moment M7 reads `parent`.
   This is not a bet that nesting is wanted — M6.4 and M7 decide that. It is the
   cheap half of an option whose expensive half is a coordinated release.
+  SHIPPED. `Node.parent`, `NodeInit.parent`, `graph.setNodeParent(id, parent)`,
+  `graph.children(id)`, the `update-node-parent` op, `ContainmentCycleError`,
+  and `NodeJSON.parent`, with 35 tests in
+  `packages/graph/test/graph.containment.test.ts` written before the
+  implementation. `@dagr/layout` gained the two explicit cases below and no
+  reading of `parent` at all.
+  THE THREE RULES ARE ONE FIELD AND ONE WALK. At most one parent is the field
+  being a field. Acyclicity is a walk UP from the proposed parent, which is
+  O(depth) rather than O(subtree) because a node has one parent and many
+  children, and it terminates because the relation it is checking is a forest.
+  An edge crossing a boundary needed no code, which is the point: containment
+  and adjacency are separate relations and nothing derives one from the other.
+  A `#children` index is carried beside the record for the one direction the
+  record cannot answer, since `removeNode` has to know what a node contains and
+  a pass over the roster per removal is not a cost this model pays anywhere
+  else. `children` sorts it by insertion rank, the rule `successors` follows,
+  so a listing never depends on the order the containment was declared in.
+  THE CHILDREN INDEX IS LAZY, AND THAT IS A MEASUREMENT RATHER THAN A TASTE.
+  Every other per-node index here is present for every node, because every node
+  uses one; a graph that never nests anything would have paid an empty `Set` per
+  `addNode` for a relation it never asked for, worth about 4% on the 1k-node,
+  4k-edge build in an interleaved A/B against the version before this task. The
+  entry is created on a node's first child and dropped again when its last child
+  leaves, so a graph that used containment and stopped costs what one that never
+  used it costs, and an absent entry means "contains nothing" rather than "not a
+  node", which moves the presence question onto the node map.
+  `setNodeParent` RATHER THAN `updateNodeParent`, against the op's own name.
+  Every `update` on this class merges a patch into a bag and leaves what the
+  patch does not name alone; this replaces one field, and `undefined` is a value
+  rather than a request to leave it alone. The op keeps `update-node-parent`
+  because an op names the kind of change and every changed-field op in the
+  format is spelled that way. The mismatch is deliberate and documented on both
+  sides.
+  THE TWO ORDERING BULLETS ARE ONE DECISION AND THE ENTRY WAS RIGHT ABOUT IT.
+  `removeNode` emits its subtree depth-first post-order, and reversing that is
+  already the order `apply` needs, so `invert` sorts nothing and `apply` sorts
+  nothing. What the entry did NOT anticipate is that the SAME constraint reaches
+  serialization and cannot be paid the same way: a document's `nodes` array is
+  in insertion order, and a node reparented long after it was added is written
+  BEFORE the parent it names. So `fromJSON` reads `nodes` in two passes, adding
+  every node and then setting every parent. One pass would refuse a document
+  this package itself wrote, and sorting the nodes into containment order would
+  restore a graph whose iteration order is not the one that was written, which
+  the format promises. GENERALISE IT: an ordering constraint on a REPLAY is
+  payable by emitting in the right order; the same constraint on a DOCUMENT is
+  not, because the document's order is already promised to something else.
+  A TWELFTH ERROR, WHICH IS A THIRD SURFACE OF THE KIND THIS TASK EXISTS TO MOVE
+  EARLY. The entry named `PatchOp` and `GraphJSON.version`; `DagrGraphErrorCode`
+  is the same shape of commitment, since adding a code breaks an exhaustive
+  switch exactly as adding an op does, and it grew here rather than being
+  avoided by reusing `CycleError`. Reuse was rejected on the reading side: the
+  two relations are different, a caller catching one has no way to ask which it
+  got, and `CycleError`'s "consecutive entries are joined by an edge" would have
+  become false of half its instances.
+  `update-node-parent` SPELLS BOTH KEYS PRESENT, which is the opposite of how
+  the record and the add and remove ops spell the same field, and the asymmetry
+  is between a state and a transition. A record says what a node IS and an
+  absent key is the cleanest way to say it has no parent. The op says what
+  MOVED, and both ends of a move have to be nameable, or "was a root" and "did
+  not say" are spelled the same and every consumer tests `'before' in op` before
+  believing the value.
+  `PatchOp` IS DOCUMENTED AS AN OPEN UNION, in its own docstring and on the docs
+  page, and the note says what the convention does NOT do: a `default:` arm
+  keeps a consumer compiling and running across a version that adds an op, and a
+  `never` arm still breaks the day one lands. It works here only because this is
+  pre-v0.1, so the convention lands before the first consumer who could be
+  broken by it. The package's own `invert` and `apply` stay exhaustive on
+  purpose, so a new op cannot be added without teaching both.
+  `GraphJSON.version` STAYS 1 AND THE FORMAT'S OWN RULE SAYS WHY IT COULD NOT
+  HAVE, which is the contradiction worth writing down rather than leaving for a
+  reader to find: the version field's section already said an additive field a
+  version 1 reader would silently drop is a version bump. It is, when such a
+  reader exists. Containment landed before the first published release, so one
+  never will, and the rule is about readers that exist rather than about the
+  shape of the change. The next additive field does not get the same answer.
+  THE TWO `@dagr/layout` CASES ARE NOT THE SAME KIND OF CASE. `influenceRegion`
+  takes the documented no-op the entry allowed, and empty is EXACT rather than
+  optimistic: no stage reads `parent`, so the drawing after a reparent is the
+  drawing before it, coordinate for coordinate. `checkPatchApplied` takes more
+  than a no-op, because that function exists to catch a caller who hands over a
+  patch expecting the engine to apply it, and a patch of nothing but reparents
+  was the one edit that could pass through it in silence. It now reads the claim
+  the op does make, under the same last-op-wins rule as the presence checks, so
+  a node the patch ends by removing is checked as removed and not as reparented.
+  WHAT M6.4 AND M7 INHERIT. The model, settled, plus a `children` listing whose
+  order is a promise. M7 is where `influenceRegion`'s empty case stops being
+  exact: on the day a parent is drawn around its children, a reparent moves the
+  drawing, and that case becomes a wrong narrow bound rather than a documented
+  no-op. It is written out rather than folded into the `default` arm for exactly
+  that reason, so the task that changes it finds a case rather than a silence.
 
 ## M6: VDSL = v0.2 (`@dagr/vdsl`)
 

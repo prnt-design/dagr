@@ -263,10 +263,12 @@ function warmStartOf(routed: RoutedState): PreviousLayout {
 function checkPatchApplied(graph: Graph, patch: Patch): void {
   const nodes = new Map<NodeId, boolean>();
   const edges = new Map<EdgeId, boolean>();
+  const parents = new Map<NodeId, NodeId | undefined>();
   for (const op of patch) {
     switch (op.op) {
       case 'add-node':
         nodes.set(op.id, true);
+        parents.set(op.id, op.parent);
         break;
       case 'remove-node':
         nodes.set(op.id, false);
@@ -276,6 +278,14 @@ function checkPatchApplied(graph: Graph, patch: Patch): void {
         break;
       case 'remove-edge':
         edges.set(op.id, false);
+        break;
+      // A reparent has no presence question and does make a claim, so it is
+      // checked on the claim it makes. Without this arm a patch of nothing but
+      // reparents is the one edit a caller can hand over unapplied and hear
+      // nothing about, which is the mistake this whole function exists for.
+      // Nothing here reads containment for the layout: see `influence.ts`.
+      case 'update-node-parent':
+        parents.set(op.id, op.after);
         break;
       default:
         break;
@@ -287,9 +297,31 @@ function checkPatchApplied(graph: Graph, patch: Patch): void {
   for (const [id, expected] of edges) {
     if (graph.hasEdge(id) !== expected) throw mismatch('edge', id, expected);
   }
+  for (const [id, expected] of parents) {
+    // A node the patch ends by removing has no parent left to check, and the
+    // presence pass above has already had the last word on it.
+    if (nodes.get(id) === false) continue;
+    const actual = graph.getNode(id)?.parent;
+    if (actual !== expected) throw parentMismatch(id, expected, actual);
+  }
 }
 
-/** The one message both halves of the patch check raise. */
+/** The message the containment half of the patch check raises. */
+function parentMismatch(
+  id: NodeId,
+  expected: NodeId | undefined,
+  actual: NodeId | undefined,
+): EngineStateError {
+  const where = (parent: NodeId | undefined): string =>
+    parent === undefined ? 'no parent' : `parent "${parent}"`;
+  return new EngineStateError(
+    `the patch gives node "${id}" ${where(expected)} and the graph shows ${where(actual)}. ` +
+      'relayout describes an edit you have already made to your own graph rather than ' +
+      'applying one, so apply the patch before handing it over',
+  );
+}
+
+/** The one message both presence halves of the patch check raise. */
 function mismatch(kind: 'node' | 'edge', id: string, expected: boolean): EngineStateError {
   const verb = expected ? 'adds' : 'removes';
   const state = expected ? 'does not hold it' : 'still holds it';

@@ -14,6 +14,43 @@ diffing five milestones of doc prose.
 
 ### Added
 
+- Containment: `Node.parent`, `NodeInit.parent`, `graph.setNodeParent(id,
+  parent)`, `graph.children(id)`, the `update-node-parent` patch op,
+  `ContainmentCycleError`, and `NodeJSON.parent` (M5.5). Additive for a reader,
+  and `Node` is only ever produced by `Graph`, so nothing a caller holds
+  changes shape. `@dagr/layout` ignores `parent`: this is the model, not the
+  layout.
+
+  **Three rules and nothing else.** A node has at most one parent, containment
+  is acyclic, and an edge may cross a boundary. Containment is not
+  reachability: no traversal on `Graph` reads it, and the two relations have
+  their own cycle errors, because a caller catching one has no way to ask which
+  it got.
+
+  **One graph, not nested graphs.** `parent` is a reference on a node rather
+  than a child `Graph`, because every patch op is scoped to one graph and
+  `batch` is per-`Graph`: with nested instances a child's edits would never
+  reach a subscriber of the graph that contains it, and an edit spanning a
+  boundary would span two patch streams with no way to make it one.
+
+  **`removeNode` takes the contained nodes with it**, one `remove-node` op
+  each, which is the answer incident edges already take. Refusing while a node
+  contains something would have made `removeNode` partial in a way nothing else
+  in this API is. The ops come out deepest first with the parent last, and that
+  single choice settles both ordering rules containment adds: reversing a
+  post-order removal is already the replay order `apply` needs, so a parent
+  comes back before the children that name it without anything sorting.
+
+  **What it costs a caller who never uses it: nothing measurable.** The children
+  index is created on a node's first child rather than with the node, because an
+  empty `Set` per `addNode` is about 4% on the 1k-node, 4k-edge build, measured
+  in an interleaved A/B against the version before this.
+
+  **The document keeps `version: 1`**, and that is worth saying out loud
+  because the format's own rule says an additive field a version 1 reader would
+  silently drop is a version bump. It is, when such a reader exists. This
+  landed before the first published release, so it never will.
+
 - `graph.batch(body)`: runs `body` and emits everything it changed as one patch,
   returning what `body` returned. Additive, and nothing an existing caller does
   changes: a graph with no batch open emits exactly what it emitted before

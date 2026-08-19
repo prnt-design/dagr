@@ -525,6 +525,16 @@ export function influenceRegion(input: InfluenceRegionInput): InfluenceSet {
         break;
       }
 
+      // Containment is a relation on the graph that no stage in this package
+      // reads: ranks come from edges, sizes from attributes, and a parent is
+      // neither. So a reparent moves nothing and the exact bound on it is the
+      // empty one, which is why this names no node and widens no band. It is
+      // written out rather than left to the arm below because M7 is the task
+      // that draws parents and children together, and on the day it does this
+      // case becomes a wrong narrow bound rather than an exact one.
+      case 'update-node-parent':
+        break;
+
       // Graph attributes reach the layout through the config, which is bound
       // to the engine and cannot change under a patch.
       default:

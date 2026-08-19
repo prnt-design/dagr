@@ -158,6 +158,57 @@ describe('engine.relayout', () => {
     expect(() => engine.relayout(unapplied)).toThrow(/"e"/u);
   });
 
+  // M5.5. A reparent has no presence question, so it would have fallen through
+  // the patch check's `default` arm and a caller who never applied it would get
+  // silence. The check exists to catch exactly that mistake, so it reads the
+  // one thing the op does claim.
+  it('refuses a reparent the graph does not show', () => {
+    const graph = diamond();
+    graph.addNode('box');
+    const engine = createLayout();
+    engine.run(graph);
+
+    const unapplied: Patch = [
+      { op: 'update-node-parent', id: 'a', after: 'box', before: undefined },
+    ];
+    expect(() => engine.relayout(unapplied)).toThrow(EngineStateError);
+    expect(() => engine.relayout(unapplied)).toThrow(/"a"/u);
+
+    graph.setNodeParent('a', 'box');
+    expect(() => engine.relayout(unapplied)).not.toThrow();
+  });
+
+  // The patch check reads the net effect of a patch rather than each op in
+  // turn, which for containment means a node reparented and then removed is
+  // checked as removed and not as reparented.
+  it('reads the last word on a node the patch reparents and then removes', () => {
+    const { graph, patches } = watched(diamond());
+    graph.addNode('box');
+    const engine = createLayout();
+    engine.run(graph);
+
+    graph.batch(() => {
+      graph.setNodeParent('a', 'box');
+      graph.removeNode('a');
+    });
+    expect(() => engine.relayout(last(patches))).not.toThrow();
+  });
+
+  // Containment is not laid out (M5.5 says the model, not the layout), so a
+  // relayout that only moves a node into another node draws the same picture.
+  it('draws the same picture for a reparent', () => {
+    const { graph, patches } = watched(diamond());
+    graph.addNode('box');
+    const engine = createLayout();
+    const before = engine.run(graph);
+
+    graph.setNodeParent('a', 'box');
+    const { result, delta } = engine.relayout(last(patches));
+
+    expect(isEmptyDelta(delta)).toBe(true);
+    expect(boxes(result)).toEqual(boxes(before));
+  });
+
   // M3.3's evidence, and the reason batching landed rather than being declined.
   // The stepwise path already agrees with the combined one on the FINAL layout
   // (the test above), so what a batch changes is the states in between, which
