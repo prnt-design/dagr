@@ -162,9 +162,9 @@ describe('the step is exact, which is why there is no fixed-timestep accumulator
   });
 
   it('survives a step a fixed-step integrator would have to refuse', () => {
-    // Semi-implicit Euler diverges once w*h passes 2. The closed form takes the
-    // same step and lands on the target, which is what a tab coming back from
-    // the background should show.
+    // Semi-implicit Euler diverges once w*h passes about 0.83, pinned below.
+    // The closed form takes the same step and lands on the target, which is
+    // what a tab coming back from the background should show.
     const state = { position: 900, velocity: 400 };
     const [target, w, dt] = [0, 20, 5];
     expect(Math.abs(eulerReference(state, target, w, dt, 1).position)).toBeGreaterThan(1e6);
@@ -174,9 +174,25 @@ describe('the step is exact, which is why there is no fixed-timestep accumulator
     expect(exact.velocity).toBeCloseTo(0, 9);
   });
 
+  it('pins the substep ceiling the closed form removes', () => {
+    // Measured rather than quoted, because the number a textbook gives for a
+    // semi-implicit Euler oscillator is w*h < 2 and that is the UNDAMPED case.
+    // Critical damping puts a factor of (1 - 2wh) on the velocity update, which
+    // changes sign and amplifies well before the spring term does.
+    const diverges = (wh: number): boolean => {
+      const { position } = eulerReference(rest(1), 0, 1, wh * 20_000, 20_000);
+      return !Number.isFinite(position) || Math.abs(position) > 1e12;
+    };
+    expect(diverges(0.82)).toBe(false);
+    expect(diverges(0.84)).toBe(true);
+    // Which is a real ceiling at animation frequencies: a 120ms half-life is a
+    // substep of about 59ms, so one dropped frame at 60fps clears it.
+    expect((0.8288 / omegaForHalfLife(0.12)) * 1000).toBeCloseTo(59.26, 2);
+  });
+
   it('lands exactly on the target once the decay underflows', () => {
     // A backgrounded tab hands back a delta measured in minutes or hours. Past
-    // w*dt of about 746 the exponential is zero in a double, and the product
+    // w*dt of about 745 the exponential is zero in a double, and the product
     // that would otherwise be computed is an infinity times a zero.
     const long = stepSpring({ position: 1e12, velocity: -1e12 }, 42, 8, 1e6);
     expect(long).toEqual({ position: 42, velocity: 0 });

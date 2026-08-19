@@ -1207,7 +1207,7 @@ wide a ribbon is and no rule for which wins.
 ## Springs, and the fixed timestep that is not here
 
 M4.6 added the motion arithmetic: `stepSpring`, `stepSpring2D`,
-`omegaForHalfLife`, and the two constants the last of those is solved from.
+`omegaForHalfLife`, and two constants of the envelope the last of those reads.
 Nothing in it touches a GPU, a canvas or three.js, and nothing in the renderer
 calls it. It is exported because a caller drives the clock.
 
@@ -1278,7 +1278,7 @@ jump, which is a faint snap at high `w`, and that is the honest cost.
 The usual reason to run a physics integrator on a fixed substep and accumulate
 the remainder is that an approximate integrator's error, and therefore its
 behaviour, changes with the frame rate. Semi-implicit Euler over that same
-equation is stable only while `w * h` stays below 2, and inside that bound it
+equation is stable only while `w * h` stays below about 0.83, and inside that bound it
 still traces a slightly different curve at 60fps than at 144fps. An exact step
 has no such error to bound: ten steps of a millisecond and one step of ten
 give the same state to machine precision, which the suite asserts directly.
@@ -1295,8 +1295,14 @@ A backgrounded tab hands back a delta measured in seconds or minutes. Stepped
 exactly, that lands the spring on its target with zero velocity, which is what a
 returning tab should show: the settled drawing rather than a minute of catch-up
 animation. The same delta through Euler is an overflow. Past a `w * dt` of about
-746 the decay underflows to zero in a double, and `stepSpring` returns the
+745 the decay underflows to zero in a double, and `stepSpring` returns the
 target itself rather than computing an infinity times a zero.
+
+The 0.83 above is measured rather than quoted, and it is worth knowing that it
+is EARLIER than the `w * h` of 2 an undamped oscillator gives: what goes
+unstable first on a critically damped system is the damping term, whose velocity
+update carries a factor of `1 - 2 w h`. At a half-life of 120ms that is a
+substep ceiling of about 59 milliseconds, which one dropped frame clears.
 
 This is the opinion `ribbon.ts` said the integrator owed. `advanceDashFlow` does
 not clamp either, for the opposite reason: a dash pattern is periodic, so a long
@@ -1327,8 +1333,8 @@ rest is `(1 + u)e^(-u)` with `u = wt`, which is not an exponential, so the
 second half-life is shorter than the first: two half-lives leave 15.2% of the
 distance rather than 25%, and three leave 3.9%. For "how long does this take"
 rather than "how fast does it start", use `SETTLE_OMEGA_1_PERCENT / w`, which is
-when the spring is within one percent of where it began, just under four
-half-lives.
+when the spring has closed all but one percent of the distance it started with,
+just under four half-lives.
 
 ### Where it lives
 

@@ -29,10 +29,9 @@ describe('@dagr/render', () => {
     // itself stays internal, because `setEdges` takes points rather than
     // geometry.
     //
-    // M4.6 added the springs, and they are the third group here that no GPU
-    // touches: a closed-form step, its two-axis form, the half-life conversion
-    // a caller tunes with, and the two envelope constants that conversion is
-    // solved from. `spring.ts` is exported whole rather than kept internal
+    // M4.6 added the springs: a closed-form step, its two-axis form, the
+    // half-life conversion a caller tunes with, and two constants of the
+    // envelope that conversion reads. Nothing in the group touches a GPU. `spring.ts` is exported whole rather than kept internal
     // because motion is driven by a caller's loop, and because `@dagr/react`
     // will want the same curve for interactions with no graph in them.
     expect(Object.keys(api).sort()).toEqual([

@@ -32,7 +32,7 @@ not" is the category this file has a heading for.
 
   **A LONG FRAME IS SAFE WITHOUT A CLAMP.** A backgrounded tab's delta lands
   the spring on its target with zero velocity, which is what a returning tab
-  should show. Past a `w * dt` of about 746 the decay underflows in a double
+  should show. Past a `w * dt` of about 745 the decay underflows in a double
   and the target is returned directly, rather than multiplying a possibly
   infinite displacement by zero. A zero delta is an identity by construction
   too: `target + (position - target)` is not `position` in a double, so a

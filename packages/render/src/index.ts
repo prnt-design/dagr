@@ -57,8 +57,8 @@
  * `specs/2026-08-14-html-overlay-design.md` for the escape hatch and what
  * taking it would cost.
  *
- * **M4.6 took that same option for the springs themselves, which is the third
- * thing exported here that no GPU touches.** {@link stepSpring} and
+ * **M4.6 took that same option for the springs themselves, which are exported
+ * here and touch no GPU at all.** {@link stepSpring} and
  * {@link stepSpring2D} are a critically damped integrator in closed form, and
  * they are exported rather than internal because motion is a feature a caller
  * drives: M4.7 will run them over `LayoutDelta`s, and `@dagr/react` in M5 wants

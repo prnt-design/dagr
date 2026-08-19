@@ -36,11 +36,11 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * needed is the reason there is none.** An accumulator exists to keep an
  * approximate integrator's error, and therefore its behaviour, from changing
  * with the frame rate: semi-implicit Euler over `x''` above is stable only
- * while `w h` stays below 2, and inside that bound it still traces a slightly
- * different curve at 60fps than at 144fps. An exact step has no such error to
- * bound. Ten steps of a millisecond and one step of ten give the same state to
- * machine precision, which `test/spring.test.ts` asserts directly, so a
- * consumer stepping once per `requestAnimationFrame` already has the property
+ * while `w h` stays below about 0.83, and inside that bound it still traces a
+ * slightly different curve at 60fps than at 144fps. An exact step has no such
+ * error to bound. Ten steps of a millisecond and one step of ten give the same
+ * state to machine precision, which `test/spring.test.ts` asserts directly, so
+ * a consumer stepping once per `requestAnimationFrame` already has the property
  * the accumulator was going to buy. Adding one anyway would cost the thing it
  * was meant to protect: a fixed substep leaves a remainder every frame, and a
  * remainder is either dropped (the drawing lags the clock by up to a substep,
@@ -50,12 +50,20 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * settled rather than skipped, and the argument is a measurement rather than a
  * preference.
  *
+ * That 0.83 is measured and pinned in the suite rather than quoted, and it is
+ * worth knowing because it is EARLIER than the `w h` of 2 an undamped
+ * oscillator gives. What goes unstable first on a critically damped system is
+ * the DAMPING term: the velocity update carries a factor of `1 - 2 w h`, which
+ * changes sign and starts amplifying long before the spring term does. At a
+ * half-life of 120ms it is a substep ceiling of about 59 milliseconds, which
+ * one dropped frame at 60fps clears.
+ *
  * **A long frame needs no clamp either, which is the opinion `ribbon.ts` says
  * this module owes.** A backgrounded tab hands back a delta of seconds or
  * minutes. Exactly stepped, that lands the spring on its target with zero
  * velocity, which is what a returning tab should show: the settled drawing,
  * not a minute of catch-up animation. The same delta through an Euler step is
- * an overflow. Past `w * dt` of about 746 the decay underflows to zero in a
+ * an overflow. Past `w * dt` of about 745 the decay underflows to zero in a
  * double and the exact answer is the target itself, which {@link stepSpring}
  * returns rather than computing an infinity times a zero.
  *
