@@ -114,7 +114,14 @@ nothing else, because each load's address is the previous load's result. They
 are registered by `registerControl()` alongside the control, so a bench file
 cannot acquire benchmarks without acquiring them, and they are never gated and
 never normalised: a probe is recorded as raw milliseconds and compared only
-against the raw milliseconds a capture recorded for the same probe.
+against the raw milliseconds a capture recorded for the same probe. They cost
+about 1.2 seconds per bench file per run, so about 7 seconds on a three-run
+`bench:ci`, against a gate that takes two to four minutes. Whether they move the
+numbers beside them was measured rather than argued, because `chase` holds a
+64 MiB table live in the same worker: six alternating runs, three with and three
+without, put the gated ratios between 0.898 and 1.229 on-over-off with both
+sides' per-run values overlapping on every entry, and the entries that fail this
+box most often came out FASTER with the probes in.
 
 What is read out of them is not how much slower the machine is, which the ratio
 already handles, but WHETHER THE TWO PROBES AGREE ABOUT HOW MUCH SLOWER IT IS.
@@ -125,18 +132,20 @@ in kind, and no single control normalises that away.
 arithmetic in registers is the obvious floor to measure the other two against,
 and it is useless on a shared virtual machine: a workload doing nothing but
 issuing instructions is the one a hypervisor's stolen cycles hit hardest, while
-a workload waiting on memory was going to wait anyway. Its between-run band was
-66% where `alloc` stayed inside 18% and `chase` inside 14%. It was removed
-rather than resized, because with it the noise alone exceeds any threshold that
-would still sit under a real signal: six pairs of runs scored up to 1.583
+a workload waiting on memory was going to wait anyway. Its widest per-file band
+over four runs was 65.9%, against 14.8% for `alloc` and 14.4% for `chase` over
+the same four. It was removed rather than resized, because with it the noise
+alone exceeds any threshold that would still sit under a real signal: six pairs
+of runs scored up to 1.583
 against each other with it in, and fifteen pairs over six runs top out at 1.215
 without it.
 
 **The threshold is 1.5 and it is placed between two measurements rather than
 chosen.** The noise is measured: fifteen pairs of six gate-sized runs on this
-box on 2026-08-21, no code changing, at 1-minute loads between 0.2 and 3.0,
-widest 1.215. The signal is estimated: on the same day the control was 1.134
-times the value this file records for it while `2.5k outEdges`, almost pure
+box on 2026-08-21, no code changing, five of them starting at 1-minute loads
+between 0.17 and 3.03, widest 1.215. The signal is estimated: on the same day
+the control was 1.134 times the value this file records for it while
+`2.5k outEdges`, almost pure
 pointer chasing, was 2.083 times its own, a non-uniformity of 1.84 between two
 benchmarks standing in for the two probes. 1.5 is the geometric midpoint,
 1.495 rounded, which is the placement that treats a missed diagnosis and a
@@ -169,7 +178,11 @@ ratios, which is a continuum ordered by how memory-bound each entry is and not
 two clusters. Two controls would give two anchors and leave everything between
 them served by neither. That is an argument for the probes, which only have to
 DETECT the difference, and it is a reason to stop describing a second control as
-the fix rather than as an improvement.
+the fix rather than as an improvement. `2.5k successors` carries that promise in
+its own exemption text inside `bench/baseline.json`, where it reads as the path
+back to gating that entry. It is left standing rather than edited, because the
+next recapture rewrites the stats under it anyway and this paragraph is where
+the qualification belongs.
 
 ## Two of three
 
@@ -223,10 +236,12 @@ did on 2026-08-16 at 06:00, on a branch whose diff was zero bytes against
 1-minute load went from 2.37 to 6.37, and the gate duly reported the same entry
 twice. The same-entry report is therefore evidence and not proof, which is why
 it says to read a repeat as real UNTIL THE CODE SAYS OTHERWISE rather than
-asserting it. Two checks settle it and both are cheap: read the failing entry
-against the rest of the same run, since a stage entry failing while the pipeline
-entry that runs that stage is negative cannot describe a regression, and re-run
-once the box is quiet. Repetition narrows the window that noise can fail a merge
+asserting it. Three checks settle it and all three are cheap: read the machine
+probes printed above the table, since a profile mismatch says plainly that no
+ratio in the run means what it usually does; read the failing entry against the
+rest of the same run, since a stage entry failing while the pipeline entry that
+runs that stage is negative cannot describe a regression; and re-run once the
+box is quiet. Repetition narrows the window that noise can fail a merge
 through. It does not close it, and nothing available here does.
 
 A regression and an unreadable measurement are still different facts and still

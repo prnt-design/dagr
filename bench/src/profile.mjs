@@ -78,8 +78,9 @@
  * two figures, both taken on the dispatch box on 2026-08-21 with no code
  * changing.
  *
- * THE NOISE, measured: six gate-sized runs at 1-minute loads between 0.2 and
- * 3.0, compared every way round, put the widest of the fifteen pairs at 1.215.
+ * THE NOISE, measured: six gate-sized runs, five of which started at 1-minute
+ * loads between 0.17 and 3.03, compared every way round, put the widest of the
+ * fifteen pairs at 1.215.
  * THE SIGNAL, estimated: the same day, the control workload was 1.134 times
  * the value `bench/baseline.json` records for it while `2.5k outEdges`, which
  * `bench/README.md` describes as almost pure pointer chasing, was 2.083 times

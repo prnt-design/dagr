@@ -175,15 +175,17 @@ findings addressed or logged, docs land with the feature.
   in registers is the obvious floor to measure the other two against and it is
   useless on a shared virtual machine, because a workload doing nothing but
   issuing instructions is the one a hypervisor's stolen cycles hit hardest while
-  a workload waiting on memory was going to wait anyway. Its between-run band was
-  66% against 18% for `alloc` and 14% for `chase`, and it does not merely add
+  a workload waiting on memory was going to wait anyway. Its widest per-file band
+  over four runs was 65.9%, against 14.8% for `alloc` and 14.4% for `chase` over
+  the same four, and it does not merely add
   noise: with it, six pairs of runs scored up to 1.583 against each other, which
   is above any threshold that would still sit under a real signal. Removed rather
   than resized, because the swing is the machine's and not the measurement's.
   THE THRESHOLD IS 1.5 AND IT IS PLACED BETWEEN TWO MEASUREMENTS. The noise is
   measured: fifteen pairs of six gate-sized runs on this box on 2026-08-21, no
-  code changing, at 1-minute loads between 0.2 and 3.0, widest 1.215, pinned as a
-  case in `test/profile.test.ts` rather than only as a constant. The signal is
+  code changing, five of them starting at 1-minute loads between 0.17 and 3.03,
+  widest 1.215, pinned as a case in `test/profile.test.ts` rather than only as a
+  constant. The signal is
   estimated: the same day the control was 1.134 times its recorded value while
   `2.5k outEdges`, almost pure pointer chasing, was 2.083 times its own, a
   non-uniformity of 1.84. 1.5 is the geometric midpoint, 1.495 rounded, which is
@@ -191,6 +193,20 @@ findings addressed or logged, docs land with the feature.
   same. The evidence is ONE-SIDED and says so: no baseline carrying probes exists
   on a second machine yet, so the signal figure is inferred, and the first
   recapture is when this constant is worth revisiting.
+  THE PROBES RUN IN THE SAME WORKER AS THE BENCHMARKS, SO "DID THEY MOVE THE
+  NUMBERS" IS A QUESTION THIS TASK OWED AND MEASURED. It is not idle: `chase`
+  holds a 64 MiB table live in every bench worker, the three entries this
+  branch's gate failed twice are the three most memory-bound in the file, and
+  the zero-byte-diff check cannot clear a branch that changes `bench` itself.
+  Six alternating `pnpm bench` runs, three with the probes registered and three
+  without, medians of three per side over the gated ratios: the on-over-off
+  figures span 0.898 to 1.229, and THE THREE ENTRIES THE GATE FAILED CAME OUT
+  FASTER WITH THE PROBES ON, at 0.908, 0.960 and 0.898, which is the opposite of
+  the story where the table causes them. The per-run values overlap between
+  sides on every entry read out: `rank > 10k` was 3266.7, 2782.6 and 3290.9 with
+  the probes and 2529.6, 3103.4 and 2657.9 without, each side's range containing
+  a value from the other. The box's between-run spread dominates and no shift is
+  visible under it.
   IT PRINTS A SENTENCE AND CHANGES NO EXIT CODE, which is the one place it
   deliberately differs from the identity check beside it. An identity mismatch is
   a fact about two files and reproduces on the next run by construction, so the

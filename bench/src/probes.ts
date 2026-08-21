@@ -25,11 +25,11 @@
  * THERE WAS A THIRD, AND MEASURING IT IS WHY THERE ISN'T. A pure-arithmetic
  * probe, registers only, is the obvious floor to measure the other two against
  * and it is useless on a shared virtual machine. Four gate-sized runs on the
- * dispatch box on 2026-08-21, at 1-minute loads between 1.4 and 3.0, put its
- * between-run band at 66% while `alloc` stayed inside 18% and `chase` inside
- * 14%, because a workload that is doing nothing but issuing instructions is
- * exactly the workload a hypervisor's stolen cycles hit hardest, while one
- * waiting on memory was going to wait anyway.
+ * dispatch box on 2026-08-21, three of which started at 1-minute loads of 1.47,
+ * 3.03 and 1.46, put its widest per-file band at 65.9%, against 14.8% for
+ * `alloc` and 14.4% for `chase` over the same four. A workload doing nothing
+ * but issuing instructions is the one a hypervisor's stolen cycles hit hardest,
+ * while one waiting on memory was going to wait anyway.
  *
  * It was removed rather than resized, because the swing is the machine's and
  * not the measurement's, and it does not merely add noise: WITH IT, THE NOISE
@@ -134,6 +134,13 @@ const chaseTable = ((): Int32Array => {
 export function chaseProbe(): void {
   let at = 0;
   for (let step = 0; step < CHASE_STEPS; step += 1) {
+    // The `?? 0` is the index signature's and cannot be taken: every value in
+    // the table is `nextChaseIndex(_, CHASE_MASK)`, which is masked into range
+    // by construction, so `at` is always a valid index. It is worth naming
+    // because if it ever COULD be taken the walk would restart at 0 and the
+    // probe would silently become a walk over a handful of cache lines, which
+    // is the one failure that would leave a profile comparison looking healthy
+    // while measuring nothing about memory.
     at = chaseTable[at] ?? 0;
   }
   probeSink = at;

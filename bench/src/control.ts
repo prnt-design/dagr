@@ -15,8 +15,18 @@
  * so that it is wrong in a middling way for everything rather than badly wrong
  * for one class. If a benchmark turns out to track it poorly, and the evidence
  * for that is a ratio that drifts between machines while the code under it is
- * untouched, the fix is a second control matching that class of work, not a
+ * untouched, the answer is a second control matching that class of work, not a
  * wider tolerance. A wider tolerance hides the drift and the regression alike.
+ *
+ * THAT LAST SENTENCE USED TO SAY "THE FIX" AND 2026-08-21 MEASURED IT DOWN TO
+ * "the answer". A second control anchors the class it matches, and the drift
+ * measured that day had no classes to anchor: the fifteen gated entries moved
+ * between +0.4% and +111.2% against the committed ratios, ordered by how
+ * memory-bound each one is, which is a continuum rather than two clusters. Two
+ * controls would leave everything between the two anchors served by neither.
+ * `probes.ts` is what came of that: not a better normalisation, which the
+ * measurement says is not available, but a pair of measurements that DETECT
+ * when no normalisation is going to work.
  *
  * IT MUST NEVER CHANGE without recapturing every baseline. The recorded ratios
  * are all relative to this function, so editing it silently rebases the whole
