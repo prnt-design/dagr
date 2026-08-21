@@ -15,8 +15,9 @@
  *    control workload alongside its real ones, and each benchmark is recorded
  *    as `median / control median` measured in the same worker. A runner twice
  *    as slow as the baseline machine runs the control twice as slow too, and
- *    the ratio does not move. See `control.mjs` for what the control is and
- *    where the approximation breaks.
+ *    the ratio does not move. See `control.ts` for what the control is and
+ *    where the approximation breaks, and `probes.ts` for the measurement that
+ *    says whether it broke on the machine you are standing on.
  *
  * 2. It gates on the MEDIAN, not the mean. A single GC pause or a scheduler
  *    hiccup drags the mean a long way: in the run that motivated this, a
@@ -83,6 +84,11 @@
  * @property {1} schema
  * @property {Record<string, BaselineEntry>} benchmarks
  * @property {MachineInfo} [machine]
+ * @property {import('./profile.mjs').MachineProfile} [machineProfile]
+ *   What the machine MEASURED like when the file was captured, as distinct
+ *   from what `machine` says it was called. `profile.mjs` explains why a name
+ *   is not enough. Optional because every baseline captured before the probes
+ *   existed lacks it.
  * @property {string} [capturedAt]
  */
 

@@ -13,5 +13,6 @@
  */
 export declare const CONTROL_GROUP: 'control';
 export declare const CONTROL_NAME: 'mixed';
+export declare const MACHINE_GROUP: 'machine';
 export declare const REPORT_NAME: 'bench-report.json';
 export declare const WORKSPACE_DIRS: readonly string[];

@@ -82,6 +82,108 @@ named below: an allowance nobody wrote down is the kind that stops being
 noticed. Narrowing them is a capture on a quieter machine or a second control,
 not a smaller number asserted here.
 
+## The machine it measures like
+
+`bench/baseline.json` records what the machine was CALLED. It now also records
+what the machine MEASURED like, because the first of those turned out not to
+imply the second.
+
+The gate normalises every benchmark against a control workload, and that
+handles exactly one shape of difference: a machine that is uniformly slower
+runs the control uniformly slower too, so the ratio does not move. A
+normalisation cancels the dimension it was measured along and no other. When a
+box's allocation throughput is 13% slower and its memory latency has doubled,
+the control moves 13%, every pointer-chasing benchmark moves 100%, and what the
+gate prints is a table of regressions in packages nobody has touched.
+
+**Recording the identity does not catch it, and the day it failed to is worth
+writing down.** On 2026-08-21 this box reported the same platform, arch, CPU
+model, core count and node version as this file records, so the identity check
+matched on every field. Unmodified `main` failed the gate 2 of 2 at a 1-minute
+load of 0.10, the quietest start any gate here has had, with ALL FIFTEEN
+entries slower in absolute milliseconds: between +13.9% and +139.4%, ranked
+almost exactly by how memory-bound each one is. The control itself had moved
++13.4%, so it cancelled a seventh of what the entries did. A name is not a
+measurement.
+
+**Two probes, run beside the control in the same worker.** `alloc` is
+short-lived object churn and nothing else, which scales with the allocator and
+the young generation's collector. `chase` is a dependent pointer walk over
+64 MiB, four times this box's L3, which scales with memory latency and with
+nothing else, because each load's address is the previous load's result. They
+are registered by `registerControl()` alongside the control, so a bench file
+cannot acquire benchmarks without acquiring them, and they are never gated and
+never normalised: a probe is recorded as raw milliseconds and compared only
+against the raw milliseconds a capture recorded for the same probe. They cost
+about 1.2 seconds per bench file per run, so about 7 seconds on a three-run
+`bench:ci`, against a gate that takes two to four minutes. Whether they move the
+numbers beside them was measured rather than argued, because `chase` holds a
+64 MiB table live in the same worker: six alternating runs, three with and three
+without, put the gated ratios between 0.898 and 1.229 on-over-off with both
+sides' per-run values overlapping on every entry, and the entries that fail this
+box most often came out FASTER with the probes in.
+
+What is read out of them is not how much slower the machine is, which the ratio
+already handles, but WHETHER THE TWO PROBES AGREE ABOUT HOW MUCH SLOWER IT IS.
+Agreement is a machine differing in speed. Disagreement is a machine differing
+in kind, and no single control normalises that away.
+
+**There was a third probe and measuring it is why there is not.** Pure
+arithmetic in registers is the obvious floor to measure the other two against,
+and it is useless on a shared virtual machine: a workload doing nothing but
+issuing instructions is the one a hypervisor's stolen cycles hit hardest, while
+a workload waiting on memory was going to wait anyway. Its widest per-file band
+over four runs was 65.9%, against 14.8% for `alloc` and 14.4% for `chase` over
+the same four. It was removed rather than resized, because with it the noise
+alone exceeds any threshold that would still sit under a real signal: six pairs
+of runs scored up to 1.583
+against each other with it in, and fifteen pairs over six runs top out at 1.215
+without it.
+
+**The threshold is 1.5 and it is placed between two measurements rather than
+chosen.** The noise is measured: fifteen pairs of six gate-sized runs on this
+box on 2026-08-21, no code changing, five of them starting at 1-minute loads
+between 0.17 and 3.03, widest 1.215. The signal is estimated: on the same day
+the control was 1.134 times the value this file records for it while
+`2.5k outEdges`, almost pure
+pointer chasing, was 2.083 times its own, a non-uniformity of 1.84 between two
+benchmarks standing in for the two probes. 1.5 is the geometric midpoint,
+1.495 rounded, which is the placement that treats a missed diagnosis and a
+wrong one as costing the same. The evidence is one-sided and says so: no
+baseline carrying probes exists on a second machine yet, so the signal figure
+is inferred. The first recapture makes it measurable, and that is when the
+constant is worth revisiting.
+
+**It prints a sentence and changes no exit code**, which is deliberate and is
+the difference between this and the identity check above it. An identity
+mismatch is a fact about two files and reproduces on the next run by
+construction, so the gate stops after one measurement. A profile mismatch is a
+MEASUREMENT, it can be wrong once, and `bench:ci` takes up to three for exactly
+that reason. What the four runs this cost were spent on was diagnosis and not
+the exit code: the gate was always going to be red, and what was missing was
+the harness saying which of the two things it was red about.
+
+**The committed file predates the probes, so the comparison says so and does
+nothing.** Until a recapture records a profile, every run prints one line
+saying it cannot tell a different machine from a slower one, which is a
+different fact from the machines matching and is printed as one.
+
+**This also qualifies the second control workload that this file keeps naming
+as the fix for control drift, and the qualification is measured.** A second
+control normalises the class of work it matches, so it would help the ends of
+the range. The 2026-08-21 spread has no ends to speak of: the fifteen entries
+moved by +0.4%, +10.5%, +10.9%, +11.7%, +23.7%, +25.8%, +32.0%, +32.2%, +35.3%,
++39.7%, +44.1%, +49.2%, +70.7%, +83.7% and +111.2% against the committed
+ratios, which is a continuum ordered by how memory-bound each entry is and not
+two clusters. Two controls would give two anchors and leave everything between
+them served by neither. That is an argument for the probes, which only have to
+DETECT the difference, and it is a reason to stop describing a second control as
+the fix rather than as an improvement. `2.5k successors` carries that promise in
+its own exemption text inside `bench/baseline.json`, where it reads as the path
+back to gating that entry. It is left standing rather than edited, because the
+next recapture rewrites the stats under it anyway and this paragraph is where
+the qualification belongs.
+
 ## Two of three
 
 `pnpm bench:ci` measures up to three times and passes when two runs pass. Two
@@ -134,10 +236,12 @@ did on 2026-08-16 at 06:00, on a branch whose diff was zero bytes against
 1-minute load went from 2.37 to 6.37, and the gate duly reported the same entry
 twice. The same-entry report is therefore evidence and not proof, which is why
 it says to read a repeat as real UNTIL THE CODE SAYS OTHERWISE rather than
-asserting it. Two checks settle it and both are cheap: read the failing entry
-against the rest of the same run, since a stage entry failing while the pipeline
-entry that runs that stage is negative cannot describe a regression, and re-run
-once the box is quiet. Repetition narrows the window that noise can fail a merge
+asserting it. Three checks settle it and all three are cheap: read the machine
+probes printed above the table, since a profile mismatch says plainly that no
+ratio in the run means what it usually does; read the failing entry against the
+rest of the same run, since a stage entry failing while the pipeline entry that
+runs that stage is negative cannot describe a regression; and re-run once the
+box is quiet. Repetition narrows the window that noise can fail a merge
 through. It does not close it, and nothing available here does.
 
 A regression and an unreadable measurement are still different facts and still
@@ -271,7 +375,8 @@ the exact flake its exemption exists to prevent.)
 
 Add a `*.bench.ts` under your package's `bench/`, call `registerControl()` once
 at the top level, and size each benchmark so one iteration takes a few
-milliseconds. That is not arbitrary: vitest samples for a fixed wall-clock
+milliseconds. `registerControl()` registers the machine probes as well as the
+control, so you get both by doing nothing; see "The machine it measures like". That is not arbitrary: vitest samples for a fixed wall-clock
 window, so a microsecond iteration is mostly loop overhead and a
 hundred-millisecond one yields a handful of samples and a median that means
 nothing. Pass `{ time: 3000 }` for a genuinely heavy workload instead of
@@ -329,6 +434,16 @@ editing it silently rebases the entire committed baseline. If it has to change,
 change it and run `pnpm bench:baseline` in the same commit, and say so in the
 message.
 
+The probes in `src/probes.ts` are the opposite case, and the difference is
+worth being precise about rather than filing them under the same rule. No
+benchmark's ratio is expressed in terms of a probe, so changing one rebases
+nothing and needs no recapture. What it does invalidate is the profile
+comparison against any baseline captured before the change, and the comparison
+detects that for itself: a probe the baseline does not carry is skipped, and a
+file left with fewer than two is reported as not comparable rather than as a
+match. So a probe may be changed on its own merits. It just stops answering the
+question until the next capture, which is the state the file is in today.
+
 The same hazard, from the other end: a milestone that grows the WORKLOAD a
 benchmark measures rebases that benchmark's entry just as surely, without
 touching a line of bench code. M2.4b was the first: dummy chains take the nodes
@@ -358,8 +473,13 @@ prediction was the thing that had been wrong. **And the recapture is the
 maintainer's call rather than the agent's**, whichever way the prediction came
 out. An agent measures, states both options and asks; it does not run
 `bench:baseline` to turn its own gate green. The one exception already on the
-record is a machine mismatch, where the baseline names a machine that is not the
-one in front of you, and that is a different fact about a different thing.
+record is a machine mismatch, and 2026-08-21 sharpened what that means: it is
+NOT "the baseline names a machine that is not the one in front of you", which is
+how this paragraph used to put it. The identity fields matched on every one of
+them that day and the box was still not the machine the file was captured on.
+The exception is a mismatch established by MEASUREMENT, by the identity check or
+by the profile comparison or by benching unmodified `main`, and it is a
+different fact about a different thing either way.
 
 ## The third reason to recapture: the baseline itself was mis-measured
 

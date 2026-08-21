@@ -1,6 +1,6 @@
 // @ts-check
 
-import { CONTROL_GROUP, CONTROL_NAME } from './names.mjs';
+import { CONTROL_GROUP, CONTROL_NAME, MACHINE_GROUP } from './names.mjs';
 
 /**
  * Turning `vitest bench --outputJson` into the control-normalised report the
@@ -33,6 +33,7 @@ import { CONTROL_GROUP, CONTROL_NAME } from './names.mjs';
 
 /** @typedef {import('./gate.mjs').BenchStat} BenchStat */
 /** @typedef {import('./gate.mjs').BenchReport} BenchReport */
+/** @typedef {import('./profile.mjs').MachineProfile} MachineProfile */
 
 /**
  * @typedef {object} PackageRun
@@ -44,6 +45,7 @@ import { CONTROL_GROUP, CONTROL_NAME } from './names.mjs';
  * @typedef {object} NormalisedRun
  * @property {Record<string, BenchStat>} benchmarks
  * @property {Record<string, number>} controls Control median per bench file, for humans.
+ * @property {MachineProfile} machine Probe medians per bench file, for `profile.mjs`.
  * @property {string[]} errors
  */
 
@@ -90,6 +92,8 @@ export function normalisePackageRun(run) {
   const benchmarks = {};
   /** @type {Record<string, number>} */
   const controls = {};
+  /** @type {MachineProfile} */
+  const machine = {};
   /** @type {string[]} */
   const errors = [];
 
@@ -106,6 +110,7 @@ export function normalisePackageRun(run) {
     for (const [fileName, groups] of byFile) {
       const controlGroup = groups.find((group) => group.fullName === `${fileName} > ${CONTROL_GROUP}`);
       const control = controlGroup?.benchmarks.find((bench) => bench.name === CONTROL_NAME);
+      const machineGroup = groups.find((group) => group.fullName === `${fileName} > ${MACHINE_GROUP}`);
 
       if (control === undefined) {
         errors.push(
@@ -118,10 +123,32 @@ export function normalisePackageRun(run) {
         continue;
       }
 
-      controls[`${run.packageName} > ${fileName}`] = control.median;
+      const fileKey = `${run.packageName} > ${fileName}`;
+      controls[fileKey] = control.median;
+
+      // The probes are recorded, never gated, and never normalised: they are
+      // the measurement that says whether normalising against this file's
+      // control means anything at all, so expressing them as a ratio against
+      // it would erase the difference they exist to show. A file without them
+      // is not an error, because the profile comparison already treats an
+      // absent probe as a question it cannot answer rather than as a match.
+      if (machineGroup !== undefined) {
+        /** @type {Record<string, number>} */
+        const probes = {};
+        for (const probe of machineGroup.benchmarks) {
+          if (probe.median <= 0) {
+            errors.push(
+              `${run.packageName} > ${fileName} probe \`${probe.name}\` measured a median of zero, which is a probe measuring nothing`,
+            );
+            continue;
+          }
+          probes[probe.name] = probe.median;
+        }
+        if (Object.keys(probes).length > 0) machine[fileKey] = probes;
+      }
 
       for (const group of groups) {
-        if (group === controlGroup) continue;
+        if (group === controlGroup || group === machineGroup) continue;
         for (const bench of group.benchmarks) {
           benchmarks[benchKey(run.packageName, group.fullName, bench.name)] = {
             medianMs: bench.median,
@@ -135,7 +162,7 @@ export function normalisePackageRun(run) {
     }
   }
 
-  return { benchmarks, controls, errors };
+  return { benchmarks, controls, machine, errors };
 }
 
 /**
@@ -149,6 +176,8 @@ export function normaliseRuns(runs) {
   const benchmarks = {};
   /** @type {Record<string, number>} */
   const controls = {};
+  /** @type {MachineProfile} */
+  const machine = {};
   /** @type {string[]} */
   const errors = [];
 
@@ -156,6 +185,7 @@ export function normaliseRuns(runs) {
     const normalised = normalisePackageRun(run);
     errors.push(...normalised.errors);
     Object.assign(controls, normalised.controls);
+    Object.assign(machine, normalised.machine);
     for (const [key, stat] of Object.entries(normalised.benchmarks)) {
       if (key in benchmarks) {
         errors.push(`${key} was reported twice. Benchmark keys must be unique across the workspace`);
@@ -165,5 +195,5 @@ export function normaliseRuns(runs) {
     }
   }
 
-  return { benchmarks, controls, errors };
+  return { benchmarks, controls, machine, errors };
 }

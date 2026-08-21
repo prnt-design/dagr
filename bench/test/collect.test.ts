@@ -104,3 +104,49 @@ describe('guards against measuring nothing', () => {
     expect(Object.keys(normalised.benchmarks)).toHaveLength(2);
   });
 });
+
+/**
+ * The probes ride in the same report as the benchmarks and must never become
+ * benchmarks themselves: they measure the machine, and gating them would fail
+ * a merge for the reason the whole profile comparison exists to name.
+ */
+describe('machine probes', () => {
+  function withProbes(file: string, probes: Record<string, number>, control: number): VitestReport {
+    const built = report(file, {}, { control });
+    built.files[0]?.groups.push({
+      fullName: `${file} > machine`,
+      benchmarks: Object.entries(probes).map(([name, median]) => benchmark(name, median)),
+    });
+    return built;
+  }
+
+  it('records each probe median under its bench file', () => {
+    const normalised = normalisePackageRun(
+      run('@dagr/graph', withProbes('graph.bench.ts', { alloc: 0.09, chase: 1 }, 0.1)),
+    );
+    expect(normalised.machine['@dagr/graph > graph.bench.ts']).toEqual({ alloc: 0.09, chase: 1 });
+    expect(normalised.errors).toEqual([]);
+  });
+
+  it('does not record a probe as a gated benchmark', () => {
+    const normalised = normalisePackageRun(
+      run('@dagr/graph', withProbes('graph.bench.ts', { alloc: 0.09, chase: 1 }, 0.1)),
+    );
+    expect(normalised.benchmarks).toEqual({});
+  });
+
+  it('rejects a probe that measured zero, which is a probe measuring nothing', () => {
+    const normalised = normalisePackageRun(
+      run('@dagr/graph', withProbes('graph.bench.ts', { alloc: 0, chase: 1 }, 0.1)),
+    );
+    expect(normalised.errors.join(' ')).toMatch(/probe .*alloc.* measured a median of zero/);
+  });
+
+  it('leaves the profile empty for a file that registers no probes', () => {
+    const normalised = normalisePackageRun(
+      run('@dagr/graph', report('graph.bench.ts', { g: [benchmark('x', 1)] }, { control: 0.5 })),
+    );
+    expect(normalised.machine).toEqual({});
+    expect(normalised.errors).toEqual([]);
+  });
+});
