@@ -8,6 +8,7 @@ import { machineInfo, mergeBaseline } from '../src/baseline.mjs';
 import { normaliseRuns } from '../src/collect.mjs';
 import { compareReports } from '../src/gate.mjs';
 import { REPORT_NAME, WORKSPACE_DIRS } from '../src/names.mjs';
+import { compareMachineProfile } from '../src/profile.mjs';
 import { summarise } from '../src/repeat.mjs';
 
 /**
@@ -140,10 +141,21 @@ function main() {
     const previous = existsSync(baselinePath)
       ? /** @type {BaselineReport} */ (JSON.parse(readFileSync(baselinePath, 'utf8')))
       : undefined;
-    const baseline = mergeBaseline(previous, normalised.benchmarks, new Date().toISOString());
+    const baseline = mergeBaseline(
+      previous,
+      normalised.benchmarks,
+      new Date().toISOString(),
+      normalised.machine,
+    );
     writeFileSync(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
     const count = Object.keys(baseline.benchmarks).length;
     console.log(`Recorded ${String(count)} benchmarks to bench/baseline.json on ${baseline.machine?.cpu ?? 'unknown'}.`);
+    const probed = Object.keys(baseline.machineProfile ?? {}).length;
+    console.log(
+      probed > 0
+        ? `Recorded the machine profile from ${String(probed)} bench ${probed === 1 ? 'file' : 'files'}, so a later run can tell a different machine from a slower one.`
+        : 'Recorded NO machine profile: this run produced no probes, and a gate against this file cannot tell a different machine from a slower one.',
+    );
     console.log('Commit it, and say in the message what changed to justify the new numbers.');
     return;
   }
@@ -154,6 +166,19 @@ function main() {
   }
 
   const baseline = /** @type {BaselineReport} */ (JSON.parse(readFileSync(baselinePath, 'utf8')));
+  const profile = compareMachineProfile(baseline.machineProfile, normalised.machine);
+  if (profile.files.length > 0) {
+    console.log('Machine probes, median milliseconds per iteration, against the baseline capture:');
+    for (const file of profile.files) {
+      for (const probe of file.probes) {
+        console.log(
+          `  ${`${file.file} > ${probe.name}`.padEnd(52)} ${probe.baselineMs.toFixed(4)} -> ${probe.currentMs.toFixed(4)}  ${probe.slowdown.toFixed(2)}x`,
+        );
+      }
+    }
+    console.log('');
+  }
+
   const gate = compareReports(baseline, {
     schema: 1,
     machine: machineInfo(),
@@ -185,6 +210,13 @@ function main() {
   }
 
   for (const note of gate.notes) console.log(`\n  note   ${note}`);
+  // Printed after the table rather than before it, because it is the sentence
+  // that says how to read the table, and it is a note rather than an error
+  // because a profile mismatch is a MEASUREMENT: it can be wrong once, and
+  // `bin/bench-ci.mjs` measures up to three times for exactly that reason. A
+  // harness error stops after one, which is right for a stale report and wrong
+  // for this.
+  if (profile.note !== undefined) console.log(`\n  note   ${profile.note}`);
   const printable = [...errors, ...gate.errors];
   if (gate.noiseError !== undefined) printable.push(gate.noiseError);
   for (const error of printable) console.error(`\n  error  ${error}`);

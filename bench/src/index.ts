@@ -10,4 +10,5 @@
 export { controlWorkload } from './control.js';
 export { largeCorpus, layeredDag, mulberry32, smallCorpus } from './corpus.js';
 export type { GraphSpec, LayeredOptions } from './corpus.js';
+export { CHASE_WORDS, allocProbe, chaseProbe, nextChaseIndex, probeSink } from './probes.js';
 export { registerControl } from './register.js';

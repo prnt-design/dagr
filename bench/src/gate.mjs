@@ -83,6 +83,11 @@
  * @property {1} schema
  * @property {Record<string, BaselineEntry>} benchmarks
  * @property {MachineInfo} [machine]
+ * @property {import('./profile.mjs').MachineProfile} [machineProfile]
+ *   What the machine MEASURED like when the file was captured, as distinct
+ *   from what `machine` says it was called. `profile.mjs` explains why a name
+ *   is not enough. Optional because every baseline captured before the probes
+ *   existed lacks it.
  * @property {string} [capturedAt]
  */
 
