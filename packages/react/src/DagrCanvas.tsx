@@ -29,6 +29,12 @@
  * whole M3 milestone exists to keep out of the layout, reintroduced one level
  * up where no stability metric would ever see it.
  *
+ * **The holder has no size of its own.** The canvas fills it and the renderer
+ * is told what the holder measures, so a `<DagrCanvas>` in a container with no
+ * height measures zero, draws nothing and says nothing about it. Give it a
+ * height, through `style` or `className`, the way any other layout-filling
+ * component needs one.
+ *
  * **Children do not render until the renderer, the overlay and the layout all
  * exist.** `<Html>` and anything else reading `useDagrCanvas` would otherwise
  * have to handle a half-built canvas, and a nullable field on the handle
@@ -222,7 +228,18 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
           renderer.dispose();
           return;
         }
-        made = { renderer, overlay: createHtmlOverlay({ parent: host, camera: renderer.camera }) };
+        // The overlay refuses a parent it cannot mount into, and a throw here
+        // would otherwise leave a live renderer holding a device context with
+        // nothing left that could dispose it: `made` is still null, so the
+        // cleanup below has nothing to take back.
+        let overlay;
+        try {
+          overlay = createHtmlOverlay({ parent: host, camera: renderer.camera });
+        } catch (cause: unknown) {
+          renderer.dispose();
+          throw cause;
+        }
+        made = { renderer, overlay };
         stageRef.current = made;
         setStage(made);
       })
@@ -296,11 +313,6 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
     if (trouble !== null) latest.current.onError?.(trouble);
   }, [trouble]);
 
-  // Thrown during render rather than from the effect above, so a React error
-  // boundary is what catches it. An effect that threw would land outside the
-  // render React is tracking and take the whole root down instead.
-  if (trouble !== null && props.onError === undefined) throw trouble;
-
   const handle = useMemo<DagrCanvasHandle | null>(
     () =>
       stage === null || result === null
@@ -308,6 +320,13 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
         : { renderer: stage.renderer, overlay: stage.overlay, result, requestDraw },
     [stage, result, requestDraw],
   );
+
+  // Thrown during render rather than from the effect above, so a React error
+  // boundary is what catches it: an effect that threw would land outside the
+  // render React is tracking and take the whole root down instead. BELOW every
+  // hook, so a boundary that resets and rerenders this component finds the same
+  // hook sequence it saw last time rather than a shorter one.
+  if (trouble !== null && props.onError === undefined) throw trouble;
 
   return (
     <div

@@ -10,11 +10,17 @@
  * order, with what arguments, and whether it takes them all back on unmount.
  * None of that needs a device, and jsdom cannot provide one. What it costs is
  * that the renderer and the overlay are not exercised at all here: a real
- * `createHtmlOverlay` refuses a parent that is not positioned, a real
- * `resize` refuses a zero viewport, and neither refusal can happen against
- * this file. `@dagr/render`'s own suite covers both, and the two places where
- * this package has to hold up its end of those contracts are asserted directly
+ * `createHtmlOverlay` refuses a parent that is not positioned, a real `resize`
+ * refuses a zero viewport, and neither refusal happens on its own against this
+ * file. `@dagr/render`'s own suite covers both, and the two places where this
+ * package has to hold up its end of those contracts are asserted directly
  * instead: the container's `position`, and the zero-size viewport guard.
+ *
+ * What IS simulated is the SHAPE of those failures rather than their cause.
+ * `built.overlayFailure` makes `createHtmlOverlay` throw, because what happens
+ * to the renderer when it does is this package's problem and not the
+ * overlay's: the renderer already holds a device context at that point and
+ * nothing else is left that could take it back.
  */
 
 import { vi } from 'vitest';
@@ -67,17 +73,27 @@ export const built: {
   overlays: FakeOverlay[];
   /** Set to reject the next `createRenderer`, for the failure path. */
   rendererFailure: Error | null;
+  /** Set to make the next `createHtmlOverlay` throw, as a static parent does. */
+  overlayFailure: Error | null;
   /** Set to leave the next `createRenderer` pending, for the unmount-mid-flight path. */
   hold: boolean;
   /** Settles the held promise. Set by `createRenderer` while `hold` is true. */
   release: (() => void) | null;
-} = { renderers: [], overlays: [], rendererFailure: null, hold: false, release: null };
+} = {
+  renderers: [],
+  overlays: [],
+  rendererFailure: null,
+  overlayFailure: null,
+  hold: false,
+  release: null,
+};
 
 /** Clears the record between tests. Call it from `beforeEach`. */
 export function resetFakes(): void {
   built.renderers = [];
   built.overlays = [];
   built.rendererFailure = null;
+  built.overlayFailure = null;
   built.hold = false;
   built.release = null;
 }
@@ -126,6 +142,7 @@ export function createRenderer(options: RendererOptions): Promise<Renderer> {
 }
 
 export function createHtmlOverlay(options: HtmlOverlayOptions): HtmlOverlay {
+  if (built.overlayFailure !== null) throw built.overlayFailure;
   const entries: FakeEntry[] = [];
   const fake: FakeOverlay = {
     add: vi.fn((init: OverlayEntryInit): OverlayEntry => {

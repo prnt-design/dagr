@@ -216,6 +216,18 @@ describe('DagrCanvas', () => {
     expect(built.renderers).toHaveLength(1);
   });
 
+  it('does not leave a renderer running when the overlay refuses its parent', async () => {
+    built.overlayFailure = new Error('parent is static');
+    const failures: unknown[] = [];
+
+    tree = await mount(<DagrCanvas graph={chain()} onError={(cause) => failures.push(cause)} />);
+
+    expect((failures[0] as Error).message).toBe('parent is static');
+    // The renderer holds a device context and `made` is still null at this
+    // point, so nothing else would ever take it back.
+    expect(lastRenderer().dispose).toHaveBeenCalledTimes(1);
+  });
+
   it('hands the layout to whoever asked for it', async () => {
     const seen: number[] = [];
     tree = await mount(<DagrCanvas graph={chain()} onLayout={(result) => seen.push(result.nodes.size)} />);

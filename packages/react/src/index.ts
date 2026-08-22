@@ -29,10 +29,10 @@
  *
  * - No interaction. Hover, selection and drag are M5.2 and they want M4.8's
  *   picking pass underneath, not a hit test invented here against a scene array.
- * - No animation. M4.6 shipped the springs and M4.7 is the delta consumer that
- *   drives them from a `LayoutDelta`. `<DagrCanvas>` re-lays out and re-sets;
- *   nothing tweens, and adding a tween here would be M4.7 built in the wrong
- *   package.
+ * - No animation. The spring integrator is M4.6 and the delta consumer that
+ *   drives it from a `LayoutDelta` is M4.7. `<DagrCanvas>` re-lays out and
+ *   re-sets; nothing tweens, and adding a tween here would be M4.7 built in the
+ *   wrong package.
  * - No worker. See `use-dagr.ts`: the `Worker` has to be the caller's, and
  *   M3.9 owns the worker-side session that makes a per-edit round trip worth
  *   taking.

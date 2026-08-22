@@ -123,7 +123,7 @@ is here, and it is exported rather than hidden:
 import { toSceneNodes, toSceneEdges, toWorldBounds } from '@dagr/react';
 
 renderer.setNodes(toSceneNodes(result));
-renderer.setEdges('edges', toSceneEdges(result));
+renderer.setEdges('my-edges', toSceneEdges(result));
 renderer.camera.fitBounds(toWorldBounds(result.bounds));
 ```
 
@@ -244,8 +244,8 @@ holds the renderer and calls `setEdgeStyle` on it.
 - **Interaction.** Hover, selection and drag are M5.2, and they want the GPU
   picking pass of M4.8 underneath rather than a hit test invented here against
   a scene array.
-- **Animation.** M4.6 shipped the spring integrator and M4.7 is the delta
-  consumer that drives it from a `LayoutDelta`. `<DagrCanvas>` re-lays out and
+- **Animation.** The spring integrator is M4.6 and the delta consumer that
+  drives it from a `LayoutDelta` is M4.7. `<DagrCanvas>` re-lays out and
   re-sets; nothing tweens yet.
 - **A node ontology.** What a node looks like is a callback and it stays one.
   Deciding that a node of kind X draws as a hexagon belongs to the

@@ -10,6 +10,31 @@ import type { DagrLayoutState, UseDagrOptions } from '../src/use-dagr.js';
 import { flush, mount } from './mount.js';
 import type { Mounted } from './mount.js';
 
+/**
+ * The second test the config guard needs, because the first one is vacuous.
+ *
+ * `use-dagr.ts` asserts that every `LayoutConfig` field is named in its
+ * comparison, and that assertion passes today precisely because they all are:
+ * it can never fail against the type it guards until somebody adds a field, so
+ * on its own it is evidence of nothing. These two lines run the same expression
+ * over a stand-in in both directions, so the failing branch is demonstrated
+ * rather than assumed. `pnpm typecheck` reads this file, which is what makes
+ * `@ts-expect-error` an assertion rather than a comment.
+ */
+type ComparedHere = 'nodeSep' | 'rankSep';
+type UncomparedIn<T> = Exclude<keyof T, ComparedHere>;
+
+// @ts-expect-error `edgeSep` is named nowhere in `ComparedHere`, so the guard's
+// type is `never` and this is the compile error the real one would raise.
+const guardFires: [UncomparedIn<{ nodeSep?: 1; rankSep?: 1; edgeSep?: 1 }>] extends [never]
+  ? true
+  : never = true;
+void guardFires;
+
+const guardPasses: [UncomparedIn<{ nodeSep?: 1; rankSep?: 1 }>] extends [never] ? true : never =
+  true;
+void guardPasses;
+
 let tree: Mounted | null = null;
 
 afterEach(async () => {

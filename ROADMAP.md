@@ -4304,7 +4304,8 @@ it settled rather than restating the argument.
   assumed (`style.transform` round-trips verbatim, `pointer-events` survives
   `setProperty`, `getComputedStyle().position` resolves an inline value and
   reports `static` without one, `remove()` detaches), and because `@dagr/react`
-  will want the same implementation at M5.1. What stays untested is that a
+  will want the same implementation at M5.1. IT DID: M5.1 selects jsdom the same
+  way, per file through the docblock, for all three of its DOM suites. What stays untested is that a
   browser composes the two transforms the way the algebra says and that the
   float32 argument above is quantitatively right; both are listed with the rest
   of the package's untested surface on `docs/docs/render.md`.
