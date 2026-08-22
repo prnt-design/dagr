@@ -131,8 +131,8 @@ fallback, including telling the caller what they got.
 `setNodes` diffs by `id`. A node present in two consecutive calls is updated in
 place, keeping the instance handle it had; one that left is freed, and one that
 arrived is allocated. That is not an optimisation, it is the property M4.6's
-springs and M4.8's picking ids are keyed on: a node that kept its id but got a
-new handle every relayout would lose its velocity and jump.
+springs are keyed on: a node that kept its id but got a new handle every
+relayout would lose its velocity and jump.
 
 The one case where the handle cannot survive is a node that changes SHAPE,
 because the two shape families are two meshes and an instance cannot move
@@ -336,9 +336,12 @@ which keeps live slots contiguous and keeps one draw call covering them with no
 holes and no per-slot liveness test. The cost is that a slot index is not durable
 across any removal, and the failure is silent: the slot stays a perfectly valid
 index, it merely belongs to a different instance now. Spring state (M4.6, M4.7)
-and picking IDs (M4.8) are keyed by handle for that reason, and a handle is never
-reused, so a handle held past its instance's removal raises
-`UnknownInstanceHandleError` rather than addressing whatever took its place.
+is keyed by handle for that reason, and a handle is never reused, so a handle
+held past its instance's removal raises `UnknownInstanceHandleError` rather than
+addressing whatever took its place. M4.8a's picking ids are keyed one layer
+further out again, by the caller's own node id, which is the same invariant with
+room to spare: the id survives even a shape change, which reallocates a
+handle.
 
 None of this is exported. `setNodes` is the seam a caller feeds a graph through,
 and an instance HANDLE API on top of it would be a guess at what M4.8's picking
@@ -500,7 +503,7 @@ third is a split, and it is what this package does.
 **Anything that is arithmetic or bookkeeping is a pure module, unit tested in
 Node, with no device at all.** Camera and viewport math is that, and it is
 tested here. Instance bookkeeping (M4.3), spring integration (M4.6), and ID
-encode and decode (M4.8) are the same shape and get the same treatment.
+encode and decode (M4.8a) are the same shape and get the same treatment.
 
 **Anything that needs a real adapter is verified by a screenshot, committed in
 the run that changes it, and by nothing else.** Screenshots live in
@@ -1199,6 +1202,63 @@ a caller's number and raising it there says the same thing to every edge at
 once, so a channel that could exceed 1 would give a scene two ways to say how
 wide a ribbon is and no rule for which wins.
 
+## Picking, decided and half built
+
+Hit testing a graph of ten thousand nodes by walking a list is the work the GPU
+is already doing. **M4.8 draws the scene a second time into an offscreen target
+where every instance is a colour that names it, reads back the single pixel
+under the pointer, and turns that colour into a node.** Hover, select and drag
+all cost the same regardless of how many nodes are on screen.
+
+Half of that has landed: the encoding, the pixel arithmetic and the
+bookkeeping, which is M4.8a. **Nothing is callable yet.** There is no `pick()`
+on `Renderer` and nothing exported, because the pass that writes these bytes
+and the readback that reads them need a device, and a device is what the
+machine writing this cannot supply. What follows is what was decided, so that
+the half still to come is written against something rather than deciding it
+again.
+
+**A pick pixel is three bytes of id and one byte of kind.** Tag 0 is nothing,
+so a target cleared to all zeros reads as a miss with no reserved value anyone
+has to remember, and no instance is ever given id 0. Three bytes cap one kind
+at 16,777,215 pickable things. The tag partitions the id space, so nodes and
+edges keep separate allocators instead of sharing one counter across two meshes
+that know nothing about each other, and it survives a stale answer: a pick that
+cannot be resolved can still say the pointer was over an edge.
+
+**The id is not the instance's slot, and not its handle.** A slot is free, in
+the sense that the shader already knows its own instance index and needs no
+attribute at all, and it is wrong: removal swaps the last live instance into
+the freed slot, so a slot means somebody else after any removal, and a readback
+answers a question about a frame that has already been drawn. A handle is
+durable and unbounded, so it runs past three bytes and truncating one is a
+collision. The pick id is a third name, durable like a handle and bounded like
+a slot, recycled on purpose rather than by accident.
+
+**The id is taken apart on the CPU, not in the shader.** Handing the shader one
+number and letting it split that number into channels costs no bytes per
+instance, and it fails for a reason that is arithmetic rather than taste. Every
+vertex of an instance's quad carries the same value, so the interpolated value
+differs from it by about a float32 ulp, and at 2^24 that ulp is exactly 1: one
+bit of drift is the next node. Carried as three byte-valued channels the same
+drift is 6e-8 against a write that rounds to the nearest 1/255, a margin of
+about 30,000. The suite asserts both, the surviving encoding over every byte
+value there is and the rejected one at the top of its range.
+
+**A pick can be refused, and that is the point.** The readback resolves at
+least a frame after the pass, and in between the scene may have released a
+node's id and given it to another. Every id remembers when it was assigned, a
+pass records the registry's stamp when it draws, and an id that has changed
+hands since is answered with nothing rather than with the wrong node. The
+comparison is per id: a scene adding a node every frame would otherwise refuse
+every pick in flight, which is exactly the scene picking exists for.
+
+**One assumption is carried rather than checked.** Screen y grows downward and
+three's readback measures y from the bottom of the target, so the pointer's row
+is flipped on the way in. No test here can confirm that, because confirming it
+needs a device. It is written down where the flip happens, and M4.8b owes the
+confirmation.
+
 ## What is not here yet
 
 Most of it. M4.4 is a graph on screen, drawn correctly, one draw call per shape
@@ -1208,7 +1268,10 @@ family, and nothing that moves.
 - Consuming `LayoutDelta` from `@dagr/layout`'s incremental path, which is the
   point of the whole exercise: untouched nodes stay still and touched ones
   animate (M4.7). This is the single M4 task that genuinely waits on M3.
-- GPU picking through an ID buffer pass (M4.8).
+- The pass half of GPU picking: a material writing the bytes above, an
+  offscreen target, the readback and a `pick()` on `Renderer` (M4.8b). What
+  a pixel says and which node an id still means are decided and tested; see
+  [Picking](#picking-decided-and-half-built).
 - An explicit WebGL2 fallback story, with the backend differences written down
   (M4.9).
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for

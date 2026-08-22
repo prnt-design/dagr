@@ -3414,7 +3414,8 @@ M4.6 depend on nothing in M3 and nothing in M2 beyond the types M2.1 already
 shipped, so the natural split is one runner working M3 in order while the other
 takes the early M4 tasks. M4.4 and M4.5 want real coordinates and routes
 (M2.7, M2.8) but still nothing incremental. M4.8 and M4.9 follow M4.3 and M4.2
-respectively and need nothing from M2 or M3. M4.10 wants a real 10k-node
+respectively and need nothing from M2 or M3; M4.8a needs nothing at all, since
+it is arithmetic and a map. M4.10 wants a real 10k-node
 layout, so it trails M2.9. M4.7 is the single M4 task that genuinely blocks on
 M3, because it consumes `LayoutDelta` from M3.1. So M3 leads M4 in dependency
 order at exactly one join, and treating the whole of M4 as blocked on the whole
@@ -3604,8 +3605,11 @@ of M3 would leave the second runner idle for a milestone.
   State this invariant, because the rest of the package relies on it and
   swap-with-last corrupts slot-keyed data silently, without an error, since the
   slot stays valid and merely belongs to a different node: per-instance spring
-  state (M4.6, M4.7) and picking IDs (M4.8) are keyed by handle, never by slot,
-  and slot indices are not durable across any removal. Testable in the pure
+  state (M4.6, M4.7) is keyed by handle, never by slot, and slot indices are not
+  durable across any removal. M4.8a settled its own half of that prediction
+  differently and in the same direction: a picking id is keyed by the caller's
+  own node id, one layer further out again, which survives even the shape change
+  a handle cannot. Testable in the pure
   module: remove an instance, assert every surviving handle still resolves, and
   assert no test helper can observe a slot index across the removal.
   Decide here instead, carried from M4.2: whether the package uses one material
@@ -3659,7 +3663,9 @@ of M3 would leave the second runner idle for a milestone.
   environment map, so `setupOutgoingLight` returns `diffuseColor.rgb` and
   nothing asks for a normal. M4.6's spring velocity or M4.8's picking id is the
   seventh channel and fits; an eighth needs interleaving or a raised
-  `requiredLimits`. Two ordinary SCENE changes take the last slot before a
+  `requiredLimits`. M4.8a WITHDREW ITS HALF OF THAT CLAIM on the same rule D3
+  turned on below: the pick bytes are read by the pick material, which is a
+  different pipeline with its own eight. Two ordinary SCENE changes take the last slot before a
   channel does, and neither is renderer work: a material that comes to read
   `uv`, and a light or an environment map, either of which satisfies that guard
   and pulls in the `normal` the quad already carries.
@@ -3672,9 +3678,9 @@ of M3 would leave the second runner idle for a milestone.
   the first per-vertex channel since this entry and the obvious reading is that
   it did. The limit is PER PIPELINE, and D3's per-edge highlight is an attribute
   on the RIBBON mesh: a different geometry, a different material, its own eight,
-  five of them used before and six after. This budget is untouched and M4.6's
-  spring velocity and M4.8's picking id are still competing for the same one
-  slot. The rule the two cases share, and the one worth carrying forward, is
+  five of them used before and six after. This budget is untouched, and M4.8a
+  (2026-08-22) then took the picking id out of the contest for the same reason,
+  leaving M4.6's spring velocity as the only channel still asking for the slot. The rule the two cases share, and the one worth carrying forward, is
   that a slot belongs to the SHADER that reads the attribute, not to the package
   or the scene.
   A COLOUR REACHING A SHADER AS AN ATTRIBUTE IS CONVERTED BY NOTHING. As a
@@ -4116,25 +4122,114 @@ of M3 would leave the second runner idle for a milestone.
   deltas are never dropped. Note this interacts with M3.1's absent-or-flagged
   question: a self-describing delta makes resync trivial and every delta
   larger.
-- [ ] **M4.8** (`@dagr/render`, `apps/demo`) GPU picking: an ID buffer pass
-  rendering per-instance IDs to an offscreen target, with a single-pixel
-  readback giving O(1) hover, select and drag hit testing regardless of node
-  count. Unit tests for ID encode and decode: round-trip across the full range,
-  and the no-hit value cannot collide with a real ID. Demo scene with hover
-  highlight.
-  Decide here: the encoding, and when the pass runs. Twenty-four bits of ID
-  plus an eight-bit type tag lets a hit say what it hit (node, edge, port)
-  without a side lookup and caps a scene at 16M elements, which is not a real
-  limit here; a full 32 bits of ID needs that side table. Separately, the pass
-  can run every frame (simple, and costs a second full draw of the scene) or on
-  demand when the pointer moves (nearly free when idle, adds a frame of latency
-  and needs care while things are animating, which in this project is most of
-  the time). WebGPU's asynchronous readback makes the latency half of that
-  sharper than the equivalent WebGL decision would be, so measure it rather
-  than porting an instinct. Treat the every-frame-versus-on-demand half as
+- [x] **M4.8a** (`@dagr/render`) The id a pick pixel carries: the encoding, the
+  pixel a pointer is asking about, and the registry that says which node an id
+  still means. Unit tests for ID encode and decode: round-trip across the full
+  range, and the no-hit value cannot collide with a real ID.
+  SPLIT OUT OF M4.8 BY THE RUN THAT SHIPPED IT, on the split M3.7 took and for
+  a reason that is about this box rather than about the task. M4.8's other half
+  is a material, an offscreen target and an asynchronous readback, none of
+  which can be verified here: the headless Chromium on this machine has no
+  WebGPU, so a pass written in this increment would ship untested beside code
+  that is exhaustively tested, behind the same green tick. The halves also
+  differ in kind and not only in verifiability, which is why the seam is a good
+  one rather than a convenient one: what a pixel says, which pixel to read, and
+  which node an id means are decidable in Node, and drawing is not. M4.6 made
+  the same split between an integrator and the loop that drives it.
+  THE ID IS A THIRD NAME, AND THE TWO THIS PACKAGE ALREADY HAD BOTH FAIL. The
+  SLOT is free, since a shader knows its own instance index and needs no
+  attribute at all, and it is wrong: M4.3 removes by swapping the last live
+  instance into the freed slot, and a readback answers a question about a frame
+  already drawn, so by the time the pixel is decoded the slot can name somebody
+  else. The HANDLE is durable and unbounded, so it passes three bytes in a long
+  session and truncating one collides. So the pick id is durable like a handle
+  and bounded like a slot, and it is keyed by the CALLER'S OWN node or edge id
+  rather than by a handle, for two reasons: that is the name a pick has to come
+  back as, and handle spaces are per family, so the first rounded rect and the
+  first circle are both handle 1 and a handle alone identifies nothing.
+  THE TAG IS WORTH HAVING AND THE REASON THIS ENTRY GAVE FOR IT IS WRONG. "A
+  hit can say what it hit without a side lookup" does not survive the registry
+  above, which IS a side lookup, exists for the recycling rather than for the
+  kind, and is on the path of every pick. The two reasons that do survive: the
+  tag PARTITIONS the id space, so nodes and edges keep separate allocators
+  instead of sharing one counter across two meshes that know nothing about each
+  other, and it SURVIVES a stale answer, so a pick that cannot be resolved can
+  still say the pointer was over an edge. Twenty-four bits and eight is
+  therefore the right split for a reason the entry did not name. Tag 0 is
+  nothing and no instance is given id 0, so a target cleared to all zeros reads
+  as a miss with no reserved value a caller has to remember.
+  THE ID IS TAKEN APART ON THE CPU, AND THE MARGIN IS MEASURED RATHER THAN
+  ASSERTED. Handing the shader one number and splitting it there costs no bytes
+  per instance and loses nodes. Every vertex of an instance's quad carries the
+  same value, so the interpolated value differs from it by about a float32 ulp,
+  and at 2^24 that ulp is exactly 1: one bit of drift is the next id. Three
+  byte-valued channels drift by 6e-8 against an RGBA8 write that rounds to the
+  nearest 1/255, a margin of about 3e4. The suite asserts the surviving
+  encoding over every byte value there is and shows the rejected one losing at
+  the top of its range, which is this repo's rule about a guard that passes by
+  construction. The second reason is the standing one: a shader is the one
+  place this package cannot test arithmetic, and an id is where being off by
+  one confidently names a different node.
+  A REFUSED PICK IS A DESIGNED ANSWER AND THE THIRD OUTCOME IS NOT ON OFFER.
+  Between the pass and the pixel a scene can release a node's id and give it to
+  another, and the decoded id then resolves to a real node that was not under
+  the pointer. Every assignment bumps a stamp, each id remembers the stamp it
+  was assigned at, and a pass records the stamp it drew with; an id that
+  changed hands since resolves to nothing. The comparison is PER ID and not
+  against one revision for the whole registry, because a scene that adds a node
+  every frame bumps the stamp every frame, and a registry-wide revision would
+  refuse every pick in flight in exactly the scenes picking exists for. The
+  free list is FIFO on top of that, which changes nothing about what is correct
+  and makes a refusal rarer.
+  THE CHANNEL BUDGET DID NOT MOVE, WHICH M4.3's NOTE EXPECTED IT TO. That note
+  reserves the one free vertex buffer slot on the instanced node pipeline for
+  M4.6's spring velocity or M4.8's picking id. M4.8 does not take it: the pick
+  bytes are read by the PICK material and not by the node material, and
+  `instance-attributes.ts` counts what a shader READS rather than what a
+  geometry carries, so this is D3's situation of a different pipeline with its
+  own eight. Half the contest for that slot is therefore off, and this run says
+  nothing about M4.6's half, which is M4.6's to settle. M4.8b adds the
+  attribute and should confirm the count where it does, rather than trusting
+  this line.
+  ONE ASSUMPTION IS CARRIED RATHER THAN CHECKED, and it is handed to M4.8b
+  named: screen y grows downward and three's readback measures y from the
+  bottom of the target, so the pointer's row is flipped on the way in. Nothing
+  in Node can confirm that. A flip got backwards is a pick that is perfect in
+  the middle of the canvas and names the wrong node everywhere else, which is
+  the failure shape most likely to be shipped.
+- [ ] **M4.8b** (`@dagr/render`, `apps/demo`) GPU picking, the pass: an ID
+  buffer pass rendering per-instance IDs to an offscreen target, with a
+  single-pixel readback giving O(1) hover, select and drag hit testing
+  regardless of node count. Demo scene with hover highlight.
+  Decide here when the pass runs. It can run every frame (simple, and costs a
+  second full draw of the scene) or on demand when the pointer moves (nearly
+  free when idle, adds a frame of latency and needs care while things are
+  animating, which in this project is most of the time). WebGPU's asynchronous
+  readback makes the latency half of that sharper than the equivalent WebGL
+  decision would be, so measure it rather than porting an instinct. Treat it as
   provisional until M4.10 measures it, since the ID pass sits inside that
   task's frame budget and the two decisions are the same decision seen from
   two ends.
+  WHAT M4.8a LEAVES HERE, so this does not start by deciding it again. The
+  encoding is settled and tested, so the pass writes `encodePickId` bytes and
+  the readback reads `decodePickPixel`; the pointer arithmetic is settled, so
+  the pass reads `pickReadbackPixel`'s pixel and nothing recomputes a device
+  pixel ratio, which `camera.ts` reserves to `drawingBufferSize`; and the
+  registry is settled, so the pass records `PickIdRegistry.stamp` when it draws
+  and resolves with `keyFor(id, stamp)` rather than assuming an id still means
+  what it meant.
+  THREE PROPERTIES THE PASS OWES, none of which M4.8a can enforce. The target
+  is cleared to all four channels ZERO, since the tag is the authority and a
+  different clear leaves pixels whose bytes mean nothing. BLENDING IS OFF and
+  the material is not transparent, since a blend averages two ids into a third
+  that is well formed and belongs to a node somewhere else. And NO COLOUR
+  MANAGEMENT touches the path, since these bytes are not a colour and an sRGB
+  conversion is a permutation of the id space. `decodePickPixel` catches some
+  of the ways those go wrong (an unknown tag, a tagged pixel with id 0) and
+  cannot catch all of them, which is why they are a contract and not a check.
+  ALSO OWED HERE: the y flip M4.8a assumed, confirmed against a real readback,
+  and the vertex buffer count on the pick pipeline, confirmed where the
+  attribute is added rather than inherited from M4.8a's paragraph on it.
 - [ ] **M4.9** (`@dagr/render`) WebGL2 fallback: the same TSL node graphs
   compiled through three.js's WebGL2 backend, with backend selection at init
   and a documented list of what differs between the two. Parity check between
@@ -4190,10 +4285,10 @@ of M3 would leave the second runner idle for a milestone.
   reserved slot is the instanced NODE pipeline's seventh of eight, and D3's
   highlight is an attribute on the RIBBON mesh, which is a different material
   and a different pipeline. That one went from five of eight to six. So M4.6's
-  spring velocity and M4.8's picking id are still competing for one slot with
-  each other and with the two ordinary scene changes M4.3's record names (a
-  material that comes to read `uv`, and a light or environment map that pulls in
-  the `normal` the quad already carries). What D3 does add to this task's
+  spring velocity is competing for one slot with the two ordinary scene changes
+  M4.3's record names (a material that comes to read `uv`, and a light or
+  environment map that pulls in the `normal` the quad already carries), M4.8a
+  having taken the picking id out of that contest on the same pipeline rule. What D3 does add to this task's
   measurement is a second per-fragment multiply on every ribbon and a per-vertex
   one on every ribbon vertex, which at the campaign's 7,100 routes is the cost
   worth a line in the pass breakdown rather than a guess here.
@@ -5381,8 +5476,9 @@ the demo itself should show richer nodes and its zoom.
   THE CHANNEL BUDGET, which M4.3 asked to be told about and which the obvious
   reading gets wrong: this does NOT spend the one free vertex-buffer slot.
   `maxVertexBuffers` is a PIPELINE limit; the reserved slot is the instanced NODE
-  pipeline's seventh of eight, spoken for by M4.6's spring velocity or M4.8's
-  picking id; and a ribbon group is a different mesh with a different material and
+  pipeline's seventh of eight, spoken for by M4.6's spring velocity, and by
+  M4.8's picking id until M4.8a withdrew that half on this same rule; and a
+  ribbon group is a different mesh with a different material and
   its own eight, which went from five to six. The rule worth carrying forward is
   that a slot belongs to the SHADER that reads the attribute, not to the package
   or the scene. Recorded on M4.3 and M4.10 as well as here, in

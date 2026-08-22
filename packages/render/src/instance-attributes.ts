@@ -96,8 +96,14 @@ export interface InstanceChannel {
  * neither holds, `setupOutgoingLight` returns `diffuseColor.rgb`, and nothing
  * in the graph ever asks for a normal.
  *
- * One slot is left. M4.6's spring velocity or M4.8's picking id is the seventh
- * channel and fits; an eighth needs interleaving or a raised `requiredLimits`.
+ * One slot is left. M4.6's spring velocity is the seventh channel and fits; an
+ * eighth needs interleaving or a raised `requiredLimits`.
+ *
+ * **M4.8's PICKING ID IS NO LONGER A CANDIDATE FOR IT (M4.8a), on the counting
+ * rule above rather than on a change of plan.** The pick bytes are read by the
+ * PICK material and not by this one, so they belong to a different pipeline
+ * with its own eight, exactly as D3's per-edge highlight did. M4.8b adds the
+ * attribute, and the count to confirm there is that pipeline's, not this one's.
  *
  * **D3 DID NOT TAKE IT, and the reason is the counting rule above rather than
  * restraint.** The per-edge highlight it added is an attribute on the RIBBON

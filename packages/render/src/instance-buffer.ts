@@ -39,8 +39,11 @@ import { requireIntegerAtLeast } from './validate.js';
  * State this loudly, because the rest of the package relies on it and
  * swap-with-last corrupts slot-keyed data SILENTLY, without an error: the slot
  * stays a perfectly valid index, it merely belongs to a different instance now.
- * Per-instance spring state (M4.6, M4.7) and picking IDs (M4.8) are keyed by
- * handle. Slot indices are not durable across ANY removal, and
+ * Per-instance spring state (M4.6, M4.7) is keyed by handle, and M4.8a's
+ * picking ids go one layer further out and are keyed by the caller's own node
+ * id, which is this invariant satisfied with room to spare: the id survives
+ * even a shape change, which reallocates the handle. Slot indices are not
+ * durable across ANY removal, and
  * {@link InstanceBuffer.slotOf} is a question with an answer that expires: read
  * it, use it, do not store it.
  *

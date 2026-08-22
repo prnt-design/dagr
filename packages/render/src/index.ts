@@ -33,13 +33,24 @@
  *   three.js in it at all and is exhaustively tested. A public `Arith<T>` would
  *   be a promise to keep nine primitives stable for callers who are not writing
  *   this package's shaders, and nobody has asked.
+ * - The pick encoding in `picking.ts` (M4.8a), on `sdf.ts`'s reason and one of
+ *   its own. A caller has nothing to encode until there is a pass writing the
+ *   bytes and a `pick()` reading them back, and M4.8b is what adds both; naming
+ *   `PickBytes` now would be the guess this list's second entry says the handle
+ *   API would have been.
  *
- * What the instancing does put on the surface is its two ERRORS,
+ * What the instancing does put on the surface is its ERRORS,
  * {@link UnknownInstanceHandleError} and {@link SceneDisposedError},
  * because an error is the one part of an internal module that arrives in
  * somebody else's `catch` whether or not it was exported, and one that arrives
  * as a bare `Error` gets there with no `code` and failing `instanceof
  * DagrRenderError`.
+ *
+ * {@link PickIdSpaceExhaustedError} is here on the same rule and ahead of it:
+ * nothing public can throw it until M4.8b, and it is exported now because
+ * `DagrRenderErrorCode` is a public union that already names its code, and a
+ * code a consumer can switch on whose class they cannot compare against is the
+ * worse half of both choices.
  *
  * **M4.11 added the second thing this package can put on screen, and it is not
  * drawn by a GPU at all.** `createHtmlOverlay` positions DOM elements in world
@@ -78,6 +89,7 @@ export {
   DagrRenderError,
   OverlayDisposedError,
   OverlayParentError,
+  PickIdSpaceExhaustedError,
   RendererDisposedError,
   SceneDisposedError,
   UnknownInstanceHandleError,

@@ -27,7 +27,10 @@ describe('@dagr/render', () => {
     // things a DRAW LOOP needs from the ribbon arithmetic: where the dash has
     // flowed to, and the width and alpha the zoom implies. The tessellation
     // itself stays internal, because `setEdges` takes points rather than
-    // geometry.
+    // geometry. `PickIdSpaceExhaustedError` joined at M4.8a, before anything
+    // public can throw it: `DagrRenderErrorCode` is exported and already names
+    // `PICK_IDS_EXHAUSTED`, so the class that carries the code belongs on the
+    // same surface as the code.
     expect(Object.keys(api).sort()).toEqual([
       'CENTRE_ANCHOR',
       'Camera2D',
@@ -36,6 +39,7 @@ describe('@dagr/render', () => {
       'OVERLAY_ZOOM_PROPERTY',
       'OverlayDisposedError',
       'OverlayParentError',
+      'PickIdSpaceExhaustedError',
       'RendererDisposedError',
       'SceneDisposedError',
       'UnknownInstanceHandleError',
@@ -87,6 +91,19 @@ describe('@dagr/render', () => {
     expect('ribbonWorldPosition' in api).toBe(false);
     expect('numberDashArith' in api).toBe(false);
     expect('SceneEdges' in api).toBe(false);
+  });
+
+  it('does not export the pick encoding, only the error it can raise', () => {
+    // M4.8a is the id, the pixel and the bookkeeping, and none of the three is
+    // callable by a consumer until M4.8b gives them a pass to write the bytes
+    // and a `pick()` to read them back. Exporting `encodePickId` now would be
+    // a promise about a format nothing in the package yet produces.
+    expect('encodePickId' in api).toBe(false);
+    expect('decodePickPixel' in api).toBe(false);
+    expect('pickReadbackPixel' in api).toBe(false);
+    expect('PickIdRegistry' in api).toBe(false);
+    expect('PICK_KIND_TAGS' in api).toBe(false);
+    expect('MAX_PICK_ID' in api).toBe(false);
   });
 
   it('does not export the renderer implementation class', () => {
