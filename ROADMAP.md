@@ -4126,16 +4126,18 @@ of M3 would leave the second runner idle for a milestone.
   pixel a pointer is asking about, and the registry that says which node an id
   still means. Unit tests for ID encode and decode: round-trip across the full
   range, and the no-hit value cannot collide with a real ID.
-  SPLIT OUT OF M4.8 BY THE RUN THAT SHIPPED IT, on the split M3.7 took and for
-  a reason that is about this box rather than about the task. M4.8's other half
+  SPLIT OUT OF M4.8 BY THE RUN THAT SHIPPED IT, on the precedent M2.4 and M2.6
+  set, and for a reason that is about this box rather than about the task, which
+  those two were not. M4.8's other half
   is a material, an offscreen target and an asynchronous readback, none of
   which can be verified here: the headless Chromium on this machine has no
   WebGPU, so a pass written in this increment would ship untested beside code
   that is exhaustively tested, behind the same green tick. The halves also
   differ in kind and not only in verifiability, which is why the seam is a good
   one rather than a convenient one: what a pixel says, which pixel to read, and
-  which node an id means are decidable in Node, and drawing is not. M4.6 made
-  the same split between an integrator and the loop that drives it.
+  which node an id means are decidable in Node, and drawing is not. M4.6 and
+  M4.7's entries name the same seam one task earlier, an integrator and the loop
+  that drives it, so the shape is not new to this milestone.
   THE ID IS A THIRD NAME, AND THE TWO THIS PACKAGE ALREADY HAD BOTH FAIL. The
   SLOT is free, since a shader knows its own instance index and needs no
   attribute at all, and it is wrong: M4.3 removes by swapping the last live

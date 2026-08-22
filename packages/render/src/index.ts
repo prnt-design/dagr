@@ -19,7 +19,7 @@
  * y-up conversion belongs to whoever owns the layout, which `camera.ts` has said
  * since M4.1.
  *
- * Three things stay internal, and the reasons differ:
+ * Four things stay internal, and the reasons differ:
  *
  * - The TSL nodes, because a TSL node is a three.js type and `types.ts` decided
  *   that no three.js type appears in this package's public surface. Exporting

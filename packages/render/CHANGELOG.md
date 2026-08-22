@@ -26,8 +26,9 @@ not" is the category this file has a heading for.
   about, and which node an id still means do not. The half that needs no device
   is exhaustively testable and the half that needs one cannot be verified at
   all on a box whose headless Chromium has no WebGPU, so shipping them together
-  would put both behind the same green tick. This is the split M4.6 made
-  between an integrator and the loop that drives it, taken for the same reason.
+  would put both behind the same green tick. Splitting a task in two is what
+  M2.4 and M2.6 did when one run could not carry both halves; the seam here is a
+  device rather than a scope.
 
   **THE ID IS NOT THE SLOT AND NOT THE HANDLE.** A slot costs nothing to write,
   since the shader already knows its own instance index, and it is wrong:

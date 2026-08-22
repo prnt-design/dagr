@@ -12,10 +12,9 @@ import {
  * afterwards, and which pixel a pointer is asking about.
  *
  * **The half of M4.8 that needs no device, shipped ahead of the half that
- * does.** The same split M4.6 made: `spring.ts` is an integrator with no
- * consumer until M4.7 drives it, and this is an encoding with no pass until
- * M4.8b draws one. The reason to take it in that order twice is the same both
- * times and it is not tidiness. Everything here is decidable in Node, and
+ * does.** Splitting a task in two is what M2.4 and M2.6 did when one run could
+ * not carry both halves; the seam here is not scope but a device, and it is not
+ * tidiness. Everything here is decidable in Node, and
  * `test/picking.test.ts` decides it: the round trip over the FULL id range, the
  * flip a pointer coordinate goes through, and which node an id still means
  * after the scene has moved on. What M4.8b adds is a material, an offscreen
