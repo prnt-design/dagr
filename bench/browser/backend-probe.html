@@ -105,10 +105,11 @@
        * what reached the canvas.
        *
        * The pixel counts are the point. "It drew" asserted from the absence of
-       * a thrown error is a claim a black canvas satisfies, which the D5 note
-       * in bench/browser/README.md is about, so this reads the drawing buffer
-       * back and counts pixels that are not the clear colour, plus the two
-       * fills it should be able to find by hue.
+       * a thrown error is a claim an empty canvas satisfies, which is the trap
+       * D1's entry already names about the demo's own check ("the DOM tiers are
+       * satisfied by a blank canvas"), so this reads the drawing buffer back and
+       * counts pixels that are not the clear colour, plus the two fills it
+       * should be able to find by hue and compare against their own areas.
        */
       window.probe = async (backend, keep = false) => {
         // A FRESH canvas per run, which the first version of this page did not

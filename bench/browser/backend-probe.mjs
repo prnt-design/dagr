@@ -10,8 +10,8 @@
  * backend and never generates code. Opening the same package in a browser is
  * what closes that, and the box this runs on has WebGL2 through swiftshader and
  * no WebGPU adapter, so it closes it for one backend of two. What it therefore
- * CANNOT do is the parity comparison M4.9's entry asks for, which needs both
- * backends on one machine: that half is M4.9b.
+ * CANNOT do is the parity comparison M4.9b owns, which needs both backends on
+ * one machine.
  *
  * Outside `pnpm bench:ci` for the reason everything in this directory is: it
  * answers a question once, with numbers, and records how they were taken. It is
@@ -56,7 +56,21 @@ const LAUNCH_ARGS = ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe
  */
 function pageHtml() {
   const fromRender = createRequire(`${ROOT}packages/render/package.json`);
-  const served = (specifier) => fromRender.resolve(specifier).slice(ROOT.length - 1);
+  const served = (specifier) => {
+    const resolved = fromRender.resolve(specifier);
+    // The static server's root is the repository, so a path outside it has no
+    // URL at all. Checked rather than assumed, because the slice below would
+    // otherwise produce a plausible-looking URL out of an unrelated absolute
+    // path and the only symptom would be a 404 in a page that loads.
+    if (!resolved.startsWith(ROOT)) {
+      throw new Error(
+        `${specifier} resolved to ${resolved}, which is outside ${ROOT} and cannot be served`,
+      );
+    }
+    // ROOT ends in a slash, so dropping one character short of its length keeps
+    // the leading slash the page's import map needs.
+    return resolved.slice(ROOT.length - 1);
+  };
   return readFileSync(`${ROOT}bench/browser/backend-probe.html`, 'utf8')
     .replace('__THREE_WEBGPU__', served('three/webgpu'))
     .replace('__THREE_TSL__', served('three/tsl'));

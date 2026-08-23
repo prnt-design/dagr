@@ -1,3 +1,5 @@
+import type { BackendPreference, RendererBackend } from './types.js';
+
 /**
  * Errors thrown by `@dagr/render`, and the rule for which kind is which.
  *
@@ -218,13 +220,23 @@ export class SceneDisposedError extends DagrRenderError {
 export class BackendUnavailableError extends DagrRenderError {
   readonly code = 'BACKEND_UNAVAILABLE';
 
-  constructor(
-    readonly requested: string,
-    readonly actual: string,
-  ) {
+  /** What the caller asked for. */
+  readonly requested: BackendPreference;
+
+  /** What `createRenderer` got instead, which can be `unknown`. */
+  readonly actual: RendererBackend;
+
+  constructor(requested: BackendPreference, actual: RendererBackend) {
     super(
       `backend "${requested}" was requested and the renderer came up on "${actual}". Pass backend: "auto" to take whichever backend is available.`,
     );
+    // Declared and assigned rather than written as constructor parameter
+    // properties, which nothing else in this file uses: with
+    // `useDefineForClassFields` on, the emit order of a parameter property
+    // against a field initializer is a thing to have to know, and `code` above
+    // is a field initializer.
+    this.requested = requested;
+    this.actual = actual;
     this.name = 'BackendUnavailableError';
     Object.setPrototypeOf(this, BackendUnavailableError.prototype);
   }

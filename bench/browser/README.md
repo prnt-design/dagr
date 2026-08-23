@@ -62,8 +62,9 @@ read back off the canvas, and what two of those counts SHOULD be.
 
 **The counts are the point, and the expected areas are what make them mean
 something.** "It drew", asserted from the absence of a thrown error, is a claim
-an empty canvas satisfies, and this repository has already committed one
-screenshot that was a black canvas under a true caption. A count of amber pixels
+an empty canvas satisfies, which is the trap D1 already named about the demo's
+own check: the DOM tiers are satisfied by a blank canvas, so that check gates on
+a floor over the canvas PNG. A count of amber pixels
 fixes that much. A count that agrees with the area of a 90 by 50 rounded
 rectangle inset by its 2 device pixel outline fixes the next question too, which
 is whether the shape on screen is the shape that was asked for. Both expectations
@@ -109,7 +110,7 @@ a viewport can hold at readable size is arithmetic, not a measurement (a label
 about 100 by 18 CSS pixels tiles a 1200 by 800 viewport 530 times with no gaps
 at all, so a real scene shows one or two hundred).
 
-## The numbers this was written for
+## The overlay numbers this was written for
 
 Taken on 2026-08-14, on the dispatch box (AMD EPYC VM), headless Chromium
 through swiftshader with NO GPU, a 1200 by 800 CSS pixel layer at device pixel

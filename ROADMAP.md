@@ -4142,8 +4142,10 @@ REPORTING it is arithmetic over two strings and two booleans, checkable with no
 device at all and then confirmable on any one machine. The parity check is not:
 "the two backends draw the same shapes" needs both backends on one machine, and
 the box these runs happen on has WebGL2 through swiftshader and no WebGPU
-adapter, so it is not deferred by preference. M4.9a took four of the entry's
-five asks; M4.9b is the fifth.
+adapter, so it is not deferred by preference. Of the entry's five asks, M4.9a
+took backend selection at init, the automatic-versus-explicit decision, the
+documented list of what differs, and showing the TSL graphs compiled and drawn
+through the WebGL2 backend. M4.9b is the fifth, the parity screenshot.
 
 - [x] **M4.9a** (`@dagr/render`, `bench/browser`, `docs`) Backend selection and
   reporting: `createRenderer` takes a `backend` preference and every renderer
@@ -4152,9 +4154,11 @@ five asks; M4.9b is the fifth.
   and whether the shapes reach the canvas.
   **THE DECISION THE ENTRY ASKED FOR IS AUTOMATIC WITH A NAMED EXCEPTION, AND
   THE QUESTION IT ASKED WAS ALREADY HALF ANSWERED.** three's `WebGPURenderer`
-  has fallen back to WebGL2 by itself since before M4.1: its constructor
-  installs a `getFallback` and `init()` calls it. So "automatic or explicit" was
-  never a choice about whether to fall back, which was already happening on
+  falls back to WebGL2 by itself: its constructor installs a `getFallback` and
+  `init()` calls it (verified in three 0.185.1, the version this package builds
+  against). It was already doing that when M4.1 mounted one, which M4.1's own
+  note in `webgpu-renderer.ts` says in so many words. So "automatic or explicit"
+  was never a choice about whether to fall back, which was already happening on
   every machine without an adapter. It was a choice about whether a caller can
   TELL, which M4.1's own note said nobody could. `backend` defaults to `auto`
   and `renderer.backend` reports the answer; naming `webgpu` or `webgl2` turns
@@ -4167,10 +4171,10 @@ five asks; M4.9b is the fifth.
   awaits, so by the time a caller holds a renderer the fallback has happened and
   `renderer.backend` already says so. A callback through the options would
   deliver one fact through a second mechanism, before the caller has anything to
-  act on, and would leave every consumer with two places to read one value. This
-  is the fourth prediction in this file that its own task settled differently
-  (see M4.8a's four), and the pattern is the same: the entry named a mechanism
-  where what it wanted was a property.
+  act on, and would leave every consumer with two places to read one value. The
+  entry named a MECHANISM where what it wanted was a PROPERTY, which is a shape
+  worth recognising the next time an entry predicts an interface rather than a
+  requirement.
   **DO NOT PROBE `navigator.gpu`, MEASURED RATHER THAN ARGUED.** The obvious
   implementation of `backend: 'webgpu'` is a capability check before
   construction. On this box's headless Chromium, on 2026-08-23, `'gpu' in
@@ -4244,7 +4248,9 @@ five asks; M4.9b is the fifth.
   because it is not a backend question at all: three takes it as a renderer
   parameter on both backends, so exposing it is a decision about what the page
   behind the canvas is for. `clearColor`'s docstring had said M4.9 owned it, and
-  that was wrong about its own subject in the way M3.7a's entry was about its.
+  that was a roadmap prediction wrong about its own subject: the sentence is
+  corrected in place rather than left, because it is the kind a later task
+  implements from.
 - [ ] **M4.9b** (`@dagr/render`, `bench/browser`) Backend parity: the same TSL
   node graphs drawn through BOTH backends on one machine and compared, by
   screenshot over M4.2's shape scene. Everything it needs exists: the probe page
@@ -4453,10 +4459,10 @@ it settled rather than restating the argument.
   "has no `navigator.gpu` at all", and on 2026-08-23
   `bench/browser/backend-probe.mjs` found `'gpu' in navigator` TRUE with
   `requestAdapter()` returning null. The conclusion held and the reason did not,
-  which is the same shape as M3.7a's right decision with a false reason attached.
-  It is corrected here rather than left, because "this browser has no
-  `navigator.gpu`" is exactly the sentence a later task would have implemented a
-  capability probe from.
+  and a right conclusion with a false reason attached is still a defect: it is
+  corrected here rather than left, because "this browser has no `navigator.gpu`"
+  is exactly the sentence a later task would have implemented a capability probe
+  from, and M4.9a nearly was that task.
 - [x] **M4.12** (`@dagr/render`, `apps/demo`) Rich nodes: a node's visual as
   arbitrary HTML sized to its layout box, with the campaign plan's three-tier
   semantic zoom (instanced shape below ~24 CSS px, title label to ~160 px, full
