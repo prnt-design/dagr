@@ -1,8 +1,15 @@
 # Browser measurements
 
-Two files that measure what a browser costs, which the rest of `bench/` cannot:
+What a browser does that the rest of `bench/` cannot reach.
 `label-throughput.html` drives `@dagr/render`'s HTML overlay in a real browser
 and `label-throughput.mjs` opens it, runs a plan and prints the numbers.
+`card-heights.mjs` renders every campaign card and reports the tallest per kind.
+`backend-probe.html` and `backend-probe.mjs` are the odd ones out and the
+directory name undersells them: they do not measure anything, they CHECK
+something, which is which backend `@dagr/render` comes up on and whether the
+shapes reach the canvas once it has. They live here because this is where the
+browser is, and because the rule below about a committed harness applies to them
+exactly as it does to a measurement.
 
 **Nothing here is part of `pnpm bench:ci`, and it is not a gate.** The gate
 compares Node medians against a committed baseline on one machine; a browser
@@ -19,7 +26,7 @@ green gate while it lives there is true and says nothing about it.
 `card-heights.mjs` went red on its first lint the moment it was committed,
 having "passed" for an entire review cycle from a scratchpad.
 
-## Running it
+## Running the overlay harness
 
 ```
 pnpm --filter @dagr/render build          # the page imports from dist
@@ -29,7 +36,7 @@ node bench/browser/label-throughput.mjs '[{"count":6000,"cap":20000,"zoom":0.387
 
 The runner needs `playwright-core` and a Chromium; on the dispatch box that is
 `~/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome`, and the path is at
-the top of the `.mjs`. Each plan step takes 90 frames, discards the first 30, and
+the top of the `.mjs`. Both runners here want the same two. Each plan step takes 90 frames, discards the first 30, and
 reports medians; one warm-up run happens before the plan, which is the rule
 `bench/README.md` already states for a capture.
 
@@ -38,7 +45,57 @@ Plan fields: `count` nodes registered, `cap` the overlay's element cap, `zoom`
 pixel per frame camera move (0 for a still camera), and `willChange` to promote
 the layer.
 
-## What it measures, and what it does not
+## The backend probe
+
+```
+pnpm --filter @dagr/render build          # the page imports from dist
+npm --prefix bench/browser install --no-save playwright-core
+python3 -m http.server 8733               # from the REPO ROOT
+node bench/browser/backend-probe.mjs [screenshot.png]
+```
+
+It builds a renderer three times, once per `backend` preference, on a fresh
+canvas each time (a canvas holds one context for its whole life, so reusing one
+gets a `TypeError` out of three rather than an answer about backends). For each
+it reports the backend that came up, the drawing buffer size, three pixel counts
+read back off the canvas, and what two of those counts SHOULD be.
+
+**The counts are the point, and the expected areas are what make them mean
+something.** "It drew", asserted from the absence of a thrown error, is a claim
+an empty canvas satisfies, and this repository has already committed one
+screenshot that was a black canvas under a true caption. A count of amber pixels
+fixes that much. A count that agrees with the area of a 90 by 50 rounded
+rectangle inset by its 2 device pixel outline fixes the next question too, which
+is whether the shape on screen is the shape that was asked for. Both expectations
+are derived in the page from the same node records the renderer is given, so
+there is no copy of the numbers to drift.
+
+Pass a path to also write the frame as a PNG, which is drawn a fourth time and
+left undisposed, because a disposed renderer releases its context and the canvas
+goes white.
+
+The page's import map is filled in by the runner from its own
+`require.resolve`, so nothing here names a pnpm store path: one would carry the
+three version in it and 404 silently after the next bump.
+
+**What it found on 2026-08-23**, on this box, headless Chromium through
+swiftshader with no GPU and no WebGPU adapter. `'gpu' in navigator` is `true`
+and `requestAdapter()` returns `null`, which is why `@dagr/render` reads the
+backend after `init()` rather than probing before it. `'auto'` came up on
+`'webgl2'` and drew 10,780 pixels above the clear colour in a 480 by 320 buffer,
+3,908 of them the rounded rectangle's amber fill against 3,901 of expected area,
+and 2,432 the circle's blue against 2,463. `'webgpu'` was refused with
+`BACKEND_UNAVAILABLE`. `'webgl2'` drew the identical counts. The frame is
+`assets/screenshots/m4.9a-webgl2-shapes.png`.
+
+Both counts run UNDER their expectation, by 0.2% on the rectangle and 1.3% on
+the circle, and the direction and the ordering are both what they should be:
+antialiased boundary pixels blend toward the halo and fail the hue test, and a
+60 pixel circle is far more boundary per unit area than a 90 by 50 rectangle is.
+A count OVER the area would be the interesting result, and it is not what
+happened.
+
+## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`
 either side of `overlay.sync()`) and `frameMedian` (the interval between

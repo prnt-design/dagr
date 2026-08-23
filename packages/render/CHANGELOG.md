@@ -14,6 +14,52 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- `backend` on `RendererOptions` and `backend` on `Renderer`: which of three's
+  two backends to draw through, and which one you got. `'auto'` (the default)
+  takes WebGPU where the machine has it and WebGL2 where it does not; naming
+  `'webgpu'` or `'webgl2'` turns the preference into a requirement and rejects
+  with a new `BackendUnavailableError`, code `BACKEND_UNAVAILABLE`. The three
+  new names on the surface are that error and the two string-union types
+  `RendererBackend` and `BackendPreference`. (M4.9a)
+
+  **NOTHING BEHAVES DIFFERENTLY BY DEFAULT.** three's `WebGPURenderer` has always
+  fallen back to WebGL2 by itself, so `createRenderer({ canvas })` builds exactly
+  what it built before and resolves in exactly the cases it resolved before. What
+  is new is that a caller can find out. A fallback nobody can see is a
+  performance cliff a consumer discovers first, and until now `createRenderer`
+  resolving was the only signal and it said nothing about which backend resolved
+  it.
+
+  **AUTOMATIC BY DEFAULT, EXPLICIT ON REQUEST.** Refusing by default would make
+  this package unavailable on every browser that has not shipped WebGPU, for a
+  reason the person looking at the blank canvas cannot act on. Refusing when
+  asked is a different thing: a caller who wrote `backend: 'webgpu'` is saying
+  their scene is only worth drawing on the fast path, and the useful answer to
+  that is an error rather than a slower frame.
+
+  **DO NOT PROBE `navigator.gpu`, AND THAT IS MEASURED.** On the headless
+  Chromium this repository's browser probe runs on, `'gpu' in navigator` is
+  `true` and `navigator.gpu.requestAdapter()` then returns `null`. A capability
+  check before construction would have reported WebGPU on a machine that cannot
+  give one, which is the exact wrong answer for the one caller who cared enough
+  to ask. The backend is therefore read AFTER `init()`, off what three actually
+  built.
+
+  **NO FALLBACK EVENT, DELIBERATELY.** three falls back inside the `init()` that
+  `createRenderer` awaits, so there is no moment at which a caller holds a
+  renderer and does not already have `renderer.backend`. A callback would be a
+  second way to learn one fact, delivered before the caller has anything to do
+  with it.
+
+  **`'unknown'` IS A THIRD VALUE AND NOT A THIRD BACKEND.** The backend is named
+  by reading three's `isWebGPUBackend` and `isWebGLBackend` markers, which three
+  declares on its two concrete backends and not on the `Backend` type that
+  `renderer.backend` has. A release that renames either one leaves a renderer
+  that draws perfectly and cannot be named, so `'auto'` reports `'unknown'` and
+  hands it back rather than trading a working renderer for a naming problem. A
+  caller who NAMED a backend asked for a guarantee that can no longer be made,
+  and is refused. Same fact, two answers, one rule.
+
 - `setEdgeIntensity(groupId, intensityOf)` on `Renderer`: one number per edge in
   `[0, 1]`, which the ribbon shader multiplies BOTH the width and the alpha by.
   A type-level addition to the `Renderer` interface and no new exported name.

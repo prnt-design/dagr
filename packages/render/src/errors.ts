@@ -38,7 +38,8 @@ export type DagrRenderErrorCode =
   | 'OVERLAY_PARENT'
   | 'OVERLAY_DISPOSED'
   | 'UNKNOWN_INSTANCE_HANDLE'
-  | 'SCENE_DISPOSED';
+  | 'SCENE_DISPOSED'
+  | 'BACKEND_UNAVAILABLE';
 
 /** The base every error this package throws extends. */
 export abstract class DagrRenderError extends Error {
@@ -189,5 +190,42 @@ export class SceneDisposedError extends DagrRenderError {
     super(`cannot call ${method}() on the disposed ${label}`);
     this.name = 'SceneDisposedError';
     Object.setPrototypeOf(this, SceneDisposedError.prototype);
+  }
+}
+
+/**
+ * Thrown when a caller named a backend and `createRenderer` could not give them
+ * that one.
+ *
+ * A class rather than a `RangeError`, on this file's rule: nothing is out of
+ * range. `backend: 'webgpu'` is a perfectly good request and the machine is the
+ * thing that cannot meet it, so the caller learns something about where their
+ * code is RUNNING rather than about what they wrote, and "fall back to a
+ * simpler scene" is a real thing to do in a `catch`. It is also the one error in
+ * this package whose occurrence is a property of the browser rather than of the
+ * program, which is exactly the case a `code` is for.
+ *
+ * Both ends are on the instance rather than only in the message, because the
+ * caller that catches this is choosing what to do next and `error.actual` is the
+ * input to that choice: a scene that degrades gracefully on WebGL2 wants a
+ * different branch from one that cannot be drawn at all.
+ *
+ * `actual` can be `unknown`, which is not a third backend. It means three built
+ * something this package's markers do not recognise, and a named request is a
+ * guarantee that cannot then be made. See `backend.ts` for why the same fact is
+ * merely reported when the preference was `auto`.
+ */
+export class BackendUnavailableError extends DagrRenderError {
+  readonly code = 'BACKEND_UNAVAILABLE';
+
+  constructor(
+    readonly requested: string,
+    readonly actual: string,
+  ) {
+    super(
+      `backend "${requested}" was requested and the renderer came up on "${actual}". Pass backend: "auto" to take whichever backend is available.`,
+    );
+    this.name = 'BackendUnavailableError';
+    Object.setPrototypeOf(this, BackendUnavailableError.prototype);
   }
 }

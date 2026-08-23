@@ -110,11 +110,15 @@ export interface InstanceChannel {
  * an environment map, either of which satisfies the guard above and pulls the
  * `normal` this geometry already carries into the shader.
  *
- * EIGHT IS A WEBGPU NUMBER, and M4.9 owns what the other backend does. three's
- * WebGL2 path binds each attribute with `vertexAttribPointer` into a VAO, so it
- * has no buffer-slot limit at all and its ceiling is `MAX_VERTEX_ATTRIBS`, at
- * least sixteen. A channel past the eighth therefore fails pipeline creation on
- * one backend and draws fine on the other.
+ * EIGHT IS A WEBGPU NUMBER, and three's WebGL2 path binds each attribute with
+ * `vertexAttribPointer` into a VAO, so it has no buffer-slot limit at all and
+ * its ceiling is `MAX_VERTEX_ATTRIBS`, at least sixteen. A channel past the
+ * eighth therefore fails pipeline creation on one backend and draws fine on the
+ * other. M4.9a is where that stopped being a note and became a caller-visible
+ * difference: `createRenderer` now takes a backend and reports the one it got,
+ * so this limit is the FIRST entry in the differences list on the renderer's
+ * docs page, and a ninth channel is a change that has to be made on the
+ * narrower of the two ceilings.
  *
  * `instanceColor` is deliberately NOT one of these names: three's `InstancedMesh`
  * uses it for its own per-instance colour, and a name collision on a geometry
