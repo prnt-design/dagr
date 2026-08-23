@@ -120,6 +120,12 @@ is built once from a literal, usually at module scope, and a bad spec is a bug
 in your source rather than in your data. The same port id in two different
 kinds is fine: port ids are unique within a node, not across a graph.
 
+`registry.port(kind, portId)` returns `undefined` for a port the kind does not
+declare, and throws `UnknownNodeKindError` for a kind the registry does not
+hold, which is what `get` does and for the same reason: an undeclared kind has
+no ports for a port to be absent from. The compiler stops both being called
+that way, and JavaScript reaches them with any string at all.
+
 Enforcing the cap is not here. A spec says what the rule is; validating a
 proposed connection against it is M6.2's task, and what this package does today
 is refuse a value M6.2 could not act on.

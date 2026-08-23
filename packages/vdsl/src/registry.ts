@@ -113,18 +113,25 @@ function isPositiveInteger(value: number): boolean {
 }
 
 /**
- * Read the kind attribute off a node.
+ * A node's attributes as an unknown-valued bag.
  *
- * This is the one cast in the package. `Node.attrs` is `Readonly<Partial<A>>`
- * for the consumer's own `A`, which cannot be indexed by a key chosen at
- * runtime, and the registry's whole job is to index it by exactly that key. The
- * cast widens a known-shaped bag to an unknown-valued one, which is the safe
- * direction: every value read out of it is `unknown` and the caller below
- * checks that it is a string before doing anything with it.
+ * This is one of the package's two casts, and the reading one. `Node.attrs` is
+ * `Readonly<Partial<A>>` for the consumer's own `A`, which cannot be indexed by
+ * a key chosen at runtime, and indexing it by exactly that key is what the
+ * registry is for. The cast widens a known-shaped bag to an unknown-valued one,
+ * which is the safe direction: every value out of it is `unknown`, and the two
+ * callers either check it is a string first or hand the whole bag to the
+ * consumer's own validator, which is where it came from.
+ *
+ * One helper rather than one cast per reader, so the argument is written once
+ * and a third reader cannot arrive without it.
  */
-function readKind<A extends object>(node: Node<A>, kindKey: string): unknown {
-  return (node.attrs as ReadAttrs<Attrs>)[kindKey];
+function attrsOf<A extends object>(node: Node<A>): ReadAttrs<Attrs> {
+  return node.attrs as ReadAttrs<Attrs>;
 }
+
+/** One shared empty result, so a kind with no config check allocates nothing. */
+const NO_ISSUES: readonly string[] = Object.freeze([]);
 
 class Registry<K extends string> implements NodeRegistry<K> {
   readonly kinds: readonly K[];
@@ -160,12 +167,12 @@ class Registry<K extends string> implements NodeRegistry<K> {
   }
 
   kindOf<A extends object>(node: Node<A>): K | undefined {
-    const value = readKind(node, this.kindKey);
+    const value = attrsOf(node)[this.kindKey];
     return typeof value === 'string' && this.has(value) ? value : undefined;
   }
 
   resolve<A extends object>(node: Node<A>): NodeSpec<K> {
-    const value = readKind(node, this.kindKey);
+    const value = attrsOf(node)[this.kindKey];
     if (typeof value !== 'string') {
       throw new NodeKindMissingError(this.kindKey, value);
     }
@@ -182,7 +189,7 @@ class Registry<K extends string> implements NodeRegistry<K> {
 
   checkConfig<A extends object>(node: Node<A>): readonly string[] {
     const spec = this.resolve(node);
-    return spec.checkConfig === undefined ? EMPTY : spec.checkConfig(node.attrs as ReadAttrs<Attrs>);
+    return spec.checkConfig === undefined ? NO_ISSUES : spec.checkConfig(attrsOf(node));
   }
 
   nodeInit<A extends object = Attrs>(kind: K, init: KindNodeInit<A> = {}): NodeInit<A> {
@@ -193,13 +200,10 @@ class Registry<K extends string> implements NodeRegistry<K> {
     }));
     // The kind goes in LAST, so a caller's own `attrs` cannot overwrite it and
     // leave a node that resolves to a kind it was not built as. The cast is
-    // the mirror of `readKind`'s: `AttrsPatch<A>` cannot be written to under a
-    // key chosen at runtime, and the value written is the kind the caller just
-    // asked for.
+    // the package's other one and the writing mirror of `attrsOf`:
+    // `AttrsPatch<A>` cannot be written to under a key chosen at runtime, and
+    // the value written is the kind the caller just asked for.
     const attrs = { ...init.attrs, [this.kindKey]: kind } as AttrsPatch<A>;
     return init.id === undefined ? { attrs, ports } : { id: init.id, attrs, ports };
   }
 }
-
-/** One shared empty result, so a kind with no config check allocates nothing. */
-const EMPTY: readonly string[] = Object.freeze([]);

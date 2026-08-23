@@ -4701,9 +4701,12 @@ whether the generalisation holds.
   `NodeRegistry`), `src/registry.ts` (`DEFAULT_KIND_KEY`, `defineRegistry` and
   the `Registry` class behind it), `src/errors.ts` (`DagrVdslError` and three
   members), 50 tests across four files, a `CHANGELOG.md`, and
-  `docs/docs/vdsl.md` at sidebar position 7. The one prose edit outside the
-  package is the Status section of `docs/docs/visual-languages.md`, which said
-  `@dagr/vdsl` does not exist.
+  `docs/docs/vdsl.md` at sidebar position 7. Two prose edits outside the
+  package, both of them a document that said this package does not exist: the
+  Status section of `docs/docs/visual-languages.md`, and the `@dagr/vdsl` row
+  of README.md's package table, which read "Planned (v0.2)". The README row is
+  the tree pass's find, and it is the same amend-your-own-row rule PR #57 and
+  PR #59 are each following on their own package's row.
   TAKEN THREE MILESTONES OUT OF ORDER, AND THE REASON IS THE PILE RATHER THAN
   THE TASK. Eight pull requests were open on one blocker when this run started,
   main had not moved since 2026-08-18, and every unchecked task in milestone
@@ -4752,12 +4755,16 @@ whether the generalisation holds.
   does not have.
   THE CAST IS ONE, AND IT IS INSIDE. The entry's own argument is that reading
   `attrs.kind` erases the kind union, and reading it is still what has to
-  happen: the registry does it once, in `readKind`, widening
+  happen: the registry does it once, in `attrsOf`, widening
   `Readonly<Partial<A>>` to an unknown-valued bag, which is the safe direction
-  because every value out of it is `unknown` and is checked to be a string
-  before anything is done with it. `nodeInit` holds the mirror of it, writing
-  one key into an `AttrsPatch<A>` under a runtime-chosen name. Two casts in the
-  package, both in the two places whose whole job is a runtime key.
+  because every value out of it is `unknown`. `nodeInit` holds the writing
+  mirror of it, putting one key into an `AttrsPatch<A>` under a runtime-chosen
+  name. TWO CASTS IN THE PACKAGE, one in each direction, and the reading one is
+  a helper rather than a cast per reader so a third reader cannot arrive
+  without the argument attached. The tree pass found the first draft had three:
+  the extra was `checkConfig` widening the bag a second time to hand it to the
+  consumer's own validator, and the entry claimed two while the code held
+  three.
   `has` LOOKS IN A MAP RATHER THAN AT THE OBJECT. `'toString' in specs` is true
   for every object literal a consumer writes, and a membership test that
   answers yes for an inherited property name is a narrowing that lies: it hands
