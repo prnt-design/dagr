@@ -4682,7 +4682,7 @@ assumptions become the API and nobody notices until the second arrives. Two
 consumers with genuinely different shapes is the cheapest available test of
 whether the generalisation holds.
 
-- [ ] **M6.1** Node spec adapter: the interface a consumer implements to
+- [x] **M6.1** Node spec adapter: the interface a consumer implements to
   describe its own node kinds (ports, arity, config shape), and the registry
   that resolves a node to a spec. Dagr defines the interface and nothing
   behind it.
@@ -4696,6 +4696,115 @@ whether the generalisation holds.
   peerDependencies plus devDependencies, for the same `#private` nominal-typing
   reason M5.4 records for `@dagr/layout`. Two copies of `@dagr/graph` in a
   consumer's tree are not interchangeable.
+  SHIPPED as `packages/vdsl`, a new package: `src/types.ts` (`PortSpec`,
+  `NodeSpec`, `NodeSpecInit`, `ConfigCheck`, `RegistryOptions`, `KindNodeInit`,
+  `NodeRegistry`), `src/registry.ts` (`DEFAULT_KIND_KEY`, `defineRegistry` and
+  the `Registry` class behind it), `src/errors.ts` (`DagrVdslError` and three
+  members), 50 tests across four files, a `CHANGELOG.md`, and
+  `docs/docs/vdsl.md` at sidebar position 7. The one prose edit outside the
+  package is the Status section of `docs/docs/visual-languages.md`, which said
+  `@dagr/vdsl` does not exist.
+  TAKEN THREE MILESTONES OUT OF ORDER, AND THE REASON IS THE PILE RATHER THAN
+  THE TASK. Eight pull requests were open on one blocker when this run started,
+  main had not moved since 2026-08-18, and every unchecked task in milestone
+  order reads a file some open branch is rewriting: M3.7 IS #53, M3.8 stacks on
+  it, M4.7 drives M4.6's springs and those are on #57, M5.3 needs both #59 and
+  #57. This is the one unchecked task whose dependencies are entirely merged on
+  main and whose files NO open PR touches, so it merges in any order with the
+  eight and imposes a conflict on none of them. That is a property of the
+  pile's shape and not an argument that M6 is ready, and the milestone preamble
+  still says the breakdown is finalised when M5 completes.
+  THE PACKAGING NOTE ABOVE IS RIGHT AND ITS REASON IS NOT TRUE YET. The
+  `#private` nominal-typing argument is about `Graph`, and M6.1 does not put
+  `Graph` on its surface: it takes `Node<A>` and returns `NodeInit<A>`, both
+  interfaces, both structurally typed, both interchangeable between two copies
+  of `@dagr/graph`. The argument becomes load-bearing at M6.2, whose own entry
+  names `graph.canReach` and therefore puts a `Graph` in a parameter position.
+  The peer is declared NOW anyway, because the alternative is changing a
+  dependency's kind between two 0.x tasks for a reason nobody reading the diff
+  would recognise. Every import in this package is `import type`, so with
+  `verbatimModuleSyntax` the built JavaScript imports `@dagr/graph` not at all.
+  `@dagr/react` AND `react` ARE NOT DECLARED, AND THAT IS THE SAME RULE POINTED
+  THE OTHER WAY. Nothing here imports either, and M6.3 is the first task that
+  will. A peer dependency declared ahead of an import makes every consumer of a
+  headless registry install React to silence a warning about a dependency the
+  package does not use. M6.3 adds them, and the note above is where it will
+  look.
+  ARITY IS A CAP AND NOT A WORD. `PortSpec.maxEdges`, absent meaning unbounded.
+  The usual `'single' | 'multiple'` is the two useful values of a number, so a
+  number loses nothing, and a union declared here is a union every consumer's
+  exhaustive `switch` breaks on when a third case arrives, which is the hazard
+  M5.5's entry plans to document `PatchOp` as an open union to escape. Absent
+  rather than `Infinity` because `Infinity` does not survive `JSON.stringify`
+  and a spec a consumer cannot serialise is a spec they cannot ship a fixture
+  of. ENFORCEMENT IS M6.2's: a spec says what the rule is, and a proposed
+  connection is where the rule is met. What this task does is refuse a value
+  M6.2 could not act on, so the number M6.2 reads is a positive integer or
+  nothing.
+  VALIDATION IS AT DEFINE TIME. An empty kind, an empty port id, a port id
+  declared twice in one kind, and a `maxEdges` that is not a positive integer
+  all throw out of `defineRegistry`. A registry is built once from a literal,
+  usually at module scope, so a bad spec is a bug in the consumer's source
+  rather than in their data, and the run that finds it should be the one that
+  loads the module. The same port id in two DIFFERENT kinds is allowed and
+  tested: port ids are unique within a node and not across a graph, and two
+  kinds that could not share a port vocabulary would be a rule the graph model
+  does not have.
+  THE CAST IS ONE, AND IT IS INSIDE. The entry's own argument is that reading
+  `attrs.kind` erases the kind union, and reading it is still what has to
+  happen: the registry does it once, in `readKind`, widening
+  `Readonly<Partial<A>>` to an unknown-valued bag, which is the safe direction
+  because every value out of it is `unknown` and is checked to be a string
+  before anything is done with it. `nodeInit` holds the mirror of it, writing
+  one key into an `AttrsPatch<A>` under a runtime-chosen name. Two casts in the
+  package, both in the two places whose whole job is a runtime key.
+  `has` LOOKS IN A MAP RATHER THAN AT THE OBJECT. `'toString' in specs` is true
+  for every object literal a consumer writes, and a membership test that
+  answers yes for an inherited property name is a narrowing that lies: it hands
+  back `'toString'` typed as one of the consumer's kinds. Tested with
+  `'__proto__'` and `'toString'` directly, because the correct implementation
+  makes the case unreachable by construction and a guard nobody can trip is a
+  guard nobody can check.
+  TWO ERRORS FOR THREE FAILURES, ON PURPOSE. An absent kind attribute and one
+  holding a non-string both raise `NodeKindMissingError`, because the caller's
+  remedy is the same sentence in both cases and the difference is a detail of
+  what was there, which the error carries as `value` and names in its message.
+  `UnknownNodeKindError` is the genuinely different one: the node said
+  something legible and this registry does not hold it, so the error carries
+  the kinds that were declared, which is the list the message is for.
+  `nodeInit` IS THE SEAM, AND IT IS WHAT MAKES THE SPEC ACTIONABLE RATHER THAN
+  DECORATIVE. A spec that cannot produce a node is a spec nobody can use, and
+  the round trip (`graph.addNode(registry.nodeInit(k))` then
+  `registry.resolve(node)`) is asserted. Two things it refuses: the kind
+  attribute is written LAST so a caller's own `attrs` cannot mislabel the node
+  they are building, and ports are not takeable from the caller, because the
+  spec is what says which ports a kind has and a node that quietly gained one
+  would resolve to a spec that does not describe it. `A` is the caller's own
+  attribute type, inferred from the graph the init is handed to, so a typed
+  consumer's keys are checked; a consumer whose type does not declare the kind
+  key still gets it written, because `Graph` stores what it is given.
+  NO PER-KIND PAYLOAD ON A `NodeSpec`. No label, no colour, no category, no
+  `meta` slot. It is a real want and the shape it should take is decided by
+  what M6.3's callbacks actually need to read, and a `meta` typed per kind is a
+  second type parameter fighting the inference this entry asks for. Until a
+  consumer asks, `registry.kinds` is typed and exhaustive, so a
+  `Record<Kind, YourPayload>` of the consumer's own is checked for completeness
+  by the compiler at no cost to this package. This is `@dagr/graph` keeping
+  `traversal.ts` unexported and `@dagr/layout` publishing only `defaultStages`,
+  a third time.
+  WHAT M6.2 INHERITS. The port type token goes on `PortSpec` beside `maxEdges`,
+  and the compatibility predicate goes on `NodeSpecInit` beside `checkConfig`,
+  both additive. Connection validation reads `maxEdges` and gets a positive
+  integer or nothing. `Graph` arrives on the surface with `canReach`, at which
+  point the packaging note's stated reason starts being true. One thing M6.2
+  should not inherit by accident: `checkConfig` returns strings rather than a
+  structured issue type, and a connection validator returning something richer
+  would be two shapes for one job, so decide it there rather than drifting into
+  it.
+  `defineRegistry({})` IS ALLOWED AND INFERS `K` AS `never`, so every method
+  taking a kind is uncallable and `has` answers false for everything. Left
+  legal rather than refused, because it is what a consumer building kinds up
+  behind a flag writes first and the type system already says the whole story.
 - [ ] **M6.2** Port typing and connection validation: a type token per port,
   a compatibility predicate the consumer supplies, and validation of a
   proposed connection against it.
