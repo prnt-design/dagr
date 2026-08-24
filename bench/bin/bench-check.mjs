@@ -209,7 +209,7 @@ function main() {
     if (result.detail !== undefined) console.log(`        ${result.detail}`);
   }
 
-  for (const note of gate.notes) console.log(`\n  note   ${note}`);
+  for (const note of [...normalised.notes, ...gate.notes]) console.log(`\n  note   ${note}`);
   // Printed after the table rather than before it, because it is the sentence
   // that says how to read the table, and it is a note rather than an error
   // because a profile mismatch is a MEASUREMENT: it can be wrong once, and

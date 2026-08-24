@@ -109,18 +109,29 @@ export function nextChaseIndex(index: number, mask: number): number {
   return (Math.imul(1664525, index) + 1013904223) & mask;
 }
 
+let table: Int32Array | undefined;
+
 /**
- * Built once per worker rather than per call: filling 64 MiB costs about 60ms,
- * and paying that inside the timed function would measure a sequential write,
- * which is the opposite of what the probe is for.
+ * Built once per worker, on first request rather than at import. The timing
+ * argument is unchanged: filling 64 MiB costs about 60ms, and paying that
+ * inside the timed function would measure a sequential write, which is the
+ * opposite of what the probe is for. What moved is WHEN the fill happens.
+ * This module reaches unit-test workers through the package barrel, which
+ * about twenty test files import for the corpus alone, and an import-time
+ * build charged every one of those workers 64 MiB and the fill for a table
+ * nothing in them walks. So `registerControl` builds it, at registration and
+ * before any timed iteration, and a worker that never registers benchmarks
+ * never pays.
  */
-const chaseTable = ((): Int32Array => {
-  const table = new Int32Array(CHASE_WORDS);
-  for (let index = 0; index < CHASE_WORDS; index += 1) {
-    table[index] = nextChaseIndex(index, CHASE_MASK);
+export function chaseTable(): Int32Array {
+  if (table === undefined) {
+    table = new Int32Array(CHASE_WORDS);
+    for (let index = 0; index < CHASE_WORDS; index += 1) {
+      table[index] = nextChaseIndex(index, CHASE_MASK);
+    }
   }
   return table;
-})();
+}
 
 /**
  * A dependent pointer chase over 64 MiB. Scales with memory latency, and with
@@ -132,6 +143,7 @@ const chaseTable = ((): Int32Array => {
  * when this project's box changed underneath it.
  */
 export function chaseProbe(): void {
+  const walk = chaseTable();
   let at = 0;
   for (let step = 0; step < CHASE_STEPS; step += 1) {
     // The `?? 0` is the index signature's and cannot be taken: every value in
@@ -141,7 +153,7 @@ export function chaseProbe(): void {
     // probe would silently become a walk over a handful of cache lines, which
     // is the one failure that would leave a profile comparison looking healthy
     // while measuring nothing about memory.
-    at = chaseTable[at] ?? 0;
+    at = walk[at] ?? 0;
   }
   probeSink = at;
 }

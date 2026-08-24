@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { CHASE_WORDS, allocProbe, chaseProbe, nextChaseIndex, probeSink } from '../src/probes.js';
+import {
+  CHASE_WORDS,
+  allocProbe,
+  chaseProbe,
+  chaseTable,
+  nextChaseIndex,
+  probeSink,
+} from '../src/probes.js';
 
 /**
  * The probes measure the machine rather than the code, so what has to be
@@ -62,6 +69,15 @@ describe('the chase cycle', () => {
       at = next;
     }
     expect(adjacent).toBeLessThan(words / 32);
+  });
+
+  it('builds the table once and hands back the same one after', () => {
+    // The build is lazy so that unit-test workers importing the barrel for
+    // the corpus never allocate the 64 MiB. What has to hold on the bench
+    // side is that the laziness cannot mean twice: a second call returning a
+    // fresh table would pay the fill again and walk cold memory the baseline
+    // capture never walked.
+    expect(chaseTable()).toBe(chaseTable());
   });
 
   it('spans a working set several times the largest cache it has to defeat', () => {

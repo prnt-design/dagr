@@ -135,11 +135,16 @@ describe('machine probes', () => {
     expect(normalised.benchmarks).toEqual({});
   });
 
-  it('rejects a probe that measured zero, which is a probe measuring nothing', () => {
+  it('drops a probe that measured zero, as a note rather than an error', () => {
     const normalised = normalisePackageRun(
       run('@dagr/graph', withProbes('graph.bench.ts', { alloc: 0, chase: 1 }, 0.1)),
     );
-    expect(normalised.errors.join(' ')).toMatch(/probe .*alloc.* measured a median of zero/);
+    // A probe is advisory by contract, so a probe measuring nothing must not
+    // fail the run: it is dropped, the sentence lands in `notes`, and the
+    // profile comparison reports the file as not comparable on its own.
+    expect(normalised.errors).toEqual([]);
+    expect(normalised.notes.join(' ')).toMatch(/probe .*alloc.* measured a median of zero/);
+    expect(normalised.machine['@dagr/graph > graph.bench.ts']).toEqual({ chase: 1 });
   });
 
   it('leaves the profile empty for a file that registers no probes', () => {

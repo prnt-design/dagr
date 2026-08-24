@@ -47,6 +47,10 @@ import { CONTROL_GROUP, CONTROL_NAME, MACHINE_GROUP } from './names.mjs';
  * @property {Record<string, number>} controls Control median per bench file, for humans.
  * @property {MachineProfile} machine Probe medians per bench file, for `profile.mjs`.
  * @property {string[]} errors
+ * @property {string[]} notes
+ *   Skipped measurements worth a sentence. Kept apart from `errors` because a
+ *   note about a probe must not fail the run: the probes are advisory by
+ *   contract, and a channel that can fail a merge is not advisory.
  */
 
 /**
@@ -96,6 +100,8 @@ export function normalisePackageRun(run) {
   const machine = {};
   /** @type {string[]} */
   const errors = [];
+  /** @type {string[]} */
+  const notes = [];
 
   for (const file of run.report.files) {
     /** @type {Map<string, VitestGroup[]>} */
@@ -137,8 +143,14 @@ export function normalisePackageRun(run) {
         const probes = {};
         for (const probe of machineGroup.benchmarks) {
           if (probe.median <= 0) {
-            errors.push(
-              `${run.packageName} > ${fileName} probe \`${probe.name}\` measured a median of zero, which is a probe measuring nothing`,
+            // A note rather than an error, and the difference is the
+            // contract: the probes can never fail a merge, and a probe that
+            // measured zero measured nothing, which is exactly the case the
+            // profile comparison already answers for itself. Dropping the
+            // probe here leaves the file with fewer than two, and the
+            // comparison reports it as not comparable rather than as a match.
+            notes.push(
+              `${run.packageName} > ${fileName} probe \`${probe.name}\` measured a median of zero, which is a probe measuring nothing. It was dropped, and the file's profile is not comparable`,
             );
             continue;
           }
@@ -162,7 +174,7 @@ export function normalisePackageRun(run) {
     }
   }
 
-  return { benchmarks, controls, machine, errors };
+  return { benchmarks, controls, machine, errors, notes };
 }
 
 /**
@@ -180,10 +192,13 @@ export function normaliseRuns(runs) {
   const machine = {};
   /** @type {string[]} */
   const errors = [];
+  /** @type {string[]} */
+  const notes = [];
 
   for (const run of runs) {
     const normalised = normalisePackageRun(run);
     errors.push(...normalised.errors);
+    notes.push(...normalised.notes);
     Object.assign(controls, normalised.controls);
     Object.assign(machine, normalised.machine);
     for (const [key, stat] of Object.entries(normalised.benchmarks)) {
@@ -195,5 +210,5 @@ export function normaliseRuns(runs) {
     }
   }
 
-  return { benchmarks, controls, machine, errors };
+  return { benchmarks, controls, machine, errors, notes };
 }

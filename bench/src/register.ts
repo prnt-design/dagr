@@ -2,7 +2,7 @@ import { bench, describe } from 'vitest';
 
 import { controlWorkload } from './control.js';
 import { CONTROL_GROUP, CONTROL_NAME, MACHINE_GROUP } from './names.mjs';
-import { allocProbe, chaseProbe } from './probes.js';
+import { allocProbe, chaseProbe, chaseTable } from './probes.js';
 
 /**
  * Register the control workload and the machine probes in a bench file.
@@ -28,6 +28,13 @@ export function registerControl(): void {
   // one the baseline was captured on. They are registered here and nowhere
   // else for the same reason the control is: they must run in the same worker
   // as the benchmarks they describe, and vitest gives each bench file its own.
+  // Built here, at registration, so the chase's first timed iteration walks a
+  // table that already exists. The build is lazy at the module level so that
+  // unit-test workers importing the barrel for the corpus do not pay 64 MiB
+  // and the fill; this call is what makes bench workers pay it exactly once,
+  // outside any measurement.
+  chaseTable();
+
   describe(MACHINE_GROUP, () => {
     bench('alloc', allocProbe);
     bench('chase', chaseProbe);
