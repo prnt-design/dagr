@@ -854,7 +854,7 @@ findings addressed or logged, docs land with the feature.
   ranks across a wide region while improving nothing, which makes M2.3 a
   stability regression against the deterministic M2.2 longest-path ranker it
   replaces. Warm starting from the previous tight tree is the textbook
-  advantage of simplex here, and it is most of M3.7's performance story too.
+  advantage of simplex here, and it is most of M3.7b's performance story too.
   Second, "rank sum must never regress" passes with flying colours while ranks
   churn between equal-cost optima, because churn does not change the sum. Add a
   rank-stability check: re-ranking after a trivial perturbation must not move
@@ -2507,7 +2507,7 @@ it.
   narrowing of something already observable rather than a new concept, and
   M3.9's fast paths assert against the same object. It also buys a free
   regression guard, because the influence set should shrink monotonically
-  across M3.5, M3.7 and M3.9 and that is assertable.
+  across M3.5, M3.7b and M3.9 and that is assertable.
   Two things to state here rather than discover. Retained state must stay
   proportional to the live graph, not to patch history: `RoutedState` covers
   the whole roster (real nodes plus dummies, which on a 10k graph with long
@@ -2593,7 +2593,7 @@ it.
   and every consumer iterates it; an influence set is a PREDICATE, and every
   consumer this roadmap names asks it either "is this id in you" (M3.4's
   contract, M3.5's property test) or "how big are you" (the monotone shrink
-  across M3.5, M3.7 and M3.9). The structured-cloning argument that pushed the
+  across M3.5, M3.7b and M3.9). The structured-cloning argument that pushed the
   delta to arrays does not reach it either, because nothing sends one across the
   wire: see the async decision below. It names ONLY IDS THE CALLER CAN SEE, so
   no dummy chain node, because half its membership questions would otherwise be
@@ -2820,7 +2820,7 @@ it.
   exactly and violating it fails the build, which is the strongest form of the
   project's headline claim. It is testable from M3.2 onward because the
   influence set is an observable output there, vacuously true against the
-  trivial whole-roster set and tightening as M3.5, M3.7 and M3.9 narrow it. A
+  trivial whole-roster set and tightening as M3.5, M3.7b and M3.9 narrow it. A
   metric is a threshold on a corpus, which survives a full-relayout fallback
   but degrades quietly and lets a regression land as long as it stays under the
   bar. The likely answer is both (a contract on the fast paths, a metric on the
@@ -3053,13 +3053,20 @@ it.
   moves every row underneath however unconnected. A row keeps its height when one
   of two equally tall nodes leaves, which is why the row record counts its
   tallest rather than flagging it.
-  ON A CYCLIC GRAPH ANY EDGE OP WIDENS IT TO EVERYTHING, which is M3.7's own
-  observation arriving early: M2.2's greedy feedback arc set is order dependent,
-  so one changed degree can move a node between buckets and reverse a DIFFERENT
-  set of edges for a graph whose cycle structure did not change, and no band
-  bounds that. On a DAG the reversed set is empty and stays empty, so the bound
-  is sharp exactly on the pattern-generator case. M3.7's stable FAS is what
-  narrows this, and it now has a second consumer waiting on it.
+  ON A CYCLIC GRAPH ANY EDGE OP WIDENS IT TO EVERYTHING, which is M3.7a's own
+  observation arriving early: the feedback arc set moves under a patch that
+  changed no cycle, so a different set of edges is reversed for a graph whose
+  cycle structure did not change, and no band bounds that. On a DAG the reversed
+  set is empty and stays empty, so the bound is sharp exactly on the
+  pattern-generator case. M3.7a's stable FAS has landed and DID NOT NARROW THIS,
+  which is worth stating plainly because the sentence here used to predict it
+  would. A region is computed BEFORE the run it bounds, so the only reversed set
+  available to it is the previous one and whether the patch changed it is not
+  yet knowable; what M3.7a bought is that comparing two sets would now MEAN
+  something. Making the comparison needs the region computed after a
+  cycle-breaking pass rather than before one, which is M3.7b's trigger and
+  M3.9's budget. The entry's reading of WHY the cold set moved was M2.2's greedy pass
+  and is corrected in M3.7a's own entry.
   THE WINDOW IS 1, THE ARGUMENT IS THE SWEEP, AND THE MEASUREMENT SAYS NO WINDOW
   BUYS SOUNDNESS. A window of 0 takes only the touched ranks; the crossing sweep
   re-barycenters the rank above and the rank below whatever changed, which is
@@ -3131,11 +3138,11 @@ it.
   newcomer at its new rank, inserted at a barycenter-derived slot among the
   nodes there that kept theirs. Nodes that kept their rank keep their relative
   order, and the seed constrains relative order only, never absolute index.
-  This has to hold from the first line of the task rather than from M3.7,
+  This has to hold from the first line of the task rather than from M3.7b,
   because at this point the ranker is still M3.2's cold full rank and a cold
   rank of a changed graph reorders freely: one added edge shifts the rank of a
   whole subtree under longest-path ranking. That is also the answer to whether
-  M3.7 should come first. It should not. M3.7 REDUCES rank churn, so building
+  M3.7b should come first. It should not. M3.7b REDUCES rank churn, so building
   the warm start against the noisy cold-rank baseline is the more demanding
   test, and a warm start that survives it survives incremental ranking
   trivially.
@@ -3147,7 +3154,7 @@ it.
   pass it, which is how a milestone quietly redefines its own target. If the
   warm start costs crossings, that number is the price of the feature and
   belongs in M3.10's docs page.
-  Prior art worth an hour before starting this, M3.7 and M3.8: North and
+  Prior art worth an hour before starting this, M3.7b and M3.8: North and
   Woodhull's DynaDAG (online hierarchical drawing) and Frishman and Tal's
   online dynamic graph drawing solve this milestone's problem directly,
   including order warm start under rank churn and stable coordinates via a
@@ -3239,43 +3246,128 @@ it.
   with M3.9, where the async path is what a frame budget is measured on. Until
   it lands `relayoutAsync` over a worker is the unstable path and says so in its
   own docstring, on the docs page and here.
-  WHAT M3.7 INHERITS. The constraint is keyed by node identity and reads
+  WHAT M3.7b INHERITS. The constraint is keyed by node identity and reads
   `previous.layers` only, so incremental ranking changes nothing about it: a
   node whose rank the new ranker keeps is in the same cohort it was in, and one
-  whose rank moves is a newcomer either way. What M3.7 changes is HOW OFTEN a
+  whose rank moves is a newcomer either way. What M3.7b changes is HOW OFTEN a
   node is a newcomer, which is the entry's own argument for building the warm
   start against the noisy cold rank first, and it should expect the four zeros
   above to stay zero rather than to improve. IT ALSO INHERITS A NEW REASON TO
   CARE ABOUT THE REVERSED-EDGE SET: a flipped edge changes which layer a chain's
   dummies sit in, every dummy is a node this constraint has never seen, and a
   cohort that lost half its members to renamed dummies constrains half as much.
+  M3.7a ANSWERED THAT ONE RATHER THAN LEAVING IT TO M3.7b: the reversed set now
+  holds across a patch that changed no cycle, so the flips that renamed those
+  dummies do not happen. What is left of it is the flips a real cycle change
+  causes, which are a fact about the edit.
   M3.8 inherits the coordinate half the corpus test above deliberately does not
   assert.
-- [ ] **M3.7** (`@dagr/layout`) Incremental ranking: keep the previous ranks
+- [x] **M3.7a** (`@dagr/layout`) Stable feedback arc set: seed the cycle breaker
+  with the previous run's reversed set, so that a changed reversed set means
+  changed cycle structure and not a changed solve. This is the half of the
+  original M3.7 that its own last sentence named as the one to ship first if the
+  run needed splitting, and the run needed splitting: it is the half the bail
+  trigger is blocked on, and M3.7b is the ranking half.
+  THE ENTRY'S PREMISE WAS STALE AND THE CORRECTION IS THE FIRST THING THIS TASK
+  FOUND. It argued from M2.2's greedy Eades-Lin-Smyth pass, whose order is built
+  vertex by vertex out of degree buckets, so one changed degree rewrites the
+  sequence. M2.2c replaced that pass with a least-squares vertex order and never
+  revisited this entry. The least-squares order is far steadier: a leaf added to
+  either bench corpus moves nothing at all, and the greedy failure mode the entry
+  describes cannot happen because there are no buckets. GREP THE TREE FOR A TASK
+  YOU ARE ABOUT TO START, not only for one you are about to finish; three
+  documents were still describing the pass this repo stopped running at M2.2c,
+  and two of them are fixed in this task's diff.
+  THE INSTABILITY IS REAL ANYWAY AND IT IS A DIFFERENT SHAPE. Every height is
+  the balance of every edge in its weakly connected component, so a patch
+  anywhere moves every height a little, and an edge whose two heights sit close
+  together changes sides. Measured over the dense cyclic population of
+  `test/random.ts`: ONE ADDED LEAF, which can change no cycle, moves the cold set
+  on 30 of 132 graphs. So the trigger would have fired on a quarter of the
+  patches that needed nothing, which is what the entry predicted, for a reason it
+  did not predict. The smallest case is three nodes and it is in the suite: the
+  two arcs of a two-cycle are structurally interchangeable, so which one is
+  reversed is settled by the last bit of an iterative solve, and a leaf hung
+  elsewhere swaps them.
+  THE RULE. `feedbackArcSet(graph, previous)` holds a previously reversed edge
+  reversed WHILE IT STILL LIES ON A CYCLE, which for an edge is exactly its
+  endpoints still sharing a strongly connected component of the input graph, and
+  is what the entry asked for in a form that costs one components pass rather
+  than a cycle enumeration. An entry naming a deleted edge is ignored, a self
+  loop is never held, and a reversal whose cycle is gone is released rather than
+  left drawing an edge backwards for nothing. RETENTION IS PER ORDERED PAIR AND
+  NOT PER EDGE, which is where the reversal decision is already taken, AND IT IS
+  A STABILITY RULE RATHER THAN A CORRECTNESS ONE, which is a correction to what
+  this task first wrote down. Per edge, a second copy of a reversed edge stays as
+  authored, the seeded view gets a two-cycle, and the seeded run resolves it: the
+  first version of this entry said that was a bug and it is not, because the
+  resolution is per pair and leaves a legal answer either way. What it costs is
+  the previous decision, measured over 1,299 random cyclic digraphs each given
+  one such copy: the reversal survives 1,237 times per pair against 1,129 per
+  edge. THE REASON IT NEEDED MEASURING IS THAT THE SYMMETRY ARGUMENT WAS WRONG,
+  and a rule argued from symmetry alone would have shipped with a false reason
+  attached to a right decision.
+  THE ONE LINE IT ALL RESTS ON is which components the seeded run is scoped to,
+  and it is THE SEEDED VIEW'S rather than the input's. An already-acyclic seed
+  has nothing but singleton components in it, so no arc is in scope, nothing is
+  reversed, and the answer is the seed. That is what makes an unchanged graph a
+  FIXED POINT and an edit closing no new cycle exact. Scoping by the input's
+  components looks equivalent and is not, because the least-squares order is not
+  a topological order of the seeded view: about four random cyclic digraphs in a
+  thousand have an intra-component arc running backwards in an acyclic seeded
+  view, and the input-scoped version reverses one for a cycle that is not there.
+  A 400-graph population missed that entirely, the witness is written out in
+  `test/layout.cycles.stable.test.ts`, and the property test around it draws
+  3,000. WHEN A RARE CASE IS WHAT DECIDES A DESIGN, PIN THE CASE AND NOT ONLY THE
+  PROPERTY.
+  WHAT THE SEED IS NOT ALLOWED TO DO IS MAKE THE ANSWER WRONG, and that is what
+  lets `PreviousLayout` be plumbed to it without validation at the seam. The
+  result is a legal feedback arc set for any set of ids whatever, including one
+  from a different graph and one naming every edge, and the suite hands it all
+  three. Acyclicity is the shipped proof applied to the seeded view. The
+  component rule survives because the seed flips only intra-component arcs, so
+  every component of the seeded view sits inside one component of the input. The
+  `m/2` bound is the one property that is GUARDED RATHER THAN INHERITED: a seeded
+  answer is at most half the arcs plus whatever it was handed, and holding all
+  ten arcs of a ten-cycle would cost nine, so the answer is size-checked and a
+  seeded answer over the bound is discarded for a cold one. THAT GUARD HAS AN
+  OBSERVABLE COST AND IT IS PINNED RATHER THAN ASSUMED RARE: it fires on 62 of
+  those same 1,299 cases, every one of them a graph small enough for two arcs to
+  be more than half of it, and what it refuses there is a perfectly good answer
+  that the bound counts in edges where the decision is about pairs. Kept anyway,
+  because an unconditional bound is what rules out the degenerate answer, and
+  because 62 cases of a two-node graph is not a reason to weaken a guarantee the
+  whole module is claimed on.
+  WHAT IT IS NOT is a speed-up, and this is measured rather than waved at. The
+  same solve runs either way and the seed then costs one more components pass,
+  two more walks of the edges and four array copies: 1.22x to 1.38x a cold break
+  on the two bench corpora. THE COLD PATH IS UNTOUCHED AND WAS MEASURED SO, at
+  0.97x to 1.05x over four interleaved runs, which is what settled a gate that
+  named `rank > 1k` in its same-entry line. Both rank stages read the channel, because a
+  warm start living in one ranker and not the other is the shape of bug M2.4c
+  already fixed once for the splitter. On a DAG the set is empty and stays empty,
+  so none of this touches the pattern-generator case, exactly as the
+  entry said to scope it. Merged in PR #53.
+- [ ] **M3.7b** (`@dagr/layout`) Incremental ranking: keep the previous ranks
   where the patch cannot have changed them, recompute the affected band, and
   fall back to a full rank when the patch changes the cycle structure (any
-  change to the reversed-edge set M2.2 produces) or would shift more than an
-  agreed fraction of the graph. Tests: incremental ranks equal a cold rank of
-  the same final graph on the cases where they must, and the fallback trigger
-  is exercised by a test rather than assumed to fire.
-  The reversed-edge trigger only means something if the reversed set is itself
-  stable, and today nothing makes it so. M2.2's greedy Eades-Lin-Smyth FAS is
-  order-dependent by construction: its sequence depends on degree-bucket
-  membership and on iteration order within a bucket, so a patch changing one
-  node's degree can move it between buckets, change the whole sequence, and
-  produce a DIFFERENT feedback arc set of the same size for a graph whose cycle
-  structure did not change. Edges flip, ranks flip under them, and M3.6's warm
-  start is meaningless across that region. So this task also makes the cycle
-  breaker incremental: re-run it seeded with the previous reversed set, keeping
-  a previously reversed edge reversed while it still lies on a cycle and
-  reversing newly added edges only as new cycles require. Then a changed
-  reversed set genuinely means changed cycle structure and the bail trigger
-  measures what it claims to, instead of observing the symptom of a non-stable
-  FAS and firing on patches that needed nothing. Scope it honestly: on a DAG
-  the reversed set is empty and stays empty, so none of this touches the
-  pattern-generator case, and it bites cyclic input only. That is a reason to
-  plan it rather than to panic, and if the run needs splitting, the
-  stable FAS is the half that unblocks the trigger.
+  change to the reversed-edge set the rank stage produces) or would shift more
+  than an agreed fraction of the graph. Tests: incremental ranks equal a cold
+  rank of the same final graph on the cases where they must, and the fallback
+  trigger is exercised by a test rather than assumed to fire.
+  THE TRIGGER IS UNBLOCKED AS OF M3.7a and that is the whole reason it shipped
+  first: a changed reversed set now means changed cycle structure. Read M3.7a's
+  entry before writing the trigger, because it also says what a changed set does
+  NOT mean. A patch that closes a new cycle changes the set legitimately, and so
+  does one that opens a cycle by removing an edge, so the trigger is a signal
+  about the graph rather than a bug report.
+  WHAT M3.7a LEAVES FOR THIS TASK. The ranks themselves: a relayout still runs a
+  full longest-path sweep, and `previous.ranks` is on the channel unread.
+  `networkSimplexRank`'s `initialRanks` is an OPTION bound at construction rather
+  than a per-run hint, so an engine cannot refresh it, and giving the ranking a
+  per-run warm start is this task's to do for both stages. Note the two are not
+  the same problem: longest path is a sweep with one answer, and the simplex is
+  a degenerate LP whose warm start chooses between optima of equal cost.
   Decide here when to bail. Bail too eagerly and the fast path is rare enough
   that the feature is a lie; bail too reluctantly and a relayout costs more
   than a cold run, because it pays for the analysis and then does the work

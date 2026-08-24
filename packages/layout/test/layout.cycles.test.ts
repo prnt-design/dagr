@@ -1,82 +1,10 @@
 import { Graph } from '@dagr/graph';
-import type { EdgeId, NodeId } from '@dagr/graph';
+import type { EdgeId } from '@dagr/graph';
 import { describe, expect, it } from 'vitest';
 import { feedbackArcSet } from '../src/cycles.js';
+import { acyclicView, build, referenceTopologicalOrder } from './cycles-check.js';
 import { mulberry32, randomDigraph } from './random.js';
 
-/** A graph from a script of `addNode`/`addEdge` calls, for the readable cases. */
-function build(nodes: readonly string[], edges: readonly (readonly [string, string, string])[]) {
-  const graph = new Graph();
-  for (const id of nodes) graph.addNode(id);
-  for (const [source, target, id] of edges) graph.addEdge(source, target, id);
-  return graph;
-}
-
-/** One arc of the digraph a reversal decision leaves behind. */
-type Arc = readonly [NodeId, NodeId];
-
-/**
- * The digraph the ranker will actually rank: every edge, pointing the way the
- * feedback set says, with self loops dropped because they constrain nothing and
- * are never reversed.
- */
-function acyclicView(graph: Graph, reversed: ReadonlySet<EdgeId>): Arc[] {
-  const arcs: Arc[] = [];
-  for (const edge of graph.edges()) {
-    if (edge.source === edge.target) continue;
-    arcs.push(reversed.has(edge.id) ? [edge.target, edge.source] : [edge.source, edge.target]);
-  }
-  return arcs;
-}
-
-/**
- * A topological order of a digraph, or `undefined` if it has a cycle.
- *
- * Written from scratch here, and deliberately by a different method than the
- * production code: this is a three-colour depth-first search that reports a
- * cycle when it meets a grey vertex, where `longestPathRankStage` uses a
- * Kahn-style sweep over in-degrees. A checker that shared an implementation
- * with the thing it checks would carry the same bug and turn this assertion
- * into a no-op, which is the failure this file exists to rule out.
- *
- * Iterative rather than recursive, so a long random chain cannot blow the stack
- * and be mistaken for a result.
- */
-function referenceTopologicalOrder(graph: Graph, arcs: readonly Arc[]): NodeId[] | undefined {
-  const successors = new Map<NodeId, NodeId[]>();
-  for (const node of graph.nodes()) successors.set(node.id, []);
-  for (const [from, to] of arcs) successors.get(from)?.push(to);
-
-  const state = new Map<NodeId, 'open' | 'done'>();
-  const finished: NodeId[] = [];
-  for (const root of graph.nodes()) {
-    if (state.has(root.id)) continue;
-    state.set(root.id, 'open');
-    const stack: { readonly id: NodeId; next: number }[] = [{ id: root.id, next: 0 }];
-    while (stack.length > 0) {
-      const frame = stack[stack.length - 1];
-      if (frame === undefined) break;
-      const outgoing = successors.get(frame.id) ?? [];
-      if (frame.next >= outgoing.length) {
-        state.set(frame.id, 'done');
-        finished.push(frame.id);
-        stack.pop();
-        continue;
-      }
-      const successor = outgoing[frame.next];
-      frame.next += 1;
-      if (successor === undefined) continue;
-      const seen = state.get(successor);
-      // An arc back to a vertex still on the stack closes a cycle.
-      if (seen === 'open') return undefined;
-      if (seen === undefined) {
-        state.set(successor, 'open');
-        stack.push({ id: successor, next: 0 });
-      }
-    }
-  }
-  return finished.reverse();
-}
 
 describe('feedbackArcSet', () => {
   it('reverses nothing when the graph is already acyclic', () => {

@@ -14,6 +14,57 @@ of doc prose.
 
 ### Changed
 
+- **Both rank stages now seed the cycle breaker from the previous run, so a
+  relayout stops re-deciding which edges point backwards.** Behaviour changed,
+  types did not. (M3.7a)
+
+  **Why a cold answer moves at all.** M2.2c replaced the greedy feedback arc set
+  with a least-squares one, which is far steadier than the pass the M3.7 roadmap
+  entry was written against: a leaf added to either bench corpus moves nothing.
+  Steadier is not stable. Every height is the balance of every edge in its
+  connected component, so a patch anywhere moves every height a little and an
+  edge whose two heights sit close together changes sides. Measured over the
+  dense cyclic population of `test/random.ts`, ONE ADDED LEAF, which can change
+  no cycle, moves the cold set on 30 of 132 graphs. The smallest case is three
+  nodes: the two arcs of a two-cycle are structurally interchangeable, so which
+  one is reversed is the last bit of an iterative solve, and a leaf hung
+  somewhere else swaps them.
+
+  **The rule.** `feedbackArcSet(graph, previous)` holds a previously reversed
+  edge reversed while it still lies on a cycle, which for an edge is exactly its
+  endpoints still sharing a strongly connected component of the input graph. An
+  entry naming an edge the graph no longer holds is ignored, a self loop is
+  never held, and a reversal whose cycle is gone is released. Retention is taken
+  per ordered PAIR rather than per edge, which is where the reversal decision is
+  already taken, and it is a STABILITY rule rather than a correctness one: per
+  edge, a second copy of a reversed edge stays as authored, the seeded view gets
+  a two-cycle and the seeded run may resolve it by turning the held copy back
+  round. Over 1,299 random cyclic digraphs each given one such copy the reversal
+  survives 1,237 times per pair against 1,129 per edge, and both readings leave
+  a legal feedback arc set.
+
+  **The one line it rests on.** The seeded run is scoped to the components of
+  the SEEDED VIEW and not of the input. An already-acyclic seed has nothing but
+  singleton components in it, so nothing is in scope, nothing is reversed, and
+  the answer is the seed: an unchanged graph is a FIXED POINT and an edit that
+  closes no new cycle returns the previous set exactly. Scoping by the input's
+  components instead looks equivalent and is not, and the witness is in
+  `test/layout.cycles.stable.test.ts`.
+
+  **What it does not change.** It is not a speed-up. The same solve runs either
+  way and the seed then costs one more components pass, two more walks of the
+  edges and four array copies: 1.22x to 1.38x a cold break, measured interleaved
+  on both bench corpora. The COLD path is untouched and measured so, at 0.97x to
+  1.05x its previous cost over four interleaved runs, and the gate's rank
+  entries take no `previous` at all, so the warm path is not on any benched
+  path. On a DAG the set is empty and stays empty, so none of this touches
+  acyclic input. And a seed cannot make the answer wrong: the result is a legal
+  feedback arc set for any set of ids whatever, the `m/2` bound is size-checked
+  rather than inherited, and a seeded answer over the bound is discarded for a
+  cold one. That guard has an observable cost in stability, measured at 62 of
+  those 1,299 cases, all of them graphs small enough for two arcs to be more
+  than half of the whole.
+
 - **`influenceRegion` and the engine's patch check now name
   `update-node-parent` explicitly.** Behaviour changed on one of them, types did
   not. (M5.5)
