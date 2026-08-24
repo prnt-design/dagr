@@ -151,6 +151,59 @@ findings addressed or logged, docs land with the feature.
   five idle runs with no code changing, which a recapture re-centres and cannot
   narrow. That is the standing argument for the second control workload
   `bench/README.md` keeps naming, and `rank > 1k` is where to start.
+  **THE GATE NOW CHECKS THE MACHINE IT IS COMPARING AGAINST (2026-08-18),
+  because the box changed CPU under it and nobody could see that from the
+  numbers.** `bench/baseline.json` names an AMD EPYC-Rome VM, captured
+  2026-08-16. `os.cpus()[0].model` on the dispatch box reads
+  `Intel Xeon Processor (Skylake, IBRS, no TSX)` two days later, with the same
+  platform, the same arch, the same eight cores and the same `node v22.23.2`.
+  The harness had recorded that field on both sides since it was written and
+  never once compared them, and `machineInfo`'s own docstring said the machine
+  is "never gated against, because the gate reads control-normalised ratios and
+  nothing else". A ratio corrects for a UNIFORMLY slower machine. It does not
+  correct for a machine that is slower at some things, and this one is: on
+  unmodified `main`, benched deliberately rather than in passing, the gate
+  failed 2 of 2 at a 1-minute load of 0.54 under a 5-minute 0.40, the quietest
+  start on record here. SAY WHICH RUN, BECAUSE THE TWO SAY DIFFERENT THINGS.
+  Run 1 failed exactly six entries, `2.5k outEdges`, `descendants, 10k`, both
+  `pipeline` entries and both `rank` entries, at +27.1% to +44.3%, while every
+  allocation-heavy entry passed: `2k updateNodeAttrs` at +0.0%, +1.7% and -6.2%,
+  and both `isAcyclic` entries inside 0.3%. THAT RUN IS THE DIAGNOSIS, because
+  it separates the two families cleanly: memory-latency-bound work moves and
+  allocation-heavy work does not, which is the control drift `bench/README.md`
+  already named, arriving as a step change rather than as noise. Run 2 was the
+  louder of the two and failed eleven, adding the three `updateNodeAttrs`
+  entries, `build > 1k` at +61.9% and `topologicalOrder`, and taking
+  `descendants, 10k` to +69.8%. A loud box adds names to the list, which is the
+  same reading M0.2's `diffAttrs` verification recorded. The six that failed
+  BOTH runs are the six from run 1. The morning run of the same day had already
+  failed `main` 2 of 2 at 0.58, so this is twice.
+  `platform`, `arch`, `cpu`, `cores` and `node` are the identity, because each
+  changes the shape of the work rather than only its speed. `ci` and
+  `loadAverageAtCapture` are not, because they describe who ran it and how busy
+  the box was, and gating on them would block a merge over a neighbour's build.
+  A CPU model compares with its whitespace collapsed, since `os.cpus()` pads
+  some models and a merge blocked by two spaces teaches the next reader to
+  distrust the check. A report with no machine at all is a NOTE and not an
+  error: the field is optional in schema 1, so its absence is not evidence of a
+  mismatch.
+  IT IS A HARNESS ERROR RATHER THAN A REGRESSION, and that placement is the
+  point rather than a detail. A different machine reproduces on the next run by
+  construction, so `bench:ci` stops after ONE measurement instead of three, the
+  way it already stops on a stale report. It matters more here than anywhere
+  else in the harness, because a mismatched baseline moves whole families of
+  entries at once and therefore fails the SAME entries every run, which is
+  exactly what this gate calls its strongest evidence for a real regression.
+  The table still prints: rejecting the comparison is not a reason to hide the
+  numbers a human needs to decide on a recapture. THERE IS NO OVERRIDE FLAG, by
+  decision. It would be the silent no-op this harness exists to prevent, and it
+  would be reached for on exactly the runs whose numbers mean least.
+  WHAT IT DOES NOT DO IS MAKE A GATE GREEN. The recapture is the maintainer's
+  call, it is queued rather than taken, and until it happens no branch passes
+  `bench:ci` on this box. It is also NOT the second control workload: the
+  30.6% between-run spread on `build > 1k` was measured across five idle runs
+  on ONE machine, which a machine check cannot see and a recapture cannot
+  narrow.
 
 ## M1: Graph model (`@dagr/graph`)
 
@@ -4304,7 +4357,8 @@ it settled rather than restating the argument.
   assumed (`style.transform` round-trips verbatim, `pointer-events` survives
   `setProperty`, `getComputedStyle().position` resolves an inline value and
   reports `static` without one, `remove()` detaches), and because `@dagr/react`
-  will want the same implementation at M5.1. What stays untested is that a
+  will want the same implementation at M5.1. IT DID: M5.1 selects jsdom the same
+  way, per file through the docblock, for all three of its DOM suites. What stays untested is that a
   browser composes the two transforms the way the algebra says and that the
   float32 argument above is quantitatively right; both are listed with the rest
   of the package's untested surface on `docs/docs/render.md`.
@@ -4513,7 +4567,7 @@ it settled rather than restating the argument.
   relative-color-syntax `calc()` channels (`postcss-calc` cannot lex `l - 0.05`).
   Verified against the built output rather than assumed: the expressions
   survive minification verbatim, so the warnings are noise, not damage.
-- [ ] **M5.1** `@dagr/react`: `<DagrCanvas>` + `useDagr` hook, controlled
+- [x] **M5.1** `@dagr/react`: `<DagrCanvas>` + `useDagr` hook, controlled
   graph prop, mocked-renderer component tests.
   ALSO LANDS `<Html>`, the React sugar over M4.11's overlay, and the reason it
   waits for this task rather than shipping with M4.11 is that it has to FIND
@@ -4524,6 +4578,99 @@ it settled rather than restating the argument.
   with the shape when this task arrives with the requirements that should have
   decided it. The maintainer was asked on 2026-08-14 whether to reverse that
   and bootstrap the package early; until they do, `@dagr/react` stays empty.
+  THE MAINTAINER NEVER ANSWERED AND THE QUESTION EXPIRED WITH THIS TASK: the
+  package is no longer empty, so there is nothing left to bootstrap early. The
+  ordering argument above held up exactly as written, and `canvas-context.ts`
+  is the context it predicted, carrying the one field the prediction did not:
+  the LAYOUT, without which `<Html node="a">` cannot know where node `a` is.
+  A context of `{ renderer, overlay }` would have been smaller and would have
+  forced every consumer to run the layout a second time to place a label, which
+  is two answers that can disagree while an edit is in flight.
+  CONTROLLED MEANS WATCHED, WHICH IS THE ONE DECISION EVERYTHING ELSE HANGS
+  OFF. `Graph` is mutable, so a graph prop compared by identity would mean
+  `graph.addNode(...)` changed nothing on screen until the caller also replaced
+  the object. `Graph.subscribe` is already `useSyncExternalStore`'s subscribe
+  to the character (a listener in, an unsubscribe out), so the hook watches the
+  graph and an edit reaches the canvas whichever way it arrives. THE SNAPSHOT
+  IS A COUNTER THIS PACKAGE KEEPS, because `Graph` exposes no O(1) mutation
+  counter, and that leaves ONE window: React subscribes in an effect, effects
+  run child first, so a CHILD's mount effect that edits the graph runs before
+  the subscription exists and that edit is not drawn until the next one. Both
+  ways of closing it from this side were measured against and rejected, and the
+  reasons are opposite in kind. Bumping the counter inside `subscribe` makes
+  the post-subscribe re-check ALWAYS differ, so every mount lays out twice.
+  Subscribing during the first render, through a registry keyed on the graph,
+  can never unsubscribe (the listener has to outlive the component to be there
+  before the next one renders), so a graph that has ever been rendered builds a
+  `Patch` on every mutation forever, which is precisely the cost `@dagr/graph`
+  documents itself as not paying for a graph nobody subscribed to. QUEUED FOR
+  `@dagr/graph`: an O(1) monotonic revision on the graph itself is a true
+  snapshot and closes the window with no bookkeeping here at all.
+  THE CONFIG IS COMPARED BY VALUE AND `nodeSize` CANNOT BE. `LayoutConfig` is
+  the one prop a caller writes as an object literal in their JSX, so identity
+  comparison would relayout the whole graph on every render of the surrounding
+  application. The comparison names its five fields one at a time, because
+  `defaultNodeSize` is an object literal too and a shallow compare gets it
+  wrong. Naming fields means a field added upstream is silently not compared,
+  so the file carries a type-level assertion that fails to compile the day
+  `LayoutConfig` grows one. `nodeSize` is compared by identity because two
+  functions that agree on every node are indistinguishable without calling them
+  on every node, which is the work the comparison exists to avoid.
+  A LAYOUT THAT FAILS IS REPORTED BY THE HOOK AND THROWN BY THE COMPONENT, and
+  the split is deliberate. A graph a user is editing passes through states the
+  layout refuses, so a hook that threw would unmount the subtree to the nearest
+  boundary on the keystroke that made the graph momentarily invalid. It does
+  not hold the last good result either: a stale picture presented as the
+  current one is the failure mode hardest to notice. `<DagrCanvas>` throws it
+  during render so a boundary catches it, unless an `onError` takes it, because
+  the remaining option is an empty box and an empty box is indistinguishable
+  from an empty graph.
+  THE CAMERA IS FITTED ONCE. The first frame with both a layout and a viewport
+  frames the graph and nothing refits after. Refitting per edit would be a
+  camera that jumps whenever the graph changes, which is the instability all of
+  M3 exists to keep out of the layout, reintroduced one level up where no
+  stability metric would ever see it.
+  `<Html>` INVERTS THE OVERLAY'S LIFECYCLE RATHER THAN WRAPPING IT. The
+  component owns one host element for its whole life, `create` hands the
+  overlay that same element every time, `release` does nothing, and the
+  children reach it through a portal, so the overlay attaches and detaches an
+  element whose contents React has been maintaining all along. THE COST IS THE
+  CAP: the overlay's `create` is lazy so that 2,800 nodes build DOM for the few
+  dozen on screen, and a portal is not lazy, so a culled `<Html>` still has its
+  subtree mounted. THIS COMPONENT IS FOR THE TENS AND `createRichNodes` IS FOR
+  THE THOUSANDS, which is now written on both. An entry is registered once and
+  MOVED afterwards, never re-registered, because a re-register detaches and
+  reattaches the element on every edit.
+  THE SCENE CONVERSION IS EXPORTED, NOT HIDDEN. `@dagr/render` refuses to name
+  a `LayoutResult` on the argument that the y flip belongs to whoever owns the
+  layout, and this is the first package that owns both, so `scene.ts` is the
+  flip and it is public: a caller driving the renderer directly wants the same
+  three functions rather than writing it a fourth time. THE FLIP IS THREE
+  SEPARATE EXPRESSIONS (nodes, route points, bounds) AND FLIPPING TWO OF THREE
+  IS GREEN ON EVERY UNIT TEST OF THE TWO, so the suite runs a real layout
+  through all three and asserts they agree.
+  DEPENDENCY SHAPE, ON `@dagr/layout`'s OWN ARGUMENT: `@dagr/graph` and
+  `@dagr/render` are PEER dependencies plus devDependencies, because both put a
+  class with `#private` fields on this package's surface (`Graph`, and
+  `Camera2D` through `Renderer.camera`) and a nominal type has to be the same
+  copy. `@dagr/layout` is a plain dependency: everything it puts on the surface
+  is a structural interface, and a consumer who wants a canvas should not have
+  to install the layout engine to get one. M5.4's pack-and-check list is where
+  that gets verified against a real tarball.
+  THE TEST HARNESS IS FORTY LINES OF `react-dom/client` AND `act`, WITH NO
+  TESTING LIBRARY, and three non-test helpers beside it: `mount.tsx`,
+  `frames.ts` (a hand-driven `requestAnimationFrame`, so "has it drawn yet" is
+  an event the test causes rather than a race against jsdom's timer) and
+  `resize.ts` (jsdom has no `ResizeObserver` and lays every element out at zero
+  by zero, so both halves of "the canvas got bigger" are supplied). The one
+  class component in the package is the error boundary in `mount.tsx`: a root's
+  `onUncaughtError` is not a substitute, because React reports through it AND
+  rethrows out of the `act` that caused the render.
+  WHAT THE MOCK CANNOT SEE IS ASSERTED DIRECTLY. A faked renderer cannot refuse
+  a static overlay parent or a zero viewport, so the two places this package
+  has to hold up its end of those contracts are pinned by their own tests: the
+  container carries `position: relative`, and a container measuring zero by
+  zero is never passed to `resize`.
 - [ ] **M5.2** Interaction hooks: `useSelection`, hover and drag wiring to
   GPU picking. Component tests.
 - [ ] **M5.3** Demo app: animated living demo (grow/prune/relayout
@@ -4781,7 +4928,7 @@ assumptions become the API and nobody notices until the second arrives. Two
 consumers with genuinely different shapes is the cheapest available test of
 whether the generalisation holds.
 
-- [ ] **M6.1** Node spec adapter: the interface a consumer implements to
+- [x] **M6.1** Node spec adapter: the interface a consumer implements to
   describe its own node kinds (ports, arity, config shape), and the registry
   that resolves a node to a spec. Dagr defines the interface and nothing
   behind it.
@@ -4795,6 +4942,122 @@ whether the generalisation holds.
   peerDependencies plus devDependencies, for the same `#private` nominal-typing
   reason M5.4 records for `@dagr/layout`. Two copies of `@dagr/graph` in a
   consumer's tree are not interchangeable.
+  SHIPPED as `packages/vdsl`, a new package: `src/types.ts` (`PortSpec`,
+  `NodeSpec`, `NodeSpecInit`, `ConfigCheck`, `RegistryOptions`, `KindNodeInit`,
+  `NodeRegistry`), `src/registry.ts` (`DEFAULT_KIND_KEY`, `defineRegistry` and
+  the `Registry` class behind it), `src/errors.ts` (`DagrVdslError` and three
+  members), 50 tests across four files, a `CHANGELOG.md`, and
+  `docs/docs/vdsl.md` at sidebar position 7. Two prose edits outside the
+  package, both of them a document that said this package does not exist: the
+  Status section of `docs/docs/visual-languages.md`, and the `@dagr/vdsl` row
+  of README.md's package table, which read "Planned (v0.2)". The README row is
+  the tree pass's find, and it is the same amend-your-own-row rule PR #57 and
+  PR #59 are each following on their own package's row.
+  TAKEN THREE MILESTONES OUT OF ORDER, AND THE REASON IS THE PILE RATHER THAN
+  THE TASK. Eight pull requests were open on one blocker when this run started,
+  main had not moved since 2026-08-18, and every unchecked task in milestone
+  order reads a file some open branch is rewriting: M3.7 IS #53, M3.8 stacks on
+  it, M4.7 drives M4.6's springs and those are on #57, M5.3 needs both #59 and
+  #57. This is the one unchecked task whose dependencies are entirely merged on
+  main and whose files NO open PR touches, so it merges in any order with the
+  eight and imposes a conflict on none of them. That is a property of the
+  pile's shape and not an argument that M6 is ready, and the milestone preamble
+  still says the breakdown is finalised when M5 completes.
+  THE PACKAGING NOTE ABOVE IS RIGHT AND ITS REASON IS NOT TRUE YET. The
+  `#private` nominal-typing argument is about `Graph`, and M6.1 does not put
+  `Graph` on its surface: it takes `Node<A>` and returns `NodeInit<A>`, both
+  interfaces, both structurally typed, both interchangeable between two copies
+  of `@dagr/graph`. The argument becomes load-bearing at M6.2, whose own entry
+  names `graph.canReach` and therefore puts a `Graph` in a parameter position.
+  The peer is declared NOW anyway, because the alternative is changing a
+  dependency's kind between two 0.x tasks for a reason nobody reading the diff
+  would recognise. Every import in this package is `import type`, so with
+  `verbatimModuleSyntax` the built JavaScript imports `@dagr/graph` not at all.
+  `@dagr/react` AND `react` ARE NOT DECLARED, AND THAT IS THE SAME RULE POINTED
+  THE OTHER WAY. Nothing here imports either, and M6.3 is the first task that
+  will. A peer dependency declared ahead of an import makes every consumer of a
+  headless registry install React to silence a warning about a dependency the
+  package does not use. M6.3 adds them, and the note above is where it will
+  look.
+  ARITY IS A CAP AND NOT A WORD. `PortSpec.maxEdges`, absent meaning unbounded.
+  The usual `'single' | 'multiple'` is the two useful values of a number, so a
+  number loses nothing, and a union declared here is a union every consumer's
+  exhaustive `switch` breaks on when a third case arrives, which is the hazard
+  M5.5's entry plans to document `PatchOp` as an open union to escape. Absent
+  rather than `Infinity` because `Infinity` does not survive `JSON.stringify`
+  and a spec a consumer cannot serialise is a spec they cannot ship a fixture
+  of. ENFORCEMENT IS M6.2's: a spec says what the rule is, and a proposed
+  connection is where the rule is met. What this task does is refuse a value
+  M6.2 could not act on, so the number M6.2 reads is a positive integer or
+  nothing.
+  VALIDATION IS AT DEFINE TIME. An empty kind, an empty port id, a port id
+  declared twice in one kind, and a `maxEdges` that is not a positive integer
+  all throw out of `defineRegistry`. A registry is built once from a literal,
+  usually at module scope, so a bad spec is a bug in the consumer's source
+  rather than in their data, and the run that finds it should be the one that
+  loads the module. The same port id in two DIFFERENT kinds is allowed and
+  tested: port ids are unique within a node and not across a graph, and two
+  kinds that could not share a port vocabulary would be a rule the graph model
+  does not have.
+  THE CAST IS ONE, AND IT IS INSIDE. The entry's own argument is that reading
+  `attrs.kind` erases the kind union, and reading it is still what has to
+  happen: the registry does it once, in `attrsOf`, widening
+  `Readonly<Partial<A>>` to an unknown-valued bag, which is the safe direction
+  because every value out of it is `unknown`. `nodeInit` holds the writing
+  mirror of it, putting one key into an `AttrsPatch<A>` under a runtime-chosen
+  name. TWO CASTS IN THE PACKAGE, one in each direction, and the reading one is
+  a helper rather than a cast per reader so a third reader cannot arrive
+  without the argument attached. The tree pass found the first draft had three:
+  the extra was `checkConfig` widening the bag a second time to hand it to the
+  consumer's own validator, and the entry claimed two while the code held
+  three.
+  `has` LOOKS IN A MAP RATHER THAN AT THE OBJECT. `'toString' in specs` is true
+  for every object literal a consumer writes, and a membership test that
+  answers yes for an inherited property name is a narrowing that lies: it hands
+  back `'toString'` typed as one of the consumer's kinds. Tested with
+  `'__proto__'` and `'toString'` directly, because the correct implementation
+  makes the case unreachable by construction and a guard nobody can trip is a
+  guard nobody can check.
+  TWO ERRORS FOR THREE FAILURES, ON PURPOSE. An absent kind attribute and one
+  holding a non-string both raise `NodeKindMissingError`, because the caller's
+  remedy is the same sentence in both cases and the difference is a detail of
+  what was there, which the error carries as `value` and names in its message.
+  `UnknownNodeKindError` is the genuinely different one: the node said
+  something legible and this registry does not hold it, so the error carries
+  the kinds that were declared, which is the list the message is for.
+  `nodeInit` IS THE SEAM, AND IT IS WHAT MAKES THE SPEC ACTIONABLE RATHER THAN
+  DECORATIVE. A spec that cannot produce a node is a spec nobody can use, and
+  the round trip (`graph.addNode(registry.nodeInit(k))` then
+  `registry.resolve(node)`) is asserted. Two things it refuses: the kind
+  attribute is written LAST so a caller's own `attrs` cannot mislabel the node
+  they are building, and ports are not takeable from the caller, because the
+  spec is what says which ports a kind has and a node that quietly gained one
+  would resolve to a spec that does not describe it. `A` is the caller's own
+  attribute type, inferred from the graph the init is handed to, so a typed
+  consumer's keys are checked; a consumer whose type does not declare the kind
+  key still gets it written, because `Graph` stores what it is given.
+  NO PER-KIND PAYLOAD ON A `NodeSpec`. No label, no colour, no category, no
+  `meta` slot. It is a real want and the shape it should take is decided by
+  what M6.3's callbacks actually need to read, and a `meta` typed per kind is a
+  second type parameter fighting the inference this entry asks for. Until a
+  consumer asks, `registry.kinds` is typed and exhaustive, so a
+  `Record<Kind, YourPayload>` of the consumer's own is checked for completeness
+  by the compiler at no cost to this package. This is `@dagr/graph` keeping
+  `traversal.ts` unexported and `@dagr/layout` publishing only `defaultStages`,
+  a third time.
+  WHAT M6.2 INHERITS. The port type token goes on `PortSpec` beside `maxEdges`,
+  and the compatibility predicate goes on `NodeSpecInit` beside `checkConfig`,
+  both additive. Connection validation reads `maxEdges` and gets a positive
+  integer or nothing. `Graph` arrives on the surface with `canReach`, at which
+  point the packaging note's stated reason starts being true. One thing M6.2
+  should not inherit by accident: `checkConfig` returns strings rather than a
+  structured issue type, and a connection validator returning something richer
+  would be two shapes for one job, so decide it there rather than drifting into
+  it.
+  `defineRegistry({})` IS ALLOWED AND INFERS `K` AS `never`, so every method
+  taking a kind is uncallable and `has` answers false for everything. Left
+  legal rather than refused, because it is what a consumer building kinds up
+  behind a flag writes first and the type system already says the whole story.
 - [ ] **M6.2** Port typing and connection validation: a type token per port,
   a compatibility predicate the consumer supplies, and validation of a
   proposed connection against it.

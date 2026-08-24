@@ -28,8 +28,8 @@ published package, and documents itself in
 | `@dagr/graph` | Typed directed graph model: patches, stable identity, zero deps | Identity, shape, adjacency, attributes, ports, patches, traversal, and serialization implemented |
 | `@dagr/layout` | Headless Sugiyama layout engine; incremental, animation-first | Pipeline, cycle breaking, ranking, and crossing reduction implemented |
 | `@dagr/render` | WebGPU renderer: SDF shapes, instancing, spring animation | Camera, SDF shapes, an HTML overlay, instancing and a real graph on screen implemented; edge ribbons and springs are next |
-| `@dagr/react` | `<DagrCanvas>` component and hooks | Planned |
-| `@dagr/vdsl` | Visual DSL toolkit: node spec adapter, typed ports, drag-to-connect | Planned (v0.2) |
+| `@dagr/react` | `<DagrCanvas>` component and hooks | The canvas, the `useDagr` hook, `<Html>` over the overlay, and the layout-to-scene conversion implemented; interaction and animation are next |
+| `@dagr/vdsl` | Visual DSL toolkit: node spec adapter, typed ports, drag-to-connect | The node spec adapter and its registry implemented; typed ports and connection validation are next |
 
 Nothing is published to npm yet.
 
@@ -61,7 +61,10 @@ so the gate lives here instead (see [bench/README.md](./bench/README.md)). A
 run too noisy to read is not a regression and is not a pass either, so
 `bench:check` exits 2 for it against 1 for a regression, and such a run counts
 towards neither of the two `bench:ci` needs. If a local `pnpm bench:check` exits
-2, the machine was too busy to measure, not your change.
+2, the machine was too busy to measure, not your change. Nor is it your change
+when it stops on `the baseline was captured on a different machine`: the gate
+compares the machine the baseline names against the one that ran, and refuses a
+comparison across two, which is a recapture rather than a regression.
 
 `bench:ci` measures more than once because one measurement stopped being
 evidence on a shared machine: two runs have to agree before the gate says
