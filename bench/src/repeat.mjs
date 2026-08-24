@@ -35,7 +35,8 @@
  * - `inconclusive`: too noisy to read. Neither a pass nor a fail, and it does
  *   not count towards either total.
  * - `error`: the harness rejected the run (stale reports, no baseline, a
- *   duplicate key, a malformed exemption). Not a measurement at all.
+ *   duplicate key, a malformed exemption, a baseline captured on a different
+ *   machine). Not a measurement at all.
  *
  * @typedef {'pass' | 'regressed' | 'inconclusive' | 'error'} RunOutcome
  */

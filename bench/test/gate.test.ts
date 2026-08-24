@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { GATE_DEFAULTS, compareReports } from '../src/gate.mjs';
-import type { BaselineReport, BenchReport } from '../src/gate.mjs';
+import type { BaselineReport, BenchReport, MachineInfo } from '../src/gate.mjs';
 
 /**
  * The gate is the only part of the harness with real logic, and it is the part
@@ -251,5 +251,120 @@ describe('the exemption path', () => {
     );
     expect(report.ok).toBe(false);
     expect(statusOf(report, 'a')).toBe('regressed');
+  });
+});
+
+describe('the machine the baseline names', () => {
+  /** The machine `bench/baseline.json` was captured on, as `machineInfo` records it. */
+  function machine(over: Partial<MachineInfo> = {}): MachineInfo {
+    return {
+      platform: 'linux',
+      arch: 'x64',
+      cpu: 'AMD EPYC-Rome Processor',
+      cores: 8,
+      node: 'v22.23.2',
+      ci: false,
+      loadAverageAtCapture: 1.3,
+      ...over,
+    };
+  }
+
+  /** Generic over the report, because both sides of a comparison record one. */
+  function on<T extends { machine?: MachineInfo }>(report: T, info: MachineInfo): T {
+    return { ...report, machine: info };
+  }
+
+  it('rejects a comparison against a baseline captured on a different CPU', () => {
+    // Measured, not supposed. The dispatch box was an AMD EPYC-Rome VM when
+    // PR #48 captured the baseline on 2026-08-16 and an Intel Xeon Skylake two
+    // days later, and unmodified `main` then failed its own gate twice at a
+    // 1-minute load of 0.54: six entries over +20%, concentrated in the
+    // memory-latency-bound ones the allocation-heavy control cannot normalise.
+    const report = compareReports(
+      on(baseline({ a: stat(4) }), machine()),
+      on(current({ a: stat(4) }), machine({ cpu: 'Intel Xeon Processor (Skylake, IBRS, no TSX)' })),
+    );
+    expect(report.ok).toBe(false);
+    expect(report.errors.join(' ')).toMatch(/different machine/i);
+    expect(report.errors.join(' ')).toMatch(/EPYC-Rome/);
+    expect(report.errors.join(' ')).toMatch(/Skylake/);
+  });
+
+  it('says which fields differ, all of them rather than the first', () => {
+    const report = compareReports(
+      on(baseline({ a: stat(4) }), machine()),
+      on(current({ a: stat(4) }), machine({ arch: 'arm64', cores: 10, node: 'v24.0.0' })),
+    );
+    const said = report.errors.join(' ');
+    for (const field of ['arch', 'cores', 'node']) expect(said).toMatch(new RegExp(field));
+    expect(said).not.toMatch(/cpu/);
+  });
+
+  it('is a harness error rather than a regression, so the gate stops measuring', () => {
+    // The distinction is the whole value of this check. A different machine
+    // reproduces on the next run by construction, so `bench:ci` must fail on
+    // the first measurement instead of spending three reproducing it and then
+    // reporting the same entries every time, which is its strongest evidence
+    // for a REAL regression. `summarise` reads anything in `errors` that way,
+    // which is why the message goes there and not into `notes`.
+    const report = compareReports(
+      on(baseline({ a: stat(4) }), machine()),
+      on(current({ a: stat(4) }), machine({ cpu: 'Intel Xeon Processor (Skylake, IBRS, no TSX)' })),
+    );
+    expect(report.errors).toHaveLength(1);
+    expect(report.measuredNothing).toBe(false);
+    expect(statusOf(report, 'a')).toBe('pass');
+  });
+
+  it('still prints what the entries did, because those numbers are the evidence', () => {
+    // Rejecting the comparison does not mean hiding it. A human deciding
+    // whether to recapture wants to see how far the entries moved and which
+    // ones, so the mismatch fails the run without suppressing the table.
+    const report = compareReports(
+      on(baseline({ a: stat(4), b: stat(4) }), machine()),
+      on(current({ a: stat(8), b: stat(4) }), machine({ cpu: 'Intel Xeon' })),
+    );
+    expect(statusOf(report, 'a')).toBe('regressed');
+    expect(statusOf(report, 'b')).toBe('pass');
+  });
+
+  it('passes the same machine through untouched', () => {
+    const report = compareReports(
+      on(baseline({ a: stat(4) }), machine()),
+      on(current({ a: stat(4) }), machine({ loadAverageAtCapture: 4.1 })),
+    );
+    expect(report.errors).toEqual([]);
+    expect(report.ok).toBe(true);
+  });
+
+  it('ignores the fields that describe conditions rather than identity', () => {
+    // `ci` says who started the run and `loadAverageAtCapture` says how busy
+    // the box was, and neither changes whether two numbers are comparable.
+    // Gating on them would block a merge over a neighbour's build.
+    const report = compareReports(
+      on(baseline({ a: stat(4) }), machine({ ci: false, loadAverageAtCapture: 0.2 })),
+      on(current({ a: stat(4) }), machine({ ci: true, loadAverageAtCapture: 7.9 })),
+    );
+    expect(report.errors).toEqual([]);
+  });
+
+  it('does not read cosmetic whitespace in a CPU model as a different machine', () => {
+    // `os.cpus()` pads some models to a fixed width, and a merge blocked by two
+    // spaces would teach the next reader to distrust the check.
+    const report = compareReports(
+      on(baseline({ a: stat(4) }), machine({ cpu: 'Intel Xeon  CPU @ 2.10GHz ' })),
+      on(current({ a: stat(4) }), machine({ cpu: 'Intel Xeon CPU @ 2.10GHz' })),
+    );
+    expect(report.errors).toEqual([]);
+  });
+
+  it('notes rather than fails when a report records no machine at all', () => {
+    // `machine` is optional in schema 1, and a hand-written baseline without it
+    // is not evidence of a mismatch. Saying so once beats either failing a run
+    // over a missing field or checking nothing without mentioning it.
+    const report = compareReports(baseline({ a: stat(4) }), on(current({ a: stat(4) }), machine()));
+    expect(report.errors).toEqual([]);
+    expect(report.notes.join(' ')).toMatch(/no machine/i);
+    expect(report.ok).toBe(true);
   });
 });

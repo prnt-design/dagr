@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mergeBaseline } from '../src/baseline.mjs';
+import { machineInfo, mergeBaseline } from '../src/baseline.mjs';
 import type { BaselineReport } from '../src/gate.mjs';
 
 const AT = '2026-07-27T00:00:00.000Z';
@@ -67,5 +67,25 @@ describe('recording a baseline', () => {
     // looks wrong, so a refactor of `machineInfo` that dropped it would make
     // that instruction a lie without failing anything else.
     expect(typeof merged.machine?.loadAverageAtCapture).toBe('number');
+  });
+
+  it('records the machine that ran, which is what clears a mismatch', () => {
+    // The gate refuses to compare a run against a baseline captured on another
+    // machine, and the message it prints tells the reader to recapture. This is
+    // the other end of that instruction: a capture adopts the CURRENT machine,
+    // so the next gate compares like with like. Without it the fix the error
+    // names would be untested, and the cost of finding that out by hand was two
+    // days of sessions reading a CPU change as a regression in their branch.
+    const merged = mergeBaseline(undefined, { a: stat(1) }, AT);
+    const now = machineInfo();
+    // The identity fields the gate compares, and only those.
+    // `loadAverageAtCapture` is sampled per call and would differ between these
+    // two by however busy the box got in between, which is a flake rather than
+    // a check.
+    expect(merged.machine?.platform).toBe(now.platform);
+    expect(merged.machine?.arch).toBe(now.arch);
+    expect(merged.machine?.cpu).toBe(now.cpu);
+    expect(merged.machine?.cores).toBe(now.cores);
+    expect(merged.machine?.node).toBe(now.node);
   });
 });
