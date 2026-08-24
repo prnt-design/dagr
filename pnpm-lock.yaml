@@ -203,6 +203,12 @@ importers:
         specifier: ^0.185.1
         version: 0.185.1
 
+  packages/vdsl:
+    devDependencies:
+      '@dagr/graph':
+        specifier: workspace:^
+        version: link:../graph
+
 packages:
 
   '@11ty/gray-matter@1.0.0':
