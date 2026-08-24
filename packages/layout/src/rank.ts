@@ -57,6 +57,16 @@ function at(values: { readonly [index: number]: number | undefined }, index: num
  * the simplex ranker starts from exactly the same view and the same ranking.
  * This stage is the two of them and a map back to the caller's ids.
  *
+ * ## The warm start
+ *
+ * The cycle breaker is handed `previous.reversedEdges` when the run has one,
+ * which is M3.7a. What that buys is not speed, since the breaker does the same
+ * work either way: it is that the set this stage records is then a fact about
+ * the graph's cycles rather than about where a numerical solve landed. See the
+ * warm start section of `cycles.ts` for the rule, the proof and what the seed
+ * is not allowed to do. Nothing else here is warm yet: the ranks themselves
+ * come from a full longest-path sweep on every run, which is M3.7b's to change.
+ *
  * ## Dummy chains
  *
  * An edge whose endpoints are more than one rank apart is then split into a
@@ -97,7 +107,7 @@ export const longestPathRankStage: RankStage = Object.freeze<RankStage>({
   name: 'longest-path-rank',
   run(input) {
     const { graph } = input;
-    const reversedEdges = feedbackArcSet(graph);
+    const reversedEdges = feedbackArcSet(graph, input.previous?.reversedEdges);
     const view = acyclicView(graph, reversedEdges);
     const rankOf = longestPathRanks(view);
 

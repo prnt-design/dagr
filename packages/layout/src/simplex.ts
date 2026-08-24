@@ -892,6 +892,16 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  * make it non-optimal either as long as the budget holds; all it can do is
  * choose between optima, which is the whole point.
  *
+ * THERE ARE TWO WARM STARTS HERE AND THEY ARRIVE BY DIFFERENT ROUTES, which is
+ * worth knowing before adding a third. `initialRanks` is an OPTION, bound when
+ * the stage is constructed, so it is the same hint on every run and an engine
+ * cannot refresh it; M3.7b is the task that gives the ranking a per-run one off
+ * `previous.ranks`. The cycle breaker's seed is already per-run: this stage
+ * hands `feedbackArcSet` the previous run's `reversedEdges` (M3.7a), so the
+ * view it ranks stops moving under patches that changed no cycle. Both stages
+ * do it, because a splitter that lives in one ranker and not the other is the
+ * shape of bug M2.4c already fixed once.
+ *
  * ## Determinism
  *
  * Same graph, same ranks, always. Every tie-break is the graph's own iteration
@@ -913,7 +923,7 @@ export function networkSimplexRank(options?: NetworkSimplexOptions): RankStage {
     name: 'network-simplex-rank',
     run(input) {
       const { graph } = input;
-      const reversedEdges = feedbackArcSet(graph);
+      const reversedEdges = feedbackArcSet(graph, input.previous?.reversedEdges);
       const view = acyclicView(graph, reversedEdges);
       const rank = longestPathRanks(view, floorFrom(hint, view));
       tighten(view, rank, budget);
