@@ -83,6 +83,20 @@ describe('reading one run', () => {
     expect(summarise(report, []).outcome).toBe('error');
   });
 
+  it('reads a machine mismatch as an error rather than as the entries it moved', () => {
+    // The case this ordering was written for a second time. A baseline captured
+    // on another CPU moves whole families of entries at once, so a run against
+    // it looks like several regressions that reproduce every time, which is the
+    // shape of the strongest evidence this gate has. It is a fact about the
+    // baseline, and one measurement is enough to say so.
+    const report = gate({
+      ok: false,
+      errors: ['the baseline was captured on a different machine (cpu ...)'],
+      results: [result('a', 'regressed'), result('b', 'regressed')],
+    });
+    expect(summarise(report, []).outcome).toBe('error');
+  });
+
   it('reads a stale package as an error rather than as a regression', () => {
     // This is the ordering that matters. A stale report drops its whole package
     // from the run, so every baseline entry under it reads as `missing`, which

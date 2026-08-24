@@ -8,8 +8,9 @@ sidebar_position: 4
 
 `@dagr/render` draws a graph. It takes coordinates, not a `Graph`: whatever
 [`@dagr/layout`](./layout.md) works out goes on screen through a three.js
-`WebGPURenderer`, with an orthographic camera, springs carrying nodes between one
-layout and the next, and one draw call per shape family.
+`WebGPURenderer`, with an orthographic camera, critically damped springs for
+carrying nodes between one layout and the next, and one draw call per shape
+family.
 
 This page describes the package as of M4.4, the task that gave it a way to be
 told what to draw. Rounded rectangles and circles are on screen, drawn as signed distance
@@ -502,8 +503,10 @@ third is a split, and it is what this package does.
 
 **Anything that is arithmetic or bookkeeping is a pure module, unit tested in
 Node, with no device at all.** Camera and viewport math is that, and it is
-tested here. Instance bookkeeping (M4.3), spring integration (M4.6), and ID
-encode and decode (M4.8a) are the same shape and get the same treatment.
+tested here. So are instance bookkeeping (M4.3) and spring integration (M4.6),
+which is arithmetic end to end and is checked against a hand-written Euler
+integrator of the same equation rather than only against its own algebra. ID
+encode and decode (M4.8a) is the same shape and gets the same treatment.
 
 **Anything that needs a real adapter is verified by a screenshot, committed in
 the run that changes it, and by nothing else.** Screenshots live in
@@ -808,8 +811,10 @@ threw.
 
 There is no render loop. Frames happen when the caller asks for one. A
 `requestAnimationFrame` loop would wake the GPU sixty times a second to redraw
-an unchanged frame; M4.6's springs are what make a continuous loop necessary,
-and that is the task that should add one. Do coalesce, though: an input handler
+an unchanged frame. M4.6 shipped the springs without adding one, and that is
+deliberate: a spring step is a pure function of a delta, so the loop belongs to
+whoever owns the clock. M4.7, which drives springs from layout deltas, is where
+this package needs an opinion about starting and stopping one. Do coalesce, though: an input handler
 that calls `render()` synchronously runs at the event rate rather than the
 display rate, and a trackpad fling dispatches wheel events faster than the
 screen refreshes. The campaign demo schedules one frame per `requestAnimationFrame`
@@ -1202,6 +1207,148 @@ a caller's number and raising it there says the same thing to every edge at
 once, so a channel that could exceed 1 would give a scene two ways to say how
 wide a ribbon is and no rule for which wins.
 
+## Springs, and the fixed timestep that is not here
+
+M4.6 added the motion arithmetic: `stepSpring`, `stepSpring2D`,
+`omegaForHalfLife`, and two constants of the envelope the last of those reads.
+Nothing in it touches a GPU, a canvas or three.js, and nothing in the renderer
+calls it. It is exported because a caller drives the clock.
+
+A spring here is **critically damped**, which is the fastest approach to a
+target that does not oscillate around it. The damping ratio is fixed at 1 by
+construction rather than passed in: an under-damped spring is a different
+feeling that would need a second parameter and a second formula, and a ratio a
+caller can set to 1.0001 is one they can set to 1.0001 by accident.
+
+```ts
+import { omegaForHalfLife, stepSpring2D, type Spring2DState } from '@dagr/render';
+
+// Half the distance closed in 120ms, released from rest.
+const w = omegaForHalfLife(0.12);
+
+const springs = new Map<string, Spring2DState>();
+const targets = new Map<string, { x: number; y: number }>();
+let previousMs: number | undefined;
+
+function frame(nowMs: number) {
+  const dtSeconds = previousMs === undefined ? 0 : (nowMs - previousMs) / 1000;
+  previousMs = nowMs;
+
+  renderer.setNodes(
+    [...targets].map(([id, target]) => {
+      const stepped = stepSpring2D(
+        springs.get(id) ?? { position: target, velocity: { x: 0, y: 0 } },
+        target,
+        w,
+        dtSeconds,
+      );
+      springs.set(id, stepped);
+      return {
+        id,
+        shape: 'roundedRect' as const,
+        center: stepped.position,
+        size: { width: 160, height: 48 },
+        cornerRadius: 8,
+        fillColor: 0x219ebc,
+        glowColor: 0x8ecae6,
+        glowWorld: 12,
+      };
+    }),
+  );
+  renderer.render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+```
+
+The first frame steps by zero, because there is no previous timestamp to
+subtract and inventing one is inventing motion. A node that appears for the
+first time starts AT its target rather than at the origin, which is the
+difference between a new node fading in where it belongs and every new node
+flying in from the same corner.
+
+`target` can change on any frame. The target is a parameter of
+`x'' = -2w x' - w^2 (x - target)` and the state is the position and velocity, so
+retargeting mid-flight cannot move either: there is no jump. Acceleration does
+jump, which is a faint snap at high `w`, and that is the honest cost.
+
+### The step is exact, which is why there is no accumulator
+
+`stepSpring` does not integrate towards the answer, it evaluates it. With
+`A = x0 - target` and `B = v0 + wA`, the solution over a step of `h` is
+`x(h) = target + (A + Bh)e^(-wh)`, and the velocity is its derivative.
+
+The usual reason to run a physics integrator on a fixed substep and accumulate
+the remainder is that an approximate integrator's error, and therefore its
+behaviour, changes with the frame rate. Semi-implicit Euler over that same
+equation is stable only while `w * h` stays below about 0.83, and inside that bound it
+still traces a slightly different curve at 60fps than at 144fps. An exact step
+has no such error to bound: ten steps of a millisecond and one step of ten
+give the same state to machine precision, which the suite asserts directly.
+
+Adding an accumulator anyway would cost the property it was meant to protect. A
+fixed substep leaves a remainder every frame, and a remainder is either dropped,
+which lags the drawing behind the clock by up to a substep and by a different
+amount at each frame rate, or carried, which lets one frame advance a substep
+further than its neighbour and shows up as a stagger at constant velocity.
+
+### A long frame is safe, and needs no clamp
+
+A backgrounded tab hands back a delta measured in seconds or minutes. Stepped
+exactly, that lands the spring on its target with zero velocity, which is what a
+returning tab should show: the settled drawing rather than a minute of catch-up
+animation. The same delta through Euler is an overflow. Past a `w * dt` of about
+745 the decay underflows to zero in a double, and `stepSpring` returns the
+target itself rather than computing an infinity times a zero.
+
+The 0.83 above is measured rather than quoted, and it is worth knowing that it
+is EARLIER than the `w * h` of 2 an undamped oscillator gives: what goes
+unstable first on a critically damped system is the damping term, whose velocity
+update carries a factor of `1 - 2 w h`. At a half-life of 120ms that is a
+substep ceiling of about 59 milliseconds, which one dropped frame clears.
+
+This is the opinion `ribbon.ts` said the integrator owed. `advanceDashFlow` does
+not clamp either, for the opposite reason: a dash pattern is periodic, so a long
+frame leaves it somewhere else and nothing is out of range.
+
+### No overshoot, and what that does not mean
+
+Critical damping guarantees no OSCILLATION. It does not guarantee no overshoot,
+and the two claims are worth separating because a design that promises both and
+also promises mid-flight retargeting is promising something untrue.
+
+The displacement `(A + Bt)e^(-wt)` is zero at `t = -A/B`, which is in the future
+whenever the initial speed towards the target exceeds `w` times the distance to
+it. A spring released from rest can never be in that state, so a node that
+starts still never passes where it is going. A spring retargeted while moving
+can pass its new target once and come back, and once is the bound: a linear
+factor times an exponential has one root.
+
+### Tuning: half-lives, not stiffnesses
+
+`omegaForHalfLife(0.12)` is the angular frequency of a spring that closes half
+its distance in 120 milliseconds, released from rest. That is the number a
+designer has an opinion about; `w` is the number the formula wants, and the
+conversion happens once rather than sixty times a second.
+
+The half-life is a FIRST half-life and not a repeating one. The envelope from
+rest is `(1 + u)e^(-u)` with `u = wt`, which is not an exponential, so the
+second half-life is shorter than the first: two half-lives leave 15.2% of the
+distance rather than 25%, and three leave 3.9%. For "how long does this take"
+rather than "how fast does it start", use `SETTLE_OMEGA_1_PERCENT / w`, which is
+when the spring has closed all but one percent of the distance it started with,
+just under four half-lives.
+
+### Where it lives
+
+Inside `@dagr/render`, exported, with no dependency on anything here that a
+device could break: the `Vec2` type and the shared validators, and nothing else.
+That is the third option the ROADMAP's M4.6 entry named, and it is the second
+time this package has taken it, after the HTML overlay. `@dagr/react` in M5 will
+want this curve for interaction animation with no graph in it, and if that turns
+out to be a package rather than an import, the split is a file that travels
+unchanged rather than code that has to be rewritten.
+
 ## Picking, decided and half built
 
 Hit testing a graph of ten thousand nodes by walking a list is the work the GPU
@@ -1264,7 +1411,9 @@ confirmation.
 Most of it. M4.4 is a graph on screen, drawn correctly, one draw call per shape
 family, and nothing that moves.
 
-- Critically damped springs, and with them a real animation loop (M4.6).
+- A real animation loop. M4.6 shipped the springs and deliberately did not
+  start one, because the clock belongs to whoever owns the frame; the demo
+  already coalesces its own. M4.7 is where the renderer drives them.
 - Consuming `LayoutDelta` from `@dagr/layout`'s incremental path, which is the
   point of the whole exercise: untouched nodes stay still and touched ones
   animate (M4.7). This is the single M4 task that genuinely waits on M3.

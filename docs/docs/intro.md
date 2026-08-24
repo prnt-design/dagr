@@ -34,7 +34,7 @@ documents itself in
 | [`@dagr/graph`](./graph-model.md) | Typed directed graph model: stable identity, zero dependencies |
 | [`@dagr/layout`](./layout.md) | Headless Sugiyama layout pipeline, incremental and animation first |
 | [`@dagr/render`](./render.md) | WebGPU renderer: SDF shapes, instancing, spring animation |
-| `@dagr/react` | The `DagrCanvas` component and hooks |
+| [`@dagr/react`](./react.md) | The `DagrCanvas` component and hooks |
 
 ## Status
 
@@ -49,7 +49,9 @@ says which half is which. `@dagr/render` is past first light: an orthographic
 camera, the renderer seam, and rounded rectangles and circles drawn as signed
 distance fields through a three.js
 `WebGPURenderer`, described on the [renderer](./render.md) page. `@dagr/react`
-is still a scaffold.
+joins the three: one `<DagrCanvas>` takes a graph and draws it, with the layout
+watched for edits and React content placed in world coordinates over the
+canvas, on the [React bindings](./react.md) page.
 
 Nothing is published to npm and there is no released API. Names and signatures
 change when a milestone learns something, without deprecation cycles, because
