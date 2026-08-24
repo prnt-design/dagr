@@ -9,6 +9,7 @@ import os from 'node:os';
  * @typedef {import('./gate.mjs').BaselineEntry} BaselineEntry
  * @typedef {import('./gate.mjs').BenchStat} BenchStat
  * @typedef {import('./gate.mjs').MachineInfo} MachineInfo
+ * @typedef {import('./profile.mjs').MachineProfile} MachineProfile
  */
 
 /**
@@ -80,12 +81,23 @@ export function machineInfo() {
  * like `"offf"` is `isExempt`'s problem to surface at gate time, and a merge
  * that dropped it would hide the file's error instead.
  *
+ * The machine profile is the RUN'S OWN OR ABSENT, which is the one place this
+ * function does not merge. Every other field folds a fresh run into what was
+ * there because the two describe the same thing measured twice; the profile
+ * describes the machine the benchmarks beside it were measured on, so carrying
+ * a previous capture's probes forward would pair one machine's numbers with
+ * another machine's fingerprint, and the comparison that reads it would confirm
+ * a match that nobody measured. A capture taken by a harness too old to produce
+ * probes therefore drops the field, and `profile.mjs` reports the absence as a
+ * question it could not ask.
+ *
  * @param {BaselineReport | undefined} previous
  * @param {Record<string, BenchStat>} benchmarks
  * @param {string} capturedAt
+ * @param {MachineProfile} [machineProfile]
  * @returns {BaselineReport}
  */
-export function mergeBaseline(previous, benchmarks, capturedAt) {
+export function mergeBaseline(previous, benchmarks, capturedAt, machineProfile) {
   /** @type {Record<string, BaselineEntry>} */
   const merged = { ...benchmarks };
   for (const [key, entry] of Object.entries(previous?.benchmarks ?? {})) {
@@ -111,5 +123,13 @@ export function mergeBaseline(previous, benchmarks, capturedAt) {
     if (entry !== undefined) sorted[key] = entry;
   }
 
-  return { schema: 1, capturedAt, machine: machineInfo(), benchmarks: sorted };
+  const profile = machineProfile !== undefined && Object.keys(machineProfile).length > 0 ? machineProfile : undefined;
+
+  return {
+    schema: 1,
+    capturedAt,
+    machine: machineInfo(),
+    ...(profile === undefined ? {} : { machineProfile: profile }),
+    benchmarks: sorted,
+  };
 }

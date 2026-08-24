@@ -204,6 +204,84 @@ findings addressed or logged, docs land with the feature.
   30.6% between-run spread on `build > 1k` was measured across five idle runs
   on ONE machine, which a machine check cannot see and a recapture cannot
   narrow.
+  **THE MACHINE PROFILE (2026-08-21), because the identity check was necessary
+  and is not sufficient.** The gate records what the machine is CALLED and now
+  also records what it MEASURES LIKE, and the day that stopped being the same
+  question is the whole argument. On 2026-08-21 this box reported the same
+  platform, arch, CPU model, core count and node version as `bench/baseline.json`
+  records, so every identity field matched, and unmodified `main` failed the gate
+  2 of 2 at a 1-minute load of 0.10, the quietest start any gate here has had,
+  with ALL FIFTEEN entries slower in absolute milliseconds: +13.9% to +139.4%,
+  ordered almost exactly by how memory-bound each one is. The control had moved
+  +13.4%, so it cancelled a seventh of what the entries did. A NAME IS NOT A
+  MEASUREMENT, and a normalisation cancels the dimension it was measured along
+  and no other.
+  So `registerControl()` now registers two PROBES beside the control, in the same
+  worker: `alloc`, short-lived object churn and nothing else, and `chase`, a
+  dependent pointer walk over 64 MiB, four times this box's L3, whose cost is the
+  number of steps times the latency of a miss. They are recorded as raw
+  milliseconds in the baseline, never gated and never normalised, and what is
+  read out of them is not how much slower the machine is, which the ratio already
+  handles, but WHETHER THE TWO AGREE ABOUT HOW MUCH SLOWER IT IS. Agreement is a
+  machine differing in speed. Disagreement is a machine differing in kind.
+  THERE WAS A THIRD PROBE AND MEASURING IT IS WHY THERE IS NOT. Pure arithmetic
+  in registers is the obvious floor to measure the other two against and it is
+  useless on a shared virtual machine, because a workload doing nothing but
+  issuing instructions is the one a hypervisor's stolen cycles hit hardest while
+  a workload waiting on memory was going to wait anyway. Its widest per-file band
+  over four runs was 65.9%, against 14.8% for `alloc` and 14.4% for `chase` over
+  the same four, and it does not merely add
+  noise: with it, six pairs of runs scored up to 1.583 against each other, which
+  is above any threshold that would still sit under a real signal. Removed rather
+  than resized, because the swing is the machine's and not the measurement's.
+  THE THRESHOLD IS 1.5 AND IT IS PLACED BETWEEN TWO MEASUREMENTS. The noise is
+  measured: fifteen pairs of six gate-sized runs on this box on 2026-08-21, no
+  code changing, five of them starting at 1-minute loads between 0.17 and 3.03,
+  widest 1.215, pinned as a case in `test/profile.test.ts` rather than only as a
+  constant. The signal is
+  estimated: the same day the control was 1.134 times its recorded value while
+  `2.5k outEdges`, almost pure pointer chasing, was 2.083 times its own, a
+  non-uniformity of 1.84. 1.5 is the geometric midpoint, 1.495 rounded, which is
+  the placement that treats a missed diagnosis and a wrong one as costing the
+  same. The evidence is ONE-SIDED and says so: no baseline carrying probes exists
+  on a second machine yet, so the signal figure is inferred, and the first
+  recapture is when this constant is worth revisiting.
+  THE PROBES RUN IN THE SAME WORKER AS THE BENCHMARKS, SO "DID THEY MOVE THE
+  NUMBERS" IS A QUESTION THIS TASK OWED AND MEASURED. It is not idle: `chase`
+  holds a 64 MiB table live in every bench worker, the three entries this
+  branch's gate failed twice are the three most memory-bound in the file, and
+  the zero-byte-diff check cannot clear a branch that changes `bench` itself.
+  Six alternating `pnpm bench` runs, three with the probes registered and three
+  without, medians of three per side over the gated ratios: the on-over-off
+  figures span 0.898 to 1.229, and THE THREE ENTRIES THE GATE FAILED CAME OUT
+  FASTER WITH THE PROBES ON, at 0.908, 0.960 and 0.898, which is the opposite of
+  the story where the table causes them. The per-run values overlap between
+  sides on every entry read out: `rank > 10k` was 3266.7, 2782.6 and 3290.9 with
+  the probes and 2529.6, 3103.4 and 2657.9 without, each side's range containing
+  a value from the other. The box's between-run spread dominates and no shift is
+  visible under it.
+  IT PRINTS A SENTENCE AND CHANGES NO EXIT CODE, which is the one place it
+  deliberately differs from the identity check beside it. An identity mismatch is
+  a fact about two files and reproduces on the next run by construction, so the
+  gate stops after one measurement. A profile mismatch is a MEASUREMENT, it can
+  be wrong once, and `bench:ci` takes up to three for exactly that reason. What
+  the runs this cost were spent on was diagnosis and not the exit code: the gate
+  was always going to be red, and what was missing was the harness saying which
+  of the two things it was red about.
+  AND IT QUALIFIES THE SECOND CONTROL WORKLOAD THE PARAGRAPH ABOVE ARGUES FOR,
+  with a measurement rather than an opinion. A second control normalises the
+  class of work it matches, so it helps the ends of a range. The 2026-08-21
+  spread has no ends: the fifteen entries moved +0.4%, +10.5%, +10.9%, +11.7%,
+  +23.7%, +25.8%, +32.0%, +32.2%, +35.3%, +39.7%, +44.1%, +49.2%, +70.7%, +83.7%
+  and +111.2%, a continuum ordered by how memory-bound each entry is rather than
+  two clusters. Two controls give two anchors and leave everything between them
+  served by neither. That is an argument for probes, which only have to DETECT
+  the difference, and a reason to stop calling a second control the fix rather
+  than an improvement.
+  WHAT IS STILL THE MAINTAINER'S: the recapture. Nothing here rebaselines
+  anything, the committed file predates the probes, and until it is recaptured
+  every run prints one line saying the comparison cannot be made, which is a
+  different fact from the machines matching and is printed as one.
 
 ## M1: Graph model (`@dagr/graph`)
 

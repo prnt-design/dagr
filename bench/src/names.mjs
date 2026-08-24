@@ -15,6 +15,17 @@ export const CONTROL_GROUP = 'control';
 /** The benchmark name inside that group. */
 export const CONTROL_NAME = 'mixed';
 
+/**
+ * The group name a bench file registers its machine probes under.
+ *
+ * A group of its own rather than more names inside `control`, because the two
+ * are read for opposite purposes: the control is the denominator every gated
+ * ratio is expressed in, and the probes are never a denominator of anything.
+ * The collector skips both groups when it builds the gated set, so a probe can
+ * never fail a merge.
+ */
+export const MACHINE_GROUP = 'machine';
+
 /** What each package's `bench` script writes its run to. */
 export const REPORT_NAME = 'bench-report.json';
 

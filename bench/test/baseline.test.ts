@@ -89,3 +89,28 @@ describe('recording a baseline', () => {
     expect(merged.machine?.node).toBe(now.node);
   });
 });
+
+/**
+ * The profile is the run's own or it is absent. Carrying a previous capture's
+ * probes forward beside fresh benchmarks would describe one machine with
+ * another machine's measurements, which is the exact confusion the field is
+ * being added to end.
+ */
+describe('the machine profile', () => {
+  it('records the probes the run measured', () => {
+    const merged = mergeBaseline(undefined, { a: stat(1) }, AT, {
+      '@dagr/graph > graph.bench.ts': { alloc: 0.09, chase: 1 },
+    });
+    expect(merged.machineProfile?.['@dagr/graph > graph.bench.ts']?.chase).toBe(1);
+  });
+
+  it('omits the field rather than keeping the previous capture, probes and all', () => {
+    const previous: BaselineReport = {
+      schema: 1,
+      benchmarks: {},
+      machineProfile: { '@dagr/graph > graph.bench.ts': { alloc: 0.09, chase: 1 } },
+    };
+    const merged = mergeBaseline(previous, { a: stat(1) }, AT, {});
+    expect(merged.machineProfile).toBeUndefined();
+  });
+});

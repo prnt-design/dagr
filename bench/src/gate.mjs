@@ -19,8 +19,9 @@
  *    holds for a runner that is UNIFORMLY slower, and not for one with a
  *    different cache and memory profile, which moves whole families of
  *    benchmarks against a control that looks fine. That is what
- *    `MACHINE_IDENTITY` below is for. See `control.mjs` for what the control is
- *    and where the approximation breaks.
+ *    `MACHINE_IDENTITY` below is for, and `probes.ts` holds the measurement
+ *    that says whether it happened on the machine you are standing on. See
+ *    `control.ts` for what the control is and where the approximation breaks.
  *
  * 2. It gates on the MEDIAN, not the mean. A single GC pause or a scheduler
  *    hiccup drags the mean a long way: in the run that motivated this, a
@@ -87,6 +88,11 @@
  * @property {1} schema
  * @property {Record<string, BaselineEntry>} benchmarks
  * @property {MachineInfo} [machine]
+ * @property {import('./profile.mjs').MachineProfile} [machineProfile]
+ *   What the machine MEASURED like when the file was captured, as distinct
+ *   from what `machine` says it was called. `profile.mjs` explains why a name
+ *   is not enough. Optional because every baseline captured before the probes
+ *   existed lacks it.
  * @property {string} [capturedAt]
  */
 
