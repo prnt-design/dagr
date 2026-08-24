@@ -507,13 +507,14 @@ export function FirstLight({
      * Still a `useState` update, and still on the frame path, which is a choice
      * with a shelf life rather than a permanent one. One `setReadout` is one
      * full reconciliation, which is affordable while frames only happen when a
-     * user moves and stops being affordable once M4.6's springs run a
-     * continuous loop: the overlay would then be the thing making the renderer
-     * look slow when it is not. It stays for now because React state is what
-     * keeps `Overlay`'s null and failure cases readable, and the coalescing
-     * below already caps it at one per refresh. **M4.6 should move it off the
-     * frame path**, to a ref plus `textContent` or to publishing every few
-     * frames.
+     * user moves and stops being affordable once a continuous loop runs: the
+     * overlay would then be the thing making the renderer look slow when it is
+     * not. It stays for now because React state is what keeps `Overlay`'s null
+     * and failure cases readable, and the coalescing below already caps it at
+     * one per refresh. **M4.7 should move it off the frame path**, to a ref plus
+     * `textContent` or to publishing every few frames. M4.6 shipped the springs
+     * without a loop, so the deadline moved with the loop rather than with
+     * them.
      */
     const publish = (): void => {
       setReadout({
@@ -569,7 +570,9 @@ export function FirstLight({
      * while the picture moves one pixel. Accumulating the delta instead means
      * the pattern drifts while you pan and holds where it was while you do
      * not, which is what this comment claimed before the code did it, and it
-     * animates on its own the moment M4.6 brings a loop.
+     * animates on its own the moment something brings a loop. Not M4.6: that
+     * task shipped the spring arithmetic and deliberately left the clock to
+     * whoever owns the frame, which here is `requestDraw` below.
      */
     /** Where each dashed group's pattern has flowed to, wrapped into its period. */
     const flowPixels = new Map<string, number>();

@@ -3725,11 +3725,17 @@ of M3 would leave the second runner idle for a milestone.
   the first per-vertex channel since this entry and the obvious reading is that
   it did. The limit is PER PIPELINE, and D3's per-edge highlight is an attribute
   on the RIBBON mesh: a different geometry, a different material, its own eight,
-  five of them used before and six after. This budget is untouched and M4.6's
-  spring velocity and M4.8's picking id are still competing for the same one
-  slot. The rule the two cases share, and the one worth carrying forward, is
-  that a slot belongs to the SHADER that reads the attribute, not to the package
-  or the scene.
+  five of them used before and six after. This budget is untouched. The rule the
+  two cases share, and the one worth carrying forward, is that a slot belongs to
+  the SHADER that reads the attribute, not to the package or the scene.
+  M4.6 (2026-08-19) SETTLED THE COMPETITION BY WITHDRAWING FROM IT. The two
+  candidates recorded above were a spring velocity and a picking id; the springs
+  shipped as CPU arithmetic, so a stepped position arrives as an ordinary centre
+  through the write this entry already counts, and a velocity no shader reads
+  has no reason to be uploaded at all. The slot is M4.8's unless a scene change
+  takes it first. GENERALISE IT: a channel is only a channel if a SHADER wants
+  the number, and "this task will need per-instance state" is not the same claim
+  as "this task will need per-instance state on the device."
   A COLOUR REACHING A SHADER AS AN ATTRIBUTE IS CONVERTED BY NOTHING. As a
   uniform it goes through three's `Color`, which does sRGB to linear on the way;
   an attribute is whatever floats are in the buffer. So `linearFromHex` does it
@@ -4116,7 +4122,7 @@ of M3 would leave the second runner idle for a milestone.
   needs a `fract` and periodicity cannot be built from the nine. `DashArith`
   extends `Arith` beside its only consumer, so the shape formulas keep their
   count and `tslArith` gains no line no shape uses.
-- [ ] **M4.6** (`@dagr/render`) Spring integrator: critically damped springs
+- [x] **M4.6** (`@dagr/render`) Spring integrator: critically damped springs
   driving scalar and vec2 targets, retargetable mid-flight with no
   discontinuity in position or velocity, and a fixed-timestep accumulator so
   behaviour does not change with frame rate. Pure math, so the tests are
@@ -4151,6 +4157,74 @@ of M3 would leave the second runner idle for a milestone.
   for it. The way to keep that option open is to give this module no dependency
   on anything else in the package, which is worth doing regardless of the
   answer.
+  **THE ACCUMULATOR IS NOT HERE, AND THE REASON ONE IS USUALLY NEEDED IS THE
+  REASON IT IS NOT.** This entry asked for a fixed-timestep accumulator so
+  behaviour would not change with frame rate. An accumulator exists to bound an
+  approximate integrator's error, and there is no approximate integrator: the
+  ODE this entry writes out has a closed form, so `stepSpring` evaluates
+  `target + (A + Bh)e^(-wh)` rather than walking towards it. Ten steps of a
+  millisecond and one step of ten agree to machine precision, which is the
+  frame-rate property the accumulator was going to buy, asserted directly in
+  `test/spring.test.ts`. Shipping one anyway would have cost that property: a
+  fixed substep leaves a remainder every frame, and a remainder is either
+  dropped, which lags the drawing behind the clock by a different amount at each
+  frame rate, or carried, which advances one frame a substep further than its
+  neighbour and reads as a stagger at constant velocity. GENERALISE IT: a
+  mechanism that exists to bound an error is not neutral when the error is
+  absent, because it has costs of its own that nothing is paying for.
+  **THE LONG-FRAME OPINION `ribbon.ts` ASKED FOR IS THAT NO CLAMP IS NEEDED.**
+  Exactly stepped, a backgrounded tab's delta lands the spring on its target
+  with zero velocity, which is the correct picture for a tab coming back: the
+  settled drawing rather than a minute of catch-up. The one real hazard is
+  arithmetic rather than physical, and it is guarded: past a `w * dt` of about
+  745 the decay underflows to zero in a double while `A + Bh` can be an
+  infinity, and zero times infinity is `NaN`, so the target is returned
+  directly. A zero delta is guarded for the same class of reason and a different
+  cause: `target + (position - target)` is not `position` in a double, so a
+  paused clock or two callbacks in one millisecond would walk a resting spring
+  off its own value one rounding at a time.
+  **THE SUITE IS CHECKED AGAINST THE EQUATION AND NOT ONLY AGAINST ITSELF.** A
+  closed form tested by its own properties is a suite that agrees with its own
+  algebra: a transcription error in the exponential would leave every property
+  in this entry's list true, because they are all properties OF the
+  transcription. `test/spring.test.ts` carries a hand-written semi-implicit
+  Euler integrator derived from `x'' = -2w x' - w^2 (x - target)` directly, and
+  asserts that the two agree at a small substep and that shrinking the substep a
+  thousandfold tightens the agreement by at least a hundredfold, which is the
+  first-order convergence Euler has and a wrong closed form would not be the
+  limit of. The same reference then
+  earns its keep twice more: it is the demonstration that a fixed step DOES vary
+  with frame rate, and the demonstration that it diverges on the long frame the
+  closed form absorbs.
+  **THE OVERSHOOT PAIR IS TESTED AS THIS ENTRY WROTE IT, WHICH IS TO SAY THE
+  ENTRY WAS RIGHT.** Released from rest the displacement never changes sign, at
+  any distance and any `w`, over a grid. From an arbitrary state it changes sign
+  exactly when `-A/B` is positive, which is the entry's own condition, and never
+  more than once. The retarget test that catches the `(start, target, elapsed)`
+  shortcut is the one worth keeping in mind: retarget a moving spring TO WHERE
+  IT ALREADY IS. The ODE carries the velocity through and overshoots; the
+  shortcut restarts from rest and stops dead.
+  **IT LIVES IN `@dagr/render`, EXPORTED: the third option, taken for the second
+  time.** `html-overlay.ts` was the first, and `index.ts` had already recorded
+  that it was taken "on the option M4.6 named", so the precedent was set before
+  the decision was due. The entry's condition for keeping the split cheap is met
+  with two qualifications, both deliberate: `spring.ts` imports the `Vec2` TYPE
+  and three of the shared checks in `validate.ts`, and nothing else. Neither is
+  three.js and neither is a scene. A fresh copy of the checks was the
+  alternative and `validate.ts`'s own docstring already refused a third copy of
+  them once, on the grounds that the copy that drifts is always the one whose
+  error message no test asserts. So the split cost is a file that would travel
+  unchanged rather than code that would have to be rewritten, which is the thing
+  the no-dependency instruction was protecting.
+  **WHAT IS DELIBERATELY NOT HERE.** No animation loop, because a spring step is
+  a pure function of a delta and the clock belongs to whoever owns the frame;
+  `render.md` already said M4.6 was the task that should start one and now says
+  M4.7 is. No settled predicate, because the consumer that needs "this spring
+  has finished" is M4.7's removal case and it does not exist yet, and a
+  tolerance pair invented before its caller is a guess. No damping ratio, since
+  a ratio a caller can set to 1.0001 is a ratio a caller can set to 1.0001 by
+  accident, and an under-damped spring needs a second closed form rather than a
+  second argument.
 - [ ] **M4.7** (`@dagr/render`) Delta consumer: the renderer takes M3.1's
   `LayoutDelta`s and drives node and edge motion through M4.6's springs,
   interruptible when a new delta arrives mid-flight. Integration test with a

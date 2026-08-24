@@ -28,15 +28,23 @@ describe('@dagr/render', () => {
     // flowed to, and the width and alpha the zoom implies. The tessellation
     // itself stays internal, because `setEdges` takes points rather than
     // geometry.
+    //
+    // M4.6 added the springs: a closed-form step, its two-axis form, the
+    // half-life conversion a caller tunes with, and two constants of the
+    // envelope that conversion reads. Nothing in the group touches a GPU. `spring.ts` is exported whole rather than kept internal
+    // because motion is driven by a caller's loop, and because `@dagr/react`
+    // will want the same curve for interactions with no graph in them.
     expect(Object.keys(api).sort()).toEqual([
       'CENTRE_ANCHOR',
       'Camera2D',
       'DagrRenderError',
+      'HALF_LIFE_OMEGA',
       'OVERLAY_INV_ZOOM_PROPERTY',
       'OVERLAY_ZOOM_PROPERTY',
       'OverlayDisposedError',
       'OverlayParentError',
       'RendererDisposedError',
+      'SETTLE_OMEGA_1_PERCENT',
       'SceneDisposedError',
       'UnknownInstanceHandleError',
       'advanceDashFlow',
@@ -45,7 +53,10 @@ describe('@dagr/render', () => {
       'createRichNodes',
       'fitZoom',
       'measureHtmlSizes',
+      'omegaForHalfLife',
       'ribbonWidthAt',
+      'stepSpring',
+      'stepSpring2D',
     ]);
   });
 
