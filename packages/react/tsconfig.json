@@ -2,7 +2,20 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
-    "types": ["node"]
+    "jsx": "react-jsx",
+    // The base sets `lib: ["ES2022"]` with no DOM, which is right for the
+    // headless packages and wrong here: this one owns a canvas, an overlay,
+    // a `ResizeObserver` and a portal into a DOM element.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    // The Dagr packages publish from dist, which does not exist in a fresh
+    // clone or in CI, where typecheck runs before build. Typecheck therefore
+    // reads them from source, mirrored by the aliases in vitest.config.ts.
+    "paths": {
+      "@dagr/graph": ["../graph/src/index.ts"],
+      "@dagr/layout": ["../layout/src/index.ts"],
+      "@dagr/render": ["../render/src/index.ts"]
+    }
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "vitest.config.ts"]
 }

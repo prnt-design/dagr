@@ -47,6 +47,17 @@ export interface NodeJSON<N extends object = Attrs> {
   readonly attrs?: ReadAttrs<N>;
   /** Absent when the node declares no ports. */
   readonly ports?: readonly PortJSON[];
+  /**
+   * The node that contains this one. Absent when nothing does, exactly as on
+   * the record.
+   *
+   * It may name a node written LATER in `nodes`, because both listings are in
+   * insertion order and a node can be reparented long after it was added. A
+   * reader therefore cannot assume parents come first; `Graph.fromJSON` adds
+   * every node before it sets any parent, which is what keeps insertion order
+   * the document's to decide.
+   */
+  readonly parent?: NodeId;
 }
 
 /** An edge as a document holds it. */
@@ -81,6 +92,14 @@ export interface EdgeJSON<E extends object = Attrs> {
  * and never merely because the package released. Version 1 is the only one this
  * package writes and the only one it reads: an unrecognised version is refused
  * rather than guessed at.
+ *
+ * M5.5 ADDED `parent` AND CORRECTLY LEFT THIS AT 1, which is written down here
+ * so nobody bumps it later out of caution. The rule above is about misreading:
+ * unknown keys are ignored by design, so a document carrying `parent` read by a
+ * build without containment would drop the containment silently, which is
+ * exactly what a version bump exists to prevent. It is not a misread here
+ * because no such build was ever published: containment landed before v0.1, so
+ * every reader that can hold a document of this format understands the field.
  *
  * The four unversioned names, this one and {@link NodeJSON}, {@link EdgeJSON},
  * and {@link PortJSON}, TRACK the current format version rather than pinning
@@ -215,6 +234,7 @@ function parseNode(value: unknown, path: string): NodeJSON {
   const node = requireRecord(value, path);
   const id = requireString(node['id'], `${path}.id`);
   const attrs = optionalAttrs(node['attrs'], `${path}.attrs`);
+  const parent = optionalString(node['parent'], `${path}.parent`);
   const rawPorts = node['ports'];
   const ports =
     rawPorts === undefined
@@ -229,6 +249,7 @@ function parseNode(value: unknown, path: string): NodeJSON {
     id,
     ...(attrs === undefined ? {} : { attrs }),
     ...(ports === undefined ? {} : { ports }),
+    ...(parent === undefined ? {} : { parent }),
   };
 }
 

@@ -151,6 +151,59 @@ findings addressed or logged, docs land with the feature.
   five idle runs with no code changing, which a recapture re-centres and cannot
   narrow. That is the standing argument for the second control workload
   `bench/README.md` keeps naming, and `rank > 1k` is where to start.
+  **THE GATE NOW CHECKS THE MACHINE IT IS COMPARING AGAINST (2026-08-18),
+  because the box changed CPU under it and nobody could see that from the
+  numbers.** `bench/baseline.json` names an AMD EPYC-Rome VM, captured
+  2026-08-16. `os.cpus()[0].model` on the dispatch box reads
+  `Intel Xeon Processor (Skylake, IBRS, no TSX)` two days later, with the same
+  platform, the same arch, the same eight cores and the same `node v22.23.2`.
+  The harness had recorded that field on both sides since it was written and
+  never once compared them, and `machineInfo`'s own docstring said the machine
+  is "never gated against, because the gate reads control-normalised ratios and
+  nothing else". A ratio corrects for a UNIFORMLY slower machine. It does not
+  correct for a machine that is slower at some things, and this one is: on
+  unmodified `main`, benched deliberately rather than in passing, the gate
+  failed 2 of 2 at a 1-minute load of 0.54 under a 5-minute 0.40, the quietest
+  start on record here. SAY WHICH RUN, BECAUSE THE TWO SAY DIFFERENT THINGS.
+  Run 1 failed exactly six entries, `2.5k outEdges`, `descendants, 10k`, both
+  `pipeline` entries and both `rank` entries, at +27.1% to +44.3%, while every
+  allocation-heavy entry passed: `2k updateNodeAttrs` at +0.0%, +1.7% and -6.2%,
+  and both `isAcyclic` entries inside 0.3%. THAT RUN IS THE DIAGNOSIS, because
+  it separates the two families cleanly: memory-latency-bound work moves and
+  allocation-heavy work does not, which is the control drift `bench/README.md`
+  already named, arriving as a step change rather than as noise. Run 2 was the
+  louder of the two and failed eleven, adding the three `updateNodeAttrs`
+  entries, `build > 1k` at +61.9% and `topologicalOrder`, and taking
+  `descendants, 10k` to +69.8%. A loud box adds names to the list, which is the
+  same reading M0.2's `diffAttrs` verification recorded. The six that failed
+  BOTH runs are the six from run 1. The morning run of the same day had already
+  failed `main` 2 of 2 at 0.58, so this is twice.
+  `platform`, `arch`, `cpu`, `cores` and `node` are the identity, because each
+  changes the shape of the work rather than only its speed. `ci` and
+  `loadAverageAtCapture` are not, because they describe who ran it and how busy
+  the box was, and gating on them would block a merge over a neighbour's build.
+  A CPU model compares with its whitespace collapsed, since `os.cpus()` pads
+  some models and a merge blocked by two spaces teaches the next reader to
+  distrust the check. A report with no machine at all is a NOTE and not an
+  error: the field is optional in schema 1, so its absence is not evidence of a
+  mismatch.
+  IT IS A HARNESS ERROR RATHER THAN A REGRESSION, and that placement is the
+  point rather than a detail. A different machine reproduces on the next run by
+  construction, so `bench:ci` stops after ONE measurement instead of three, the
+  way it already stops on a stale report. It matters more here than anywhere
+  else in the harness, because a mismatched baseline moves whole families of
+  entries at once and therefore fails the SAME entries every run, which is
+  exactly what this gate calls its strongest evidence for a real regression.
+  The table still prints: rejecting the comparison is not a reason to hide the
+  numbers a human needs to decide on a recapture. THERE IS NO OVERRIDE FLAG, by
+  decision. It would be the silent no-op this harness exists to prevent, and it
+  would be reached for on exactly the runs whose numbers mean least.
+  WHAT IT DOES NOT DO IS MAKE A GATE GREEN. The recapture is the maintainer's
+  call, it is queued rather than taken, and until it happens no branch passes
+  `bench:ci` on this box. It is also NOT the second control workload: the
+  30.6% between-run spread on `build > 1k` was measured across five idle runs
+  on ONE machine, which a machine check cannot see and a recapture cannot
+  narrow.
 
 ## M1: Graph model (`@dagr/graph`)
 
@@ -3414,8 +3467,9 @@ M4.6 depend on nothing in M3 and nothing in M2 beyond the types M2.1 already
 shipped, so the natural split is one runner working M3 in order while the other
 takes the early M4 tasks. M4.4 and M4.5 want real coordinates and routes
 (M2.7, M2.8) but still nothing incremental. M4.8 and M4.9 follow M4.3 and M4.2
-respectively and need nothing from M2 or M3 (M4.9a is done and M4.9b needs a
-machine rather than a task). M4.10 wants a real 10k-node
+respectively and need nothing from M2 or M3; M4.8a needs nothing at all, since
+it is arithmetic and a map, and M4.9a is done with M4.9b needing a machine
+rather than a task. M4.10 wants a real 10k-node
 layout, so it trails M2.9. M4.7 is the single M4 task that genuinely blocks on
 M3, because it consumes `LayoutDelta` from M3.1. So M3 leads M4 in dependency
 order at exactly one join, and treating the whole of M4 as blocked on the whole
@@ -3605,8 +3659,11 @@ of M3 would leave the second runner idle for a milestone.
   State this invariant, because the rest of the package relies on it and
   swap-with-last corrupts slot-keyed data silently, without an error, since the
   slot stays valid and merely belongs to a different node: per-instance spring
-  state (M4.6, M4.7) and picking IDs (M4.8) are keyed by handle, never by slot,
-  and slot indices are not durable across any removal. Testable in the pure
+  state (M4.6, M4.7) is keyed by handle, never by slot, and slot indices are not
+  durable across any removal. M4.8a settled its own half of that prediction
+  differently and in the same direction: a picking id is keyed by the caller's
+  own node id, one layer further out again, which survives even the shape change
+  a handle cannot. Testable in the pure
   module: remove an instance, assert every surviving handle still resolves, and
   assert no test helper can observe a slot index across the removal.
   Decide here instead, carried from M4.2: whether the package uses one material
@@ -3660,7 +3717,9 @@ of M3 would leave the second runner idle for a milestone.
   environment map, so `setupOutgoingLight` returns `diffuseColor.rgb` and
   nothing asks for a normal. M4.6's spring velocity or M4.8's picking id is the
   seventh channel and fits; an eighth needs interleaving or a raised
-  `requiredLimits`. Two ordinary SCENE changes take the last slot before a
+  `requiredLimits`. M4.8a WITHDREW ITS HALF OF THAT CLAIM on the same rule D3
+  turned on below: the pick bytes are read by the pick material, which is a
+  different pipeline with its own eight. Two ordinary SCENE changes take the last slot before a
   channel does, and neither is renderer work: a material that comes to read
   `uv`, and a light or an environment map, either of which satisfies that guard
   and pulls in the `normal` the quad already carries.
@@ -3673,11 +3732,21 @@ of M3 would leave the second runner idle for a milestone.
   the first per-vertex channel since this entry and the obvious reading is that
   it did. The limit is PER PIPELINE, and D3's per-edge highlight is an attribute
   on the RIBBON mesh: a different geometry, a different material, its own eight,
-  five of them used before and six after. This budget is untouched and M4.6's
-  spring velocity and M4.8's picking id are still competing for the same one
-  slot. The rule the two cases share, and the one worth carrying forward, is
-  that a slot belongs to the SHADER that reads the attribute, not to the package
-  or the scene.
+  five of them used before and six after. This budget is untouched. The rule the
+  two cases share, and the one worth carrying forward, is that a slot belongs to
+  the SHADER that reads the attribute, not to the package or the scene.
+  M4.6 (2026-08-19) SETTLED ONE HALF OF THE COMPETITION BY WITHDRAWING FROM IT.
+  The two candidates recorded above were a spring velocity and a picking id; the
+  springs shipped as CPU arithmetic, so a stepped position arrives as an
+  ordinary centre through the write this entry already counts, and a velocity no
+  shader reads has no reason to be uploaded at all. M4.8a (2026-08-22) then took
+  the picking id out on the same rule: the pick bytes are read by the pick
+  material, a different pipeline with its own eight slots. So the slot has NO
+  remaining channel claimant, and what can still take it is an ordinary scene
+  change (a uv-reading material, a light or an environment map). GENERALISE IT:
+  a channel is only a channel if a SHADER wants the number, and "this task will
+  need per-instance state" is not the same claim as "this task will need
+  per-instance state on the device."
   A COLOUR REACHING A SHADER AS AN ATTRIBUTE IS CONVERTED BY NOTHING. As a
   uniform it goes through three's `Color`, which does sRGB to linear on the way;
   an attribute is whatever floats are in the buffer. So `linearFromHex` does it
@@ -4064,7 +4133,7 @@ of M3 would leave the second runner idle for a milestone.
   needs a `fract` and periodicity cannot be built from the nine. `DashArith`
   extends `Arith` beside its only consumer, so the shape formulas keep their
   count and `tslArith` gains no line no shape uses.
-- [ ] **M4.6** (`@dagr/render`) Spring integrator: critically damped springs
+- [x] **M4.6** (`@dagr/render`) Spring integrator: critically damped springs
   driving scalar and vec2 targets, retargetable mid-flight with no
   discontinuity in position or velocity, and a fixed-timestep accumulator so
   behaviour does not change with frame rate. Pure math, so the tests are
@@ -4099,6 +4168,74 @@ of M3 would leave the second runner idle for a milestone.
   for it. The way to keep that option open is to give this module no dependency
   on anything else in the package, which is worth doing regardless of the
   answer.
+  **THE ACCUMULATOR IS NOT HERE, AND THE REASON ONE IS USUALLY NEEDED IS THE
+  REASON IT IS NOT.** This entry asked for a fixed-timestep accumulator so
+  behaviour would not change with frame rate. An accumulator exists to bound an
+  approximate integrator's error, and there is no approximate integrator: the
+  ODE this entry writes out has a closed form, so `stepSpring` evaluates
+  `target + (A + Bh)e^(-wh)` rather than walking towards it. Ten steps of a
+  millisecond and one step of ten agree to machine precision, which is the
+  frame-rate property the accumulator was going to buy, asserted directly in
+  `test/spring.test.ts`. Shipping one anyway would have cost that property: a
+  fixed substep leaves a remainder every frame, and a remainder is either
+  dropped, which lags the drawing behind the clock by a different amount at each
+  frame rate, or carried, which advances one frame a substep further than its
+  neighbour and reads as a stagger at constant velocity. GENERALISE IT: a
+  mechanism that exists to bound an error is not neutral when the error is
+  absent, because it has costs of its own that nothing is paying for.
+  **THE LONG-FRAME OPINION `ribbon.ts` ASKED FOR IS THAT NO CLAMP IS NEEDED.**
+  Exactly stepped, a backgrounded tab's delta lands the spring on its target
+  with zero velocity, which is the correct picture for a tab coming back: the
+  settled drawing rather than a minute of catch-up. The one real hazard is
+  arithmetic rather than physical, and it is guarded: past a `w * dt` of about
+  745 the decay underflows to zero in a double while `A + Bh` can be an
+  infinity, and zero times infinity is `NaN`, so the target is returned
+  directly. A zero delta is guarded for the same class of reason and a different
+  cause: `target + (position - target)` is not `position` in a double, so a
+  paused clock or two callbacks in one millisecond would walk a resting spring
+  off its own value one rounding at a time.
+  **THE SUITE IS CHECKED AGAINST THE EQUATION AND NOT ONLY AGAINST ITSELF.** A
+  closed form tested by its own properties is a suite that agrees with its own
+  algebra: a transcription error in the exponential would leave every property
+  in this entry's list true, because they are all properties OF the
+  transcription. `test/spring.test.ts` carries a hand-written semi-implicit
+  Euler integrator derived from `x'' = -2w x' - w^2 (x - target)` directly, and
+  asserts that the two agree at a small substep and that shrinking the substep a
+  thousandfold tightens the agreement by at least a hundredfold, which is the
+  first-order convergence Euler has and a wrong closed form would not be the
+  limit of. The same reference then
+  earns its keep twice more: it is the demonstration that a fixed step DOES vary
+  with frame rate, and the demonstration that it diverges on the long frame the
+  closed form absorbs.
+  **THE OVERSHOOT PAIR IS TESTED AS THIS ENTRY WROTE IT, WHICH IS TO SAY THE
+  ENTRY WAS RIGHT.** Released from rest the displacement never changes sign, at
+  any distance and any `w`, over a grid. From an arbitrary state it changes sign
+  exactly when `-A/B` is positive, which is the entry's own condition, and never
+  more than once. The retarget test that catches the `(start, target, elapsed)`
+  shortcut is the one worth keeping in mind: retarget a moving spring TO WHERE
+  IT ALREADY IS. The ODE carries the velocity through and overshoots; the
+  shortcut restarts from rest and stops dead.
+  **IT LIVES IN `@dagr/render`, EXPORTED: the third option, taken for the second
+  time.** `html-overlay.ts` was the first, and `index.ts` had already recorded
+  that it was taken "on the option M4.6 named", so the precedent was set before
+  the decision was due. The entry's condition for keeping the split cheap is met
+  with two qualifications, both deliberate: `spring.ts` imports the `Vec2` TYPE
+  and three of the shared checks in `validate.ts`, and nothing else. Neither is
+  three.js and neither is a scene. A fresh copy of the checks was the
+  alternative and `validate.ts`'s own docstring already refused a third copy of
+  them once, on the grounds that the copy that drifts is always the one whose
+  error message no test asserts. So the split cost is a file that would travel
+  unchanged rather than code that would have to be rewritten, which is the thing
+  the no-dependency instruction was protecting.
+  **WHAT IS DELIBERATELY NOT HERE.** No animation loop, because a spring step is
+  a pure function of a delta and the clock belongs to whoever owns the frame;
+  `render.md` already said M4.6 was the task that should start one and now says
+  M4.7 is. No settled predicate, because the consumer that needs "this spring
+  has finished" is M4.7's removal case and it does not exist yet, and a
+  tolerance pair invented before its caller is a guess. No damping ratio, since
+  a ratio a caller can set to 1.0001 is a ratio a caller can set to 1.0001 by
+  accident, and an under-damped spring needs a second closed form rather than a
+  second argument.
 - [ ] **M4.7** (`@dagr/render`) Delta consumer: the renderer takes M3.1's
   `LayoutDelta`s and drives node and edge motion through M4.6's springs,
   interruptible when a new delta arrives mid-flight. Integration test with a
@@ -4117,25 +4254,116 @@ of M3 would leave the second runner idle for a milestone.
   deltas are never dropped. Note this interacts with M3.1's absent-or-flagged
   question: a self-describing delta makes resync trivial and every delta
   larger.
-- [ ] **M4.8** (`@dagr/render`, `apps/demo`) GPU picking: an ID buffer pass
-  rendering per-instance IDs to an offscreen target, with a single-pixel
-  readback giving O(1) hover, select and drag hit testing regardless of node
-  count. Unit tests for ID encode and decode: round-trip across the full range,
-  and the no-hit value cannot collide with a real ID. Demo scene with hover
-  highlight.
-  Decide here: the encoding, and when the pass runs. Twenty-four bits of ID
-  plus an eight-bit type tag lets a hit say what it hit (node, edge, port)
-  without a side lookup and caps a scene at 16M elements, which is not a real
-  limit here; a full 32 bits of ID needs that side table. Separately, the pass
-  can run every frame (simple, and costs a second full draw of the scene) or on
-  demand when the pointer moves (nearly free when idle, adds a frame of latency
-  and needs care while things are animating, which in this project is most of
-  the time). WebGPU's asynchronous readback makes the latency half of that
-  sharper than the equivalent WebGL decision would be, so measure it rather
-  than porting an instinct. Treat the every-frame-versus-on-demand half as
+- [x] **M4.8a** (`@dagr/render`) The id a pick pixel carries: the encoding, the
+  pixel a pointer is asking about, and the registry that says which node an id
+  still means. Unit tests for ID encode and decode: round-trip across the full
+  range, and the no-hit value cannot collide with a real ID.
+  SPLIT OUT OF M4.8 BY THE RUN THAT SHIPPED IT, on the precedent M2.4 and M2.6
+  set, and for a reason that is about this box rather than about the task, which
+  those two were not. M4.8's other half
+  is a material, an offscreen target and an asynchronous readback, none of
+  which can be verified here: the headless Chromium on this machine has no
+  WebGPU, so a pass written in this increment would ship untested beside code
+  that is exhaustively tested, behind the same green tick. The halves also
+  differ in kind and not only in verifiability, which is why the seam is a good
+  one rather than a convenient one: what a pixel says, which pixel to read, and
+  which node an id means are decidable in Node, and drawing is not. M4.6 and
+  M4.7's entries name the same seam one task earlier, an integrator and the loop
+  that drives it, so the shape is not new to this milestone.
+  THE ID IS A THIRD NAME, AND THE TWO THIS PACKAGE ALREADY HAD BOTH FAIL. The
+  SLOT is free, since a shader knows its own instance index and needs no
+  attribute at all, and it is wrong: M4.3 removes by swapping the last live
+  instance into the freed slot, and a readback answers a question about a frame
+  already drawn, so by the time the pixel is decoded the slot can name somebody
+  else. The HANDLE is durable and unbounded, so it passes three bytes in a long
+  session and truncating one collides. So the pick id is durable like a handle
+  and bounded like a slot, and it is keyed by the CALLER'S OWN node or edge id
+  rather than by a handle, for two reasons: that is the name a pick has to come
+  back as, and handle spaces are per family, so the first rounded rect and the
+  first circle are both handle 1 and a handle alone identifies nothing.
+  THE TAG IS WORTH HAVING AND THE REASON THIS ENTRY GAVE FOR IT IS WRONG. "A
+  hit can say what it hit without a side lookup" does not survive the registry
+  above, which IS a side lookup, exists for the recycling rather than for the
+  kind, and is on the path of every pick. The two reasons that do survive: the
+  tag PARTITIONS the id space, so nodes and edges keep separate allocators
+  instead of sharing one counter across two meshes that know nothing about each
+  other, and it SURVIVES a stale answer, so a pick that cannot be resolved can
+  still say the pointer was over an edge. Twenty-four bits and eight is
+  therefore the right split for a reason the entry did not name. Tag 0 is
+  nothing and no instance is given id 0, so a target cleared to all zeros reads
+  as a miss with no reserved value a caller has to remember.
+  THE ID IS TAKEN APART ON THE CPU, AND THE MARGIN IS MEASURED RATHER THAN
+  ASSERTED. Handing the shader one number and splitting it there costs no bytes
+  per instance and loses nodes. Every vertex of an instance's quad carries the
+  same value, so the interpolated value differs from it by about a float32 ulp,
+  and at 2^24 that ulp is exactly 1: one bit of drift is the next id. Three
+  byte-valued channels drift by 6e-8 against an RGBA8 write that rounds to the
+  nearest 1/255, a margin of about 3e4. The suite asserts the surviving
+  encoding over every byte value there is and shows the rejected one losing at
+  the top of its range, which is this repo's rule about a guard that passes by
+  construction. The second reason is the standing one: a shader is the one
+  place this package cannot test arithmetic, and an id is where being off by
+  one confidently names a different node.
+  A REFUSED PICK IS A DESIGNED ANSWER AND THE THIRD OUTCOME IS NOT ON OFFER.
+  Between the pass and the pixel a scene can release a node's id and give it to
+  another, and the decoded id then resolves to a real node that was not under
+  the pointer. Every assignment bumps a stamp, each id remembers the stamp it
+  was assigned at, and a pass records the stamp it drew with; an id that
+  changed hands since resolves to nothing. The comparison is PER ID and not
+  against one revision for the whole registry, because a scene that adds a node
+  every frame bumps the stamp every frame, and a registry-wide revision would
+  refuse every pick in flight in exactly the scenes picking exists for. The
+  free list is FIFO on top of that, which changes nothing about what is correct
+  and makes a refusal rarer.
+  THE CHANNEL BUDGET DID NOT MOVE, WHICH M4.3's NOTE EXPECTED IT TO. That note
+  reserves the one free vertex buffer slot on the instanced node pipeline for
+  M4.6's spring velocity or M4.8's picking id. M4.8 does not take it: the pick
+  bytes are read by the PICK material and not by the node material, and
+  `instance-attributes.ts` counts what a shader READS rather than what a
+  geometry carries, so this is D3's situation of a different pipeline with its
+  own eight. Half the contest for that slot is therefore off, and this run says
+  nothing about M4.6's half, which is M4.6's to settle. M4.8b adds the
+  attribute and should confirm the count where it does, rather than trusting
+  this line.
+  ONE ASSUMPTION IS CARRIED RATHER THAN CHECKED, and it is handed to M4.8b
+  named: screen y grows downward and three's readback measures y from the
+  bottom of the target, so the pointer's row is flipped on the way in. Nothing
+  in Node can confirm that. A flip got backwards is a pick that is perfect in
+  the middle of the canvas and names the wrong node everywhere else, which is
+  the failure shape most likely to be shipped.
+- [ ] **M4.8b** (`@dagr/render`, `apps/demo`) GPU picking, the pass: an ID
+  buffer pass rendering per-instance IDs to an offscreen target, with a
+  single-pixel readback giving O(1) hover, select and drag hit testing
+  regardless of node count. Demo scene with hover highlight.
+  Decide here when the pass runs. It can run every frame (simple, and costs a
+  second full draw of the scene) or on demand when the pointer moves (nearly
+  free when idle, adds a frame of latency and needs care while things are
+  animating, which in this project is most of the time). WebGPU's asynchronous
+  readback makes the latency half of that sharper than the equivalent WebGL
+  decision would be, so measure it rather than porting an instinct. Treat it as
   provisional until M4.10 measures it, since the ID pass sits inside that
   task's frame budget and the two decisions are the same decision seen from
   two ends.
+  WHAT M4.8a LEAVES HERE, so this does not start by deciding it again. The
+  encoding is settled and tested, so the pass writes `encodePickId` bytes and
+  the readback reads `decodePickPixel`; the pointer arithmetic is settled, so
+  the pass reads `pickReadbackPixel`'s pixel and nothing recomputes a device
+  pixel ratio, which `camera.ts` reserves to `drawingBufferSize`; and the
+  registry is settled, so the pass records `PickIdRegistry.stamp` when it draws
+  and resolves with `keyFor(id, stamp)` rather than assuming an id still means
+  what it meant.
+  THREE PROPERTIES THE PASS OWES, none of which M4.8a can enforce. The target
+  is cleared to all four channels ZERO, since the tag is the authority and a
+  different clear leaves pixels whose bytes mean nothing. BLENDING IS OFF and
+  the material is not transparent, since a blend averages two ids into a third
+  that is well formed and belongs to a node somewhere else. And NO COLOUR
+  MANAGEMENT touches the path, since these bytes are not a colour and an sRGB
+  conversion is a permutation of the id space. `decodePickPixel` catches some
+  of the ways those go wrong (an unknown tag, a tagged pixel with id 0) and
+  cannot catch all of them, which is why they are a contract and not a check.
+  ALSO OWED HERE: the y flip M4.8a assumed, confirmed against a real readback,
+  and the vertex buffer count on the pick pipeline, confirmed where the
+  attribute is added rather than inherited from M4.8a's paragraph on it.
 **M4.9 IS SPLIT INTO M4.9a AND M4.9b**, and the split is drawn by what a machine
 has rather than by what a task wants. Everything about SELECTING a backend and
 REPORTING it is arithmetic over two strings and two booleans, checkable with no
@@ -4310,11 +4538,12 @@ through the WebGL2 backend. M4.9b is the fifth, the parity screenshot.
   that it spent it. It did not: `maxVertexBuffers` is a PIPELINE limit, the
   reserved slot is the instanced NODE pipeline's seventh of eight, and D3's
   highlight is an attribute on the RIBBON mesh, which is a different material
-  and a different pipeline. That one went from five of eight to six. So M4.6's
-  spring velocity and M4.8's picking id are still competing for one slot with
-  each other and with the two ordinary scene changes M4.3's record names (a
-  material that comes to read `uv`, and a light or environment map that pulls in
-  the `normal` the quad already carries). What D3 does add to this task's
+  and a different pipeline. That one went from five of eight to six. So the slot's
+  only remaining candidates are the two ordinary scene changes M4.3's record
+  names (a material that comes to read `uv`, and a light or environment map
+  that pulls in the `normal` the quad already carries): M4.6 withdrew the
+  spring velocity when the springs shipped as CPU arithmetic, and M4.8a took
+  the picking id out of the contest on the pipeline rule. What D3 does add to this task's
   measurement is a second per-fragment multiply on every ribbon and a per-vertex
   one on every ribbon vertex, which at the campaign's 7,100 routes is the cost
   worth a line in the pass breakdown rather than a guess here.
@@ -4425,7 +4654,8 @@ it settled rather than restating the argument.
   assumed (`style.transform` round-trips verbatim, `pointer-events` survives
   `setProperty`, `getComputedStyle().position` resolves an inline value and
   reports `static` without one, `remove()` detaches), and because `@dagr/react`
-  will want the same implementation at M5.1. What stays untested is that a
+  will want the same implementation at M5.1. IT DID: M5.1 selects jsdom the same
+  way, per file through the docblock, for all three of its DOM suites. What stays untested is that a
   browser composes the two transforms the way the algebra says and that the
   float32 argument above is quantitatively right; both are listed with the rest
   of the package's untested surface on `docs/docs/render.md`.
@@ -4641,7 +4871,7 @@ it settled rather than restating the argument.
   relative-color-syntax `calc()` channels (`postcss-calc` cannot lex `l - 0.05`).
   Verified against the built output rather than assumed: the expressions
   survive minification verbatim, so the warnings are noise, not damage.
-- [ ] **M5.1** `@dagr/react`: `<DagrCanvas>` + `useDagr` hook, controlled
+- [x] **M5.1** `@dagr/react`: `<DagrCanvas>` + `useDagr` hook, controlled
   graph prop, mocked-renderer component tests.
   ALSO LANDS `<Html>`, the React sugar over M4.11's overlay, and the reason it
   waits for this task rather than shipping with M4.11 is that it has to FIND
@@ -4652,6 +4882,99 @@ it settled rather than restating the argument.
   with the shape when this task arrives with the requirements that should have
   decided it. The maintainer was asked on 2026-08-14 whether to reverse that
   and bootstrap the package early; until they do, `@dagr/react` stays empty.
+  THE MAINTAINER NEVER ANSWERED AND THE QUESTION EXPIRED WITH THIS TASK: the
+  package is no longer empty, so there is nothing left to bootstrap early. The
+  ordering argument above held up exactly as written, and `canvas-context.ts`
+  is the context it predicted, carrying the one field the prediction did not:
+  the LAYOUT, without which `<Html node="a">` cannot know where node `a` is.
+  A context of `{ renderer, overlay }` would have been smaller and would have
+  forced every consumer to run the layout a second time to place a label, which
+  is two answers that can disagree while an edit is in flight.
+  CONTROLLED MEANS WATCHED, WHICH IS THE ONE DECISION EVERYTHING ELSE HANGS
+  OFF. `Graph` is mutable, so a graph prop compared by identity would mean
+  `graph.addNode(...)` changed nothing on screen until the caller also replaced
+  the object. `Graph.subscribe` is already `useSyncExternalStore`'s subscribe
+  to the character (a listener in, an unsubscribe out), so the hook watches the
+  graph and an edit reaches the canvas whichever way it arrives. THE SNAPSHOT
+  IS A COUNTER THIS PACKAGE KEEPS, because `Graph` exposes no O(1) mutation
+  counter, and that leaves ONE window: React subscribes in an effect, effects
+  run child first, so a CHILD's mount effect that edits the graph runs before
+  the subscription exists and that edit is not drawn until the next one. Both
+  ways of closing it from this side were measured against and rejected, and the
+  reasons are opposite in kind. Bumping the counter inside `subscribe` makes
+  the post-subscribe re-check ALWAYS differ, so every mount lays out twice.
+  Subscribing during the first render, through a registry keyed on the graph,
+  can never unsubscribe (the listener has to outlive the component to be there
+  before the next one renders), so a graph that has ever been rendered builds a
+  `Patch` on every mutation forever, which is precisely the cost `@dagr/graph`
+  documents itself as not paying for a graph nobody subscribed to. QUEUED FOR
+  `@dagr/graph`: an O(1) monotonic revision on the graph itself is a true
+  snapshot and closes the window with no bookkeeping here at all.
+  THE CONFIG IS COMPARED BY VALUE AND `nodeSize` CANNOT BE. `LayoutConfig` is
+  the one prop a caller writes as an object literal in their JSX, so identity
+  comparison would relayout the whole graph on every render of the surrounding
+  application. The comparison names its five fields one at a time, because
+  `defaultNodeSize` is an object literal too and a shallow compare gets it
+  wrong. Naming fields means a field added upstream is silently not compared,
+  so the file carries a type-level assertion that fails to compile the day
+  `LayoutConfig` grows one. `nodeSize` is compared by identity because two
+  functions that agree on every node are indistinguishable without calling them
+  on every node, which is the work the comparison exists to avoid.
+  A LAYOUT THAT FAILS IS REPORTED BY THE HOOK AND THROWN BY THE COMPONENT, and
+  the split is deliberate. A graph a user is editing passes through states the
+  layout refuses, so a hook that threw would unmount the subtree to the nearest
+  boundary on the keystroke that made the graph momentarily invalid. It does
+  not hold the last good result either: a stale picture presented as the
+  current one is the failure mode hardest to notice. `<DagrCanvas>` throws it
+  during render so a boundary catches it, unless an `onError` takes it, because
+  the remaining option is an empty box and an empty box is indistinguishable
+  from an empty graph.
+  THE CAMERA IS FITTED ONCE. The first frame with both a layout and a viewport
+  frames the graph and nothing refits after. Refitting per edit would be a
+  camera that jumps whenever the graph changes, which is the instability all of
+  M3 exists to keep out of the layout, reintroduced one level up where no
+  stability metric would ever see it.
+  `<Html>` INVERTS THE OVERLAY'S LIFECYCLE RATHER THAN WRAPPING IT. The
+  component owns one host element for its whole life, `create` hands the
+  overlay that same element every time, `release` does nothing, and the
+  children reach it through a portal, so the overlay attaches and detaches an
+  element whose contents React has been maintaining all along. THE COST IS THE
+  CAP: the overlay's `create` is lazy so that 2,800 nodes build DOM for the few
+  dozen on screen, and a portal is not lazy, so a culled `<Html>` still has its
+  subtree mounted. THIS COMPONENT IS FOR THE TENS AND `createRichNodes` IS FOR
+  THE THOUSANDS, which is now written on both. An entry is registered once and
+  MOVED afterwards, never re-registered, because a re-register detaches and
+  reattaches the element on every edit.
+  THE SCENE CONVERSION IS EXPORTED, NOT HIDDEN. `@dagr/render` refuses to name
+  a `LayoutResult` on the argument that the y flip belongs to whoever owns the
+  layout, and this is the first package that owns both, so `scene.ts` is the
+  flip and it is public: a caller driving the renderer directly wants the same
+  three functions rather than writing it a fourth time. THE FLIP IS THREE
+  SEPARATE EXPRESSIONS (nodes, route points, bounds) AND FLIPPING TWO OF THREE
+  IS GREEN ON EVERY UNIT TEST OF THE TWO, so the suite runs a real layout
+  through all three and asserts they agree.
+  DEPENDENCY SHAPE, ON `@dagr/layout`'s OWN ARGUMENT: `@dagr/graph` and
+  `@dagr/render` are PEER dependencies plus devDependencies, because both put a
+  class with `#private` fields on this package's surface (`Graph`, and
+  `Camera2D` through `Renderer.camera`) and a nominal type has to be the same
+  copy. `@dagr/layout` is a plain dependency: everything it puts on the surface
+  is a structural interface, and a consumer who wants a canvas should not have
+  to install the layout engine to get one. M5.4's pack-and-check list is where
+  that gets verified against a real tarball.
+  THE TEST HARNESS IS FORTY LINES OF `react-dom/client` AND `act`, WITH NO
+  TESTING LIBRARY, and three non-test helpers beside it: `mount.tsx`,
+  `frames.ts` (a hand-driven `requestAnimationFrame`, so "has it drawn yet" is
+  an event the test causes rather than a race against jsdom's timer) and
+  `resize.ts` (jsdom has no `ResizeObserver` and lays every element out at zero
+  by zero, so both halves of "the canvas got bigger" are supplied). The one
+  class component in the package is the error boundary in `mount.tsx`: a root's
+  `onUncaughtError` is not a substitute, because React reports through it AND
+  rethrows out of the `act` that caused the render.
+  WHAT THE MOCK CANNOT SEE IS ASSERTED DIRECTLY. A faked renderer cannot refuse
+  a static overlay parent or a zero viewport, so the two places this package
+  has to hold up its end of those contracts are pinned by their own tests: the
+  container carries `position: relative`, and a container measuring zero by
+  zero is never passed to `resize`.
 - [ ] **M5.2** Interaction hooks: `useSelection`, hover and drag wiring to
   GPU picking. Component tests.
 - [ ] **M5.3** Demo app: animated living demo (grow/prune/relayout
@@ -4710,7 +5033,7 @@ it settled rather than restating the argument.
   `pnpm --filter @dagr/layout build` needs `@dagr/graph` built first (see the
   comment in `packages/layout/tsconfig.build.json`). Not worth the machinery at
   two packages, worth knowing about before the other decision is made.
-- [ ] **M5.5** Reserve containment in the graph model: `readonly parent?: NodeId`
+- [x] **M5.5** Reserve containment in the graph model: `readonly parent?: NodeId`
   on `Node` and on `NodeJSON`, an `update-node-parent` patch op, the invariants
   (a node has at most one parent, containment is acyclic, an edge may cross a
   boundary), and traversal coverage. `@dagr/layout` IGNORES `parent` in this
@@ -4771,6 +5094,105 @@ it settled rather than restating the argument.
     the moment M7 reads `parent`.
   This is not a bet that nesting is wanted — M6.4 and M7 decide that. It is the
   cheap half of an option whose expensive half is a coordinated release.
+  SHIPPED. `Node.parent`, `NodeInit.parent`, `graph.setNodeParent(id, parent)`,
+  `graph.children(id)`, the `update-node-parent` op, `ContainmentCycleError`,
+  and `NodeJSON.parent`, with 35 tests in
+  `packages/graph/test/graph.containment.test.ts` written before the
+  implementation. `@dagr/layout` gained the two explicit cases below and no
+  reading of `parent` at all.
+  THE THREE RULES ARE ONE FIELD AND ONE WALK. At most one parent is the field
+  being a field. Acyclicity is a walk UP from the proposed parent, which is
+  O(depth) rather than O(subtree) because a node has one parent and many
+  children, and it terminates because the relation it is checking is a forest.
+  An edge crossing a boundary needed no code, which is the point: containment
+  and adjacency are separate relations and nothing derives one from the other.
+  A `#children` index is carried beside the record for the one direction the
+  record cannot answer, since `removeNode` has to know what a node contains and
+  a pass over the roster per removal is not a cost this model pays anywhere
+  else. `children` sorts it by insertion rank, the rule `successors` follows,
+  so a listing never depends on the order the containment was declared in.
+  THE CHILDREN INDEX IS LAZY, AND THAT IS A MEASUREMENT RATHER THAN A TASTE.
+  Every other per-node index here is present for every node, because every node
+  uses one; a graph that never nests anything would have paid an empty `Set` per
+  `addNode` for a relation it never asked for, worth about 4% on the 1k-node,
+  4k-edge build in an interleaved A/B against the version before this task. The
+  entry is created on a node's first child and dropped again when its last child
+  leaves, so a graph that used containment and stopped costs what one that never
+  used it costs, and an absent entry means "contains nothing" rather than "not a
+  node", which moves the presence question onto the node map.
+  `setNodeParent` RATHER THAN `updateNodeParent`, against the op's own name.
+  Every `update` on this class merges a patch into a bag and leaves what the
+  patch does not name alone; this replaces one field, and `undefined` is a value
+  rather than a request to leave it alone. The op keeps `update-node-parent`
+  because an op names the kind of change and every changed-field op in the
+  format is spelled that way. The mismatch is deliberate and documented on both
+  sides.
+  THE TWO ORDERING BULLETS ARE ONE DECISION AND THE ENTRY WAS RIGHT ABOUT IT.
+  `removeNode` emits its subtree depth-first post-order, and reversing that is
+  already the order `apply` needs, so `invert` sorts nothing and `apply` sorts
+  nothing. What the entry did NOT anticipate is that the SAME constraint reaches
+  serialization and cannot be paid the same way: a document's `nodes` array is
+  in insertion order, and a node reparented long after it was added is written
+  BEFORE the parent it names. So `fromJSON` reads `nodes` in two passes, adding
+  every node and then setting every parent. One pass would refuse a document
+  this package itself wrote, and sorting the nodes into containment order would
+  restore a graph whose iteration order is not the one that was written, which
+  the format promises. GENERALISE IT: an ordering constraint on a REPLAY is
+  payable by emitting in the right order; the same constraint on a DOCUMENT is
+  not, because the document's order is already promised to something else.
+  THE FORWARD REFERENCE IS NOT A CORNER CASE, MEASURED RATHER THAN ASSUMED. Both
+  property suites gained a reparent command, and over the serialization suite's
+  200 random documents 58 nodes were written with a parent and 26 of those named
+  a parent the document had not written yet. A one-pass reader would have
+  refused one document in eight of the ones that use containment at all. The
+  patch suite's four properties (replay, invert, unwind to empty, invert twice)
+  hold over 160 reparents and 25 removals that took a contained node with them,
+  which is the ordering rule above checked by something other than the case that
+  was written for it.
+  A TWELFTH ERROR, WHICH IS A THIRD SURFACE OF THE KIND THIS TASK EXISTS TO MOVE
+  EARLY. The entry named `PatchOp` and `GraphJSON.version`; `DagrGraphErrorCode`
+  is the same shape of commitment, since adding a code breaks an exhaustive
+  switch exactly as adding an op does, and it grew here rather than being
+  avoided by reusing `CycleError`. Reuse was rejected on the reading side: the
+  two relations are different, a caller catching one has no way to ask which it
+  got, and `CycleError`'s "consecutive entries are joined by an edge" would have
+  become false of half its instances.
+  `update-node-parent` SPELLS BOTH KEYS PRESENT, which is the opposite of how
+  the record and the add and remove ops spell the same field, and the asymmetry
+  is between a state and a transition. A record says what a node IS and an
+  absent key is the cleanest way to say it has no parent. The op says what
+  MOVED, and both ends of a move have to be nameable, or "was a root" and "did
+  not say" are spelled the same and every consumer tests `'before' in op` before
+  believing the value.
+  `PatchOp` IS DOCUMENTED AS AN OPEN UNION, in its own docstring and on the docs
+  page, and the note says what the convention does NOT do: a `default:` arm
+  keeps a consumer compiling and running across a version that adds an op, and a
+  `never` arm still breaks the day one lands. It works here only because this is
+  pre-v0.1, so the convention lands before the first consumer who could be
+  broken by it. The package's own `invert` and `apply` stay exhaustive on
+  purpose, so a new op cannot be added without teaching both.
+  `GraphJSON.version` STAYS 1 AND THE FORMAT'S OWN RULE SAYS WHY IT COULD NOT
+  HAVE, which is the contradiction worth writing down rather than leaving for a
+  reader to find: the version field's section already said an additive field a
+  version 1 reader would silently drop is a version bump. It is, when such a
+  reader exists. Containment landed before the first published release, so one
+  never will, and the rule is about readers that exist rather than about the
+  shape of the change. The next additive field does not get the same answer.
+  THE TWO `@dagr/layout` CASES ARE NOT THE SAME KIND OF CASE. `influenceRegion`
+  takes the documented no-op the entry allowed, and empty is EXACT rather than
+  optimistic: no stage reads `parent`, so the drawing after a reparent is the
+  drawing before it, coordinate for coordinate. `checkPatchApplied` takes more
+  than a no-op, because that function exists to catch a caller who hands over a
+  patch expecting the engine to apply it, and a patch of nothing but reparents
+  was the one edit that could pass through it in silence. It now reads the claim
+  the op does make, under the same last-op-wins rule as the presence checks, so
+  a node the patch ends by removing is checked as removed and not as reparented.
+  WHAT M6.4 AND M7 INHERIT. The model, settled, plus a `children` listing whose
+  order is a promise. M7 is where `influenceRegion`'s empty case stops being
+  exact: on the day a parent is drawn around its children, a reparent moves the
+  drawing, and that case becomes a wrong narrow bound rather than a documented
+  no-op. It is written out rather than folded into the `default` arm for exactly
+  that reason, so the task that changes it finds a case rather than a silence.
 
 ## M6: VDSL = v0.2 (`@dagr/vdsl`)
 
@@ -4810,7 +5232,7 @@ assumptions become the API and nobody notices until the second arrives. Two
 consumers with genuinely different shapes is the cheapest available test of
 whether the generalisation holds.
 
-- [ ] **M6.1** Node spec adapter: the interface a consumer implements to
+- [x] **M6.1** Node spec adapter: the interface a consumer implements to
   describe its own node kinds (ports, arity, config shape), and the registry
   that resolves a node to a spec. Dagr defines the interface and nothing
   behind it.
@@ -4824,6 +5246,122 @@ whether the generalisation holds.
   peerDependencies plus devDependencies, for the same `#private` nominal-typing
   reason M5.4 records for `@dagr/layout`. Two copies of `@dagr/graph` in a
   consumer's tree are not interchangeable.
+  SHIPPED as `packages/vdsl`, a new package: `src/types.ts` (`PortSpec`,
+  `NodeSpec`, `NodeSpecInit`, `ConfigCheck`, `RegistryOptions`, `KindNodeInit`,
+  `NodeRegistry`), `src/registry.ts` (`DEFAULT_KIND_KEY`, `defineRegistry` and
+  the `Registry` class behind it), `src/errors.ts` (`DagrVdslError` and three
+  members), 50 tests across four files, a `CHANGELOG.md`, and
+  `docs/docs/vdsl.md` at sidebar position 7. Two prose edits outside the
+  package, both of them a document that said this package does not exist: the
+  Status section of `docs/docs/visual-languages.md`, and the `@dagr/vdsl` row
+  of README.md's package table, which read "Planned (v0.2)". The README row is
+  the tree pass's find, and it is the same amend-your-own-row rule PR #57 and
+  PR #59 are each following on their own package's row.
+  TAKEN THREE MILESTONES OUT OF ORDER, AND THE REASON IS THE PILE RATHER THAN
+  THE TASK. Eight pull requests were open on one blocker when this run started,
+  main had not moved since 2026-08-18, and every unchecked task in milestone
+  order reads a file some open branch is rewriting: M3.7 IS #53, M3.8 stacks on
+  it, M4.7 drives M4.6's springs and those are on #57, M5.3 needs both #59 and
+  #57. This is the one unchecked task whose dependencies are entirely merged on
+  main and whose files NO open PR touches, so it merges in any order with the
+  eight and imposes a conflict on none of them. That is a property of the
+  pile's shape and not an argument that M6 is ready, and the milestone preamble
+  still says the breakdown is finalised when M5 completes.
+  THE PACKAGING NOTE ABOVE IS RIGHT AND ITS REASON IS NOT TRUE YET. The
+  `#private` nominal-typing argument is about `Graph`, and M6.1 does not put
+  `Graph` on its surface: it takes `Node<A>` and returns `NodeInit<A>`, both
+  interfaces, both structurally typed, both interchangeable between two copies
+  of `@dagr/graph`. The argument becomes load-bearing at M6.2, whose own entry
+  names `graph.canReach` and therefore puts a `Graph` in a parameter position.
+  The peer is declared NOW anyway, because the alternative is changing a
+  dependency's kind between two 0.x tasks for a reason nobody reading the diff
+  would recognise. Every import in this package is `import type`, so with
+  `verbatimModuleSyntax` the built JavaScript imports `@dagr/graph` not at all.
+  `@dagr/react` AND `react` ARE NOT DECLARED, AND THAT IS THE SAME RULE POINTED
+  THE OTHER WAY. Nothing here imports either, and M6.3 is the first task that
+  will. A peer dependency declared ahead of an import makes every consumer of a
+  headless registry install React to silence a warning about a dependency the
+  package does not use. M6.3 adds them, and the note above is where it will
+  look.
+  ARITY IS A CAP AND NOT A WORD. `PortSpec.maxEdges`, absent meaning unbounded.
+  The usual `'single' | 'multiple'` is the two useful values of a number, so a
+  number loses nothing, and a union declared here is a union every consumer's
+  exhaustive `switch` breaks on when a third case arrives, which is the hazard
+  M5.5's entry plans to document `PatchOp` as an open union to escape. Absent
+  rather than `Infinity` because `Infinity` does not survive `JSON.stringify`
+  and a spec a consumer cannot serialise is a spec they cannot ship a fixture
+  of. ENFORCEMENT IS M6.2's: a spec says what the rule is, and a proposed
+  connection is where the rule is met. What this task does is refuse a value
+  M6.2 could not act on, so the number M6.2 reads is a positive integer or
+  nothing.
+  VALIDATION IS AT DEFINE TIME. An empty kind, an empty port id, a port id
+  declared twice in one kind, and a `maxEdges` that is not a positive integer
+  all throw out of `defineRegistry`. A registry is built once from a literal,
+  usually at module scope, so a bad spec is a bug in the consumer's source
+  rather than in their data, and the run that finds it should be the one that
+  loads the module. The same port id in two DIFFERENT kinds is allowed and
+  tested: port ids are unique within a node and not across a graph, and two
+  kinds that could not share a port vocabulary would be a rule the graph model
+  does not have.
+  THE CAST IS ONE, AND IT IS INSIDE. The entry's own argument is that reading
+  `attrs.kind` erases the kind union, and reading it is still what has to
+  happen: the registry does it once, in `attrsOf`, widening
+  `Readonly<Partial<A>>` to an unknown-valued bag, which is the safe direction
+  because every value out of it is `unknown`. `nodeInit` holds the writing
+  mirror of it, putting one key into an `AttrsPatch<A>` under a runtime-chosen
+  name. TWO CASTS IN THE PACKAGE, one in each direction, and the reading one is
+  a helper rather than a cast per reader so a third reader cannot arrive
+  without the argument attached. The tree pass found the first draft had three:
+  the extra was `checkConfig` widening the bag a second time to hand it to the
+  consumer's own validator, and the entry claimed two while the code held
+  three.
+  `has` LOOKS IN A MAP RATHER THAN AT THE OBJECT. `'toString' in specs` is true
+  for every object literal a consumer writes, and a membership test that
+  answers yes for an inherited property name is a narrowing that lies: it hands
+  back `'toString'` typed as one of the consumer's kinds. Tested with
+  `'__proto__'` and `'toString'` directly, because the correct implementation
+  makes the case unreachable by construction and a guard nobody can trip is a
+  guard nobody can check.
+  TWO ERRORS FOR THREE FAILURES, ON PURPOSE. An absent kind attribute and one
+  holding a non-string both raise `NodeKindMissingError`, because the caller's
+  remedy is the same sentence in both cases and the difference is a detail of
+  what was there, which the error carries as `value` and names in its message.
+  `UnknownNodeKindError` is the genuinely different one: the node said
+  something legible and this registry does not hold it, so the error carries
+  the kinds that were declared, which is the list the message is for.
+  `nodeInit` IS THE SEAM, AND IT IS WHAT MAKES THE SPEC ACTIONABLE RATHER THAN
+  DECORATIVE. A spec that cannot produce a node is a spec nobody can use, and
+  the round trip (`graph.addNode(registry.nodeInit(k))` then
+  `registry.resolve(node)`) is asserted. Two things it refuses: the kind
+  attribute is written LAST so a caller's own `attrs` cannot mislabel the node
+  they are building, and ports are not takeable from the caller, because the
+  spec is what says which ports a kind has and a node that quietly gained one
+  would resolve to a spec that does not describe it. `A` is the caller's own
+  attribute type, inferred from the graph the init is handed to, so a typed
+  consumer's keys are checked; a consumer whose type does not declare the kind
+  key still gets it written, because `Graph` stores what it is given.
+  NO PER-KIND PAYLOAD ON A `NodeSpec`. No label, no colour, no category, no
+  `meta` slot. It is a real want and the shape it should take is decided by
+  what M6.3's callbacks actually need to read, and a `meta` typed per kind is a
+  second type parameter fighting the inference this entry asks for. Until a
+  consumer asks, `registry.kinds` is typed and exhaustive, so a
+  `Record<Kind, YourPayload>` of the consumer's own is checked for completeness
+  by the compiler at no cost to this package. This is `@dagr/graph` keeping
+  `traversal.ts` unexported and `@dagr/layout` publishing only `defaultStages`,
+  a third time.
+  WHAT M6.2 INHERITS. The port type token goes on `PortSpec` beside `maxEdges`,
+  and the compatibility predicate goes on `NodeSpecInit` beside `checkConfig`,
+  both additive. Connection validation reads `maxEdges` and gets a positive
+  integer or nothing. `Graph` arrives on the surface with `canReach`, at which
+  point the packaging note's stated reason starts being true. One thing M6.2
+  should not inherit by accident: `checkConfig` returns strings rather than a
+  structured issue type, and a connection validator returning something richer
+  would be two shapes for one job, so decide it there rather than drifting into
+  it.
+  `defineRegistry({})` IS ALLOWED AND INFERS `K` AS `never`, so every method
+  taking a kind is uncallable and `has` answers false for everything. Left
+  legal rather than refused, because it is what a consumer building kinds up
+  behind a flag writes first and the type system already says the whole story.
 - [ ] **M6.2** Port typing and connection validation: a type token per port,
   a compatibility predicate the consumer supplies, and validation of a
   proposed connection against it.
@@ -5509,8 +6047,10 @@ the demo itself should show richer nodes and its zoom.
   THE CHANNEL BUDGET, which M4.3 asked to be told about and which the obvious
   reading gets wrong: this does NOT spend the one free vertex-buffer slot.
   `maxVertexBuffers` is a PIPELINE limit; the reserved slot is the instanced NODE
-  pipeline's seventh of eight, spoken for by M4.6's spring velocity or M4.8's
-  picking id; and a ribbon group is a different mesh with a different material and
+  pipeline's seventh of eight, once contested by M4.6's spring velocity and
+  M4.8's picking id and now claimed by neither, M4.6 having shipped the springs
+  as CPU arithmetic and M4.8a having withdrawn on this same rule; and a
+  ribbon group is a different mesh with a different material and
   its own eight, which went from five to six. The rule worth carrying forward is
   that a slot belongs to the SHADER that reads the attribute, not to the package
   or the scene. Recorded on M4.3 and M4.10 as well as here, in

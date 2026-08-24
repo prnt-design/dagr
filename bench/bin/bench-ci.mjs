@@ -40,9 +40,13 @@ import { MAX_ATTEMPTS, decide, sharedFailures } from '../src/repeat.mjs';
  * not count towards either two. What used to be "retry once on exit 2"
  * generalises into the attempt budget below.
  *
- * A harness error is not re-measured. A stale report, a missing baseline or a
- * malformed exemption reproduces on the next run by construction, so spending
- * two more measurements on it buys nothing.
+ * A harness error is not re-measured. A stale report, a missing baseline, a
+ * malformed exemption or a baseline captured on a different machine reproduces
+ * on the next run by construction, so spending two more measurements on it buys
+ * nothing. The machine case is the one that most needs saying: it moves whole
+ * families of entries at once, so re-measuring it produces the same failing
+ * entries every run, which is precisely the signature this command reports as
+ * the strongest evidence for a real regression.
  */
 
 const root = fileURLToPath(new URL('../../', import.meta.url));

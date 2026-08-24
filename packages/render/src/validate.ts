@@ -80,6 +80,31 @@ export function requireIntegerAtLeast(value: number, min: number, field: string)
   return value;
 }
 
+/**
+ * Rejects a value that is not an INTEGER in `[min, max]`, naming the field.
+ *
+ * The two-sided form of {@link requireIntegerAtLeast}, and it arrived with
+ * M4.8a's pick ids, where every bound is two-sided for a structural reason: an
+ * id is three bytes, a channel is one, and a value past either end is not a
+ * large number but a different number after the bits above the field are
+ * dropped. `0x1000001` as an id encodes as 1, which is a real id belonging to
+ * somebody else, so a one-sided check would let the failure through as a
+ * confident answer about the wrong node.
+ */
+export function requireIntegerInRange(
+  value: number,
+  min: number,
+  max: number,
+  field: string,
+): number {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new RangeError(
+      `${field} has to be an integer between ${String(min)} and ${String(max)}, got ${String(value)}`,
+    );
+  }
+  return value;
+}
+
 /** Rejects a value that is not a finite number at or above zero. */
 export function requireNonNegative(value: number, field: string): number {
   if (!Number.isFinite(value) || value < 0) {
