@@ -14,6 +14,173 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- `backend` on `RendererOptions` and `backend` on `Renderer`: which of three's
+  two backends to draw through, and which one you got. `'auto'` (the default)
+  takes WebGPU where the machine has it and WebGL2 where it does not; naming
+  `'webgpu'` or `'webgl2'` turns the preference into a requirement and rejects
+  with a new `BackendUnavailableError`, code `BACKEND_UNAVAILABLE`. The three
+  new names on the surface are that error and the two string-union types
+  `RendererBackend` and `BackendPreference`. (M4.9a)
+
+  **NOTHING BEHAVES DIFFERENTLY BY DEFAULT.** three's `WebGPURenderer` has always
+  fallen back to WebGL2 by itself, so `createRenderer({ canvas })` builds exactly
+  what it built before and resolves in exactly the cases it resolved before. What
+  is new is that a caller can find out. A fallback nobody can see is a
+  performance cliff a consumer discovers first, and until now `createRenderer`
+  resolving was the only signal and it said nothing about which backend resolved
+  it.
+
+  **AUTOMATIC BY DEFAULT, EXPLICIT ON REQUEST.** Refusing by default would make
+  this package unavailable on every browser that has not shipped WebGPU, for a
+  reason the person looking at the blank canvas cannot act on. Refusing when
+  asked is a different thing: a caller who wrote `backend: 'webgpu'` is saying
+  their scene is only worth drawing on the fast path, and the useful answer to
+  that is an error rather than a slower frame.
+
+  **DO NOT PROBE `navigator.gpu`, AND THAT IS MEASURED.** On the headless
+  Chromium this repository's browser probe runs on, `'gpu' in navigator` is
+  `true` and `navigator.gpu.requestAdapter()` then returns `null`. A capability
+  check before construction would have reported WebGPU on a machine that cannot
+  give one, which is the exact wrong answer for the one caller who cared enough
+  to ask. The backend is therefore read AFTER `init()`, off what three actually
+  built.
+
+  **NO FALLBACK EVENT, DELIBERATELY.** three falls back inside the `init()` that
+  `createRenderer` awaits, so there is no moment at which a caller holds a
+  renderer and does not already have `renderer.backend`. A callback would be a
+  second way to learn one fact, delivered before the caller has anything to do
+  with it.
+
+  **`'unknown'` IS A THIRD VALUE AND NOT A THIRD BACKEND.** The backend is named
+  by reading three's `isWebGPUBackend` and `isWebGLBackend` markers, which three
+  declares on its two concrete backends and not on the `Backend` type that
+  `renderer.backend` has. A release that renames either one leaves a renderer
+  that draws perfectly and cannot be named, so `'auto'` reports `'unknown'` and
+  hands it back rather than trading a working renderer for a naming problem. A
+  caller who NAMED a backend asked for a guarantee that can no longer be made,
+  and is refused. Same fact, two answers, one rule.
+
+- `PickIdSpaceExhaustedError`, and `PICK_IDS_EXHAUSTED` on
+  `DagrRenderErrorCode`. The only two names M4.8a puts on the surface: the id
+  encoding, the readback pixel arithmetic and the id registry under them are
+  internal, because a caller has nothing to encode until M4.8b ships a pass
+  that writes the bytes and a `pick()` that reads them back. (M4.8a)
+
+  **WHY HALF A TASK.** M4.8 is an offscreen pass that draws every instance in a
+  colour naming it and reads back one pixel. The pass, the target and the
+  readback need a device; what a pixel says, which pixel a pointer is asking
+  about, and which node an id still means do not. The half that needs no device
+  is exhaustively testable and the half that needs one cannot be verified at
+  all on a box whose headless Chromium has no WebGPU, so shipping them together
+  would put both behind the same green tick. Splitting a task in two is what
+  M2.4 and M2.6 did when one run could not carry both halves; the seam here is a
+  device rather than a scope.
+
+  **THE ID IS NOT THE SLOT AND NOT THE HANDLE.** A slot costs nothing to write,
+  since the shader already knows its own instance index, and it is wrong:
+  `InstanceBuffer` removes by swapping the last live instance into the freed
+  slot, and a readback answers a question about a frame already drawn, so by
+  the time the pixel is decoded the slot may name somebody else. A handle is
+  durable and unbounded, so it passes three bytes in a long session and
+  truncating one collides. The pick id is a third name, durable like a handle
+  and bounded like a slot, keyed by the caller's own node or edge id rather than
+  by a handle because that is the name a pick has to come back as, and because
+  handle spaces are per family: the first rounded rect and the first circle are
+  both handle 1.
+
+  **THREE BYTES AND A TAG, FOR A DIFFERENT REASON THAN THE ROADMAP GAVE.** The
+  entry justified the tag byte as letting a hit say what it hit without a side
+  lookup. That reason does not survive contact with the registry, which IS a
+  side lookup, exists for the recycling, and is on the path of every pick. The
+  tag is worth having because it PARTITIONS the id space, so nodes and edges
+  keep separate allocators instead of sharing one counter across two meshes
+  that know nothing about each other, and because it survives a stale answer:
+  a pick that cannot be resolved can still say the pointer was over an edge.
+  Tag 0 is nothing and no instance is given id 0, so a target cleared to all
+  zeros reads as a miss with no reserved value for a caller to remember.
+
+  **THE ID IS DECOMPOSED ON THE CPU, AND THE MARGIN IS MEASURED.** Handing the
+  shader one number and splitting it there costs no bytes per instance and
+  loses nodes. Every vertex of an instance's quad carries the same value, so
+  the interpolated value differs from it by about a float32 ulp, and at 2^24
+  that ulp is exactly 1: one bit of drift is the next id. Three byte-valued
+  channels drift by 6e-8 against an RGBA8 write that rounds to the nearest
+  1/255, a margin of about 3e4. `test/picking.test.ts` asserts the surviving
+  encoding over every byte value there is and shows the rejected one losing at
+  the top of its range, which is the repo's rule about a guard that passes by
+  construction.
+
+  **A REFUSED PICK IS A DESIGNED ANSWER.** Between the pass and the pixel a
+  scene can release a node's id and give it to another, and the decoded id then
+  resolves to a real node that was not under the pointer. Every assignment
+  bumps a stamp, each id remembers the stamp it was assigned at, and a pass
+  records the stamp it drew with; an id that changed hands since resolves to
+  nothing. The comparison is PER ID rather than against one revision for the
+  whole registry, because a scene that adds a node every frame bumps the stamp
+  every frame and a registry-wide revision would refuse every pick in flight in
+  exactly the scenes picking is for. The free list is FIFO on top of that,
+  which changes nothing about correctness and makes a refusal rarer.
+
+  **ONE ASSUMPTION IS CARRIED RATHER THAN CHECKED**, and it is named where it
+  is made: screen y grows downward and three's readback measures y from the
+  bottom of the target, so `pickReadbackPixel` flips the row. No test in Node
+  can confirm that. A flip got backwards is a pick that is perfect in the
+  middle of the canvas and names the wrong node everywhere else, which is why
+  M4.8b owes the confirmation rather than inheriting the claim.
+
+  **THE CHANNEL BUDGET DID NOT MOVE.** M4.3 reserved the instanced node
+  pipeline's one free vertex buffer slot for M4.6's spring velocity or M4.8's
+  picking id. The picking id does not want it: the pick bytes reach the GPU as
+  an attribute the PICK material reads and the node material does not, and
+  `instance-attributes.ts` counts what a shader reads rather than what a
+  geometry carries, so this is D3's situation rather than a seventh channel, a
+  different pipeline with its own eight. Half the contest for that slot is off
+  and nothing here says anything about M4.6's half. M4.8b is what actually adds
+  the attribute, and it should confirm the count there rather than trust this
+  paragraph.
+
+- `requireIntegerInRange(value, min, max, field)` in the internal `validate.ts`,
+  beside `requireIntegerAtLeast`. Every bound a pick id has is two-sided for a
+  structural reason: a value past the end of a bit field is not a large number
+  but a different number once the bits above the field are dropped, so
+  `0x1000001` as an id would encode as 1, which belongs to somebody else.
+  (M4.8a)
+
+- Critically damped springs: `stepSpring`, `stepSpring2D`, `omegaForHalfLife`,
+  the constants `HALF_LIFE_OMEGA` and `SETTLE_OMEGA_1_PERCENT`, and the types
+  `SpringState` and `Spring2DState`. Nothing in the renderer calls them; they
+  are the motion arithmetic M4.7 will drive from layout deltas, exported
+  because the caller owns the clock. (M4.6)
+
+  **THE STEP IS EXACT, AND THERE IS NO FIXED-TIMESTEP ACCUMULATOR.** The
+  ROADMAP's M4.6 entry asked for one, and the reason it usually exists is the
+  reason there is none: an accumulator bounds an approximate integrator's
+  error so behaviour does not change with the frame rate, and a closed-form
+  step has no such error to bound. Ten steps of a millisecond and one step of
+  ten agree to machine precision. Shipping one anyway would cost the property
+  it protects, since a fixed substep leaves a remainder that is either dropped
+  (a lag that differs per frame rate) or carried (a stagger at constant
+  velocity).
+
+  **A LONG FRAME IS SAFE WITHOUT A CLAMP.** A backgrounded tab's delta lands
+  the spring on its target with zero velocity, which is what a returning tab
+  should show. Past a `w * dt` of about 745 the decay underflows in a double
+  and the target is returned directly, rather than multiplying a possibly
+  infinite displacement by zero. A zero delta is an identity by construction
+  too: `target + (position - target)` is not `position` in a double, so a
+  paused clock would otherwise walk a resting spring off its own value.
+
+  **NO OVERSHOOT MEANS NO OSCILLATION AND NOT NO OVERSHOOT.** A spring
+  released from rest never passes its target; one retargeted while moving can
+  pass it once and come back, and once is the bound. Both are asserted over a
+  grid rather than argued.
+
+  It lives inside this package and is exported, which is the third option the
+  M4.6 entry named and the second time this package has taken it after the
+  HTML overlay. It imports the `Vec2` type and the shared validators and
+  nothing else, so a later split is a file that travels rather than code that
+  is rewritten.
+
 - `setEdgeIntensity(groupId, intensityOf)` on `Renderer`: one number per edge in
   `[0, 1]`, which the ribbon shader multiplies BOTH the width and the alpha by.
   A type-level addition to the `Renderer` interface and no new exported name.

@@ -1,3 +1,5 @@
+import type { BackendPreference, RendererBackend } from './types.js';
+
 /**
  * Errors thrown by `@dagr/render`, and the rule for which kind is which.
  *
@@ -38,7 +40,9 @@ export type DagrRenderErrorCode =
   | 'OVERLAY_PARENT'
   | 'OVERLAY_DISPOSED'
   | 'UNKNOWN_INSTANCE_HANDLE'
-  | 'SCENE_DISPOSED';
+  | 'SCENE_DISPOSED'
+  | 'PICK_IDS_EXHAUSTED'
+  | 'BACKEND_UNAVAILABLE';
 
 /** The base every error this package throws extends. */
 export abstract class DagrRenderError extends Error {
@@ -189,5 +193,81 @@ export class SceneDisposedError extends DagrRenderError {
     super(`cannot call ${method}() on the disposed ${label}`);
     this.name = 'SceneDisposedError';
     Object.setPrototypeOf(this, SceneDisposedError.prototype);
+  }
+}
+
+/**
+ * Thrown when a `PickIdRegistry` has no id left to hand out.
+ *
+ * Unreachable at any scene a GPU draws, and here anyway because the branch that
+ * would otherwise take its place is a colliding id: two instances writing the
+ * same three bytes, one pick answering with whichever of them the allocator
+ * happened to remember last, and nothing anywhere raising. The default capacity
+ * is 16,777,215, which is 800MB of instance data before a single pick id is
+ * written, so the case this class names is a bug in the caller's bookkeeping
+ * rather than a scene that got large.
+ *
+ * Not a `RangeError`, because nothing here is out of range: every id the
+ * registry ever handed out was in range, and the range is used up. The rule
+ * this file states puts that in the other half, and the capacity argument on
+ * the registry is what makes the branch reachable from a test.
+ */
+export class PickIdSpaceExhaustedError extends DagrRenderError {
+  readonly code = 'PICK_IDS_EXHAUSTED';
+
+  constructor(kind: string, capacity: number) {
+    super(
+      `ran out of ${kind} pick ids at ${String(capacity)}; release one before assigning another`,
+    );
+    this.name = 'PickIdSpaceExhaustedError';
+    Object.setPrototypeOf(this, PickIdSpaceExhaustedError.prototype);
+  }
+}
+
+
+/**
+ * Thrown when a caller named a backend and `createRenderer` could not give them
+ * that one.
+ *
+ * A class rather than a `RangeError`, on this file's rule: nothing is out of
+ * range. `backend: 'webgpu'` is a perfectly good request and the machine is the
+ * thing that cannot meet it, so the caller learns something about where their
+ * code is RUNNING rather than about what they wrote, and "fall back to a
+ * simpler scene" is a real thing to do in a `catch`. It is also the one error in
+ * this package whose occurrence is a property of the browser rather than of the
+ * program, which is exactly the case a `code` is for.
+ *
+ * Both ends are on the instance rather than only in the message, because the
+ * caller that catches this is choosing what to do next and `error.actual` is the
+ * input to that choice: a scene that degrades gracefully on WebGL2 wants a
+ * different branch from one that cannot be drawn at all.
+ *
+ * `actual` can be `unknown`, which is not a third backend. It means three built
+ * something this package's markers do not recognise, and a named request is a
+ * guarantee that cannot then be made. See `backend.ts` for why the same fact is
+ * merely reported when the preference was `auto`.
+ */
+export class BackendUnavailableError extends DagrRenderError {
+  readonly code = 'BACKEND_UNAVAILABLE';
+
+  /** What the caller asked for. */
+  readonly requested: BackendPreference;
+
+  /** What `createRenderer` got instead, which can be `unknown`. */
+  readonly actual: RendererBackend;
+
+  constructor(requested: BackendPreference, actual: RendererBackend) {
+    super(
+      `backend "${requested}" was requested and the renderer came up on "${actual}". Pass backend: "auto" to take whichever backend is available.`,
+    );
+    // Declared and assigned rather than written as constructor parameter
+    // properties, which nothing else in this file uses: with
+    // `useDefineForClassFields` on, the emit order of a parameter property
+    // against a field initializer is a thing to have to know, and `code` above
+    // is a field initializer.
+    this.requested = requested;
+    this.actual = actual;
+    this.name = 'BackendUnavailableError';
+    Object.setPrototypeOf(this, BackendUnavailableError.prototype);
   }
 }

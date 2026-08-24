@@ -96,8 +96,26 @@ export interface InstanceChannel {
  * neither holds, `setupOutgoingLight` returns `diffuseColor.rgb`, and nothing
  * in the graph ever asks for a normal.
  *
- * One slot is left. M4.6's spring velocity or M4.8's picking id is the seventh
- * channel and fits; an eighth needs interleaving or a raised `requiredLimits`.
+ * One slot is left, and NEITHER of the two channels once recorded as competing
+ * for it takes it (settled by M4.6 and M4.8a, from opposite directions).
+ *
+ * M4.6's spring velocity: the springs shipped as arithmetic on the CPU
+ * (`spring.ts`), so a stepped position arrives as an ordinary centre through
+ * the write this file already counts, and a velocity the shader never reads
+ * has no reason to be on the device at all. Uploading one would be paying a
+ * vertex buffer slot for a number that is cheaper to keep beside the layout it
+ * belongs to.
+ *
+ * M4.8's picking id: no longer a candidate on the counting rule above rather
+ * than on a change of plan. The pick bytes are read by the PICK material and
+ * not by this one, so they belong to a different pipeline with its own eight,
+ * exactly as D3's per-edge highlight did. M4.8b adds the attribute, and the
+ * count to confirm there is that pipeline's, not this one's.
+ *
+ * So the slot is free, and what remains asking for it are ordinary scene
+ * changes (a uv-reading material, a light or an environment map), not a
+ * roadmap channel. An eighth channel needs interleaving or a raised
+ * `requiredLimits`.
  *
  * **D3 DID NOT TAKE IT, and the reason is the counting rule above rather than
  * restraint.** The per-edge highlight it added is an attribute on the RIBBON
@@ -110,11 +128,15 @@ export interface InstanceChannel {
  * an environment map, either of which satisfies the guard above and pulls the
  * `normal` this geometry already carries into the shader.
  *
- * EIGHT IS A WEBGPU NUMBER, and M4.9 owns what the other backend does. three's
- * WebGL2 path binds each attribute with `vertexAttribPointer` into a VAO, so it
- * has no buffer-slot limit at all and its ceiling is `MAX_VERTEX_ATTRIBS`, at
- * least sixteen. A channel past the eighth therefore fails pipeline creation on
- * one backend and draws fine on the other.
+ * EIGHT IS A WEBGPU NUMBER, and three's WebGL2 path binds each attribute with
+ * `vertexAttribPointer` into a VAO, so it has no buffer-slot limit at all and
+ * its ceiling is `MAX_VERTEX_ATTRIBS`, at least sixteen. A channel past the
+ * eighth therefore fails pipeline creation on one backend and draws fine on the
+ * other. M4.9a is where that stopped being a note and became a caller-visible
+ * difference: `createRenderer` now takes a backend and reports the one it got,
+ * so this limit is the FIRST entry in the differences list on the renderer's
+ * docs page, and a ninth channel is a change that has to be made on the
+ * narrower of the two ceilings.
  *
  * `instanceColor` is deliberately NOT one of these names: three's `InstancedMesh`
  * uses it for its own per-instance colour, and a name collision on a geometry

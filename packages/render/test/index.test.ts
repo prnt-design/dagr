@@ -28,15 +28,35 @@ describe('@dagr/render', () => {
     // flowed to, and the width and alpha the zoom implies. The tessellation
     // itself stays internal, because `setEdges` takes points rather than
     // geometry.
+    //
+    // M4.6 added the springs: a closed-form step, its two-axis form, the
+    // half-life conversion a caller tunes with, and two constants of the
+    // envelope that conversion reads. Nothing in the group touches a GPU. `spring.ts` is exported whole rather than kept internal
+    // because motion is driven by a caller's loop, and because `@dagr/react`
+    // will want the same curve for interactions with no graph in them.
+    //
+    // `PickIdSpaceExhaustedError` joined at M4.8a, before anything public can
+    // throw it: `DagrRenderErrorCode` is exported and already names
+    // `PICK_IDS_EXHAUSTED`, so the class that carries the code belongs on the
+    // same surface as the code.
+    //
+    // `BackendUnavailableError` joined at M4.9a, and it is the ONLY thing the
+    // backend decision puts on the surface: the choice is made through an
+    // option and read back off a property, both of which are types and
+    // therefore erased, so an error is all there is left to count.
     expect(Object.keys(api).sort()).toEqual([
+      'BackendUnavailableError',
       'CENTRE_ANCHOR',
       'Camera2D',
       'DagrRenderError',
+      'HALF_LIFE_OMEGA',
       'OVERLAY_INV_ZOOM_PROPERTY',
       'OVERLAY_ZOOM_PROPERTY',
       'OverlayDisposedError',
       'OverlayParentError',
+      'PickIdSpaceExhaustedError',
       'RendererDisposedError',
+      'SETTLE_OMEGA_1_PERCENT',
       'SceneDisposedError',
       'UnknownInstanceHandleError',
       'advanceDashFlow',
@@ -45,7 +65,10 @@ describe('@dagr/render', () => {
       'createRichNodes',
       'fitZoom',
       'measureHtmlSizes',
+      'omegaForHalfLife',
       'ribbonWidthAt',
+      'stepSpring',
+      'stepSpring2D',
     ]);
   });
 
@@ -87,6 +110,34 @@ describe('@dagr/render', () => {
     expect('ribbonWorldPosition' in api).toBe(false);
     expect('numberDashArith' in api).toBe(false);
     expect('SceneEdges' in api).toBe(false);
+  });
+
+  it('does not export the pick encoding, only the error it can raise', () => {
+    // M4.8a is the id, the pixel and the bookkeeping, and none of the three is
+    // callable by a consumer until M4.8b gives them a pass to write the bytes
+    // and a `pick()` to read them back. Exporting `encodePickId` now would be
+    // a promise about a format nothing in the package yet produces.
+    expect('encodePickId' in api).toBe(false);
+    expect('decodePickPixel' in api).toBe(false);
+    expect('pickReadbackPixel' in api).toBe(false);
+    expect('PickIdRegistry' in api).toBe(false);
+    expect('PICK_KIND_TAGS' in api).toBe(false);
+    expect('MAX_PICK_ID' in api).toBe(false);
+  });
+
+  it('does not export the backend decision, only its error', () => {
+    // `backend.ts` decides what to construct and what the caller is told, and it
+    // stays internal on `sdf.ts`'s terms: exporting `backendOf` would be a
+    // promise to keep three's two marker flags a supported reading for callers
+    // who are not building this package's renderer, and the flags are three's to
+    // rename. What a caller needs is `createRenderer`'s `backend` option and
+    // `Renderer.backend`, and both are erased types.
+    expect('backendOf' in api).toBe(false);
+    expect('forceWebGLFor' in api).toBe(false);
+    expect('requireBackendPreference' in api).toBe(false);
+    expect('requireBackendHonoured' in api).toBe(false);
+    expect('BACKEND_PREFERENCES' in api).toBe(false);
+    expect('DEFAULT_BACKEND' in api).toBe(false);
   });
 
   it('does not export the renderer implementation class', () => {

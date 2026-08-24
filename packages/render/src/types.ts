@@ -13,8 +13,11 @@ import type { EdgeFrameStyle, SceneEdge, SceneEdgeGroup } from './scene-edges.js
  * stop being a bundle-size problem and start being a type error, and every
  * consumer of this package would need three installed just to name a viewport.
  * Keeping the surface in plain records means three stays an implementation
- * detail of `webgpu-renderer.ts`, and M4.9's WebGL fallback can change what is
- * constructed in there without touching a single caller.
+ * detail of `webgpu-renderer.ts`, and M4.9a's backend selection changed what is
+ * constructed in there without touching a single caller. The two types it added
+ * to this file, {@link RendererBackend} and {@link BackendPreference}, are the
+ * same rule read the other way: naming a backend to a caller is four string
+ * literals rather than three's `Backend` class.
  */
 
 /** A point or a vector in two dimensions. Whose space it is, the field says. */
@@ -91,6 +94,31 @@ export interface OrthoFrustum {
 }
 
 /**
+ * Which GPU API a renderer ended up drawing through.
+ *
+ * `unknown` is a third member and not a third backend: three marks its two with
+ * `isWebGPUBackend` and `isWebGLBackend`, and a release that renames either one
+ * leaves a renderer that draws perfectly and that this package cannot name.
+ * Reporting that is better than refusing a working renderer over a naming
+ * problem, and better than guessing, which would tell a caller they are on the
+ * slow path forever. A caller who cannot live with `unknown` names a backend in
+ * {@link RendererOptions.backend} and gets an error instead. See `backend.ts`.
+ *
+ * A union rather than an enum, on `DagrRenderErrorCode`'s terms: a `switch`
+ * narrows it exhaustively and nothing has to be imported to compare against it.
+ */
+export type RendererBackend = 'webgpu' | 'webgl2' | 'unknown';
+
+/**
+ * Which backend a caller asks for.
+ *
+ * Exactly {@link RendererBackend} without `unknown`, and the difference is the
+ * point: `unknown` is something a renderer can BE and not something a caller can
+ * ASK for.
+ */
+export type BackendPreference = 'auto' | 'webgpu' | 'webgl2';
+
+/**
  * A GPU resource somebody owns and has to give back: a geometry, a material, or
  * anything else with a `dispose`.
  *
@@ -145,13 +173,31 @@ export interface Renderer {
   readonly camera: Camera2D;
 
   /**
+   * Which backend this renderer came up on, decided during
+   * {@link createRenderer} and fixed for its life.
+   *
+   * Read it to log the answer, to show a badge, or to decide whether an
+   * expensive option is worth offering. `auto` (the default) can hand back
+   * either, so this is the only way to find out; a caller who named a backend
+   * already knows, because a request that could not be honoured was an error
+   * rather than a renderer.
+   *
+   * Not an event, and that is a decision rather than an omission: three's
+   * fallback happens inside the `init()` that `createRenderer` awaits, so there
+   * is no moment at which a caller holds a renderer and does not already have
+   * this value. See `backend.ts`.
+   */
+  readonly backend: RendererBackend;
+
+  /**
    * Replaces the scene's nodes, keeping the instances of nodes that are in both
    * this list and the last one.
    *
    * The diff is by `id` and it is the property M4.4 owed the tasks after it: a
    * node present in two consecutive calls keeps its instance handle, so
-   * per-instance state keyed to it (M4.6's spring velocity, M4.8's picking id)
-   * survives a call that moved every other node in the graph. A node that
+   * per-instance state keyed to it, such as M4.6's spring velocity, survives a
+   * call that moved every other node in the graph. M4.8a's picking ids are
+   * keyed by the node id itself and survive the one case a handle cannot. A node that
    * changes SHAPE is the exception, and it is a removal and an addition, because
    * the two shape families are two meshes.
    *
@@ -261,6 +307,23 @@ export interface RendererOptions {
   readonly canvas: HTMLCanvasElement;
 
   /**
+   * Which backend to draw through. `auto` by default, which takes WebGPU when
+   * the machine has it and WebGL2 when it does not, and reports the answer on
+   * {@link Renderer.backend}.
+   *
+   * Name one to turn the preference into a requirement. `webgpu` rejects with a
+   * `BackendUnavailableError` on a machine that falls back, which is what a
+   * caller wants when their scene is only worth drawing on the fast path;
+   * `webgl2` takes the compatible path deliberately, which is what a
+   * reproduction or a screenshot comparison wants. Both dispose the device they
+   * refuse, so the guarantee that a caller never has to dispose a renderer it
+   * did not receive holds here too.
+   *
+   * Rejected with a `RangeError` if it is not one of the three.
+   */
+  readonly backend?: BackendPreference;
+
+  /**
    * The camera to draw through. Optional: omit it and the renderer builds a
    * default one, which is what a caller that only wants to look at something
    * wants. Pass one when the camera has to outlive the renderer, or when input
@@ -280,7 +343,15 @@ export interface RendererOptions {
    * The background, as a 24-bit `0xRRGGBB` integer. A number rather than a CSS
    * string because it is handed straight to three's `Color`, and because a
    * string invites `'transparent'`, which this cannot honour: alpha is a
-   * context-creation flag, not a clear colour, so M4.9 owns it.
+   * context-creation flag rather than a clear colour. **M4.9a did not take it
+   * and the reason is worth writing down: it is not a backend question.** three
+   * takes `alpha` as a `WebGPURenderer` parameter on both backends, so exposing
+   * it is an option on this record and a decision about what the page behind the
+   * canvas is for, not about which API draws. What IS a backend question, and is
+   * in the differences list on the docs page, is that a transparent clear colour
+   * is premultiplied unconditionally on WebGL2 and only when `alpha` is on under
+   * WebGPU, so the two agree exactly while this package's background stays
+   * opaque and would need checking the day it does not.
    *
    * Rejected with a `RangeError` if it is not an integer in `[0, 0xffffff]`.
    * three itself validates none of that, and every way of getting it wrong is

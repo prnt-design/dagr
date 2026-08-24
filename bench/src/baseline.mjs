@@ -13,10 +13,18 @@ import os from 'node:os';
  */
 
 /**
- * What the numbers were measured on. Never gated against, because the gate
- * reads control-normalised ratios and nothing else. Recorded so that a human
- * reading a raw millisecond figure a year from now knows what it was measured
- * on, which is the question the raw figures exist to answer.
+ * What the numbers were measured on. Recorded so that a human reading a raw
+ * millisecond figure a year from now knows what it was measured on, which is
+ * the question the raw figures exist to answer, AND read back by the gate,
+ * which is a correction rather than an extension.
+ *
+ * This said "never gated against, because the gate reads control-normalised
+ * ratios and nothing else" from the day it was written until 2026-08-18, when
+ * the dispatch box turned out to be a different CPU from the one the committed
+ * baseline names and unmodified `main` had been failing its own gate for two
+ * days. A ratio corrects for a machine that is uniformly slower. It does not
+ * correct for one that is slower at some things, and which fields make that
+ * difference is `MACHINE_IDENTITY` in `gate.mjs`.
  *
  * `loadAverageAtCapture` is here because its absence cost a run. Four
  * `@dagr/graph` entries read 26% to 41% faster than the committed baseline

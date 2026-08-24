@@ -64,6 +64,16 @@ export interface Node<A extends object = Attrs> {
   readonly attrs: ReadAttrs<A>;
   /** Declared ports, in declaration order. Frozen. */
   readonly ports: readonly Port[];
+  /**
+   * The node that contains this one, absent when nothing does.
+   *
+   * A reference on a node rather than a child `Graph`, so containment adds a
+   * relation to one graph rather than a second graph inside it. A node has at
+   * most one parent, the relation is acyclic, and an edge may cross a boundary
+   * freely: containment says what is inside what, and edges say what flows
+   * where. Nothing in `@dagr/layout` reads this yet.
+   */
+  readonly parent?: NodeId;
 }
 
 /** A directed connection from `source` to `target`, with its own identity. */
@@ -84,6 +94,8 @@ export interface NodeInit<A extends object = Attrs> {
   readonly id?: NodeId;
   readonly attrs?: AttrsPatch<A>;
   readonly ports?: readonly PortInit[];
+  /** The node that contains this one. Must already be in the graph. */
+  readonly parent?: NodeId;
 }
 
 /**

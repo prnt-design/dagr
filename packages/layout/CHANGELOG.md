@@ -14,6 +14,26 @@ of doc prose.
 
 ### Changed
 
+- **`influenceRegion` and the engine's patch check now name
+  `update-node-parent` explicitly.** Behaviour changed on one of them, types did
+  not. (M5.5)
+
+  `@dagr/graph` grew containment, and both of this package's switches over a
+  patch had a `default: break` that would have swallowed the new op with no
+  compile error. Nothing here reads `parent`, so `influenceRegion` reports an
+  EMPTY region for a reparent, which is exact rather than optimistic: the
+  drawing after the move is the drawing before it, coordinate for coordinate.
+  The case is written out rather than left to the `default` arm so that the
+  milestone that draws parents and children together finds a case to change
+  instead of a silence to notice.
+
+  `engine.relayout` now refuses a reparent the graph does not show, which is
+  the behaviour half. The check exists to catch a caller who hands over a patch
+  expecting the engine to apply it, and a patch of nothing but reparents was
+  the one edit that could pass through it in silence. A node the patch ends by
+  removing is checked as removed and not as reparented, the same last-op-wins
+  rule the presence checks already follow.
+
 - **`barycenterOrder` now holds the previous run's per-rank order, and
   `engine.relayout` feeds it that order.** Behaviour changed, types did not, on
   both halves. (M3.6)

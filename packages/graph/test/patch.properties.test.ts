@@ -19,6 +19,7 @@ import type { EdgePortsPatch, PortDirection, PortInit } from '../src/types.js';
 
 const RUNS = { seed: 20260726, numRuns: 250 } as const;
 
+
 const NODE_POOL = ['a', 'b', 'c'] as const;
 const EDGE_POOL = ['x1', 'x2', 'x3'] as const;
 const PORT_POOL = ['p1', 'p2', 'p3'] as const;
@@ -72,7 +73,8 @@ type Command =
   | { readonly kind: 'update-node-attrs'; readonly id: string; readonly attrs: readonly Entry[] }
   | { readonly kind: 'update-edge-attrs'; readonly id: string; readonly attrs: readonly Entry[] }
   | { readonly kind: 'update-graph-attrs'; readonly attrs: readonly Entry[] }
-  | { readonly kind: 'update-edge-ports'; readonly id: string; readonly ports: EdgePortsPatch };
+  | { readonly kind: 'update-edge-ports'; readonly id: string; readonly ports: EdgePortsPatch }
+  | { readonly kind: 'set-node-parent'; readonly id: string; readonly parent: string | undefined };
 
 const nodeId = fc.constantFrom(...NODE_POOL);
 const edgeId = fc.constantFrom(...EDGE_POOL);
@@ -183,6 +185,17 @@ const command: fc.Arbitrary<Command> = fc.oneof(
     weight: 2,
     arbitrary: fc.record({ id: nodeId }).map((fields): Command => ({ kind: 'remove-node', ...fields })),
   },
+  // Weighted like the other movers, and the pool of three node ids is what
+  // makes it worth generating at all: with three nodes a sequence reaches a
+  // two-deep nesting, a sibling move, and a cycle to refuse within a handful of
+  // draws, and a `removeNode` on the parent of a nested pair is what the
+  // ordering rules are for.
+  {
+    weight: 5,
+    arbitrary: fc
+      .record({ id: nodeId, parent: fc.option(nodeId, { nil: undefined, freq: 4 }) })
+      .map((fields): Command => ({ kind: 'set-node-parent', ...fields })),
+  },
 );
 
 /**
@@ -237,6 +250,9 @@ function run(graph: Graph, item: Command): void {
       case 'update-edge-ports':
         graph.updateEdgePorts(item.id, item.ports);
         return;
+      case 'set-node-parent':
+        graph.setNodeParent(item.id, item.parent);
+        return;
     }
   } catch (error) {
     // Duplicate, not-found, direction, and in-use rejections are part of the
@@ -276,6 +292,10 @@ function snapshot(graph: Graph): unknown {
         ports: [...node.ports]
           .sort((left, right) => left.id.localeCompare(right.id))
           .map((port) => ({ id: port.id, direction: port.direction })),
+        // Normalised to `null` for the same reason an unbound port end is: a
+        // comparison must not be able to ignore it quietly, which is exactly
+        // what it would do if a missing key and a root were both `undefined`.
+        parent: node.parent ?? null,
       })),
     edges: [...graph.edges()]
       .sort((left, right) => left.id.localeCompare(right.id))
@@ -307,6 +327,10 @@ interface Coverage {
   portRemovals: number;
   /** Attribute updates that deleted a key rather than storing one. */
   deletes: number;
+  /** Containment moves that actually moved a node. */
+  reparents: number;
+  /** Removals that took a contained node with them: more than one node op. */
+  nestedCascades: number;
   /** Calls that left the graph as it was: rejections, and no-op merges. */
   unchanged: number;
 }
@@ -317,6 +341,8 @@ const emptyCoverage = (): Coverage => ({
   rebinds: 0,
   portRemovals: 0,
   deletes: 0,
+  reparents: 0,
+  nestedCascades: 0,
   unchanged: 0,
 });
 
@@ -324,7 +350,9 @@ const emptyCoverage = (): Coverage => ({
 function tally(coverage: Coverage, patch: Patch): void {
   coverage.patches += 1;
   if (patch.length > 1) coverage.cascades += 1;
+  if (patch.filter((op) => op.op === 'remove-node').length > 1) coverage.nestedCascades += 1;
   for (const op of patch) {
+    if (op.op === 'update-node-parent') coverage.reparents += 1;
     if (op.op === 'update-edge-ports') coverage.rebinds += 1;
     if (op.op === 'remove-port') coverage.portRemovals += 1;
     if (op.op === 'update-node-attrs' || op.op === 'update-edge-attrs') {
@@ -342,6 +370,14 @@ function tally(coverage: Coverage, patch: Patch): void {
  * to the same content.
  */
 function checkNormalised(op: PatchOp): void {
+  // `update-node-parent` carries two values rather than two bags, so its whole
+  // normalisation rule is that the two differ: it is emitted when the parent
+  // moved and never otherwise, which is what makes inverting it an
+  // unconditional swap.
+  if (op.op === 'update-node-parent') {
+    expect(op.after, 'update-node-parent: after and before are the same').not.toBe(op.before);
+    return;
+  }
   if (
     op.op !== 'update-node-attrs' &&
     op.op !== 'update-edge-attrs' &&
@@ -391,6 +427,8 @@ function accumulate(total: Coverage, one: Coverage): void {
   total.rebinds += one.rebinds;
   total.portRemovals += one.portRemovals;
   total.deletes += one.deletes;
+  total.reparents += one.reparents;
+  total.nestedCascades += one.nestedCascades;
   total.unchanged += one.unchanged;
 }
 
@@ -414,6 +452,8 @@ describe('patch properties over random mutation sequences', () => {
     expect(total.rebinds).toBeGreaterThan(25);
     expect(total.portRemovals).toBeGreaterThan(75);
     expect(total.deletes).toBeGreaterThan(35);
+    expect(total.reparents).toBeGreaterThan(100);
+    expect(total.nestedCascades).toBeGreaterThan(15);
     expect(total.unchanged).toBeGreaterThan(1000);
   });
 

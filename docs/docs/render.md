@@ -8,8 +8,9 @@ sidebar_position: 4
 
 `@dagr/render` draws a graph. It takes coordinates, not a `Graph`: whatever
 [`@dagr/layout`](./layout.md) works out goes on screen through a three.js
-`WebGPURenderer`, with an orthographic camera, springs carrying nodes between one
-layout and the next, and one draw call per shape family.
+`WebGPURenderer`, with an orthographic camera, critically damped springs for
+carrying nodes between one layout and the next, and one draw call per shape
+family.
 
 This page describes the package as of M4.4, the task that gave it a way to be
 told what to draw. Rounded rectangles and circles are on screen, drawn as signed distance
@@ -123,16 +124,17 @@ ready to draw, and no caller ever holds a renderer that exists but cannot render
 
 three's `WebGPURenderer` falls back to WebGL2 by itself when WebGPU is
 unavailable, so `createRenderer` resolving is not a promise that WebGPU is in
-use. Nothing here forces a backend or reports which one won. M4.9 owns the
-fallback, including telling the caller what they got.
+use. Since M4.9a it is not silent about that either: pass `backend` to say what
+is acceptable, and read `renderer.backend` for what happened. See
+[Two backends, and which one you got](#two-backends-and-which-one-you-got).
 
 ### A node keeps its handle
 
 `setNodes` diffs by `id`. A node present in two consecutive calls is updated in
 place, keeping the instance handle it had; one that left is freed, and one that
 arrived is allocated. That is not an optimisation, it is the property M4.6's
-springs and M4.8's picking ids are keyed on: a node that kept its id but got a
-new handle every relayout would lose its velocity and jump.
+springs are keyed on: a node that kept its id but got a new handle every
+relayout would lose its velocity and jump.
 
 The one case where the handle cannot survive is a node that changes SHAPE,
 because the two shape families are two meshes and an instance cannot move
@@ -336,9 +338,12 @@ which keeps live slots contiguous and keeps one draw call covering them with no
 holes and no per-slot liveness test. The cost is that a slot index is not durable
 across any removal, and the failure is silent: the slot stays a perfectly valid
 index, it merely belongs to a different instance now. Spring state (M4.6, M4.7)
-and picking IDs (M4.8) are keyed by handle for that reason, and a handle is never
-reused, so a handle held past its instance's removal raises
-`UnknownInstanceHandleError` rather than addressing whatever took its place.
+is keyed by handle for that reason, and a handle is never reused, so a handle
+held past its instance's removal raises `UnknownInstanceHandleError` rather than
+addressing whatever took its place. M4.8a's picking ids are keyed one layer
+further out again, by the caller's own node id, which is the same invariant with
+room to spare: the id survives even a shape change, which reallocates a
+handle.
 
 None of this is exported. `setNodes` is the seam a caller feeds a graph through,
 and an instance HANDLE API on top of it would be a guess at what M4.8's picking
@@ -499,8 +504,10 @@ third is a split, and it is what this package does.
 
 **Anything that is arithmetic or bookkeeping is a pure module, unit tested in
 Node, with no device at all.** Camera and viewport math is that, and it is
-tested here. Instance bookkeeping (M4.3), spring integration (M4.6), and ID
-encode and decode (M4.8) are the same shape and get the same treatment.
+tested here. So are instance bookkeeping (M4.3) and spring integration (M4.6),
+which is arithmetic end to end and is checked against a hand-written Euler
+integrator of the same equation rather than only against its own algebra. ID
+encode and decode (M4.8a) is the same shape and gets the same treatment.
 
 **Anything that needs a real adapter is verified by a screenshot, committed in
 the run that changes it, and by nothing else.** Screenshots live in
@@ -625,13 +632,18 @@ checks:
   does not stretch the canvas afterwards.
 - That `dispose` frees GPU memory. That every resource in the list is disposed
   exactly once, and that a disposed renderer then refuses to draw, IS tested.
-- That `init()` succeeds, or that three's automatic WebGL2 fallback engages, and
-  therefore that anything in `createRenderer` past `init()` runs at all. That
-  one has a named casualty: the abort check after `init()` cannot be reached
-  without a device to hand back, and deleting it leaves the suite green, which
-  was measured rather than assumed. The abort check before `init()` is tested.
-- That the two backends agree with each other. That one is M4.9's, by screenshot
-  comparison.
+- That `init()` succeeds ON WEBGPU, and therefore that the shapes compile and
+  draw there. **M4.9a took the WebGL2 half of this entry off the list**, with a
+  browser probe that draws through the built package and counts the pixels: see
+  [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
+  Nothing it found is evidence about WGSL, which the other backend generates
+  from the same TSL graphs.
+- The abort check AFTER `init()`, which cannot be reached without a device to
+  hand back AND an abort in the window between the request and the resolution.
+  Deleting it leaves the suite green, which was measured rather than assumed.
+  The abort check before `init()` is tested.
+- That the two backends agree with each other. That one is M4.9b's, by
+  screenshot comparison, and it needs a machine with both.
 - That a browser composes the overlay's two transforms the way the algebra says.
   The layer's `translate() scale()` and an entry's own transform are asserted as
   strings by a suite that never renders them, so a wrong composition order or a
@@ -720,6 +732,121 @@ signature that saw one. That is the weaker of the two guarantees, and it is the
 reason the peer declaration is doing real work here rather than documenting
 something the compiler already enforces.
 
+## Two backends, and which one you got
+
+three's `WebGPURenderer` falls back to a WebGL2 backend by itself when WebGPU is
+not available. It always has. What M4.9a added is that you can tell.
+
+```ts
+const renderer = await createRenderer({ canvas });
+renderer.backend; // 'webgpu' | 'webgl2' | 'unknown'
+```
+
+`backend` defaults to `'auto'`, which takes WebGPU where the machine has it and
+WebGL2 where it does not, and reports the answer. That is the right default: a
+consumer on a browser without WebGPU wants a slower picture rather than no
+picture, and a library that refused would be unavailable on a large share of the
+web for a reason its user cannot act on.
+
+Name a backend to turn the preference into a requirement.
+
+```ts
+// Refuses rather than falling back. A `BackendUnavailableError`, code
+// BACKEND_UNAVAILABLE, carrying both what you asked for and what came up.
+const fast = await createRenderer({ canvas, backend: 'webgpu' });
+
+// Takes the compatible path deliberately, which is what a reproduction or a
+// screenshot comparison wants.
+const compatible = await createRenderer({ canvas, backend: 'webgl2' });
+```
+
+Both refusals dispose the device they refuse, so the guarantee that you never
+have to dispose a renderer you did not receive holds here too.
+
+**There is no fallback event, and that is a decision rather than an omission.**
+three falls back inside the `init()` that `createRenderer` awaits, so by the time
+you hold a renderer the fallback has already happened and `renderer.backend`
+already says so. A callback would deliver the same fact through a second
+mechanism, before you have anything to act on.
+
+**Do not probe `navigator.gpu` and skip the option.** It is not the same
+question, and the difference is measured rather than argued: on the machine this
+package's browser probe runs on, `'gpu' in navigator` is `true` and
+`navigator.gpu.requestAdapter()` then returns `null`. A capability check before
+construction reports WebGPU on a machine that cannot give one. What three built
+is the only honest report, and it does not exist until `init()` has resolved,
+which is where `renderer.backend` reads it from.
+
+`'unknown'` is a third value and not a third backend. This package names the
+backend by reading three's `isWebGPUBackend` and `isWebGLBackend` markers, and a
+three release that renames either one leaves a renderer that draws perfectly and
+cannot be named. Refusing a working renderer over a naming problem would be
+worse than saying so, so `'auto'` reports `'unknown'` and hands it back. A caller
+who NAMED a backend asked for a guarantee that can no longer be made, and gets
+the error instead. The same fact, reported one way and refused the other.
+
+### What differs between the two
+
+Recorded here rather than left for a consumer to find in a browser, which is
+what M4.9's roadmap entry asks for. Every entry names where it comes from.
+
+- **Per-instance vertex channels.** WebGPU's `maxVertexBuffers` is 8 and the
+  instanced node pipeline uses 7 of them. three's WebGL2 path binds attributes
+  with `vertexAttribPointer` into a VAO, which has no buffer-slot limit at all
+  and a ceiling of `MAX_VERTEX_ATTRIBS`, at least 16. **A ninth channel would
+  fail pipeline creation on WebGPU and draw fine on WebGL2**, so the narrower
+  ceiling is the one this package builds against. See
+  `packages/render/src/instance-attributes.ts`.
+- **A transparent background is premultiplied differently.** three multiplies
+  the clear colour by its alpha unconditionally on WebGL2 and only when the
+  renderer's `alpha` is on under WebGPU (`Background.js` in three 0.185.1). This
+  package's background is opaque, so the multiply is by one and the two agree
+  exactly. It is here because it is the first thing to check the day a
+  transparent canvas is offered.
+- **A per-pass frame-time breakdown is not available on the same terms.** WebGPU
+  asks the adapter for the `timestamp-query` feature; WebGL2 needs
+  `EXT_disjoint_timer_query_webgl2`, which is absent on plenty of machines and
+  is `null` when it is. M4.10's pass breakdown cannot assume one number per pass
+  on both backends.
+- **A compute barrier is a no-op on WebGL2** (`BarrierNode.js` in three 0.185.1).
+  Nothing in this package computes. This is the line that would matter first if
+  anything did.
+- **Performance is unmeasured, and that is the honest statement rather than a
+  hedge.** The machine this package's probe runs on has no WebGPU adapter at
+  all, so there is no pair of numbers to compare and no cliff to quote. M4.9's
+  own entry says an automatic fallback hides a performance cliff, and an
+  unmeasured cliff is one a consumer finds first, so: assume WebGL2 is slower,
+  and read `renderer.backend` if that matters to what you draw.
+
+### What is verified, and on which backend
+
+`bench/browser/backend-probe.mjs` opens this package's built `dist` in a real
+browser, draws one rounded rectangle and one circle, and counts what reached the
+canvas. On 2026-08-23, on a headless Chromium with swiftshader and no WebGPU
+adapter: `'auto'` came up on `'webgl2'` and drew 10,780 pixels above the clear
+colour, of which 3,908 are the rectangle's amber fill and 2,432 the circle's
+blue; `'webgpu'` was refused with `BACKEND_UNAVAILABLE`; and `'webgl2'` drew the
+identical counts. The frame is committed as
+`assets/screenshots/m4.9a-webgl2-shapes.png`.
+
+**The fill counts agree with the geometry**, which is what makes this evidence
+about size rather than only about presence. The amber region should be the 90 by
+50 rounded rectangle inset by its 2 device pixel outline, an area of 3,901
+against 3,908 counted; the blue should be the 60 diameter circle inset the same
+way, 2,463 against 2,432. Both run slightly under, in the direction
+antialiasing predicts and in the order it predicts (a small circle is nearly all
+boundary), and the expectations are derived in the probe page from the same node
+records the renderer is handed.
+
+That is the first time anything in this repository has checked a pixel this
+package drew rather than the arithmetic behind one, and it closes most of the
+UNVERIFIED list in `webgpu-renderer.ts` **on WebGL2 only**. The shapes appear, in
+the right place, at the right size and in the intended colours, so the TSL graphs
+compile and the shader computes. None of that is evidence about WGSL, which a
+different backend generates from the same graphs. The screenshot comparison
+between the two backends that M4.9's entry asks for needs a machine with both,
+and is M4.9b.
+
 ## Usage
 
 ```ts
@@ -805,8 +932,10 @@ threw.
 
 There is no render loop. Frames happen when the caller asks for one. A
 `requestAnimationFrame` loop would wake the GPU sixty times a second to redraw
-an unchanged frame; M4.6's springs are what make a continuous loop necessary,
-and that is the task that should add one. Do coalesce, though: an input handler
+an unchanged frame. M4.6 shipped the springs without adding one, and that is
+deliberate: a spring step is a pure function of a delta, so the loop belongs to
+whoever owns the clock. M4.7, which drives springs from layout deltas, is where
+this package needs an opinion about starting and stopping one. Do coalesce, though: an input handler
 that calls `render()` synchronously runs at the event rate rather than the
 display rate, and a trackpad fling dispatches wheel events faster than the
 screen refreshes. The campaign demo schedules one frame per `requestAnimationFrame`
@@ -884,7 +1013,7 @@ through the WebGL2 fallback rather than WebGPU, which is what a headless
 Chromium on a machine with no GPU has. That bears on the shapes and not on the
 overlay, which never touches a GPU: what these frames are evidence for is the
 transform composition and the counter-scale, and those are the browser's
-compositor either way. Whether the two backends draw the same shapes is M4.9's
+compositor either way. Whether the two backends draw the same shapes is M4.9b's
 question, and it is on the untested list above.
 
 ### What one sync does, and what it costs
@@ -1199,17 +1328,222 @@ a caller's number and raising it there says the same thing to every edge at
 once, so a channel that could exceed 1 would give a scene two ways to say how
 wide a ribbon is and no rule for which wins.
 
+## Springs, and the fixed timestep that is not here
+
+M4.6 added the motion arithmetic: `stepSpring`, `stepSpring2D`,
+`omegaForHalfLife`, and two constants of the envelope the last of those reads.
+Nothing in it touches a GPU, a canvas or three.js, and nothing in the renderer
+calls it. It is exported because a caller drives the clock.
+
+A spring here is **critically damped**, which is the fastest approach to a
+target that does not oscillate around it. The damping ratio is fixed at 1 by
+construction rather than passed in: an under-damped spring is a different
+feeling that would need a second parameter and a second formula, and a ratio a
+caller can set to 1.0001 is one they can set to 1.0001 by accident.
+
+```ts
+import { omegaForHalfLife, stepSpring2D, type Spring2DState } from '@dagr/render';
+
+// Half the distance closed in 120ms, released from rest.
+const w = omegaForHalfLife(0.12);
+
+const springs = new Map<string, Spring2DState>();
+const targets = new Map<string, { x: number; y: number }>();
+let previousMs: number | undefined;
+
+function frame(nowMs: number) {
+  const dtSeconds = previousMs === undefined ? 0 : (nowMs - previousMs) / 1000;
+  previousMs = nowMs;
+
+  renderer.setNodes(
+    [...targets].map(([id, target]) => {
+      const stepped = stepSpring2D(
+        springs.get(id) ?? { position: target, velocity: { x: 0, y: 0 } },
+        target,
+        w,
+        dtSeconds,
+      );
+      springs.set(id, stepped);
+      return {
+        id,
+        shape: 'roundedRect' as const,
+        center: stepped.position,
+        size: { width: 160, height: 48 },
+        cornerRadius: 8,
+        fillColor: 0x219ebc,
+        glowColor: 0x8ecae6,
+        glowWorld: 12,
+      };
+    }),
+  );
+  renderer.render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+```
+
+The first frame steps by zero, because there is no previous timestamp to
+subtract and inventing one is inventing motion. A node that appears for the
+first time starts AT its target rather than at the origin, which is the
+difference between a new node fading in where it belongs and every new node
+flying in from the same corner.
+
+`target` can change on any frame. The target is a parameter of
+`x'' = -2w x' - w^2 (x - target)` and the state is the position and velocity, so
+retargeting mid-flight cannot move either: there is no jump. Acceleration does
+jump, which is a faint snap at high `w`, and that is the honest cost.
+
+### The step is exact, which is why there is no accumulator
+
+`stepSpring` does not integrate towards the answer, it evaluates it. With
+`A = x0 - target` and `B = v0 + wA`, the solution over a step of `h` is
+`x(h) = target + (A + Bh)e^(-wh)`, and the velocity is its derivative.
+
+The usual reason to run a physics integrator on a fixed substep and accumulate
+the remainder is that an approximate integrator's error, and therefore its
+behaviour, changes with the frame rate. Semi-implicit Euler over that same
+equation is stable only while `w * h` stays below about 0.83, and inside that bound it
+still traces a slightly different curve at 60fps than at 144fps. An exact step
+has no such error to bound: ten steps of a millisecond and one step of ten
+give the same state to machine precision, which the suite asserts directly.
+
+Adding an accumulator anyway would cost the property it was meant to protect. A
+fixed substep leaves a remainder every frame, and a remainder is either dropped,
+which lags the drawing behind the clock by up to a substep and by a different
+amount at each frame rate, or carried, which lets one frame advance a substep
+further than its neighbour and shows up as a stagger at constant velocity.
+
+### A long frame is safe, and needs no clamp
+
+A backgrounded tab hands back a delta measured in seconds or minutes. Stepped
+exactly, that lands the spring on its target with zero velocity, which is what a
+returning tab should show: the settled drawing rather than a minute of catch-up
+animation. The same delta through Euler is an overflow. Past a `w * dt` of about
+745 the decay underflows to zero in a double, and `stepSpring` returns the
+target itself rather than computing an infinity times a zero.
+
+The 0.83 above is measured rather than quoted, and it is worth knowing that it
+is EARLIER than the `w * h` of 2 an undamped oscillator gives: what goes
+unstable first on a critically damped system is the damping term, whose velocity
+update carries a factor of `1 - 2 w h`. At a half-life of 120ms that is a
+substep ceiling of about 59 milliseconds, which one dropped frame clears.
+
+This is the opinion `ribbon.ts` said the integrator owed. `advanceDashFlow` does
+not clamp either, for the opposite reason: a dash pattern is periodic, so a long
+frame leaves it somewhere else and nothing is out of range.
+
+### No overshoot, and what that does not mean
+
+Critical damping guarantees no OSCILLATION. It does not guarantee no overshoot,
+and the two claims are worth separating because a design that promises both and
+also promises mid-flight retargeting is promising something untrue.
+
+The displacement `(A + Bt)e^(-wt)` is zero at `t = -A/B`, which is in the future
+whenever the initial speed towards the target exceeds `w` times the distance to
+it. A spring released from rest can never be in that state, so a node that
+starts still never passes where it is going. A spring retargeted while moving
+can pass its new target once and come back, and once is the bound: a linear
+factor times an exponential has one root.
+
+### Tuning: half-lives, not stiffnesses
+
+`omegaForHalfLife(0.12)` is the angular frequency of a spring that closes half
+its distance in 120 milliseconds, released from rest. That is the number a
+designer has an opinion about; `w` is the number the formula wants, and the
+conversion happens once rather than sixty times a second.
+
+The half-life is a FIRST half-life and not a repeating one. The envelope from
+rest is `(1 + u)e^(-u)` with `u = wt`, which is not an exponential, so the
+second half-life is shorter than the first: two half-lives leave 15.2% of the
+distance rather than 25%, and three leave 3.9%. For "how long does this take"
+rather than "how fast does it start", use `SETTLE_OMEGA_1_PERCENT / w`, which is
+when the spring has closed all but one percent of the distance it started with,
+just under four half-lives.
+
+### Where it lives
+
+Inside `@dagr/render`, exported, with no dependency on anything here that a
+device could break: the `Vec2` type and the shared validators, and nothing else.
+That is the third option the ROADMAP's M4.6 entry named, and it is the second
+time this package has taken it, after the HTML overlay. `@dagr/react` in M5 will
+want this curve for interaction animation with no graph in it, and if that turns
+out to be a package rather than an import, the split is a file that travels
+unchanged rather than code that has to be rewritten.
+
+## Picking, decided and half built
+
+Hit testing a graph of ten thousand nodes by walking a list is the work the GPU
+is already doing. **M4.8 draws the scene a second time into an offscreen target
+where every instance is a colour that names it, reads back the single pixel
+under the pointer, and turns that colour into a node.** Hover, select and drag
+all cost the same regardless of how many nodes are on screen.
+
+Half of that has landed: the encoding, the pixel arithmetic and the
+bookkeeping, which is M4.8a. **Nothing is callable yet.** There is no `pick()`
+on `Renderer` and nothing exported, because the pass that writes these bytes
+and the readback that reads them need a device, and a device is what the
+machine writing this cannot supply. What follows is what was decided, so that
+the half still to come is written against something rather than deciding it
+again.
+
+**A pick pixel is three bytes of id and one byte of kind.** Tag 0 is nothing,
+so a target cleared to all zeros reads as a miss with no reserved value anyone
+has to remember, and no instance is ever given id 0. Three bytes cap one kind
+at 16,777,215 pickable things. The tag partitions the id space, so nodes and
+edges keep separate allocators instead of sharing one counter across two meshes
+that know nothing about each other, and it survives a stale answer: a pick that
+cannot be resolved can still say the pointer was over an edge.
+
+**The id is not the instance's slot, and not its handle.** A slot is free, in
+the sense that the shader already knows its own instance index and needs no
+attribute at all, and it is wrong: removal swaps the last live instance into
+the freed slot, so a slot means somebody else after any removal, and a readback
+answers a question about a frame that has already been drawn. A handle is
+durable and unbounded, so it runs past three bytes and truncating one is a
+collision. The pick id is a third name, durable like a handle and bounded like
+a slot, recycled on purpose rather than by accident.
+
+**The id is taken apart on the CPU, not in the shader.** Handing the shader one
+number and letting it split that number into channels costs no bytes per
+instance, and it fails for a reason that is arithmetic rather than taste. Every
+vertex of an instance's quad carries the same value, so the interpolated value
+differs from it by about a float32 ulp, and at 2^24 that ulp is exactly 1: one
+bit of drift is the next node. Carried as three byte-valued channels the same
+drift is 6e-8 against a write that rounds to the nearest 1/255, a margin of
+about 30,000. The suite asserts both, the surviving encoding over every byte
+value there is and the rejected one at the top of its range.
+
+**A pick can be refused, and that is the point.** The readback resolves at
+least a frame after the pass, and in between the scene may have released a
+node's id and given it to another. Every id remembers when it was assigned, a
+pass records the registry's stamp when it draws, and an id that has changed
+hands since is answered with nothing rather than with the wrong node. The
+comparison is per id: a scene adding a node every frame would otherwise refuse
+every pick in flight, which is exactly the scene picking exists for.
+
+**One assumption is carried rather than checked.** Screen y grows downward and
+three's readback measures y from the bottom of the target, so the pointer's row
+is flipped on the way in. No test here can confirm that, because confirming it
+needs a device. It is written down where the flip happens, and M4.8b owes the
+confirmation.
+
 ## What is not here yet
 
 Most of it. M4.4 is a graph on screen, drawn correctly, one draw call per shape
 family, and nothing that moves.
 
-- Critically damped springs, and with them a real animation loop (M4.6).
+- A real animation loop. M4.6 shipped the springs and deliberately did not
+  start one, because the clock belongs to whoever owns the frame; the demo
+  already coalesces its own. M4.7 is where the renderer drives them.
 - Consuming `LayoutDelta` from `@dagr/layout`'s incremental path, which is the
   point of the whole exercise: untouched nodes stay still and touched ones
   animate (M4.7). This is the single M4 task that genuinely waits on M3.
-- GPU picking through an ID buffer pass (M4.8).
-- An explicit WebGL2 fallback story, with the backend differences written down
-  (M4.9).
+- The pass half of GPU picking: a material writing the bytes above, an
+  offscreen target, the readback and a `pick()` on `Renderer` (M4.8b). What
+  a pixel says and which node an id still means are decided and tested; see
+  [Picking](#picking-decided-and-half-built).
+- A screenshot comparison between the WebGPU and WebGL2 backends, which needs a
+  machine with both (M4.9b). The selection, the reporting and the differences
+  landed at M4.9a and are two sections above.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).

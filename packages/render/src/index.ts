@@ -19,7 +19,7 @@
  * y-up conversion belongs to whoever owns the layout, which `camera.ts` has said
  * since M4.1.
  *
- * Three things stay internal, and the reasons differ:
+ * Four things stay internal, and the reasons differ:
  *
  * - The TSL nodes, because a TSL node is a three.js type and `types.ts` decided
  *   that no three.js type appears in this package's public surface. Exporting
@@ -33,13 +33,24 @@
  *   three.js in it at all and is exhaustively tested. A public `Arith<T>` would
  *   be a promise to keep nine primitives stable for callers who are not writing
  *   this package's shaders, and nobody has asked.
+ * - The pick encoding in `picking.ts` (M4.8a), on `sdf.ts`'s reason and one of
+ *   its own. A caller has nothing to encode until there is a pass writing the
+ *   bytes and a `pick()` reading them back, and M4.8b is what adds both; naming
+ *   `PickBytes` now would be the guess this list's second entry says the handle
+ *   API would have been.
  *
- * What the instancing does put on the surface is its two ERRORS,
+ * What the instancing does put on the surface is its ERRORS,
  * {@link UnknownInstanceHandleError} and {@link SceneDisposedError},
  * because an error is the one part of an internal module that arrives in
  * somebody else's `catch` whether or not it was exported, and one that arrives
  * as a bare `Error` gets there with no `code` and failing `instanceof
  * DagrRenderError`.
+ *
+ * {@link PickIdSpaceExhaustedError} is here on the same rule and ahead of it:
+ * nothing public can throw it until M4.8b, and it is exported now because
+ * `DagrRenderErrorCode` is a public union that already names its code, and a
+ * code a consumer can switch on whose class they cannot compare against is the
+ * worse half of both choices.
  *
  * **M4.11 added the second thing this package can put on screen, and it is not
  * drawn by a GPU at all.** `createHtmlOverlay` positions DOM elements in world
@@ -56,6 +67,27 @@
  * a consumer who wants only the overlay still installs the `three` peer. See
  * `specs/2026-08-14-html-overlay-design.md` for the escape hatch and what
  * taking it would cost.
+ *
+ * **M4.6 took that same option for the springs themselves, which are exported
+ * here and touch no GPU at all.** {@link stepSpring} and
+ * {@link stepSpring2D} are a critically damped integrator in closed form, and
+ * they are exported rather than internal because motion is a feature a caller
+ * drives: M4.7 will run them over `LayoutDelta`s, and `@dagr/react` in M5 wants
+ * the same curve for interaction animation that has no graph in it at all. The
+ * module imports nothing from this package but the `Vec2` type and the shared
+ * validators, so the day a second consumer makes a package of it, the move is a
+ * file rather than a rewrite. Its whole surface is five names and two records
+ * of numbers, and nothing in it needs a device to be tested.
+ *
+ * **M4.9a is the first thing this package says about the machine it is running
+ * on.** `createRenderer` takes a `backend` preference and every renderer reports
+ * the {@link RendererBackend} it came up on. three's `WebGPURenderer` has always
+ * fallen back to WebGL2 by itself; what was missing was any way for a caller to
+ * tell, and a fallback nobody can see is a performance cliff a consumer finds
+ * first. Naming a backend turns the preference into a requirement and an unmet
+ * one into a {@link BackendUnavailableError}. The selection logic is internal,
+ * in `backend.ts`, because the seam a caller needs is the option and the
+ * property.
  *
  * Not one three.js type appears in anything exported from this file. See
  * `types.ts` for why: three is a peer dependency, so it stays an implementation
@@ -75,9 +107,11 @@
 export { Camera2D, fitZoom } from './camera.js';
 export type { Camera2DInit } from './camera.js';
 export {
+  BackendUnavailableError,
   DagrRenderError,
   OverlayDisposedError,
   OverlayParentError,
+  PickIdSpaceExhaustedError,
   RendererDisposedError,
   SceneDisposedError,
   UnknownInstanceHandleError,
@@ -100,10 +134,20 @@ export { advanceDashFlow, ribbonWidthAt } from './ribbon.js';
 export type { RibbonDashStyle, RibbonStyle, RibbonWidth, RibbonWidthInput } from './ribbon.js';
 export type { EdgeFrameStyle, SceneEdge, SceneEdgeGroup } from './scene-edges.js';
 export type { NodeShape, SceneNode } from './scene-nodes.js';
+export {
+  HALF_LIFE_OMEGA,
+  SETTLE_OMEGA_1_PERCENT,
+  omegaForHalfLife,
+  stepSpring,
+  stepSpring2D,
+} from './spring.js';
+export type { Spring2DState, SpringState } from './spring.js';
 export { createRenderer } from './webgpu-renderer.js';
 export type {
+  BackendPreference,
   OrthoFrustum,
   Renderer,
+  RendererBackend,
   RendererOptions,
   Size,
   Vec2,
