@@ -10,7 +10,7 @@
   "entries": [
     {
       "name": "pattern-generator",
-      "shapedAfter": "a prnt.design generative pattern editor, parameters into operators into a preview",
+      "shapedAfter": "a generative pattern editor, parameters into operators into a preview",
       "built": {
         "nodes": 20,
         "edges": 29,
