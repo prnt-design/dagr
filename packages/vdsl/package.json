@@ -1,0 +1,38 @@
+{
+  "name": "@dagr/vdsl",
+  "version": "0.1.0",
+  "description": "Toolkit for building a node-graph language on Dagr: the node spec adapter and its registry.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "peerDependencies": {
+    "@dagr/graph": "workspace:^"
+  },
+  "devDependencies": {
+    "@dagr/graph": "workspace:^"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prnt-design/dagr",
+    "directory": "packages/vdsl"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json"
+  }
+}
