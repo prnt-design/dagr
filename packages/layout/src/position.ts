@@ -123,8 +123,12 @@ interface PositionIndex {
   /** Node number to id, in layer order. */
   readonly ids: readonly NodeId[];
   /**
-   * The same thing backwards, which the build needs for the segments and M3.8a
-   * needs to find the caller's own nodes without walking the whole roster.
+   * The same thing backwards, which the build needs for the segments and
+   * {@link displacements} needs to find the caller's own nodes without walking
+   * the whole roster. It is built either way; carrying it on the index is what
+   * keeps it alive for the length of a run rather than for the length of the
+   * build, which on the 10k corpus is a 184,222-entry map held across four
+   * solve passes and measured as costing nothing.
    */
   readonly numberOf: ReadonlyMap<NodeId, number>;
   /** Layer `l` holds the numbers `layerStart[l]` up to `layerStart[l + 1]`. */
@@ -542,7 +546,7 @@ function balance(candidates: readonly Float64Array[], widths: Float64Array): Flo
  *
  * ONLY THE CALLER'S OWN NODES, and that is measured rather than assumed. A
  * dummy is as much a part of the drawing as a node is, and it outnumbers the
- * nodes better than eighteen to one on the 10k corpus, so the obvious reading
+ * nodes better than seventeen to one on the 10k corpus, so the obvious reading
  * is that walking the graph rather than the roster throws most of the evidence
  * away. It does, and the shift is BETTER for it. On the 10k corpus, over a
  * patch that adds one edge: the caller's own nodes leave 5,038 of 10,000 nodes
@@ -569,6 +573,11 @@ function displacements(
   for (const node of input.graph.nodes()) {
     const was = previous.get(node.id);
     if (was === undefined) continue;
+    // A node the order stage did not put in a layer has no coordinate to have
+    // moved. The runner refuses that state at the order boundary, so this is
+    // unreachable through the pipeline; it is a skip rather than a throw
+    // because this stage is also called directly by its own suite, and a node
+    // missing from a hand-built layering is that caller's business.
     const number = index.numberOf.get(node.id);
     if (number === undefined) continue;
     found[shared] = at(xs, number) - was.x;
@@ -611,13 +620,12 @@ function displacements(
  * interval, which is the two paragraphs above in one line.
  */
 function displacementShift(found: Float64Array): number {
-  // A copy, because `subarray` is a VIEW of the caller's buffer and this sort
-  // is in place. Sorting the displacements is not sorting the drawing, but the
-  // buffer underneath is one this stage reuses.
-  const sorted = found.slice();
-  sorted.sort();
-  const lower = at(sorted, (sorted.length - 1) >> 1);
-  const upper = at(sorted, sorted.length >> 1);
+  // IT SORTS ITS ARGUMENT. `found` is the fresh view `displacements` just
+  // returned and nothing reads it again, so a defensive copy here would be a
+  // second array per relayout bought with nothing.
+  found.sort();
+  const lower = at(found, (found.length - 1) >> 1);
+  const upper = at(found, found.length >> 1);
   return Math.min(Math.max(0, lower), upper);
 }
 
@@ -660,14 +668,14 @@ function rowCentres(input: OrderedState): Float64Array {
  * and 45% on the 10k, and there is no one answer to freeze into a second shared
  * stage.
  *
- * THERE IS NO OPTION TO TURN THE WARM START OFF, which is the one place this
- * differs from `longestPathRank`'s `maxWarmShare`. That budget exists because a
- * warm ranking can cost more than the cold sweep it replaces, so a caller has a
- * trade to make. Here the pass is inside the noise of the stage it belongs to
- * and never changes the drawing, only where the drawing is read, so there is
- * nothing to trade. A caller who wants the unshifted coordinates asks for them
- * by having no previous run: `layout()` never fills `previous` in, and only an
- * engine does.
+ * THERE IS NO OPTION TO TURN THE WARM START OFF, and that is a decision rather
+ * than an omission. An option earns its place when a caller has a trade to
+ * make, which is what `variant` above is and what `maxSweeps` is on the order
+ * stage: a budget exists because spending it can cost more than it saves. This
+ * pass is inside the noise of the stage it belongs to and never changes the
+ * drawing, only where the drawing is read, so there is nothing to trade. A
+ * caller who wants the unshifted coordinates asks for them by having no
+ * previous run: `layout()` never fills `previous` in, and only an engine does.
  *
  * ## NOT THE DEFAULT, NOT EXPORTED, and not an improvement on today's graphs
  *
@@ -841,7 +849,7 @@ function rowCentres(input: OrderedState): Float64Array {
  * coordinates come out where the compaction put them, and `bounds` covers them
  * wherever that is.
  *
- * ## M3.8a: where the drawing is read, which is the freedom nothing was using
+ * ## Where the drawing is read, which is the freedom nothing was using
  *
  * **This algorithm decides a drawing up to a horizontal translation and nothing
  * in it decides which translation.** Every constraint it solves is a difference
@@ -902,19 +910,23 @@ function rowCentres(input: OrderedState): Float64Array {
  * equalities rather than as improvements in `test/layout.position.stable.test.ts`.
  *
  * A COUNT CAN GO UP WHERE A DISTANCE GOES DOWN, and the 1k remove-node row is
- * where. `moved` counts nodes past a 1e-9 tolerance, so a shift that is right
- * for the drawing still touches a node that would otherwise have been exactly
- * still: 886 of 999 moved becomes 998 while the mean distance falls by a
- * quarter. On the 10k the counts fall too (9,960 to 5,038 on the added edge),
- * because there the drawing is large enough that the translation is most of
- * what happened. The guarantee that bounds this is the majority one above.
+ * where: its rerouted share is the one figure in the table that gets worse,
+ * 97.3% to 100%. Both counts are past a 1e-9 tolerance, so a shift that is
+ * right for the drawing still touches a node, and a route, that would otherwise
+ * have been exactly still: 886 of 999 nodes moved becomes 998 while the mean
+ * distance falls by a quarter. On the 10k the counts fall too (9,960 to 5,038
+ * on the added edge, and every rerouted share in the table with them), because
+ * there the drawing is large enough that the translation is most of what
+ * happened. The guarantee that bounds this is the majority one above: a run
+ * that left a majority of the drawing alone takes no shift and so pays none of
+ * this.
  *
  * ### What it costs
  *
  * Nothing measurable. One pass over the graph's own nodes and one sort of their
  * displacements, against a stage whose index build alone walks a roster
  * eighteen times larger. Four timed runs of the protocol in the cost section
- * below put the warm stage at 0.96x to 1.04x the cold one on both corpora,
+ * above put the warm stage at 0.96x to 1.04x the cold one on both corpora,
  * which is the noise this box has, so no absolute figure for the pass is quoted
  * here: there is none to quote.
  *

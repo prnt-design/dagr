@@ -403,8 +403,7 @@ describe('brandesKoepfPosition, what the shift is worth on a corpus', () => {
     { kind: 'add-edge' as const, ceiling: 14_000, floor: 100_000 },
     { kind: 'add-middle' as const, ceiling: 12_500, floor: 13_500 },
     { kind: 'remove-leaf' as const, ceiling: 1_200, floor: 1_500 },
-  ])('moves the 1k corpus less on a $kind patch', ({ kind, ceiling, floor }, ...rest) => {
-    void rest;
+  ])('moves the 1k corpus less on a $kind patch', ({ kind, ceiling, floor }) => {
     const spec = smallCorpus();
     expect(relayoutOnce(spec, kind, true)).toBeLessThanOrEqual(ceiling);
     expect(relayoutOnce(spec, kind, false)).toBeGreaterThanOrEqual(floor);

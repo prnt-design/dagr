@@ -108,13 +108,15 @@ offer, and `engine.run` deliberately does not either, because the graph it is
 handed need not be the one the last run saw. It is on the record every stage
 reads rather than passed to one of them, because ranking, ordering and
 positioning each have a previous answer to start from and a channel per stage
-would be three contracts to keep in step. The order stage reads `layers` and
-both rank stages read `reversedEdges`; nothing reads `ranks` or `positions` yet,
-so a relayout is still correct and no faster than a cold run. What those readers
-buy is a stable answer rather than a cheaper one: see
-[the warm start](#the-warm-start) for the order stage's and
+would be three contracts to keep in step. The order stage reads `layers`, both
+rank stages read `reversedEdges`, and `brandes-koepf-position` reads
+`positions`; nothing reads `ranks` yet, so a relayout is still correct and no
+faster than a cold run. What those readers buy is a stable answer rather than a
+cheaper one: see [the warm start](#the-warm-start) for the order stage's,
 [the reversed set across a relayout](#the-reversed-set-across-a-relayout) for
-the rankers'.
+the rankers', and [where a drawing is read](#where-a-drawing-is-read) for the
+position stage's, which is a reader of a different kind: it does not seed the
+search at all, only the translation the finished drawing is read at.
 
 Its own `previous` is subtracted for a reason worth knowing if you write a stage
 that reads it: the field is on the record, so the runner carries it forward and
@@ -706,7 +708,7 @@ reversed edge's source being the end at the high rank. The id is a pure function
 of the edge and that position, never a counter and never iteration order. That
 is a requirement of M3 rather than a tidiness: with a counter, adding an
 unrelated edge would rename every dummy on a chain, so M3.6's warm start would
-meet nodes it had never seen and M3.8 would have no previous coordinate to
+meet nodes it had never seen and M3.8b would have no previous coordinate to
 anchor, and a long edge would visibly jitter between two endpoints that did not
 move at all. On a real Sugiyama drawing dummies outnumber real nodes, so that is
 most of the geometry rather than a corner of it. Nothing parses the id back

@@ -1224,7 +1224,7 @@ findings addressed or logged, docs land with the feature.
   golden files is a corpus-wide migration and adding it up front cost nothing.
   It is met, by `#dummy:<edgeId>:<index>` rather than by the rank form this
   paragraph suggested, for the reason further down this entry. Without it
-  every dummy is a node M3.6's warm start has never seen and M3.8 has no
+  every dummy is a node M3.6's warm start has never seen and M3.8b has no
   previous coordinate to anchor, so a long edge visibly jitters between two
   endpoints that did not move at all, on every patch, forever, while
   node-displacement metrics score it as perfect stability. On a real Sugiyama
@@ -2910,7 +2910,7 @@ it.
   fallback), but it has to be decided rather than drifted into, because M3.5
   through M3.9 are all written against whichever it is, and M3.10's docs
   promise it to users.
-  Write the contract in a form that survives insertion, and do not let M3.8 be
+  Write the contract in a form that survives insertion, and do not let M3.8b be
   the run that discovers why. Take hard anchoring literally: untouched nodes
   hold their coordinates, M3.6 fixes the intra-layer order, and M2.7 requires a
   minimum separation. Now insert one node into a rank between two anchored
@@ -2951,7 +2951,7 @@ it.
   demonstration ships as a test rather than as a paragraph: a batched one-node
   insertion into the diamond moves nodes the patch never names, so a contract
   written against the patch's own ids fails today, against the pipeline as it
-  stands, before M3.8 exists to discover it. What ships instead is scoped to the
+  stands, before M3.8b exists to discover it. What ships instead is scoped to the
   INFLUENCE SET, which is vacuously satisfied by M3.2's whole-roster
   implementation, and the suite therefore also runs the checker against a
   DELIBERATELY NARROWED set and asserts it reports violations. Without that
@@ -3087,7 +3087,7 @@ it.
   algorithm where k hops cuts across it unevenly. Predicting this matters
   because the property test above is what fails, in the run that writes it, if
   a reachability-based set is chosen.
-  Note the coupling to M3.8: once anchors are relaxable, the influence set is
+  Note the coupling to M3.8b: once anchors are relaxable, the influence set is
   partly a consequence of the anchoring feasibility analysis rather than an
   independent graph computation, because a rank an insertion widens is
   influenced whether or not reachability says so.
@@ -3188,7 +3188,7 @@ it.
   measured against a frame budget cannot afford one, and the band's own work
   already avoids it.
   THE TWO AXES REST ON DIFFERENT STAGES, WHICH IS THIS RUN'S OWN REVIEW FINDING
-  AND IS M3.8's TO INHERIT. The vertical rule holds for any position stage in
+  AND IS M3.8b's TO INHERIT. The vertical rule holds for any position stage in
   this package, because `rowCentres` is shared and `position.ts` says so:
   swapping the position stage moves nodes sideways and never up or down. The
   horizontal rule is `gridPositionStage`'s alone, because that stage lays each
@@ -3237,7 +3237,7 @@ it.
   pass it, which is how a milestone quietly redefines its own target. If the
   warm start costs crossings, that number is the price of the feature and
   belongs in M3.10's docs page.
-  Prior art worth an hour before starting this, M3.7b and M3.8: North and
+  Prior art worth an hour before starting this, M3.7b and M3.8b: North and
   Woodhull's DynaDAG (online hierarchical drawing) and Frishman and Tal's
   online dynamic graph drawing solve this milestone's problem directly,
   including order warm start under rank churn and stable coordinates via a
@@ -3282,7 +3282,7 @@ it.
   for and it is asserted with the cold figure as a ceiling so that the evidence
   cannot go vacuous. Note what is NOT claimed: the untouched nodes keep their
   ORDER and not their COORDINATES, because a row that gained a node got wider
-  and every row is centred on x = 0. That is M3.8's, and it is why the corpus
+  and every row is centred on x = 0. That is M3.8b's, and it is why the corpus
   test asserts order and the coordinate half is measured against the region.
   THE CROSSING TOLERANCE IS 2% PER GRAPH OVER THE M2.6 CORPUS AND M3.6 SET IT,
   from this measurement rather than from a preference. Warm against cold after
@@ -3343,7 +3343,7 @@ it.
   holds across a patch that changed no cycle, so the flips that renamed those
   dummies do not happen. What is left of it is the flips a real cycle change
   causes, which are a fact about the edit.
-  M3.8 inherits the coordinate half the corpus test above deliberately does not
+  M3.8b inherits the coordinate half the corpus test above deliberately does not
   assert.
 - [x] **M3.7a** (`@dagr/layout`) Stable feedback arc set: seed the cycle breaker
   with the previous run's reversed set, so that a changed reversed set means
@@ -3598,10 +3598,12 @@ it.
   displacement was 163,522. The entry's phrase about throwing the graph across
   the screen is a literal description of the measurement.
   WHERE THE INSTABILITY LIVES, measured before anything was designed, which is
-  the thing M3.7b said to do first. Running one named alignment instead of the
-  median of four makes a patch that changes no layering move NOTHING (0 of 1,000
-  nodes) where `balanced` moves 154. So the alignment and the compaction are
-  stable under such a patch and THE BALANCING STEP IS NOT: it aligns the four
+  this milestone's own ordering principle applied inside a task rather than
+  between them: correctness, then the measurement, then speed. Running one named
+  alignment instead of the median of four makes a patch that changes no layering
+  move NOTHING (0 of 1,000 nodes) where `balanced` moves 154. So the alignment
+  and the compaction are stable under such a patch and THE BALANCING STEP IS
+  NOT: it aligns the four
   candidates to whichever of them is narrowest, and which one that is can flip
   on one node.
   THE FOUR OPTIONS, DECIDED. The POST-PASS is taken, restricted to a rigid
@@ -3633,7 +3635,7 @@ it.
   the 1k corpus over a patch that changes no layering it moves all 1,000 nodes
   where this rule moves none, at a mean displacement of 19.8 against 11.6.
   ONLY THE CALLER'S OWN NODES, AND THAT IS MEASURED RATHER THAN ASSUMED. A dummy
-  outnumbers a node better than eighteen to one on the 10k corpus, so throwing
+  outnumbers a node better than seventeen to one on the 10k corpus, so throwing
   them out looks like throwing out the evidence. The shift is better for it: on
   the 10k, over an added edge, the caller's nodes leave 5,038 of 10,000 moved
   and 44.2% of edges rerouted against 9,656 and 99.1% for the whole roster, and
@@ -3675,8 +3677,10 @@ it.
   at 10k, which is what sent the walk to `graph.nodes()` instead; the population
   and the cost pointed the same way, which is luck rather than a principle.
   WHAT THIS HALF DOES NOT TOUCH. The work is still a whole cold run, so nothing
-  here confines anything to a region, and `influence.ts`'s note that M3.8 owns
-  the horizontal rule for a stage coupling `x` across ranks is M3.8b's still.
+  here confines anything to a region. `influence.ts` now points its note about
+  the horizontal rule for a stage coupling `x` across ranks at M3.8b, and says
+  why this half is not it: a translation of the whole drawing moves every node
+  together and so declares nothing about a band.
   NODE REMOVAL IS NOT DECIDED HERE, against the entry, and the reason is that
   the entry's own framing does not apply to a cold run: a cold run has no gap to
   leave, because it pins nothing and the compaction closes every gap by
