@@ -3568,17 +3568,133 @@ it.
   the walk. It also inherits the warning: the position stage's cost profile has
   to be measured BEFORE the incremental path is designed, because this task's
   saving turned out to be in the wrong half of its own stage. Merged in PR #64.
-- [ ] **M3.8** (`@dagr/layout`) Stable coordinate assignment: positions that do
-  not jump. Two halves. The incremental path holds untouched nodes at their
-  previous coordinates and solves only the influenced band against them. The
-  full-relayout fallback has to be stable too, because a fallback that throws
-  the graph across the screen is worse for a user than having no incremental
-  layout at all: a cold run seeded with the previous coordinates as the
-  tie-break preference, so the same input keeps the same answer everywhere the
-  constraints leave a choice. Invariant tests from M2.7 run against both paths,
-  but say which of Brandes-Koepf's guarantees actually survive the incremental
-  path, because "no overlaps, spacing respected" is strictly weaker than what
-  BK promises and the invariant tests will not notice the difference.
+- [x] **M3.8a** (`@dagr/layout`) The full relayout that keeps its place: a cold
+  Brandes-Koepf run read at the translation the previous run was read at, so the
+  fallback half of M3.8 stops throwing the graph across the screen. Tests: a
+  drawing that only translated is put back exactly, a drawing a majority of
+  which did not move is returned byte for byte, the shift is rigid so every
+  invariant `test/layout.position.test.ts` asserts survives it, and the corpus
+  measurement below is a test rather than a number in a document nothing checks.
+  THE SPLIT IS THE ENTRY'S OWN, and it is taken in the opposite order to the one
+  the entry names, because the entry contradicts itself about the order. Its
+  last paragraph says to land the incremental path first "rather than shipping a
+  stable fast path behind an unstable fallback", and landing the incremental
+  path first is exactly what produces a stable fast path behind an unstable
+  fallback. The subordinate clause is the argument and the main clause is a
+  slip. Everything falls back to the cold run, so the cold run is the floor and
+  the floor goes first. M3.8b is the anchored incremental path, and it inherits
+  every part of the entry this one did not spend.
+  THE FREEDOM NOTHING WAS USING. Every constraint Brandes-Koepf solves is a
+  DIFFERENCE between two coordinates, so sliding the finished drawing sideways
+  solves them all equally well and nothing in the algorithm picks a slide. The
+  origin it reaches is wherever the leftmost block landed. `position.ts` already
+  stated that as a fact about `bounds` ("the drawing is NOT centred on `x = 0`")
+  without noticing it was a freedom. Spending it is the whole task.
+  WHAT THE ENTRY GOT RIGHT AND WHAT THE MEASUREMENT ADDS. The entry predicted a
+  discontinuity rather than a drift, and that a one-node insertion could
+  translate a whole block by a full `nodeSep`. It is worse than that, and by two
+  orders of magnitude. On the 1k corpus, whose drawing is 179,375 units wide,
+  ADDING ONE EDGE TRANSLATED IT BY 170,900, and the relayout's mean node
+  displacement was 163,522. The entry's phrase about throwing the graph across
+  the screen is a literal description of the measurement.
+  WHERE THE INSTABILITY LIVES, measured before anything was designed, which is
+  the thing M3.7b said to do first. Running one named alignment instead of the
+  median of four makes a patch that changes no layering move NOTHING (0 of 1,000
+  nodes) where `balanced` moves 154. So the alignment and the compaction are
+  stable under such a patch and THE BALANCING STEP IS NOT: it aligns the four
+  candidates to whichever of them is narrowest, and which one that is can flip
+  on one node.
+  THE FOUR OPTIONS, DECIDED. The POST-PASS is taken, restricted to a rigid
+  translation. ANCHORING is deferred to M3.8b rather than refused, and the
+  entry's own argument is why it cannot be this half: the alignment offsets are
+  global and blocks span ranks, so a boundary between pinned and free members
+  kinks exactly the chains BK exists to straighten. PER-RANK SHIFTS ARE REFUSED
+  outright, on the same argument pointed at the transform instead of at the
+  decomposition: a chain spans ranks, so two ranks shifted differently bend the
+  segment between them, and a pass that straightens inner segments and then
+  bends them has undone its own work. A SOFT DISPLACEMENT PENALTY is deferred
+  with its cost restated: it means an LP or QP coordinate stage beside the cold
+  BK one, two stages to keep consistent, and the cheap transform already removes
+  the dominant term. `engine.reflow()` is not built, and this half is the reason
+  it is not needed yet: a post-pass has no lock-in to escape from, because it
+  pins nothing. It becomes M3.8b's to weigh, exactly as the entry says.
+  THE RULE, and it is the part worth reading. The shift is the SMALLEST
+  minimiser of the TOTAL DISTANCE the caller's own nodes travel. Absolute
+  distance and not squared: the absolute form is minimised over the closed
+  interval between the two central order statistics, so the answer is a range,
+  and choosing zero from that range when zero is in it makes the pass a strict
+  improvement rather than a trade. IT FOLLOWS THAT THE SHIFT IS EXACTLY ZERO
+  UNLESS A STRICT MAJORITY OF THE SHARED NODES MOVED THE SAME WAY, since a node
+  that did not move is in neither camp. That is the guarantee that keeps this
+  pass from being the first thing to move a node the stages above it left alone,
+  and it is what makes it safe against M3.4's contract, which is scoped to an
+  influence set. The squared form has neither property: its minimiser is the
+  mean, a generic real number that moves every node on every relayout, and on
+  the 1k corpus over a patch that changes no layering it moves all 1,000 nodes
+  where this rule moves none, at a mean displacement of 19.8 against 11.6.
+  ONLY THE CALLER'S OWN NODES, AND THAT IS MEASURED RATHER THAN ASSUMED. A dummy
+  outnumbers a node better than eighteen to one on the 10k corpus, so throwing
+  them out looks like throwing out the evidence. The shift is better for it: on
+  the 10k, over an added edge, the caller's nodes leave 5,038 of 10,000 moved
+  and 44.2% of edges rerouted against 9,656 and 99.1% for the whole roster, and
+  over a removed node 8,095 and 87.7% against 9,999 and 100%. A chain is the
+  part of the drawing a patch is most likely to re-mint, so the dummies are the
+  noisier population, and what is being estimated is where the drawing SAT.
+  ONE ALTERNATIVE WAS BUILT AND REFUTED. Normalising each of the four candidates
+  onto the previous coordinates before the median is taken, rather than the
+  finished drawing after it, looks like the sharper form of the same idea: it
+  attacks the balancing step where the instability was measured to live. It is
+  much worse. On a patch that changes no layering it moves 999 of 1,000 nodes at
+  a mean displacement of 5,500 where the finished-drawing form moves 154 at
+  11.6. THE FOUR CANDIDATES ARE NOT FOUR TRANSLATIONS OF ONE DRAWING, so pulling
+  each onto the same previous coordinates collapses the offsets the median is
+  taken over, and the median of four becomes roughly a single alignment.
+  WHAT IT IS WORTH, as mean node displacement, mean route distance and the
+  rerouted share, against the same stage with the channel taken away. 10k, leaf
+  added: 123.9 to 26.1, 136.1 to 18.7, 100% to 24.5%. 10k, edge added: 826.9 to
+  335.8, 985.9 to 304.5, 100% to 44.2%. 10k, node removed: 587.3 to 229.0, 697.8
+  to 196.2, 94.1% to 87.7%. 10k, edge removed: 92.5 to 51.6, 113.7 to 62.6,
+  89.6% to 83.6%. 1k, edge added: 163,522 to 13,371, 170,847 to 17,281. 1k, node
+  added mid-graph: 14,021 to 11,929, 19,121 to 16,829. 1k, node removed: 1,532
+  to 1,129, 2,174 to 1,467. On the 1k corpus a leaf added and an edge removed
+  change no surviving node's rank or slot, so the drawing did not translate, the
+  optimal shift is zero and the cold answer comes back byte for byte; both are
+  asserted as equalities rather than as improvements.
+  A COUNT CAN GO UP WHERE A DISTANCE GOES DOWN and the 1k removed-node case is
+  where: 886 of 999 moved becomes 998 while the mean distance falls by a
+  quarter, because a shift that is right for the drawing still touches a node
+  that would have been exactly still. On the 10k the counts fall too. The
+  majority guarantee above is what bounds this, and it is the honest statement
+  of the post-pass's known cost, which the entry names as moving more nodes than
+  it strictly has to.
+  WHAT IT COSTS: nothing measurable. One pass over the graph's own nodes and one
+  sort of their displacements, beside a stage whose index build walks a roster
+  eighteen times larger. Four timed runs put the warm stage at 0.96x to 1.04x
+  the cold one on both corpora, which is this box's noise. An earlier form that
+  walked the ROSTER and excluded dummies by a set lookup cost 14% of the stage
+  at 10k, which is what sent the walk to `graph.nodes()` instead; the population
+  and the cost pointed the same way, which is luck rather than a principle.
+  WHAT THIS HALF DOES NOT TOUCH. The work is still a whole cold run, so nothing
+  here confines anything to a region, and `influence.ts`'s note that M3.8 owns
+  the horizontal rule for a stage coupling `x` across ranks is M3.8b's still.
+  NODE REMOVAL IS NOT DECIDED HERE, against the entry, and the reason is that
+  the entry's own framing does not apply to a cold run: a cold run has no gap to
+  leave, because it pins nothing and the compaction closes every gap by
+  construction. Close-the-gap versus leave-the-gap is a question about anchored
+  neighbours, so it belongs with the anchoring, which is M3.8b.
+  THE ONE THING THE M2.7 INVARIANT TESTS DID NOT HAVE TO BE RUN TWICE FOR: a
+  rigid translation preserves every difference in the drawing, so the spacing
+  invariant, the no-overlap property and the block straightness are preserved by
+  construction rather than re-asserted. What the suite asserts instead is the
+  rigidity itself, pairwise over every pair of nodes, which is the statement
+  that carries all three.
+- [ ] **M3.8b** (`@dagr/layout`) The anchored incremental path: hold untouched
+  nodes at their previous coordinates and solve only the influenced band against
+  them, on top of the stable fallback M3.8a shipped. Invariant tests from M2.7
+  run against both paths, but say which of Brandes-Koepf's guarantees actually
+  survive the incremental path, because "no overlaps, spacing respected" is
+  strictly weaker than what BK promises and the invariant tests will not notice
+  the difference.
   BK does not decompose into a band solve, which the naive reading of the
   paragraph above assumes it does. BK is: mark type-1 conflicts, run four
   biased vertical-alignment passes forming blocks, compact each block class,
@@ -3596,9 +3712,12 @@ it.
   neighbours and accept that straightness holds only within the band, or to run
   full BK and reconcile afterwards, which sidesteps the decomposition entirely
   and is a stronger argument for the post-pass than the one below.
-  Decide here between anchoring and a post-pass, with four options rather than
-  two. This is the decision that most directly sets what the differentiator
-  feels like in a user's hands.
+  M3.8a TOOK THE POST-PASS FOR THE COLD PATH AND LEFT THIS ONE OPEN, so read
+  M3.8a's entry before choosing: the shift it ships is rigid and global, it is
+  measured, and it is already the reconcile-afterwards form applied to a run
+  that anchors nothing. The question left here is whether an anchored band beats
+  a cold run plus that shift, which is a comparison M3.8a's numbers are the
+  baseline for.
   Anchoring pins previous coordinates and gives exact stability where it is
   feasible at all (see M3.4: it is not feasible for an insertion between two
   anchored neighbours, so anchors have to be relaxable). What it accumulates
@@ -3607,9 +3726,6 @@ it.
   coordinates no cold BK run would produce, so blocks straddle pinned and free
   nodes, kinks build, and the drawing gets progressively wider than it needs to
   be.
-  A post-pass solves fresh and then transforms the result (rigid translation,
-  possibly per-rank shifts) to minimise total displacement, keeping layout
-  quality and moving more nodes than it strictly has to.
   A soft displacement penalty adds a per-node `w_i * |x_i - x_i^prev|` term so
   stability trades continuously against quality instead of being on or off, and
   a soft anchor can always yield, which dissolves the feasibility problem. This
@@ -3623,29 +3739,23 @@ it.
   with M4.6's springs animating the escape, is nearly free once M3.2 exists and
   changes how bad anchoring's worst case is: lock-in stops being a permanent
   defect and becomes a user-triggerable cost. Weigh it before picking, because
-  it is what makes anchoring survivable.
-  Note also what BK's own instability looks like, since it is the real argument
-  for the fallback half of this task: it is a discontinuity, not a drift. The
-  per-node value is a median across four candidate alignments, and which
-  candidates are extremal can flip on a single layer-membership change, so a
-  one-node insertion can translate a whole block by a full `nodeSep` in a cold
-  run. That is why an unseeded fallback throws the graph across the screen.
-  Node removal is decided here too, because it is the same axis and currently
-  has no owner. Removing a node leaves a gap in its rank, and the two policies
-  have opposite failure modes: closing the gap keeps layout quality and moves
-  every node to one side of the removal within that rank, which is the worst
-  possible stability outcome for a patch the user thinks of as touching one
-  node; leaving the gap is perfectly stable and accumulates holes, so a
-  long-running session ends up mostly whitespace with no way back, which is the
-  same lock-in reached by another route and the same `reflow()` escape hatch
-  resolves it. M3.9's remove-leaf fast path quietly presumes leave-the-gap
-  without arguing for it, so argue it here, and let M3.10's prune and churn
-  sequences measure the cost.
-  This is the run to spend the milestone's heaviest algorithms review on, and
-  it is the one task in M3 carrying two deliverables rather than one. If both
-  halves cannot land green in one run, land the incremental path and its tests
-  and record the fallback as the next run, rather than shipping a stable fast
-  path behind an unstable fallback.
+  it is what makes anchoring survivable. M3.8a does not need it, because a
+  post-pass pins nothing; anchoring is what brings the need back.
+  Node removal is decided here, and M3.8a says why it could not be decided
+  there: a cold run has no gap to leave. Removing a node leaves a gap in its
+  rank, and the two policies have opposite failure modes: closing the gap keeps
+  layout quality and moves every node to one side of the removal within that
+  rank, which is the worst possible stability outcome for a patch the user
+  thinks of as touching one node; leaving the gap is perfectly stable and
+  accumulates holes, so a long-running session ends up mostly whitespace with no
+  way back, which is the same lock-in reached by another route and the same
+  `reflow()` escape hatch resolves it. M3.9's remove-leaf fast path quietly
+  presumes leave-the-gap without arguing for it, so argue it here, and let
+  M3.10's prune and churn sequences measure the cost.
+  This is the run to spend the milestone's heaviest algorithms review on.
+  `influence.ts` NAMES THIS TASK: its horizontal rule is `gridPositionStage`'s
+  and it declines to narrow the region for a stage that couples `x` across
+  ranks, which is what a band solve has to declare.
 - [ ] **M3.9** (`@dagr/layout`) Fast paths: add-leaf, remove-leaf and
   attribute-only patches skip pipeline stages outright. An attribute patch that
   does not change a node's size changes no geometry at all and should emit an
