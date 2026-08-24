@@ -3560,7 +3560,8 @@ shipped, so the natural split is one runner working M3 in order while the other
 takes the early M4 tasks. M4.4 and M4.5 want real coordinates and routes
 (M2.7, M2.8) but still nothing incremental. M4.8 and M4.9 follow M4.3 and M4.2
 respectively and need nothing from M2 or M3; M4.8a needs nothing at all, since
-it is arithmetic and a map. M4.10 wants a real 10k-node
+it is arithmetic and a map, and M4.9a is done with M4.9b needing a machine
+rather than a task. M4.10 wants a real 10k-node
 layout, so it trails M2.9. M4.7 is the single M4 task that genuinely blocks on
 M3, because it consumes `LayoutDelta` from M3.1. So M3 leads M4 in dependency
 order at exactly one join, and treating the whole of M4 as blocked on the whole
@@ -4455,18 +4456,138 @@ of M3 would leave the second runner idle for a milestone.
   ALSO OWED HERE: the y flip M4.8a assumed, confirmed against a real readback,
   and the vertex buffer count on the pick pipeline, confirmed where the
   attribute is added rather than inherited from M4.8a's paragraph on it.
-- [ ] **M4.9** (`@dagr/render`) WebGL2 fallback: the same TSL node graphs
-  compiled through three.js's WebGL2 backend, with backend selection at init
-  and a documented list of what differs between the two. Parity check between
-  backends on M4.2's shape scene, by screenshot comparison where the M4.1
-  harness allows it.
-  Decide here whether the fallback is automatic (probe for WebGPU, fall back
-  silently, which is what a consumer wants and which hides a large performance
-  cliff) or explicit (the consumer names a backend and gets an error when it is
-  unavailable, which is honest and pushes the decision onto everyone). The
-  likely middle is automatic, with the chosen backend readable and an event
-  when the fallback fires. Whatever is chosen, record what is known not to work
-  on WebGL2 here rather than letting a consumer discover it in a browser.
+**M4.9 IS SPLIT INTO M4.9a AND M4.9b**, and the split is drawn by what a machine
+has rather than by what a task wants. Everything about SELECTING a backend and
+REPORTING it is arithmetic over two strings and two booleans, checkable with no
+device at all and then confirmable on any one machine. The parity check is not:
+"the two backends draw the same shapes" needs both backends on one machine, and
+the box these runs happen on has WebGL2 through swiftshader and no WebGPU
+adapter, so it is not deferred by preference. Of the entry's five asks, M4.9a
+took backend selection at init, the automatic-versus-explicit decision, the
+documented list of what differs, and showing the TSL graphs compiled and drawn
+through the WebGL2 backend. M4.9b is the fifth, the parity screenshot.
+
+- [x] **M4.9a** (`@dagr/render`, `bench/browser`, `docs`) Backend selection and
+  reporting: `createRenderer` takes a `backend` preference and every renderer
+  reports the one it came up on, with the differences between the two written
+  down, and a committed browser harness that says which one this machine gives
+  and whether the shapes reach the canvas.
+  **THE DECISION THE ENTRY ASKED FOR IS AUTOMATIC WITH A NAMED EXCEPTION, AND
+  THE QUESTION IT ASKED WAS ALREADY HALF ANSWERED.** three's `WebGPURenderer`
+  falls back to WebGL2 by itself: its constructor installs a `getFallback` and
+  `init()` calls it (verified in three 0.185.1, the version this package builds
+  against). It was already doing that when M4.1 mounted one, which M4.1's own
+  note in `webgpu-renderer.ts` says in so many words. So "automatic or explicit"
+  was never a choice about whether to fall back, which was already happening on
+  every machine without an adapter. It was a choice about whether a caller can
+  TELL, which M4.1's own note said nobody could. `backend` defaults to `auto`
+  and `renderer.backend` reports the answer; naming `webgpu` or `webgl2` turns
+  the preference into a requirement and an unmet one into a
+  `BackendUnavailableError`. Refusing by default was rejected on the entry's own
+  terms: it pushes the decision onto everyone, and the person looking at the
+  blank canvas is the one who can do least about it.
+  **THE EVENT THE ENTRY ASKED FOR DOES NOT EXIST, BECAUSE THERE IS NO MOMENT FOR
+  IT TO FIRE IN.** three falls back inside the `init()` that `createRenderer`
+  awaits, so by the time a caller holds a renderer the fallback has happened and
+  `renderer.backend` already says so. A callback through the options would
+  deliver one fact through a second mechanism, before the caller has anything to
+  act on, and would leave every consumer with two places to read one value. The
+  entry named a MECHANISM where what it wanted was a PROPERTY, which is a shape
+  worth recognising the next time an entry predicts an interface rather than a
+  requirement.
+  **DO NOT PROBE `navigator.gpu`, MEASURED RATHER THAN ARGUED.** The obvious
+  implementation of `backend: 'webgpu'` is a capability check before
+  construction. On this box's headless Chromium, on 2026-08-23, `'gpu' in
+  navigator` is `true` and `navigator.gpu.requestAdapter()` then returns `null`,
+  with the console carrying "No available adapters" followed by three's own
+  fallback warning. A pre-flight probe would therefore have told the one caller
+  who cared enough to ask that they had WebGPU, on a machine that has none. The
+  backend is read AFTER `init()`, off what three actually built, and there is no
+  earlier honest answer.
+  **A STRICT WEBGPU REQUEST IS CONSTRUCTED EXACTLY LIKE `auto`, WHICH IS FORCED
+  RATHER THAN CHOSEN.** `forceWebGL` is the only backend switch three's
+  constructor exposes, and the else branch of that same constructor overwrites
+  `parameters.getFallback` with its own, so there is no supported way to ask for
+  WebGPU and no fallback. `webgpu` is therefore refused afterwards, by reading
+  what came up and disposing the device it is refusing, which keeps the standing
+  guarantee that a caller never has to dispose a renderer it did not receive.
+  **`unknown` IS A THIRD REPORTED VALUE AND NOT A THIRD BACKEND, AND THE SAME
+  FACT IS REPORTED ONE WAY AND REFUSED THE OTHER.** The backend is named by
+  reading three's `isWebGPUBackend` and `isWebGLBackend` markers, which three
+  declares on its two concrete backends and NOT on the `Backend` type that
+  `renderer.backend` has, so reading them is a widening however it is written and
+  this package does it in one two-line function. A three release that renames
+  either marker leaves a renderer that draws perfectly and cannot be named.
+  Throwing there would trade a working renderer for a naming problem, so `auto`
+  reports `unknown` and hands it back; a caller who NAMED a backend asked for a
+  guarantee that can no longer be made, and is refused. One rule, read from both
+  ends.
+  **THE MEASUREMENT THIS TASK EXISTS TO HAVE MADE.**
+  `bench/browser/backend-probe.mjs` and its page open the BUILT package in a real
+  browser, draw one rounded rectangle and one circle, and count pixels off the
+  canvas. On 2026-08-23, headless Chromium through swiftshader with no GPU:
+  `auto` came up on `webgl2` and drew 10,780 pixels above the clear colour in a
+  480 by 320 buffer, 3,908 of them the rectangle's amber fill and 2,432 the
+  circle's blue; `webgpu` was refused with `BACKEND_UNAVAILABLE`; `webgl2` drew
+  the identical counts. **THE FILL COUNTS AGREE WITH THE GEOMETRY AND THAT IS
+  WHAT MAKES THEM EVIDENCE ABOUT SIZE**: the amber should be the 90 by 50
+  rounded rectangle inset by its 2 device pixel outline, 3,901 of area against
+  3,908 counted, and the blue the 60 diameter circle inset the same way, 2,463
+  against 2,432, both under by the amount and in the order antialiasing
+  predicts. The expectations are derived in the page from the SAME node records
+  the renderer is given, because a hand copy of two sizes is the drift
+  `card-heights.mjs` already paid for. The frame is
+  `assets/screenshots/m4.9a-webgl2-shapes.png`. **THAT IS THE FIRST TIME
+  ANYTHING IN THIS REPOSITORY HAS CHECKED A PIXEL `@dagr/render` DREW RATHER THAN
+  THE ARITHMETIC BEHIND ONE**, and it takes four entries off the UNVERIFIED list
+  in `webgpu-renderer.ts` that have stood since M4.1: that a shape appears, in
+  the right place, at the right size and in the intended colour; that the shader
+  computes anything; that the derivatives antialias; and that the drawing buffer
+  size computed in that file reaches a real canvas. Every one of those is scoped
+  to WebGL2, which is the whole reason for the split.
+  **THE COUNTS ARE THE ASSERTION AND THE SCREENSHOT IS NOT.** "It drew", taken
+  from the absence of a thrown error, is a claim an empty canvas satisfies, and
+  this repository has committed a black canvas under a true caption before. The
+  first screenshot this harness produced was blank for a reason worth keeping:
+  the probe disposes its renderer before returning, a disposed renderer releases
+  its context, and the image was taken after the counts. The counts were right
+  the whole time. Counting and looking are two checks and both were needed.
+  **THE DIFFERENCES, RECORDED WHERE A CONSUMER READS RATHER THAN HERE.**
+  `docs/docs/render.md` carries the list with a source on each: the instanced
+  node pipeline's vertex-channel ceiling (8 on WebGPU against at least 16 on
+  WebGL2, so the narrow one is what this package builds against); a transparent
+  clear colour premultiplied unconditionally on WebGL2 and only under `alpha` on
+  WebGPU, which agree exactly while the background stays opaque; timestamp
+  queries, which M4.10's per-pass breakdown cannot assume on both; and compute
+  barriers, which are a no-op on WebGL2 and matter to nothing here yet.
+  Performance is UNMEASURED and said so plainly, because a box with one backend
+  has no pair to compare.
+  **WHAT M4.9a DELIBERATELY DID NOT TAKE WHILE IT WAS NEXT TO IT.** `antialias`
+  stays unexposed: it is how many samples an API draws with rather than which API
+  draws, which is M4.10's bandwidth question. And `alpha` stays unexposed
+  because it is not a backend question at all: three takes it as a renderer
+  parameter on both backends, so exposing it is a decision about what the page
+  behind the canvas is for. `clearColor`'s docstring had said M4.9 owned it, and
+  that was a roadmap prediction wrong about its own subject: the sentence is
+  corrected in place rather than left, because it is the kind a later task
+  implements from.
+- [ ] **M4.9b** (`@dagr/render`, `bench/browser`) Backend parity: the same TSL
+  node graphs drawn through BOTH backends on one machine and compared, by
+  screenshot over M4.2's shape scene. Everything it needs exists: the probe page
+  takes a `backend` preference, `backend: 'webgl2'` forces the compatible path
+  deterministically, and the pixel counting is already there. What it needs is a
+  machine with a WebGPU adapter, which is the whole of why it is separate.
+  Two things to settle when it runs. WHAT COUNTS AS AGREEMENT: two rasterisers
+  do not produce identical bytes, and a tolerance invented to make a first
+  comparison pass is a tolerance that measures nothing, so derive it from
+  something (the antialiasing ramp `sdf.ts` already characterises is the obvious
+  source, since the disagreement should be confined to boundary pixels and a
+  difference in the interior is a different KIND of failure from a difference at
+  an edge). And WHETHER THIS BECOMES A GATE: `bench/browser/README.md`'s standing
+  argument is that a browser measurement cannot join `bench:ci` because a runner
+  cannot re-measure it honestly, and a parity check is not a measurement, so the
+  argument does not automatically carry. It still needs a runner with both
+  backends, which CI does not obviously have.
 - [ ] **M4.10** (`@dagr/render`) Performance: 10k nodes at 60fps, this
   project's headline rendering target. Benchmark driving a real 10k-node
   laid-out graph, with frame time broken down by pass (instance update, node
@@ -4652,11 +4773,18 @@ it settled rather than restating the argument.
   formatted to seven significant digits with the fraction count chosen per
   value, and the large end goes through `BigInt`, which is exact because every
   double at or above 1e21 is an integer. Both ends are tested.
-  THE SCREENSHOTS WERE CAPTURED THROUGH THE WEBGL2 FALLBACK. Headless Chromium
-  on this box has no `navigator.gpu` at all and swiftshader gives it WebGL2, so
-  three's automatic fallback is what drew the committed frames. That is a fact
-  about the capture and about M4.9's eventual parity check, not about the
-  overlay, which never touches a GPU.
+  THE SCREENSHOTS WERE CAPTURED THROUGH THE WEBGL2 FALLBACK. Swiftshader gives
+  this box WebGL2 and no WebGPU adapter, so three's automatic fallback is what
+  drew the committed frames. That is a fact about the capture and about M4.9b's
+  parity check, not about the overlay, which never touches a GPU.
+  ONE CLAUSE OF THAT WAS WRONG AND M4.9a MEASURED IT: this entry said the box
+  "has no `navigator.gpu` at all", and on 2026-08-23
+  `bench/browser/backend-probe.mjs` found `'gpu' in navigator` TRUE with
+  `requestAdapter()` returning null. The conclusion held and the reason did not,
+  and a right conclusion with a false reason attached is still a defect: it is
+  corrected here rather than left, because "this browser has no `navigator.gpu`"
+  is exactly the sentence a later task would have implemented a capability probe
+  from, and M4.9a nearly was that task.
 - [x] **M4.12** (`@dagr/render`, `apps/demo`) Rich nodes: a node's visual as
   arbitrary HTML sized to its layout box, with the campaign plan's three-tier
   semantic zoom (instanced shape below ~24 CSS px, title label to ~160 px, full

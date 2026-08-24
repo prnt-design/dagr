@@ -39,7 +39,13 @@ describe('@dagr/render', () => {
     // throw it: `DagrRenderErrorCode` is exported and already names
     // `PICK_IDS_EXHAUSTED`, so the class that carries the code belongs on the
     // same surface as the code.
+    //
+    // `BackendUnavailableError` joined at M4.9a, and it is the ONLY thing the
+    // backend decision puts on the surface: the choice is made through an
+    // option and read back off a property, both of which are types and
+    // therefore erased, so an error is all there is left to count.
     expect(Object.keys(api).sort()).toEqual([
+      'BackendUnavailableError',
       'CENTRE_ANCHOR',
       'Camera2D',
       'DagrRenderError',
@@ -117,6 +123,21 @@ describe('@dagr/render', () => {
     expect('PickIdRegistry' in api).toBe(false);
     expect('PICK_KIND_TAGS' in api).toBe(false);
     expect('MAX_PICK_ID' in api).toBe(false);
+  });
+
+  it('does not export the backend decision, only its error', () => {
+    // `backend.ts` decides what to construct and what the caller is told, and it
+    // stays internal on `sdf.ts`'s terms: exporting `backendOf` would be a
+    // promise to keep three's two marker flags a supported reading for callers
+    // who are not building this package's renderer, and the flags are three's to
+    // rename. What a caller needs is `createRenderer`'s `backend` option and
+    // `Renderer.backend`, and both are erased types.
+    expect('backendOf' in api).toBe(false);
+    expect('forceWebGLFor' in api).toBe(false);
+    expect('requireBackendPreference' in api).toBe(false);
+    expect('requireBackendHonoured' in api).toBe(false);
+    expect('BACKEND_PREFERENCES' in api).toBe(false);
+    expect('DEFAULT_BACKEND' in api).toBe(false);
   });
 
   it('does not export the renderer implementation class', () => {

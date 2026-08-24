@@ -1,4 +1,11 @@
 import { Color, OrthographicCamera, Scene, WebGPURenderer } from 'three/webgpu';
+import {
+  DEFAULT_BACKEND,
+  backendOf,
+  forceWebGLFor,
+  requireBackendHonoured,
+  requireBackendPreference,
+} from './backend.js';
 import { Camera2D } from './camera.js';
 import { RendererDisposedError } from './errors.js';
 import type { SceneStyle } from './instance-attributes.js';
@@ -6,7 +13,14 @@ import { SceneEdges } from './scene-edges.js';
 import type { EdgeFrameStyle, SceneEdge, SceneEdgeGroup } from './scene-edges.js';
 import { SceneNodes } from './scene-nodes.js';
 import type { SceneNode } from './scene-nodes.js';
-import type { GpuResource, Renderer, RendererOptions, Size, ViewportSize } from './types.js';
+import type {
+  GpuResource,
+  Renderer,
+  RendererBackend,
+  RendererOptions,
+  Size,
+  ViewportSize,
+} from './types.js';
 
 /**
  * A three.js `WebGPURenderer` drawing M4.2's SDF shapes through a
@@ -27,51 +41,55 @@ import type { GpuResource, Renderer, RendererOptions, Size, ViewportSize } from 
  * that implement {@link FrameSink}, {@link ProjectionTarget} and
  * {@link GpuResource} and counts those calls, with no device anywhere.
  *
- * What is therefore still UNVERIFIED, stated plainly rather than left to be
- * discovered. M4.2 amended this list rather than replacing it, because every
- * entry M4.1 wrote is still true and the SDF path added to it:
+ * **M4.9a moved four entries off the list below, on ONE backend of two.**
+ * `bench/browser/backend-probe.mjs` opens this package's own `dist` in a
+ * headless Chromium and draws two shapes, and on 2026-08-23 it reported a
+ * WebGL2 backend, a 480 by 320 drawing buffer, and 10,780 pixels above the
+ * clear colour, of which 3,908 are the rounded rect's amber fill and 2,432 the
+ * circle's blue. `assets/screenshots/m4.9a-webgl2-shapes.png` is that frame.
+ * **The two fill counts agree with the geometry**, which is what makes this
+ * evidence about SIZE rather than only about presence: the amber region is the
+ * 90 by 50 rounded rect inset by the 2 device pixel outline, 3,901 pixels of
+ * area against 3,908 counted, and the blue is the 60 diameter circle inset the
+ * same way, 2,463 against 2,432. So a shape appears, in the right place, at the
+ * right size and in the intended colour; the shader computes; the derivatives
+ * antialias; and the buffer size computed here reaches a real canvas. What is NOT covered is WebGPU, because
+ * this box has no adapter (see `backend.ts`), so every claim in this paragraph
+ * is scoped to the backend that drew it. That scope is the whole of why M4.9
+ * is split, and M4.9b owns closing it.
  *
- * - That any shape appears at all, in the right place, at the right size, or in
- *   the intended colour. The camera suite proves the frustum agrees with
- *   `worldToScreen` and reaches a real `OrthographicCamera` intact; it cannot
- *   prove a mesh is drawn, or that the winding faces the camera.
- * - **That the shader computes anything.** This is the big one M4.2 added. A TSL
- *   graph builds in Node and does not evaluate: there is no builder and no
- *   backend, so `getNodeType` and code generation are both out of reach. The
- *   arithmetic is therefore tested as arithmetic, over plain numbers, by writing
- *   each formula once against `Arith<T>` in `sdf.ts` and running it through
- *   `numberArith` (see `test/sdf.test.ts`). What that leaves unverified is the nine
- *   one-line adapters in `sdf-nodes.ts` and THREE pieces of TSL beside them (the
- *   `length` in `antialiasWidth`, the colour `mix` in `shapeShading`, and the
- *   `mul(size, 0.5)` inside `roundedRectSDF`'s deferred `Fn` body, which no test
- *   builds), plus the assumption that WGSL agrees with `Math` about all of it. The
- *   first two have structural assertions standing in for execution; the third has
- *   nothing but the screenshot. See the module docstring in `sdf-nodes.ts`, which
- *   carries the list. `test/sdf-nodes.test.ts` proves those graphs are
- *   CONSTRUCTIBLE and nothing more.
- * - That antialiasing is actually crisp on a display. `test/sdf.test.ts` proves
- *   the coverage at k pixels from a boundary is identical at zoom 0.1 and zoom
- *   100, which is the claim; whether a real fragment shader's derivatives agree
- *   with that arithmetic is a screenshot's job.
- * - That the drawing buffer sizes computed here reach a real canvas, or that
- *   the canvas is not stretched by CSS afterwards.
+ * What is therefore still UNVERIFIED, stated plainly rather than left to be
+ * discovered. M4.2 amended M4.1's list rather than replacing it, and M4.9a is
+ * the first task to take entries OFF it:
+ *
+ * - Everything above, ON WEBGPU. The TSL graphs are compiled by a different
+ *   backend into a different shading language there, and "it compiles on
+ *   WebGL2" is not evidence about WGSL. M4.9b's parity check is exactly this
+ *   entry and it needs a machine with both.
  * - That `dispose` actually frees GPU memory, only that every resource in the
  *   list is disposed exactly once.
- * - That `init()` succeeds, or that the WebGL2 fallback below engages, and
- *   therefore that {@link createRenderer} itself gets past `await
- *   renderer.init()` at all. This bullet used to swallow the whole assembly with
- *   it, and no longer does: everything after that line is
- *   {@link buildSceneRenderer}, which takes the sink as a {@link FrameSink} and is
- *   therefore built over a stub in the test, scene, meshes, resources, frustum and
- *   all. What is left is the two lines that need a device to exist. One has a
- *   named casualty: the abort check AFTER `init()`, which is the branch that gives
- *   a device back when a caller aborts mid-request, cannot be reached without a
- *   device to give back. Deleting it leaves the suite green, which was measured
+ * - The abort check AFTER `init()`, which is the branch that gives a device back
+ *   when a caller aborts mid-request: reaching it needs a device to give back
+ *   AND an abort in the window between the request and the resolution, which the
+ *   probe cannot arrange. Deleting it leaves the suite green, which was measured
  *   rather than assumed. The check before `init()` is tested.
+ * - That a page's CSS does not stretch the canvas after the buffer is sized.
+ *   The probe states its CSS box and its device pixel ratio, so what it checks
+ *   is that the buffer this file computes is the buffer the canvas gets. Whether
+ *   somebody else's stylesheet then scales it is theirs.
  *
- * A screenshot test in a browser runner is what closes this. The orchestrator
- * takes one per milestone with a real browser; M4.9 owns making it a CI gate,
- * along with the fallback story.
+ * The nine one-line TSL adapters in `sdf-nodes.ts` and the three pieces of TSL
+ * beside them (the `length` in `antialiasWidth`, the colour `mix` in
+ * `shapeShading`, and the `mul(size, 0.5)` inside `roundedRectSDF`'s deferred
+ * `Fn` body) were the sharpest form of the shader entry, and they are now
+ * covered on WebGL2 by a drawn frame rather than by structural assertions
+ * standing in for execution. `sdf.ts` still tests the arithmetic as arithmetic,
+ * which is what makes a WRONG picture diagnosable rather than merely visible.
+ *
+ * Making the probe a CI gate is not done and is not this task's: a runner's GPU
+ * story is not this box's, which is the same argument M4.10's entry makes about
+ * frame times and which `bench/browser/README.md` applies to everything in that
+ * directory.
  */
 
 /**
@@ -257,6 +275,7 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
  */
 export class WebGPUSceneRenderer implements Renderer {
   readonly camera: Camera2D;
+  readonly backend: RendererBackend;
   readonly #renderer: FrameSink;
   readonly #scene: OpaqueThreeObject;
   readonly #threeCamera: ProjectionTarget;
@@ -283,6 +302,7 @@ export class WebGPUSceneRenderer implements Renderer {
   constructor(
     camera: Camera2D,
     renderer: FrameSink,
+    backend: RendererBackend,
     scene: OpaqueThreeObject,
     threeCamera: ProjectionTarget,
     nodes: SceneNodes,
@@ -290,6 +310,11 @@ export class WebGPUSceneRenderer implements Renderer {
     resources: readonly GpuResource[],
   ) {
     this.camera = camera;
+    // Passed in rather than read off the sink, and that is the {@link FrameSink}
+    // decision applied one field further: the sink is four methods so that this
+    // class can be built over a stub, and a `backend` marker on it would be a
+    // fifth member of that contract existing only to be copied here.
+    this.backend = backend;
     this.#renderer = renderer;
     this.#scene = scene;
     this.#threeCamera = threeCamera;
@@ -518,6 +543,7 @@ function countByShape(
 export function buildSceneRenderer(
   camera: Camera2D,
   renderer: FrameSink,
+  backend: RendererBackend,
   clearColor: number,
   sceneStyle?: SceneStyle,
   nodes?: readonly SceneNode[],
@@ -561,6 +587,7 @@ export function buildSceneRenderer(
     const instance = new WebGPUSceneRenderer(
       camera,
       renderer,
+      backend,
       scene,
       threeCamera,
       sceneNodes,
@@ -599,11 +626,13 @@ export function buildSceneRenderer(
  * rather than inside every method means the object handed back is ready, and no
  * caller has to think about a renderer that exists but cannot draw.
  *
- * three's `WebGPURenderer` falls back to WebGL2 by itself when WebGPU is
- * unavailable, so this function resolving is not a promise that WebGPU is in
- * use. `forceWebGL` is the flag that takes the decision away from three. M4.1
- * neither sets it nor reports which backend won; M4.9 owns the fallback story,
- * including telling the caller which one they got.
+ * **This function resolving is not a promise that WebGPU is in use, and as of
+ * M4.9a it is not silent about that either.** three's `WebGPURenderer` falls
+ * back to WebGL2 by itself when WebGPU is unavailable; `options.backend` says
+ * whether that is acceptable and {@link Renderer.backend} says what happened.
+ * The default is `auto`, which takes either and reports which. See `backend.ts`
+ * for why the check is after `init()` rather than a capability probe before it,
+ * and for the measurement behind that.
  *
  * **A caller never has to dispose a renderer it did not receive.** Pass a
  * `signal` and every early exit below cleans up whatever had been built before
@@ -613,6 +642,11 @@ export function buildSceneRenderer(
 export async function createRenderer(options: RendererOptions): Promise<Renderer> {
   const { canvas, signal } = options;
   const clearColor = requireClearColor(options.clearColor ?? DEFAULT_CLEAR_COLOR);
+  // Beside the clear colour and before the abort check for the same reason it
+  // is: a preference that is not one of the three is a bug in the caller's
+  // source whatever the signal says, and a `RangeError` that only appears on
+  // the runs nobody aborted is a `RangeError` found by a user.
+  const preference = requireBackendPreference(options.backend ?? DEFAULT_BACKEND);
 
   // Before the device is requested, not only after. An adapter this function
   // has already been told to throw away is worth not asking for: it is the
@@ -626,10 +660,18 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
 
   const renderer = new WebGPURenderer({
     canvas,
+    // `true` only for an explicit `webgl2`. `webgpu` is constructed exactly like
+    // `auto`, because three's constructor writes its own `getFallback` over
+    // anything passed in and there is no supported way to ask it not to fall
+    // back; the strict request is enforced below instead, by reading what came
+    // up. See `backend.ts`.
+    forceWebGL: forceWebGLFor(preference),
     // On by default because a graph is edges and box corners, and every one of
     // them is a diagonal that reads as a staircase without it. Not exposed in
-    // `RendererOptions` yet: it is a device capability question rather than a
-    // scene one, and it belongs with the rest of the backend choices in M4.9.
+    // `RendererOptions`, and M4.9a did NOT expose it while it was adding the
+    // option next to it, deliberately: `backend` is a choice about which API
+    // draws, and this is a choice about how many samples it draws with, which
+    // is M4.10's bandwidth question and needs the measurement below.
     //
     // M4.1 asked for this to be revisited rather than carried forward, and M4.2
     // has now landed the SDF path without changing it, deliberately. The argument
@@ -658,6 +700,24 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     signal.throwIfAborted();
   }
 
+  // AFTER `init()`, which is the whole finding: three requests the adapter in
+  // there, and a browser that advertises `navigator.gpu` can still have none to
+  // give. Measured on this box on 2026-08-23, through
+  // `bench/browser/backend-probe.mjs`: `'gpu' in navigator` is true, the
+  // adapter request comes back null, and three falls back. A probe before this
+  // line would have told a caller who asked for WebGPU that they had it.
+  //
+  // Refusing disposes, so `createRenderer`'s promise holds here too: a caller
+  // never has to dispose a renderer it did not receive. The abort check comes
+  // first because a caller who has gone away does not care which backend it was.
+  const backend = backendOf(renderer.backend);
+  try {
+    requireBackendHonoured(preference, backend);
+  } catch (error) {
+    renderer.dispose();
+    throw error;
+  }
+
   // An EMPTY scene, and the device handed back if building it throws.
   // Everything from here to the returned renderer lives in one function with one
   // `catch` for that reason: see {@link buildSceneRenderer}. What is drawn now
@@ -666,6 +726,7 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
   return buildSceneRenderer(
     camera,
     renderer,
+    backend,
     clearColor,
     options.sceneStyle,
     options.nodes,
