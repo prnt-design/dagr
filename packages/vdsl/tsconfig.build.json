@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    // The build emits from `src` alone, so the source `paths` entry for
+    // @dagr/graph is dropped here: pulling ../graph/src into the program would
+    // put files outside `rootDir`. The build resolves @dagr/graph through
+    // node_modules to its published types instead, which is why @dagr/graph is
+    // a devDependency as well as a peer and pnpm builds it first.
+    "paths": {}
+  },
+  "include": ["src"],
+  "exclude": ["test", "dist"]
+}

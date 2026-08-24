@@ -7,6 +7,7 @@ export { Graph } from './graph.js';
 // The traversal surface is the methods on `Graph`. This is the same call M2.2
 // made in `@dagr/layout`, where only `defaultStages` is public.
 export {
+  ContainmentCycleError,
   CycleError,
   DagrGraphError,
   DuplicateEdgeError,
@@ -37,6 +38,7 @@ export type {
   UpdateEdgePortsOp,
   UpdateGraphAttrsOp,
   UpdateNodeAttrsOp,
+  UpdateNodeParentOp,
 } from './patch.js';
 // The document types are public, because a caller annotating a file reader or
 // a fixture needs them. The validator behind `Graph.fromJSON` is not, for the

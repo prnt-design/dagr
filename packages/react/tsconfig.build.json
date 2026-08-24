@@ -6,7 +6,14 @@
     "outDir": "dist",
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    // The build emits from `src` alone, so the source `paths` entries are
+    // dropped here, exactly as @dagr/layout and @dagr/campaign-stage drop
+    // theirs: pulling ../render/src into the program puts files outside
+    // `rootDir` and tsc refuses to emit (TS6059). The build resolves the three
+    // Dagr packages through node_modules to their published types instead,
+    // which is what the `devDependency` entries beside the peers are for.
+    "paths": {}
   },
   "include": ["src"],
   "exclude": ["test", "dist"]
