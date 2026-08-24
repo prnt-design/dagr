@@ -35,13 +35,13 @@ function at(values: { readonly [index: number]: number | undefined }, index: num
  * node at a time, because the alternative is the O(V + E) index a cold sweep
  * builds and building that is most of what a cold sweep costs. Asking the graph
  * is far dearer per node than walking an index, so the confined sweep is
- * cheaper only while there are few enough nodes to ask about. Measured on the
- * two bench corpora on 2026-08-24, one dirty node at a time, region size swept
- * from 1 to three quarters of the roster: the warm run costs the detection pass
- * plus about 3.9 microseconds per region node on the 1k and 9.5 on the 10k, and
- * a cold sweep costs 0.093ms and 1.61ms. The two meet at about 7 nodes of 1,000
- * and 91 of 10,000, which is 0.7% and 0.9%. One percent is the round number
- * just above both.
+ * cheaper only while there are few enough nodes to ask about. Measured on
+ * 2026-08-24 by nudging one node per rank and sweeping the region size from 1
+ * to three quarters of the roster: the warm run costs the detection pass plus
+ * about 3.9 microseconds per region node on the 1k corpus and 9.5 on the 10k,
+ * against cold sweeps of 0.093ms and 1.61ms IN THAT SAME RUN. The two meet at
+ * about 7 nodes of 1,000 and 91 of 10,000, which is 0.7% and 0.9%. One percent
+ * is the round number just above both.
  *
  * WHAT THE SHARE IS NOT is a claim that a bigger region is wrong. A confined
  * sweep is exact at any share, so this number trades one kind of work for
@@ -49,8 +49,10 @@ function at(values: { readonly [index: number]: number | undefined }, index: num
  * to be a default a caller may raise to 1 or drop to 0.
  *
  * AND IT IS NOT WHERE THIS STAGE'S TIME GOES, which is the measurement worth
- * carrying out of this task. Of the 10k corpus's 307ms in this stage, the cycle
- * break is 32ms, the acyclic view 12ms, the ranking sweep 1.5ms, and the
+ * carrying out of this task, taken in a SECOND run on the same box and the same
+ * day: the two runs put the 10k cold sweep at 1.61ms and 1.505ms, which is the
+ * spread to expect of any figure here. Of the 10k corpus's 307ms in this stage,
+ * the cycle break is 32ms, the acyclic view 12ms, the ranking sweep 1.5ms, and the
  * remaining 260ms is the ranks map and the 174,222 dummy nodes
  * {@link splitLongEdges} mints on every single run. Incremental ranking takes
  * the 1.5ms to 0.93ms and can never take anything else, so the honest reading

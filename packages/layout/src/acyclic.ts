@@ -2,15 +2,29 @@ import type { EdgeId, Graph, Node, NodeId } from '@dagr/graph';
 import { InternalLayoutError } from './errors.js';
 
 /**
- * The view every rank stage ranks over, and the longest-path ranking of it.
+ * The view every rank stage ranks over, and the two ways this package ranks it.
  *
- * Both halves live here rather than in `rank.ts` because two stages want them.
+ * All of it lives here rather than in `rank.ts` because two stages want it.
  * `longestPathRankStage` is the ranking, and `networkSimplexRankStage` needs
  * exactly the same view and the same initial feasible ranking before it can
  * start pivoting. A second copy of either would be a second place for the
  * self-loop rule and the reversal rule to drift, and a ranker that disagreed
  * with the other about what the acyclic view IS would disagree about which
  * rankings are feasible, which is the one thing both have to agree on.
+ *
+ * THE TWO RANKINGS ARE ONE RANKING, which is the thing to hold on to when
+ * reading {@link warmLongestPathRanks} beside {@link longestPathRanks}. The
+ * first sweeps the view from nothing; the second checks a previous run's answer
+ * against the view and recomputes only what disagrees. They return the same
+ * numbers for the same view, always, because longest path has one answer per
+ * view and there is nothing for a warm start to choose. What differs is the
+ * work, which is what {@link WarmRanking} reports on the side.
+ *
+ * {@link viewNeighbours} is the one thing here that is not the arrays: a
+ * per-node reading of the same view off the graph's own adjacency, which the
+ * confined sweep needs and which is the second copy of the reversal rule this
+ * module's whole argument is against. Its docstring says what it costs to have
+ * one and how the two are held to agreeing.
  */
 
 /**
@@ -185,8 +199,8 @@ export function longestPathRanks(view: AcyclicView, floor?: Int32Array): Int32Ar
  * avoid paying. The graph already keeps that index per node, so the walk asks
  * it instead.
  *
- * THE RULE IS THE ONE `acyclicView` APPLIES AND IT IS WRITTEN ONCE, HERE AND
- * THERE, WHICH IS ONE TIME TOO MANY. Self loops are dropped, and a reversed
+ * THE RULE IS THE ONE `acyclicView` APPLIES AND IT IS NOW WRITTEN TWICE, HERE
+ * AND THERE, WHICH IS ONCE TOO MANY. Self loops are dropped, and a reversed
  * edge runs target to source, so it leaves the node it was authored to arrive
  * at and arrives at the node it was authored to leave. That the two readings
  * agree is asserted in `test/layout.rank.warm.test.ts` over a random cyclic
@@ -219,12 +233,14 @@ export function* viewNeighbours(
   const here = view.nodes[node];
   if (here === undefined) throw new InternalLayoutError(`no node at index ${String(node)}`);
   const forward = direction === 'out';
-  // An edge in this node's out-index runs away from it in the view unless it
-  // was reversed, and an edge in its in-index runs away from it only if it was.
-  // THE NEIGHBOUR IS THE OTHER ENDPOINT WHATEVER THE DIRECTION IS, and the
-  // reversal decides which of the two listings the edge belongs to rather than
-  // which end of it to read. An edge in this node's out-index has the node as
-  // its source, so its other end is its target however the view runs it.
+  // Two questions, and only the first one is about the reversal. WHICH LISTING
+  // AN EDGE BELONGS TO is the reversal's: an edge in this node's out-index runs
+  // away from it in the view unless it was reversed, and one in its in-index
+  // runs away from it only if it was. WHICH END TO READ is not: an edge in the
+  // out-index has this node as its source, so its other end is its target
+  // however the view runs it, and the in-index is the mirror of that. Reading
+  // the end off the direction rather than off the listing is the bug this pair
+  // of loops was written with, and it survives every acyclic input.
   for (const edge of graph.outEdges(here.id)) {
     if (edge.source === edge.target) continue;
     if (reversedEdges.has(edge.id) === forward) continue;
@@ -415,9 +431,9 @@ export function warmLongestPathRanks(input: WarmRankInput): WarmRanking {
   const limit = Math.ceil(input.maxWarmShare * count);
 
   // THE DIRTY COUNT DOES NOT PREDICT THE REGION AND THE SHALLOWEST DIRTY RANK
-  // DOES, which is the one thing this task measured that changed its shape. One
-  // dirty node at the top of the 10k corpus reaches 76% of the roster and one
-  // at the bottom reaches itself, so a guard on the dirty count alone lets the
+  // DOES, which is the one thing this task measured that changed its shape.
+  // Nudging one node at the top of the 10k corpus moves 76% of the roster and
+  // nudging one at the bottom moves it alone, so a guard on the dirty count lets the
   // worst case through and then pays for the walk that discovers it. A region
   // node is a descendant of a dirty one, so in the ranking being computed it
   // sits below the shallowest dirty rank, and the nodes the SEED put there are

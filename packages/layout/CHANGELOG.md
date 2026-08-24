@@ -58,9 +58,10 @@ of doc prose.
   the answer is exact at every value.
 
   **The trigger the roadmap asked for is not here, and the reason is measured.**
-  M3.7b's entry asked for a fallback whenever the reversed-edge set changes. On
-  4,000 patches over random cyclic digraphs, a changed reversed set left the
-  ranks already exact 29.5% of the time, and 48.6% on random layered graphs. A
+  M3.7b's entry asked for a fallback whenever the reversed-edge set changes. Of
+  3,598 patches over random cyclic digraphs the set changed on 261, and of 4,000
+  over random layered graphs it changed on 185; a changed set left the ranks
+  already exact on 29.5% and 48.6% of those. A
   trigger on it would throw away a free answer on a third to a half of the
   patches it fires for, while the region estimate that decides bailing already
   refuses the expensive ones without being told about the reversed set at all.

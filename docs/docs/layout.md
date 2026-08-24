@@ -871,21 +871,37 @@ an engine also hands it a previous run, the previous run wins: it is the drawing
 you are looking at, and the option is a constant from when the stage was built.
 
 **What incremental ranking saves, and where it does not.** On the 10k benchmark
-corpus the ranking sweep itself is about 1.5ms and a warm one that finds nothing
-moved is about 0.93ms. That is half a percent of what the rank stage costs on
-that graph: most of the rest is the dummy chains, which are re-minted on every
-run whether or not a single rank moved. So treat this as a stability and
-bookkeeping change rather than as the thing that makes a relayout cheap. The
-chains are the thing that would.
+corpus the ranking sweep is about **half a percent** of what the rank stage
+costs, and a warm run that finds nothing moved takes about **two thirds** of the
+sweep. Most of the rest of the stage is the dummy chains, which are re-minted on
+every run whether or not a single rank moved. So treat this as a stability and
+bookkeeping change rather than as the thing that makes a relayout cheap; the
+chains are the thing that would. Those are ratios rather than milliseconds on
+purpose: the absolute figures were taken on this repo's own runner and not on
+the machine [What a run costs](#what-a-run-costs) names, so quoting them here
+would put two unrelated numbers for the rank stage on one page. M3.7b's roadmap
+entry has them.
 
 **When it gives up.** Recomputing a region means asking the graph for one node's
 neighbours at a time, which is dearer per node than the whole-view index a cold
 sweep builds in one pass, so it is only cheaper while the region is small. The
 crossover measures at about 7 nodes in 1,000 and 91 in 10,000, and the default
 is the round number just above both: a region wider than **1% of the roster**
-gets a cold sweep instead. `longestPathRank({ maxWarmShare })` moves it, with 0
-meaning "sweep cold whenever anything moved" and 1 meaning "confine any region".
-Every setting gives the same ranks.
+gets a cold sweep instead. Naming the stage is how you move it:
+
+```ts
+import { longestPathRank, longestPathRankStage, layout } from '@dagr/layout';
+
+layout({ graph });
+layout({ graph }, { rank: longestPathRankStage });
+layout({ graph }, { rank: longestPathRank({ maxWarmShare: 0 }) });
+layout({ graph }, { rank: longestPathRank({ maxWarmShare: 1 }) });
+```
+
+The first two lines do the same thing. Zero means "sweep cold whenever anything
+moved" and one means "confine any region however wide", and every setting gives
+you the same ranks. Note that none of this reaches `layout()` itself, which has
+no previous run to be warm from: it is `engine.relayout` that has both.
 
 ### Determinism and cost
 

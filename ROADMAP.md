@@ -3488,9 +3488,9 @@ it.
   confined sweep raises the same `InternalLayoutError` the cold one does. Pinned
   with two hundred arbitrary seeds over a three-cycle rather than argued.
   THE DIRTY COUNT DOES NOT PREDICT THE REGION AND THE SHALLOWEST DIRTY RANK
-  DOES. This is the measurement that changed the shape of the task. One dirty
-  node at the deepest rank of the 10k corpus reaches ONE node; one at rank 0
-  reaches 7,632 of 10,000. So a guard on the dirty count lets the worst case
+  DOES. This is the measurement that changed the shape of the task. Nudging one
+  node at the deepest rank of the 10k corpus moves ONE node; nudging one at rank
+  0 moves 7,632 of 10,000. So a guard on the dirty count lets the worst case
   through and then pays for the walk that discovers it, which is precisely the
   failure this entry warned about. What the guard reads instead is the seed's own
   rank tally: the region lies under the shallowest dirty rank, so the nodes the
@@ -3514,9 +3514,10 @@ it.
   of work for another and never for correctness.
   THE TRIGGER THIS ENTRY ASKED FOR IS NOT SHIPPED, AND THE REASON IS MEASURED
   RATHER THAN ARGUED. The entry asked for a fallback whenever the reversed-edge
-  set changes, which M3.7a is what made meaningful. Over 4,000 patches with the
-  seeded breaker running, a CHANGED reversed set left the ranks ALREADY EXACT on
-  29.5% of random cyclic digraphs and 48.6% of random layered ones. So a trigger
+  set changes, which M3.7a is what made meaningful. Over 3,598 patches on random
+  cyclic digraphs and 4,000 on random layered graphs, with the seeded breaker
+  running, the reversed set changed on 261 and 185 of them, and a CHANGED set
+  left the ranks ALREADY EXACT on 29.5% and 48.6% of those. So a trigger
   on it would throw away a free answer on a third to a half of the patches it
   fires for, and it would add nothing on the rest: the detection pass prices a
   changed reversed set exactly like any other change, and the region estimate

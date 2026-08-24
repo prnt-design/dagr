@@ -376,9 +376,9 @@ export function influenceRegion(input: InfluenceRegionInput): InfluenceSet {
    * rather than before it, which is M3.9's budget.
    *
    * M3.7b MEASURED THAT COMPARISON AND DECLINED TO BAIL ON IT, which narrows
-   * what the comparison would be worth here. Over 4,000 patches, a changed
-   * reversed set left the ranks already exact on 29.5% of random cyclic digraphs
-   * and 48.6% of random layered ones, so a set that moved is not a set that
+   * what the comparison would be worth here. Over 3,598 patches on random cyclic
+   * digraphs and 4,000 on random layered ones, a changed reversed set left the
+   * ranks already exact on 29.5% and 48.6% of them, so a set that moved is not a set that
    * moved anything. What the rank stage bails on instead is a reading of how far
    * the changed ranks reach, which is the same kind of quantity this band is.
    *
