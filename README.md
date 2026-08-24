@@ -61,7 +61,10 @@ so the gate lives here instead (see [bench/README.md](./bench/README.md)). A
 run too noisy to read is not a regression and is not a pass either, so
 `bench:check` exits 2 for it against 1 for a regression, and such a run counts
 towards neither of the two `bench:ci` needs. If a local `pnpm bench:check` exits
-2, the machine was too busy to measure, not your change.
+2, the machine was too busy to measure, not your change. Nor is it your change
+when it stops on `the baseline was captured on a different machine`: the gate
+compares the machine the baseline names against the one that ran, and refuses a
+comparison across two, which is a recapture rather than a regression.
 
 `bench:ci` measures more than once because one measurement stopped being
 evidence on a shared machine: two runs have to agree before the gate says
