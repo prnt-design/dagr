@@ -105,8 +105,10 @@ export interface SceneEdgeGroup {
  * one vertex buffer slot per non-interleaved attribute THE SHADER READS, and
  * WebGPU's default `maxVertexBuffers` is eight, which is the limit
  * `instance-attributes.ts` counts against for the instanced NODE pipeline: that
- * one reads seven of eight and has a single slot left, spoken for by M4.6's
- * spring velocity or M4.8's picking id.
+ * one reads seven of eight and has a single slot left, spoken for by nobody:
+ * M4.6's springs turned out to want nothing on the device, and M4.8a's pick
+ * bytes are read by the pick material, which is a different pipeline, on the
+ * same rule this paragraph turns on.
  *
  * A ribbon is a different mesh with a different material, so it has its own
  * eight. This graph reads these six and not `positionGeometry` (the position

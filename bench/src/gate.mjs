@@ -15,8 +15,12 @@
  *    control workload alongside its real ones, and each benchmark is recorded
  *    as `median / control median` measured in the same worker. A runner twice
  *    as slow as the baseline machine runs the control twice as slow too, and
- *    the ratio does not move. See `control.mjs` for what the control is and
- *    where the approximation breaks.
+ *    the ratio does not move. Read that sentence for exactly what it says: it
+ *    holds for a runner that is UNIFORMLY slower, and not for one with a
+ *    different cache and memory profile, which moves whole families of
+ *    benchmarks against a control that looks fine. That is what
+ *    `MACHINE_IDENTITY` below is for. See `control.mjs` for what the control is
+ *    and where the approximation breaks.
  *
  * 2. It gates on the MEDIAN, not the mean. A single GC pause or a scheduler
  *    hiccup drags the mean a long way: in the run that motivated this, a
@@ -195,6 +199,79 @@ function declaredGate(entry) {
 }
 
 /**
+ * The fields of a machine record that decide whether two runs are comparable at
+ * all, as opposed to describing the conditions one of them ran under.
+ *
+ * The ratio cancels a machine that is uniformly slower, and that is the whole
+ * claim behind gating on it. It does not cancel a machine that is slower at
+ * SOME things: one control workload normalises one mix of arithmetic,
+ * allocation and cache behaviour, so a CPU with a different cache and memory
+ * profile moves whole families of benchmarks against the control while the
+ * control itself looks fine. Every field here changes that profile. `ci` and
+ * `loadAverageAtCapture` do not, so they are left out: they say who started the
+ * run and how busy the box was, and gating on them would block a merge over a
+ * neighbour's build.
+ */
+const MACHINE_IDENTITY = ['platform', 'arch', 'cpu', 'cores', 'node'];
+
+/**
+ * One recorded field, read for comparison rather than for display.
+ *
+ * Read through `unknown` for the same reason `declaredGate` is: the file is
+ * hand-edited and nothing validates it on the way in. Strings are compared with
+ * their whitespace collapsed, because `os.cpus()` pads some models to a fixed
+ * width and a merge blocked by two spaces would teach the next reader to
+ * distrust the check.
+ *
+ * The one hole this leaves is worth naming: `machineInfo` records a cpu of
+ * `"unknown"` where `os.cpus()` returns nothing, and two runs that both know
+ * nothing compare equal. That is the best answer available from the field, and
+ * it is a container with no CPU list rather than the case this check is for.
+ *
+ * @param {MachineInfo} machine
+ * @param {string} field
+ * @returns {unknown}
+ */
+function machineField(machine, field) {
+  const value = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (machine))[field];
+  return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : value;
+}
+
+/**
+ * A recorded field as it should read in a message: quoted if it is a string,
+ * bare if it is a number, and named rather than blank if it was never recorded.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+function shown(value) {
+  return value === undefined ? 'unrecorded' : JSON.stringify(value);
+}
+
+/**
+ * How the two machines differ, in the words the operator needs to act on.
+ *
+ * Every differing field is named rather than the first one found, because the
+ * answer to this message is a decision about a machine and a reader making it
+ * wants the whole difference in front of them.
+ *
+ * @param {MachineInfo} baselineMachine
+ * @param {MachineInfo} currentMachine
+ * @returns {string[]}
+ */
+function machineDifferences(baselineMachine, currentMachine) {
+  /** @type {string[]} */
+  const differences = [];
+  for (const field of MACHINE_IDENTITY) {
+    const then = machineField(baselineMachine, field);
+    const now = machineField(currentMachine, field);
+    if (then === now) continue;
+    differences.push(`${field} ${shown(then)} then, ${shown(now)} now`);
+  }
+  return differences;
+}
+
+/**
  * Compare a run against the committed baseline.
  *
  * Returns a report rather than throwing or printing, so the same logic backs
@@ -216,6 +293,41 @@ export function compareReports(baselineReport, currentReport, overrides = {}) {
 
   if (baselineReport.schema !== 1) {
     errors.push(`baseline schema ${String(baselineReport.schema)} is not readable by this gate`);
+  }
+
+  // THE BASELINE IS MACHINE-MATCHED, SO THE MACHINE IS PART OF WHAT IT MEANS.
+  //
+  // `machineInfo` has recorded this since the harness was written and nothing
+  // ever read it back, on the argument that the gate compares ratios and a
+  // ratio corrects for a slower machine. It corrects for a UNIFORMLY slower
+  // one. The dispatch box was an AMD EPYC-Rome VM when PR #48 captured the
+  // committed baseline on 2026-08-16 and an Intel Xeon Skylake on 2026-08-18,
+  // and unmodified `main` then failed its own gate 2 of 2 at a 1-minute load of
+  // 0.54: six entries between +20% and +48%, every one of them memory-latency
+  // bound, while the allocation-heavy entries came in within 2% of baseline.
+  // Two days of sessions read that as a regression in their own branch.
+  //
+  // It goes in `errors` rather than among the results because it is a fact
+  // about the baseline and not a measurement: it reproduces on the next run by
+  // construction, so `bench:ci` stops after one measurement instead of three.
+  // See `bin/bench-ci.mjs` and bench/README.md, "The machine in the file".
+  const baselineMachine = baselineReport.machine;
+  const currentMachine = currentReport.machine;
+  if (baselineMachine === undefined || currentMachine === undefined) {
+    const missing = [
+      ...(baselineMachine === undefined ? ['the baseline'] : []),
+      ...(currentMachine === undefined ? ['this run'] : []),
+    ];
+    notes.push(
+      `${missing.join(' and ')} records no machine, so the gate cannot tell whether these numbers are comparable`,
+    );
+  } else {
+    const differences = machineDifferences(baselineMachine, currentMachine);
+    if (differences.length > 0) {
+      errors.push(
+        `the baseline was captured on a different machine (${differences.join('; ')}). Control-normalised ratios correct for a slower machine and not for a different one, so this comparison says nothing about the code. The answer is a recapture on this machine, and bench/README.md says whose call that is`,
+      );
+    }
   }
 
   const baselineEntries = Object.entries(baselineReport.benchmarks);

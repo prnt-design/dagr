@@ -137,8 +137,8 @@ export interface ParityGraph {
 }
 
 /**
- * A prnt.design pattern generator, which is the graph this milestone was asked
- * for by name and the first consumer this project has.
+ * A pattern generator, which is the graph this milestone was asked for by name
+ * and the shape M6.6's first reference DSL takes.
  *
  * A generative pattern editor: parameter nodes feed operators, operators feed
  * blends, and one wide preview node sits at the end showing the result. The
@@ -153,11 +153,11 @@ export interface ParityGraph {
  * generator emits acyclic graphs, so the reversed set is empty and stays empty
  * on this input, and cycle breaking is exercised by `state-machine` and
  * `service-mesh` instead. A corpus that made every graph cyclic would misstate
- * what the first consumer actually sends.
+ * what this consumer actually sends.
  */
 const patternGenerator: ParityGraph = {
   name: 'pattern-generator',
-  shapedAfter: 'a prnt.design generative pattern editor, parameters into operators into a preview',
+  shapedAfter: 'a generative pattern editor, parameters into operators into a preview',
   nodes: [
     ['seed', 'param'],
     ['scale', 'param'],

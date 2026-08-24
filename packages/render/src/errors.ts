@@ -38,7 +38,8 @@ export type DagrRenderErrorCode =
   | 'OVERLAY_PARENT'
   | 'OVERLAY_DISPOSED'
   | 'UNKNOWN_INSTANCE_HANDLE'
-  | 'SCENE_DISPOSED';
+  | 'SCENE_DISPOSED'
+  | 'PICK_IDS_EXHAUSTED';
 
 /** The base every error this package throws extends. */
 export abstract class DagrRenderError extends Error {
@@ -189,5 +190,33 @@ export class SceneDisposedError extends DagrRenderError {
     super(`cannot call ${method}() on the disposed ${label}`);
     this.name = 'SceneDisposedError';
     Object.setPrototypeOf(this, SceneDisposedError.prototype);
+  }
+}
+
+/**
+ * Thrown when a `PickIdRegistry` has no id left to hand out.
+ *
+ * Unreachable at any scene a GPU draws, and here anyway because the branch that
+ * would otherwise take its place is a colliding id: two instances writing the
+ * same three bytes, one pick answering with whichever of them the allocator
+ * happened to remember last, and nothing anywhere raising. The default capacity
+ * is 16,777,215, which is 800MB of instance data before a single pick id is
+ * written, so the case this class names is a bug in the caller's bookkeeping
+ * rather than a scene that got large.
+ *
+ * Not a `RangeError`, because nothing here is out of range: every id the
+ * registry ever handed out was in range, and the range is used up. The rule
+ * this file states puts that in the other half, and the capacity argument on
+ * the registry is what makes the branch reachable from a test.
+ */
+export class PickIdSpaceExhaustedError extends DagrRenderError {
+  readonly code = 'PICK_IDS_EXHAUSTED';
+
+  constructor(kind: string, capacity: number) {
+    super(
+      `ran out of ${kind} pick ids at ${String(capacity)}; release one before assigning another`,
+    );
+    this.name = 'PickIdSpaceExhaustedError';
+    Object.setPrototypeOf(this, PickIdSpaceExhaustedError.prototype);
   }
 }

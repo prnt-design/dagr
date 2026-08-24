@@ -701,6 +701,11 @@ with a gate, and an atlas takes the tier over by taking the gate over.
 
 1. Decision 2: `@dagr/react` gets no component and `<Html>` waits for M5.1's
    context. Reverse it and `<Html>` lands in this session instead.
+   SETTLED BY EXPIRY: never reversed, and M5.1 shipped `<DagrCanvas>` and
+   `<Html>` together on 2026-08-22, so there is nothing left to bootstrap
+   early. The context this decision predicted is `canvas-context.ts`, and it
+   carries one field the prediction did not: the layout, without which
+   `<Html node="a">` cannot know where node `a` is.
 2. The default element cap is 200, from the campaign plan. It is the number
    that bounds the worst case rather than one anybody has measured a frame
    against; increment 4's measurement is what would move it.

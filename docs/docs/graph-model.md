@@ -87,12 +87,14 @@ interface Node<A extends object = Attrs> {
   readonly id: NodeId;
   readonly attrs: ReadAttrs<A>;
   readonly ports: readonly Port[];
+  readonly parent?: NodeId; // absent when nothing contains this node
 }
 
 interface NodeInit<A extends object = Attrs> {
   readonly id?: NodeId; // generated when absent
   readonly attrs?: AttrsPatch<A>;
   readonly ports?: readonly PortInit[];
+  readonly parent?: NodeId; // must already be in the graph
 }
 
 interface Edge<A extends object = Attrs> {
@@ -318,8 +320,65 @@ Silently deleting edges the caller did not name is a bigger surprise than an
 error they can act on, and the error hands back exactly the list they need to
 rewire or remove before retrying: `updateEdgePorts` to move an edge off the
 port, `removeEdge` to drop it. The cascade already exists where it is
-unambiguous: `removeNode` takes the node, its ports, and every incident edge
-together, because there is no coherent graph left if it does not.
+unambiguous: `removeNode` takes the node, its ports, every incident edge, and
+every node it contains together, because there is no coherent graph left if it
+does not.
+
+## Containment
+
+A node can be inside another node. `parent` names the one that contains it, and
+an absent `parent` means nothing does.
+
+```ts
+graph.addNode('subsystem');
+graph.addNode({ id: 'filter', parent: 'subsystem' });
+
+graph.getNode('filter')?.parent; // 'subsystem'
+graph.children('subsystem'); // ['filter']
+
+graph.setNodeParent('filter', undefined); // out of everything, a root again
+```
+
+**One graph, not nested graphs.** Containment is a reference on a node, not a
+child `Graph` instance, and that is a decision rather than an implementation
+detail. Every patch op is scoped to a single graph and `batch` is per-`Graph`,
+so with nested instances a child's edits would never reach a subscriber of the
+graph that contains it, and an edit spanning a boundary would span two patch
+streams with no way to make it one. The flat model keeps one patch stream and
+keeps the graph to layout to renderer direction one way.
+
+Three rules, and nothing else:
+
+- **At most one parent.** `parent` is one field, so setting it again moves the
+  node rather than adding a second home.
+- **Containment is acyclic.** A node cannot be inside itself, directly or
+  through any chain, and the call that would close the loop is refused with
+  `ContainmentCycleError` carrying the chain that closes.
+- **An edge may cross a boundary.** Containment says what is inside what and
+  edges say what flows where. Nothing stops an edge running from a node inside a
+  subsystem to a node outside it, and nothing derives one relation from the
+  other.
+
+**Containment is not reachability.** `successors`, `descendants`,
+`topologicalOrder`, `isAcyclic` and every other traversal on this page read
+edges and only edges: a parent and its children are not connected unless an edge
+connects them. The two relations even have their own cycle errors, `CycleError`
+for edges and `ContainmentCycleError` for containment, because a caller catching
+one has no way to ask which it got.
+
+**Removing a node removes what it contains**, however deep, as one
+`remove-node` op per node, the same expansion `removeNode` already does for
+incident edges. Refusing while a node contains something was the other candidate
+and would have made `removeNode` partial in a way nothing else in this API is.
+The ops come out deepest first with the parent last, which is what makes the
+inverse of a removal add each parent before the children that name it.
+
+**`@dagr/layout` ignores `parent` entirely.** Nothing in the pipeline reads it,
+so a reparent draws exactly the picture the graph had before it, and
+`influenceRegion` reports an empty region for one. Drawing a parent and its
+children as nested boxes changes ranking, crossing reduction and positioning,
+and is its own milestone. What landed here is the model, so that the type is
+settled before v0.1 publishes it.
 
 ## Patches
 
@@ -341,10 +400,12 @@ Flat means the array is ops and nothing else, with no nesting and no grouping.
 Cascade-free means an op names one thing and does one thing. `removeNode` takes
 its incident edges with it, so it emits a `remove-edge` op per edge followed by
 the `remove-node` op, rather than one op a consumer would have to expand for
-itself. Two things follow, and both are load bearing. Replaying such a patch
-never re-triggers the cascade, because the edges are already gone by the time
-the node op runs. And reversing the array is the right undo order, because the
-node comes back before the edges that need it to exist.
+itself. It takes the nodes it contains the same way, one `remove-node` op each.
+Two things follow, and both are load bearing. Replaying such a patch never
+re-triggers the cascade, because the edges are already gone by the time the node
+op runs. And reversing the array is the right undo order, because the node comes
+back before the edges that need it to exist, and a parent before the children
+that name it.
 
 | Function | Behaviour |
 | --- | --- |
@@ -421,17 +482,28 @@ graph error out of `apply`, with the ops before it already applied.
 
 ### The ops
 
-`PatchOp` is a discriminated union on `op`, ten tags in all. Every op object,
+`PatchOp` is a discriminated union on `op`, eleven tags in all. Every op object,
 and every bag inside it, is frozen. On the add and remove ops the bags and port
 arrays are the same frozen references the records already hold; the four
-`update-*` ops carry diff bags built fresh for the emission, holding only the
-keys that moved. Either way an op costs a small object and no deep copy, since
-the values inside are the caller's own references.
+`update-*` ops that carry bags build them fresh for the emission, holding only
+the keys that moved. Either way an op costs a small object and no deep copy,
+since the values inside are the caller's own references.
+
+**It is an open union.** The tags below are the ones this version emits, and a
+later version may emit one that is not here: `update-node-parent` arrived with
+containment and containment will not be the last relation the model grows. So a
+consumer switching on `op` should write a `default:` arm that ignores what it
+does not know, rather than an exhaustiveness check that asserts the value is
+`never`. Say precisely what that buys, because it is a convention and not
+enforcement: the `default:` arm is what keeps a consumer compiling and running
+across a version that adds an op, and a `never` arm still breaks the day one
+lands. The package's own `invert` and `apply` switch exhaustively on purpose, so
+that a new op cannot be added without both being taught what to do with it.
 
 | `op` | Payload | Emitted by |
 | --- | --- | --- |
-| `add-node` | `id`, `attrs`, `ports` | `addNode` |
-| `remove-node` | `id`, `attrs`, `ports` | `removeNode`, last in its patch |
+| `add-node` | `id`, `attrs`, `ports`, `parent?` | `addNode` |
+| `remove-node` | `id`, `attrs`, `ports`, `parent?` | `removeNode`, once per node it removes, deepest first |
 | `add-edge` | `id`, `source`, `target`, `attrs`, `sourcePort?`, `targetPort?` | `addEdge` |
 | `remove-edge` | `id`, `source`, `target`, `attrs`, `sourcePort?`, `targetPort?` | `removeEdge`, and `removeNode` once per incident edge |
 | `add-port` | `nodeId`, `port`, `index` | `addPort` |
@@ -440,11 +512,20 @@ the values inside are the caller's own references.
 | `update-edge-attrs` | `id`, `after`, `before` | `updateEdgeAttrs` |
 | `update-graph-attrs` | `after`, `before` | `updateAttrs` |
 | `update-edge-ports` | `id`, `after`, `before` | `updateEdgePorts` |
+| `update-node-parent` | `id`, `after`, `before` | `setNodeParent` |
 
 Each remove op carries everything its matching add op needs, which is what lets
 `invert` swap the tag and keep the payload. An unbound edge end is an absent
 key on `add-edge` and `remove-edge`, never a key present and `undefined`, the
-same distinction the edge records draw.
+same distinction the edge records draw. A node with no parent spells it the same
+way, an absent `parent` key.
+
+`update-node-parent` is the exception, and deliberately: both its keys are
+always present, and `undefined` on either is how it says "a root". The
+difference is the difference between a state and a transition. A record and an
+add op say what a node *is*, and an absent key is the cleanest way to say it has
+no parent; this op says what *moved*, and both ends of a move have to be
+nameable, or "was a root" and "did not say" end up spelled the same.
 
 Ports declared in `addNode({ ports })` ride along on the `add-node` op rather
 than arriving as separate `add-port` ops: one call, one op. `add-port` is what
@@ -456,9 +537,17 @@ before in-edges and each group in edge insertion order, and then the node op.
 A self loop is incident to its node twice but is detached once, so it
 contributes one `remove-edge` op, not two.
 
+A node that contains others contributes one block like that per node it
+removes, deepest first, with its own block last. Reversing the patch is
+therefore already the order a replay needs: the parent comes back before the
+children that name it, and each node before the edges that need it.
+
 ### Normalisation
 
-The four `update-*` ops carry two bags of the same shape. `after` names exactly
+Four of the five `update-*` ops carry two bags of the same shape.
+`update-node-parent` carries two node ids instead, or `undefined` for a root,
+and needs none of what follows: with one field there is nothing to name and
+nothing to leave out, so the swap that inverts it is unconditional. `after` names exactly
 the keys that moved and holds their new values; `before` names the same keys
 and holds their prior values. A key present with the value `undefined` means
 "was absent", which is exactly what that value already means to
@@ -496,7 +585,8 @@ and an unbound end is named with an explicit `undefined`.
 ### Inverting
 
 `invert(patch)` reverses the array and inverts each op. Adds and removes swap
-their tag and keep their payload; the four `update-*` ops swap their two bags.
+their tag and keep their payload; the five `update-*` ops swap `after` and
+`before`.
 It is pure: the patch handed in is not touched, and the one handed back is
 frozen, ops included. `invert(invert(patch))` is structurally the patch you
 started with.
@@ -783,6 +873,7 @@ interface NodeJSON<N extends object = Attrs> {
   readonly id: NodeId;
   readonly attrs?: ReadAttrs<N>; // absent when the bag is empty
   readonly ports?: readonly PortJSON[]; // absent when there are none
+  readonly parent?: NodeId; // absent when nothing contains this node
 }
 
 interface EdgeJSON<E extends object = Attrs> {
@@ -873,6 +964,14 @@ could check one: the graph never reads an attribute, so it has no idea what a
 the annotation, since the typed document was somebody's claim too.
 `fromJSON<NodeAttrs>` is worth exactly what your knowledge of what wrote the
 file is worth.
+
+`nodes` is read in two passes: every node is added, and then every `parent` is
+set. That is not an optimisation, it is what makes the document's own order the
+graph's. Both listings are in insertion order and a node can be reparented long
+after it was added, so a `parent` is free to name a node written later in the
+file. A single pass would refuse that document, and sorting the nodes into a
+containment order would restore a graph whose iteration order is not the one
+that was written.
 
 ### What survives, and what does not
 
@@ -967,6 +1066,14 @@ misread, which is what the tag buys: unknown keys are ignored today, so an
 additive field that a version 1 reader would drop on the floor without noticing
 is a version bump even though nothing about it looks breaking.
 
+`parent` is the field that rule was written for, and it correctly did not bump
+the version. A build without containment reading a document that carries one
+would drop the containment silently, which is exactly the misread the tag
+prevents. There has never been such a build: containment landed before the first
+published release, so every reader that can hold a document of this format
+understands the field. The rule is about readers that exist, not about the shape
+of the change, and the next additive field will not get the same answer.
+
 ### When a document is refused
 
 Two kinds of wrongness, and they are deliberately not the same error.
@@ -1030,11 +1137,13 @@ and it surfaces while the graph is being built.
 
 | Method | Behaviour |
 | --- | --- |
-| `addNode(init?)` | Adds a node and returns it. `init` is `{ id?, attrs?, ports? }`, or a plain id string as shorthand, or nothing at all. With no id the id is generated. Throws on an empty or duplicate id, and on a duplicate port in the list. |
+| `addNode(init?)` | Adds a node and returns it. `init` is `{ id?, attrs?, ports?, parent? }`, or a plain id string as shorthand, or nothing at all. With no id the id is generated. Throws on an empty or duplicate id, on a duplicate port in the list, and on a `parent` that is not in the graph or is the node itself. |
 | `hasNode(id)` | Whether the node is in the graph. O(1). |
 | `getNode(id)` | The node record, or `undefined`. O(1). |
 | `requireNode(id)` | The node record. Throws `NodeNotFoundError` if the node is unknown. O(1). |
-| `removeNode(id)` | Removes the node and every edge incident to it, in-edges, out-edges, and self loops alike. Throws if the node is unknown. O(degree). |
+| `removeNode(id)` | Removes the node, every edge incident to it, in-edges, out-edges, and self loops alike, and every node it contains, however deep. Throws if the node is unknown. O(subtree plus their degrees). |
+| `setNodeParent(id, parent)` | Moves the node into `parent`, or out of everything when `parent` is `undefined`, and returns the record that now answers for the id. Copy on write. Throws if either node is unknown or the move would close a containment cycle. O(depth of `parent`). |
+| `children(id)` | The nodes this one contains directly, in insertion order, as a fresh array. Throws if the node is unknown. |
 | `nodes()` | Every node, in insertion order, as a fresh array. O(nodeCount). |
 
 ### Edges
@@ -1206,7 +1315,7 @@ try {
     switch (error.code) {
       case 'EDGE_NOT_FOUND':
         break;
-      // ... the other ten codes
+      // ... the other eleven codes
     }
   }
 }
@@ -1227,14 +1336,15 @@ try {
 | `PortInUseError` | `PORT_IN_USE` | `removePort` names a port live edges still reference. Carries `nodeId`, `portId`, and `edgeIds`. |
 | `PortDirectionError` | `PORT_DIRECTION` | An edge asks a port to be an end it does not face. Carries `nodeId`, `portId`, `direction`, and `end`. |
 | `CycleError` | `CYCLE` | `topologicalOrder` is called on a graph with a cycle. Carries `cycle`, a witness. |
+| `ContainmentCycleError` | `CONTAINMENT_CYCLE` | A node is put inside itself, directly or through a chain. Carries `chain`, the containment path that closes. |
 | `InvalidGraphJSONError` | `INVALID_GRAPH_JSON` | `Graph.fromJSON` is given a value that is not a version 1 document. Carries `path`, where the offending field sits, and `expected`. |
 
 Switching on `code` through `DagrGraphError` narrows the code but not the
 object, because an abstract base cannot know its subclasses. `isDagrGraphError`
 closes that gap: it narrows a caught value to `DagrGraphErrorLike`, a
-discriminated union of the eleven concrete classes, so an arm can read the
+discriminated union of the twelve concrete classes, so an arm can read the
 fields only its own class carries. It tests `instanceof DagrGraphError` and then
-that `code` is one of the eleven, so the runtime check is as closed as the type
+that `code` is one of the twelve, so the runtime check is as closed as the type
 it narrows to.
 
 `DagrGraphError` is a catch base, not an extension point. A subclass declared
@@ -1254,7 +1364,7 @@ try {
       case 'PORT_IN_USE':
         error.edgeIds; // readonly string[], no cast needed
         break;
-      // ... the other ten codes
+      // ... the other eleven codes
     }
   }
 }
@@ -1305,6 +1415,10 @@ so the model makes these promises:
 - Ports are listed in declaration order, and attribute updates never move
   anything: a node keeps its place in iteration order, its ports, and its
   adjacency when its bag changes.
+- `children` returns node insertion order, not the order the containment was
+  declared in, for the same reason `successors` does: a listing that reordered
+  itself when a node was reparented would make a drawing depend on edit
+  history.
 
 The same sequence of calls therefore always produces the same graph, with the
 same ids in the same order.

@@ -372,7 +372,7 @@ export function influenceRegion(input: InfluenceRegionInput): InfluenceSet {
    * the comparison needs the region computed after a cheap cycle-breaking pass
    * rather than before it, which is M3.7b's bail trigger and M3.9's budget.
    *
-   * On a DAG the reversed set is empty and stays empty, which is the prnt.design
+   * On a DAG the reversed set is empty and stays empty, which is the
    * pattern-generator case and the one this region is sharp on.
    */
   const broken = previous.reversedEdges.size > 0;
@@ -535,6 +535,16 @@ export function influenceRegion(input: InfluenceRegionInput): InfluenceSet {
         seedEdges.add(op.id);
         break;
       }
+
+      // Containment is a relation on the graph that no stage in this package
+      // reads: ranks come from edges, sizes from attributes, and a parent is
+      // neither. So a reparent moves nothing and the exact bound on it is the
+      // empty one, which is why this names no node and widens no band. It is
+      // written out rather than left to the arm below because M7 is the task
+      // that draws parents and children together, and on the day it does this
+      // case becomes a wrong narrow bound rather than an exact one.
+      case 'update-node-parent':
+        break;
 
       // Graph attributes reach the layout through the config, which is bound
       // to the engine and cannot change under a patch.

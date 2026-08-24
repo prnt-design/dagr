@@ -15,7 +15,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "sideEffects": false,
   "repository": {
@@ -24,11 +25,26 @@
     "directory": "packages/react"
   },
   "peerDependencies": {
-    "react": "^19"
+    "@dagr/graph": "workspace:^",
+    "@dagr/render": "workspace:^",
+    "react": ">=19.0.0 <20.0.0",
+    "react-dom": ">=19.0.0 <20.0.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "build": "tsc -p tsconfig.build.json"
+  },
+  "devDependencies": {
+    "@dagr/graph": "workspace:^",
+    "@dagr/render": "workspace:^",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "jsdom": "^30.0.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "dependencies": {
+    "@dagr/layout": "workspace:^"
   }
 }

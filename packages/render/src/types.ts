@@ -150,8 +150,9 @@ export interface Renderer {
    *
    * The diff is by `id` and it is the property M4.4 owed the tasks after it: a
    * node present in two consecutive calls keeps its instance handle, so
-   * per-instance state keyed to it (M4.6's spring velocity, M4.8's picking id)
-   * survives a call that moved every other node in the graph. A node that
+   * per-instance state keyed to it, such as M4.6's spring velocity, survives a
+   * call that moved every other node in the graph. M4.8a's picking ids are
+   * keyed by the node id itself and survive the one case a handle cannot. A node that
    * changes SHAPE is the exception, and it is a removal and an addition, because
    * the two shape families are two meshes.
    *
