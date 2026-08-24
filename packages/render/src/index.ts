@@ -79,6 +79,16 @@
  * file rather than a rewrite. Its whole surface is five names and two records
  * of numbers, and nothing in it needs a device to be tested.
  *
+ * **M4.9a is the first thing this package says about the machine it is running
+ * on.** `createRenderer` takes a `backend` preference and every renderer reports
+ * the {@link RendererBackend} it came up on. three's `WebGPURenderer` has always
+ * fallen back to WebGL2 by itself; what was missing was any way for a caller to
+ * tell, and a fallback nobody can see is a performance cliff a consumer finds
+ * first. Naming a backend turns the preference into a requirement and an unmet
+ * one into a {@link BackendUnavailableError}. The selection logic is internal,
+ * in `backend.ts`, because the seam a caller needs is the option and the
+ * property.
+ *
  * Not one three.js type appears in anything exported from this file. See
  * `types.ts` for why: three is a peer dependency, so it stays an implementation
  * detail of `webgpu-renderer.ts`.
@@ -97,6 +107,7 @@
 export { Camera2D, fitZoom } from './camera.js';
 export type { Camera2DInit } from './camera.js';
 export {
+  BackendUnavailableError,
   DagrRenderError,
   OverlayDisposedError,
   OverlayParentError,
@@ -133,8 +144,10 @@ export {
 export type { Spring2DState, SpringState } from './spring.js';
 export { createRenderer } from './webgpu-renderer.js';
 export type {
+  BackendPreference,
   OrthoFrustum,
   Renderer,
+  RendererBackend,
   RendererOptions,
   Size,
   Vec2,

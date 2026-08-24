@@ -160,7 +160,7 @@ function harness(
   const threeCamera = new StubProjectionTarget();
   const resources = Array.from({ length: resourceCount }, () => new StubResource());
   const nodes = new SceneNodes(sceneStyle);
-  const renderer = new WebGPUSceneRenderer(camera, sink, {}, threeCamera, nodes, new SceneEdges([]), [
+  const renderer = new WebGPUSceneRenderer(camera, sink, 'webgpu', {}, threeCamera, nodes, new SceneEdges([]), [
     ...resources,
     nodes,
   ]);
@@ -362,6 +362,7 @@ describe('WebGPUSceneRenderer disposal', () => {
     new WebGPUSceneRenderer(
       new Camera2D({ viewport: initialViewport }),
       countingSink,
+      'webgpu',
       {},
       new StubProjectionTarget(),
       new SceneNodes(sceneStyle),
@@ -381,6 +382,7 @@ describe('WebGPUSceneRenderer disposal', () => {
     const renderer = new WebGPUSceneRenderer(
       camera,
       new StubFrameSink(),
+      'webgpu',
       {},
       new StubProjectionTarget(),
       new SceneNodes(sceneStyle),
@@ -516,7 +518,7 @@ describe('buildSceneRenderer', () => {
     // nodes are a caller's, so their numbers are somebody else's arithmetic.
     const camera = new Camera2D({ viewport: initialViewport });
     const sink = new StubFrameSink();
-    expect(() => buildSceneRenderer(camera, sink, 0x0b0d10, sceneStyle, [impossible])).toThrow(
+    expect(() => buildSceneRenderer(camera, sink, 'webgpu', 0x0b0d10, sceneStyle, [impossible])).toThrow(
       RangeError,
     );
     expect(sink.disposals).toBe(1);
@@ -524,7 +526,7 @@ describe('buildSceneRenderer', () => {
     // who wrote a bad number is told which node and which field, and the node's
     // own id is what names it.
     expect(() =>
-      buildSceneRenderer(camera, new StubFrameSink(), 0x0b0d10, sceneStyle, [impossible]),
+      buildSceneRenderer(camera, new StubFrameSink(), 'webgpu', 0x0b0d10, sceneStyle, [impossible]),
     ).toThrow(/too-round\.cornerRadius/);
   });
 
@@ -535,7 +537,7 @@ describe('buildSceneRenderer', () => {
     // cannot reach, and it has to be given back once rather than once per unwind.
     const sink = new StubFrameSink();
     expect(() =>
-      buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 0x0b0d10, sceneStyle, [
+      buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 'webgpu', 0x0b0d10, sceneStyle, [
         node('good'),
         impossible,
       ]),
@@ -551,6 +553,7 @@ describe('buildSceneRenderer', () => {
     const renderer = buildSceneRenderer(
       new Camera2D({ viewport: initialViewport }),
       sink,
+      'webgpu',
       0x0b0d10,
       sceneStyle,
       [],
@@ -569,6 +572,7 @@ describe('buildSceneRenderer', () => {
     const renderer = buildSceneRenderer(
       new Camera2D({ viewport: initialViewport }),
       new StubFrameSink(),
+      'webgpu',
       0x0b0d10,
       sceneStyle,
       [node('a'), node('b', 500), circle],
@@ -596,6 +600,7 @@ describe('buildSceneRenderer', () => {
       buildSceneRenderer(
         new Camera2D({ viewport: initialViewport }),
         sink,
+        'webgpu',
         0x0b0d10,
         sceneStyle,
         duplicated,
@@ -615,7 +620,7 @@ describe('buildSceneRenderer', () => {
     const disposedNodes = vi.spyOn(SceneNodes.prototype, 'dispose');
     const sink = new StubFrameSink();
     expect(() =>
-      buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 0x0b0d10, sceneStyle, [
+      buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 'webgpu', 0x0b0d10, sceneStyle, [
         node('a'),
         node('a', 500),
       ]),
@@ -630,7 +635,7 @@ describe('buildSceneRenderer', () => {
   it('rejects a node style that cannot be drawn, and still gives the device back', () => {
     const sink = new StubFrameSink();
     expect(() =>
-      buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 0x0b0d10, {
+      buildSceneRenderer(new Camera2D({ viewport: initialViewport }), sink, 'webgpu', 0x0b0d10, {
         ...sceneStyle,
         glowAlpha: 2,
       }),
@@ -647,7 +652,7 @@ describe('buildSceneRenderer', () => {
     // state as of M4.4: this package ships no scene of its own any more.
     const camera = new Camera2D({ viewport: initialViewport });
     const sink = new StubFrameSink();
-    const renderer = buildSceneRenderer(camera, sink, 0x0b0d10);
+    const renderer = buildSceneRenderer(camera, sink, 'webgpu', 0x0b0d10);
     expect(renderer.camera).toBe(camera);
     expect(sink.sizes).toEqual([{ width: 1600, height: 1200, updateStyle: false }]);
     renderer.render();
@@ -663,6 +668,7 @@ describe('buildSceneRenderer', () => {
     const renderer = buildSceneRenderer(
       new Camera2D({ viewport: initialViewport }),
       new StubFrameSink(),
+      'webgpu',
       0x0b0d10,
       sceneStyle,
       [node('a'), node('b', 500)],
@@ -676,6 +682,7 @@ describe('buildSceneRenderer', () => {
     const renderer = buildSceneRenderer(
       new Camera2D({ viewport: initialViewport }),
       new StubFrameSink(),
+      'webgpu',
       0x0b0d10,
     );
     renderer.dispose();
@@ -760,5 +767,40 @@ describe('createRenderer cancellation', () => {
       signal: controller.signal,
     }).catch((error: unknown) => error);
     expect(failure).toBe(reason);
+  });
+});
+
+describe('the backend a renderer reports', () => {
+  // The wiring half of M4.9a. The decision itself is `test/backend.test.ts`;
+  // what is checked here is that the answer reaches the object a caller holds,
+  // which is the one part of it that lives in this file and the one that a
+  // rename of the constructor's parameter order would break in silence.
+  it('carries the backend it was built with onto the renderer', () => {
+    const backends = ['webgpu', 'webgl2', 'unknown'] as const;
+    for (const backend of backends) {
+      const renderer = buildSceneRenderer(
+        new Camera2D({ viewport: initialViewport }),
+        new StubFrameSink(),
+        backend,
+        0x0b0d10,
+      );
+      expect(renderer.backend).toBe(backend);
+      renderer.dispose();
+    }
+  });
+
+  it('keeps reporting it after dispose', () => {
+    // Every other member of this interface throws after `dispose()`, and this
+    // one deliberately does not: it is a fact about the machine rather than a
+    // use of a released resource, and a caller logging why a session was slow
+    // reads it in the same teardown that disposed the renderer.
+    const renderer = buildSceneRenderer(
+      new Camera2D({ viewport: initialViewport }),
+      new StubFrameSink(),
+      'webgl2',
+      0x0b0d10,
+    );
+    renderer.dispose();
+    expect(renderer.backend).toBe('webgl2');
   });
 });

@@ -124,8 +124,9 @@ ready to draw, and no caller ever holds a renderer that exists but cannot render
 
 three's `WebGPURenderer` falls back to WebGL2 by itself when WebGPU is
 unavailable, so `createRenderer` resolving is not a promise that WebGPU is in
-use. Nothing here forces a backend or reports which one won. M4.9 owns the
-fallback, including telling the caller what they got.
+use. Since M4.9a it is not silent about that either: pass `backend` to say what
+is acceptable, and read `renderer.backend` for what happened. See
+[Two backends, and which one you got](#two-backends-and-which-one-you-got).
 
 ### A node keeps its handle
 
@@ -631,13 +632,18 @@ checks:
   does not stretch the canvas afterwards.
 - That `dispose` frees GPU memory. That every resource in the list is disposed
   exactly once, and that a disposed renderer then refuses to draw, IS tested.
-- That `init()` succeeds, or that three's automatic WebGL2 fallback engages, and
-  therefore that anything in `createRenderer` past `init()` runs at all. That
-  one has a named casualty: the abort check after `init()` cannot be reached
-  without a device to hand back, and deleting it leaves the suite green, which
-  was measured rather than assumed. The abort check before `init()` is tested.
-- That the two backends agree with each other. That one is M4.9's, by screenshot
-  comparison.
+- That `init()` succeeds ON WEBGPU, and therefore that the shapes compile and
+  draw there. **M4.9a took the WebGL2 half of this entry off the list**, with a
+  browser probe that draws through the built package and counts the pixels: see
+  [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
+  Nothing it found is evidence about WGSL, which the other backend generates
+  from the same TSL graphs.
+- The abort check AFTER `init()`, which cannot be reached without a device to
+  hand back AND an abort in the window between the request and the resolution.
+  Deleting it leaves the suite green, which was measured rather than assumed.
+  The abort check before `init()` is tested.
+- That the two backends agree with each other. That one is M4.9b's, by
+  screenshot comparison, and it needs a machine with both.
 - That a browser composes the overlay's two transforms the way the algebra says.
   The layer's `translate() scale()` and an entry's own transform are asserted as
   strings by a suite that never renders them, so a wrong composition order or a
@@ -725,6 +731,121 @@ copies compile cleanly and misbehave at runtime, where `@dagr/graph`'s
 signature that saw one. That is the weaker of the two guarantees, and it is the
 reason the peer declaration is doing real work here rather than documenting
 something the compiler already enforces.
+
+## Two backends, and which one you got
+
+three's `WebGPURenderer` falls back to a WebGL2 backend by itself when WebGPU is
+not available. It always has. What M4.9a added is that you can tell.
+
+```ts
+const renderer = await createRenderer({ canvas });
+renderer.backend; // 'webgpu' | 'webgl2' | 'unknown'
+```
+
+`backend` defaults to `'auto'`, which takes WebGPU where the machine has it and
+WebGL2 where it does not, and reports the answer. That is the right default: a
+consumer on a browser without WebGPU wants a slower picture rather than no
+picture, and a library that refused would be unavailable on a large share of the
+web for a reason its user cannot act on.
+
+Name a backend to turn the preference into a requirement.
+
+```ts
+// Refuses rather than falling back. A `BackendUnavailableError`, code
+// BACKEND_UNAVAILABLE, carrying both what you asked for and what came up.
+const fast = await createRenderer({ canvas, backend: 'webgpu' });
+
+// Takes the compatible path deliberately, which is what a reproduction or a
+// screenshot comparison wants.
+const compatible = await createRenderer({ canvas, backend: 'webgl2' });
+```
+
+Both refusals dispose the device they refuse, so the guarantee that you never
+have to dispose a renderer you did not receive holds here too.
+
+**There is no fallback event, and that is a decision rather than an omission.**
+three falls back inside the `init()` that `createRenderer` awaits, so by the time
+you hold a renderer the fallback has already happened and `renderer.backend`
+already says so. A callback would deliver the same fact through a second
+mechanism, before you have anything to act on.
+
+**Do not probe `navigator.gpu` and skip the option.** It is not the same
+question, and the difference is measured rather than argued: on the machine this
+package's browser probe runs on, `'gpu' in navigator` is `true` and
+`navigator.gpu.requestAdapter()` then returns `null`. A capability check before
+construction reports WebGPU on a machine that cannot give one. What three built
+is the only honest report, and it does not exist until `init()` has resolved,
+which is where `renderer.backend` reads it from.
+
+`'unknown'` is a third value and not a third backend. This package names the
+backend by reading three's `isWebGPUBackend` and `isWebGLBackend` markers, and a
+three release that renames either one leaves a renderer that draws perfectly and
+cannot be named. Refusing a working renderer over a naming problem would be
+worse than saying so, so `'auto'` reports `'unknown'` and hands it back. A caller
+who NAMED a backend asked for a guarantee that can no longer be made, and gets
+the error instead. The same fact, reported one way and refused the other.
+
+### What differs between the two
+
+Recorded here rather than left for a consumer to find in a browser, which is
+what M4.9's roadmap entry asks for. Every entry names where it comes from.
+
+- **Per-instance vertex channels.** WebGPU's `maxVertexBuffers` is 8 and the
+  instanced node pipeline uses 7 of them. three's WebGL2 path binds attributes
+  with `vertexAttribPointer` into a VAO, which has no buffer-slot limit at all
+  and a ceiling of `MAX_VERTEX_ATTRIBS`, at least 16. **A ninth channel would
+  fail pipeline creation on WebGPU and draw fine on WebGL2**, so the narrower
+  ceiling is the one this package builds against. See
+  `packages/render/src/instance-attributes.ts`.
+- **A transparent background is premultiplied differently.** three multiplies
+  the clear colour by its alpha unconditionally on WebGL2 and only when the
+  renderer's `alpha` is on under WebGPU (`Background.js` in three 0.185.1). This
+  package's background is opaque, so the multiply is by one and the two agree
+  exactly. It is here because it is the first thing to check the day a
+  transparent canvas is offered.
+- **A per-pass frame-time breakdown is not available on the same terms.** WebGPU
+  asks the adapter for the `timestamp-query` feature; WebGL2 needs
+  `EXT_disjoint_timer_query_webgl2`, which is absent on plenty of machines and
+  is `null` when it is. M4.10's pass breakdown cannot assume one number per pass
+  on both backends.
+- **A compute barrier is a no-op on WebGL2** (`BarrierNode.js` in three 0.185.1).
+  Nothing in this package computes. This is the line that would matter first if
+  anything did.
+- **Performance is unmeasured, and that is the honest statement rather than a
+  hedge.** The machine this package's probe runs on has no WebGPU adapter at
+  all, so there is no pair of numbers to compare and no cliff to quote. M4.9's
+  own entry says an automatic fallback hides a performance cliff, and an
+  unmeasured cliff is one a consumer finds first, so: assume WebGL2 is slower,
+  and read `renderer.backend` if that matters to what you draw.
+
+### What is verified, and on which backend
+
+`bench/browser/backend-probe.mjs` opens this package's built `dist` in a real
+browser, draws one rounded rectangle and one circle, and counts what reached the
+canvas. On 2026-08-23, on a headless Chromium with swiftshader and no WebGPU
+adapter: `'auto'` came up on `'webgl2'` and drew 10,780 pixels above the clear
+colour, of which 3,908 are the rectangle's amber fill and 2,432 the circle's
+blue; `'webgpu'` was refused with `BACKEND_UNAVAILABLE`; and `'webgl2'` drew the
+identical counts. The frame is committed as
+`assets/screenshots/m4.9a-webgl2-shapes.png`.
+
+**The fill counts agree with the geometry**, which is what makes this evidence
+about size rather than only about presence. The amber region should be the 90 by
+50 rounded rectangle inset by its 2 device pixel outline, an area of 3,901
+against 3,908 counted; the blue should be the 60 diameter circle inset the same
+way, 2,463 against 2,432. Both run slightly under, in the direction
+antialiasing predicts and in the order it predicts (a small circle is nearly all
+boundary), and the expectations are derived in the probe page from the same node
+records the renderer is handed.
+
+That is the first time anything in this repository has checked a pixel this
+package drew rather than the arithmetic behind one, and it closes most of the
+UNVERIFIED list in `webgpu-renderer.ts` **on WebGL2 only**. The shapes appear, in
+the right place, at the right size and in the intended colours, so the TSL graphs
+compile and the shader computes. None of that is evidence about WGSL, which a
+different backend generates from the same graphs. The screenshot comparison
+between the two backends that M4.9's entry asks for needs a machine with both,
+and is M4.9b.
 
 ## Usage
 
@@ -892,7 +1013,7 @@ through the WebGL2 fallback rather than WebGPU, which is what a headless
 Chromium on a machine with no GPU has. That bears on the shapes and not on the
 overlay, which never touches a GPU: what these frames are evidence for is the
 transform composition and the counter-scale, and those are the browser's
-compositor either way. Whether the two backends draw the same shapes is M4.9's
+compositor either way. Whether the two backends draw the same shapes is M4.9b's
 question, and it is on the untested list above.
 
 ### What one sync does, and what it costs
@@ -1421,7 +1542,8 @@ family, and nothing that moves.
   offscreen target, the readback and a `pick()` on `Renderer` (M4.8b). What
   a pixel says and which node an id still means are decided and tested; see
   [Picking](#picking-decided-and-half-built).
-- An explicit WebGL2 fallback story, with the backend differences written down
-  (M4.9).
+- A screenshot comparison between the WebGPU and WebGL2 backends, which needs a
+  machine with both (M4.9b). The selection, the reporting and the differences
+  landed at M4.9a and are two sections above.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).

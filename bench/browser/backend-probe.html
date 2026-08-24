@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>@dagr/render backend probe</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #000;
+      }
+      /*
+        The CSS box and the drawing buffer are both stated, at device pixel
+        ratio 1, so the screenshot this produces is comparable to the rest of
+        assets/screenshots/ and so a stretched canvas cannot be mistaken for a
+        rendering difference between the backends.
+      */
+      #stage {
+        width: 480px;
+        height: 320px;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <!--
+      An import map rather than a bundler. The two specifiers @dagr/render's
+      dist actually uses are three/webgpu and three/tsl, and the runner rewrites
+      both to the paths its own `require.resolve` found, so this page never
+      names a pnpm directory and never goes stale against a three upgrade.
+    -->
+    <script type="importmap">
+      { "imports": { "three/webgpu": "__THREE_WEBGPU__", "three/tsl": "__THREE_TSL__" } }
+    </script>
+    <script type="module">
+      import { createRenderer } from '/packages/render/dist/index.js';
+
+      /**
+       * The M4.2 shape ladder reduced to two shapes, one from each family.
+       *
+       * Two rather than six because what this page asks is whether the TSL
+       * graphs COMPILE and draw on a backend, and the two families are two
+       * meshes with two materials and therefore two pipelines. A third
+       * rounded rect would exercise nothing a second instance of the first
+       * does not.
+       */
+      const NODES = [
+        {
+          id: 'rect',
+          shape: 'roundedRect',
+          center: { x: -60, y: 0 },
+          size: { width: 90, height: 50 },
+          cornerRadius: 10,
+          fillColor: 0xffb703,
+          glowColor: 0xfb8500,
+          glowWorld: 8,
+        },
+        {
+          id: 'circle',
+          shape: 'circle',
+          center: { x: 60, y: 0 },
+          size: { width: 60, height: 60 },
+          cornerRadius: 0,
+          fillColor: 0x8ecae6,
+          glowColor: 0x219ebc,
+          glowWorld: 8,
+        },
+      ];
+
+      /**
+       * The area each fill should cover, in device pixels, from the same
+       * records the renderer is given.
+       *
+       * **This is what turns "it drew" into "it drew the right thing at the
+       * right size".** A count of amber pixels says a shape is there; a count
+       * that matches the area of a 90 by 50 rounded rectangle says it is THAT
+       * shape. Derived here rather than written as a constant, and derived from
+       * NODES rather than from a copy of its numbers, because a hand copy that
+       * drifts is the trap card-heights.mjs already paid for.
+       *
+       * The inset is the outline. `outlinePixels` is 2 DEVICE pixels drawn
+       * inside the boundary in the scene's outline colour, so the fill is the
+       * shape shrunk by 2 on every side, and the corner radius shrinks with it.
+       * At device pixel ratio 1 a world unit is a device pixel at zoom 1, which
+       * is the view this page uses and states.
+       *
+       * Boundary pixels are blended toward the halo and fail the hue test, so
+       * the count runs slightly UNDER the area rather than over it, and by more
+       * on the circle than on the rectangle because a circle of this size is
+       * almost all boundary.
+       */
+      const OUTLINE_DEVICE_PX = 2;
+      const expectedFillArea = (node) => {
+        const inset = OUTLINE_DEVICE_PX * 2;
+        const width = node.size.width - inset;
+        const height = node.size.height - inset;
+        if (node.shape === 'circle') return Math.PI * (width / 2) * (height / 2);
+        const radius = Math.max(0, node.cornerRadius - OUTLINE_DEVICE_PX);
+        return width * height - (4 - Math.PI) * radius * radius;
+      };
+
+      /**
+       * Builds a renderer under one preference, draws one frame, and counts
+       * what reached the canvas.
+       *
+       * The pixel counts are the point. "It drew" asserted from the absence of
+       * a thrown error is a claim an empty canvas satisfies, which is the trap
+       * D1's entry already names about the demo's own check ("the DOM tiers are
+       * satisfied by a blank canvas"), so this reads the drawing buffer back and
+       * counts pixels that are not the clear colour, plus the two fills it
+       * should be able to find by hue and compare against their own areas.
+       */
+      window.probe = async (backend, keep = false) => {
+        // A FRESH canvas per run, which the first version of this page did not
+        // do and paid for: a canvas holds one context for its whole life, so
+        // the second `createRenderer` on the same element came back with a
+        // TypeError out of three rather than with anything about backends. That
+        // is a fact about canvases rather than about this package, and it is
+        // worth the four lines here because the probe's whole job is to be
+        // three independent runs.
+        const previous = document.getElementById('stage');
+        const canvas = document.createElement('canvas');
+        canvas.id = 'stage';
+        previous.replaceWith(canvas);
+        const viewport = { width: 480, height: 320, devicePixelRatio: 1 };
+        let renderer;
+        try {
+          renderer = await createRenderer({ canvas, backend, nodes: NODES });
+        } catch (error) {
+          return { backend, ok: false, error: String(error), code: error && error.code };
+        }
+        renderer.camera.setViewport(viewport);
+        renderer.render();
+        // The drawn canvas holds a WebGL or WebGPU context, so it has no 2d
+        // context to read pixels out of. The counting happens through a second
+        // canvas the drawn one is copied into, which is what a screenshot does
+        // anyway.
+        const scratch = document.createElement('canvas');
+        scratch.width = canvas.width;
+        scratch.height = canvas.height;
+        const ctx = scratch.getContext('2d');
+        ctx.drawImage(canvas, 0, 0);
+        const { data } = ctx.getImageData(0, 0, scratch.width, scratch.height);
+        let lit = 0;
+        let amber = 0;
+        let blue = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          // The clear colour is 0x0b0d10. Anything meaningfully above it came
+          // from a shape, and the two fills are separable by which channel
+          // dominates: 0xffb703 is red over blue, 0x8ecae6 is blue over red.
+          if (r + g + b > 0x0b + 0x0d + 0x10 + 24) lit += 1;
+          if (r > 200 && g > 140 && b < 80) amber += 1;
+          if (b > 200 && r < 200 && g > 180) blue += 1;
+        }
+        const reported = renderer.backend;
+        // `keep` leaves the renderer alive so the caller can screenshot the
+        // canvas, and the default does not. Disposing releases the context and
+        // the canvas goes blank, which cost this file one committed screenshot
+        // of an empty frame under a caption that said otherwise: the pixel
+        // counts above were taken before the dispose and were right, and the
+        // image taken after it was white. Counting and looking are two checks.
+        if (!keep) renderer.dispose();
+        return {
+          backend,
+          ok: true,
+          reported,
+          drawingBuffer: { width: canvas.width, height: canvas.height },
+          lit,
+          amber,
+          blue,
+          expected: {
+            amber: Math.round(expectedFillArea(NODES[0])),
+            blue: Math.round(expectedFillArea(NODES[1])),
+          },
+        };
+      };
+
+      /**
+       * What a capability probe before `init()` would have said, against what
+       * asking for an adapter actually gives.
+       *
+       * This pair is the reason `backend.ts` reads the backend AFTER `init()`
+       * rather than probing before it, so the page reports both halves rather
+       * than the conclusion.
+       */
+      window.webgpuAdvertised = async () => ({
+        navigatorGpu: 'gpu' in navigator,
+        adapter:
+          'gpu' in navigator ? (await navigator.gpu.requestAdapter()) !== null : false,
+      });
+
+      window.ready = true;
+    </script>
+  </body>
+</html>
