@@ -107,7 +107,12 @@ export type {
 // the gap wider rather than closing it. So the name waits on the compaction
 // work that file names. See `position.ts`.
 export { defaultStages } from './stages.js';
-export { longestPathRankStage } from './rank.js';
+// The factory beside the stage, for the reason the simplex one is: M3.7b gives
+// the default ranker a budget of its own, `maxWarmShare`, which is how much of
+// the drawing a warm run may recompute before sweeping it all. A caller who
+// wants the old behaviour asks for a share of zero, which is a call.
+export { longestPathRank, longestPathRankStage } from './rank.js';
+export type { LongestPathRankOptions } from './rank.js';
 // The factory is exported beside the simplex stage because M3 warm starts a run
 // from the previous run's ranks, which is an argument and therefore a call.
 export { networkSimplexRank, networkSimplexRankStage } from './simplex.js';

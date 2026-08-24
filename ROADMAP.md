@@ -933,6 +933,11 @@ findings addressed or logged, docs land with the feature.
   stability regression against the deterministic M2.2 longest-path ranker it
   replaces. Warm starting from the previous tight tree is the textbook
   advantage of simplex here, and it is most of M3.7b's performance story too.
+  THAT LAST CLAUSE IS FALSE AND M3.7b MEASURED IT SO. Warm starting the ranker
+  is real and it is 0.6ms of a 307ms rank stage on the 10k corpus; the story is
+  the 260ms of dummy chains re-minted on every run. The stability half of this
+  paragraph stands and is exactly what `previous.ranks` buys the simplex stage.
+  See M3.7b's entry.
   Second, "rank sum must never regress" passes with flying colours while ranks
   churn between equal-cost optima, because churn does not change the sum. Add a
   rank-stability check: re-ranking after a trivial perturbation must not move
@@ -3426,7 +3431,7 @@ it.
   already fixed once for the splitter. On a DAG the set is empty and stays empty,
   so none of this touches the pattern-generator case, exactly as the
   entry said to scope it. Merged in PR #53.
-- [ ] **M3.7b** (`@dagr/layout`) Incremental ranking: keep the previous ranks
+- [x] **M3.7b** (`@dagr/layout`) Incremental ranking: keep the previous ranks
   where the patch cannot have changed them, recompute the affected band, and
   fall back to a full rank when the patch changes the cycle structure (any
   change to the reversed-edge set the rank stage produces) or would shift more
@@ -3453,6 +3458,115 @@ it.
   task carries a bench comparing incremental against cold across patch sizes
   and commits the crossover point it actually finds. Name the fraction rather
   than writing "an agreed fraction", for the reason M3.6 gives.
+  A WARM RANKING IS THE COLD RANKING, ALWAYS, AND THE ENTRY'S HEDGE BELONGS TO
+  THE OTHER STAGE. This entry asked for incremental ranks to equal a cold rank
+  "on the cases where they must", which is the right requirement for the simplex
+  and the wrong one for longest path: longest path has ONE answer per view, so
+  there is nothing for a seed to choose and any difference is a defect. The
+  suite asserts the equality over 3,000 random cyclic digraphs given one edit
+  each, plus 200 random layered ones, and not over a class of cases. This entry
+  also predicted the two would be different problems and that half is exactly
+  right; what it did not predict is that the difference shows up as whether the
+  seed is CHECKED or BELIEVED.
+  THE SEED IS VERIFIED RATHER THAN TRUSTED, WHICH IS WHY IT NEEDS NO VALIDATION.
+  A ranking is the longest-path ranking exactly when every node sits one below
+  its deepest predecessor, or at zero with none, so one pass over the view's
+  edges and one over its nodes says which nodes the seed got wrong. That makes a
+  bad seed cost WORK and never correctness, and the suite hands it ranks from a
+  different graph, ranks naming every node at one rank, negative ranks,
+  fractional ranks and a NaN, and gets the cold answer from all of them. The
+  contrast with `networkSimplexRank` is the finding worth carrying: its
+  `initialRanks` is a FLOOR, only ever pushed down by the sweep that follows it,
+  so a hint that put a node too high stays too high and `floorFrom` HAS to drop
+  the entries that would do it. ONE CHANNEL, TWO STAGES, TWO MEANINGS, and which
+  one you get is decided by whether the stage has one answer or a choice between
+  optima.
+  THE CLEAN PASS IS ALSO THE CYCLE CHECK, which is what makes returning a seed
+  without sweeping safe. Local consistency all the way round a cycle would need
+  each node to sit one below the last and one above the first, so a cyclic view
+  always has a wrong node in every cycle, the cycle is inside the region, and the
+  confined sweep raises the same `InternalLayoutError` the cold one does. Pinned
+  with two hundred arbitrary seeds over a three-cycle rather than argued.
+  THE DIRTY COUNT DOES NOT PREDICT THE REGION AND THE SHALLOWEST DIRTY RANK
+  DOES. This is the measurement that changed the shape of the task. One dirty
+  node at the deepest rank of the 10k corpus reaches ONE node; one at rank 0
+  reaches 7,632 of 10,000. So a guard on the dirty count lets the worst case
+  through and then pays for the walk that discovers it, which is precisely the
+  failure this entry warned about. What the guard reads instead is the seed's own
+  rank tally: the region lies under the shallowest dirty rank, so the nodes the
+  seed put there and below are an ESTIMATE of its size, free from a pass already
+  being made. An estimate rather than a bound, and that is enough, because
+  guessing high sweeps cold and cold is always right, while guessing low is
+  caught by the walk's own limit.
+  THE FRACTION IS 0.01 AND IT IS A CROSSOVER RATHER THAN A PREFERENCE, named in
+  `rank.ts` as `DEFAULT_MAX_WARM_SHARE` and settable per stage as
+  `longestPathRank({ maxWarmShare })`. A confined sweep asks the GRAPH for one
+  node's neighbours at a time, because the alternative is the whole-view index a
+  cold sweep builds in one pass and building that is most of what a cold sweep
+  costs, so confining is cheaper only while there are few enough nodes to ask
+  about. Measured on 2026-08-24 by nudging one node per rank and sweeping the
+  region from 1 node to three quarters of the roster: the warm run costs the
+  detection pass plus about 3.9 microseconds per region node on the 1k corpus and
+  9.5 on the 10k, against cold sweeps of 0.093ms and 1.61ms. The two meet at
+  about 7 nodes of 1,000 and 91 of 10,000, which is 0.7% and 0.9%. One percent is
+  the round number just above both. 0 is the honest off switch and 1 admits every
+  region, and the answer is exact at every setting, so the number trades one kind
+  of work for another and never for correctness.
+  THE TRIGGER THIS ENTRY ASKED FOR IS NOT SHIPPED, AND THE REASON IS MEASURED
+  RATHER THAN ARGUED. The entry asked for a fallback whenever the reversed-edge
+  set changes, which M3.7a is what made meaningful. Over 4,000 patches with the
+  seeded breaker running, a CHANGED reversed set left the ranks ALREADY EXACT on
+  29.5% of random cyclic digraphs and 48.6% of random layered ones. So a trigger
+  on it would throw away a free answer on a third to a half of the patches it
+  fires for, and it would add nothing on the rest: the detection pass prices a
+  changed reversed set exactly like any other change, and the region estimate
+  refuses the expensive ones without being told about the set at all. A CHANGED
+  SET IS A SIGNAL ABOUT THE GRAPH AND NOT A REASON TO GIVE UP ON THE RANKS, which
+  is this entry's own sentence about the signal arriving one step further than it
+  went.
+  WHAT IT SAVES IS HALF A PERCENT OF THE RANK STAGE, AND THE MEASUREMENT THAT
+  SAYS SO IS THE ONE M3.9 SHOULD START FROM. On the 10k corpus the ranking sweep
+  is 1.5ms and the warm one that finds nothing moved is 0.93ms, of a rank stage
+  costing 307ms: the cycle break is 32ms, the acyclic view 12ms, and the
+  REMAINING 260ms is the ranks map and the 174,222 dummy nodes `splitLongEdges`
+  mints on every single run. So incremental ranking makes a third of half a
+  percent disappear and can never do more. The fast path M3.9 is looking for is
+  not a faster sweep: it is not re-minting a chain whose ranks did not move. This
+  is the same shape of finding M3.7a recorded about the cycle breaker, arrived at
+  from the other end: that task measured its own cost and found no speed-up, and
+  this one measured a real speed-up and found it in the wrong 0.5%.
+  WHAT IS DELIBERATELY NOT HERE. No incremental SPLIT, because a chain is named
+  for its edge and its index rather than for a rank, so a chain a warm run keeps
+  is a chain it re-mints under the same ids, and skipping the re-mint needs a
+  second inventory of dummies to keep in step with the first. That is M3.9's and
+  it is where the 260ms is. No confinement of the ORDER, POSITION or ROUTE
+  stages, so `RelayoutResult.influence` is still the whole roster and this task
+  did NOT narrow it, for the same reason M3.5 and M3.6 did not. No cached
+  adjacency index across runs, which is what would make the confined sweep beat a
+  cold one at any region size and which is an engine-lifetime object rather than
+  a stage's.
+  THE ONE DRIFT HAZARD IT ADDS IS PINNED RATHER THAN ARGUED. `acyclicView` reads
+  the self-loop rule and the reversal rule once over `graph.edges()` and writes
+  two arrays; `viewNeighbours` reads the same rules per node off `graph.outEdges`
+  and `graph.inEdges`, because a region-proportional walk cannot afford the
+  arrays' index. That is a second copy of the rule `acyclic.ts` exists to keep
+  singular, so the two are asserted to agree EDGE FOR EDGE over 300 random cyclic
+  digraphs, in both directions, with parallel copies kept: a walk that
+  deduplicated them would leave the confined sweep's in-degree short and stall it
+  on a node it had already cleared.
+  WHAT M3.6 PREDICTED AND WHAT HAPPENED. M3.6's entry said the four zero-escape
+  figures should STAY zero rather than improve, and they did: `layout.influence`
+  and `layout.warmstart` pass unchanged. It also said M3.7b would change HOW
+  OFTEN a node is a newcomer to the order stage's cohort constraint, and on this
+  pipeline it changes it not at all, because the ranks a warm run produces are
+  the ranks a cold run produces. The prediction was about a warm start that
+  chose between answers, and this one does not choose.
+  M3.8 INHERITS a working shape rather than only a requirement: the seed is
+  checked against the current state, the region is the forward closure of what
+  disagreed, and the bail is a cheap estimate of the region plus a hard limit on
+  the walk. It also inherits the warning: the position stage's cost profile has
+  to be measured BEFORE the incremental path is designed, because this task's
+  saving turned out to be in the wrong half of its own stage. Merged in PR #64.
 - [ ] **M3.8** (`@dagr/layout`) Stable coordinate assignment: positions that do
   not jump. Two halves. The incremental path holds untouched nodes at their
   previous coordinates and solves only the influenced band against them. The

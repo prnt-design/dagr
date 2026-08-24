@@ -14,6 +14,57 @@ of doc prose.
 
 ### Changed
 
+- **Both rank stages now take the previous run's RANKS as well, and the default
+  one checks them rather than trusting them.** Behaviour changed, types did not,
+  except that `longestPathRank` joins `longestPathRankStage` on the surface.
+  (M3.7b)
+
+  **The default ranker returns exactly what it always did.** Longest path has
+  one answer per view, so a warm start here has nothing to choose between and
+  any difference from a cold sweep would be a defect. What changes is the work:
+  a seeded ranking is checked node by node against the view it is meant to rank,
+  a seed every node agrees with IS the answer and there is no sweep at all, and
+  a seed some nodes disagree with is swept over the region those nodes reach and
+  no further. The equality with a cold rank is asserted over 3,000 random cyclic
+  digraphs given one edit each, and the seed needs no validation because it is
+  verified: the suite hands it ranks from other graphs, ranks naming every node
+  at one rank, and values a ranking could never produce, and gets the cold answer
+  from all of them.
+
+  **`networkSimplexRank` reads the same field as a FLOOR, which is the other
+  meaning.** Its sweep only ever pushes a node further down, so a hint that put
+  one too high stays too high and `floorFrom` has to drop the entries that would
+  do it. One channel, two stages, two meanings, because that stage is choosing
+  between optima of equal cost and this one has only the one answer. Where both
+  a `previous` and an `initialRanks` option are present, the previous run wins,
+  which is M3.6's precedence rule arriving at the second stage that reads the
+  record.
+
+  **What it saves, measured rather than claimed.** On the 10k bench corpus the
+  ranking sweep is 1.5ms and the warm one that finds nothing moved is 0.93ms.
+  That is 0.5% of the 307ms the rank stage costs, of which the cycle break is
+  32ms, the acyclic view 12ms and the remaining 260ms is the ranks map and the
+  174,222 dummy nodes the splitter mints on every run. Incremental ranking makes
+  a third of half a percent disappear and can never do more, which is the number
+  M3.9 should start from: the fast path it is looking for is the split, not the
+  sweep.
+
+  **When it gives up: 1% of the roster, and the number is a crossover rather
+  than a preference.** A confined sweep reads its neighbours off the graph one
+  node at a time, because the alternative is the whole-view index a cold sweep
+  builds, so it is cheaper only while there are few enough nodes to ask about.
+  The two meet at about 7 nodes of 1,000 and 91 of 10,000. `maxWarmShare` is the
+  option, 0 sweeps cold whenever anything moved and 1 admits every region, and
+  the answer is exact at every value.
+
+  **The trigger the roadmap asked for is not here, and the reason is measured.**
+  M3.7b's entry asked for a fallback whenever the reversed-edge set changes. On
+  4,000 patches over random cyclic digraphs, a changed reversed set left the
+  ranks already exact 29.5% of the time, and 48.6% on random layered graphs. A
+  trigger on it would throw away a free answer on a third to a half of the
+  patches it fires for, while the region estimate that decides bailing already
+  refuses the expensive ones without being told about the reversed set at all.
+
 - **Both rank stages now seed the cycle breaker from the previous run, so a
   relayout stops re-deciding which edges point backwards.** Behaviour changed,
   types did not. (M3.7a)

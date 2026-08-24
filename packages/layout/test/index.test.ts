@@ -18,6 +18,7 @@ import type {
   LayoutPort,
   LayoutResult,
   LayoutStageOverrides,
+  LongestPathRankOptions,
   LayoutStages,
   MovedNode,
   NetworkSimplexOptions,
@@ -185,6 +186,11 @@ describe('@dagr/layout public surface', () => {
     expect(api.layout({ graph }, { rank: stage }).nodes.size).toBe(2);
     const shortest: RankStage = api.longestPathRankStage;
     expect(api.layout({ graph }, { rank: shortest }).nodes.size).toBe(2);
+    // The same shape one milestone later (M3.7b): the default ranker has a
+    // budget of its own now, so its factory is on the surface beside the stage.
+    const shortestOptions: LongestPathRankOptions = { maxWarmShare: 0 };
+    const configured: RankStage = api.longestPathRank(shortestOptions);
+    expect(api.layout({ graph }, { rank: configured }).nodes.size).toBe(2);
   });
 
   // Both are module-level singletons shared by every run in the process, which
@@ -223,6 +229,7 @@ describe('@dagr/layout public surface', () => {
       'influenceRegion',
       'isEmptyDelta',
       'layout',
+      'longestPathRank',
       'longestPathRankStage',
       'measureStability',
       'networkSimplexRank',

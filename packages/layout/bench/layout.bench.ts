@@ -47,6 +47,16 @@ const large = build(largeCorpus());
 const preparedSmall = prepare(small);
 const preparedLarge = prepare(large);
 
+/** What the runner hands the rank stage on the run AFTER a cold one. */
+function warmed(graph: Graph, prepared: PreparedState): PreparedState {
+  const first = longestPathRankStage.run(prepared);
+  const previous = { ranks: first.ranks, reversedEdges: first.reversedEdges };
+  return { ...prepared, previous: previous as PreparedState['previous'] };
+}
+
+const warmSmall = warmed(small, preparedSmall);
+const warmLarge = warmed(large, preparedLarge);
+
 /**
  * The rank stage on its own, which is where the cost currently sits.
  *
@@ -70,6 +80,26 @@ describe('rank', () => {
 
   bench('10k nodes, 40k edges', () => {
     longestPathRankStage.run(preparedLarge);
+  }, HEAVY);
+
+  // M3.7b: the same stage on a relayout, which is what an engine actually runs
+  // after the first frame. Both warm starts are in these two rather than one:
+  // the cycle breaker is seeded (M3.7a) and the ranks are (M3.7b), because that
+  // is the pair `PreparedState.previous` carries and measuring one of them
+  // alone would be measuring a state the engine never builds.
+  //
+  // The graph is UNCHANGED between the cold entry and the warm one, which is
+  // the case the warm path is sharpest on and the only one that is reproducible
+  // in a benchmark: a patch would have to be applied per iteration, and then
+  // the entry would be measuring the patch. What the pair says is what a
+  // relayout that moved nothing costs against a run that assumed everything
+  // moved, and M3.7b's ROADMAP entry carries the breakdown underneath it.
+  bench('1k nodes, 4k edges, warm', () => {
+    longestPathRankStage.run(warmSmall);
+  });
+
+  bench('10k nodes, 40k edges, warm', () => {
+    longestPathRankStage.run(warmLarge);
   }, HEAVY);
 });
 

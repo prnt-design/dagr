@@ -23,7 +23,10 @@ import type { LayoutResult, PreviousLayout, Size } from './types.js';
  * beside it that narrows the set by hand so the checker is shown failing as well
  * as passing. The same type is what M3.9's fast paths assert against, and it
  * buys a free regression guard, because it should shrink monotonically across
- * M3.7b and M3.9 and a set is a thing you can measure.
+ * M3.9 and a set is a thing you can measure. M3.7b DID NOT SHRINK IT EITHER, for
+ * the same reason M3.5 and M3.6 did not and it is recorded below: it confined
+ * one stage's sweep and changed nothing about what a relayout is entitled to
+ * move, because the other three stages still run whole.
  *
  * M3.2 AND M3.4 BOTH SAID M3.5 WOULD NARROW THIS SET, AND IT DID NOT, which is
  * worth recording where the prediction was made. What a relayout is ENTITLED to
@@ -370,7 +373,14 @@ export function influenceRegion(input: InfluenceRegionInput): InfluenceSet {
    * M3.7a bought is that the answer would now MEAN something: comparing two sets
    * would be a statement about cycle structure rather than about a solve. Doing
    * the comparison needs the region computed after a cheap cycle-breaking pass
-   * rather than before it, which is M3.7b's bail trigger and M3.9's budget.
+   * rather than before it, which is M3.9's budget.
+   *
+   * M3.7b MEASURED THAT COMPARISON AND DECLINED TO BAIL ON IT, which narrows
+   * what the comparison would be worth here. Over 4,000 patches, a changed
+   * reversed set left the ranks already exact on 29.5% of random cyclic digraphs
+   * and 48.6% of random layered ones, so a set that moved is not a set that
+   * moved anything. What the rank stage bails on instead is a reading of how far
+   * the changed ranks reach, which is the same kind of quantity this band is.
    *
    * On a DAG the reversed set is empty and stays empty, which is the
    * pattern-generator case and the one this region is sharp on.
