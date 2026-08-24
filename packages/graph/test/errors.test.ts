@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ContainmentCycleError,
   CycleError,
   DagrGraphError,
   DuplicateEdgeError,
@@ -20,7 +21,7 @@ import { PatchListenerError } from '../src/patch.js';
 /**
  * The base class is abstract, so a test that wants a bare family member has to
  * declare one. Nothing in the package ships a class like this: every real
- * error is one of the eleven below.
+ * error is one of the twelve below.
  */
 class TestGraphError extends DagrGraphError {
   readonly code = 'INVALID_ID';
@@ -160,6 +161,37 @@ describe('PortDirectionError', () => {
   });
 });
 
+describe('ContainmentCycleError', () => {
+  it('carries the CONTAINMENT_CYCLE code and the chain that closes', () => {
+    const error = new ContainmentCycleError(['c', 'p']);
+    expect(error).toBeInstanceOf(DagrGraphError);
+    expect(error).toBeInstanceOf(ContainmentCycleError);
+    expect(error.name).toBe('ContainmentCycleError');
+    expect(error.code).toBe('CONTAINMENT_CYCLE');
+    expect(error.chain).toEqual(['c', 'p']);
+    expect(error.message).toBe('Containment cycle: c -> p -> c');
+  });
+
+  /**
+   * The endpoint is listed once, the way {@link CycleError} lists it, so a node
+   * proposed as its own parent is one entry rather than two.
+   */
+  it('reads as a closed loop on a chain of one', () => {
+    expect(new ContainmentCycleError(['a']).message).toBe('Containment cycle: a -> a');
+  });
+
+  /**
+   * Two classes rather than one, because the two relations are different and a
+   * caller catching one has no way to ask which it got. An edge cycle is a fact
+   * the graph stores and the caller may want to break for themselves; a
+   * containment cycle is a call the graph refused.
+   */
+  it('is not a CycleError', () => {
+    expect(new ContainmentCycleError(['a'])).not.toBeInstanceOf(CycleError);
+    expect(new CycleError(['a'])).not.toBeInstanceOf(ContainmentCycleError);
+  });
+});
+
 describe('InvalidGraphJSONError', () => {
   it('carries the INVALID_GRAPH_JSON code and the path of the offending field', () => {
     const error = new InvalidGraphJSONError('nodes[3].ports[1].direction', 'a port direction');
@@ -212,7 +244,7 @@ describe('isDagrGraphError', () => {
   });
 
   /**
-   * The predicate narrows to a closed union of the eleven concrete classes, so
+   * The predicate narrows to a closed union of the twelve concrete classes, so
    * an `instanceof` test against the exported base is not enough on its own: a
    * further subclass with a code of its own would pass it and be narrowed to a
    * union it is not in, and an exhaustive-looking switch would then read a
@@ -255,6 +287,8 @@ describe('isDagrGraphError', () => {
           return `${error.direction} as ${error.end}`;
         case 'CYCLE':
           return error.cycle.join('->');
+        case 'CONTAINMENT_CYCLE':
+          return error.chain.join('>');
         case 'INVALID_GRAPH_JSON':
           return error.path;
         default: {
@@ -282,6 +316,7 @@ describe('isDagrGraphError', () => {
       'e1,e2',
       'in as source',
       'a->b',
+      'c>p',
       'nodes[0].id',
     ]);
   });
@@ -300,6 +335,7 @@ function everyError(): DagrGraphErrorLike[] {
     new PortInUseError('a', 'out', ['e1', 'e2']),
     new PortDirectionError('a', 'sink', 'in', 'source'),
     new CycleError(['a', 'b']),
+    new ContainmentCycleError(['c', 'p']),
     new InvalidGraphJSONError('nodes[0].id', 'a string'),
   ];
 }
@@ -342,6 +378,8 @@ describe('error catching', () => {
           return 'port direction';
         case 'CYCLE':
           return 'cycle';
+        case 'CONTAINMENT_CYCLE':
+          return 'containment cycle';
         case 'INVALID_GRAPH_JSON':
           return 'invalid graph json';
         default: {
@@ -363,6 +401,7 @@ describe('error catching', () => {
       'port in use',
       'port direction',
       'cycle',
+      'containment cycle',
       'invalid graph json',
     ]);
   });
