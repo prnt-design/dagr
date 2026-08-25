@@ -1,6 +1,7 @@
 import type { NodeId } from '@dagr/graph';
 import { acyclicView, longestPathRanks } from './acyclic.js';
 import type { AcyclicView } from './acyclic.js';
+import { authored } from './authorship.js';
 import { splitLongEdges } from './chains.js';
 import { feedbackArcSet } from './cycles.js';
 import { InternalLayoutError, InvalidConfigError } from './errors.js';
@@ -932,7 +933,7 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
 export function networkSimplexRank(options?: NetworkSimplexOptions): RankStage {
   const budget = resolveBudget(options?.maxIterations);
   const hint = options?.initialRanks;
-  return {
+  return authored({
     name: 'network-simplex-rank',
     run(input) {
       const { graph } = input;
@@ -960,7 +961,7 @@ export function networkSimplexRank(options?: NetworkSimplexOptions): RankStage {
       if (split === undefined) return { ranks, reversedEdges };
       return { ranks, reversedEdges, ...split };
     },
-  };
+  });
 }
 
 /**

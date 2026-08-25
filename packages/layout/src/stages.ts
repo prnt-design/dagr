@@ -1,4 +1,5 @@
 import type { NodeId } from '@dagr/graph';
+import { authored } from './authorship.js';
 import { InternalLayoutError } from './errors.js';
 import { barycenterOrderStage } from './order.js';
 import { longestPathRankStage } from './rank.js';
@@ -93,7 +94,7 @@ function requireRank(ranks: ReadonlyMap<NodeId, number>, id: NodeId): number {
  * record the position stage reads, so this stage has no way to disturb the
  * graph, the config, the ranks or the sizes it was handed.
  */
-export const insertionOrderStage: OrderStage = {
+export const insertionOrderStage: OrderStage = authored({
   name: 'insertion-order',
   run(input) {
     const byRank = new Map<number, NodeId[]>();
@@ -109,7 +110,7 @@ export const insertionOrderStage: OrderStage = {
       .map(([, layer]) => layer);
     return { layers };
   },
-};
+});
 
 /**
  * Lays each layer out as a row, left to right, centred on `x = 0`, and stacks
@@ -146,7 +147,7 @@ export const insertionOrderStage: OrderStage = {
  * It returns the positions and nothing else, and the runner merges them into
  * the record the route stage reads.
  */
-export const gridPositionStage: PositionStage = {
+export const gridPositionStage: PositionStage = authored({
   name: 'grid-position',
   run(input) {
     const { nodeSep, rankSep } = input.config;
@@ -171,7 +172,7 @@ export const gridPositionStage: PositionStage = {
     }
     return { positions };
   },
-};
+});
 
 /**
  * The stage set a run uses for any phase the caller does not override. Frozen,

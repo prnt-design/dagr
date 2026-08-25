@@ -410,7 +410,7 @@ const CORPUS_CEILINGS: Record<PatchKind, { readonly escaped: number; readonly vi
     'remove-edge': { escaped: 0, violations: 0 },
     // The one kind that was inside its bound on every graph in the corpus
     // before M3.6 as well, and it is the one that changes no rank and no
-    // barycenter: a wider node re-centres its own row and nothing else. M3.9's
+    // barycenter: a wider node re-centres its own row and nothing else. M3.9b's
     // attribute fast path is written over exactly this case.
     resize: { escaped: 0, violations: 0 },
   };

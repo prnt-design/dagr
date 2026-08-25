@@ -1,4 +1,5 @@
 import type { EdgeId, NodeId } from '@dagr/graph';
+import { authored } from './authorship.js';
 import { InternalLayoutError } from './errors.js';
 import type { Point, RouteStage, Size } from './types.js';
 
@@ -206,7 +207,7 @@ function attachment(centre: Point, size: Size, toward: Point, other: Point): Poi
  * {@link LayoutResult} from them and from the graph, so a router states the
  * polyline and never the identity of what it routed.
  */
-export const polylineRouteStage: RouteStage = {
+export const polylineRouteStage: RouteStage = authored({
   name: 'polyline-route',
   run(input) {
     const routes = new Map<EdgeId, readonly Point[]>();
@@ -230,4 +231,4 @@ export const polylineRouteStage: RouteStage = {
     }
     return { routes };
   },
-};
+});

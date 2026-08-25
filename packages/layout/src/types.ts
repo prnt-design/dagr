@@ -632,6 +632,17 @@ export interface LayoutStages {
 }
 
 /**
+ * What one phase of the pipeline is called, as a value.
+ *
+ * Derived from {@link LayoutStages} rather than written out beside it, so a
+ * fifth phase is one edit and not two that can disagree. M3.9's
+ * `RelayoutResult.ran` is what needs it: a relayout that skipped work has to
+ * say which work it skipped, and the four keys are already the names of the
+ * four phases.
+ */
+export type LayoutStageName = keyof LayoutStages;
+
+/**
  * The stage overrides {@link layout} accepts: any subset of the four, with the
  * rest falling back to `defaultStages`.
  *

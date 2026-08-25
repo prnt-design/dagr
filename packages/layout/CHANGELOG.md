@@ -243,9 +243,60 @@ of doc prose.
   RETAINS THE STATE AND THE PATCH CROSSES, because the state is proportional to
   the drawing (a 4k-node graph carries 233k dummies) and the patch is
   proportional to the edit. It needs a session on the worker side, which is
-  M2.10's wire protocol reopened, and it lands with M3.9.
+  M2.10's wire protocol reopened, and it lands with M3.9b.
 
 ### Added
+
+- **A relayout that changes nothing the pipeline reads now runs no stage at
+  all,** and a fifth field on `RelayoutResult` says so: `ran`, the stages this
+  relayout ran in pipeline order, empty when it ran none. (M3.9a)
+
+  **What "changes nothing the pipeline reads" is.** A run is a function of the
+  nodes and edges, the resolved config, the resolved sizes, and the warm-start
+  state. The config is bound at construction and a patch cannot reach it, and a
+  skipped relayout leaves the warm state alone, so a patch that adds and removes
+  no node and no edge and moves no size is a patch a run cannot see. Seven of
+  the eleven op kinds qualify by kind: ports, edge attributes, graph attributes
+  and containment are read by no stage here. Node attributes are read, but only
+  through `nodeSize`, so an attribute op is settled by comparing the sizes it
+  produced. A batch carrying one structural op is structural, since the ops are
+  one emission.
+
+  **What it costs, on the 10k corpus.** An inert relayout is 1.955ms against
+  3,317ms for a full one, 1,697x, which is the three orders of magnitude the
+  M3.9 entry predicted. On the 1k corpus it is 0.348ms against 189ms, 545x,
+  which is two: the prediction is true on the corpus the milestone states its
+  targets on and one order high on the other.
+
+  **The 1.955ms is a walk of the roster and nothing else.** Sizing every node is
+  1.161ms of it and comparing every size is 0.414ms; classifying the ops is
+  0.0005ms. Sizing stays total rather than being narrowed to the nodes the patch
+  names, because `measureNodes` promises a `nodeSize` callback one call per node
+  per run and a caller whose sizes come from the DOM rather than from the attrs
+  depends on it.
+
+  **No region is computed, and that is the saving that makes the budget.** A run
+  that skips every stage needs no bound on what a stage may touch: the exact
+  region is the empty one, and this is the first patch kind that has one.
+  `influenceRegion` on this corpus is 33.255ms, two frames on its own, so a fast
+  path that computed its own bound could not meet a frame budget however many
+  stages it skipped. `influence` is empty for the same reason and it is the
+  first time either set has been narrower than the roster.
+
+  **It is refused for a stage this package did not write.** The claim "no stage
+  reads a port" is a fact about the stages in this package rather than a rule
+  the pipeline imposes, and a caller's own router reading ports is the case
+  `influenceRegion` says ports are named for. A skip taken against such a stage
+  is a wrong drawing returned in silence, so the stages are checked by identity:
+  everything this package builds is marked at its construction site, factories
+  included, so `networkSimplexRank({ maxIterations })` keeps the fast path and a
+  hand-written stage does not.
+
+  **It is refused after a run served by a worker,** which is the one arrangement
+  where the drawing the engine holds was made by stages this side cannot name:
+  "the stages are this side's, and the config is not" is the worker protocol in
+  one sentence. An engine that has run here since keeps the fast path, and its
+  inert patches never reach `postMessage`.
 
 - `influenceRegion({ graph, patch, previous, sizes, rankWindow })`, the bound on
   what a patch can affect, and a fourth field on `RelayoutResult` carrying it:

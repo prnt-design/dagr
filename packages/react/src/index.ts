@@ -34,7 +34,7 @@
  *   re-sets; nothing tweens, and adding a tween here would be M4.7 built in the
  *   wrong package.
  * - No worker. See `use-dagr.ts`: the `Worker` has to be the caller's, and
- *   M3.9 owns the worker-side session that makes a per-edit round trip worth
+ *   M3.9b owns the worker-side session that makes a per-edit round trip worth
  *   taking.
  * - No node ontology. What a node looks like is a callback, and it stays one.
  *   Deciding that a node of kind X draws as a hexagon is M6's, and M6 was
