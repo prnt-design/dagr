@@ -3881,7 +3881,7 @@ it.
   their own; AND THE WORKER SESSION, unchanged and undiminished by this half.
   Read the original entry's own reasoning below, which is M3.9b's and is
   reproduced rather than summarised.
-  Merged in PR #PRNUM.
+  Merged in PR #66.
 - [ ] **M3.9b** (`@dagr/layout`) Fast paths that do work: add-leaf, remove-leaf
   and size-changing attribute patches skip pipeline stages rather than all of
   them. An attribute patch that changes a node's size is a
