@@ -172,13 +172,13 @@ export interface LayoutEngineOptions {
  * What a relayout produced: the drawing, what changed to get there, and what it
  * was entitled to change.
  *
- * Four fields rather than a bare delta because a consumer needs them and can
+ * Five fields rather than a bare delta because a consumer needs them and can
  * derive none of them from the others. A renderer holding the previous result
  * applies the `delta`; one that has just been mounted, or that dropped a frame,
  * takes the `result` whole; M3.4's `stabilityViolations` is written against the
- * `influence` set; and `region` is the bound M3.5 added beside it, which is what
+ * `influence` set; `region` is the bound M3.5 added beside it, which is what
  * the stages after it are confined to and what `influence` becomes once they
- * are.
+ * are; and `ran` is M3.9's, the stages this relayout actually ran.
  */
 export interface RelayoutResult {
   /**
@@ -203,7 +203,15 @@ export interface RelayoutResult {
   /** What changed between the last reported geometry and this one. */
   readonly delta: LayoutDelta;
 
-  /** What this relayout was entitled to move. See {@link InfluenceSet}. */
+  /**
+   * What this relayout was entitled to move. See {@link InfluenceSet}.
+   *
+   * The whole roster for a relayout that ran the pipeline, because a cold sweep
+   * is entitled to reorder a rank the patch never came near. EMPTY for one that
+   * ran no stage, which is M3.9a's fast path and the first time this field has
+   * been narrower than the roster: it is exact rather than tightened, since a
+   * run that did not happen moved nothing. See {@link ran}.
+   */
   readonly influence: InfluenceSet;
 
   /**
@@ -477,17 +485,21 @@ export interface LayoutEngine {
    * pipeline runs again. That is what makes the delta contract, the engine
    * lifetime and the retained state testable before any incremental algorithm
    * exists, and it gives M3.6 through M3.9 a correct baseline to be measured
-   * against rather than nothing. The patch is read for two things today: whether
-   * it happened, and what it can affect, which is the `region` on the result.
-   * NOTHING YET CONFINES THE WORK TO THAT REGION, AND M3.7b IS THE FIRST TASK
-   * THAT PARTLY DOES, which is measurable in the meantime. M3.6 confined the
-   * ANSWER without confining the work: the order stage holds the previous run's
-   * permutation, so a relayout costs what a cold run costs and lands inside the
-   * region anyway. M3.7b confined one stage's sweep to the ranks a patch
-   * actually moved, and measured what that is worth at half a percent of the
-   * rank stage, because the stage's cost is the dummy chains it re-mints and not
-   * the sweep it now skips. So the work is still a cold run's for every reading
-   * a caller can take, and M3.8 and M3.9 are still what change that.
+   * against rather than nothing. The patch is read for three things today:
+   * whether it happened, whether it needs a run at all, and what it can affect,
+   * which is the `region` on the result.
+   * NOTHING YET CONFINES THE WORK OF A RUN TO THAT REGION, AND M3.7b IS THE
+   * FIRST TASK THAT PARTLY DOES. M3.6 confined the ANSWER without confining the
+   * work: the order stage holds the previous run's permutation, so a relayout
+   * costs what a cold run costs and lands inside the region anyway. M3.7b
+   * confined one stage's sweep to the ranks a patch actually moved, and measured
+   * what that is worth at half a percent of the rank stage, because the stage's
+   * cost is the dummy chains it re-mints and not the sweep it now skips. So a
+   * run that happens is still a cold run's work for every reading a caller can
+   * take, and M3.8b and M3.9b are still what change that. M3.9a is the first
+   * thing here that costs LESS, and it does it by not running rather than by
+   * running less: a patch that changes nothing the pipeline reads is answered
+   * from the drawing already in hand. See {@link RelayoutResult.ran}.
    *
    * The delta is measured against the geometry this engine last REPORTED rather
    * than against its last computed run, which is what makes a nonzero
@@ -506,7 +518,7 @@ export interface LayoutEngine {
    * {@link relayout}, in the bound worker, or on this thread when there is none.
    *
    * The call a consumer who adopted `runAsync` for a large graph reaches for,
-   * and it answers with the same four fields the synchronous one does. Rejects
+   * and it answers with the same five fields the synchronous one does. Rejects
    * rather than throws, for every failure, on the same argument `runAsync`
    * makes.
    *
@@ -868,7 +880,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
   };
 
   /**
-   * The four fields a relayout answers with, from the run it just did, given
+   * The five fields a relayout answers with, from the run it just did, given
    * the region computed before it.
    *
    * The reported geometry is the previous reported geometry with this delta
