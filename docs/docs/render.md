@@ -337,11 +337,12 @@ HANDLE and never by SLOT.** Freeing a slot moves the last live instance into it,
 which keeps live slots contiguous and keeps one draw call covering them with no
 holes and no per-slot liveness test. The cost is that a slot index is not durable
 across any removal, and the failure is silent: the slot stays a perfectly valid
-index, it merely belongs to a different instance now. Spring state (M4.6, M4.7)
-is keyed by handle for that reason, and a handle is never reused, so a handle
-held past its instance's removal raises `UnknownInstanceHandleError` rather than
-addressing whatever took its place. M4.8a's picking ids are keyed one layer
-further out again, by the caller's own node id, which is the same invariant with
+index, it merely belongs to a different instance now. A handle is never reused,
+so a handle held past its instance's removal raises `UnknownInstanceHandleError`
+rather than addressing whatever took its place. Spring state was the predicted
+first consumer of that and is not one: M4.7a keys a node's spring by the
+caller's own node id, one layer further out again, which is where M4.8a's
+picking ids also went, which is the same invariant with
 room to spare: the id survives even a shape change, which reallocates a
 handle.
 
@@ -934,8 +935,9 @@ There is no render loop. Frames happen when the caller asks for one. A
 `requestAnimationFrame` loop would wake the GPU sixty times a second to redraw
 an unchanged frame. M4.6 shipped the springs without adding one, and that is
 deliberate: a spring step is a pure function of a delta, so the loop belongs to
-whoever owns the clock. M4.7, which drives springs from layout deltas, is where
-this package needs an opinion about starting and stopping one. Do coalesce, though: an input handler
+whoever owns the clock. M4.7a keeps that: `createNodeMotion` takes the elapsed
+seconds and answers whether anything is still moving, so the opinion about
+starting and stopping a loop is M4.7b's, with the frame budget it implies. Do coalesce, though: an input handler
 that calls `render()` synchronously runs at the event rate rather than the
 display rate, and a trackpad fling dispatches wheel events faster than the
 screen refreshes. The campaign demo schedules one frame per `requestAnimationFrame`
@@ -1470,6 +1472,107 @@ want this curve for interaction animation with no graph in it, and if that turns
 out to be a package rather than an import, the split is a file that travels
 unchanged rather than code that has to be rewritten.
 
+## Deltas drive the springs, and the state is the renderer's
+
+M4.6 shipped the arithmetic. **M4.7a is what holds it between two frames:**
+`createNodeMotion` keeps one spring per node, retargets the springs a
+`LayoutDelta` names, and hands back the frame to draw.
+
+```ts
+import { createNodeMotion } from '@dagr/render';
+import { diffLayout } from '@dagr/layout';
+
+const motion = createNodeMotion({ halfLifeSeconds: 0.12 });
+
+// World centres, y up: the same conversion `setNodes` already asks for.
+const worldOf = (node) => ({
+  id: node.id,
+  center: { x: node.x + node.width / 2, y: -(node.y + node.height / 2) },
+});
+
+motion.resync([...first.nodes.values()].map(worldOf));
+
+function onRelayout(previous, next) {
+  const delta = diffLayout(previous, next);
+  motion.apply({
+    added: delta.nodes.added.map(worldOf),
+    removed: [...delta.nodes.removed],
+    moved: delta.nodes.moved.map((move) => worldOf({ id: move.id, ...move.to })),
+  });
+}
+
+function frame(nowMs) {
+  const { nodes, settled } = motion.advance((nowMs - previousMs) / 1000);
+  previousMs = nowMs;
+  renderer.setNodes(nodes.map(draw));
+  renderer.render();
+  if (!settled) requestAnimationFrame(frame);
+}
+```
+
+**The renderer holds its own scene state, because the alternative is not
+available.** The ROADMAP's M4.7 entry asks whether the renderer applies deltas
+to state it keeps or is handed the full `LayoutResult` alongside each delta. A
+spring's position and velocity are in no `LayoutResult`: a layout says where a
+node belongs, and this is about where it currently is on the way there. So the
+renderer is already stateful and the real question is narrower, whether it keeps
+a second copy of the layout's answer too. It keeps one target per node and
+nothing else: no sizes, no shapes, no routes, no bounds.
+
+**A delta that does not describe the scene is a throw, not an adoption.** One
+dropped or reordered delta and the picture is wrong with nothing in the system
+able to notice, and the observable symptoms are exactly three: a move naming a
+node the motion has never seen, an add naming one it already holds, a removal of
+something that is not there. Each is a `MotionDesyncError`, code
+`MOTION_DESYNC`. Adopting instead is available, because a `moved` entry carries
+a whole target, and it is the worse half of both choices. `resync` is the way
+back and it takes the roster whole; it is also how a scene is seeded before any
+delta exists. Applying a delta is all or nothing, so the scene a refusal leaves
+behind is the one the caller resyncs from.
+
+**A removed node leaves when its spring finishes, not when the delta lands.**
+Until then it is in the frame with `departing: true`, so a caller can fade it,
+shrink it, or just keep drawing it. A node removed while already at rest is gone
+on the next frame, because its spring has finished. A node re-added while still
+departing is a departure cancelled rather than a node arriving: it keeps where
+it is and where it was going.
+
+**Retargeting mid-flight moves nothing on the frame it arrives.** The target is
+a parameter of the equation and the state is the position and the velocity, so a
+second delta interrupting the first cannot move the drawing. `MotionTarget`
+deliberately carries no `from`, which is the field `LayoutDelta` has: a delta's
+`from` is where the LAYOUT last put the node, and a spring caught mid-flight is
+not there. Using it would undo the interruption this is for.
+
+**When it settles, the drawing is the layout's answer exactly.** A spring's
+approach is exponential and never arrives, so arrival is a tolerance:
+`restEpsilon`, in world units, which are CSS pixels at zoom 1. Reaching it snaps
+the node onto its target and zeroes its velocity, which is one discontinuity per
+arrival, bounded by the tolerance and taken at the moment of least motion. The
+alternative, stopping wherever the tolerance was met, leaves a residual that is
+bounded and permanent, and the visible form of that is not one node in the wrong
+place: it is a rank of nodes a layout aligned that stop a hundredth of a unit
+apart, which reads as ragged at a glance where a single node does not. `settled`
+is true only once every spring is exactly on target, so advancing a settled
+scene again returns the same frame to every bit and a caller can stop asking for
+one.
+
+**The floor is the frame, not the springs.** A settled scene costs a per-frame
+pass over every node even though it does no spring arithmetic at all, because
+the frame it hands back is the whole scene and that is what `setNodes` takes.
+Measured on ten thousand nodes, one node moving costs about the same per frame
+as none moving, and all ten thousand moving costs about ten times that. So
+absent-means-unchanged buys the arithmetic and not the frame: a delta is
+proportional to the change, a frame is proportional to the scene. Whether that
+floor is worth removing is M4.10's to measure against a real GPU.
+
+**Edges are M4.7b, and the seam is about kind rather than convenience.** A node
+moves as a point, so one two-axis spring is the whole of it. An edge is a
+polyline whose vertex count changes between two routes, because a long edge
+gaining a rank to cross gains a bend, and there is nothing to retarget until
+something decides what corresponds to what. The bounds change and the loop that
+drives both are M4.7b's too.
+
 ## Picking, decided and half built
 
 Hit testing a graph of ten thousand nodes by walking a list is the work the GPU
@@ -1534,10 +1637,12 @@ family, and nothing that moves.
 
 - A real animation loop. M4.6 shipped the springs and deliberately did not
   start one, because the clock belongs to whoever owns the frame; the demo
-  already coalesces its own. M4.7 is where the renderer drives them.
-- Consuming `LayoutDelta` from `@dagr/layout`'s incremental path, which is the
-  point of the whole exercise: untouched nodes stay still and touched ones
-  animate (M4.7). This is the single M4 task that genuinely waits on M3.
+  already coalesces its own. M4.7a still does not start one, and it does add
+  the `settled` a loop needs to stop. M4.7b is where the renderer drives it.
+- The edge half of the delta consumer, the bounds change, and the loop over
+  both (M4.7b). The node half landed at M4.7a and is
+  [two sections up](#deltas-drive-the-springs-and-the-state-is-the-renderers).
+  M4.7 is the M4 task that genuinely waits on M3, and both halves do.
 - The pass half of GPU picking: a material writing the bytes above, an
   offscreen target, the readback and a `pick()` on `Renderer` (M4.8b). What
   a pixel says and which node an id still means are decided and tested; see

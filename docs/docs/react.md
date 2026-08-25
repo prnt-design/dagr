@@ -245,8 +245,8 @@ holds the renderer and calls `setEdgeStyle` on it.
   picking pass of M4.8 underneath rather than a hit test invented here against
   a scene array.
 - **Animation.** The spring integrator is M4.6 and the delta consumer that
-  drives it from a `LayoutDelta` is M4.7. `<DagrCanvas>` re-lays out and
-  re-sets; nothing tweens yet.
+  drives it from a `LayoutDelta`'s node lists is M4.7a. `<DagrCanvas>` re-lays
+  out and re-sets; nothing tweens yet.
 - **A node ontology.** What a node looks like is a callback and it stays one.
   Deciding that a node of kind X draws as a hexagon belongs to the
   [visual-language toolkit](./visual-languages.md), which is scoped precisely so
