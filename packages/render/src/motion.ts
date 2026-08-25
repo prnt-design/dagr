@@ -89,7 +89,15 @@ export interface NodeMotionDelta {
   readonly moved: readonly MotionTarget[];
 }
 
-/** One node as it should be drawn this frame. */
+/**
+ * One node as it should be drawn this frame.
+ *
+ * READ IT, USE IT, DO NOT MUTATE IT. `center` is this module's own point, not a
+ * copy taken for the caller: a moving node's is fresh out of `stepSpring2D`
+ * every frame, and a settled node's is the same object every frame. Copying per
+ * node per frame would double the allocation that is already this module's
+ * whole floor, for a hazard the `readonly` on the field describes.
+ */
 export interface MotionNode {
   readonly id: string;
   /** Where the spring has got to, in world units, y up. */
@@ -225,6 +233,20 @@ type Presence = 'absent' | 'live' | 'departing';
 
 const AT_REST = { x: 0, y: 0 };
 
+/**
+ * A copy of a caller's point, taken at the boundary.
+ *
+ * Nothing here retains an object a caller passed in. A caller pooling one
+ * record per node across frames, which is the shape an allocation-conscious
+ * consumer takes, would otherwise be mutating this module's targets from
+ * outside and the drawing would follow a value nobody set. One allocation per
+ * CHANGED node is proportional to the delta, which is the budget this module
+ * already works in.
+ */
+function copyOf(point: Vec2): Vec2 {
+  return { x: point.x, y: point.y };
+}
+
 /** Rejects a target whose centre is not two finite numbers, naming the field. */
 function requireTarget(target: MotionTarget, field: string): MotionTarget {
   requireFinite(target.center.x, `${field}.center.x`);
@@ -290,16 +312,17 @@ export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
     for (const target of targets) {
       const existing = entries.get(target.id);
       if (existing === undefined) {
+        const centre = copyOf(target.center);
         kept.set(target.id, {
-          spring: { position: target.center, velocity: AT_REST },
-          target: target.center,
+          spring: { position: centre, velocity: AT_REST },
+          target: centre,
           departing: false,
           moving: false,
         });
         continue;
       }
       existing.departing = false;
-      retarget(existing, target.center);
+      retarget(existing, copyOf(target.center));
       kept.set(target.id, existing);
     }
     entries.clear();
@@ -324,7 +347,7 @@ export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
     for (const [index, id] of delta.removed.entries()) {
       const where = presence(id);
       if (where !== 'live') {
-        throw new MotionDesyncError(id, `removed[${String(index)}]`, 'removed', where);
+        throw new MotionDesyncError(id, `removed[${String(index)}]`, where);
       }
       planned.set(id, { kind: 'depart' });
     }
@@ -333,11 +356,11 @@ export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
       requireTarget(target, field);
       const where = presence(target.id);
       if (where === 'live') {
-        throw new MotionDesyncError(target.id, field, 'added', where);
+        throw new MotionDesyncError(target.id, field, where);
       }
       planned.set(target.id, {
         kind: where === 'departing' ? 'revive' : 'arrive',
-        target: target.center,
+        target: copyOf(target.center),
       });
     }
     for (const [index, target] of delta.moved.entries()) {
@@ -345,9 +368,15 @@ export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
       requireTarget(target, field);
       const where = presence(target.id);
       if (where !== 'live') {
-        throw new MotionDesyncError(target.id, field, 'moved', where);
+        throw new MotionDesyncError(target.id, field, where);
       }
-      planned.set(target.id, { kind: 'retarget', target: target.center });
+      // A retarget of something this same delta added or revived is still that
+      // add or that revival, at the later target. Overwriting the kind would
+      // drop an arrival on the floor, since nothing exists yet for a retarget
+      // to find, and would leave a revived node still marked departing.
+      const prior = planned.get(target.id)?.kind;
+      const kind = prior === 'arrive' || prior === 'revive' ? prior : 'retarget';
+      planned.set(target.id, { kind, target: copyOf(target.center) });
     }
 
     for (const [id, intent] of planned) {
@@ -396,7 +425,10 @@ export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
           // which reads as ragged at a glance where a single node does not.
           // The price is one discontinuity per arrival, bounded by
           // `restEpsilon` and taken at the moment of least motion.
-          entry.spring = { position: entry.target, velocity: AT_REST };
+          // A copy of the target rather than the target itself, so the point
+          // this hands back in a frame is never the point the next retarget
+          // compares against.
+          entry.spring = { position: copyOf(entry.target), velocity: AT_REST };
           entry.moving = false;
         } else {
           entry.spring = stepped;

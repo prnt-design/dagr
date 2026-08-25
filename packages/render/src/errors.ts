@@ -304,13 +304,13 @@ export class MotionDesyncError extends DagrRenderError {
 
   /**
    * @param id The node the delta named.
-   * @param field Where in the delta it was, as `moved[3]`.
-   * @param list Which list it was in, for the sentence.
+   * @param field Where in the delta it was, as `moved[3]`, which names the list
+   *   as well as the position in it.
    * @param presence What the motion holds for that id instead.
    */
-  constructor(id: string, field: string, list: 'added' | 'removed' | 'moved', presence: string) {
+  constructor(id: string, field: string, presence: string) {
     super(
-      `delta ${field} ${list} node ${JSON.stringify(id)}, which this scene has as ${presence}: ` +
+      `delta ${field} names node ${JSON.stringify(id)}, which this scene has as ${presence}: ` +
         'the deltas and the drawing disagree, so resync() with the whole roster',
     );
     this.name = 'MotionDesyncError';

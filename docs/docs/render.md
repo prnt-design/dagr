@@ -1334,8 +1334,10 @@ wide a ribbon is and no rule for which wins.
 
 M4.6 added the motion arithmetic: `stepSpring`, `stepSpring2D`,
 `omegaForHalfLife`, and two constants of the envelope the last of those reads.
-Nothing in it touches a GPU, a canvas or three.js, and nothing in the renderer
-calls it. It is exported because a caller drives the clock.
+Nothing in it touches a GPU, a canvas or three.js, and no `Renderer` method
+calls it. It is exported because a caller drives the clock, and M4.7a's node
+motion, [two sections down](#deltas-drive-the-springs-and-the-state-is-the-renderers),
+is the first thing in this package to call it on a caller's behalf.
 
 A spring here is **critically damped**, which is the fastest approach to a
 target that does not oscillate around it. The damping ratio is fixed at 1 by

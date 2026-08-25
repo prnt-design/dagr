@@ -15,12 +15,12 @@ import { omegaForHalfLife, stepSpring2D } from '../src/spring.js';
  * assertions about a specific frame rather than about a rendered result that
  * happened to look right.
  *
- * Two helpers carry most of the weight. {@link centre} reads one node out of a
- * frame by id and fails loudly when it is missing, because "the node is not in
- * the frame" and "the node is at the wrong place" are different failures and a
+ * {@link centre} carries most of the weight: it reads one node out of a frame by
+ * id and fails loudly when it is missing, because "the node is not in the
+ * frame" and "the node is at the wrong place" are different failures and a
  * `?.center.x` would report the first as `undefined` inside an arithmetic
- * comparison. {@link runTo} steps a fixed number of equal frames, which is what
- * a caller's loop does and is also the only way to ask when something settles.
+ * comparison. Where a test needs to know when something settles it steps equal
+ * frames until `settled`, with a bound, which is what a caller's loop does.
  */
 
 const HALF_LIFE = 0.12;
@@ -501,6 +501,53 @@ describe('createNodeMotion', () => {
       motion.resync([at('n0', 1, 1), at('n2', 2, 2)]);
       expect(() => motion.apply(converted)).not.toThrow();
       expect(ids(motion.advance(0).nodes)).toEqual(['n1', 'n2']);
+    });
+
+    it('keeps an add an add when the same delta also moves it', () => {
+      const motion = createNodeMotion();
+      motion.resync([at('a', 0, 0)]);
+
+      // Hand-built rather than diffed: `diffLayout` cannot put one node in both
+      // lists. The plan for the id has to stay an ARRIVAL at the later target,
+      // because nothing exists yet for a retarget to find and dropping it would
+      // be a node missing from the drawing with nothing raised.
+      motion.apply(delta({ added: [at('late', 1, 1)], moved: [at('late', 9, 9)] }));
+      const frame = motion.advance(0);
+      expect(centre(frame.nodes, 'late')).toEqual({ x: 9, y: 9 });
+      expect(frame.settled).toBe(true);
+    });
+
+    it('keeps a revival a revival when the same delta also moves it', () => {
+      const motion = createNodeMotion({ halfLifeSeconds: HALF_LIFE });
+      motion.resync([at('a', 0, 0), at('back', 0, 0)]);
+      motion.apply(delta({ moved: [at('back', 700, 0)] }));
+      motion.advance(1 / 60);
+      motion.apply(delta({ removed: ['back'] }));
+      const leaving = centre(motion.advance(1 / 60).nodes, 'back');
+
+      motion.apply(delta({ added: [at('back', 700, 0)], moved: [at('back', 20, 0)] }));
+      const revived = motion.advance(0).nodes.find((node) => node.id === 'back');
+
+      // Overwriting the revival with a plain retarget would retarget the spring
+      // and leave the node still marked departing, so it would animate to the
+      // right place and then vanish.
+      expect(revived?.departing).toBe(false);
+      expect(revived?.center).toEqual(leaving);
+    });
+
+    it('does not retain the point a caller handed it', () => {
+      const motion = createNodeMotion();
+      const mutable = { id: 'a', center: { x: 10, y: 10 } };
+      motion.resync([mutable]);
+      // A caller pooling one record per node across frames is an ordinary
+      // optimisation, and it must not be able to move this module's target.
+      (mutable.center as { x: number; y: number }).x = 9999;
+      expect(centre(motion.advance(0).nodes, 'a')).toEqual({ x: 10, y: 10 });
+
+      const added = { id: 'b', center: { x: 1, y: 2 } };
+      motion.apply(delta({ added: [added] }));
+      (added.center as { x: number; y: number }).y = -777;
+      expect(centre(motion.advance(0).nodes, 'b')).toEqual({ x: 1, y: 2 });
     });
 
     it('catches a duplicate add and a duplicate removal for free', () => {
