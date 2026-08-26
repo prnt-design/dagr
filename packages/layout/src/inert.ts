@@ -102,6 +102,8 @@ export function movesNothing(patch: Patch): boolean {
  * The sizes are compared component by component rather than by identity,
  * because `measureNodes` builds a fresh map and a fresh record per run: an
  * identity comparison would answer no every time and the fast path would never
+ * fire.
+ *
  * The two counts are compared first, which is redundant for a patch
  * {@link movesNothing} accepted and is a free guard for a caller who mutated
  * the graph without emitting a patch for it. It guards NODES AND NOT EDGES, and
