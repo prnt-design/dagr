@@ -14,6 +14,47 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- `createNodeMotion`, the node half of the delta consumer: one spring per node,
+  retargeted by a `LayoutDelta`'s node lists, stepped by a clock the caller
+  owns. Eight new names on the surface: the factory, `MotionDesyncError` with
+  code `MOTION_DESYNC`, the two defaults `DEFAULT_MOTION_HALF_LIFE` and
+  `DEFAULT_MOTION_REST`, and the types `NodeMotion`, `NodeMotionDelta`,
+  `NodeMotionOptions`, `MotionTarget`, `MotionNode` and `MotionFrame`. (M4.7a)
+
+  **NOTHING EXISTING BEHAVES DIFFERENTLY.** M4.6's `stepSpring2D` is unchanged
+  and this calls it; `setNodes` is unchanged and this produces what a caller
+  builds its argument from. There is still no render loop in this package.
+
+  **IT TAKES CENTRES, NOT A `LayoutDelta`.** `MotionTarget` is an id and a
+  world-space centre, y up, which is the conversion `setNodes` already asks a
+  caller for. `@dagr/layout` is not a dependency of this package and the y flip
+  belongs to whoever owns the layout, which `camera.ts` has said since M4.1.
+
+  **A DELTA THAT DOES NOT DESCRIBE THE SCENE THROWS.** A move naming an unknown
+  node, an add naming a known one, a removal of something absent: each is a
+  `MotionDesyncError` rather than a silent adoption, and applying a delta is all
+  or nothing so a refusal leaves the scene untouched. `resync(targets)` takes
+  the roster whole and is the way back, and is also how a scene is seeded.
+
+  **ARRIVAL IS EXACT, WHICH IS A BEHAVIOUR AND NOT A TYPE.** A spring within
+  `restEpsilon` of its target, at a speed below `restEpsilon` times `w`, is
+  snapped onto the target with its velocity zeroed. The discontinuity is bounded
+  by the tolerance and taken at the moment of least motion, and what it buys is
+  that a settled scene advanced again returns the same frame to every bit, so a
+  caller's loop can stop. Stopping at the tolerance instead would leave a
+  residual that is permanent, and the visible form of that is a rank of nodes a
+  layout aligned that stop a hundredth of a unit apart.
+
+  **A REMOVED NODE LEAVES WHEN ITS SPRING FINISHES.** Until then it is in the
+  frame with `departing: true`. One removed while already at rest is gone on the
+  next frame. One re-added while still departing keeps where it is and where it
+  was going, because a re-add of something still on screen is a departure
+  cancelled and not a node arriving.
+
+  **EDGES, THE BOUNDS CHANGE AND THE LOOP ARE M4.7b.** A node moves as a point;
+  an edge is a polyline whose vertex count changes between two routes, so there
+  is nothing to retarget until something decides what corresponds to what.
+
 - `backend` on `RendererOptions` and `backend` on `Renderer`: which of three's
   two backends to draw through, and which one you got. `'auto'` (the default)
   takes WebGPU where the machine has it and WebGL2 where it does not; naming

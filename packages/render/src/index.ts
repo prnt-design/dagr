@@ -72,12 +72,25 @@
  * here and touch no GPU at all.** {@link stepSpring} and
  * {@link stepSpring2D} are a critically damped integrator in closed form, and
  * they are exported rather than internal because motion is a feature a caller
- * drives: M4.7 will run them over `LayoutDelta`s, and `@dagr/react` in M5 wants
+ * drives: M4.7a runs them over `LayoutDelta`s, and `@dagr/react` in M5 wants
  * the same curve for interaction animation that has no graph in it at all. The
  * module imports nothing from this package but the `Vec2` type and the shared
  * validators, so the day a second consumer makes a package of it, the move is a
  * file rather than a rewrite. Its whole surface is five names and two records
  * of numbers, and nothing in it needs a device to be tested.
+ *
+ * **M4.7a is the first thing here that remembers a frame.** {@link createNodeMotion}
+ * holds one spring per node and retargets them from a `LayoutDelta`'s node
+ * lists, which is the state a caller cannot supply: a `LayoutResult` says where
+ * a node belongs and a spring is about where it currently is on the way there.
+ * It is exported for the same reason the springs are, and it still owns no
+ * clock. Two things it deliberately does not take are a `LayoutResult` and a
+ * `LayoutDelta`: {@link MotionTarget} is a world-space centre, so the y flip
+ * stays with whoever owns the layout exactly as `setNodes` already requires,
+ * and `@dagr/layout` stays out of this package's dependencies. Edges, the
+ * bounds change and the loop that drives both are M4.7b's, on a seam that is
+ * about kind rather than convenience: a node moves as a point, and an edge is a
+ * polyline whose vertex count changes between two routes.
  *
  * **M4.9a is the first thing this package says about the machine it is running
  * on.** `createRenderer` takes a `backend` preference and every renderer reports
@@ -109,6 +122,7 @@ export type { Camera2DInit } from './camera.js';
 export {
   BackendUnavailableError,
   DagrRenderError,
+  MotionDesyncError,
   OverlayDisposedError,
   OverlayParentError,
   PickIdSpaceExhaustedError,
@@ -124,6 +138,19 @@ export {
 } from './html-overlay.js';
 export type { HtmlOverlay, HtmlOverlayOptions, OverlayEntry, OverlayEntryInit } from './html-overlay.js';
 export { measureHtmlSizes } from './measure-html.js';
+export {
+  DEFAULT_MOTION_HALF_LIFE,
+  DEFAULT_MOTION_REST,
+  createNodeMotion,
+} from './motion.js';
+export type {
+  MotionFrame,
+  MotionNode,
+  MotionTarget,
+  NodeMotion,
+  NodeMotionDelta,
+  NodeMotionOptions,
+} from './motion.js';
 export type { MeasureItem, MeasureOptions } from './measure-html.js';
 export { CENTRE_ANCHOR } from './overlay-math.js';
 export type { ElementAnchor, OverlayPlacement } from './overlay-math.js';

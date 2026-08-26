@@ -2462,7 +2462,7 @@ it.
   cheaply: the delta's exact shape. Four questions, none of them obvious.
   Absent or flagged: an unchanged node does not appear at all, or appears with
   an unchanged marker. Absent keeps the delta proportional to the change, which
-  is the whole point, and is what M4.7's spring consumer wants (nothing to
+  is the whole point, and is what M4.7a's spring consumer wants (nothing to
   animate). Flagged makes a delta self-describing, so a consumer can rebuild a
   scene from one delta without holding the previous result.
   Arrays or keyed records: `{ moved: Array<{ id, from, to }> }` against
@@ -2484,7 +2484,7 @@ it.
   because this task owns the epsilon: a threshold on a diff is not transitive.
   Fifty patches each moving a node by 0.9 epsilon each report nothing and leave
   a consumer's scene 45 epsilon out of position, with nothing in the system
-  able to notice, which is M4.7's desynchronisation failure arriving from the
+  able to notice, which is M4.7a's desynchronisation failure arriving from the
   delta layer instead of from a dropped delta. So the diff has to compare
   against the last REPORTED geometry rather than the last computed geometry,
   which means the engine retains a reported-geometry snapshot distinct from its
@@ -2550,7 +2550,7 @@ it.
   `applyDelta` IS EXPORTED, and it is the reason the absent-means-unchanged
   choice is safe rather than merely cheap: what a delta MEANS is that round trip,
   so the meaning ships as code a consumer can check itself against rather than
-  only as a paragraph. M4.7 applies deltas to a scene rather than to a result and
+  only as a paragraph. M4.7a applies deltas to a scene rather than to a result and
   cannot call it, but it can be tested against it. The one thing it does not
   reproduce is ITERATION ORDER: the maps hold what survived in the previous
   result's order with the additions appended, because the next result's order is
@@ -2799,7 +2799,7 @@ it.
   states that are not meaningful graphs. Building "add node, add edge, add
   edge" as three patches means relayouting a graph containing a disconnected
   singleton, which gets ranked and positioned somewhere arbitrary, emits a
-  delta, then corrects itself twice. By M4.7 those are three spring retargets,
+  delta, then corrects itself twice. By M4.7a those are three spring retargets,
   so a user watches a node fly in from the wrong place and then move twice more
   on every multi-step edit, and a pattern generator emits multi-step edits
   constantly. That reframes what batching is: not a coalescing optimisation but
@@ -2896,8 +2896,8 @@ it.
   and the polylines between them different on every patch. So the set has to
   include a per-edge route metric (summed or Hausdorff distance between the
   previous and current polyline) and bend-count churn. Same shape of
-  computation, and it is what M4.5's ribbons and M4.7's springs are actually
-  judged by.
+  computation, and it is what M4.5's ribbons and M4.7b's edge motion are
+  actually judged by.
   Decide here: is stability a contract or a metric? A contract is a hard
   assertion, that a node outside a patch's influence set keeps its coordinate
   exactly and violating it fails the build, which is the strongest form of the
@@ -4002,8 +4002,9 @@ takes the early M4 tasks. M4.4 and M4.5 want real coordinates and routes
 respectively and need nothing from M2 or M3; M4.8a needs nothing at all, since
 it is arithmetic and a map, and M4.9a is done with M4.9b needing a machine
 rather than a task. M4.10 wants a real 10k-node
-layout, so it trails M2.9. M4.7 is the single M4 task that genuinely blocks on
-M3, because it consumes `LayoutDelta` from M3.1. So M3 leads M4 in dependency
+layout, so it trails M2.9. M4.7 is the M4 task that genuinely blocks on
+M3, because it consumes `LayoutDelta` from M3.1, and both halves of it do after
+the split. So M3 leads M4 in dependency
 order at exactly one join, and treating the whole of M4 as blocked on the whole
 of M3 would leave the second runner idle for a milestone.
 
@@ -4190,12 +4191,16 @@ of M3 would leave the second runner idle for a milestone.
   gain the map does not already provide.
   State this invariant, because the rest of the package relies on it and
   swap-with-last corrupts slot-keyed data silently, without an error, since the
-  slot stays valid and merely belongs to a different node: per-instance spring
-  state (M4.6, M4.7) is keyed by handle, never by slot, and slot indices are not
-  durable across any removal. M4.8a settled its own half of that prediction
-  differently and in the same direction: a picking id is keyed by the caller's
-  own node id, one layer further out again, which survives even the shape change
-  a handle cannot. Testable in the pure
+  slot stays valid and merely belongs to a different node: per-instance state is
+  keyed by handle, never by slot, and slot indices are not durable across any
+  removal. THIS ENTRY PREDICTED SPRING STATE (M4.6, M4.7) WOULD BE THAT STATE
+  AND BOTH HALVES OF THE PREDICTION HAVE NOW MISSED, in the same direction and
+  for the same reason. M4.8a's picking id is keyed by the caller's own node id,
+  one layer further out again, which survives even the shape change a handle
+  cannot; and M4.7a's springs are keyed by that same id, because where a node
+  is on its way somewhere is a fact about the node and not about the slot it is
+  drawn from. So the invariant is correct and is still unpaid for by anything
+  shipped: its consumers are now M4.7b's per-edge state and M4.8b's pick pass. Testable in the pure
   module: remove an instance, assert every surviving handle still resolves, and
   assert no test helper can observe a slot index across the removal.
   Decide here instead, carried from M4.2: whether the package uses one material
@@ -4762,30 +4767,161 @@ of M3 would leave the second runner idle for a milestone.
   **WHAT IS DELIBERATELY NOT HERE.** No animation loop, because a spring step is
   a pure function of a delta and the clock belongs to whoever owns the frame;
   `render.md` already said M4.6 was the task that should start one and now says
-  M4.7 is. No settled predicate, because the consumer that needs "this spring
-  has finished" is M4.7's removal case and it does not exist yet, and a
-  tolerance pair invented before its caller is a guess. No damping ratio, since
+  M4.7b is. No settled predicate, because the consumer that needs "this spring
+  has finished" is M4.7a's removal case and it does not exist yet, and a
+  tolerance pair invented before its caller is a guess.
+  M4.7a SETTLED THAT LAST ONE AND THE WORD "PAIR" WAS THE WRONG HALF OF IT. The
+  caller did arrive and it did need a predicate, and it needed ONE number rather
+  than two: an arrival distance in world units, with the speed threshold DERIVED
+  as that distance times `w`, because `w` is the only inverse time in the system
+  and so the tolerance has exactly one speed scale. Two knobs in different units
+  would be two numbers a caller has to keep consistent to express one opinion,
+  and the pair that drifts out of step is a scene that reports itself settled
+  while still visibly moving. Waiting was still right: the derivation is
+  obvious only once something is holding the state the predicate is about. No damping ratio, since
   a ratio a caller can set to 1.0001 is a ratio a caller can set to 1.0001 by
   accident, and an under-damped spring needs a second closed form rather than a
   second argument.
-- [ ] **M4.7** (`@dagr/render`) Delta consumer: the renderer takes M3.1's
-  `LayoutDelta`s and drives node and edge motion through M4.6's springs,
-  interruptible when a new delta arrives mid-flight. Integration test with a
-  fake clock: a delta retargets, a second delta mid-flight retargets again
-  without a jump, and a node named in a removal disappears only once its spring
-  has finished rather than the instant the delta lands. This is the one M4 task
-  that genuinely blocks on M3.
-  Decide here: does the renderer hold its own scene state and apply deltas to
-  it, or is it handed the full `LayoutResult` alongside each delta? Applying
-  deltas is the cheap path and the reason the delta type exists at all, and it
-  makes the renderer stateful and desynchronisable: one dropped or reordered
-  delta and the picture is wrong with nothing in the system able to notice.
-  Decide what happens when a delta names a node the renderer has never seen,
-  since that is the observable symptom of the failure, and whether there is a
-  resync path (accept a full result and rebuild) or the contract is simply that
-  deltas are never dropped. Note this interacts with M3.1's absent-or-flagged
-  question: a self-describing delta makes resync trivial and every delta
-  larger.
+- [x] **M4.7a** (`@dagr/render`) Delta consumer, the node half: one spring per
+  node, retargeted by M3.1's node lists, interruptible when a new delta arrives
+  mid-flight. Integration test with a fake clock: a delta retargets, a second
+  delta mid-flight retargets again without a jump, and a node named in a removal
+  disappears only once its spring has finished rather than the instant the delta
+  lands.
+  SPLIT OUT OF M4.7 BY THE RUN THAT SHIPPED IT, the sixth split in the project
+  after M3.7, M3.8, M3.9, M4.8 and M4.9, and the seam is about KIND rather than
+  about this box, which M4.8's and M4.9's were. A node moves as a point, so one
+  two-axis spring is the whole of it and the hard part is the bookkeeping
+  between two deltas. An edge is a polyline whose VERTEX COUNT CHANGES between
+  two routes, because a long edge gaining a rank to cross gains a bend, and
+  `delta.ts` says in as many words that no per-point comparison catches it:
+  there is nothing to retarget until something decides what corresponds to what.
+  Those are two problems that happen to arrive in one entry, and the second one
+  is a resampling decision rather than a state machine.
+  **THE SCENE-STATE QUESTION THIS ENTRY ASKS HAS AN ANSWER RATHER THAN A
+  PREFERENCE, AND THE ENTRY ASKED IT ONE STEP TOO LATE.** It offers a choice
+  between the renderer applying deltas to state it keeps and the renderer being
+  handed the full `LayoutResult` alongside each delta. The second is not
+  available: a spring's POSITION AND VELOCITY are in no `LayoutResult`, because
+  a layout says where a node belongs and a spring is about where it currently is
+  on the way there. So the renderer is stateful either way and the real question
+  is narrower, whether it keeps a second copy of the LAYOUT's answer too. It
+  keeps one target per node, which is the smallest thing a spring needs, and
+  nothing else: no sizes, no shapes, no routes, no bounds. GENERALISE IT: when
+  an entry offers stateful or stateless, check first whether the stateless
+  option can represent what the feature is about.
+  **THE DESYNCHRONISATION IS PAID FOR LOUDLY, AND THE THREE SYMPTOMS ARE THE
+  WHOLE OF IT.** A move naming a node never seen, an add naming one already
+  held, a removal of something not there. Each throws `MotionDesyncError`, code
+  `MOTION_DESYNC`, naming the id and the list position. Adopting instead is
+  available and is the worse half of both choices, because a `moved` entry
+  carries a whole target so a consumer CAN take it, and taking it turns one
+  dropped delta into a drawing that is silently wrong about every node that
+  delta named. This is the polarity rule again, one milestone after M3.9a stated
+  it for a skip: the unknown arm is the expensive one. `resync(targets)` is the
+  way back and is also how a scene is seeded, so the resync path costs one
+  method rather than a mode.
+  **APPLYING A DELTA IS ALL OR NOTHING, AND THE REASON IS THE RESYNC.** Every id
+  is checked against the scene before anything is mutated, using an overlay
+  keyed by the ids the DELTA names, so the check stays proportional to the
+  change. A half-applied delta would be the worst outcome available: the
+  caller's signal to resync arrives having already moved the thing they would
+  resync from. Two of the three checks come free from the overlay, since a
+  duplicate add and a duplicate removal inside one delta hit their own first
+  entry.
+  **THE DELTA'S `from` IS THE FIELD THIS CONSUMER MUST NOT USE.** `MovedNode`
+  carries `from` and `to`, and `from` is where the LAYOUT last put the node. A
+  spring caught mid-flight is not there, so starting the new spring from it
+  would undo the interruptibility that is the point of the task. `MotionTarget`
+  therefore carries a centre and an id and nothing else. STATE IT GENERALLY: a
+  record of what changed describes two states of the MODEL, and a consumer
+  animating between them has a third state of its own that neither field names.
+  **WHEN IT SETTLES THE DRAWING IS THE LAYOUT'S ANSWER EXACTLY, AND THE REASON
+  IS ALIGNMENT RATHER THAN ACCURACY.** An exponential approach never arrives, so
+  arrival is a tolerance, and the obvious thing to do at the tolerance is stop.
+  That leaves a residual that is BOUNDED AND PERMANENT, and the visible form of
+  a permanent residual is not one node in the wrong place: it is a rank of nodes
+  a layered layout aligned that stop a hundredth of a unit apart, which reads as
+  ragged at a glance where a single node does not. So arrival SNAPS the node onto
+  its target and zeroes its velocity. The price is one discontinuity per
+  arrival, bounded by the tolerance and taken at the moment of least motion, and
+  what it buys is that `settled` means advancing again by any elapsed time
+  returns the same frame to every bit.
+  **ONE TOLERANCE, NOT THE PAIR M4.6's ENTRY PREDICTED.** M4.6 declined a
+  settled predicate on the grounds that a tolerance pair invented before its
+  caller is a guess. The caller arrived and needed one number: an arrival
+  distance in world units, with the speed threshold DERIVED as that distance
+  times `w`, since `w` is the only inverse time in the system and the tolerance
+  therefore has exactly one speed scale. Two knobs in different units would be
+  two numbers a caller must keep consistent to express one opinion, and the pair
+  that drifts apart is a scene reporting itself settled while still visibly
+  moving. The test is per axis rather than by distance, because `stepSpring2D`
+  is two independent scalar springs and not one spring in the plane.
+  **KEYED BY THE CALLER'S OWN NODE ID, WHICH MISSES A PREDICTION THREE PLACES
+  MADE.** `instance-buffer.ts`, `scene-nodes.ts` and M4.3's entry all say
+  per-instance spring state is keyed by HANDLE, and it is not: `motion.ts` never
+  sees a handle, because where a node is on its way somewhere is a fact about
+  the node rather than about the slot it is drawn from. That is one layer
+  further out, exactly where M4.8a's picking ids went for a different reason,
+  and all three places are corrected in place. The handle invariant is still
+  correct and is STILL UNPAID FOR by anything shipped; its consumers are now
+  M4.7b's per-edge state and M4.8b's pick pass.
+  **A RESIZE IS A MOVE THAT NEEDS NO MOTION, AND THAT FALLS OUT RATHER THAN
+  BEING HANDLED.** `MovedNode`'s `from` and `to` are whole boxes, so a node that
+  only grew is in `moved`. A consumer keyed on the centre retargets a spring to
+  where it already is, the arrival test passes on the same frame, and `settled`
+  stays true: the correct amount of animation for a resize is none, and no arm
+  in this module says so. Sizes themselves are not animated here and are the
+  caller's, which is M4.7b's to revisit.
+  **A DEPARTURE IS A STATE AND A RESYNC IS NOT.** A removed node keeps its
+  spring and its target, stays in the frame with `departing: true` until it
+  arrives, and is gone on the frame after. One removed while already at rest is
+  gone on the next frame, because its spring has finished. One re-added while
+  still departing is a departure CANCELLED rather than a node arriving, so it
+  keeps where it is and where it was going. `resync` does none of that: it drops
+  what it does not name with no departure at all, because a delta describes a
+  CHANGE and so has a moment to animate from, while a roster describes a STATE
+  and has none.
+  **MEASURED ON THIS BOX, AND THE FLOOR IS THE FRAME RATHER THAN THE SPRINGS.**
+  A settled scene of 10,000 nodes costs 0.20 to 0.34ms per `advance`, doing no
+  spring arithmetic at all: that is the ten thousand records and the array it
+  returns. One node moving in that scene costs 0.195 to 0.230ms, which is the
+  same number. All ten thousand moving costs 2.1 to 4.1ms, so the springs are
+  about ten times the floor and about an eighth of a 60fps frame. Applying a
+  delta of one against 10,000 nodes is under 0.002ms. On 1,000: 0.023 to 0.029
+  settled, 0.21 to 0.29 all moving. SO ABSENT-MEANS-UNCHANGED BUYS THE
+  ARITHMETIC AND NOT THE FRAME. A delta is proportional to the change and a
+  frame is proportional to the scene, because `setNodes` takes the whole scene
+  and this hands back the whole scene to build it from. Whether that floor is
+  worth removing is M4.10's to measure against a GPU rather than this task's to
+  guess at, and the lever if it is, is handing back only what moved.
+  **ON NO BENCHED PATH**, like the springs, `@dagr/react`, the rest of
+  `@dagr/render` and `@dagr/vdsl` before it: `motion.ts` appears in no file
+  under any `bench/` directory, and one grep says so. The numbers above are a
+  throwaway under vitest, deleted before staging.
+- [ ] **M4.7b** (`@dagr/render`, `apps/demo`) Delta consumer, the rest: edge
+  motion, the bounds change, and the loop that drives both. This is the half
+  M4.7a's seam left, and it inherits the entry's remaining questions.
+  **THE EDGE PROBLEM IS RESAMPLING AND NOT SPRINGING.** `ReroutedEdge` carries
+  `from` and `to` polylines whose lengths differ whenever a long edge gains or
+  loses a rank to cross, so before any spring exists there has to be a
+  correspondence between the two point lists. Decide it here: resample both to a
+  common count, spring the control points of a curve rather than the polyline,
+  or animate the endpoints and re-route instantly. Note M3.4's entry already
+  says a per-edge route metric is what M4.5's ribbons and this task are actually
+  judged by, so whatever is chosen has a measurement waiting for it.
+  **THE LOOP IS THIS TASK'S, AND M4.7a HANDED IT THE PREDICATE IT NEEDS.**
+  `render.md` has said since M4.6 that this package needs an opinion about
+  starting and stopping a `requestAnimationFrame`; `MotionFrame.settled` is the
+  stopping half of that and nothing yet owns the starting half. The demo already
+  coalesces its own frame, so the opinion has to be compatible with a caller
+  who has one.
+  **THE SIZES ARE STILL THE CALLER'S, AND M4.7a MEASURED WHY THAT IS NOT FREE.**
+  A resize arrives through `moved` and produces no motion, so a label that grew
+  snaps to its new width while its node glides. Decide whether the size springs
+  too, which doubles the per-node state, and note the frame floor M4.7a
+  measured before adding to it: a settled scene of 10,000 already costs 0.2 to
+  0.3ms per frame in records this module allocates and nothing else.
 - [x] **M4.8a** (`@dagr/render`) The id a pick pixel carries: the encoding, the
   pixel a pointer is asking about, and the registry that says which node an id
   still means. Unit tests for ID encode and decode: round-trip across the full

@@ -16,10 +16,17 @@ import type { GpuResource, Size, Vec2 } from './types.js';
  * SURVIVES nodes being added and removed, so a node present in two consecutive
  * calls keeps its buffer slot's data rather than being freed and reallocated.
  *
- * Why that matters before anything animates: M4.6's springs and M4.7's delta
- * consumer key their state by handle, and a node that kept its id but got a new
- * handle would lose its velocity and jump. The property is worth having now,
- * while it costs a `Map` and a diff, rather than after something depends on it.
+ * Why that matters before anything animates: per-instance state is keyed by
+ * handle and never by slot (`instance-buffer.ts` states it), and a node that
+ * kept its id but got a new handle would lose whatever was on that instance.
+ * M4.7a SETTLED THE PREDICTION THIS LINE USED TO MAKE IN THE OTHER DIRECTION.
+ * It named the springs as the consumer, and `motion.ts` holds one spring per
+ * CALLER ID and never sees a handle at all, which is where M4.8a's picking ids
+ * had already gone one task earlier: the drawing's own velocity is not
+ * per-instance state, because it is about a node rather than about the slot a
+ * node is drawn from. What the mapping below still buys is everything that does
+ * live on an instance, which is M4.7b's edge state and M4.8b's pick pass, and
+ * it costs a `Map` and a diff either way.
  *
  * **No three.js type appears in anything this file exports**, which is the rule
  * `types.ts` sets. {@link SceneNode} is plain numbers and two string unions, so

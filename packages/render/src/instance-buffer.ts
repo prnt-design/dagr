@@ -21,11 +21,12 @@ import { requireIntegerAtLeast } from './validate.js';
  * covers them with no holes and no per-slot liveness test. The handle-to-slot
  * map is what makes that survivable, and the indirection's supposed cost does
  * not survive inspection: per-frame rendering iterates slots on the GPU and
- * never consults the map, the per-frame spring pass (M4.7) iterates spring
- * state which is keyed by handle anyway, and the map is touched once per
- * CHANGED entry when a delta is applied, which is O(size of delta). Leaving
- * holes and compacting on a threshold is the alternative, and it wastes buffer
- * space and draw work for nothing the map does not already provide.
+ * never consults the map, the per-frame spring pass (M4.7a) iterates spring
+ * state keyed by the caller's own id and never consults it either, and the map
+ * is touched once per CHANGED entry when a delta is applied, which is O(size of
+ * delta). Leaving holes and compacting on a threshold is the alternative, and
+ * it wastes buffer space and draw work for nothing the map does not already
+ * provide.
  *
  * What swap-with-last costs, stated because a consumer has to know it: SLOT
  * ORDER IS NOT DURABLE, so anything a renderer derives from it is not either.
@@ -39,15 +40,16 @@ import { requireIntegerAtLeast } from './validate.js';
  * State this loudly, because the rest of the package relies on it and
  * swap-with-last corrupts slot-keyed data SILENTLY, without an error: the slot
  * stays a perfectly valid index, it merely belongs to a different instance now.
- * Per-instance spring state (M4.7) is keyed by handle. M4.6 shipped the spring
- * arithmetic itself as a pure function holding no state at all, which is why
- * this invariant only starts costing anything at M4.7. M4.8a's picking ids go
- * one layer further out and are keyed by the caller's own node id, which is
- * this invariant satisfied with room to spare: the id survives even a shape
- * change, which reallocates the handle. Slot indices are not durable across
- * ANY removal, and
- * {@link InstanceBuffer.slotOf} is a question with an answer that expires: read
- * it, use it, do not store it.
+ * Spring state was this invariant's predicted first consumer and turned out not
+ * to be one: M4.6 shipped the arithmetic as a pure function holding no state,
+ * and M4.7a's `motion.ts` holds the state a caller drives keyed by the CALLER'S
+ * OWN NODE ID, one layer further out, exactly where M4.8a's picking ids went.
+ * That layer is this invariant satisfied with room to spare, since an id
+ * survives even a shape change, which reallocates the handle. So the invariant
+ * is still unpaid for by anything shipped, and the consumers now named for it
+ * are M4.7b's per-edge state and M4.8b's pick pass. Slot indices are not
+ * durable across ANY removal, and {@link InstanceBuffer.slotOf} is a question
+ * with an answer that expires: read it, use it, do not store it.
  *
  * `test/instance-buffer.test.ts` asserts both halves. Every surviving handle
  * still resolves after a removal, and a slot index captured before one is shown

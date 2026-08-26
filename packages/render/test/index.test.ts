@@ -44,12 +44,21 @@ describe('@dagr/render', () => {
     // backend decision puts on the surface: the choice is made through an
     // option and read back off a property, both of which are types and
     // therefore erased, so an error is all there is left to count.
+    //
+    // M4.7a added the node motion and the error it throws: the springs above
+    // are arithmetic a caller drives, and this is the STATE between two deltas,
+    // which is the part a caller cannot supply. The two defaults are exported
+    // beside `createNodeMotion` so a caller tuning one can say "half the
+    // default" and a test can assert against the number the module used.
     expect(Object.keys(api).sort()).toEqual([
       'BackendUnavailableError',
       'CENTRE_ANCHOR',
       'Camera2D',
+      'DEFAULT_MOTION_HALF_LIFE',
+      'DEFAULT_MOTION_REST',
       'DagrRenderError',
       'HALF_LIFE_OMEGA',
+      'MotionDesyncError',
       'OVERLAY_INV_ZOOM_PROPERTY',
       'OVERLAY_ZOOM_PROPERTY',
       'OverlayDisposedError',
@@ -61,6 +70,7 @@ describe('@dagr/render', () => {
       'UnknownInstanceHandleError',
       'advanceDashFlow',
       'createHtmlOverlay',
+      'createNodeMotion',
       'createRenderer',
       'createRichNodes',
       'fitZoom',

@@ -42,7 +42,8 @@ export type DagrRenderErrorCode =
   | 'UNKNOWN_INSTANCE_HANDLE'
   | 'SCENE_DISPOSED'
   | 'PICK_IDS_EXHAUSTED'
-  | 'BACKEND_UNAVAILABLE';
+  | 'BACKEND_UNAVAILABLE'
+  | 'MOTION_DESYNC';
 
 /** The base every error this package throws extends. */
 export abstract class DagrRenderError extends Error {
@@ -269,5 +270,50 @@ export class BackendUnavailableError extends DagrRenderError {
     this.actual = actual;
     this.name = 'BackendUnavailableError';
     Object.setPrototypeOf(this, BackendUnavailableError.prototype);
+  }
+}
+
+/**
+ * Thrown when a delta describes a scene the node motion does not hold: a move
+ * naming a node it has never seen, an add naming one it already has, or a
+ * removal of something that is not there.
+ *
+ * **This is the failure the M4.7 entry asks to be decided, and the decision is
+ * to be loud.** Applying deltas is the cheap path and the reason the delta type
+ * exists at all, and the price is that the consumer is stateful and
+ * desynchronisable: one dropped or reordered delta and the picture is wrong
+ * with nothing in the system able to notice. The three cases above are the only
+ * observable symptoms of that, so each one is a throw at the delta that caused
+ * it rather than an adoption of whatever it said. Adopting is available and is
+ * the worse half of both choices: a `moved` entry carries a whole target, so a
+ * consumer CAN take it, and doing so turns a dropped delta into a drawing that
+ * is silently wrong about every node the dropped one named.
+ *
+ * Not a `RangeError`, on the rule at the top of this file: nothing here is out
+ * of range. Every id involved is a string the caller wrote, and the failure is
+ * about the state of a conversation between two components rather than about a
+ * value. It is also the case a caller writes a `catch` for, because there IS
+ * something to do about it: `NodeMotion.resync` takes the roster whole and is
+ * the way back.
+ *
+ * The message names the id and the list position, because a delta is a batch
+ * and "some node was missing" sends a reader through all three lists.
+ */
+export class MotionDesyncError extends DagrRenderError {
+  readonly code = 'MOTION_DESYNC';
+
+  /**
+   * @param id The node the delta named.
+   * @param field Where in the delta it was, as `moved[3]`, which names the list
+   *   as well as the position in it.
+   * @param presence What the motion holds for that id instead.
+   */
+  constructor(id: string, field: string, presence: string) {
+    super(
+      `delta ${field} names node ${JSON.stringify(id)}, which this scene has as ${presence}: ` +
+        'the deltas and the drawing disagree, so resync() with the whole roster',
+    );
+    this.name = 'MotionDesyncError';
+    Object.setPrototypeOf(this, MotionDesyncError.prototype);
   }
 }

@@ -89,7 +89,7 @@ export interface EdgeDelta {
  * ABSENT MEANS UNCHANGED. A node that did not move is not in here at all, not
  * even with a marker saying so, which is the decision that makes a delta
  * proportional to the change rather than to the graph. That is the whole point
- * of the type, and it is what M4.7's spring consumer wants: nothing to animate
+ * of the type, and it is what M4.7a's spring consumer wants: nothing to animate
  * is nothing to iterate. The cost is that a delta is not self-describing, so a
  * consumer cannot rebuild a scene from one alone; it needs the result the delta
  * was computed against, which {@link applyDelta} is the reference for. The
@@ -353,7 +353,7 @@ export function isEmptyDelta(delta: LayoutDelta): boolean {
  * bound of `next`, exactly at `epsilon: 0` and to within epsilon otherwise.
  * That round trip is what the delta MEANS, and it lives here as executable code
  * rather than only as a paragraph because a consumer that applies deltas
- * differently from this function has a bug the delta type cannot catch. M4.7's
+ * differently from this function has a bug the delta type cannot catch. M4.7a's
  * renderer applies them to a scene rather than to a result and cannot call
  * this; what it can do is be checked against it.
  *
