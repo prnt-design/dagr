@@ -895,12 +895,25 @@ function tighten(view: AcyclicView, rank: Int32Array, budget: number): void {
  * THERE ARE TWO WARM STARTS HERE AND THEY ARRIVE BY DIFFERENT ROUTES, which is
  * worth knowing before adding a third. `initialRanks` is an OPTION, bound when
  * the stage is constructed, so it is the same hint on every run and an engine
- * cannot refresh it; M3.7b is the task that gives the ranking a per-run one off
- * `previous.ranks`. The cycle breaker's seed is already per-run: this stage
- * hands `feedbackArcSet` the previous run's `reversedEdges` (M3.7a), so the
- * view it ranks stops moving under patches that changed no cycle. Both stages
- * do it, because a splitter that lives in one ranker and not the other is the
- * shape of bug M2.4c already fixed once.
+ * cannot refresh it. `PreparedState.previous.ranks` is the per-run one, added
+ * by M3.7b, and it WINS over the option when both are there for the reason
+ * M3.6's order stage gives: a constant preferred to the run before it is a
+ * frozen answer handed back for the life of the engine. The cycle breaker's
+ * seed is per-run too: this stage hands `feedbackArcSet` the previous run's
+ * `reversedEdges` (M3.7a), so the view it ranks stops moving under patches that
+ * changed no cycle. Both stages do all of it, because a splitter that lives in
+ * one ranker and not the other is the shape of bug M2.4c already fixed once.
+ *
+ * WHAT THE TWO STAGES DO WITH `previous.ranks` IS NOT THE SAME THING, AND THE
+ * DIFFERENCE IS WHY ONLY ONE OF THEM VALIDATES IT. Here it is a FLOOR: the
+ * sweep only ever pushes a node further down, so a hint that put one too high
+ * stays too high, the answer is feasible but longer than it needed to be, and
+ * `floorFrom` therefore drops the three kinds of entry that would do it.
+ * `longestPathRankStage` CHECKS the same map against the view instead and
+ * corrects it in both directions, so its answer is the cold answer whatever it
+ * was handed and it validates nothing. One channel, two stages, two meanings,
+ * and the reason is that this stage is choosing between optima where that one
+ * has only the one.
  *
  * ## Determinism
  *
@@ -925,7 +938,14 @@ export function networkSimplexRank(options?: NetworkSimplexOptions): RankStage {
       const { graph } = input;
       const reversedEdges = feedbackArcSet(graph, input.previous?.reversedEdges);
       const view = acyclicView(graph, reversedEdges);
-      const rank = longestPathRanks(view, floorFrom(hint, view));
+      // THE FRESHEST RANKING WINS, which is M3.6's precedence rule arriving at
+      // the second stage that reads this record, and it is the same argument
+      // there and here: `previous` is the run immediately before this one, and
+      // `initialRanks` is a constant bound when the stage was built, so a stage
+      // that preferred it would choose the same optimum on every relayout for
+      // the life of the engine. That is the churn the channel exists to stop.
+      const warm = input.previous?.ranks ?? hint;
+      const rank = longestPathRanks(view, floorFrom(warm, view));
       tighten(view, rank, budget);
 
       const ranks = new Map<NodeId, number>();

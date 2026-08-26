@@ -840,6 +840,69 @@ enough for two arcs to be more than half of it, holding both copies of a pair
 trips it and the run answers cold. The seed can choose between equally good
 answers and can do nothing else.
 
+### The ranks across a relayout
+
+The other half of what `previous` carries is the previous run's ranks, and as of
+M3.7b both rank stages read them. **They mean different things to the two
+stages**, which is worth knowing before you hand either of them a hint.
+
+To `longestPathRankStage` a previous ranking is a **claim to be checked**. A
+longest-path ranking has exactly one answer per view, so there is nothing for a
+warm start to choose and any answer but the cold one would be wrong. The stage
+checks the ranks it was handed node by node: a node that already sits one below
+its deepest predecessor is right, and if every node is right then the ranking you
+handed over is the answer and there is no sweep at all. Where some nodes are
+wrong, the stage recomputes them and everything below them and leaves the rest of
+the drawing exactly where it was.
+
+Because the seed is checked rather than believed, **you cannot break the answer
+with a bad one**. Ranks from a different graph, ranks naming every node at one
+rank, values a ranking could never produce: all of them give you the ranking a
+cold run would have produced. What a bad seed costs is work.
+
+To `networkSimplexRankStage` the same ranking is a **floor**. That stage
+minimises total edge length, which many different rankings achieve, so which one
+it lands on is genuinely up for grabs and the previous run's answer is how you
+stop it wandering between them on every edit. A floor is only ever pushed
+further down by the sweep that follows it, so a hint that put a node above its
+own predecessor is corrected, and entries that are not usable ranks are dropped
+before it starts. If you construct that stage with an `initialRanks` option and
+an engine also hands it a previous run, the previous run wins: it is the drawing
+you are looking at, and the option is a constant from when the stage was built.
+
+**What incremental ranking saves, and where it does not.** On the 10k benchmark
+corpus the ranking sweep is about **half a percent** of what the rank stage
+costs, and a warm run that finds nothing moved takes about **two thirds** of the
+sweep. Most of the rest of the stage is the dummy chains, which are re-minted on
+every run whether or not a single rank moved. So treat this as a stability and
+bookkeeping change rather than as the thing that makes a relayout cheap; the
+chains are the thing that would. Those are ratios rather than milliseconds on
+purpose: the absolute figures were taken on this repo's own runner and not on
+the machine [What a run costs](#what-a-run-costs) names, so quoting them here
+would put two unrelated numbers for the rank stage on one page. M3.7b's roadmap
+entry has them.
+
+**When it gives up.** Recomputing a region means asking the graph for one node's
+neighbours at a time, which is dearer per node than the whole-view index a cold
+sweep builds in one pass, so it is only cheaper while the region is small. The
+crossover measures at about 7 nodes in 1,000 and 91 in 10,000, and the default
+is the round number just above both: a region wider than **1% of the roster**
+gets a cold sweep instead. Naming the stage is how you move it:
+
+```ts
+import { longestPathRank, longestPathRankStage, layout } from '@dagr/layout';
+
+layout({ graph });
+layout({ graph }, { rank: longestPathRankStage });
+layout({ graph }, { rank: longestPathRank({ maxWarmShare: 0 }) });
+layout({ graph }, { rank: longestPathRank({ maxWarmShare: 1 }) });
+```
+
+The first two lines do the same thing. Zero means "sweep cold whenever anything
+moved" and one means "confine any region however wide", and every setting gives
+you the same ranks. Note that none of this reaches `layout()` itself, which has
+no previous run to be warm from: it is `engine.relayout` that has both.
+
 ### Determinism and cost
 
 Ranking is O(V + E) in time and space, a Kahn-style sweep that visits each node

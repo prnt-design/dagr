@@ -185,8 +185,10 @@ function atFloat(values: Float64Array, index: number): number {
  *
  * `previous` is the reversed set of the run before this one, and handing one in
  * is what makes the answer a statement about the graph rather than about the
- * arithmetic that produced it. M3.7a added it; M3.7b is the ranking task that
- * needs it.
+ * arithmetic that produced it. M3.7a added it, and M3.7b is what needed it: a
+ * warm ranking is seeded from ranks measured over the PREVIOUS view, so a view
+ * that stops moving under patches that changed no cycle is what makes those
+ * ranks worth checking rather than worth throwing away.
  *
  * WHY IT IS NEEDED IS NOT WHAT THE ROADMAP ENTRY SAID, and the correction is
  * worth having here because the entry's reasoning was about a pass this module

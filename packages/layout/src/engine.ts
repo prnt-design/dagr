@@ -410,10 +410,15 @@ export interface LayoutEngine {
    * exists, and it gives M3.6 through M3.9 a correct baseline to be measured
    * against rather than nothing. The patch is read for two things today: whether
    * it happened, and what it can affect, which is the `region` on the result.
-   * Nothing yet confines the WORK to that region, which is what M3.7b onwards are
-   * for and is measurable in the meantime. M3.6 confined the ANSWER without
-   * confining the work: the order stage holds the previous run's permutation, so
-   * a relayout costs what a cold run costs and lands inside the region anyway.
+   * NOTHING YET CONFINES THE WORK TO THAT REGION, AND M3.7b IS THE FIRST TASK
+   * THAT PARTLY DOES, which is measurable in the meantime. M3.6 confined the
+   * ANSWER without confining the work: the order stage holds the previous run's
+   * permutation, so a relayout costs what a cold run costs and lands inside the
+   * region anyway. M3.7b confined one stage's sweep to the ranks a patch
+   * actually moved, and measured what that is worth at half a percent of the
+   * rank stage, because the stage's cost is the dummy chains it re-mints and not
+   * the sweep it now skips. So the work is still a cold run's for every reading
+   * a caller can take, and M3.8 and M3.9 are still what change that.
    *
    * The delta is measured against the geometry this engine last REPORTED rather
    * than against its last computed run, which is what makes a nonzero
