@@ -398,10 +398,10 @@ describe('influence regions across components', () => {
  * says the run respects a wide bound and not that it is confined.
  *
  * The corpus is `randomLayered`, which is the population the crossing suites
- * already run over, at four patch kinds, all batched. It is not M3.10's
- * committed golden corpus and does not want to be: this measures ONE relayout
- * per graph against ONE bound, where M3.10 measures a sequence of them against
- * the stability metrics.
+ * already run over, at four patch kinds, all batched. It is not M3.10a's
+ * committed session corpus and does not want to be: this measures ONE relayout
+ * per graph against ONE bound, where that one measures a session of them
+ * against the stability metrics.
  */
 const CORPUS_CEILINGS: Record<PatchKind, { readonly escaped: number; readonly violations: number }> =
   {

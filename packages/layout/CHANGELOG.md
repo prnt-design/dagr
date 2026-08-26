@@ -1399,6 +1399,34 @@ of doc prose.
 
 ### Notes
 
+- **M3.10a changed no code here, and what landed is the measurement**, the same
+  shape as the M3.3 note below.
+  `test/layout.sequence.golden.test.ts` runs six scripted sessions of edits
+  through the engine, one patch at a time, under three configurations that
+  differ only in what a stage is allowed to have seen: nothing, the previous
+  layering, or everything the pipeline reads a previous run for. The pairs it
+  reaches are committed in `test/sequence-stability.golden.json` and asserted
+  exactly, so a change that degrades stability arrives as a diff.
+
+  **What the warm start costs a consumer, over a session rather than a patch.**
+  Mean crossings rise 3.1% to 13.8% against a cold relayout on four of the five
+  sessions that change the graph, and fall 0.3% on the fifth. Over a single
+  patch M3.6 measured that same trade at no worse than 1.59%, so the cost
+  compounds and the one-patch figure understated it by up to nine times. What it
+  buys is 4.1x to 38.4x less movement per patch, and order churn of exactly zero
+  on every session and every step: two nodes that shared a rank keep their
+  relative order, always. Both halves of that trade are on the docs site's
+  incremental layout page.
+
+  **An edit and its exact undo do not return the drawing to where it started.**
+  A balanced add-and-remove cycle leaves the graph identical, and the cold and
+  warm-order configurations redraw it identically too. The engine does not: at
+  one cycle of eight the held reversed set gains an edge and keeps it, and the
+  ranking that follows mints ten more dummy nodes. That is M3.7a's retention
+  rule working rather than state leaking, it settles rather than ratcheting, and
+  nothing had measured its price before. Nothing is retained for a node the
+  graph no longer holds, which is asserted separately.
+
 - M3.3 changed no code here. `relayout` already took a patch of any length, so
   `graph.batch` from `@dagr/graph` needed nothing widened: a batch arrives as one
   patch and relays out once. What landed in this package is the measurement that

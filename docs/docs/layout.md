@@ -1484,10 +1484,12 @@ cold after one added leaf:
 
 Three of the six are cheaper warm than cold, and the one that pays for the
 constraint pays 1.59%. Over one patch, that is what continuity costs. Over a
-long editing session it is an open question and a real one: a held pair is held
-forever, so a crossing that could be removed by swapping two retained nodes
-stays, and nothing gives it back later. Measuring that needs a sequence rather
-than a single patch, which is what M3.10 is for.
+long editing session it costs more, because a held pair is held forever, so a
+crossing that could be removed by swapping two retained nodes stays and nothing
+gives it back later. Measuring that needs a session rather than a single patch,
+and the numbers are on the [incremental layout](./incremental-layout.md) page:
+between 3.1% and 13.8% in mean crossings across six scripted sessions, for 4.1x
+to 38.4x less movement per patch.
 
 **A hint that names every node freezes the layering**, which is the same rule
 seen from the other side and is what makes a structure-preserving edit exact.

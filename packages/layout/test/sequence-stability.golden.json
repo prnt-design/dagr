@@ -1,0 +1,745 @@
+{
+  "regenerate": "UPDATE_GOLDEN=1 pnpm --filter @dagr/layout test layout.sequence.golden",
+  "regenerateWhen": "Only for a deliberate change to what the pipeline does, and only when you can say what moved and why. A number that changed without an intended cause is something to investigate, not a file to refresh.",
+  "configurations": "One engine with one channel cut. cold: no stage is handed the previous run. warmOrder: the order stage holds to the previous layering and the rank stage starts cold. incremental: every stage that reads a previous run gets one, which on this commit is the cycle breaker and the warm ranking inside the rank stage, and the held layering in the order stage. brandesKoepfPosition also reads one, and defaultStages does not use it, so no column here is drawn by it.",
+  "entries": [
+    {
+      "name": "grow-tall",
+      "kind": "grow",
+      "base": {
+        "name": "grow-tall",
+        "nodeCount": 240,
+        "edgeCount": 620,
+        "layerCount": 18,
+        "seed": 177,
+        "longEdgeShare": 0.25,
+        "backEdgeShare": 0.02
+      },
+      "steps": 16,
+      "width": 2,
+      "seed": 45313,
+      "built": {
+        "baseNodes": 240,
+        "baseEdges": 620,
+        "finalNodes": 272,
+        "finalEdges": 684,
+        "ops": 96
+      },
+      "columns": {
+        "cold": {
+          "finalCrossings": 5853,
+          "meanCrossings": 5009,
+          "meanDisplacement": 502.1,
+          "maxDisplacement": 6000,
+          "movedFraction": 0.85,
+          "rankChurn": 0.13,
+          "orderChurn": 0.26,
+          "reroutedFraction": 0.96
+        },
+        "warmOrder": {
+          "finalCrossings": 6446,
+          "meanCrossings": 5461.65,
+          "meanDisplacement": 103.14,
+          "maxDisplacement": 5019.42,
+          "movedFraction": 0.59,
+          "rankChurn": 0.13,
+          "orderChurn": 0,
+          "reroutedFraction": 0.76
+        },
+        "incremental": {
+          "finalCrossings": 6809,
+          "meanCrossings": 5701,
+          "meanDisplacement": 87.82,
+          "maxDisplacement": 3230.82,
+          "movedFraction": 0.52,
+          "rankChurn": 0.13,
+          "orderChurn": 0,
+          "reroutedFraction": 0.69
+        }
+      },
+      "retained": {
+        "cold": {
+          "first": {
+            "ranks": 1462,
+            "reversedEdges": 3,
+            "virtualNodes": 1222,
+            "virtualChains": 341,
+            "layers": 33,
+            "positions": 1462,
+            "routes": 620,
+            "sizes": 1462
+          },
+          "last": {
+            "ranks": 1917,
+            "reversedEdges": 43,
+            "virtualNodes": 1647,
+            "virtualChains": 383,
+            "layers": 30,
+            "positions": 1917,
+            "routes": 680,
+            "sizes": 1917
+          }
+        },
+        "warmOrder": {
+          "first": {
+            "ranks": 1462,
+            "reversedEdges": 3,
+            "virtualNodes": 1222,
+            "virtualChains": 341,
+            "layers": 33,
+            "positions": 1462,
+            "routes": 620,
+            "sizes": 1462
+          },
+          "last": {
+            "ranks": 1917,
+            "reversedEdges": 43,
+            "virtualNodes": 1647,
+            "virtualChains": 383,
+            "layers": 30,
+            "positions": 1917,
+            "routes": 680,
+            "sizes": 1917
+          }
+        },
+        "incremental": {
+          "first": {
+            "ranks": 1462,
+            "reversedEdges": 3,
+            "virtualNodes": 1222,
+            "virtualChains": 341,
+            "layers": 33,
+            "positions": 1462,
+            "routes": 620,
+            "sizes": 1462
+          },
+          "last": {
+            "ranks": 1728,
+            "reversedEdges": 51,
+            "virtualNodes": 1458,
+            "virtualChains": 371,
+            "layers": 27,
+            "positions": 1728,
+            "routes": 680,
+            "sizes": 1728
+          }
+        }
+      }
+    },
+    {
+      "name": "prune-wide",
+      "kind": "prune",
+      "base": {
+        "name": "prune-wide",
+        "nodeCount": 320,
+        "edgeCount": 900,
+        "layerCount": 8,
+        "seed": 178,
+        "longEdgeShare": 0.1,
+        "backEdgeShare": 0.02
+      },
+      "steps": 16,
+      "width": 2,
+      "seed": 45570,
+      "built": {
+        "baseNodes": 320,
+        "baseEdges": 900,
+        "finalNodes": 288,
+        "finalEdges": 723,
+        "ops": 32
+      },
+      "columns": {
+        "cold": {
+          "finalCrossings": 11743,
+          "meanCrossings": 14682.76,
+          "meanDisplacement": 1644.81,
+          "maxDisplacement": 10425,
+          "movedFraction": 0.96,
+          "rankChurn": 0.01,
+          "orderChurn": 0.44,
+          "reroutedFraction": 1
+        },
+        "warmOrder": {
+          "finalCrossings": 12356,
+          "meanCrossings": 15741.18,
+          "meanDisplacement": 91.22,
+          "maxDisplacement": 4557.24,
+          "movedFraction": 0.63,
+          "rankChurn": 0.01,
+          "orderChurn": 0,
+          "reroutedFraction": 0.83
+        },
+        "incremental": {
+          "finalCrossings": 12308,
+          "meanCrossings": 15577.53,
+          "meanDisplacement": 42.85,
+          "maxDisplacement": 4680.71,
+          "movedFraction": 0.55,
+          "rankChurn": 0,
+          "orderChurn": 0,
+          "reroutedFraction": 0.77
+        }
+      },
+      "retained": {
+        "cold": {
+          "first": {
+            "ranks": 1853,
+            "reversedEdges": 11,
+            "virtualNodes": 1533,
+            "virtualChains": 430,
+            "layers": 17,
+            "positions": 1853,
+            "routes": 900,
+            "sizes": 1853
+          },
+          "last": {
+            "ranks": 1583,
+            "reversedEdges": 9,
+            "virtualNodes": 1293,
+            "virtualChains": 336,
+            "layers": 17,
+            "positions": 1583,
+            "routes": 730,
+            "sizes": 1583
+          }
+        },
+        "warmOrder": {
+          "first": {
+            "ranks": 1853,
+            "reversedEdges": 11,
+            "virtualNodes": 1533,
+            "virtualChains": 430,
+            "layers": 17,
+            "positions": 1853,
+            "routes": 900,
+            "sizes": 1853
+          },
+          "last": {
+            "ranks": 1583,
+            "reversedEdges": 9,
+            "virtualNodes": 1293,
+            "virtualChains": 336,
+            "layers": 17,
+            "positions": 1583,
+            "routes": 730,
+            "sizes": 1583
+          }
+        },
+        "incremental": {
+          "first": {
+            "ranks": 1853,
+            "reversedEdges": 11,
+            "virtualNodes": 1533,
+            "virtualChains": 430,
+            "layers": 17,
+            "positions": 1853,
+            "routes": 900,
+            "sizes": 1853
+          },
+          "last": {
+            "ranks": 1599,
+            "reversedEdges": 10,
+            "virtualNodes": 1309,
+            "virtualChains": 334,
+            "layers": 17,
+            "positions": 1599,
+            "routes": 730,
+            "sizes": 1599
+          }
+        }
+      }
+    },
+    {
+      "name": "rewire-mid",
+      "kind": "rewire",
+      "base": {
+        "name": "rewire-mid",
+        "nodeCount": 260,
+        "edgeCount": 780,
+        "layerCount": 12,
+        "seed": 179,
+        "longEdgeShare": 0.2,
+        "backEdgeShare": 0.04
+      },
+      "steps": 16,
+      "width": 3,
+      "seed": 45827,
+      "built": {
+        "baseNodes": 260,
+        "baseEdges": 780,
+        "finalNodes": 260,
+        "finalEdges": 780,
+        "ops": 96
+      },
+      "columns": {
+        "cold": {
+          "finalCrossings": 13602,
+          "meanCrossings": 11245.47,
+          "meanDisplacement": 1039.79,
+          "maxDisplacement": 6525,
+          "movedFraction": 0.97,
+          "rankChurn": 0.22,
+          "orderChurn": 0.4,
+          "reroutedFraction": 1
+        },
+        "warmOrder": {
+          "finalCrossings": 15980,
+          "meanCrossings": 12975,
+          "meanDisplacement": 224.21,
+          "maxDisplacement": 6157.31,
+          "movedFraction": 0.87,
+          "rankChurn": 0.22,
+          "orderChurn": 0,
+          "reroutedFraction": 0.99
+        },
+        "incremental": {
+          "finalCrossings": 17907,
+          "meanCrossings": 12800.53,
+          "meanDisplacement": 137.06,
+          "maxDisplacement": 5037.75,
+          "movedFraction": 0.73,
+          "rankChurn": 0.15,
+          "orderChurn": 0,
+          "reroutedFraction": 0.91
+        }
+      },
+      "retained": {
+        "cold": {
+          "first": {
+            "ranks": 1811,
+            "reversedEdges": 15,
+            "virtualNodes": 1551,
+            "virtualChains": 415,
+            "layers": 25,
+            "positions": 1811,
+            "routes": 780,
+            "sizes": 1811
+          },
+          "last": {
+            "ranks": 2444,
+            "reversedEdges": 67,
+            "virtualNodes": 2184,
+            "virtualChains": 466,
+            "layers": 25,
+            "positions": 2444,
+            "routes": 780,
+            "sizes": 2444
+          }
+        },
+        "warmOrder": {
+          "first": {
+            "ranks": 1811,
+            "reversedEdges": 15,
+            "virtualNodes": 1551,
+            "virtualChains": 415,
+            "layers": 25,
+            "positions": 1811,
+            "routes": 780,
+            "sizes": 1811
+          },
+          "last": {
+            "ranks": 2444,
+            "reversedEdges": 67,
+            "virtualNodes": 2184,
+            "virtualChains": 466,
+            "layers": 25,
+            "positions": 2444,
+            "routes": 780,
+            "sizes": 2444
+          }
+        },
+        "incremental": {
+          "first": {
+            "ranks": 1811,
+            "reversedEdges": 15,
+            "virtualNodes": 1551,
+            "virtualChains": 415,
+            "layers": 25,
+            "positions": 1811,
+            "routes": 780,
+            "sizes": 1811
+          },
+          "last": {
+            "ranks": 2763,
+            "reversedEdges": 63,
+            "virtualNodes": 2503,
+            "virtualChains": 447,
+            "layers": 26,
+            "positions": 2763,
+            "routes": 780,
+            "sizes": 2763
+          }
+        }
+      }
+    },
+    {
+      "name": "reparent-mid",
+      "kind": "reparent",
+      "base": {
+        "name": "reparent-mid",
+        "nodeCount": 200,
+        "edgeCount": 520,
+        "layerCount": 10,
+        "seed": 180,
+        "longEdgeShare": 0.2,
+        "backEdgeShare": 0.02
+      },
+      "steps": 8,
+      "width": 4,
+      "seed": 46084,
+      "built": {
+        "baseNodes": 200,
+        "baseEdges": 520,
+        "finalNodes": 200,
+        "finalEdges": 520,
+        "ops": 32
+      },
+      "columns": {
+        "cold": {
+          "finalCrossings": 4840,
+          "meanCrossings": 4840,
+          "meanDisplacement": 0,
+          "maxDisplacement": 0,
+          "movedFraction": 0,
+          "rankChurn": 0,
+          "orderChurn": 0,
+          "reroutedFraction": 0
+        },
+        "warmOrder": {
+          "finalCrossings": 4840,
+          "meanCrossings": 4840,
+          "meanDisplacement": 0,
+          "maxDisplacement": 0,
+          "movedFraction": 0,
+          "rankChurn": 0,
+          "orderChurn": 0,
+          "reroutedFraction": 0
+        },
+        "incremental": {
+          "finalCrossings": 4840,
+          "meanCrossings": 4840,
+          "meanDisplacement": 0,
+          "maxDisplacement": 0,
+          "movedFraction": 0,
+          "rankChurn": 0,
+          "orderChurn": 0,
+          "reroutedFraction": 0
+        }
+      },
+      "retained": {
+        "cold": {
+          "first": {
+            "ranks": 1459,
+            "reversedEdges": 0,
+            "virtualNodes": 1259,
+            "virtualChains": 264,
+            "layers": 24,
+            "positions": 1459,
+            "routes": 520,
+            "sizes": 1459
+          },
+          "last": {
+            "ranks": 1459,
+            "reversedEdges": 0,
+            "virtualNodes": 1259,
+            "virtualChains": 264,
+            "layers": 24,
+            "positions": 1459,
+            "routes": 520,
+            "sizes": 1459
+          }
+        },
+        "warmOrder": {
+          "first": {
+            "ranks": 1459,
+            "reversedEdges": 0,
+            "virtualNodes": 1259,
+            "virtualChains": 264,
+            "layers": 24,
+            "positions": 1459,
+            "routes": 520,
+            "sizes": 1459
+          },
+          "last": {
+            "ranks": 1459,
+            "reversedEdges": 0,
+            "virtualNodes": 1259,
+            "virtualChains": 264,
+            "layers": 24,
+            "positions": 1459,
+            "routes": 520,
+            "sizes": 1459
+          }
+        },
+        "incremental": {
+          "first": {
+            "ranks": 1459,
+            "reversedEdges": 0,
+            "virtualNodes": 1259,
+            "virtualChains": 264,
+            "layers": 24,
+            "positions": 1459,
+            "routes": 520,
+            "sizes": 1459
+          },
+          "last": {
+            "ranks": 1459,
+            "reversedEdges": 0,
+            "virtualNodes": 1259,
+            "virtualChains": 264,
+            "layers": 24,
+            "positions": 1459,
+            "routes": 520,
+            "sizes": 1459
+          }
+        }
+      }
+    },
+    {
+      "name": "churn-balanced",
+      "kind": "churn",
+      "base": {
+        "name": "churn-balanced",
+        "nodeCount": 240,
+        "edgeCount": 640,
+        "layerCount": 14,
+        "seed": 181,
+        "longEdgeShare": 0.25,
+        "backEdgeShare": 0.03
+      },
+      "steps": 16,
+      "width": 4,
+      "seed": 46341,
+      "built": {
+        "baseNodes": 240,
+        "baseEdges": 640,
+        "finalNodes": 240,
+        "finalEdges": 640,
+        "ops": 128
+      },
+      "columns": {
+        "cold": {
+          "finalCrossings": 5899,
+          "meanCrossings": 5918.47,
+          "meanDisplacement": 633.9,
+          "maxDisplacement": 4425,
+          "movedFraction": 0.97,
+          "rankChurn": 0.31,
+          "orderChurn": 0.36,
+          "reroutedFraction": 1
+        },
+        "warmOrder": {
+          "finalCrossings": 5926,
+          "meanCrossings": 6178.41,
+          "meanDisplacement": 176.62,
+          "maxDisplacement": 2351.72,
+          "movedFraction": 0.9,
+          "rankChurn": 0.31,
+          "orderChurn": 0,
+          "reroutedFraction": 0.95
+        },
+        "incremental": {
+          "finalCrossings": 5980,
+          "meanCrossings": 6104.35,
+          "meanDisplacement": 153.75,
+          "maxDisplacement": 2205.82,
+          "movedFraction": 0.79,
+          "rankChurn": 0.27,
+          "orderChurn": 0,
+          "reroutedFraction": 0.9
+        }
+      },
+      "retained": {
+        "cold": {
+          "first": {
+            "ranks": 2247,
+            "reversedEdges": 14,
+            "virtualNodes": 2007,
+            "virtualChains": 369,
+            "layers": 35,
+            "positions": 2247,
+            "routes": 640,
+            "sizes": 2247
+          },
+          "last": {
+            "ranks": 2260,
+            "reversedEdges": 16,
+            "virtualNodes": 2016,
+            "virtualChains": 370,
+            "layers": 34,
+            "positions": 2260,
+            "routes": 648,
+            "sizes": 2260
+          }
+        },
+        "warmOrder": {
+          "first": {
+            "ranks": 2247,
+            "reversedEdges": 14,
+            "virtualNodes": 2007,
+            "virtualChains": 369,
+            "layers": 35,
+            "positions": 2247,
+            "routes": 640,
+            "sizes": 2247
+          },
+          "last": {
+            "ranks": 2260,
+            "reversedEdges": 16,
+            "virtualNodes": 2016,
+            "virtualChains": 370,
+            "layers": 34,
+            "positions": 2260,
+            "routes": 648,
+            "sizes": 2260
+          }
+        },
+        "incremental": {
+          "first": {
+            "ranks": 2247,
+            "reversedEdges": 14,
+            "virtualNodes": 2007,
+            "virtualChains": 369,
+            "layers": 35,
+            "positions": 2247,
+            "routes": 640,
+            "sizes": 2247
+          },
+          "last": {
+            "ranks": 2311,
+            "reversedEdges": 17,
+            "virtualNodes": 2067,
+            "virtualChains": 373,
+            "layers": 35,
+            "positions": 2311,
+            "routes": 648,
+            "sizes": 2311
+          }
+        }
+      }
+    },
+    {
+      "name": "pattern-blocks",
+      "kind": "pattern",
+      "base": {
+        "name": "pattern-blocks",
+        "nodeCount": 180,
+        "edgeCount": 460,
+        "layerCount": 12,
+        "seed": 182,
+        "longEdgeShare": 0.3,
+        "backEdgeShare": 0.02
+      },
+      "steps": 12,
+      "width": 3,
+      "seed": 46598,
+      "built": {
+        "baseNodes": 180,
+        "baseEdges": 460,
+        "finalNodes": 228,
+        "finalEdges": 508,
+        "ops": 96
+      },
+      "columns": {
+        "cold": {
+          "finalCrossings": 3668,
+          "meanCrossings": 3523.08,
+          "meanDisplacement": 260.54,
+          "maxDisplacement": 4050,
+          "movedFraction": 0.61,
+          "rankChurn": 0,
+          "orderChurn": 0.2,
+          "reroutedFraction": 0.77
+        },
+        "warmOrder": {
+          "finalCrossings": 3597,
+          "meanCrossings": 3514,
+          "meanDisplacement": 10.31,
+          "maxDisplacement": 225,
+          "movedFraction": 0.08,
+          "rankChurn": 0,
+          "orderChurn": 0,
+          "reroutedFraction": 0.22
+        },
+        "incremental": {
+          "finalCrossings": 3597,
+          "meanCrossings": 3514,
+          "meanDisplacement": 10.31,
+          "maxDisplacement": 225,
+          "movedFraction": 0.08,
+          "rankChurn": 0,
+          "orderChurn": 0,
+          "reroutedFraction": 0.22
+        }
+      },
+      "retained": {
+        "cold": {
+          "first": {
+            "ranks": 1303,
+            "reversedEdges": 5,
+            "virtualNodes": 1123,
+            "virtualChains": 238,
+            "layers": 24,
+            "positions": 1303,
+            "routes": 460,
+            "sizes": 1303
+          },
+          "last": {
+            "ranks": 1347,
+            "reversedEdges": 5,
+            "virtualNodes": 1123,
+            "virtualChains": 238,
+            "layers": 26,
+            "positions": 1347,
+            "routes": 504,
+            "sizes": 1347
+          }
+        },
+        "warmOrder": {
+          "first": {
+            "ranks": 1303,
+            "reversedEdges": 5,
+            "virtualNodes": 1123,
+            "virtualChains": 238,
+            "layers": 24,
+            "positions": 1303,
+            "routes": 460,
+            "sizes": 1303
+          },
+          "last": {
+            "ranks": 1347,
+            "reversedEdges": 5,
+            "virtualNodes": 1123,
+            "virtualChains": 238,
+            "layers": 26,
+            "positions": 1347,
+            "routes": 504,
+            "sizes": 1347
+          }
+        },
+        "incremental": {
+          "first": {
+            "ranks": 1303,
+            "reversedEdges": 5,
+            "virtualNodes": 1123,
+            "virtualChains": 238,
+            "layers": 24,
+            "positions": 1303,
+            "routes": 460,
+            "sizes": 1303
+          },
+          "last": {
+            "ranks": 1347,
+            "reversedEdges": 5,
+            "virtualNodes": 1123,
+            "virtualChains": 238,
+            "layers": 26,
+            "positions": 1347,
+            "routes": 504,
+            "sizes": 1347
+          }
+        }
+      }
+    }
+  ]
+}
