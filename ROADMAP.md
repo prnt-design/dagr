@@ -6027,11 +6027,29 @@ whether the generalisation holds.
   consumer's tree are not interchangeable, which is exactly what the peer
   dependency M6.1 declared ahead of its reason exists for.
   WHAT M6.3 INHERITS. `checkPorts` is the drop-target filter and `ok` is the
-  field it reads, so a hover over a port is one map lookup, one `find` over a
-  short frozen array, and at most two consumer calls, with no allocation on the
-  allowed path. `PickKind.port` in `packages/render/src/picking.ts` said it had
+  field it reads, so a hover over a port is two map lookups, two `find`s over
+  short frozen arrays, one `ends` record, and at most two consumer calls. The
+  allowed result is one shared frozen object, so the answer itself allocates
+  nothing; the `ends` record does, and the diff review corrected this sentence
+  when it claimed the whole path did not. `PickKind.port` in `packages/render/src/picking.ts` said it had
   no drawn representation until M6.2; drawing a port is M6.3's, and the
-  docstring now says so. The remaining open question is the drag that ends on
+  docstring now says so.
+  THE TWO REVIEW PASSES FOUND DIFFERENT THINGS AGAIN. The DIFF pass found the
+  interface declaring `checkConnection` with two type parameters where its only
+  implementation had three, which compiles because a method is bivariant in its
+  parameters and is still a declaration that does not describe what is there.
+  It also found this entry claiming the allowed path allocates nothing when the
+  `ends` record allocates on every query, corrected above. The TREE pass found
+  three sentences that had gone false rather than been written wrong: this
+  page's own opening, which said it covered the first piece of the toolkit;
+  `InvalidSpecError`'s docstring, which enumerates what `defineRegistry`
+  refuses and did not know about the empty type token; and the docs page's
+  matching enumeration. A test helper's docstring counted two kinds where the
+  helper builds three, which is the characteristic defect for the fifteenth
+  time. `@dagr/vdsl`'s `package.json` description names the adapter and the
+  registry and was LEFT ALONE deliberately: every package's description is a
+  one-line identity rather than a manifest, and `@dagr/render`'s has named two
+  of its eight features since M4.2. The remaining open question is the drag that ends on
   empty canvas, where there is no target port at all: `checkPorts` needs two
   ends and that case has one, so it is not a validation question but a
   create-then-connect question, and M6.3 is where it gets an answer.

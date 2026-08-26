@@ -344,8 +344,8 @@ export interface NodeRegistry<K extends string = string> {
    * @throws {NodeKindMissingError} when an endpoint declares no kind.
    * @throws {UnknownNodeKindError} when an endpoint names an undeclared kind.
    */
-  checkConnection<A extends object, E extends object>(
-    graph: Graph<A, E>,
+  checkConnection<A extends object, E extends object, G extends object>(
+    graph: Graph<A, E, G>,
     proposed: ProposedConnection,
   ): ConnectionCheckResult;
 }

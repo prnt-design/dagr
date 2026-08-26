@@ -411,7 +411,7 @@ class Registry<K extends string> implements NodeRegistry<K> {
     if (used < cap) return undefined;
     return refuse(
       'port-full',
-      `port "${portId}" on node "${nodeId}" already carries ${used} of its ${cap} edges`,
+      `port "${portId}" on node "${nodeId}" already carries ${used} of a maximum ${cap}`,
     );
   }
 }

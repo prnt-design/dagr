@@ -5,10 +5,10 @@ import { defineRegistry, sameType } from '../src/registry.js';
 import type { ConnectionCheck, NodeRegistry } from '../src/types.js';
 
 /**
- * A registry whose two kinds carry type tokens and a capped input, used by most
- * of the cases below. `sink` is deliberately `inout` at one end, because an
- * `inout` port is the only place the difference between "edges at a port" and
- * "edges leaving a port" is visible.
+ * Three kinds carrying type tokens and two different caps, used by most of the
+ * cases below. `sink` is deliberately `inout`, because an `inout` port is the
+ * only place the difference between "edges at a port" and "edges leaving a
+ * port" is visible.
  */
 function typed() {
   return defineRegistry({
@@ -321,6 +321,25 @@ describe('checkConnection', () => {
     const registry = typed();
     const { graph, a, b } = threeNodes(registry);
     graph.addEdge({ source: a, target: b });
+    expect(
+      registry.checkConnection(graph, { source: a, sourcePort: 'out', target: b, targetPort: 'in' }),
+    ).toEqual({ ok: true });
+  });
+
+  it('takes a graph carrying every attribute type its owner declared', () => {
+    // `Graph` has three type parameters and this method names all three. The
+    // two-parameter form the interface first declared also compiles, because a
+    // method is bivariant in its parameters, so this test does not fail
+    // against it. It is here because relying on bivariance to admit the
+    // ordinary caller is relying on the wrong thing, and because the interface
+    // and its only implementation disagreed about the arity.
+    type NodeAttrs = { kind: 'source' | 'filter' | 'sink'; label: string };
+    type EdgeAttrs = { weight: number };
+    type GraphAttrs = { title: string };
+    const registry = typed();
+    const graph = new Graph<NodeAttrs, EdgeAttrs, GraphAttrs>();
+    const a = graph.addNode(registry.nodeInit<NodeAttrs>('source', { id: 'a' })).id;
+    const b = graph.addNode(registry.nodeInit<NodeAttrs>('filter', { id: 'b' })).id;
     expect(
       registry.checkConnection(graph, { source: a, sourcePort: 'out', target: b, targetPort: 'in' }),
     ).toEqual({ ok: true });

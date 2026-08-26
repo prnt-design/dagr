@@ -7,11 +7,12 @@ sidebar_position: 7
 # Node spec toolkit
 
 `@dagr/vdsl` is the layer where your node graph stops being a graph and starts
-being a language: what kinds of node exist, what ports they have, and what
-counts as a valid configuration for one. [Visual languages](./visual-languages.md)
-is the design brief for the milestone. This page is what exists today, which is
-the first piece of it: the adapter interface and the registry that resolves a
-node to a spec.
+being a language: what kinds of node exist, what ports they have, what counts
+as a valid configuration for one, and which pairs of ports may be joined.
+[Visual languages](./visual-languages.md) is the design brief for the
+milestone. This page is what exists today: the adapter interface, the registry
+that resolves a node to a spec, and the validation a proposed connection is put
+through.
 
 Dagr defines that interface and nothing behind it. There is no built-in node
 kind, no opinion about what a `source` or a `transform` is, and no config
@@ -114,7 +115,8 @@ because `Infinity` does not survive `JSON.stringify` and a spec you cannot
 serialise is a spec you cannot ship a fixture of.
 
 `defineRegistry` refuses a `maxEdges` that is not a positive integer, along
-with an empty kind, an empty port id, and a port id declared twice in one kind.
+with an empty kind, an empty port id, an empty type token, and a port id
+declared twice in one kind.
 It refuses at define time rather than reporting at use time, because a registry
 is built once from a literal, usually at module scope, and a bad spec is a bug
 in your source rather than in your data. The same port id in two different
