@@ -118,7 +118,7 @@ export type PickKind = 'node' | 'edge' | 'port';
 /**
  * The tag byte each kind is written with, and the one no kind claims.
  *
- * `port` has no drawn representation until M6.2 and is here anyway, because the
+ * `port` has no drawn representation until M6.3 and is here anyway, because the
  * cost of reserving a tag is a line and the cost of adding one later is every
  * recorded pick pixel in a fixture meaning something else.
  */

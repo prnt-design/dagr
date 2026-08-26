@@ -27,8 +27,8 @@ prose.
 
 - `NodeSpec<K>`, `NodeSpecInit`, `PortSpec` and `ConfigCheck`: what a consumer
   declares. A `PortSpec` carries `maxEdges`, absent meaning unbounded, and
-  `defineRegistry` refuses a value that is not a positive integer so M6.2 can
-  act on what it reads. ENFORCING the cap is M6.2's, not this package's today.
+  `defineRegistry` refuses a value that is not a positive integer, and M6.2's
+  `checkConnection` is what enforces the cap.
 
   `checkConfig` takes the node's whole attribute bag and returns strings,
   because which keys are configuration is the consumer's question and a
@@ -40,6 +40,39 @@ prose.
   `tryResolve` and `kindOf` report, and `nodeInit` builds a `NodeInit` for
   `graph.addNode` with the declared ports and the kind attribute written last,
   so a caller's own attributes cannot mislabel the node.
+
+- `PortSpec.type`, `NodeSpecInit.canConnect` and `sameType`: port type tokens
+  and the rule that reads them (M6.2). The token is a string this package
+  stores and never interprets, because the obvious comparison (equal tokens
+  connect) is wrong for every language with a subtype relation, an `any`, or a
+  coercion. `sameType` is that comparison written out as a value, so a consumer
+  who wants it names it.
+
+  `canConnect` is asked at BOTH ends of a proposed connection, source first,
+  and returns one string rather than `checkConfig`'s list, because a connection
+  is a decision and a config is a report. It is handed no graph and no node
+  ids, which is forced by `checkPorts` existing at all.
+
+- `NodeRegistry.checkPorts` and `NodeRegistry.checkConnection`, plus
+  `RegistryOptions.rejectCycles` and `NodeRegistry.rejectsCycles` (M6.2).
+  `checkPorts` answers the port, direction and `canConnect` questions from the
+  kinds alone; `checkConnection` adds the two only a graph can answer, the
+  `maxEdges` cap and the cycle. First refusal wins, and the graph is not
+  mutated to find out.
+
+  Cycle rejection is a policy the adapter declares rather than a default:
+  `Graph` permits cycles by design and M6.6 mandates a reference language with
+  feedback. The question is `source === target || graph.canReach(target,
+  source)` and not add-then-`findCycle`-then-remove, which emits two patches
+  and pollutes an undo stack.
+
+- `ConnectionCheck`, `ConnectionEnd`, `ConnectionEnds`, `ConnectionAllowed`,
+  `ConnectionRefused`, `ConnectionRefusalCode`, `ConnectionCheckResult`,
+  `PortRef` and `ProposedConnection`: the types the above are written in. A
+  refusal carries a `code` a caller branches on and a `reason` it shows, where
+  a config check carries only strings, because every refusal but `incompatible`
+  is authored by Dagr and an English sentence is not something a consumer can
+  localise.
 
 - `DagrVdslError` and the three errors under it: `InvalidSpecError`,
   `NodeKindMissingError` and `UnknownNodeKindError`, plus `DagrVdslErrorCode`,

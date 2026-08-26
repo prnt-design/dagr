@@ -5890,11 +5890,20 @@ whether the generalisation holds.
   structured issue type, and a connection validator returning something richer
   would be two shapes for one job, so decide it there rather than drifting into
   it.
+  M6.2 SETTLED ALL OF THAT, AND ONE MORE THING THIS PARAGRAPH DID NOT SEE. The
+  three predictions held. The decision it asked for went RICHER, on the ground
+  that Dagr authors every connection refusal but one where it authors no config
+  message at all. What this paragraph missed is that threading the kind union
+  into the predicate makes `NodeSpecInit` generic, and a `canConnect` mirrored
+  onto `NodeSpec<K>` would have taken away the unparameterised `NodeRegistry`
+  assignment this entry's own test asserts. See M6.2's entry: the predicate
+  stays off the spec, and the reason that survives is that a connection rule is
+  about a pair rather than about one kind.
   `defineRegistry({})` IS ALLOWED AND INFERS `K` AS `never`, so every method
   taking a kind is uncallable and `has` answers false for everything. Left
   legal rather than refused, because it is what a consumer building kinds up
   behind a flag writes first and the type system already says the whole story.
-- [ ] **M6.2** Port typing and connection validation: a type token per port,
+- [x] **M6.2** Port typing and connection validation: a type token per port,
   a compatibility predicate the consumer supplies, and validation of a
   proposed connection against it.
   CYCLE REJECTION IS A POLICY THE ADAPTER DECLARES, NOT A DEFAULT. `Graph`
@@ -5910,6 +5919,122 @@ whether the generalisation holds.
   drag has not created yet. That second case needs its own answer.
   `findCycle` and `isAcyclic` answer over the whole graph AFTER insertion and
   are the wrong tool here.
+  SHIPPED into `packages/vdsl`, additively as M6.1's entry predicted:
+  `PortSpec.type`, `NodeSpecInit.canConnect`, `RegistryOptions.rejectCycles`,
+  `NodeRegistry.rejectsCycles`, `NodeRegistry.checkPorts`,
+  `NodeRegistry.checkConnection`, the exported `sameType`, and nine types
+  (`ConnectionCheck`, `ConnectionEnd`, `ConnectionEnds`, `ConnectionAllowed`,
+  `ConnectionRefused`, `ConnectionRefusalCode`, `ConnectionCheckResult`,
+  `PortRef`, `ProposedConnection`). 37 new tests in
+  `packages/vdsl/test/connection.test.ts` plus two in `registry.types.test.ts`,
+  the CHANGELOG, a `## Connecting two ports` section on `docs/docs/vdsl.md`,
+  the Status paragraph of `docs/docs/visual-languages.md`, README's
+  `@dagr/vdsl` row, and one docstring in `packages/render/src/picking.ts` that
+  this task made false.
+  TAKEN OUT OF MILESTONE ORDER FOR THE FOURTH RUN RUNNING, AND FOR THE SAME
+  REASON: four pull requests are open on the bench blocker, three of them
+  rewrite `packages/layout` and the fourth `packages/render`, and every
+  unchecked task in order reads a file one of them is rewriting or needs a
+  device this box lacks. `@dagr/vdsl` is the one package no open branch
+  touches, and M6.1 is merged, so this merges in any order with the four and
+  imposes a conflict on none of them. The one shared file is README.md, where
+  #67 amends the `@dagr/render` row and this amends the `@dagr/vdsl` row, two
+  lines apart with an untouched row between them.
+  DAGR STORES A TYPE TOKEN AND NEVER COMPARES TWO OF THEM. The obvious rule,
+  equal tokens connect, is wrong for every language with a subtype relation, an
+  `any`, or a coercion, and this package has no way to know which of those a
+  consumer has: comparing would be the ontology this milestone exists not to
+  define, arriving by the back door. `sameType` is the equality rule written
+  out as an exported value, so a consumer who wants it names it, and it is the
+  same call `@dagr/layout` makes publishing `defaultStages` and nothing else.
+  A port declaring no token is untyped and has no opinion, so `sameType`
+  refuses only when BOTH ends name one and the two differ.
+  A DECISION IS NOT A REPORT, AND THAT IS WHY THE RESULT IS NOT `checkConfig`'s
+  LIST. The entry above asked this to be decided here rather than drifted into,
+  and the deciding difference is WHO AUTHORS THE STRINGS. `checkConfig` reports
+  what the consumer's own validator found, in the consumer's own words, and a
+  node can have several things wrong with it at once, which is a panel. Every
+  refusal here but `incompatible` is authored by Dagr, an English sentence a
+  consumer can neither localise nor branch on, and a drag stops at the first
+  reason a drop is refused. So `ConnectionCheckResult` is
+  `{ ok: true }` or `{ ok: false, code, reason }`: `ok` is the field M6.3's
+  drop-target filter reads, `code` is what a caller branches on, `reason` is
+  what it shows. `ConnectionCheck`, which is the consumer's half, returns
+  `string | undefined`, because a rule about one pair is still a decision.
+  THE REFUSAL CODES ARE FIVE AND THE ORDER THEY ARE ASKED IN IS PART OF THE
+  CONTRACT: `no-such-port`, `wrong-direction`, `incompatible`, `port-full`,
+  `would-cycle`, first refusal wins. The order is cheapest-first and also
+  most-local-first, and it is asserted rather than implied: a full port is
+  reported before a cycle, and an absent port before a direction.
+  `wrong-direction` is the same rule `Graph.addEdge` enforces by throwing,
+  asked rather than tried, because a drag offering every port on the canvas as
+  a drop target cannot catch its way through the ones facing the wrong way.
+  THE ENDPOINT THAT DOES NOT EXIST YET IS ANSWERED BY SPLITTING THE QUESTION,
+  NOT BY GUESSING. `checkPorts(source, target)` takes two kinds and two port
+  ids and no graph; `checkConnection(graph, proposed)` is that plus the two
+  questions only a graph can answer. The split is derived rather than chosen:
+  the two rules `checkPorts` drops are both VACUOUS for a node about to be
+  created, because a node with no edges occupies no port and can reach nothing,
+  so it can neither fill a cap nor close a cycle. What is left over is exactly
+  the graph-free half, which is why there are two methods and not three.
+  AND THE SPLIT IS WHAT FIXES THE PREDICATE'S SIGNATURE. `canConnect` is handed
+  no graph and no node ids, and that is forced rather than tasteful: it has to
+  be answerable in exactly the case where there is nothing to read. Generalise
+  it: when an API has to work with less, the version that works with less is
+  the one that decides the interface.
+  A REFUSAL IS ABOUT THE PROPOSAL AND AN ERROR IS ABOUT THE GRAPH. A port the
+  kind does not declare comes back as `no-such-port`, because a miss is an
+  ordinary outcome of a hit test. A node the graph does not hold, or one
+  carrying a kind this registry never declared, THROWS, because it is a bug in
+  the caller's own data and M6.1 already made `resolve` throw for it. The line
+  is not "how bad is it" but "whose fact is it".
+  BOTH ENDS ARE ASKED, SOURCE FIRST. A rule about what may ARRIVE at a port
+  belongs to the kind declaring the port, and a rule about what may LEAVE one
+  belongs to the kind at the other end just as much, so either end refusing is
+  a refusal. Neither is asked about a pair already refused: a predicate handed
+  a port facing the wrong way would be answering a question that is not live.
+  `maxEdges` CAPS THE EDGES AT A PORT, NOT THE EDGES THROUGH IT IN ONE
+  DIRECTION, and the difference is only visible on an `inout` port. Taken from
+  the graph model's own reading rather than invented: `Graph.removePort`
+  refuses a port with users and counts a user on either side. Edge ids go
+  through a set for that method's reason too, because a self loop can name the
+  same port at both ends.
+  THE KIND UNION COST A TYPE PARAMETER AND A `NoInfer`, AND IT COLLIDED WITH A
+  PROPERTY M6.1 SHIPPED A TEST FOR. `canConnect` is the one function a consumer
+  writes about two kinds at once, so handing it `ConnectionEnds<string>` would
+  repeat, in the worst possible place, the erasure M6.1 built a factory to
+  avoid. Threading it means `NodeSpecInit<K>`, and `K` then appears in the
+  value type as well as the keys, which widens `K` to `string` for a consumer
+  passing a pre-declared `NodeSpecInit`: `NoInfer<K>` on that position is what
+  keeps the keys the only thing `K` is read from.
+  THE COLLISION: `ConnectionCheck<K>` is CONTRAVARIANT in `K`, so a
+  `canConnect` mirrored onto `NodeSpec<K>` would make the spec invariant, and
+  `const held: NodeRegistry = registry` is a property M6.1 shipped a test for.
+  THE RESOLUTION IS NOT A COMPROMISE, because there was a better reason
+  underneath: a `NodeSpec` is what ONE KIND promises about itself and a config
+  check is a rule about one node, but a connection rule is a rule about a PAIR,
+  so it was never a property of one kind to hand back. It lives in a second map
+  inside the registry and `checkPorts` is the only door. THE VARIANCE IS WHAT
+  MADE ANYONE LOOK, and the reason that survives is not the variance.
+  WHAT M6.1's ENTRY PREDICTED, SETTLED. The token on `PortSpec` beside
+  `maxEdges` and the predicate on `NodeSpecInit` beside `checkConfig`, both
+  additive: TRUE, and no existing field changed shape. `maxEdges` read as a
+  positive integer or nothing: TRUE, and `#capRefusal` needs no validation of
+  its own. `Graph` arriving on the surface with `canReach`, at which point the
+  packaging note's stated reason starts being true: TRUE, and now literally so.
+  `Graph` carries `#private` fields, so a `Graph` in `checkConnection`'s
+  parameter position is nominally typed and two copies of `@dagr/graph` in a
+  consumer's tree are not interchangeable, which is exactly what the peer
+  dependency M6.1 declared ahead of its reason exists for.
+  WHAT M6.3 INHERITS. `checkPorts` is the drop-target filter and `ok` is the
+  field it reads, so a hover over a port is one map lookup, one `find` over a
+  short frozen array, and at most two consumer calls, with no allocation on the
+  allowed path. `PickKind.port` in `packages/render/src/picking.ts` said it had
+  no drawn representation until M6.2; drawing a port is M6.3's, and the
+  docstring now says so. The remaining open question is the drag that ends on
+  empty canvas, where there is no target port at all: `checkPorts` needs two
+  ends and that case has one, so it is not a validation question but a
+  create-then-connect question, and M6.3 is where it gets an answer.
 - [ ] **M6.3** Drag-to-connect interactions on top of M5.2's hooks and M4.8's
   GPU picking: port hit-testing, an in-flight edge, drop targets filtered by
   M6.2's predicate.

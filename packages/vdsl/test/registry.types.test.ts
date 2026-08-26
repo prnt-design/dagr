@@ -1,6 +1,6 @@
 import { Graph } from '@dagr/graph';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import type { NodeRegistry, NodeSpec } from '../src/index.js';
+import type { NodeRegistry, NodeSpec, NodeSpecInit } from '../src/index.js';
 import { defineRegistry } from '../src/index.js';
 
 /**
@@ -76,6 +76,34 @@ describe('the kind union survives the boundary', () => {
     const graph = new Graph<NodeAttrs>();
     // @ts-expect-error `label` is a string in this consumer's attribute type.
     expect(() => graph.addNode(registry.nodeInit('source', { attrs: { label: 7 } }))).not.toThrow();
+  });
+
+  it('gives a canConnect written inline the consumer\'s own union at both ends', () => {
+    let seen: string | undefined;
+    const typed = defineRegistry({
+      source: { ports: [{ id: 'out', direction: 'out' }] },
+      filter: {
+        ports: [{ id: 'in', direction: 'in' }],
+        canConnect: (ends) => {
+          expectTypeOf(ends.source.kind).toEqualTypeOf<'source' | 'filter'>();
+          expectTypeOf(ends.target.kind).toEqualTypeOf<'source' | 'filter'>();
+          seen = ends.source.kind;
+          return undefined;
+        },
+      },
+    });
+    expect(typed.checkPorts({ kind: 'source', portId: 'out' }, { kind: 'filter', portId: 'in' })).toEqual({ ok: true });
+    expect(seen).toBe('source');
+  });
+
+  it('infers the kinds from the keys alone, so a pre-declared spec init does not widen them', () => {
+    // `NodeSpecInit` is `NodeSpecInit<string>`, and it sits in a position `K`
+    // also appears in. Without `NoInfer` on that position, `K` would come out
+    // as `string` here and every kind downstream with it.
+    const init: NodeSpecInit = { ports: [{ id: 'out', direction: 'out' }] };
+    const held = defineRegistry({ source: init, filter: init });
+    expectTypeOf(held.kinds).toEqualTypeOf<readonly ('source' | 'filter')[]>();
+    expect(held.kinds).toEqual(['source', 'filter']);
   });
 
   it('leaves an unparameterised registry meaning what it always did', () => {

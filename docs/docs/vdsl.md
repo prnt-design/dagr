@@ -126,9 +126,105 @@ hold, which is what `get` does and for the same reason: an undeclared kind has
 no ports for a port to be absent from. The compiler stops both being called
 that way, and JavaScript reaches them with any string at all.
 
-Enforcing the cap is not here. A spec says what the rule is; validating a
-proposed connection against it is M6.2's task, and what this package does today
-is refuse a value M6.2 could not act on.
+A spec says what the rule is, and `registry.checkConnection` is where a
+proposed edge meets it.
+
+## Connecting two ports
+
+A port may also carry a `type`, which is a token this package stores, hands to
+your own rule, and never interprets:
+
+```ts
+import { defineRegistry, sameType } from '@dagr/vdsl';
+
+const registry = defineRegistry(
+  {
+    source: { ports: [{ id: 'out', direction: 'out', type: 'number' }] },
+    filter: {
+      ports: [
+        { id: 'in', direction: 'in', maxEdges: 1, type: 'number' },
+        { id: 'out', direction: 'out', type: 'number' },
+      ],
+      canConnect: sameType,
+    },
+  },
+  { rejectCycles: true },
+);
+
+registry.checkConnection(graph, {
+  source: 'a',
+  sourcePort: 'out',
+  target: 'b',
+  targetPort: 'in',
+});
+// { ok: true }, or { ok: false, code, reason }
+```
+
+Dagr never compares two tokens itself. The obvious rule, equal tokens connect,
+is wrong for every language with a subtype relation, an `any`, or a coercion,
+and this package has no way to know which of those you have. `sameType` is that
+rule written out as a value, so you name it when you want it. A port declaring
+no token is untyped and has no opinion, so `sameType` refuses a pair only when
+both ends name a token and the two differ.
+
+`canConnect` is your own rule and it is asked at BOTH ends, source first,
+because a rule about what may arrive at a port belongs to the kind declaring
+the port and a rule about what may leave one belongs to the kind at the other
+end just as much. It returns nothing when the pair is fine and the sentence to
+put in front of a user when it is not. That is one string rather than
+`checkConfig`'s list because a connection is a decision and a config is a
+report: a drag stops at the first reason a drop is refused, where a config
+panel shows everything wrong at once.
+
+The result is a decision too. `ok` is what a filter reads, `code` is what a
+caller branches on, and `reason` is what it shows:
+
+| `code` | what it means |
+| --- | --- |
+| `no-such-port` | the kind declares no port of that id |
+| `wrong-direction` | an `in` port offered as a source, or an `out` as a target |
+| `incompatible` | a `canConnect` at one end said no, and `reason` is its words |
+| `port-full` | the port is already carrying its `maxEdges` |
+| `would-cycle` | the edge would close a cycle, in a registry that refuses them |
+
+`maxEdges` caps the edges AT a port and not the edges through it in one
+direction, which is only visible on an `inout` port. That is the graph model's
+own reading: `Graph.removePort` refuses a port with users and it counts a user
+on either side.
+
+Cycle rejection is a policy your adapter declares, `{ rejectCycles: true }`,
+and never a default. `Graph` permits cycles by design and a feedback loop is
+the point of half the languages this toolkit exists for, so a toolkit refusing
+one out of the box would be wrong for them and silent about it. The question a
+proposed edge asks is `source === target || graph.canReach(target, source)`,
+one walk over the subgraph the target reaches. Nothing is added to answer it,
+so no patch is emitted and no undo stack learns about a question.
+
+### The end that does not exist yet
+
+`checkConnection` answers for an edge between two nodes the graph holds. A node
+the graph does not hold, or one carrying a kind the registry never declared, is
+a bug in your own data and throws, exactly as `resolve` does: a refusal is
+about the proposal and an error is about the graph.
+
+For a drag aimed at a node you have not created yet, ask `checkPorts` instead.
+It takes two kinds and two port ids, no graph, and answers the port, direction
+and `canConnect` questions. The two it drops are both vacuous for a node about
+to be created: a node with no edges occupies no port and can reach nothing, so
+it can neither fill a cap nor close a cycle.
+
+```ts
+registry.checkPorts({ kind: 'source', portId: 'out' }, { kind: 'filter', portId: 'in' });
+```
+
+That is also why `canConnect` is handed no graph and no node ids. It has to be
+answerable in exactly the case where there is nothing to read.
+
+`canConnect` is not mirrored onto the `NodeSpec` the registry hands back, where
+`checkConfig` is. A spec is what one kind promises about itself and a config
+check is a rule about one node, but a connection rule is a rule about a pair,
+so there is no one kind for it to belong to. `checkPorts` is the door, and it
+asks both ends.
 
 ## Config is yours
 
@@ -203,10 +299,6 @@ exhaustive over its own errors.
 
 ## Not here yet
 
-- **Port type tokens and connection validation** (M6.2). A type token per port,
-  a compatibility predicate you supply, and a proposed connection checked
-  against it and against `maxEdges`. Cycle rejection is a policy your adapter
-  declares rather than a default: `Graph` permits cycles by design.
 - **Drag-to-connect** (M6.3), on top of the interaction hooks and GPU picking.
   That is the task where this package first needs React, which is why
   `@dagr/react` is not a peer dependency yet.

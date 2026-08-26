@@ -14,13 +14,22 @@ export {
   isDagrVdslError,
 } from './errors.js';
 export type { DagrVdslErrorCode, DagrVdslErrorLike } from './errors.js';
-export { DEFAULT_KIND_KEY, defineRegistry } from './registry.js';
+export { DEFAULT_KIND_KEY, defineRegistry, sameType } from './registry.js';
 export type {
   ConfigCheck,
+  ConnectionAllowed,
+  ConnectionCheck,
+  ConnectionCheckResult,
+  ConnectionEnd,
+  ConnectionEnds,
+  ConnectionRefusalCode,
+  ConnectionRefused,
   KindNodeInit,
   NodeRegistry,
   NodeSpec,
   NodeSpecInit,
+  PortRef,
   PortSpec,
+  ProposedConnection,
   RegistryOptions,
 } from './types.js';
