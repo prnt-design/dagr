@@ -63,7 +63,7 @@ import type { Size } from './types.js';
  * and never iteration order. That is a hard requirement of M3 rather than a
  * tidiness: a counter would rename every dummy on a chain whenever an unrelated
  * edge was added upstream of it, so M3.6's warm start would meet a node it had
- * never seen and M3.8 would have no previous coordinate to anchor, and a long
+ * never seen and M3.8b would have no previous coordinate to anchor, and a long
  * edge would visibly jitter between two endpoints that did not move at all. On
  * a real Sugiyama drawing dummies outnumber real nodes, so that is most of the
  * geometry rather than a corner of it.

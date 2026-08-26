@@ -273,7 +273,7 @@ function requireRankWindow(rankWindow: number | undefined): number {
  * reorder a rank the patch never came near, so the honest set for that run is
  * still the whole roster and that is still what `RelayoutResult.influence`
  * reports. This is the other object: what M3.6's warm-started ordering, M3.7b's
- * incremental ranking, M3.8's anchored coordinates and M3.9's fast paths are
+ * incremental ranking, M3.8b's anchored coordinates and M3.9's fast paths are
  * allowed to touch, computed before any of them exist so that each is written
  * against a bound rather than against its own opinion of one. The distance
  * between the two is the milestone, and it is a measurement rather than a
@@ -319,8 +319,10 @@ function requireRankWindow(rankWindow: number | undefined): number {
  * implemented here and deliberately not exported, so nothing a caller can
  * select breaks this today, and it is a thing such a stage would have to
  * declare rather than a thing this module can check. It is the same shape of
- * dependency M3.4 recorded for its rank derivation, and M3.8 is the task that
- * owns it.
+ * dependency M3.4 recorded for its rank derivation, and M3.8b is the task
+ * that owns it. M3.8a is not: it shipped a rigid translation of the WHOLE
+ * finished drawing, which moves every node together and so declares nothing
+ * about a band.
  *
  * ## What it costs
  *

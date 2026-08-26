@@ -122,6 +122,15 @@ function resolveVariant(variant: BrandesKoepfOptions['variant']): Variant {
 interface PositionIndex {
   /** Node number to id, in layer order. */
   readonly ids: readonly NodeId[];
+  /**
+   * The same thing backwards, which the build needs for the segments and
+   * {@link displacements} needs to find the caller's own nodes without walking
+   * the whole roster. It is built either way; carrying it on the index is what
+   * keeps it alive for the length of a run rather than for the length of the
+   * build, which on the 10k corpus is a 184,222-entry map held across four
+   * solve passes and measured as costing nothing.
+   */
+  readonly numberOf: ReadonlyMap<NodeId, number>;
   /** Layer `l` holds the numbers `layerStart[l]` up to `layerStart[l + 1]`. */
   readonly layerStart: Int32Array;
   readonly layerOf: Int32Array;
@@ -243,6 +252,7 @@ function buildIndex(input: OrderedState): PositionIndex {
   const down = compress(upper, lower, count);
   return {
     ids,
+    numberOf,
     layerStart,
     layerOf,
     widths,
@@ -531,6 +541,95 @@ function balance(candidates: readonly Float64Array[], widths: Float64Array): Flo
 }
 
 /**
+ * How far every node both runs drew has moved, or `undefined` when they share
+ * none.
+ *
+ * ONLY THE CALLER'S OWN NODES, and that is measured rather than assumed. A
+ * dummy is as much a part of the drawing as a node is, and it outnumbers the
+ * nodes better than seventeen to one on the 10k corpus, so the obvious reading
+ * is that walking the graph rather than the roster throws most of the evidence
+ * away. It does, and the shift is BETTER for it. On the 10k corpus, over a
+ * patch that adds one edge: the caller's own nodes leave 5,038 of 10,000 nodes
+ * moved and 44.2% of the edges rerouted, and the whole roster leaves 9,656 and
+ * 99.1%. Over a patch that removes a node, 8,095 and 87.7% against 9,999 and
+ * 100%. The reason is that a chain is the part of the drawing a patch is most
+ * likely to re-mint, so the dummies are the noisier population, and what is
+ * being estimated here is where the drawing SAT rather than where it is going.
+ *
+ * It walks `graph.nodes()` rather than the roster minus `virtualNodes` for the
+ * same reason stated as cost: the roster is 184,222 entries on the 10k corpus
+ * against the graph's 10,000, and the difference is two hash lookups per entry
+ * on every relayout.
+ */
+function displacements(
+  xs: Float64Array,
+  index: PositionIndex,
+  input: OrderedState,
+): Float64Array | undefined {
+  const previous = input.previous?.positions;
+  if (previous === undefined) return undefined;
+  const found = new Float64Array(input.graph.nodeCount);
+  let shared = 0;
+  for (const node of input.graph.nodes()) {
+    const was = previous.get(node.id);
+    if (was === undefined) continue;
+    // A node the order stage did not put in a layer has no coordinate to have
+    // moved. The runner refuses that state at the order boundary, so this is
+    // unreachable through the pipeline; it is a skip rather than a throw
+    // because this stage is also called directly by its own suite, and a node
+    // missing from a hand-built layering is that caller's business.
+    const number = index.numberOf.get(node.id);
+    if (number === undefined) continue;
+    found[shared] = at(xs, number) - was.x;
+    shared += 1;
+  }
+  return shared === 0 ? undefined : found.subarray(0, shared);
+}
+
+/**
+ * How far to slide a finished layout to put it back where the run before it
+ * drew the same nodes: the smallest shift that minimises the total distance
+ * every shared node travels.
+ *
+ * MINIMISING THE TOTAL DISTANCE, not the total squared distance, and the
+ * difference is the whole of why this pass is safe to run unconditionally. The
+ * sum of absolute displacements is minimised over the closed interval between
+ * the two central order statistics, so the answer is a RANGE and something has
+ * to choose within it. Choosing zero when zero is in the range is what makes
+ * this a strict improvement rather than a trade: the drawing is moved only when
+ * moving it strictly reduces how far the drawing moved.
+ *
+ * WHAT THAT BUYS, as the guarantee a caller can hold this to: the shift is
+ * exactly zero unless a strict majority of the shared nodes moved the same way.
+ * Zero is in the optimal interval whenever neither the nodes that went left nor
+ * the nodes that went right are a majority, and a node that did not move is in
+ * neither camp. So a relayout that left most of the drawing where it was is
+ * returned byte for byte, which is what keeps this pass from being the first
+ * thing to move a node the stages upstream of it left alone. See M3.4's
+ * stability contract, which is scoped to an influence set and which a pass that
+ * slid the whole drawing on a one-node patch would break.
+ *
+ * The squared form would have neither property. Its minimiser is the MEAN,
+ * which is a generic real number, so it moves every node in the drawing by a
+ * fraction of a unit on every relayout whatever happened, and the far tail a
+ * patch splitting one long edge produces drags it. Measured on the 1k corpus
+ * against a patch that changes no layering: the mean form moves all 1,000 nodes
+ * where this one moves none, and its mean displacement is 19.8 against 11.6.
+ *
+ * `Math.min(Math.max(0, lower), upper)` is zero clamped into the optimal
+ * interval, which is the two paragraphs above in one line.
+ */
+function displacementShift(found: Float64Array): number {
+  // IT SORTS ITS ARGUMENT. `found` is the fresh view `displacements` just
+  // returned and nothing reads it again, so a defensive copy here would be a
+  // second array per relayout bought with nothing.
+  found.sort();
+  const lower = at(found, (found.length - 1) >> 1);
+  const upper = at(found, found.length >> 1);
+  return Math.min(Math.max(0, lower), upper);
+}
+
+/**
  * The centre line of each row, which is `gridPositionStage`'s arithmetic and
  * has to stay it: a layer's nodes share a centre line, a row is as tall as its
  * tallest node, rows are `rankSep` apart edge to edge, and the stack starts at
@@ -559,13 +658,24 @@ function rowCentres(input: OrderedState): Float64Array {
  * unless a run needs one named alignment rather than the median of all four.
  *
  * It is a factory for one reason, and it is not symmetry with
- * `networkSimplexRank` or `barycenterOrder`: those two are factories because M3
- * and M3.6 warm start a run from state the caller passes in, and there is no
- * warm start here. {@link BrandesKoepfOptions.variant} is the whole reason.
- * Whether to spend four passes or one is a cost and quality trade a single call
- * site makes, about 6.3x to 7x the solve time and 1.6x to 2.1x the whole stage
- * for 21% of the horizontal edge length on the 1k and 45% on the 10k, and there
- * is no one answer to freeze into a second shared stage.
+ * `networkSimplexRank` or `barycenterOrder`. Those two are factories because
+ * their warm start is a value a caller BINDS, and M3.8a's is not: this stage
+ * warm starts too, off `previous.positions`, and that arrives per run on the
+ * record rather than per stage in a call. {@link BrandesKoepfOptions.variant}
+ * is the whole reason. Whether to spend four passes or one is a cost and
+ * quality trade a single call site makes, about 6.3x to 7x the solve time and
+ * 1.6x to 2.1x the whole stage for 21% of the horizontal edge length on the 1k
+ * and 45% on the 10k, and there is no one answer to freeze into a second shared
+ * stage.
+ *
+ * THERE IS NO OPTION TO TURN THE WARM START OFF, and that is a decision rather
+ * than an omission. An option earns its place when a caller has a trade to
+ * make, which is what `variant` above is and what `maxSweeps` is on the order
+ * stage: a budget exists because spending it can cost more than it saves. This
+ * pass is inside the noise of the stage it belongs to and never changes the
+ * drawing, only where the drawing is read, so there is nothing to trade. A
+ * caller who wants the unshifted coordinates asks for them by having no
+ * previous run: `layout()` never fills `previous` in, and only an engine does.
  *
  * ## NOT THE DEFAULT, NOT EXPORTED, and not an improvement on today's graphs
  *
@@ -739,11 +849,96 @@ function rowCentres(input: OrderedState): Float64Array {
  * coordinates come out where the compaction put them, and `bounds` covers them
  * wherever that is.
  *
+ * ## Where the drawing is read, which is the freedom nothing was using
+ *
+ * **This algorithm decides a drawing up to a horizontal translation and nothing
+ * in it decides which translation.** Every constraint it solves is a difference
+ * between two coordinates, so sliding the finished layout sideways solves them
+ * all equally well; the origin the compaction reaches is wherever the leftmost
+ * block happened to land. The paragraph above states that as a fact about
+ * `bounds`. M3.8a spends it: a run with a previous one behind it slides the
+ * finished drawing back onto the coordinates the user is already looking at,
+ * and a cold run is left exactly where it was before this existed.
+ *
+ * IT IS A POST-PASS AND NOT AN ANCHORING, which is M3.8's four-way decision
+ * taken for the fallback half. Anchoring pins previous coordinates and solves
+ * the rest against them, and the M3.8 entry's own argument is that Brandes-Koepf
+ * does not decompose that way: the alignment step's offsets come from each
+ * candidate layout's global extremes, and a block spans ranks, so a boundary
+ * between pinned and free members kinks exactly the long-edge chains this
+ * algorithm exists to straighten. A rigid translation has the opposite
+ * property. It preserves every difference in the drawing, so every guarantee
+ * stated above, the spacing invariant included, is preserved by construction
+ * rather than re-argued, and the layout is the cold layout to the last bit.
+ *
+ * PER-RANK SHIFTS ARE REFUSED for the same reason, and they are the other
+ * transform the M3.8 entry names. A chain spans ranks, so two ranks shifted
+ * differently bend the segment between them, and a pass that straightens inner
+ * segments and then bends them has undone its own work.
+ *
+ * The choice within the translation is at {@link displacementShift} and the
+ * population it is taken over is at {@link displacements}. The short form:
+ * the shift is the smallest minimiser of total displacement, so it is exactly
+ * zero unless a strict majority of the caller's nodes moved the same way.
+ *
+ * ### What it is worth
+ *
+ * A relayout of each corpus after one patch, against the same stage with
+ * `previous` taken away and nothing else changed. Mean displacement and mean
+ * route distance are `measureStability`'s, over the caller's own nodes and
+ * edges; the shifted column is this stage.
+ *
+ * | corpus | patch       | mean displacement | mean route distance | rerouted      |
+ * | ------ | ----------- | ----------------- | ------------------- | ------------- |
+ * | 10k    | add a leaf  | 123.9 -> 26.1     | 136.1 -> 18.7       | 100% -> 24.5% |
+ * | 10k    | add an edge | 826.9 -> 335.8    | 985.9 -> 304.5      | 100% -> 44.2% |
+ * | 10k    | remove node | 587.3 -> 229.0    | 697.8 -> 196.2      | 94.1% -> 87.7% |
+ * | 10k    | remove edge | 92.5 -> 51.6      | 113.7 -> 62.6       | 89.6% -> 83.6% |
+ * | 1k     | add an edge | 163,522 -> 13,371 | 170,847 -> 17,281   | 100% -> 100%  |
+ * | 1k     | add a node  | 14,021 -> 11,929  | 19,121 -> 16,829    | 100% -> 100%  |
+ * | 1k     | remove node | 1,532 -> 1,129    | 2,174 -> 1,467      | 97.3% -> 100% |
+ *
+ * The 1k row that says 163,522 is the one to read first: the drawing is 179,375
+ * wide, so adding one edge translated it by most of its own width. That is the
+ * failure the M3.8 entry describes as throwing the graph across the screen, and
+ * it is not a metaphor.
+ *
+ * TWO PATCHES ARE MISSING FROM THE TABLE AND THEIR ABSENCE IS THE POINT. On the
+ * 1k corpus, adding a leaf and removing an edge change no surviving node's rank
+ * or slot, so the drawing did not translate, so the optimal shift is zero and
+ * this pass returns the cold answer byte for byte. Both are asserted as
+ * equalities rather than as improvements in `test/layout.position.stable.test.ts`.
+ *
+ * A COUNT CAN GO UP WHERE A DISTANCE GOES DOWN, and the 1k remove-node row is
+ * where: its rerouted share is the one figure in the table that gets worse,
+ * 97.3% to 100%. Both counts are past a 1e-9 tolerance, so a shift that is
+ * right for the drawing still touches a node, and a route, that would otherwise
+ * have been exactly still: 886 of 999 nodes moved becomes 998 while the mean
+ * distance falls by a quarter. On the 10k the counts fall too (9,960 to 5,038
+ * on the added edge, and every rerouted share in the table with them), because
+ * there the drawing is large enough that the translation is most of what
+ * happened. The guarantee that bounds this is the majority one above: a run
+ * that left a majority of the drawing alone takes no shift and so pays none of
+ * this.
+ *
+ * ### What it costs
+ *
+ * Nothing measurable. One pass over the graph's own nodes and one sort of their
+ * displacements, against a stage whose index build alone walks a roster
+ * eighteen times larger. Four timed runs of the protocol in the cost section
+ * above put the warm stage at 0.96x to 1.04x the cold one on both corpora,
+ * which is the noise this box has, so no absolute figure for the pass is quoted
+ * here: there is none to quote.
+ *
  * ## Determinism
  *
- * Same layering, same coordinates. Node numbers are the layers' own order, the
- * medians are taken by index rather than by any comparison that could tie, and
- * nothing is sorted except four doubles per node in the balancing step. The one
+ * Same layering, same coordinates, and since M3.8a the same PREVIOUS layering
+ * too, which is a second input and therefore a second thing to be deterministic
+ * about. Node numbers are the layers' own order, the medians are taken by index
+ * rather than by any comparison that could tie, and nothing is sorted except
+ * four doubles per node in the balancing step and one double per node of the
+ * caller's graph in {@link displacementShift}. Both sorts are of doubles by
+ * value with no tie to break. The one
  * value that needs care is negative zero, which the mirrored passes produce
  * whenever a coordinate lands exactly on the origin: it is normalised to `0` on
  * the way out, because `-0` and `0` are equal under `===` and different under
@@ -784,6 +979,17 @@ export function brandesKoepfPosition(options?: BrandesKoepfOptions): PositionSta
       } else {
         xs = new Float64Array(count);
         solve(index, nodeSep, variant.startsWith('down'), variant.endsWith('left'), xs);
+      }
+
+      // The warm start, and it is the LAST thing rather than a seed for the
+      // first: the layout is the cold layout, and only the translation it is
+      // read at is decided here. See the stability section below.
+      const moved = displacements(xs, index, input);
+      if (moved !== undefined) {
+        const shift = displacementShift(moved);
+        if (shift !== 0) {
+          for (let node = 0; node < count; node += 1) xs[node] = at(xs, node) - shift;
+        }
       }
 
       const centres = rowCentres(input);

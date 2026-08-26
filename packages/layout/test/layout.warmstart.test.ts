@@ -365,7 +365,7 @@ describe('an unchanged subgraph keeps its order across a relayout', () => {
    * exactly here: the untouched nodes keep their ORDER and not their
    * COORDINATES. A row that gained a node got wider, every row is centred on
    * x = 0, so a node that kept its slot in an untouched layer still moves
-   * sideways. That is M3.8's, and `layout.influence.test.ts` is where the
+   * sideways. That is M3.8b's, and `layout.influence.test.ts` is where the
    * coordinate half is measured against the region that admits it.
    */
   it('keeps the order of every untouched node on all thirty graphs', () => {

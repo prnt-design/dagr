@@ -135,8 +135,15 @@ export interface PreparedState {
    * FLOOR, so its answer is a different optimum of the same cost and a seed has
    * to be validated before it is believed. Where a stage also has an
    * `initialRanks` option, this field wins, because a constant preferred to the
-   * run before it is a frozen answer for the life of the engine. Nothing reads
-   * `positions` yet, which is M3.8's.
+   * run before it is a frozen answer for the life of the engine.
+   *
+   * M3.8a added the fourth: `brandesKoepfPosition` takes `positions` and slides
+   * its finished drawing back onto them, which is a reader of a DIFFERENT KIND
+   * from the three above. Those seed a search. This one does not touch the
+   * search at all: the layout is the cold layout, and what the previous run
+   * decides is only which of the translations that all solve it equally the
+   * drawing is read at. Nothing reads `routes`, and nothing is expected to: a
+   * route is derived from the positions above it.
    *
    * READING IT IS NOT SEEDING FROM IT, which is M3.6's finding and is the thing
    * to know before adding the second reader. The order stage holds its previous

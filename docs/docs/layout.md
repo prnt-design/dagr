@@ -108,13 +108,15 @@ offer, and `engine.run` deliberately does not either, because the graph it is
 handed need not be the one the last run saw. It is on the record every stage
 reads rather than passed to one of them, because ranking, ordering and
 positioning each have a previous answer to start from and a channel per stage
-would be three contracts to keep in step. The order stage reads `layers` and
-both rank stages read `reversedEdges`; nothing reads `ranks` or `positions` yet,
-so a relayout is still correct and no faster than a cold run. What those readers
-buy is a stable answer rather than a cheaper one: see
-[the warm start](#the-warm-start) for the order stage's and
+would be three contracts to keep in step. The order stage reads `layers`, both
+rank stages read `reversedEdges`, and `brandes-koepf-position` reads
+`positions`; nothing reads `ranks` yet, so a relayout is still correct and no
+faster than a cold run. What those readers buy is a stable answer rather than a
+cheaper one: see [the warm start](#the-warm-start) for the order stage's,
 [the reversed set across a relayout](#the-reversed-set-across-a-relayout) for
-the rankers'.
+the rankers', and [where a drawing is read](#where-a-drawing-is-read) for the
+position stage's, which is a reader of a different kind: it does not seed the
+search at all, only the translation the finished drawing is read at.
 
 Its own `previous` is subtracted for a reason worth knowing if you write a stage
 that reads it: the field is on the record, so the runner carries it forward and
@@ -706,7 +708,7 @@ reversed edge's source being the end at the high rank. The id is a pure function
 of the edge and that position, never a counter and never iteration order. That
 is a requirement of M3 rather than a tidiness: with a counter, adding an
 unrelated edge would rename every dummy on a chain, so M3.6's warm start would
-meet nodes it had never seen and M3.8 would have no previous coordinate to
+meet nodes it had never seen and M3.8b would have no previous coordinate to
 anchor, and a long edge would visibly jitter between two endpoints that did not
 move at all. On a real Sugiyama drawing dummies outnumber real nodes, so that is
 most of the geometry rather than a corner of it. Nothing parses the id back
@@ -2692,6 +2694,54 @@ edges the full re-run moved outside the bound the patch actually implies, which
 is the number [the next section](#influence-regions) reports and the rest of the
 incremental work drives to zero.
 
+### Where a drawing is read
+
+A relayout can be perfectly stable in everything it decides and still move every
+node, because a coordinate stage decides a drawing and not a place to put it.
+Brandes-Koepf is the case in point: every constraint it solves is a
+**difference** between two coordinates, so sliding the finished drawing sideways
+solves all of them equally well, and the origin it lands on is wherever the
+leftmost block happened to end up. Add one edge and that block can change, and
+the whole drawing translates.
+
+The size of that is not a rounding detail. On the 1k benchmark corpus, whose
+Brandes-Koepf drawing is 179,375 units wide, adding one edge translated it by
+170,900 of that: the mean node displacement of the relayout was 163,522 units,
+and every polyline in the drawing moved with it.
+
+So a warm run spends the freedom rather than leaving it to the compaction. It
+runs the cold algorithm unchanged, and then slides the finished drawing by the
+smallest shift that minimises the total distance the caller's own nodes travel
+from where the previous run drew them. Two properties follow, and both are what
+make it safe to do unconditionally:
+
+- **The layout is the cold layout.** A rigid translation preserves every
+  difference in the drawing, so the spacing guarantee, the no-overlap property
+  and the straightness of long-edge chains survive it by construction rather
+  than by being re-checked.
+- **The shift is exactly zero unless a strict majority of the shared nodes moved
+  the same way.** Minimising total distance (rather than total squared distance)
+  makes the answer a range rather than a point, and zero is taken whenever zero
+  is in it. A node that did not move counts against a shift in either direction,
+  so a relayout that left most of the drawing where it was comes back untouched.
+
+Measured against the same stage with the previous run's coordinates withheld, on
+the 10k corpus: adding a leaf takes the mean node displacement to 21% of what it
+was and the share of edges that reroute from 100% to 24.5%; adding an edge takes
+the displacement to 41% and the reroutes to 44.2%; removing a node takes the
+displacement to 39%.
+
+It costs nothing measurable: one pass over the graph's own nodes and one sort of
+their displacements, beside a stage whose index build walks a roster eighteen
+times larger.
+
+**Today this describes a stage you cannot select.** `grid-position`, the
+default, anchors every row on `x = 0`, so it has no translation to choose and
+nothing here applies to it. See
+[what is not here yet](#what-is-not-here-yet) for why
+`brandes-koepf-position` is still unexported. The freedom is a property of any
+coordinate stage that does not anchor its own origin, which is most of them.
+
 ## Influence regions
 
 `region` on a `RelayoutResult` is the set of nodes and edges the patch can
@@ -3106,6 +3156,12 @@ this corpus does not confirm: `service-mesh` has 1.07 bends per node and the
 worst edge-length ratio at 1.55x, while `module-imports` has 8.40 and comes in
 at 1.37x. None of this is enough on its own to move the default, and it is
 enough that the default should not be settled on generated graphs alone.
+
+One thing about it did change, and it is a stability property rather than a
+quality one: a warm relayout now reads its drawing at the translation the
+previous run was read at, instead of at whichever one the compaction reached.
+See [Where a drawing is read](#where-a-drawing-is-read). It changes no
+coordinate a cold run produces, so none of the figures above move.
 
 The full table, what the stage costs, what four alignments buy over one, and why
 its compaction is not the paper's are all in

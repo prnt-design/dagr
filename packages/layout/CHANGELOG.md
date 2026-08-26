@@ -14,6 +14,52 @@ of doc prose.
 
 ### Changed
 
+- **A warm relayout now reads its Brandes-Koepf drawing at the translation the
+  previous run was read at, rather than at whichever one the compaction
+  reached.** Behaviour changed, types did not. Cold runs are byte for byte what
+  they were, because `layout()` has no previous run and only an engine fills the
+  channel in. (M3.8a)
+
+  **The freedom.** Every constraint Brandes-Koepf solves is a DIFFERENCE between
+  two coordinates, so sliding the finished drawing sideways solves them all
+  equally well and nothing in the algorithm picks a slide. The origin it reaches
+  is wherever the leftmost block happened to land, and a patch that widens one
+  side of the drawing moves it. Measured on the 1k corpus, whose drawing is
+  179,375 units wide: adding ONE EDGE translated it by 170,900 of that, and the
+  mean node displacement of the relayout was 163,522. This is the failure the
+  M3.8 roadmap entry calls throwing the graph across the screen.
+
+  **The rule.** The stage slides its finished layout by the smallest shift that
+  minimises the total distance the caller's own nodes travel from where the
+  previous run drew them. Total distance and not total SQUARED distance: the
+  absolute form is minimised over a closed interval, so zero can be chosen when
+  zero is optimal, and it follows that the shift is exactly zero unless a strict
+  majority of the shared nodes moved the same way. A relayout that left most of
+  the drawing alone is therefore returned unchanged, which is what keeps the
+  pass from being the first thing to move a node that the stages above it left
+  where it was. The squared form's minimiser is the mean, a generic real number
+  that moves every node on every relayout: on the 1k corpus, over a patch that
+  changes no layering, it moves all 1,000 nodes where this rule moves none.
+
+  **What it is worth**, as mean node displacement and mean route distance,
+  against the same stage with the channel taken away. On the 10k corpus: a leaf
+  added, 123.9 to 26.1 and 136.1 to 18.7, with the rerouted share falling from
+  100% to 24.5%; an edge added, 826.9 to 335.8 and 985.9 to 304.5, 100% to
+  44.2%; a node removed, 587.3 to 229.0 and 697.8 to 196.2. On the 1k corpus, an
+  edge added, 163,522 to 13,371 and 170,847 to 17,281.
+
+  **What it costs.** Nothing measurable: one pass over the graph's own nodes and
+  one sort of their displacements, beside a stage whose index build walks a
+  roster eighteen times larger. The warm stage timed at 0.96x to 1.04x the cold
+  one on both corpora, which is this box's noise.
+
+  **What it is not.** It is not the anchored incremental path, which is M3.8b:
+  the work is still a whole cold run, and the influence region is still the one
+  `influence.ts` declines to narrow for a stage that couples `x` across ranks.
+  Per-rank shifts were refused rather than deferred, because a chain spans ranks
+  and two ranks shifted differently bend the inner segments this algorithm
+  exists to straighten.
+
 - **Both rank stages now take the previous run's RANKS as well, and the default
   one checks them rather than trusting them.** Behaviour changed, types did not,
   except that `longestPathRank` joins `longestPathRankStage` on the surface.
