@@ -29,7 +29,7 @@ published package, and documents itself in
 | `@dagr/layout` | Headless Sugiyama layout engine; incremental, animation-first | Pipeline, cycle breaking, ranking, and crossing reduction implemented |
 | `@dagr/render` | WebGPU renderer: SDF shapes, instancing, spring animation | Camera, SDF shapes, an HTML overlay, instancing, edge ribbons, a real graph on screen and critically damped springs implemented; consuming layout deltas and GPU picking are next |
 | `@dagr/react` | `<DagrCanvas>` component and hooks | The canvas, the `useDagr` hook, `<Html>` over the overlay, and the layout-to-scene conversion implemented; interaction and animation are next |
-| `@dagr/vdsl` | Visual DSL toolkit: node spec adapter, typed ports, drag-to-connect | The node spec adapter and its registry implemented; typed ports and connection validation are next |
+| `@dagr/vdsl` | Visual DSL toolkit: node spec adapter, typed ports, drag-to-connect | The node spec adapter, its registry, port type tokens and connection validation implemented; drag-to-connect is next |
 
 Nothing is published to npm yet.
 

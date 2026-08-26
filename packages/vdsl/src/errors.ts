@@ -37,8 +37,8 @@ export abstract class DagrVdslError extends Error {
 
 /**
  * Thrown by `defineRegistry` when a declared kind is not one the toolkit could
- * act on: an empty id, a port id declared twice in one kind, or a `maxEdges`
- * that is not a positive integer.
+ * act on: an empty id, a port id declared twice in one kind, a `maxEdges` that
+ * is not a positive integer, or an empty port type token.
  *
  * It throws at define time rather than reporting at use time because a
  * registry is built once from a literal, usually at module scope, and a bad
