@@ -9,6 +9,85 @@ Quality bar for every task: TDD (failing test first), green typecheck and
 tests, benchmarks within 10% of baseline once they exist, persona review
 findings addressed or logged, docs land with the feature.
 
+## Where this stands, and what to do next
+
+Written 2026-08-26, after six pull requests merged in one sitting: M3.7b (#64),
+M3.8a (#65), M3.9a (#66), M4.7a (#67), M6.2 (#68) and M3.10a (#69). That is a
+five-day backlog cleared, and the state it leaves is worth stating plainly
+before the next task is picked, because the obvious next task by milestone
+order is not the next task by usefulness.
+
+THE ENGINE IS THE PART THAT IS DONE. M3.10a's corpus measures the shipped
+default pipeline over six scripted sessions and says the flagship claim holds:
+the incremental path moves 4.1x to 38.4x less of the drawing per patch than a
+cold run, with order churn at exactly zero on every session and every step, for
+3.1% to 13.8% in crossings. That is a claim with a committed measurement behind
+it rather than a sentence on a landing page.
+
+WHAT IS NOT DONE IS EVERYTHING BETWEEN THAT ENGINE AND A PERSON WHO WANTS TO
+USE IT. Nothing is on npm, so the only way to run any of this is to clone the
+repo. That is the whole of the gap, and it is not a big one in work.
+
+### The three things a consumer hits first, verified rather than assumed
+
+Every one of these was checked by packing the five packages on 2026-08-26 and
+reading the tarballs, not by reading the manifests.
+
+1. **`npm publish` would ship packages nobody can install.** `@dagr/layout`,
+   `@dagr/react` and `@dagr/vdsl` each declare `@dagr/graph` as
+   `"workspace:^"`, and `npm pack` leaves that string in the published
+   manifest, where it resolves to nothing. `pnpm pack` rewrites it to `^0.1.0`,
+   verified on the same package in the same tree. So the publish command is
+   `pnpm publish`, and AGENTS.md's queued-for-the-human item names the one that
+   does not work.
+2. **Every published source map is dangling.** All five packages set
+   `declarationMap` and `sourceMap` in `tsconfig.build.json` and ship
+   `files: ["dist", "CHANGELOG.md"]`, so 128 map files across the five point at
+   `../src/*.ts` that is not in any tarball. Ship `src` or stop emitting the
+   maps; M5.4b's entry already names the choice and couples it to project
+   references.
+3. **No package has a README or a LICENSE.** Five npm pages would be empty, and
+   five tarballs carry no licence text for a repo that has one. `publishConfig.access`
+   is absent too, and a scoped package without it does not publish public.
+
+### The order to take them in
+
+**M5.4a, the packaging half, next.** M5.4 is split below, and this is the half
+with no dependency on anything unbuilt: the three defects above, `publint` and
+`arethetypeswrong` over every tarball, a scratch project that installs the
+tarballs and typechecks an `import { layout } from '@dagr/layout'`, and the
+versioning decision. It needs no new feature, it is checkable end to end on
+this box, and until it lands every other task improves something no one outside
+this repo can run. The publish itself stays queued for the maintainer, which is
+AGENTS.md's rule and not this task's to change.
+
+**M4.7b second**, because it is what a consumer needs the moment they have the
+packages. M4.7a shipped the node springs and `MotionFrame.settled`, deliberately
+without a loop, so a caller wiring layout deltas to the renderer today writes
+their own `requestAnimationFrame` and gets no edge motion at all. The two halves
+of M4 that a consumer touches first are the delta consumer and the loop, and one
+of them is missing.
+
+**M5.3 third.** `docs/src/pages/index.tsx` tells a visitor that mutations arrive
+as deltas and untouched nodes stay put. Nothing on the site or in `apps/demo`
+calls `relayout` even once, so the claim is unillustrated on the page that makes
+it, while M3.10a's numbers now sit one click away on the incremental-layout doc.
+An animated demo is the cheapest way to make the two agree.
+
+**M5.2 and M4.8b after those, and they are a pair.** Interaction hooks want the
+pick pass, and the pick pass wants a machine with a WebGPU adapter, which this
+box does not have (M4.8a's entry records why). That is a real scheduling
+constraint rather than a preference, and it is the reason these come after three
+tasks that do not need one.
+
+WHAT THIS ORDER DEMOTES, SAID OUT LOUD. M3.8b and M3.9b are the two halves of
+M3 that do work rather than confine answers, and both are genuinely valuable:
+M3.9b is what makes a small edit CHEAP rather than only STABLE, which is the
+half of the flagship claim the corpus cannot yet show. They are demoted anyway,
+because a fast path nobody can install is worth less than a slow path they can,
+and because M3.10a's tables give both of them a measurement to be judged against
+whenever they land.
+
 ## M0: Foundation
 
 - [x] **M0.1** pnpm monorepo scaffold: `packages/{graph,layout,render,react}`,
@@ -4164,7 +4243,7 @@ of M3 would leave the second runner idle for a milestone.
   shipped with M1.1 and `docs/docs/layout.md` with M2.1, carrying this task's
   testing-strategy decision and three.js dependency call. `@dagr/render` is
   otherwise the only package whose documentation would be deferred wholesale to
-  M5.4, which is the shape that produces a rushed page written months after the
+  M5.4b, which is the shape that produces a rushed page written months after the
   decisions it describes. M4.9's list of WebGL2 differences and M4.10's
   measured numbers both assume a page exists to land on; this is that page.
   Decide here, because not one of this milestone's tests can be written until
@@ -4181,7 +4260,7 @@ of M3 would leave the second runner idle for a milestone.
   the far side of it, because "we have tests" and "the shader is correct" are
   different claims and this milestone will be tempted to conflate them.
   Also decide here: whether `three` is a `dependency` or a `peerDependency` of
-  `@dagr/render`. The M5.4 note explains why `@dagr/graph` became a peer of
+  `@dagr/render`. The M5.4b note explains why `@dagr/graph` became a peer of
   `@dagr/layout` (nominal typing through `#private` fields makes two copies in
   a tree incompatible), and three.js carries the same hazard for anything a
   consumer hands in or reads out: a `Scene`, a `Camera`, a renderer they
@@ -5342,7 +5421,7 @@ through the WebGL2 backend. M4.9b is the fifth, the parity screenshot.
   (instance update, buffer upload) under the M0.2 gate and keep only the draw
   passes local, which puts most of the number back under an automated check.
   Otherwise commit to re-measuring by hand at the end of the milestone and
-  again at M5.4's v0.1 readiness review.
+  again at M5.4b's v0.1 readiness review.
   THE FREE VERTEX BUFFER SLOT IS STILL FREE, recorded here because D3 was the
   first task since M4.3 to add a per-vertex channel and the obvious reading is
   that it spent it. It did not: `maxVertexBuffers` is a PIPELINE limit, the
@@ -5769,7 +5848,7 @@ it settled rather than restating the argument.
   `Camera2D` through `Renderer.camera`) and a nominal type has to be the same
   copy. `@dagr/layout` is a plain dependency: everything it puts on the surface
   is a structural interface, and a consumer who wants a canvas should not have
-  to install the layout engine to get one. M5.4's pack-and-check list is where
+  to install the layout engine to get one. M5.4a's pack-and-check list is where
   that gets verified against a real tarball.
   THE TEST HARNESS IS FORTY LINES OF `react-dom/client` AND `act`, WITH NO
   TESTING LIBRARY, and three non-test helpers beside it: `mount.tsx`,
@@ -5792,12 +5871,46 @@ it settled rather than restating the argument.
   THIS IS THE TASK THAT DEMONSTRATES THE HEADLINE CLAIM, and nothing shipped
   does. The campaign demo is read-only: `apps/demo/src/App.tsx` never mutates a
   graph, so it proves scale, rendering and semantic zoom, and proves nothing at
-  all about layout staying stable under an edit — which is what M6's preamble
+  all about layout staying stable under an edit, which is what M6's preamble
   says the project competes on. A visitor currently cannot see the flagship
   feature. Weight this accordingly against M5.1 and M5.2.
-- [ ] **M5.4** Docs: Docusaurus getting-started, API reference pages for all
-  packages, v0.1 readiness review. Queue npm publish for the human.
-  Pre-publish packaging checklist (from the M0.1 oss-docs review): add
+- [ ] **M5.4a** (every package) The tarball a consumer installs: the packaging
+  half of M5.4, split out and moved to the front of the queue on 2026-08-26.
+  See "Where this stands, and what to do next" at the top of this file for why
+  it goes first. The publish itself stays queued for the maintainer.
+  THREE DEFECTS, VERIFIED BY PACKING THE FIVE PACKAGES RATHER THAN BY READING
+  THE MANIFESTS, and each is a thing the first consumer hits rather than a
+  tidiness item.
+  `npm pack` LEAVES `workspace:^` IN THE PUBLISHED MANIFEST, so `@dagr/layout`,
+  `@dagr/react` and `@dagr/vdsl` would each ship a peer range that resolves to
+  nothing. `pnpm pack` rewrites it to `^0.1.0`, checked on the same package in
+  the same tree, so the publish command is `pnpm publish` and the queued item
+  should say so: AGENTS.md currently names `npm publish`, which is the one that
+  does not work.
+  EVERY PUBLISHED SOURCE MAP IS DANGLING. All five set `declarationMap` and
+  `sourceMap` in `tsconfig.build.json` and ship `files: ["dist", "CHANGELOG.md"]`,
+  so 128 map files across the five point at a `../src/*.ts` no tarball carries.
+  Ship `src` or stop emitting the maps, and take that decision together with
+  project references for the reason M5.4b's entry gives.
+  NO PACKAGE HAS A README OR A LICENSE, so five npm pages would be empty and
+  five tarballs carry no licence text for a repo that has one, and
+  `publishConfig.access` is absent, which does not publish a scoped package
+  public.
+  WHAT PROVES IT IS FIXED is not a manifest that looks right: `publint` and
+  `arethetypeswrong` over every tarball, plus a scratch project outside the
+  workspace that installs the tarballs and typechecks an
+  `import { layout } from '@dagr/layout'`. M5.4b's entry already argues why
+  nothing in CI can catch this: typecheck reads siblings through tsconfig
+  `paths`, tests through a vitest alias, and the build through the workspace
+  symlink, so all four steps pass on a package no consumer can resolve.
+  The versioning and changelog decision comes with this half, because a
+  lockstep release is a decision to take before the first publish rather than
+  after it. See M5.4b for the peer-range reasoning it rests on.
+- [ ] **M5.4b** Docs: Docusaurus getting-started, API reference pages for all
+  packages, v0.1 readiness review. Queue the publish for the human, on M5.4a's
+  finding that the command is `pnpm publish`.
+  Pre-publish packaging checklist (from the M0.1 oss-docs review), now M5.4a's
+  to execute and kept here for the reasoning behind it: add
   `publishConfig.access: "public"` to each scoped package; fix source maps
   (ship `src` in `files` or drop declaration/source maps from builds) so
   published maps do not point outside the tarball; per-package README and
@@ -5847,8 +5960,8 @@ it settled rather than restating the argument.
   on `Node` and on `NodeJSON`, an `update-node-parent` patch op, the invariants
   (a node has at most one parent, containment is acyclic, an edge may cross a
   boundary), and traversal coverage. `@dagr/layout` IGNORES `parent` in this
-  task — the point is the model, not the layout.
-  LANDS BEFORE M5.4 QUEUES THE PUBLISH. The api-design review of 2026-08-18
+  task: the point is the model, not the layout.
+  LANDS BEFORE M5.4b QUEUES THE PUBLISH. The api-design review of 2026-08-18
   corrected the reason, and the corrected reason is the one that matters. The
   field on `Node` is NOT the urgent part: it is optional and readonly, `Node` is
   only ever produced by `Graph` and never structurally implemented by a
@@ -5867,7 +5980,7 @@ it settled rather than restating the argument.
   - `GraphJSON.version` is the literal `1`
     (`packages/graph/src/serialize.ts`). `parseGraphJSON` ignores unknown keys
     by design, so a document carrying `parent` read by a build without
-    containment loses it silently rather than refusing — exactly the misread
+    containment loses it silently rather than refusing, which is exactly the misread
     `version` exists to prevent. Because this lands before v0.1 publishes, no
     such reader will ever exist and `version` correctly STAYS `1`. Say so here
     so nobody bumps it later out of caution.
@@ -5884,8 +5997,8 @@ it settled rather than restating the argument.
     replayed before its children. Containment adds a node ordering constraint
     that patches do not have today.
   - `removeNode` is cascade-free by expansion for incident edges: it emits a
-    `remove-edge` op per incident edge. Containment takes the SAME answer —
-    emit a `remove-node` op per child — because it is the one consistent with
+    `remove-edge` op per incident edge. Containment takes the SAME answer,
+    emit a `remove-node` op per child, because it is the one consistent with
     the rest of the model and it lets `invert` restore in order. "Refuse" was
     the other candidate and is rejected: it would make `removeNode` partial in
     a way nothing else in the API is.
@@ -5902,7 +6015,7 @@ it settled rather than restating the argument.
     a reparent becomes whatever the other ops in the patch happened to widen.
     A documented no-op case is fine; an implicit one is a wrong narrow bound
     the moment M7 reads `parent`.
-  This is not a bet that nesting is wanted — M6.4 and M7 decide that. It is the
+  This is not a bet that nesting is wanted: M6.4 and M7 decide that. It is the
   cheap half of an option whose expensive half is a coordinated release.
   SHIPPED. `Node.parent`, `NodeInit.parent`, `graph.setNodeParent(id, parent)`,
   `graph.children(id)`, the `update-node-parent` op, `ContainmentCycleError`,
@@ -6015,7 +6128,7 @@ WHAT `@dagr/vdsl` IS. A toolkit for building a node-graph language, not a
 node-graph language. The distinction is the whole design: general-purpose
 visual *languages* have a long failure record (Prograph, the 80s and 90s VPL
 wave), while toolkits that let someone else build a domain-specific one have a
-good one — React Flow, Rete, Baklava, NodeGraphQt, imgui-node-editor, and most
+good one: React Flow, Rete, Baklava, NodeGraphQt, imgui-node-editor, and most
 instructively LiteGraph.js, whose modest node-editor library is the substrate
 ComfyUI was built on. The toolkit never needed to guess the domain. It needed
 to be good enough that someone else's domain could land on it.
@@ -6048,13 +6161,13 @@ whether the generalisation holds.
   behind it.
   NOT an `attrs -> spec` predicate. `attrs` is `Readonly<Partial<A>>`, so
   `attrs.kind` is `string | undefined` and the consumer's kind union is erased
-  at the boundary — every hover and drag callback downstream lands on `any` or
+  at the boundary: every hover and drag callback downstream lands on `any` or
   a cast, which defeats the point of a typed toolkit. Ship
   `defineRegistry({ ... })` keyed on `K extends string`, inferred once from the
   object literal and threaded through as `NodeSpec<K>`.
   Packaging: `@dagr/vdsl` declares `@dagr/graph`, `@dagr/react` and `react` as
   peerDependencies plus devDependencies, for the same `#private` nominal-typing
-  reason M5.4 records for `@dagr/layout`. Two copies of `@dagr/graph` in a
+  reason M5.4b records for `@dagr/layout`. Two copies of `@dagr/graph` in a
   consumer's tree are not interchangeable.
   SHIPPED as `packages/vdsl`, a new package: `src/types.ts` (`PortSpec`,
   `NodeSpec`, `NodeSpecInit`, `ConfigCheck`, `RegistryOptions`, `KindNodeInit`,
@@ -6188,7 +6301,7 @@ whether the generalisation holds.
   permits cycles by design and M6.6 mandates a DSL with feedback, so a toolkit
   that rejects cycles out of the box is wrong for half its own reference
   consumers. When the adapter does declare it, the proposed-edge question is
-  `source === target || graph.canReach(target, source)` — already public on
+  `source === target || graph.canReach(target, source)`, already public on
   `Graph` and O(V + E) over the reached subgraph. Name it in the task, because
   the obvious wrong implementation is add-then-`findCycle`-then-remove, which
   emits two patches and pollutes undo. One boundary: `canReach` throws
@@ -6337,14 +6450,15 @@ whether the generalisation holds.
 - [ ] **M6.4** Subgraph nodes, drill-down form: a node that CONTAINS other
   nodes (M5.5's `parent`, one graph, not a nested `Graph` instance), and
   navigation that replaces the canvas with the container's children.
-  NO LAYOUT ALGORITHM CHANGE — and that is a narrower claim than the one this
+  NO LAYOUT ALGORITHM CHANGE, and that is a narrower claim than the one this
   entry made before the 2026-08-18 algorithms review, which was wrong about
   the engine. The stages need nothing. The ENGINE does: `createLayout` retains
   exactly one graph and one warm start (`held` / `warm`), and `run(graph)`
   always passes `previous: undefined`, so a run is always cold, on purpose.
   A consumer that navigates in and back out by calling `run()` on each view
-  therefore gets a COLD RUN every time it re-enters — precisely the reshuffle
-  the incremental-layout docs sell against — and calling `relayout(patch)` for
+  therefore gets a COLD RUN every time it re-enters, which is precisely the
+  reshuffle the incremental-layout docs sell against, and calling
+  `relayout(patch)` for
   the other view fails `checkPatchApplied` with `EngineStateError`. The real
   requirement is ONE ENGINE PER CONTAINER, KEPT ALIVE ACROSS NAVIGATION, each
   holding the derived view of its own children. Write that into the task; it
@@ -6380,7 +6494,7 @@ whether the generalisation holds.
   consequence is a large structural patch, which is what M3.3 batched and M3.6
   made order-stable, so this is a consumer of that work rather than new engine
   work. Verified in the 2026-08-18 algorithms review: collapse does NOT fall
-  back to a cold run — `cohortsOf` skips hint ids the roster no longer holds
+  back to a cold run: `cohortsOf` skips hint ids the roster no longer holds
   and stays engaged while any survivor is named, so the removed N cost nothing.
   WITH TWO LIMITS the task has to carry, because the guarantee is narrower than
   "collapse is stable". The order constraint is per hint LAYER, and a node
@@ -6411,7 +6525,7 @@ algorithms review rather than asserted:
   median sweep, and that is the pass Forster's work on layered compound graphs
   exists to replace.
 - RANKING, but NOT by replacing the ranker. Network simplex IS amenable to
-  containment constraints; this implementation just hardcodes both knobs —
+  containment constraints; this implementation hardcodes both knobs,
   minlen is the `- 1` in `slackOf`, and every weight is ±1 in `netInflow`,
   with `AcyclicView` carrying only `from` and `to` per edge. Containment
   edges need per-edge minlen and weight, so what M7 needs is A PER-EDGE
@@ -6437,7 +6551,7 @@ That makes the success criterion concrete, and it should replace "inline
 nesting" as the way this milestone is judged: M7 reproduces the campaign
 drawing without the hand-rolled packer. Two honest limits on that. The demo
 today runs all 95 tile layouts through ONE engine (`campaign-scene.ts`), so
-every tile is a cold run and no tile can relayout incrementally — the problem
+every tile is a cold run and no tile can relayout incrementally, and the problem
 M6.4 names above, already visible in shipped code. And the 6 GRID tiles are not
 a compound-layout problem at all: NPCs, factions, items, stat blocks, clues and
 weather have no routed edge with both ends inside a group, so a layer
