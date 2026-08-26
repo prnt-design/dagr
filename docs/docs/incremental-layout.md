@@ -55,9 +55,10 @@ cohort rather than a node.
 ## The three configurations
 
 `PreparedState.previous` is the only way a previous run reaches a stage, and two
-stages read it: the rank stage hands the previous reversed set to the cycle
-breaker, and the order stage holds to the previous layering. So the corpus runs
-one engine three times with that channel cut in three places.
+of the default stages read it: the rank stage hands the previous reversed set to
+the cycle breaker and checks the previous ranks against the view it is about to
+rank, and the order stage holds to the previous layering. So the corpus runs one
+engine three times with that channel cut in three places.
 
 - **Cold.** No stage sees a previous run. Every patch is a fresh layout, which
   is what a caller who throws the engine away and calls `layout()` again gets.
@@ -144,14 +145,31 @@ left.
 
 ## What is not here yet
 
-Every relayout on this page is a full pipeline run. The stability above comes
-from what the stages are handed rather than from work they skip, so a patch that
-moves nothing still costs a cold layout in time. The fast paths that make a
-small edit cheap, the incremental ranking that keeps the previous layers, and
-the coordinate assignment that does not throw the drawing across the screen are
-each in flight as their own milestones, and each of them will move the
-incremental column of these tables and leave the other two exactly where they
-are. That is what the two control columns are for.
+Every relayout on this page is a full pipeline run, with one exception noted
+below. The stability above comes from what the stages are handed rather than
+from work they skip, so a patch that moves nothing still costs a cold layout in
+time.
+
+This page predicted that the incremental ranking, the stable coordinate
+assignment and the fast paths would each move the incremental column when they
+landed. All three have landed, and **not one of them moved a number here**. Each
+has a reason, and none of them is that the corpus cannot see:
+
+- **Incremental ranking** checks the previous ranks rather than being seeded
+  from them, and longest path has one answer per graph, so a warm ranking IS the
+  cold ranking. It changes the work and cannot change the drawing.
+- **Stable coordinate assignment** slides a finished Brandes-Koepf drawing back
+  onto the previous run's coordinates. `brandesKoepfPosition` is not the default
+  position stage, so nothing in this corpus is drawn by it.
+- **The zero-stage fast path** answers a patch that changes nothing the pipeline
+  reads from the drawing already in hand. It fires on `reparent-mid`, which is
+  the one session whose expected answer already was that nothing moves. That
+  session is now the exception to the first sentence above: its relayouts run no
+  stage at all.
+
+What is still missing is the work the third bullet does not do: a fast path that
+declines to run stages for an edit that DOES change the drawing, which is what
+would make a small edit cheap in time rather than only stable in space.
 
 The corpus does not yet carry a comparison between the current warm-start rule
 and a softer one that would let the transpose pass break a held pair on a
