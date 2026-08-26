@@ -2010,8 +2010,9 @@ you meant, and reports the node once. The suite measures both paths side by side
 in `test/layout.relayout.test.ts`. See
 [Batching](./graph-model.md#batching) for what a batch is and what it is not.
 
-**It is no faster than a cold run.** The whole pipeline runs again, and the
-tests hold it to landing the same geometry a cold run of the same graph does.
+**It is no faster than a cold run, unless it runs no stage at all.** For any
+patch that changes the drawing the whole pipeline runs again, and the tests hold
+it to landing the same geometry a cold run of the same graph does.
 That is the point of shipping it in this shape first: it makes the delta
 contract, the engine lifetime and the retained state testable before any
 incremental algorithm exists, and it gives the stages that become incremental
@@ -2034,7 +2035,9 @@ drawn backwards: see
 `relayoutAsync` over a worker does NOT get either of them, because the state
 they read stays in the worker.
 
-Four fields come back. `delta` is a [`LayoutDelta`](#deltas) against the
+Five fields come back. `ran` names the stages this relayout ran, in pipeline
+order, and is empty when it ran none: see [the patch that runs no
+stage](#the-patch-that-runs-no-stage). `delta` is a [`LayoutDelta`](#deltas) against the
 geometry the engine last reported. `result` is that geometry with the delta
 applied, so a consumer that reads it and a consumer that accumulates deltas are
 never holding different drawings. `influence` and `region` are both sets of node
@@ -2062,6 +2065,62 @@ rather than arrays, which is the opposite of what a delta chose and for the
 opposite reason: a delta is a list you iterate, and these are predicates you
 ask.
 
+### The patch that runs no stage
+
+Some edits cannot change a drawing. Recolouring a node, retitling a graph,
+attaching an edge to a different port, moving a node under a parent: none of
+them reaches anything this pipeline reads, and laying the graph out again would
+spend a full Sugiyama pass reproducing the drawing it started from. The engine
+recognises those and answers without running a stage:
+
+```ts
+graph.updateNodeAttrs('n7', { colour: 'red' });
+
+const { ran, delta, influence } = engine.relayout(patch);
+ran; // []
+isEmptyDelta(delta); // true
+influence.nodes.size; // 0
+```
+
+**What a run actually reads** is the nodes and edges, the resolved config, the
+resolved sizes, and the previous run's state. The config is bound when you build
+the engine, and a skipped relayout leaves the previous state alone, so a patch
+that adds and removes no node and no edge and moves no size is a patch a run
+cannot see. Seven of the eleven op kinds qualify on their kind alone, since no
+stage here reads a port, an edge attribute, a graph attribute or a parent. Node
+attributes are read, through your `nodeSize` callback and nowhere else, so an
+attribute edit is settled by measuring: same sizes, no run. A `graph.batch` that
+carries one structural op is structural, because its ops are one patch.
+
+**It is about a thousand times faster on the corpus this milestone measures on**
+and about five hundred on a corpus ten times smaller, so read the order of
+magnitude rather than the number: the saving is the whole cold run, and a cold
+run gets more expensive faster than the graph gets bigger. What is left is a
+walk of the roster, sizing every node and comparing every size, and that is
+deliberate: `nodeSize` is promised one call per node per run, and a caller
+measuring text or reading the DOM is relying on it.
+
+**Nothing is bounded, because nothing ran.** `influence` and `region` are both
+empty, and they are exact rather than conservative for the first time: a
+relayout that ran no stage was entitled to move nothing, and the exact bound on
+a patch that changes nothing is the empty one. That matters for the budget as
+much as for the honesty. Computing a [region](#influence-regions) costs a pass
+over the graph's edges, which on the 10k-node corpus is more than a frame on its
+own, so a fast path that bounded itself could not meet a frame budget however
+many stages it went on to skip.
+
+**It is refused in two cases, both about not knowing what would have run.** A
+stage you wrote yourself may read anything it likes: a router that reads ports
+is exactly what ports are named in a region for. So an engine built with a stage
+this package did not write takes the full path, even for a recolour. Stages this
+package builds are recognised by identity whether they are the defaults or not,
+so `createLayout({ stages: { rank: networkSimplexRankStage } })` keeps the fast
+path. The other case is a drawing that came back from a worker: the stages over
+there are the worker's and this side cannot name them, so the relayout after a
+`runAsync` served by a worker runs the pipeline. An engine that has run on this
+thread since keeps the fast path, and its inert patches never reach the port at
+all.
+
 ### The tolerance, on the engine
 
 `createLayout({ epsilon })` is the smallest move worth reporting, in node-size
@@ -2079,7 +2138,7 @@ At the default of 0 nothing is ever withheld, and `result` is the pipeline's own
 answer.
 
 An engine with a worker bound has `relayoutAsync`, which is the same call and
-answers with the same four fields; see
+answers with the same five fields; see
 [Relayout in a worker](#relayout-in-a-worker).
 
 ### Ending an engine
@@ -2277,7 +2336,10 @@ give up needs to race the promise themselves.
 ### Relayout in a worker
 
 `engine.relayoutAsync(patch)` is the same call for an engine with a port bound,
-and it answers with the same four fields. The delta is computed on the calling
+and it answers with the same five fields. A patch that
+[runs no stage](#the-patch-that-runs-no-stage) is answered here without posting
+anything at all, as long as the drawing the engine is holding was made on this
+thread. The delta is computed on the calling
 thread whatever the worker did, because the geometry the engine last reported is
 this side's bookkeeping rather than the pipeline's, so nothing about the
 [wire protocol](#what-crosses-and-what-does-not) changes: what crosses is a run,

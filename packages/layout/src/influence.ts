@@ -73,7 +73,11 @@ export interface InfluenceSet {
  * The trivial influence set: everything on either side of the patch.
  *
  * The honest answer for a relayout that re-runs the whole pipeline, which is
- * what M3.2's does and what it still does. Nothing about the patch is consulted,
+ * what M3.2's does and what it still does whenever it runs a stage at all.
+ * M3.9a's fast path does not, and reports an empty set rather than this one,
+ * which is exact for the same reason this is: it names what the run that
+ * happened was entitled to move, and a run that did not happen was entitled to
+ * nothing. Nothing about the patch is consulted,
  * because nothing about this relayout is confined by it: see
  * {@link influenceRegion} for what the patch does bound, and M3.6 onwards for
  * the stages that make the two the same set.

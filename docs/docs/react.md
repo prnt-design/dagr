@@ -74,9 +74,9 @@ There is no worker here, and that is a decision rather than an omission. A
 import.meta.url))` is an expression a bundler reads statically and a `new URL`
 inside this package would have to resolve, and emit its own chunk, under
 everyone's bundler. `@dagr/campaign-stage` takes a `createWorker` factory for
-exactly that reason. Inviting one here before M3.9 has built the worker-side
+exactly that reason. Inviting one here before M3.9b has built the worker-side
 session that would make a per-edit round trip worth taking would be guessing at
-a shape M3.9 is going to decide.
+a shape M3.9b is going to decide.
 
 ## The config is compared by value
 

@@ -1,4 +1,5 @@
 import type { EdgeId, Graph, NodeId } from '@dagr/graph';
+import { authored } from './authorship.js';
 import { InternalLayoutError, InvalidConfigError } from './errors.js';
 import { forEachSegment } from './segments.js';
 import type { OrderStage, RankedState } from './types.js';
@@ -1521,7 +1522,7 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
   const budget = resolveBudget(options?.maxSweeps);
   const passBudget = resolveTransposeBudget(options?.maxTransposePasses);
   const hint = options?.initialOrder;
-  return {
+  return authored({
     name: 'barycenter-order',
     run(input) {
       const index = buildIndex(input);
@@ -1716,7 +1717,7 @@ export function barycenterOrder(options?: BarycenterOrderOptions): OrderStage {
 
       return { layers: best.map((layer) => layer.map((node) => idAt(index.ids, node))) };
     },
-  };
+  });
 }
 
 /**

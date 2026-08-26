@@ -143,6 +143,7 @@ export type {
   LayoutConfig,
   LayoutInput,
   LayoutResult,
+  LayoutStageName,
   LayoutStageOverrides,
   LayoutStages,
   NodeGeometry,

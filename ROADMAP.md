@@ -3166,7 +3166,7 @@ it.
   times of 30 (0 violations, region 48% of the roster), adding a leaf 8 times
   (154, 57%), removing a node 11 times (137, 86%), removing an edge 15 times
   (119, 74%). THE RESIZE IS THE ONE KIND THAT IS ALREADY INSIDE ITS BOUND, and it
-  is the one that changes no rank and no barycenter, which is M3.9's attribute
+  is the one that changes no rank and no barycenter, which is M3.9b's attribute
   fast path arriving as a measurement. Everything else in that table is the cold
   crossing sweep: removing one edge from a 40-node drawing reorders the top rank
   and moves a node 650 units sideways. M3.6 is what brings that down, and this is
@@ -3326,7 +3326,7 @@ it.
   What it costs is a SESSION on the worker side, an engine id and a run that
   says "the graph you have, with this patch applied", plus a failure mode for a
   worker that has lost it. That is M2.10's wire protocol reopened and it belongs
-  with M3.9, where the async path is what a frame budget is measured on. Until
+  with M3.9b, where the async path is what a frame budget is measured on. Until
   it lands `relayoutAsync` over a worker is the unstable path and says so in its
   own docstring, on the docs page and here.
   WHAT M3.7b INHERITS. The constraint is keyed by node identity and reads
@@ -3753,17 +3753,138 @@ it.
   thinks of as touching one node; leaving the gap is perfectly stable and
   accumulates holes, so a long-running session ends up mostly whitespace with no
   way back, which is the same lock-in reached by another route and the same
-  `reflow()` escape hatch resolves it. M3.9's remove-leaf fast path quietly
+  `reflow()` escape hatch resolves it. M3.9b's remove-leaf fast path quietly
   presumes leave-the-gap without arguing for it, so argue it here, and let
   M3.10's prune and churn sequences measure the cost.
   This is the run to spend the milestone's heaviest algorithms review on.
   `influence.ts` NAMES THIS TASK: its horizontal rule is `gridPositionStage`'s
   and it declines to narrow the region for a stage that couples `x` across
   ranks, which is what a band solve has to declare.
-- [ ] **M3.9** (`@dagr/layout`) Fast paths: add-leaf, remove-leaf and
-  attribute-only patches skip pipeline stages outright. An attribute patch that
-  does not change a node's size changes no geometry at all and should emit an
-  empty delta without running a stage; one that does change size is a
+- [x] **M3.9a** (`@dagr/layout`) The patch that runs no stage: a relayout whose
+  patch changes nothing the pipeline reads returns the drawing the caller is
+  holding, an empty delta, and empty influence and region sets, without running
+  a stage. This is the half of M3.9 its own entry called available on day one,
+  and it is the half that needs no stage to become incremental: it is a decision
+  ABOUT a run rather than a change to one. M3.9b is the rest, and it is the half
+  that does work.
+  THE SPLIT IS TAKEN IN THE ORDER THE ENTRY ARGUES FOR AND NOT THE ONE IT LISTS.
+  The entry names add-leaf first and then says, twice, that a combined figure
+  would hide the work: the attribute path is three or four orders of magnitude
+  and free, and reporting it beside add-leaf means add-leaf learns nothing.
+  Shipping them apart is what that argument asks for, and it also means the
+  per-path budget arrives with the path that can be asserted rather than with
+  the one that cannot.
+  WHAT A RUN READS, WHICH IS THE WHOLE ARGUMENT. A run is a function of the
+  nodes and edges, the resolved config, the resolved sizes and the warm-start
+  state. The config is bound at construction and no patch reaches it, and a
+  skipped relayout leaves the warm state alone, so a patch that adds and removes
+  no node and no edge and moves no size is a patch a run CANNOT SEE. Seven of
+  the eleven op kinds qualify by kind, because no stage here reads a port, an
+  edge attribute, a graph attribute or a parent; node attributes are read, but
+  only through `nodeSize`, so an attribute op is settled by measuring rather
+  than by its kind. `inert.ts` holds both halves and `engine.ts` takes the
+  decision.
+  THE SWITCH LISTS WHAT IS INERT AND REFUSES EVERYTHING ELSE, which is the
+  opposite polarity to the one that reads better. A `default` arm that skipped
+  would skip an op kind nobody has classified, and the cost of that is a wrong
+  drawing returned in silence; a `default` arm that runs costs a full relayout
+  on the day @dagr/graph adds an op. GENERALISE IT: when a switch decides
+  whether to do LESS work, the unknown arm is the expensive one.
+  WHAT IT COSTS, ON THIS BOX, 8 cores, 1-minute load 0.5 to 0.7. On the 10k
+  corpus an inert relayout is 1.955ms against 3,317ms for a full one, 1,697x. On
+  the 1k corpus 0.348ms against 189ms, 545x. THE ENTRY'S "THREE OR FOUR ORDERS
+  OF MAGNITUDE" IS TRUE ON THE CORPUS THIS MILESTONE MEASURES ON AND ONE ORDER
+  HIGH ON THE OTHER, which is the same scoping rule every number in this repo
+  carries: 1,697x is 3.2 orders and 545x is 2.7.
+  THE 1.955ms IS A WALK OF THE ROSTER AND ALMOST NOTHING ELSE: sizing every node
+  is 1.161ms of it, comparing every size 0.414ms, and classifying the ops
+  0.0005ms. So the remaining saving is entirely the decision to size the whole
+  roster rather than the nodes the patch names, and it is worth about 1.5ms on
+  10k. IT IS NOT TAKEN HERE, because `measureNodes` promises a `nodeSize`
+  callback one call per node per run, and a caller whose sizes come from
+  measuring text or reading the DOM is relying on exactly that: narrowing the
+  measurement would silently stop a relayout picking up a size change the graph
+  never emitted a patch for. M3.9b inherits it, where it can be traded against a
+  fast path that does real work.
+  NO REGION IS COMPUTED, AND THAT IS WHAT MAKES THE BUDGET RATHER THAN A DETAIL.
+  M3.5's remaining cost was handed here: the region's edge pass is proportional
+  to the drawing rather than to the patch, and it was 2.2ms on 1k and 5.9ms on
+  4k when M3.5 measured it. ON THE 10k CORPUS IT IS 33.255ms, TWO FRAMES ON ITS
+  OWN, so a fast path that bounded itself could not meet a frame budget however
+  many stages it went on to skip. The answer here is that it needs no bound: a
+  run that skips every stage was entitled to move nothing, so the exact region
+  is the empty one. GENERALISE IT: a bound exists to constrain work, and work
+  that does not happen is already constrained.
+  THIS IS THE FIRST TIME EITHER SET ON A `RelayoutResult` HAS BEEN NARROWER THAN
+  THE ROSTER, which `InfluenceSet`'s own docstring predicted would arrive with
+  this milestone and which M3.5 recorded itself as failing to deliver. It is
+  narrower because it is EXACT, not because it was tightened: nothing ran.
+  THE OBSERVABLE IS `RelayoutResult.ran`, the stages this relayout ran in
+  pipeline order, empty when it ran none. A LIST RATHER THAN THE BOOLEAN IT IS
+  TODAY, because the boolean is an accident of which fast path landed first:
+  M3.9b's add-leaf runs no cycle pass and no re-rank and still positions and
+  routes, and its attribute-resize case is a position-and-route-only run, so
+  both name two of four. It says WHAT RAN rather than how long anything took,
+  which is the only form of "this was cheap" a shared machine can hold.
+  THE FAST PATH IS REFUSED FOR A STAGE THIS PACKAGE DID NOT WRITE, and this is
+  the one decision here that is about correctness rather than about scope. "No
+  stage reads a port" is a fact about the stages in this package and not a rule
+  the pipeline imposes: a stage is handed the whole `PreparedState`, and
+  `influence.ts` says in as many words that a caller's own router is who ports
+  are named for. A skip taken against such a stage is not a slower answer or a
+  looser bound, it is A WRONG DRAWING RETURNED IN SILENCE. So `authorship.ts`
+  marks every stage this package builds at its construction site, factories
+  included, and the engine asks. That keeps `networkSimplexRank({ maxIterations })`
+  on the fast path, which an identity check against exported names could not:
+  half the stages here are minted per call. It is CONSERVATIVE and not exact,
+  because "what does this stage read" is not a question a stage can be asked;
+  letting one declare it widens four public interfaces and is M3.9b's to take if
+  a consumer ever wants it.
+  AND IT IS REFUSED AFTER A RUN SERVED BY A WORKER, for the same reason read
+  from the other end. "The stages are this side's, and the config is not" is
+  `serveLayout`'s protocol in one sentence, so a drawing that came back across
+  the wire was made by stages this side cannot name. This costs the case the
+  M3.9 entry named, an attribute edit that should never leave the calling thread
+  at all, in EXACTLY ONE ARRANGEMENT: a worker-backed engine whose last run was
+  `runAsync`. One that has run here since keeps the fast path and never posts,
+  and the check is taken before `postMessage` rather than after. Carrying the
+  stage identity across is the session's to do, with the rest of the protocol.
+  A RETAINED SIZES MAP IS NOT THE PIPELINE'S SIZES MAP, and the difference is a
+  fast path that never fires. `PreviousLayout.sizes` is what the stages saw,
+  which the rank stage extends with one entry per dummy: 174k entries beside the
+  10k a caller has on the large corpus, so comparing a fresh measurement against
+  it answers no on the count alone. The engine retains `prepare`'s own map
+  instead, before any stage saw it. IT WAS CAUGHT BY THE 10k BUDGET TEST AND BY
+  NOTHING ELSE, because the two bench corpora carry dummies and a four-node
+  diamond does not: A TEST ON A GRAPH SMALL ENOUGH TO READ IS NOT A TEST ON A
+  GRAPH WITH DUMMIES IN IT.
+  THE ONE TIMING THIS REPO ASSERTS, and it is assertable for one reason: the
+  margin is two orders of magnitude. `layout.cost.test.ts` argues at length that
+  a wall-clock number cannot be asserted on a shared machine without becoming a
+  flake or a no-op, and it is right about a number measured against itself. A
+  frame budget against a path that runs no stage is neither. IT STOPS BEING
+  ASSERTABLE EXACTLY WHEN A FAST PATH GETS CLOSE TO ITS BUDGET, which is M3.9b's
+  problem: the honest guard there is `ran`, which says what was skipped rather
+  than how fast the skipping was.
+  NO BENCH ENTRY WAS ADDED. The gate's entries are ratios against a control
+  workload measured in the same worker, and this entry's own argument is that a
+  ratio is the wrong instrument for a fast path. The regression guard that
+  matters is the assertion that `ran` is empty, which catches a change that
+  quietly starts running stages and which no timing on this box could.
+  WHAT M3.9b INHERITS, WHICH IS EVERYTHING THAT DOES WORK. Add-leaf and
+  remove-leaf skipping the cycle pass and the re-rank; the attribute patch that
+  DOES change a size, as a position-and-route-only run; the stated ceiling on
+  the fallback path, a small multiple of a cold run, measured, without which the
+  milestone can pass by being perfectly stable and slower than a cold run on
+  every patch; sizing only the nodes the patch names, with the promise it
+  spends; a stage declaring what it reads, if a consumer wants the fast path for
+  their own; AND THE WORKER SESSION, unchanged and undiminished by this half.
+  Read the original entry's own reasoning below, which is M3.9b's and is
+  reproduced rather than summarised.
+  Merged in PR #66.
+- [ ] **M3.9b** (`@dagr/layout`) Fast paths that do work: add-leaf, remove-leaf
+  and size-changing attribute patches skip pipeline stages rather than all of
+  them. An attribute patch that changes a node's size is a
   position-and-route-only run. A leaf attached to an existing rank needs no
   cycle pass and no re-rank.
   The bench is an absolute per-patch latency against a budget, one target per
@@ -3780,11 +3901,15 @@ it.
   matters least. M4 animates, so the budget is a frame at 60fps and the useful
   commitment is that an add-leaf patch on the 10k corpus completes within one
   frame. That number cannot be met by making something else slower.
+  THAT PARAGRAPH IS WHY M3.9a EXISTS AS ITS OWN TASK: it is the argument for
+  reporting the zero-stage path separately, taken to its conclusion. M3.9a
+  measured it at 1,697x on the 10k corpus and 545x on the 1k, so the combined
+  figure this task would otherwise carry is now unavailable to hide behind.
   Give the fallback path a stated ceiling too, a small multiple of a cold run,
   measured. Otherwise the milestone can pass by being perfectly stable and
   slower than a cold run on every patch, since M3.4's metrics measure only
   stability and the fallback pays for the incremental analysis and then does
-  the full work anyway.
+  the work anyway.
   These come last among the algorithm tasks on purpose. A fast path is only
   safe once M3.5's influence regions say what it is allowed to skip, and only
   demonstrable once M3.4's metrics can show it skipped work rather than
@@ -3803,10 +3928,18 @@ it.
   of its docstring, the docs page and M3.6's entry say so. Note the interaction
   with the fast paths above: an attribute patch that changes no geometry should
   not cross a boundary at all, so the cheapest half of this is deciding what
-  never leaves the calling thread.
-  M3.5's REMAINING COST IS ALSO M3.9's: the region's edge pass is proportional
-  to the drawing rather than to the patch, 2.2ms on 1k nodes and 5.9ms on 4k,
-  and a frame is the budget that makes that worth looking at.
+  never leaves the calling thread. M3.9a ANSWERED THAT HALF EXCEPT IN ONE
+  ARRANGEMENT: an inert patch never leaves this thread, unless the drawing the
+  engine is holding came back from the worker, because then the stages that made
+  it are not this side's to name. The session is what would carry the stage
+  identity across and close it.
+  M3.5's REMAINING COST WAS M3.9a's TO ANSWER FOR THE ZERO-STAGE PATH AND IS
+  STILL THIS TASK'S FOR EVERY OTHER: the region's edge pass is proportional to
+  the drawing rather than to the patch, and M3.9a measured it at 33.255ms on the
+  10k corpus, two frames on its own, against M3.5's 2.2ms on 1k and 5.9ms on 4k.
+  A path that runs no stage needs no bound and skips it; a path that runs SOME
+  stages needs one, so the pass has to get cheaper or the bound has to come from
+  somewhere other than a walk of the edges.
 - [ ] **M3.10** (`@dagr/layout`, `docs`) Stability golden corpus: scripted
   mutation sequences (grow, prune, reparent, rewire, sustained churn) run
   through the engine with their stability metrics committed as golden files, so

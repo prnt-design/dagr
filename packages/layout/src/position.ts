@@ -1,4 +1,5 @@
 import type { NodeId } from '@dagr/graph';
+import { authored } from './authorship.js';
 import { InternalLayoutError, InvalidConfigError } from './errors.js';
 import { forEachSegment } from './segments.js';
 import type { OrderedState, Point, PositionStage, Size } from './types.js';
@@ -949,7 +950,7 @@ function rowCentres(input: OrderedState): Float64Array {
  */
 export function brandesKoepfPosition(options?: BrandesKoepfOptions): PositionStage {
   const variant = resolveVariant(options?.variant);
-  return {
+  return authored({
     name: 'brandes-koepf-position',
     run(input) {
       const index = buildIndex(input);
@@ -1006,7 +1007,7 @@ export function brandesKoepfPosition(options?: BrandesKoepfOptions): PositionSta
       }
       return { positions };
     },
-  };
+  });
 }
 
 /**

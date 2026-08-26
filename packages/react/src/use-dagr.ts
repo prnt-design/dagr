@@ -44,9 +44,9 @@
  * async version costs: the `Worker` has to be the CALLER's, because `new
  * Worker(new URL(...))` is an expression a bundler reads statically and this
  * package would have to resolve under every host's bundler to own one. A
- * `createWorker` prop invented here, before M3.9 has built the worker-side
+ * `createWorker` prop invented here, before M3.9b has built the worker-side
  * session that would make a per-edit round trip worth taking, would be a guess
- * at a shape M3.9 is going to decide.
+ * at a shape M3.9b is going to decide.
  */
 
 import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';

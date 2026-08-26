@@ -4,16 +4,19 @@
  */
 
 import type { EdgeId, Graph, NodeId, Patch } from '@dagr/graph';
+import { isAuthored } from './authorship.js';
 import { resolveConfig } from './config.js';
 import { applyDelta, diffLayout, requireEpsilon } from './delta.js';
 import type { LayoutDelta } from './delta.js';
 import { DagrLayoutError, EngineStateError, WorkerTransportError } from './errors.js';
 import type { InfluenceSet } from './influence.js';
 import { influenceRegion, wholeRoster } from './influence.js';
+import { movesNothing, sameSizes } from './inert.js';
 import { prepare, runPipeline } from './pipeline.js';
 import type {
   LayoutConfig,
   LayoutResult,
+  LayoutStageName,
   LayoutStageOverrides,
   PreparedState,
   PreviousLayout,
@@ -36,6 +39,48 @@ import { decodeFailure, decodeResult, encodeRun, isLayoutMessage } from './wire.
  * costs nothing and makes the ids disjoint by construction.
  */
 let nextRequest = 1;
+
+/**
+ * What a full relayout ran, in pipeline order, and what a skipped one did.
+ *
+ * Frozen and shared rather than built per relayout, because they are constants
+ * and `RelayoutResult.ran` is `readonly`.
+ */
+const EVERY_STAGE: readonly LayoutStageName[] = Object.freeze([
+  'rank',
+  'order',
+  'position',
+  'route',
+]);
+const NO_STAGE: readonly LayoutStageName[] = Object.freeze([]);
+
+/**
+ * The influence set of a relayout that ran no stage, which is empty and is
+ * EXACT rather than conservative: nothing ran, so nothing was entitled to move.
+ *
+ * The first time either of `RelayoutResult`'s two sets is narrower than the
+ * roster, and the narrowing `InfluenceSet`'s own docstring predicted would
+ * arrive with this milestone. Built fresh per call rather than shared, on the
+ * same argument {@link wholeRoster} builds fresh sets: the field is a
+ * `ReadonlySet` to the type system and an ordinary `Set` at runtime, and one
+ * shared instance would let one caller's mistake reach every other caller's
+ * answer.
+ */
+const nothingMoved = (): InfluenceSet => ({ nodes: new Set(), edges: new Set() });
+
+/**
+ * The delta of a relayout that changed nothing.
+ *
+ * Built rather than diffed: `diffLayout(previous, previous)` walks both rosters
+ * to produce this, which is the pass the fast path exists to avoid, and it
+ * would be walking a result against itself to learn what this file already
+ * knows.
+ */
+const noChange = (): LayoutDelta => ({
+  nodes: { added: [], removed: [], moved: [] },
+  edges: { added: [], removed: [], rerouted: [] },
+  bounds: undefined,
+});
 
 /**
  * The part of a worker this package uses: post a message, hear the answer.
@@ -127,13 +172,13 @@ export interface LayoutEngineOptions {
  * What a relayout produced: the drawing, what changed to get there, and what it
  * was entitled to change.
  *
- * Four fields rather than a bare delta because a consumer needs them and can
+ * Five fields rather than a bare delta because a consumer needs them and can
  * derive none of them from the others. A renderer holding the previous result
  * applies the `delta`; one that has just been mounted, or that dropped a frame,
  * takes the `result` whole; M3.4's `stabilityViolations` is written against the
- * `influence` set; and `region` is the bound M3.5 added beside it, which is what
+ * `influence` set; `region` is the bound M3.5 added beside it, which is what
  * the stages after it are confined to and what `influence` becomes once they
- * are.
+ * are; and `ran` is M3.9's, the stages this relayout actually ran.
  */
 export interface RelayoutResult {
   /**
@@ -158,7 +203,15 @@ export interface RelayoutResult {
   /** What changed between the last reported geometry and this one. */
   readonly delta: LayoutDelta;
 
-  /** What this relayout was entitled to move. See {@link InfluenceSet}. */
+  /**
+   * What this relayout was entitled to move. See {@link InfluenceSet}.
+   *
+   * The whole roster for a relayout that ran the pipeline, because a cold sweep
+   * is entitled to reorder a rank the patch never came near. EMPTY for one that
+   * ran no stage, which is M3.9a's fast path and the first time this field has
+   * been narrower than the roster: it is exact rather than tightened, since a
+   * run that did not happen moved nothing. See {@link ran}.
+   */
   readonly influence: InfluenceSet;
 
   /**
@@ -194,10 +247,34 @@ export interface RelayoutResult {
    * worker, so it left no pipeline state on this side and there are no ranks to
    * build a band out of. That is the same absence that makes such a relayout
    * cold, and M3.6 decided what to do about it: the worker retains the state
-   * and the patch crosses, which is a protocol M3.9 owns. See
+   * and the patch crosses, which is a protocol M3.9b owns. See
    * {@link LayoutEngine.relayoutAsync}.
    */
   readonly region: InfluenceSet;
+
+  /**
+   * The stages this relayout ran, in pipeline order. Empty when it ran none.
+   *
+   * M3.9's observable, and the thing its fast paths are a claim about. A full
+   * relayout names all four; the path this milestone shipped first names none,
+   * because a patch that changes nothing the pipeline reads has nothing for a
+   * stage to do and the drawing the caller is holding is already the answer.
+   *
+   * A LIST RATHER THAN THE BOOLEAN IT IS TODAY, and the reason is that the
+   * boolean is an accident of which fast path landed first. The one here skips
+   * every stage; the entry's other two do not. An add-leaf patch attached to an
+   * existing rank needs no cycle pass and no re-rank and still has to position
+   * and route, and an attribute edit that DOES change a size is a
+   * position-and-route-only run, so both of those name two of the four. A
+   * boolean would have to be replaced on the day either lands, and a consumer
+   * reading it would have to be told that `false` had stopped meaning what it
+   * meant.
+   *
+   * IT IS NOT A PERFORMANCE HINT AND IT IS NOT ADVISORY: it says what ran, so a
+   * test can assert that a patch cost nothing rather than assert that it was
+   * fast, which is the only form of that claim a shared machine can hold.
+   */
+  readonly ran: readonly LayoutStageName[];
 }
 
 /**
@@ -408,17 +485,21 @@ export interface LayoutEngine {
    * pipeline runs again. That is what makes the delta contract, the engine
    * lifetime and the retained state testable before any incremental algorithm
    * exists, and it gives M3.6 through M3.9 a correct baseline to be measured
-   * against rather than nothing. The patch is read for two things today: whether
-   * it happened, and what it can affect, which is the `region` on the result.
-   * NOTHING YET CONFINES THE WORK TO THAT REGION, AND M3.7b IS THE FIRST TASK
-   * THAT PARTLY DOES, which is measurable in the meantime. M3.6 confined the
-   * ANSWER without confining the work: the order stage holds the previous run's
-   * permutation, so a relayout costs what a cold run costs and lands inside the
-   * region anyway. M3.7b confined one stage's sweep to the ranks a patch
-   * actually moved, and measured what that is worth at half a percent of the
-   * rank stage, because the stage's cost is the dummy chains it re-mints and not
-   * the sweep it now skips. So the work is still a cold run's for every reading
-   * a caller can take, and M3.8 and M3.9 are still what change that.
+   * against rather than nothing. The patch is read for three things today:
+   * whether it happened, whether it needs a run at all, and what it can affect,
+   * which is the `region` on the result.
+   * NOTHING YET CONFINES THE WORK OF A RUN TO THAT REGION, AND M3.7b IS THE
+   * FIRST TASK THAT PARTLY DOES. M3.6 confined the ANSWER without confining the
+   * work: the order stage holds the previous run's permutation, so a relayout
+   * costs what a cold run costs and lands inside the region anyway. M3.7b
+   * confined one stage's sweep to the ranks a patch actually moved, and measured
+   * what that is worth at half a percent of the rank stage, because the stage's
+   * cost is the dummy chains it re-mints and not the sweep it now skips. So a
+   * run that happens is still a cold run's work for every reading a caller can
+   * take, and M3.8b and M3.9b are still what change that. M3.9a is the first
+   * thing here that costs LESS, and it does it by not running rather than by
+   * running less: a patch that changes nothing the pipeline reads is answered
+   * from the drawing already in hand. See {@link RelayoutResult.ran}.
    *
    * The delta is measured against the geometry this engine last REPORTED rather
    * than against its last computed run, which is what makes a nonzero
@@ -437,7 +518,7 @@ export interface LayoutEngine {
    * {@link relayout}, in the bound worker, or on this thread when there is none.
    *
    * The call a consumer who adopted `runAsync` for a large graph reaches for,
-   * and it answers with the same four fields the synchronous one does. Rejects
+   * and it answers with the same five fields the synchronous one does. Rejects
    * rather than throws, for every failure, on the same argument `runAsync`
    * makes.
    *
@@ -470,7 +551,7 @@ export interface LayoutEngine {
    * session on that side: an engine id, a run that says "the graph you have,
    * with this patch applied", and a failure mode for a worker that has lost it.
    * That is M2.10's wire protocol reopened, it is a task rather than a
-   * paragraph, and it belongs with M3.9, where the async path is what the frame
+   * paragraph, and it belongs with M3.9b, where the async path is what the frame
    * budget is measured on. Until it lands, a consumer who wants stability calls
    * {@link relayout}.
    */
@@ -524,6 +605,28 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
   const { stages, worker } = options;
 
   /**
+   * Whether every stage this engine runs is one this package wrote.
+   *
+   * The precondition of every fast path, and it is a precondition about
+   * CORRECTNESS rather than about scope. A skip rests on "no stage reads a
+   * port", which is a fact about the stages in `stages.ts` and not a rule the
+   * pipeline imposes: a stage is handed the whole `PreparedState`, so a
+   * caller's own router may read the ports `influence.ts` says it is there for.
+   * Taking a skip against such a stage returns a WRONG DRAWING and says
+   * nothing, which is a worse failure than any other in this file, so the
+   * question is asked rather than assumed. See `authorship.ts`, including for
+   * why it is conservative and what would make it exact.
+   *
+   * Read once, because `stages` is bound for the life of the engine the way
+   * everything else here is.
+   */
+  const ownStages =
+    (stages?.rank === undefined || isAuthored(stages.rank)) &&
+    (stages?.order === undefined || isAuthored(stages.order)) &&
+    (stages?.position === undefined || isAuthored(stages.position)) &&
+    (stages?.route === undefined || isAuthored(stages.route));
+
+  /**
    * What the engine retains between runs, which is what M3.2 built it for.
    *
    * Three separate things rather than one record, because they are retained for
@@ -545,6 +648,24 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
   let held: Graph | undefined;
   let warm: PreviousLayout | undefined;
   let reported: LayoutResult | undefined;
+  /**
+   * The sizes the last run measured for the CALLER'S nodes, which is what
+   * M3.9's fast path compares a fresh measurement against.
+   *
+   * A fourth retained thing rather than a read of `warm.sizes`, and the reason
+   * is that the two maps are not the same map. `warm` carries the PIPELINE's
+   * sizes, which the rank stage extends with one entry per dummy as it splits
+   * long edges: on the 10k corpus that is 174k entries beside the 10k a caller
+   * has, so comparing a fresh `prepare` against it answers no on the count
+   * alone and the fast path would never fire on any graph with a long edge in
+   * it. These are `prepare`'s own, before any stage saw them.
+   *
+   * Absent for the same reason `warm` is absent and at exactly the same
+   * moments: the last run happened in a worker, so it left nothing on this
+   * side. See {@link unchanged} for why that is the condition the fast path
+   * needs rather than an inconvenience it works around.
+   */
+  let measured: ReadonlyMap<NodeId, Size> | undefined;
   let disposed = false;
 
   /** The runs waiting on an answer, by request id. */
@@ -637,6 +758,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
     const { result, routed } = runPipeline(prepared, stages);
     held = graph;
     warm = warmStartOf(routed);
+    measured = prepared.sizes;
     return result;
   };
 
@@ -670,6 +792,73 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
       : influenceRegion({ graph, patch, previous: warm, sizes });
 
   /**
+   * The answer to a relayout that needs no run, or `undefined` when it needs
+   * one.
+   *
+   * M3.9's first fast path, and the whole of it. A patch that changes nothing
+   * the pipeline reads leaves the drawing where it was, so the answer is the
+   * geometry the caller is already holding, an empty delta, and the two sets
+   * empty because no stage ran and nothing was entitled to move. See
+   * `inert.ts` for what "nothing the pipeline reads" is a claim about.
+   *
+   * ## The three conditions, and the one that is not obvious
+   *
+   * `ownStages` is correctness: see above. The op check and the size check are
+   * the two halves of the claim itself: see `inert.ts`.
+   *
+   * A RUN ON THIS THREAD IS REQUIRED, which is what `measured` being present
+   * means and what `warm` being present means at the same moments. It is
+   * required because its absence means one thing, that the run this engine is
+   * holding a drawing from happened in a WORKER, and the stages over there are
+   * not this side's to know: "the stages are this side's, and the config is
+   * not" is `serveLayout`'s protocol in one sentence. So a drawing that came
+   * back across the wire was made by stages `ownStages` says nothing about, and
+   * a skip against it would be the same silent wrong answer a caller's own
+   * stage would produce. It costs the case M3.9b's entry names, an attribute
+   * edit that should never leave the calling thread at all, in exactly one
+   * arrangement: a worker-backed engine whose last run was `runAsync`. One that
+   * has run here since keeps the fast path, patch and all, and never posts.
+   * Carrying the stage identity across is the session's to do, with the rest of
+   * the protocol.
+   *
+   * ## What it does not do
+   *
+   * IT DOES NOT TOUCH THE RETAINED STATE. `held` is already this graph, `warm`
+   * is the state of the last run that happened and is still what the next real
+   * relayout should warm-start from, and `reported` is what the caller holds
+   * and has not moved. So an inert relayout is invisible to the one after it,
+   * which is the property `layout.fastpath.test.ts` pins against a second
+   * engine that never saw one.
+   *
+   * IT DOES NOT COMPUTE A REGION, and that is the saving that makes this
+   * proportional to something small. `influenceRegion` costs a pass over the
+   * graph's edges, 2.2ms on 1k nodes and 5.9ms on 4k when M3.5 measured it, and
+   * that module names the pass as the thing this milestone would have to look
+   * at. A run that skips every stage needs no bound on what a stage may touch:
+   * the exact region is the empty one and this is the first patch kind that has
+   * one.
+   */
+  const unchanged = (
+    patch: Patch,
+    previous: LayoutResult,
+    sizes: ReadonlyMap<NodeId, Size>,
+  ): RelayoutResult | undefined => {
+    if (!ownStages || measured === undefined) return undefined;
+    if (!movesNothing(patch)) return undefined;
+    // The fresh sizes are equal to the retained ones, so they are dropped
+    // rather than kept: retaining them would replace one map with a second
+    // holding the same numbers, on every inert patch.
+    if (!sameSizes(measured, sizes)) return undefined;
+    return {
+      result: previous,
+      delta: noChange(),
+      influence: nothingMoved(),
+      region: nothingMoved(),
+      ran: NO_STAGE,
+    };
+  };
+
+  /**
    * The graph a relayout re-runs and the geometry it starts from, or the
    * refusal to do one.
    *
@@ -691,7 +880,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
   };
 
   /**
-   * The four fields a relayout answers with, from the run it just did, given
+   * The five fields a relayout answers with, from the run it just did, given
    * the region computed before it.
    *
    * The reported geometry is the previous reported geometry with this delta
@@ -716,7 +905,13 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
     }
     const delta = diffLayout(previous, next, { epsilon });
     reported = epsilon === 0 ? next : applyDelta(previous, delta);
-    return { result: reported, delta, influence: wholeRoster(graph, previous), region };
+    return {
+      result: reported,
+      delta,
+      influence: wholeRoster(graph, previous),
+      region,
+      ran: EVERY_STAGE,
+    };
   };
 
   /**
@@ -773,6 +968,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
     const result = await answer;
     held = graph;
     warm = undefined;
+    measured = undefined;
     return result;
   };
 
@@ -795,6 +991,8 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
     relayout(patch) {
       const { graph, previous } = forRelayout(patch);
       const prepared = prepare(graph, config, nodeSize, warm);
+      const skipped = unchanged(patch, previous, prepared.sizes);
+      if (skipped !== undefined) return skipped;
       const region = regionFor(graph, patch, previous, prepared.sizes);
       return report(graph, runPrepared(graph, prepared), region);
     },
@@ -803,6 +1001,8 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
       const { graph, previous } = forRelayout(patch);
       if (worker === undefined) {
         const prepared = prepare(graph, config, nodeSize, warm);
+        const skipped = unchanged(patch, previous, prepared.sizes);
+        if (skipped !== undefined) return skipped;
         const region = regionFor(graph, patch, previous, prepared.sizes);
         return report(graph, runPrepared(graph, prepared), region);
       }
@@ -813,6 +1013,10 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
       // run settled last and the patch was described against the one it holds
       // now.
       const prepared = prepare(graph, config, nodeSize);
+      // Before the post, so an inert patch never leaves this thread. It only
+      // reaches here at all when the last run happened here: see `unchanged`.
+      const skipped = unchanged(patch, previous, prepared.sizes);
+      if (skipped !== undefined) return skipped;
       const region = regionFor(graph, patch, previous, prepared.sizes);
       const next = await runThere(graph, prepared, worker);
       return report(graph, next, region);
@@ -824,6 +1028,7 @@ export function createLayout(options: LayoutEngineOptions = {}): LayoutEngine {
       held = undefined;
       warm = undefined;
       reported = undefined;
+      measured = undefined;
       // Rejected before the listener goes, because an answer arriving afterwards
       // reaches nobody and a promise that can never settle is worse than one
       // that settles badly.
