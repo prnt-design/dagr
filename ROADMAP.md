@@ -4099,6 +4099,18 @@ it.
   close-the-gap question wants the prune and churn sessions to measure the cost
   of each, and neither session can see a gap left or closed until a remove-leaf
   fast path exists, which is M3.9b's.
+  WHAT THE CORPUS SAID ABOUT THE THREE MILESTONES MERGED BESIDE IT, which is
+  the first thing it was asked and is why it exists. Rebased onto a `main`
+  carrying M3.7b, M3.8a and M3.9a, every number in the file is unchanged and
+  only the sentence describing the configurations moved. Each has a reason and
+  none of them is that the corpus is blind: a warm longest-path ranking IS the
+  cold ranking, so M3.7b cannot move a metric here by construction; M3.8a reads
+  `previous.positions` in `brandesKoepfPosition`, which `defaultStages` does not
+  use, so no column is drawn by it; and M3.9a's skip fires on the reparent
+  session, whose expected answer already was that nothing moves. THE SECOND OF
+  THOSE IS THE ONE TO ACT ON: the stability work M3.8a measured reaches no
+  caller of `layout()` until the coordinate stage it lives in is the default
+  one, and this corpus is the instrument that would price that swap.
   AND ONE THING M3.10a FOUND THAT NOTHING PREDICTED: the incremental column beats
   the warm-order column on BOTH axes on three of the five sessions, loses on
   crossings on one, and is identical on the fifth. Whether holding the reversed

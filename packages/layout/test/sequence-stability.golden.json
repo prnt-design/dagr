@@ -1,7 +1,7 @@
 {
   "regenerate": "UPDATE_GOLDEN=1 pnpm --filter @dagr/layout test layout.sequence.golden",
   "regenerateWhen": "Only for a deliberate change to what the pipeline does, and only when you can say what moved and why. A number that changed without an intended cause is something to investigate, not a file to refresh.",
-  "configurations": "One engine with one channel cut. cold: no stage is handed the previous run. warmOrder: the order stage holds to the previous layering and the rank stage starts cold. incremental: every stage that reads a previous run gets one, which on this commit is the cycle breaker inside the rank stage and the order stage.",
+  "configurations": "One engine with one channel cut. cold: no stage is handed the previous run. warmOrder: the order stage holds to the previous layering and the rank stage starts cold. incremental: every stage that reads a previous run gets one, which on this commit is the cycle breaker and the warm ranking inside the rank stage, and the held layering in the order stage. brandesKoepfPosition also reads one, and defaultStages does not use it, so no column here is drawn by it.",
   "entries": [
     {
       "name": "grow-tall",

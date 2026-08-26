@@ -29,6 +29,7 @@ import type { SessionEntry, SessionStep } from './sequence-corpus.js';
  * makes the columns comparable. `PreparedState.previous` is the only way a
  * previous run reaches a stage, and on `main` exactly two stages read it: the
  * rank stage hands `previous.reversedEdges` to the cycle breaker (M3.7a) and
+ * checks `previous.ranks` against the view it is about to rank (M3.7b), and
  * the order stage holds to `previous.layers` (M3.6). So the columns are that
  * channel blanked for both, blanked for the ranker only, and left alone. Same
  * engine, same stages, same config, same epsilon, same planned session: the
@@ -38,12 +39,22 @@ import type { SessionEntry, SessionStep } from './sequence-corpus.js';
  * column to agreeing with a bare `layout()` anyway.
  *
  * WHAT THE THIRD COLUMN MEANS TODAY, said plainly because it will move. "The
- * full incremental path" is whatever the pipeline reads a previous run for, and
- * that is two stages as this file is written. M3.7b's warm ranks, M3.8's stable
- * coordinates and M3.9's fast paths each add a reader, and each will move this
- * column and leave the other two exactly where they are. That is the shape of
- * the evidence this file exists to produce: the first two columns are controls,
- * and a milestone that improves the incremental path improves one column.
+ * full incremental path" is whatever the DEFAULT pipeline reads a previous run
+ * for, and that is two stages as this file is written. Each milestone that adds
+ * a reader moves this column and leaves the other two exactly where they are,
+ * which is the shape of the evidence this file exists to produce: the first two
+ * columns are controls, and a milestone that improves the incremental path
+ * improves one column.
+ *
+ * A READER THIS FILE DOES NOT SEE IS ONE THE DEFAULT STAGES DO NOT HOLD. M3.7b
+ * added `previous.ranks` to the rank stage and moved no number here, because a
+ * warm longest-path ranking IS the cold ranking. M3.8a added
+ * `previous.positions` to `brandesKoepfPosition`, which `defaultStages` does
+ * not use, so nothing in this corpus is drawn by it. M3.9a added a reader to
+ * the ENGINE rather than to a stage, and it fires on the reparent session,
+ * which is the one session whose expected answer is that nothing moves. So
+ * three milestones have landed against an unchanged golden file, and that is a
+ * measurement rather than an oversight.
  *
  * THE PAIR IS THE POINT. Crossings and displacement are recorded side by side
  * for each column because they trade against each other and reading either
@@ -440,8 +451,10 @@ describe('the incremental pipeline, over a session of edits', () => {
           'One engine with one channel cut. cold: no stage is handed the previous ' +
           'run. warmOrder: the order stage holds to the previous layering and the ' +
           'rank stage starts cold. incremental: every stage that reads a previous ' +
-          'run gets one, which on this commit is the cycle breaker inside the rank ' +
-          'stage and the order stage.',
+          'run gets one, which on this commit is the cycle breaker and the warm ' +
+          'ranking inside the rank stage, and the held layering in the order ' +
+          'stage. brandesKoepfPosition also reads one, and defaultStages does not ' +
+          'use it, so no column here is drawn by it.',
         entries: measured.map((entry) => entry.golden),
       };
       writeFileSync(goldenPath, `${JSON.stringify(file, undefined, 2)}\n`);
