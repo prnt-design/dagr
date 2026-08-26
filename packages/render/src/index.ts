@@ -122,8 +122,8 @@ export type { Camera2DInit } from './camera.js';
 export {
   BackendUnavailableError,
   DagrRenderError,
-  OverlayDisposedError,
   MotionDesyncError,
+  OverlayDisposedError,
   OverlayParentError,
   PickIdSpaceExhaustedError,
   RendererDisposedError,

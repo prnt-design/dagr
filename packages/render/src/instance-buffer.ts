@@ -23,10 +23,10 @@ import { requireIntegerAtLeast } from './validate.js';
  * not survive inspection: per-frame rendering iterates slots on the GPU and
  * never consults the map, the per-frame spring pass (M4.7a) iterates spring
  * state keyed by the caller's own id and never consults it either, and the map
- * is touched once per
- * CHANGED entry when a delta is applied, which is O(size of delta). Leaving
- * holes and compacting on a threshold is the alternative, and it wastes buffer
- * space and draw work for nothing the map does not already provide.
+ * is touched once per CHANGED entry when a delta is applied, which is O(size of
+ * delta). Leaving holes and compacting on a threshold is the alternative, and
+ * it wastes buffer space and draw work for nothing the map does not already
+ * provide.
  *
  * What swap-with-last costs, stated because a consumer has to know it: SLOT
  * ORDER IS NOT DURABLE, so anything a renderer derives from it is not either.
@@ -47,10 +47,9 @@ import { requireIntegerAtLeast } from './validate.js';
  * That layer is this invariant satisfied with room to spare, since an id
  * survives even a shape change, which reallocates the handle. So the invariant
  * is still unpaid for by anything shipped, and the consumers now named for it
- * are M4.7b's per-edge state and M4.8b's pick pass. Slot indices are not durable across
- * ANY removal, and
- * {@link InstanceBuffer.slotOf} is a question with an answer that expires: read
- * it, use it, do not store it.
+ * are M4.7b's per-edge state and M4.8b's pick pass. Slot indices are not
+ * durable across ANY removal, and {@link InstanceBuffer.slotOf} is a question
+ * with an answer that expires: read it, use it, do not store it.
  *
  * `test/instance-buffer.test.ts` asserts both halves. Every surviving handle
  * still resolves after a removal, and a slot index captured before one is shown
