@@ -1420,12 +1420,17 @@ function cohortsOf(
  * the resize kind stops being exact. A structure-preserving edit that moves the
  * drawing is the thing this task exists to stop, so the hard rule ships.
  *
- * WHAT THE HARD RULE COSTS OVER A LONG SESSION IS NOT MEASURED HERE AND IS
- * M3.10's. A hint naming every node in a layer freezes that layer, so an added
- * edge whose crossing could be removed by swapping two retained nodes leaves
- * that crossing in place, and nothing gives it back later. One patch costs at
- * most 1.59% on this corpus; a hundred patches is a different question, and
- * M3.10's churn sequence is the one written to ask it.
+ * WHAT THE HARD RULE COSTS OVER A LONG SESSION IS NOT MEASURED HERE AND WAS
+ * M3.10a's, WHICH MEASURED IT AND FOUND THAT IT COMPOUNDS. A hint naming every
+ * node in a layer freezes that layer, so an added edge whose crossing could be
+ * removed by swapping two retained nodes leaves that crossing in place, and
+ * nothing gives it back later. One patch costs at most 1.59% on this corpus.
+ * Over a session of eight to sixteen patches it costs between 3.1% and 13.8%
+ * in mean crossings on four of five sessions and 0.3% LESS on the fifth, and it
+ * buys 4.1x to 38.4x less movement per patch with order churn of exactly zero
+ * throughout: see `test/layout.sequence.golden.test.ts`. Whether that reopens
+ * the softer rule this section rejected is M3.10b's, and the comparison it has
+ * to make is the same session under both rules.
  *
  * Two of its rules are rules from the sections above rather than rules of their
  * own, and both are argued at {@link Cohorts}. A cohort is the ids one hint

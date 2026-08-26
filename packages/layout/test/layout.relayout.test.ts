@@ -349,9 +349,9 @@ describe('the warm-start state the engine retains', () => {
     expect(recorder.inputs.route?.previous).toBe(recorder.inputs.rank?.previous);
   });
 
-  // The leak M3.10's churn sequence is written to catch, asserted here in the
-  // one form this task can assert it: retained state is rebuilt from the run it
-  // came from, so a node that went away is not in it.
+  // The leak M3.10a's churn session catches over a whole session, asserted here
+  // in the one form this task can assert it: retained state is rebuilt from the
+  // run it came from, so a node that went away is not in it.
   it('holds nothing for a node the patch removed', () => {
     const recorder = recordingStages();
     const { graph, patches } = watched(diamond());
@@ -373,7 +373,7 @@ describe('the warm-start state the engine retains', () => {
   // start feeding that back in chains one full pipeline state onto the front of
   // the last on every single relayout. Twenty edits retained twenty runs. It is
   // proportional to PATCH HISTORY rather than to the live graph, which is the
-  // exact shape M3.10's churn sequence exists to catch, and no assertion that
+  // exact shape M3.10a's churn session exists to catch, and no assertion that
   // looks only at the newest link can see it.
   it('does not chain, so an editing session retains one run and not all of them', () => {
     const recorder = recordingStages();

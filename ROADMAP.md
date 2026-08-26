@@ -2599,8 +2599,11 @@ it.
   implementation leaks in an unremarkable way, by never deleting a removed
   node's entry because nothing on the fast path iterates the map to notice. A
   leak there is invisible to every M3.4 metric and shows up as a browser tab
-  growing over an afternoon of editing, so M3.10's churn sequence asserts
-  retained map sizes return to baseline after a balanced add and remove cycle.
+  growing over an afternoon of editing, so M3.10a's churn session asserts it.
+  What it asserts is not the SIZE, in the end: the incremental path legitimately
+  ends a balanced cycle holding one more reversed edge than it started with, so
+  the durable form is that every per-node map is exactly the drawing's roster
+  and every per-edge map exactly the graph's edges.
   Second, say how `relayout` relates to M2.10's `runAsync`. If the layout ran
   in a worker the retained state lives in the worker, so `relayout` is either
   async as well or silently sync-only, and the consumer who adopted `runAsync`
@@ -2759,8 +2762,8 @@ it.
   strips nothing, so a retention test has to walk the object rather than trust
   the type. This task's suite now pins both forms (a removed node is in neither
   the retained ranks nor the retained sizes, and the retained chain is one link
-  deep after twenty edits), and M3.10's churn sequence should assert depth as
-  well as size.
+  deep after twenty edits), and M3.10a's churn session records the retained
+  chain COUNT rather than its depth, so depth is still owed and is M3.10b's.
   `dispose` REJECTS RUNS IN FLIGHT rather than leaving them pending, which M2.10's
   "there is no timeout" argument does not cover: dispose detaches the port
   listener, so an answer arriving afterwards reaches nobody, and a promise that
@@ -3299,11 +3302,17 @@ it.
   3, 2, 3 and 3 and the untouched-order figure from 30 of 30 to 25 of 30. A
   structure-preserving edit that moves the drawing is the thing this task exists
   to stop.
-  WHAT IS LEFT UNMEASURED IS THE SESSION, AND IT IS M3.10's. A hint naming every
-  node in a layer FREEZES that layer, so an added edge whose crossing could be
-  removed by swapping two retained nodes leaves it there and nothing gives it
-  back. One patch costs at most 1.59% on this corpus. A hundred patches is a
-  different question and only a churn sequence can ask it.
+  WHAT IS LEFT UNMEASURED IS THE SESSION, AND IT WAS M3.10a's: MEASURED, AND
+  THE COST COMPOUNDS. Over six scripted sessions the warm start costs 3.1% to
+  13.8% in mean crossings against a cold relayout, up to nine times the
+  one-patch figure below, and buys 4.1x to 38.4x less movement per patch with
+  order churn of exactly zero throughout. WHETHER THAT REOPENS THE RULE IS
+  M3.10b's, and the comparison it has to make is the same session under both
+  rules. THE MECHANISM, UNCHANGED: a hint naming every node in a layer FREEZES
+  that layer, so an added edge whose crossing could be removed by swapping two
+  retained nodes leaves it there and nothing gives it back. One patch costs at
+  most 1.59% on this corpus. A hundred patches is a different question and only
+  a churn sequence can ask it, which is what M3.10a built.
   THREE CASES IN `test/layout.order.test.ts` USED A COMPLETE HINT TO FORCE A
   SEED and could not survive the change, which is worth recording because it is
   a real loss of expressiveness rather than test churn. The walk CANNOT produce
@@ -3755,7 +3764,10 @@ it.
   way back, which is the same lock-in reached by another route and the same
   `reflow()` escape hatch resolves it. M3.9b's remove-leaf fast path quietly
   presumes leave-the-gap without arguing for it, so argue it here, and let
-  M3.10's prune and churn sequences measure the cost.
+  M3.10a's prune and churn sessions measure the cost. THEY CANNOT YET: both
+  sessions exist and neither can see a gap left or closed until a remove-leaf
+  fast path is on `main`, so the measurement waits on M3.9b's and belongs to
+  M3.10b.
   This is the run to spend the milestone's heaviest algorithms review on.
   `influence.ts` NAMES THIS TASK: its horizontal rule is `gridPositionStage`'s
   and it declines to narrow the region for a stage that couples `x` across
@@ -3940,40 +3952,158 @@ it.
   A path that runs no stage needs no bound and skips it; a path that runs SOME
   stages needs one, so the pass has to get cheaper or the bound has to come from
   somewhere other than a walk of the edges.
-- [ ] **M3.10** (`@dagr/layout`, `docs`) Stability golden corpus: scripted
-  mutation sequences (grow, prune, reparent, rewire, sustained churn) run
-  through the engine with their stability metrics committed as golden files, so
-  a later change that degrades stability arrives as a diff rather than as a
-  feeling. Include at least one pattern-generator-shaped sequence, since that
-  is the shape M6.6's first reference DSL takes. Docs page on incremental
-  layout, the flagship feature, carrying the numbers this corpus produces and
-  an honest statement of what the fallback costs when it fires.
-  Two specific things the corpus must carry. Report the pair (crossings,
-  displacement) for the same mutation sequence under three configurations, cold
-  every time, warm-started ordering only, and the full incremental path, so the
-  stability-versus-quality trade reads as a curve rather than as two pass/fail
-  bars in two different files, one of which gets relaxed when it fails. That
-  artefact is nearly free once M3.4's metrics and M2.6's crossing counter both
-  exist, and it is what turns the docs page's honest statement into something
-  other than prose. And have the sustained-churn sequence assert that retained
-  map sizes return to baseline after a balanced add and remove cycle, which is
-  the cheap place to catch the M3.2 state leak, and the only place: it is
-  invisible to every stability metric here.
-  THE ONE QUESTION M3.6 COULD NOT ANSWER AND HANDED HERE: WHAT THE WARM START
-  COSTS OVER A SESSION. Its constraint is absolute, so a hint naming every node
-  in a layer FREEZES that layer, and an added edge whose crossing could be
-  removed by swapping two retained nodes leaves that crossing there with nothing
-  to give it back. Measured over ONE patch it costs at most 1.59% on the M2.6
-  corpus, and three of the six entries came out cheaper warm than cold. Over a
-  hundred patches it is a different question and only a sequence can ask it, so
-  the three-configuration curve above is not an artefact this task happens to
-  produce: it is the measurement that says whether M3.6's rule should soften.
-  M3.6 already measured the softer rule it would soften TO, letting the
-  transpose pass break a held pair on a strictly improving swap, and rejected it
-  on one-patch evidence (half a point of crossings for escapes going from zero
-  to 3, 2, 3 and 3). A session that showed quality bleeding away is the evidence
-  that reopens it. The comparison to make is then the SAME sequence under both
-  rules, and not warm against cold, which M3.6 already answered.
+- [x] **M3.10a** (`@dagr/layout`, `docs`) The session corpus: scripted mutation
+  sequences run through the engine with their stability metrics committed as
+  golden files, so a later change that degrades stability arrives as a diff
+  rather than as a feeling. Six sessions in
+  `test/sequence-stability.golden.json`, the three-configuration curve, the
+  churn assertion, and the docs page the numbers are published on. M3.10b is the
+  rest of the entry: the softening decision M3.6 handed here, the fallback cost,
+  and the two measurements that need a fast path on `main` before they can be
+  taken.
+  THE SPLIT IS TAKEN WHERE THE EVIDENCE STOPS BEING PRODUCIBLE. Everything above
+  needs only M3.4's metrics and M2.6's counter, both merged. Everything below
+  needs something that is not on `main`: the softening comparison needs a second
+  order rule to compare against, and "what the fallback costs when it fires"
+  needs a path that can decline to fire ON GEOMETRY, which is M3.9b's: M3.9a
+  shipped the path that declines on a patch changing no geometry at all, and a
+  skip that produces the same drawing has no cost to state. A
+  task that ships the evidence it can produce and names what the rest waits on
+  is better than one that waits for all of it.
+  THE THREE CONFIGURATIONS ARE ONE ENGINE WITH ONE CHANNEL CUT, and the entry
+  did not say which channel because until this task nobody had written down that
+  there is only one. `PreparedState.previous` is the whole of how a previous run
+  reaches a stage, and exactly two stages read it: the rank stage hands
+  `previous.reversedEdges` to the cycle breaker (M3.7a) and the order stage
+  holds to `previous.layers` (M3.6). So the columns are that field blanked for
+  both, blanked for the ranker only, and left alone, which is a wrapper per
+  stage and no new option on anything shipped. BUILDING THE COLD COLUMN OUT OF
+  BARE `layout()` CALLS WOULD HAVE CHANGED THE RUNNER AS WELL AS THE CHANNEL,
+  and the suite holds the cold column to agreeing with a bare `layout()` anyway,
+  which is what makes the wrapper a claim rather than an assumption.
+  THE ANSWER TO M3.6's QUESTION: THE COST COMPOUNDS, AND THE ONE-PATCH FIGURE
+  UNDERSTATED IT BY UP TO NINE TIMES. Mean crossings over the session,
+  incremental against cold: `grow-tall` 5,701 against 5,009 (+13.8%),
+  `rewire-mid` 12,801 against 11,245 (+13.8%), `prune-wide` 15,578 against
+  14,683 (+6.1%), `churn-balanced` 6,104 against 5,918 (+3.1%), and
+  `pattern-blocks` 3,514 against 3,523, which is 0.3% CHEAPER warm. M3.6
+  measured the same trade at no worse than 1.59% over one patch. So a session
+  really does pay several times what one edit suggested, and the sentence in
+  M3.6's entry that a hundred patches is a different question was right.
+  AND WHAT IT BUYS IS LARGER THAN WHAT IT COSTS, WHICH THE ENTRY DID NOT
+  PREDICT EITHER WAY. Mean displacement per patch, cold against incremental:
+  `prune-wide` 1,644.81 to 42.85 (38.4x), `pattern-blocks` 260.54 to 10.31
+  (25.3x), `rewire-mid` 1,039.79 to 137.06 (7.6x), `grow-tall` 502.10 to 87.82
+  (5.7x), `churn-balanced` 633.90 to 153.75 (4.1x). The share of the drawing
+  that moves at all falls with it, from 0.85 to 0.52 on `grow-tall` and 0.96 to
+  0.55 on `prune-wide`. A trade whose two sides are 13.8% and 38x is not a
+  trade a caller has to think about, which is the finding that matters most to
+  a consumer and the one this milestone existed to be able to state.
+  ORDER CHURN IS EXACTLY ZERO IN BOTH WARM COLUMNS, ON EVERY SESSION AND EVERY
+  STEP, AND THAT IS THE SAME FACT AS THE CROSSING COST. The constraint is total:
+  two nodes that shared a rank keep their relative order, always. So the swap
+  that would remove a crossing is exactly the swap the rule forbids, and the
+  cost above is not a side effect of the warm start, it IS the warm start
+  measured in the other currency. M3.10b's softening question is therefore a
+  question about how much of that zero to give back, and the honest form of it
+  is a number: what fraction of the 13.8% does letting the transpose pass break
+  a strictly improving held pair buy, and what does order churn become.
+  HOLDING THE REVERSED SET IS FREE ON THREE OF THE FIVE, which nothing predicted
+  because nobody had run the two warm columns separately. On `prune-wide`,
+  `rewire-mid` and `churn-balanced` the incremental column is BETTER than warm
+  order on both axes at once, fewer crossings and less movement. On `grow-tall`
+  it is worse on crossings (+13.8% against +9.0%) and better on displacement, and
+  on `pattern-blocks` the two warm columns are identical in every recorded
+  number. M3.7a shipped on a stability argument and this is the first evidence
+  about what it costs quality.
+  AN EDIT AND ITS EXACT UNDO DO NOT RETURN THE DRAWING TO WHERE IT STARTED, AND
+  THAT IS THE RETENTION RULE WORKING. `churn-balanced` adds four nodes and
+  removes the same four, so the graph is identical at the end of every cycle.
+  Cold and warm order hold the same retained record at all seven cycle
+  boundaries, number for number. The incremental column holds one record for
+  five boundaries and a second for the rest: at one cycle its held reversed set
+  goes from 14 edges to 15 and stays, and the ranking that follows mints ten
+  more dummies (2,247 roster entries to 2,257) which it also keeps. A transient
+  cycle through a node that has since left is exactly where holding and
+  re-deciding disagree, the point of holding is that a drawing does not flip,
+  and the price is hysteresis. NOBODY HAD MEASURED THAT PRICE. GENERALISE IT:
+  a rule that exists so an answer does not change has a cost that only shows up
+  when the question comes back.
+  WHICH IS WHY THE CHURN ASSERTION IS NOT THE ONE THE ENTRY ASKED FOR. "Retained
+  map sizes return to baseline" is the natural form and it FAILS on the
+  incremental column for the legitimate reason above; the first version of this
+  test asserted it and caught exactly that. The durable form is about the ROSTER
+  and not the size: every per-node map is exactly the caller's nodes plus the
+  dummies this run declared, and every per-edge map exactly the graph's edges, at
+  every cycle boundary. A leak breaks that whatever the layering did, and a
+  legitimate change of drawing does not. Beside it sits the bound the size form
+  was really reaching for: the session SETTLES, meaning its boundary records take
+  at most two distinct values, so a held set that grew every cycle fails.
+  GENERALISE IT: WHEN AN ASSERTION ABOUT RETAINED STATE FAILS, ASK WHETHER IT WAS
+  ASSERTING THE ABSENCE OF A LEAK OR THE ABSENCE OF A DECISION.
+  THE REPARENT SESSION IS THE CONTROL AND IT MEASURES ZERO ON PURPOSE. No stage
+  in this package reads a parent, so eight patches of `setNodeParent` move
+  nothing in any column: zero displacement, zero rerouting, the same 4,840
+  crossings throughout. It is asserted rather than left implicit because it is
+  exactly what M7 changes, and the day inline compound layout lands this is the
+  row that says so. It is also the only entry in the corpus whose expected value
+  is a constant rather than a measurement.
+  THE SCRIPT IS DATA AND IS PLANNED ONCE. Each session is planned into a concrete
+  list of ops against a throwaway graph and that same list is replayed against
+  every column. A callback holding a generator would be re-run per column, and a
+  generator that drifted by one call between two of them would compare two
+  different sessions and report the difference as a stability result. THE
+  SESSIONS ARE SMALLER THAN THE ORDER CORPUS (180 to 320 nodes, 8 to 16 steps)
+  because a session is three times the step count in full pipeline runs, and this
+  file has to stay in the ordinary test run: it costs about six seconds.
+  THE DOCS PAGE IS NEW RATHER THAN A SECTION OF `docs/docs/layout.md`, and it
+  sits at `sidebar_position: 8` rather than beside the layout page at 4. Both
+  are decisions about a repository with five open pull requests in it: three of
+  them amend `layout.md` and two amend the frontmatter neighbourhood a
+  renumbering would touch, and a new file with a position at the end collides
+  with none of them. The right home is position 4 and the move is one edit
+  whenever the pile clears. THE PAGE QUOTES THE SAME ABSOLUTES THIS ENTRY DOES,
+  which is the opposite of the rule `layout.md`'s rank-stage table follows,
+  and the reason is that these are counts and distances rather than timings:
+  they are the same on any machine that runs the suite, so there is no second
+  number for a reader to be confused by.
+  WHAT THIS DOES NOT DO. It adds no benchmark: the gate's entries are ratios
+  against a control and every number here is already a ratio against two
+  controls of its own. It changes no source file in `packages/layout/src`. And
+  it does not sweep `packages/layout/src/engine.ts`, whose retained-state
+  docstring still says M3.10's churn sequence is written to catch a leak: PR #66
+  is rewriting that file forty lines either side of it, and the same goes for two
+  M3.10 references in this document inside entries PR #65 is rewriting. Three
+  sites, listed here rather than left to be found.
+
+- [ ] **M3.10b** (`@dagr/layout`, `docs`) The rest of the corpus: the softening
+  decision, the fallback cost, and the two measurements that need a fast path on
+  `main`. It inherits the original M3.10 entry's second deliverable and the
+  question M3.6 handed here, both of which M3.10a produced the evidence for
+  without taking the decision.
+  THE SOFTENING DECISION IS NOW A LIVE QUESTION WITH A NUMBER ON IT. M3.6
+  measured the softer rule it would soften TO, letting the transpose pass break a
+  held pair on a strictly improving swap, and rejected it on one-patch evidence
+  (half a point of crossings for escapes going from zero to 3, 2, 3 and 3). The
+  evidence that reopens it is M3.10a's: the cost compounds to 13.8% over a
+  session, against 1.59% over one patch. THE COMPARISON TO MAKE IS THE SAME
+  SESSION UNDER BOTH RULES, and not warm against cold, which M3.6 already
+  answered and M3.10a has now answered again over a session.
+  THE FALLBACK COST, HONESTLY STATED, is the other half of the original entry's
+  docs deliverable and it cannot be written yet: every relayout M3.10a measured
+  is a full pipeline run, so there is no fallback to have a cost. It becomes
+  writable when a fast path can decline to fire on geometry, which is M3.9b's.
+  TWO MEASUREMENTS ARE INHERITED WITH IT, both named in older entries and both
+  blocked on the same thing. M3.2's entry wants the churn session to assert
+  retained chain DEPTH as well as count. M3.6's leave-the-gap versus
+  close-the-gap question wants the prune and churn sessions to measure the cost
+  of each, and neither session can see a gap left or closed until a remove-leaf
+  fast path exists, which is M3.9b's.
+  AND ONE THING M3.10a FOUND THAT NOTHING PREDICTED: the incremental column beats
+  the warm-order column on BOTH axes on three of the five sessions, loses on
+  crossings on one, and is identical on the fifth. Whether holding the reversed
+  set is free in general, or free on the shapes this corpus happens to hold, is
+  a question this corpus can be widened to answer.
 
 ## M4: Renderer (`@dagr/render`)
 
