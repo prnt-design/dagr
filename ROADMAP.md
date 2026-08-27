@@ -5128,9 +5128,17 @@ of M3 would leave the second runner idle for a milestone.
   point of a route, retargeted by M3.1's edge lists, interruptible when a new
   delta arrives mid-flight. The correspondence between two routes of different
   lengths is decided here, and it is decided before any spring exists.
-  SPLIT OUT OF M4.7b BY THE RUN THAT SHIPPED IT, the seventh split in the
-  project after M3.7, M3.8, M3.9, M4.8, M4.9 and M3.10, and it is the SAME SEAM
-  M4.6 and M4.7a already used twice: an integrator and the loop that drives it.
+  SPLIT OUT OF M4.7b BY THE RUN THAT SHIPPED IT, and it is the SAME SEAM M4.6
+  and M4.7a already used twice: an integrator and the loop that drives it.
+  NO ORDINAL, DELIBERATELY, AND THE REASON IS A DEFECT THIS RUN FOUND. M4.7a's
+  entry calls itself "the sixth split in the project" and the brain records
+  M3.10a as the sixth as well: both were written on branches that merged in the
+  same sitting on 2026-08-26, so each counted the other as not yet existing. And
+  both counts were already short, because they list only M3.7, M3.8, M3.9, M4.8
+  and M4.9 while `main` also carries M2.2, M2.4, M2.6 and, since #70, M5.4.
+  GENERALISE IT: A RUNNING COUNT IS A CLAIM ABOUT EVERY OTHER BRANCH IN FLIGHT,
+  which is the one thing a branch cannot see. Count what the tree holds when the
+  question is asked, or do not count.
   What is left is M4.7c below, the bounds change and the loop. The reason for
   the seam is that this half is a CORRESPONDENCE, decidable and testable in
   Node against constructed point lists, while the loop is an opinion about a
@@ -5205,9 +5213,12 @@ of M3 would leave the second runner idle for a milestone.
   THE SETTLED FLOOR IS PER DRAWING AND NOT PER POINT, which is M4.7a's finding
   again. Moving is where the halves part. All 10,000 edges rerouting costs
   12.8ms at two points each (20,000 springs) and 36.5ms at five (50,000), where
-  all 10,000 nodes moving costs 2.7ms: PER SPRING AN EDGE COSTS ABOUT 2.4 TIMES
-  A NODE, and an edge has as many springs as it has points. So a COLD reroute of
-  a 10,000-edge drawing is about two frames at 60fps and does not fit in one.
+  all 10,000 nodes moving costs 2.7ms: 0.64 and 0.73 microseconds per edge
+  spring against 0.27 per node spring, so PER SPRING AN EDGE COSTS 2.3 TO 2.7
+  TIMES A NODE, and an edge has as many springs as it has points. So a COLD
+  reroute of a 10,000-edge drawing runs from three quarters of a 60fps frame at
+  two points each to about two and a quarter frames at five: THE ROUTE LENGTH
+  AND NOT THE EDGE COUNT IS WHAT DECIDES WHETHER IT FITS.
   What makes that acceptable rather than a defect is M3.10a's measurement that
   the incremental path moves 4.1x to 38.4x less of the drawing per patch than a
   cold run: this is the cost of the case M3 exists to avoid. Applying a delta of
@@ -5247,9 +5258,11 @@ of M3 would leave the second runner idle for a milestone.
   A resize arrives through `moved` and produces no motion, so a label that grew
   snaps to its new width while its node glides. Decide whether the size springs
   too, which doubles the per-node state, and note the frame floor before adding
-  to it: a settled scene of 10,000 nodes costs 0.2 to 0.34ms per frame and
-  10,000 settled edges 0.25 to 0.32ms, in records those modules allocate and
-  nothing else.
+  to it. Quote it from ONE harness: M4.7b measured 10,000 settled nodes at
+  0.34ms per frame and 10,000 settled edges at 0.25 to 0.32ms in the same
+  invocation, in records those modules allocate and nothing else. M4.7a's
+  0.20 to 0.34ms for the nodes is a different harness on a different day and
+  says the same thing without being comparable to the edge figure.
   **THE EDGE HALF'S COLD COST IS THE NUMBER THE LOOP HAS TO LIVE WITH.** M4.7b
   measured all 10,000 edges rerouting at 12.8 to 36.5ms depending on route
   length, which is more than one frame. A loop that asks for a frame it cannot

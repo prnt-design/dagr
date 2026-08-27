@@ -1642,6 +1642,20 @@ velocity per point as well as a position, and the point a retarget adds needs
 both. Zeroing it instead would stop a moving edge dead at every new bend, which
 is the same interruptibility failure that reading a delta's `from` would cause.
 
+**The settled floor is per drawing; the moving cost is per point.** Measured
+against the node half in one invocation, a settled scene of ten thousand edges
+costs about what a settled scene of ten thousand nodes does, and it barely
+changes between two points per edge and five: a settled frame is the records
+this module allocates and nothing else. Moving is where the two halves part. An
+edge has as many springs as it has points, and per spring an edge costs about
+two and a half times a node, so whether a COLD reroute of ten thousand edges
+fits in a frame is decided by how long the routes are rather than by how many
+edges there are. What makes that the right trade rather
+than a defect is what the incremental engine is for: a patch reroutes a small
+fraction of the drawing, and applying a delta of one against ten thousand edges
+is under a fiftieth of a millisecond. Whether the floor is worth removing is
+M4.10's to measure against a real GPU.
+
 **A removal and an addition under one id is one line changing route.** That is
 how `EdgeDelta` reports an edge whose endpoints changed, and `@dagr/layout` is
 right that it is not the same edge. But there is one line on the screen carrying
@@ -1719,9 +1733,11 @@ family, and nothing that moves.
   the `settled` a loop needs to stop, and M4.7b adds the edge half that needs
   driving too. M4.7c is where the renderer drives them.
 - The bounds change and the loop over both halves of the delta consumer
-  (M4.7c). The node half landed at M4.7a and the edge half at M4.7b, and both
-  are two sections up. M4.7 is the M4 task that genuinely waits on M3, and every
-  part of it does.
+  (M4.7c). The node half landed at M4.7a and is under
+  [Deltas drive the springs](#deltas-drive-the-springs-and-the-state-is-the-renderers);
+  the edge half landed at M4.7b and is under
+  [An edge needs a correspondence](#an-edge-needs-a-correspondence-before-it-needs-a-spring).
+  M4.7 is the M4 task that genuinely waits on M3, and every part of it does.
 - The pass half of GPU picking: a material writing the bytes above, an
   offscreen target, the readback and a `pick()` on `Renderer` (M4.8b). What
   a pixel says and which node an id still means are decided and tested; see

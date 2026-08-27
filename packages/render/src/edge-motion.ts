@@ -355,6 +355,10 @@ function sampleAlong(
     }
     const startParameter = parameters[cursor];
     const start = values[cursor];
+    // Unreachable: `cursor` never passes the last index, and `values` and
+    // `parameters` are the same length by construction. Skipping rather than
+    // throwing would shorten the result and break the one property the whole
+    // correspondence is, that both routes come back the same length.
     if (startParameter === undefined || start === undefined) continue;
     if (startParameter === t) {
       sampled.push(copyOf(start));
