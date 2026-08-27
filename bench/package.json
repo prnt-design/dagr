@@ -7,7 +7,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prnt-design/dagr",
+    "url": "git+https://github.com/prnt-design/dagr.git",
     "directory": "bench"
   },
   "scripts": {

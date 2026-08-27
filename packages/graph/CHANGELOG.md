@@ -165,3 +165,25 @@ diffing five milestones of doc prose.
   to leave one graph as a single patch and arrive at the next as two, and
   mirroring a batched edit used to re-fan it into the intermediate states
   batching exists to remove.
+
+- **The tarball a consumer installs (M5.4a).** `files` now ships `src`,
+  `README.md` and `LICENSE` beside `dist` and `CHANGELOG.md`, and
+  `publishConfig.access` is `"public"`. The package has a README for the first
+  time, which is what an npm page renders.
+
+  `src` is shipped because the build emits `declarationMap` and `sourceMap`
+  against a `files` list that had no `src` in it, so every map this package
+  published pointed at a file the tarball did not carry: 128 of them across the
+  five published packages, verified by packing rather than by reading the
+  manifests. The alternative was to stop emitting the maps, which would have
+  closed the door on TypeScript project references, because `composite`
+  requires `declaration` and effectively wants `declarationMap`. Shipping the
+  source costs about 40% of the tarball and buys go-to-definition landing on
+  the real TypeScript rather than on a `.d.ts`.
+
+  THE PUBLISH COMMAND IS `pnpm publish`, NOT `npm publish`. `npm pack` leaves
+  pnpm's `workspace:` protocol in the published manifest, where it resolves to
+  nothing; `pnpm pack` rewrites it to the sibling's real version, checked on the
+  same package in the same tree. The `packaging` workspace member is the gate
+  that keeps this true: it packs every published package on every `pnpm test`
+  and reads the tarball back.

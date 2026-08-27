@@ -1,0 +1,22 @@
+{
+  "name": "@dagr/packaging",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Packaging gate for Dagr: packs every published package and reads the tarball a consumer would install. Never published.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prnt-design/dagr.git",
+    "directory": "packaging"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify:tools": "node bin/verify-tools.mjs"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "publint": "^0.3.24"
+  }
+}

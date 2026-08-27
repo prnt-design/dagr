@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prnt-design/dagr"
+    "url": "git+https://github.com/prnt-design/dagr.git"
   },
   "type": "module",
   "packageManager": "pnpm@9.15.4",

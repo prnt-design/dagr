@@ -5874,7 +5874,7 @@ it settled rather than restating the argument.
   all about layout staying stable under an edit, which is what M6's preamble
   says the project competes on. A visitor currently cannot see the flagship
   feature. Weight this accordingly against M5.1 and M5.2.
-- [ ] **M5.4a** (every package) The tarball a consumer installs: the packaging
+- [x] **M5.4a** (every package) The tarball a consumer installs: the packaging
   half of M5.4, split out and moved to the front of the queue on 2026-08-26.
   See "Where this stands, and what to do next" at the top of this file for why
   it goes first. The publish itself stays queued for the maintainer.
@@ -5906,6 +5906,89 @@ it settled rather than restating the argument.
   The versioning and changelog decision comes with this half, because a
   lockstep release is a decision to take before the first publish rather than
   after it. See M5.4b for the peer-range reasoning it rests on.
+  ALL THREE DEFECTS REPRODUCED EXACTLY BEFORE ANYTHING WAS CHANGED, and the
+  reproduction is the test rather than a note: 128 dangling maps, zero `src`
+  files and no README or LICENSE in any of the five tarballs, the same 128 the
+  entry names, derived independently by packing. `npm pack` left `workspace:^`
+  in three manifests and `pnpm pack` rewrote all three to `^0.1.0`.
+  THE GATE IS A NEW TOP-LEVEL WORKSPACE MEMBER, `packaging`, private and never
+  published, the same shape `bench` has and for the same reason: it is a
+  workspace member that is not a product. It packs every published package on
+  every `pnpm test` and reads the tarball back. THE REASON IT HAS TO EXIST is
+  the entry's own argument turned into a table in `packaging/README.md`:
+  typecheck resolves a sibling through tsconfig `paths`, test through a vitest
+  alias, build through the workspace symlink, and lint not at all, so not one
+  of the four steps ever reads `exports`, `files`, or a published manifest.
+  THE CHECKS ARE PURE AND THE PACKING IS NOT, which is what lets each one be
+  shown FAILING. `src/checks.ts` holds predicates over a structural description
+  of a packed package and `test/checks.test.ts` fails every one of them on a
+  package built to be wrong, beside a passing case; `test/pack.test.ts` runs the
+  same predicates over the five real tarballs. Twenty-six tests, four of which
+  went red against the tree before this task and green after it.
+  THE MAP CHECK IS STATED AS A PROPERTY OF THE TARBALL RATHER THAN AS "SHIP
+  `src`", so it stays correct under either arm of the decision the entry poses:
+  a package that ships no maps passes because it has none to resolve. That is
+  the durable form, and it is what makes the decision below reversible without
+  rewriting the guard.
+  THE SOURCE-MAP DECISION IS TO SHIP `src`, AND THE REASON IS THE COUPLING
+  M5.4b NAMES RATHER THAN THE MAPS THEMSELVES. Dropping `declarationMap` closes
+  the door on TypeScript project references, because `composite` requires
+  `declaration` and effectively wants `declarationMap`, and references are the
+  self-healing fix for the build-order edge that now runs from three packages
+  rather than one. MEASURED COST: 682K of tarball becomes 951K, +39% overall
+  (`@dagr/graph` +48%, `@dagr/layout` +43%, `@dagr/render` +32%, `@dagr/react`
+  +38%, `@dagr/vdsl` +38%). What it buys is go-to-definition landing on the real
+  TypeScript rather than on a `.d.ts`.
+  THE VERSIONING DECISION IS LOCKSTEP AT `0.1.0` WITH NO CHANGESETS, and both
+  halves have a reason. LOCKSTEP IS FORCED rather than chosen: `^0.1.0` on a 0.x
+  package means `>=0.1.0 <0.2.0`, so a `@dagr/graph` minor cannot be picked up
+  by a consumer's caret range and every graph minor therefore forces a matching
+  release of the three packages that peer on it. NO CHANGESETS because this repo
+  already writes a richer changelog than a changesets run would produce: one
+  hand-written entry per milestone carrying the decision and its reason, which
+  is the thing a release note is for, and a tool that generates entries from
+  commit-time summaries would either replace that or run beside it. Revisit if
+  the packages ever version independently, which is the case changesets is
+  actually for.
+  `publint` AND `arethetypeswrong` BOTH PASS ON ALL FIVE, and attw runs under
+  `--profile esm-only` rather than the default `strict`, which is a decision
+  and not a silenced warning: all five are `"type": "module"` with no CommonJS
+  build, so `strict` reports `CJSResolvesToESM` on every one of them, and that
+  is an accurate description of an ESM-only package. If a CommonJS build ever
+  lands, that profile is the line that has to change. publint's one suggestion
+  was taken: `repository.url` is now a full `git+https://...git` URL, swept
+  across every manifest in the repo rather than only the five, because a split
+  convention is worse than either convention.
+  THE SCRATCH PROJECT IS THE STRONGEST OF THE THREE AND IT PROVES SOMETHING
+  NARROWER THAN IT LOOKS. It installs the tarballs with `npm` outside the
+  workspace and compiles `layout({ graph })` against them. `Graph` carries
+  `#private` fields, so a peer range that resolved to a SECOND copy would fail
+  that line with `separate declarations of a private property '#nodes'`. It
+  compiling is the evidence that the peer resolved to one copy, which is the
+  hazard M5.4b's peer-dependency note is entirely about and which no amount of
+  manifest reading can settle. GENERALISE IT: A NOMINAL TYPE IS A DUPLICATE
+  DETECTOR YOU ALREADY OWN, and the check is to compile a call that crosses the
+  boundary.
+  THE FIVE READMEs ARE THE FEATURE'S DOCS, and writing them found four wrong
+  claims that were caught by TYPECHECKING THE EXAMPLES rather than by reading
+  them: `layout()` takes its config inside the input object and not as a third
+  argument, `canConnect` is declared per kind and is not a `RegistryOptions`
+  field, a `Patch` IS the frozen op array rather than an object with `.ops`, and
+  a `PatchOp`'s discriminant is `op` rather than `kind`. A fifth was a type
+  error only in the sense that mattered most: `createNodeMotion().apply` takes a
+  `NodeMotionDelta` carrying y-up CENTRES, not a `@dagr/layout` `LayoutDelta`,
+  so the README that said otherwise would have sent every first consumer into
+  the one conversion this project has always said belongs to the caller.
+  GENERALISE IT: A README EXAMPLE IS SOURCE CODE THAT NOTHING COMPILES, so
+  compile it somewhere before shipping it.
+  WHAT IS DELIBERATELY NOT DONE. The publish stays queued for the maintainer,
+  which is AGENTS.md's rule. AGENTS.md itself still names `npm publish` and an
+  agent may not edit it, so the correction is queued rather than taken.
+  `@dagr/bench` survives into `@dagr/graph`'s and `@dagr/layout`'s published
+  devDependencies as `"0.0.0"`, a version of a package that will never be on
+  npm: harmless, because npm installs no devDependencies for a package it is
+  installing as a dependency, and asserted as exempt in the check rather than
+  left to be rediscovered.
 - [ ] **M5.4b** Docs: Docusaurus getting-started, API reference pages for all
   packages, v0.1 readiness review. Queue the publish for the human, on M5.4a's
   finding that the command is `pnpm publish`.

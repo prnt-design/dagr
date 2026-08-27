@@ -16,12 +16,18 @@
   },
   "files": [
     "dist",
-    "CHANGELOG.md"
+    "src",
+    "CHANGELOG.md",
+    "README.md",
+    "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "sideEffects": false,
   "repository": {
     "type": "git",
-    "url": "https://github.com/prnt-design/dagr",
+    "url": "git+https://github.com/prnt-design/dagr.git",
     "directory": "packages/graph"
   },
   "scripts": {
