@@ -11,6 +11,9 @@
  * alternative is a check nobody runs until the publish fails.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { PackedPackage } from '../src/checks.js';
@@ -21,7 +24,7 @@ import {
   unresolvedEntryPoints,
   workspaceRanges,
 } from '../src/checks.js';
-import { PUBLISHED_PACKAGES, packPublishedPackages } from '../src/pack.js';
+import { PUBLISHED_PACKAGES, REPO_ROOT, packPublishedPackages } from '../src/pack.js';
 
 let packed: PackedPackage[] = [];
 let dispose = () => {};
@@ -38,8 +41,10 @@ beforeAll(() => {
 afterAll(() => dispose());
 
 function each(): PackedPackage[] {
-  // Guards against a beforeAll that silently produced nothing, which would
-  // otherwise make every `it.each` below vacuous.
+  // Guards against a beforeAll that silently produced nothing. Every
+  // assertion below is over a LIST, so an empty list satisfies each one of
+  // them: without this, a pack that produced nothing would read as a green
+  // gate rather than as a broken one.
   expect(packed).toHaveLength(PUBLISHED_PACKAGES.length);
   return packed;
 }
@@ -88,10 +93,12 @@ describe('the tarball a consumer installs', () => {
   });
 
   it('ships a LICENSE with the same text the repo licences under', () => {
-    // A `license: "MIT"` field with no text beside it, or with text that has
-    // drifted from the root, is the repo asserting a licence it did not ship.
-    const root = each()[0]?.text('LICENSE');
-    expect(root).toBeTypeOf('string');
+    // Against the repo's own LICENSE and not merely against each other: five
+    // identical copies that have all drifted from the root would satisfy a
+    // pairwise check and still be the repo asserting a licence it did not
+    // ship. This is the only assertion here that reads a file outside the
+    // tarballs, and that is exactly the point of it.
+    const root = readFileSync(join(REPO_ROOT, 'LICENSE'), 'utf8');
     for (const p of each()) expect(p.text('LICENSE')).toBe(root);
   });
 
