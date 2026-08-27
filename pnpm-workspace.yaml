@@ -2,4 +2,5 @@ packages:
   - 'packages/*'
   - 'apps/*'
   - 'bench'
+  - 'packaging'
   - 'docs'

@@ -32,8 +32,12 @@ published package, and documents itself in
 | `@dagr/vdsl` | Visual DSL toolkit: node spec adapter, typed ports, drag-to-connect | The node spec adapter, its registry, port type tokens and connection validation implemented; drag-to-connect is next |
 
 Nothing is published to npm yet, so the only way to run any of this today is to
-clone the repo. Closing that is the next task on the
-[roadmap](./ROADMAP.md#where-this-stands-and-what-to-do-next).
+clone the repo. The tarballs are ready: every package packs with a README, a
+LICENSE and source maps that resolve, `publint` and `arethetypeswrong` pass on
+all five, and a scratch project outside the workspace installs them and
+typechecks. The `packaging` member is the gate that keeps that true, and the
+publish command is `pnpm publish` rather than `npm publish`. The publish itself
+is the maintainer's, per [AGENTS.md](./AGENTS.md).
 
 ## Development
 
