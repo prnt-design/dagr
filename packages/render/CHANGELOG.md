@@ -14,6 +14,43 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- `createEdgeMotion` and `alignRoutes`, the edge half of the delta consumer: one
+  spring per point of a route, retargeted by a `LayoutDelta`'s edge lists,
+  stepped by the same clock and settling to the same feel as the node half. Nine
+  new names on the surface: the two functions, and the types `EdgeMotion`,
+  `EdgeMotionDelta`, `EdgeMotionFrame`, `EdgeMotionOptions`, `EdgeMotionTarget`,
+  `MotionEdge` and `AlignedRoutes`. (M4.7b)
+
+  **NOTHING EXISTING BEHAVES DIFFERENTLY.** `createNodeMotion` is untouched,
+  `setEdges` is untouched, and there is still no render loop in this package.
+  `MotionDesyncError` gained a fourth constructor argument saying which roster
+  it is about, defaulted so that every message the node half produces is the
+  message it produced before.
+
+  **AN EDGE NEEDED A CORRESPONDENCE BEFORE IT NEEDED A SPRING.** A route that
+  gains a rank to cross gains a bend, so two routes for one edge can have
+  different vertex counts and there is nothing to retarget. `alignRoutes` takes
+  the UNION of the two routes' own arc-length parameters, which keeps every
+  vertex of each route exactly and puts every added point on a segment the route
+  already had. `@dagr/layout`'s `maxRouteDistance` measures a route by Hausdorff
+  distance and says a point added on the line a route already ran along measures
+  zero, so this correspondence is free in the metric that judges it.
+
+  **AN ARRIVING EDGE COMPACTS BACK TO THE ROUTE'S OWN POINTS.** The union count
+  exists between two frames and not in the drawing: an edge that kept it would
+  gain a point per reroute and end a session drawing a three-point line out of
+  hundreds. Compacting is exact, because every point the union added was on a
+  segment of the route being arrived at.
+
+  **`MotionEdge.points` DOES NOT KEEP A STABLE COUNT ACROSS FRAMES.** A caller
+  that binds per segment should key on the edge and not on the vertex.
+  `setEdges` rebuilds a group's geometry whole, so nothing in this package does.
+
+  **A REMOVAL AND AN ADDITION UNDER ONE ID IS ONE LINE CHANGING ROUTE.** That is
+  how `EdgeDelta` reports an edge whose endpoints changed, and there is one line
+  on screen carrying that id either way, so the departure is cancelled and the
+  new route becomes the target.
+
 - `createNodeMotion`, the node half of the delta consumer: one spring per node,
   retargeted by a `LayoutDelta`'s node lists, stepped by a clock the caller
   owns. Eight new names on the surface: the factory, `MotionDesyncError` with
@@ -51,9 +88,10 @@ not" is the category this file has a heading for.
   was going, because a re-add of something still on screen is a departure
   cancelled and not a node arriving.
 
-  **EDGES, THE BOUNDS CHANGE AND THE LOOP ARE M4.7b.** A node moves as a point;
-  an edge is a polyline whose vertex count changes between two routes, so there
-  is nothing to retarget until something decides what corresponds to what.
+  **EDGES ARE M4.7b, AND THE BOUNDS CHANGE AND THE LOOP ARE M4.7c.** A node
+  moves as a point; an edge is a polyline whose vertex count changes between two
+  routes, so there is nothing to retarget until something decides what
+  corresponds to what.
 
 - `backend` on `RendererOptions` and `backend` on `Renderer`: which of three's
   two backends to draw through, and which one you got. `'auto'` (the default)

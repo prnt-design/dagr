@@ -87,10 +87,19 @@
  * clock. Two things it deliberately does not take are a `LayoutResult` and a
  * `LayoutDelta`: {@link MotionTarget} is a world-space centre, so the y flip
  * stays with whoever owns the layout exactly as `setNodes` already requires,
- * and `@dagr/layout` stays out of this package's dependencies. Edges, the
- * bounds change and the loop that drives both are M4.7b's, on a seam that is
- * about kind rather than convenience: a node moves as a point, and an edge is a
- * polyline whose vertex count changes between two routes.
+ * and `@dagr/layout` stays out of this package's dependencies. The bounds
+ * change and the loop that drives every one of these is M4.7c's.
+ *
+ * **M4.7b added the edge half, and it is one decision with a state machine
+ * around it.** {@link createEdgeMotion} is {@link createNodeMotion}'s shape for
+ * routes, down to the defaults, so one delta's nodes and edges arrive together.
+ * What it needed first was a CORRESPONDENCE: an edge is a polyline whose vertex
+ * count changes between two routes, so there is nothing to retarget until
+ * something says which point becomes which. {@link alignRoutes} is that
+ * decision and is exported beside the motion for the same reason `spring.ts`
+ * is: a caller animating edges with their own curve or their own clock needs
+ * the correspondence before they need anything else, and it is a pure function
+ * of two point lists.
  *
  * **M4.9a is the first thing this package says about the machine it is running
  * on.** `createRenderer` takes a `backend` preference and every renderer reports
@@ -131,6 +140,16 @@ export {
   UnknownInstanceHandleError,
 } from './errors.js';
 export type { DagrRenderErrorCode } from './errors.js';
+export { alignRoutes, createEdgeMotion } from './edge-motion.js';
+export type {
+  AlignedRoutes,
+  EdgeMotion,
+  EdgeMotionDelta,
+  EdgeMotionFrame,
+  EdgeMotionOptions,
+  EdgeMotionTarget,
+  MotionEdge,
+} from './edge-motion.js';
 export {
   OVERLAY_INV_ZOOM_PROPERTY,
   OVERLAY_ZOOM_PROPERTY,

@@ -72,8 +72,15 @@ for the same reason `setNodes` takes no `LayoutResult`. It follows the same
 three rules the layout delta does, so absent means unchanged and a node you do
 not name does not move.
 
-It owns no clock. There is no `requestAnimationFrame` in this package yet, and
-edge motion is not here either: both are M4.7b on the
+`createEdgeMotion` is the same thing for routes, and it takes the delta's edge
+lists. An edge is a polyline whose vertex count changes between two routes, so
+it resamples both onto the union of their own arc-length parameters first:
+every vertex of each route survives exactly, and the settled drawing is the
+layout's answer to the bit. `alignRoutes` is that correspondence on its own if
+you would rather animate edges your own way.
+
+Neither owns a clock. There is no `requestAnimationFrame` in this package yet,
+which is M4.7c on the
 [roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md). A caller
 today writes the loop.
 

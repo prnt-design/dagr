@@ -55,8 +55,10 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * polyline whose VERTEX COUNT changes between two routes: a long edge gaining
  * a rank to cross gains a bend, and `delta.ts` says in as many words that no
  * per-point comparison catches it. There is nothing to retarget until somebody
- * decides what corresponds to what, and that decision is M4.7b's along with
- * the bounds change and the frame loop that drives both.
+ * decides what corresponds to what. M4.7b made that decision in
+ * `edge-motion.ts`, by resampling both routes onto the union of their own
+ * arc-length parameters; the bounds change and the frame loop that drives both
+ * halves are M4.7c's.
  */
 
 /** Where a node is being pulled to: its id, and its centre in world units, y up. */

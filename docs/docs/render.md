@@ -937,7 +937,7 @@ an unchanged frame. M4.6 shipped the springs without adding one, and that is
 deliberate: a spring step is a pure function of a delta, so the loop belongs to
 whoever owns the clock. M4.7a keeps that: `createNodeMotion` takes the elapsed
 seconds and answers whether anything is still moving, so the opinion about
-starting and stopping a loop is M4.7b's, with the frame budget it implies. Do coalesce, though: an input handler
+starting and stopping a loop is M4.7c's, with the frame budget it implies. Do coalesce, though: an input handler
 that calls `render()` synchronously runs at the event rate rather than the
 display rate, and a trackpad fling dispatches wheel events faster than the
 screen refreshes. The campaign demo schedules one frame per `requestAnimationFrame`
@@ -1568,12 +1568,88 @@ absent-means-unchanged buys the arithmetic and not the frame: a delta is
 proportional to the change, a frame is proportional to the scene. Whether that
 floor is worth removing is M4.10's to measure against a real GPU.
 
-**Edges are M4.7b, and the seam is about kind rather than convenience.** A node
-moves as a point, so one two-axis spring is the whole of it. An edge is a
-polyline whose vertex count changes between two routes, because a long edge
-gaining a rank to cross gains a bend, and there is nothing to retarget until
-something decides what corresponds to what. The bounds change and the loop that
-drives both are M4.7b's too.
+**The bounds change and the loop that drives all of this are M4.7c.** This
+package still owns no clock.
+
+## An edge needs a correspondence before it needs a spring
+
+M4.7b is the other half of the delta consumer, and the seam between the two is
+about kind rather than convenience. A node moves as a point, so one two-axis
+spring is the whole of it and the hard part is the bookkeeping between two
+deltas. An edge is a polyline whose **vertex count changes between two routes**,
+because a long edge gaining a rank to cross gains a bend, and no per-point
+comparison can even be spelled between two lists of different lengths. There is
+nothing to retarget until something decides what corresponds to what.
+
+`createEdgeMotion` is `createNodeMotion`'s shape for routes, down to the two
+defaults, so one delta's nodes and its edges arrive together:
+
+```ts
+import { createEdgeMotion, createNodeMotion } from '@dagr/render';
+
+const edges = createEdgeMotion();
+
+// World points, y up: the same flip `setEdges` already asks for.
+const routeOf = (edge) => ({
+  id: edge.id,
+  points: edge.points.map((point) => ({ x: point.x, y: -point.y })),
+});
+
+edges.resync([...first.edges.values()].map(routeOf));
+
+// ... on a relayout, beside the node half:
+edges.apply({
+  added: delta.edges.added.map(routeOf),
+  removed: [...delta.edges.removed],
+  rerouted: delta.edges.rerouted.map((reroute) => routeOf({ id: reroute.id, points: reroute.to })),
+});
+
+// ... and per frame, beside `motion.advance`:
+const frame = edges.advance(elapsedSeconds);
+renderer.setEdges('flow', frame.edges.map(draw));
+```
+
+**The correspondence is resampling, and the metric that judges it says the
+resampling is free.** `alignRoutes(from, to)` gives both routes a common list of
+places along themselves: the **union of their own arc-length parameters**. Every
+vertex of each route survives in its own list exactly, and every point either
+list gains sits on a segment that list already had. `@dagr/layout`'s
+`maxRouteDistance` measures a route by Hausdorff distance between the two
+polylines taken as curves, and it already records that a point added on the line
+a route already ran along measures zero. So the correspondence costs nothing in
+the metric M3.4 says this task is judged by: it is not a compromise between two
+drawings, it is the same two drawings with more names for places on them.
+
+**A common count would have cut every corner.** Resampling both routes to
+`max(from.length, to.length)` evenly spaced points is the obvious reading of a
+common count, and a bend that does not happen to fall on one of those samples is
+rounded off. Springing the control points of a curve was the other option, and it
+needs a curve this package does not have and would leave the settled drawing off
+the line the layout computed.
+
+**An arriving edge compacts back to the route's own points.** The union can be
+as large as the two counts added together, so an edge that kept it would carry
+the shape of every route it had ever taken: a session of edits is a polyline
+with hundreds of vertices drawing a line with three. Compacting is exact rather
+than a simplification, because every point the union added lay on a segment of
+the route being arrived at. So the union count exists between two frames and
+never in the drawing, and `MotionEdge.points` **does not keep a stable count
+across frames**. A caller binding per segment should key on the edge and not on
+the vertex; `setEdges` rebuilds a group's geometry whole, so nothing here does.
+
+**Velocity is resampled with position.** A polyline caught mid-flight has a
+velocity per point as well as a position, and the point a retarget adds needs
+both. Zeroing it instead would stop a moving edge dead at every new bend, which
+is the same interruptibility failure that reading a delta's `from` would cause.
+
+**A removal and an addition under one id is one line changing route.** That is
+how `EdgeDelta` reports an edge whose endpoints changed, and `@dagr/layout` is
+right that it is not the same edge. But there is one line on the screen carrying
+that id either way, so the departure is cancelled and the new route becomes the
+target, which is what a reroute does. Everything else is the node half's
+behaviour exactly: the same `MotionDesyncError` on a delta that does not
+describe the scene, the same all-or-nothing apply, the same `departing` state
+until a removed edge's springs finish, the same `resync` back.
 
 ## Picking, decided and half built
 
@@ -1640,11 +1716,12 @@ family, and nothing that moves.
 - A real animation loop. M4.6 shipped the springs and deliberately did not
   start one, because the clock belongs to whoever owns the frame; the demo
   already coalesces its own. M4.7a still does not start one, and it does add
-  the `settled` a loop needs to stop. M4.7b is where the renderer drives it.
-- The edge half of the delta consumer, the bounds change, and the loop over
-  both (M4.7b). The node half landed at M4.7a and is
-  [two sections up](#deltas-drive-the-springs-and-the-state-is-the-renderers).
-  M4.7 is the M4 task that genuinely waits on M3, and both halves do.
+  the `settled` a loop needs to stop, and M4.7b adds the edge half that needs
+  driving too. M4.7c is where the renderer drives them.
+- The bounds change and the loop over both halves of the delta consumer
+  (M4.7c). The node half landed at M4.7a and the edge half at M4.7b, and both
+  are two sections up. M4.7 is the M4 task that genuinely waits on M3, and every
+  part of it does.
 - The pass half of GPU picking: a material writing the bytes above, an
   offscreen target, the readback and a `pick()` on `Renderer` (M4.8b). What
   a pixel says and which node an id still means are decided and tested; see

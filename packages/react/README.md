@@ -36,7 +36,7 @@ coordinates over the canvas. `useDagrCanvas` is how anything inside reaches the
 renderer.
 
 What is not here yet, so you know before you reach for it: no hover, selection
-or drag (M5.2), and no animation wired through the component (M4.7b).
+or drag (M5.2), and no animation wired through the component (M4.7c).
 
 ## Read this first: the `graph` prop is watched, not compared
 

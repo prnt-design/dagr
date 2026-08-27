@@ -46,8 +46,13 @@ import { requireIntegerAtLeast } from './validate.js';
  * OWN NODE ID, one layer further out, exactly where M4.8a's picking ids went.
  * That layer is this invariant satisfied with room to spare, since an id
  * survives even a shape change, which reallocates the handle. So the invariant
- * is still unpaid for by anything shipped, and the consumers now named for it
- * are M4.7b's per-edge state and M4.8b's pick pass. Slot indices are not
+ * is still unpaid for by anything shipped, and M4.7b HAS NOW MISSED IT IN THE
+ * SAME DIRECTION FOR THE SECOND TIME: `edge-motion.ts` keys a route's springs
+ * by the caller's own EDGE ID, and `scene-edges.ts` has no per-instance edge
+ * state to key at all, since a group's geometry is rebuilt whole. So the one
+ * consumer still named for this invariant is M4.8b's pick pass, and a
+ * prediction that per-instance state would want a handle has now been made
+ * three times and been wrong twice. Slot indices are not
  * durable across ANY removal, and {@link InstanceBuffer.slotOf} is a question
  * with an answer that expires: read it, use it, do not store it.
  *
