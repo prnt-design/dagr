@@ -225,7 +225,9 @@ also read as a different effect at each end of the range.
 
 The width of the ramp is the larger of the two per-axis gradients of the
 interpolated POSITION, `max(length(vec2(dFdx(p.x), dFdy(p.x))),
-length(vec2(dFdx(p.y), dFdy(p.y))))`, and deliberately not `fwidth`.
+length(vec2(dFdx(p.y), dFdy(p.y))))`. Keeping each gradient as a Euclidean
+length makes the measurement independent of derivative orientation under
+future rotation or shear, unlike `fwidth`.
 
 **Of the position, not of the distance**, which is a correction rather than a
 detail. Every field here folds: `roundedRectDistance` runs both coordinates
@@ -236,14 +238,13 @@ a small shape is the whole shape. The position has no `abs` in front of it and
 cannot fold. The euclidean-gradient argument that used to justify differentiating
 the distance was sound about magnitude and silent about folding.
 
-`fwidth` is defined as `abs(dFdx) + abs(dFdy)`, the L1 norm of
-the same gradient, and L1 exceeds L2 by up to a factor of `sqrt(2)`, 41%, exactly
-when the two derivatives are equal. Equal derivatives means an edge at 45
-degrees, and a rounded corner is a continuum of diagonals: with `fwidth` the ramp
-is correct along the flat sides and up to 41% too soft around the corner, which
-reads as corners blurrier than the edges they join. That is the artefact a
-distance field is supposed to remove. It costs one `sqrt` per fragment, and the
-shader already has one.
+With the current axis-aligned orthographic camera, each position component
+varies along one screen axis. Its other derivative is zero, so `fwidth`'s L1
+norm and the Euclidean L2 length agree. The difference appears only if a future
+rotation or shear makes a position component vary along both screen axes:
+`fwidth`, defined as `abs(dFdx) + abs(dFdy)`, then depends on that orientation,
+while the Euclidean gradient length does not. The formula computes two
+`length`s, so this choice costs two square roots per fragment, not one.
 
 This works because the fields are TRUE euclidean distances outside the shape
 rather than a cheaper approximation. The gradient of such a field has magnitude 1
