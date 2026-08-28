@@ -187,11 +187,11 @@ describe('antialiasWidth', () => {
   it('is the LENGTH of the gradient and not fwidth, checked structurally', () => {
     // The one place this file inspects a graph's shape instead of only its
     // existence, and it is worth the coupling. `fwidth(d)` builds just as happily
-    // as `length(vec2(dFdx(p.c), dFdy(p.c)))` and differs from it by up to 41% on a
-    // diagonal, which is every point of every rounded corner: the visible symptom
-    // is corners blurrier than the sides they join, at every zoom, which is a
-    // thing a reviewer would look straight past on a screenshot. So the decision
-    // gets a test rather than only a paragraph.
+    // as `length(vec2(dFdx(p.c), dFdy(p.c)))`. Today's axis-aligned mapping makes
+    // their L1 and L2 lengths agree because each position component varies along
+    // only one screen axis. Under a future rotation or shear, the Euclidean length
+    // remains independent of derivative orientation while `fwidth` does not, so
+    // the orientation-independent form gets a test rather than only a paragraph.
     //
     // What is asserted: the outermost operation is a `length`, and its argument
     // joins exactly two components which are `dFdx` and `dFdy` of something. What

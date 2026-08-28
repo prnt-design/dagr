@@ -132,17 +132,16 @@ export const tslArith: Arith<FloatNode> = {
  * The position has no `abs` and no square in front of it, so it cannot fold.
  * `test/sdf.test.ts` executes the fold; `test/sdf-nodes.test.ts` pins this graph.
  *
- * **`max` of two `length`s, and NOT `fwidth`.** `fwidth` is `abs(dFdx) + abs(dFdy)`,
- * the L1 norm, which exceeds the L2 norm by up to `sqrt(2)`, 41% too wide, when the
- * two derivatives are equal. Equal derivatives means an edge at 45 degrees, and a
- * rounded corner is a continuum of diagonals: with `fwidth` the ramp is right along
- * the flat sides and up to 41% too soft at the corner, which reads as corners
- * blurrier than the edges they join, at every zoom.
+ * **`max` of two `length`s, and NOT `fwidth`.** With today's axis-aligned mapping,
+ * each position component varies along only one screen axis, so `fwidth`'s L1 norm
+ * and the Euclidean L2 length agree. A future rotation or shear could make one
+ * component vary along both screen axes. The Euclidean length remains independent
+ * of derivative orientation then, while `fwidth` becomes orientation-dependent.
  *
  * The `max` over the two axes costs a second `length` against differentiating one
  * scalar. The cheaper `max(abs(dFdx(p.x)), abs(dFdy(p.y)))` is exact for the
  * axis-aligned orthographic camera this package has today and WRONG under rotation,
- * which M4.4 may want, so the general form is taken now rather than swapped in later.
+ * or shear, so the general form is taken now rather than swapped in later.
  *
  * **DEVICE pixels, not CSS pixels.** The derivative is taken across a framebuffer
  * pixel, and `#syncSize` sizes the framebuffer from `Camera2D.drawingBufferSize()`,
