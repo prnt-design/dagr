@@ -4356,12 +4356,15 @@ of M3 would leave the second runner idle for a milestone.
   DISTANCE: every field folds through `abs` or a square, so a distance gradient
   collapses on the quad holding a shape's centre and the inset outline vanishes
   there, which on a small shape is the whole shape.
-  because `fwidth` is the L1 sum and exceeds L2 by up to 41% exactly where the
-  derivatives are equal, which is a 45 degree edge, and a rounded corner is
-  nothing else. READ THIS ONE AS A WARNING: swapping in either `fwidth` or its L1
-  expansion left the whole suite GREEN, since both are correct to within a factor
-  on every value a numeric test can check, so the suite now asserts the node
-  graph's STRUCTURE. A numeric test cannot catch a wrong-by-a-factor derivative.
+  WITH THE CURRENT AXIS-ALIGNED ORTHOGRAPHIC CAMERA, each position component
+  varies along one screen axis, so `fwidth`'s L1 norm and the Euclidean length
+  agree. The Euclidean lengths remain independent of derivative orientation
+  under a future rotation or shear, while `fwidth` would become
+  orientation-dependent once a component varied along both screen axes. The
+  formula computes TWO lengths and therefore costs TWO square roots per fragment.
+  READ THIS ONE AS A WARNING: swapping in either `fwidth` or its L1 expansion left
+  the whole suite GREEN because the current camera makes them equal, so the suite
+  asserts the node graph's STRUCTURE.
   THE OUTLINE'S OUTER RAMP IS CENTRED ON THE BOUNDARY, exactly like the fill's,
   and an earlier draft inset it by half an antialiasing width so that its coverage
   was exactly zero at the boundary. That draft was WRONG and a real GPU frame is
