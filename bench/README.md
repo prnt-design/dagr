@@ -24,30 +24,46 @@ for a slower machine, not for a different architecture. Gating on CI reported
 eleven regressions between +23% and +76% on a commit that changed one docs
 page.
 
-Which machine that is has changed once and can change again: the current file
-was captured on the dispatch box, an x64 AMD EPYC-Rome VM, replacing a capture
-from the maintainer's arm64 M1 Pro after `bench:ci` on the VM showed the
-mismatch signature (failures concentrated in a package the change never
-touched; every `@dagr/graph` ratio had moved +10.2% to +69.8% with no commits
-to its `src`, which is exactly the shift the control cannot cancel). The
-mismatch now points the other way: a run on the maintainer's arm64 machines
-will fail against this file the same way, and moving development back there
-means recapturing on the same terms, three agreeing runs on a quiet machine.
-It has since changed twice without anyone moving: the box became an Intel Xeon
-Skylake on 2026-08-18 and reported EPYC-Rome again by 2026-08-24, when the
-queued recapture was taken (PR #63). See "The machine in the file" below for
-how the gate says so now, and for what it cost to find out by hand.
-The CI argument above is unchanged by the baseline being x64 Linux: the
+Which machine that is has changed and can change again. The first capture came
+from the maintainer's arm64 M1 Pro; the dispatch box, an x64 AMD EPYC-Rome
+VM, replaced it after `bench:ci` on the VM showed the mismatch signature
+(failures concentrated in a package the change never touched; every
+`@dagr/graph` ratio had moved +10.2% to +69.8% with no commits to its `src`,
+which is exactly the shift the control cannot cancel). The box then changed
+twice without anyone moving: it became an Intel Xeon Skylake on 2026-08-18
+and reported EPYC-Rome again by 2026-08-24, when the queued recapture was
+taken (PR #63). Development then moved to the maintainer's arm64 Apple M4,
+where the identity check refused every run for a week, and on 2026-09-01 the
+maintainer called the move: the current file is captured there, on the terms
+this paragraph has always named, and it is now a run on the dispatch box that
+fails the identity check. See "The machine in the file" below for how the
+gate says so, and for what it cost to find out by hand.
+The CI argument above is unchanged by the baseline being arm64 macOS: the
 remaining reason the gate stays local is runner noise and runner identity, not
 which architecture the file happens to name.
 
-**The current file was captured on 2026-08-24 (PR #63) and supersedes the
-2026-08-16 capture the next paragraph describes.** The box had turned Intel
-Xeon Skylake on 2026-08-18 and reported EPYC-Rome again by capture day, so
-the machine name matches the old file and the numbers still must not: this
-capture is the first to carry a `machineProfile`, so the next box that is
-different in kind under the same name is detectable rather than a two-day
-investigation. Taken per the 2026-08-16 procedure: one warmup discarded,
+**The current file was captured on 2026-09-01 on the maintainer's Apple M4
+(darwin arm64, 10 cores, Node v25.6.1), authorized by the maintainer in
+session after a week of identity refusals on this box.** One warmup run
+discarded, then five measured runs at 1-minute loads between 2.4 and 3.5.
+Three would have satisfied the precedent (the worst gated band across the
+first three was 18.2%, on `2.5k outEdges`, against the 32.5% disagreement
+that extended the 2026-08-16 capture), and two more cost eighty seconds, so
+they were taken anyway. Run 4 is the file: 1.60% mean absolute deviation
+from the per-entry medians over the sixteen gated entries, worst entry 5.3%,
+taken at the quietest loads of the set. It is the first capture to carry the
+two warm `rank` entries, new since PR #63. `bench:ci` against the file
+passed 2 of 2 before committing. And the exempt `2.5k successors` measured a
+5.3% band across the five runs here, against 35% to 64% on the dispatch box:
+the exemption stands, because lifting it is a hand edit by design, and this
+is the first machine that could argue for that edit.
+
+**The 2026-08-24 capture (PR #63) superseded the 2026-08-16 capture the
+paragraph after it describes.** The box had turned Intel Xeon Skylake on
+2026-08-18 and reported EPYC-Rome again by capture day, so the machine name
+matched the old file and the numbers still must not: that capture was the
+first to carry a `machineProfile`, so the next box that is different in kind
+under the same name is detectable rather than a two-day investigation. Taken per the 2026-08-16 procedure: one warmup discarded,
 five measured runs at 1-minute loads between 1.0 and 1.5, run 5 committed
 (4.58% mean absolute deviation from the per-entry medians over the fourteen
 gated entries, worst entry 15.8%). `bench:ci` against it passed 2 of 3
