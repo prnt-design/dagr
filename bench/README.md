@@ -33,27 +33,41 @@ to its `src`, which is exactly the shift the control cannot cancel). The
 mismatch now points the other way: a run on the maintainer's arm64 machines
 will fail against this file the same way, and moving development back there
 means recapturing on the same terms, three agreeing runs on a quiet machine.
-It has since changed again without anyone moving: the box became an Intel Xeon
-Skylake on 2026-08-18, this file still names the EPYC, and a recapture is queued
-rather than taken. See "The machine in the file" below for how the gate says so
-now, and for what it cost to find out by hand.
+It has since changed twice without anyone moving: the box became an Intel Xeon
+Skylake on 2026-08-18 and reported EPYC-Rome again by 2026-08-24, when the
+queued recapture was taken (PR #63). See "The machine in the file" below for
+how the gate says so now, and for what it cost to find out by hand.
 The CI argument above is unchanged by the baseline being x64 Linux: the
 remaining reason the gate stays local is runner noise and runner identity, not
 which architecture the file happens to name.
 
-**The current file was captured on 2026-08-16 between 05:20 and 05:29 UTC and
-supersedes PR #21's capture of 2026-08-14.** Same machine, different conditions,
-which is the whole reason for it: PR #21 was taken when one agent ran on this
-box at a time, and the box now carries several sessions at once. The maintainer
-called the recapture after four sessions escalated the same symptom. It was
-taken in a trough between the neighbours' bursts, with the 1-minute load between
-0.40 and 2.13 for the whole set, a warmup run discarded, and FIVE measured runs
-rather than three: the first three disagreed by 32.5% on `build > 1k` and 26.7%
-on `isAcyclic, acyclic`, so two more were taken to find out which of them was
-representative. The file is run 3. `loadAverageAtCapture` reads 1.3 because
-`bench:baseline` sampled it when the file was written, half an hour after the
-runs it holds; the figures above are what the measurements were taken under, and
-that gap is the reason the field's name is as narrow as it is.
+**The current file was captured on 2026-08-24 (PR #63) and supersedes the
+2026-08-16 capture the next paragraph describes.** The box had turned Intel
+Xeon Skylake on 2026-08-18 and reported EPYC-Rome again by capture day, so
+the machine name matches the old file and the numbers still must not: this
+capture is the first to carry a `machineProfile`, so the next box that is
+different in kind under the same name is detectable rather than a two-day
+investigation. Taken per the 2026-08-16 procedure: one warmup discarded,
+five measured runs at 1-minute loads between 1.0 and 1.5, run 5 committed
+(4.58% mean absolute deviation from the per-entry medians over the fourteen
+gated entries, worst entry 15.8%). `bench:ci` against it passed 2 of 3
+before committing, the failing run failing different entries each time,
+which is the noise shape rather than the regression shape.
+
+**The 2026-08-16 capture was taken between 05:20 and 05:29 UTC and
+superseded PR #21's capture of 2026-08-14.** Same machine, different
+conditions, which is the whole reason for it: PR #21 was taken when one agent
+ran on this box at a time, and the box now carries several sessions at once.
+The maintainer called the recapture after four sessions escalated the same
+symptom. It was taken in a trough between the neighbours' bursts, with the
+1-minute load between 0.40 and 2.13 for the whole set, a warmup run
+discarded, and FIVE measured runs rather than three: the first three
+disagreed by 32.5% on `build > 1k` and 26.7% on `isAcyclic, acyclic`, so two
+more were taken to find out which of them was representative. That file was
+run 3. Its `loadAverageAtCapture` read 1.3 because `bench:baseline` sampled
+it when the file was written, half an hour after the runs it holds; the
+figures above are what the measurements were taken under, and that gap is the
+reason the field's name is as narrow as it is.
 
 **Measure closeness over the GATED entries only when picking which run to
 commit.** The first pick here was run 4, on a per-entry closeness computed over

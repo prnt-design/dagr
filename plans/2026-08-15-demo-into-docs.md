@@ -1,10 +1,10 @@
 # The campaign demo moves into the docs site, and reads its edges
 
 **Date:** 2026-08-15
-**Status:** approved 2026-08-15. D1 DELIVERED the same day as PR #40, except
-for the one step a blueprint cannot take (see below); D2 and D3 open,
-owned by a parallel session. The ROADMAP's "Demo into the docs site" section
-carries D1's decision record.
+**Status:** delivered. D1 shipped the same day as PR #40, except for the one
+step a blueprint cannot take (see below); D2 and D3 followed, and the
+maintainer's 2026-08-16 message extended the track through D6, all shipped.
+The ROADMAP's "Demo into the docs site" section carries the task record.
 **Supersedes:** the standalone `dagr-demo` Render service (PR #33) as the
 demo's home, and the P7 landing-page link that was never added.
 
