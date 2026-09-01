@@ -400,19 +400,21 @@ describe('what a layout run costs', () => {
   });
 
   /**
-   * The ROADMAP entry quotes the same figures and is held to them too.
+   * The roadmap notes entry quotes the same figures and is held to them too.
    *
    * Added because the docs reviewer pointed out that pinning the docs page
    * alone left the second site unguarded, and the second site is exactly where
    * the stale numbers were found. Two files quoting one measurement is two
    * chances to drift, and the fix that covers one of them is half a fix.
    *
-   * Phrases rather than a block, because a ROADMAP entry is prose that gets
-   * edited around the numbers and asserting its exact wrapping would fail for
-   * reasons that are not staleness.
+   * The M2.9 working record moved from `ROADMAP.md` to
+   * `specs/roadmap-notes.md` on 2026-09-01; the guard followed the prose that
+   * quotes the numbers. Phrases rather than a block, because the entry is
+   * prose that gets edited around the numbers and asserting its exact
+   * wrapping would fail for reasons that are not staleness.
    */
-  it('is the same table the ROADMAP entry quotes', () => {
-    const roadmap = readFileSync(new URL('../../../ROADMAP.md', import.meta.url), 'utf8');
+  it('is the same table the roadmap notes entry quotes', () => {
+    const roadmap = readFileSync(new URL('../../../specs/roadmap-notes.md', import.meta.url), 'utf8');
     const entry = roadmap.slice(roadmap.indexOf('**M2.9**')).replace(/\s+/gu, ' ');
     const small = requireRow(committed, '1k nodes, 4k edges');
     const large = requireRow(committed, '10k nodes, 40k edges');

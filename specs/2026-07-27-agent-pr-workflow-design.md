@@ -1,7 +1,8 @@
 # Agent PR workflow
 
 Date: 2026-07-27
-Status: approved, not yet implemented
+Status: implemented. The live process is AGENTS.md's "How work reaches main";
+this file is kept as the argument behind it.
 
 ## Problem
 
