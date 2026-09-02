@@ -180,10 +180,11 @@ describe('antialiasWidth', () => {
       operands.push(dx);
     }
 
-    // And the two branches must differentiate DIFFERENT components, or this is one
-    // axis measured twice and the other never, which is a `max` that cannot see a
-    // pixel stretched along the axis it dropped.
+    // And the two branches must differentiate the EXACT components handed to the
+    // function, or a factor inserted before either derivative changes the ramp
+    // width while preserving every node kind checked above.
     expect(operands[0]).not.toBe(operands[1]);
+    expect(operands).toEqual([position.x, position.y]);
   });
 
   it('is the LENGTH of the gradient and not fwidth, checked structurally', () => {
@@ -221,35 +222,6 @@ describe('antialiasWidth', () => {
     expect(join.nodes.map((node) => methodOf(node))).toEqual(['dFdx', 'dFdy']);
   });
 
-  it('has no factor in front of the quantity it differentiates', () => {
-    // Where every remaining factor error lives: `dFdx(mul(p.x, 2))` builds the
-    // same node kinds in the same places and doubles every antialiasing ramp in
-    // the shader, because `aaWidth` would then be two world units per pixel rather
-    // than one. Measured against the previous, distance-differentiating version of
-    // this function: that mutation left all 67 tests in the two sdf suites green.
-    //
-    // A ramp at the wrong width is not a subtle artefact. Halved, it is a hard
-    // edge with one intermediate sample, which is the aliasing this milestone
-    // exists to remove, and it reads like a driver problem rather than a factor.
-    //
-    // Asserted only as "the operand is not itself a MathNode": this excludes a
-    // `mul` or `add` wrapper in this graph, but does not identify a position swizzle.
-    const outer = unwrap(antialiasWidth(vec2(1, 2)));
-    if (!(outer instanceof MathNode)) throw new Error('unreachable');
-    if (outer.bNode === null) throw new Error('unreachable');
-    for (const branchNode of [outer.aNode, outer.bNode]) {
-      const branch = unwrap(branchNode);
-      if (!(branch instanceof MathNode)) throw new Error('unreachable');
-      const join = unwrap(branch.aNode);
-      if (!(join instanceof JoinNode)) throw new Error('unreachable');
-      for (const component of join.nodes) {
-        const derivative = unwrap(component);
-        expect(derivative).toBeInstanceOf(MathNode);
-        if (!(derivative instanceof MathNode)) throw new Error('unreachable');
-        expect(unwrap(derivative.aNode)).not.toBeInstanceOf(MathNode);
-      }
-    }
-  });
 });
 
 describe('the composable SDF nodes', () => {

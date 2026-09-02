@@ -451,12 +451,13 @@ not" is the category this file has a heading for.
 
 - Signed distance fields for rounded rectangles and circles, authored in TSL,
   with fill, an inset outline and a glow all read from the SAME distance and
-  antialiased from that distance's own screen-space derivative. `createRenderer`
-  now draws six of them, a rounded rect and a circle on each of three rungs a
-  decade apart, in place of M4.1's single quad. The RECTS are 10, 100 and 1000
-  world units across and each circle's diameter matches its rung's height, so the
-  circles are 4, 40 and 400: quoting "10, 100 and 1000" for the shapes is false of
-  half of them. **Nothing new is exported.** A TSL node is a three.js type
+  antialiased from the interpolated position's screen-space gradient.
+  `createRenderer` now draws six of them, a rounded rect and a circle on each of
+  three rungs a decade apart, in place of M4.1's single quad. The RECTS are 10,
+  100 and 1000 world units across and each circle's diameter matches its rung's
+  height, so the circles are 4, 40 and 400: quoting "10, 100 and 1000" for the
+  shapes is false of half of them. **Nothing new is exported.** A TSL node is a
+  three.js type
   and this package's surface has none; the scene is a hard-coded demonstration
   that M4.4 replaces with a real layout. So M4.2 changed what is DRAWN and not
   what is CALLABLE. (M4.2)
@@ -816,8 +817,10 @@ not" is the category this file has a heading for.
   `mix` in `shapeShading`, which is vec3 and cannot go through a float interface at
   all; and the `mul(size, 0.5)` halving a rounded rect's extents inside a deferred
   `Fn` body the suite never runs, because it builds that body directly from
-  pre-halved literals. Their compensating control is the structural assertions on
-  the node graph in `test/sdf-nodes.test.ts`. An earlier draft of this entry said
+  pre-halved literals. The controls are not interchangeable: structural assertions
+  pin the `length` graph and the outer colour `mix`, while the deferred size halving
+  has no Node test. The committed browser probe covers all three on WebGL2. An
+  earlier draft of this entry said
   the untested surface was "exactly nine" and copied that into five other files;
   api-design-review caught it, and it is worth recording because a counted claim
   that survives copying unchecked is the failure this documentation style exists to

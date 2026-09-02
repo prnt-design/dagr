@@ -4345,8 +4345,9 @@ of M3 would leave the second runner idle for a milestone.
   `antialiasWidth` alone; `shapeShading`'s colour `mix` is vec3 and cannot go
   through a float interface; and the `mul(size, 0.5)` inside `roundedRectSDF`'s
   deferred `Fn` body never runs, because the suite builds that body directly from
-  pre-halved literals. The compensating control is the STRUCTURAL assertions in
-  `test/sdf-nodes.test.ts` rather than a numeric test.
+  pre-halved literals. The controls are different: STRUCTURAL assertions pin the
+  `length` graph and the outer colour `mix`, while the deferred size halving has no
+  Node test. The committed browser probe covers all three on WebGL2.
   TWO UNITS, AND THE ASYMMETRY IS THE POINT. An outline is in DEVICE PIXELS and is
   inset; a glow is in WORLD units and sits outside. An outline is a property of
   the screen and the derivative that gives the antialiasing width also converts

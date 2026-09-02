@@ -560,10 +560,11 @@ three pieces of TSL are executed by no Node test: that `length` over a join of t
 two derivatives; the colour `mix` in the shading node, which is vec3 and cannot go
 through a float interface at all; and the `mul(size, 0.5)` that halves a rounded
 rect's extents inside a deferred `Fn` body, which the suite never runs because it
-builds the body directly from pre-halved literals. Their compensating control is
-the STRUCTURAL assertions on the node graph rather than a numeric test, and the
-first of the three is the one that needed it: swapping the gradient length for
-`fwidth` left every numeric test green.
+builds the body directly from pre-halved literals. Their controls are different:
+structural assertions pin the `length` graph and the outer colour `mix`, but the
+deferred size halving has no Node test. The committed browser probe covers all
+three on WebGL2. The `length` graph is the one that needed its structural control:
+swapping the gradient length for `fwidth` left every numeric test green.
 
 ### Crisp at every zoom, as a test rather than a claim
 
