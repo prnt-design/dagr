@@ -123,7 +123,7 @@ describe('antialiasWidth', () => {
     expect(antialiasWidth(vec2(1, 2)).isNode).toBe(true);
   });
 
-  it('differentiates the POSITION, which has no fold, and not the distance', () => {
+  it('builds two gradient-length branches over distinct operands', () => {
     // The defect this signature exists to prevent, found on a real device after
     // three other personas had passed the file. Every distance in `sdf.ts` folds:
     // `roundedRectDistance` runs both coordinates through `abs`, `circleDistance`
@@ -138,11 +138,13 @@ describe('antialiasWidth', () => {
     // on a real device flipped between all fill and all outline on alternate pan
     // phases, because whether the centre lands on an even or odd quad boundary
     // depends on the shape's sub-pixel position. `test/sdf.test.ts` executes the
-    // fold itself over `numberArith`; this asserts the graph that avoids it.
+    // fold itself over `numberArith`.
     //
     // The position is the right quantity because it is what the interpolator
     // hands the fragment before any of the arithmetic runs, so there is no `abs`
-    // and no square anywhere in front of the derivative.
+    // and no square anywhere in front of the derivative. The production function
+    // supplies `position.x` and `position.y`; the checks below pin the graph's
+    // method shape, not the semantic provenance of those operands.
     const position = vec2(1, 2);
     const outer = unwrap(antialiasWidth(position));
     expect(outer).toBeInstanceOf(MathNode);
@@ -194,10 +196,11 @@ describe('antialiasWidth', () => {
     // That future-facing decision gets a test rather than only a paragraph.
     //
     // Together with the preceding graph check, this establishes two `length`
-    // branches whose arguments join `dFdx` and `dFdy` of the two POSITION
-    // components. The differentiated value is therefore the position, not the
-    // folded distance. What is not asserted is that WGSL's `length` does what its
-    // name says.
+    // branches, `dFdx` and `dFdy` method shape in each branch, the same operand
+    // within a branch, and distinct operands across branches. The production
+    // function supplies `position.x` and `position.y`, but these assertions do not
+    // independently prove that semantic provenance. They also do not assert that
+    // WGSL's `length` does what its name says.
     //
     // Brittle by design. It reads `method`, `aNode` and `nodes`, which are three's
     // node fields rather than a public API surface, so a three release that

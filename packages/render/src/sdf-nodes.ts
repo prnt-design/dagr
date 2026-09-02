@@ -142,8 +142,8 @@ export const tslArith: Arith<FloatNode> = {
  * `antialiasWidth` computes two `length` operations from four derivative nodes,
  * then takes their `max`. The cheaper `max(abs(dFdx(p.x)), abs(dFdy(p.y)))` is
  * exact for the axis-aligned orthographic camera this package has today and WRONG
- * under rotation, which M4.4 may want, so the general form is taken now rather
- * than swapped in later.
+ * under rotation. Retaining the general form avoids a later shader rewrite if
+ * rotation or shear is introduced.
  *
  * **DEVICE pixels, not CSS pixels.** The derivative is taken across a framebuffer
  * pixel, and `#syncSize` sizes the framebuffer from `Camera2D.drawingBufferSize()`,
