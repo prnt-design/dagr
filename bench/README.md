@@ -560,7 +560,8 @@ remains the only one. M2.5 through M2.8 were each expected to do it again and
 none of them did: replacing a later stage with a better algorithm changes what
 a benchmark COSTS, which is what the tolerance is for, and only a change to
 what a benchmark PROCESSES rebases it. M2.8's own entry in
-`specs/roadmap-notes.md` states that distinction, having had to make it. Recapturing can be right in the case
+`specs/roadmap-notes.md` states that distinction, having had to make it.
+Recapturing can be right in the case
 this paragraph is about, and it is the same recipe: recapture in the same commit
 and say why in the message. What separates it from talking a gate out of a
 failure is one habit, so make it one: PREDICT

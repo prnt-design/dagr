@@ -123,7 +123,8 @@ export interface LayoutDelta {
  * reports any difference at all.
  *
  * It is named HERE, on the comparison, and not on `LayoutConfig`. The M3.1
- * entry in `specs/roadmap-notes.md` argued for the config on the grounds that the number is
+ * entry in `specs/roadmap-notes.md` argued for the config on the grounds that
+ * the number is
  * in node-size units and only the caller knows that scale, and the first half
  * of that survives while the conclusion does not: every field of `LayoutConfig`
  * answers "how should this graph be laid out", is resolved once per RUN, and is

@@ -1503,7 +1503,8 @@ function cohortsOf(
  *
  * THOSE FOUR FIGURES ARE LIVE ADVICE HERE AND NOWHERE ELSE. Each is a
  * measurement with a scheduled expiry: a bench recapture moves the timings. So
- * `index.ts`, `specs/roadmap-notes.md` and `docs/docs/layout.md` describe the trade in a
+ * `index.ts`, `specs/roadmap-notes.md` and `docs/docs/layout.md` describe the
+ * trade in a
  * sentence and point back at this section rather than copying the table, which
  * leaves one paragraph to correct rather than four. `CHANGELOG.md` is the
  * deliberate exception: a dated entry records what a past change measured at
