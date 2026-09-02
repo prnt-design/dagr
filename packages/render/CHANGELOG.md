@@ -485,18 +485,18 @@ not" is the category this file has a heading for.
   interpolated POSITION's gradient, and deliberately not `fwidth`.** Of the
   position and not of the distance: every field in `sdf.ts` folds through `abs`
   or a square, so a distance gradient collapses to zero on the fragment quad
-  holding a shape's centre, taking the inset outline with it. `fwidth` is the L1
-  sum of two derivatives, and L1
-  exceeds L2 by up to 41% exactly when the derivatives are equal, which is an
-  edge at 45 degrees. A rounded corner is nothing but diagonals, so `fwidth`
-  gives a ramp that is right along the flat sides and up to 41% too soft around
-  the corner: corners blurrier than the edges they join, which is the artefact a
-  distance field exists to remove. It costs one `sqrt` per fragment and the
-  shader already has one. This one is worth reading as a warning rather than a
-  preference: swapping the gradient length for either `fwidth` or its L1
-  expansion left the whole suite GREEN, because both are correct to within a
-  factor on every value a numeric test can check. The suite now asserts the node
-  graph's structure (`length` over a join of `dFdx` and `dFdy`) for that reason.
+  holding a shape's centre, taking the inset outline with it. Under the current
+  axis-aligned orthographic camera, each position component varies along one
+  screen axis, so `fwidth`'s L1 norm and the Euclidean gradient length agree.
+  The Euclidean lengths remain independent of derivative orientation if a
+  future rotation or shear makes a component vary along both screen axes,
+  whereas `fwidth` would become orientation-dependent. The formula computes two
+  `length`s, so it costs two square roots per fragment, not one. This one is
+  worth reading as a warning rather than a preference: swapping the gradient
+  length for either `fwidth` or its L1 expansion left the whole suite GREEN,
+  because the current camera makes them equal on every position component the
+  shader sees. The suite now asserts the node graph's structure (`length` over a
+  join of `dFdx` and `dFdy`) for that reason.
 
 - `depthWrite` is off on the shape materials. three leaves it on when
   `transparent` is set, and left on, a fragment with alpha 0 still writes depth
