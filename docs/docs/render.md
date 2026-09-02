@@ -627,8 +627,10 @@ checks:
   in the shading node, which is vec3 and cannot go through a float interface at all,
   and the `mul(size, 0.5)` that halves a rounded rect's extents inside a deferred
   `Fn` body the suite bypasses by building that body from pre-halved literals. The
-  tests prove the node graphs are CONSTRUCTIBLE and assert their STRUCTURE, which is
-  a different and much weaker claim than computing the right answer.
+  Node tests prove the eager graphs are CONSTRUCTIBLE and structurally pin only
+  `antialiasWidth` and the outer shading nodes. They never build the deferred size
+  halving. Those are different and much weaker claims than computing the right
+  answer.
 - That a real fragment shader's derivatives agree with the coverage arithmetic,
   and therefore that the crispness the suite proves about the formulas is the
   crispness on a display.
