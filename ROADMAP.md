@@ -22,8 +22,8 @@ use it. Nothing is on npm: M5.4a fixed the tarballs and gated them
 the publish itself is queued for the maintainer. The command is
 `pnpm publish`; `npm publish` ships `workspace:^` ranges that resolve to
 nothing. One engine caveat a consumer should know: Brandes-Koepf positioning
-is implemented and tested but `gridPositionStage` is still the default, with
-the reason written in `packages/layout/src/index.ts`.
+is implemented and tested but unexported, and `gridPositionStage` is the
+default, with the reason written in `packages/layout/src/index.ts`.
 
 The order to v0.1, decided 2026-08-26 (reasoning in the notes):
 

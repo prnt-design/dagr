@@ -149,7 +149,7 @@ export interface ParityGraph {
  * else in the drawing. That spread is what a real editor produces and what no
  * other corpus in this package has.
  *
- * It is a DAG, deliberately. `ROADMAP.md` records under M3.7a that a pattern
+ * It is a DAG, deliberately. `specs/roadmap-notes.md` records under M3.7a that a pattern
  * generator emits acyclic graphs, so the reversed set is empty and stays empty
  * on this input, and cycle breaking is exercised by `state-machine` and
  * `service-mesh` instead. A corpus that made every graph cyclic would misstate

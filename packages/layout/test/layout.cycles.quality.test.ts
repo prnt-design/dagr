@@ -437,8 +437,8 @@ const largeQuality = measure(large, largeReversed);
  * REVERSALS FELL (74 to 40, and 4,620 to 857), and DEPTH FELL (81 to 64, and
  * 203 to 160). Nothing was traded away for it, which is worth stating because
  * the two updates before this one both paid depth for span and this entry was
- * written to make that payment visible. The entry that governs it is ROADMAP
- * M2.2c, which states this triple on both corpora.
+ * written to make that payment visible. The entry that governs it is M2.2c in
+ * `specs/roadmap-notes.md`, which states this triple on both corpora.
  *
  * The gap that remains is depth. The 10k corpus is authored as 60 layers and
  * this view occupies 160 ranks, so the ground truth's 796 / 60 / 32,050 is
