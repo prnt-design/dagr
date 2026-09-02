@@ -86,21 +86,23 @@ figures above are what the measurements were taken under, and that gap is the
 reason the field's name is as narrow as it is.
 
 **Measure closeness over the GATED entries only when picking which run to
-commit.** The first pick here was run 4, on a per-entry closeness computed over
+commit** (learned on the 2026-08-16 capture, dispatch box). The first pick
+there was run 4, on a per-entry closeness computed over
 all fifteen: `2.5k successors` is exempt, it swings further than anything else
 in the file, and it pulled the choice by more than the gated entries did. Over
-the fourteen that actually gate, run 3 sits at 2.28% mean absolute deviation
+the fourteen that gated then, run 3 sat at 2.28% mean absolute deviation
 from the per-entry medians and run 4 at 2.94%. Run 4 was quieter WITHIN its runs
 by about 0.5 percentage points of rme per entry, which is a real cost, and
 centring still wins: a baseline off-centre by 10% moves every future comparison
 against that entry and prints `is N% faster than baseline` forever, while rme
 only widens the allowance and hits the same 25% cap either way.
 
-**The old file was not far wrong, and that is the finding.** Eleven of the
+**The old file was not far wrong, and that is the finding** (2026-08-16
+capture, dispatch box). Eleven of the
 fourteen gated entries moved less than 6%, the largest being `2.5k outEdges` at
 -11.0%, `sources, 10k` at -10.8% and `isAcyclic, acyclic` at +9.4%. So the
 flakiness that motivated this was never mostly a stale baseline: it is the
-between-run spread on this machine, measured over the five capture runs as a
+between-run spread on that machine, measured over the five capture runs as a
 30.6% band on `build > 1k`, a 40.7% band on `isAcyclic, acyclic`, a 39.8% band
 on `rank > 1k` and a 35% band on the already-exempt `2.5k successors`, on an
 idle box with no code changing. A fresh baseline re-centres those bands; it
@@ -110,9 +112,10 @@ the two changes ship together for that reason.
 **A recapture moves the effective tolerance even though it touches no
 constant**, and saying "the tolerances are unchanged" without that sentence
 would be a half-truth. The formula adds the BASELINE's margin of error, so a
-noisier baseline gates wider on that entry. Comparing each entry against an
-equally noisy re-run, seven of the fourteen widened and four now sit at the 25%
-cap where two did: `build > 1k`, `rank > 10k`, and now `descendants, 10k`
+noisier baseline gates wider on that entry. Measured on the 2026-08-16
+capture, dispatch box: comparing each entry against an
+equally noisy re-run, seven of the fourteen widened and four then sat at the
+25% cap where two had: `build > 1k`, `rank > 10k`, and newly `descendants, 10k`
 (1.60% rme to 5.86%) and `pipeline > 1k` (4.45% to 12.70%). Those four are close
 to ungated, and they are named here for the same reason the weakest entries are
 named below: an allowance nobody wrote down is the kind that stops being
@@ -556,8 +559,9 @@ segments it orders and counts crossings between from 13,131 to 214,222. It
 remains the only one. M2.5 through M2.8 were each expected to do it again and
 none of them did: replacing a later stage with a better algorithm changes what
 a benchmark COSTS, which is what the tolerance is for, and only a change to
-what a benchmark PROCESSES rebases it. M2.8's own entry in `ROADMAP.md` states
-that distinction, having had to make it. Recapturing can be right in the case
+what a benchmark PROCESSES rebases it. M2.8's own entry in
+`specs/roadmap-notes.md` states that distinction, having had to make it.
+Recapturing can be right in the case
 this paragraph is about, and it is the same recipe: recapture in the same commit
 and say why in the message. What separates it from talking a gate out of a
 failure is one habit, so make it one: PREDICT
@@ -701,14 +705,17 @@ has to have.
 ### The weakest entries in the current file, named rather than left to be found
 
 One entry is exempt outright. `2.5k successors` carries `"gate": "off"` in the
-current file, because across nine quiet-machine runs on the dispatch box its
-control-normalized ratio ranged 37.7 to 61.8, a 64% band, while its within-run
-rme stayed under 6%: the between-run variance is real, exceeds the 25%
-tolerance cap, and a gate on it would flag noise rather than regressions. The
-full evidence is in the entry's own `reason`. The 2026-08-16 recapture measured
-it again over five quiet runs, at 37.51 to 50.71, a 35% band, so the exemption
-stands. Re-enable it if the baseline moves to a machine where three runs agree
-on it.
+current file, an exemption earned on the dispatch box: nine quiet-machine runs
+there ranged 37.7 to 61.8 in control-normalized ratio, a 64% band, and the
+2026-08-16 recapture measured 37.51 to 50.71, a 35% band, while within-run rme
+stayed under 6% throughout, so the between-run variance was real, exceeded the
+25% tolerance cap, and a gate on it flagged noise rather than regressions. The
+full evidence is in the entry's own `reason`. The re-enable condition that
+history named, a baseline machine where the runs agree on it, is now arguably
+met: the 2026-09-01 capture on the Apple M4 measured a 5.3% band across its
+five runs. The exemption stands anyway, because lifting it is a hand edit by
+design rather than a side effect of a capture, and the edit should be taken
+deliberately, with this paragraph as its evidence.
 
 Among the gated entries, four are weakest by margin of error, and the whole list
 is given rather than the top two, because each of them gates at the 25% cap
