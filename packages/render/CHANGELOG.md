@@ -470,7 +470,8 @@ not" is the category this file has a heading for.
   visible width is 2.00 CSS pixels at dpr 1, 1.00 at dpr 2 and 0.67 at dpr 3. A
   glow is a property of the shape, and its quad has to be padded to contain it at
   build time, so a pixel-space glow would need the quad resized whenever the
-  camera moved, which is M4.4's problem and not a shader's.
+  camera moved. That would be an unowned future zoom-aware, per-frame scene
+  decision, not a shader decision.
 
   **Where the outline band lands, which is this file's category exactly: a rule a
   caller can see that no type describes.** The band's outer ramp is centred on the

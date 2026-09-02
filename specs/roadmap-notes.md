@@ -4352,7 +4352,7 @@ of M3 would leave the second runner idle for a milestone.
   the screen and the derivative that gives the antialiasing width also converts
   pixels to world units; a glow is a property of the shape and its padding is
   baked into the quad, so a pixel-space glow would need the quad resized per
-  frame, which is M4.4's.
+  frame. That would be an UNOWNED FUTURE ZOOM-AWARE, PER-FRAME SCENE DECISION.
   THE ANTIALIASING WIDTH IS THE `max` OF THE TWO PER-AXIS `length`s OF THE
   INTERPOLATED POSITION'S GRADIENT, AND NOT `fwidth`. OF THE POSITION AND NOT THE
   DISTANCE: every field folds through `abs` or a square, so a distance gradient
