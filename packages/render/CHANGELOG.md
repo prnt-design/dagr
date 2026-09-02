@@ -487,17 +487,17 @@ not" is the category this file has a heading for.
   position and not of the distance: every field in `sdf.ts` folds through `abs`
   or a square, so a distance gradient collapses to zero on the fragment quad
   holding a shape's centre, taking the inset outline with it. Under the current
-  axis-aligned orthographic camera, each position component varies along one
-  screen axis, so `fwidth`'s L1 norm and the Euclidean gradient length agree.
-  The Euclidean lengths remain independent of derivative orientation if a
-  future rotation or shear makes a component vary along both screen axes,
-  whereas `fwidth` would become orientation-dependent. The formula computes two
-  `length`s, so it costs two square roots per fragment, not one. This one is
-  worth reading as a warning rather than a preference: swapping the gradient
-  length for either `fwidth` or its L1 expansion left the whole suite GREEN,
-  because the current camera makes them equal on every position component the
-  shader sees. The suite now asserts the node graph's structure (`length` over a
-  join of `dFdx` and `dFdy`) for that reason.
+  axis-aligned, isotropic orthographic camera, each position component varies
+  along one screen axis, so `fwidth`'s L1 norm and the Euclidean gradient length
+  agree. Under a future rotation with isotropic scale, the Euclidean component
+  gradients avoid `fwidth`'s screen-axis L1 orientation dependence, and their
+  `max` remains valid. Shear or nonuniform transforms require a normal-aware
+  Jacobian treatment instead. The graph expresses two gradient-length
+  operations. This one is worth reading as a warning rather than a preference:
+  swapping the gradient length for either `fwidth` or its L1 expansion left the
+  whole suite GREEN, because the current camera makes them equal on every
+  position component the shader sees. The suite now asserts the node graph's
+  structure (`length` over a join of `dFdx` and `dFdy`) for that reason.
 
 - `depthWrite` is off on the shape materials. three leaves it on when
   `transparent` is set, and left on, a fragment with alpha 0 still writes depth

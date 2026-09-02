@@ -132,18 +132,19 @@ export const tslArith: Arith<FloatNode> = {
  * The position has no `abs` and no square in front of it, so it cannot fold.
  * `test/sdf.test.ts` executes the fold; `test/sdf-nodes.test.ts` pins this graph.
  *
- * **`max` of two `length`s, and NOT `fwidth`.** With the current axis-aligned
- * orthographic camera, each position component varies along one screen axis and
- * its other derivative is zero, so `fwidth`'s L1 norm and the Euclidean length
- * agree. Under a future rotation or shear, a position component can vary along
- * both screen axes: the Euclidean length remains independent of derivative
- * orientation, while `fwidth` becomes orientation-dependent.
+ * **`max` of two `length`s, and NOT `fwidth`.** With the current axis-aligned,
+ * isotropic orthographic camera, each position component varies along one screen
+ * axis and its other derivative is zero, so `fwidth`'s L1 norm and the Euclidean
+ * length agree. Under a future rotation with isotropic scale, a position component
+ * can vary along both screen axes: the Euclidean length avoids `fwidth`'s
+ * screen-axis L1 orientation dependence, and the `max` remains valid.
  *
  * `antialiasWidth` computes two `length` operations from four derivative nodes,
  * then takes their `max`. The cheaper `max(abs(dFdx(p.x)), abs(dFdy(p.y)))` is
- * exact for the axis-aligned orthographic camera this package has today and WRONG
- * under rotation. Retaining the general form avoids a later shader rewrite if
- * rotation or shear is introduced.
+ * exact for the axis-aligned, isotropic orthographic camera this package has today
+ * and WRONG under rotation. The general form handles rotation with isotropic
+ * scale. Shear or nonuniform transforms require a normal-aware Jacobian treatment
+ * instead.
  *
  * **DEVICE pixels, not CSS pixels.** The derivative is taken across a framebuffer
  * pixel, and `#syncSize` sizes the framebuffer from `Camera2D.drawingBufferSize()`,
@@ -154,8 +155,8 @@ export const tslArith: Arith<FloatNode> = {
  * shader as a uniform, putting a second reader of `devicePixelRatio` beside
  * `drawingBufferSize` and breaking the rule `camera.ts` states.
  *
- * Nothing here reads the camera: the width follows whatever transform the mesh has
- * picked up, because the position Jacobian IS that transform.
+ * Nothing here reads the camera explicitly: derivatives carry the current
+ * axis-aligned, isotropic transform into the graph.
  */
 export function antialiasWidth(position: Node<'vec2'>): FloatNode {
   return max(

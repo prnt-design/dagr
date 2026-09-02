@@ -190,10 +190,11 @@ describe('antialiasWidth', () => {
     // The one place this file inspects a graph's shape instead of only its
     // existence, and it is worth the coupling. `fwidth(d)` builds just as happily
     // as `length(vec2(dFdx(p.c), dFdy(p.c)))`. They agree under the current
-    // axis-aligned camera because each position component varies along one screen
-    // axis. A future rotation or shear can make it vary along both, at which point
-    // `fwidth` becomes orientation-dependent and the Euclidean length does not.
-    // That future-facing decision gets a test rather than only a paragraph.
+    // axis-aligned, isotropic camera because each position component varies along
+    // one screen axis. A future rotation with isotropic scale can make it vary
+    // along both: the Euclidean component gradients avoid `fwidth`'s screen-axis
+    // L1 orientation dependence, and their `max` remains valid. Shear or
+    // nonuniform transforms require a normal-aware Jacobian treatment instead.
     //
     // Together with the preceding graph check, this establishes two `length`
     // branches, `dFdx` and `dFdy` method shape in each branch, the same operand

@@ -226,8 +226,7 @@ also read as a different effect at each end of the range.
 The width of the ramp is the larger of the two per-axis gradients of the
 interpolated POSITION, `max(length(vec2(dFdx(p.x), dFdy(p.x))),
 length(vec2(dFdx(p.y), dFdy(p.y))))`. Keeping each gradient as a Euclidean
-length makes the measurement independent of derivative orientation under
-future rotation or shear, unlike `fwidth`.
+length avoids `fwidth`'s dependence on screen-axis orientation.
 
 **Of the position, not of the distance**, which is a correction rather than a
 detail. Every field here folds: `roundedRectDistance` runs both coordinates
@@ -238,20 +237,22 @@ a small shape is the whole shape. The position has no `abs` in front of it and
 cannot fold. The euclidean-gradient argument that used to justify differentiating
 the distance was sound about magnitude and silent about folding.
 
-With the current axis-aligned orthographic camera, each position component
-varies along one screen axis. Its other derivative is zero, so `fwidth`'s L1
-norm and the Euclidean L2 length agree. The difference appears only if a future
-rotation or shear makes a position component vary along both screen axes:
-`fwidth`, defined as `abs(dFdx) + abs(dFdy)`, then depends on that orientation,
-while the Euclidean gradient length does not. The formula computes two
-`length`s, so this choice costs two square roots per fragment, not one.
+With the current axis-aligned, isotropic orthographic camera, each position
+component varies along one screen axis. Its other derivative is zero, so
+`fwidth`'s L1 norm and the Euclidean L2 length agree. A future rotation with
+isotropic scale can make a position component vary along both screen axes:
+`fwidth`, defined as `abs(dFdx) + abs(dFdy)`, then depends on screen-axis
+orientation while the Euclidean component gradient does not. Taking the `max`
+of those component lengths remains valid for that rotation. Shear or nonuniform
+transforms require a normal-aware Jacobian treatment instead. At the graph
+level, this formula expresses two gradient-length operations.
 
 This works because the fields are TRUE euclidean distances outside the shape
 rather than a cheaper approximation. The gradient of such a field has magnitude 1
-in world space, so its screen-space gradient magnitude is world units per pixel
-and nothing else. It also means nothing reads the camera: the width follows
-whatever transform a mesh has picked up, including the per-instance one M4.3
-writes in the vertex stage.
+in world space, so under the isotropic transforms supported today its
+screen-space gradient magnitude is world units per pixel. Nothing reads the
+camera explicitly: derivatives carry the current camera and per-instance
+transforms from the vertex stage.
 
 ### Where the fade stops, measured
 

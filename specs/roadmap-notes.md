@@ -4358,12 +4358,13 @@ of M3 would leave the second runner idle for a milestone.
   DISTANCE: every field folds through `abs` or a square, so a distance gradient
   collapses on the quad holding a shape's centre and the inset outline vanishes
   there, which on a small shape is the whole shape.
-  WITH THE CURRENT AXIS-ALIGNED ORTHOGRAPHIC CAMERA, each position component
-  varies along one screen axis, so `fwidth`'s L1 norm and the Euclidean length
-  agree. The Euclidean lengths remain independent of derivative orientation
-  under a future rotation or shear, while `fwidth` would become
-  orientation-dependent once a component varied along both screen axes. The
-  formula computes TWO lengths and therefore costs TWO square roots per fragment.
+  WITH THE CURRENT AXIS-ALIGNED, ISOTROPIC ORTHOGRAPHIC CAMERA, each position
+  component varies along one screen axis, so `fwidth`'s L1 norm and the Euclidean
+  length agree. Under a future rotation with isotropic scale, the Euclidean
+  component gradients avoid `fwidth`'s screen-axis L1 orientation dependence,
+  and their `max` remains valid. Shear or nonuniform transforms require a
+  normal-aware Jacobian treatment instead. The graph expresses TWO
+  gradient-length operations.
   READ THIS ONE AS A WARNING: swapping in either `fwidth` or its L1 expansion left
   the whole suite GREEN because the current camera makes them equal, so the suite
   asserts the node graph's STRUCTURE.
