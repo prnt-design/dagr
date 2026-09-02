@@ -227,14 +227,16 @@ export function circleDistance<T>(m: Arith<T>, px: T, py: T, radius: T): T {
  * (3 - 2t)`.
  *
  * **What this costs, since WGSL has a `smoothstep` intrinsic and TSL exposes
- * it.** The intrinsic is one instruction on most hardware where this is a clamp
- * (two instructions), a subtract, a divide and four multiply-adds: call it five
- * to eight ALU operations per fragment more than the builtin, times three
- * coverage functions, on a fragment shader that is already doing a `sqrt` and
- * two derivatives. On the 10k-node scene M4.10 has to hit 60fps on, that is
- * arithmetic against a budget that is far more likely to be bound by overdraw
- * and bandwidth (every shape is a transparent, padded quad), so it is worth
- * measuring before it is worth optimising, and M4.10 owns the measurement.
+ * it.** This source expands each ramp into a clamp, a subtract, a divide and the
+ * cubic instead of asking the backend for its intrinsic. How those operations
+ * lower is backend and hardware dependent. Each of the three coverage functions
+ * evaluates that expansion; on rounded-rectangle and circle paths, distance
+ * evaluation includes its own `sqrt`, while `antialiasWidth` adds two `length`
+ * operations built from four derivative calls. On the 10k-node scene M4.10 has
+ * to hit 60fps on, that is arithmetic against a budget that is far more likely
+ * to be bound by overdraw and bandwidth (every shape is a transparent, padded
+ * quad), so it is worth measuring before it is worth optimising, and M4.10 owns
+ * the measurement.
  *
  * What it buys is that the ramp the test suite exercises is the ramp the shader
  * evaluates. A builtin `smoothstep` would be an unexecutable tenth primitive,
