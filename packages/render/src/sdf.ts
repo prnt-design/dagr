@@ -61,9 +61,9 @@ import { requireFinite, requireNonNegative } from './validate.js';
  * distance: every field here folds through `abs` or a square, and a folded quantity
  * has a zero gradient on the quad containing the shape's centre. See
  * `antialiasWidth` in `sdf-nodes.ts` for what that cost before it was fixed. Taking
- * it from the position also means the antialiasing follows any transform the mesh
- * picks up without being told about it, because the position Jacobian IS that
- * transform.
+ * it from the position means derivatives carry the currently supported isotropic
+ * transform, including rotation with isotropic scale. Shear or nonuniform
+ * transforms need the normal-aware Jacobian treatment documented in `sdf-nodes.ts`.
  *
  * ## Validation
  *
