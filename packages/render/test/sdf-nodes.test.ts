@@ -231,8 +231,8 @@ describe('antialiasWidth', () => {
     // edge with one intermediate sample, which is the aliasing this milestone
     // exists to remove, and it reads like a driver problem rather than a factor.
     //
-    // Asserted as "the operand is a leaf that is not itself arithmetic": a swizzle
-    // of the position, not a `mul` or an `add` wrapping one.
+    // Asserted only as "the operand is not itself a MathNode": this excludes a
+    // `mul` or `add` wrapper in this graph, but does not identify a position swizzle.
     const outer = unwrap(antialiasWidth(vec2(1, 2)));
     if (!(outer instanceof MathNode)) throw new Error('unreachable');
     if (outer.bNode === null) throw new Error('unreachable');
