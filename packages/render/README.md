@@ -53,6 +53,10 @@ its way to is a fact about the node rather than about the slot it draws from:
 import { createNodeMotion } from '@dagr/render';
 
 const motion = createNodeMotion();
+motion.resync([
+  { id: 'plan', center: { x: 0, y: 0 } },
+  { id: 'draft', center: { x: 0, y: 80 } },
+]);
 motion.apply({
   added: [{ id: 'ship', center: { x: 0, y: 120 } }],
   moved: [{ id: 'plan', center: { x: 0, y: 40 } }],
@@ -77,7 +81,9 @@ lists. An edge is a polyline whose vertex count changes between two routes, so
 it resamples both onto the union of their own arc-length parameters first:
 every vertex of each route survives exactly, and the settled drawing is the
 layout's answer to the bit. `alignRoutes` is that correspondence on its own if
-you would rather animate edges your own way.
+you would rather animate edges your own way. A shared edge whose route changes
+animates, while a removed and added edge under one id is seeded at rest on the
+new directed route because it is a replacement, not a reroute.
 
 Neither owns a clock. There is no `requestAnimationFrame` in this package yet,
 which is M4.7c on the

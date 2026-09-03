@@ -46,14 +46,14 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * it snapped an arriving node onto its target rather than stopping within the
  * tolerance of it.
  *
- * **THE RESAMPLING IS FOR THE FLIGHT AND NOT FOR THE DRAWING.** The union is at
- * most the two counts added together, and an edge that kept it would carry the
- * shape of every route it had ever taken: a hundred reroutes in a session is a
- * polyline with hundreds of vertices drawing a line with three. So arrival
- * COMPACTS, back to the target route's own points, which is exact because every
- * extra point was on a segment of that route. A settled edge therefore holds
- * exactly what the layout gave it, and the union count exists only between two
- * frames.
+ * **THE RESAMPLING IS FOR THE DRAWN TRANSITION, AND SETTLEMENT COMPACTS.** The
+ * union is at most the two counts added together, and an edge that kept it
+ * would carry the shape of every route it had ever taken: a hundred reroutes
+ * in a session is a polyline with hundreds of vertices drawing a line with
+ * three. So arrival COMPACTS, back to the target route's own points, which is
+ * exact because every extra point was on a segment of that route. A settled
+ * edge therefore holds exactly what the layout gave it, and the union-sized
+ * points are drawn only while the edge is moving.
  *
  * **VELOCITY IS RESAMPLED WITH POSITION, AND THAT IS WHAT KEEPS A RETARGET
  * SMOOTH.** A polyline caught mid-flight has a velocity per point as well as a
@@ -93,9 +93,9 @@ export interface EdgeMotionTarget {
  * ABSENT MEANS UNCHANGED, so this iterates the change rather than the drawing.
  *
  * ONE ID CAN BE IN BOTH `removed` AND `added`, and unlike the node half this is
- * the case the rule was written for: that is how `EdgeDelta` reports an edge
- * whose ENDPOINTS changed. Removals apply first, and see
- * {@link EdgeMotion.apply} for what the pair means once they have.
+ * the case the rule was written for: that is how `EdgeDelta` reports that the
+ * old edge left and a new edge with different endpoints arrived. Removals
+ * apply first, and see {@link EdgeMotion.apply} for what the pair means.
  */
 export interface EdgeMotionDelta {
   readonly added: readonly EdgeMotionTarget[];
@@ -182,15 +182,11 @@ export interface EdgeMotion {
    * was and the caller's signal to resync arrives before the thing they would
    * resync from has moved.
    *
-   * AN ID IN BOTH `removed` AND `added` IS ONE LINE CHANGING ROUTE, not a
-   * departure and an arrival. `EdgeDelta` reports an edge whose endpoints
-   * changed that way, and `@dagr/layout`'s stability metrics are right that it
-   * is not the same edge; but there is one line on the screen carrying that id
-   * either way, and the drawing a reader can follow is the one that swings from
-   * where it was to where it now runs. So the departure is cancelled and the
-   * new route becomes the target, which is what a reroute does. Two lines
-   * cannot be drawn for one id, and cutting is the option this whole module
-   * exists to avoid.
+   * AN ID IN BOTH `removed` AND `added` IS A REPLACEMENT. `EdgeDelta` reports
+   * changed endpoints this way because the old edge left and a new edge
+   * arrived. The replacement is seeded immediately on its new directed route,
+   * at rest, rather than retargeting springs that belonged to the old edge. A
+   * genuinely rerouted edge present in both layouts still animates.
    */
   apply(delta: EdgeMotionDelta): void;
 
@@ -219,7 +215,12 @@ function copyOf(point: Vec2): Vec2 {
   return { x: point.x, y: point.y };
 }
 
-/** Rejects a route that is not at least two finite points, naming the field. */
+/**
+ * Rejects a route that is not at least two finite, representable points.
+ *
+ * Finite coordinates can still produce an infinite segment length or total
+ * when subtraction or accumulation overflows.
+ */
 function requireRoute(points: readonly Vec2[], field: string): readonly Vec2[] {
   if (points.length < 2) {
     throw new RangeError(
@@ -230,6 +231,20 @@ function requireRoute(points: readonly Vec2[], field: string): readonly Vec2[] {
   for (const [index, point] of points.entries()) {
     requireFinite(point.x, `${field}[${String(index)}].x`);
     requireFinite(point.y, `${field}[${String(index)}].y`);
+  }
+  let total = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1];
+    const point = points[index];
+    if (previous === undefined || point === undefined) continue;
+    const length = Math.hypot(point.x - previous.x, point.y - previous.y);
+    if (!Number.isFinite(length)) {
+      throw new RangeError(`${field} segment ${String(index - 1)} length has to be finite`);
+    }
+    total += length;
+    if (!Number.isFinite(total)) {
+      throw new RangeError(`${field} total length has to be finite after segment ${String(index - 1)}`);
+    }
   }
   return points;
 }
@@ -400,8 +415,10 @@ function sampleAlong(
  * before they need anything else, and there is nothing to reuse from
  * {@link createEdgeMotion} if it is buried inside it.
  *
- * @param from The route being left. At least two finite points.
- * @param to The route being taken. At least two finite points.
+ * @param from The route being left. At least two finite points whose segment
+ *   lengths and total length are representable as finite numbers.
+ * @param to The route being taken. At least two finite points whose segment
+ *   lengths and total length are representable as finite numbers.
  */
 export function alignRoutes(from: readonly Vec2[], to: readonly Vec2[]): AlignedRoutes {
   requireRoute(from, 'from');
@@ -635,7 +652,7 @@ export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
     }
 
     for (const [id, intent] of planned) {
-      if (intent.kind === 'arrive') {
+      if (intent.kind === 'arrive' || intent.kind === 'replace') {
         entries.set(id, seed(intent.route));
         continue;
       }
@@ -646,8 +663,6 @@ export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
         entry.departing = true;
         continue;
       }
-      // A replace is a departure cancelled by the same delta, so the line keeps
-      // where it is and where it was going; `retarget` clears `departing`.
       retarget(entry, intent.route);
     }
   }

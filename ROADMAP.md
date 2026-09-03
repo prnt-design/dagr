@@ -155,8 +155,9 @@ worth less than a slow path they can.
   mapping that survives adds and removes.
 - [x] **M4.5** Edge ribbons: polyline and bezier tessellation, joins that do
   not pinch, dash-flow uniform.
-- [x] **M4.6** Spring integrator: critically damped, retargetable mid-flight
-  with no discontinuity, fixed timestep.
+- [x] **M4.6** Spring integrator: exact critically damped integration,
+  retargetable mid-flight with no discontinuity and no fixed-timestep
+  accumulator.
 - [x] **M4.7a** Delta consumer, node half: one spring per node, retargeted by
   deltas, interruptible; `MotionFrame.settled`.
 - [x] **M4.7b** Delta consumer, edge half: route vertices aligned by the union

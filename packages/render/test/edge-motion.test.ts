@@ -188,6 +188,21 @@ describe('alignRoutes', () => {
   it('refuses a coordinate that is not finite', () => {
     expect(() => alignRoutes([{ x: 0, y: 0 }, { x: NaN, y: 0 }], STRAIGHT)).toThrow(RangeError);
   });
+
+  it('refuses a segment whose derived length overflows', () => {
+    const overflowing: readonly Vec2[] = [
+      { x: -Number.MAX_VALUE, y: 0 },
+      { x: Number.MAX_VALUE, y: 0 },
+    ];
+    expect(() => alignRoutes(overflowing, STRAIGHT)).toThrow(/from segment 0 length/);
+
+    const overflowingTotal: readonly Vec2[] = [
+      { x: 0, y: 0 },
+      { x: Number.MAX_VALUE * 0.75, y: 0 },
+      { x: 0, y: 0 },
+    ];
+    expect(() => alignRoutes(overflowingTotal, STRAIGHT)).toThrow(/from total length.*segment 1/);
+  });
 });
 
 describe('createEdgeMotion', () => {
@@ -314,18 +329,17 @@ describe('createEdgeMotion', () => {
     expect(frame.settled).toBe(true);
   });
 
-  it('treats a removal and an addition under one id as one line changing route', () => {
-    // `EdgeDelta` reports an edge that changed ENDPOINTS as a removal and an
-    // addition of the same id, and there is one line on the screen with that
-    // id either way. So it keeps where it is and springs to the new route,
-    // which is the same thing a reroute does and not a departure.
+  it('seeds a same-id replacement on its new directed route', () => {
+    // `EdgeDelta` reports changed endpoints as the old edge leaving and a new
+    // edge arriving. Retargeting would collapse this reversed route in flight.
+    const reversed = [...STRAIGHT].reverse();
     const motion = createEdgeMotion();
     motion.resync([target('e1', STRAIGHT)]);
-    motion.apply({ added: [target('e1', BENT)], removed: ['e1'], rerouted: [] });
+    motion.apply({ added: [target('e1', reversed)], removed: ['e1'], rerouted: [] });
     const frame = motion.advance(0);
-    expect(frame.settled).toBe(false);
+    expect(frame.settled).toBe(true);
     expect(edgeNamed(frame.edges, 'e1').departing).toBe(false);
-    expect(maxDeviation(edgeNamed(frame.edges, 'e1').points, STRAIGHT)).toBe(0);
+    expect(edgeNamed(frame.edges, 'e1').points).toEqual(reversed);
   });
 
   it('throws when a delta names an edge the scene does not hold', () => {
@@ -361,6 +375,23 @@ describe('createEdgeMotion', () => {
     const frame = motion.advance(1 / 60);
     expect(frame.settled).toBe(true);
     expect(edgeNamed(frame.edges, 'e1').points).toEqual(STRAIGHT);
+  });
+
+  it('validates every route before mutating the scene', () => {
+    const motion = createEdgeMotion();
+    motion.resync([target('e1', STRAIGHT), target('e2', STRAIGHT)]);
+    const overflowing: readonly Vec2[] = [
+      { x: -Number.MAX_VALUE, y: 0 },
+      { x: Number.MAX_VALUE, y: 0 },
+    ];
+    expect(() => {
+      motion.apply({
+        added: [],
+        removed: [],
+        rerouted: [target('e1', BENT), target('e2', overflowing)],
+      });
+    }).toThrow(/rerouted\[1\]\.points segment 0 length/);
+    expect(edgeNamed(motion.advance(0).edges, 'e1').points).toEqual(STRAIGHT);
   });
 
   it('drops what a resync does not name, with no departure', () => {
@@ -438,6 +469,26 @@ describe('createEdgeMotion', () => {
     const frame = motion.advance(0);
     expect(frame.settled).toBe(false);
     expect(maxDeviation(edgeNamed(motion.advance(1 / 60).edges, 'e1').points, inFlight)).toBeGreaterThan(0);
+  });
+
+  it('interpolates velocity for a point added during a mid-flight retarget', () => {
+    const motion = createEdgeMotion();
+    motion.resync([target('e1', STRAIGHT)]);
+    motion.apply({ added: [], removed: [], rerouted: [target('e1', BENT)] });
+    for (let step = 0; step < 4; step += 1) motion.advance(1 / 60);
+
+    const inFlight = edgeNamed(motion.advance(0).edges, 'e1').points;
+    const first = inFlight[0];
+    const second = inFlight[1];
+    if (first === undefined || second === undefined) throw new Error('expected an in-flight segment');
+    const inserted = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+    const samePolyline = [first, inserted, ...inFlight.slice(1)];
+
+    motion.apply({ added: [], removed: [], rerouted: [target('e1', samePolyline)] });
+    const retargeted = edgeNamed(motion.advance(0).edges, 'e1').points;
+    expect(retargeted[1]).toEqual(inserted);
+    const next = edgeNamed(motion.advance(1 / 60).edges, 'e1').points;
+    expect(next[1]).not.toEqual(inserted);
   });
 
   it('does not grow an edge by one point per reroute it has ever taken', () => {

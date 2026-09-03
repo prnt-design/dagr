@@ -5174,16 +5174,16 @@ of M3 would leave the second runner idle for a milestone.
   layout computed, and re-routing instantly gives up on the frame that matters.
   BY ARC LENGTH AND NOT BY INDEX, because the place a reader sees is a distance
   along the line rather than a count of the bends before it.
-  **THE RESAMPLING IS FOR THE FLIGHT AND NOT FOR THE DRAWING, WHICH IS A LEAK
-  CAUGHT BY WRITING THE GUARD FOR IT.** The union is at most the two counts
-  added together, so an edge that kept it would carry the shape of every route
-  it had ever taken and a session of edits would draw a three-point line out of
-  hundreds. Arrival COMPACTS back to the target route's own points, which is
-  exact rather than approximate because every point the union added lay on a
-  segment of that route. The consequence a caller has to know is that
-  `MotionEdge.points` does NOT keep a stable count across frames, so a caller
-  binding per segment must key on the edge; `setEdges` rebuilds a group's
-  geometry whole, so nothing in this package does.
+  **THE UNION-SIZED POINTS ARE DRAWN IN FLIGHT AND COMPACTED ON SETTLEMENT,
+  WHICH IS A LEAK CAUGHT BY WRITING THE GUARD FOR IT.** The union is at most
+  the two counts added together, so an edge that kept it after settling would
+  carry the shape of every route it had ever taken and a session of edits would
+  draw a three-point line out of hundreds. Arrival COMPACTS back to the target
+  route's own points, which is exact rather than approximate because every point
+  the union added lay on a segment of that route. The consequence a caller has
+  to know is that `MotionEdge.points` does NOT keep a stable count across
+  frames, so a caller binding per segment must key on the edge; `setEdges`
+  rebuilds a group's geometry whole, so nothing in this package does.
   **VELOCITY IS RESAMPLED WITH POSITION.** A polyline caught mid-flight has a
   velocity per point as well as a position, so the point a retarget adds needs
   both, and interpolating the velocity along the same parameter is exactly as
@@ -5192,15 +5192,13 @@ of M3 would leave the second runner idle for a milestone.
   other half of the state. The guard is written so that zeroing fails it:
   retarget a moving edge to the line it is drawing RIGHT NOW, and a carried
   velocity overshoots where a dropped one reports itself settled.
-  **A REMOVAL AND AN ADDITION UNDER ONE ID IS ONE LINE CHANGING ROUTE.** M4.7a
-  kept M3.1's removals-before-additions rule while noting the case it was
-  written for could not arise for a node. It arises here: that is how `EdgeDelta`
-  reports an edge whose ENDPOINTS changed, and `@dagr/layout`'s stability
-  metrics are right that it is not the same edge. But there is one line on the
-  screen carrying that id either way, and two cannot be drawn for one id, so the
-  departure is cancelled and the new route becomes the target. The general
-  shape: when a model says two things and a drawing can only show one, the
-  drawing's arity decides.
+  **A REMOVAL AND AN ADDITION UNDER ONE ID REPLACES THE OLD EDGE.** M4.7a kept
+  M3.1's removals-before-additions rule while noting the case it was written for
+  could not arise for a node. It arises here: that is how `EdgeDelta` reports
+  that an old edge left and a new edge with different endpoints arrived. The
+  replacement is seeded immediately at rest on its new directed route rather
+  than retargeting springs that belonged to the old edge. A genuinely rerouted
+  edge present in both layouts still animates.
   **THE HANDLE PREDICTION HAS NOW BEEN WRONG TWICE, IN THE SAME DIRECTION.**
   `instance-buffer.ts` and `scene-nodes.ts` both named this task's per-edge
   state as a consumer of the handle invariant, after M4.7a had already corrected

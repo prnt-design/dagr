@@ -1627,15 +1627,15 @@ rounded off. Springing the control points of a curve was the other option, and i
 needs a curve this package does not have and would leave the settled drawing off
 the line the layout computed.
 
-**An arriving edge compacts back to the route's own points.** The union can be
-as large as the two counts added together, so an edge that kept it would carry
-the shape of every route it had ever taken: a session of edits is a polyline
-with hundreds of vertices drawing a line with three. Compacting is exact rather
-than a simplification, because every point the union added lay on a segment of
-the route being arrived at. So the union count exists between two frames and
-never in the drawing, and `MotionEdge.points` **does not keep a stable count
-across frames**. A caller binding per segment should key on the edge and not on
-the vertex; `setEdges` rebuilds a group's geometry whole, so nothing here does.
+**A moving edge draws the union-sized points, then compacts on settlement.**
+The union can be as large as the two counts added together, so an edge that
+kept it would carry the shape of every route it had ever taken: a session of
+edits is a polyline with hundreds of vertices drawing a line with three.
+Compacting is exact rather than a simplification, because every point the union
+added lay on a segment of the route being arrived at. `MotionEdge.points`
+**does not keep a stable count across frames**. A caller binding per segment
+should key on the edge and not on the vertex; `setEdges` rebuilds a group's
+geometry whole, so nothing here does.
 
 **Velocity is resampled with position.** A polyline caught mid-flight has a
 velocity per point as well as a position, and the point a retarget adds needs
@@ -1656,11 +1656,11 @@ fraction of the drawing, and applying a delta of one against ten thousand edges
 is under a fiftieth of a millisecond. Whether the floor is worth removing is
 M4.10's to measure against a real GPU.
 
-**A removal and an addition under one id is one line changing route.** That is
-how `EdgeDelta` reports an edge whose endpoints changed, and `@dagr/layout` is
-right that it is not the same edge. But there is one line on the screen carrying
-that id either way, so the departure is cancelled and the new route becomes the
-target, which is what a reroute does. Everything else is the node half's
+**A removal and an addition under one id replaces the old edge.** That is how
+`EdgeDelta` reports changed endpoints: the old edge left and a new one arrived.
+The replacement is seeded immediately on its new directed route, at rest,
+rather than retargeting the old edge's springs. A genuinely rerouted edge
+present in both layouts still animates. Everything else is the node half's
 behaviour exactly: the same `MotionDesyncError` on a delta that does not
 describe the scene, the same all-or-nothing apply, the same `departing` state
 until a removed edge's springs finish, the same `resync` back.

@@ -36,24 +36,23 @@ not" is the category this file has a heading for.
   distance and says a point added on the line a route already ran along measures
   zero, so this correspondence is free in the metric that judges it.
 
-  **AN ARRIVING EDGE COMPACTS BACK TO THE ROUTE'S OWN POINTS.** The union count
-  exists between two frames and not in the drawing: an edge that kept it would
-  gain a point per reroute and end a session drawing a three-point line out of
-  hundreds. Compacting is exact, because every point the union added was on a
-  segment of the route being arrived at.
+  **A MOVING EDGE DRAWS THE UNION-SIZED POINTS, THEN COMPACTS ON SETTLEMENT.**
+  An edge that kept the union after settling would gain a point per reroute and
+  end a session drawing a three-point line out of hundreds. Compacting is exact,
+  because every point the union added was on a segment of the target route.
 
   **`MotionEdge.points` DOES NOT KEEP A STABLE COUNT ACROSS FRAMES.** A caller
   that binds per segment should key on the edge and not on the vertex.
   `setEdges` rebuilds a group's geometry whole, so nothing in this package does.
 
-  **A REMOVAL AND AN ADDITION UNDER ONE ID IS ONE LINE CHANGING ROUTE.** That is
-  how `EdgeDelta` reports an edge whose endpoints changed, and there is one line
-  on screen carrying that id either way, so the departure is cancelled and the
-  new route becomes the target.
+  **A REMOVAL AND AN ADDITION UNDER ONE ID REPLACES THE OLD EDGE.** That is how
+  `EdgeDelta` reports changed endpoints: the old edge left and a new one
+  arrived. The replacement is seeded immediately at rest on its new directed
+  route. A genuinely rerouted shared edge still animates.
 
 - `createNodeMotion`, the node half of the delta consumer: one spring per node,
   retargeted by a `LayoutDelta`'s node lists, stepped by a clock the caller
-  owns. Eight new names on the surface: the factory, `MotionDesyncError` with
+  owns. Ten new names on the surface: the factory, `MotionDesyncError` with
   code `MOTION_DESYNC`, the two defaults `DEFAULT_MOTION_HALF_LIFE` and
   `DEFAULT_MOTION_REST`, and the types `NodeMotion`, `NodeMotionDelta`,
   `NodeMotionOptions`, `MotionTarget`, `MotionNode` and `MotionFrame`. (M4.7a)
