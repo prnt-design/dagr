@@ -41,7 +41,7 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * two samples and the drawing rounds it off. {@link alignRoutes} takes the UNION
  * of the two routes' own arc-length parameters instead, so every vertex of each
  * route survives in its own list exactly, and every point either list gains
- * sits on a segment the other route already had. The settled drawing is then
+ * sits on a segment that same route already had. The settled drawing is then
  * the layout's answer to the bit, which is the same commitment M4.7a made when
  * it snapped an arriving node onto its target rather than stopping within the
  * tolerance of it.
@@ -496,6 +496,7 @@ export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
   requirePositive(restEpsilon, 'restEpsilon');
 
   const w = omegaForHalfLife(halfLife);
+  requireFinite(w, 'halfLifeSeconds angular frequency');
 
   /**
    * The speed below which a spring counts as stopped, in world units per
@@ -603,14 +604,18 @@ export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
     for (const [index, position] of positions.entries()) {
       const target = targets[index];
       if (target === undefined) continue;
-      requireFinite(
-        position.x - target.x,
-        `${field} edge "${id}" point ${String(index)} x displacement`,
-      );
-      requireFinite(
-        position.y - target.y,
-        `${field} edge "${id}" point ${String(index)} y displacement`,
-      );
+      const velocity = velocities[index] ?? AT_REST;
+      for (const axis of ['x', 'y'] as const) {
+        const location = `${field} edge "${id}" point ${String(index)} ${axis}`;
+        const displacement = position[axis] - target[axis];
+        requireFinite(displacement, `${location} displacement`);
+        const weightedDisplacement = w * displacement;
+        requireFinite(weightedDisplacement, `${location} spring coefficient w * displacement`);
+        requireFinite(
+          velocity[axis] + weightedDisplacement,
+          `${location} spring coefficient with velocity`,
+        );
+      }
     }
     return { springs, targets, rest: route, points: positions };
   }

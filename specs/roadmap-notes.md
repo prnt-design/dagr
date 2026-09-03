@@ -5176,14 +5176,15 @@ of M3 would leave the second runner idle for a milestone.
   along the line rather than a count of the bends before it.
   **THE UNION-SIZED POINTS ARE DRAWN IN FLIGHT AND COMPACTED ON SETTLEMENT,
   WHICH IS A LEAK CAUGHT BY WRITING THE GUARD FOR IT.** The union is at most
-  the two counts added together, so an edge that kept it after settling would
-  carry the shape of every route it had ever taken and a session of edits would
-  draw a three-point line out of hundreds. Arrival COMPACTS back to the target
-  route's own points, which is exact rather than approximate because every point
-  the union added lay on a segment of that route. The consequence a caller has
-  to know is that `MotionEdge.points` does NOT keep a stable count across
-  frames, so a caller binding per segment must key on the edge; `setEdges`
-  rebuilds a group's geometry whole, so nothing in this package does.
+  `from.length + to.length - 2`, because the two routes share both endpoint
+  parameters. An edge that kept it after settling would carry the shape of
+  every route it had ever taken, and a session of edits would draw a three-point
+  line out of hundreds. Arrival COMPACTS back to the target route's own points,
+  which is exact rather than approximate because every point the union added
+  lay on a segment of that route. The consequence a caller has to know is that
+  `MotionEdge.points` does NOT keep a stable count across frames, so a caller
+  binding per segment must key on the edge; `setEdges` rebuilds a group's
+  geometry whole, so nothing in this package does.
   **VELOCITY IS RESAMPLED WITH POSITION.** A polyline caught mid-flight has a
   velocity per point as well as a position, so the point a retarget adds needs
   both, and interpolating the velocity along the same parameter is exactly as

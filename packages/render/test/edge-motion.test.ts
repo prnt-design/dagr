@@ -436,6 +436,48 @@ describe('createEdgeMotion', () => {
     expect(motion.advance(0)).toEqual(before);
   });
 
+  it.each(['apply', 'resync'] as const)(
+    'refuses an overflowing spring coefficient in %s without changing finite state',
+    (operation) => {
+      const negative: readonly Vec2[] = [
+        { x: -8e307, y: 0 },
+        { x: -7e307, y: 0 },
+      ];
+      const positive: readonly Vec2[] = [
+        { x: 8e307, y: 0 },
+        { x: 7e307, y: 0 },
+      ];
+      const motion = createEdgeMotion();
+      motion.resync([target('earlier', STRAIGHT), target('overflow', negative)]);
+      const before = motion.advance(0);
+
+      expect(() => {
+        if (operation === 'apply') {
+          motion.apply({
+            added: [],
+            removed: [],
+            rerouted: [target('earlier', BENT), target('overflow', positive)],
+          });
+        } else {
+          motion.resync([target('earlier', BENT), target('overflow', positive)]);
+        }
+      }).toThrow(
+        operation === 'apply'
+          ? /rerouted\[1\].*edge "overflow".*point 0.*x spring coefficient/
+          : /targets\[1\].*edge "overflow".*point 0.*x spring coefficient/,
+      );
+
+      const after = motion.advance(1 / 60);
+      expect(after).toEqual(before);
+      for (const edge of after.edges) {
+        for (const point of edge.points) {
+          expect(Number.isFinite(point.x)).toBe(true);
+          expect(Number.isFinite(point.y)).toBe(true);
+        }
+      }
+    },
+  );
+
   it('drops what a resync does not name, with no departure', () => {
     const motion = createEdgeMotion();
     motion.resync([target('e1', STRAIGHT), target('e2', BENT)]);
@@ -498,6 +540,12 @@ describe('createEdgeMotion', () => {
   it('refuses a half-life or a tolerance that is not above zero', () => {
     expect(() => createEdgeMotion({ halfLifeSeconds: 0 })).toThrow(RangeError);
     expect(() => createEdgeMotion({ restEpsilon: -1 })).toThrow(RangeError);
+  });
+
+  it('refuses a finite half-life whose angular frequency overflows', () => {
+    expect(() => createEdgeMotion({ halfLifeSeconds: Number.MIN_VALUE })).toThrow(
+      /halfLifeSeconds.*angular frequency/,
+    );
   });
 
   it('shares the node motion defaults, and honours one a caller names', () => {
