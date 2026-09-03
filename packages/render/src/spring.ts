@@ -165,12 +165,14 @@ function stepAxis(
     // Computing it anyway would multiply a possibly infinite `A + B h` by zero.
     return { position: target, velocity: 0 };
   }
-  const a = position - target;
-  const b = velocity + w * a;
+  const u = w * dtSeconds;
+  const uDecay = u * decay;
+  const retention = decay + uDecay;
   const timeDecay = dtSeconds * decay;
-  const displacement = a * decay + b * timeDecay;
-  const nextPosition = target + displacement;
-  const nextVelocity = velocity * decay - b * ((w * dtSeconds) * decay);
+  const nextPosition =
+    target * (1 - retention) + position * retention + velocity * timeDecay;
+  const springVelocity = (target * uDecay - position * uDecay) * w;
+  const nextVelocity = velocity * (decay - uDecay) + springVelocity;
   requireFinite(nextPosition, 'spring result position');
   requireFinite(nextVelocity, 'spring result velocity');
   return { position: nextPosition, velocity: nextVelocity };

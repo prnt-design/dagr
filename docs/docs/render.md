@@ -1492,7 +1492,7 @@ const motion = createNodeMotion({ halfLifeSeconds: 0.12 });
 // World centres, y up: the same conversion `setNodes` already asks for.
 const worldOf = (node) => ({
   id: node.id,
-  center: { x: node.x + node.width / 2, y: -(node.y + node.height / 2) },
+  center: { x: node.x, y: -node.y },
 });
 
 motion.resync([...first.nodes.values()].map(worldOf));

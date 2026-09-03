@@ -269,6 +269,7 @@ export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
   requirePositive(restEpsilon, 'restEpsilon');
 
   const w = omegaForHalfLife(halfLife);
+  requireFinite(w, 'halfLifeSeconds angular frequency');
 
   /**
    * The speed below which a spring counts as stopped, in world units per

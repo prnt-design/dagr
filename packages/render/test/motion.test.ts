@@ -407,6 +407,12 @@ describe('createNodeMotion', () => {
       expect(() => createNodeMotion({ restEpsilon: -1 })).toThrow(/restEpsilon/);
     });
 
+    it('rejects a half-life whose angular frequency overflows', () => {
+      expect(() => createNodeMotion({ halfLifeSeconds: Number.MIN_VALUE })).toThrow(
+        /halfLifeSeconds.*angular frequency/,
+      );
+    });
+
     it('publishes the defaults it applies', () => {
       // Exported rather than only documented, so a caller tuning one of them
       // can say "a third of the default" and a test can assert against the

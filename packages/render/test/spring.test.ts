@@ -191,10 +191,17 @@ describe('the step is exact, which is why there is no fixed-timestep accumulator
     expect(exact.velocity).toBeGreaterThan(0);
   });
 
+  it('keeps a settled long-frame result finite when constructing B would overflow', () => {
+    const exact = stepSpring(rest(0), 1e308, 2, 100);
+    expect(Number.isFinite(exact.position)).toBe(true);
+    expect(Number.isFinite(exact.velocity)).toBe(true);
+    expect(exact.position).toBeCloseTo(1e308, 12);
+    expect(Math.abs(exact.velocity / exact.position)).toBeLessThan(1e-80);
+  });
+
   it('rejects a final state that is not representable', () => {
-    expect(() => stepSpring(rest(Number.MAX_VALUE), -Number.MAX_VALUE, 1, 0.1)).toThrow(
-      /result position/,
-    );
+    const state = { position: Number.MAX_VALUE, velocity: Number.MAX_VALUE };
+    expect(() => stepSpring(state, Number.MAX_VALUE, 1, 0.1)).toThrow(/result position/);
   });
 
   it('pins the substep ceiling the closed form removes', () => {

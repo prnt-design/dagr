@@ -21,11 +21,13 @@ not" is the category this file has a heading for.
   `EdgeMotionDelta`, `EdgeMotionFrame`, `EdgeMotionOptions`, `EdgeMotionTarget`,
   `MotionEdge` and `AlignedRoutes`. (M4.7b)
 
-  **NOTHING EXISTING BEHAVES DIFFERENTLY.** `createNodeMotion` is untouched,
-  `setEdges` is untouched, and there is still no render loop in this package.
-  `MotionDesyncError` gained a fourth constructor argument saying which roster
-  it is about, defaulted so that every message the node half produces is the
-  message it produced before.
+  **SPRING EVALUATION NOW STAYS FINITE WHEN THE FINAL STATE IS REPRESENTABLE.**
+  Decay-scaled coefficients avoid overflowing algebraic intermediates during a
+  long frame, while a final position or velocity outside the finite range is
+  still rejected. Ordinary spring trajectories are unchanged. `createNodeMotion`
+  also rejects a half-life whose derived angular frequency is not finite,
+  matching `createEdgeMotion`. `setEdges` is untouched, and there is still no
+  render loop in this package.
 
   **AN EDGE NEEDED A CORRESPONDENCE BEFORE IT NEEDED A SPRING.** A route that
   gains a rank to cross gains a bend, so two routes for one edge can have
@@ -57,9 +59,9 @@ not" is the category this file has a heading for.
   `DEFAULT_MOTION_REST`, and the types `NodeMotion`, `NodeMotionDelta`,
   `NodeMotionOptions`, `MotionTarget`, `MotionNode` and `MotionFrame`. (M4.7a)
 
-  **NOTHING EXISTING BEHAVES DIFFERENTLY.** M4.6's `stepSpring2D` is unchanged
-  and this calls it; `setNodes` is unchanged and this produces what a caller
-  builds its argument from. There is still no render loop in this package.
+  **THE NODE MOTION API DOES NOT CHANGE HOW NODES ARE DRAWN.** It calls M4.6's
+  `stepSpring2D`; `setNodes` is unchanged and this produces what a caller builds
+  its argument from. There is still no render loop in this package.
 
   **IT TAKES CENTRES, NOT A `LayoutDelta`.** `MotionTarget` is an id and a
   world-space centre, y up, which is the conversion `setNodes` already asks a
