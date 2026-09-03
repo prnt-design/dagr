@@ -436,6 +436,34 @@ describe('createEdgeMotion', () => {
     expect(motion.advance(0)).toEqual(before);
   });
 
+  it('keeps a far reroute finite through a long frame and a later retarget', () => {
+    const far: readonly Vec2[] = [
+      { x: 1e307, y: 1e306 },
+      { x: 1.1e307, y: 2e306 },
+    ];
+    const farther: readonly Vec2[] = [
+      { x: 9e306, y: 2e306 },
+      { x: 1.05e307, y: 3e306 },
+    ];
+    const motion = createEdgeMotion();
+    motion.resync([target('e1', STRAIGHT)]);
+    motion.apply({ added: [], removed: [], rerouted: [target('e1', far)] });
+
+    const afterLongFrame = motion.advance(2);
+    expect(afterLongFrame.settled).toBe(false);
+    for (const point of edgeNamed(afterLongFrame.edges, 'e1').points) {
+      expect(Number.isFinite(point.x)).toBe(true);
+      expect(Number.isFinite(point.y)).toBe(true);
+      expect(point.x).toBeGreaterThan(0);
+    }
+
+    motion.apply({ added: [], removed: [], rerouted: [target('e1', farther)] });
+    for (const point of edgeNamed(motion.advance(1 / 60).edges, 'e1').points) {
+      expect(Number.isFinite(point.x)).toBe(true);
+      expect(Number.isFinite(point.y)).toBe(true);
+    }
+  });
+
   it.each(['apply', 'resync'] as const)(
     'refuses an overflowing spring coefficient in %s without changing finite state',
     (operation) => {

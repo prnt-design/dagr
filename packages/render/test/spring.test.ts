@@ -174,6 +174,29 @@ describe('the step is exact, which is why there is no fixed-timestep accumulator
     expect(exact.velocity).toBeCloseTo(0, 9);
   });
 
+  it('keeps a representable long-frame result finite when B times dt overflows', () => {
+    const target = 1e307;
+    const w = omegaForHalfLife(0.12);
+    const dt = 2;
+    const a = -target;
+    const b = w * a;
+    expect(Number.isFinite(b)).toBe(true);
+    expect(Number.isFinite(b * dt)).toBe(false);
+
+    const exact = stepSpring(rest(0), target, w, dt);
+    expect(Number.isFinite(exact.position)).toBe(true);
+    expect(Number.isFinite(exact.velocity)).toBe(true);
+    expect(exact.position).toBeGreaterThan(0);
+    expect(exact.position).toBeLessThan(target);
+    expect(exact.velocity).toBeGreaterThan(0);
+  });
+
+  it('rejects a final state that is not representable', () => {
+    expect(() => stepSpring(rest(Number.MAX_VALUE), -Number.MAX_VALUE, 1, 0.1)).toThrow(
+      /result position/,
+    );
+  });
+
   it('pins the substep ceiling the closed form removes', () => {
     // Measured rather than quoted, because the number a textbook gives for a
     // semi-implicit Euler oscillator is w*h < 2 and that is the UNDAMPED case.

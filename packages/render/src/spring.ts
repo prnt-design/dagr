@@ -28,9 +28,12 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * v(h) = (B - w (A + B h)) e^(-w h)
  * ```
  *
- * so {@link stepSpring} evaluates it rather than integrating towards it. The
- * consequences run through everything below, and the largest is what is NOT
- * here.
+ * so {@link stepSpring} evaluates it rather than integrating towards it. Its
+ * evaluation applies the exponential through its bounded coefficients before
+ * multiplying by displacement or velocity. This is the same closed form, but
+ * it keeps an intermediate such as `B h` from overflowing when the decayed
+ * result is representable. The consequences run through everything below, and
+ * the largest is what is NOT here.
  *
  * **There is no fixed-timestep accumulator, and the reason one is usually
  * needed is the reason there is none.** An accumulator exists to keep an
@@ -164,11 +167,13 @@ function stepAxis(
   }
   const a = position - target;
   const b = velocity + w * a;
-  const displacement = a + b * dtSeconds;
-  return {
-    position: target + displacement * decay,
-    velocity: (b - w * displacement) * decay,
-  };
+  const timeDecay = dtSeconds * decay;
+  const displacement = a * decay + b * timeDecay;
+  const nextPosition = target + displacement;
+  const nextVelocity = velocity * decay - b * ((w * dtSeconds) * decay);
+  requireFinite(nextPosition, 'spring result position');
+  requireFinite(nextVelocity, 'spring result velocity');
+  return { position: nextPosition, velocity: nextVelocity };
 }
 
 /**

@@ -12,14 +12,16 @@ sidebar_position: 4
 carrying nodes between one layout and the next, and one draw call per shape
 family.
 
-This page describes the package as of M4.4, the task that gave it a way to be
-told what to draw. Rounded rectangles and circles are on screen, drawn as signed distance
-fields, and there is an HTML overlay for the text a signed distance field cannot
-draw. What is real is the seam everything else plugs into: the `Renderer`
-interface, the camera, the distance fields and the shading that reads them, and
-the decisions that had to be made before a single test in this milestone could
-be written. They are argued below rather than left in a commit message, because
-each is the kind of choice that is cheap now and expensive in six tasks' time.
+This page describes the package through M4.7b. M4.4 gave it a way to be told
+what to draw, and the later sections cover the motion that carries nodes and
+edges between layouts. Rounded rectangles and circles are on screen, drawn as
+signed distance fields, and there is an HTML overlay for the text a signed
+distance field cannot draw. What is real is the seam everything else plugs
+into: the `Renderer` interface, the camera, the distance fields and the shading
+that reads them, and the decisions that had to be made before a single test in
+this milestone could be written. They are argued below rather than left in a
+commit message, because each is the kind of choice that is cheap now and
+expensive in six tasks' time.
 
 ## What is on screen
 
@@ -1519,8 +1521,11 @@ to state it keeps or is handed the full `LayoutResult` alongside each delta. A
 spring's position and velocity are in no `LayoutResult`: a layout says where a
 node belongs, and this is about where it currently is on the way there. So the
 renderer is already stateful and the real question is narrower, whether it keeps
-a second copy of the layout's answer too. It keeps one target per node and
-nothing else: no sizes, no shapes, no routes, no bounds.
+a second copy of the layout's answer too. `createNodeMotion` keeps one target
+per node and no sizes, shapes, routes, or bounds. While an edge is active,
+`createEdgeMotion` retains its current route, resampled target route, and exact
+rest route. Those routes are the state needed to retarget and then recover the
+layout's own point count, not a second full `LayoutResult`.
 
 **A delta that does not describe the scene is a throw, not an adoption.** One
 dropped or reordered delta and the picture is wrong with nothing in the system
