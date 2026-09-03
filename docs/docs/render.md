@@ -1731,8 +1731,8 @@ confirmation.
 
 ## What is not here yet
 
-Most of it. M4.4 is a graph on screen, drawn correctly, one draw call per shape
-family, and nothing that moves.
+The motion arithmetic and both delta consumers are headless. What is still
+missing is the package-owned loop that drives them and the device work below.
 
 - A real animation loop. M4.6 shipped the springs and deliberately did not
   start one, because the clock belongs to whoever owns the frame; the demo
