@@ -10,7 +10,7 @@ the decisions it took and the reasons, lives in
 reference elsewhere in the repo to "the roadmap's M4.6 entry" means the entry
 there. Milestone status is mirrored in the project brain.
 
-## Status (2026-09-01)
+## Status (2026-09-03)
 
 The engine is the part that is done. Over the six-session corpus (M3.10a) the
 incremental path moves 4.1x to 38.4x less of the drawing per patch than a cold
@@ -25,11 +25,12 @@ nothing. One engine caveat a consumer should know: Brandes-Koepf positioning
 is implemented and tested but unexported, and `gridPositionStage` is the
 default, with the reason written in `packages/layout/src/index.ts`.
 
-The order to v0.1, decided 2026-08-26 (reasoning in the notes):
+The order to v0.1, decided 2026-08-26 and updated after M4.7b shipped
+(reasoning in the notes):
 
-1. **M4.7b**, the render loop and edge motion. A consumer wiring deltas to the
-   renderer today writes their own `requestAnimationFrame` and gets no edge
-   motion at all.
+1. **M4.7c**, the render loop, bounds motion, and demo. Edge motion shipped in
+   M4.7b, but a consumer wiring deltas to the renderer still writes their own
+   `requestAnimationFrame`.
 2. **M5.3**, the animated demo. Nothing deployed mutates a graph, so the
    flagship stability claim is unillustrated on the page that makes it.
 3. **M5.2 + M4.8b**, interaction hooks and GPU picking, together. Blocked on a
@@ -154,17 +155,19 @@ worth less than a slow path they can.
   mapping that survives adds and removes.
 - [x] **M4.5** Edge ribbons: polyline and bezier tessellation, joins that do
   not pinch, dash-flow uniform.
-- [x] **M4.6** Spring integrator: critically damped, retargetable mid-flight
-  with no discontinuity, fixed timestep.
+- [x] **M4.6** Spring integrator: exact critically damped integration,
+  retargetable mid-flight with no discontinuity and no fixed-timestep
+  accumulator.
 - [x] **M4.7a** Delta consumer, node half: one spring per node, retargeted by
   deltas, interruptible; `MotionFrame.settled`.
-- [ ] **M4.7b** Delta consumer, the rest: edge motion, the bounds change, and
-  the loop that drives both. The edge problem is resampling, not springing:
-  `from` and `to` polylines differ in length, so pick the correspondence
-  (resample to a common count, spring a curve's control points, or animate
-  endpoints and reroute instantly). The loop has to coexist with a caller who
-  already has one. Decide whether size springs too; the frame floor is 0.2 to
-  0.3ms at 10k settled.
+- [x] **M4.7b** Delta consumer, edge half: route vertices aligned by the union
+  of both routes' arc-length parameters, one spring per aligned point,
+  interruptible and compacted to the exact target route at rest.
+- [ ] **M4.7c** Delta consumer, the rest: bounds motion, the loop that drives
+  both halves, and the demo that proves it. The loop has to coexist with a
+  caller who already has one. Decide whether size springs too; the measured
+  frame floor is 0.34ms for 10k settled nodes and 0.25 to 0.32ms for 10k
+  settled edges in the same invocation.
 - [x] **M4.8a** Pick IDs: the encoding, the pixel arithmetic, and the stamp
   registry that refuses a stale answer.
 - [ ] **M4.8b** GPU picking, the pass: per-instance IDs to an offscreen

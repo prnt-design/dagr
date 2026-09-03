@@ -407,6 +407,42 @@ describe('createNodeMotion', () => {
       expect(() => createNodeMotion({ restEpsilon: -1 })).toThrow(/restEpsilon/);
     });
 
+    it('rejects a half-life whose angular frequency overflows', () => {
+      expect(() => createNodeMotion({ halfLifeSeconds: Number.MIN_VALUE })).toThrow(
+        /halfLifeSeconds.*angular frequency/,
+      );
+    });
+
+    it.each(['apply', 'resync'] as const)(
+      'refuses an overflowing spring coefficient in %s without changing finite state',
+      (operation) => {
+        const motion = createNodeMotion();
+        motion.resync([at('earlier', 0, 0), at('overflow', -8e307, 0)]);
+        const before = motion.advance(0);
+
+        expect(() => {
+          if (operation === 'apply') {
+            motion.apply(
+              delta({ moved: [at('earlier', 10, 0), at('overflow', 8e307, 0)] }),
+            );
+          } else {
+            motion.resync([at('earlier', 10, 0), at('overflow', 8e307, 0)]);
+          }
+        }).toThrow(
+          operation === 'apply'
+            ? /moved\[1\].*node "overflow".*x spring coefficient/
+            : /targets\[1\].*node "overflow".*x spring coefficient/,
+        );
+
+        const after = motion.advance(0);
+        expect(after).toEqual(before);
+        for (const node of after.nodes) {
+          expect(Number.isFinite(node.center.x)).toBe(true);
+          expect(Number.isFinite(node.center.y)).toBe(true);
+        }
+      },
+    );
+
     it('publishes the defaults it applies', () => {
       // Exported rather than only documented, so a caller tuning one of them
       // can say "a third of the default" and a test can assert against the

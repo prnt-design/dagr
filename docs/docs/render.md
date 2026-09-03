@@ -12,14 +12,16 @@ sidebar_position: 4
 carrying nodes between one layout and the next, and one draw call per shape
 family.
 
-This page describes the package as of M4.4, the task that gave it a way to be
-told what to draw. Rounded rectangles and circles are on screen, drawn as signed distance
-fields, and there is an HTML overlay for the text a signed distance field cannot
-draw. What is real is the seam everything else plugs into: the `Renderer`
-interface, the camera, the distance fields and the shading that reads them, and
-the decisions that had to be made before a single test in this milestone could
-be written. They are argued below rather than left in a commit message, because
-each is the kind of choice that is cheap now and expensive in six tasks' time.
+This page describes the package through M4.7b. M4.4 gave it a way to be told
+what to draw, and the later sections cover the motion that carries nodes and
+edges between layouts. Rounded rectangles and circles are on screen, drawn as
+signed distance fields, and there is an HTML overlay for the text a signed
+distance field cannot draw. What is real is the seam everything else plugs
+into: the `Renderer` interface, the camera, the distance fields and the shading
+that reads them, and the decisions that had to be made before a single test in
+this milestone could be written. They are argued below rather than left in a
+commit message, because each is the kind of choice that is cheap now and
+expensive in six tasks' time.
 
 ## What is on screen
 
@@ -132,14 +134,15 @@ is acceptable, and read `renderer.backend` for what happened. See
 
 `setNodes` diffs by `id`. A node present in two consecutive calls is updated in
 place, keeping the instance handle it had; one that left is freed, and one that
-arrived is allocated. That is not an optimisation, it is the property M4.6's
-springs are keyed on: a node that kept its id but got a new handle every
-relayout would lose its velocity and jump.
+arrived is allocated. The stable handle keeps its instance-buffer identity
+attached while removals move dense slots. M4.6's springs are keyed by the
+caller's node id instead, so a handle replacement does not lose velocity.
 
 The one case where the handle cannot survive is a node that changes SHAPE,
 because the two shape families are two meshes and an instance cannot move
-between them. It is a removal and an addition, and per-instance state keyed to
-that node has to be rebuilt.
+between them. It is a removal and an addition. The caller id is also why the
+spring and M4.8's picking id survive that replacement while the handle does
+not.
 
 What `setNodes` deliberately does NOT take is a `LayoutResult`. Naming one would
 make `@dagr/layout` a dependency of this package, and the y-down to y-up
@@ -937,7 +940,7 @@ an unchanged frame. M4.6 shipped the springs without adding one, and that is
 deliberate: a spring step is a pure function of a delta, so the loop belongs to
 whoever owns the clock. M4.7a keeps that: `createNodeMotion` takes the elapsed
 seconds and answers whether anything is still moving, so the opinion about
-starting and stopping a loop is M4.7b's, with the frame budget it implies. Do coalesce, though: an input handler
+starting and stopping a loop is M4.7c's, with the frame budget it implies. Do coalesce, though: an input handler
 that calls `render()` synchronously runs at the event rate rather than the
 display rate, and a trackpad fling dispatches wheel events faster than the
 screen refreshes. The campaign demo schedules one frame per `requestAnimationFrame`
@@ -1422,9 +1425,11 @@ further than its neighbour and shows up as a stagger at constant velocity.
 A backgrounded tab hands back a delta measured in seconds or minutes. Stepped
 exactly, that lands the spring on its target with zero velocity, which is what a
 returning tab should show: the settled drawing rather than a minute of catch-up
-animation. The same delta through Euler is an overflow. Past a `w * dt` of about
-745 the decay underflows to zero in a double, and `stepSpring` returns the
-target itself rather than computing an infinity times a zero.
+animation. The same delta through Euler is an overflow. A bare decay underflows
+around a `w * dt` of 745, but polynomial-scaled residuals such as
+`(1 + w * dt)e^(-w * dt)` can remain representable beyond it. `stepSpring`
+preserves those residuals. Only an infinite `w * dt` takes the settled limit
+directly.
 
 The 0.83 above is measured rather than quoted, and it is worth knowing that it
 is EARLIER than the `w * h` of 2 an undamped oscillator gives: what goes
@@ -1489,7 +1494,7 @@ const motion = createNodeMotion({ halfLifeSeconds: 0.12 });
 // World centres, y up: the same conversion `setNodes` already asks for.
 const worldOf = (node) => ({
   id: node.id,
-  center: { x: node.x + node.width / 2, y: -(node.y + node.height / 2) },
+  center: { x: node.x, y: -node.y },
 });
 
 motion.resync([...first.nodes.values()].map(worldOf));
@@ -1518,8 +1523,11 @@ to state it keeps or is handed the full `LayoutResult` alongside each delta. A
 spring's position and velocity are in no `LayoutResult`: a layout says where a
 node belongs, and this is about where it currently is on the way there. So the
 renderer is already stateful and the real question is narrower, whether it keeps
-a second copy of the layout's answer too. It keeps one target per node and
-nothing else: no sizes, no shapes, no routes, no bounds.
+a second copy of the layout's answer too. `createNodeMotion` keeps one target
+per node and no sizes, shapes, routes, or bounds. While an edge is active,
+`createEdgeMotion` retains its current route, resampled target route, and exact
+rest route. Those routes are the state needed to retarget and then recover the
+layout's own point count, not a second full `LayoutResult`.
 
 **A delta that does not describe the scene is a throw, not an adoption.** One
 dropped or reordered delta and the picture is wrong with nothing in the system
@@ -1568,12 +1576,103 @@ absent-means-unchanged buys the arithmetic and not the frame: a delta is
 proportional to the change, a frame is proportional to the scene. Whether that
 floor is worth removing is M4.10's to measure against a real GPU.
 
-**Edges are M4.7b, and the seam is about kind rather than convenience.** A node
-moves as a point, so one two-axis spring is the whole of it. An edge is a
-polyline whose vertex count changes between two routes, because a long edge
-gaining a rank to cross gains a bend, and there is nothing to retarget until
-something decides what corresponds to what. The bounds change and the loop that
-drives both are M4.7b's too.
+**The bounds change and the loop that drives all of this are M4.7c.** This
+package still owns no clock.
+
+## An edge needs a correspondence before it needs a spring
+
+M4.7b is the other half of the delta consumer, and the seam between the two is
+about kind rather than convenience. A node moves as a point, so one two-axis
+spring is the whole of it and the hard part is the bookkeeping between two
+deltas. An edge is a polyline whose **vertex count changes between two routes**,
+because a long edge gaining a rank to cross gains a bend, and no per-point
+comparison can even be spelled between two lists of different lengths. There is
+nothing to retarget until something decides what corresponds to what.
+
+`createEdgeMotion` is `createNodeMotion`'s shape for routes, down to the two
+defaults, so one delta's nodes and its edges arrive together:
+
+```ts
+import { createEdgeMotion, createNodeMotion } from '@dagr/render';
+
+const edges = createEdgeMotion();
+
+// World points, y up: the same flip `setEdges` already asks for.
+const routeOf = (edge) => ({
+  id: edge.id,
+  points: edge.points.map((point) => ({ x: point.x, y: -point.y })),
+});
+
+edges.resync([...first.edges.values()].map(routeOf));
+
+// ... on a relayout, beside the node half:
+edges.apply({
+  added: delta.edges.added.map(routeOf),
+  removed: [...delta.edges.removed],
+  rerouted: delta.edges.rerouted.map((reroute) => routeOf({ id: reroute.id, points: reroute.to })),
+});
+
+// ... and per frame, beside `motion.advance`:
+const frame = edges.advance(elapsedSeconds);
+renderer.setEdges('flow', frame.edges.map(draw));
+```
+
+**The correspondence is resampling, and the metric that judges it says the
+resampling is free.** `alignRoutes(from, to)` gives both routes a common list of
+places along themselves: the **union of their own arc-length parameters**. Every
+vertex of each route survives in its own list exactly, and every point either
+list gains sits on a segment that list already had. `@dagr/layout`'s
+`maxRouteDistance` measures a route by Hausdorff distance between the two
+polylines taken as curves, and it already records that a point added on the line
+a route already ran along measures zero. So the correspondence costs nothing in
+the metric M3.4 says this task is judged by: it is not a compromise between two
+drawings, it is the same two drawings with more names for places on them.
+
+**A common count would have cut every corner.** Resampling both routes to
+`max(from.length, to.length)` evenly spaced points is the obvious reading of a
+common count, and a bend that does not happen to fall on one of those samples is
+rounded off. Springing the control points of a curve was the other option, and it
+needs a curve this package does not have and would leave the settled drawing off
+the line the layout computed.
+
+**A moving edge draws the union-sized points, then compacts on settlement.**
+The union can contain at most `from.length + to.length - 2` points, since both
+routes share the endpoint parameters. An edge that kept it would carry the
+shape of every route it had ever taken: a session of edits is a polyline with
+hundreds of vertices drawing a line with three.
+Compacting is exact rather than a simplification, because every point the union
+added lay on a segment of the route being arrived at. `MotionEdge.points`
+**does not keep a stable count across frames**. A caller binding per segment
+should key on the edge and not on the vertex; `setEdges` rebuilds a group's
+geometry whole, so nothing here does.
+
+**Velocity is resampled with position.** A polyline caught mid-flight has a
+velocity per point as well as a position, and the point a retarget adds needs
+both. Zeroing it instead would stop a moving edge dead at every new bend, which
+is the same interruptibility failure that reading a delta's `from` would cause.
+
+**The settled floor is per drawing; the moving cost is per point.** Measured
+against the node half in one invocation, a settled scene of ten thousand edges
+costs about what a settled scene of ten thousand nodes does, and it barely
+changes between two points per edge and five: a settled frame is the records
+this module allocates and nothing else. Moving is where the two halves part. An
+edge has as many springs as it has points, and per spring an edge costs about
+two and a half times a node, so whether a COLD reroute of ten thousand edges
+fits in a frame is decided by how long the routes are rather than by how many
+edges there are. What makes that the right trade rather
+than a defect is what the incremental engine is for: a patch reroutes a small
+fraction of the drawing, and applying a delta of one against ten thousand edges
+is under a fiftieth of a millisecond. Whether the floor is worth removing is
+M4.10's to measure against a real GPU.
+
+**A removal and an addition under one id replaces the old edge.** That is how
+`EdgeDelta` reports changed endpoints: the old edge left and a new one arrived.
+The replacement is seeded immediately on its new directed route, at rest,
+rather than retargeting the old edge's springs. A genuinely rerouted edge
+present in both layouts still animates. Everything else is the node half's
+behaviour exactly: the same `MotionDesyncError` on a delta that does not
+describe the scene, the same all-or-nothing apply, the same `departing` state
+until a removed edge's springs finish, the same `resync` back.
 
 ## Picking, decided and half built
 
@@ -1634,17 +1733,20 @@ confirmation.
 
 ## What is not here yet
 
-Most of it. M4.4 is a graph on screen, drawn correctly, one draw call per shape
-family, and nothing that moves.
+The motion arithmetic and both delta consumers are headless. What is still
+missing is the package-owned loop that drives them and the device work below.
 
 - A real animation loop. M4.6 shipped the springs and deliberately did not
   start one, because the clock belongs to whoever owns the frame; the demo
   already coalesces its own. M4.7a still does not start one, and it does add
-  the `settled` a loop needs to stop. M4.7b is where the renderer drives it.
-- The edge half of the delta consumer, the bounds change, and the loop over
-  both (M4.7b). The node half landed at M4.7a and is
-  [two sections up](#deltas-drive-the-springs-and-the-state-is-the-renderers).
-  M4.7 is the M4 task that genuinely waits on M3, and both halves do.
+  the `settled` a loop needs to stop, and M4.7b adds the edge half that needs
+  driving too. M4.7c is where the renderer drives them.
+- The bounds change and the loop over both halves of the delta consumer
+  (M4.7c). The node half landed at M4.7a and is under
+  [Deltas drive the springs](#deltas-drive-the-springs-and-the-state-is-the-renderers);
+  the edge half landed at M4.7b and is under
+  [An edge needs a correspondence](#an-edge-needs-a-correspondence-before-it-needs-a-spring).
+  M4.7 is the M4 task that genuinely waits on M3, and every part of it does.
 - The pass half of GPU picking: a material writing the bytes above, an
   offscreen target, the readback and a `pick()` on `Renderer` (M4.8b). What
   a pixel says and which node an id still means are decided and tested; see

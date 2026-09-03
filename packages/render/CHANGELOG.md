@@ -14,16 +14,55 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- `createEdgeMotion` and `alignRoutes`, the edge half of the delta consumer: one
+  spring per point of a route, retargeted by a `LayoutDelta`'s edge lists,
+  stepped by the same clock and settling to the same feel as the node half. Nine
+  new names on the surface: the two functions, and the types `EdgeMotion`,
+  `EdgeMotionDelta`, `EdgeMotionFrame`, `EdgeMotionOptions`, `EdgeMotionTarget`,
+  `MotionEdge` and `AlignedRoutes`. (M4.7b)
+
+  **SPRING EVALUATION NOW STAYS FINITE WHEN THE FINAL STATE IS REPRESENTABLE.**
+  Log-formed polynomial coefficients preserve residuals after the bare decay
+  underflows, and scaled linear combinations let overflowing products cancel
+  before the finite result is restored. A final position or velocity outside
+  the finite range is still rejected. Ordinary spring trajectories are
+  unchanged. `createNodeMotion` also rejects a half-life whose derived angular
+  frequency is not finite, matching `createEdgeMotion`. `setEdges` is untouched,
+  and there is still no render loop in this package.
+
+  **AN EDGE NEEDED A CORRESPONDENCE BEFORE IT NEEDED A SPRING.** A route that
+  gains a rank to cross gains a bend, so two routes for one edge can have
+  different vertex counts and there is nothing to retarget. `alignRoutes` takes
+  the UNION of the two routes' own arc-length parameters, which keeps every
+  vertex of each route exactly and puts every added point on a segment the route
+  already had. `@dagr/layout`'s `maxRouteDistance` measures a route by Hausdorff
+  distance and says a point added on the line a route already ran along measures
+  zero, so this correspondence is free in the metric that judges it.
+
+  **A MOVING EDGE DRAWS THE UNION-SIZED POINTS, THEN COMPACTS ON SETTLEMENT.**
+  An edge that kept the union after settling would gain a point per reroute and
+  end a session drawing a three-point line out of hundreds. Compacting is exact,
+  because every point the union added was on a segment of the target route.
+
+  **`MotionEdge.points` DOES NOT KEEP A STABLE COUNT ACROSS FRAMES.** A caller
+  that binds per segment should key on the edge and not on the vertex.
+  `setEdges` rebuilds a group's geometry whole, so nothing in this package does.
+
+  **A REMOVAL AND AN ADDITION UNDER ONE ID REPLACES THE OLD EDGE.** That is how
+  `EdgeDelta` reports changed endpoints: the old edge left and a new one
+  arrived. The replacement is seeded immediately at rest on its new directed
+  route. A genuinely rerouted shared edge still animates.
+
 - `createNodeMotion`, the node half of the delta consumer: one spring per node,
   retargeted by a `LayoutDelta`'s node lists, stepped by a clock the caller
-  owns. Eight new names on the surface: the factory, `MotionDesyncError` with
+  owns. Ten new names on the surface: the factory, `MotionDesyncError` with
   code `MOTION_DESYNC`, the two defaults `DEFAULT_MOTION_HALF_LIFE` and
   `DEFAULT_MOTION_REST`, and the types `NodeMotion`, `NodeMotionDelta`,
   `NodeMotionOptions`, `MotionTarget`, `MotionNode` and `MotionFrame`. (M4.7a)
 
-  **NOTHING EXISTING BEHAVES DIFFERENTLY.** M4.6's `stepSpring2D` is unchanged
-  and this calls it; `setNodes` is unchanged and this produces what a caller
-  builds its argument from. There is still no render loop in this package.
+  **THE NODE MOTION API DOES NOT CHANGE HOW NODES ARE DRAWN.** It calls M4.6's
+  `stepSpring2D`; `setNodes` is unchanged and this produces what a caller builds
+  its argument from. There is still no render loop in this package.
 
   **IT TAKES CENTRES, NOT A `LayoutDelta`.** `MotionTarget` is an id and a
   world-space centre, y up, which is the conversion `setNodes` already asks a
@@ -51,9 +90,10 @@ not" is the category this file has a heading for.
   was going, because a re-add of something still on screen is a departure
   cancelled and not a node arriving.
 
-  **EDGES, THE BOUNDS CHANGE AND THE LOOP ARE M4.7b.** A node moves as a point;
-  an edge is a polyline whose vertex count changes between two routes, so there
-  is nothing to retarget until something decides what corresponds to what.
+  **EDGES ARE M4.7b, AND THE BOUNDS CHANGE AND THE LOOP ARE M4.7c.** A node
+  moves as a point; an edge is a polyline whose vertex count changes between two
+  routes, so there is nothing to retarget until something decides what
+  corresponds to what.
 
 - `backend` on `RendererOptions` and `backend` on `Renderer`: which of three's
   two backends to draw through, and which one you got. `'auto'` (the default)
@@ -171,14 +211,12 @@ not" is the category this file has a heading for.
 
   **THE CHANNEL BUDGET DID NOT MOVE.** M4.3 reserved the instanced node
   pipeline's one free vertex buffer slot for M4.6's spring velocity or M4.8's
-  picking id. The picking id does not want it: the pick bytes reach the GPU as
-  an attribute the PICK material reads and the node material does not, and
+  picking id. Neither uses it. Motion state stays on the CPU, keyed by the
+  caller's node and edge ids. The pick bytes reach the GPU as an attribute the
+  PICK material reads and the node material does not, and
   `instance-attributes.ts` counts what a shader reads rather than what a
-  geometry carries, so this is D3's situation rather than a seventh channel, a
-  different pipeline with its own eight. Half the contest for that slot is off
-  and nothing here says anything about M4.6's half. M4.8b is what actually adds
-  the attribute, and it should confirm the count there rather than trust this
-  paragraph.
+  geometry carries. This is D3's situation rather than a seventh channel, a
+  different pipeline with its own eight.
 
 - `requireIntegerInRange(value, min, max, field)` in the internal `validate.ts`,
   beside `requireIntegerAtLeast`. Every bound a pick id has is two-sided for a
@@ -189,9 +227,9 @@ not" is the category this file has a heading for.
 
 - Critically damped springs: `stepSpring`, `stepSpring2D`, `omegaForHalfLife`,
   the constants `HALF_LIFE_OMEGA` and `SETTLE_OMEGA_1_PERCENT`, and the types
-  `SpringState` and `Spring2DState`. Nothing in the renderer calls them; they
-  are the motion arithmetic M4.7 will drive from layout deltas, exported
-  because the caller owns the clock. (M4.6)
+  `SpringState` and `Spring2DState`. Node and edge motion call `stepSpring2D`
+  from clocks their callers own; the scalar form remains the arithmetic each
+  independent axis uses. (M4.6)
 
   **THE STEP IS EXACT, AND THERE IS NO FIXED-TIMESTEP ACCUMULATOR.** The
   ROADMAP's M4.6 entry asked for one, and the reason it usually exists is the
@@ -205,11 +243,12 @@ not" is the category this file has a heading for.
 
   **A LONG FRAME IS SAFE WITHOUT A CLAMP.** A backgrounded tab's delta lands
   the spring on its target with zero velocity, which is what a returning tab
-  should show. Past a `w * dt` of about 745 the decay underflows in a double
-  and the target is returned directly, rather than multiplying a possibly
-  infinite displacement by zero. A zero delta is an identity by construction
-  too: `target + (position - target)` is not `position` in a double, so a
-  paused clock would otherwise walk a resting spring off its own value.
+  should show. A bare decay underflows around a `w * dt` of 745, but its
+  polynomial coefficients can remain representable beyond that point and are
+  evaluated in log space. An infinite `w * dt` takes the target limit directly.
+  A zero delta is an identity by construction too: `target + (position -
+  target)` is not `position` in a double, so a paused clock would otherwise walk
+  a resting spring off its own value.
 
   **NO OVERSHOOT MEANS NO OSCILLATION AND NOT NO OVERSHOOT.** A spring
   released from rest never passes its target; one retargeted while moving can
@@ -244,10 +283,11 @@ not" is the category this file has a heading for.
 
   **THE CHANNEL BUDGET, which M4.3 asked to be told about.** The one free vertex
   buffer slot recorded there is the INSTANCED NODE pipeline's (seven of eight,
-  reserved for M4.6's spring velocity or M4.8's picking id) and this does not
-  touch it: a ribbon is a different mesh with a different material and its own
-  eight, going from five to six. Nothing in M4 is closer to the limit than it
-  was.
+  once reserved for M4.6's spring velocity or M4.8's picking id). Motion stays
+  on the CPU, and picking uses a separate material's channel budget, so neither
+  consumes that slot. This does not touch it either: a ribbon is a different
+  mesh with a different material and its own eight, going from five to six.
+  Nothing in M4 is closer to the limit than it was.
 
   Only changed values are uploaded, as one merged update range immediately
   before the next draw, because `addUpdateRange` pushes a record per call and
@@ -317,11 +357,11 @@ not" is the category this file has a heading for.
   needs rather than twice it, and an empty list is a scene with no nodes rather
   than a `RangeError`.
 
-  **A node keeps its instance handle across calls**, which is the property M4.6's
-  springs and M4.8's picking ids depend on rather than a convenience: the diff is
-  by `id`, so a node present in two consecutive calls is updated in place. The
-  one exception is a node that changes SHAPE, because the two shape families are
-  two meshes and an instance cannot move between them.
+  **A node keeps its instance handle across calls.** The diff is by `id`, so a
+  node present in two consecutive calls is updated in place. Motion does not
+  depend on that handle: its state is keyed by the caller's node id. The one
+  exception is a node that changes SHAPE, because the two shape families are two
+  meshes and an instance cannot move between them.
 
   **It takes NODES and not a `LayoutResult`.** Naming one would make
   `@dagr/layout` a dependency of this package, and the y-down to y-up conversion
@@ -364,12 +404,12 @@ not" is the category this file has a heading for.
   pays for grows at the same rate as the calls it saves. The revisit gate is
   M4.10, and reversing it rewires one assembly function and touches no formula.
 
-  **Removal is swap-with-last, so per-instance state is keyed by HANDLE and never
-  by SLOT.** A slot index is not durable across any removal and the failure is
-  silent, because the slot stays a valid index and merely belongs to a different
-  instance. Handles are never reused, so a handle held past its instance's
-  removal raises rather than addressing whatever took its place. M4.6's springs
-  and M4.8's picking IDs inherit this.
+  **Removal is swap-with-last, so instance-buffer state is keyed by HANDLE and
+  never by SLOT.** A slot index is not durable across any removal and the
+  failure is silent, because the slot stays a valid index and merely belongs to
+  a different instance. Handles are never reused, so a handle held past its
+  instance's removal raises rather than addressing whatever took its place.
+  Motion state is separate and keyed by caller ids.
 
   A colour reaching a shader as a UNIFORM is converted from sRGB by three's
   `Color`; as a vertex ATTRIBUTE it is converted by nothing, so the conversion
@@ -461,15 +501,16 @@ not" is the category this file has a heading for.
   that M4.4 replaces with a real layout. So M4.2 changed what is DRAWN and not
   what is CALLABLE. (M4.2)
 
-  **Two units, and the asymmetry is the decision.** An outline is measured in CSS
-  PIXELS and is inset; a glow is measured in WORLD units and sits outside. An
-  outline is a property of the screen, and a two pixel border staying two pixels
-  at every zoom is the thing a geometry pipeline cannot do without rebuilding
-  geometry: the same derivative that gives the antialiasing width converts pixels
-  into world units at the fragment being shaded. A glow is a property of the
-  shape, and its quad has to be padded to contain it at build time, so a
-  pixel-space glow would need the quad resized whenever the camera moved, which
-  is M4.4's problem and not a shader's.
+  **Two units, and the asymmetry is the decision.** An outline is measured in
+  DEVICE PIXELS and is inset; a glow is measured in WORLD units and sits
+  outside. An outline is a property of the rasterized screen, and a two device
+  pixel border staying two framebuffer samples wide at every zoom is the thing
+  a geometry pipeline cannot do without rebuilding geometry: the same
+  derivative that gives the antialiasing width converts device pixels into
+  world units at the fragment being shaded. A glow is a property of the shape,
+  and its quad has to be padded to contain it at build time, so a pixel-space
+  glow would need the quad resized whenever the camera moved, which is M4.4's
+  problem and not a shader's.
 
   **Where the outline band lands, which is this file's category exactly: a rule a
   caller can see that no type describes.** The band's outer ramp is centred on the

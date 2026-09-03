@@ -40,8 +40,10 @@ conversion belongs to whoever owns the layout**, not to the thing drawing it.
 `@dagr/react` is where the two are joined; if you are wiring them yourself,
 that conversion is your one line.
 
-A node keeps its instance handle across `setNodes` calls, so per-instance state
-survives an update: the springs below, and the picking ids.
+A node keeps its instance handle across `setNodes` calls, which keeps its
+instance-buffer identity stable while dense slots move. Springs and picking
+ids use the caller's node id instead, so they also survive a shape change that
+has to replace the handle.
 
 ## Springs, and the loop you still write
 
@@ -53,6 +55,10 @@ its way to is a fact about the node rather than about the slot it draws from:
 import { createNodeMotion } from '@dagr/render';
 
 const motion = createNodeMotion();
+motion.resync([
+  { id: 'plan', center: { x: 0, y: 0 } },
+  { id: 'draft', center: { x: 0, y: 80 } },
+]);
 motion.apply({
   added: [{ id: 'ship', center: { x: 0, y: 120 } }],
   moved: [{ id: 'plan', center: { x: 0, y: 40 } }],
@@ -72,8 +78,17 @@ for the same reason `setNodes` takes no `LayoutResult`. It follows the same
 three rules the layout delta does, so absent means unchanged and a node you do
 not name does not move.
 
-It owns no clock. There is no `requestAnimationFrame` in this package yet, and
-edge motion is not here either: both are M4.7b on the
+`createEdgeMotion` is the same thing for routes, and it takes the delta's edge
+lists. An edge is a polyline whose vertex count changes between two routes, so
+it resamples both onto the union of their own arc-length parameters first:
+every vertex of each route survives exactly, and the settled drawing is the
+layout's answer to the bit. `alignRoutes` is that correspondence on its own if
+you would rather animate edges your own way. A shared edge whose route changes
+animates, while a removed and added edge under one id is seeded at rest on the
+new directed route because it is a replacement, not a reroute.
+
+Neither owns a clock. There is no `requestAnimationFrame` in this package yet,
+which is M4.7c on the
 [roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md). A caller
 today writes the loop.
 

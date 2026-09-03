@@ -25,8 +25,9 @@ import type { GpuResource, Size, Vec2 } from './types.js';
  * had already gone one task earlier: the drawing's own velocity is not
  * per-instance state, because it is about a node rather than about the slot a
  * node is drawn from. What the mapping below still buys is everything that does
- * live on an instance, which is M4.7b's edge state and M4.8b's pick pass, and
- * it costs a `Map` and a diff either way.
+ * live on an instance, which after M4.7b is M4.8b's pick pass alone: the edge
+ * motion keys by the caller's own edge id too, and edges have no per-instance
+ * state here to key in the first place. It costs a `Map` and a diff either way.
  *
  * **No three.js type appears in anything this file exports**, which is the rule
  * `types.ts` sets. {@link SceneNode} is plain numbers and two string unions, so

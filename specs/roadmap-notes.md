@@ -4423,8 +4423,10 @@ of M3 would leave the second runner idle for a milestone.
   cannot; and M4.7a's springs are keyed by that same id, because where a node
   is on its way somewhere is a fact about the node and not about the slot it is
   drawn from. So the invariant is correct and is still unpaid for by anything
-  shipped: its consumers are now M4.7b's per-edge state and M4.8b's pick pass. Testable in the pure
-  module: remove an instance, assert every surviving handle still resolves, and
+  shipped, and M4.7b HAS NOW MISSED IT TOO: an edge's springs are keyed by the
+  caller's own edge id and `scene-edges.ts` keeps no per-instance edge state at
+  all, so the one consumer still named for it is M4.8b's pick pass. Testable in
+  the pure module: remove an instance, assert every surviving handle resolves, and
   assert no test helper can observe a slot index across the removal.
   Decide here instead, carried from M4.2: whether the package uses one material
   with a per-instance shape id or one material per shape family. This task owns
@@ -4947,13 +4949,14 @@ of M3 would leave the second runner idle for a milestone.
   Exactly stepped, a backgrounded tab's delta lands the spring on its target
   with zero velocity, which is the correct picture for a tab coming back: the
   settled drawing rather than a minute of catch-up. The one real hazard is
-  arithmetic rather than physical, and it is guarded: past a `w * dt` of about
-  745 the decay underflows to zero in a double while `A + Bh` can be an
-  infinity, and zero times infinity is `NaN`, so the target is returned
-  directly. A zero delta is guarded for the same class of reason and a different
-  cause: `target + (position - target)` is not `position` in a double, so a
-  paused clock or two callbacks in one millisecond would walk a resting spring
-  off its own value one rounding at a time.
+  arithmetic rather than physical, and it is guarded: a bare decay underflows
+  around a `w * dt` of 745, but polynomial-scaled residuals can remain
+  representable beyond it, so the step preserves them rather than multiplying
+  zero by an infinite coefficient. Only an infinite `w * dt` takes the settled
+  limit directly. A zero delta is guarded for the same class of reason and a
+  different cause: `target + (position - target)` is not `position` in a
+  double, so a paused clock or two callbacks in one millisecond would walk a
+  resting spring off its own value one rounding at a time.
   **THE SUITE IS CHECKED AGAINST THE EQUATION AND NOT ONLY AGAINST ITSELF.** A
   closed form tested by its own properties is a suite that agrees with its own
   algebra: a transcription error in the exponential would leave every property
@@ -4989,9 +4992,10 @@ of M3 would leave the second runner idle for a milestone.
   the no-dependency instruction was protecting.
   **WHAT IS DELIBERATELY NOT HERE.** No animation loop, because a spring step is
   a pure function of a delta and the clock belongs to whoever owns the frame;
-  `render.md` already said M4.6 was the task that should start one and now says
-  M4.7b is. No settled predicate, because the consumer that needs "this spring
-  has finished" is M4.7a's removal case and it does not exist yet, and a
+  `render.md` already said M4.6 was the task that should start one; after
+  M4.7b's split it says M4.7c is. No settled predicate, because the consumer
+  that needs "this spring has finished" is M4.7a's removal case and it does not
+  exist yet, and a
   tolerance pair invented before its caller is a guess.
   M4.7a SETTLED THAT LAST ONE AND THE WORD "PAIR" WAS THE WRONG HALF OF IT. The
   caller did arrive and it did need a predicate, and it needed ONE number rather
@@ -5087,15 +5091,16 @@ of M3 would leave the second runner idle for a milestone.
   the node rather than about the slot it is drawn from. That is one layer
   further out, exactly where M4.8a's picking ids went for a different reason,
   and all three places are corrected in place. The handle invariant is still
-  correct and is STILL UNPAID FOR by anything shipped; its consumers are now
-  M4.7b's per-edge state and M4.8b's pick pass.
+  correct and is STILL UNPAID FOR by anything shipped. M4.7b MADE THE SAME MISS
+  AGAIN one task later, keying an edge's springs by the caller's own edge id, so
+  the one consumer still named for the invariant is M4.8b's pick pass.
   **A RESIZE IS A MOVE THAT NEEDS NO MOTION, AND THAT FALLS OUT RATHER THAN
   BEING HANDLED.** `MovedNode`'s `from` and `to` are whole boxes, so a node that
   only grew is in `moved`. A consumer keyed on the centre retargets a spring to
   where it already is, the arrival test passes on the same frame, and `settled`
   stays true: the correct amount of animation for a resize is none, and no arm
   in this module says so. Sizes themselves are not animated here and are the
-  caller's, which is M4.7b's to revisit.
+  caller's, which is M4.7c's to revisit.
   **A DEPARTURE IS A STATE AND A RESYNC IS NOT.** A removed node keeps its
   spring and its target, stays in the frame with `departing: true` until it
   arrives, and is gone on the frame after. One removed while already at rest is
@@ -5122,29 +5127,149 @@ of M3 would leave the second runner idle for a milestone.
   `@dagr/render` and `@dagr/vdsl` before it: `motion.ts` appears in no file
   under any `bench/` directory, and one grep says so. The numbers above are a
   throwaway under vitest, deleted before staging.
-- [ ] **M4.7b** (`@dagr/render`, `apps/demo`) Delta consumer, the rest: edge
-  motion, the bounds change, and the loop that drives both. This is the half
-  M4.7a's seam left, and it inherits the entry's remaining questions.
-  **THE EDGE PROBLEM IS RESAMPLING AND NOT SPRINGING.** `ReroutedEdge` carries
-  `from` and `to` polylines whose lengths differ whenever a long edge gains or
-  loses a rank to cross, so before any spring exists there has to be a
-  correspondence between the two point lists. Decide it here: resample both to a
-  common count, spring the control points of a curve rather than the polyline,
-  or animate the endpoints and re-route instantly. Note M3.4's entry already
-  says a per-edge route metric is what M4.5's ribbons and this task are actually
-  judged by, so whatever is chosen has a measurement waiting for it.
-  **THE LOOP IS THIS TASK'S, AND M4.7a HANDED IT THE PREDICATE IT NEEDS.**
-  `render.md` has said since M4.6 that this package needs an opinion about
-  starting and stopping a `requestAnimationFrame`; `MotionFrame.settled` is the
-  stopping half of that and nothing yet owns the starting half. The demo already
-  coalesces its own frame, so the opinion has to be compatible with a caller
-  who has one.
+- [x] **M4.7b** (`@dagr/render`) Delta consumer, the edge half: one spring per
+  point of a route, retargeted by M3.1's edge lists, interruptible when a new
+  delta arrives mid-flight. The correspondence between two routes of different
+  lengths is decided here, and it is decided before any spring exists.
+  SPLIT OUT OF M4.7b BY THE RUN THAT SHIPPED IT, and it is the SAME SEAM M4.6
+  and M4.7a already used twice: an integrator and the loop that drives it.
+  NO ORDINAL, DELIBERATELY, AND THE REASON IS A DEFECT THIS RUN FOUND. M4.7a's
+  entry calls itself "the sixth split in the project" and the brain records
+  M3.10a as the sixth as well: both were written on branches that merged in the
+  same sitting on 2026-08-26, so each counted the other as not yet existing. And
+  both counts were already short, because they list only M3.7, M3.8, M3.9, M4.8
+  and M4.9 while `main` also carries M2.2, M2.4, M2.6 and, since #70, M5.4.
+  GENERALISE IT: A RUNNING COUNT IS A CLAIM ABOUT EVERY OTHER BRANCH IN FLIGHT,
+  which is the one thing a branch cannot see. Count what the tree holds when the
+  question is asked, or do not count.
+  What is left is M4.7c below, the bounds change and the loop. The reason for
+  the seam is that this half is a CORRESPONDENCE, decidable and testable in
+  Node against constructed point lists, while the loop is an opinion about a
+  clock that a browser host and `apps/demo` are the judges of. The reason for
+  taking this half first is #70's own argument for M4.7b: a consumer wiring
+  deltas to the renderer today can write a `requestAnimationFrame` in five lines
+  (`render.md` prints those five lines) and cannot write the correspondence at
+  all.
+  **THE RESAMPLING IS FREE IN THE METRIC THAT JUDGES IT, AND THAT IS THE WHOLE
+  ARGUMENT.** The entry named three ways out and asked for one. The answer is to
+  resample, and the reason is not a preference between animations: M3.4's
+  per-edge route metric, which this entry already said the decision would be
+  judged by, is `maxRouteDistance`, a Hausdorff distance between two polylines
+  taken as CURVES, and its own docstring records that "a point added on the line
+  the route already ran along draws the same picture and measures zero". So a
+  correspondence built by adding points ON both routes is INVISIBLE to the
+  measurement. It is not a compromise between two drawings, it is the same two
+  drawings with more names for places on them. GENERALISE IT: when a task has to
+  choose a representation, look first for a metric the project already publishes
+  that is blind to the choice, because a representation that measurement cannot
+  see is a representation nothing downstream has to agree with.
+  **A COMMON COUNT IS THE WRONG READING OF "A COMMON COUNT".** Resampling both
+  routes to `max(from.length, to.length)` evenly spaced points is the obvious
+  implementation and it CUTS EVERY CORNER: a bend that does not fall on one of
+  the samples is rounded off, and the bend appearing is the exact change a
+  reader is trying to follow. `alignRoutes` takes the UNION of the two routes'
+  own arc-length parameters instead, so every vertex of each route survives in
+  its own list to the bit and every point either list gains sits on a segment
+  that list already had. The other two options both lose at rest rather than in
+  flight: a curve's control points move the settled drawing off the line the
+  layout computed, and re-routing instantly gives up on the frame that matters.
+  BY ARC LENGTH AND NOT BY INDEX, because the place a reader sees is a distance
+  along the line rather than a count of the bends before it.
+  **THE UNION-SIZED POINTS ARE DRAWN IN FLIGHT AND COMPACTED ON SETTLEMENT,
+  WHICH IS A LEAK CAUGHT BY WRITING THE GUARD FOR IT.** The union is at most
+  `from.length + to.length - 2`, because the two routes share both endpoint
+  parameters. An edge that kept it after settling would carry the shape of
+  every route it had ever taken, and a session of edits would draw a three-point
+  line out of hundreds. Arrival COMPACTS back to the target route's own points,
+  which is exact rather than approximate because every point the union added
+  lay on a segment of that route. The consequence a caller has to know is that
+  `MotionEdge.points` does NOT keep a stable count across frames, so a caller
+  binding per segment must key on the edge; `setEdges` rebuilds a group's
+  geometry whole, so nothing in this package does.
+  **VELOCITY IS RESAMPLED WITH POSITION.** A polyline caught mid-flight has a
+  velocity per point as well as a position, so the point a retarget adds needs
+  both, and interpolating the velocity along the same parameter is exactly as
+  defensible as interpolating the position. Zeroing it would stop a moving edge
+  dead at every new bend, which is M4.7a's `from` failure arriving through the
+  other half of the state. The guard is written so that zeroing fails it:
+  retarget a moving edge to the line it is drawing RIGHT NOW, and a carried
+  velocity overshoots where a dropped one reports itself settled.
+  **A REMOVAL AND AN ADDITION UNDER ONE ID REPLACES THE OLD EDGE.** M4.7a kept
+  M3.1's removals-before-additions rule while noting the case it was written for
+  could not arise for a node. It arises here: that is how `EdgeDelta` reports
+  that an old edge left and a new edge with different endpoints arrived. The
+  replacement is seeded immediately at rest on its new directed route rather
+  than retargeting springs that belonged to the old edge. A genuinely rerouted
+  edge present in both layouts still animates.
+  **THE HANDLE PREDICTION HAS NOW BEEN WRONG TWICE, IN THE SAME DIRECTION.**
+  `instance-buffer.ts` and `scene-nodes.ts` both named this task's per-edge
+  state as a consumer of the handle invariant, after M4.7a had already corrected
+  them once for the node half. `edge-motion.ts` keys by the caller's own EDGE
+  ID, and `scene-edges.ts` has no per-instance edge state to key at all, since a
+  group's geometry is rebuilt whole. Both places are corrected in place again,
+  and the one consumer still named for the invariant is M4.8b's pick pass.
+  **MEASURED ON THIS BOX, IN ONE INVOCATION WITH THE NODE HALF, WHICH IS THE
+  ONLY WAY THE COMPARISON MEANS ANYTHING.** A settled scene of 10,000 edges
+  costs 0.25 to 0.32ms per `advance`, against 0.34ms for 10,000 settled nodes in
+  the same invocation, and it barely moves between two points per edge and five:
+  THE SETTLED FLOOR IS PER DRAWING AND NOT PER POINT, which is M4.7a's finding
+  again. Moving is where the halves part. All 10,000 edges rerouting costs
+  12.8ms at two points each (20,000 springs) and 36.5ms at five (50,000), where
+  all 10,000 nodes moving costs 2.7ms: 0.64 and 0.73 microseconds per edge
+  spring against 0.27 per node spring, so PER SPRING AN EDGE COSTS 2.3 TO 2.7
+  TIMES A NODE, and an edge has as many springs as it has points. So a COLD
+  reroute of a 10,000-edge drawing runs from three quarters of a 60fps frame at
+  two points each to about two and a quarter frames at five: THE ROUTE LENGTH
+  AND NOT THE EDGE COUNT IS WHAT DECIDES WHETHER IT FITS.
+  What makes that acceptable rather than a defect is M3.10a's measurement that
+  the incremental path moves 4.1x to 38.4x less of the drawing per patch than a
+  cold run: this is the cost of the case M3 exists to avoid. Applying a delta of
+  one against 10,000 edges is under 0.02ms. Whether the floor is worth removing
+  is still M4.10's to measure against a GPU. Numbers from a throwaway under
+  vitest, deleted before staging. BETWEEN TWO INVOCATIONS OF THE SAME MEASUREMENT
+  ON THIS BOX THE ALL-MOVING FIGURES SPREAD BY 1.8x, so the ratio inside one
+  invocation is the durable half and the absolutes are this box on this evening.
+  **ONE PASS RATHER THAN TWO, AND THE MEASUREMENT SAYS THAT WAS NOT THE COST.**
+  Arrival is decided while the springs are stepped rather than in a walk after
+  them, which is a real simplification for a list that is per POINT. It bought
+  nothing measurable, and that is the finding: the edge path's cost is the
+  ALLOCATION per point per frame and not the comparison.
+  **ON NO BENCHED PATH**, like `motion.ts`, the springs, `@dagr/react`, the rest
+  of `@dagr/render`, `@dagr/vdsl` and `@dagr/packaging` before it:
+  `edge-motion.ts` appears in no file under any `bench/` directory, and one grep
+  says so.
+- [ ] **M4.7c** (`@dagr/render`, `apps/demo`) Delta consumer, the rest: the
+  bounds change, the loop that drives both halves, and the demo that proves it.
+  This is what M4.7b's seam left, and it inherits the entry's remaining
+  questions.
+  **THE LOOP IS THIS TASK'S, AND BOTH EARLIER HALVES HANDED IT THE PREDICATE IT
+  NEEDS.** `render.md` has said since M4.6 that this package needs an opinion
+  about starting and stopping a `requestAnimationFrame`; `MotionFrame.settled`
+  and `EdgeMotionFrame.settled` are the stopping half of that and nothing yet
+  owns the starting half. A caller driving both halves stops when BOTH say so,
+  which is the first thing the loop has to get right. The demo already coalesces
+  its own frame, so the opinion has to be compatible with a caller who has one.
+  **THE BOUNDS CHANGE IS THE THIRD FIELD OF A DELTA AND NOTHING READS IT YET.**
+  `LayoutDelta.bounds` is a `BoundsChange` or `undefined`, and a camera fitting
+  to the drawing wants it sprung rather than cut to. Note where that belongs
+  before writing it: `camera.ts` owns the fit and `fitZoom` is already exported,
+  so the question is whether the bounds spring is a third motion module or a
+  camera concern, and the answer decides whether the loop drives two things or
+  three.
   **THE SIZES ARE STILL THE CALLER'S, AND M4.7a MEASURED WHY THAT IS NOT FREE.**
   A resize arrives through `moved` and produces no motion, so a label that grew
   snaps to its new width while its node glides. Decide whether the size springs
-  too, which doubles the per-node state, and note the frame floor M4.7a
-  measured before adding to it: a settled scene of 10,000 already costs 0.2 to
-  0.3ms per frame in records this module allocates and nothing else.
+  too, which doubles the per-node state, and note the frame floor before adding
+  to it. Quote it from ONE harness: M4.7b measured 10,000 settled nodes at
+  0.34ms per frame and 10,000 settled edges at 0.25 to 0.32ms in the same
+  invocation, in records those modules allocate and nothing else. M4.7a's
+  0.20 to 0.34ms for the nodes is a different harness on a different day and
+  says the same thing without being comparable to the edge figure.
+  **THE EDGE HALF'S COLD COST IS THE NUMBER THE LOOP HAS TO LIVE WITH.** M4.7b
+  measured all 10,000 edges rerouting at 12.8 to 36.5ms depending on route
+  length, which is more than one frame. A loop that asks for a frame it cannot
+  deliver is the thing to decide about here rather than in the motion modules,
+  and the lever named so far is handing back only what moved.
 - [x] **M4.8a** (`@dagr/render`) The id a pick pixel carries: the encoding, the
   pixel a pointer is asking about, and the registry that says which node an id
   still means. Unit tests for ID encode and decode: round-trip across the full

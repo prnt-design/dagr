@@ -27,7 +27,7 @@ published package, and documents itself in
 | --- | --- | --- |
 | `@dagr/graph` | Typed directed graph model: patches, stable identity, zero deps | Identity, shape, adjacency, attributes, ports, patches, traversal, and serialization implemented |
 | `@dagr/layout` | Headless Sugiyama layout engine; incremental, animation-first | The full pipeline, cycle breaking, ranking, crossing reduction, coordinates and routes implemented, plus the incremental engine: patches in, deltas out, warm-started stages and a committed [stability corpus](https://dagr.prnt.design/docs/incremental-layout); fast paths that make a small edit cheap in time are next |
-| `@dagr/render` | WebGPU renderer: SDF shapes, instancing, spring animation | Camera, SDF shapes, an HTML overlay, instancing, edge ribbons, a real graph on screen, critically damped springs and the node half of the delta consumer implemented; edge motion, the animation loop and GPU picking are next |
+| `@dagr/render` | WebGPU renderer: SDF shapes, instancing, spring animation | Camera, SDF shapes, an HTML overlay, instancing, edge ribbons, a real graph on screen, critically damped springs, and node and edge motion implemented; the animation loop and GPU picking are next |
 | `@dagr/react` | `<DagrCanvas>` component and hooks | The canvas, the `useDagr` hook, `<Html>` over the overlay, and the layout-to-scene conversion implemented; interaction and animation are next |
 | `@dagr/vdsl` | Visual DSL toolkit: node spec adapter, typed ports, drag-to-connect | The node spec adapter, its registry, port type tokens and connection validation implemented; drag-to-connect is next |
 

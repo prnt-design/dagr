@@ -50,6 +50,16 @@ describe('@dagr/render', () => {
     // which is the part a caller cannot supply. The two defaults are exported
     // beside `createNodeMotion` so a caller tuning one can say "half the
     // default" and a test can assert against the number the module used.
+    //
+    // M4.7b added the edge half and one function beside it. `createEdgeMotion`
+    // is the same shape as the node half and reads the same two defaults, which
+    // is why neither is duplicated here. `alignRoutes` is on the surface for the
+    // reason `spring.ts` is: it is the DECISION the task makes rather than a
+    // helper, it is pure, and a caller animating edges with their own curve or
+    // their own clock needs the correspondence before anything else. No second
+    // error joined, because a desynchronised edge delta is the same failure the
+    // node half already names and `MotionDesyncError` now takes the word for
+    // which roster it is talking about.
     expect(Object.keys(api).sort()).toEqual([
       'BackendUnavailableError',
       'CENTRE_ANCHOR',
@@ -69,6 +79,8 @@ describe('@dagr/render', () => {
       'SceneDisposedError',
       'UnknownInstanceHandleError',
       'advanceDashFlow',
+      'alignRoutes',
+      'createEdgeMotion',
       'createHtmlOverlay',
       'createNodeMotion',
       'createRenderer',

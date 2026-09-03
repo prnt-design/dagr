@@ -274,9 +274,16 @@ export class BackendUnavailableError extends DagrRenderError {
 }
 
 /**
- * Thrown when a delta describes a scene the node motion does not hold: a move
- * naming a node it has never seen, an add naming one it already has, or a
- * removal of something that is not there.
+ * Thrown when a delta describes a scene the motion does not hold: a move naming
+ * a node it has never seen, an add naming one it already has, or a removal of
+ * something that is not there.
+ *
+ * BOTH HALVES OF THE DELTA CONSUMER THROW IT. M4.7a's node motion was the first
+ * and M4.7b's edge motion is the second, and the failure is the same one in
+ * both: the deltas and the drawing disagree. What differs is one word in the
+ * message, which the `subject` argument carries, because a reader chasing "the
+ * scene has e7 as absent" needs to know which of the two rosters is being
+ * talked about before they know which resync to call.
  *
  * **This is the failure the M4.7 entry asks to be decided, and the decision is
  * to be loud.** Applying deltas is the cheap path and the reason the delta type
@@ -293,8 +300,8 @@ export class BackendUnavailableError extends DagrRenderError {
  * of range. Every id involved is a string the caller wrote, and the failure is
  * about the state of a conversation between two components rather than about a
  * value. It is also the case a caller writes a `catch` for, because there IS
- * something to do about it: `NodeMotion.resync` takes the roster whole and is
- * the way back.
+ * something to do about it: `NodeMotion.resync` and `EdgeMotion.resync` each
+ * take their roster whole and are the way back.
  *
  * The message names the id and the list position, because a delta is a batch
  * and "some node was missing" sends a reader through all three lists.
@@ -303,14 +310,16 @@ export class MotionDesyncError extends DagrRenderError {
   readonly code = 'MOTION_DESYNC';
 
   /**
-   * @param id The node the delta named.
+   * @param id The node or edge the delta named.
    * @param field Where in the delta it was, as `moved[3]`, which names the list
    *   as well as the position in it.
    * @param presence What the motion holds for that id instead.
+   * @param subject Which roster this is about. Defaults to `'node'`, so the
+   *   node half reads exactly as it did before the edge half existed.
    */
-  constructor(id: string, field: string, presence: string) {
+  constructor(id: string, field: string, presence: string, subject = 'node') {
     super(
-      `delta ${field} names node ${JSON.stringify(id)}, which this scene has as ${presence}: ` +
+      `delta ${field} names ${subject} ${JSON.stringify(id)}, which this scene has as ${presence}: ` +
         'the deltas and the drawing disagree, so resync() with the whole roster',
     );
     this.name = 'MotionDesyncError';

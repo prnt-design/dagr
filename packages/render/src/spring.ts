@@ -28,9 +28,13 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * v(h) = (B - w (A + B h)) e^(-w h)
  * ```
  *
- * so {@link stepSpring} evaluates it rather than integrating towards it. The
- * consequences run through everything below, and the largest is what is NOT
- * here.
+ * so {@link stepSpring} evaluates it rather than integrating towards it. Its
+ * evaluation forms each polynomial-times-exponential coefficient in log space,
+ * then evaluates the resulting short linear combinations at a shared scale.
+ * This is the same closed form, but it preserves a representable coefficient
+ * after the bare exponential underflows and lets overflowing products cancel
+ * when their final sum is finite. The consequences run through everything
+ * below, and the largest is what is NOT here.
  *
  * **There is no fixed-timestep accumulator, and the reason one is usually
  * needed is the reason there is none.** An accumulator exists to keep an
@@ -63,9 +67,9 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * minutes. Exactly stepped, that lands the spring on its target with zero
  * velocity, which is what a returning tab should show: the settled drawing,
  * not a minute of catch-up animation. The same delta through an Euler step is
- * an overflow. Past `w * dt` of about 745 the decay underflows to zero in a
- * double and the exact answer is the target itself, which {@link stepSpring}
- * returns rather than computing an infinity times a zero.
+ * an overflow. A bare `e^(-w t)` underflows around 745, but coefficients such
+ * as `(1 + w t)e^(-w t)` can remain representable beyond it. Only an infinite
+ * `w * dt` takes the finite-state limit directly.
  *
  * **This module depends on nothing in this package that a device could break.**
  * The M4.6 entry asked for no dependency on anything else in `@dagr/render`, so
@@ -137,6 +141,110 @@ export function omegaForHalfLife(halfLifeSeconds: number): number {
 }
 
 /**
+ * Evaluates a short linear combination without requiring each product to fit.
+ *
+ * The ordinary path keeps the usual floating-point evaluation. The scaled path
+ * is only for an overflowing product or partial sum: values and coefficients
+ * are divided by their largest magnitudes before multiplication, then the two
+ * scales are restored in the order that keeps the representable result finite.
+ */
+function linearCombination(terms: readonly (readonly [number, number])[]): number {
+  let direct = 0;
+  let maxValue = 0;
+  let maxCoefficient = 0;
+  let needsScaling = false;
+  for (const [value, coefficient] of terms) {
+    const product = value * coefficient;
+    if (!Number.isFinite(product)) {
+      needsScaling = true;
+    }
+    direct += product;
+    if (!Number.isFinite(direct)) {
+      needsScaling = true;
+    }
+    maxValue = Math.max(maxValue, Math.abs(value));
+    maxCoefficient = Math.max(maxCoefficient, Math.abs(coefficient));
+  }
+  if (!needsScaling || maxValue === 0 || maxCoefficient === 0) {
+    return direct;
+  }
+
+  let scaled = 0;
+  for (const [value, coefficient] of terms) {
+    scaled += (value / maxValue) * (coefficient / maxCoefficient);
+  }
+
+  // At least one of these orders avoids overflow when the final product is
+  // representable. The logarithmic fallback also covers a tiny scale product
+  // that underflows before a large third factor restores it.
+  const coefficientFirst = scaled * maxCoefficient;
+  if (coefficientFirst !== 0 && Number.isFinite(coefficientFirst)) {
+    const result = coefficientFirst * maxValue;
+    if (Number.isFinite(result)) {
+      return result;
+    }
+  }
+  const valueFirst = scaled * maxValue;
+  if (valueFirst !== 0 && Number.isFinite(valueFirst)) {
+    const result = valueFirst * maxCoefficient;
+    if (Number.isFinite(result)) {
+      return result;
+    }
+  }
+  return Math.sign(scaled) * Math.exp(
+    Math.log(Math.abs(scaled)) + Math.log(maxValue) + Math.log(maxCoefficient),
+  );
+}
+
+/**
+ * Computes `log(1 + u) - u` without subtracting equal rounded values near zero.
+ *
+ * The alternating series starts at `-u^2 / 2`. Below one percent it converges
+ * quickly enough that stopping when the next term no longer changes the sum
+ * preserves the rounded remainder without paying for a fixed term count.
+ */
+function log1pMinusU(u: number): number {
+  if (u >= 0.01) {
+    return Math.log1p(u) - u;
+  }
+
+  let power = u * u;
+  let sum = -power / 2;
+  for (let n = 3; ; n += 1) {
+    power *= u;
+    const term = (n % 2 === 0 ? -power : power) / n;
+    const next = sum + term;
+    if (next === sum) {
+      return sum;
+    }
+    sum = next;
+  }
+}
+
+/**
+ * Interpolates without losing a residual when one weight rounds to one.
+ *
+ * Equal coordinates are an identity before either coefficient applies. Every
+ * other case keeps the two weighted coordinates separate, which preserves a
+ * polynomial-scaled residual after the complementary weight rounds to one and
+ * lets opposite-sign huge coordinates cancel through the scaled path.
+ */
+function weightedInterpolation(
+  position: number,
+  target: number,
+  retention: number,
+  targetRetention: number,
+): number {
+  if (position === target) {
+    return position;
+  }
+  return linearCombination([
+    [position, retention],
+    [target, targetRetention],
+  ]);
+}
+
+/**
  * Advances one axis by `dtSeconds`. No validation: both public entry points
  * check their own arguments under their own field names, and a per-frame loop
  * over a scene's worth of springs should not pay for the same check twice.
@@ -156,19 +264,46 @@ function stepAxis(
     // resting value one rounding at a time.
     return { position, velocity };
   }
-  const decay = Math.exp(-w * dtSeconds);
-  if (decay === 0) {
-    // Underflowed, so the drawing is at its target to every bit a double has.
-    // Computing it anyway would multiply a possibly infinite `A + B h` by zero.
+  const u = w * dtSeconds;
+  if (!Number.isFinite(u)) {
+    // With finite inputs, an infinite `w * dt` can only be the settled limit.
     return { position: target, velocity: 0 };
   }
-  const a = position - target;
-  const b = velocity + w * a;
-  const displacement = a + b * dtSeconds;
-  return {
-    position: target + displacement * decay,
-    velocity: (b - w * displacement) * decay,
-  };
+  // Each polynomial-times-exponential coefficient is formed from its log.
+  // `exp(-u)` may be zero while `u exp(-u)` is still a subnormal number.
+  const logDecay = -u;
+  const logUDecay = Math.log(u) - u;
+  const retentionLog = log1pMinusU(u);
+  const retention = Math.exp(retentionLog);
+  const targetRetention = -Math.expm1(retentionLog);
+  const timeDecay = Math.exp(Math.log(dtSeconds) + logDecay);
+  const velocityRetention =
+    u === 1 ? 0 : Math.sign(1 - u) * Math.exp(Math.log(Math.abs(1 - u)) + logDecay);
+  const springRetention = Math.exp(Math.log(w) + logUDecay);
+  const interpolatedPosition = weightedInterpolation(
+    position,
+    target,
+    retention,
+    targetRetention,
+  );
+  const nextPosition = linearCombination([
+    [interpolatedPosition, 1],
+    [velocity, timeDecay],
+  ]);
+  const difference = target - position;
+  const nextVelocity = Number.isFinite(difference)
+    ? linearCombination([
+        [velocity, velocityRetention],
+        [difference, springRetention],
+      ])
+    : linearCombination([
+        [velocity, velocityRetention],
+        [target, springRetention],
+        [position, -springRetention],
+      ]);
+  requireFinite(nextPosition, 'spring result position');
+  requireFinite(nextVelocity, 'spring result velocity');
+  return { position: nextPosition, velocity: nextVelocity };
 }
 
 /**
