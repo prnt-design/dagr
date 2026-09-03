@@ -162,11 +162,11 @@ export interface NodeMotion {
   /**
    * Retargets the springs a delta names, and starts or cancels departures.
    *
-   * ALL OR NOTHING. Every id in the delta is checked against the scene before
-   * anything is mutated, so a {@link MotionDesyncError} leaves the scene
-   * exactly as it was. A half-applied delta would be the worst available
-   * outcome: the caller's signal to resync arrives having already moved the
-   * thing they would resync from.
+   * ALL OR NOTHING. Every id and derived spring transition is validated before
+   * anything is mutated, so a refused delta leaves the scene exactly as it
+   * was. A half-applied delta would be the worst available outcome: the
+   * caller's signal to resync arrives having already moved the thing they would
+   * resync from.
    *
    * Nothing here reports whether the delta started any motion. `advance(0)` is
    * the answer, and it is exact: a delta that only resized a node retargets a
@@ -227,8 +227,14 @@ interface Entry {
 type Intent =
   | { readonly kind: 'depart' }
   | { readonly kind: 'arrive'; readonly target: Vec2 }
-  | { readonly kind: 'revive'; readonly target: Vec2 }
-  | { readonly kind: 'retarget'; readonly target: Vec2 };
+  | { readonly kind: 'revive'; readonly target: Vec2; readonly field: string }
+  | { readonly kind: 'retarget'; readonly target: Vec2; readonly field: string };
+
+/** A node retarget worked out without changing the entry it came from. */
+interface RetargetTransition {
+  readonly target: Vec2;
+  readonly moving: boolean;
+}
 
 /** Whether an id is in the scene, and if so whether it is on its way out. */
 type Presence = 'absent' | 'live' | 'departing';
@@ -301,31 +307,63 @@ export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
     );
   }
 
-  /** Points an existing entry at a new target and works out whether that moves it. */
-  function retarget(entry: Entry, target: Vec2): void {
-    entry.target = target;
-    entry.moving = !atRest(entry.spring, target);
+  /**
+   * Works out a node retarget and rejects spring coefficients that cannot be
+   * represented before any entry changes.
+   */
+  function prepareRetarget(
+    entry: Entry,
+    target: Vec2,
+    field: string,
+    id: string,
+  ): RetargetTransition {
+    for (const axis of ['x', 'y'] as const) {
+      const location = `${field} node "${id}" ${axis}`;
+      const displacement = entry.spring.position[axis] - target[axis];
+      requireFinite(displacement, `${location} displacement`);
+      const weightedDisplacement = w * displacement;
+      requireFinite(weightedDisplacement, `${location} spring coefficient w * displacement`);
+      requireFinite(
+        entry.spring.velocity[axis] + weightedDisplacement,
+        `${location} spring coefficient with velocity`,
+      );
+    }
+    return { target, moving: !atRest(entry.spring, target) };
+  }
+
+  /** Applies one transition after every transition in the call was validated. */
+  function installRetarget(entry: Entry, transition: RetargetTransition): void {
+    entry.target = transition.target;
+    entry.moving = transition.moving;
   }
 
   function resync(targets: readonly MotionTarget[]): void {
     for (const [index, target] of targets.entries()) {
       requireTarget(target, `targets[${String(index)}]`);
     }
-    const kept = new Map<string, Entry>();
-    for (const target of targets) {
+    const prepared = targets.map((target, index) => {
+      const center = copyOf(target.center);
       const existing = entries.get(target.id);
+      const transition =
+        existing === undefined
+          ? undefined
+          : prepareRetarget(existing, center, `targets[${String(index)}]`, target.id);
+      return { id: target.id, center, existing, transition };
+    });
+    const kept = new Map<string, Entry>();
+    for (const target of prepared) {
+      const { center, existing, transition } = target;
       if (existing === undefined) {
-        const centre = copyOf(target.center);
         kept.set(target.id, {
-          spring: { position: centre, velocity: AT_REST },
-          target: centre,
+          spring: { position: center, velocity: AT_REST },
+          target: center,
           departing: false,
           moving: false,
         });
         continue;
       }
       existing.departing = false;
-      retarget(existing, copyOf(target.center));
+      if (transition !== undefined) installRetarget(existing, transition);
       kept.set(target.id, existing);
     }
     entries.clear();
@@ -361,10 +399,11 @@ export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
       if (where === 'live') {
         throw new MotionDesyncError(target.id, field, where);
       }
-      planned.set(target.id, {
-        kind: where === 'departing' ? 'revive' : 'arrive',
-        target: copyOf(target.center),
-      });
+      if (where === 'departing') {
+        planned.set(target.id, { kind: 'revive', target: copyOf(target.center), field });
+      } else {
+        planned.set(target.id, { kind: 'arrive', target: copyOf(target.center) });
+      }
     }
     for (const [index, target] of delta.moved.entries()) {
       const field = `moved[${String(index)}]`;
@@ -379,7 +418,19 @@ export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
       // to find, and would leave a revived node still marked departing.
       const prior = planned.get(target.id)?.kind;
       const kind = prior === 'arrive' || prior === 'revive' ? prior : 'retarget';
-      planned.set(target.id, { kind, target: copyOf(target.center) });
+      if (kind === 'arrive') {
+        planned.set(target.id, { kind, target: copyOf(target.center) });
+      } else {
+        planned.set(target.id, { kind, target: copyOf(target.center), field });
+      }
+    }
+
+    const transitions = new Map<string, RetargetTransition>();
+    for (const [id, intent] of planned) {
+      if (intent.kind !== 'revive' && intent.kind !== 'retarget') continue;
+      const entry = entries.get(id);
+      if (entry === undefined) continue;
+      transitions.set(id, prepareRetarget(entry, intent.target, intent.field, id));
     }
 
     for (const [id, intent] of planned) {
@@ -403,7 +454,8 @@ export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
       // it was going, so coming back is not a jump forward by whatever was left
       // of the departure.
       entry.departing = false;
-      retarget(entry, intent.target);
+      const transition = transitions.get(id);
+      if (transition !== undefined) installRetarget(entry, transition);
     }
   }
 
