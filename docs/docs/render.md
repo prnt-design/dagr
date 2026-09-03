@@ -132,14 +132,15 @@ is acceptable, and read `renderer.backend` for what happened. See
 
 `setNodes` diffs by `id`. A node present in two consecutive calls is updated in
 place, keeping the instance handle it had; one that left is freed, and one that
-arrived is allocated. That is not an optimisation, it is the property M4.6's
-springs are keyed on: a node that kept its id but got a new handle every
-relayout would lose its velocity and jump.
+arrived is allocated. The stable handle keeps its instance-buffer identity
+attached while removals move dense slots. M4.6's springs are keyed by the
+caller's node id instead, so a handle replacement does not lose velocity.
 
 The one case where the handle cannot survive is a node that changes SHAPE,
 because the two shape families are two meshes and an instance cannot move
-between them. It is a removal and an addition, and per-instance state keyed to
-that node has to be rebuilt.
+between them. It is a removal and an addition. The caller id is also why the
+spring and M4.8's picking id survive that replacement while the handle does
+not.
 
 What `setNodes` deliberately does NOT take is a `LayoutResult`. Naming one would
 make `@dagr/layout` a dependency of this package, and the y-down to y-up
@@ -1628,9 +1629,10 @@ needs a curve this package does not have and would leave the settled drawing off
 the line the layout computed.
 
 **A moving edge draws the union-sized points, then compacts on settlement.**
-The union can be as large as the two counts added together, so an edge that
-kept it would carry the shape of every route it had ever taken: a session of
-edits is a polyline with hundreds of vertices drawing a line with three.
+The union can contain at most `from.length + to.length - 2` points, since both
+routes share the endpoint parameters. An edge that kept it would carry the
+shape of every route it had ever taken: a session of edits is a polyline with
+hundreds of vertices drawing a line with three.
 Compacting is exact rather than a simplification, because every point the union
 added lay on a segment of the route being arrived at. `MotionEdge.points`
 **does not keep a stable count across frames**. A caller binding per segment

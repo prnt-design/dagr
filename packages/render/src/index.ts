@@ -12,7 +12,9 @@
  * anything reaches the canvas: an array of {@link SceneNode}, each carrying its
  * own centre, size, shape and colours, with {@link SceneStyle} for the three
  * uniforms every node in a scene shares. A node keeps its instance handle across
- * calls, so per-instance state survives (M4.6's springs, M4.8's picking ids).
+ * calls so its instance-buffer identity stays stable while dense slots move.
+ * M4.6's springs and M4.8's picking ids are keyed by the caller's node id
+ * instead, so both also survive the shape change that replaces a handle.
  *
  * What `setNodes` deliberately does NOT take is a `LayoutResult`. Naming one
  * would make `@dagr/layout` a dependency of this package, and the y-down to

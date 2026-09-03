@@ -121,6 +121,24 @@ describe('alignRoutes', () => {
     expect(maxDeviation(LOPSIDED, aligned.to)).toBe(0);
   });
 
+  it('keeps distinct vertices whose arc-length parameters round equal', () => {
+    const collapsed: readonly Vec2[] = [
+      { x: 0, y: 0 },
+      { x: 2 ** 54, y: 0 },
+      { x: 2 ** 54, y: 1 },
+    ];
+    const straight: readonly Vec2[] = [
+      { x: 0, y: 4 },
+      { x: 2 ** 54, y: 4 },
+    ];
+
+    const aligned = alignRoutes(collapsed, straight);
+
+    expect(aligned.from).toEqual(collapsed);
+    expect(aligned.to).toHaveLength(collapsed.length);
+    expect(maxDeviation(aligned.to, straight)).toBe(0);
+  });
+
   it('puts the points it adds on the line the route already drew', () => {
     // Zero, not "small". A point placed on a segment of the route is on the
     // route, so the drawing does not change and `maxRouteDistance` says so.
@@ -394,6 +412,30 @@ describe('createEdgeMotion', () => {
     expect(edgeNamed(motion.advance(0).edges, 'e1').points).toEqual(STRAIGHT);
   });
 
+  it('validates every spring displacement before mutating the scene', () => {
+    const negative: readonly Vec2[] = [
+      { x: -1e308, y: 0 },
+      { x: -9e307, y: 0 },
+    ];
+    const positive: readonly Vec2[] = [
+      { x: 1e308, y: 0 },
+      { x: 9e307, y: 0 },
+    ];
+    const motion = createEdgeMotion();
+    motion.resync([target('earlier', STRAIGHT), target('overflow', negative)]);
+    const before = motion.advance(0);
+
+    expect(() => {
+      motion.apply({
+        added: [],
+        removed: [],
+        rerouted: [target('earlier', BENT), target('overflow', positive)],
+      });
+    }).toThrow(/rerouted\[1\].*"overflow".*point 0.*x displacement/);
+
+    expect(motion.advance(0)).toEqual(before);
+  });
+
   it('drops what a resync does not name, with no departure', () => {
     const motion = createEdgeMotion();
     motion.resync([target('e1', STRAIGHT), target('e2', BENT)]);
@@ -413,6 +455,26 @@ describe('createEdgeMotion', () => {
     const frame = motion.advance(0);
     expect(frame.settled).toBe(false);
     expect(maxDeviation(edgeNamed(frame.edges, 'e1').points, STRAIGHT)).toBe(0);
+  });
+
+  it('validates every resync displacement before mutating the scene', () => {
+    const negative: readonly Vec2[] = [
+      { x: -1e308, y: 0 },
+      { x: -9e307, y: 0 },
+    ];
+    const positive: readonly Vec2[] = [
+      { x: 1e308, y: 0 },
+      { x: 9e307, y: 0 },
+    ];
+    const motion = createEdgeMotion();
+    motion.resync([target('earlier', STRAIGHT), target('overflow', negative)]);
+    const before = motion.advance(0);
+
+    expect(() => {
+      motion.resync([target('earlier', BENT), target('overflow', positive)]);
+    }).toThrow(/targets\[1\].*edge "overflow".*point 0.*x displacement/);
+
+    expect(motion.advance(0)).toEqual(before);
   });
 
   it('refuses a route of fewer than two points, wherever it arrives', () => {

@@ -40,8 +40,10 @@ conversion belongs to whoever owns the layout**, not to the thing drawing it.
 `@dagr/react` is where the two are joined; if you are wiring them yourself,
 that conversion is your one line.
 
-A node keeps its instance handle across `setNodes` calls, so per-instance state
-survives an update: the springs below, and the picking ids.
+A node keeps its instance handle across `setNodes` calls, which keeps its
+instance-buffer identity stable while dense slots move. Springs and picking
+ids use the caller's node id instead, so they also survive a shape change that
+has to replace the handle.
 
 ## Springs, and the loop you still write
 

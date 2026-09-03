@@ -47,13 +47,14 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * tolerance of it.
  *
  * **THE RESAMPLING IS FOR THE DRAWN TRANSITION, AND SETTLEMENT COMPACTS.** The
- * union is at most the two counts added together, and an edge that kept it
- * would carry the shape of every route it had ever taken: a hundred reroutes
- * in a session is a polyline with hundreds of vertices drawing a line with
- * three. So arrival COMPACTS, back to the target route's own points, which is
- * exact because every extra point was on a segment of that route. A settled
- * edge therefore holds exactly what the layout gave it, and the union-sized
- * points are drawn only while the edge is moving.
+ * union is at most the two counts added together minus their two shared
+ * endpoint parameters, and an edge that kept it would carry the shape of every
+ * route it had ever taken: a hundred reroutes in a session is a polyline with
+ * hundreds of vertices drawing a line with three. So arrival COMPACTS, back to
+ * the target route's own points, which is exact because every extra point was
+ * on a segment of that route. A settled edge therefore holds exactly what the
+ * layout gave it, and the union-sized points are drawn only while the edge is
+ * moving.
  *
  * **VELOCITY IS RESAMPLED WITH POSITION, AND THAT IS WHAT KEEPS A RETARGET
  * SMOOTH.** A polyline caught mid-flight has a velocity per point as well as a
@@ -298,17 +299,15 @@ function routeParameters(points: readonly Vec2[]): number[] {
 }
 
 /**
- * The two ascending lists merged into one, with duplicates collapsed.
+ * The two ascending lists merged with the larger multiplicity of each value.
  *
- * Collapsing matters: two straight routes both parameterise as `{0, 1}`, and a
- * union that kept both copies would double the point count of the commonest
- * case in any drawing for no visible difference at all.
+ * Multiplicity matters when distinct vertices acquire the same parameter after
+ * floating-point accumulation. Taking the maximum keeps every vertex from
+ * either route without summing the copies both routes already share. Two
+ * straight routes therefore still produce `{0, 1}`.
  */
 function mergeParameters(left: readonly number[], right: readonly number[]): number[] {
   const merged: number[] = [];
-  function push(value: number): void {
-    if (merged[merged.length - 1] !== value) merged.push(value);
-  }
   let leftIndex = 0;
   let rightIndex = 0;
   while (leftIndex < left.length && rightIndex < right.length) {
@@ -317,24 +316,29 @@ function mergeParameters(left: readonly number[], right: readonly number[]): num
     // Unreachable: both indices are inside their own list.
     if (a === undefined || b === undefined) break;
     if (a < b) {
-      push(a);
+      merged.push(a);
       leftIndex += 1;
     } else if (b < a) {
-      push(b);
+      merged.push(b);
       rightIndex += 1;
     } else {
-      push(a);
-      leftIndex += 1;
-      rightIndex += 1;
+      let leftEnd = leftIndex + 1;
+      while (leftEnd < left.length && left[leftEnd] === a) leftEnd += 1;
+      let rightEnd = rightIndex + 1;
+      while (rightEnd < right.length && right[rightEnd] === b) rightEnd += 1;
+      const count = Math.max(leftEnd - leftIndex, rightEnd - rightIndex);
+      for (let copy = 0; copy < count; copy += 1) merged.push(a);
+      leftIndex = leftEnd;
+      rightIndex = rightEnd;
     }
   }
   for (; leftIndex < left.length; leftIndex += 1) {
     const a = left[leftIndex];
-    if (a !== undefined) push(a);
+    if (a !== undefined) merged.push(a);
   }
   for (; rightIndex < right.length; rightIndex += 1) {
     const b = right[rightIndex];
-    if (b !== undefined) push(b);
+    if (b !== undefined) merged.push(b);
   }
   return merged;
 }
@@ -359,42 +363,51 @@ function sampleAlong(
   at: readonly number[],
 ): Vec2[] {
   const sampled: Vec2[] = [];
-  // `at` ascends, so the segment only ever moves forwards: one pass over both
-  // lists rather than a search per sample.
-  let cursor = 0;
-  for (const t of at) {
-    while (cursor + 1 < parameters.length) {
-      const next = parameters[cursor + 1];
-      if (next === undefined || next >= t) break;
-      cursor += 1;
+  let parameterCursor = 0;
+  let atCursor = 0;
+  while (atCursor < at.length) {
+    const t = at[atCursor];
+    if (t === undefined) break;
+    let atEnd = atCursor + 1;
+    while (atEnd < at.length && at[atEnd] === t) atEnd += 1;
+
+    while (parameterCursor < parameters.length && (parameters[parameterCursor] ?? Infinity) < t) {
+      parameterCursor += 1;
     }
-    const startParameter = parameters[cursor];
-    const start = values[cursor];
-    // Unreachable: `cursor` never passes the last index, and `values` and
-    // `parameters` are the same length by construction. Skipping rather than
-    // throwing would shorten the result and break the one property the whole
-    // correspondence is, that both routes come back the same length.
-    if (startParameter === undefined || start === undefined) continue;
-    if (startParameter === t) {
-      sampled.push(copyOf(start));
-      continue;
+    let parameterEnd = parameterCursor;
+    while (parameterEnd < parameters.length && parameters[parameterEnd] === t) parameterEnd += 1;
+    const ownCount = parameterEnd - parameterCursor;
+
+    if (ownCount > 0) {
+      for (let copy = 0; copy < atEnd - atCursor; copy += 1) {
+        const index = parameterCursor + Math.min(copy, ownCount - 1);
+        const value = values[index];
+        if (value !== undefined) sampled.push(copyOf(value));
+      }
+      parameterCursor = parameterEnd;
+    } else {
+      const startIndex = Math.max(0, parameterCursor - 1);
+      const endIndex = Math.min(parameterCursor, parameters.length - 1);
+      const startParameter = parameters[startIndex];
+      const endParameter = parameters[endIndex];
+      const start = values[startIndex];
+      const end = values[endIndex];
+      if (
+        startParameter !== undefined &&
+        endParameter !== undefined &&
+        start !== undefined &&
+        end !== undefined
+      ) {
+        const span = endParameter - startParameter;
+        const fraction = span === 0 ? 0 : (t - startParameter) / span;
+        const point = {
+          x: start.x + (end.x - start.x) * fraction,
+          y: start.y + (end.y - start.y) * fraction,
+        };
+        for (let copy = atCursor; copy < atEnd; copy += 1) sampled.push(copyOf(point));
+      }
     }
-    const endParameter = parameters[cursor + 1];
-    const end = values[cursor + 1];
-    if (endParameter === undefined || end === undefined) {
-      sampled.push(copyOf(start));
-      continue;
-    }
-    if (endParameter === t) {
-      sampled.push(copyOf(end));
-      continue;
-    }
-    const span = endParameter - startParameter;
-    const fraction = span === 0 ? 0 : (t - startParameter) / span;
-    sampled.push({
-      x: start.x + (end.x - start.x) * fraction,
-      y: start.y + (end.y - start.y) * fraction,
-    });
+    atCursor = atEnd;
   }
   return sampled;
 }
@@ -405,9 +418,9 @@ function sampleAlong(
  *
  * Both come back at the same length, every vertex of each survives in its own
  * list exactly, and every point either list gained lies on a segment that list
- * already had. The count is at most `from.length + to.length` and is exactly
- * `from.length` when the two routes already parameterise the same way, which
- * two straight lines do.
+ * already had. The count is at most `from.length + to.length - 2` and is
+ * exactly `from.length` when the two routes already parameterise the same way,
+ * which two straight lines do.
  *
  * Exported because it is the decision this task makes rather than an
  * implementation detail of the springs: a caller animating edges with their own
@@ -457,7 +470,15 @@ type Intent =
   | { readonly kind: 'depart' }
   | { readonly kind: 'arrive'; readonly route: readonly Vec2[] }
   | { readonly kind: 'replace'; readonly route: readonly Vec2[] }
-  | { readonly kind: 'reroute'; readonly route: readonly Vec2[] };
+  | { readonly kind: 'reroute'; readonly route: readonly Vec2[]; readonly field: string };
+
+/** A retarget worked out without changing the entry it came from. */
+interface RetargetTransition {
+  readonly springs: Spring2DState[];
+  readonly targets: Vec2[];
+  readonly rest: readonly Vec2[];
+  readonly points: readonly Vec2[];
+}
 
 /** Whether an id is in the scene, and if so whether it is on its way out. */
 type Presence = 'absent' | 'live' | 'departing';
@@ -559,7 +580,12 @@ export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
    * that is the point of the task. This is the edge form of the `from` field
    * M4.7a refused to read.
    */
-  function retarget(entry: EdgeEntry, route: readonly Vec2[]): void {
+  function prepareRetarget(
+    entry: EdgeEntry,
+    route: readonly Vec2[],
+    field: string,
+    id: string,
+  ): RetargetTransition {
     const fromParameters = routeParameters(entry.points);
     const toParameters = routeParameters(route);
     const merged = mergeParameters(fromParameters, toParameters);
@@ -569,13 +595,32 @@ export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
       fromParameters,
       merged,
     );
-    entry.springs = positions.map((position, index) => ({
+    const springs = positions.map((position, index) => ({
       position,
       velocity: velocities[index] ?? AT_REST,
     }));
-    entry.targets = sampleAlong(route, toParameters, merged);
-    entry.rest = route;
-    entry.points = positions;
+    const targets = sampleAlong(route, toParameters, merged);
+    for (const [index, position] of positions.entries()) {
+      const target = targets[index];
+      if (target === undefined) continue;
+      requireFinite(
+        position.x - target.x,
+        `${field} edge "${id}" point ${String(index)} x displacement`,
+      );
+      requireFinite(
+        position.y - target.y,
+        `${field} edge "${id}" point ${String(index)} y displacement`,
+      );
+    }
+    return { springs, targets, rest: route, points: positions };
+  }
+
+  /** Applies a transition only after every transition in the call was validated. */
+  function installRetarget(entry: EdgeEntry, transition: RetargetTransition): void {
+    entry.springs = transition.springs;
+    entry.targets = transition.targets;
+    entry.rest = transition.rest;
+    entry.points = transition.points;
     entry.departing = false;
     entry.moving = !atRest(entry);
     // A reroute to the line already being drawn is the edge form of M4.7a's
@@ -588,15 +633,23 @@ export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
     for (const [index, target] of targets.entries()) {
       requireRoute(target.points, `targets[${String(index)}].points`);
     }
-    const kept = new Map<string, EdgeEntry>();
-    for (const target of targets) {
+    const prepared = targets.map((target, index) => {
       const route = copyRoute(target.points);
       const existing = entries.get(target.id);
+      const transition =
+        existing === undefined
+          ? undefined
+          : prepareRetarget(existing, route, `targets[${String(index)}].points`, target.id);
+      return { id: target.id, route, existing, transition };
+    });
+    const kept = new Map<string, EdgeEntry>();
+    for (const target of prepared) {
+      const { existing, route, transition } = target;
       if (existing === undefined) {
         kept.set(target.id, seed(route));
         continue;
       }
-      retarget(existing, route);
+      if (transition !== undefined) installRetarget(existing, transition);
       kept.set(target.id, existing);
     }
     entries.clear();
@@ -647,8 +700,19 @@ export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
       // arrival, at the later route: overwriting the kind would leave nothing
       // for the reroute to find, since the entry does not exist yet.
       const prior = planned.get(target.id)?.kind;
-      const kind = prior === 'arrive' || prior === 'replace' ? prior : 'reroute';
-      planned.set(target.id, { kind, route: copyRoute(target.points) });
+      if (prior === 'arrive' || prior === 'replace') {
+        planned.set(target.id, { kind: prior, route: copyRoute(target.points) });
+      } else {
+        planned.set(target.id, { kind: 'reroute', route: copyRoute(target.points), field });
+      }
+    }
+
+    const transitions = new Map<string, RetargetTransition>();
+    for (const [id, intent] of planned) {
+      if (intent.kind !== 'reroute') continue;
+      const entry = entries.get(id);
+      if (entry === undefined) continue;
+      transitions.set(id, prepareRetarget(entry, intent.route, intent.field, id));
     }
 
     for (const [id, intent] of planned) {
@@ -663,7 +727,8 @@ export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
         entry.departing = true;
         continue;
       }
-      retarget(entry, intent.route);
+      const transition = transitions.get(id);
+      if (transition !== undefined) installRetarget(entry, transition);
     }
   }
 
