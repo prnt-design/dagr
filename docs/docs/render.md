@@ -1425,9 +1425,11 @@ further than its neighbour and shows up as a stagger at constant velocity.
 A backgrounded tab hands back a delta measured in seconds or minutes. Stepped
 exactly, that lands the spring on its target with zero velocity, which is what a
 returning tab should show: the settled drawing rather than a minute of catch-up
-animation. The same delta through Euler is an overflow. Past a `w * dt` of about
-745 the decay underflows to zero in a double, and `stepSpring` returns the
-target itself rather than computing an infinity times a zero.
+animation. The same delta through Euler is an overflow. A bare decay underflows
+around a `w * dt` of 745, but polynomial-scaled residuals such as
+`(1 + w * dt)e^(-w * dt)` can remain representable beyond it. `stepSpring`
+preserves those residuals. Only an infinite `w * dt` takes the settled limit
+directly.
 
 The 0.83 above is measured rather than quoted, and it is worth knowing that it
 is EARLIER than the `w * h` of 2 an undamped oscillator gives: what goes

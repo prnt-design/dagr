@@ -225,6 +225,26 @@ describe('the step is exact, which is why there is no fixed-timestep accumulator
     expect(relativeError(exact.velocity, Number('1.6700373951398006e308'))).toBeLessThan(2e-15);
   });
 
+  it('cancels equal huge coordinates before applying the spring coefficient', () => {
+    const exact = stepSpring(
+      { position: Number.MAX_VALUE, velocity: 1 },
+      Number.MAX_VALUE,
+      Number.MAX_VALUE,
+      0.5 / Number.MAX_VALUE,
+    );
+
+    expect(Number.isFinite(exact.velocity)).toBe(true);
+    expect(relativeError(exact.velocity, Math.exp(-0.5) * 0.5)).toBeLessThan(2e-15);
+  });
+
+  it('preserves a displacement below the target ulp over a tiny step', () => {
+    const exact = stepSpring(rest(0), 1e308, 1, 1e-16);
+
+    expect(Number.isFinite(exact.position)).toBe(true);
+    expect(exact.position).toBeGreaterThan(0);
+    expect(relativeError(exact.position, 5e275)).toBeLessThan(2e-15);
+  });
+
   it('rejects a final state that is not representable', () => {
     const state = { position: Number.MAX_VALUE, velocity: Number.MAX_VALUE };
     expect(() => stepSpring(state, Number.MAX_VALUE, 1, 0.1)).toThrow(/result position/);

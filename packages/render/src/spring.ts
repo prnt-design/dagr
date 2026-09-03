@@ -197,6 +197,54 @@ function linearCombination(terms: readonly (readonly [number, number])[]): numbe
 }
 
 /**
+ * Computes `log(1 + u) - u` without subtracting equal rounded values near zero.
+ *
+ * The alternating series starts at `-u^2 / 2`. Below one percent it converges
+ * quickly enough that stopping when the next term no longer changes the sum
+ * preserves the rounded remainder without paying for a fixed term count.
+ */
+function log1pMinusU(u: number): number {
+  if (u >= 0.01) {
+    return Math.log1p(u) - u;
+  }
+
+  let power = u * u;
+  let sum = -power / 2;
+  for (let n = 3; ; n += 1) {
+    power *= u;
+    const term = (n % 2 === 0 ? -power : power) / n;
+    const next = sum + term;
+    if (next === sum) {
+      return sum;
+    }
+    sum = next;
+  }
+}
+
+/**
+ * Interpolates without losing a residual when one weight rounds to one.
+ *
+ * Equal coordinates are an identity before either coefficient applies. Every
+ * other case keeps the two weighted coordinates separate, which preserves a
+ * polynomial-scaled residual after the complementary weight rounds to one and
+ * lets opposite-sign huge coordinates cancel through the scaled path.
+ */
+function weightedInterpolation(
+  position: number,
+  target: number,
+  retention: number,
+  targetRetention: number,
+): number {
+  if (position === target) {
+    return position;
+  }
+  return linearCombination([
+    [position, retention],
+    [target, targetRetention],
+  ]);
+}
+
+/**
  * Advances one axis by `dtSeconds`. No validation: both public entry points
  * check their own arguments under their own field names, and a per-frame loop
  * over a scene's worth of springs should not pay for the same check twice.
@@ -225,23 +273,34 @@ function stepAxis(
   // `exp(-u)` may be zero while `u exp(-u)` is still a subnormal number.
   const logDecay = -u;
   const logUDecay = Math.log(u) - u;
-  const retentionLog = Math.log1p(u) - u;
+  const retentionLog = log1pMinusU(u);
   const retention = Math.exp(retentionLog);
   const targetRetention = -Math.expm1(retentionLog);
   const timeDecay = Math.exp(Math.log(dtSeconds) + logDecay);
   const velocityRetention =
     u === 1 ? 0 : Math.sign(1 - u) * Math.exp(Math.log(Math.abs(1 - u)) + logDecay);
   const springRetention = Math.exp(Math.log(w) + logUDecay);
+  const interpolatedPosition = weightedInterpolation(
+    position,
+    target,
+    retention,
+    targetRetention,
+  );
   const nextPosition = linearCombination([
-    [target, targetRetention],
-    [position, retention],
+    [interpolatedPosition, 1],
     [velocity, timeDecay],
   ]);
-  const nextVelocity = linearCombination([
-    [velocity, velocityRetention],
-    [target, springRetention],
-    [position, -springRetention],
-  ]);
+  const difference = target - position;
+  const nextVelocity = Number.isFinite(difference)
+    ? linearCombination([
+        [velocity, velocityRetention],
+        [difference, springRetention],
+      ])
+    : linearCombination([
+        [velocity, velocityRetention],
+        [target, springRetention],
+        [position, -springRetention],
+      ]);
   requireFinite(nextPosition, 'spring result position');
   requireFinite(nextVelocity, 'spring result velocity');
   return { position: nextPosition, velocity: nextVelocity };

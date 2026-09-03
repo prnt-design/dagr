@@ -501,15 +501,16 @@ not" is the category this file has a heading for.
   that M4.4 replaces with a real layout. So M4.2 changed what is DRAWN and not
   what is CALLABLE. (M4.2)
 
-  **Two units, and the asymmetry is the decision.** An outline is measured in CSS
-  PIXELS and is inset; a glow is measured in WORLD units and sits outside. An
-  outline is a property of the screen, and a two pixel border staying two pixels
-  at every zoom is the thing a geometry pipeline cannot do without rebuilding
-  geometry: the same derivative that gives the antialiasing width converts pixels
-  into world units at the fragment being shaded. A glow is a property of the
-  shape, and its quad has to be padded to contain it at build time, so a
-  pixel-space glow would need the quad resized whenever the camera moved, which
-  is M4.4's problem and not a shader's.
+  **Two units, and the asymmetry is the decision.** An outline is measured in
+  DEVICE PIXELS and is inset; a glow is measured in WORLD units and sits
+  outside. An outline is a property of the rasterized screen, and a two device
+  pixel border staying two framebuffer samples wide at every zoom is the thing
+  a geometry pipeline cannot do without rebuilding geometry: the same
+  derivative that gives the antialiasing width converts device pixels into
+  world units at the fragment being shaded. A glow is a property of the shape,
+  and its quad has to be padded to contain it at build time, so a pixel-space
+  glow would need the quad resized whenever the camera moved, which is M4.4's
+  problem and not a shader's.
 
   **Where the outline band lands, which is this file's category exactly: a rule a
   caller can see that no type describes.** The band's outer ramp is centred on the

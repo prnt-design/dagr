@@ -4949,13 +4949,14 @@ of M3 would leave the second runner idle for a milestone.
   Exactly stepped, a backgrounded tab's delta lands the spring on its target
   with zero velocity, which is the correct picture for a tab coming back: the
   settled drawing rather than a minute of catch-up. The one real hazard is
-  arithmetic rather than physical, and it is guarded: past a `w * dt` of about
-  745 the decay underflows to zero in a double while `A + Bh` can be an
-  infinity, and zero times infinity is `NaN`, so the target is returned
-  directly. A zero delta is guarded for the same class of reason and a different
-  cause: `target + (position - target)` is not `position` in a double, so a
-  paused clock or two callbacks in one millisecond would walk a resting spring
-  off its own value one rounding at a time.
+  arithmetic rather than physical, and it is guarded: a bare decay underflows
+  around a `w * dt` of 745, but polynomial-scaled residuals can remain
+  representable beyond it, so the step preserves them rather than multiplying
+  zero by an infinite coefficient. Only an infinite `w * dt` takes the settled
+  limit directly. A zero delta is guarded for the same class of reason and a
+  different cause: `target + (position - target)` is not `position` in a
+  double, so a paused clock or two callbacks in one millisecond would walk a
+  resting spring off its own value one rounding at a time.
   **THE SUITE IS CHECKED AGAINST THE EQUATION AND NOT ONLY AGAINST ITSELF.** A
   closed form tested by its own properties is a suite that agrees with its own
   algebra: a transcription error in the exponential would leave every property
