@@ -61,9 +61,12 @@ import { requireFinite, requireNonNegative } from './validate.js';
  * distance: every field here folds through `abs` or a square, and a folded quantity
  * has a zero gradient on the quad containing the shape's centre. See
  * `antialiasWidth` in `sdf-nodes.ts` for what that cost before it was fixed. Taking
- * it from the position means derivatives carry the currently supported isotropic
- * transform, including rotation with isotropic scale. Shear or nonuniform
- * transforms need the normal-aware Jacobian treatment documented in `sdf-nodes.ts`.
+ * it from the position means derivatives measure the axis-aligned, shape-centred
+ * coordinates instanced rendering supplies today. Per-instance translation is
+ * applied after that varying and does not change its gradient. The graph also
+ * supports a future rotation with isotropic scale, but no rotation is supplied
+ * today. Shear or nonuniform transforms need the normal-aware Jacobian treatment
+ * documented in `sdf-nodes.ts`.
  *
  * ## Validation
  *

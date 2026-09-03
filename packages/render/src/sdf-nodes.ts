@@ -60,8 +60,11 @@ import type { Arith } from './sdf.js';
  *   calling it in Node builds a call node and never constructs the halving, and the
  *   test that builds the body eagerly passes pre-halved literals to
  *   `roundedRectDistance` and so bypasses it. A factor of two in the wrong place
- *   there would draw every rect at half or twice its size, and the committed
- *   screenshot is the whole of the evidence against that.
+ *   there would draw every rect at half or twice its size. The WebGL2 browser probe
+ *   is the quantitative evidence against that: `bench/browser/backend-probe.html`
+ *   derives expected fill areas from the same node records and reports them beside
+ *   the observed pixel counts. The committed screenshot supplies the visual
+ *   evidence.
  *
  * Nothing here is exported from `index.ts`. A TSL node is a three.js type, and
  * `types.ts` decided that no three.js type appears in this package's public
