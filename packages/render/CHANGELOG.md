@@ -22,12 +22,13 @@ not" is the category this file has a heading for.
   `MotionEdge` and `AlignedRoutes`. (M4.7b)
 
   **SPRING EVALUATION NOW STAYS FINITE WHEN THE FINAL STATE IS REPRESENTABLE.**
-  Decay-scaled coefficients avoid overflowing algebraic intermediates during a
-  long frame, while a final position or velocity outside the finite range is
-  still rejected. Ordinary spring trajectories are unchanged. `createNodeMotion`
-  also rejects a half-life whose derived angular frequency is not finite,
-  matching `createEdgeMotion`. `setEdges` is untouched, and there is still no
-  render loop in this package.
+  Log-formed polynomial coefficients preserve residuals after the bare decay
+  underflows, and scaled linear combinations let overflowing products cancel
+  before the finite result is restored. A final position or velocity outside
+  the finite range is still rejected. Ordinary spring trajectories are
+  unchanged. `createNodeMotion` also rejects a half-life whose derived angular
+  frequency is not finite, matching `createEdgeMotion`. `setEdges` is untouched,
+  and there is still no render loop in this package.
 
   **AN EDGE NEEDED A CORRESPONDENCE BEFORE IT NEEDED A SPRING.** A route that
   gains a rank to cross gains a bend, so two routes for one edge can have
@@ -210,14 +211,12 @@ not" is the category this file has a heading for.
 
   **THE CHANNEL BUDGET DID NOT MOVE.** M4.3 reserved the instanced node
   pipeline's one free vertex buffer slot for M4.6's spring velocity or M4.8's
-  picking id. The picking id does not want it: the pick bytes reach the GPU as
-  an attribute the PICK material reads and the node material does not, and
+  picking id. Neither uses it. Motion state stays on the CPU, keyed by the
+  caller's node and edge ids. The pick bytes reach the GPU as an attribute the
+  PICK material reads and the node material does not, and
   `instance-attributes.ts` counts what a shader reads rather than what a
-  geometry carries, so this is D3's situation rather than a seventh channel, a
-  different pipeline with its own eight. Half the contest for that slot is off
-  and nothing here says anything about M4.6's half. M4.8b is what actually adds
-  the attribute, and it should confirm the count there rather than trust this
-  paragraph.
+  geometry carries. This is D3's situation rather than a seventh channel, a
+  different pipeline with its own eight.
 
 - `requireIntegerInRange(value, min, max, field)` in the internal `validate.ts`,
   beside `requireIntegerAtLeast`. Every bound a pick id has is two-sided for a
@@ -228,9 +227,9 @@ not" is the category this file has a heading for.
 
 - Critically damped springs: `stepSpring`, `stepSpring2D`, `omegaForHalfLife`,
   the constants `HALF_LIFE_OMEGA` and `SETTLE_OMEGA_1_PERCENT`, and the types
-  `SpringState` and `Spring2DState`. Nothing in the renderer calls them; they
-  are the motion arithmetic M4.7 will drive from layout deltas, exported
-  because the caller owns the clock. (M4.6)
+  `SpringState` and `Spring2DState`. Node and edge motion call `stepSpring2D`
+  from clocks their callers own; the scalar form remains the arithmetic each
+  independent axis uses. (M4.6)
 
   **THE STEP IS EXACT, AND THERE IS NO FIXED-TIMESTEP ACCUMULATOR.** The
   ROADMAP's M4.6 entry asked for one, and the reason it usually exists is the
@@ -244,11 +243,12 @@ not" is the category this file has a heading for.
 
   **A LONG FRAME IS SAFE WITHOUT A CLAMP.** A backgrounded tab's delta lands
   the spring on its target with zero velocity, which is what a returning tab
-  should show. Past a `w * dt` of about 745 the decay underflows in a double
-  and the target is returned directly, rather than multiplying a possibly
-  infinite displacement by zero. A zero delta is an identity by construction
-  too: `target + (position - target)` is not `position` in a double, so a
-  paused clock would otherwise walk a resting spring off its own value.
+  should show. A bare decay underflows around a `w * dt` of 745, but its
+  polynomial coefficients can remain representable beyond that point and are
+  evaluated in log space. An infinite `w * dt` takes the target limit directly.
+  A zero delta is an identity by construction too: `target + (position -
+  target)` is not `position` in a double, so a paused clock would otherwise walk
+  a resting spring off its own value.
 
   **NO OVERSHOOT MEANS NO OSCILLATION AND NOT NO OVERSHOOT.** A spring
   released from rest never passes its target; one retargeted while moving can
@@ -283,10 +283,11 @@ not" is the category this file has a heading for.
 
   **THE CHANNEL BUDGET, which M4.3 asked to be told about.** The one free vertex
   buffer slot recorded there is the INSTANCED NODE pipeline's (seven of eight,
-  reserved for M4.6's spring velocity or M4.8's picking id) and this does not
-  touch it: a ribbon is a different mesh with a different material and its own
-  eight, going from five to six. Nothing in M4 is closer to the limit than it
-  was.
+  once reserved for M4.6's spring velocity or M4.8's picking id). Motion stays
+  on the CPU, and picking uses a separate material's channel budget, so neither
+  consumes that slot. This does not touch it either: a ribbon is a different
+  mesh with a different material and its own eight, going from five to six.
+  Nothing in M4 is closer to the limit than it was.
 
   Only changed values are uploaded, as one merged update range immediately
   before the next draw, because `addUpdateRange` pushes a record per call and
@@ -356,11 +357,11 @@ not" is the category this file has a heading for.
   needs rather than twice it, and an empty list is a scene with no nodes rather
   than a `RangeError`.
 
-  **A node keeps its instance handle across calls**, which is the property M4.6's
-  springs and M4.8's picking ids depend on rather than a convenience: the diff is
-  by `id`, so a node present in two consecutive calls is updated in place. The
-  one exception is a node that changes SHAPE, because the two shape families are
-  two meshes and an instance cannot move between them.
+  **A node keeps its instance handle across calls.** The diff is by `id`, so a
+  node present in two consecutive calls is updated in place. Motion does not
+  depend on that handle: its state is keyed by the caller's node id. The one
+  exception is a node that changes SHAPE, because the two shape families are two
+  meshes and an instance cannot move between them.
 
   **It takes NODES and not a `LayoutResult`.** Naming one would make
   `@dagr/layout` a dependency of this package, and the y-down to y-up conversion
@@ -403,12 +404,12 @@ not" is the category this file has a heading for.
   pays for grows at the same rate as the calls it saves. The revisit gate is
   M4.10, and reversing it rewires one assembly function and touches no formula.
 
-  **Removal is swap-with-last, so per-instance state is keyed by HANDLE and never
-  by SLOT.** A slot index is not durable across any removal and the failure is
-  silent, because the slot stays a valid index and merely belongs to a different
-  instance. Handles are never reused, so a handle held past its instance's
-  removal raises rather than addressing whatever took its place. M4.6's springs
-  and M4.8's picking IDs inherit this.
+  **Removal is swap-with-last, so instance-buffer state is keyed by HANDLE and
+  never by SLOT.** A slot index is not durable across any removal and the
+  failure is silent, because the slot stays a valid index and merely belongs to
+  a different instance. Handles are never reused, so a handle held past its
+  instance's removal raises rather than addressing whatever took its place.
+  Motion state is separate and keyed by caller ids.
 
   A colour reaching a shader as a UNIFORM is converted from sRGB by three's
   `Color`; as a vertex ATTRIBUTE it is converted by nothing, so the conversion

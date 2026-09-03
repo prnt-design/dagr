@@ -75,6 +75,9 @@ function signChanges(state: SpringState, target: number, w: number, span: number
 
 const rest = (position: number): SpringState => ({ position, velocity: 0 });
 
+const relativeError = (actual: number, expected: number): number =>
+  Math.abs(actual - expected) / Math.abs(expected);
+
 describe('stepSpring validation', () => {
   it('names the field of every value it rejects', () => {
     expect(() => stepSpring({ position: Number.NaN, velocity: 0 }, 0, 1, 0.016)).toThrow(
@@ -197,6 +200,29 @@ describe('the step is exact, which is why there is no fixed-timestep accumulator
     expect(Number.isFinite(exact.velocity)).toBe(true);
     expect(exact.position).toBeCloseTo(1e308, 12);
     expect(Math.abs(exact.velocity / exact.position)).toBeLessThan(1e-80);
+  });
+
+  it('keeps the representable residual after the bare exponential underflows', () => {
+    const state = { position: 1e308, velocity: 0 };
+    const once = stepSpring(state, 0, 1, 746);
+    const partitioned = stepSpring(stepSpring(state, 0, 1, 373), 0, 1, 373);
+
+    expect(Number.isFinite(once.position)).toBe(true);
+    expect(once.position).toBeGreaterThan(0);
+    expect(relativeError(once.position, 7.755987527083237e-14)).toBeLessThan(2e-3);
+    expect(relativeError(once.velocity, -7.745604678988079e-14)).toBeLessThan(2e-3);
+    expect(relativeError(once.position, partitioned.position)).toBeLessThan(2e-3);
+    expect(relativeError(once.velocity, partitioned.velocity)).toBeLessThan(2e-3);
+  });
+
+  it('cancels overflowing velocity terms before evaluating the finite result', () => {
+    const state = { position: 0, velocity: 1.7e308 };
+    const exact = stepSpring(state, 7.02e307, 10, 0.2);
+
+    expect(Number.isFinite(exact.position)).toBe(true);
+    expect(Number.isFinite(exact.velocity)).toBe(true);
+    expect(relativeError(exact.position, 4.62997889804142e307)).toBeLessThan(2e-15);
+    expect(relativeError(exact.velocity, Number('1.6700373951398006e308'))).toBeLessThan(2e-15);
   });
 
   it('rejects a final state that is not representable', () => {
