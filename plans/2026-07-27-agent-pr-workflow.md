@@ -2,6 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** delivered. The live process is AGENTS.md's "How work reaches
+main"; this plan is kept as the record of getting there.
+
 **Goal:** Move the two scheduled Dagr jobs from pushing straight to `main` onto
 a pull request flow gated on green CI, and fix the CI bench failure that would
 otherwise deadlock that gate.

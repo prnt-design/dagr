@@ -1,7 +1,9 @@
 # The campaign demo: a mock D&D campaign as the dataset
 
 **Date:** 2026-08-14
-**Status:** proposed, awaiting maintainer direction
+**Status:** delivered. Approved and P1 shipped 2026-08-14; P2 and P6 to P8
+followed (P3 to P5 are M4.3 to M4.5 and live in M4). The ROADMAP's campaign
+demo track carries the task record.
 **Branch:** `agt_9ac0d2019def/more-interesting-demo`
 **Asked for by:** Nii, 2026-08-14, in session. The research behind the schema
 and the scale numbers is shared as Dispatch media
