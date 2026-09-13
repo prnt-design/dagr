@@ -192,10 +192,11 @@ describe('antialiasWidth', () => {
     // position component varies along one screen axis and its other derivative
     // is zero. (An earlier version of this comment claimed a 41% gap on the
     // diagonals; that gap belongs to the distance's gradient, which nothing here
-    // differentiates.) The two part under a rotated camera, where `fwidth`'s L1
-    // sum reads wider by up to `sqrt(2)` depending on the angle, so a screenshot
-    // taken today cannot tell them apart and the decision gets a structural test
-    // rather than only a paragraph.
+    // differentiates.) So a screenshot taken today cannot tell them apart. The
+    // two part under a rotated camera, where `fwidth`'s L1 sum reads wider by up
+    // to a factor of `sqrt(2)` depending on the angle, and that is the form the
+    // decision has to hold, so it gets a structural test rather than only a
+    // paragraph.
     //
     // What is asserted: the outermost operation is a `length`, and its argument
     // joins exactly two components which are `dFdx` and `dFdy` of something. What

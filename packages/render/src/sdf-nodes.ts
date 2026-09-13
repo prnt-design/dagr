@@ -136,25 +136,30 @@ export const tslArith: Arith<FloatNode> = {
  * than corners.** Each `length` differentiates ONE position component along both
  * screen axes. Under the axis-aligned orthographic camera this package has today a
  * world component varies along one screen axis only, so the other derivative is
- * zero and `length(vec2(dFdx(p.x), dFdy(p.x)))` is exactly `abs(dFdx(p.x))`, which
- * is exactly `fwidth(p.x)`: today the two forms agree to the bit, at every zoom and
- * around every corner. An earlier version of this comment claimed `fwidth` was up to
- * 41% too soft at a 45 degree edge. That is the L1 versus L2 gap of the DISTANCE
- * field's gradient, and nothing here differentiates the distance, so the claim
- * was wrong about the code beneath it. Where the two forms part is a rotated or
- * sheared camera, which makes a component vary along both screen axes: `fwidth`
- * is then `abs(dFdx) + abs(dFdy)`, the L1 norm, and reads up to `sqrt(2)` wider
- * than the Euclidean length depending on the angle, so the ramp would soften
- * and sharpen with the rotation. The Euclidean form does not depend on the angle.
- * A shear or a non-uniform scale is a case further out: a component's gradient
- * is then not the pixel footprint along the boundary normal, and the width would
- * want the Jacobian applied to that normal rather than a per-component `max`.
- * Nothing supplies such a transform today.
+ * zero and `length(vec2(dFdx(p.x), dFdy(p.x)))` is `abs(dFdx(p.x))`, which is
+ * `fwidth(p.x)`: today the two forms agree exactly in real arithmetic and to
+ * within `sqrt`'s rounding on hardware, at every zoom and around every corner. An
+ * earlier version of this comment claimed `fwidth` was up to 41% too soft at a 45
+ * degree edge. That is the L1 versus L2 gap of the DISTANCE field's gradient, and
+ * nothing here differentiates the distance, so the claim was wrong about the code
+ * beneath it. Where the two forms part is a ROTATED camera, which makes a
+ * component vary along both screen axes: `fwidth` is then `abs(dFdx) +
+ * abs(dFdy)`, the L1 norm, and reads up to a factor of `sqrt(2)` wider than the
+ * Euclidean length depending on the angle, so the ramp would soften and sharpen
+ * with the rotation. The Euclidean form does not depend on the angle. A shear or
+ * a non-uniform scale is a case further out: a component's gradient is then not
+ * the pixel footprint along the boundary normal, and the width would want the
+ * Jacobian's TRANSPOSE applied to that normal rather than a per-component `max`.
+ * Nothing supplies such a transform today: the per-instance quad scale in
+ * `instanced-scene.ts` is applied BEFORE the varying, so `local` reaches the
+ * fragment stage in world units and only the camera's uniform scale stands
+ * between it and the screen.
  *
- * The general form costs two `length`s, so two square roots per fragment, against
- * the cheaper `max(abs(dFdx(p.x)), abs(dFdy(p.y)))`, which is exact for today's
- * camera and WRONG under rotation, which M4.4 may want, so the general form is
- * taken now rather than swapped in later.
+ * The general form costs two `length`s, so two square roots per fragment against
+ * none for `fwidth` and against the cheaper `max(abs(dFdx(p.x)), abs(dFdy(p.y)))`,
+ * which is exact for today's camera and WRONG under rotation. No milestone has
+ * asked for a rotation yet; the general form is taken now rather than swapped in
+ * later.
  *
  * **DEVICE pixels, not CSS pixels.** The derivative is taken across a framebuffer
  * pixel, and `#syncSize` sizes the framebuffer from `Camera2D.drawingBufferSize()`,

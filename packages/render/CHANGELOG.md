@@ -533,16 +533,21 @@ not" is the category this file has a heading for.
   gradient, and nothing here differentiates the distance. Each `length`
   differentiates one position COMPONENT, and under the axis-aligned
   orthographic camera this package has a component varies along one screen
-  axis only, so `length(vec2(dFdx(p.x), dFdy(p.x)))` is exactly `fwidth(p.x)`
-  and the two agree to the bit. The Euclidean form is kept for a rotated or
-  sheared camera, where a component varies along both axes and `fwidth` reads
-  up to `sqrt(2)` wider depending on the angle. It costs two `sqrt`s per
-  fragment, one per `length`. This one is worth reading as a warning rather than
-  a preference: swapping the gradient length for either `fwidth` or its L1
-  expansion left the whole suite GREEN, and under today's camera it had to,
-  because they compute the same number. The suite asserts the node graph's
-  structure (`length` over a join of `dFdx` and `dFdy`) for that reason: it
-  pins the form that stays right once the camera rotates.
+  axis only, so `length(vec2(dFdx(p.x), dFdy(p.x)))` is `fwidth(p.x)`: the
+  two agree exactly in real arithmetic and to within `sqrt`'s rounding on
+  hardware. The Euclidean form is kept for a rotated camera, where a
+  component varies along both axes and `fwidth` reads up to a factor of
+  `sqrt(2)` wider depending on the angle. A shear or a non-uniform scale
+  needs more than this form and is named in the shader comment rather than
+  solved. It costs two `sqrt`s per fragment, one per `length`, against none
+  for `fwidth`. This one is worth reading as a warning rather than a
+  preference: swapping the gradient length for either `fwidth` or its L1
+  expansion left the whole suite GREEN before the structural assertion
+  existed, and not because the two agree: no Node test evaluates a derivative
+  at all, so a factor in front of the position went just as unnoticed. The
+  suite now asserts the node graph's structure (`length` over a join of
+  `dFdx` and `dFdy`) for that reason: it pins the form that stays right once
+  the camera rotates.
 
 - `depthWrite` is off on the shape materials. three leaves it on when
   `transparent` is set, and left on, a fragment with alpha 0 still writes depth

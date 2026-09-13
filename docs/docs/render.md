@@ -239,28 +239,38 @@ a small shape is the whole shape. The position has no `abs` in front of it and
 cannot fold. The euclidean-gradient argument that used to justify differentiating
 the distance was sound about magnitude and silent about folding.
 
-**Why not `fwidth`, corrected.** An earlier version of this page said `fwidth`
-would draw corners up to 41% softer than the flat sides, because `fwidth` is the
-L1 norm `abs(dFdx) + abs(dFdy)` and L1 exceeds the Euclidean length by `sqrt(2)`
-at a 45 degree edge. That is true of the DISTANCE field's gradient, and nothing
-in the shader differentiates the distance. Each `length` above differentiates
-one position COMPONENT, and under today's axis-aligned orthographic camera a
-world component varies along one screen axis only, so its other derivative is
-zero and `length(vec2(dFdx(p.x), dFdy(p.x)))` is exactly `fwidth(p.x)`. The two
-forms agree to the bit, around every corner and at every zoom, which is also why
-swapping one for the other leaves the suite green: they compute the same number.
-The Euclidean form is kept for the camera this package does not have yet. Under
-a rotation or a shear a component varies along both screen axes, `fwidth` reads
-up to `sqrt(2)` wider than the Euclidean length depending on the angle, and the
-ramp would soften and sharpen as the camera turned. It costs two `sqrt`s per
-fragment, one per `length`.
+**Why not `fwidth`.** Each `length` above differentiates one position
+COMPONENT along both screen axes. Under today's axis-aligned orthographic camera
+a world component varies along one screen axis only, so its other derivative is
+zero and `length(vec2(dFdx(p.x), dFdy(p.x)))` is `abs(dFdx(p.x))`, which is
+`fwidth(p.x)`: the two forms agree exactly in real arithmetic and to within
+`sqrt`'s rounding on hardware, around every corner and at every zoom. The
+Euclidean form is kept for the camera this package does not have yet. Under a
+rotation a component varies along both screen axes, `fwidth` reads up to a
+factor of `sqrt(2)` wider than the Euclidean length depending on the angle, and
+the ramp would soften and sharpen as the camera turned. It costs two `sqrt`s per
+fragment, one per `length`, against none for `fwidth`. A shear or a non-uniform
+scale is a case further out, named in the shader comment rather than solved:
+there the right width is the pixel footprint along the boundary normal, which a
+per-component `max` does not compute. An earlier version of this page said
+`fwidth` would draw corners up to 41% softer than the flat sides, because
+`fwidth` is the L1 norm `abs(dFdx) + abs(dFdy)` and L1 exceeds the Euclidean
+length by a factor of `sqrt(2)` at a 45 degree edge. That is true of the
+DISTANCE field's gradient, and nothing in the shader differentiates the
+distance. What the equality does mean is that no screenshot taken through
+today's camera could tell the two forms apart; see
+[what is knowingly untested](#what-is-knowingly-untested) for why no Node test
+could either.
 
-This works because the fields are TRUE euclidean distances outside the shape
-rather than a cheaper approximation. The gradient of such a field has magnitude 1
-in world space, so its screen-space gradient magnitude is world units per pixel
-and nothing else. It also means nothing reads the camera: the width follows
-whatever transform a mesh has picked up, including the per-instance one M4.3
-writes in the vertex stage.
+The fields are TRUE euclidean distances outside the shape rather than a cheaper
+approximation, and that is what makes the width usable: the gradient of such a
+field has magnitude 1 in world space, so a distance of one `aaWidth` is one
+device pixel. The shader never takes that gradient; the unit magnitude is what
+makes comparing the distance against a width measured off the position mean
+what it says. Nothing reads the camera: the width follows whatever transform the
+position has picked up on its way to the fragment stage, which today is the
+camera's uniform scale alone, since M4.3's per-instance quad scale is applied
+before the varying and `local` reaches the fragment stage in world units.
 
 ### Where the fade stops, measured
 
@@ -564,18 +574,22 @@ bound by overdraw than by arithmetic.
 
 `length` is NOT one of those, and this is where an earlier draft of this page was
 wrong. It is used as an intrinsic, in `antialiasWidth` alone. Counting properly,
-three pieces of TSL are executed by no Node test: that `length` over a join of the
-two derivatives; the colour `mix` in the shading node, which is vec3 and cannot go
-through a float interface at all; and the `mul(size, 0.5)` that halves a rounded
-rect's extents inside a deferred `Fn` body, which the suite never runs because it
-builds the body directly from pre-halved literals. Their compensating control is
-the STRUCTURAL assertions on the node graph rather than a numeric test, and the
-first of the three is the one that needed it: swapping the gradient length for
-`fwidth` left every numeric test green, and under today's camera it had to,
-since the two are the same number there (see
-[why not `fwidth`](#the-antialiasing-width-is-a-gradient-length-not-fwidth)).
-The structural assertion is what holds the form that is still right once the
-camera rotates.
+three pieces of TSL are executed by no Node test: those two `length`s over a join
+of the two derivatives; the colour `mix` in the shading node, which is vec3 and
+cannot go through a float interface at all; and the `mul(size, 0.5)` that halves
+a rounded rect's extents inside a deferred `Fn` body, which the suite never runs
+because it builds the body directly from pre-halved literals. Their compensating
+control is the STRUCTURAL assertions on the node graph rather than a numeric
+test, and the first of the three is the one that needed it. The mutation that
+shows why is a factor in front of the position: `dFdx(mul(p.x, 2))` builds the
+same node kinds in the same places, doubles every ramp, and left all 67 tests in
+the two sdf suites green before the structural assertion existed, because no
+Node test evaluates a derivative at all. The milder swap of the gradient length
+for `fwidth` is invisible for a different reason, that under today's camera the
+two compute the same number (see
+[why not `fwidth`](#the-antialiasing-width-is-a-gradient-length-not-fwidth)), so
+neither a numeric test nor a screenshot could have caught it. The structural
+assertion is what holds the form that is still right once the camera rotates.
 
 ### Crisp at every zoom, as a test rather than a claim
 
