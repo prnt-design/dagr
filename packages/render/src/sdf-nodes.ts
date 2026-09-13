@@ -132,17 +132,29 @@ export const tslArith: Arith<FloatNode> = {
  * The position has no `abs` and no square in front of it, so it cannot fold.
  * `test/sdf.test.ts` executes the fold; `test/sdf-nodes.test.ts` pins this graph.
  *
- * **`max` of two `length`s, and NOT `fwidth`.** `fwidth` is `abs(dFdx) + abs(dFdy)`,
- * the L1 norm, which exceeds the L2 norm by up to `sqrt(2)`, 41% too wide, when the
- * two derivatives are equal. Equal derivatives means an edge at 45 degrees, and a
- * rounded corner is a continuum of diagonals: with `fwidth` the ramp is right along
- * the flat sides and up to 41% too soft at the corner, which reads as corners
- * blurrier than the edges they join, at every zoom.
+ * **`max` of two `length`s, and NOT `fwidth`, and the reason is rotation rather
+ * than corners.** Each `length` differentiates ONE position component along both
+ * screen axes. Under the axis-aligned orthographic camera this package has today a
+ * world component varies along one screen axis only, so the other derivative is
+ * zero and `length(vec2(dFdx(p.x), dFdy(p.x)))` is exactly `abs(dFdx(p.x))`, which
+ * is exactly `fwidth(p.x)`: today the two forms agree to the bit, at every zoom and
+ * around every corner. An earlier version of this comment claimed `fwidth` was up to
+ * 41% too soft at a 45 degree edge. That is the L1 versus L2 gap of the DISTANCE
+ * field's gradient, and nothing here differentiates the distance, so the claim
+ * was wrong about the code beneath it. Where the two forms part is a rotated or
+ * sheared camera, which makes a component vary along both screen axes: `fwidth`
+ * is then `abs(dFdx) + abs(dFdy)`, the L1 norm, and reads up to `sqrt(2)` wider
+ * than the Euclidean length depending on the angle, so the ramp would soften
+ * and sharpen with the rotation. The Euclidean form does not depend on the angle.
+ * A shear or a non-uniform scale is a case further out: a component's gradient
+ * is then not the pixel footprint along the boundary normal, and the width would
+ * want the Jacobian applied to that normal rather than a per-component `max`.
+ * Nothing supplies such a transform today.
  *
- * The `max` over the two axes costs a second `length` against differentiating one
- * scalar. The cheaper `max(abs(dFdx(p.x)), abs(dFdy(p.y)))` is exact for the
- * axis-aligned orthographic camera this package has today and WRONG under rotation,
- * which M4.4 may want, so the general form is taken now rather than swapped in later.
+ * The general form costs two `length`s, so two square roots per fragment, against
+ * the cheaper `max(abs(dFdx(p.x)), abs(dFdy(p.y)))`, which is exact for today's
+ * camera and WRONG under rotation, which M4.4 may want, so the general form is
+ * taken now rather than swapped in later.
  *
  * **DEVICE pixels, not CSS pixels.** The derivative is taken across a framebuffer
  * pixel, and `#syncSize` sizes the framebuffer from `Camera2D.drawingBufferSize()`,

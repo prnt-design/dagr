@@ -4358,12 +4358,25 @@ of M3 would leave the second runner idle for a milestone.
   DISTANCE: every field folds through `abs` or a square, so a distance gradient
   collapses on the quad holding a shape's centre and the inset outline vanishes
   there, which on a small shape is the whole shape.
-  because `fwidth` is the L1 sum and exceeds L2 by up to 41% exactly where the
-  derivatives are equal, which is a 45 degree edge, and a rounded corner is
-  nothing else. READ THIS ONE AS A WARNING: swapping in either `fwidth` or its L1
-  expansion left the whole suite GREEN, since both are correct to within a factor
-  on every value a numeric test can check, so the suite now asserts the node
-  graph's STRUCTURE. A numeric test cannot catch a wrong-by-a-factor derivative.
+  NOT `fwidth`, AND THE REASON THIS ENTRY FIRST GAVE WAS WRONG (corrected
+  2026-09-12, from a review branch that predated the roadmap split and was
+  never merged). The entry said `fwidth`, the L1 sum, exceeds the Euclidean
+  length by up to 41% at a 45 degree edge and so softens every rounded corner.
+  That gap is the DISTANCE field's gradient, and nothing in the shader
+  differentiates the distance: each `length` differentiates one position
+  COMPONENT, and under the axis-aligned orthographic camera this package has a
+  component varies along one screen axis only, so `length(vec2(dFdx(p.x),
+  dFdy(p.x)))` IS `fwidth(p.x)` to the bit. The Euclidean form is kept for a
+  rotated or sheared camera, where a component varies along both screen axes
+  and `fwidth` reads up to `sqrt(2)` wider depending on the angle. It costs two
+  square roots per fragment, one per `length`, not one. READ THIS ONE AS A
+  WARNING: swapping in either `fwidth` or its L1 expansion left the whole suite
+  GREEN, and under today's camera it had to, since they compute the same
+  number, so the suite asserts the node graph's STRUCTURE: the form that stays
+  right once the camera rotates. GENERALISE IT: a numeric test cannot catch a
+  derivative that is wrong by a factor, and it cannot catch a rationale that is
+  wrong about which quantity is being differentiated either. The second is the
+  one this entry shipped.
   THE OUTLINE'S OUTER RAMP IS CENTRED ON THE BOUNDARY, exactly like the fill's,
   and an earlier draft inset it by half an antialiasing width so that its coverage
   was exactly zero at the boundary. That draft was WRONG and a real GPU frame is

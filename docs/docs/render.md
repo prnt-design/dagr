@@ -239,14 +239,21 @@ a small shape is the whole shape. The position has no `abs` in front of it and
 cannot fold. The euclidean-gradient argument that used to justify differentiating
 the distance was sound about magnitude and silent about folding.
 
-`fwidth` is defined as `abs(dFdx) + abs(dFdy)`, the L1 norm of
-the same gradient, and L1 exceeds L2 by up to a factor of `sqrt(2)`, 41%, exactly
-when the two derivatives are equal. Equal derivatives means an edge at 45
-degrees, and a rounded corner is a continuum of diagonals: with `fwidth` the ramp
-is correct along the flat sides and up to 41% too soft around the corner, which
-reads as corners blurrier than the edges they join. That is the artefact a
-distance field is supposed to remove. It costs one `sqrt` per fragment, and the
-shader already has one.
+**Why not `fwidth`, corrected.** An earlier version of this page said `fwidth`
+would draw corners up to 41% softer than the flat sides, because `fwidth` is the
+L1 norm `abs(dFdx) + abs(dFdy)` and L1 exceeds the Euclidean length by `sqrt(2)`
+at a 45 degree edge. That is true of the DISTANCE field's gradient, and nothing
+in the shader differentiates the distance. Each `length` above differentiates
+one position COMPONENT, and under today's axis-aligned orthographic camera a
+world component varies along one screen axis only, so its other derivative is
+zero and `length(vec2(dFdx(p.x), dFdy(p.x)))` is exactly `fwidth(p.x)`. The two
+forms agree to the bit, around every corner and at every zoom, which is also why
+swapping one for the other leaves the suite green: they compute the same number.
+The Euclidean form is kept for the camera this package does not have yet. Under
+a rotation or a shear a component varies along both screen axes, `fwidth` reads
+up to `sqrt(2)` wider than the Euclidean length depending on the angle, and the
+ramp would soften and sharpen as the camera turned. It costs two `sqrt`s per
+fragment, one per `length`.
 
 This works because the fields are TRUE euclidean distances outside the shape
 rather than a cheaper approximation. The gradient of such a field has magnitude 1
@@ -564,7 +571,11 @@ rect's extents inside a deferred `Fn` body, which the suite never runs because i
 builds the body directly from pre-halved literals. Their compensating control is
 the STRUCTURAL assertions on the node graph rather than a numeric test, and the
 first of the three is the one that needed it: swapping the gradient length for
-`fwidth` left every numeric test green.
+`fwidth` left every numeric test green, and under today's camera it had to,
+since the two are the same number there (see
+[why not `fwidth`](#the-antialiasing-width-is-a-gradient-length-not-fwidth)).
+The structural assertion is what holds the form that is still right once the
+camera rotates.
 
 ### Crisp at every zoom, as a test rather than a claim
 
