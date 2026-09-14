@@ -1714,10 +1714,12 @@ import { createLayout } from '@dagr/layout';
 const engine = createLayout();
 const motion = createSceneMotion();
 
-// The flip is the caller's, as it has been since M4.1. `@dagr/react`'s
-// `toWorldBounds` is `boxOf` exactly; its `toSceneNodes` and `toSceneEdges` do
-// this same flip on the way to `setNodes` and `setEdges`, and dress the result
-// besides, so they are not drop-in replacements for the two above.
+// The flip is the caller's, as it has been since M4.1, and this is it written
+// out. A caller who has `@dagr/react` does not write it: `toMotionRoster` with
+// `toSceneNodes` and `toSceneEdges` is this roster, `toMotionDelta` is the whole
+// `motion.apply` argument below, and `retarget` is that call plus the one check
+// this example does not make (see the React page: a delta is only safe to apply
+// to the drawing it was measured from). `toWorldBounds` is `boxOf` exactly.
 const centreOf = (node) => ({ id: node.id, center: { x: node.x, y: -node.y } });
 const routeOf = (edge) => ({
   id: edge.id,
@@ -1934,9 +1936,8 @@ confirmation.
 ## What is not here yet
 
 The motion arithmetic, the three delta consumers and the loop are headless and
-complete. What is still missing is the device work below, and one thing that is
-not this package's: nothing deployed drives the loop from a graph a user is
-editing, which is M5.3's demo and the React wiring beside it.
+complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
+(M5.3a). What is still missing is the device work below.
 
 - The pass half of GPU picking: a material writing the bytes above, an
   offscreen target, the readback and a `pick()` on `Renderer` (M4.8b). What

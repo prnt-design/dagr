@@ -50,8 +50,9 @@ camera, the renderer seam, and rounded rectangles and circles drawn as signed
 distance fields through a three.js
 `WebGPURenderer`, described on the [renderer](./render.md) page. `@dagr/react`
 joins the three: one `<DagrCanvas>` takes a graph and draws it, with the layout
-watched for edits and React content placed in world coordinates over the
-canvas, on the [React bindings](./react.md) page.
+watched for edits, `animate` gliding an edit to its new layout rather than
+cutting to it, and React content placed in world coordinates over the canvas, on
+the [React bindings](./react.md) page.
 
 Nothing is published to npm and there is no released API. Names and signatures
 change when a milestone learns something, without deprecation cycles, because

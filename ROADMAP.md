@@ -10,7 +10,7 @@ the decisions it took and the reasons, lives in
 reference elsewhere in the repo to "the roadmap's M4.6 entry" means the entry
 there. Milestone status is mirrored in the project brain.
 
-## Status (2026-09-13)
+## Status (2026-09-14)
 
 The engine is the part that is done. Over the six-session corpus (M3.10a) the
 incremental path moves 4.1x to 38.4x less of the drawing per patch than a cold
@@ -25,14 +25,15 @@ nothing. One engine caveat a consumer should know: Brandes-Koepf positioning
 is implemented and tested but unexported, and `gridPositionStage` is the
 default, with the reason written in `packages/layout/src/index.ts`.
 
-The order to v0.1, decided 2026-08-26 and updated after M4.7c shipped
+The order to v0.1, decided 2026-08-26 and updated after M5.3a shipped
 (reasoning in the notes):
 
-1. **M5.3**, the animated demo, and the React wiring it stands on: `useDagr`
-   over the incremental engine, `<DagrCanvas animate>` driving M4.7c's scene
-   motion and loop. The render side is complete; nothing deployed mutates a
-   graph yet, so the flagship stability claim is unillustrated on the page that
-   makes it, and no component animates.
+1. **M5.3b**, the animated demo. M5.3a shipped the React wiring it stands on:
+   `useDagr` holds a layout engine so an edit is a `LayoutDelta` rather than a
+   cold run, and `<DagrCanvas animate>` drives M4.7c's scene motion and loop off
+   that delta through its own coalesced frame. The render side and the component
+   side are both complete now; nothing DEPLOYED mutates a graph yet, so the
+   flagship stability claim is still unillustrated on the page that makes it.
 2. **M5.2 + M4.8b**, interaction hooks and GPU picking, together. Blocked on a
    machine with a WebGPU adapter.
 3. **M5.4b**, getting-started docs, API reference, v0.1 readiness review,
@@ -168,7 +169,8 @@ worth less than a slow path they can.
   not at all, and `createMotionLoop`, woken rather than started, stopping on
   the frame that says settled, with the scheduler as an option so a caller's
   coalesced frame is the loop's frame. Sizes do not spring. The demo that
-  proves it moved to M5.3, beside the React wiring it needs.
+  proves it moved to M5.3b, beside the React wiring it stands on, which
+  shipped as M5.3a.
 - [x] **M4.8a** Pick IDs: the encoding, the pixel arithmetic, and the stamp
   registry that refuses a stale answer.
 - [ ] **M4.8b** GPU picking, the pass: per-instance IDs to an offscreen
@@ -199,14 +201,20 @@ worth less than a slow path they can.
 - [x] **M5.1** `@dagr/react`: `<DagrCanvas>`, `useDagr`, `<Html>`.
 - [ ] **M5.2** Interaction hooks: `useSelection`, hover and drag wired to GPU
   picking. Component tests.
-- [ ] **M5.3** The animation a consumer gets for free, and the demo that proves
-  it: `useDagr` over `createLayout` so an edit is a patch rather than a cold
-  run, `<DagrCanvas>` driving M4.7c's `createSceneMotion` and `createMotionLoop`
-  off that patch, and an animated living demo (grow, prune, relayout) in
-  `apps/demo`. This is the task that demonstrates the headline claim: the
-  campaign demo is read-only and proves nothing about stability under an edit.
-  M4.7c's demo folded in here, because a hand-wired demo would be written
-  against the render API and rewritten the day the component learned to do it.
+- [x] **M5.3a** The animation a consumer gets for free: `useDagr` over
+  `createLayout`, so an edit is a `relayout(patch)` with a `LayoutDelta` rather
+  than a cold run, and `<DagrCanvas animate>` driving M4.7c's
+  `createSceneMotion` and `createMotionLoop` off that delta, with the
+  component's own coalesced frame as the loop's scheduler. Animation is a prop
+  and the sprung box is handed to `onFrame`, so a following camera stays the
+  caller's line of code. The engine runs in the graph listener, which is neither
+  render nor an effect.
+- [ ] **M5.3b** The demo that proves it: an animated living demo (grow, prune,
+  relayout) in `apps/demo`. This is the task that demonstrates the headline
+  claim: the campaign demo is read-only and proves nothing about stability under
+  an edit. M4.7c's demo folded in here, because a hand-wired demo would be
+  written against the render API and rewritten the day the component learned to
+  do it, which M5.3a is the day it did.
 - [x] **M5.4a** The tarball a consumer installs: `workspace:^` fixed (the
   publish command is `pnpm publish`), `src` shipped so source maps resolve,
   per-package README and LICENSE, `publint` + `arethetypeswrong` + a scratch

@@ -1,9 +1,14 @@
 /**
- * A stand-in for `@dagr/render`, so a component test can run without a GPU.
+ * A stand-in for the two things in `@dagr/render` that need a device, so a
+ * component test can run without a GPU.
  *
- * A NON-TEST helper. `vi.mock('@dagr/render', () => import('./fake-render.js'))`
- * puts it in the renderer's place, which is what the M5.1 entry asks for when
- * it says "mocked-renderer component tests".
+ * A NON-TEST helper. It replaces `createRenderer` and `createHtmlOverlay` and
+ * NOTHING ELSE: the mock spreads this file over the real module, so every other
+ * export a component reaches for is the real one. M5.3a is why that distinction
+ * matters. `<DagrCanvas animate>` drives `createSceneMotion` and
+ * `createMotionLoop`, neither of which touches a device, and faking them too
+ * would leave a component test asserting that the component calls an API rather
+ * than that a node ends up halfway to where it is going.
  *
  * **What that buys and what it costs, stated rather than assumed.** It buys the
  * only thing these tests are about: which calls `DagrCanvas` makes, in what
@@ -15,6 +20,14 @@
  * file. `@dagr/render`'s own suite covers both, and the two places where this
  * package has to hold up its end of those contracts are asserted directly
  * instead: the container's `position`, and the zero-size viewport guard.
+ *
+ * ONE HAZARD COMES WITH THE SPREAD: this file's own helpers (`built`,
+ * `resetFakes`, `lastRenderer`, `lastOverlay`) land on the mocked module's
+ * surface too, so a `@dagr/render` export that ever takes one of those names
+ * would be shadowed here and nowhere else. Nothing in `src/` reaches for them,
+ * and the alternative is a pick list that has to be updated every time the
+ * component imports something new, which is the failure that is harder to
+ * notice.
  *
  * What IS simulated is the SHAPE of those failures rather than their cause.
  * `built.overlayFailure` makes `createHtmlOverlay` throw, because what happens

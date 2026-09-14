@@ -31,8 +31,8 @@ export function Board() {
 }
 ```
 
-This page describes the package as of M5.1, which is everything it has: the
-component, the hook under it, the overlay sugar, and the conversion the
+This page describes the package as of M5.3a: the component, the hook under it,
+the animation an edit gets for free, the overlay sugar, and the conversions the
 renderer deliberately does not own.
 
 ## The graph prop is controlled, and controlled here means watched
@@ -63,11 +63,98 @@ second layout on every mount, or a listener that outlives every component and
 makes the graph build a patch on every mutation forever. Both cost more than
 the window does. `use-dagr.ts` carries the full argument.
 
-## The layout runs during render, synchronously
+It is one edit of latency rather than a disagreement that persists.
+`relayout` re-runs the pipeline over the graph the engine holds and measures the
+delta against the geometry it last reported, so the next edit reports both and
+the drawing catches up. Any resubscribe (a new graph, a new config, React's
+`StrictMode` remount) closes it outright, because a resubscribe rebuilds the
+engine and lays the graph out cold.
 
-`layout()` is synchronous and `useDagr` calls it in a `useMemo`. The result is
-referentially stable: a render that changed neither the graph nor the config
-hands back the same `LayoutResult`, so effects downstream of it do not run.
+## An edit is a relayout, not a cold run
+
+`useDagr` holds a `createLayout` engine for as long as it is watching one graph
+with one config, and calls `relayout(patch)` with the patch the graph delivers.
+So it returns four things rather than two:
+
+```tsx
+const { result, error, delta, from } = useDagr(graph);
+```
+
+`delta` is a `LayoutDelta`: what appeared, what went away, what moved, and what
+the box around the lot became. It is what `<DagrCanvas animate>` animates from,
+and what a caller driving `@dagr/render` themselves wants. `from` is the drawing
+that delta is a difference FROM, and it has a section of its own below.
+
+**`delta` is `null` on a cold run, and that is a statement rather than a missing
+value.** A delta is a difference from a drawing; the first run of a graph has no
+drawing to differ from, and neither does the run after a config change or the
+recovery from an engine that fell out of step with its graph. `null` is how those
+runs say "reseat, do not retarget", and `retarget` (exported) is where that
+decision is written down.
+
+**The engine runs in the graph listener**, which is neither render nor an effect.
+`relayout` does not apply its patch: the graph is already mutated, the patch
+describes an edit already made, and a patch the graph disagrees with is refused.
+A hook that kept those patches in a queue and drained it during render would be
+doing a side effect in render, and concurrent rendering is entitled to discard
+that render and run it again, which would consume a patch twice or not at all.
+So there is no queue: `Graph.subscribe` hands over one patch per mutating call,
+straight after it commits, and the relayout happens right there. Render only
+reads the result.
+
+One consequence worth stating: the relayout happens inside your own
+`graph.addNode(...)` call. A layout that fails is reported through `error`
+rather than thrown, because `addNode` is not a function anyone expects to raise
+a layout error. And **wrap a multi-step edit in `graph.batch`**: it is one patch
+and one relayout rather than three, which is the same advice `relayout` gives
+for its own reasons. Unbatched, the intermediate layouts are computed and never
+drawn, because React commits once, and the section below is about what the
+component then has to do to stay correct.
+
+The engine is disposed when the component stops watching, which is what
+`LayoutEngine.dispose` is for: the graph, the previous run's pipeline state and
+the reported-geometry snapshot are retained for the life of an engine, and on a
+large graph they are larger than the result you can see.
+
+## A delta is only safe to apply to the drawing it was measured from
+
+**The state changes once per layout. An effect keyed on it runs once per
+commit.** Those are different counts, because React renders the latest snapshot
+of an external store rather than every one, so two mutating calls in one task
+are two layouts and one commit holding the second. The delta you are handed is
+then a difference from a drawing you never drew, and applying it to the drawing
+you did draw leaves the two disagreeing from then on.
+
+That is what `from` is for, and the check is one line:
+
+```tsx
+// `drawn` is the result the motion is currently holding. `rosterOf` builds the
+// whole scene from a result, which is what a reseat needs and a retarget does
+// not: it has to be the CURRENT layout, not one hoisted earlier.
+useEffect(() => {
+  if (state.result === null) return;
+  const continues = drawn.current !== null && drawn.current === state.from;
+  retarget(motion, continues ? state.delta : null, rosterOf(state.result));
+  drawn.current = state.result;
+}, [state]);
+```
+
+**Do not leave that check to the motion.** `SceneMotion.apply` refuses a delta
+naming an id whose presence it disagrees about, which catches some of these, and
+a delta naming only ids it already holds applies cleanly and leaves the drawing
+wrong in silence. Creating a node and then labelling it, in one handler, is
+enough to produce one. `<DagrCanvas animate>` does this check for you, and
+`onLayout` hands you `from` for the same reason.
+
+The other half of the answer is `graph.batch`: one patch, one layout, one delta,
+nothing to miss.
+
+## The layout still runs during render, synchronously
+
+The first run for a graph is a `useMemo`, exactly as it was: synchronous, and
+during render. The result is referentially stable, and so is the whole state
+object: a render that changed neither the graph nor the config hands back the
+same one, so an effect keyed on it does not run.
 
 There is no worker here, and that is a decision rather than an omission. A
 `Worker` has to be constructed by the host, because `new Worker(new URL('./x.ts',
@@ -99,7 +186,7 @@ Memoise it, the way React asks for every callback prop. The same goes for
 
 ## A layout that fails is reported, not thrown
 
-`useDagr` returns `{ result, error }` and never throws. A graph a user is
+`useDagr` returns `error` rather than throwing. A graph a user is
 editing passes through states the layout refuses, and throwing would unmount
 the subtree to the nearest error boundary on the keystroke that made the graph
 momentarily invalid. It does not hold the last good result either: a stale
@@ -111,6 +198,17 @@ render, so a React error boundary catches it; an `onError` prop takes it
 instead and suppresses the throw. Both beat the third option, which is to
 render an empty box, because an empty box is indistinguishable from an empty
 graph.
+
+**One class of failure is recovered from instead, and only one.**
+`EngineStateError` means the engine and the graph have fallen out of step, which
+a cold run fixes, so the hook rebuilds and runs cold and reports the result with
+no delta. Everything else a relayout raises is reported, exactly as the same
+failure from a cold run already is. The alternative, recovering from all of
+them, would make a failure reachable only under a warm start invisible: every
+edit would come back cold, undelta'd and unanimated, with nothing saying why.
+The cost of that choice, stated rather than buried: such a failure now reaches
+your error boundary rather than quietly degrading to a correct but unanimated
+drawing.
 
 ## The flip, and why it lives here
 
@@ -133,6 +231,16 @@ separate expressions and flipping two of the three draws a picture that is half
 upside down with every unit test on the flipped halves still green, which is
 why the suite runs a real layout through all three and asserts they agree.
 
+The delta half is the same flip in three more expressions, and it is the worse
+three: a target flipped the wrong way does not draw a node upside down, it
+springs the node to the mirror of where it belongs and leaves it there. So
+`toMotionDelta` is asserted against what `toSceneNodes` and `toWorldBounds` put
+in the same place for the same run, rather than against numbers written by hand.
+
+```ts
+import { retarget, toMotionDelta, toMotionRoster } from '@dagr/react';
+```
+
 Appearance is a callback taking a node id:
 
 ```tsx
@@ -152,13 +260,92 @@ layout's answer, and overriding them here would draw a picture that disagrees
 with the bounds, the routes and every stability guarantee the layout makes. Set
 `config.nodeSize` instead, upstream, where the layout can account for it.
 
-## The camera is fitted once
+## `animate` is one word, and it is the flagship
+
+```tsx
+<DagrCanvas graph={graph} animate />
+```
+
+With it, an edit glides to its new layout instead of cutting to it: nodes spring
+to their new centres, edges follow their new routes, and the drawing's box moves
+with them. Without it, nothing tweens, which is what the component did before
+M5.3a and is still the default.
+
+It is a prop rather than a hook because this component already owns all four
+things a hook would have to hand back out: the coalesced frame, the renderer,
+the scene conversions, and the delta. What keeps the prop from foreclosing the
+other shape is that `createMotionLoop` takes its scheduler as an option. A
+caller who owns their own frame leaves `animate` off, takes the renderer off
+`useDagrCanvas`, takes the delta and its `from` off `onLayout`, and drives
+`createSceneMotion` from their own loop, which is
+[the worked example](./render.md#the-loop-the-box-and-the-scene-as-one-thing)
+on the render page. `toMotionDelta`, `toMotionRoster` and `retarget` are
+exported for exactly that caller, so the flip and the continuity check are not
+theirs to rewrite. The component hands the loop its own `requestDraw`, so there
+is one frame budget here rather than two, and a burst of edits in one task is
+one frame.
+
+The feel is the same prop:
+
+```tsx
+<DagrCanvas graph={graph} animate={{ halfLifeSeconds: 0.3 }} />
+```
+
+`halfLifeSeconds` is how long a spring takes to close half the remaining gap
+(default 0.12) and `restEpsilon` is how close, in world units, counts as arrived
+(default 0.05). Both are `@dagr/render`'s, one number each for the whole scene,
+because one delta is one change and three arrival times would read as three. The
+object is compared by value, like `config`.
+
+Four things worth knowing:
+
+- **The first layout does not animate.** A scene built from a result has no
+  history to come from, so it is seeded at rest and drawn where the layout put
+  it. Only an edit glides.
+- **Sizes do not spring.** A node that changed size takes its new box on the
+  frame the edit lands, and only its centre glides. A label that grew measures
+  wider because the text that made it wider changed instantly, and a box lagging
+  its own contents would clip them.
+- **A removed node leaves on the frame its spring settles**, which for a node
+  that was standing still is the next one: it is gone rather than faded. A node
+  removed mid-glide finishes its move first, so it does not jump on the way out,
+  unless that removal arrived in a burst that had to reseat, in which case it is
+  gone at once: a reseat describes a whole state, and a node not in it has no
+  departure to finish. Nothing fades, because a fade is an appearance and this
+  component has no opinion about appearance.
+- **The loop stops itself.** It asks for no frame after the one on which every
+  spring has arrived, so an idle canvas is an idle canvas.
+
+## The camera is fitted once, and the sprung box is yours
 
 The first frame that has both a layout and a viewport frames the graph. Nothing
 refits after that, and `fit={false}` skips even the first. Refitting on every
 edit would be a camera that jumps whenever the graph changes, which is the
 instability the whole incremental-layout milestone exists to keep out of the
-layout, reintroduced one level up where no stability metric would see it.
+layout, reintroduced one level up where no stability metric would see it. An
+animated demo that refits every frame would look impressive and would hide the
+thing it exists to show, because a drawing that stays put while the camera moves
+is indistinguishable from a drawing that moves.
+
+A caller who does want a following camera has the box on every frame, sprung
+along with everything else, and writes the one line themselves:
+
+```tsx
+<DagrCanvas
+  graph={graph}
+  animate
+  onFrame={(frame, renderer) => {
+    if (following && frame.bounds !== null) renderer.camera.fitBounds(frame.bounds);
+  }}
+/>
+```
+
+`onFrame` runs after the renderer has been told what to draw and before it
+draws, so a camera moved there moves on that frame rather than the next. The
+renderer comes with the frame so that line needs no ref: reaching it through
+`useDagrCanvas` would be a child component written to call `fitBounds` once. It
+is not called when `animate` is off, because then there are no frames between
+layouts to hand over.
 
 ## `<Html>` puts React content in world coordinates
 
@@ -244,13 +431,6 @@ holds the renderer and calls `setEdgeStyle` on it.
 - **Interaction.** Hover, selection and drag are M5.2, and they want the GPU
   picking pass of M4.8 underneath rather than a hit test invented here against
   a scene array.
-- **Animation, through this component.** The springs, the three delta consumers
-  and the loop that drives them all landed in `@dagr/render` at M4.6 through
-  M4.7c, and they are exported: `createSceneMotion` takes a delta and
-  `createMotionLoop` drives it. What is missing is this package doing that for
-  you off the `graph` prop, which is M5.3, together with the hook reaching for
-  the incremental engine rather than a cold `layout()` per edit. Today
-  `<DagrCanvas>` re-lays out and re-sets, so nothing tweens.
 - **A node ontology.** What a node looks like is a callback and it stays one.
   Deciding that a node of kind X draws as a hexagon belongs to the
   [visual-language toolkit](./visual-languages.md), which is scoped precisely so

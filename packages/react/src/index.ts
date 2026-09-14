@@ -6,15 +6,22 @@
  * `<DagrCanvas>`'s to provide: shipping the sugar first would have meant
  * inventing that context in a package with no component to provide it, and then
  * living with the shape when the requirements that should have decided it
- * finally arrived. They have, and the whole package is four exports and a
- * conversion.
+ * finally arrived. They have, and the whole package is five things, over two
+ * conversions: the one `scene.ts` owns, which turns a whole layout into a
+ * drawing, and the one `animation.ts` owns, which turns a delta into a change
+ * to one.
  *
- * - {@link DagrCanvas} is the component: a graph goes in, a picture comes out.
+ * - {@link DagrCanvas} is the component: a graph goes in, a picture comes out,
+ *   and with `animate` an edit glides to its new layout rather than cutting.
  * - {@link useDagr} is the layout on its own, for a caller drawing it their own
- *   way or reading the geometry beside a canvas somebody else owns.
+ *   way or reading the geometry beside a canvas somebody else owns. Since M5.3a
+ *   it holds a `createLayout` engine across renders, so an edit is a
+ *   `LayoutDelta` rather than a cold run.
  * - {@link Html} puts React content in world coordinates over the canvas.
  * - {@link useDagrCanvas} is how anything inside reaches the renderer, the
  *   overlay and the layout.
+ * - {@link retarget} and the two conversions beside it are the delta half of
+ *   `scene.ts`, for a caller driving `@dagr/render`'s scene motion themselves.
  *
  * **What this package is FOR is the seam nothing else in the workspace owns.**
  * `@dagr/render` refuses to name a `LayoutResult`, on the argument that the
@@ -29,10 +36,6 @@
  *
  * - No interaction. Hover, selection and drag are M5.2 and they want M4.8's
  *   picking pass underneath, not a hit test invented here against a scene array.
- * - No animation. The spring integrator is M4.6 and the delta consumer that
- *   drives it from a `LayoutDelta` is M4.7. `<DagrCanvas>` re-lays out and
- *   re-sets; nothing tweens, and adding a tween here would be M4.7 built in the
- *   wrong package.
  * - No worker. See `use-dagr.ts`: the `Worker` has to be the caller's, and
  *   M3.9b owns the worker-side session that makes a per-edit round trip worth
  *   taking.
@@ -48,6 +51,8 @@
 
 export { DEFAULT_EDGE_GROUP_ID, DagrCanvas } from './DagrCanvas.js';
 export type { DagrCanvasProps } from './DagrCanvas.js';
+export { retarget, toMotionDelta, toMotionRoster } from './animation.js';
+export type { Retargeting } from './animation.js';
 export { Html } from './Html.js';
 export type { HtmlProps } from './Html.js';
 export { DagrCanvasContext, useDagrCanvas } from './canvas-context.js';
