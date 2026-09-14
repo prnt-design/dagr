@@ -567,18 +567,29 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
     };
   }, [stage, fitOnce, requestDraw]);
 
-  // The dressing the animated frames draw from, kept up to date whether or not
-  // anything is animating: a caller who turns `animate` on has a map to seed
-  // from, and one who changes an appearance callback without moving a node gets
-  // the one frame that redraws it.
+  /**
+   * The dressing an animated frame draws from, kept up to date only while
+   * something is animating.
+   *
+   * ONLY WHILE ANIMATING, because the map is written to per layout and pruned
+   * on the frame that settles: a component that is not animating never reaches
+   * that frame, so an hour of edits would leave it holding every node the graph
+   * has ever had. A motion built later seeds both maps from the layout as it
+   * then stands, so there is nothing to carry across.
+   *
+   * The wake is for a node that changed how it looks without changing where it
+   * is. That moves no spring, so nothing else would ask for the frame that
+   * redraws it, and one wake on a settled motion is exactly one frame.
+   */
   useEffect(() => {
+    if (motionRef.current === null) return;
     if (sceneNodes !== null) {
       for (const node of sceneNodes) dressedNodesRef.current.set(node.id, node);
     }
     if (sceneEdges !== null) {
       for (const edge of sceneEdges) dressedEdgesRef.current.set(edge.id, edge);
     }
-    if (motionRef.current !== null) loopRef.current?.wake();
+    loopRef.current?.wake();
   }, [sceneNodes, sceneEdges]);
 
   useEffect(() => {
@@ -613,6 +624,10 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
     const motion = createSceneMotion(animation.options);
     motion.resync(rosterNow());
     appliedRef.current = layoutRef.current;
+    // Seeded from the layout as it stands, so the maps hold what the scene
+    // holds and nothing older. See the dressing effect above.
+    dressedNodesRef.current = new Map((sceneNodesRef.current ?? []).map((node) => [node.id, node]));
+    dressedEdgesRef.current = new Map((sceneEdgesRef.current ?? []).map((edge) => [edge.id, edge]));
     const loop = createMotionLoop({
       frame: (dtSeconds) => runAnimationFrame(motion, dtSeconds),
       scheduler,
