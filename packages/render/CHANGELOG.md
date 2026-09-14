@@ -14,6 +14,74 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- `createBoundsMotion`, `createSceneMotion` and `createMotionLoop`: the rest of
+  the delta consumer and the loop that drives it. Fourteen new names on the
+  surface: the three factories and the eleven types `BoundsMotion`,
+  `BoundsMotionFrame`, `BoundsMotionOptions`, `SceneMotion`, `SceneMotionDelta`,
+  `SceneMotionFrame`, `SceneMotionOptions`, `SceneMotionRoster`, `MotionLoop`,
+  `MotionLoopOptions` and `FrameScheduler`. No new error class. (M4.7c)
+
+  **THE BOX IS A MOTION MODULE AND THE CAMERA DOES NOT READ IT.** `<DagrCanvas>`
+  fits once and then the camera is the user's; a sprung box is handed back per
+  frame and `fitBounds` on it is the caller's line. The box is sprung as a
+  centre and two half-extents rather than two corners, so it never turns inside
+  out on the way. A degenerate box is accepted, since an empty layout has one.
+
+  **A SCENE DELTA IS APPLIED ACROSS ALL THREE HALVES OR NOT AT ALL.** All three
+  halves grew a two-phase form (every check, then the mutation as a closure) so
+  the composite can commit them together. The plan methods are on the objects
+  the three public factories return and deliberately absent from the
+  `NodeMotion`, `EdgeMotion` and `BoundsMotion` types and from the package
+  surface: a plan is valid only against the state it was made from. Behaviour
+  of any half called directly is unchanged.
+
+  The bounds half needed one even though its checks look pure, and that is
+  worth recording. The first version of the composite checked it by aiming a
+  throwaway `createBoundsMotion` at the same box. `requireBounds` is indeed
+  pure, and the other check is not: it reads the CURRENT SPRING and guards
+  `velocity + w * displacement`. A throwaway seeded from the current position
+  is at rest, so it validated `0 + w * displacement` where the real half,
+  caught mid-flight, validates a nonzero velocity plus the same term. A box
+  moving fast enough that the sum overflows while the term alone does not would
+  have passed the probe and thrown on the real retarget, after the other two
+  halves had committed.
+
+  **A LOOP IS WOKEN, NOT STARTED, AND STOPS ITSELF.** `wake()` while running
+  is the frame already queued; the frame callback returns `settled` and the
+  loop asks for nothing after the frame that said so. The first frame after
+  EVERY wake steps by zero, so an idle hour is not a cut. A wake from inside a
+  frame wins over that frame's `settled`. A frame that throws stops the loop
+  and rethrows. The scheduler is an option with the shape of
+  `requestAnimationFrame`, so a caller who already coalesces a frame hands
+  theirs in; without one the platform's is read at the first wake, not at
+  construction, so a server import is fine and only a server wake throws.
+
+  **SIZES DO NOT SPRING.** A resize still arrives through `moved` and moves
+  nothing. The text that caused it changed instantly whatever the box does, and
+  springing sizes doubles the per-node state against a settled floor already
+  measured. `stepSpring2D` and the node id are there for a caller who wants it.
+
+### Changed
+
+- **A node retarget to within the tolerance of its target now lands ON the
+  target** rather than staying where it was. Behaviour, not types, which is the
+  category this file exists for. `advance` skips an entry that is not moving, so
+  the old spelling set the target and then never reached it: a residual that is
+  bounded and PERMANENT, which is exactly what `advance`'s own arrival path
+  refuses and for the reason written there. At the default `restEpsilon` of 0.05
+  world units the gap is sub-pixel; at a coarse one, which the option exists for,
+  a delta moving every node by less than the tolerance moved none of them while
+  the drawing's box moved with them. The edge half has always landed exactly and
+  the bounds half does too, so the three halves now agree. (M4.7c)
+
+- **`NodeMotionOptions` and `EdgeMotionOptions` widened from `?: number` to
+  `?: number | undefined`.** Redundant under a default tsconfig, and not under
+  `exactOptionalPropertyTypes`, which this repo sets and a careful consumer sets:
+  there `?: T` means a key may be absent but may not be present holding
+  `undefined`. `createSceneMotion` takes one set of options for all three halves
+  and could not forward them, which turned the preference into a compiler error.
+  Purely widening, so nothing that compiled before stops. (M4.7c)
+
 - `createEdgeMotion` and `alignRoutes`, the edge half of the delta consumer: one
   spring per point of a route, retargeted by a `LayoutDelta`'s edge lists,
   stepped by the same clock and settling to the same feel as the node half. Nine

@@ -57,8 +57,10 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * per-point comparison catches it. There is nothing to retarget until somebody
  * decides what corresponds to what. M4.7b made that decision in
  * `edge-motion.ts`, by resampling both routes onto the union of their own
- * arc-length parameters; the bounds change and the frame loop that drives both
- * halves are M4.7c's.
+ * arc-length parameters. M4.7c added the third half in `bounds-motion.ts`, the
+ * composite that drives all three from one delta in `scene-motion.ts`, and the
+ * loop in `motion-loop.ts`. This module still owns no clock: `advance` takes
+ * the elapsed seconds, whichever of the two drives it.
  */
 
 /** Where a node is being pulled to: its id, and its centre in world units, y up. */
@@ -129,18 +131,30 @@ export interface MotionFrame {
   readonly settled: boolean;
 }
 
-/** How the motion should feel, and when it should call itself done. */
+/**
+ * How the motion should feel, and when it should call itself done.
+ *
+ * Both fields are `?: T | undefined` rather than `?: T`, which is redundant
+ * under a default tsconfig and is not under `exactOptionalPropertyTypes`, which
+ * this repo sets and a careful consumer sets too. Under that flag `?: T` means
+ * the key may be ABSENT but may not be present holding `undefined`, and the
+ * ordinary shape here is a caller forwarding options they were themselves given
+ * optionally. M4.7c proved that with a compiler error rather than an argument:
+ * `createSceneMotion` takes one set of options for all three halves and could
+ * not pass them down. `engine.ts` widened `LayoutEngineOptions` for the same
+ * reason and says so; widening is safe to do later and pointless to postpone.
+ */
 export interface NodeMotionOptions {
   /**
    * Seconds to close half the distance to a target, released from rest.
    * Defaults to {@link DEFAULT_MOTION_HALF_LIFE}.
    */
-  readonly halfLifeSeconds?: number;
+  readonly halfLifeSeconds?: number | undefined;
   /**
    * How close, in world units, counts as arrived. Defaults to
    * {@link DEFAULT_MOTION_REST}.
    */
-  readonly restEpsilon?: number;
+  readonly restEpsilon?: number | undefined;
 }
 
 /** A scene's springs, and the two things that are done to them. */
@@ -263,12 +277,48 @@ function requireTarget(target: MotionTarget, field: string): MotionTarget {
 }
 
 /**
+ * A node motion with its two mutations split into a plan and a commit.
+ *
+ * INTERNAL to this package, and the reason it exists is the scene composite in
+ * `scene-motion.ts`. `apply` is all or nothing for the NODES, and a scene's
+ * delta names nodes and edges together: applying one half and then refusing
+ * the other would leave a caller holding exactly the half-applied scene the
+ * two halves each promise never to produce. So each half hands back its
+ * commit as a closure, after every check that can throw has run, and the
+ * composite runs the closures only once it holds all of them. The public
+ * {@link NodeMotion} is this interface with the plans hidden: a caller of one
+ * half alone has no second half to coordinate with.
+ *
+ * A plan is valid against the state at the moment it was made. Committing one
+ * after another mutation has landed is a caller error this module does not
+ * detect, which is why the plans are not on the public surface.
+ */
+export interface PlannedNodeMotion extends NodeMotion {
+  /** Every check {@link NodeMotion.resync} makes, then the mutation as a closure. */
+  planResync(targets: readonly MotionTarget[]): () => void;
+  /** Every check {@link NodeMotion.apply} makes, then the mutation as a closure. */
+  planApply(delta: NodeMotionDelta): () => void;
+}
+
+/**
  * Creates a motion state for one scene's nodes.
  *
  * @param options The feel and the arrival tolerance. See
  *   {@link NodeMotionOptions}.
  */
 export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
+  // The plans are STRIPPED rather than merely hidden by the return type. A type
+  // is not a barrier for a JavaScript consumer or for anything that enumerates
+  // keys, and the rule a plan carries, that it is valid only against the state
+  // it was made from, is unenforceable and silently violable from a public
+  // object that exposes one. The cost is one object literal per motion, which is
+  // per scene rather than per frame.
+  const { resync, apply, advance } = createPlannedNodeMotion(options);
+  return { resync, apply, advance };
+}
+
+/** {@link createNodeMotion} with the plans exposed. See {@link PlannedNodeMotion}. */
+export function createPlannedNodeMotion(options: NodeMotionOptions = {}): PlannedNodeMotion {
   const halfLife = options.halfLifeSeconds ?? DEFAULT_MOTION_HALF_LIFE;
   const restEpsilon = options.restEpsilon ?? DEFAULT_MOTION_REST;
   requirePositive(halfLife, 'halfLifeSeconds');
@@ -335,9 +385,23 @@ export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
   function installRetarget(entry: Entry, transition: RetargetTransition): void {
     entry.target = transition.target;
     entry.moving = transition.moving;
+    if (!entry.moving) {
+      // LANDS EXACTLY ON THE NEW TARGET, and not staying where it was, which is
+      // what this did until M4.7c. `advance` skips an entry that is not moving,
+      // so a retarget to WITHIN the tolerance of the target used to set the
+      // target and then never reach it: a residual that is bounded and
+      // PERMANENT, which is the thing `advance`'s own arrival path refuses in as
+      // many words, for the reason written there. At the default tolerance the
+      // gap is sub-pixel; at a coarse one, which the option exists for, a delta
+      // moving every node by less than the tolerance moved none of them while
+      // the drawing's box moved with it. The edge half has always landed here
+      // (`installRetarget` calls `settleOnto`) and the bounds half does too, so
+      // the three agree.
+      entry.spring = { position: copyOf(transition.target), velocity: AT_REST };
+    }
   }
 
-  function resync(targets: readonly MotionTarget[]): void {
+  function planResync(targets: readonly MotionTarget[]): () => void {
     for (const [index, target] of targets.entries()) {
       requireTarget(target, `targets[${String(index)}]`);
     }
@@ -350,27 +414,29 @@ export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
           : prepareRetarget(existing, center, `targets[${String(index)}]`, target.id);
       return { id: target.id, center, existing, transition };
     });
-    const kept = new Map<string, Entry>();
-    for (const target of prepared) {
-      const { center, existing, transition } = target;
-      if (existing === undefined) {
-        kept.set(target.id, {
-          spring: { position: center, velocity: AT_REST },
-          target: center,
-          departing: false,
-          moving: false,
-        });
-        continue;
+    return () => {
+      const kept = new Map<string, Entry>();
+      for (const target of prepared) {
+        const { center, existing, transition } = target;
+        if (existing === undefined) {
+          kept.set(target.id, {
+            spring: { position: center, velocity: AT_REST },
+            target: center,
+            departing: false,
+            moving: false,
+          });
+          continue;
+        }
+        existing.departing = false;
+        if (transition !== undefined) installRetarget(existing, transition);
+        kept.set(target.id, existing);
       }
-      existing.departing = false;
-      if (transition !== undefined) installRetarget(existing, transition);
-      kept.set(target.id, existing);
-    }
-    entries.clear();
-    for (const [id, entry] of kept) entries.set(id, entry);
+      entries.clear();
+      for (const [id, entry] of kept) entries.set(id, entry);
+    };
   }
 
-  function apply(delta: NodeMotionDelta): void {
+  function planApply(delta: NodeMotionDelta): () => void {
     // Worked out in full before anything is mutated, so a refusal leaves the
     // scene untouched. The overlay is keyed by the ids the DELTA names, so it
     // is proportional to the change and not to the scene, which is the property
@@ -433,30 +499,40 @@ export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
       transitions.set(id, prepareRetarget(entry, intent.target, intent.field, id));
     }
 
-    for (const [id, intent] of planned) {
-      if (intent.kind === 'arrive') {
-        entries.set(id, {
-          spring: { position: intent.target, velocity: AT_REST },
-          target: intent.target,
-          departing: false,
-          moving: false,
-        });
-        continue;
+    return () => {
+      for (const [id, intent] of planned) {
+        if (intent.kind === 'arrive') {
+          entries.set(id, {
+            spring: { position: intent.target, velocity: AT_REST },
+            target: intent.target,
+            departing: false,
+            moving: false,
+          });
+          continue;
+        }
+        // Every other intent was checked against an entry that exists.
+        const entry = entries.get(id);
+        if (entry === undefined) continue;
+        if (intent.kind === 'depart') {
+          entry.departing = true;
+          continue;
+        }
+        // A revive is a departure cancelled: the node keeps where it is and
+        // where it was going, so coming back is not a jump forward by whatever
+        // was left of the departure.
+        entry.departing = false;
+        const transition = transitions.get(id);
+        if (transition !== undefined) installRetarget(entry, transition);
       }
-      // Every other intent was checked against an entry that exists.
-      const entry = entries.get(id);
-      if (entry === undefined) continue;
-      if (intent.kind === 'depart') {
-        entry.departing = true;
-        continue;
-      }
-      // A revive is a departure cancelled: the node keeps where it is and where
-      // it was going, so coming back is not a jump forward by whatever was left
-      // of the departure.
-      entry.departing = false;
-      const transition = transitions.get(id);
-      if (transition !== undefined) installRetarget(entry, transition);
-    }
+    };
+  }
+
+  function resync(targets: readonly MotionTarget[]): void {
+    planResync(targets)();
+  }
+
+  function apply(delta: NodeMotionDelta): void {
+    planApply(delta)();
   }
 
   function advance(dtSeconds: number): MotionFrame {
@@ -499,5 +575,5 @@ export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
     return { nodes, settled };
   }
 
-  return { resync, apply, advance };
+  return { resync, apply, advance, planResync, planApply };
 }

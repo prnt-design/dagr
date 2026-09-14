@@ -67,8 +67,10 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * Everything else is M4.7a's, deliberately: the same desynchronisation
  * polarity, the same all-or-nothing apply, the same departing state, the same
  * two options, and the same two defaults so that one delta's nodes and edges
- * arrive together. What is NOT here is the bounds change and the loop that
- * drives both halves, which are M4.7c's.
+ * arrive together. What is not here is the bounds change, the composite that
+ * applies one delta across all three halves, and the loop: M4.7c added those
+ * as `bounds-motion.ts`, `scene-motion.ts` and `motion-loop.ts`. This module
+ * still owns no clock.
  */
 
 /** Where an edge is being pulled to: its id, and its route in world units, y up. */
@@ -153,13 +155,16 @@ export interface EdgeMotionOptions {
    * Defaults to {@link DEFAULT_MOTION_HALF_LIFE}, which is the node half's
    * default too: one delta moves both, and two feels are two arrivals.
    */
-  readonly halfLifeSeconds?: number;
+  readonly halfLifeSeconds?: number | undefined;
   /**
    * How close, in world units, counts as arrived. Defaults to
    * {@link DEFAULT_MOTION_REST}. Per point: an edge is arrived when all of its
    * points are.
+   *
+   * Both fields are `?: T | undefined` on `NodeMotionOptions`'s argument, which
+   * M4.7c's composite turned from a preference into a compiler error.
    */
-  readonly restEpsilon?: number;
+  readonly restEpsilon?: number | undefined;
 }
 
 /** A scene's edge springs, and the three things that are done to them. */
@@ -484,12 +489,36 @@ interface RetargetTransition {
 type Presence = 'absent' | 'live' | 'departing';
 
 /**
+ * An edge motion with its two mutations split into a plan and a commit.
+ *
+ * INTERNAL, on `motion.ts`'s terms exactly: the scene composite has to commit
+ * the node half and the edge half together or not at all, so each half hands
+ * its mutation back as a closure once every check that can throw has run. See
+ * `PlannedNodeMotion` for the rule about when a plan is valid.
+ */
+export interface PlannedEdgeMotion extends EdgeMotion {
+  /** Every check {@link EdgeMotion.resync} makes, then the mutation as a closure. */
+  planResync(targets: readonly EdgeMotionTarget[]): () => void;
+  /** Every check {@link EdgeMotion.apply} makes, then the mutation as a closure. */
+  planApply(delta: EdgeMotionDelta): () => void;
+}
+
+/**
  * Creates a motion state for one scene's edges.
  *
  * @param options The feel and the arrival tolerance. See
  *   {@link EdgeMotionOptions}.
  */
 export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
+  // Stripped rather than hidden by the return type, on `motion.ts`'s argument:
+  // a type is no barrier to a JavaScript consumer, and a plan's validity rule
+  // cannot be enforced on a public object that exposes one.
+  const { resync, apply, advance } = createPlannedEdgeMotion(options);
+  return { resync, apply, advance };
+}
+
+/** {@link createEdgeMotion} with the plans exposed. See {@link PlannedEdgeMotion}. */
+export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): PlannedEdgeMotion {
   const halfLife = options.halfLifeSeconds ?? DEFAULT_MOTION_HALF_LIFE;
   const restEpsilon = options.restEpsilon ?? DEFAULT_MOTION_REST;
   requirePositive(halfLife, 'halfLifeSeconds');
@@ -634,7 +663,7 @@ export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
     if (!entry.moving) settleOnto(entry);
   }
 
-  function resync(targets: readonly EdgeMotionTarget[]): void {
+  function planResync(targets: readonly EdgeMotionTarget[]): () => void {
     for (const [index, target] of targets.entries()) {
       requireRoute(target.points, `targets[${String(index)}].points`);
     }
@@ -647,21 +676,23 @@ export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
           : prepareRetarget(existing, route, `targets[${String(index)}].points`, target.id);
       return { id: target.id, route, existing, transition };
     });
-    const kept = new Map<string, EdgeEntry>();
-    for (const target of prepared) {
-      const { existing, route, transition } = target;
-      if (existing === undefined) {
-        kept.set(target.id, seed(route));
-        continue;
+    return () => {
+      const kept = new Map<string, EdgeEntry>();
+      for (const target of prepared) {
+        const { existing, route, transition } = target;
+        if (existing === undefined) {
+          kept.set(target.id, seed(route));
+          continue;
+        }
+        if (transition !== undefined) installRetarget(existing, transition);
+        kept.set(target.id, existing);
       }
-      if (transition !== undefined) installRetarget(existing, transition);
-      kept.set(target.id, existing);
-    }
-    entries.clear();
-    for (const [id, entry] of kept) entries.set(id, entry);
+      entries.clear();
+      for (const [id, entry] of kept) entries.set(id, entry);
+    };
   }
 
-  function apply(delta: EdgeMotionDelta): void {
+  function planApply(delta: EdgeMotionDelta): () => void {
     // Worked out in full before anything is mutated, so a refusal leaves the
     // scene untouched. Keyed by the ids the DELTA names, so the overlay is
     // proportional to the change and not to the drawing.
@@ -720,21 +751,31 @@ export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
       transitions.set(id, prepareRetarget(entry, intent.route, intent.field, id));
     }
 
-    for (const [id, intent] of planned) {
-      if (intent.kind === 'arrive' || intent.kind === 'replace') {
-        entries.set(id, seed(intent.route));
-        continue;
+    return () => {
+      for (const [id, intent] of planned) {
+        if (intent.kind === 'arrive' || intent.kind === 'replace') {
+          entries.set(id, seed(intent.route));
+          continue;
+        }
+        // Every other intent was checked against an entry that exists.
+        const entry = entries.get(id);
+        if (entry === undefined) continue;
+        if (intent.kind === 'depart') {
+          entry.departing = true;
+          continue;
+        }
+        const transition = transitions.get(id);
+        if (transition !== undefined) installRetarget(entry, transition);
       }
-      // Every other intent was checked against an entry that exists.
-      const entry = entries.get(id);
-      if (entry === undefined) continue;
-      if (intent.kind === 'depart') {
-        entry.departing = true;
-        continue;
-      }
-      const transition = transitions.get(id);
-      if (transition !== undefined) installRetarget(entry, transition);
-    }
+    };
+  }
+
+  function resync(targets: readonly EdgeMotionTarget[]): void {
+    planResync(targets)();
+  }
+
+  function apply(delta: EdgeMotionDelta): void {
+    planApply(delta)();
   }
 
   function advance(dtSeconds: number): EdgeMotionFrame {
@@ -778,5 +819,5 @@ export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
     return { edges, settled };
   }
 
-  return { resync, apply, advance };
+  return { resync, apply, advance, planResync, planApply };
 }

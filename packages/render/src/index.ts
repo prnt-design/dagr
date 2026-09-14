@@ -90,7 +90,7 @@
  * `LayoutDelta`: {@link MotionTarget} is a world-space centre, so the y flip
  * stays with whoever owns the layout exactly as `setNodes` already requires,
  * and `@dagr/layout` stays out of this package's dependencies. The bounds
- * change and the loop that drives every one of these is M4.7c's.
+ * change and the loop that drives every one of these are M4.7c's, below.
  *
  * **M4.7b added the edge half, and it is one decision with a state machine
  * around it.** {@link createEdgeMotion} is {@link createNodeMotion}'s shape for
@@ -102,6 +102,21 @@
  * is: a caller animating edges with their own curve or their own clock needs
  * the correspondence before they need anything else, and it is a pure function
  * of two point lists.
+ *
+ * **M4.7c is where this package finally owns a clock, and it owns as little of
+ * one as it can.** {@link createBoundsMotion} is the third half of the delta
+ * consumer, the drawing's box sprung as a centre and two half-extents so it
+ * never turns inside out on the way. {@link createSceneMotion} drives all three
+ * halves from one delta and one clock, and adds the one property no half can
+ * have alone: a scene delta is applied across nodes, edges and the box or not at
+ * all, which is what the two-phase `planApply` on the halves exists for and why
+ * that plan API is not exported. {@link createMotionLoop} is the starting half
+ * of the opinion `render.md` has asked for since M4.6: a loop is woken rather
+ * than started, stops itself on the frame that says settled, and takes its
+ * scheduler as an option so that a caller who already coalesces a frame hands
+ * theirs in and there is one loop rather than two. What none of the three does
+ * is render, or read a `LayoutDelta`: the conversion and the draw stay with the
+ * caller, as they have since M4.1.
  *
  * **M4.9a is the first thing this package says about the machine it is running
  * on.** `createRenderer` takes a `backend` preference and every renderer reports
@@ -128,6 +143,8 @@
  * is a different thing from putting it on the package's surface.
  */
 
+export { createBoundsMotion } from './bounds-motion.js';
+export type { BoundsMotion, BoundsMotionFrame, BoundsMotionOptions } from './bounds-motion.js';
 export { Camera2D, fitZoom } from './camera.js';
 export type { Camera2DInit } from './camera.js';
 export {
@@ -159,6 +176,8 @@ export {
 } from './html-overlay.js';
 export type { HtmlOverlay, HtmlOverlayOptions, OverlayEntry, OverlayEntryInit } from './html-overlay.js';
 export { measureHtmlSizes } from './measure-html.js';
+export { createMotionLoop } from './motion-loop.js';
+export type { FrameScheduler, MotionLoop, MotionLoopOptions } from './motion-loop.js';
 export {
   DEFAULT_MOTION_HALF_LIFE,
   DEFAULT_MOTION_REST,
@@ -181,6 +200,14 @@ export type { SceneStyle } from './instance-attributes.js';
 export { advanceDashFlow, ribbonWidthAt } from './ribbon.js';
 export type { RibbonDashStyle, RibbonStyle, RibbonWidth, RibbonWidthInput } from './ribbon.js';
 export type { EdgeFrameStyle, SceneEdge, SceneEdgeGroup } from './scene-edges.js';
+export { createSceneMotion } from './scene-motion.js';
+export type {
+  SceneMotion,
+  SceneMotionDelta,
+  SceneMotionFrame,
+  SceneMotionOptions,
+  SceneMotionRoster,
+} from './scene-motion.js';
 export type { NodeShape, SceneNode } from './scene-nodes.js';
 export {
   HALF_LIFE_OMEGA,

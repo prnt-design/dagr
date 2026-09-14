@@ -244,9 +244,13 @@ holds the renderer and calls `setEdgeStyle` on it.
 - **Interaction.** Hover, selection and drag are M5.2, and they want the GPU
   picking pass of M4.8 underneath rather than a hit test invented here against
   a scene array.
-- **Animation.** The spring integrator is M4.6 and the delta consumer that
-  drives it from a `LayoutDelta`'s node lists is M4.7a. `<DagrCanvas>` re-lays
-  out and re-sets; nothing tweens yet.
+- **Animation, through this component.** The springs, the three delta consumers
+  and the loop that drives them all landed in `@dagr/render` at M4.6 through
+  M4.7c, and they are exported: `createSceneMotion` takes a delta and
+  `createMotionLoop` drives it. What is missing is this package doing that for
+  you off the `graph` prop, which is M5.3, together with the hook reaching for
+  the incremental engine rather than a cold `layout()` per edit. Today
+  `<DagrCanvas>` re-lays out and re-sets, so nothing tweens.
 - **A node ontology.** What a node looks like is a callback and it stays one.
   Deciding that a node of kind X draws as a hexagon belongs to the
   [visual-language toolkit](./visual-languages.md), which is scoped precisely so
