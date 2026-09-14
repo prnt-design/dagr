@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createBoundsMotion } from '../src/bounds-motion.js';
+import { createBoundsMotion, createPlannedBoundsMotion } from '../src/bounds-motion.js';
 import { DEFAULT_MOTION_HALF_LIFE, DEFAULT_MOTION_REST } from '../src/motion.js';
 import { omegaForHalfLife, stepSpring2D } from '../src/spring.js';
 import type { WorldBounds } from '../src/types.js';
@@ -50,6 +50,41 @@ describe('createBoundsMotion', () => {
     const motion = createBoundsMotion();
     motion.resync(box(0, 0, 0, 0));
     expect(motion.advance(0).bounds).toEqual(box(0, 0, 0, 0));
+  });
+
+  it('keeps a box whose midpoint would overflow, by not computing the midpoint', () => {
+    // Four finite coordinates in the right order do not make a finite `(minX +
+    // maxX) / 2`, and a box from 1e308 to 1.5e308 is the demonstration: every
+    // corner is finite, the ordering holds, and the sum overflows. The module
+    // computes the HALF-EXTENT first and the centre as `minX + half`, so the
+    // intermediate that overflowed never exists and this box is drawn correctly
+    // rather than refused. Asserted on the way back out, because the point is
+    // that the decomposition round-trips.
+    const motion = createBoundsMotion();
+    motion.resync(box(1e308, 0, 1.5e308, 1));
+    expect(motion.advance(0).bounds).toEqual(box(1e308, 0, 1.5e308, 1));
+  });
+
+  it('refuses a box whose extent overflows, rather than drawing an infinite one', () => {
+    // What is left once the midpoint is out of the way: a box wider than the
+    // finite range, whose half-extent overflows however it is computed. This is
+    // the one input class that reached the drawing, because a SEEDED box has no
+    // springs yet and the guard that catches everything else reads the springs.
+    // Unrefused it puts an infinite box in the frame, and the caller hands that
+    // to `fitBounds`, which throws an animation loop away from the cause.
+    const motion = createBoundsMotion();
+    expect(() => {
+      motion.resync(box(-1.7e308, 0, 1.7e308, 1));
+    }).toThrow(/half-extent x/);
+    expect(() => {
+      motion.resync(box(0, -1.7e308, 1, 1.7e308));
+    }).toThrow(/half-extent y/);
+    // Refused rather than half seeded: nothing infinite reached the frame and
+    // the motion still holds no box at all.
+    expect(motion.advance(0)).toEqual({ bounds: null, settled: true });
+    expect(() => {
+      motion.retarget(box(-1.7e308, 0, 1.7e308, 1));
+    }).toThrow(/half-extent x/);
   });
 
   it('refuses a box that is inside out, by name', () => {
@@ -176,5 +211,87 @@ describe('createBoundsMotion', () => {
     motion.resync(handed);
     handed.maxX = 999;
     expect(motion.advance(0).bounds?.maxX).toBe(10);
+  });
+});
+
+/**
+ * The two-phase form, which exists for `createSceneMotion` and not for a caller.
+ *
+ * Asserted here rather than only through the composite, because the property it
+ * carries is about THIS module: every check that can throw runs at plan time,
+ * and the closure that comes back mutates and cannot refuse. The composite's own
+ * suite asserts what that buys across three halves.
+ */
+describe('createPlannedBoundsMotion', () => {
+  it('changes nothing until the commit is called', () => {
+    const motion = createPlannedBoundsMotion();
+    motion.resync(box(0, 0, 100, 100));
+    const commit = motion.planRetarget(box(0, 0, 400, 100));
+
+    expect(motion.advance(0)).toEqual({ bounds: box(0, 0, 100, 100), settled: true });
+    commit();
+    expect(motion.advance(0).settled).toBe(false);
+    expect(settle(motion)).toEqual(box(0, 0, 400, 100));
+  });
+
+  it('refuses at plan time, before there is anything to undo', () => {
+    const motion = createPlannedBoundsMotion();
+    motion.resync(box(0, 0, 100, 100));
+    expect(() => motion.planRetarget(box(10, 0, 0, 10))).toThrow(/maxX/);
+    expect(motion.advance(0)).toEqual({ bounds: box(0, 0, 100, 100), settled: true });
+  });
+
+  it('checks the spring it will actually aim, mid-flight and not at rest', () => {
+    // The defect the plan API replaced. The composite used to check this half by
+    // aiming a THROWAWAY motion seeded from the current box, which is at REST,
+    // where the real half is caught mid-flight with velocity. `checkAim` guards
+    // `velocity + w * displacement`, so the two validate different expressions.
+    //
+    // WHAT THIS TEST EXHIBITS is that a plan is made against the moving entry:
+    // the commit lands the box on the plan's target from wherever the springs
+    // had got to, carrying velocity, rather than from the box the plan was read
+    // at. WHAT IT DOES NOT EXHIBIT is the arithmetic divergence itself, and that
+    // is worth saying plainly: reaching it needs a velocity and a displacement
+    // whose sum overflows while neither does, and `spring.ts` rejects a step
+    // whose own result leaves the finite range, so the states that would show it
+    // are guarded a layer earlier. The hole was real, the fix is the symmetry,
+    // and the evidence for it is the code path rather than a number.
+    const motion = createPlannedBoundsMotion({ restEpsilon: 1e-9 });
+    motion.resync(box(0, 0, 100, 100));
+    motion.retarget(box(0, 0, 900, 100));
+    motion.advance(0.05);
+    const midFlight = motion.advance(0).bounds;
+    if (midFlight === null) throw new Error('no bounds mid-flight');
+    expect(midFlight.maxX).toBeGreaterThan(100);
+    expect(midFlight.maxX).toBeLessThan(900);
+
+    const commit = motion.planRetarget(box(0, 0, 100, 100));
+    commit();
+    // Still where it was on the frame the plan committed: a retarget moves no
+    // box on its own frame, which is the node half's rule for the same reason.
+    expect(motion.advance(0).bounds).toEqual(midFlight);
+    expect(settle(motion)).toEqual(box(0, 0, 100, 100));
+  });
+
+  it('aims the entry it validated, which is why a plan is not portable', () => {
+    // The rule the plan API's docstring states, as a test. A plan holds the
+    // entry it checked; dropping the box and then committing aims an entry
+    // nothing is drawing, and the scene is left with no box rather than with a
+    // box the plan never validated.
+    const motion = createPlannedBoundsMotion();
+    motion.resync(box(0, 0, 100, 100));
+    const commit = motion.planRetarget(box(0, 0, 400, 100));
+    motion.resync(null);
+    commit();
+    expect(motion.advance(0)).toEqual({ bounds: null, settled: true });
+  });
+
+  it('plans a resync to nothing as a commit that clears the box', () => {
+    const motion = createPlannedBoundsMotion();
+    motion.resync(box(0, 0, 100, 100));
+    const commit = motion.planResync(null);
+    expect(motion.advance(0).bounds).toEqual(box(0, 0, 100, 100));
+    commit();
+    expect(motion.advance(0).bounds).toBeNull();
   });
 });

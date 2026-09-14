@@ -5259,7 +5259,7 @@ of M3 would leave the second runner idle for a milestone.
 - [x] **M4.7c** (`@dagr/render`) Delta consumer, the rest: the bounds change,
   the loop that drives all three halves, and the scene that makes them one call.
   This is what M4.7b's seam left, and it inherits the entry's remaining
-  questions. Shipped 2026-09-12. THE DEMO MOVED TO M5.3, and the reason is the
+  questions. Shipped 2026-09-13. THE DEMO MOVED TO M5.3, and the reason is the
   one the entry's own scoping gave for the seam: the render half is decidable
   and testable in Node against a scheduler made of a `Map`, and every claim
   below is asserted that way, while a demo that mutates a graph wants
@@ -5296,21 +5296,34 @@ of M3 would leave the second runner idle for a milestone.
   delta names nodes AND edges, so applying the node half and then refusing the
   edge half hands the caller precisely the half-applied scene both halves
   promise never to produce, with the node springs already moved by the delta
-  they are about to resync away from. The halves therefore grew a two-phase
-  form, `planApply` and `planResync`, which run every check that can throw and
-  hand the mutation back as a closure; `createSceneMotion` plans all three
-  before it commits any. THE PLAN API IS ON THE OBJECTS AND OFF THE TYPES AND
-  OFF THE SURFACE: a plan is valid only against the state it was made from,
-  and a caller of one half alone has nothing to coordinate with, so
-  `createPlannedNodeMotion` stays internal and `index.test.ts` asserts it. The
-  test that matters is the one where the node half would accept and the edge
-  half would refuse, and it asserts the node is exactly where it was.
-  **THE BOUNDS HALF HAS NO PLAN API, AND THE COMPOSITE CHECKS IT WITH A
-  THROWAWAY.** A bounds check is `requireBounds` plus the per-axis overflow
-  guard, both pure, so the composite aims a fresh `createBoundsMotion` at the
-  same box from the same current box and lets it throw, then commits the two
-  rosters and retargets the real one. A third plan interface for one caller
-  would be more surface than the check is worth.
+  they are about to resync away from. All three halves therefore grew a
+  two-phase form, `planApply`, `planResync` and `planRetarget`, which run every
+  check that can throw and hand the mutation back as a closure;
+  `createSceneMotion` plans all three before it commits any. THE PLAN API IS ON
+  THE OBJECTS AND OFF THE TYPES AND OFF THE SURFACE: a plan is valid only
+  against the state it was made from, and a caller of one half alone has nothing
+  to coordinate with, so the three `createPlanned*` factories stay internal and
+  `index.test.ts` asserts it. The test that matters is the one where the node
+  half would accept and the edge half would refuse, and it asserts the node is
+  exactly where it was.
+  **THE BOUNDS HALF NEEDED A PLAN TOO, AND THE REASON IS THE ONE THING IN THIS
+  TASK THAT WAS SHIPPED WRONG AND CAUGHT BEFORE THE PULL REQUEST.** The first
+  version of the composite checked that half by aiming a THROWAWAY
+  `createBoundsMotion` at the same box, on the argument that a bounds check is
+  pure. `requireBounds` is; `checkAim` is not, because it reads the CURRENT
+  SPRING and guards `velocity + w * displacement`. A throwaway seeded from the
+  current position is at REST, so it validated `0 + w * displacement` where the
+  real half, caught mid-flight, validates a nonzero velocity plus the same term.
+  A box moving fast enough that the sum overflows while the term alone does not
+  would have passed the probe and thrown on the real retarget, AFTER the other
+  two halves had committed, which is exactly the state the whole mechanism
+  exists to make unreachable. The probe also called `advance(0)` on the real
+  motion to read its current box, which is a mutation inside what was supposed
+  to be a check. So the bounds half has `planResync` and `planRetarget` like the
+  other two, and the three are symmetric. GENERALISE IT: "this check is pure" is
+  a claim about every expression the check evaluates, not about the argument it
+  is handed, and the expression that broke it here was three calls away, inside
+  a function whose name says it validates rather than that it reads.
   **A LOOP IS WOKEN, NOT STARTED, AND IT STOPS ITSELF.** The opinion `render.md`
   has asked for since M4.6 is three sentences. `wake()` on a running loop is
   the frame already queued, so a burst of edits in one task is one frame. The
@@ -5363,6 +5376,57 @@ of M3 would leave the second runner idle for a milestone.
   clock says. Nothing here skips work to fit a budget, because the lever is
   upstream: the incremental engine reroutes a small fraction of the drawing
   per patch, and M4.10 measures the frame against a GPU.
+  **WHAT THE TWO REVIEWS FOUND, AND THE TWO DEFECTS AMONG IT.** Both were found
+  by reading rather than by a failing test, which is the argument for the tree
+  review this repo makes in AGENTS.md.
+  FOUR FINITE CORNERS DO NOT MAKE A FINITE MIDPOINT. `requireBounds` checks each
+  coordinate on its own, so a box from `1e308` to `1.5e308` passed it and
+  `(minX + maxX) / 2` overflowed: a perfectly drawable box, centre `1.25e308`,
+  reported as infinite in both directions with nothing raised. The seeding path
+  was the only one that could do it, because `checkAim` is what catches a bad box
+  everywhere else and it reads springs a seeded box has none of. The fix is to
+  compute the HALF-EXTENT first and the centre as `minX + half`, which removes
+  the intermediate rather than refusing the input, so that box now draws
+  correctly; what is left, a box genuinely wider than the finite range, is
+  refused by name. GENERALISE IT: a guard that validates the INPUTS of an
+  expression has not validated the expression, and the arithmetic between them is
+  where a finite-in, finite-out assumption lives unstated.
+  A SCHEDULER THAT REFUSED THE NEXT FRAME LEFT THE LOOP CLAIMING TO RUN. `wake`
+  guarded its `schedule` and the tail of `onFrame` did not, so a caller's own
+  frame queue throwing once (torn down with the surface it draws to, before they
+  reached `dispose`) left `running` true with no frame queued and no frame on the
+  stack, and every later `wake` returned early on `running`. One `startFrame`
+  for both call sites. GENERALISE IT: two call sites of the same operation where
+  only one handles the failure is a bug with a shape, and the shape is visible in
+  the diff without knowing anything about the domain.
+  THE `exactOptionalPropertyTypes` WIDENING WAS DEMONSTRATED BY THE COMPILER
+  RATHER THAN ARGUED. `SceneMotionDelta` mirrors `LayoutDelta`, whose `bounds` is
+  a key that is always present and sometimes `undefined`, so `?: T` forced a
+  conditional spread at every call site and the docs example had one. Widening
+  the scene types then failed to compile against `NodeMotionOptions` and
+  `EdgeMotionOptions`, which were still `?: number`: the composite could not pass
+  its own options down. All five are `?: T | undefined` now and the example
+  forwards the field plainly.
+  THE NODE HALF'S RETARGET KEPT A PERMANENT RESIDUAL, AND THE OTHER TWO DID NOT.
+  `installRetarget` set the target and `moving = false` when the new target was
+  within the tolerance, and `advance` skips an entry that is not moving, so the
+  node never arrived. That is precisely what `advance`'s own arrival path refuses,
+  in as many words, one screen further down the same file. Sub-pixel at the
+  default tolerance and visible at a coarse one: a delta moving every node by
+  less than the tolerance moved none of them while the box moved with them. The
+  edge half has always called `settleOnto` and the bounds half does too, so this
+  is the node half joining them rather than a new rule.
+  THE PLANS ARE STRIPPED FROM THE PUBLIC OBJECTS, NOT ONLY FROM THE TYPES. The
+  first version returned the planned instance and let the return type hide the
+  extra methods. A type is no barrier to a JavaScript consumer or to anything
+  that enumerates keys, and the rule a plan carries, that it is valid only
+  against the state it was made from, is unenforceable from a public object that
+  exposes one. One object literal per motion, which is per scene and not per
+  frame. `index.test.ts` asserts the key lists rather than the declarations.
+  THE PLATFORM SCHEDULER NO LONGER PINS THE FUNCTION IT FOUND. What is decided
+  once is WHETHER the platform has a `requestAnimationFrame`, which is what a
+  wake needs an answer to; which function that is, is read per frame, so a loop
+  woken before a test replaced the global does not go on driving the old one.
   **ON NO BENCHED PATH**, like the two halves before it: none of the three new
   modules appears in any file under a `bench/` directory, and one grep says so.
   **THE LOOP IS THIS TASK'S, AND BOTH EARLIER HALVES HANDED IT THE PREDICATE IT

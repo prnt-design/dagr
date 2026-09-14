@@ -131,18 +131,30 @@ export interface MotionFrame {
   readonly settled: boolean;
 }
 
-/** How the motion should feel, and when it should call itself done. */
+/**
+ * How the motion should feel, and when it should call itself done.
+ *
+ * Both fields are `?: T | undefined` rather than `?: T`, which is redundant
+ * under a default tsconfig and is not under `exactOptionalPropertyTypes`, which
+ * this repo sets and a careful consumer sets too. Under that flag `?: T` means
+ * the key may be ABSENT but may not be present holding `undefined`, and the
+ * ordinary shape here is a caller forwarding options they were themselves given
+ * optionally. M4.7c proved that with a compiler error rather than an argument:
+ * `createSceneMotion` takes one set of options for all three halves and could
+ * not pass them down. `engine.ts` widened `LayoutEngineOptions` for the same
+ * reason and says so; widening is safe to do later and pointless to postpone.
+ */
 export interface NodeMotionOptions {
   /**
    * Seconds to close half the distance to a target, released from rest.
    * Defaults to {@link DEFAULT_MOTION_HALF_LIFE}.
    */
-  readonly halfLifeSeconds?: number;
+  readonly halfLifeSeconds?: number | undefined;
   /**
    * How close, in world units, counts as arrived. Defaults to
    * {@link DEFAULT_MOTION_REST}.
    */
-  readonly restEpsilon?: number;
+  readonly restEpsilon?: number | undefined;
 }
 
 /** A scene's springs, and the two things that are done to them. */
@@ -295,7 +307,14 @@ export interface PlannedNodeMotion extends NodeMotion {
  *   {@link NodeMotionOptions}.
  */
 export function createNodeMotion(options: NodeMotionOptions = {}): NodeMotion {
-  return createPlannedNodeMotion(options);
+  // The plans are STRIPPED rather than merely hidden by the return type. A type
+  // is not a barrier for a JavaScript consumer or for anything that enumerates
+  // keys, and the rule a plan carries, that it is valid only against the state
+  // it was made from, is unenforceable and silently violable from a public
+  // object that exposes one. The cost is one object literal per motion, which is
+  // per scene rather than per frame.
+  const { resync, apply, advance } = createPlannedNodeMotion(options);
+  return { resync, apply, advance };
 }
 
 /** {@link createNodeMotion} with the plans exposed. See {@link PlannedNodeMotion}. */
@@ -366,6 +385,20 @@ export function createPlannedNodeMotion(options: NodeMotionOptions = {}): Planne
   function installRetarget(entry: Entry, transition: RetargetTransition): void {
     entry.target = transition.target;
     entry.moving = transition.moving;
+    if (!entry.moving) {
+      // LANDS EXACTLY ON THE NEW TARGET, and not staying where it was, which is
+      // what this did until M4.7c. `advance` skips an entry that is not moving,
+      // so a retarget to WITHIN the tolerance of the target used to set the
+      // target and then never reach it: a residual that is bounded and
+      // PERMANENT, which is the thing `advance`'s own arrival path refuses in as
+      // many words, for the reason written there. At the default tolerance the
+      // gap is sub-pixel; at a coarse one, which the option exists for, a delta
+      // moving every node by less than the tolerance moved none of them while
+      // the drawing's box moved with it. The edge half has always landed here
+      // (`installRetarget` calls `settleOnto`) and the bounds half does too, so
+      // the three agree.
+      entry.spring = { position: copyOf(transition.target), velocity: AT_REST };
+    }
   }
 
   function planResync(targets: readonly MotionTarget[]): () => void {

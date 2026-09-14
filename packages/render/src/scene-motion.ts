@@ -22,8 +22,9 @@ import type { WorldBounds } from './types.js';
  * half-applied scene both halves promise never to produce, with the node
  * springs already moved by the delta the caller is about to resync away from.
  * So the halves expose their two mutations as a PLAN and a COMMIT (see
- * `PlannedNodeMotion`), this module asks all three halves to plan first, and
- * only when it holds every commit does it run any. A `MotionDesyncError` or a
+ * `PlannedNodeMotion`, and `PlannedBoundsMotion` for why the half whose checks
+ * look pure needs one too), this module asks all three halves to plan first,
+ * and only when it holds every commit does it run any. A `MotionDesyncError` or a
  * `RangeError` from any half therefore leaves all three exactly as they were.
  * The plans are internal to the package, because a caller of one half alone
  * has nothing to coordinate with.
@@ -44,12 +45,24 @@ import type { WorldBounds } from './types.js';
  * that calls `advance` is `motion-loop.ts`.
  */
 
-/** What a scene is made of, absolutely. The shape `resync` takes. */
+/**
+ * What a scene is made of, absolutely. The shape `resync` takes.
+ *
+ * `bounds` is `?: T | undefined` rather than `?: T`, and every optional field on
+ * {@link SceneMotionDelta} is too. The difference is only visible under
+ * `exactOptionalPropertyTypes`, which this repo sets and a careful consumer
+ * sets: there `?: T` means the key may be ABSENT but may not be present holding
+ * `undefined`. `LayoutDelta.bounds` is declared `BoundsChange | undefined`, a
+ * key that is always there and is sometimes undefined, so forwarding it is the
+ * ordinary shape a caller writes and `?: T` would refuse it, pushing a
+ * conditional spread into every call site. `engine.ts` widened
+ * `LayoutEngineOptions` for the same reason and says so.
+ */
 export interface SceneMotionRoster {
   readonly nodes: readonly MotionTarget[];
   readonly edges: readonly EdgeMotionTarget[];
-  /** The drawing's box. Absent means the scene has none. */
-  readonly bounds?: WorldBounds;
+  /** The drawing's box. Absent or `undefined` means the scene has none. */
+  readonly bounds?: WorldBounds | undefined;
 }
 
 /**
@@ -59,10 +72,15 @@ export interface SceneMotionRoster {
  * two nodes and nothing else is a delta naming two nodes.
  */
 export interface SceneMotionDelta {
-  readonly nodes?: NodeMotionDelta;
-  readonly edges?: EdgeMotionDelta;
-  /** The box after the change. Absent means it did not change. */
-  readonly bounds?: WorldBounds;
+  readonly nodes?: NodeMotionDelta | undefined;
+  readonly edges?: EdgeMotionDelta | undefined;
+  /**
+   * The box after the change. Absent or `undefined` means it did not change,
+   * which is exactly what `LayoutDelta.bounds` being `undefined` already means,
+   * so `bounds: delta.bounds === undefined ? undefined : boxOf(delta.bounds.to)`
+   * forwards without a conditional spread. See {@link SceneMotionRoster}.
+   */
+  readonly bounds?: WorldBounds | undefined;
 }
 
 /** One frame's worth of answer for the whole scene. */
@@ -78,9 +96,9 @@ export interface SceneMotionFrame {
 /** How the whole scene should feel. One number each, shared by all three halves. */
 export interface SceneMotionOptions {
   /** See `NodeMotionOptions.halfLifeSeconds`. Defaults to `DEFAULT_MOTION_HALF_LIFE`. */
-  readonly halfLifeSeconds?: number;
+  readonly halfLifeSeconds?: number | undefined;
   /** See `NodeMotionOptions.restEpsilon`. Defaults to `DEFAULT_MOTION_REST`. */
-  readonly restEpsilon?: number;
+  readonly restEpsilon?: number | undefined;
 }
 
 /** A scene's springs, and the three things done to them. */

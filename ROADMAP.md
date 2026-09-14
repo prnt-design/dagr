@@ -10,7 +10,7 @@ the decisions it took and the reasons, lives in
 reference elsewhere in the repo to "the roadmap's M4.6 entry" means the entry
 there. Milestone status is mirrored in the project brain.
 
-## Status (2026-09-12)
+## Status (2026-09-13)
 
 The engine is the part that is done. Over the six-session corpus (M3.10a) the
 incremental path moves 4.1x to 38.4x less of the drawing per patch than a cold

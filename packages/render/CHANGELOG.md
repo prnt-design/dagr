@@ -61,6 +61,27 @@ not" is the category this file has a heading for.
   springing sizes doubles the per-node state against a settled floor already
   measured. `stepSpring2D` and the node id are there for a caller who wants it.
 
+### Changed
+
+- **A node retarget to within the tolerance of its target now lands ON the
+  target** rather than staying where it was. Behaviour, not types, which is the
+  category this file exists for. `advance` skips an entry that is not moving, so
+  the old spelling set the target and then never reached it: a residual that is
+  bounded and PERMANENT, which is exactly what `advance`'s own arrival path
+  refuses and for the reason written there. At the default `restEpsilon` of 0.05
+  world units the gap is sub-pixel; at a coarse one, which the option exists for,
+  a delta moving every node by less than the tolerance moved none of them while
+  the drawing's box moved with them. The edge half has always landed exactly and
+  the bounds half does too, so the three halves now agree. (M4.7c)
+
+- **`NodeMotionOptions` and `EdgeMotionOptions` widened from `?: number` to
+  `?: number | undefined`.** Redundant under a default tsconfig, and not under
+  `exactOptionalPropertyTypes`, which this repo sets and a careful consumer sets:
+  there `?: T` means a key may be absent but may not be present holding
+  `undefined`. `createSceneMotion` takes one set of options for all three halves
+  and could not forward them, which turned the preference into a compiler error.
+  Purely widening, so nothing that compiled before stops. (M4.7c)
+
 - `createEdgeMotion` and `alignRoutes`, the edge half of the delta consumer: one
   spring per point of a route, retargeted by a `LayoutDelta`'s edge lists,
   stepped by the same clock and settling to the same feel as the node half. Nine

@@ -93,8 +93,16 @@ export interface MotionLoopOptions {
    * the global at the first wake rather than at construction, so the module
    * imports cleanly where there is none and a loop built on a server throws
    * only if it is woken there.
+   *
+   * `?: T | undefined` rather than `?: T`, which is redundant under a default
+   * tsconfig and is not under `exactOptionalPropertyTypes`, which this repo
+   * sets and a careful consumer sets too. Under that flag `?: T` means the key
+   * may be ABSENT but may not be present holding `undefined`, and a React
+   * wrapper threading `scheduler` out of a ref, which is the ordinary shape
+   * here, stops compiling. `engine.ts` widened `LayoutEngineOptions` for the
+   * same reason.
    */
-  readonly scheduler?: FrameScheduler;
+  readonly scheduler?: FrameScheduler | undefined;
 }
 
 /** A loop, and the three things done to it. */
@@ -120,25 +128,44 @@ export interface MotionLoop {
   dispose(): void;
 }
 
+/** What the platform is expected to have, as this module reads it. */
+interface FrameHost {
+  requestAnimationFrame?: (callback: (nowMs: number) => void) => number;
+  cancelAnimationFrame?: (handle: number) => void;
+}
+
 /**
- * The platform's scheduler, or `null` where there is none.
+ * A scheduler that goes through the platform, or `null` where there is none.
  *
- * Resolved at wake rather than import so that importing this package on a
- * server is not an error, and read through `globalThis` rather than a bare
- * name for the same reason.
+ * Resolved at the first wake rather than at import, so importing this package on
+ * a server is not an error and only waking a loop there is. Read through
+ * `globalThis` for the same reason.
+ *
+ * **IT DOES NOT PIN THE FUNCTION IT FOUND.** Each call reads
+ * `requestAnimationFrame` off the host again, so a loop woken before a test
+ * replaced the global does not go on driving the old one, and a loop that
+ * outlives a jsdom teardown fails at the call rather than into a detached
+ * window. What is decided once is WHETHER the platform has one at all, which is
+ * what the wake needs an answer to; which function that is, is the host's
+ * business every time.
  */
 function platformScheduler(): FrameScheduler | null {
-  const host = globalThis as {
-    requestAnimationFrame?: (callback: (nowMs: number) => void) => number;
-    cancelAnimationFrame?: (handle: number) => void;
-  };
-  const request = host.requestAnimationFrame;
-  const cancel = host.cancelAnimationFrame;
-  if (typeof request !== 'function') return null;
+  const host = globalThis as FrameHost;
+  if (typeof host.requestAnimationFrame !== 'function') return null;
   return {
-    request: (callback) => request.call(host, callback),
+    request: (callback) => {
+      const request = (globalThis as FrameHost).requestAnimationFrame;
+      if (typeof request !== 'function') {
+        throw new TypeError(
+          'createMotionLoop: requestAnimationFrame has gone away since this loop was woken, ' +
+            'so pass a scheduler',
+        );
+      }
+      return request.call(globalThis, callback);
+    },
     cancel: (handle) => {
-      if (typeof cancel === 'function') cancel.call(host, handle as number);
+      const cancel = (globalThis as FrameHost).cancelAnimationFrame;
+      if (typeof cancel === 'function') cancel.call(globalThis, handle as number);
     },
   };
 }
@@ -182,8 +209,24 @@ export function createMotionLoop(options: MotionLoopOptions): MotionLoop {
     previousMs = undefined;
   }
 
-  function schedule(): void {
-    queued = resolveScheduler().request(onFrame);
+  /**
+   * Asks for the next frame, and stops the loop if asking fails.
+   *
+   * ONE function for both call sites, and the reason is the state a second
+   * spelling left reachable. `wake` guarded its own `schedule` and the tail of
+   * `onFrame` did not, so a scheduler that threw at the end of a frame (a
+   * caller's own frame queue, torn down with the surface it draws to, before
+   * they got to `dispose`) left the loop with `running` true, no frame queued
+   * and no frame on the stack. Every later `wake` then returned early on
+   * `running` and the loop could never run again or report that it had stopped.
+   */
+  function startFrame(): void {
+    try {
+      queued = resolveScheduler().request(onFrame);
+    } catch (cause: unknown) {
+      stop();
+      throw cause;
+    }
   }
 
   function onFrame(nowMs: number): void {
@@ -211,7 +254,7 @@ export function createMotionLoop(options: MotionLoopOptions): MotionLoop {
       stop();
       return;
     }
-    schedule();
+    startFrame();
   }
 
   function wake(): void {
@@ -224,12 +267,7 @@ export function createMotionLoop(options: MotionLoopOptions): MotionLoop {
     // Running from the moment of the wake, not from the first frame: a second
     // wake before the frame arrives has to see a loop that is already going.
     running = true;
-    try {
-      schedule();
-    } catch (cause: unknown) {
-      running = false;
-      throw cause;
-    }
+    startFrame();
   }
 
   function dispose(): void {

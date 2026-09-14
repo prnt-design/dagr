@@ -1365,7 +1365,7 @@ M4.6 added the motion arithmetic: `stepSpring`, `stepSpring2D`,
 `omegaForHalfLife`, and two constants of the envelope the last of those reads.
 Nothing in it touches a GPU, a canvas or three.js, and no `Renderer` method
 calls it. It is exported because a caller drives the clock, and M4.7a's node
-motion, [two sections down](#deltas-drive-the-springs-and-the-state-is-the-renderers),
+motion, in the [next section](#deltas-drive-the-springs-and-the-state-is-the-renderers),
 is the first thing in this package to call it on a caller's behalf.
 
 A spring here is **critically damped**, which is the fastest approach to a
@@ -1714,9 +1714,10 @@ import { createLayout } from '@dagr/layout';
 const engine = createLayout();
 const motion = createSceneMotion();
 
-// The flip is the caller's, as it has been since M4.1. `@dagr/react` exports
-// the same three conversions as `toSceneNodes`, `toSceneEdges` and
-// `toWorldBounds`; this is what they do.
+// The flip is the caller's, as it has been since M4.1. `@dagr/react`'s
+// `toWorldBounds` is `boxOf` exactly; its `toSceneNodes` and `toSceneEdges` do
+// this same flip on the way to `setNodes` and `setEdges`, and dress the result
+// besides, so they are not drop-in replacements for the two above.
 const centreOf = (node) => ({ id: node.id, center: { x: node.x, y: -node.y } });
 const routeOf = (edge) => ({
   id: edge.id,
@@ -1761,7 +1762,9 @@ graph.subscribe((patch) => {
       removed: [...delta.edges.removed],
       rerouted: delta.edges.rerouted.map((r) => routeOf({ id: r.id, points: r.to })),
     },
-    ...(delta.bounds === undefined ? {} : { bounds: boxOf(delta.bounds.to) }),
+    // `undefined` means the box did not change, which is what `LayoutDelta`
+    // already means by it, so this forwards rather than spreading a condition.
+    bounds: delta.bounds === undefined ? undefined : boxOf(delta.bounds.to),
   });
   loop.wake();
 });

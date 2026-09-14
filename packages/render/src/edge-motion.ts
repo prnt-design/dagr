@@ -155,13 +155,16 @@ export interface EdgeMotionOptions {
    * Defaults to {@link DEFAULT_MOTION_HALF_LIFE}, which is the node half's
    * default too: one delta moves both, and two feels are two arrivals.
    */
-  readonly halfLifeSeconds?: number;
+  readonly halfLifeSeconds?: number | undefined;
   /**
    * How close, in world units, counts as arrived. Defaults to
    * {@link DEFAULT_MOTION_REST}. Per point: an edge is arrived when all of its
    * points are.
+   *
+   * Both fields are `?: T | undefined` on `NodeMotionOptions`'s argument, which
+   * M4.7c's composite turned from a preference into a compiler error.
    */
-  readonly restEpsilon?: number;
+  readonly restEpsilon?: number | undefined;
 }
 
 /** A scene's edge springs, and the three things that are done to them. */
@@ -507,7 +510,11 @@ export interface PlannedEdgeMotion extends EdgeMotion {
  *   {@link EdgeMotionOptions}.
  */
 export function createEdgeMotion(options: EdgeMotionOptions = {}): EdgeMotion {
-  return createPlannedEdgeMotion(options);
+  // Stripped rather than hidden by the return type, on `motion.ts`'s argument:
+  // a type is no barrier to a JavaScript consumer, and a plan's validity rule
+  // cannot be enforced on a public object that exposes one.
+  const { resync, apply, advance } = createPlannedEdgeMotion(options);
+  return { resync, apply, advance };
 }
 
 /** {@link createEdgeMotion} with the plans exposed. See {@link PlannedEdgeMotion}. */

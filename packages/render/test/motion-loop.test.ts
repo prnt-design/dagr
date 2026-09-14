@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createMotionLoop } from '../src/motion-loop.js';
-import type { FrameScheduler } from '../src/motion-loop.js';
+import type { FrameScheduler, MotionLoop } from '../src/motion-loop.js';
 
 /**
  * The loop, under a scheduler this file owns.
@@ -141,9 +141,8 @@ describe('createMotionLoop', () => {
     // the frame was the last one. The settled answer predates the wake, so the
     // wake wins and the next frame reads the new targets.
     const scheduler = fakeScheduler();
-    let loop = createMotionLoop({ frame: () => true, scheduler });
     let calls = 0;
-    loop = createMotionLoop({
+    const loop: MotionLoop = createMotionLoop({
       frame: () => {
         calls += 1;
         if (calls === 1) loop.wake();
@@ -227,6 +226,77 @@ describe('createMotionLoop', () => {
     expect(request).toHaveBeenCalledTimes(1);
     expect(frame).toHaveBeenCalledWith(0);
     expect(loop.running).toBe(false);
+  });
+
+  it('reports itself running from inside the frame it is running', () => {
+    const scheduler = fakeScheduler();
+    const seen: boolean[] = [];
+    const loop: MotionLoop = createMotionLoop({
+      frame: () => {
+        seen.push(loop.running);
+        return true;
+      },
+      scheduler,
+    });
+    loop.wake();
+    scheduler.run(0);
+    expect(seen).toEqual([true]);
+    expect(loop.running).toBe(false);
+  });
+
+  it('stops for good when disposed from inside a frame', () => {
+    // The lifecycle race a `useEffect` cleanup runs: the thing the frame draws
+    // to goes away while the frame is drawing to it. Disposing must take effect
+    // after the callback returns rather than being overwritten by the reschedule
+    // the callback's own answer would otherwise ask for.
+    const scheduler = fakeScheduler();
+    let calls = 0;
+    const loop: MotionLoop = createMotionLoop({
+      frame: () => {
+        calls += 1;
+        loop.dispose();
+        return false;
+      },
+      scheduler,
+    });
+    loop.wake();
+    scheduler.run(0);
+    expect(calls).toBe(1);
+    expect(loop.running).toBe(false);
+    expect(scheduler.pending()).toBe(0);
+    loop.wake();
+    expect(scheduler.pending()).toBe(0);
+  });
+
+  it('stops rather than sticking when the scheduler refuses a later frame', () => {
+    // A caller's own coalesced frame queue, torn down with the surface it draws
+    // to, before they got to `dispose`. The tail of a frame asks for the next
+    // one, and if that ask throws the loop must not be left claiming to run with
+    // no frame queued and no frame on the stack: every later wake would return
+    // early on `running` and the loop could never run again or say it had
+    // stopped.
+    let refuse = false;
+    const inner = fakeScheduler();
+    const scheduler: FrameScheduler = {
+      request: (callback) => {
+        if (refuse) throw new Error('frame queue is gone');
+        return inner.request(callback);
+      },
+      cancel: (handle) => inner.cancel(handle),
+    };
+    const loop = createMotionLoop({ frame: () => false, scheduler });
+    loop.wake();
+    refuse = true;
+    expect(() => {
+      inner.run(0);
+    }).toThrow('frame queue is gone');
+    expect(loop.running).toBe(false);
+    // And it recovers once the caller's queue does, which a stuck loop cannot.
+    refuse = false;
+    loop.wake();
+    expect(loop.running).toBe(true);
+    inner.run(16);
+    expect(loop.running).toBe(true);
   });
 
   it('refuses to wake where there is no requestAnimationFrame and no scheduler', () => {
