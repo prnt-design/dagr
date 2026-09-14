@@ -35,12 +35,21 @@ beside a canvas somebody else owns. `Html` puts React content in world
 coordinates over the canvas. `useDagrCanvas` is how anything inside reaches the
 renderer.
 
+**Add `animate` and an edit glides to its new layout instead of cutting to it:**
+
+```tsx
+<DagrCanvas graph={graph} animate />
+```
+
+That is the whole of it. `useDagr` holds a layout engine across renders, so an
+edit is a `LayoutDelta` rather than a cold run, and the component drives
+`@dagr/render`'s springs and loop off that delta through its own coalesced
+frame. The camera is fitted once and then it is yours: a following camera is
+`fitBounds` on the sprung box handed to `onFrame`, which is your line of code
+rather than the component's.
+
 What is not here yet, so you know before you reach for it: no hover, selection
-or drag (M5.2), and no animation wired through the component (M5.3). The
-animation itself is built and exported from `@dagr/render` as
-`createSceneMotion` and `createMotionLoop`; what is missing is this package
-driving them off the `graph` prop, so today `<DagrCanvas>` re-lays out and
-re-sets on every edit rather than tweening.
+or drag (M5.2).
 
 ## Read this first: the `graph` prop is watched, not compared
 
@@ -57,8 +66,14 @@ setGraph(rebuildFromScratch());
 There is one narrow window this leaves open and it is real. React subscribes in
 an effect, after the render that read the store, and effects run child first.
 A **child's** mount effect that edits the graph runs before the canvas has
-subscribed, so that one edit is not picked up. Edit in a parent effect, or in an
-event handler, and it is.
+subscribed, so that one edit is not picked up until the next one arrives, which
+reports both. Edit in a parent effect, or in an event handler, and it is picked
+up straight away.
+
+One more thing worth knowing before your first multi-step edit: **wrap it in
+`graph.batch`**. Each mutating call is a patch, a relayout and an animation of
+its own, so adding a node and then wiring it up is three of each, and the first
+two place the node somewhere it does not stay.
 
 ## Documentation
 

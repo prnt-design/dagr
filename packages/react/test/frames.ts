@@ -38,11 +38,40 @@ export function pendingFrames(): number {
   return queue.size;
 }
 
-/** Runs every queued frame inside `act`, including any they queue themselves. */
-export async function runFrames(): Promise<void> {
+/**
+ * Runs every queued frame inside `act`, at `nowMs` on the frame clock.
+ *
+ * A frame a callback queues for itself is NOT run here: it is the next frame,
+ * and running it in this call would make one animation's whole settling happen
+ * inside one `runFrames`, with no way for a test to say what the drawing looked
+ * like in between. The timestamp is the caller's for the same reason. A spring
+ * is stepped by the gap between two frames, so a test that wants to talk about
+ * a node halfway to its target has to be the thing that decides how much time
+ * has passed. See {@link runFramesUntilIdle} for the other half.
+ */
+export async function runFrames(nowMs = 0): Promise<void> {
   const due = [...queue.entries()];
   queue.clear();
   await flush(() => {
-    for (const [, callback] of due) callback(0);
+    for (const [, callback] of due) callback(nowMs);
   });
+}
+
+/**
+ * Runs frames at `stepMs` apart until nothing asks for another, and says how
+ * many it took.
+ *
+ * The cap is what makes a loop that never stops a failing test rather than a
+ * hung one: it throws by name instead of running until vitest gives up.
+ */
+export async function runFramesUntilIdle(stepMs = 16, cap = 400): Promise<number> {
+  let ran = 0;
+  let nowMs = 0;
+  while (queue.size > 0) {
+    if (ran >= cap) throw new Error(`the frame loop ran ${String(cap)} frames without settling`);
+    nowMs += stepMs;
+    await runFrames(nowMs);
+    ran += 1;
+  }
+  return ran;
 }

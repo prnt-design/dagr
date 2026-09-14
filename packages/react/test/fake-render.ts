@@ -1,9 +1,14 @@
 /**
- * A stand-in for `@dagr/render`, so a component test can run without a GPU.
+ * A stand-in for the two things in `@dagr/render` that need a device, so a
+ * component test can run without a GPU.
  *
- * A NON-TEST helper. `vi.mock('@dagr/render', () => import('./fake-render.js'))`
- * puts it in the renderer's place, which is what the M5.1 entry asks for when
- * it says "mocked-renderer component tests".
+ * A NON-TEST helper. It replaces `createRenderer` and `createHtmlOverlay` and
+ * NOTHING ELSE: the mock spreads this file over the real module, so every other
+ * export a component reaches for is the real one. M5.3 is why that distinction
+ * matters. `<DagrCanvas animate>` drives `createSceneMotion` and
+ * `createMotionLoop`, neither of which touches a device, and faking them too
+ * would leave a component test asserting that the component calls an API rather
+ * than that a node ends up halfway to where it is going.
  *
  * **What that buys and what it costs, stated rather than assumed.** It buys the
  * only thing these tests are about: which calls `DagrCanvas` makes, in what

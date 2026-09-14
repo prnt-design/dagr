@@ -4,6 +4,27 @@
 
 ### Added
 
+- **M5.3: an edit animates.** `<DagrCanvas animate>` glides a node to its new
+  layout instead of cutting to it, and the same prop carries the feel:
+  `animate={{ halfLifeSeconds, restEpsilon }}` is `@dagr/render`'s two numbers,
+  compared by value the way `config` is. A prop rather than a hook because the
+  component already owns the four things a hook would have to hand back out
+  (the coalesced frame, the renderer, the scene conversions, and the delta),
+  and `createMotionLoop`'s scheduler option is what keeps that from foreclosing
+  the other shape: the loop is given the component's own `requestDraw`, so
+  there is one frame budget rather than two and a burst of edits in one task is
+  one frame.
+- `onFrame` on `<DagrCanvas>`, called with the sprung scene and the renderer
+  about to draw it, after `setNodes` and `setEdges` and before `render`. This
+  is where a following camera lives: the component still fits once and never
+  refits, and `fitBounds` on `frame.bounds` is the caller's line of code.
+- `animation.ts`: `toMotionDelta`, `toMotionRoster` and `retarget`, exported on
+  `scene.ts`'s precedent, for a caller driving `@dagr/render`'s scene motion
+  themselves. `retarget` is where one decision is written down: a delta is a
+  difference from a drawing, a cold run is not, and the second reseats.
+- `DagrLayoutState.delta`, the `LayoutDelta` of the edit that produced this
+  layout, or `null` for a run that was cold. `null` is a statement rather than a
+  missing value: there is no previous drawing to be a difference from.
 - **M5.1: the package.** `<DagrCanvas>`, `useDagr`, `<Html>` and
   `useDagrCanvas`, plus the `LayoutResult` to scene conversion the renderer
   deliberately does not own. The package had been a scaffold since the
@@ -43,6 +64,19 @@
 
 ### Changed
 
+- **`useDagr` holds a `createLayout` engine across renders.** An edit is
+  `relayout(patch)` rather than a cold `layout()`, which is where the delta
+  comes from and what makes the drawing stable under an edit rather than merely
+  correct. The engine runs in the graph listener, which is neither render nor an
+  effect: `relayout` does not apply its patch, so the patch has to be consumed
+  exactly once and in order, and draining a queue during render is a side effect
+  concurrent rendering is entitled to discard and run again. There is no queue.
+  The engine is disposed when the hook stops watching, and a resubscribe
+  rebuilds it and lays the graph out cold, which is the designed recovery for an
+  engine and a graph that have fallen out of step.
+- The first run for a graph is still synchronous and still during render, and
+  the whole `{ result, error, delta }` state is still referentially stable, so
+  an effect keyed on it runs exactly once per layout.
 - **The tarball a consumer installs (M5.4a).** `files` now ships `src`,
   `README.md` and `LICENSE` beside `dist` and `CHANGELOG.md`, and
   `publishConfig.access` is `"public"`. The package has a README for the first

@@ -1934,9 +1934,8 @@ confirmation.
 ## What is not here yet
 
 The motion arithmetic, the three delta consumers and the loop are headless and
-complete. What is still missing is the device work below, and one thing that is
-not this package's: nothing deployed drives the loop from a graph a user is
-editing, which is M5.3's demo and the React wiring beside it.
+complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
+(M5.3). What is still missing is the device work below.
 
 - The pass half of GPU picking: a material writing the bytes above, an
   offscreen target, the readback and a `pick()` on `Renderer` (M4.8b). What

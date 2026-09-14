@@ -70,11 +70,14 @@ their own `requestAnimationFrame` and gets no edge motion at all. The two halves
 of M4 that a consumer touches first are the delta consumer and the loop, and one
 of them is missing.
 
-**M5.3 third.** `docs/src/pages/index.tsx` tells a visitor that mutations arrive
-as deltas and untouched nodes stay put. Nothing on the site or in `apps/demo`
-calls `relayout` even once, so the claim is unillustrated on the page that makes
-it, while M3.10a's numbers now sit one click away on the incremental-layout doc.
-An animated demo is the cheapest way to make the two agree.
+**M5.3 third, and it split in two on 2026-09-14.** `docs/src/pages/index.tsx`
+tells a visitor that mutations arrive as deltas and untouched nodes stay put.
+Nothing on the site or in `apps/demo` called `relayout` even once, so the claim
+was unillustrated on the page that makes it, while M3.10a's numbers sit one
+click away on the incremental-layout doc. An animated demo is the cheapest way
+to make the two agree. M5.3a is the React wiring that demo would otherwise have
+had to hand-write against the render API, and it has shipped; M5.3b is the demo
+itself, and it is what still stands between a visitor and the headline claim.
 
 **M5.2 and M4.8b after those, and they are a pair.** Interaction hooks want the
 pick pass, and the pick pass wants a machine with a WebGPU adapter, which this
@@ -5266,7 +5269,8 @@ of M3 would leave the second runner idle for a milestone.
   `<DagrCanvas>` to animate, which is `@dagr/react`'s wiring and not this
   package's. A hand-wired demo in `apps/demo` would have been written against
   the render API and rewritten the day the component learned to do it. M5.3
-  now owns both the wiring and the demo, and its entry says so.
+  took both the wiring and the demo, and split them on 2026-09-14: M5.3a is the
+  wiring, shipped, and M5.3b is the demo.
   **THE BOX IS A THIRD MOTION MODULE, AND THE CAMERA IS NOT ALLOWED TO READ IT
   ON ITS OWN.** The entry asked whether a sprung box belongs in `camera.ts`,
   which owns the fit. It does not, and the reason is M5.1's: `<DagrCanvas>`
@@ -6180,45 +6184,130 @@ it settled rather than restating the argument.
   zero is never passed to `resize`.
 - [ ] **M5.2** Interaction hooks: `useSelection`, hover and drag wiring to
   GPU picking. Component tests.
-- [ ] **M5.3** (`@dagr/react`, `apps/demo`) The animation a consumer gets for
-  free, and the demo that proves it: `useDagr` over the incremental engine,
-  `<DagrCanvas>` driving M4.7c's scene motion and loop, and an animated living
-  demo (grow/prune/relayout) in `apps/demo`, deployed-ready.
+- [x] **M5.3a** (`@dagr/react`) The animation a consumer gets for free:
+  `useDagr` over the incremental engine, and `<DagrCanvas animate>` driving
+  M4.7c's scene motion and loop off the delta it now reports.
+  M5.3 WAS SPLIT ON 2026-09-14, into this wiring and the demo below, and the
+  split is the one its own entry named as the honest one. The wiring is a
+  change to the hook's public shape, to the component's ownership of its frame,
+  and to three documentation surfaces; the demo is an application. Each half
+  wants its own diff review and its own merged-tree review, and one PR carrying
+  both would have got one pass over the pair.
+  THE FIRST QUESTION, PROP OR HOOK, IS ANSWERED PROP: `animate`, taking `true`
+  or the two numbers that set the feel, compared by value the way `config` is.
+  The component already owns all four things a hook would have had to hand back
+  out (the coalesced frame, the renderer, the scene conversions, and the delta),
+  so a hook would have made the common caller rewire what is already wired.
+  What keeps that from being a fork is `createMotionLoop`'s scheduler option,
+  which M4.7c shipped for exactly this: a caller who owns their own frame leaves
+  `animate` off and drives `createSceneMotion` from their own loop, and a caller
+  who does not gets the component's `requestDraw` handed to the loop, so there
+  is one frame budget rather than two. Default off, because a drawing that
+  starts springing under a caller who did not ask is not a default a component
+  gets to choose for them.
+  THE SECOND QUESTION, WHERE THE ENGINE RUNS, IS ANSWERED NEITHER: not during
+  render and not in an effect, but in the graph listener. `relayout` does not
+  apply its patch, so a patch has to be consumed exactly once and in the order
+  it was emitted, and a queue drained during render is a side effect concurrent
+  rendering is entitled to discard and run again, which consumes a patch twice
+  or not at all. So THERE IS NO QUEUE. `Graph.subscribe` delivers one patch per
+  mutating call, straight after it commits, and the relayout happens right
+  there: once, in order, in a callback that is neither replayed nor discarded.
+  The cold run for a new graph or config stays in the `useMemo` where this hook
+  has always run a layout. The cost, stated in the hook and in the docs, is that
+  the relayout is inside the caller's own `graph.addNode(...)` call, so a layout
+  that fails is reported rather than thrown: `addNode` is not a function anyone
+  expects to raise a layout error.
+  WHAT A DROPPED PATCH ACTUALLY COSTS TODAY IS ONE EDIT OF LATENCY, NOT A
+  DIVERGENCE, and the task brief assumed worse. `checkPatchApplied` compares the
+  patch against the graph as it now stands, and a live subscription always hands
+  over a patch the graph already agrees with, so a drop does not make the next
+  patch refusable. `relayout` then re-runs the whole pipeline over the graph it
+  holds and diffs against the geometry it last REPORTED, so the next edit
+  reports the dropped one too and the drawing catches up. That is pinned by a
+  test rather than asserted. It is worth writing down because it will stop being
+  true: an incremental path that CONSUMES a patch rather than bounding one makes
+  a drop permanent, and `RelayoutResult.region` is already computed from the
+  patch, so a drop already under-bounds it. Consuming one patch per delivery is
+  what keeps this correct on both sides of that change.
+  THE ENGINE'S LIFE IS THE SUBSCRIPTION'S, which is what makes `StrictMode`
+  survivable rather than a special case. `dispose` runs from the `subscribe`
+  cleanup, so React's double-invoke leaves a live component holding a disposed
+  engine; the resubscribe rebuilds it and lays the graph out cold, publishing
+  with no delta. That is the designed recovery for an engine and a graph that
+  have fallen out of step, it runs in development on every mount, and it closes
+  the documented mount window for the one mode that opens it twice. The window
+  itself is unchanged in production and both of M5.1's reasons for leaving it
+  open still hold.
+  A DELTA IS A DIFFERENCE FROM A DRAWING AND A COLD RUN IS NOT, so
+  `DagrLayoutState.delta` is `null` for one, and `null` is the statement rather
+  than the absence of one: it is what the first run of a graph reports, what a
+  config change reports, and what the recovery above reports. `retarget` in the
+  new `animation.ts` is where the consequence is written down, one function,
+  `resync` when there is no delta and `apply` when there is.
+  THE RECOVERY IS REACHABLE IN THE ORDINARY CASE, WHICH IS THE FINDING THIS
+  TASK DID NOT EXPECT. React coalesces store updates, so two mutating calls in
+  one task are two patches, two published states and ONE render holding the
+  last of them: the first delta never reaches the motion, and the second
+  describes a drawing the motion is not holding, which is a `MotionDesyncError`
+  by name. `retarget` catches that one class and reseats from the roster. The
+  cost is visually almost nothing, because `resync` retargets a node it already
+  holds and seeds one it does not, which is what `apply` does with `moved` and
+  `added`; the only difference is that a node removed in the burst vanishes
+  rather than gliding out. The advice that avoids it is `graph.batch`, which
+  `relayout`'s own docstring already gives for a different reason, and it is now
+  in the React docs and the package README as well.
+  ONLY `MotionDesyncError` IS CAUGHT THERE. A `RangeError` from a target that is
+  not finite would meet the same number again in the roster, so swallowing it
+  would turn a refusal into the same picture forever, which is what the refusal
+  exists to prevent rather than to cause.
+  THE CAMERA DECISION IS UPHELD AND MADE ACTIONABLE. The component still fits
+  once and never refits. What M5.3a adds is `onFrame`, called with the sprung
+  scene AND the renderer about to draw it, after `setNodes` and `setEdges` and
+  before `render`, so a following camera is one line in the caller's own code
+  rather than a component they have to write to reach a ref. Before the draw
+  rather than after, so a camera moved there moves on that frame. Without it the
+  prop-shaped API would have foreclosed exactly what the decision promises, and
+  the decision's own words are that following the box is the caller's line of
+  code.
+  THE DRESSING IS A RETAINED MAP AND A DEPARTING NODE IS WHY. The motion reports
+  an id and a centre; a `SceneNode`'s size, shape and colours are the layout's
+  and the caller's, and a node a delta removed is still in the frame while its
+  spring runs down and is no longer in the layout that removed it. So the map is
+  written from every layout and rebuilt from the current one on the frame that
+  reports settled, which is the one frame on which nothing is mid-departure.
+  Sizes are taken whole from the newest layout, which is M4.7c's "sizes do not
+  spring" seen from the consumer's side.
+  THE TEST HARNESS CHANGED SHAPE AND THE CHANGE IS THE POINT. `fake-render.ts`
+  now replaces `createRenderer` and `createHtmlOverlay` and nothing else: the
+  mock spreads it OVER the real module, so a component test drives the real
+  springs and the real loop. Faking those two as well would have left the
+  component tests asserting that the component calls an API rather than that a
+  node ends up halfway to where it is going, and "halfway" is the whole claim.
+  `frames.ts` grew a timestamp and a run-until-idle, because a spring is stepped
+  by the gap between two frames and a test that wants to talk about halfway has
+  to be the thing that decides how much time has passed.
+- [ ] **M5.3b** (`apps/demo`) The demo that proves it: an animated living demo
+  (grow, prune, relayout) in `apps/demo`, deployed-ready.
   THIS IS THE TASK THAT DEMONSTRATES THE HEADLINE CLAIM, and nothing shipped
   does. The campaign demo is read-only: `apps/demo/src/App.tsx` never mutates a
   graph, so it proves scale, rendering and semantic zoom, and proves nothing at
   all about layout staying stable under an edit, which is what M6's preamble
   says the project competes on. A visitor currently cannot see the flagship
-  feature. Weight this accordingly against M5.1 and M5.2.
-  M4.7c'S DEMO FOLDED IN HERE, and the React wiring came with it. M4.7c shipped
-  `createSceneMotion` and `createMotionLoop`, so the render half of an animated
-  demo is done and exported; what a demo still needs is a component that drives
-  them, and writing one by hand in `apps/demo` first would be a demo against
-  the render API that gets rewritten the day `<DagrCanvas>` learns to do it.
-  So this task is the wiring and the demo together.
-  TWO THINGS THE WIRING HAS TO DECIDE, BOTH NAMED BY THE CODE THAT EXISTS.
-  First, `use-dagr.ts` calls the one-shot `layout()` on every revision, so an
-  edit is a COLD RUN and there is no `LayoutDelta` anywhere in the package to
-  animate from. It has to hold a `createLayout` engine across renders and call
-  `relayout(patch)`, which means holding the patch: `Graph.subscribe` delivers
-  one, and the hook currently throws it away and keeps only a counter (see the
-  file's own docstring for why the counter exists and what window it leaves).
-  The engine's own rule is the constraint: `relayout` does not APPLY the patch,
-  it describes one already applied, and a patch the graph disagrees with is
-  refused, so the hook must not drop or reorder one. A dropped patch is
-  `resync` from `engine.run`, which is also the M4.7 desync recovery path, so
-  the two agree.
-  Second, whether animation is a prop or a hook. A prop (`animate`) keeps the
-  flagship behaviour one word away for the common caller; a hook keeps it out
-  of the way of a caller who owns their own frame. `createMotionLoop` already
-  takes the scheduler as an option precisely so both are available, and
-  `<DagrCanvas>` already has a coalesced `requestDraw` to hand it, so the
-  component wires one loop rather than two whichever shape wins.
+  feature. Weight this accordingly against M5.2.
+  M4.7c'S DEMO FOLDED IN HERE, and the React wiring came with it and has now
+  shipped as M5.3a: writing the demo by hand in `apps/demo` first would have
+  been a demo against the render API that got rewritten the day `<DagrCanvas>`
+  learned to do it, and M5.3a is the day it did. What the demo writes now is
+  `<DagrCanvas animate>` and the edits.
   THE CAMERA QUESTION IS ALREADY ANSWERED AND SHOULD NOT BE REOPENED: the fit
-  happens once, and a sprung box is available per frame for a caller who wants
-  to follow it. An animated demo that refits every frame would look impressive
-  and would hide the thing it exists to show, because a drawing that stays put
-  while the camera moves is indistinguishable from a drawing that moves.
+  happens once, and a sprung box is on every `onFrame` for a caller who wants to
+  follow it. An animated demo that refits every frame would look impressive and
+  would hide the thing it exists to show, because a drawing that stays put while
+  the camera moves is indistinguishable from a drawing that moves.
+  THE NUMBERS ARE ALREADY PUBLISHED, at `docs/docs/incremental-layout.md`, and
+  the demo's job is to let a visitor SEE what they describe rather than to
+  produce new ones.
 - [x] **M5.4a** (every package) The tarball a consumer installs: the packaging
   half of M5.4, split out and moved to the front of the queue on 2026-08-26.
   See "Where this stands, and what to do next" at the top of this file for why
