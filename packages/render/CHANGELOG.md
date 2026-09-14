@@ -14,6 +14,42 @@ not" is the category this file has a heading for.
 
 ### Added
 
+- `createBoundsMotion`, `createSceneMotion` and `createMotionLoop`: the rest of
+  the delta consumer and the loop that drives it. Fifteen new names on the
+  surface: the three factories and the types `BoundsMotion`,
+  `BoundsMotionFrame`, `BoundsMotionOptions`, `SceneMotion`, `SceneMotionDelta`,
+  `SceneMotionFrame`, `SceneMotionOptions`, `SceneMotionRoster`, `MotionLoop`,
+  `MotionLoopOptions` and `FrameScheduler`. No new error class. (M4.7c)
+
+  **THE BOX IS A MOTION MODULE AND THE CAMERA DOES NOT READ IT.** `<DagrCanvas>`
+  fits once and then the camera is the user's; a sprung box is handed back per
+  frame and `fitBounds` on it is the caller's line. The box is sprung as a
+  centre and two half-extents rather than two corners, so it never turns inside
+  out on the way. A degenerate box is accepted, since an empty layout has one.
+
+  **A SCENE DELTA IS APPLIED ACROSS ALL THREE HALVES OR NOT AT ALL.** The node
+  and edge halves grew a two-phase `planApply` and `planResync` (every check,
+  then the mutation as a closure) so the composite can commit them together.
+  The plan API is on the objects `createNodeMotion` and `createEdgeMotion`
+  return and deliberately absent from the `NodeMotion` and `EdgeMotion` types
+  and from the package surface: a plan is valid only against the state it was
+  made from. Behaviour of the two halves called directly is unchanged.
+
+  **A LOOP IS WOKEN, NOT STARTED, AND STOPS ITSELF.** `wake()` while running
+  is the frame already queued; the frame callback returns `settled` and the
+  loop asks for nothing after the frame that said so. The first frame after
+  EVERY wake steps by zero, so an idle hour is not a cut. A wake from inside a
+  frame wins over that frame's `settled`. A frame that throws stops the loop
+  and rethrows. The scheduler is an option with the shape of
+  `requestAnimationFrame`, so a caller who already coalesces a frame hands
+  theirs in; without one the platform's is read at the first wake, not at
+  construction, so a server import is fine and only a server wake throws.
+
+  **SIZES DO NOT SPRING.** A resize still arrives through `moved` and moves
+  nothing. The text that caused it changed instantly whatever the box does, and
+  springing sizes doubles the per-node state against a settled floor already
+  measured. `stepSpring2D` and the node id are there for a caller who wants it.
+
 - `createEdgeMotion` and `alignRoutes`, the edge half of the delta consumer: one
   spring per point of a route, retargeted by a `LayoutDelta`'s edge lists,
   stepped by the same clock and settling to the same feel as the node half. Nine

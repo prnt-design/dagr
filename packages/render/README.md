@@ -45,7 +45,7 @@ instance-buffer identity stable while dense slots move. Springs and picking
 ids use the caller's node id instead, so they also survive a shape change that
 has to replace the handle.
 
-## Springs, and the loop you still write
+## Springs, the scene, and the loop
 
 `createNodeMotion` is the delta consumer. It holds one spring per node, keyed
 by **your** node id and never by a renderer handle, because where a node is on
@@ -87,10 +87,37 @@ you would rather animate edges your own way. A shared edge whose route changes
 animates, while a removed and added edge under one id is seeded at rest on the
 new directed route because it is a replacement, not a reroute.
 
-Neither owns a clock. There is no `requestAnimationFrame` in this package yet,
-which is M4.7c on the
-[roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md). A caller
-today writes the loop.
+`createSceneMotion` drives both, plus the drawing's box, from one delta and
+one clock, and `createMotionLoop` is the clock:
+
+```ts
+import { createMotionLoop, createSceneMotion } from '@dagr/render';
+
+const motion = createSceneMotion();
+motion.resync({ nodes, edges, bounds }); // once, from the first layout
+
+const loop = createMotionLoop({
+  frame(dtSeconds) {
+    const frame = motion.advance(dtSeconds);
+    renderer.setNodes(frame.nodes.map(dress));
+    renderer.setEdges('flow', frame.edges.map(draw));
+    renderer.render();
+    return frame.settled; // the loop stops asking for frames when this is true
+  },
+});
+
+// on every relayout:
+motion.apply({ nodes: nodeDelta, edges: edgeDelta, bounds: newBox });
+loop.wake();
+```
+
+A scene delta is applied across nodes, edges and the box **or not at all**. A
+loop is woken rather than started: a wake while it is running is the frame it
+was going to run anyway, and the first frame after every wake steps by zero so
+an idle hour is not a jump. Already have a coalesced `requestAnimationFrame` of
+your own? Pass it as `scheduler` and there is one loop, not two. The box is
+sprung as a centre and two half-extents so it never turns inside out on the
+way; the camera does not read it unless you call `fitBounds` on it yourself.
 
 Two things worth knowing about the springs. A settled spring **snaps exactly
 onto its target** rather than stopping within a tolerance, because a permanent

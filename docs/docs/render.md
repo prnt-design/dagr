@@ -12,9 +12,9 @@ sidebar_position: 4
 carrying nodes between one layout and the next, and one draw call per shape
 family.
 
-This page describes the package through M4.7b. M4.4 gave it a way to be told
-what to draw, and the later sections cover the motion that carries nodes and
-edges between layouts. Rounded rectangles and circles are on screen, drawn as
+This page describes the package through M4.7c. M4.4 gave it a way to be told
+what to draw, and the later sections cover the motion that carries nodes, edges
+and the drawing's box between layouts, and the loop that drives it. Rounded rectangles and circles are on screen, drawn as
 signed distance fields, and there is an HTML overlay for the text a signed
 distance field cannot draw. What is real is the seam everything else plugs
 into: the `Renderer` interface, the camera, the distance fields and the shading
@@ -959,18 +959,19 @@ what the camera's own API table recommends, got a correct frustum drawn into a
 buffer still sized for the old canvas. The browser stretched it, and nothing
 threw.
 
-There is no render loop. Frames happen when the caller asks for one. A
-`requestAnimationFrame` loop would wake the GPU sixty times a second to redraw
-an unchanged frame. M4.6 shipped the springs without adding one, and that is
-deliberate: a spring step is a pure function of a delta, so the loop belongs to
-whoever owns the clock. M4.7a keeps that: `createNodeMotion` takes the elapsed
-seconds and answers whether anything is still moving, so the opinion about
-starting and stopping a loop is M4.7c's, with the frame budget it implies. Do coalesce, though: an input handler
-that calls `render()` synchronously runs at the event rate rather than the
-display rate, and a trackpad fling dispatches wheel events faster than the
-screen refreshes. The campaign demo schedules one frame per `requestAnimationFrame`
-and drops the rest, which keeps "every frame is one a user asked for" true while
-capping it at one per refresh.
+The renderer runs no loop of its own. Frames happen when the caller asks for
+one. A free-running `requestAnimationFrame` would wake the GPU sixty times a
+second to redraw an unchanged frame. M4.6 shipped the springs without adding
+one, and that is deliberate: a spring step is a pure function of a delta, so
+the loop belongs to whoever owns the clock. What M4.7c added is a loop that
+runs only while something is moving and stops itself, `createMotionLoop`,
+[below](#the-loop-the-box-and-the-scene-as-one-thing); it still calls
+`render()` through the caller's own frame callback rather than on its own. Do
+coalesce, though: an input handler that calls `render()` synchronously runs at
+the event rate rather than the display rate, and a trackpad fling dispatches
+wheel events faster than the screen refreshes. The campaign demo schedules one
+frame per `requestAnimationFrame` and drops the rest, which keeps "every frame
+is one a user asked for" true while capping it at one per refresh.
 
 `dispose` is idempotent, because a component that unmounts twice is an ordinary
 thing rather than a bug worth crashing for. Every other method throws
@@ -1601,8 +1602,8 @@ absent-means-unchanged buys the arithmetic and not the frame: a delta is
 proportional to the change, a frame is proportional to the scene. Whether that
 floor is worth removing is M4.10's to measure against a real GPU.
 
-**The bounds change and the loop that drives all of this are M4.7c.** This
-package still owns no clock.
+**The bounds change and the loop that drives all of this landed at M4.7c**,
+[two sections down](#the-loop-the-box-and-the-scene-as-one-thing).
 
 ## An edge needs a correspondence before it needs a spring
 
@@ -1699,6 +1700,177 @@ behaviour exactly: the same `MotionDesyncError` on a delta that does not
 describe the scene, the same all-or-nothing apply, the same `departing` state
 until a removed edge's springs finish, the same `resync` back.
 
+## The loop, the box, and the scene as one thing
+
+M4.7c is the rest of the delta consumer: the drawing's box, the three halves
+driven as one scene, and the loop. Together they turn the five-line
+`requestAnimationFrame` the two sections above asked a caller to write into
+two calls, one per relayout and one at mount.
+
+```ts
+import { createMotionLoop, createSceneMotion } from '@dagr/render';
+import { createLayout } from '@dagr/layout';
+
+const engine = createLayout();
+const motion = createSceneMotion();
+
+// The flip is the caller's, as it has been since M4.1. `@dagr/react` exports
+// the same three conversions as `toSceneNodes`, `toSceneEdges` and
+// `toWorldBounds`; this is what they do.
+const centreOf = (node) => ({ id: node.id, center: { x: node.x, y: -node.y } });
+const routeOf = (edge) => ({
+  id: edge.id,
+  points: edge.points.map((p) => ({ x: p.x, y: -p.y })),
+});
+const boxOf = (rect) => ({
+  minX: rect.x,
+  maxX: rect.x + rect.width,
+  minY: -(rect.y + rect.height),
+  maxY: -rect.y,
+});
+
+const first = engine.run(graph);
+motion.resync({
+  nodes: [...first.nodes.values()].map(centreOf),
+  edges: [...first.edges.values()].map(routeOf),
+  bounds: boxOf(first.bounds),
+});
+
+const loop = createMotionLoop({
+  frame(dtSeconds) {
+    const { nodes, edges, bounds, settled } = motion.advance(dtSeconds);
+    renderer.setNodes(nodes.map(dress));
+    renderer.setEdges('flow', edges.map(draw));
+    if (bounds !== null && following) renderer.camera.fitBounds(bounds);
+    renderer.render();
+    overlay.sync();
+    return settled;
+  },
+});
+
+graph.subscribe((patch) => {
+  const { delta } = engine.relayout(patch);
+  motion.apply({
+    nodes: {
+      added: delta.nodes.added.map(centreOf),
+      removed: [...delta.nodes.removed],
+      moved: delta.nodes.moved.map((m) => centreOf({ id: m.id, ...m.to })),
+    },
+    edges: {
+      added: delta.edges.added.map(routeOf),
+      removed: [...delta.edges.removed],
+      rerouted: delta.edges.rerouted.map((r) => routeOf({ id: r.id, points: r.to })),
+    },
+    ...(delta.bounds === undefined ? {} : { bounds: boxOf(delta.bounds.to) }),
+  });
+  loop.wake();
+});
+```
+
+**The box is a third motion module, and the camera is not allowed to read it
+on its own.** The M4.7c entry asked whether a sprung box belongs in
+`camera.ts`, which already owns the fit. It does not. `<DagrCanvas>` fits the
+camera once and then the camera is the user's, on the argument the React page
+makes: a camera that refits on every edit is the instability M3 exists to keep
+out of the layout, reintroduced one level up where no stability metric would
+see it. So `createBoundsMotion` hands back a box per frame that glides rather
+than cuts, and a caller who wants a following camera writes `fitBounds` on it
+in their frame, as the example does behind a flag. A caller who does not, reads
+nothing.
+
+**Four numbers are sprung and they are not the corners.** Springing the two
+corners separately turns a box inside out on the way: two corners retargeted by
+different distances arrive at different times, and a box shrinking from the
+right while growing from the left crosses over in the middle. The module springs
+the centre and the two half-extents instead. Released from rest, each is the
+same convex combination of start and target at every instant, so a half-extent
+that starts and ends at or above zero stays there and a corner stays on its own
+side. A retarget mid-flight carries velocity and can overshoot once, like any
+spring here, and the report clamps a half-extent at zero for that one case. A
+degenerate box is accepted, because an empty layout has one and a scene seeded
+from it must not throw; whether it is worth fitting is `fitBounds`'s question,
+and it already refuses.
+
+**A scene delta is applied across all three halves or not at all.** Each half
+is already all or nothing for itself. A scene delta names nodes AND edges, and
+applying the node half and then refusing the edge half would hand a caller
+exactly the half-applied scene both halves promise never to produce, with the
+node springs already moved by the delta the caller is about to resync away
+from. So the halves grew a two-phase form, a plan that runs every check and a
+commit that runs none, and `createSceneMotion` plans all three before it
+commits any. That plan API is deliberately not exported: a plan is valid only
+against the state it was made from, and a caller of one half alone has nothing
+to coordinate with. Absent means unchanged per half, so a relayout that moved
+two nodes is a delta naming two nodes. A roster is the opposite: `resync`
+describes a whole state, and a roster without a box is a scene with no box.
+
+**A loop is woken, not started, and it stops itself.** `wake()` on a loop
+already running is the frame it was going to run anyway, so a burst of edits
+in one task is one frame. The frame callback returns `settled`, and the loop
+asks for no frame after the one that said so. `running` is true from the wake,
+not from the first frame, so a second wake before the frame arrives sees a loop
+already going. A wake that arrives INSIDE a frame, from a delta applied after
+that frame's advance, wins over that frame's `settled`: one more frame runs.
+
+**The first frame after every wake steps by zero.** Not only the first frame
+ever. A loop that carried its previous timestamp across its own stop would step
+the first frame of the next animation by however long the scene sat still, and
+`stepSpring` on a minute lands every spring on its target: the drawing would cut
+to the new layout on the exact frame the animation was meant to begin. The
+timestamp is cleared on every stop. A clock that runs backwards is clamped to
+zero for the same reason `advance` refuses a negative step by name.
+
+**The scheduler is an option, and that is how the loop coexists with a caller
+who already has one.** The campaign stage and `<DagrCanvas>` each coalesce
+their own `requestAnimationFrame`, and two loops would be two frame budgets and
+a frame of skew, which is the failure `HtmlOverlay.sync` already refuses on its
+own account. `FrameScheduler` is two functions with the shape of
+`requestAnimationFrame` and `cancelAnimationFrame`, so a caller with a
+coalesced frame hands theirs in and the loop's frame IS their frame:
+
+```ts
+const loop = createMotionLoop({
+  frame,
+  scheduler: {
+    request: (callback) => requestDraw(callback), // the caller's coalesced frame
+    cancel: (handle) => cancelDraw(handle),
+  },
+});
+```
+
+A caller with no loop passes nothing and gets the platform's, resolved at the
+first wake rather than at construction, so importing the package on a server is
+not an error and only waking a loop there is. A test passes a `Map`, which is
+what makes every timing claim in the suite exact rather than sampled.
+
+**A frame that throws stops the loop and lets the throw out.** Rescheduling
+after a throw would be a loop throwing sixty times a second until the tab is
+closed; swallowing it would be this package's polarity reversed. The loop is
+usable afterwards, because the failure was the frame's.
+
+**Sizes do not spring, and the decision is recorded rather than deferred.** A
+resize arrives through `moved` and produces no motion, so a node whose label
+grew snaps to its new width while its centre glides. The M4.7c entry asked
+whether the size should spring too. It should not, for two reasons. A resize is
+the caller's own attribute change, made at a moment they chose, and the text
+that caused it changed instantly whatever the box does; a box that lagged its
+own contents would clip them for a hundred milliseconds. And the state is per
+node: springing sizes doubles it, against a settled floor M4.7b measured at
+0.34ms per frame for ten thousand nodes and 0.25 to 0.32ms for ten thousand
+edges in the same invocation, in records those modules allocate and nothing
+else. A caller who wants a sprung size has `stepSpring2D` and the node's id.
+
+**The cold reroute is still the number the loop lives with, and the loop does
+not throttle it.** M4.7b measured all ten thousand edges rerouting at 12.8 to
+36.5ms depending on route length, which is more than one frame. A frame that
+takes two refreshes is a dropped frame, not a wrong one: the step is exact, so
+the next frame lands where the clock says. Nothing here skips work to fit a
+budget, because the lever is upstream: the incremental engine reroutes a small
+fraction of the drawing per patch, which is what M3 is for, and applying a
+delta of one against ten thousand edges is under a fiftieth of a millisecond.
+M4.10 measures the frame against a GPU and decides whether the settled floor
+is worth removing.
+
 ## Picking, decided and half built
 
 Hit testing a graph of ten thousand nodes by walking a list is the work the GPU
@@ -1758,20 +1930,11 @@ confirmation.
 
 ## What is not here yet
 
-The motion arithmetic and both delta consumers are headless. What is still
-missing is the package-owned loop that drives them and the device work below.
+The motion arithmetic, the three delta consumers and the loop are headless and
+complete. What is still missing is the device work below, and one thing that is
+not this package's: nothing deployed drives the loop from a graph a user is
+editing, which is M5.3's demo and the React wiring beside it.
 
-- A real animation loop. M4.6 shipped the springs and deliberately did not
-  start one, because the clock belongs to whoever owns the frame; the demo
-  already coalesces its own. M4.7a still does not start one, and it does add
-  the `settled` a loop needs to stop, and M4.7b adds the edge half that needs
-  driving too. M4.7c is where the renderer drives them.
-- The bounds change and the loop over both halves of the delta consumer
-  (M4.7c). The node half landed at M4.7a and is under
-  [Deltas drive the springs](#deltas-drive-the-springs-and-the-state-is-the-renderers);
-  the edge half landed at M4.7b and is under
-  [An edge needs a correspondence](#an-edge-needs-a-correspondence-before-it-needs-a-spring).
-  M4.7 is the M4 task that genuinely waits on M3, and every part of it does.
 - The pass half of GPU picking: a material writing the bytes above, an
   offscreen target, the readback and a `pick()` on `Renderer` (M4.8b). What
   a pixel says and which node an id still means are decided and tested; see

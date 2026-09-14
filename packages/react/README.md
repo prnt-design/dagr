@@ -36,7 +36,11 @@ coordinates over the canvas. `useDagrCanvas` is how anything inside reaches the
 renderer.
 
 What is not here yet, so you know before you reach for it: no hover, selection
-or drag (M5.2), and no animation wired through the component (M4.7c).
+or drag (M5.2), and no animation wired through the component (M5.3). The
+animation itself is built and exported from `@dagr/render` as
+`createSceneMotion` and `createMotionLoop`; what is missing is this package
+driving them off the `graph` prop, so today `<DagrCanvas>` re-lays out and
+re-sets on every edit rather than tweening.
 
 ## Read this first: the `graph` prop is watched, not compared
 

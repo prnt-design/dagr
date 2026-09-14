@@ -60,6 +60,15 @@ describe('@dagr/render', () => {
     // error joined, because a desynchronised edge delta is the same failure the
     // node half already names and `MotionDesyncError` now takes the word for
     // which roster it is talking about.
+    //
+    // M4.7c added the rest of the delta consumer and the loop that drives it:
+    // `createBoundsMotion` is the third half, `createSceneMotion` drives all
+    // three from one delta, and `createMotionLoop` is the clock this package
+    // declined to own since M4.6. No error class joined: a loop woken after
+    // dispose is a no-op on the overlay's terms, and a bad box is a
+    // `RangeError` like a bad route. What did NOT join is the two-phase
+    // `planApply` and `planResync` the halves grew for the composite; see the
+    // test below.
     expect(Object.keys(api).sort()).toEqual([
       'BackendUnavailableError',
       'CENTRE_ANCHOR',
@@ -80,11 +89,14 @@ describe('@dagr/render', () => {
       'UnknownInstanceHandleError',
       'advanceDashFlow',
       'alignRoutes',
+      'createBoundsMotion',
       'createEdgeMotion',
       'createHtmlOverlay',
+      'createMotionLoop',
       'createNodeMotion',
       'createRenderer',
       'createRichNodes',
+      'createSceneMotion',
       'fitZoom',
       'measureHtmlSizes',
       'omegaForHalfLife',
@@ -92,6 +104,20 @@ describe('@dagr/render', () => {
       'stepSpring',
       'stepSpring2D',
     ]);
+  });
+
+  it('does not export the two-phase plans the halves grew for the composite', () => {
+    // `createPlannedNodeMotion` and `createPlannedEdgeMotion` exist so that
+    // `createSceneMotion` can commit nodes and edges together or not at all. A
+    // plan is valid only against the state it was made from, which is a rule
+    // a caller of one half alone has no reason to learn, so the public
+    // factories return the halves with the plans hidden.
+    expect('createPlannedNodeMotion' in api).toBe(false);
+    expect('createPlannedEdgeMotion' in api).toBe(false);
+    const nodes = api.createNodeMotion();
+    expect('planApply' in nodes).toBe(true);
+    // Present on the object, absent from the type: the interface is the
+    // contract and the test above is what keeps the factory off the surface.
   });
 
   it('does not export the overlay arithmetic', () => {

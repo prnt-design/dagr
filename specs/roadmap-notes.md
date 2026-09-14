@@ -5256,10 +5256,115 @@ of M3 would leave the second runner idle for a milestone.
   of `@dagr/render`, `@dagr/vdsl` and `@dagr/packaging` before it:
   `edge-motion.ts` appears in no file under any `bench/` directory, and one grep
   says so.
-- [ ] **M4.7c** (`@dagr/render`, `apps/demo`) Delta consumer, the rest: the
-  bounds change, the loop that drives both halves, and the demo that proves it.
+- [x] **M4.7c** (`@dagr/render`) Delta consumer, the rest: the bounds change,
+  the loop that drives all three halves, and the scene that makes them one call.
   This is what M4.7b's seam left, and it inherits the entry's remaining
-  questions.
+  questions. Shipped 2026-09-12. THE DEMO MOVED TO M5.3, and the reason is the
+  one the entry's own scoping gave for the seam: the render half is decidable
+  and testable in Node against a scheduler made of a `Map`, and every claim
+  below is asserted that way, while a demo that mutates a graph wants
+  `<DagrCanvas>` to animate, which is `@dagr/react`'s wiring and not this
+  package's. A hand-wired demo in `apps/demo` would have been written against
+  the render API and rewritten the day the component learned to do it. M5.3
+  now owns both the wiring and the demo, and its entry says so.
+  **THE BOX IS A THIRD MOTION MODULE, AND THE CAMERA IS NOT ALLOWED TO READ IT
+  ON ITS OWN.** The entry asked whether a sprung box belongs in `camera.ts`,
+  which owns the fit. It does not, and the reason is M5.1's: `<DagrCanvas>`
+  fits once and then the camera is the user's, because a camera that refits
+  per edit is the instability M3 keeps out of the layout, reintroduced one
+  level up where no stability metric would see it. `createBoundsMotion` hands
+  back a box per frame that glides, and a following camera is `fitBounds` on
+  that box in the caller's own frame, behind whatever flag they choose. So the
+  loop drives three things, and the third is the cheapest of them.
+  **FOUR NUMBERS ARE SPRUNG AND THEY ARE NOT THE CORNERS.** Springing the two
+  corners is the obvious reading and it turns a box inside out on the way,
+  because two corners retargeted by different distances arrive at different
+  times. The module springs the centre and the two half-extents. Released from
+  rest each is the same convex combination `start * e + target * (1 - e)` with
+  `e = (1 + wt)e^(-wt)` of its own start and target at every instant, so a
+  half-extent that starts and ends at or above zero stays there and a corner
+  stays on its own side; the suite drives a 1000-unit box down to a 10-unit
+  one over 120 frames and asserts the order every frame. A retarget mid-flight
+  carries velocity and can overshoot once, and the report clamps a half-extent
+  at zero for exactly that case. A DEGENERATE BOX IS ACCEPTED, and it has to
+  be: an empty layout has a zero-by-zero box, and a scene seeded from it must
+  not throw before its first node. Whether it is worth fitting is `fitBounds`'s
+  question, and it already refuses.
+  **A SCENE DELTA IS APPLIED ACROSS ALL THREE HALVES OR NOT AT ALL, AND THAT
+  IS THE ONE PROPERTY THE COMPOSITE EXISTS FOR.** Each half was already all or
+  nothing for itself, and M4.7a and M4.7b both made a point of it. A scene
+  delta names nodes AND edges, so applying the node half and then refusing the
+  edge half hands the caller precisely the half-applied scene both halves
+  promise never to produce, with the node springs already moved by the delta
+  they are about to resync away from. The halves therefore grew a two-phase
+  form, `planApply` and `planResync`, which run every check that can throw and
+  hand the mutation back as a closure; `createSceneMotion` plans all three
+  before it commits any. THE PLAN API IS ON THE OBJECTS AND OFF THE TYPES AND
+  OFF THE SURFACE: a plan is valid only against the state it was made from,
+  and a caller of one half alone has nothing to coordinate with, so
+  `createPlannedNodeMotion` stays internal and `index.test.ts` asserts it. The
+  test that matters is the one where the node half would accept and the edge
+  half would refuse, and it asserts the node is exactly where it was.
+  **THE BOUNDS HALF HAS NO PLAN API, AND THE COMPOSITE CHECKS IT WITH A
+  THROWAWAY.** A bounds check is `requireBounds` plus the per-axis overflow
+  guard, both pure, so the composite aims a fresh `createBoundsMotion` at the
+  same box from the same current box and lets it throw, then commits the two
+  rosters and retargets the real one. A third plan interface for one caller
+  would be more surface than the check is worth.
+  **A LOOP IS WOKEN, NOT STARTED, AND IT STOPS ITSELF.** The opinion `render.md`
+  has asked for since M4.6 is three sentences. `wake()` on a running loop is
+  the frame already queued, so a burst of edits in one task is one frame. The
+  frame callback returns `settled` and the loop asks for nothing after the
+  frame that said so. `running` is true from the wake and not from the first
+  frame, so a second wake before the frame arrives sees a loop already going.
+  A WAKE FROM INSIDE A FRAME WINS OVER THAT FRAME'S SETTLED: a delta applied
+  in a frame callback after the advance that decided the frame was the last
+  one would otherwise wait for the next unrelated wake, so the loop notes it
+  and runs one more.
+  **THE FIRST FRAME AFTER EVERY WAKE STEPS BY ZERO, WHICH IS THE FIVE-LINE
+  LOOP'S FIRST-FRAME RULE MADE TO HOLD FOR EVERY RESTART.** A loop that carried
+  its previous timestamp across its own stop would step the first frame of
+  the next animation by however long the scene sat still, and `stepSpring` on
+  a minute lands every spring on its target: the drawing would CUT to the new
+  layout on the exact frame the animation was meant to begin. The timestamp
+  is cleared on every stop and the suite wakes a loop sixty seconds after it
+  settled and asserts a zero step. GENERALISE IT: a rule stated for the first
+  frame ever is a rule about every frame that has no predecessor, and a loop
+  that stops itself manufactures those.
+  **THE SCHEDULER IS AN OPTION, AND THAT IS THE WHOLE ANSWER TO "COEXIST WITH
+  A CALLER WHO ALREADY HAS ONE".** The campaign stage and `<DagrCanvas>` each
+  coalesce their own `requestAnimationFrame`, and two loops are two frame
+  budgets and a frame of skew, which `HtmlOverlay.sync` already refuses on its
+  own account. `FrameScheduler` is two functions with the platform's shape and
+  an opaque handle, so a caller with a coalesced frame hands theirs in and
+  the loop's frame IS their frame. The platform's is resolved AT THE FIRST WAKE
+  rather than at construction, through `globalThis`, so importing the package
+  on a server is not an error and only waking a loop there is, with a
+  `TypeError` that names the option. A test passes a `Map`, which is what makes
+  every timing claim in `motion-loop.test.ts` exact rather than sampled.
+  **A FRAME THAT THROWS STOPS THE LOOP AND LETS THE THROW OUT.** Rescheduling
+  would be a loop throwing sixty times a second until the tab is closed;
+  swallowing would be this package's polarity reversed. The loop is usable
+  afterwards, because the failure was the frame's. A WAKE AFTER DISPOSE IS A
+  NO-OP, on `HtmlOverlay.sync`'s terms rather than `Renderer.render`'s: it is
+  a lifecycle race with nothing to draw, not a frame drawn wrong, and it is the
+  race every `useEffect` cleanup runs. No error class joined the surface.
+  **SIZES DO NOT SPRING, AND THE FRAME FLOOR IS QUOTED FROM THE ONE HARNESS
+  THE ENTRY ASKED FOR.** A resize is the caller's own attribute change, made
+  at a moment they chose, and the text that caused it changed instantly
+  whatever the box does; a box that lagged its own contents would clip them
+  for a hundred milliseconds. Springing sizes also doubles the per-node state
+  against M4.7b's floor of 0.34ms per frame for 10,000 settled nodes and 0.25
+  to 0.32ms for 10,000 settled edges in the same invocation. A caller who wants
+  it has `stepSpring2D` and the node's id.
+  **THE COLD REROUTE IS STILL THE NUMBER THE LOOP LIVES WITH, AND THE LOOP DOES
+  NOT THROTTLE IT.** A frame that takes two refreshes is a dropped frame and
+  not a wrong one, since the step is exact and the next frame lands where the
+  clock says. Nothing here skips work to fit a budget, because the lever is
+  upstream: the incremental engine reroutes a small fraction of the drawing
+  per patch, and M4.10 measures the frame against a GPU.
+  **ON NO BENCHED PATH**, like the two halves before it: none of the three new
+  modules appears in any file under a `bench/` directory, and one grep says so.
   **THE LOOP IS THIS TASK'S, AND BOTH EARLIER HALVES HANDED IT THE PREDICATE IT
   NEEDS.** `render.md` has said since M4.6 that this package needs an opinion
   about starting and stopping a `requestAnimationFrame`; `MotionFrame.settled`
@@ -6011,14 +6116,45 @@ it settled rather than restating the argument.
   zero is never passed to `resize`.
 - [ ] **M5.2** Interaction hooks: `useSelection`, hover and drag wiring to
   GPU picking. Component tests.
-- [ ] **M5.3** Demo app: animated living demo (grow/prune/relayout
-  scenarios) in `apps/demo`, deployed-ready build.
+- [ ] **M5.3** (`@dagr/react`, `apps/demo`) The animation a consumer gets for
+  free, and the demo that proves it: `useDagr` over the incremental engine,
+  `<DagrCanvas>` driving M4.7c's scene motion and loop, and an animated living
+  demo (grow/prune/relayout) in `apps/demo`, deployed-ready.
   THIS IS THE TASK THAT DEMONSTRATES THE HEADLINE CLAIM, and nothing shipped
   does. The campaign demo is read-only: `apps/demo/src/App.tsx` never mutates a
   graph, so it proves scale, rendering and semantic zoom, and proves nothing at
   all about layout staying stable under an edit, which is what M6's preamble
   says the project competes on. A visitor currently cannot see the flagship
   feature. Weight this accordingly against M5.1 and M5.2.
+  M4.7c'S DEMO FOLDED IN HERE, and the React wiring came with it. M4.7c shipped
+  `createSceneMotion` and `createMotionLoop`, so the render half of an animated
+  demo is done and exported; what a demo still needs is a component that drives
+  them, and writing one by hand in `apps/demo` first would be a demo against
+  the render API that gets rewritten the day `<DagrCanvas>` learns to do it.
+  So this task is the wiring and the demo together.
+  TWO THINGS THE WIRING HAS TO DECIDE, BOTH NAMED BY THE CODE THAT EXISTS.
+  First, `use-dagr.ts` calls the one-shot `layout()` on every revision, so an
+  edit is a COLD RUN and there is no `LayoutDelta` anywhere in the package to
+  animate from. It has to hold a `createLayout` engine across renders and call
+  `relayout(patch)`, which means holding the patch: `Graph.subscribe` delivers
+  one, and the hook currently throws it away and keeps only a counter (see the
+  file's own docstring for why the counter exists and what window it leaves).
+  The engine's own rule is the constraint: `relayout` does not APPLY the patch,
+  it describes one already applied, and a patch the graph disagrees with is
+  refused, so the hook must not drop or reorder one. A dropped patch is
+  `resync` from `engine.run`, which is also the M4.7 desync recovery path, so
+  the two agree.
+  Second, whether animation is a prop or a hook. A prop (`animate`) keeps the
+  flagship behaviour one word away for the common caller; a hook keeps it out
+  of the way of a caller who owns their own frame. `createMotionLoop` already
+  takes the scheduler as an option precisely so both are available, and
+  `<DagrCanvas>` already has a coalesced `requestDraw` to hand it, so the
+  component wires one loop rather than two whichever shape wins.
+  THE CAMERA QUESTION IS ALREADY ANSWERED AND SHOULD NOT BE REOPENED: the fit
+  happens once, and a sprung box is available per frame for a caller who wants
+  to follow it. An animated demo that refits every frame would look impressive
+  and would hide the thing it exists to show, because a drawing that stays put
+  while the camera moves is indistinguishable from a drawing that moves.
 - [x] **M5.4a** (every package) The tarball a consumer installs: the packaging
   half of M5.4, split out and moved to the front of the queue on 2026-08-26.
   See "Where this stands, and what to do next" at the top of this file for why
