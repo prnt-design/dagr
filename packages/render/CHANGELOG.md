@@ -15,8 +15,8 @@ not" is the category this file has a heading for.
 ### Added
 
 - `createBoundsMotion`, `createSceneMotion` and `createMotionLoop`: the rest of
-  the delta consumer and the loop that drives it. Fifteen new names on the
-  surface: the three factories and the types `BoundsMotion`,
+  the delta consumer and the loop that drives it. Fourteen new names on the
+  surface: the three factories and the eleven types `BoundsMotion`,
   `BoundsMotionFrame`, `BoundsMotionOptions`, `SceneMotion`, `SceneMotionDelta`,
   `SceneMotionFrame`, `SceneMotionOptions`, `SceneMotionRoster`, `MotionLoop`,
   `MotionLoopOptions` and `FrameScheduler`. No new error class. (M4.7c)
@@ -27,13 +27,24 @@ not" is the category this file has a heading for.
   centre and two half-extents rather than two corners, so it never turns inside
   out on the way. A degenerate box is accepted, since an empty layout has one.
 
-  **A SCENE DELTA IS APPLIED ACROSS ALL THREE HALVES OR NOT AT ALL.** The node
-  and edge halves grew a two-phase `planApply` and `planResync` (every check,
-  then the mutation as a closure) so the composite can commit them together.
-  The plan API is on the objects `createNodeMotion` and `createEdgeMotion`
-  return and deliberately absent from the `NodeMotion` and `EdgeMotion` types
-  and from the package surface: a plan is valid only against the state it was
-  made from. Behaviour of the two halves called directly is unchanged.
+  **A SCENE DELTA IS APPLIED ACROSS ALL THREE HALVES OR NOT AT ALL.** All three
+  halves grew a two-phase form (every check, then the mutation as a closure) so
+  the composite can commit them together. The plan methods are on the objects
+  the three public factories return and deliberately absent from the
+  `NodeMotion`, `EdgeMotion` and `BoundsMotion` types and from the package
+  surface: a plan is valid only against the state it was made from. Behaviour
+  of any half called directly is unchanged.
+
+  The bounds half needed one even though its checks look pure, and that is
+  worth recording. The first version of the composite checked it by aiming a
+  throwaway `createBoundsMotion` at the same box. `requireBounds` is indeed
+  pure, and the other check is not: it reads the CURRENT SPRING and guards
+  `velocity + w * displacement`. A throwaway seeded from the current position
+  is at rest, so it validated `0 + w * displacement` where the real half,
+  caught mid-flight, validates a nonzero velocity plus the same term. A box
+  moving fast enough that the sum overflows while the term alone does not would
+  have passed the probe and thrown on the real retarget, after the other two
+  halves had committed.
 
   **A LOOP IS WOKEN, NOT STARTED, AND STOPS ITSELF.** `wake()` while running
   is the frame already queued; the frame callback returns `settled` and the
