@@ -5262,7 +5262,7 @@ of M3 would leave the second runner idle for a milestone.
 - [x] **M4.7c** (`@dagr/render`) Delta consumer, the rest: the bounds change,
   the loop that drives all three halves, and the scene that makes them one call.
   This is what M4.7b's seam left, and it inherits the entry's remaining
-  questions. Shipped 2026-09-13. THE DEMO MOVED TO M5.3, and the reason is the
+  questions. Shipped 2026-09-13. THE DEMO MOVED TO M5.3b, and the reason is the
   one the entry's own scoping gave for the seam: the render half is decidable
   and testable in Node against a scheduler made of a `Map`, and every claim
   below is asserted that way, while a demo that mutates a graph wants
@@ -6245,22 +6245,61 @@ it settled rather than restating the argument.
   config change reports, and what the recovery above reports. `retarget` in the
   new `animation.ts` is where the consequence is written down, one function,
   `resync` when there is no delta and `apply` when there is.
-  THE RECOVERY IS REACHABLE IN THE ORDINARY CASE, WHICH IS THE FINDING THIS
-  TASK DID NOT EXPECT. React coalesces store updates, so two mutating calls in
-  one task are two patches, two published states and ONE render holding the
-  last of them: the first delta never reaches the motion, and the second
-  describes a drawing the motion is not holding, which is a `MotionDesyncError`
-  by name. `retarget` catches that one class and reseats from the roster. The
-  cost is visually almost nothing, because `resync` retargets a node it already
-  holds and seeds one it does not, which is what `apply` does with `moved` and
-  `added`; the only difference is that a node removed in the burst vanishes
-  rather than gliding out. The advice that avoids it is `graph.batch`, which
-  `relayout`'s own docstring already gives for a different reason, and it is now
-  in the React docs and the package README as well.
-  ONLY `MotionDesyncError` IS CAUGHT THERE. A `RangeError` from a target that is
-  not finite would meet the same number again in the roster, so swallowing it
-  would turn a refusal into the same picture forever, which is what the refusal
-  exists to prevent rather than to cause.
+  A STATE IS A SNAPSHOT AND REACT IS OBLIGED TO RENDER THE LATEST ONE, NOT EVERY
+  ONE, AND THAT IS THE DEFECT THE DIFF REVIEW FOUND AND THE REASON
+  `DagrLayoutState.from` EXISTS. Two mutating calls in one task are two patches,
+  two relayouts, two published states and ONE commit holding the last. An effect
+  that applies `delta` per commit therefore applies the second delta to a drawing
+  the first was supposed to move, and the two disagree from then on. The first
+  version of this task shipped that, with a test that passed for the wrong
+  reason: the burst it used produced a second delta naming a node the motion had
+  never seen, which `apply` refuses by name, so the reseat happened by luck about
+  the shape of the delta rather than by a property.
+  A NO-OP SECOND PATCH IS THE INSTANCE THAT PROVES IT, and it is an ordinary
+  flow rather than a contrivance: add a node, then set an attribute on it, in one
+  handler. The attribute edit's delta names nothing, applies cleanly, refuses
+  nothing, and leaves one node drawn where it was and another never drawn at all,
+  permanently, because the loop draws from the springs and the `setNodes` effect
+  stands down while it does. Reproduced before the fix, at `b` drawn at x 0 where
+  the layout says -75. That is the silently wrong drawing the rest of this repo
+  refuses, and a motion cannot be asked to catch it: `apply` checks the presence
+  of the ids a delta NAMES, and has no way to check that the scene is the one the
+  delta was measured from.
+  SO THE HOOK REPORTS WHAT EACH DELTA IS A DIFFERENCE FROM. `from` is the
+  previous state's `result`, the same object, because the engine measures each
+  delta against the geometry it last reported and that is exactly what the hook
+  last handed over. The consumer's test is then an identity comparison,
+  `from === theResultIAmDrawing`, with no counter to keep and nothing to get
+  wrong. `<DagrCanvas>` does it in the retarget effect and reseats when it fails,
+  which costs visually almost nothing, because `resync` retargets a node it
+  already holds and seeds one it does not, exactly as `apply` does with `moved`
+  and `added`. The advice that avoids the reseat entirely is `graph.batch`, which
+  `relayout`'s own docstring already gives for a different reason.
+  THE GENERAL FORM, WORTH KEEPING: a snapshot in an external store is not a
+  message queue, and a value that is a DIFFERENCE is a message. Putting one in a
+  snapshot is safe only if the snapshot also says what it is a difference from.
+  ONLY `MotionDesyncError` IS CAUGHT IN `retarget`. A `RangeError` from a target
+  that is not finite would meet the same number again in the roster, so
+  swallowing it would turn a refusal into the same picture forever, which is what
+  the refusal exists to prevent rather than to cause.
+  ONE FAILURE IS RECOVERED FROM IN THE HOOK AND THE REST ARE REPORTED, which is
+  the other half of the same lesson. The first version caught everything from
+  `relayout` and ran cold, and the diff review pointed out what that hides: a
+  failure reachable only under a WARM start (a stage breaking the pipeline
+  contract from retained state, which no cold run would reproduce) would leave
+  every edit cold, undelta'd and unanimated, with nothing anywhere saying why.
+  So `EngineStateError` recovers, because that class means the engine and the
+  graph are out of step and a cold run is the designed way back, and everything
+  else is reported through `error`, which is exactly how the same failure is
+  already treated when a COLD run raises it.
+  THAT RECOVERY ARM IS REACHABLE AND IS TESTED, which was not obvious: a live
+  subscription always hands over a patch the graph already agrees with, so the
+  usual routes to `EngineStateError` are closed. The one that is open is a
+  listener registered BEFORE the hook's that edits the graph in response to an
+  edit (an auto-layout rule, a constraint solver): it can undo what the patch in
+  flight describes before the hook's listener ever sees it. The test asserts the
+  recovery rather than the outcome, by counting the second engine and the second
+  cold run.
   THE CAMERA DECISION IS UPHELD AND MADE ACTIONABLE. The component still fits
   once and never refits. What M5.3a adds is `onFrame`, called with the sprung
   scene AND the renderer about to draw it, after `setNodes` and `setEdges` and
@@ -6287,6 +6326,20 @@ it settled rather than restating the argument.
   `frames.ts` grew a timestamp and a run-until-idle, because a spring is stepped
   by the gap between two frames and a test that wants to talk about halfway has
   to be the thing that decides how much time has passed.
+  TWO SMALLER THINGS THE REVIEWS CHANGED AND ONE THEY DID NOT. The dressing map
+  is now maintained only while something is animating: it is written per layout
+  and pruned on the frame that settles, so a component that never animates never
+  reaches the pruning frame and would have held every node the graph had ever
+  had. It was a leak rather than a wrong picture, because a frame draws what the
+  MOTION reports and a stale entry is never reported. And every optional prop on
+  `DagrCanvasProps` is now `?: T | undefined`, which under this repo's
+  `exactOptionalPropertyTypes` is what lets a caller write
+  `animate={reducedMotion ? undefined : feel}`; the pre-existing props had the
+  same hole and were widened with it. What did NOT change is the departure: a
+  node removed while it was standing still is gone on the next frame rather than
+  fading, because `advance` drops an entry that is departing and not moving.
+  That is correct and it is now stated on the docs page rather than left for
+  M5.3b to discover.
 - [ ] **M5.3b** (`apps/demo`) The demo that proves it: an animated living demo
   (grow, prune, relayout) in `apps/demo`, deployed-ready.
   THIS IS THE TASK THAT DEMONSTRATES THE HEADLINE CLAIM, and nothing shipped

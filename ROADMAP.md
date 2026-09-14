@@ -25,7 +25,7 @@ nothing. One engine caveat a consumer should know: Brandes-Koepf positioning
 is implemented and tested but unexported, and `gridPositionStage` is the
 default, with the reason written in `packages/layout/src/index.ts`.
 
-The order to v0.1, decided 2026-08-26 and updated after M4.7c shipped
+The order to v0.1, decided 2026-08-26 and updated after M5.3a shipped
 (reasoning in the notes):
 
 1. **M5.3b**, the animated demo. M5.3a shipped the React wiring it stands on:
@@ -169,7 +169,8 @@ worth less than a slow path they can.
   not at all, and `createMotionLoop`, woken rather than started, stopping on
   the frame that says settled, with the scheduler as an option so a caller's
   coalesced frame is the loop's frame. Sizes do not spring. The demo that
-  proves it moved to M5.3b, beside the React wiring it needs.
+  proves it moved to M5.3b, beside the React wiring it stands on, which
+  shipped as M5.3a.
 - [x] **M4.8a** Pick IDs: the encoding, the pixel arithmetic, and the stamp
   registry that refuses a stale answer.
 - [ ] **M4.8b** GPU picking, the pass: per-instance IDs to an offscreen

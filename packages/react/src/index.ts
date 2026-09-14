@@ -6,13 +6,13 @@
  * `<DagrCanvas>`'s to provide: shipping the sugar first would have meant
  * inventing that context in a package with no component to provide it, and then
  * living with the shape when the requirements that should have decided it
- * finally arrived. They have, and the whole package is four exports and a
- * conversion.
+ * finally arrived. They have, and the whole package is five exports and two
+ * conversions.
  *
  * - {@link DagrCanvas} is the component: a graph goes in, a picture comes out,
  *   and with `animate` an edit glides to its new layout rather than cutting.
  * - {@link useDagr} is the layout on its own, for a caller drawing it their own
- *   way or reading the geometry beside a canvas somebody else owns. Since M5.3
+ *   way or reading the geometry beside a canvas somebody else owns. Since M5.3a
  *   it holds a `createLayout` engine across renders, so an edit is a
  *   `LayoutDelta` rather than a cold run.
  * - {@link Html} puts React content in world coordinates over the canvas.

@@ -31,7 +31,7 @@ export function Board() {
 }
 ```
 
-This page describes the package as of M5.3: the component, the hook under it,
+This page describes the package as of M5.3a: the component, the hook under it,
 the animation an edit gets for free, the overlay sugar, and the conversions the
 renderer deliberately does not own.
 
@@ -74,15 +74,16 @@ engine and lays the graph out cold.
 
 `useDagr` holds a `createLayout` engine for as long as it is watching one graph
 with one config, and calls `relayout(patch)` with the patch the graph delivers.
-So it returns three things rather than two:
+So it returns four things rather than two:
 
 ```tsx
-const { result, error, delta } = useDagr(graph);
+const { result, error, delta, from } = useDagr(graph);
 ```
 
 `delta` is a `LayoutDelta`: what appeared, what went away, what moved, and what
 the box around the lot became. It is what `<DagrCanvas animate>` animates from,
-and what a caller driving `@dagr/render` themselves wants.
+and what a caller driving `@dagr/render` themselves wants. `from` is the drawing
+that delta is a difference FROM, which is the next section.
 
 **`delta` is `null` on a cold run, and that is a statement rather than a missing
 value.** A delta is a difference from a drawing; the first run of a graph has no
@@ -116,9 +117,37 @@ large graph they are larger than the result you can see.
 ## The layout still runs during render, synchronously
 
 The first run for a graph is a `useMemo`, exactly as it was: synchronous, and
-during render. The result is referentially stable, and so is the whole
-`{ result, error, delta }` state, so an effect keyed on it runs exactly once per
-layout, which is what makes "apply each delta once" something a caller can write.
+during render. The result is referentially stable, and so is the whole state
+object: a render that changed neither the graph nor the config hands back the
+same one, so an effect keyed on it does not run.
+
+**Stable is not the same as seen, and a consumer applying deltas has to know the
+difference.** The state changes once per layout. An effect keyed on it runs once
+per commit. Those are different counts, because React renders the latest
+snapshot of an external store rather than every one, so two mutating calls in
+one task are two layouts and one render holding the second. The delta you are
+handed is then a difference from a drawing you never drew.
+
+That is what `from` is for, and the check is one line:
+
+```tsx
+useEffect(() => {
+  if (state.result === null) return;
+  const continues = drawn.current !== null && drawn.current === state.from;
+  // Retarget when it continues, reseat when it does not.
+  retarget(motion, continues ? state.delta : null, roster);
+  drawn.current = state.result;
+}, [state]);
+```
+
+**Do not leave that check to the motion.** `SceneMotion.apply` refuses a delta
+naming an id whose presence it disagrees about, which catches some of these, and
+a delta naming only ids it already holds applies cleanly and leaves the drawing
+wrong in silence. Creating a node and then labelling it, in one handler, is
+enough to produce one. `<DagrCanvas animate>` does this check for you.
+
+The other half of the answer is `graph.batch`: one patch, one layout, one delta,
+nothing to miss.
 
 There is no worker here, and that is a decision rather than an omission. A
 `Worker` has to be constructed by the host, because `new Worker(new URL('./x.ts',
@@ -212,7 +241,7 @@ with the bounds, the routes and every stability guarantee the layout makes. Set
 With it, an edit glides to its new layout instead of cutting to it: nodes spring
 to their new centres, edges follow their new routes, and the drawing's box moves
 with them. Without it, nothing tweens, which is what the component did before
-M5.3 and is still the default.
+M5.3a and is still the default.
 
 It is a prop rather than a hook because this component already owns all four
 things a hook would have to hand back out: the coalesced frame, the renderer,
@@ -228,14 +257,14 @@ one frame.
 The feel is the same prop:
 
 ```tsx
-<DagrCanvas graph={graph} animate={{ halfLifeSeconds: 0.2, restEpsilon: 0.05 }} />
+<DagrCanvas graph={graph} animate={{ halfLifeSeconds: 0.3 }} />
 ```
 
-`halfLifeSeconds` is how long a spring takes to close half the remaining gap and
-`restEpsilon` is how close counts as arrived; both are `@dagr/render`'s, one
-number each for the whole scene, because one delta is one change and three
-arrival times would read as three. The object is compared by value, like
-`config`.
+`halfLifeSeconds` is how long a spring takes to close half the remaining gap
+(default 0.12) and `restEpsilon` is how close, in world units, counts as arrived
+(default 0.05). Both are `@dagr/render`'s, one number each for the whole scene,
+because one delta is one change and three arrival times would read as three. The
+object is compared by value, like `config`.
 
 Three things worth knowing:
 
@@ -246,6 +275,11 @@ Three things worth knowing:
   frame the edit lands, and only its centre glides. A label that grew measures
   wider because the text that made it wider changed instantly, and a box lagging
   its own contents would clip them.
+- **A removed node leaves on the frame its spring settles**, which for a node
+  that was standing still is the next one: it is gone rather than faded. A node
+  removed mid-glide finishes its move first, so it does not jump on the way out.
+  Nothing fades, because a fade is an appearance and this component has no
+  opinion about appearance.
 - **The loop stops itself.** It asks for no frame after the one on which every
   spring has arrived, so an idle canvas is an idle canvas.
 

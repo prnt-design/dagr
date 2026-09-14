@@ -20,7 +20,7 @@ type RealLayout = Record<string, unknown> & {
 /**
  * Every engine this hook built, and every call it made to one.
  *
- * The three claims M5.3 makes about the hook are claims about an ENGINE rather
+ * The three claims M5.3a makes about the hook are claims about an ENGINE rather
  * than about a layout: that one is held across edits, that an edit is a
  * `relayout` and not a `run`, and that it is disposed when the component goes.
  * None of the three is visible in a `LayoutResult`, and inferring them from a
@@ -334,6 +334,49 @@ describe('useDagr over the incremental engine', () => {
     }
   });
 
+  it('reports the drawing each delta is a difference from', async () => {
+    const graph = twoNodes();
+    const seen: DagrLayoutState[] = [];
+    tree = await mount(<Probe graph={graph} seen={seen} />);
+    const first = latest(seen).result;
+    expect(latest(seen).from).toBeNull();
+
+    await flush(() => {
+      graph.addNode({ id: 'c' });
+    });
+
+    expect(latest(seen).from).toBe(first);
+    expect(latest(seen).delta).not.toBeNull();
+  });
+
+  /**
+   * The property a consumer animating from deltas cannot do without, and the
+   * reason `from` is a field rather than something a caller could derive.
+   *
+   * React renders the LATEST snapshot of an external store, not every one, so
+   * two mutating calls in one task are two states and one render. The delta the
+   * caller is handed is then a difference from a drawing they never saw, and
+   * `from` is what lets them notice: it is not the result they are holding.
+   */
+  it('says so when a burst of edits skipped a state past the caller', async () => {
+    const graph = twoNodes();
+    const seen: DagrLayoutState[] = [];
+    tree = await mount(<Probe graph={graph} seen={seen} />);
+    const held = latest(seen).result;
+    const renders = seen.length;
+
+    await flush(() => {
+      graph.addNode({ id: 'c' });
+      graph.addNode({ id: 'd' });
+    });
+
+    // One render, two layouts: the state the caller sees is the second one.
+    expect(seen.length).toBe(renders + 1);
+    expect(latest(seen).result?.nodes.size).toBe(4);
+    expect(latest(seen).delta).not.toBeNull();
+    expect(latest(seen).from).not.toBe(held);
+  });
+
   it('runs cold, with no delta, when the config changes', async () => {
     const graph = twoNodes();
     const seen: DagrLayoutState[] = [];
@@ -445,5 +488,43 @@ describe('useDagr over the incremental engine', () => {
     expect(latest(seen).result).toBeNull();
     expect(latest(seen).error?.message).toBe('the measurer refused');
     expect(graph.hasNode('c')).toBe(true);
+  });
+});
+
+describe('useDagr and a graph that edits itself', () => {
+  /**
+   * The one way a live subscription can be handed a patch the graph disagrees
+   * with, which is the failure `EngineStateError` exists for and the failure
+   * the cold recovery in `onPatch` exists for.
+   *
+   * A listener registered BEFORE this hook's, editing the graph in response to
+   * an edit (an auto-layout rule, a constraint solver), can undo what the patch
+   * in flight describes before the hook's own listener ever sees it. The engine
+   * then refuses the patch, and the drawing has to come out right anyway.
+   */
+  it('recovers when a listener ahead of it undoes the edit it is being told about', async () => {
+    const graph = twoNodes();
+    const stop = graph.subscribe((patch) => {
+      for (const op of patch) {
+        if (op.op === 'add-node' && op.id === 'doomed') graph.removeNode('doomed');
+      }
+    });
+    const seen: DagrLayoutState[] = [];
+    tree = await mount(<Probe graph={graph} seen={seen} />);
+
+    await flush(() => {
+      graph.addNode({ id: 'doomed' });
+    });
+    stop();
+
+    expect(latest(seen).error).toBeNull();
+    expect(latest(seen).result?.nodes.size).toBe(2);
+    expect(graph.hasNode('doomed')).toBe(false);
+    // The recovery rather than a lucky relayout: a second engine, a second cold
+    // run, and a state that says it is not a difference from anything.
+    expect(spy.built).toBe(2);
+    expect(spy.runs).toBe(2);
+    expect(latest(seen).delta).toBeNull();
+    expect(latest(seen).from).toBeNull();
   });
 });

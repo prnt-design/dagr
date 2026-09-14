@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Graph } from '@dagr/graph';
-import type { LayoutResult } from '@dagr/layout';
+import type { LayoutDelta, LayoutResult } from '@dagr/layout';
 
 // Only the two builders are faked; see `fake-render.ts`. The scene motion and
 // the loop this file is about are the real ones, so what it asserts about a
@@ -188,6 +188,35 @@ describe('DagrCanvas animate', () => {
     expect(drawnAt('c')).toEqual(laidOutAt(after, 'c'));
   });
 
+  /**
+   * The same skip as above, with the one difference that decides whether it is
+   * caught: the surviving delta names nothing the dropped one introduced, so it
+   * applies cleanly and NOTHING REFUSES IT. The scene is then a delta behind for
+   * good, because the loop draws from the springs and the `setNodes` effect
+   * stands down while it does.
+   *
+   * A no-op attribute edit is the cleanest instance and an ordinary flow:
+   * create a node, then label it. The drawing has to be right afterwards, and a
+   * motion that refuses nothing is exactly why the continuity check cannot be
+   * left to the motion.
+   */
+  it('reseats when the surviving delta is one the motion would not refuse', async () => {
+    const graph = chain();
+    const { layouts } = await mountAnimated(graph);
+
+    await flush(() => {
+      addSibling(graph);
+      graph.updateNodeAttrs('a', { label: 'hello' });
+    });
+    await runFramesUntilIdle();
+
+    const after = layouts.at(-1);
+    expect(after).toBeDefined();
+    if (after === undefined) return;
+    expect(drawnAt('b')).toEqual(laidOutAt(after, 'b'));
+    expect(drawnAt('c')).toEqual(laidOutAt(after, 'c'));
+  });
+
   it('never refits the camera, not even while the drawing box is moving', async () => {
     const graph = chain();
     await mountAnimated(graph);
@@ -303,5 +332,85 @@ describe('DagrCanvas animate', () => {
     expect(lastRenderer().setNodes.mock.calls.length).toBeGreaterThan(before);
     const nodes = lastRenderer().setNodes.mock.calls.at(-1)?.[0] as SceneNode[];
     expect(nodes.every((node) => node.fillColor === 0xff0000)).toBe(true);
+  });
+});
+
+describe('DagrCanvas and what it reports', () => {
+  it('hands the delta to onLayout beside the result, so a consumer can show it', async () => {
+    const graph = chain();
+    const seen: (LayoutDelta | null)[] = [];
+    tree = await mount(
+      <DagrCanvas graph={graph} animate onLayout={(_result, delta) => seen.push(delta)} />,
+    );
+    resizeTo(800, 600);
+    await flush();
+
+    expect(seen).toEqual([null]);
+
+    await flush(() => {
+      addSibling(graph);
+    });
+
+    expect(seen).toHaveLength(2);
+    expect(seen[1]?.nodes.added.map((node) => node.id)).toEqual(['c']);
+  });
+
+  /**
+   * A node removed while it was standing still is gone on the next frame rather
+   * than gliding out, because `advance` drops an entry that is departing and not
+   * moving. The claim worth pinning is the one a consumer sees: the drawing ends
+   * up holding exactly what the layout holds, and the renderer is never asked to
+   * draw a node the graph no longer has.
+   */
+  it('stops drawing a node the graph no longer has', async () => {
+    const graph = chain();
+    const { layouts } = await mountAnimated(graph);
+    await flush(() => {
+      addSibling(graph);
+    });
+    await runFramesUntilIdle();
+    expect(drawnAt('c')).toBeDefined();
+
+    await flush(() => {
+      graph.batch(() => {
+        graph.removeEdge('a-c');
+        graph.removeNode('c');
+      });
+    });
+    await runFramesUntilIdle();
+
+    const after = layouts.at(-1);
+    expect(after).toBeDefined();
+    if (after === undefined) return;
+    const drawn = lastRenderer().setNodes.mock.calls.at(-1)?.[0] as SceneNode[];
+    expect(drawn.map((node) => node.id).sort()).toEqual(['a', 'b']);
+    expect(drawnAt('b')).toEqual(laidOutAt(after, 'b'));
+  });
+
+  /**
+   * The stage effect's cleanup runs before the motion effect's, because React
+   * destroys a component's effects in the order they were declared. The motion
+   * cleanup snaps the renderer back to the layout, so if that order were the
+   * other way round it would be calling a renderer that has already been
+   * disposed. Argued in a comment there; pinned here.
+   */
+  it('touches nothing after the renderer has been disposed', async () => {
+    const graph = chain();
+    await mountAnimated(graph);
+    await flush(() => {
+      addSibling(graph);
+    });
+    await runFrames(16);
+
+    const renderer = lastRenderer();
+    await tree?.unmount();
+    tree = null;
+
+    const disposedAt = renderer.dispose.mock.invocationCallOrder[0];
+    expect(disposedAt).toBeDefined();
+    if (disposedAt === undefined) return;
+    for (const mock of [renderer.setNodes, renderer.setEdges, renderer.render, renderer.resize]) {
+      for (const order of mock.mock.invocationCallOrder) expect(order).toBeLessThan(disposedAt);
+    }
   });
 });

@@ -29,11 +29,13 @@ export function Board() {
 }
 ```
 
-Four exports carry the package. `DagrCanvas` is the component. `useDagr` is the
+Five exports carry the package. `DagrCanvas` is the component. `useDagr` is the
 layout on its own, for a caller drawing it their own way or reading the geometry
 beside a canvas somebody else owns. `Html` puts React content in world
 coordinates over the canvas. `useDagrCanvas` is how anything inside reaches the
-renderer.
+renderer. `retarget`, with `toMotionDelta` and `toMotionRoster` beside it, is
+the delta half of the scene conversion, for a caller driving `@dagr/render`'s
+scene motion themselves.
 
 **Add `animate` and an edit glides to its new layout instead of cutting to it:**
 

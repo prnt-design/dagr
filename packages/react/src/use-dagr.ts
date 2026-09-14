@@ -10,7 +10,7 @@
  * watches the graph, and an edit anywhere reaches the canvas.
  *
  * **An edit is a relayout, and a relayout is where the delta comes from.** Until
- * M5.3 this hook called the one-shot `layout()` on every revision, so every edit
+ * M5.3a this hook called the one-shot `layout()` on every revision, so every edit
  * was a cold run and there was no `LayoutDelta` anywhere in this package to
  * animate from. It holds a `createLayout` engine instead and calls
  * `relayout(patch)`, which hands back the drawing AND what changed to get there.
@@ -40,8 +40,9 @@
  * out of a mutation nobody expects to raise one. It is reported instead, on the
  * same argument {@link DagrLayoutState.error} already made.
  *
- * **THE ENGINE'S LIFE IS THE SUBSCRIPTION'S.** It is disposed from the
- * `subscribe` cleanup, which is what `LayoutEngine.dispose` is for: the graph,
+ * **THE ENGINE'S LIFE IS THE SUBSCRIPTION'S, WITH ONE EXCEPTION.** It is
+ * disposed from the `subscribe` cleanup, which is what `LayoutEngine.dispose`
+ * is for: the graph,
  * the previous run's pipeline state and the reported-geometry snapshot are
  * retained for the life of an engine and on a large graph they are larger than
  * the result a caller can see. React under `StrictMode` unsubscribes and
@@ -51,6 +52,14 @@
  * the designed recovery for an engine and a graph that have fallen out of step,
  * and it runs in development on every mount, which is the best place for a
  * recovery path to be exercised.
+ *
+ * The exception is a render React discards. The session and its cold run happen
+ * in a `useMemo` during render, and a render that never commits never
+ * subscribes, so that engine is never disposed. It is unreachable and holds
+ * nothing outside itself (no worker port, no listener), so it is collected
+ * rather than leaked. What it does cost is real and worth naming: a `StrictMode`
+ * mount double-renders and remounts its effects, so it lays the graph out three
+ * times where production lays it out once.
  *
  * **The snapshot is the layout state, and the mount window it used to leave is
  * still there.** React subscribes in an effect, after the render that read the
@@ -89,7 +98,7 @@
 
 import { useMemo, useRef, useSyncExternalStore } from 'react';
 import type { Graph, Patch } from '@dagr/graph';
-import { createLayout } from '@dagr/layout';
+import { EngineStateError, createLayout } from '@dagr/layout';
 import type { LayoutConfig, LayoutDelta, LayoutEngine, LayoutResult, Size } from '@dagr/layout';
 
 /** What a caller may say about the layout run. */
@@ -99,7 +108,7 @@ export interface UseDagrOptions {
    * caller writes this as an object literal in their JSX and it would otherwise
    * relayout the whole graph on every render of the host application.
    */
-  readonly config?: LayoutConfig;
+  readonly config?: LayoutConfig | undefined;
 }
 
 /** The layout, or what stopped it. Exactly one of the first two is set. */
@@ -139,6 +148,35 @@ export interface DagrLayoutState {
    * does not exist.
    */
   readonly delta: LayoutDelta | null;
+
+  /**
+   * The drawing {@link delta} is a difference FROM, or `null` when it is not a
+   * difference from anything.
+   *
+   * **APPLY A DELTA ONLY WHEN THIS IS THE RESULT YOU ARE ALREADY DRAWING, AND
+   * RESEAT OTHERWISE.** That is the whole of the field and it is not optional
+   * care: a state is a snapshot in an external store, and React is obliged to
+   * render the LATEST snapshot rather than every one. Two mutating calls in one
+   * task are two patches, two relayouts and two states, and ONE commit holding
+   * the second. A consumer whose effect applies `delta` on every commit
+   * therefore applies the second delta on top of a drawing the first one was
+   * supposed to move, and the two disagree from then on.
+   *
+   * THE MOTION CANNOT CATCH THAT FOR YOU. `SceneMotion.apply` refuses a delta
+   * that names an id whose presence it disagrees about, which catches some of
+   * these by luck, and a delta that names only ids it holds (or names nothing at
+   * all, which an attribute edit produces) applies cleanly and leaves the scene
+   * wrong in silence. "Add a node, then label it" is enough to reach it.
+   *
+   * So the test is an identity comparison and this field is what makes it one:
+   * `state.from === theResultIAmDrawing`. It is the previous state's `result`,
+   * the same object, because the engine measures each delta against the geometry
+   * it last reported and that is exactly what this hook last handed over.
+   * `null` whenever `delta` is, and `null` after a run that failed, which is
+   * conservative in the one direction that costs a reseat rather than a wrong
+   * picture.
+   */
+  readonly from: LayoutResult | null;
 }
 
 /**
@@ -245,9 +283,9 @@ function createSession(graph: Graph, config: LayoutConfig | undefined): LayoutSe
       // than holding an engine that has never run.
       const result = made.run(graph);
       engine = made;
-      return { result, error: null, delta: null };
+      return { result, error: null, delta: null, from: null };
     } catch (cause: unknown) {
-      return { result: null, error: asError(cause), delta: null };
+      return { result: null, error: asError(cause), delta: null, from: null };
     }
   }
 
@@ -256,13 +294,21 @@ function createSession(graph: Graph, config: LayoutConfig | undefined): LayoutSe
   /**
    * One patch, one relayout, one new state.
    *
-   * EVERY failure is met with a cold run rather than only the ones this file
-   * can name. `EngineStateError` is what a disposed engine and a patch the
-   * graph disagrees with both raise, and both are recoverable exactly this way;
-   * a failure that is really about the graph or the config fails the cold run
-   * too, and then it is that error, described against the graph as it now
-   * stands, that gets reported. Sniffing the class would buy nothing and would
-   * leave a third kind of failure with no path at all.
+   * ONE FAILURE IS RECOVERED FROM AND THE REST ARE REPORTED, and the line
+   * between them is the class. `EngineStateError` is what a disposed engine and
+   * a patch the graph disagrees with both raise: the engine and the graph are
+   * out of step, the drawing is still obtainable, and a cold run is the designed
+   * way back. Everything else is the same kind of failure a COLD run already
+   * reports through {@link DagrLayoutState.error} (a stage that broke the
+   * pipeline contract, a `nodeSize` callback that threw), and it is reported the
+   * same way here rather than recovered from, because a recovery that always
+   * succeeds is a bug that never surfaces: a failure reachable only under a warm
+   * start would leave every edit cold, undelta'd and unanimated, with nothing
+   * anywhere saying why.
+   *
+   * Nothing is thrown out of this either way. It runs inside the caller's own
+   * `graph.addNode(...)`, which is not a call anyone expects to raise a layout
+   * error.
    */
   function onPatch(patch: Patch): void {
     const held = engine;
@@ -271,10 +317,17 @@ function createSession(graph: Graph, config: LayoutConfig | undefined): LayoutSe
       return;
     }
     try {
+      // Captured BEFORE the relayout: `from` has to be the geometry the engine
+      // measured this delta against, which is the one this hook last reported.
+      const before = state.result;
       const { result, delta } = held.relayout(patch);
-      state = { result, error: null, delta };
-    } catch {
-      state = cold();
+      state = { result, error: null, delta, from: before };
+    } catch (cause: unknown) {
+      if (cause instanceof EngineStateError) {
+        state = cold();
+        return;
+      }
+      state = { result: null, error: asError(cause), delta: null, from: null };
     }
   }
 
@@ -310,9 +363,16 @@ function createSession(graph: Graph, config: LayoutConfig | undefined): LayoutSe
  *
  * The result is referentially stable: a render that changed neither the graph
  * nor the config hands back the same {@link DagrLayoutState}, so a `useMemo` or
- * a `useEffect` downstream keyed on it does not run. That is what makes the
- * state itself the right dependency for a consumer applying deltas: it changes
- * exactly once per layout, so an effect keyed on it applies each delta once.
+ * a `useEffect` downstream keyed on it does not run.
+ *
+ * STABLE IS NOT THE SAME AS SEEN. The state changes once per layout and an
+ * effect keyed on it runs once per COMMIT, and those are different counts: React
+ * renders the latest snapshot of an external store rather than every one, so two
+ * mutating calls in one task are two layouts and one commit. A consumer applying
+ * deltas has to check {@link DagrLayoutState.from} rather than assume it was
+ * handed every one, and that field exists to make the check an identity
+ * comparison. `graph.batch` is the other half of the answer: one patch, one
+ * layout, one delta, nothing to miss.
  */
 export function useDagr(graph: Graph, options?: UseDagrOptions): DagrLayoutState {
   const config = useStableConfig(options?.config);

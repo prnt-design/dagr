@@ -29,7 +29,9 @@
  * (see `DagrLayoutState.delta`), which happens on the first run of a graph, on
  * a config change, and on the recovery from a patch the engine refused. Those
  * are the runs where the scene has to be reseated absolutely rather than
- * retargeted, and reseating is `resync`.
+ * retargeted, and reseating is `resync`. A delta that IS a difference from some
+ * drawing, but not from the one the motion is holding, wants the same treatment
+ * and the caller is the one who can tell: see `DagrLayoutState.from`.
  *
  * Nothing here touches React and nothing here holds state, for the reason
  * `scene.ts` gives: the arithmetic is the part worth testing without a DOM, and
@@ -118,13 +120,23 @@ export type Retargeting = 'applied' | 'resynced';
  * Moves a scene onto a new layout: by the delta when there is one, absolutely
  * when there is not.
  *
- * The `MotionDesyncError` arm is the recovery `@dagr/render` names in that
- * error's own message, and it is reachable through this package rather than
- * theoretical: a motion built after the edit that produced the delta (turning
- * `animate` on again, for one) holds a roster the delta's `moved` list does not
- * describe. The roster is the way back because it describes a whole state
- * rather than a difference, so a scene reseated from it agrees with the drawing
- * whatever it was holding before.
+ * **PASS `null` FOR A DELTA THAT IS NOT A DIFFERENCE FROM WHAT THE MOTION IS
+ * HOLDING, NOT ONLY FOR ONE THE HOOK REPORTED AS COLD.** The caller owns that
+ * judgement because only the caller knows which drawing the motion has, and
+ * `DagrLayoutState.from` is what makes it an identity comparison. It matters
+ * because React renders the latest snapshot of an external store rather than
+ * every one, so a burst of edits in one task can carry a delta past a consumer
+ * whose effect runs once per commit.
+ *
+ * THE MOTION WILL NOT CATCH THAT FOR YOU, AND THE ARM BELOW IS NOT A SUBSTITUTE
+ * FOR THE CHECK. `apply` refuses a delta naming an id whose presence it
+ * disagrees about, which catches the skipped delta that happens to introduce or
+ * remove something, and a delta naming only ids the motion already holds applies
+ * cleanly and leaves the drawing wrong in silence. The arm is the backstop for
+ * the case the motion CAN see, and the recovery `@dagr/render` names in that
+ * error's own message: the roster describes a whole state rather than a
+ * difference, so a scene reseated from it agrees with the drawing whatever it
+ * was holding before.
  *
  * Only that error is caught. A `RangeError` from a target that is not finite is
  * a number the reseat would meet again in the roster, so swallowing it would

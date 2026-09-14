@@ -35,7 +35,7 @@
  * their line of code.
  *
  * **`animate` is a prop, and the scheduler option is why that is not a fork.**
- * M5.3 asked whether animation should be a prop or a hook. It is a prop, because
+ * M5.3a asked whether animation should be a prop or a hook. It is a prop, because
  * this component already owns all four things a hook would have to hand back
  * out: the coalesced frame, the renderer, the scene conversions, and the
  * `LayoutDelta` `useDagr` now reports. A hook would make the common caller
@@ -67,7 +67,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import type { Graph } from '@dagr/graph';
-import type { LayoutConfig, LayoutResult } from '@dagr/layout';
+import type { LayoutConfig, LayoutDelta, LayoutResult } from '@dagr/layout';
 import { createHtmlOverlay, createMotionLoop, createRenderer, createSceneMotion } from '@dagr/render';
 import type {
   FrameScheduler,
@@ -122,7 +122,7 @@ export interface DagrCanvasProps {
   readonly graph: Graph;
 
   /** The layout configuration. Compared by value; see `useDagr`. */
-  readonly config?: LayoutConfig;
+  readonly config?: LayoutConfig | undefined;
 
   /**
    * What each node looks like, by id. Compared by IDENTITY, so memoise it.
@@ -133,19 +133,19 @@ export interface DagrCanvasProps {
    * passes an unmemoised arrow rebuilds the scene array on every render of the
    * host, which is O(nodes) and one `setNodes`, not a redraw of the device.
    */
-  readonly nodeAppearance?: NodeAppearanceOf;
+  readonly nodeAppearance?: NodeAppearanceOf | undefined;
 
   /** What colour each edge is, by id. Compared by identity, as above. */
-  readonly edgeColor?: EdgeColorOf;
+  readonly edgeColor?: EdgeColorOf | undefined;
 
   /** The three uniforms every node shares. Read once, at construction. */
-  readonly sceneStyle?: SceneStyle;
+  readonly sceneStyle?: SceneStyle | undefined;
 
   /** The canvas background, as `0xRRGGBB`. Read once, at construction. */
-  readonly clearColor?: number;
+  readonly clearColor?: number | undefined;
 
   /** How the edge ribbons are drawn. Read once, at construction. */
-  readonly edgeStyle?: RibbonStyle;
+  readonly edgeStyle?: RibbonStyle | undefined;
 
   /**
    * Whether an edit glides to its new layout instead of cutting to it, and how
@@ -161,7 +161,7 @@ export interface DagrCanvasProps {
    * ask is not a default this component gets to choose for them, and the whole
    * of the opt-in is one word.
    */
-  readonly animate?: boolean | SceneMotionOptions;
+  readonly animate?: boolean | SceneMotionOptions | undefined;
 
   /**
    * Called on every animated frame, with the scene as the springs have it and
@@ -180,25 +180,35 @@ export interface DagrCanvasProps {
    * Not called at all when `animate` is off, because then there are no frames
    * to be handed: nothing is moving between layouts.
    */
-  readonly onFrame?: (frame: SceneMotionFrame, renderer: Renderer) => void;
+  readonly onFrame?: ((frame: SceneMotionFrame, renderer: Renderer) => void) | undefined;
 
   /** Whether to frame the graph on the first drawable frame. Default true. */
-  readonly fit?: boolean;
+  readonly fit?: boolean | undefined;
 
   /** The margin the fit leaves, as a fraction of the viewport. Default the camera's. */
-  readonly fitPadding?: number;
+  readonly fitPadding?: number | undefined;
 
   /** Passed to the element that holds the canvas and the overlay. */
-  readonly className?: string;
+  readonly className?: string | undefined;
 
   /** Merged into the holder's style. `position` is this component's. */
-  readonly style?: CSSProperties;
+  readonly style?: CSSProperties | undefined;
 
   /** Rendered once the canvas is ready, inside its context. */
-  readonly children?: ReactNode;
+  readonly children?: ReactNode | undefined;
 
-  /** Called after every layout, with the result now on screen. */
-  readonly onLayout?: (result: LayoutResult) => void;
+  /**
+   * Called after every layout, with the result now on screen and what changed
+   * to reach it.
+   *
+   * `delta` is `null` when the run was cold and had nothing to be a difference
+   * from (see `DagrLayoutState.delta`). It is here because the numbers a
+   * consumer wants to SHOW about incremental layout are in the delta and
+   * nowhere else: how many nodes moved, how many did not, how much of the
+   * drawing an edit disturbed. Calling `useDagr` a second time to get at them
+   * would lay the graph out twice.
+   */
+  readonly onLayout?: ((result: LayoutResult, delta: LayoutDelta | null) => void) | undefined;
 
   /**
    * Called instead of throwing, for a layout that failed or a device that never
@@ -209,7 +219,7 @@ export interface DagrCanvasProps {
    * component that cannot draw is to render an empty box and say nothing, and
    * an empty box is indistinguishable from an empty graph.
    */
-  readonly onError?: (error: unknown) => void;
+  readonly onError?: ((error: unknown) => void) | undefined;
 }
 
 /** The renderer and the overlay, which are built together and torn down together. */
@@ -225,6 +235,27 @@ interface Animation {
 }
 
 const NOT_ANIMATED: Animation = Object.freeze({ enabled: false, options: Object.freeze({}) });
+
+/**
+ * Every field of {@link SceneMotionOptions}, so a new one cannot be forgotten
+ * in the comparison below.
+ *
+ * The same guard `use-dagr.ts` puts on `LayoutConfig`, for the same reason and
+ * against a worse failure: a field added upstream and not compared here would
+ * mean a caller changing it never rebuilds the springs, so the prop would
+ * silently stop working with nothing to see. The declaration fails to compile
+ * the day `SceneMotionOptions` grows a field this file does not read.
+ */
+type ComparedAnimationField = 'halfLifeSeconds' | 'restEpsilon';
+
+/** `never` when every option is compared, which is what makes it a check. */
+type UncomparedAnimationField = Exclude<keyof SceneMotionOptions, ComparedAnimationField>;
+
+// Fails with "Type 'true' is not assignable to type 'never'" naming the field
+// that was added and not compared.
+const everyAnimationFieldIsCompared: [UncomparedAnimationField] extends [never] ? true : never =
+  true;
+void everyAnimationFieldIsCompared;
 
 /** Whether two `animate` props mean the same springs. */
 function sameAnimation(a: Animation, b: Animation): boolean {
@@ -260,10 +291,19 @@ function useStableAnimation(animate: boolean | SceneMotionOptions | undefined): 
  * The motion reports an id and a centre; everything else a `SceneNode` carries
  * (its size, its shape, its colours) is the layout's and the caller's, so it is
  * looked up by id. A DEPARTING node is why the lookup is a retained map rather
- * than the current scene array: a node a delta removed is still in the frame
- * while its spring runs down, and it is no longer in the layout that removed it.
- * An id with no dressing at all is skipped rather than drawn from defaults,
- * because a guessed size draws a node the wrong size where skipping draws none.
+ * than the current scene array: a node removed WHILE IT WAS MOVING is still in
+ * the frame until its spring runs down, and it is no longer in the layout that
+ * removed it. A node removed while it was standing still is not in the frame at
+ * all, because `advance` drops an entry the moment it is departing and not
+ * moving, so the common case never reads the map's older half. An id with no
+ * dressing at all is skipped rather than drawn from defaults, because a guessed
+ * size draws a node the wrong size where skipping draws none.
+ *
+ * THE ANIMATED PATH IS O(SCENE) PER FRAME, where the delta path is O(change).
+ * `motion.ts` refuses to copy a point per node per frame and then this copies a
+ * whole node, which is forced rather than chosen: `setNodes` takes whole
+ * `SceneNode`s, so a frame's worth of centres has to be dressed into a frame's
+ * worth of nodes. It is the same array `setNodes` already walks.
  *
  * SIZES DO NOT SPRING, which is M4.7c's decision and is visible here as the
  * dressing being taken whole from the newest layout: a node that changed size is
@@ -298,7 +338,9 @@ function dressEdges(
 
 export function DagrCanvas(props: DagrCanvasProps): ReactElement {
   const { graph, config, children, className, style } = props;
-  const layout = useDagr(graph, config === undefined ? undefined : { config });
+  // `{ config }` rather than a conditional spread: `UseDagrOptions.config` is
+  // declared `?: T | undefined`, which is what that declaration is for.
+  const layout = useDagr(graph, { config });
   const { result, error } = layout;
   const animation = useStableAnimation(props.animate);
 
@@ -364,7 +406,8 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
   );
 
   /**
-   * The one queued frame, and the only place `requestAnimationFrame` is called.
+   * The one queued frame, the only place `requestAnimationFrame` is called, and
+   * the function on the canvas handle.
    *
    * A frame can be wanted for two reasons at once: something changed and the
    * canvas should redraw, and the motion loop wants to step. THE LOOP'S FRAME
@@ -373,7 +416,7 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
    * cancelled leaves the plain draw, which is what a cancel means here: the
    * loop has stopped, the canvas still has a reason to draw.
    */
-  const scheduleFrame = useCallback((): void => {
+  const requestDraw = useCallback((): void => {
     if (frameRef.current !== null) return;
     frameRef.current = requestAnimationFrame((nowMs) => {
       frameRef.current = null;
@@ -390,10 +433,6 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
     });
   }, []);
 
-  const requestDraw = useCallback((): void => {
-    scheduleFrame();
-  }, [scheduleFrame]);
-
   /**
    * The loop's scheduler, which is this component's own coalesced frame.
    *
@@ -406,14 +445,14 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
     () => ({
       request(callback: (nowMs: number) => void): unknown {
         loopFrameRef.current = callback;
-        scheduleFrame();
+        requestDraw();
         return LOOP_FRAME;
       },
       cancel(handle: unknown): void {
         if (handle === LOOP_FRAME) loopFrameRef.current = null;
       },
     }),
-    [scheduleFrame],
+    [requestDraw],
   );
 
   /**
@@ -446,12 +485,23 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
           // The departed are gone: the dressing is whatever the layout holds
           // now. Done on settling rather than per frame because that is the one
           // frame on which no node is mid-departure.
-          dressedNodesRef.current = new Map(
-            (sceneNodesRef.current ?? []).map((node) => [node.id, node]),
-          );
-          dressedEdgesRef.current = new Map(
-            (sceneEdgesRef.current ?? []).map((edge) => [edge.id, edge]),
-          );
+          //
+          // A settling frame that lands while the LAST RUN FAILED keeps what it
+          // has rather than emptying the maps. Nothing can currently draw from
+          // an emptied one (the retarget effect only wakes the loop for a result
+          // that exists, and a result that exists means the dressing effect has
+          // refilled first), so this is belt and braces, and it is cheaper than
+          // the two-effect argument a reader would otherwise have to reconstruct.
+          if (sceneNodesRef.current !== null) {
+            dressedNodesRef.current = new Map(
+              sceneNodesRef.current.map((node) => [node.id, node]),
+            );
+          }
+          if (sceneEdgesRef.current !== null) {
+            dressedEdgesRef.current = new Map(
+              sceneEdgesRef.current.map((edge) => [edge.id, edge]),
+            );
+          }
         }
         return frame.settled;
       } catch (cause: unknown) {
@@ -656,22 +706,39 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
   }, [stage, animation, scheduler, rosterNow, runAnimationFrame, requestDraw]);
 
   /**
-   * One layout, one retarget, one wake.
+   * One commit, one retarget, one wake.
    *
-   * Keyed on the layout state rather than on the result, because the state is
-   * what carries the delta and is what changes exactly once per layout. The
-   * identity check is what keeps a re-render with the same layout from applying
-   * the same delta twice, which a motion refuses by name.
+   * ONE COMMIT, NOT ONE LAYOUT, AND THE DIFFERENCE IS THE WHOLE OF THIS EFFECT.
+   * The state changes once per layout; this effect runs once per COMMIT, and
+   * React is obliged to render the latest snapshot of an external store rather
+   * than every one. Two mutating calls in one task are two layouts and one
+   * commit, so the first delta never arrives here at all.
+   *
+   * So the delta is applied only when it is a difference from the drawing this
+   * component is actually holding, which is what `DagrLayoutState.from` is for,
+   * and reseated otherwise. Leaving that to the motion does not work: it refuses
+   * a delta naming an id whose presence it disagrees about, which catches some
+   * of these and not the ones that name only live ids or name nothing at all.
+   * An attribute edit in the same task as a structural one produces exactly
+   * that, applies cleanly, and would leave the drawing wrong for good, because
+   * the `setNodes` effect above stands down while the loop is drawing.
+   *
+   * The identity check on `layout` is the other half: it keeps a re-render that
+   * changed something else (the stage arriving, say) from applying the same
+   * delta twice, which a motion does refuse by name.
    */
   useEffect(() => {
     const motion = motionRef.current;
     if (stage === null || motion === null || appliedRef.current === layout) return;
+    const held = appliedRef.current;
     appliedRef.current = layout;
-    // A run that failed moved nothing, and the next delta is still measured
-    // from the geometry the springs are holding.
+    // A run that failed moved nothing. `from` is null on the next good state
+    // after one, so that state reseats: conservative in the direction that
+    // costs a reseat rather than a wrong picture.
     if (layout.result === null) return;
+    const continues = held !== null && held.result !== null && held.result === layout.from;
     try {
-      retarget(motion, layout.delta, rosterNow());
+      retarget(motion, continues ? layout.delta : null, rosterNow());
     } catch (cause: unknown) {
       setFailure(cause);
       return;
@@ -680,8 +747,8 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
   }, [stage, layout, rosterNow]);
 
   useEffect(() => {
-    if (result !== null) latest.current.onLayout?.(result);
-  }, [result]);
+    if (layout.result !== null) latest.current.onLayout?.(layout.result, layout.delta);
+  }, [layout]);
 
   const trouble = failure ?? error;
   useEffect(() => {

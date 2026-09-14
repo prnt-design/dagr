@@ -4,7 +4,7 @@
  *
  * A NON-TEST helper. It replaces `createRenderer` and `createHtmlOverlay` and
  * NOTHING ELSE: the mock spreads this file over the real module, so every other
- * export a component reaches for is the real one. M5.3 is why that distinction
+ * export a component reaches for is the real one. M5.3a is why that distinction
  * matters. `<DagrCanvas animate>` drives `createSceneMotion` and
  * `createMotionLoop`, neither of which touches a device, and faking them too
  * would leave a component test asserting that the component calls an API rather
@@ -20,6 +20,14 @@
  * file. `@dagr/render`'s own suite covers both, and the two places where this
  * package has to hold up its end of those contracts are asserted directly
  * instead: the container's `position`, and the zero-size viewport guard.
+ *
+ * ONE HAZARD COMES WITH THE SPREAD: this file's own helpers (`built`,
+ * `resetFakes`, `lastRenderer`, `lastOverlay`) land on the mocked module's
+ * surface too, so a `@dagr/render` export that ever takes one of those names
+ * would be shadowed here and nowhere else. Nothing in `src/` reaches for them,
+ * and the alternative is a pick list that has to be updated every time the
+ * component imports something new, which is the failure that is harder to
+ * notice.
  *
  * What IS simulated is the SHAPE of those failures rather than their cause.
  * `built.overlayFailure` makes `createHtmlOverlay` throw, because what happens

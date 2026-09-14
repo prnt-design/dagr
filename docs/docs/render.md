@@ -1935,7 +1935,7 @@ confirmation.
 
 The motion arithmetic, the three delta consumers and the loop are headless and
 complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
-(M5.3). What is still missing is the device work below.
+(M5.3a). What is still missing is the device work below.
 
 - The pass half of GPU picking: a material writing the bytes above, an
   offscreen target, the readback and a `pick()` on `Renderer` (M4.8b). What
