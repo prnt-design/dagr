@@ -186,12 +186,17 @@ describe('antialiasWidth', () => {
 
   it('is the LENGTH of the gradient and not fwidth, checked structurally', () => {
     // The one place this file inspects a graph's shape instead of only its
-    // existence, and it is worth the coupling. `fwidth(d)` builds just as happily
-    // as `length(vec2(dFdx(p.c), dFdy(p.c)))` and differs from it by up to 41% on a
-    // diagonal, which is every point of every rounded corner: the visible symptom
-    // is corners blurrier than the sides they join, at every zoom, which is a
-    // thing a reviewer would look straight past on a screenshot. So the decision
-    // gets a test rather than only a paragraph.
+    // existence, and it is worth the coupling. `fwidth(p.c)` builds just as
+    // happily as `length(vec2(dFdx(p.c), dFdy(p.c)))`, and under today's
+    // axis-aligned orthographic camera it computes the SAME number, because a
+    // position component varies along one screen axis and its other derivative
+    // is zero. (An earlier version of this comment claimed a 41% gap on the
+    // diagonals; that gap belongs to the distance's gradient, which nothing here
+    // differentiates.) So a screenshot taken today cannot tell them apart. The
+    // two part under a rotated camera, where `fwidth`'s L1 sum reads wider by up
+    // to a factor of `sqrt(2)` depending on the angle, and that is the form the
+    // decision has to hold, so it gets a structural test rather than only a
+    // paragraph.
     //
     // What is asserted: the outermost operation is a `length`, and its argument
     // joins exactly two components which are `dFdx` and `dFdy` of something. What

@@ -526,18 +526,28 @@ not" is the category this file has a heading for.
   interpolated POSITION's gradient, and deliberately not `fwidth`.** Of the
   position and not of the distance: every field in `sdf.ts` folds through `abs`
   or a square, so a distance gradient collapses to zero on the fragment quad
-  holding a shape's centre, taking the inset outline with it. `fwidth` is the L1
-  sum of two derivatives, and L1
-  exceeds L2 by up to 41% exactly when the derivatives are equal, which is an
-  edge at 45 degrees. A rounded corner is nothing but diagonals, so `fwidth`
-  gives a ramp that is right along the flat sides and up to 41% too soft around
-  the corner: corners blurrier than the edges they join, which is the artefact a
-  distance field exists to remove. It costs one `sqrt` per fragment and the
-  shader already has one. This one is worth reading as a warning rather than a
+  holding a shape's centre, taking the inset outline with it. Not `fwidth`,
+  for a reason this entry first got wrong: it claimed `fwidth`, the L1 sum
+  `abs(dFdx) + abs(dFdy)`, would soften a 45 degree corner by up to 41%
+  against the Euclidean length. That gap belongs to the DISTANCE field's
+  gradient, and nothing here differentiates the distance. Each `length`
+  differentiates one position COMPONENT, and under the axis-aligned
+  orthographic camera this package has a component varies along one screen
+  axis only, so `length(vec2(dFdx(p.x), dFdy(p.x)))` is `fwidth(p.x)`: the
+  two agree exactly in real arithmetic and to within `sqrt`'s rounding on
+  hardware. The Euclidean form is kept for a rotated camera, where a
+  component varies along both axes and `fwidth` reads up to a factor of
+  `sqrt(2)` wider depending on the angle. A shear or a non-uniform scale
+  needs more than this form and is named in the shader comment rather than
+  solved. It costs two `sqrt`s per fragment, one per `length`, against none
+  for `fwidth`. This one is worth reading as a warning rather than a
   preference: swapping the gradient length for either `fwidth` or its L1
-  expansion left the whole suite GREEN, because both are correct to within a
-  factor on every value a numeric test can check. The suite now asserts the node
-  graph's structure (`length` over a join of `dFdx` and `dFdy`) for that reason.
+  expansion left the whole suite GREEN before the structural assertion
+  existed, and not because the two agree: no Node test evaluates a derivative
+  at all, so a factor in front of the position went just as unnoticed. The
+  suite now asserts the node graph's structure (`length` over a join of
+  `dFdx` and `dFdy`) for that reason: it pins the form that stays right once
+  the camera rotates.
 
 - `depthWrite` is off on the shape materials. three leaves it on when
   `transparent` is set, and left on, a fragment with alpha 0 still writes depth
