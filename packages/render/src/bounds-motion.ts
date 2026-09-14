@@ -162,12 +162,49 @@ function compose(centre: Vec2, half: Vec2): WorldBounds {
 }
 
 /**
+ * A bounds motion with its two mutations split into a plan and a commit.
+ *
+ * INTERNAL, on `motion.ts`'s terms and for the same reason: the scene composite
+ * in `scene-motion.ts` has to commit all three halves together or not at all,
+ * so each half runs every check that can throw first and hands the mutation
+ * back as a closure.
+ *
+ * **THIS HALF NEEDS IT EVEN THOUGH ITS CHECKS LOOK PURE, AND THAT IS THE POINT
+ * WORTH WRITING DOWN.** The first version of the composite checked this half by
+ * aiming a THROWAWAY `createBoundsMotion` at the same box, on the argument that
+ * `requireBounds` is a pure function of the box. It is, and the other check is
+ * not: {@link checkAim} reads the CURRENT SPRING, and its overflow guard is
+ * `velocity + w * displacement`. A throwaway seeded from the current position
+ * is at REST, so it validates `0 + w * displacement` where the real half, caught
+ * mid-flight, validates a nonzero velocity plus the same term. A box moving fast
+ * enough that the sum overflows while the term alone does not would therefore
+ * pass the probe and throw on the real retarget, AFTER the node and edge halves
+ * had already committed, which is exactly the half-applied scene the two-phase
+ * commit exists to make impossible. A plan against the real state cannot
+ * disagree with the commit that follows it, because it IS the check that commit
+ * would have run.
+ */
+export interface PlannedBoundsMotion extends BoundsMotion {
+  /** Every check {@link BoundsMotion.resync} makes, then the mutation as a closure. */
+  planResync(bounds: WorldBounds | null): () => void;
+  /** Every check {@link BoundsMotion.retarget} makes, then the mutation as a closure. */
+  planRetarget(bounds: WorldBounds): () => void;
+}
+
+/**
  * Creates a motion state for one drawing's box.
  *
  * @param options The feel and the arrival tolerance. See
  *   {@link BoundsMotionOptions}.
  */
 export function createBoundsMotion(options: BoundsMotionOptions = {}): BoundsMotion {
+  return createPlannedBoundsMotion(options);
+}
+
+/** {@link createBoundsMotion} with the plans exposed. See {@link PlannedBoundsMotion}. */
+export function createPlannedBoundsMotion(
+  options: BoundsMotionOptions = {},
+): PlannedBoundsMotion {
   const halfLife = options.halfLifeSeconds ?? DEFAULT_MOTION_HALF_LIFE;
   const restEpsilon = options.restEpsilon ?? DEFAULT_MOTION_REST;
   requirePositive(halfLife, 'halfLifeSeconds');
@@ -243,30 +280,49 @@ export function createBoundsMotion(options: BoundsMotionOptions = {}): BoundsMot
     }
   }
 
-  function resync(bounds: WorldBounds | null): void {
+  /**
+   * The one body behind both mutations, since they differ only in what a `null`
+   * means and `retarget` cannot take one.
+   *
+   * The closure captures the entry it validated, so committing it after some
+   * other mutation has replaced `state` would aim a spring nobody is drawing.
+   * That is the rule {@link PlannedBoundsMotion} states: a plan is valid
+   * against the state it was made from.
+   */
+  function planAim(bounds: WorldBounds | null): () => void {
     if (bounds === null) {
-      state = null;
-      return;
+      return () => {
+        state = null;
+      };
     }
     requireBounds(bounds, 'bounds');
-    if (state === null) {
+    const existing = state;
+    if (existing === null) {
       const { centre, half } = decompose(bounds);
-      state = settled(centre, half);
-      return;
+      return () => {
+        state = settled(centre, half);
+      };
     }
-    checkAim(state, bounds, 'bounds');
-    aim(state, bounds);
+    checkAim(existing, bounds, 'bounds');
+    return () => {
+      aim(existing, bounds);
+    };
+  }
+
+  function planResync(bounds: WorldBounds | null): () => void {
+    return planAim(bounds);
+  }
+
+  function planRetarget(bounds: WorldBounds): () => void {
+    return planAim(bounds);
+  }
+
+  function resync(bounds: WorldBounds | null): void {
+    planAim(bounds)();
   }
 
   function retarget(bounds: WorldBounds): void {
-    requireBounds(bounds, 'bounds');
-    if (state === null) {
-      const { centre, half } = decompose(bounds);
-      state = settled(centre, half);
-      return;
-    }
-    checkAim(state, bounds, 'bounds');
-    aim(state, bounds);
+    planAim(bounds)();
   }
 
   function advance(dtSeconds: number): BoundsMotionFrame {
@@ -289,5 +345,5 @@ export function createBoundsMotion(options: BoundsMotionOptions = {}): BoundsMot
     return { bounds: state.reported, settled: false };
   }
 
-  return { resync, retarget, advance };
+  return { resync, retarget, advance, planResync, planRetarget };
 }

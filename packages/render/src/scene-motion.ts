@@ -1,4 +1,4 @@
-import { createBoundsMotion } from './bounds-motion.js';
+import { createPlannedBoundsMotion } from './bounds-motion.js';
 import { createPlannedEdgeMotion } from './edge-motion.js';
 import type { EdgeMotionDelta, EdgeMotionTarget, MotionEdge } from './edge-motion.js';
 import { createPlannedNodeMotion } from './motion.js';
@@ -112,41 +112,31 @@ export interface SceneMotion {
 export function createSceneMotion(options: SceneMotionOptions = {}): SceneMotion {
   const nodes = createPlannedNodeMotion(options);
   const edges = createPlannedEdgeMotion(options);
-  const bounds = createBoundsMotion(options);
+  const bounds = createPlannedBoundsMotion(options);
 
+  // Plan all three, then commit all three. Nothing between the first plan and
+  // the last commit can throw, which is the whole of the property: every check
+  // runs against the state every commit will still find, because no commit has
+  // run yet. See `PlannedBoundsMotion` for why the bounds half needs a plan of
+  // its own rather than a throwaway probe, which is what the first version of
+  // this file used and which could pass where the real retarget would throw.
   function resync(roster: SceneMotionRoster): void {
-    // Plan everything, then commit everything. The bounds half validates
-    // inside its own call, so it goes LAST and is checked before either
-    // commit runs: `requireBounds` is pure and throws before any state moves.
     const commitNodes = nodes.planResync(roster.nodes);
     const commitEdges = edges.planResync(roster.edges);
-    const box = roster.bounds ?? null;
-    if (box !== null) checkBounds(box);
+    const commitBounds = bounds.planResync(roster.bounds ?? null);
     commitNodes();
     commitEdges();
-    bounds.resync(box);
+    commitBounds();
   }
 
   function apply(delta: SceneMotionDelta): void {
     const commitNodes = delta.nodes === undefined ? undefined : nodes.planApply(delta.nodes);
     const commitEdges = delta.edges === undefined ? undefined : edges.planApply(delta.edges);
-    if (delta.bounds !== undefined) checkBounds(delta.bounds);
+    const commitBounds =
+      delta.bounds === undefined ? undefined : bounds.planRetarget(delta.bounds);
     commitNodes?.();
     commitEdges?.();
-    if (delta.bounds !== undefined) bounds.retarget(delta.bounds);
-  }
-
-  /**
-   * The checks `bounds.retarget` would make, made before the two rosters
-   * commit. A throwaway bounds motion aimed at the same box from the same
-   * state is the cheapest way to run exactly those checks and no others,
-   * without giving the bounds half a plan API of its own for one caller.
-   */
-  function checkBounds(box: WorldBounds): void {
-    const probe = createBoundsMotion(options);
-    const current = bounds.advance(0).bounds;
-    if (current !== null) probe.resync(current);
-    probe.retarget(box);
+    commitBounds?.();
   }
 
   function advance(dtSeconds: number): SceneMotionFrame {
