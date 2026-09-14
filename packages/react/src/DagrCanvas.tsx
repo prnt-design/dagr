@@ -198,17 +198,29 @@ export interface DagrCanvasProps {
   readonly children?: ReactNode | undefined;
 
   /**
-   * Called after every layout, with the result now on screen and what changed
-   * to reach it.
+   * Called with the layout now on screen, what changed to reach it, and the
+   * drawing that change is a difference FROM.
    *
-   * `delta` is `null` when the run was cold and had nothing to be a difference
-   * from (see `DagrLayoutState.delta`). It is here because the numbers a
-   * consumer wants to SHOW about incremental layout are in the delta and
-   * nowhere else: how many nodes moved, how many did not, how much of the
-   * drawing an edit disturbed. Calling `useDagr` a second time to get at them
-   * would lay the graph out twice.
+   * The delta is here because the numbers a consumer wants to SHOW about
+   * incremental layout are in it and nowhere else: how many nodes moved, how
+   * many did not, how much of the drawing an edit disturbed. Calling `useDagr`
+   * a second time to reach them would lay the graph out twice.
+   *
+   * **CALLED ONCE PER COMMIT, NOT ONCE PER LAYOUT, WHICH IS WHY `from` IS HERE
+   * TOO.** React renders the latest snapshot of an external store rather than
+   * every one, so two mutating calls in one task are two layouts and one call
+   * to this. The `delta` you are handed is then measured from `from`, which is
+   * a drawing you never saw, and a consumer counting "nodes moved by this edit"
+   * off it would count the last hop only. `from` is what lets you tell: compare
+   * it by identity with the `result` you last saw here. `graph.batch` is the
+   * other answer, and is the one to reach for first.
+   *
+   * `delta` and `from` are both `null` for a run that was cold and had nothing
+   * to be a difference from. See `DagrLayoutState.delta`.
    */
-  readonly onLayout?: ((result: LayoutResult, delta: LayoutDelta | null) => void) | undefined;
+  readonly onLayout?:
+    | ((result: LayoutResult, delta: LayoutDelta | null, from: LayoutResult | null) => void)
+    | undefined;
 
   /**
    * Called instead of throwing, for a layout that failed or a device that never
@@ -492,6 +504,9 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
           // that exists, and a result that exists means the dressing effect has
           // refilled first), so this is belt and braces, and it is cheaper than
           // the two-effect argument a reader would otherwise have to reconstruct.
+          // What it costs is that a departed node stays in the map for as long
+          // as the failure lasts, which is bounded by the failure and reachable
+          // only behind an `onError` that keeps the canvas mounted.
           if (sceneNodesRef.current !== null) {
             dressedNodesRef.current = new Map(
               sceneNodesRef.current.map((node) => [node.id, node]),
@@ -723,9 +738,11 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
    * that, applies cleanly, and would leave the drawing wrong for good, because
    * the `setNodes` effect above stands down while the loop is drawing.
    *
-   * The identity check on `layout` is the other half: it keeps a re-render that
-   * changed something else (the stage arriving, say) from applying the same
-   * delta twice, which a motion does refuse by name.
+   * The identity check on `layout` is belt and braces beside that: a re-render
+   * that changed something else (the stage arriving, say) would fail the
+   * continuity test anyway, since the state it last applied IS this one, so it
+   * would reseat rather than apply twice. The check saves that redundant
+   * reseat.
    */
   useEffect(() => {
     const motion = motionRef.current;
@@ -747,7 +764,8 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
   }, [stage, layout, rosterNow]);
 
   useEffect(() => {
-    if (layout.result !== null) latest.current.onLayout?.(layout.result, layout.delta);
+    if (layout.result === null) return;
+    latest.current.onLayout?.(layout.result, layout.delta, layout.from);
   }, [layout]);
 
   const trouble = failure ?? error;

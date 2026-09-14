@@ -1714,10 +1714,12 @@ import { createLayout } from '@dagr/layout';
 const engine = createLayout();
 const motion = createSceneMotion();
 
-// The flip is the caller's, as it has been since M4.1. `@dagr/react`'s
-// `toWorldBounds` is `boxOf` exactly; its `toSceneNodes` and `toSceneEdges` do
-// this same flip on the way to `setNodes` and `setEdges`, and dress the result
-// besides, so they are not drop-in replacements for the two above.
+// The flip is the caller's, as it has been since M4.1, and this is it written
+// out. A caller who has `@dagr/react` does not write it: `toMotionRoster` with
+// `toSceneNodes` and `toSceneEdges` is this roster, `toMotionDelta` is the whole
+// `motion.apply` argument below, and `retarget` is that call plus the one check
+// this example does not make (see the React page: a delta is only safe to apply
+// to the drawing it was measured from). `toWorldBounds` is `boxOf` exactly.
 const centreOf = (node) => ({ id: node.id, center: { x: node.x, y: -node.y } });
 const routeOf = (edge) => ({
   id: edge.id,

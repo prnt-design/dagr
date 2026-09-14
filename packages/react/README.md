@@ -73,13 +73,15 @@ reports both. Edit in a parent effect, or in an event handler, and it is picked
 up straight away.
 
 One more thing worth knowing before your first multi-step edit: **wrap it in
-`graph.batch`**. Each mutating call is a patch, a relayout and an animation of
-its own, so adding a node and then wiring it up is three of each, and the first
-two place the node somewhere it does not stay.
+`graph.batch`**. Each mutating call is a patch and a relayout of its own, so
+adding a node and then wiring it up is three of each, computing two layouts that
+are never drawn: React commits once, holding the last. The component notices and
+reseats rather than animating from a delta it cannot trust, so the drawing is
+right either way, and a batch is one patch, one layout and one glide.
 
 ## Documentation
 
-The component, the hook, the overlay and the conversion are on the
-[React bindings](https://dagr.prnt.design/docs/react) page.
+The component, the hook, the animation, the overlay and the two conversions are
+on the [React bindings](https://dagr.prnt.design/docs/react) page.
 
 MIT © prnt.design

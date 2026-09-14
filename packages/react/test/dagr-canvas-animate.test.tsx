@@ -356,6 +356,40 @@ describe('DagrCanvas and what it reports', () => {
   });
 
   /**
+   * `onLayout` runs once per COMMIT, like every other effect here, so a burst
+   * hands over one delta for two layouts. A consumer counting "what this edit
+   * moved" off that delta alone would count the last hop only, and `from` is
+   * what lets them notice: it is not the result they were last told about.
+   */
+  it('tells onLayout what the delta is a difference from, because a burst skips one', async () => {
+    const graph = chain();
+    const seen: { result: LayoutResult; from: LayoutResult | null }[] = [];
+    tree = await mount(
+      <DagrCanvas
+        graph={graph}
+        animate
+        onLayout={(result, _delta, from) => seen.push({ result, from })}
+      />,
+    );
+    resizeTo(800, 600);
+    await flush();
+    const told = seen.at(-1)?.result;
+
+    await flush(() => {
+      graph.addNode({ id: 'c' });
+      graph.addNode({ id: 'd' });
+    });
+
+    expect(seen).toHaveLength(2);
+    const last = seen.at(-1);
+    expect(last?.result.nodes.size).toBe(4);
+    // The drawing it skipped: three nodes, which is neither what the caller was
+    // last told about nor what they are being told about now.
+    expect(last?.from?.nodes.size).toBe(3);
+    expect(last?.from).not.toBe(told);
+  });
+
+  /**
    * A node removed while it was standing still is gone on the next frame rather
    * than gliding out, because `advance` drops an entry that is departing and not
    * moving. The claim worth pinning is the one a consumer sees: the drawing ends
@@ -388,11 +422,12 @@ describe('DagrCanvas and what it reports', () => {
   });
 
   /**
-   * The stage effect's cleanup runs before the motion effect's, because React
-   * destroys a component's effects in the order they were declared. The motion
-   * cleanup snaps the renderer back to the layout, so if that order were the
-   * other way round it would be calling a renderer that has already been
-   * disposed. Argued in a comment there; pinned here.
+   * The motion cleanup snaps the renderer back to the layout, and on unmount
+   * there is no renderer left to snap: the stage cleanup has already run and
+   * taken it. What this pins is the guard that makes that safe, which is the
+   * cleanup reading `stageRef.current` rather than the `stage` it closed over.
+   * Reading the closure would put a `setNodes` after `dispose`, which is the
+   * one thing a disposed renderer must never see.
    */
   it('touches nothing after the renderer has been disposed', async () => {
     const graph = chain();

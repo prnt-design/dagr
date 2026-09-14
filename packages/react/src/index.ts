@@ -6,8 +6,10 @@
  * `<DagrCanvas>`'s to provide: shipping the sugar first would have meant
  * inventing that context in a package with no component to provide it, and then
  * living with the shape when the requirements that should have decided it
- * finally arrived. They have, and the whole package is five exports and two
- * conversions.
+ * finally arrived. They have, and the whole package is five things, over two
+ * conversions: the one `scene.ts` owns, which turns a whole layout into a
+ * drawing, and the one `animation.ts` owns, which turns a delta into a change
+ * to one.
  *
  * - {@link DagrCanvas} is the component: a graph goes in, a picture comes out,
  *   and with `animate` an edit glides to its new layout rather than cutting.

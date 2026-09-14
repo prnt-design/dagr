@@ -374,6 +374,11 @@ describe('useDagr over the incremental engine', () => {
     expect(seen.length).toBe(renders + 1);
     expect(latest(seen).result?.nodes.size).toBe(4);
     expect(latest(seen).delta).not.toBeNull();
+    // `from` is the drawing that was SKIPPED, three nodes, rather than the one
+    // the caller is holding or the one they are being handed. Asserting only
+    // that it differs from what they hold would pass for a `from` that is always
+    // null and for one captured after the relayout.
+    expect(latest(seen).from?.nodes.size).toBe(3);
     expect(latest(seen).from).not.toBe(held);
   });
 
@@ -526,5 +531,44 @@ describe('useDagr and a graph that edits itself', () => {
     expect(spy.runs).toBe(2);
     expect(latest(seen).delta).toBeNull();
     expect(latest(seen).from).toBeNull();
+  });
+});
+
+describe('useDagr and a relayout that fails', () => {
+  /**
+   * The line the hook draws between the two failures a `relayout` can raise.
+   *
+   * `EngineStateError` means the engine and the graph are out of step, and a
+   * cold run is the designed way back (the test above). EVERYTHING ELSE is the
+   * same failure a cold run reports, and is reported rather than recovered
+   * from, because a recovery that always succeeds is a bug that never surfaces:
+   * a failure reachable only under a warm start would leave every edit cold,
+   * undelta'd and unanimated with nothing saying why.
+   *
+   * The observable difference from catching everything is the engine count: a
+   * recovery builds a second one, and this does not.
+   */
+  it('reports a relayout that failed for a reason a cold run would not fix', async () => {
+    const graph = twoNodes();
+    let measured = 0;
+    // Survives the cold run at mount (two nodes) and refuses the relayout.
+    const nodeSize = (): { width: number; height: number } => {
+      measured += 1;
+      if (measured > 2) throw new Error('the measurer refused');
+      return { width: 10, height: 10 };
+    };
+    const seen: DagrLayoutState[] = [];
+    tree = await mount(<Probe graph={graph} options={{ config: { nodeSize } }} seen={seen} />);
+    expect(latest(seen).error).toBeNull();
+    expect(spy.built).toBe(1);
+
+    await flush(() => {
+      graph.addNode({ id: 'c' });
+    });
+
+    expect(latest(seen).result).toBeNull();
+    expect(latest(seen).error?.message).toBe('the measurer refused');
+    // No second engine: this failure was reported, not recovered from.
+    expect(spy.built).toBe(1);
   });
 });

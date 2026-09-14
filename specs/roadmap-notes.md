@@ -3,9 +3,14 @@
 This file was `ROADMAP.md` until 2026-09-01, when the task list moved to a
 concise [ROADMAP.md](../ROADMAP.md) and the detail stayed here. A reference
 anywhere in the repo to "the roadmap's M4.6 entry" written before that date
-means the entry in this file. Nothing below is rewritten: each entry is the
-working record of its task, the decisions it took, and the reasons, kept as
-written.
+means the entry in this file. Nothing below is rewritten ONCE ITS TASK HAS
+SHIPPED: each entry is the working record of its task, the decisions it took,
+and the reasons, kept as written, and a later task that proves one wrong says so
+in its own entry rather than editing the old one. Two things are repairs rather
+than rewrites and are made in place: a task ID that a split has invalidated
+(M5.3 became M5.3a and M5.3b on 2026-09-14, and the entries that pointed at it
+now point at the right half), and an entry still being written for a task that
+has not merged yet.
 
 The checklist in `ROADMAP.md` is the live one. New tasks keep the same shape:
 the one-line entry lands there, and the working record lands here under the
@@ -6326,6 +6331,17 @@ it settled rather than restating the argument.
   `frames.ts` grew a timestamp and a run-until-idle, because a spring is stepped
   by the gap between two frames and a test that wants to talk about halfway has
   to be the thing that decides how much time has passed.
+  `onLayout` TAKES THE DELTA AND ITS `from`, which is the one public API change
+  the review round added rather than corrected. The numbers a consumer wants to
+  SHOW about incremental layout (how many nodes moved, how many did not, how
+  much of the drawing an edit disturbed) are in the delta and nowhere else, and
+  M5.3b is the consumer that wants them; calling `useDagr` a second time to
+  reach them would lay the graph out twice. It ships with `from` because the
+  first version of it did not, and shipped the same defect the same commit was
+  fixing one screen above: a callback called once per commit, handed a delta
+  that may have skipped one, with no way to tell. The drawing was right and the
+  NUMBER would have been wrong, silently, which is the same failure wearing a
+  different hat.
   TWO SMALLER THINGS THE REVIEWS CHANGED AND ONE THEY DID NOT. The dressing map
   is now maintained only while something is animating: it is written per layout
   and pruned on the frame that settles, so a component that never animates never

@@ -37,8 +37,15 @@
  *
  * The cost of running in the listener is that the relayout is inside the
  * caller's own `graph.addNode(...)` call, so a layout that throws would throw
- * out of a mutation nobody expects to raise one. It is reported instead, on the
- * same argument {@link DagrLayoutState.error} already made.
+ * out of a mutation nobody expects to raise one. Nothing is thrown out of it.
+ * ONE class is recovered from and the rest are reported: `EngineStateError`
+ * means the engine and the graph are out of step, which a cold run fixes, and
+ * every other failure is reported through {@link DagrLayoutState.error} exactly
+ * as the same failure from a cold run already is. See `onPatch` for why
+ * recovering from all of them hides a bug rather than surviving one, and note
+ * what it costs: a warm-only pipeline failure now reports rather than quietly
+ * degrading to a correct cold drawing, which for `<DagrCanvas>` with no
+ * `onError` means the nearest error boundary.
  *
  * **THE ENGINE'S LIFE IS THE SUBSCRIPTION'S, WITH ONE EXCEPTION.** It is
  * disposed from the `subscribe` cleanup, which is what `LayoutEngine.dispose`
@@ -53,13 +60,18 @@
  * and it runs in development on every mount, which is the best place for a
  * recovery path to be exercised.
  *
- * The exception is a render React discards. The session and its cold run happen
+ * The first exception is a render React discards. The session and its cold run happen
  * in a `useMemo` during render, and a render that never commits never
  * subscribes, so that engine is never disposed. It is unreachable and holds
  * nothing outside itself (no worker port, no listener), so it is collected
  * rather than leaked. What it does cost is real and worth naming: a `StrictMode`
  * mount double-renders and remounts its effects, so it lays the graph out three
  * times where production lays it out once.
+ *
+ * The second is the recovery below: an `EngineStateError` disposes the engine
+ * and builds another one mid-subscription, which is the same lifetime rule
+ * seen from the other side, since an engine that has fallen out of step with
+ * its graph is not the engine this subscription started with.
  *
  * **The snapshot is the layout state, and the mount window it used to leave is
  * still there.** React subscribes in an effect, after the render that read the
@@ -323,6 +335,12 @@ function createSession(graph: Graph, config: LayoutConfig | undefined): LayoutSe
       const { result, delta } = held.relayout(patch);
       state = { result, error: null, delta, from: before };
     } catch (cause: unknown) {
+      // `instanceof` rather than the `code` membership test `@dagr/graph`'s own
+      // predicate argues for, and the difference is which engine threw: this
+      // one was built by this module from this module's import of
+      // `createLayout`, so the class it raises is this module's class. The
+      // duplicate-copy hazard that makes `instanceof` unsafe across a package
+      // boundary needs an object built somewhere else, and there is none here.
       if (cause instanceof EngineStateError) {
         state = cold();
         return;

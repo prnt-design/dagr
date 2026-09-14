@@ -34,10 +34,13 @@
   presence it disagrees about, and a delta naming only ids it holds applies
   cleanly and leaves the drawing wrong in silence. This field makes the check an
   identity comparison. `<DagrCanvas animate>` does it for you.
-- `onLayout` takes the delta as a second argument, because the numbers a consumer
-  wants to show about incremental layout (how many nodes moved, how many did
-  not) live in the delta and nowhere else, and calling `useDagr` again to reach
-  them would lay the graph out twice.
+- `onLayout` takes the delta and its `from` as second and third arguments,
+  because the numbers a consumer wants to show about incremental layout (how
+  many nodes moved, how many did not) live in the delta and nowhere else, and
+  calling `useDagr` again to reach them would lay the graph out twice. It is
+  called once per COMMIT, so `from` is not optional care there either: a
+  consumer counting an edit's moves off a delta that skipped one would count the
+  last hop and show the wrong number.
 - **M5.1: the package.** `<DagrCanvas>`, `useDagr`, `<Html>` and
   `useDagrCanvas`, plus the `LayoutResult` to scene conversion the renderer
   deliberately does not own. The package had been a scaffold since the
@@ -46,8 +49,8 @@
 - `scene.ts`: `toSceneNodes`, `toSceneEdges`, `toWorldBounds`,
   `nodeWorldBounds`, `NodeAppearance` and the two callback types, with
   `DEFAULT_NODE_APPEARANCE` and `DEFAULT_EDGE_COLOR`. Pure, DOM-free, and the
-  only place in the workspace that flips y-down layout coordinates into the
-  renderer's y-up world.
+  first place in the workspace to flip y-down layout coordinates into the
+  renderer's y-up world. M5.3a's `animation.ts` is the second, for deltas.
 - `CanvasContextError`, code `OUTSIDE_CANVAS`. No abstract base yet, on
   `@dagr/render`'s precedent: a base over a family of one is a family only in
   the sense that a single point is a line.
@@ -77,6 +80,13 @@
 
 ### Changed
 
+- A relayout that fails is REPORTED unless it is an `EngineStateError`, which is
+  recovered from with a cold run. Recovering from all of them would make a
+  failure reachable only under a warm start invisible: every edit would come
+  back cold, undelta'd and unanimated, with nothing saying why. The cost is that
+  such a failure now reaches an error boundary rather than degrading quietly to
+  a correct but unanimated drawing, which is the same treatment the identical
+  failure from a cold run already gets.
 - **`useDagr` holds a `createLayout` engine across renders.** An edit is
   `relayout(patch)` rather than a cold `layout()`, which is where the delta
   comes from and what makes the drawing stable under an edit rather than merely
