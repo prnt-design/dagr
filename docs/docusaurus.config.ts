@@ -73,8 +73,11 @@ const daybreakDark: PrismTheme = {
  * What the site's live demos need from the bundler to run their layout in a web
  * worker.
  *
- * TWO ENTRIES USE THIS NOW: the landing page's benchmark, and the campaign at
- * `/demos/campaign`. They are separate worker modules because webpack resolves
+ * TWO ENTRIES USE THIS: the landing page's benchmark, and the campaign at
+ * `/demos/campaign`. The living graph at `/demos/living` does NOT: 32 nodes lay
+ * out in less than a frame, and a worker would put a round trip in front of
+ * every edit in a demo whose subject is how little work an edit is.
+ * They are separate worker modules because webpack resolves
  * `new Worker(new URL(...))` from the module that writes it, so each gets its
  * own entrypoint and each needs the runtime this plugin puts back.
  *
@@ -226,12 +229,14 @@ const config: Config = {
           position: 'left',
         },
         {
-          // One demo today, and the label is plural because the tab is where
-          // the animated examples on the roadmap go: a sibling route under
-          // /demos/ rather than a second nav item each. Pointing at the one
-          // page rather than a /demos/ index, since an index listing a single
-          // link is a click a reader pays for nothing.
-          to: '/demos/campaign',
+          // Two demos now, as the plural always anticipated: sibling routes
+          // under /demos/ rather than a nav item each. Still pointing at a
+          // PAGE rather than a /demos/ index, because an index is a click in
+          // front of the thing a visitor came for and the two pages link to
+          // each other. It points at the living graph rather than the campaign
+          // because that is the one that shows the claim the project competes
+          // on; the campaign shows scale, which is the second question.
+          to: '/demos/living',
           label: 'Demos',
           position: 'left',
         },

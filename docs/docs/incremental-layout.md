@@ -18,6 +18,14 @@ The numbers here come from a committed corpus,
 pipeline that moves any of them moves the file too, so a stability regression
 arrives as a diff someone can ask about rather than as a feeling.
 
+**To watch one edit do this rather than read a table of many, the
+[living graph demo](/demos/living) is the same claim on screen.** It edits a
+32-node pipeline in front of you, one `graph.batch` at a time, and counts what
+each edit moved off the `LayoutDelta` the engine answered with: three nodes
+added, six moved, twenty-six of thirty-five exactly where they were, with those
+twenty-six visibly not moving. It is an illustration of what is measured here
+and not a measurement of its own: one graph, one seed, six edits.
+
 ## Why a session and not a patch
 
 Every other stability test in the package measures one edit. A node arrives, and

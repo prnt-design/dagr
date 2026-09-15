@@ -1,30 +1,44 @@
 # demo
 
-The playground Dagr is exercised in: a mock D&D campaign of 3,010 nodes, laid
-out by `@dagr/layout` in a worker and drawn by `@dagr/render` on a canvas. Vite
-and React, private, never published.
+The playground Dagr is exercised in. Two demos behind a switch, one at a time:
+the **living graph**, a build pipeline edited while you watch with a count of
+what each edit moved, and the **campaign**, a mock D&D campaign of 3,010 nodes
+laid out in a worker. Vite and React, private, never published.
 
 ```bash
 pnpm --filter demo dev     # http://localhost:5173
 pnpm --filter demo build   # apps/demo/dist
 ```
 
-NO DEPLOY. This built to `dagr-demo.onrender.com` for one day, and the demo now
-lives on the docs site at
-[dagr.prnt.design/demos/campaign](https://dagr.prnt.design/demos/campaign),
-where a reader finds it under the site's own nav instead of on a second
-service. What is here is a local playground: `pnpm dev` and a browser.
+NO DEPLOY. This built to `dagr-demo.onrender.com` for one day, and both demos
+now live on the docs site, at
+[/demos/living](https://dagr.prnt.design/demos/living) and
+[/demos/campaign](https://dagr.prnt.design/demos/campaign), where a reader finds
+them under the site's own nav instead of on a second service. What is here is a
+local playground: `pnpm dev` and a browser.
+
+ONE AT A TIME, and not stacked. Each stage mounts a canvas, and two live
+canvases is two GPU device contexts for a page that can only be looking at one.
+The switch is a `useState` and no router: a route each is right for a site a
+visitor navigates, and both deployed demos already have one.
+
+It opens on the living graph, and `#view=campaign` opens on the other. That key
+is why `scripts/capture.mjs` still works: every committed screenshot is of the
+campaign, taken by navigating to a hash and waiting for the stage to say it has
+drawn, and without it a capture would wait sixty seconds for a stage that was
+never mounted. It is read once at mount, with `URLSearchParams`, which is also
+how the stage reads `#node=` and `#zoom=` out of the same hash.
 
 ## What is left here, and what moved
 
-Everything on the canvas is `@dagr/campaign-stage` now, because the docs site
-mounts the same component and two copies would drift. This app is the page
-around it.
+Everything on either canvas is a package, `@dagr/campaign-stage` and
+`@dagr/living-stage`, because the docs site mounts the same two components and
+two copies would drift. This app is the page around them.
 
 | File | What it owns |
 | --- | --- |
-| `App.tsx` | the header, the facts panel, and the worker this app builds |
-| `main.tsx` | the StrictMode mount, and the two stylesheets in order |
+| `App.tsx` | the header, the demo switch, the facts panels, and the worker this app builds |
+| `main.tsx` | the StrictMode mount, and the three stylesheets in order |
 | `layout-worker.ts` | the worker end of `@dagr/layout`'s protocol |
 | `styles.css` | the page: its palette, the facts panel, the stage's frame |
 | `scripts/capture.mjs` | the committed screenshots, taken reproducibly |
@@ -62,19 +76,26 @@ ahead of the package's: without it the specifier is rewritten into
 
 ## The stylesheets, in order
 
-`main.tsx` imports `@dagr/campaign-stage/stage.css` and then `styles.css`, and
-the order is load bearing: the page adds the frame around the stage (its height,
-its border) and a host override has to come after what it overrides. The stage's
-own colour tokens are declared on `.stage`, not on `:root`, so mounting it in a
-docs site does not make it read a variable the host happens to share a name
+`main.tsx` imports `@dagr/campaign-stage/stage.css`, then
+`@dagr/living-stage/living.css`, then `styles.css`, and the order is load
+bearing: the page adds the frame around whichever stage is mounted (its height,
+its border) and a host override has to come after what it overrides. Both
+stages' colour tokens are their own rather than `:root`'s, so mounting either in
+a docs site does not make it read a variable the host happens to share a name
 with. This page's `:root` tokens are the same values, declared twice on purpose.
+
+Both are imported unconditionally even though one stage is on screen at a time:
+a stylesheet is a static import either way, and two of them are a few hundred
+bytes against a bundle that carries three.js.
 
 ## No tests here
 
-They moved with the code they cover, to `packages/campaign-stage/test/`. What is
-left in this app is the page chrome and the worker entry, and a jsdom suite over
-either would assert that a mock was called.
+They live with the code they cover, in `packages/campaign-stage/test/` and
+`packages/living-stage/test/`. What is left in this app is the page chrome, the
+demo switch and the worker entry, and a jsdom suite over any of those would
+assert that a mock was called.
 
 ```bash
 pnpm --filter @dagr/campaign-stage test
+pnpm --filter @dagr/living-stage test
 ```

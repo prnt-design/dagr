@@ -17,6 +17,8 @@
     "@dagr/campaign-stage": "workspace:*",
     "@dagr/graph": "workspace:*",
     "@dagr/layout": "workspace:*",
+    "@dagr/living-stage": "workspace:*",
+    "@dagr/react": "workspace:*",
     "@dagr/render": "workspace:*",
     "@docusaurus/core": "3.10.2",
     "@docusaurus/plugin-client-redirects": "3.10.2",

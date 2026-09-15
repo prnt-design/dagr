@@ -301,7 +301,26 @@ await context.addInitScript(() => {
   });
 });
 
-await page.goto(base, { waitUntil: 'load' });
+/**
+ * `hash` with `view=campaign` in it.
+ *
+ * EVERY FRAME HERE IS OF THE CAMPAIGN, and since the playground learned a
+ * second demo it opens on the other one. `#view=campaign` is how `App.tsx`
+ * is asked for this one; it reads the key once at mount with
+ * `URLSearchParams`, which is also how the stage reads `#node=` and `#zoom=`
+ * out of the same hash, so the keys do not interfere.
+ *
+ * Merged here rather than written into all nine frame literals, so a frame is
+ * still just the camera it names and there is one place to change if the
+ * screenshots ever cover the other demo too.
+ */
+function campaignHash(hash) {
+  const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+  params.set('view', 'campaign');
+  return `#${params.toString()}`;
+}
+
+await page.goto(`${base}/${campaignHash('')}`, { waitUntil: 'load' });
 
 // The advance this capture ran at, asserted rather than assumed. See the header.
 // Measured INSIDE the stage and through the stage's own variable, since that is
@@ -341,7 +360,7 @@ for (const frame of FRAMES) {
   // a different URL in the address bar. The demo reads its hash once at mount,
   // deliberately (see `camera-input.ts`), which is exactly why the capture has
   // to give it a fresh mount per frame.
-  await page.goto(`${base}/${frame.hash}`, { waitUntil: 'load' });
+  await page.goto(`${base}/${campaignHash(frame.hash)}`, { waitUntil: 'load' });
   await page.reload({ waitUntil: 'load' });
   // The readout is the page saying what it has actually drawn, so it is what
   // the shutter waits on: "3,010 nodes" appears only once the worker has laid

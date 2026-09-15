@@ -42,7 +42,9 @@ const FEATURES: Feature[] = [
         Nodes keep their identity across relayouts, mutations arrive as
         patches with inverses, and an unchanged record keeps its object
         identity, so <code>getNode(id) === previousNode</code> is a real
-        memoization test.
+        memoization test. An edit then arrives at the renderer as a{' '}
+        <code>LayoutDelta</code>, which is what the{' '}
+        <Link to="/demos/living">living graph demo</Link> counts on screen.
       </>
     ),
   },
@@ -89,9 +91,11 @@ export default function Home(): ReactNode {
             <p className={styles.lede}>
               Dagr is a successor to the dagre and d3 pairing: a typed,
               headless Sugiyama engine whose output is built to move, a WebGPU
-              renderer on three.js, and a React component on top. Layout will
-              emit deltas rather than fresh coordinates, so a renderer can
-              spring every node from where it was to where it belongs.
+              renderer on three.js, and a React component on top. An edit emits
+              a delta rather than fresh coordinates, so the renderer springs
+              every node from where it was to where it belongs and the ones the
+              edit did not touch do not move at all. There is a{' '}
+              <Link to="/demos/living">demo of exactly that</Link>.
             </p>
             <div className={styles.actions}>
               <Link
@@ -102,7 +106,7 @@ export default function Home(): ReactNode {
               </Link>
               <Link
                 className={clsx('bias-open-s', styles.button, styles.buttonGhost)}
-                to="/demos/campaign"
+                to="/demos/living"
               >
                 Live demo
               </Link>
@@ -114,10 +118,12 @@ export default function Home(): ReactNode {
               </Link>
             </div>
             <p className={styles.status}>
-              Early days: the graph model and the layout core are shipped, the
+              Early days: the graph model and the layout core are shipped,
+              incremental layout and spring animation are wired end to end in
+              the <Link to="/demos/living">living graph demo</Link>, the
               renderer draws a 3,010 node campaign in the{' '}
-              <Link to="/demos/campaign">live demo</Link>, incremental layout
-              has started, and nothing is on npm yet. The{' '}
+              <Link to="/demos/campaign">campaign demo</Link>, and nothing is on
+              npm yet. The{' '}
               <Link href="https://github.com/prnt-design/dagr/blob/main/ROADMAP.md">
                 roadmap
               </Link>{' '}

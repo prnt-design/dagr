@@ -1,0 +1,32 @@
+/* The box the stage fills, and the message that stands in for it before the
+   page has loaded. Everything inside the stage is styled by
+   `@dagr/living-stage/living.css`, whose colours are its own: it is a viewport
+   into a scene the renderer paints on near black, so it stays dark under the
+   site's light theme rather than following it. The same arrangement
+   `CampaignDemo.module.css` next door describes. */
+
+.frame {
+  flex: 1;
+  /* Below this the controls and the canvas are fighting for the same band, so
+     the page scrolls instead. Taller than the campaign's floor because this
+     stage is a COLUMN: a canvas, a row of controls, a readout and a legend. */
+  min-height: 32rem;
+  /* GRID, for one child, and the reason is percentage height resolution: see
+     `CampaignDemo.module.css`, which hit it first. A grid item is stretched to
+     its row by the default `align-items`, which does not care whether the
+     parent's height is definite, and this box's comes from `flex: 1` against a
+     page sized by `min-height`. */
+  display: grid;
+  border: 1px solid var(--dagr-contrast-20pct);
+  background: #0b0d10;
+  padding: 1rem;
+}
+
+.pending {
+  margin: auto;
+  padding: 1.5rem;
+  max-width: 28rem;
+  text-align: center;
+  color: #79828d;
+  font-size: 0.9375rem;
+}

@@ -75,24 +75,67 @@ body {
   font-size: 0.8125rem;
 }
 
+/* Which demo is on screen. Two buttons and no router; see App.tsx. */
+
+.page__views {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.page__view {
+  appearance: none;
+  border: 1px solid var(--rule);
+  border-radius: 0.375rem;
+  background: var(--panel);
+  color: var(--ink-dim);
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+}
+
+.page__view[aria-pressed='true'] {
+  color: var(--amber);
+  border-color: var(--amber);
+}
+
 /*
- * The frame around the stage.
+ * The frame around whichever stage is mounted.
  *
- * Everything INSIDE it belongs to `@dagr/campaign-stage`, whose `stage.css`
- * this page imports first: the canvas, the readout, the overlay tiers and their
- * colour tokens all travel with the component now, so the docs site's route
- * gets the same stage without borrowing a variable off this page's `:root`.
- * What is left here is the two decisions a HOST makes. The height, because the
- * stage fills what it is given and this page wants a band with the facts under
- * it where the docs route wants the viewport. And the border, because a
- * playground panel on a page is a panel, while the docs route is full bleed.
+ * Everything INSIDE it belongs to `@dagr/campaign-stage` or
+ * `@dagr/living-stage`, whose stylesheets this page imports first: the canvas,
+ * the readout, the controls and their colour tokens all travel with the
+ * component now, so the docs site's routes get the same stages without
+ * borrowing a variable off this page's `:root`. What is left here is the two
+ * decisions a HOST makes. The height, because a stage fills what it is given
+ * and this page wants a band with the facts under it where the docs routes want
+ * the viewport. And the border, because a playground panel on a page is a
+ * panel, while the docs routes are full bleed.
+ *
+ * GRID, for one child, and the reason is percentage height resolution. Both
+ * stages size themselves against this box; a grid item is stretched to its row
+ * by the default `align-items` whether or not anything is definite, where a
+ * block child asking for `height: 100%` depends on this box's height being one.
+ * It is here, but the living stage is a COLUMN of canvas, controls and readout
+ * rather than one canvas, and stretching is what makes that column fill the
+ * band instead of collapsing to its content.
  */
 
 .page__stage {
+  display: grid;
   height: clamp(600px, 62vh, 780px);
   border: 1px solid var(--rule);
   border-radius: 0.5rem;
   overflow: hidden;
+  padding: 0;
+}
+
+/* The living stage brings its own padding-free column; the band gives it room
+   to breathe without the canvas losing its edge-to-edge look. */
+.page__stage > .living {
+  min-height: 0;
+  padding: 0.75rem;
 }
 
 /* The `@dagr/graph` facts, below the canvas. */

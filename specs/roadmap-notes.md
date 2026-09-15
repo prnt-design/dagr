@@ -75,14 +75,16 @@ their own `requestAnimationFrame` and gets no edge motion at all. The two halves
 of M4 that a consumer touches first are the delta consumer and the loop, and one
 of them is missing.
 
-**M5.3 third, and it split in two on 2026-09-14.** `docs/src/pages/index.tsx`
-tells a visitor that mutations arrive as deltas and untouched nodes stay put.
-Nothing on the site or in `apps/demo` called `relayout` even once, so the claim
-was unillustrated on the page that makes it, while M3.10a's numbers sit one
-click away on the incremental-layout doc. An animated demo is the cheapest way
-to make the two agree. M5.3a is the React wiring that demo would otherwise have
-had to hand-write against the render API, and it has shipped; M5.3b is the demo
-itself, and it is what still stands between a visitor and the headline claim.
+**M5.3 third, and it split in two on 2026-09-14. Both halves have now
+shipped.** `docs/src/pages/index.tsx` told a visitor that mutations arrive as
+deltas and untouched nodes stay put. Nothing on the site or in `apps/demo`
+called `relayout` even once, so the claim was unillustrated on the page that
+makes it, while M3.10a's numbers sat one click away on the incremental-layout
+doc. An animated demo was the cheapest way to make the two agree. M5.3a is the
+React wiring that demo would otherwise have had to hand-write against the render
+API; M5.3b is the demo, at `/demos/living`, and it also corrected the landing
+page's lede, which was still in the future tense about deltas that had been
+shipping since M4.7c.
 
 **M5.2 and M4.8b after those, and they are a pair.** Interaction hooks want the
 pick pass, and the pick pass wants a machine with a WebGPU adapter, which this
@@ -6356,27 +6358,164 @@ it settled rather than restating the argument.
   fading, because `advance` drops an entry that is departing and not moving.
   That is correct and it is now stated on the docs page rather than left for
   M5.3b to discover.
-- [ ] **M5.3b** (`apps/demo`) The demo that proves it: an animated living demo
-  (grow, prune, relayout) in `apps/demo`, deployed-ready.
-  THIS IS THE TASK THAT DEMONSTRATES THE HEADLINE CLAIM, and nothing shipped
-  does. The campaign demo is read-only: `apps/demo/src/App.tsx` never mutates a
-  graph, so it proves scale, rendering and semantic zoom, and proves nothing at
-  all about layout staying stable under an edit, which is what M6's preamble
-  says the project competes on. A visitor currently cannot see the flagship
-  feature. Weight this accordingly against M5.2.
-  M4.7c'S DEMO FOLDED IN HERE, and the React wiring came with it and has now
-  shipped as M5.3a: writing the demo by hand in `apps/demo` first would have
-  been a demo against the render API that got rewritten the day `<DagrCanvas>`
-  learned to do it, and M5.3a is the day it did. What the demo writes now is
-  `<DagrCanvas animate>` and the edits.
-  THE CAMERA QUESTION IS ALREADY ANSWERED AND SHOULD NOT BE REOPENED: the fit
-  happens once, and a sprung box is on every `onFrame` for a caller who wants to
-  follow it. An animated demo that refits every frame would look impressive and
-  would hide the thing it exists to show, because a drawing that stays put while
-  the camera moves is indistinguishable from a drawing that moves.
-  THE NUMBERS ARE ALREADY PUBLISHED, at `docs/docs/incremental-layout.md`, and
-  the demo's job is to let a visitor SEE what they describe rather than to
-  produce new ones.
+- [x] **M5.3b** (`packages/living-stage`, `docs`, `apps/demo`, `render.yaml`)
+  The demo that proves it: an animated living demo (grow, prune, relayout),
+  deployed-ready. Shipped 2026-09-14.
+  THIS WAS THE TASK THAT DEMONSTRATED THE HEADLINE CLAIM, and until it nothing
+  did. The campaign demo is read-only: it never mutates a graph, so it proves
+  scale, rendering and semantic zoom, and proves nothing at all about layout
+  staying stable under an edit, which is what M6's preamble says the project
+  competes on. M4.7c's demo folded in here and the React wiring came with it and
+  shipped as M5.3a, so what this writes is `<DagrCanvas animate>` and the edits.
+  IT SPLIT FROM `apps/demo` INTO A PACKAGE AND TWO HOSTS, the way M5.3 recorded
+  its own split, and the reason is one line of `render.yaml`: `apps/demo` HAS NO
+  DEPLOY. The `dagr-demo` service was retired when D1 moved the campaign onto
+  the docs site, and that file says so in its own header, so a demo that lived
+  only in `apps/demo` could not be "deployed-ready" in any sense a visitor could
+  check. The deployed surface is `dagr-docs`, which is also where the claim is
+  made. So the component is `@dagr/living-stage`, private and never published,
+  and it is mounted twice: by `apps/demo`, and by the docs site at
+  `/demos/living`. That is exactly D1's argument for `@dagr/campaign-stage`
+  reused, and reusing it was the point: inventing a second answer for the second
+  demo is how two demos of the same library start drifting.
+  `/demos/living` RATHER THAN THE LANDING PAGE, and the route was reserved for
+  it three sessions ago: `docs/src/pages/demos/campaign.tsx`'s own docstring
+  says a route "leaves the animated demos on the roadmap a home as sibling pages
+  under the same tab". The landing page already carries a hero, a live benchmark
+  and a pitch, all of which would sit below a canvas that ate the fold. What the
+  landing page got instead is a link and a correction: its lede said layout
+  "WILL emit deltas rather than fresh coordinates, so a renderer CAN spring every
+  node", in the future tense, about something that has been true since M4.7c.
+  THE NAV TAB NOW POINTS AT THE LIVING GRAPH rather than the campaign, and still
+  at a page rather than a `/demos/` index. The tab's own comment argued against
+  an index on the grounds that "an index listing a single link is a click a
+  reader pays for nothing"; two links weakens that, but a click in front of the
+  flagship demo is still a cost, so the two pages link to each other instead. It
+  points here because this is the claim the project competes on and scale is the
+  second question.
+  THE CAMPAIGN DEMO SURVIVES, in both hosts, because it is the only thing that
+  proves scale, tiling and semantic zoom and the only thing that exercises the
+  worker path. In `apps/demo` the two are behind a `useState` switch and not
+  stacked, because each mounts a canvas and two live canvases is two GPU device
+  contexts for a page that can only be looking at one.
+  THE CAMERA DECISION WAS NOT REOPENED, AND THE GRAPH IS WHAT MADE THAT
+  AFFORDABLE. The three honest answers the task named were to bound the growth,
+  to start zoomed out, or to give the visitor a refit button. This took the
+  first and the third. `STAGE_WIDTHS` puts nine nodes in the `compile` column so
+  that a three-node cluster grown into a six-wide column cannot make the drawing
+  wider; the relayout verb adds no rank; and `AUTOPLAY_CYCLE` is the identity, so
+  a lap returns the graph to exactly the node and edge sets it started with. The
+  measured consequence is that the bounds are 1300 by 490 at every step of a lap,
+  unchanged, so the one fit is not merely adequate but exact, forever, and
+  `test/lap.test.ts` asserts equality rather than containment. The refit button
+  is inside the canvas, reading `useDagrCanvas`, and a person presses it.
+  THE RELAYOUT VERB WAS WRONG TWICE, IN OPPOSITE DIRECTIONS, AND ONLY THE LAYOUT
+  ENGINE COULD SAY SO. This is the finding of the run.
+  The first shape moved an edge's source a stage FORWARD, which changes the
+  target's rank, which inserts a rank, which shifts every layer below it and
+  recentres the drawing: the delta said 25 OF 25 NODES MOVED and 40 of 41 edges
+  rerouted, beside a readout whose entire purpose is to say how few move. The
+  second shape swapped an edge's source for another node in the SAME stage,
+  which is rank-preserving and looked ideal: it moved NOTHING AT ALL, 0 of 32
+  nodes, in ALL 200 candidate swaps this graph offers, because
+  `gridPositionStage` places a node by its rank and its index within the rank and
+  a same-rank source swap changes neither. The third shape, which shipped, adds
+  a dependency that SKIPS TWO RANKS: it bends through a virtual node in the rank
+  it crosses, and that nudges the six nodes nearest it and nothing else.
+  BOTH WRONG SHAPES PASSED EVERY STRUCTURAL TEST, which is why `lap.test.ts`
+  exists as a separate file with its own reason written at the top. Both were
+  valid edits: one patch, acyclic, reversible, cycle-closing. `edit-script.test.ts`
+  could not have caught either, and no amount of reading would have either,
+  because the answer is a property of `gridPositionStage` rather than of the
+  edit. The two assertions that catch them are "every edit leaves more than two
+  thirds of the drawing where it was" and "every edit moves something", and
+  neither is satisfiable by reasoning about the graph alone.
+  A THIRD INTERACTION CAME OUT OF THE SAME FILE and is the reason neither grow
+  target is `resolve`. The skip edge's virtual node sits in the rank it crosses
+  and takes a node's worth of separation with it, so growing `resolve` to nine
+  and then linking across it made that column ten wide and the drawing 50 units
+  wider than the frame the camera had already been fitted to. The bounds
+  assertion caught it; a reader would not have, because neither the grow nor the
+  link is wrong on its own and nothing names the pair.
+  THE READOUT SAYS ONLY WHAT THE DELTA SUPPORTS, and the one subtraction it makes
+  is `result.nodes.size - moved - added`. `removed` is NOT subtracted, because it
+  names ids of the PREVIOUS result and is therefore not in the count being
+  reduced; subtracting it would undercount what stayed put by exactly the number
+  of nodes that went away. There is no running total, no average and no
+  "percentage of the drawing disturbed", because a delta is a statement about one
+  difference and anything accumulated across several is a number nothing could
+  keep honest.
+  AND IT REFUSES TO CLAIM ONE WHEN IT CANNOT, which is M5.3a's lesson taken at
+  face value on the consumer side. `<DagrCanvas>` calls `onLayout` once per
+  COMMIT rather than once per layout, so two unbatched edits in one task are two
+  deltas and one call carrying the second, measured from a drawing that never
+  reached a frame. `readEdit` compares that delta's `from` against the result it
+  last counted, BY IDENTITY, and returns a `coalesced` readout with no numbers in
+  it rather than reporting the last hop as the whole edit. Every edit this demo
+  makes is batched, so the state is unreachable by design; it is implemented and
+  tested anyway, because the alternative to detecting it is a wrong number beside
+  a correct drawing, which is the exact failure M5.3a shipped and fixed.
+  THE HALO IS THE OTHER HALF OF THE READOUT. "6 moved, 29 stayed put" is a claim;
+  six lit nodes beside twenty-nine unlit ones, on the same screen, is the
+  evidence, and it makes the number checkable by a visitor who does not believe
+  it. `touchedBy` takes `added` and `moved` and NOT `removed`: a removed id is
+  not in the result being drawn, so lighting it would light nothing today and the
+  wrong thing the moment a node is pruned and grown again under the same id,
+  which this demo does on every lap.
+  AUTOPLAY AND BUTTONS, AND AUTOPLAY STOPS DEAD ON THE FIRST PRESS. Autoplay
+  shows the feature to a visitor who does not click; a button lets them cause the
+  edit, which is more convincing; stopping on the press is what keeps the second
+  from fighting the first. It is a CHAIN OF TIMEOUTS keyed on the state each step
+  produces rather than an interval, because an interval holds the first render's
+  state in a closure and takes the same step forever.
+  `takeStep` RETURNING `null` IS THE DISABLED STATE, which is why the
+  availability rules are in `edit-script.ts` and nowhere else: a prune with
+  nothing grown throws, and a button that is enabled and a step that throws must
+  not be able to disagree. The component asks the same function the test does.
+  REDUCED MOTION TURNS OFF BOTH THE GLIDE AND THE AUTOPLAY, and the counts are
+  the same either way, so the visitor still gets the demonstration. This is the
+  first consumer of the `?: T | undefined` widening M5.3a's review round made to
+  every `DagrCanvasProps` field: `animate={reduced ? undefined : FEEL}` does not
+  compile without it. The query is read through `useSyncExternalStore` with a
+  `false` server snapshot, because Docusaurus renders every page at build time
+  and there is no `matchMedia` there.
+  THE FEEL IS 0.2 RATHER THAN THE 0.12 DEFAULT. The default is tuned for an
+  application, where the animation keeps the user oriented and then gets out of
+  the way. Here the animation IS the subject, so it is slowed to where a visitor
+  can follow one node from where it was to where it belongs.
+  NO WORKER, unlike the campaign. 32 nodes lay out in well under a frame, and a
+  worker would put a round trip in front of every edit in a demo whose subject is
+  how little work an edit is. `docusaurus.config.ts`'s worker-runtime plugin
+  docstring is updated to say which demos use it and which does not.
+  THE COMPONENT TEST FAKES `DagrCanvas` AND NOTHING ELSE, spread over the real
+  `@dagr/react`, which is the shape `packages/react/test/fake-render.ts` settled
+  on. What that covers is everything `LivingStage` owns: the props it hands the
+  canvas, what it does with each `onLayout`, when a button is disabled, when
+  autoplay stops. What it does NOT cover is that `<DagrCanvas>` calls `onLayout`
+  once per commit with a `from` that means what this package thinks it means, or
+  that one batched edit glides rather than reseating. Both are `@dagr/react`'s
+  claims about its own component, tested against the real springs in
+  `dagr-canvas-animate.test.tsx`; re-testing them here would be testing
+  `@dagr/react` badly. `mount.tsx` is copied verbatim from that package rather
+  than imported across the boundary or rewritten, and says so at the top.
+  WHAT IS NOT EXHIBITED: no test drives the real renderer, so nothing here proves
+  the drawing on screen is right, only that the right instructions reach the
+  canvas. That is the same boundary every jsdom suite in this repo stops at, and
+  the committed screenshots in `assets/screenshots/` cover the campaign rather
+  than this. A capture set for the living stage would want two frames of the same
+  edit mid-glide, which needs the frame clock to be drivable from outside the
+  page; that is worth doing and is not this task.
+  ONE THING THE SWITCH BROKE AND THE FIX. `apps/demo` opening on the living graph
+  means the campaign stage is not mounted, and `scripts/capture.mjs` waits on
+  that stage's own marker: a capture would have hung for sixty seconds and then
+  blamed a missing font. The view is now a `#view=` key read once at mount with
+  `URLSearchParams`, which is how `camera-input.ts` already reads `#node=` and
+  `#zoom=` out of the same hash, and the capture script merges `view=campaign`
+  into every frame's hash in one helper rather than into nine literals.
+  `render.yaml`'S BUILD FILTER NEEDED TWO MORE PATHS, `packages/living-stage/**`
+  and `packages/react/**`, or a change to the demo would deploy nothing. The
+  filter lists every package whose code the site ships, and the site now ships
+  two more.
 - [x] **M5.4a** (every package) The tarball a consumer installs: the packaging
   half of M5.4, split out and moved to the front of the queue on 2026-08-26.
   See "Where this stands, and what to do next" at the top of this file for why

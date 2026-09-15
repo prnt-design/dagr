@@ -29,6 +29,14 @@ export default defineConfig({
       '@dagr/campaign': fileURLToPath(
         new URL('../../packages/campaign/src/index.ts', import.meta.url),
       ),
+      // The subpath before the bare name, for the reason given above.
+      '@dagr/living-stage/living.css': fileURLToPath(
+        new URL('../../packages/living-stage/src/living.css', import.meta.url),
+      ),
+      '@dagr/living-stage': fileURLToPath(
+        new URL('../../packages/living-stage/src/index.ts', import.meta.url),
+      ),
+      '@dagr/react': fileURLToPath(new URL('../../packages/react/src/index.ts', import.meta.url)),
       '@dagr/graph': fileURLToPath(new URL('../../packages/graph/src/index.ts', import.meta.url)),
       '@dagr/layout': fileURLToPath(new URL('../../packages/layout/src/index.ts', import.meta.url)),
       // This alias is also why the demo does not depend on `three`, and why it
