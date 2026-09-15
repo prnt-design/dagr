@@ -229,6 +229,17 @@ worth less than a slow path they can.
   packages, v0.1 readiness review, publish queued for the maintainer. At
   publish time, confirm the `@dagr/graph` peer range against the versions
   actually shipping.
+  ONE API CHANGE IS QUEUED AND MUST BE SEQUENCED BEFORE THE PUBLISH, because it
+  is free now and breaking after: `<DagrCanvas>` computes the delta-continuity
+  check for its own animation (`held.result === layout.from`) and does not hand
+  it over, so every consumer that shows delta numbers keeps its own ref and
+  re-derives it. Getting it wrong shows a wrong number beside a right picture,
+  silently, and two consumers in two days got it wrong (M5.3a shipped it, then
+  M5.3b's demo shipped the same class of it). The proposal is a fourth argument
+  `continues`, or an object-shaped `onLayout`. It needs its own tests for the
+  `animate` off case, where `appliedRef` is null and the check cannot come from
+  it. Raised by the M5.3b api-design review; the reasoning is in that task's
+  entry in the notes.
 - [x] **M5.5** Containment reserved in the graph model: `parent`,
   `update-node-parent`, the invariants, `PatchOp` documented as an open
   union. Layout ignores `parent` until M7.
