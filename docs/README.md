@@ -74,8 +74,9 @@ gone with it, so do not look for a `generate:perf` script.
 
 The site imports `@dagr/graph`, `@dagr/layout`, `@dagr/campaign-stage` and
 `@dagr/living-stage`, which between them bring `@dagr/campaign`, `@dagr/react`
-and `@dagr/render` with them, so all of them have to be built before it. `render.yaml` runs `pnpm --filter docs... build`, which does
-that in dependency order; the root `pnpm build` does too, because `pnpm -r` is
+and `@dagr/render` with them, so all of them have to be built before it.
+`render.yaml` runs `pnpm --filter docs... build`, which does that in dependency
+order; the root `pnpm build` does too, because `pnpm -r` is
 topological and the dependency creates the edge. Building the site alone against
 a fresh clone fails until the packages have a `dist`.
 

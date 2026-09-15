@@ -6413,9 +6413,9 @@ it settled rather than restating the argument.
   ENGINE COULD SAY SO. This is the finding of the run.
   The first shape moved an edge's source a stage FORWARD, which changes the
   target's rank, which inserts a rank, which shifts every layer below it: swept
-  over all 178 legal variants, that moved BETWEEN 7 AND 30 OF THE 32 NODES, a
-  median of 22, and every single one made the drawing a rank taller, 490 units
-  to 580, beside a readout whose entire purpose is to say how few move. The
+  over the legal variants, EVERY ONE made the drawing a rank taller, 490 units
+  to 580, and the worst MOVED 30 OF THE 32 NODES, beside a readout whose entire
+  purpose is to say how few move. The
   second shape swapped an edge's source for another node in the SAME stage,
   which is rank-preserving and looked ideal: it moved NOTHING AT ALL, 0 of 32
   nodes, in ALL 200 candidate swaps this graph offers, because
@@ -6568,6 +6568,19 @@ it settled rather than restating the argument.
   number measured to JUSTIFY A DECISION has to be re-measured when the thing it
   was measured on changes, and it is the least likely number to be re-checked
   precisely because the decision it justified is already made and correct.
+  AND THE REPLACEMENT WAS WRONG TOO, WHICH IS THE SECOND ROUND EARNING ITS KEEP
+  AGAIN. "178 variants, 7 to 30, median 22" did not reproduce: a second sweep,
+  enumerating the candidates slightly differently, got 250 variants, 3 to 30, and
+  a median of 18. Neither sweep is wrong; the NUMBER is, because a count and a
+  median over "the variants" mean nothing without saying which enumeration, and
+  the sweep was never committed so there was nothing to re-derive it from. What
+  both sweeps agree on, and what is published now, is the part that does not
+  depend on the enumeration: every variant made the drawing a rank taller, and
+  the worst moved 30 of the 32 nodes. THE GENERAL FORM: a measurement quoted in
+  prose has to carry enough of its own definition to be re-run, or it is a
+  number with no owner. The two published beside it survived precisely because
+  they do: "all 200 same-stage swaps" and "0 of 32" are exhaustive over a set
+  the code names.
   `docs/README.md` WAS THE OTHER STALE FILE, and it was false rather than
   merely incomplete: it named the packages the site builds, and the site now
   builds two more. It is the third place that list lives, after `tsconfig.json`'s

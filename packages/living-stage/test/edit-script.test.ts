@@ -58,6 +58,21 @@ function walk(
   return state;
 }
 
+/**
+ * Every field of {@link ScriptState}, so a new one cannot be forgotten below.
+ *
+ * The same guard `use-dagr.ts` puts on `LayoutConfig`, against the same failure
+ * in a different costume: a field added and not put in `key` would make two
+ * distinct states collide, the sweep would silently cover fewer of them, and
+ * the count pinned at the end could stay 52 while the coverage shrank. The
+ * declaration fails to compile the day `ScriptState` grows a field.
+ */
+type KeyedField = 'live' | 'linked' | 'cursor';
+type UnkeyedField = Exclude<keyof ScriptState, KeyedField>;
+// Fails with "Type 'true' is not assignable to type 'never'" naming the field.
+const everyScriptStateFieldIsKeyed: [UnkeyedField] extends [never] ? true : never = true;
+void everyScriptStateFieldIsKeyed;
+
 /** A state as a string, so a sweep can tell two of them apart. */
 function key(state: ScriptState): string {
   return `${state.live.join('.')}|${String(state.linked)}|${String(state.cursor)}`;
@@ -189,8 +204,9 @@ describe('the edit script', () => {
   it('applies whatever it offers, from every reachable state, so no enabled button throws', () => {
     // A BREADTH-FIRST SWEEP OF THE WHOLE STATE SPACE, and the previous version
     // of this test claimed that and walked one path: the prefixes of
-    // AUTOPLAY_CYCLE, which is 7 of the 52 states a visitor can reach by
-    // pressing buttons in any order. A rule `takeStep` gets right and
+    // AUTOPLAY_CYCLE, which is 6 distinct states (the empty prefix and the
+    // whole lap are the same one) of the 52 a visitor can reach by pressing
+    // buttons in any order. A rule `takeStep` gets right and
     // `applyStep` does not is the shape of bug a happy-path walk cannot see,
     // and the state that actually mattered (both clusters grown, cursor left
     // mid-cycle) is not on that path at all.

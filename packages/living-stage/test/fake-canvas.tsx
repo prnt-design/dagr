@@ -49,7 +49,7 @@
  * they are erased.
  */
 
-import { createElement, useEffect } from 'react';
+import { createElement, useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
 import type { DagrCanvasProps, useDagr as UseDagr } from '@dagr/react';
 
@@ -59,11 +59,6 @@ const rendered: DagrCanvasProps[] = [];
 /** Clears the record. Call it per test. */
 export function resetCanvases(): void {
   rendered.length = 0;
-}
-
-/** How many times the fake canvas has rendered. */
-export function canvasRenders(): number {
-  return rendered.length;
 }
 
 /** The props of the most recent render, which is the canvas currently on screen. */
@@ -85,6 +80,9 @@ export function lastCanvas(): DagrCanvasProps {
 export function makeFakeDagrCanvas(useDagr: typeof UseDagr) {
   return function FakeDagrCanvas(props: DagrCanvasProps): ReactElement {
     rendered.push(props);
+    // The props as of the newest render, read from effects and never depended
+    // on, exactly as `DagrCanvas` does it.
+    const latest = useRef(props);
 
     // THE REAL HOOK AND THE REAL `onLayout` EFFECT, COPIED FROM
     // `DagrCanvas.tsx`. These four lines are the whole reason this fake is not
@@ -98,11 +96,25 @@ export function makeFakeDagrCanvas(useDagr: typeof UseDagr) {
     // `[graph]` effect would look correct when it was not. That is exactly the
     // defect this harness shipped and a review found.
     const layout = useDagr(props.graph, { config: props.config });
-    const onLayout = props.onLayout;
+    latest.current = props;
+    // `[layout]` alone, which is the real component's dependency list. Reading
+    // the callback out of a ref rather than depending on it is what stops an
+    // unstable `onLayout` from re-firing for the SAME layout: the second fire
+    // would find `counted` already set to this result and render a spurious
+    // `coalesced` readout that the real component cannot produce, so a fake
+    // that depended on it would be able to fail a test the real one passes.
     useEffect(() => {
       if (layout.result === null) return;
-      onLayout?.(layout.result, layout.delta, layout.from);
-    }, [layout, onLayout]);
+      latest.current.onLayout?.(layout.result, layout.delta, layout.from);
+    }, [layout]);
+
+    // A layout that failed is reported, not thrown, and `LivingStage` takes the
+    // canvas down when it is. Without this the component's whole failure arm is
+    // unreachable from a test. `DagrCanvas` folds a renderer that never arrived
+    // in here too; a test that wants that one calls `onError` directly.
+    useEffect(() => {
+      if (layout.error !== null) latest.current.onError?.(layout.error);
+    }, [layout.error]);
 
     return createElement('div', { 'data-testid': 'fake-canvas' });
   };

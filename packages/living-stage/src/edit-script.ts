@@ -25,8 +25,12 @@
  * edit hides the stability it is supposed to reveal: a drawing that stays put
  * while the camera moves is indistinguishable from a drawing that moves. So the
  * demo cannot be allowed to grow out of the frame it was fitted to, and
- * {@link AUTOPLAY_CYCLE} returns the graph to exactly the node and edge sets it
- * started with. It can then autoplay forever inside that first fit.
+ * {@link AUTOPLAY_CYCLE} walked FROM THE INITIAL STATE returns the graph to
+ * exactly the node and edge sets it started with. An out-of-turn press leaves
+ * autoplay orbiting a different set of graphs, which is fine and is not the
+ * thing the fit depends on: what the fit depends on is that EVERY graph the
+ * three verbs can produce draws inside the same box, and `test/lap.test.ts`
+ * pins all eight of them rather than the six a lap walks.
  */
 
 import type { EdgeId, Graph, NodeId } from '@dagr/graph';
@@ -93,10 +97,12 @@ export interface ClusterPlan {
  * THE STAGES ARE MEASURED RATHER THAN CHOSEN. Two earlier shapes of this verb
  * were tried against the engine and both were wrong, in opposite directions.
  * Moving an edge's source a stage FORWARD changes the target's rank, which
- * inserts a rank, which shifts every layer below it: swept over all 178 legal
- * variants, that moved between 7 and 30 of the 32 nodes, a median of 22, and
- * every single one made the drawing a rank taller, 490 units to 580, beside a
- * readout whose purpose is to say how few do. Swapping an edge's source for
+ * inserts a rank, which shifts every layer below it. Swept over the legal
+ * variants: EVERY ONE made the drawing a rank taller, 490 units to 580, and the
+ * worst moved 30 of the 32 nodes, beside a readout whose purpose is to say how
+ * few do. (How many variants there are depends on how the candidates are
+ * enumerated, so the count is not quoted: those two facts held under every
+ * enumeration tried.) Swapping an edge's source for
  * another node in the SAME stage moves nothing at all, in all 200 candidate
  * swaps this graph offers, because `gridPositionStage` places a node by its
  * rank and its index within the rank and a same-rank swap changes neither. A
@@ -396,11 +402,12 @@ export function takeStep(
  * was, so the lap resynchronises from there instead of skipping the same
  * entries forever.
  *
- * `null` means no verb in the whole cycle applies, which no reachable state
- * produces: `relayout` is always available and the cycle contains it. It is
- * returned rather than asserted because a caller that stops playing is a better
- * answer than one that throws inside a timer, and `test/edit-script.test.ts`
- * sweeps every reachable state to keep the claim honest.
+ * `null` means no verb in the whole cycle applies, which NO state produces at
+ * all, reachable or otherwise: `takeStep`'s relayout arm is unconditional and
+ * the cycle contains a relayout. It is returned rather than asserted because a
+ * caller that stops playing is a better answer than one that throws inside a
+ * timer, and `test/edit-script.test.ts` sweeps every reachable state to keep
+ * the claim honest against a later edit that makes relayout conditional.
  */
 export function takeAutoStep(script: EditScript, state: ScriptState): TakenStep | null {
   for (let offset = 0; offset < AUTOPLAY_CYCLE.length; offset += 1) {

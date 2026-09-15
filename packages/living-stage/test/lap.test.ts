@@ -8,7 +8,7 @@
  * claim, it is the reason this task exists, and it is not something the script
  * can be reasoned into: two earlier shapes of the relayout verb were written,
  * looked right, and turned out to move up to 30 of 32 nodes and 0 of 32
- * respectively. Neither would have failed any test in `edit-script.test.ts`,
+ * respectively, the first of them adding a whole rank to the drawing. Neither would have failed any test in `edit-script.test.ts`,
  * because both were structurally valid edits. Only laying the graph out finds
  * it.
  *
@@ -24,6 +24,7 @@ import { createLayout } from '@dagr/layout';
 import type { LayoutDelta, LayoutResult } from '@dagr/layout';
 import {
   AUTOPLAY_CYCLE,
+  EDIT_KINDS,
   INITIAL_SCRIPT_STATE,
   applyStep,
   createEditScript,
@@ -68,6 +69,27 @@ function runLap(): { readonly base: LayoutResult; readonly landed: Landed[] } {
   }
   unsubscribe();
   return { base, landed };
+}
+
+/**
+ * Every sequence of presses up to four long, which is enough to reach every
+ * graph the three verbs can produce.
+ *
+ * Four because the deepest graph needs three presses to build (grow, grow,
+ * relayout) and one more cannot reach a shape the first three did not. Brute
+ * force rather than a closure over `ScriptState`, because what this test is
+ * about is the GRAPH, and two states can share one.
+ */
+function everyPressPath(): EditKind[][] {
+  const paths: EditKind[][] = [[]];
+  let frontier: EditKind[][] = [[]];
+  for (let depth = 0; depth < 4; depth += 1) {
+    const next: EditKind[][] = [];
+    for (const path of frontier) for (const kind of EDIT_KINDS) next.push([...path, kind]);
+    paths.push(...next);
+    frontier = next;
+  }
+  return paths;
 }
 
 /** How many nodes the result holds that this delta did not touch. */
@@ -139,6 +161,44 @@ describe('one lap, through the layout engine', () => {
       expect(one.delta.nodes.removed).toHaveLength(3);
       expect(one.delta.nodes.added).toEqual([]);
     }
+  });
+
+  it('never draws outside that box from any state a visitor can press it into', () => {
+    // THE LAP IS SIX OF THE TEN GRAPHS THIS DEMO CAN BE IN, and autoplay itself
+    // now visits the other four: the skip that keeps it from stalling means an
+    // out-of-turn press can leave it orbiting through states the lap never
+    // reaches. The camera fitted once on the base bounds has to be right for
+    // all ten, not for the six the happy path walks.
+    const base = createLayout({ config: LIVING_LAYOUT_CONFIG }).run(createLivingGraph());
+    const seen = new Set<string>();
+
+    for (const path of everyPressPath()) {
+      const graph = createLivingGraph();
+      const script = createEditScript(graph);
+      let state = INITIAL_SCRIPT_STATE;
+      for (const kind of path) {
+        const taken = takeStep(script, state, kind);
+        if (taken === null) break;
+        applyStep(graph, taken.step);
+        state = taken.next;
+      }
+      // The whole census, not the counts: the two clusters are the same SIZE
+      // and land in different columns, so counting would call two different
+      // drawings the same one and skip half the work.
+      const shape = [
+        ...graph.nodes().map((node) => node.id),
+        ...graph.edges().map((edge) => `${edge.source}->${edge.target}`),
+      ]
+        .sort()
+        .join(',');
+      if (seen.has(shape)) continue;
+      seen.add(shape);
+      const laid = createLayout({ config: LIVING_LAYOUT_CONFIG }).run(graph);
+      expect(laid.bounds, `after [${path.join(', ')}]`).toEqual(base.bounds);
+    }
+
+    // Each cluster present or absent, and the link present or absent: eight.
+    expect(seen.size).toBe(8);
   });
 
   it('never draws outside the box the first frame was fitted to', () => {

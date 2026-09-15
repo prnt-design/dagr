@@ -237,6 +237,59 @@ describe('<LivingStage>', () => {
     expect(lastCanvas().animate).toEqual({ halfLifeSeconds: 0.2 });
   });
 
+  it('starts the count over for a new seed, and counts the very first edit after it', async () => {
+    // THE `[graph]` RESET EFFECT, WHICH NOTHING EXERCISED. Its whole body could
+    // be deleted and the suite stayed green, which matters because a review
+    // round changed exactly this effect: it used to null `counted` here, and
+    // because React flushes a child's effects before its parent's that threw
+    // away a cold run `<DagrCanvas>` had already reported, so the first edit of
+    // every mount claimed "more than one edit arrived in a single frame".
+    //
+    // A seed change is the one way a host can make a new graph without
+    // remounting, and it is the case the effect exists for.
+    tree = await mount(<LivingStage autoplay={false} seed={1} />);
+    await flush(() => {
+      verb(tree?.container as HTMLElement, 'grow').click();
+    });
+    expect(stats(tree.container).get('nodes stayed put')).toBe('26 of 35');
+
+    await tree.rerender(<LivingStage autoplay={false} seed={99} />);
+
+    // A new graph is a cold run, so there is nothing to have stayed put yet,
+    // and the script is back at the top: prune is greyed out again.
+    expect(readoutText(tree.container)).toContain('laid out cold');
+    expect(readoutText(tree.container)).toContain('nothing edited yet');
+    expect(verb(tree.container, 'prune').disabled).toBe(true);
+
+    await flush(() => {
+      verb(tree?.container as HTMLElement, 'grow').click();
+    });
+
+    // AND THE FIRST EDIT AFTER THE RESEED COUNTS, which is the half that would
+    // go red if `counted.current = null` came back.
+    const after = stats(tree.container);
+    expect(after.get('nodes stayed put')).toBeDefined();
+    expect(after.get('added')).toBe('3');
+    expect(readoutText(tree.container)).not.toContain('More than one edit');
+  });
+
+  it('takes the controls away when the drawing fails, rather than editing nothing', async () => {
+    // `onError` is `<DagrCanvas>`'s one exit for a renderer that never arrived
+    // and for a layout that failed. Without this the verbs stayed live over a
+    // canvas that had gone, so a visitor could keep editing a graph nothing was
+    // drawing, and the message blamed the GPU for both causes.
+    await mountStage();
+    if (tree === null) return;
+    expect(verb(tree.container, 'grow').disabled).toBe(false);
+
+    await flush(() => {
+      lastCanvas().onError?.(new Error('no adapter'));
+    });
+
+    expect(tree.container.querySelector('.living__failure')?.textContent).toContain('no adapter');
+    for (const button of verbs(tree.container)) expect(button.disabled).toBe(true);
+  });
+
   it('refuses to claim a number when two edits arrive between two drawings', async () => {
     // THE M5.3a LESSON, AT THE COMPONENT LEVEL. Every edit the buttons make is
     // batched, so this drives the canvas by hand instead: two mutating calls in
