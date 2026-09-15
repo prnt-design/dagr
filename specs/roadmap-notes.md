@@ -6561,6 +6561,29 @@ it settled rather than restating the argument.
   before it was reachable rather than after. And a scratch test file one of the review agents left in the worktree,
   which never reached a commit and is deleted; worth noting only because this
   run used `git add -A` repeatedly, which would have swept it in.
+  THE GRAPHICS-FEEL REVIEW PASSED THE ANIMATION WIRING (one batch, one delta,
+  one retarget; stable `animate` and `nodeAppearance` identities; nothing added
+  per frame; no `@dagr/render` change, so no bench exposure) AND FOUND THE THIRD
+  INSTANCE OF ONE GUARD BEING ADDED IN ONE PLACE AND NOT THE OTHER. The verb
+  buttons were gated on `failure` and the AUTOPLAY TIMER WAS NOT, so after a
+  failed canvas the demo went on editing a graph nobody could see: a step every
+  2.8 seconds, the readout naming edits, the stat tiles frozen on a state
+  several edits stale (no more `onLayout` arrives), and the play button still
+  reading "pause". Reproduced at 32 to 35 nodes over three intervals behind the
+  message. The same shape as `takeAutoStep` returning null and the effect
+  scheduling nothing: two call sites of one rule, one of them updated.
+  AND THREE OF THE SIX RAMP STOPS FAILED WCAG 1.4.11's 3:1 MINIMUM for a
+  graphical object, measured against the background: `fetch` at 1.90:1, `parse`
+  at 2.78:1, and the unknown-stage grey at 2.66:1. That is not a box a visitor
+  reads, it is a box they COUNT, and counting the unlit ones is the demo's whole
+  argument. `parse` is also one of the two columns a grow lands in, so the three
+  boxes the page asks you to watch appear were arriving in the second-murkiest
+  column on it. The ramp is re-spread upward: 3.22, 4.21, 5.46, 7.19, 9.56,
+  12.66, with adjacent stops about 1.31:1 apart, which is the second property
+  and is not the same as the first. Legible one at a time is not tellable apart
+  in a row, and a six-step sequential ramp a reader cannot order is not saying
+  what a ramp says. Both are now tests rather than a comment, with the WCAG
+  luminance formula written out in six lines rather than depended on.
   `render.yaml`'S BUILD FILTER NEEDED TWO MORE PATHS, `packages/living-stage/**`
   and `packages/react/**`, or a change to the demo would deploy nothing. The
   filter lists every package whose code the site ships, and the site now ships

@@ -290,6 +290,27 @@ describe('<LivingStage>', () => {
     for (const button of verbs(tree.container)) expect(button.disabled).toBe(true);
   });
 
+  it('stops autoplaying when the drawing fails, rather than editing behind the message', async () => {
+    // The verb buttons were guarded on `failure` and the TIMER was not, so the
+    // demo went on editing a graph nobody could see: a step every 2.8s, the
+    // readout naming edits, the stat tiles frozen on a state several edits
+    // stale, and the play button still reading "pause".
+    vi.useFakeTimers();
+    const graph = await mountStage({ autoplay: true });
+    if (tree === null) return;
+    const before = graph.nodeCount;
+
+    await flush(() => {
+      lastCanvas().onError?.(new Error('no adapter'));
+    });
+    await flush(() => {
+      vi.advanceTimersByTime(3000 * 3);
+    });
+
+    expect(graph.nodeCount, 'the graph was edited behind the failure').toBe(before);
+    expect(readoutText(tree.container)).toContain('nothing edited yet');
+  });
+
   it('comes back from a failure when the seed changes, because the seed is a restart', async () => {
     // `failure` used to latch: the `[graph]` effect reset the script and not
     // the error, so a new seed left the error paragraph where the canvas had

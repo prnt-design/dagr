@@ -22,18 +22,38 @@ import type { NodeAppearance, NodeAppearanceOf } from '@dagr/react';
 import { STAGES } from './living-graph.js';
 import type { Stage } from './living-graph.js';
 
-/** The ramp, in stage order, dark to light. */
+/**
+ * The ramp, in stage order, dark to light.
+ *
+ * EVERY STOP CLEARS 3:1 AGAINST {@link CLEAR_COLOR}, which is WCAG 1.4.11's
+ * minimum for a graphical object, and the dark end of this ramp did not: the
+ * first version ran from `#2f4858` at 1.90:1, with `parse` at 2.78:1. That is
+ * not a box a visitor is asked to read, it is a box they are asked to COUNT,
+ * and the demo's entire argument is counting the unlit ones. `parse` is also
+ * one of the two columns a grow lands in, so the three boxes the demo asks
+ * you to watch appear were arriving in the second-murkiest column on the page.
+ *
+ * Measured against `#11161b`: 3.22, 4.21, 5.46, 7.19, 9.56, 12.66. Adjacent
+ * stops stay about 1.31:1 apart, which is what keeps six of them tellable
+ * apart as a sequence rather than merely legible one at a time.
+ */
 const STAGE_COLORS: Readonly<Record<Stage, number>> = {
-  fetch: 0x2f4858,
-  parse: 0x33637a,
-  resolve: 0x33809a,
-  compile: 0x2e9eb5,
-  bundle: 0x4ebdc4,
-  ship: 0x86d9cf,
+  fetch: 0x3d6d83,
+  parse: 0x3f8299,
+  resolve: 0x3f98ad,
+  compile: 0x4fb0c0,
+  bundle: 0x74c9d3,
+  ship: 0xa6e2e4,
 };
 
-/** A node whose stage nothing recorded. Grey, so it cannot be read as a stage. */
-const UNKNOWN_COLOR = 0x555b66;
+/**
+ * A node whose stage nothing recorded. Grey, so it cannot be read as a stage.
+ *
+ * Grey and LIGHT ENOUGH: at `#555b66` it was 2.66:1 against the background,
+ * which failed the same rule the ramp did, and an unrecognised node is exactly
+ * the one a reader most needs to be able to see.
+ */
+const UNKNOWN_COLOR = 0x6b7280;
 
 /** The halo colour: warm, so a touched node reads against the cool ramp. */
 export const HIGHLIGHT_COLOR = 0xffb454;

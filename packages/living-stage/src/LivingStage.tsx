@@ -284,7 +284,12 @@ export function LivingStage(props: LivingStageProps): ReactElement {
   // schedules the next. An interval would hold the first render's `state` in a
   // closure and take the same step forever.
   useEffect(() => {
-    if (!playing || reducedMotion) return;
+    // `failure` for the same reason the verb buttons check it: once the canvas
+    // has gone, an edit every 2.8 seconds is the demo mutating a graph nobody
+    // can see, naming edits in the readout, and freezing the stat tiles on a
+    // state several edits stale, all under a message saying it could not be
+    // drawn. The buttons were guarded and the timer was not.
+    if (!playing || reducedMotion || failure !== null) return;
     const timer = setTimeout(() => {
       const taken = takeAutoStep(script, state);
       if (taken === null) {
@@ -303,7 +308,7 @@ export function LivingStage(props: LivingStageProps): ReactElement {
     return () => {
       clearTimeout(timer);
     };
-  }, [playing, reducedMotion, script, state, graph]);
+  }, [playing, reducedMotion, failure, script, state, graph]);
 
   const stageOfId = useCallback(
     (id: string): Stage | undefined => {

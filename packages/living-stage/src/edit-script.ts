@@ -252,7 +252,7 @@ function planCluster(
 /**
  * The two stages the relayout verb draws a new dependency between.
  *
- * Ranks one and three: a dependency that skips exactly two ranks. The reason is
+ * Ranks one and three: a dependency that spans exactly two ranks. The reason is
  * measured and is written out on {@link LinkPlan}. Named as a pair rather than
  * searched for across the whole graph, because the thing that makes one
  * candidate right and another wrong is not a property this file could test for
@@ -267,7 +267,7 @@ function planLink(graph: Graph, layers: ReadonlyMap<Stage, readonly NodeId[]>): 
   const from = STAGES[fromRank];
   const to = STAGES[toRank];
   if (from === undefined || to === undefined) {
-    throw new Error('the pipeline is too short to skip two ranks');
+    throw new Error('the pipeline is too short to span two ranks');
   }
   for (const source of layers.get(from) ?? []) {
     for (const target of layers.get(to) ?? []) {

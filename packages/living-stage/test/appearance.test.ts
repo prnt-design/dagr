@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createLayout } from '@dagr/layout';
-import { HIGHLIGHT_GLOW, livingAppearance, stageColor, touchedBy } from '../src/appearance.js';
+import {
+  CLEAR_COLOR,
+  HIGHLIGHT_COLOR,
+  HIGHLIGHT_GLOW,
+  livingAppearance,
+  stageColor,
+  touchedBy,
+} from '../src/appearance.js';
 import { AUTOPLAY_CYCLE, applyStep, createEditScript, takeStep } from '../src/edit-script.js';
 import { INITIAL_SCRIPT_STATE } from '../src/edit-script.js';
 import { STAGES, createLivingGraph } from '../src/living-graph.js';
@@ -85,5 +92,57 @@ describe('what the drawing looks like', () => {
   it('falls back rather than throwing for a node that names no stage', () => {
     const appearance = livingAppearance(new Set(), () => undefined);
     expect(appearance('mystery')).toBeDefined();
+  });
+});
+
+/**
+ * Relative luminance, per WCAG 2.x.
+ *
+ * Written out rather than depended on: it is six lines, and a colour contrast
+ * package would be a production dependency for a private demo's test.
+ */
+function luminance(color: number): number {
+  const channel = (value: number): number => {
+    const c = value / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return (
+    0.2126 * channel((color >> 16) & 255) +
+    0.7152 * channel((color >> 8) & 255) +
+    0.0722 * channel(color & 255)
+  );
+}
+
+/** The WCAG contrast ratio between two colours, lighter over darker. */
+function contrast(a: number, b: number): number {
+  const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return ((high ?? 0) + 0.05) / ((low ?? 0) + 0.05);
+}
+
+describe('the palette is legible', () => {
+  it('clears 3:1 against the background at every stop, which is WCAG 1.4.11', () => {
+    // THE DEMO'S ARGUMENT IS COUNTING THE UNLIT NODES, so an unlit node has to
+    // be visible. The first ramp ran from 1.90:1, with `parse` (one of the two
+    // columns a grow lands in) at 2.78:1.
+    for (const stage of STAGES) {
+      const ratio = contrast(stageColor(stage), CLEAR_COLOR);
+      expect(ratio, `${stage} is ${ratio.toFixed(2)}:1 against the background`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it('keeps adjacent stops far enough apart to read as a sequence', () => {
+    // Legible one at a time is not the same as tellable apart in a row, and a
+    // six-step ramp a reader cannot order is not saying what a ramp says.
+    for (let index = 1; index < STAGES.length; index += 1) {
+      const previous = STAGES[index - 1];
+      const stage = STAGES[index];
+      if (previous === undefined || stage === undefined) continue;
+      const step = contrast(stageColor(stage), stageColor(previous));
+      expect(step, `${previous} to ${stage} is only ${step.toFixed(2)}:1`).toBeGreaterThan(1.2);
+    }
+  });
+
+  it('puts the halo well clear of the background it glows against', () => {
+    expect(contrast(HIGHLIGHT_COLOR, CLEAR_COLOR)).toBeGreaterThanOrEqual(3);
   });
 });
