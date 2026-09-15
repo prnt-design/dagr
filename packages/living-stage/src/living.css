@@ -35,14 +35,6 @@
   font-size: 0.9rem;
 }
 
-/* Over the canvas, out of the way of the drawing, which the fit centres. */
-.living__refit {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  z-index: 1;
-}
-
 .living__controls {
   display: flex;
   flex-wrap: wrap;
@@ -53,6 +45,15 @@
 .living__verbs {
   display: flex;
   gap: 0.5rem;
+}
+
+/* The refit button is over the canvas, out of the way of the drawing, which the
+   fit centres. Otherwise it is a control like the other two. */
+.living__refit {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 1;
 }
 
 .living__verb,

@@ -6,15 +6,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Graph } from '@dagr/graph';
 import { createLayout } from '@dagr/layout';
 import type { LayoutDelta, LayoutResult } from '@dagr/layout';
+// The module `vi.mock` below is replacing, as a type. A `typeof import(...)`
+// inline would be the obvious spelling and the repo's lint rule forbids it.
+import type * as DagrReact from '@dagr/react';
 
 // Only `DagrCanvas` is faked; see `fake-canvas.ts`. Everything else the
 // component imports from `@dagr/react` is the real export.
-vi.mock('@dagr/react', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  DagrCanvas: (await import('./fake-canvas.js')).FakeDagrCanvas,
-}));
+vi.mock('@dagr/react', async (importOriginal) => {
+  const real = await importOriginal<typeof DagrReact>();
+  const { makeFakeDagrCanvas } = await import('./fake-canvas.js');
+  return { ...real, DagrCanvas: makeFakeDagrCanvas(real.useDagr) };
+});
 
 import { LivingStage } from '../src/LivingStage.js';
+import { AUTOPLAY_CYCLE } from '../src/edit-script.js';
 import { HIGHLIGHT_GLOW } from '../src/appearance.js';
 import { LIVING_LAYOUT_CONFIG } from '../src/living-graph.js';
 import { lastCanvas, resetCanvases } from './fake-canvas.js';
@@ -22,29 +27,6 @@ import { flush, mount } from './mount.js';
 import type { Mounted } from './mount.js';
 
 let tree: Mounted | null = null;
-
-/**
- * Lays the component's own graph out and reports it the way `<DagrCanvas>`
- * does: in the graph listener, once per patch, with the drawing each delta is
- * a difference from.
- *
- * This is the one part of the real component the fake canvas does not bring
- * with it, so it is reproduced here rather than stubbed with invented numbers:
- * every count these tests assert is one the layout engine actually produced for
- * the edit the button actually made.
- */
-function driveLayout(graph: Graph): void {
-  const engine = createLayout({ config: LIVING_LAYOUT_CONFIG });
-  const cold = engine.run(graph);
-  let previous: LayoutResult = cold;
-  lastCanvas().onLayout?.(cold, null, null);
-  graph.subscribe((patch) => {
-    const relaid = engine.relayout(patch);
-    // Read at call time: the props are a new object on every render.
-    lastCanvas().onLayout?.(relaid.result, relaid.delta, previous);
-    previous = relaid.result;
-  });
-}
 
 /** The verb buttons, in the order they are rendered. */
 function verbs(container: HTMLElement): HTMLButtonElement[] {
@@ -81,14 +63,16 @@ function stats(container: HTMLElement): Map<string, string> {
   );
 }
 
-/** Mounts the stage with autoplay off and the layout driven, and returns the graph. */
+/**
+ * Mounts the stage, autoplay off unless asked, and returns the graph it built.
+ *
+ * Nothing drives the layout: the fake canvas holds the REAL `useDagr`, so the
+ * cold run is reported on the first commit and every later edit is reported
+ * from inside the `graph.batch` that caused it. See `fake-canvas.tsx`.
+ */
 async function mountStage(props: { autoplay?: boolean } = {}): Promise<Graph> {
   tree = await mount(<LivingStage autoplay={props.autoplay ?? false} />);
-  const graph = lastCanvas().graph;
-  await flush(() => {
-    driveLayout(graph);
-  });
-  return graph;
+  return lastCanvas().graph;
 }
 
 beforeEach(() => {
@@ -182,30 +166,35 @@ describe('<LivingStage>', () => {
     }
   });
 
-  it('plays a lap on its own, so a visitor who never clicks still sees the feature', async () => {
+  it('plays a whole lap on its own, so a visitor who never clicks still sees the feature', async () => {
+    // A LAP, not a step. The first version of this advanced one interval and
+    // asserted one grow, which is a weaker claim than its name and would have
+    // passed over an autoplay that took one step and stopped. A lap is six, and
+    // the sixth leaves the graph exactly as the first found it.
     vi.useFakeTimers();
-    tree = await mount(<LivingStage autoplay />);
-    const graph = lastCanvas().graph;
-    await flush(() => {
-      driveLayout(graph);
-    });
+    const graph = await mountStage({ autoplay: true });
+    if (tree === null) return;
     expect(readoutText(tree.container)).toContain('nothing edited yet');
+    const before = graph.nodeCount;
 
-    await flush(() => {
-      vi.advanceTimersByTime(3000);
-    });
+    const seen: string[] = [];
+    for (let step = 0; step < AUTOPLAY_CYCLE.length; step += 1) {
+      await flush(() => {
+        vi.advanceTimersByTime(3000);
+      });
+      const verb = /^(grow|prune|relayout):/.exec(readoutText(tree?.container as HTMLElement));
+      seen.push(verb?.[1] ?? 'nothing');
+    }
 
-    expect(readoutText(tree.container)).toContain('grow:');
-    expect(stats(tree.container).get('nodes stayed put')).toBe('26 of 35');
+    expect(seen).toEqual([...AUTOPLAY_CYCLE]);
+    expect(graph.nodeCount, 'a lap is the identity').toBe(before);
+    expect(stats(tree.container).get('nodes stayed put')).toBe('26 of 32');
   });
 
   it('stops playing the moment a visitor presses a verb, so the demo becomes theirs', async () => {
     vi.useFakeTimers();
-    tree = await mount(<LivingStage autoplay />);
-    const graph = lastCanvas().graph;
-    await flush(() => {
-      driveLayout(graph);
-    });
+    await mountStage({ autoplay: true });
+    if (tree === null) return;
 
     await flush(() => {
       verb(tree?.container as HTMLElement, 'relayout').click();
@@ -231,11 +220,8 @@ describe('<LivingStage>', () => {
       removeEventListener: () => undefined,
     }));
     vi.useFakeTimers();
-    tree = await mount(<LivingStage autoplay />);
-    const graph = lastCanvas().graph;
-    await flush(() => {
-      driveLayout(graph);
-    });
+    await mountStage({ autoplay: true });
+    if (tree === null) return;
 
     expect(lastCanvas().animate).toBeUndefined();
     expect(tree.container.querySelector('.living__play')).toBeNull();
@@ -260,15 +246,13 @@ describe('<LivingStage>', () => {
     // it, because that delta is a difference from a drawing that never reached
     // a frame.
     //
-    // Mounted without `mountStage`, whose `driveLayout` would report every
-    // patch as its own commit and so never produce the case.
-    tree = await mount(<LivingStage autoplay={false} />);
-    const graph = lastCanvas().graph;
+    // Synthesised rather than caused, because the component cannot produce it:
+    // `applyStep` batches, so every edit it makes is one patch and one commit.
+    // A second engine supplies a delta and a `from` of the shape a burst would
+    // have had, and the component's own `counted` is the drawing on screen.
+    const graph = await mountStage();
     const engine = createLayout({ config: LIVING_LAYOUT_CONFIG });
-    const onScreen = engine.run(graph);
-    await flush(() => {
-      lastCanvas().onLayout?.(onScreen, null, null);
-    });
+    engine.run(graph);
 
     const seen: { result: LayoutResult; delta: LayoutDelta }[] = [];
     const unsubscribe = graph.subscribe((patch) => {
@@ -285,8 +269,9 @@ describe('<LivingStage>', () => {
     if (skipped === undefined || arrived === undefined) return;
 
     await flush(() => {
-      // `from` is the drawing the SKIPPED delta produced. The component last
-      // counted against `onScreen`, which is not it.
+      // `from` is the drawing the SKIPPED delta produced, which never reached a
+      // frame. What the component last counted is the drawing on screen, which
+      // is not it.
       lastCanvas().onLayout?.(arrived.result, arrived.delta, skipped.result);
     });
 

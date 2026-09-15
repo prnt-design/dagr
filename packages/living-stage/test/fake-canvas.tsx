@@ -12,36 +12,46 @@
  *
  * WHAT IS AND IS NOT COVERED BY FAKING AT THIS LEVEL, said rather than assumed.
  * What this covers is everything `LivingStage` owns: which props it hands the
- * canvas, what it does with each `onLayout`, when a button is disabled, and
- * when autoplay stops. What it does NOT cover is that `<DagrCanvas>` calls
- * `onLayout` once per commit with a `from` that means what this package thinks
- * it means, or that one batched edit glides rather than reseating. Both of
- * those are `@dagr/react`'s own claims about its own component and are tested
- * in `packages/react/test/dagr-canvas-animate.test.tsx`, against the real
- * springs. Re-testing them here would be testing `@dagr/react` badly.
+ * canvas, what it does with each real `onLayout`, when a button is disabled,
+ * and when autoplay stops. What it does NOT cover is anything about DRAWING:
+ * that one batched edit glides rather than reseating, that a removed node
+ * leaves on the frame its spring settles, that the camera fits once. Those are
+ * `@dagr/react`'s own claims about its own component and are tested in
+ * `packages/react/test/dagr-canvas-animate.test.tsx`, against the real springs.
+ * Re-testing them here would be testing `@dagr/react` badly.
  *
- * The recorded props are the fake's whole surface: a test drives an edit by
- * calling `lastCanvas().onLayout?.(...)` with whatever a layout would have
- * said, which is how a delta the real engine would take a graph mutation to
- * produce can be stated directly instead.
+ * A test drives an edit by EDITING THE GRAPH, exactly as a visitor does. The
+ * `onLayout` calls that follow are produced by the real hook from the real
+ * patch, so every count a test asserts is one the layout engine actually
+ * computed for the edit the button actually made. `lastCanvas()` is there for
+ * the props (`animate`, `nodeAppearance`) and for the rare test that needs to
+ * synthesise a call the component cannot be made to produce on its own.
  *
  * INSTALLED BY THE TEST FILE, not by a function here. `vi.mock` is hoisted
  * above the imports by vitest's transform, so it has to appear literally in the
  * file that wants it; a helper that called it would run after the module under
- * test had already been imported for real. The spread form is the one
- * `packages/react/test/dagr-canvas-animate.test.tsx` uses:
+ * test had already been imported for real:
  *
  * ```ts
- * vi.mock('@dagr/react', async (importOriginal) => ({
- *   ...(await importOriginal<Record<string, unknown>>()),
- *   DagrCanvas: (await import('./fake-canvas.js')).FakeDagrCanvas,
- * }));
+ * vi.mock('@dagr/react', async (importOriginal) => {
+ *   const real = await importOriginal<typeof import('@dagr/react')>();
+ *   const { makeFakeDagrCanvas } = await import('./fake-canvas.js');
+ *   return { ...real, DagrCanvas: makeFakeDagrCanvas(real.useDagr) };
+ * });
  * ```
+ *
+ * `useDagr` IS HANDED IN RATHER THAN IMPORTED HERE, and that is not a style
+ * choice: this file is loaded BY the factory that is mocking `@dagr/react`, so
+ * an `import { useDagr } from '@dagr/react'` here waits on a module whose
+ * initialisation is waiting on this one. The suite deadlocks with no output at
+ * all, which is a worse symptom than a failure. The factory already holds the
+ * real module, so it passes the hook in. Type-only imports are fine, because
+ * they are erased.
  */
 
-import { createElement } from 'react';
+import { createElement, useEffect } from 'react';
 import type { ReactElement } from 'react';
-import type { DagrCanvasProps } from '@dagr/react';
+import type { DagrCanvasProps, useDagr as UseDagr } from '@dagr/react';
 
 /** Every `<DagrCanvas>` rendered since the last {@link resetCanvases}, in order. */
 const rendered: DagrCanvasProps[] = [];
@@ -64,7 +74,7 @@ export function lastCanvas(): DagrCanvasProps {
 }
 
 /**
- * The stand-in itself.
+ * The stand-in itself, over the real `useDagr`.
  *
  * Renders a plain div and NOT its children. `LivingStage` puts `<RefitButton>`
  * inside, and that reads `useDagrCanvas`, which throws without a provider: the
@@ -72,7 +82,28 @@ export function lastCanvas(): DagrCanvasProps {
  * overlay and the layout all exist, so a fake that rendered children eagerly
  * would put the component in a state the real one never produces.
  */
-export function FakeDagrCanvas(props: DagrCanvasProps): ReactElement {
-  rendered.push(props);
-  return createElement('div', { 'data-testid': 'fake-canvas' });
+export function makeFakeDagrCanvas(useDagr: typeof UseDagr) {
+  return function FakeDagrCanvas(props: DagrCanvasProps): ReactElement {
+    rendered.push(props);
+
+    // THE REAL HOOK AND THE REAL `onLayout` EFFECT, COPIED FROM
+    // `DagrCanvas.tsx`. These four lines are the whole reason this fake is not
+    // a stub that records props: `onLayout`'s TIMING is part of its contract.
+    // The hook lays the graph out during render and reports it from an effect
+    // keyed on the layout, so a cold run reaches the host on the FIRST COMMIT,
+    // before the host's own mount effects, and an edit reaches it from inside
+    // the `graph.batch` that caused it. A test that called `onLayout` itself
+    // after `mount()` resolved would report the cold run LAST, which is not an
+    // ordering the real component can produce, and a host that reset state in a
+    // `[graph]` effect would look correct when it was not. That is exactly the
+    // defect this harness shipped and a review found.
+    const layout = useDagr(props.graph, { config: props.config });
+    const onLayout = props.onLayout;
+    useEffect(() => {
+      if (layout.result === null) return;
+      onLayout?.(layout.result, layout.delta, layout.from);
+    }, [layout, onLayout]);
+
+    return createElement('div', { 'data-testid': 'fake-canvas' });
+  };
 }

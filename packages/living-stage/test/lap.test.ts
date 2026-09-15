@@ -7,9 +7,10 @@
  * The first is that every edit moves a SMALL part of the drawing. That is the
  * claim, it is the reason this task exists, and it is not something the script
  * can be reasoned into: two earlier shapes of the relayout verb were written,
- * looked right, and turned out to move 25 of 25 nodes and 0 of 32 respectively.
- * Neither would have failed any test in `edit-script.test.ts`, because both
- * were structurally valid edits. Only laying the graph out finds it.
+ * looked right, and turned out to move up to 30 of 32 nodes and 0 of 32
+ * respectively. Neither would have failed any test in `edit-script.test.ts`,
+ * because both were structurally valid edits. Only laying the graph out finds
+ * it.
  *
  * The second is that the drawing never gets bigger, which is what earns the
  * one-and-only camera fit. `<DagrCanvas>` fits once and never refits, because a

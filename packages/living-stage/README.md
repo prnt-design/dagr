@@ -40,6 +40,12 @@ one delta, and `<DagrCanvas animate>` glides rather than reseats.
 | `prune` | those three go away again | 3 removed, 6 moved, 26 of 32 stayed put |
 | `relayout` | one dependency appears between two tasks already there | 0 added, 0 removed, 6 moved, 29 of 35 stayed put |
 
+Those are the numbers one lap of `AUTOPLAY_CYCLE` actually produces, so they are
+counted against the graph as it stands at that point in the lap rather than
+against the base graph every time: the relayout row is taken with one cluster
+grown, which is where the lap puts it. Six nodes move on every edit whichever
+way round it is asked.
+
 `relayout` is the honest one and the one to watch: nothing arrives and nothing
 leaves, so the moved count is the entire story of the edit.
 
@@ -62,15 +68,17 @@ can play forever inside the frame it was fitted to. `test/lap.test.ts` asserts
 the bounds are unchanged on every step of a lap. There is a **refit** button
 over the canvas, pressed by a person.
 
-**The relayout verb skips exactly two ranks, and two other shapes of it were
+**The relayout verb spans exactly two ranks, and two other shapes of it were
 tried and measured first.** Moving an edge's source a stage FORWARD changes the
-target's rank, which inserts a rank, which shifts every layer below it: the
-delta said 25 of 25 nodes moved, beside a readout whose purpose is to say how
-few do. Swapping an edge's source for another node in the SAME stage moves
-nothing at all, in all 200 candidate swaps this graph offers, because
-`gridPositionStage` places a node by its rank and its index within the rank. A
-dependency that skips two ranks lands in between: it bends through a virtual
-node in the rank it crosses, and that nudges the six nodes nearest it.
+target's rank, which inserts a rank, which shifts every layer below it: swept
+over all 178 legal variants, that moved between 7 and 30 of the 32 nodes, a
+median of 22, and every single one made the drawing a rank taller (490 units to
+580), beside a readout whose purpose is to say how few do. Swapping an edge's
+source for another node in the SAME stage moves nothing at all, in all 200
+candidate swaps this graph offers, because `gridPositionStage` places a node by
+its rank and its index within the rank. A dependency that spans two ranks lands
+in between: it bends through one virtual node in the rank it crosses, and that
+nudges the six nodes nearest it.
 
 **Neither grow target is the rank the relayout verb crosses.** The skip edge's
 virtual node sits in `resolve` and takes a node's worth of separation with it,

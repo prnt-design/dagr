@@ -74,6 +74,16 @@ const AUTOPLAY_INTERVAL_MS = 2800;
  */
 const FEEL: SceneMotionOptions = { halfLifeSeconds: 0.2 };
 
+/**
+ * The highlight before anything has been edited, and after a cold run.
+ *
+ * One shared frozen set rather than a fresh one each time, because it feeds
+ * `nodeAppearance`, which `<DagrCanvas>` compares by IDENTITY: a new empty set
+ * is a new callback is a rebuilt scene array, for a picture that did not
+ * change.
+ */
+const NOTHING_TOUCHED: ReadonlySet<string> = Object.freeze(new Set<string>());
+
 /** What a verb's button says. */
 const VERB_LABELS: Readonly<Record<EditKind, string>> = {
   grow: 'grow',
@@ -173,7 +183,7 @@ export function LivingStage(props: LivingStageProps): ReactElement {
   const [state, setState] = useState<ScriptState>(INITIAL_SCRIPT_STATE);
   const [last, setLast] = useState<EditStep | null>(null);
   const [readout, setReadout] = useState<Readout | null>(null);
-  const [touched, setTouched] = useState<ReadonlySet<string>>(() => new Set());
+  const [touched, setTouched] = useState<ReadonlySet<string>>(NOTHING_TOUCHED);
   const [playing, setPlaying] = useState(autoplay);
   const [failure, setFailure] = useState<unknown>(null);
 
@@ -187,20 +197,32 @@ export function LivingStage(props: LivingStageProps): ReactElement {
    */
   const counted = useRef<LayoutResult | null>(null);
 
-  // A new graph is a new demo. The cold run this causes would reset the readout
-  // on its own, since a cold run carries no delta, and the rest of the state
-  // has nothing to reset it.
+  /**
+   * A new graph is a new demo, so the script goes back to the top.
+   *
+   * THIS EFFECT MUST NOT TOUCH `counted`, AND THAT IS NOT AN OVERSIGHT. React
+   * flushes a child's passive effects before its parent's, and `useDagr` lays a
+   * new graph out during RENDER, so `<DagrCanvas>` reports the cold run from
+   * its own effect on the first commit, which is BEFORE this one runs. A
+   * `counted.current = null` here therefore threw away the record of a drawing
+   * that had already been reported, and the first edit of every mount failed
+   * the continuity check and rendered "more than one edit arrived in a single
+   * frame", which was false: exactly one batched edit had. The cold run sets
+   * `counted` to the right object on its own, because a cold run carries no
+   * delta and `readEdit` returns `initial` for it whatever `counted` holds.
+   *
+   * The readout and the highlight are left alone here for the same reason:
+   * `onLayout` has already set both from the cold run.
+   */
   useEffect(() => {
     setState(INITIAL_SCRIPT_STATE);
     setLast(null);
-    setTouched(new Set());
-    counted.current = null;
   }, [graph]);
 
   const onLayout = useCallback(
     (result: LayoutResult, delta: LayoutDelta | null, from: LayoutResult | null): void => {
       setReadout(readEdit(result, delta, from, counted.current));
-      setTouched(delta === null ? new Set() : touchedBy(delta));
+      setTouched(delta === null ? NOTHING_TOUCHED : touchedBy(delta));
       // Recorded WHATEVER the readout said, so one coalesced burst costs one
       // edit's numbers rather than every edit's from then on.
       counted.current = result;
@@ -241,7 +263,15 @@ export function LivingStage(props: LivingStageProps): ReactElement {
     if (!playing || reducedMotion) return;
     const timer = setTimeout(() => {
       const taken = takeAutoStep(script, state);
-      if (taken === null) return;
+      if (taken === null) {
+        // No verb in the whole cycle applies, which no reachable state
+        // produces. Stopping rather than returning is what keeps the button
+        // from saying "pause" over a demo that has quietly stopped: that is
+        // the failure this arm used to be, back when `takeAutoStep` gave up on
+        // the first refusal instead of skipping past it.
+        setPlaying(false);
+        return;
+      }
       applyStep(graph, taken.step);
       setLast(taken.step);
       setState(taken.next);
@@ -273,10 +303,14 @@ export function LivingStage(props: LivingStageProps): ReactElement {
         // `takeStep` returning null IS the disabled state. Asking it rather
         // than restating its rules here is what keeps an enabled button and a
         // step that throws from ever disagreeing.
+        //
+        // And nothing is pressable once the canvas has gone: the graph would
+        // still edit and the readout would still count, beside no drawing at
+        // all, which is a demo inviting a visitor to watch nothing happen.
         kind,
-        enabled: takeStep(script, state, kind) !== null,
+        enabled: failure === null && takeStep(script, state, kind) !== null,
       })),
-    [script, state],
+    [script, state, failure],
   );
 
   return (
@@ -297,7 +331,14 @@ export function LivingStage(props: LivingStageProps): ReactElement {
           </DagrCanvas>
         ) : (
           <p className="living__failure" role="alert">
-            The drawing needs a GPU this browser did not give it.{' '}
+            {/*
+              No cause is named. `onError` is the one exit for a renderer that
+              never arrived AND for a layout that failed, and the first version
+              of this blamed the GPU for both, which would have sent a reader
+              looking at their browser for a bug in this package. The error's own
+              message is the only thing here that knows which it was.
+            */}
+            This demo could not be drawn:{' '}
             {failure instanceof Error ? failure.message : String(failure)}
           </p>
         )}

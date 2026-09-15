@@ -6,11 +6,11 @@ import { defineConfig } from 'vite';
 // demo should stay runnable in a fresh clone with nothing built yet.
 //
 // The map is LONGER than this app's dependency list, on purpose. The demo
-// imports `@dagr/campaign-stage`, and the stage's own source imports
-// `@dagr/graph`, `@dagr/layout` and `@dagr/render`; an alias is a path mapping
-// rather than a dependency, so those three entries are what keep the whole
-// tree on source. Drop one and that package alone falls back to its `dist`,
-// which a fresh clone does not have.
+// imports `@dagr/campaign-stage` and `@dagr/living-stage`, and those stages'
+// own sources import `@dagr/graph`, `@dagr/layout`, `@dagr/react` and
+// `@dagr/render`; an alias is a path mapping rather than a dependency, so those
+// entries are what keep the whole tree on source. Drop one and that package
+// alone falls back to its `dist`, which a fresh clone does not have.
 export default defineConfig({
   plugins: [react()],
   resolve: {

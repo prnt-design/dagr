@@ -6412,16 +6412,17 @@ it settled rather than restating the argument.
   THE RELAYOUT VERB WAS WRONG TWICE, IN OPPOSITE DIRECTIONS, AND ONLY THE LAYOUT
   ENGINE COULD SAY SO. This is the finding of the run.
   The first shape moved an edge's source a stage FORWARD, which changes the
-  target's rank, which inserts a rank, which shifts every layer below it and
-  recentres the drawing: the delta said 25 OF 25 NODES MOVED and 40 of 41 edges
-  rerouted, beside a readout whose entire purpose is to say how few move. The
+  target's rank, which inserts a rank, which shifts every layer below it: swept
+  over all 178 legal variants, that moved BETWEEN 7 AND 30 OF THE 32 NODES, a
+  median of 22, and every single one made the drawing a rank taller, 490 units
+  to 580, beside a readout whose entire purpose is to say how few move. The
   second shape swapped an edge's source for another node in the SAME stage,
   which is rank-preserving and looked ideal: it moved NOTHING AT ALL, 0 of 32
   nodes, in ALL 200 candidate swaps this graph offers, because
   `gridPositionStage` places a node by its rank and its index within the rank and
   a same-rank source swap changes neither. The third shape, which shipped, adds
-  a dependency that SKIPS TWO RANKS: it bends through a virtual node in the rank
-  it crosses, and that nudges the six nodes nearest it and nothing else.
+  a dependency that SPANS TWO RANKS: it bends through one virtual node in the
+  rank it crosses, and that nudges the six nodes nearest it and nothing else.
   BOTH WRONG SHAPES PASSED EVERY STRUCTURAL TEST, which is why `lap.test.ts`
   exists as a separate file with its own reason written at the top. Both were
   valid edits: one patch, acyclic, reversible, cycle-closing. `edit-script.test.ts`
@@ -6516,6 +6517,61 @@ it settled rather than restating the argument.
   and `packages/react/**`, or a change to the demo would deploy nothing. The
   filter lists every package whose code the site ships, and the site now ships
   two more.
+  THE REVIEW ROUND FOUND FOUR BLOCKING DEFECTS AND THE FIRST TWO WERE THE SAME
+  DEFECT SEEN FROM TWO SIDES: A TEST HARNESS THAT COULD NOT PRODUCE THE ORDERING
+  THE REAL COMPONENT PRODUCES.
+  THE FIRST EDIT OF EVERY PAGE LOAD SHOWED NO NUMBERS, and said something false
+  instead. The `[graph]` reset effect set `counted.current = null`, and React
+  flushes a CHILD's passive effects before its PARENT's, so `<DagrCanvas>` had
+  already reported the cold run from its own effect on the first commit. The
+  reset then threw away the record of a drawing that had been reported, the
+  first edit failed the continuity check, and the readout rendered "more than
+  one edit arrived in a single frame" when exactly one batched edit had. On the
+  deployed route, which has no `StrictMode`, that is every visitor on every
+  load, including the first autoplay step 2.8 seconds in. The fix is to delete
+  the line: a cold run carries no delta, so `readEdit` returns `initial`
+  whatever `counted` holds, and the cold run sets it to the right object itself.
+  THE HARNESS IS WHY NO TEST SAW IT, and fixing the harness is the real fix. The
+  fake canvas recorded props, and the test called `onLayout` ITSELF after
+  `mount()` had resolved, which reports the cold run LAST: an ordering the real
+  component cannot produce. So the fake now holds the REAL `useDagr` and the
+  real `onLayout` effect, four lines copied from `DagrCanvas.tsx`, and a test
+  drives an edit by EDITING THE GRAPH. Every count asserted is now one the
+  engine computed for the edit the button made, and the defect above reproduces
+  on the spot.
+  ONE TRAP CAME WITH THAT: `vi.mock`'s factory loads the fake, so an
+  `import { useDagr } from '@dagr/react'` in the fake waits on the module whose
+  initialisation is waiting on the fake. The suite deadlocked with NO OUTPUT AT
+  ALL, which is a worse symptom than a failure. The factory already holds the
+  real module, so it passes the hook in and the fake imports nothing but types.
+  AUTOPLAY STOPPED DEAD IN SIX OF THE 52 REACHABLE STATES, with the button still
+  reading "pause". `nextCursor` only advances when the pressed verb is the one
+  the lap was up to, so pressing grow twice leaves the cursor at `relayout` with
+  both clusters grown; autoplay took the relayout, advanced to `grow`, found
+  `takeStep` refusing it, and returned null, and the effect scheduled nothing
+  more. Nothing recovered but a manual press of the right verb, which a visitor
+  has no way to guess. `takeAutoStep` now skips forward to the first verb the
+  state allows and moves the cursor to the position it took, so the lap
+  resynchronises; and the component stops playing rather than going quiet if it
+  ever genuinely runs out, so the button cannot lie.
+  A TEST THAT SAID "EVERY REACHABLE STATE" WALKED ONE PATH, seven of the
+  fifty-two, namely the prefixes of the autoplay cycle. It is now a real
+  breadth-first sweep with the state count pinned, which is what the claim was
+  always worth, and the state that mattered (both clusters grown, cursor left
+  mid-lap) is not on the old path at all.
+  AND A PUBLISHED NUMBER WAS A MEASUREMENT OF A GRAPH THAT NO LONGER EXISTS.
+  "25 of 25 nodes moved, 40 of 41 edges rerouted" was measured on the 25-node
+  graph this task had before `STAGE_WIDTHS` was widened to bound the drawing,
+  and it was still sitting in five files beside numbers that are exact for the
+  32-node one. Re-swept: 178 legal variants, 7 to 30 nodes moved, median 22, and
+  every one of them a rank taller. The lesson is narrow and worth keeping: a
+  number measured to JUSTIFY A DECISION has to be re-measured when the thing it
+  was measured on changes, and it is the least likely number to be re-checked
+  precisely because the decision it justified is already made and correct.
+  `docs/README.md` WAS THE OTHER STALE FILE, and it was false rather than
+  merely incomplete: it named the packages the site builds, and the site now
+  builds two more. It is the third place that list lives, after `tsconfig.json`'s
+  `paths` and `render.yaml`'s `buildFilter`, and it now says so.
 - [x] **M5.4a** (every package) The tarball a consumer installs: the packaging
   half of M5.4, split out and moved to the front of the queue on 2026-08-26.
   See "Where this stands, and what to do next" at the top of this file for why

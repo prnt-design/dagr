@@ -217,8 +217,9 @@ worth less than a slow path they can.
   left alone. The camera decision holds: the graph is built so no edit can
   enlarge the drawing, which makes one fit correct forever, and the refit button
   is pressed by a person. Two shapes of the relayout verb were written and
-  measured out: a rank change moved 25 of 25 nodes, and a same-rank rebind moved
-  none, in all 200 places it could be applied.
+  measured out: a rank change moved up to 30 of 32 nodes and made the drawing a
+  rank taller in all 178 of its variants, and a same-rank rebind moved none, in
+  all 200 places it could be applied.
 - [x] **M5.4a** The tarball a consumer installs: `workspace:^` fixed (the
   publish command is `pnpm publish`), `src` shipped so source maps resolve,
   per-package README and LICENSE, `publint` + `arethetypeswrong` + a scratch

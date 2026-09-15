@@ -5,7 +5,9 @@
  * not take it, or it is a picture nobody can check. This script builds the
  * frames from the deployed page's own entry points: each one is a URL hash, so
  * a reader can open the same hash and see the same view rather than trying to
- * land on a zoom with a trackpad.
+ * land on a zoom with a trackpad. The hashes in the captions include
+ * `view=campaign`, which `apps/demo` needs since it learned a second demo and
+ * `/demos/campaign` ignores; see {@link campaignHash}.
  *
  * **What these frames are NOT.** This box has no WebGPU at all: `navigator.gpu`
  * is absent, so three's automatic fallback draws them through WebGL2 on
@@ -472,7 +474,7 @@ for (const frame of FRAMES) {
   }
   const highlighted = shown.far === 0 ? '' : `, ${String(shown.far)} of them far ends`;
   captions.push(
-    `${prefix}${frame.name}.png  [${frame.hash || 'no hash'}]  ${shown.titles} titles${highlighted}, ${shown.cards} cards\n    ${frame.caption}`,
+    `${prefix}${frame.name}.png  [${campaignHash(frame.hash)}]  ${shown.titles} titles${highlighted}, ${shown.cards} cards\n    ${frame.caption}`,
   );
   console.error(
     `captured ${prefix}${frame.name} (${shown.titles} titles${highlighted}, ${shown.cards} cards${shown.highlight === '' ? '' : `, ${shown.highlight}`})`,

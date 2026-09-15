@@ -6,6 +6,7 @@ import {
   INITIAL_SCRIPT_STATE,
   applyStep,
   createEditScript,
+  takeAutoStep,
   takeStep,
 } from '../src/edit-script.js';
 import type { EditKind, EditScript, ScriptState } from '../src/edit-script.js';
@@ -55,6 +56,28 @@ function walk(
     onStep?.(kind);
   }
   return state;
+}
+
+/** A state as a string, so a sweep can tell two of them apart. */
+function key(state: ScriptState): string {
+  return `${state.live.join('.')}|${String(state.linked)}|${String(state.cursor)}`;
+}
+
+/** Every state reachable by pressing buttons in any order. */
+function everyReachableState(script: EditScript): ScriptState[] {
+  const seen = new Map<string, ScriptState>([[key(INITIAL_SCRIPT_STATE), INITIAL_SCRIPT_STATE]]);
+  const queue: ScriptState[] = [INITIAL_SCRIPT_STATE];
+  while (queue.length > 0) {
+    const state = queue.shift();
+    if (state === undefined) break;
+    for (const kind of EDIT_KINDS) {
+      const taken = takeStep(script, state, kind);
+      if (taken === null || seen.has(key(taken.next))) continue;
+      seen.set(key(taken.next), taken.next);
+      queue.push(taken.next);
+    }
+  }
+  return [...seen.values()];
 }
 
 describe('the edit script', () => {
@@ -163,22 +186,74 @@ describe('the edit script', () => {
     expect(takeStep(script, state, 'prune')).not.toBeNull();
   });
 
-  it('applies whatever it offers, for every reachable state, so no enabled button throws', () => {
-    // Exhaustive rather than illustrative: three verbs over the states one lap
-    // passes through, each tried against a fresh graph walked to that state.
-    // A rule that `takeStep` gets right and `applyStep` does not is the shape
-    // of bug a happy-path walk cannot see.
-    for (let prefix = 0; prefix <= AUTOPLAY_CYCLE.length; prefix += 1) {
+  it('applies whatever it offers, from every reachable state, so no enabled button throws', () => {
+    // A BREADTH-FIRST SWEEP OF THE WHOLE STATE SPACE, and the previous version
+    // of this test claimed that and walked one path: the prefixes of
+    // AUTOPLAY_CYCLE, which is 7 of the 52 states a visitor can reach by
+    // pressing buttons in any order. A rule `takeStep` gets right and
+    // `applyStep` does not is the shape of bug a happy-path walk cannot see,
+    // and the state that actually mattered (both clusters grown, cursor left
+    // mid-cycle) is not on that path at all.
+    const reached = new Map<string, readonly EditKind[]>([[key(INITIAL_SCRIPT_STATE), []]]);
+    const queue: ScriptState[] = [INITIAL_SCRIPT_STATE];
+
+    while (queue.length > 0) {
+      const state = queue.shift();
+      if (state === undefined) break;
+      const path = reached.get(key(state)) ?? [];
       for (const kind of EDIT_KINDS) {
+        // A fresh graph walked to this state, so the step is applied to the
+        // graph it was planned against rather than to a shared one.
         const graph = createLivingGraph();
         const script = createEditScript(graph);
-        const state = walk(graph, script, AUTOPLAY_CYCLE.slice(0, prefix));
+        walk(graph, script, path);
         const taken = takeStep(script, state, kind);
         if (taken === null) continue;
         expect(() => {
           applyStep(graph, taken.step);
-        }, `${kind} after ${String(prefix)} steps`).not.toThrow();
+        }, `${kind} after [${path.join(', ')}]`).not.toThrow();
+        if (reached.has(key(taken.next))) continue;
+        reached.set(key(taken.next), [...path, kind]);
+        queue.push(taken.next);
       }
+    }
+
+    // Pinned, so a change to the state machine that collapses or explodes the
+    // space is a failure here rather than a silently narrower sweep.
+    expect(reached.size).toBe(52);
+  });
+
+  it('never leaves autoplay with nothing to do, from any state a visitor can reach', () => {
+    // THE BUG THIS WAS WRITTEN FOR. `nextCursor` only advances when the pressed
+    // verb is the one the lap was up to, so pressing grow twice leaves the
+    // cursor at `relayout` with both clusters already grown. Autoplay then took
+    // the relayout, advanced to `grow`, found `takeStep` refusing it, and
+    // returned null: the effect scheduled nothing more and the demo stopped
+    // dead while the button still said "pause". Six of the 52 states stalled.
+    //
+    // `takeAutoStep` skipping forward is the fix, and this is the assertion
+    // that would have caught it. It fails on every one of those six states if
+    // the skip is reverted.
+    const script = createEditScript(createLivingGraph());
+    for (const state of everyReachableState(script)) {
+      expect(takeAutoStep(script, state), `autoplay stalled at ${key(state)}`).not.toBeNull();
+    }
+  });
+
+  it('keeps autoplaying forever from a state a visitor pressed it into', () => {
+    // The stall's own shortest path, followed by enough ticks to be sure it is
+    // not merely deferred: two grows leave the cursor mid-lap with nothing left
+    // to grow.
+    const graph = createLivingGraph();
+    const script = createEditScript(graph);
+    let state = walk(graph, script, ['grow', 'grow']);
+
+    for (let tick = 0; tick < 3 * AUTOPLAY_CYCLE.length; tick += 1) {
+      const taken = takeAutoStep(script, state);
+      expect(taken, `autoplay stalled on tick ${String(tick)} at ${key(state)}`).not.toBeNull();
+      if (taken === null) return;
+      applyStep(graph, taken.step);
+      state = taken.next;
     }
   });
 });

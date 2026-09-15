@@ -4,8 +4,8 @@
  * SMALL ON PURPOSE. The campaign demo is where 3,010 nodes are, and it proves
  * scale. This one proves something scale cannot show: that an edit moves the
  * part of the drawing it touches and leaves the rest alone. That claim is read
- * off a readout saying "24 of 29 nodes stayed put" beside a picture in which
- * those 24 visibly do, and neither half of that is legible at three thousand.
+ * off a readout saying "26 of 35 nodes stayed put" beside a picture in which
+ * those 26 visibly do, and neither half of that is legible at three thousand.
  *
  * SEEDED, so the demo a visitor sees is the demo a test asserts about, and so
  * two visitors comparing notes are talking about the same picture.
@@ -55,8 +55,8 @@ export const LIVING_SEED = 0x5ca1ab1e;
  * is how this demo keeps the promise the camera decision makes it: the fit
  * happens once and never again, so the graph is built such that nothing the
  * edit script does can walk out of the frame the first fit chose. The relayout
- * verb adds no rank for the same reason, and `test/bounds.test.ts` pins the
- * whole lap against the base bounds rather than trusting this comment.
+ * verb adds no rank for the same reason, and `test/lap.test.ts` pins the whole
+ * lap against the base bounds rather than trusting this comment.
  *
  * Fixed rather than seeded, and only the wiring is seeded. A seeded width is a
  * width that can come out wider than the widest, which would make the property

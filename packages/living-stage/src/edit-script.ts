@@ -93,14 +93,16 @@ export interface ClusterPlan {
  * THE STAGES ARE MEASURED RATHER THAN CHOSEN. Two earlier shapes of this verb
  * were tried against the engine and both were wrong, in opposite directions.
  * Moving an edge's source a stage FORWARD changes the target's rank, which
- * inserts a rank, which shifts every layer below it: the delta said 25 of 25
- * nodes moved, beside a readout whose purpose is to say how few do. Swapping an
- * edge's source for another node in the SAME stage moves nothing at all, in all
- * 200 candidate swaps this graph offers, because `gridPositionStage` places a
- * node by its rank and its index within the rank and a same-rank swap changes
- * neither. A dependency that skips two ranks is the one that lands in between:
- * it bends through virtual nodes in the ranks it crosses, and those nudge the
- * six nodes nearest them and nothing else.
+ * inserts a rank, which shifts every layer below it: swept over all 178 legal
+ * variants, that moved between 7 and 30 of the 32 nodes, a median of 22, and
+ * every single one made the drawing a rank taller, 490 units to 580, beside a
+ * readout whose purpose is to say how few do. Swapping an edge's source for
+ * another node in the SAME stage moves nothing at all, in all 200 candidate
+ * swaps this graph offers, because `gridPositionStage` places a node by its
+ * rank and its index within the rank and a same-rank swap changes neither. A
+ * dependency that SPANS two ranks is the one that lands in between: it bends
+ * through one virtual node in the rank it crosses, and that nudges the six
+ * nodes nearest it and nothing else.
  */
 export interface LinkPlan {
   readonly edge: EdgeId;
@@ -248,8 +250,8 @@ function planCluster(
  * measured and is written out on {@link LinkPlan}. Named as a pair rather than
  * searched for across the whole graph, because the thing that makes one
  * candidate right and another wrong is not a property this file could test for
- * without laying the graph out, and `test/bounds.test.ts` is where that is
- * checked instead.
+ * without laying the graph out, and `test/lap.test.ts` is where that is checked
+ * instead.
  */
 const LINK_STAGES = [1, 3] as const;
 
@@ -377,10 +379,38 @@ export function takeStep(
   };
 }
 
-/** The verb autoplay takes next, and the step it would be. */
+/**
+ * The step autoplay takes next: the first verb at or after the cursor that the
+ * state allows.
+ *
+ * SKIPS FORWARD, and the skip is a bug fix rather than a nicety. Taking
+ * `AUTOPLAY_CYCLE[cursor]` and giving up when the script refused it left
+ * autoplay dead in six of the 52 states a visitor can press their way into,
+ * with the button still reading "pause" and nothing to tell them otherwise. The
+ * shortest path in is two presses: grow, grow. `nextCursor` only advances when
+ * the pressed verb is the one the lap was up to, so two grows leave the cursor
+ * at `relayout` with both clusters already grown; autoplay takes the relayout,
+ * advances to `grow`, and finds nothing left to grow.
+ *
+ * The cursor is moved to the position actually taken rather than left where it
+ * was, so the lap resynchronises from there instead of skipping the same
+ * entries forever.
+ *
+ * `null` means no verb in the whole cycle applies, which no reachable state
+ * produces: `relayout` is always available and the cycle contains it. It is
+ * returned rather than asserted because a caller that stops playing is a better
+ * answer than one that throws inside a timer, and `test/edit-script.test.ts`
+ * sweeps every reachable state to keep the claim honest.
+ */
 export function takeAutoStep(script: EditScript, state: ScriptState): TakenStep | null {
-  const kind = AUTOPLAY_CYCLE[state.cursor];
-  return kind === undefined ? null : takeStep(script, state, kind);
+  for (let offset = 0; offset < AUTOPLAY_CYCLE.length; offset += 1) {
+    const cursor = (state.cursor + offset) % AUTOPLAY_CYCLE.length;
+    const kind = AUTOPLAY_CYCLE[cursor];
+    if (kind === undefined) continue;
+    const taken = takeStep(script, { ...state, cursor }, kind);
+    if (taken !== null) return taken;
+  }
+  return null;
 }
 
 /**

@@ -92,7 +92,7 @@ services:
     headers:
       # Docusaurus fingerprints every file under /assets/, so those are safe to
       # cache forever. They all live one level deeper (/assets/css/, /assets/js/),
-      # hence `**` — a single `*` does not match across a slash. HTML is left on
+      # hence `**`, since a single `*` does not match across a slash. HTML is left on
       # Render's default revalidation so a deploy never serves a stale page.
       - path: /assets/**/*
         name: Cache-Control
