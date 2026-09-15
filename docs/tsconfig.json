@@ -16,7 +16,7 @@
     // dependency in package.json, so webpack can resolve the package at all.
     // The list is longer than what this site imports by name, because
     // typecheck follows @dagr/campaign-stage's own source into @dagr/campaign,
-    // @dagr/graph and @dagr/render.
+    // @dagr/graph and @dagr/render, and @dagr/living-stage's into @dagr/react.
     // `@site/*` is restated because `paths` replaces the inherited map rather
     // than merging with it, and the Docusaurus base config is where it comes
     // from.
@@ -26,6 +26,8 @@
       "@dagr/campaign-stage": ["../packages/campaign-stage/src/index.ts"],
       "@dagr/graph": ["../packages/graph/src/index.ts"],
       "@dagr/layout": ["../packages/layout/src/index.ts"],
+      "@dagr/living-stage": ["../packages/living-stage/src/index.ts"],
+      "@dagr/react": ["../packages/react/src/index.ts"],
       "@dagr/render": ["../packages/render/src/index.ts"]
     }
   },

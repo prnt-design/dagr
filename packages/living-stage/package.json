@@ -1,0 +1,51 @@
+{
+  "name": "@dagr/living-stage",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The animated demo as a mountable React component: a seeded graph, a cyclic grow/prune/relayout script, and the readout that says what each edit moved.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./living.css": "./src/living.css"
+  },
+  "files": [
+    "dist",
+    "src/living.css"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "peerDependencies": {
+    "react": ">=19.0.0 <20.0.0"
+  },
+  "dependencies": {
+    "@dagr/graph": "workspace:*",
+    "@dagr/layout": "workspace:*",
+    "@dagr/react": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "jsdom": "^30.0.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prnt-design/dagr.git",
+    "directory": "packages/living-stage"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json"
+  }
+}

@@ -70,3 +70,35 @@ export {
 export type { EdgeColorOf, NodeAppearance, NodeAppearanceOf } from './scene.js';
 export { useDagr } from './use-dagr.js';
 export type { DagrLayoutState, UseDagrOptions } from './use-dagr.js';
+
+/**
+ * The `@dagr/render` types this package's own surface is spelled in.
+ *
+ * TYPES ONLY, AND RE-EXPORTED RATHER THAN REDECLARED, so they stay the same
+ * types: a caller can pass one of these to `@dagr/render` directly and a
+ * structural copy that drifted would be a second source of truth.
+ *
+ * They are here because a consumer whose only contact with the renderer is
+ * `<DagrCanvas>` should not have to depend on the renderer to spell its props.
+ * Naming the `animate` value needs `SceneMotionOptions`; a named `onFrame`
+ * handler needs `SceneMotionFrame` and `Renderer`; `sceneStyle` and `edgeStyle`
+ * need `SceneStyle` and `RibbonStyle`; and `toWorldBounds` returns
+ * `WorldBounds`. Before this, the first consumer outside this package
+ * (`@dagr/living-stage`) declared `@dagr/render` as a dependency it never
+ * touched at runtime, purely to write one type annotation.
+ *
+ * `@dagr/render` stays a peer dependency and is still the place to import from
+ * for anything that drives the renderer itself. This is the subset a caller of
+ * THIS package needs, and nothing more.
+ */
+export type {
+  HtmlOverlay,
+  Renderer,
+  RibbonStyle,
+  SceneEdge,
+  SceneMotionFrame,
+  SceneMotionOptions,
+  SceneNode,
+  SceneStyle,
+  WorldBounds,
+} from '@dagr/render';

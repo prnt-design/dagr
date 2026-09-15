@@ -10,12 +10,20 @@ identity, delta output) plus a high-fidelity WebGPU renderer (three.js
 WebGPURenderer, SDF shapes, spring physics) and a React component on top.
 
 **[Documentation](https://dagr.prnt.design)** ·
-**[Live demo](https://dagr.prnt.design/demos/campaign)**
+**[Living graph demo](https://dagr.prnt.design/demos/living)** ·
+**[Campaign demo](https://dagr.prnt.design/demos/campaign)**
 
-The demo draws a mock D&D campaign: 3,010 nodes and 7,100 edges, laid out a
-tile at a time in a worker, instanced on the GPU, with names and readable cards
-appearing as you zoom in. The dataset behind it is a generated fixture, not a
-published package, and documents itself in
+The living graph demo is the claim above, on screen: press grow, prune or
+relayout and a build pipeline is edited in front of you, one `graph.batch` per
+edit, one `LayoutDelta` per batch. The nodes the edit touched light up and glide
+to their new places; the ones it did not are still exactly where they were, and
+a readout counts them. The measurements behind it are on the
+[incremental layout](https://dagr.prnt.design/docs/incremental-layout) page.
+
+The campaign demo is the other question, scale: a mock D&D campaign of 3,010
+nodes and 7,100 edges, laid out a tile at a time in a worker, instanced on the
+GPU, with names and readable cards appearing as you zoom in. The dataset behind
+it is a generated fixture, not a published package, and documents itself in
 [packages/campaign](./packages/campaign/README.md).
 
 > ⚠️ Early days. Expect rapid change until v0.1. The roadmap lives in

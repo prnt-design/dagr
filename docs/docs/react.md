@@ -316,6 +316,12 @@ Four things worth knowing:
 - **The loop stops itself.** It asks for no frame after the one on which every
   spring has arrived, so an idle canvas is an idle canvas.
 
+The [living graph demo](/demos/living) is this prop, `onLayout`, and a few
+hundred lines of page. Its source is `packages/living-stage`, and the README
+there is worth reading before writing your own: it is mostly a list of the
+things that turned out to matter, including the two shapes of edit that looked
+right and either moved the whole drawing or moved none of it.
+
 ## The camera is fitted once, and the sprung box is yours
 
 The first frame that has both a layout and a viewport frames the graph. Nothing
@@ -340,12 +346,36 @@ along with everything else, and writes the one line themselves:
 />
 ```
 
+The types these props are spelled in are re-exported from this package, so a
+caller whose only contact with the renderer is `<DagrCanvas>` does not take a
+dependency on `@dagr/render` to write an annotation:
+
+```tsx
+import type { SceneMotionFrame, SceneMotionOptions, Renderer } from '@dagr/react';
+
+const feel: SceneMotionOptions = { halfLifeSeconds: 0.3 };
+function follow(frame: SceneMotionFrame, renderer: Renderer): void {
+  if (frame.bounds !== null) renderer.camera.fitBounds(frame.bounds);
+}
+```
+
+They are the same types, re-exported rather than restated, so one can still be
+handed to `@dagr/render` directly. Anything that drives the renderer itself
+still imports from `@dagr/render`, which stays a peer dependency.
+
 `onFrame` runs after the renderer has been told what to draw and before it
 draws, so a camera moved there moves on that frame rather than the next. The
 renderer comes with the frame so that line needs no ref: reaching it through
 `useDagrCanvas` would be a child component written to call `fitBounds` once. It
 is not called when `animate` is off, because then there are no frames between
 layouts to hand over.
+
+The [living graph demo](/demos/living) takes the third option this decision
+leaves open, which is worth naming because it is the one an animated demo
+usually wants: it does not follow the box at all, and instead its graph is built
+so that no edit can make the drawing bigger, which makes one fit correct
+forever. A **refit** button is there for a visitor who has panned away, and a
+person pressing it is the whole difference between that and an automatic refit.
 
 ## `<Html>` puts React content in world coordinates
 

@@ -1,0 +1,155 @@
+/*
+ * The living stage's own chrome.
+ *
+ * Plain class names rather than CSS modules, for the same reason
+ * `@dagr/campaign-stage`'s `stage.css` uses them: two hosts import this file
+ * (a Vite app and a webpack-built Docusaurus site) and a module's generated
+ * class names would have to survive both build pipelines to keep meaning the
+ * same thing. The `living__` prefix is the namespace.
+ *
+ * The stage fills the element it is given and carries no height of its own,
+ * because the docs route wants most of the viewport and the playground wants a
+ * band with the controls under it.
+ */
+
+.living {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  color: #e6edf3;
+}
+
+.living__canvas {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 24rem;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #11161b;
+}
+
+.living__failure {
+  margin: 0;
+  padding: 2rem;
+  color: #ffb454;
+  font-size: 0.9rem;
+}
+
+.living__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.living__verbs {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* The refit button is over the canvas, out of the way of the drawing, which the
+   fit centres. Otherwise it is a control like the other two. */
+.living__refit {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 1;
+}
+
+.living__verb,
+.living__play,
+.living__refit {
+  appearance: none;
+  border: 1px solid #2f3b46;
+  border-radius: 6px;
+  background: #1a2129;
+  color: #e6edf3;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+}
+
+.living__verb:hover:not(:disabled),
+.living__play:hover,
+.living__refit:hover {
+  border-color: #4ebdc4;
+}
+
+.living__verb:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.living__play[aria-pressed='true'] {
+  border-color: #4ebdc4;
+}
+
+.living__reduced {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.75;
+  max-width: 48ch;
+}
+
+.living__readout {
+  min-height: 4.5rem;
+}
+
+.living__last {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: #ffb454;
+}
+
+.living__waiting {
+  margin: 0;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.living__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.living__stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.living__statValue {
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.living__statLabel {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.65;
+}
+
+.living__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.72rem;
+  opacity: 0.8;
+}
+
+.living__legendItem {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.living__swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+}

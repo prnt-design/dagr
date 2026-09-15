@@ -1,9 +1,24 @@
 # docs
 
 The Docusaurus site behind [dagr.prnt.design](https://dagr.prnt.design):
-the landing page in `src/pages/`, the docs in `docs/`, the campaign demo at
-`/demos/campaign`, the muslin theme port in `src/css/custom.css`. Render
-deploys `main` when CI is green; see `render.yaml` at the repo root.
+the landing page in `src/pages/`, the docs in `docs/`, two demos at
+`/demos/living` and `/demos/campaign`, the muslin theme port in
+`src/css/custom.css`. Render deploys `main` when CI is green; see `render.yaml`
+at the repo root.
+
+## The living demo, and the one thing it does not need
+
+`src/pages/demos/living.tsx` is the route and `src/components/LivingDemo/` is
+the mount. Everything on the canvas is `@dagr/living-stage`, the same component
+`apps/demo` mounts. It is the route the Demos tab points at, because it shows
+the claim the project competes on.
+
+NO WORKER, deliberately, which is the one thing it does differently from the
+campaign below. Its graph is 32 nodes and lays out in well under a frame, so a
+worker would put a round trip in front of every edit in a demo whose whole
+subject is how little work an edit is. It needs the same `BrowserOnly` plus
+`require` treatment, for the same reason: the renderer reaches a GPU adapter
+through three.js and this site renders every page on the server at build time.
 
 ## The campaign demo, and the two things it needs
 
@@ -57,10 +72,11 @@ gone with it, so do not look for a `generate:perf` script.
 
 ## What the demos need from the build
 
-The site imports `@dagr/graph`, `@dagr/layout` and `@dagr/campaign-stage`,
-which brings `@dagr/campaign` and `@dagr/render` with it, so all of them have to
-be built before it. `render.yaml` runs `pnpm --filter docs... build`, which does
-that in dependency order; the root `pnpm build` does too, because `pnpm -r` is
+The site imports `@dagr/graph`, `@dagr/layout`, `@dagr/campaign-stage` and
+`@dagr/living-stage`, which between them bring `@dagr/campaign`, `@dagr/react`
+and `@dagr/render` with them, so all of them have to be built before it.
+`render.yaml` runs `pnpm --filter docs... build`, which does that in dependency
+order; the root `pnpm build` does too, because `pnpm -r` is
 topological and the dependency creates the edge. Building the site alone against
 a fresh clone fails until the packages have a `dist`.
 
@@ -83,7 +99,10 @@ ADDING A WORKSPACE DEPENDENCY IS TWO EDITS, the same trap `apps/demo/README.md`
 documents in its own form: a `paths` entry here, so typecheck reads source, and
 a `dependencies` entry in `package.json`, so the bundler can resolve the package
 at all. The `paths` map is longer than what this site imports by name, because
-typecheck follows `@dagr/campaign-stage`'s source into the packages it imports.
+typecheck follows `@dagr/campaign-stage`'s source into the packages it imports
+and `@dagr/living-stage`'s into `@dagr/react`. `render.yaml`'s `buildFilter` is
+a THIRD place the same list appears: a package missing from it is a change to
+the site that deploys nothing.
 A local gate proves nothing about a fresh clone while a stale `dist` is lying
 around: delete every `dist` in the workspace before trusting one.
 

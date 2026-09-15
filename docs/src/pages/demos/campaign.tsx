@@ -12,8 +12,10 @@
  * A route of its own rather than a section of the landing page, because the
  * canvas wants the viewport and its own keyboard focus, and the landing page
  * has a hero, a figure and a pitch that would all sit below a canvas that ate
- * the fold. It also leaves the animated demos on the roadmap a home as sibling
- * pages under the same tab.
+ * the fold. It also left the animated demo a home as a sibling page under the
+ * same tab, which M5.3b took: `/demos/living` is the other one, the Demos tab
+ * now points there, and the two pages link to each other rather than to a
+ * `/demos/` index nobody would want a click for.
  */
 
 import Link from '@docusaurus/Link';
@@ -42,7 +44,9 @@ export default function CampaignDemoPage(): ReactNode {
             <Link href="https://github.com/prnt-design/dagr/blob/main/packages/campaign/README.md">
               documents its schema
             </Link>
-            .
+            . This demo never edits the graph: for the one that does, and a
+            count of how little each edit moves, see the{' '}
+            <Link to="/demos/living">living graph</Link>.
           </p>
         </header>
         <CampaignDemo />

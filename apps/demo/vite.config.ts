@@ -6,11 +6,11 @@ import { defineConfig } from 'vite';
 // demo should stay runnable in a fresh clone with nothing built yet.
 //
 // The map is LONGER than this app's dependency list, on purpose. The demo
-// imports `@dagr/campaign-stage`, and the stage's own source imports
-// `@dagr/graph`, `@dagr/layout` and `@dagr/render`; an alias is a path mapping
-// rather than a dependency, so those three entries are what keep the whole
-// tree on source. Drop one and that package alone falls back to its `dist`,
-// which a fresh clone does not have.
+// imports `@dagr/campaign-stage` and `@dagr/living-stage`, and those stages'
+// own sources import `@dagr/graph`, `@dagr/layout`, `@dagr/react` and
+// `@dagr/render`; an alias is a path mapping rather than a dependency, so those
+// entries are what keep the whole tree on source. Drop one and that package
+// alone falls back to its `dist`, which a fresh clone does not have.
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -29,6 +29,14 @@ export default defineConfig({
       '@dagr/campaign': fileURLToPath(
         new URL('../../packages/campaign/src/index.ts', import.meta.url),
       ),
+      // The subpath before the bare name, for the reason given above.
+      '@dagr/living-stage/living.css': fileURLToPath(
+        new URL('../../packages/living-stage/src/living.css', import.meta.url),
+      ),
+      '@dagr/living-stage': fileURLToPath(
+        new URL('../../packages/living-stage/src/index.ts', import.meta.url),
+      ),
+      '@dagr/react': fileURLToPath(new URL('../../packages/react/src/index.ts', import.meta.url)),
       '@dagr/graph': fileURLToPath(new URL('../../packages/graph/src/index.ts', import.meta.url)),
       '@dagr/layout': fileURLToPath(new URL('../../packages/layout/src/index.ts', import.meta.url)),
       // This alias is also why the demo does not depend on `three`, and why it

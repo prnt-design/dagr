@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    // The build emits from `src` alone, so the source `paths` entries are
+    // dropped here, exactly as @dagr/campaign-stage drops its four: pulling
+    // ../react/src into the program puts files outside `rootDir` and tsc
+    // refuses to emit (TS6059, once per file). The build resolves the four
+    // Dagr packages through node_modules to their published types instead,
+    // which is why they are real workspace dependencies. Consequence: they
+    // have to be built before this package, which the root `pnpm build`
+    // handles because `pnpm -r` is topological.
+    "paths": {}
+  },
+  "include": ["src"],
+  "exclude": ["test", "dist"]
+}

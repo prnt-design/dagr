@@ -20,10 +20,20 @@ patches, and the layout engine emits deltas rather than a fresh set of
 coordinates. A renderer can spring every node from where it was to where it
 now belongs, so a graph that changes reads as a graph that moved.
 
-The [live demo](/demos/campaign) draws a mock D&D campaign:
-3,010 nodes and 7,100 edges, laid out a tile at a time in a worker, instanced
-on the GPU, with names and then readable cards appearing as you zoom in. What
-it draws is a generated fixture rather than part of the toolkit, and it
+There are two live demos, and they answer different questions.
+
+The [living graph](/demos/living) is the paragraph above, on screen. Press
+grow, prune or relayout and a build pipeline is edited in front of you, one
+`graph.batch` per edit and one `LayoutDelta` per batch. The nodes the edit
+touched light up and glide; the ones it did not are still exactly where they
+were, and a readout counts them off the delta. The measurements behind that are
+on the [incremental layout](./incremental-layout.md) page, and the demo's job is
+to make them legible rather than to add to them.
+
+The [campaign](/demos/campaign) is the other question, scale: a mock D&D
+campaign of 3,010 nodes and 7,100 edges, laid out a tile at a time in a worker,
+instanced on the GPU, with names and then readable cards appearing as you zoom
+in. What it draws is a generated fixture rather than part of the toolkit, and it
 documents itself in
 [its own README](https://github.com/prnt-design/dagr/blob/main/packages/campaign/README.md).
 

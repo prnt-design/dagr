@@ -25,19 +25,20 @@ nothing. One engine caveat a consumer should know: Brandes-Koepf positioning
 is implemented and tested but unexported, and `gridPositionStage` is the
 default, with the reason written in `packages/layout/src/index.ts`.
 
-The order to v0.1, decided 2026-08-26 and updated after M5.3a shipped
+The order to v0.1, decided 2026-08-26 and updated after M5.3b shipped
 (reasoning in the notes):
 
-1. **M5.3b**, the animated demo. M5.3a shipped the React wiring it stands on:
-   `useDagr` holds a layout engine so an edit is a `LayoutDelta` rather than a
-   cold run, and `<DagrCanvas animate>` drives M4.7c's scene motion and loop off
-   that delta through its own coalesced frame. The render side and the component
-   side are both complete now; nothing DEPLOYED mutates a graph yet, so the
-   flagship stability claim is still unillustrated on the page that makes it.
-2. **M5.2 + M4.8b**, interaction hooks and GPU picking, together. Blocked on a
+1. **M5.2 + M4.8b**, interaction hooks and GPU picking, together. Blocked on a
    machine with a WebGPU adapter.
-3. **M5.4b**, getting-started docs, API reference, v0.1 readiness review,
+2. **M5.4b**, getting-started docs, API reference, v0.1 readiness review,
    publish queued.
+
+M5.3b closed the gap this list opened with for three sessions: the flagship
+stability claim is now illustrated on the site that makes it. `/demos/living`
+edits a 32-node pipeline in front of a visitor, one `graph.batch` per edit, and
+counts off the `LayoutDelta` what moved and what did not, beside a drawing in
+which the unmoved nodes visibly do not move. It is an illustration of M3.10a's
+corpus rather than a second measurement of it.
 
 M3.8b and M3.9b are demoted on purpose: a fast path nobody can install is
 worth less than a slow path they can.
@@ -209,12 +210,16 @@ worth less than a slow path they can.
   and the sprung box is handed to `onFrame`, so a following camera stays the
   caller's line of code. The engine runs in the graph listener, which is neither
   render nor an effect.
-- [ ] **M5.3b** The demo that proves it: an animated living demo (grow, prune,
-  relayout) in `apps/demo`. This is the task that demonstrates the headline
-  claim: the campaign demo is read-only and proves nothing about stability under
-  an edit. M4.7c's demo folded in here, because a hand-wired demo would be
-  written against the render API and rewritten the day the component learned to
-  do it, which M5.3a is the day it did.
+- [x] **M5.3b** The demo that proves it: an animated living demo (grow, prune,
+  relayout), shipped as `@dagr/living-stage` and mounted by both `apps/demo` and
+  the docs site's `/demos/living`, which is the deployed one. Three verbs, one
+  `graph.batch` each, and a readout that counts what the delta moved and what it
+  left alone. The camera decision holds: the graph is built so no edit can
+  enlarge the drawing, which makes one fit correct forever, and the refit button
+  is pressed by a person. Two shapes of the relayout verb were written and
+  measured out: a rank change moved up to 30 of 32 nodes and made the drawing a
+  rank taller in every variant of it, and a same-rank rebind moved none, in all
+  200 places it could be applied.
 - [x] **M5.4a** The tarball a consumer installs: `workspace:^` fixed (the
   publish command is `pnpm publish`), `src` shipped so source maps resolve,
   per-package README and LICENSE, `publint` + `arethetypeswrong` + a scratch
@@ -224,6 +229,17 @@ worth less than a slow path they can.
   packages, v0.1 readiness review, publish queued for the maintainer. At
   publish time, confirm the `@dagr/graph` peer range against the versions
   actually shipping.
+  ONE API CHANGE IS QUEUED AND MUST BE SEQUENCED BEFORE THE PUBLISH, because it
+  is free now and breaking after: `<DagrCanvas>` computes the delta-continuity
+  check for its own animation (`held.result === layout.from`) and does not hand
+  it over, so every consumer that shows delta numbers keeps its own ref and
+  re-derives it. Getting it wrong shows a wrong number beside a right picture,
+  silently, and two consumers in two days got it wrong (M5.3a shipped it, then
+  M5.3b's demo shipped the same class of it). The proposal is a fourth argument
+  `continues`, or an object-shaped `onLayout`. It needs its own tests for the
+  `animate` off case, where `appliedRef` is null and the check cannot come from
+  it. Raised by the M5.3b api-design review; the reasoning is in that task's
+  entry in the notes.
 - [x] **M5.5** Containment reserved in the graph model: `parent`,
   `update-node-parent`, the invariants, `PatchOp` documented as an open
   union. Layout ignores `parent` until M7.

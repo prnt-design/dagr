@@ -1,21 +1,36 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { JSX } from 'react';
 import { EDGE_ROLES } from '@dagr/campaign';
 import { FirstLight, useCampaignScene } from '@dagr/campaign-stage';
+import { LivingStage } from '@dagr/living-stage';
 
 /**
- * The playground page: the campaign stage, and the few facts about it that a
- * picture cannot show.
+ * The playground page: two demos, one at a time, and the few facts about each
+ * that a picture cannot show.
  *
- * Everything on the canvas moved to `@dagr/campaign-stage` when the docs site
- * started mounting the same thing, and what is left here is the page around it.
- * That is the whole shape of this file now: the stage's own state comes from
- * {@link useCampaignScene}, which this calls directly rather than mounting
- * `CampaignStage`, because the facts below the canvas are written from the same
- * scene the canvas draws and calling the hook twice would lay the campaign out
- * twice.
+ * TWO, AND ONE AT A TIME. The campaign proves scale, tiling and semantic zoom
+ * at 3,010 nodes; the living stage proves that an edit moves only the part of
+ * the drawing it touches, which is the claim the project competes on and which
+ * scale cannot show. Neither subsumes the other, so neither was deleted. They
+ * are behind a switch rather than stacked because each mounts a canvas, and two
+ * live canvases is two GPU device contexts for a page that can only be looking
+ * at one of them.
  *
- * The layout worker is built HERE, not in the package. `new Worker(new
+ * The switch is one `useState` and no router. A route each would be the right
+ * answer for a site a visitor navigates; this is a local playground with two
+ * views, and the deployed versions of both already have routes of their own on
+ * the docs site (see `render.yaml`: this app has no deploy).
+ *
+ * Everything on either canvas lives in a package, `@dagr/campaign-stage` and
+ * `@dagr/living-stage`, because the docs site mounts the same two components
+ * and a component cannot be imported from an app. What is left here is the page
+ * around them.
+ */
+
+/**
+ * Builds the campaign's layout worker.
+ *
+ * The worker entry is built HERE, not in the package. `new Worker(new
  * URL(...))` is an expression the bundler reads statically, and this app's
  * bundler is Vite where the docs site's is webpack, so each host owns its
  * worker entry. Vite emits `layout-worker.ts` as its own chunk from the
@@ -38,7 +53,43 @@ function describe(count: number | undefined, unit: string, failure: string | nul
   return failure === null ? 'laying out' : 'layout failed';
 }
 
-export function App(): JSX.Element {
+/** The animated demo, and what it is for. */
+function LivingView(): JSX.Element {
+  return (
+    <>
+      <div className="page__stage">
+        <LivingStage />
+      </div>
+
+      <section className="facts">
+        <h2 className="facts__title">what is on the canvas</h2>
+        <p className="facts__lead">
+          A seeded build pipeline, laid out by <code>@dagr/layout</code> and drawn by{' '}
+          <code>@dagr/render</code> through <code>&lt;DagrCanvas animate&gt;</code>. Press a verb,
+          or let it play. Each verb is ONE <code>graph.batch</code>, so the engine sees one patch
+          and answers with one <code>LayoutDelta</code>, and the drawing glides from where it was
+          to where it belongs instead of cutting.
+        </p>
+        <p className="facts__lead">
+          The numbers under the canvas are read off that delta and nothing else. The lit nodes are
+          the ones it named; everything unlit is a node the edit did not touch, drawn in exactly
+          the place it was in before. That is the whole claim, and the corpus measurement behind it
+          is in <code>docs/docs/incremental-layout.md</code>.
+        </p>
+        <p className="facts__lead">
+          The camera fits once, when the drawing first appears, and is yours after that. It never
+          refits on an edit: a drawing that stays put while the camera moves is indistinguishable
+          from a drawing that moves, so an automatic refit would hide the thing this page exists to
+          show. The graph is built so that no edit can make the drawing bigger, which is what makes
+          one fit enough. The refit button over the canvas is for when you have panned away.
+        </p>
+      </section>
+    </>
+  );
+}
+
+/** The campaign demo, and the few facts about it that a picture cannot show. */
+function CampaignView(): JSX.Element {
   const { campaign, scene, edges, failure } = useCampaignScene(createWorker);
 
   /** How many of the campaign's edges a layout is allowed to see. See EDGE_ROLES. */
@@ -55,12 +106,7 @@ export function App(): JSX.Element {
   );
 
   return (
-    <main className="page">
-      <header className="page__header">
-        <h1 className="page__title">Dagr demo</h1>
-        <p className="page__subtitle">A mock D&amp;D campaign, laid out in tiles and drawn</p>
-      </header>
-
+    <>
       {/*
         The stage fills the element it is given, so the height is set here: the
         package deliberately does not carry one, because the docs route wants
@@ -120,6 +166,78 @@ export function App(): JSX.Element {
           explanation sat below the fold.
         */}
       </section>
+    </>
+  );
+}
+
+/** Which demo is on screen. */
+type View = 'living' | 'campaign';
+
+const VIEWS: readonly { readonly id: View; readonly label: string }[] = [
+  { id: 'living', label: 'living graph' },
+  { id: 'campaign', label: 'campaign' },
+];
+
+/**
+ * Which demo to open on, from `#view=` in the URL.
+ *
+ * The living graph unless the hash says otherwise, because it is the one that
+ * shows the claim the project competes on.
+ *
+ * THE HASH IS WHY `scripts/capture.mjs` STILL WORKS. The screenshots are all of
+ * the campaign, taken by navigating to a hash and waiting for the stage to say
+ * it has drawn; with the switch defaulting the other way, a capture would wait
+ * sixty seconds for a stage that was never mounted. `#view=campaign` is how it
+ * asks, and `URLSearchParams` is how `camera-input.ts` reads `#node=` and
+ * `#zoom=` out of the same hash, so an extra key is ignored by both.
+ *
+ * Read ONCE, at mount, with no `hashchange` listener, which is the rule the
+ * campaign stage already set for its own two keys: the switch below is the way
+ * a person changes the view, and a hash that fought it would reset the demo
+ * under them.
+ */
+function initialView(): View {
+  if (typeof window === 'undefined') return 'living';
+  const { hash } = window.location;
+  const body = hash.startsWith('#') ? hash.slice(1) : hash;
+  return new URLSearchParams(body).get('view') === 'campaign' ? 'campaign' : 'living';
+}
+
+export function App(): JSX.Element {
+  const [view, setView] = useState<View>(initialView);
+
+  return (
+    <main className="page">
+      <header className="page__header">
+        <h1 className="page__title">Dagr demo</h1>
+        <p className="page__subtitle">
+          {view === 'living'
+            ? 'A build pipeline, edited while you watch, and a count of what moved'
+            : 'A mock D&D campaign, laid out in tiles and drawn'}
+        </p>
+        <nav className="page__views" aria-label="Which demo">
+          {VIEWS.map(({ id, label }) => (
+            <button
+              key={id}
+              type="button"
+              className="page__view"
+              aria-pressed={view === id}
+              onClick={() => {
+                setView(id);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      {/*
+        One at a time, so only one canvas holds a device. React unmounts the
+        other, which disposes its renderer: `<DagrCanvas>` and the campaign
+        stage both take their device back in their own cleanup.
+      */}
+      {view === 'living' ? <LivingView /> : <CampaignView />}
     </main>
   );
 }

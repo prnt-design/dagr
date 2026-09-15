@@ -1,7 +1,8 @@
 # Render blueprint: https://render.com/docs/blueprint-spec
 #
 # ONE static site. `dagr-docs` is the Docusaurus site at dagr.prnt.design: the
-# landing page, the reference, and the campaign demo at /demos/campaign.
+# landing page, the reference, and two demos at /demos/living and
+# /demos/campaign.
 #
 # There was a second, `dagr-demo`, serving `apps/demo` on an `onrender.com`
 # subdomain. It was the cheapest thing that produced a URL and it did that; it
@@ -49,7 +50,8 @@ services:
     # The campaign demo added three more packages behind the same `...`, and
     # `@dagr/campaign-stage` is the reason it matters twice over: webpack reads
     # its `dist`, so a stage change that is not built is a site that ships the
-    # last one.
+    # last one. The living demo added `@dagr/living-stage` and `@dagr/react`
+    # behind it on the same terms.
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter docs... build
     staticPublishPath: docs/build
 
@@ -64,6 +66,8 @@ services:
         - packages/campaign-stage/**
         - packages/graph/**
         - packages/layout/**
+        - packages/living-stage/**
+        - packages/react/**
         - packages/render/**
         # Every package's build config extends it, so it decides what `dist` the
         # site ships.
@@ -87,9 +91,10 @@ services:
 
     headers:
       # Docusaurus fingerprints every file under /assets/, so those are safe to
-      # cache forever. They all live one level deeper (/assets/css/, /assets/js/),
-      # hence `**` — a single `*` does not match across a slash. HTML is left on
-      # Render's default revalidation so a deploy never serves a stale page.
+      # cache forever. They all live one level deeper (/assets/css/,
+      # /assets/js/), hence `**`, since a single `*` does not match across a
+      # slash. HTML is left on Render's default revalidation so a deploy never
+      # serves a stale page.
       - path: /assets/**/*
         name: Cache-Control
         value: public, max-age=31536000, immutable
