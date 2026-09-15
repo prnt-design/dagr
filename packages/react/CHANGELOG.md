@@ -4,6 +4,18 @@
 
 ### Added
 
+- **M5.3b: the `@dagr/render` types this package's own props are spelled in are
+  re-exported**, as types: `Renderer`, `HtmlOverlay`, `RibbonStyle`,
+  `SceneStyle`, `SceneMotionOptions`, `SceneMotionFrame`, `SceneNode`,
+  `SceneEdge` and `WorldBounds`. A consumer whose only contact with the renderer
+  is `<DagrCanvas>` had to depend on `@dagr/render` to write one type
+  annotation: naming an `animate` value needs `SceneMotionOptions`, and a named
+  `onFrame` handler needs `SceneMotionFrame` and `Renderer`. The first consumer
+  outside this package declared that dependency and never touched it at
+  runtime, which is what surfaced this. Re-exported rather than redeclared, so
+  they stay the same types; `@dagr/render` remains a peer dependency and is
+  still where anything driving the renderer itself imports from.
+
 - **M5.3a: an edit animates.** `<DagrCanvas animate>` glides a node to its new
   layout instead of cutting to it, and the same prop carries the feel:
   `animate={{ halfLifeSeconds, restEpsilon }}` is `@dagr/render`'s two numbers,

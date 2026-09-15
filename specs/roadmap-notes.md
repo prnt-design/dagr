@@ -6513,6 +6513,54 @@ it settled rather than restating the argument.
   `URLSearchParams`, which is how `camera-input.ts` already reads `#node=` and
   `#zoom=` out of the same hash, and the capture script merges `view=campaign`
   into every frame's hash in one helper rather than into nine literals.
+  THE API-DESIGN REVIEW'S VERDICT WAS THAT `@dagr/react` HELD UP UNDER ITS FIRST
+  OUTSIDE CONSUMER: `animate`, `onLayout`, `useDagrCanvas` and the identity
+  rules all fitted with no workaround. The two gaps it found are the two only
+  visible from outside the package, and one of them is fixed here.
+  THE PACKAGE DID NOT RE-EXPORT THE TYPES ITS OWN PROPS ARE SPELLED IN, so this
+  demo declared `@dagr/render` as a dependency it never touched at runtime,
+  purely to annotate one constant: naming an `animate` value needs
+  `SceneMotionOptions`, and a named `onFrame` handler needs `SceneMotionFrame`
+  and `Renderer`. Nine types are now re-exported from `@dagr/react`, as types
+  and by re-export rather than by restating them, so they stay the same types
+  and can still be handed to `@dagr/render` directly. The demo's dependency on
+  `@dagr/render` is gone. That is a change to a PUBLISHED package inside a demo
+  task, taken because the demo is the evidence for it: the wart is invisible
+  from inside the package and nothing was going to surface it except a consumer.
+  ONE FINDING IS QUEUED RATHER THAN FIXED, AND THE REASON IS WORTH RECORDING
+  BECAUSE THE FINDING IS RIGHT. `<DagrCanvas>` already computes the
+  delta-continuity check for its own animation (`held.result === layout.from`)
+  and does not pass it on, so every consumer that shows delta numbers keeps its
+  own ref and makes the same comparison. Getting it wrong shows a WRONG NUMBER
+  beside a RIGHT PICTURE, silently. Two consumers in two days got it wrong:
+  M5.3a shipped it, and this demo then shipped the same class of it through the
+  reset effect. The reviewer's proposal is a fourth argument, `continues`, or an
+  object-shaped `onLayout`. It is not taken here because it changes the
+  signature of a callback M5.3a designed and documented one day ago, it needs
+  its own tests for the `animate` off case (the reviewer noted `appliedRef` is
+  null then, so the check cannot be computed from it), and this task is already
+  three review rounds and four personas deep. Queued as feedback on
+  `@dagr/react` with the reasoning intact, and cheap while nothing is published.
+  WHAT IS FIXED INSTEAD, AND IS MOST OF THE VALUE FOR A TENTH OF THE RISK: the
+  timing contract is now written on the prop rather than rediscovered. `onLayout`
+  is reported from an effect, so a cold run reaches a parent on the FIRST COMMIT,
+  before that parent's own mount effects, because React flushes a child's passive
+  effects first. That sentence is what this branch paid a review round to learn.
+  TWO SMALLER THINGS THE SAME REVIEW FOUND. `failure` latched, so the `seed`
+  prop could not do what its own docstring promised: a new graph remounts
+  nothing, so one error left the canvas replaced and every verb disabled for
+  good. AND THE FIX FOR IT OPENED A WINDOW THE REVIEWER NAMED WHILE RESOLVING
+  IT, which is the repo's own lesson arriving on schedule for the third time
+  this run: an effect keyed on `[graph]` runs on MOUNT too, so a failure raised
+  during that same first commit would be cleared in the same flush, and since
+  `<DagrCanvas>` reports through `onError` only when its `trouble` CHANGES, it
+  would never be reported again. An empty box instead of the error. Shut with a
+  `seenGraph` ref so the effect is a no-op on mount. It is UNEXERCISED and said
+  so here rather than claimed: reaching it needs a graph whose cold layout
+  throws, and this package has none, which is also why it was worth shutting
+  before it was reachable rather than after. And a scratch test file one of the review agents left in the worktree,
+  which never reached a commit and is deleted; worth noting only because this
+  run used `git add -A` repeatedly, which would have swept it in.
   `render.yaml`'S BUILD FILTER NEEDED TWO MORE PATHS, `packages/living-stage/**`
   and `packages/react/**`, or a change to the demo would deploy nothing. The
   filter lists every package whose code the site ships, and the site now ships

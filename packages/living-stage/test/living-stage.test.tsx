@@ -290,6 +290,27 @@ describe('<LivingStage>', () => {
     for (const button of verbs(tree.container)) expect(button.disabled).toBe(true);
   });
 
+  it('comes back from a failure when the seed changes, because the seed is a restart', async () => {
+    // `failure` used to latch: the `[graph]` effect reset the script and not
+    // the error, so a new seed left the error paragraph where the canvas had
+    // been and every verb disabled, forever. A new graph remounts nothing by
+    // itself, so nothing else was ever going to clear it.
+    tree = await mount(<LivingStage autoplay={false} seed={1} />);
+    await flush(() => {
+      lastCanvas().onError?.(new Error('no adapter'));
+    });
+    expect(tree.container.querySelector('.living__failure')).not.toBeNull();
+
+    await tree.rerender(<LivingStage autoplay={false} seed={99} />);
+
+    expect(tree.container.querySelector('.living__failure')).toBeNull();
+    expect(verb(tree.container, 'grow').disabled).toBe(false);
+    await flush(() => {
+      verb(tree?.container as HTMLElement, 'grow').click();
+    });
+    expect(stats(tree.container).get('added')).toBe('3');
+  });
+
   it('refuses to claim a number when two edits arrive between two drawings', async () => {
     // THE M5.3a LESSON, AT THE COMPONENT LEVEL. Every edit the buttons make is
     // batched, so this drives the canvas by hand instead: two mutating calls in

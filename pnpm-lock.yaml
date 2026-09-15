@@ -192,9 +192,6 @@ importers:
       '@dagr/react':
         specifier: workspace:*
         version: link:../react
-      '@dagr/render':
-        specifier: workspace:*
-        version: link:../render
     devDependencies:
       '@types/react':
         specifier: ^19.2.17

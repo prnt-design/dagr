@@ -37,8 +37,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import type { LayoutDelta, LayoutResult } from '@dagr/layout';
-import type { SceneMotionOptions } from '@dagr/render';
 import { DagrCanvas, toWorldBounds, useDagrCanvas } from '@dagr/react';
+// From `@dagr/react`, not `@dagr/render`: this package's only contact with the
+// renderer is through the component, and it re-exports the types its own props
+// are spelled in so a consumer does not take a dependency to write one
+// annotation. That re-export exists because writing this file wanted it.
+import type { SceneMotionOptions } from '@dagr/react';
 import { CLEAR_COLOR, STAGE_LEGEND, livingAppearance, touchedBy } from './appearance.js';
 import {
   EDIT_KINDS,
@@ -197,6 +201,9 @@ export function LivingStage(props: LivingStageProps): ReactElement {
    */
   const counted = useRef<LayoutResult | null>(null);
 
+  /** The graph the reset effect below has already run for. See that effect. */
+  const seenGraph = useRef(graph);
+
   /**
    * A new graph is a new demo, so the script goes back to the top.
    *
@@ -215,8 +222,25 @@ export function LivingStage(props: LivingStageProps): ReactElement {
    * `onLayout` has already set both from the cold run.
    */
   useEffect(() => {
+    // ON AN ACTUAL CHANGE, NEVER ON MOUNT, and the guard is what keeps the
+    // `setFailure` below from opening the hole it closes. This effect runs on
+    // mount like any other, and a failure raised during that same first commit
+    // would be cleared in the same flush; `<DagrCanvas>` reports through
+    // `onError` when its own `trouble` CHANGES, so having cleared it we would
+    // never be told again, and the canvas would be an empty box instead of the
+    // error. Unreachable for this demo (this graph's cold layout does not
+    // throw, and a device that never arrives does so in a later commit), which
+    // is exactly why it is worth shutting now rather than when it is not.
+    if (seenGraph.current === graph) return;
+    seenGraph.current = graph;
     setState(INITIAL_SCRIPT_STATE);
     setLast(null);
+    // The failure too, or `seed` cannot do what its docstring promises. A new
+    // graph remounts nothing by itself, so a latched failure leaves the error
+    // paragraph where the canvas was and every verb disabled, forever. A device
+    // that is genuinely gone sets it again on the next mount; a layout error
+    // that belonged to the old graph does not.
+    setFailure(null);
   }, [graph]);
 
   const onLayout = useCallback(

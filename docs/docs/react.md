@@ -346,6 +346,23 @@ along with everything else, and writes the one line themselves:
 />
 ```
 
+The types these props are spelled in are re-exported from this package, so a
+caller whose only contact with the renderer is `<DagrCanvas>` does not take a
+dependency on `@dagr/render` to write an annotation:
+
+```tsx
+import type { SceneMotionFrame, SceneMotionOptions, Renderer } from '@dagr/react';
+
+const feel: SceneMotionOptions = { halfLifeSeconds: 0.3 };
+function follow(frame: SceneMotionFrame, renderer: Renderer): void {
+  if (frame.bounds !== null) renderer.camera.fitBounds(frame.bounds);
+}
+```
+
+They are the same types, re-exported rather than restated, so one can still be
+handed to `@dagr/render` directly. Anything that drives the renderer itself
+still imports from `@dagr/render`, which stays a peer dependency.
+
 `onFrame` runs after the renderer has been told what to draw and before it
 draws, so a camera moved there moves on that frame rather than the next. The
 renderer comes with the frame so that line needs no ref: reaching it through

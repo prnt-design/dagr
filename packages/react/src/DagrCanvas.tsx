@@ -217,6 +217,13 @@ export interface DagrCanvasProps {
    *
    * `delta` and `from` are both `null` for a run that was cold and had nothing
    * to be a difference from. See `DagrLayoutState.delta`.
+   *
+   * **REPORTED FROM AN EFFECT, SO THE COLD RUN REACHES YOU ON THE FIRST
+   * COMMIT**, before any effect of the component that rendered this one: React
+   * flushes a child's passive effects before its parent's. A parent that resets
+   * per-graph state in its own `[graph]` effect therefore resets it AFTER this
+   * has already reported, and will throw away what it was just told. Reset
+   * whatever the cold run does not set for you, and nothing it does.
    */
   readonly onLayout?:
     | ((result: LayoutResult, delta: LayoutDelta | null, from: LayoutResult | null) => void)

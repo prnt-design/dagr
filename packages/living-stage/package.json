@@ -29,8 +29,7 @@
   "dependencies": {
     "@dagr/graph": "workspace:*",
     "@dagr/layout": "workspace:*",
-    "@dagr/react": "workspace:*",
-    "@dagr/render": "workspace:*"
+    "@dagr/react": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",
