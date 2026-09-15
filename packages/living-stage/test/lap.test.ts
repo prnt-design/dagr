@@ -8,9 +8,9 @@
  * claim, it is the reason this task exists, and it is not something the script
  * can be reasoned into: two earlier shapes of the relayout verb were written,
  * looked right, and turned out to move up to 30 of 32 nodes and 0 of 32
- * respectively, the first of them adding a whole rank to the drawing. Neither would have failed any test in `edit-script.test.ts`,
- * because both were structurally valid edits. Only laying the graph out finds
- * it.
+ * respectively, the first of them adding a whole rank to the drawing. Neither
+ * would have failed any test in `edit-script.test.ts`, because both were
+ * structurally valid edits. Only laying the graph out finds it.
  *
  * The second is that the drawing never gets bigger, which is what earns the
  * one-and-only camera fit. `<DagrCanvas>` fits once and never refits, because a
@@ -164,11 +164,11 @@ describe('one lap, through the layout engine', () => {
   });
 
   it('never draws outside that box from any state a visitor can press it into', () => {
-    // THE LAP IS SIX OF THE TEN GRAPHS THIS DEMO CAN BE IN, and autoplay itself
-    // now visits the other four: the skip that keeps it from stalling means an
-    // out-of-turn press can leave it orbiting through states the lap never
-    // reaches. The camera fitted once on the base bounds has to be right for
-    // all ten, not for the six the happy path walks.
+    // THE LAP IS SIX OF THE EIGHT GRAPHS THIS DEMO CAN BE IN, and autoplay
+    // itself now visits the other two: the skip that keeps it from stalling
+    // means an out-of-turn press can leave it orbiting through states the lap
+    // never reaches. The camera fitted once on the base bounds has to be right
+    // for all eight, not for the six the happy path walks.
     const base = createLayout({ config: LIVING_LAYOUT_CONFIG }).run(createLivingGraph());
     const seen = new Set<string>();
 

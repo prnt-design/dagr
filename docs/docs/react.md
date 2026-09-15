@@ -317,10 +317,10 @@ Four things worth knowing:
   spring has arrived, so an idle canvas is an idle canvas.
 
 The [living graph demo](/demos/living) is this prop, `onLayout`, and a few
-hundred lines of page. Its source is `packages/living-stage`, and the README there is
-worth reading before writing your own: it is mostly a list of the things that
-turned out to matter, including the two shapes of edit that looked right and
-either moved the whole drawing or moved none of it.
+hundred lines of page. Its source is `packages/living-stage`, and the README
+there is worth reading before writing your own: it is mostly a list of the
+things that turned out to matter, including the two shapes of edit that looked
+right and either moved the whole drawing or moved none of it.
 
 ## The camera is fitted once, and the sprung box is yours
 

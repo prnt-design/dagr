@@ -102,10 +102,10 @@ export interface ClusterPlan {
  * worst moved 30 of the 32 nodes, beside a readout whose purpose is to say how
  * few do. (How many variants there are depends on how the candidates are
  * enumerated, so the count is not quoted: those two facts held under every
- * enumeration tried.) Swapping an edge's source for
- * another node in the SAME stage moves nothing at all, in all 200 candidate
- * swaps this graph offers, because `gridPositionStage` places a node by its
- * rank and its index within the rank and a same-rank swap changes neither. A
+ * enumeration tried.) Swapping an edge's source for another node in the SAME
+ * stage moves nothing at all, in all 200 candidate swaps this graph offers,
+ * because `gridPositionStage` places a node by its rank and its index within
+ * the rank and a same-rank swap changes neither. A
  * dependency that SPANS two ranks is the one that lands in between: it bends
  * through one virtual node in the rank it crosses, and that nudges the six
  * nodes nearest it and nothing else.

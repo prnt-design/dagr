@@ -77,12 +77,12 @@ over the legal variants, every single one made the drawing a rank taller (490
 units to 580) and the worst moved 30 of the 32 nodes, beside a readout whose
 purpose is to say how few do. The count of variants and their median are not
 quoted because both depend on exactly how the candidates are enumerated; those
-two facts held under every enumeration tried. Swapping an edge's
-source for another node in the SAME stage moves nothing at all, in all 200
-candidate swaps this graph offers, because `gridPositionStage` places a node by
-its rank and its index within the rank. A dependency that spans two ranks lands
-in between: it bends through one virtual node in the rank it crosses, and that
-nudges the six nodes nearest it.
+two facts held under every enumeration tried. Swapping an edge's source for
+another node in the SAME stage moves nothing at all, in all 200 candidate swaps
+this graph offers, because `gridPositionStage` places a node by its rank and its
+index within the rank. A dependency that spans two ranks lands in between: it
+bends through one virtual node in the rank it crosses, and that nudges the six
+nodes nearest it.
 
 **Neither grow target is the rank the relayout verb crosses.** The skip edge's
 virtual node sits in `resolve` and takes a node's worth of separation with it,
