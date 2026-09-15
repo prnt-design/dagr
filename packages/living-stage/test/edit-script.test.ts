@@ -6,19 +6,21 @@ import {
   INITIAL_SCRIPT_STATE,
   applyStep,
   createEditScript,
+  planCluster,
   takeAutoStep,
   takeStep,
 } from '../src/edit-script.js';
 import type { EditKind, EditScript, ScriptState } from '../src/edit-script.js';
-import { createLivingGraph } from '../src/living-graph.js';
+import { STAGES, createLivingGraph, stageOf } from '../src/living-graph.js';
 
 /**
  * Everything the graph holds, as two sorted lists of strings.
  *
- * Ids alone are not enough for the edges: the relayout verb rebinds an edge to
- * new endpoints under the SAME id, so a census that compared ids would call the
- * rewired graph identical to the one before it, and the cycle test below would
- * pass whether or not the script ever undid the rewire.
+ * Endpoints as well as ids, because an id is not the whole of an edge and a
+ * census is only worth having if it can tell two graphs apart. The relayout
+ * verb adds and removes one edge, so ids alone would in fact catch it today;
+ * they would stop catching it the day a verb rebinds an edge under an id it
+ * keeps, which is a shape this file has already had once.
  */
 function census(graph: Graph): { readonly nodes: string[]; readonly edges: string[] } {
   return {
@@ -160,9 +162,11 @@ describe('the edit script', () => {
   });
 
   it('never makes a cycle, so the picture stays a pipeline at every step', () => {
-    // The relayout verb rebinds an edge, and an edge rebound to point backwards
-    // is a cycle the layout breaks by reversing it, which draws an arrow the
-    // wrong way round for no reason a visitor could guess at.
+    // The relayout verb adds an edge, and an edge that pointed backwards would
+    // be a cycle the layout breaks by reversing it, which draws an arrow the
+    // wrong way round for no reason a visitor could guess at. The shipped verb
+    // only ever adds a forward `parse` to `compile` edge, so this is cheap
+    // insurance on the plan rather than a live risk.
     const graph = createLivingGraph();
     expect(graph.isAcyclic()).toBe(true);
 
@@ -199,6 +203,34 @@ describe('the edit script', () => {
     expect(state.live.length).toBe(script.clusters.length);
     expect(takeStep(script, state, 'grow')).toBeNull();
     expect(takeStep(script, state, 'prune')).not.toBeNull();
+  });
+
+  it('refuses to plan a cluster in a rank the relayout link crosses', () => {
+    // MEASURED, NOT REASONED. `resolve` passes the width check (6 + 3 = 9, the
+    // width of the widest column), and grow-resolve plus the link draws 1350
+    // wide against a base of 1300: the link's dependency bends through a
+    // zero-width dummy in the rank it crosses, and a dummy still takes a
+    // `nodeSep` slot, so a column already at the limit goes one slot past it.
+    // 50 units outside the frame the camera fitted once, and the camera never
+    // refits.
+    //
+    // The shipped clusters are `parse` (rank 1) and `bundle` (rank 4) and
+    // neither is crossed, so this pins the guard for the NEXT edit to
+    // `createEditScript` rather than for today's.
+    const layers = new Map(
+      STAGES.map((stage) => [
+        stage,
+        createLivingGraph()
+          .nodes()
+          .filter((node) => stageOf(node) === stage)
+          .map((node) => node.id),
+      ]),
+    );
+
+    expect(() => planCluster(layers, 2, 0, 0)).toThrow(/crosses that rank/);
+    // The two the script actually uses stay plannable.
+    expect(() => planCluster(layers, 1, 0, 0)).not.toThrow();
+    expect(() => planCluster(layers, 4, 1, 0)).not.toThrow();
   });
 
   it('applies whatever it offers, from every reachable state, so no enabled button throws', () => {

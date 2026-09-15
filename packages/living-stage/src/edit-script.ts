@@ -183,6 +183,18 @@ export interface TakenStep {
   readonly next: ScriptState;
 }
 
+/**
+ * The two stages the relayout verb draws a new dependency between.
+ *
+ * Ranks one and three: a dependency that spans exactly two ranks. The reason is
+ * measured and is written out on {@link LinkPlan}. Named as a pair rather than
+ * searched for across the whole graph, because the thing that makes one
+ * candidate right and another wrong is not a property this file could test for
+ * without laying the graph out, and `test/lap.test.ts` is where that is checked
+ * instead.
+ */
+const LINK_STAGES = [1, 3] as const;
+
 /** How many nodes a grow adds. Three: enough to see, few enough to count. */
 const CLUSTER_SIZE = 3;
 
@@ -213,8 +225,16 @@ function nth(layers: ReadonlyMap<Stage, readonly NodeId[]>, stage: Stage, index:
   return id;
 }
 
-/** A cluster of {@link CLUSTER_SIZE} nodes in `stage`, between two existing ones. */
-function planCluster(
+/**
+ * A cluster of {@link CLUSTER_SIZE} nodes in `stage`, between two existing ones.
+ *
+ * Exported for `test/edit-script.test.ts` alone, so its two refusals can be
+ * asserted directly. {@link createEditScript} is careful to pass ranks that
+ * satisfy both, which is exactly why the refusals need a test of their own: a
+ * guard only ever reached through a call site that avoids it is a guard nobody
+ * knows is broken.
+ */
+export function planCluster(
   layers: ReadonlyMap<Stage, readonly NodeId[]>,
   rank: number,
   parentIndex: number,
@@ -233,6 +253,25 @@ function planCluster(
   if (STAGE_WIDTHS[stage] + CLUSTER_SIZE > WIDEST_STAGE) {
     throw new Error(`growing ${stage} by ${String(CLUSTER_SIZE)} would widen the drawing`);
   }
+  // AND NOT A RANK THE LINK CROSSES, which the width arithmetic above cannot
+  // see. The relayout verb's dependency bends through a zero-width dummy in
+  // every rank strictly between its ends, and a dummy still takes a `nodeSep`
+  // slot: a six-wide column grown to nine is exactly at the limit, and the
+  // dummy puts it one slot past. Measured, because `resolve` passes the check
+  // above and grow-resolve plus the link draws 1350 wide against a base of
+  // 1300, which is 50 units outside the frame the camera fitted once.
+  //
+  // The shipped clusters are `parse` and `bundle` and neither is crossed, so
+  // this guards the NEXT edit to `createEditScript` rather than today's. Before
+  // it, the only thing that would have caught that edit was `test/lap.test.ts`,
+  // and a guard that reads like the safety net while something else is the
+  // safety net is worse than no guard.
+  const [linkFrom, linkTo] = LINK_STAGES;
+  if (rank > linkFrom && rank < linkTo) {
+    throw new Error(
+      `growing ${stage} would widen the drawing: the relayout link crosses that rank`,
+    );
+  }
   const parent = nth(layers, before, parentIndex);
   const child = nth(layers, after, childIndex);
 
@@ -248,18 +287,6 @@ function planCluster(
   }
   return { stage, parent, child, nodes, edges };
 }
-
-/**
- * The two stages the relayout verb draws a new dependency between.
- *
- * Ranks one and three: a dependency that spans exactly two ranks. The reason is
- * measured and is written out on {@link LinkPlan}. Named as a pair rather than
- * searched for across the whole graph, because the thing that makes one
- * candidate right and another wrong is not a property this file could test for
- * without laying the graph out, and `test/lap.test.ts` is where that is checked
- * instead.
- */
-const LINK_STAGES = [1, 3] as const;
 
 /** The first pair of nodes in {@link LINK_STAGES} with no edge between them. */
 function planLink(graph: Graph, layers: ReadonlyMap<Stage, readonly NodeId[]>): LinkPlan {

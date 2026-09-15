@@ -9,20 +9,24 @@ import type { LayoutDelta, LayoutResult } from '@dagr/layout';
 // The module `vi.mock` below is replacing, as a type. A `typeof import(...)`
 // inline would be the obvious spelling and the repo's lint rule forbids it.
 import type * as DagrReact from '@dagr/react';
+import { toWorldBounds } from '@dagr/react';
 
 // Only `DagrCanvas` is faked; see `fake-canvas.ts`. Everything else the
 // component imports from `@dagr/react` is the real export.
 vi.mock('@dagr/react', async (importOriginal) => {
   const real = await importOriginal<typeof DagrReact>();
   const { makeFakeDagrCanvas } = await import('./fake-canvas.js');
-  return { ...real, DagrCanvas: makeFakeDagrCanvas(real.useDagr) };
+  return {
+    ...real,
+    DagrCanvas: makeFakeDagrCanvas(real.useDagr, real.DagrCanvasContext),
+  };
 });
 
 import { LivingStage } from '../src/LivingStage.js';
 import { AUTOPLAY_CYCLE } from '../src/edit-script.js';
 import { HIGHLIGHT_GLOW } from '../src/appearance.js';
 import { LIVING_LAYOUT_CONFIG } from '../src/living-graph.js';
-import { lastCanvas, resetCanvases } from './fake-canvas.js';
+import { cameraFits, lastCanvas, requestedDraws, resetCanvases } from './fake-canvas.js';
 import { flush, mount } from './mount.js';
 import type { Mounted } from './mount.js';
 
@@ -288,6 +292,30 @@ describe('<LivingStage>', () => {
 
     expect(tree.container.querySelector('.living__failure')?.textContent).toContain('no adapter');
     for (const button of verbs(tree.container)) expect(button.disabled).toBe(true);
+  });
+
+  it('frames the drawing on its own bounds when a person presses refit', async () => {
+    // THE ONE PATH NO TEST REACHED, while the package README, the react docs
+    // and the `/demos/living` page copy all promise it to a visitor. It is also
+    // the escape hatch that makes the fit-once camera decision defensible, so
+    // "there is a refit button" needs to be a fact rather than a claim.
+    const graph = await mountStage();
+    if (tree === null) return;
+    const refit = tree.container.querySelector<HTMLButtonElement>('.living__refit');
+    expect(refit, 'no refit button inside the canvas').not.toBeNull();
+
+    await flush(() => {
+      refit?.click();
+    });
+
+    const fits = cameraFits();
+    expect(fits).toHaveLength(1);
+    // The layout's own bounds, flipped to world coordinates, and NO padding
+    // argument, so this frames the graph exactly as the one automatic fit did.
+    const laid = createLayout({ config: LIVING_LAYOUT_CONFIG }).run(graph);
+    expect(fits[0]?.bounds).toEqual(toWorldBounds(laid.bounds));
+    expect(fits[0]?.padding).toBeUndefined();
+    expect(requestedDraws()).toBe(1);
   });
 
   it('stops autoplaying when the drawing fails, rather than editing behind the message', async () => {

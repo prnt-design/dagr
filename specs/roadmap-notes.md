@@ -6584,6 +6584,36 @@ it settled rather than restating the argument.
   in a row, and a six-step sequential ramp a reader cannot order is not saying
   what a ramp says. Both are now tests rather than a comment, with the WCAG
   luminance formula written out in six lines rather than depended on.
+  THE ALGORITHMS REVIEW RE-RAN EVERY ENGINE CLAIM AGAINST THE REAL PIPELINE and
+  reproduced all of them exactly, including the bounds invariance over all eight
+  reachable graphs AND over six extra seeds, which is more than this task ever
+  checked. It then found that THE WIDTH GUARD DOES NOT CATCH THE CASE ITS OWN
+  MESSAGE NAMES. `planCluster` refuses a stage whose width plus three exceeds
+  the widest column, and `resolve` passes that (6 + 3 = 9, exactly the limit),
+  but grow-resolve plus the relayout link draws 1350 wide against a base of
+  1300. Verified here before fixing: the link's dependency bends through a
+  zero-width dummy in the rank it crosses, and a DUMMY STILL TAKES A `nodeSep`
+  SLOT, so a column already at the limit goes one slot past it. The shipped
+  clusters are `parse` and `bundle` and neither is crossed, so nothing was
+  broken; what was broken is that the guard READ like the safety net while
+  `test/lap.test.ts` was the only actual one. It now also refuses any rank
+  strictly between the link's ends, and `planCluster` is exported so both
+  refusals have a test, because a guard reached only through a call site that
+  carefully avoids it is a guard nobody knows is broken.
+  THE REFIT BUTTON WAS THE ONE COMPONENT PATH NO TEST REACHED, while the package
+  README, `docs/docs/react.md` and the `/demos/living` copy all promise it to a
+  visitor, and it is the escape hatch that makes the fit-once camera decision
+  defensible in the first place. The fake canvas now PROVIDES THE CONTEXT, on
+  the same condition the real component does (a layout exists), with a stub
+  renderer whose `fitBounds` is recorded. The test asserts the button frames the
+  layout's own bounds with no padding argument, which is what makes it identical
+  to the one automatic fit. That is the second time this harness was the reason
+  something was untestable rather than untested.
+  AND THE SECOND DEADLOCK OF THE SAME KIND: adding `DagrCanvasContext` to the
+  fake as a plain import hung the suite with no output at all, exactly as
+  `useDagr` had. The factory that mocks `@dagr/react` loads this file, so a
+  value imported from `@dagr/react` here waits on a module waiting on this one.
+  Both are handed in by the factory now and the file imports only types.
   `render.yaml`'S BUILD FILTER NEEDED TWO MORE PATHS, `packages/living-stage/**`
   and `packages/react/**`, or a change to the demo would deploy nothing. The
   filter lists every package whose code the site ships, and the site now ships

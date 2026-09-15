@@ -10,6 +10,15 @@
  * nothing else, or a test ends up asserting that the component calls an API
  * rather than that it does the right thing with the answer.
  *
+ * IT DOES PROVIDE THE CONTEXT, because the real component does and because
+ * `<RefitButton>` lives in it. The real `<DagrCanvas>` withholds
+ * `DagrCanvasContext` until the renderer, the overlay and the layout all exist,
+ * so this provides it on exactly the same condition: once `useDagr` has a
+ * result. The renderer behind it is a stub with one real method, the `fitBounds`
+ * the refit button calls, recorded so a test can assert what it was framed on.
+ * Before this, the refit button was the only path in the component that no test
+ * reached, while three separate pages promised it to a visitor.
+ *
  * WHAT IS AND IS NOT COVERED BY FAKING AT THIS LEVEL, said rather than assumed.
  * What this covers is everything `LivingStage` owns: which props it hands the
  * canvas, what it does with each real `onLayout`, when a button is disabled,
@@ -36,29 +45,56 @@
  * vi.mock('@dagr/react', async (importOriginal) => {
  *   const real = await importOriginal<typeof import('@dagr/react')>();
  *   const { makeFakeDagrCanvas } = await import('./fake-canvas.js');
- *   return { ...real, DagrCanvas: makeFakeDagrCanvas(real.useDagr) };
+ *   return {
+ *     ...real,
+ *     DagrCanvas: makeFakeDagrCanvas(real.useDagr, real.DagrCanvasContext),
+ *   };
  * });
  * ```
  *
- * `useDagr` IS HANDED IN RATHER THAN IMPORTED HERE, and that is not a style
- * choice: this file is loaded BY the factory that is mocking `@dagr/react`, so
- * an `import { useDagr } from '@dagr/react'` here waits on a module whose
- * initialisation is waiting on this one. The suite deadlocks with no output at
- * all, which is a worse symptom than a failure. The factory already holds the
- * real module, so it passes the hook in. Type-only imports are fine, because
- * they are erased.
+ * EVERY VALUE THIS FILE NEEDS FROM `@dagr/react` IS HANDED IN RATHER THAN
+ * IMPORTED, and that is not a style choice: this file is loaded BY the factory
+ * that is mocking `@dagr/react`, so an `import { useDagr } from '@dagr/react'`
+ * here waits on a module whose initialisation is waiting on this one. The suite
+ * deadlocks with NO OUTPUT AT ALL, which is a worse symptom than a failure, and
+ * it has now happened twice: once for `useDagr` and once for
+ * `DagrCanvasContext`. The factory already holds the real module, so it passes
+ * both in. Type-only imports are fine, because they are erased.
  */
 
 import { createElement, useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
-import type { DagrCanvasProps, useDagr as UseDagr } from '@dagr/react';
+import type {
+  DagrCanvasContext as DagrCanvasContextValue,
+  DagrCanvasHandle,
+  DagrCanvasProps,
+  useDagr as UseDagr,
+} from '@dagr/react';
 
 /** Every `<DagrCanvas>` rendered since the last {@link resetCanvases}, in order. */
 const rendered: DagrCanvasProps[] = [];
 
+/** Every `fitBounds` the children of the fake canvas have asked for, in order. */
+const fitted: { bounds: unknown; padding: number | undefined }[] = [];
+
+/** How many frames the children have asked to be drawn. */
+let draws = 0;
+
 /** Clears the record. Call it per test. */
 export function resetCanvases(): void {
   rendered.length = 0;
+  fitted.length = 0;
+  draws = 0;
+}
+
+/** What the canvas's children framed the camera on, in order. */
+export function cameraFits(): readonly { bounds: unknown; padding: number | undefined }[] {
+  return fitted;
+}
+
+/** How many times the canvas's children asked for a frame. */
+export function requestedDraws(): number {
+  return draws;
 }
 
 /** The props of the most recent render, which is the canvas currently on screen. */
@@ -77,7 +113,10 @@ export function lastCanvas(): DagrCanvasProps {
  * overlay and the layout all exist, so a fake that rendered children eagerly
  * would put the component in a state the real one never produces.
  */
-export function makeFakeDagrCanvas(useDagr: typeof UseDagr) {
+export function makeFakeDagrCanvas(
+  useDagr: typeof UseDagr,
+  DagrCanvasContext: typeof DagrCanvasContextValue,
+) {
   return function FakeDagrCanvas(props: DagrCanvasProps): ReactElement {
     rendered.push(props);
     // The props as of the newest render, read from effects and never depended
@@ -116,6 +155,33 @@ export function makeFakeDagrCanvas(useDagr: typeof UseDagr) {
       if (layout.error !== null) latest.current.onError?.(layout.error);
     }, [layout.error]);
 
-    return createElement('div', { 'data-testid': 'fake-canvas' });
+    // The context on the same condition the real component uses: a layout
+    // exists, so anything reading the handle cannot see a half-built canvas.
+    // The renderer is a stub with the one method the children call.
+    const handle =
+      layout.result === null
+        ? null
+        : ({
+            renderer: {
+              camera: {
+                fitBounds(bounds: unknown, padding?: number) {
+                  fitted.push({ bounds, padding });
+                },
+              },
+            },
+            overlay: {},
+            result: layout.result,
+            requestDraw() {
+              draws += 1;
+            },
+          } as unknown as DagrCanvasHandle);
+
+    return createElement(
+      'div',
+      { 'data-testid': 'fake-canvas' },
+      handle === null
+        ? null
+        : createElement(DagrCanvasContext.Provider, { value: handle }, props.children),
+    );
   };
 }
