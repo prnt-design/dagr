@@ -11,13 +11,13 @@
  * rather than that it does the right thing with the answer.
  *
  * IT DOES PROVIDE THE CONTEXT, because the real component does and because
- * `<RefitButton>` lives in it. The real `<DagrCanvas>` withholds
- * `DagrCanvasContext` until the renderer, the overlay and the layout all exist,
- * so this provides it on exactly the same condition: once `useDagr` has a
- * result. The renderer behind it is a stub with one real method, the `fitBounds`
- * the refit button calls, recorded so a test can assert what it was framed on.
- * Before this, the refit button was the only path in the component that no test
- * reached, while three separate pages promised it to a visitor.
+ * `<RefitButton>` lives in it. The renderer behind it is a stub with one real
+ * method, the `fitBounds` the refit button calls, recorded so a test can assert
+ * what it was framed on. Before this, the refit button was the only path in the
+ * component that no test reached, while three separate pages promised it to a
+ * visitor. It is provided on a WEAKER condition than the real component's, and
+ * that divergence is the one this file has: see `makeFakeDagrCanvas` below,
+ * which is the single place it is stated.
  *
  * WHAT IS AND IS NOT COVERED BY FAKING AT THIS LEVEL, said rather than assumed.
  * What this covers is everything `LivingStage` owns: which props it hands the
@@ -107,11 +107,27 @@ export function lastCanvas(): DagrCanvasProps {
 /**
  * The stand-in itself, over the real `useDagr`.
  *
- * Renders a plain div and NOT its children. `LivingStage` puts `<RefitButton>`
- * inside, and that reads `useDagrCanvas`, which throws without a provider: the
- * real component deliberately withholds its context until the renderer, the
- * overlay and the layout all exist, so a fake that rendered children eagerly
- * would put the component in a state the real one never produces.
+ * Renders a div, provides {@link DagrCanvasContext}, and renders its children
+ * inside it. `LivingStage` puts `<RefitButton>` there, and that reads
+ * `useDagrCanvas`, which throws without a provider, so a fake that withheld the
+ * context would make the one path that reaches the renderer untestable. It was
+ * withheld at first, and the refit button went unreached by any test while
+ * three separate pages promised it to a visitor.
+ *
+ * WHERE THIS IS NOT FAITHFUL, AND IT IS THE ONE PLACE. The real component
+ * withholds its handle until the renderer, the overlay AND the layout all
+ * exist: `stage === null || result === null` (`DagrCanvas.tsx`). This fake has
+ * no stage and cannot have one, since a stage is the device this file exists to
+ * avoid needing, so it gates on the layout alone. It therefore provides the
+ * context in a window where the real component would still be withholding it.
+ *
+ * Harmless as things stand, because `<RefitButton>` reads the handle from a
+ * click rather than during render, so no test can observe the difference. Named
+ * rather than papered over because the rule at the top of this file is to fake
+ * the thing that needs a device and nothing else, and this is the one place the
+ * fake does MORE than that: it makes a state available earlier than the real
+ * component would. Worth knowing before something starts reading the handle
+ * during render, when it would stop being unobservable.
  */
 export function makeFakeDagrCanvas(
   useDagr: typeof UseDagr,
@@ -155,9 +171,10 @@ export function makeFakeDagrCanvas(
       if (layout.error !== null) latest.current.onError?.(layout.error);
     }, [layout.error]);
 
-    // The context on the same condition the real component uses: a layout
-    // exists, so anything reading the handle cannot see a half-built canvas.
-    // The renderer is a stub with the one method the children call.
+    // The context once a layout exists. That is WEAKER than the real gate,
+    // which also waits for the renderer and the overlay; see the docstring
+    // above for why it cannot be matched here and what it costs. The renderer
+    // is a stub with the one method the children actually call.
     const handle =
       layout.result === null
         ? null
