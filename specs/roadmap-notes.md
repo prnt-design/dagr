@@ -6614,6 +6614,44 @@ it settled rather than restating the argument.
   `useDagr` had. The factory that mocks `@dagr/react` loads this file, so a
   value imported from `@dagr/react` here waits on a module waiting on this one.
   Both are handed in by the factory now and the file imports only types.
+  AND A FOURTH INSTANCE, FOUND AFTER THE MERGE AND FIXED IN A FOLLOW-UP: the
+  commit that fixed the stale comments introduced a stale comment. Teaching the
+  fake canvas to render its children left its docstring still saying it "renders
+  a plain div and NOT its children", with the old reasoning attached. Four
+  separate times this run a fix was where the next defect hid, which is enough
+  to stop calling it luck: after changing a line, read what is written ABOUT
+  that line, and after a review round, review the round.
+  THE SAME FOLLOW-UP DROPPED A PARITY CLAIM RATHER THAN RESTATING IT. The fake
+  gated its context on the layout alone and called that "the same condition the
+  real component uses"; the real gate is `stage === null || result === null`,
+  the renderer and the overlay as well. The fake HAS no stage and cannot, since
+  a stage is the device it exists to avoid needing, so it provides the context
+  in a window the real component would still be withholding it in. Harmless
+  today, because `<RefitButton>` reads the handle from a click rather than
+  during render. It is named in the file rather than papered over, because that
+  file's rule is to fake the thing that needs a device and nothing else, and
+  this is the one place it does MORE than that: it makes a state available
+  earlier than the real component would. An unnamed exception to a design rule
+  is how the rule stops being true. A FAKE'S DIVERGENCES ARE PART OF ITS API: what it does not reproduce is
+  exactly what its tests cannot claim.
+  THE SAME FALSE CLAIM WAS IN THAT ONE FILE THREE TIMES, and the first pass at
+  this fixed the two it had been shown. The header's copy even contradicted
+  itself inside one sentence: it stated the real gate correctly, "until the
+  renderer, the overlay and the layout all exist", and then concluded "so this
+  provides it on exactly the same condition: once `useDagr` has a result". The
+  fix that holds is not three corrections but one statement: the divergence is
+  now written in exactly one place and the other two sites point at it. WHEN A
+  REVIEW POINTS AT A LINE, GREP FOR THE CLAIM RATHER THAN EDITING THE LINE; a
+  claim worth writing once is usually a claim that got written more than once.
+  AND THE CORRECTION ITSELF CONTAINED AN INVENTED QUOTATION, which is a
+  different and worse kind of wrong than a stale one. It attributed the rule
+  "never a state the real one cannot produce" to that file's header in quotation
+  marks; the header says no such thing, its actual rule being to fake the thing
+  that needs a device and nothing else. The sentence was plausible, it argued
+  correctly, and it cited a source that did not say it, which is the one shape a
+  reader cannot catch without opening the source. It had also been copied into
+  this entry. A QUOTATION IS A CLAIM ABOUT ANOTHER FILE and gets checked like
+  any other number: if it is in quotation marks, it was read, not remembered.
   `render.yaml`'S BUILD FILTER NEEDED TWO MORE PATHS, `packages/living-stage/**`
   and `packages/react/**`, or a change to the demo would deploy nothing. The
   filter lists every package whose code the site ships, and the site now ships
