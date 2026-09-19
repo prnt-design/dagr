@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import Link from '@docusaurus/Link';
 import BrowserOnly from '@docusaurus/BrowserOnly';
@@ -15,6 +15,40 @@ export default function ArchitectureExplorer() {
   const [mode, setMode] = useState<Mode>('Architecture');
   const [selected, setSelected] = useState<SystemId>('layout');
   const [zoom, setZoom] = useState(1);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const zoomHint = useId();
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const wheel = (event: WheelEvent) => {
+      if (
+        !viewport.contains(document.activeElement) ||
+        event.ctrlKey ||
+        event.metaKey
+      )
+        return;
+      if (event.deltaY === 0 || event.shiftKey) return;
+      event.preventDefault();
+      const pixels =
+        event.deltaY *
+        (event.deltaMode === 1
+          ? 16
+          : event.deltaMode === 2
+            ? viewport.clientHeight
+            : 1);
+      setZoom((value) =>
+        Math.min(
+          2,
+          Math.max(
+            0.5,
+            value * Math.exp(-Math.max(-150, Math.min(150, pixels)) * 0.002),
+          ),
+        ),
+      );
+    };
+    viewport.addEventListener('wheel', wheel, { passive: false });
+    return () => viewport.removeEventListener('wheel', wheel);
+  }, [mode]);
   const drawing = useMemo(architectureLayout, []);
   const arrow = useId().replace(/:/g, '');
   const current = systems.find((node) => node.id === selected)!;
@@ -66,8 +100,23 @@ export default function ArchitectureExplorer() {
               </div>
               <div
                 className={styles.viewport}
+                ref={viewportRef}
                 tabIndex={0}
-                aria-label="Architecture diagram. Scroll to explore; select a node to inspect it."
+                aria-label="Architecture diagram"
+                aria-describedby={zoomHint}
+                onPointerDown={(event) => {
+                  if (
+                    !(event.target instanceof Element) ||
+                    !event.target.closest('button')
+                  )
+                    event.currentTarget.focus({ preventScroll: true });
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    (document.activeElement as HTMLElement | null)?.blur();
+                    event.stopPropagation();
+                  }
+                }}
               >
                 <div
                   className={styles.diagram}
@@ -100,10 +149,33 @@ export default function ArchitectureExplorer() {
                         x: p.y - drawing.bounds.y + 32,
                         y: p.x - drawing.bounds.x + 32,
                       }));
-                      const middle = points[Math.floor(points.length / 2)]!;
-                      const from = points[0]!;
-                      const to = points[points.length - 1]!;
-                      const labelX = (from.x + to.x) / 2;
+                      // Locate the halfway point along the route, not the middle vertex.
+                      const lengths = points
+                        .slice(1)
+                        .map((point, i) =>
+                          Math.hypot(
+                            point.x - points[i]!.x,
+                            point.y - points[i]!.y,
+                          ),
+                        );
+                      let remaining =
+                        lengths.reduce((sum, length) => sum + length, 0) / 2;
+                      let middle = points[0]!;
+                      for (const [i, length] of lengths.entries()) {
+                        if (remaining <= length && length > 0) {
+                          const start = points[i]!;
+                          const end = points[i + 1]!;
+                          const fraction = remaining / length;
+                          middle = {
+                            x: start.x + (end.x - start.x) * fraction,
+                            y: start.y + (end.y - start.y) * fraction,
+                          };
+                          break;
+                        }
+                        remaining -= length;
+                      }
+                      const labelX = middle.x;
+                      const labelWidth = edge.label.length * 8 + 16;
                       return (
                         <g
                           key={edge.label}
@@ -122,12 +194,16 @@ export default function ArchitectureExplorer() {
                             markerEnd={`url(#${arrow})`}
                           />
                           <rect
-                            x={labelX - 48}
-                            y={middle.y - 23}
-                            width="96"
+                            x={labelX - labelWidth / 2}
+                            y={middle.y - 34}
+                            width={labelWidth}
                             height="22"
                           />
-                          <text x={labelX} y={middle.y - 8} textAnchor="middle">
+                          <text
+                            x={labelX}
+                            y={middle.y - 18}
+                            textAnchor="middle"
+                          >
                             {edge.label}
                           </text>
                         </g>
@@ -170,8 +246,8 @@ export default function ArchitectureExplorer() {
                   <button
                     type="button"
                     aria-label="Zoom out"
-                    disabled={zoom <= 1}
-                    onClick={() => setZoom((v) => Math.max(1, v - 0.25))}
+                    disabled={zoom <= 0.5}
+                    onClick={() => setZoom((v) => Math.max(0.5, v - 0.25))}
                   >
                     −
                   </button>
@@ -187,7 +263,10 @@ export default function ArchitectureExplorer() {
                     Reset zoom
                   </button>
                 </div>
-                <span>Select a node. Follow the connections.</span>
+                <span id={zoomHint}>
+                  Click or Tab into the graph, then scroll to zoom. Escape
+                  releases focus. Shift + scroll pans.
+                </span>
               </div>
             </div>
             <aside
