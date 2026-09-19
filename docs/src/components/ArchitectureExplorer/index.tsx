@@ -45,6 +45,7 @@ export default function ArchitectureExplorer() {
           <label className={styles.mobileSelect}>
             Inspect a system
             <select
+              aria-label="Inspect a system"
               value={selected}
               onChange={(event) => setSelected(event.target.value as SystemId)}
             >
