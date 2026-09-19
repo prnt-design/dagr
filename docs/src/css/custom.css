@@ -814,3 +814,9 @@ button:focus-visible,
     border-radius: calc(var(--corner-cut-s) * 1.8) 0 calc(var(--corner-cut-s) * 1.8) 0;
   }
 }
+
+/* Keep the unfocused skip link off the negative edge. The theme's left:100%
+   placement otherwise widens the scrollable page on narrow viewports. */
+[class*='skipToContent']:not(:focus) {
+  left: -10000px;
+}

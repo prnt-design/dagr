@@ -12,16 +12,11 @@ sidebar_position: 4
 carrying nodes between one layout and the next, and one draw call per shape
 family.
 
-This page describes the package through M4.7c. M4.4 gave it a way to be told
-what to draw, and the later sections cover the motion that carries nodes, edges
-and the drawing's box between layouts, and the loop that drives it. Rounded rectangles and circles are on screen, drawn as
-signed distance fields, and there is an HTML overlay for the text a signed
-distance field cannot draw. What is real is the seam everything else plugs
-into: the `Renderer` interface, the camera, the distance fields and the shading
-that reads them, and the decisions that had to be made before a single test in
-this milestone could be written. They are argued below rather than left in a
-commit message, because each is the kind of choice that is cheap now and
-expensive in six tasks' time.
+For a working React example, start with [rich nodes and edges](./rich-content.md).
+For changing layouts, try [Follow an edit](/demos/living). The sections below are
+the detailed renderer reference: scene geometry, camera, motion, backend
+selection, and HTML overlays. The layout package stays independent of this
+renderer.
 
 ## What is on screen
 
@@ -33,7 +28,7 @@ waits.
 const renderer = await createRenderer({ canvas });
 renderer.setNodes([
   {
-    id: 'chapter-3',
+    id: 'preview',
     shape: 'roundedRect',
     center: { x: 0, y: 0 },
     size: { width: 200, height: 80 },
@@ -46,77 +41,10 @@ renderer.setNodes([
 renderer.render();
 ```
 
-That was not always true, and what it replaced is worth a sentence. M4.1 drew one
-hard-coded quad and M4.2 a hard-coded ladder of six SDF shapes a decade apart in
-size; both were demonstrations, and the ladder's job was to prove that a signed
-distance field is crisp at every zoom rather than at one. It did, the frames
-below are the evidence, and M4.4 retired it: a package that ships a picture
-cannot be handed one.
-
-![Three thousand campaign nodes at the fitted zoom: blue geography tiles, an
-amber narrative spine, violet grids of NPCs, green quest DAGs and red pressure
-clocks, packed into a 16:9
-canvas](../../assets/screenshots/p7-campaign-fit.png)
-
-That is the [campaign demo](/demos/campaign), which you can open and drive: 3,010
-nodes of a mock D&D campaign, cut into 101 tiles, laid out by
-[`@dagr/layout`](./layout.md) in a worker one tile at a time, packed, and drawn
-in two instanced calls. The colour families are strata (spine, geography,
-people, quests, pressure, reference), which is what makes the far view readable
-as structure rather than as confetti. An EDGE takes the colour of the node it
-leaves, so a line says where it comes from, and its dash says whether a layout
-routed it. The readout is live camera state rather than a caption.
-
-![The same campaign at 1.4 CSS pixels per world unit: keyed sites as rounded
-rectangles, each with a tag above it carrying a small mark and a name, dashed
-ribbons fanning down to their rooms](../../assets/screenshots/p7-campaign-names.png)
-
-The same scene zoomed in, where the nodes are wide enough to carry names. The
-names are DOM, positioned by the camera through the overlay described below; the
-shapes and the ribbons are the GPU's. The mark before each name is an inline
-`svg` the tier draws per kind, which is the cheapest illustration of what a DOM
-tier buys you: the same picture through a glyph atlas would be a second
-rasteriser.
-
-![The same tile with the pointer on one chapter: its nine edges at full width
-and alpha, every other edge faded back, and the far end of each highlighted edge
-carrying a name](../../assets/screenshots/d3-hover.png)
-
-And the same drawing with a pointer in it. Hovering a node lights the edges
-incident to it and dims the rest to a fifth of their width and alpha, which is a
-twenty-fifth of the ink, and gives the far end of each lit edge a name it has not
-earned at this zoom. That is `setEdgeIntensity` and the overlay, from the two
-sections below; the demo decides what to light, and the renderer is told one
-number per edge.
-
-Those two are what M4.4 has evidence for, retaken since at the spacing D2
-measured. The crispness pair from M4.2 is what
-the shader has evidence for, and it stays committed:
-
-![At zoom 100 the smallest rounded rectangle fills the canvas, its corner a
-smooth arc, with a two pixel navy border inside the
-edge](../../assets/screenshots/m4.2-sdf-shapes-100x.png)
-
-At zoom 100 one 10 unit rounded rectangle fills the view, so what you are looking
-at is a single corner arc at a hundred pixels per world unit. The
-[0.1x frame](../../assets/screenshots/m4.2-sdf-shapes-0.1x.png) is the other end
-of that range, and neither is reachable in the live demo any more, for the plain
-reason that the scene they show is gone: M4.4 retired the ladder. Reproduce both
-from the M4.2 commit; what the 0.1x frame documented is recorded in that task's
-ROADMAP entry. The campaign's own floor is 0.026 and its ceiling 19.2 on the
-reference canvas: a wider range than it was, because D2 raised the separations
-and the floor is derived from the scene's extent, and still narrower than the
-ladder's because a campaign node spans 12:1 in size where the ladder spanned
-250:1.
-
-For the record, this is where the package started:
-[first light](../../assets/screenshots/m4.1-first-light.png) was a single amber
-quad, drawn to prove the pipeline lit up at all.
-
-Every frame here was captured at a device pixel ratio of 1, cropped to the canvas
-itself. The campaign pair came through a software WebGL2 rasteriser rather than a
-real WebGPU adapter, which is what the machine that runs the agents has; that is
-worth knowing for what a screenshot proves and does not.
+The showcase now uses a small pattern pipeline to demonstrate rich content.
+Earlier campaign and shape-ladder captures remain in the repository's
+[historical screenshots](https://github.com/prnt-design/dagr/tree/main/assets/screenshots).
+Those captures document experiments, not current performance measurements.
 
 Creation is asynchronous, and that is a property of WebGPU rather than a style
 choice. Getting a device means requesting an adapter from the browser, which is

@@ -4,27 +4,24 @@
 
 **Directed graph layout, WebGPU rendering, and visual DSLs.**
 
-Dagr is a successor to the dagre + d3 pairing: a typed, headless Sugiyama
+Dagr combines a typed, headless Sugiyama
 layout engine designed for *animation* (incremental layout, stable node
-identity, delta output) plus a high-fidelity WebGPU renderer (three.js
+identity, delta output), a WebGPU renderer (three.js
 WebGPURenderer, SDF shapes, spring physics) and a React component on top.
 
-**[Documentation](https://dagr.prnt.design)** ·
-**[Living graph demo](https://dagr.prnt.design/demos/living)** ·
-**[Campaign demo](https://dagr.prnt.design/demos/campaign)**
+**[Inside the graph](https://dagr.prnt.design)** ·
+**[Documentation](https://dagr.prnt.design/docs/)** ·
+**[Follow an edit](https://dagr.prnt.design/demos/living)**
 
-The living graph demo is the claim above, on screen: press grow, prune or
-relayout and a build pipeline is edited in front of you, one `graph.batch` per
-edit, one `LayoutDelta` per batch. The nodes the edit touched light up and glide
-to their new places; the ones it did not are still exactly where they were, and
-a readout counts them. The measurements behind it are on the
-[incremental layout](https://dagr.prnt.design/docs/incremental-layout) page.
+Explore Dagr through a graph of its own architecture. Inspect the systems and
+what flows between them, edit a live build pipeline, or try rich React nodes
+with a generated pattern preview and an edge annotation.
 
-The campaign demo is the other question, scale: a mock D&D campaign of 3,010
-nodes and 7,100 edges, laid out a tile at a time in a worker, instanced on the
-GPU, with names and readable cards appearing as you zoom in. The dataset behind
-it is a generated fixture, not a published package, and documents itself in
-[packages/campaign](./packages/campaign/README.md).
+Dagr provides the structure; your application defines the meaning. Use it for
+codebase maps, application architectures, build pipelines, or the building
+blocks of a domain-specific visual language. Stable IDs and incremental deltas
+make changes traceable, while layout stability depends on the graph and edit.
+See the [measured behavior](https://dagr.prnt.design/docs/incremental-layout).
 
 > ⚠️ Early days. Expect rapid change until v0.1. The roadmap lives in
 > [ROADMAP.md](./ROADMAP.md).
@@ -34,7 +31,7 @@ it is a generated fixture, not a published package, and documents itself in
 | Package | What | Status |
 | --- | --- | --- |
 | `@dagr/graph` | Typed directed graph model: patches, stable identity, zero deps | Identity, shape, adjacency, attributes, ports, patches, traversal, and serialization implemented |
-| `@dagr/layout` | Headless Sugiyama layout engine; incremental, animation-first | The full pipeline, cycle breaking, ranking, crossing reduction, coordinates and routes implemented, plus the incremental engine: patches in, deltas out, warm-started stages and a committed [stability corpus](https://dagr.prnt.design/docs/incremental-layout); fast paths that make a small edit cheap in time are next |
+| `@dagr/layout` | Headless Sugiyama layout engine; incremental, animation-first | The full pipeline, cycle breaking, ranking, crossing reduction, coordinates and routes implemented, plus the incremental engine: patches in, deltas out, warm-started stages and a committed [stability corpus](https://dagr.prnt.design/docs/incremental-layout); an inert-patch fast path skips stages when an edit changes no layout inputs; broader fast paths are planned |
 | `@dagr/render` | WebGPU renderer: SDF shapes, instancing, spring animation | Camera, SDF shapes, an HTML overlay, instancing, edge ribbons, a real graph on screen, critically damped springs, node, edge and bounds motion driven as one scene, and the loop that drives it implemented; GPU picking is next |
 | `@dagr/react` | `<DagrCanvas>` component and hooks | The canvas, the `useDagr` hook over the incremental engine, `<Html>` over the overlay, the layout-to-scene conversion, and `animate`, which glides an edit to its new layout off the delta, implemented; interaction is next |
 | `@dagr/vdsl` | Visual DSL toolkit: node spec adapter, typed ports, drag-to-connect | The node spec adapter, its registry, port type tokens and connection validation implemented; drag-to-connect is next |

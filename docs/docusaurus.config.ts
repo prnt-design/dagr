@@ -229,15 +229,8 @@ const config: Config = {
           position: 'left',
         },
         {
-          // Two demos now, as the plural always anticipated: sibling routes
-          // under /demos/ rather than a nav item each. Still pointing at a
-          // PAGE rather than a /demos/ index, because an index is a click in
-          // front of the thing a visitor came for and the two pages link to
-          // each other. It points at the living graph rather than the campaign
-          // because that is the one that shows the claim the project competes
-          // on; the campaign shows scale, which is the second question.
-          to: '/demos/living',
-          label: 'Demos',
+          to: '/',
+          label: 'Inside the graph',
           position: 'left',
         },
         {

@@ -1,26 +1,23 @@
 # demo
 
-The playground Dagr is exercised in. Two demos behind a switch, one at a time:
-the **living graph**, a build pipeline edited while you watch with a count of
-what each edit moved, and the **campaign**, a mock D&D campaign of 3,010 nodes
-laid out in a worker. Vite and React, private, never published.
+The local renderer playground. It opens on the living graph, a build pipeline
+edited while you watch. The campaign is an archived experiment, available only
+through the explicit `#view=campaign` URL for development and historical capture.
+It is no longer offered in the visible demo switch.
 
 ```bash
 pnpm --filter demo dev     # http://localhost:5173
 pnpm --filter demo build   # apps/demo/dist
 ```
 
-NO DEPLOY. This built to `dagr-demo.onrender.com` for one day, and both demos
-now live on the docs site, at
-[/demos/living](https://dagr.prnt.design/demos/living) and
-[/demos/campaign](https://dagr.prnt.design/demos/campaign), where a reader finds
-them under the site's own nav instead of on a second service. What is here is a
-local playground: `pnpm dev` and a browser.
+The public showcase lives on the docs site. The living demo is at
+[/demos/living](https://dagr.prnt.design/demos/living). The old campaign route
+shows an archive notice. This app remains a local playground.
 
 ONE AT A TIME, and not stacked. Each stage mounts a canvas, and two live
 canvases is two GPU device contexts for a page that can only be looking at one.
 The switch is a `useState` and no router: a route each is right for a site a
-visitor navigates, and both deployed demos already have one.
+visitor navigates, and the public living demo has one.
 
 It opens on the living graph, and `#view=campaign` opens on the other. That key
 is why `scripts/capture.mjs` still works: every committed screenshot is of the

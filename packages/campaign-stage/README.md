@@ -3,13 +3,12 @@
 The campaign demo as a mountable React component: the canvas, the camera, the
 input, the HTML overlay and the scene build. Private, never published.
 
-It exists because two pages draw the same thing. `apps/demo` is the playground
-the engine is exercised in, and `/demos/campaign` is the deployed one on the
-docs site. Before this package they were one page, and moving the demo into the
-docs site without moving the code would have left two of them to drift.
-`@dagr/living-stage` is the sibling that took the same shape for the animated
-demo, which is the route the site's Demos tab now lands on: this one answers
-scale, that one answers stability under an edit.
+An archived showcase artifact, retained with its tests and fixture. It was
+extracted so the Vite playground and docs host could share a stage. The public
+`/demos/campaign` route now displays an archive notice and no longer mounts it.
+Run `pnpm --filter demo dev` and open `http://localhost:5173/#view=campaign`
+to inspect the original scene. `@dagr/living-stage` remains the live mutation
+example used by the public showcase.
 
 ```tsx
 import { CampaignStage } from '@dagr/campaign-stage';

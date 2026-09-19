@@ -1,112 +1,62 @@
-# docs
+# Documentation site
 
-The Docusaurus site behind [dagr.prnt.design](https://dagr.prnt.design):
-the landing page in `src/pages/`, the docs in `docs/`, two demos at
-`/demos/living` and `/demos/campaign`, the muslin theme port in
-`src/css/custom.css`. Render deploys `main` when CI is green; see `render.yaml`
-at the repo root.
+Docusaurus powers [dagr.prnt.design](https://dagr.prnt.design). The homepage is
+**Inside the graph**, an engineering showcase with three modes:
 
-## The living demo, and the one thing it does not need
+- **Architecture:** a source-derived runtime map, laid out by `@dagr/layout`
+  and displayed with HTML and SVG. Node selection is application UI.
+- **Follow an edit:** the shared `@dagr/living-stage` demo, initially paused.
+- **Rich content:** a small `DagrCanvas` scene with React `Html` nodes and a
+  world-space edge annotation.
 
-`src/pages/demos/living.tsx` is the route and `src/components/LivingDemo/` is
-the mount. Everything on the canvas is `@dagr/living-stage`, the same component
-`apps/demo` mounts. It is the route the Demos tab points at, because it shows
-the claim the project competes on.
+The homepage also runs the seeded layout benchmark in a worker. Its timing
+includes the worker round trip and is not a renderer frame-rate measurement.
 
-NO WORKER, deliberately, which is the one thing it does differently from the
-campaign below. Its graph is 32 nodes and lays out in well under a frame, so a
-worker would put a round trip in front of every edit in a demo whose whole
-subject is how little work an edit is. It needs the same `BrowserOnly` plus
-`require` treatment, for the same reason: the renderer reaches a GPU adapter
-through three.js and this site renders every page on the server at build time.
-
-## The campaign demo, and the two things it needs
-
-`src/pages/demos/campaign.tsx` is the route. Everything on the canvas is
-`@dagr/campaign-stage`, the same component `apps/demo` mounts, so what the site
-shows and what the playground shows cannot drift.
-
-It is mounted through `<BrowserOnly>` AND required rather than imported, in
-`src/components/CampaignDemo/`. `BrowserOnly` stops the component rendering
-during the server build; it does nothing about a top-level `import`, which is
-hoisted and evaluated whether or not anything renders it, and the stage reaches
-a GPU adapter through three.js.
-
-The worker beside it is this site's own entry, not the package's, because
-webpack resolves `new Worker(new URL(...))` from the module that writes it. It
-is a second copy of the landing page demo's two-line worker for that reason, and
-both of them need the `dagr-worker-runtime` plugin in `docusaurus.config.ts`:
-without it a worker entrypoint gets no runtime bootstrap, throws on its first
-line, and never answers, which the page cannot tell from a slow layout.
-
-The stylesheet is `@dagr/campaign-stage/stage.css`, imported by the component
-rather than by the package's own modules, and its colours are its own: the stage
-is a viewport into a scene the renderer paints on near black, so it stays dark
-under the site's light theme rather than following it.
-
-## The two figures on the landing page, and which is which
-
-The hero, near the title, is committed engine output. `scripts/generate-hero-graph.mjs`
-builds a 20 node graph, runs `layout` on it, and writes coordinates and routes
-to `src/components/heroGraphData.json`, which `HeroGraph.tsx` draws inline so
-every color resolves from the theme tokens. Regenerate it after a `pnpm build`
-at the repo root:
+## Develop
 
 ```bash
-pnpm --filter docs generate:hero   # src/components/heroGraphData.json
+pnpm --filter docs... build
+pnpm --filter docs start
 ```
 
-Regenerate whenever the layout engine changes enough that the drawing stops
-representing it. Those two files are load-bearing: they are what the page shows
-when JavaScript is off.
+Workspace dependencies must be built before Docusaurus resolves their `dist`
+exports. Typecheck resolves their source through `tsconfig.json` paths.
+Adding a package requires a dependency, a source path, and a check of the
+Render deployment filters in `render.yaml`.
 
-The scale figure below it is not committed anything. `src/components/LiveLayout/`
-generates the benchmark corpus in the visitor's browser, lays it out with
-`@dagr/layout` in a web worker, and reports the time it took on their machine.
-Nothing to regenerate, and nothing that can go stale: it runs whatever the site
-was built from.
+## Where to edit
 
-It replaced a committed SVG of the same corpus and a quoted millisecond figure.
-`generate-perf-graph.mjs`, `perfStats.json` and `static/img/bench-1k-*.svg` are
-gone with it, so do not look for a `generate:perf` script.
+| Surface | Source |
+| --- | --- |
+| Landing page | `src/pages/index.tsx` and its CSS module |
+| Architecture and inspector | `src/components/ArchitectureExplorer/` |
+| Live mutation demo | `src/components/LivingDemo/` and `packages/living-stage/` |
+| Scale measurement | `src/components/LiveLayout/` |
+| Theme | `src/css/custom.css` |
+| Reader documentation | `docs/` |
 
-## What the demos need from the build
+Architecture data is a curated runtime overview, not an automatically extracted
+dependency graph. Keep its claims and source links aligned with the packages.
 
-The site imports `@dagr/graph`, `@dagr/layout`, `@dagr/campaign-stage` and
-`@dagr/living-stage`, which between them bring `@dagr/campaign`, `@dagr/react`
-and `@dagr/render` with them, so all of them have to be built before it.
-`render.yaml` runs `pnpm --filter docs... build`, which does that in dependency
-order; the root `pnpm build` does too, because `pnpm -r` is
-topological and the dependency creates the edge. Building the site alone against
-a fresh clone fails until the packages have a `dist`.
+## Browser-only rendering
 
-Typecheck reads the packages from source through `paths` in `tsconfig.json`,
-the way every other workspace package does, because `dist` does not exist in a
-fresh clone or in CI, where typecheck runs before build. The bundler resolves
-the built `dist` through the workspace symlink, which is the same artefact a
-consumer installs.
+Renderer modules reach browser APIs through three.js. Mount them through
+`BrowserOnly` and require them inside its callback; a static import still
+evaluates during server rendering. The architecture map itself is server-rendered
+and remains readable without JavaScript.
 
-`three` is in `dependencies` and nothing here imports it by name. It is
-`@dagr/render`'s peer, and this site is the consumer that ships the renderer, so
-the dependency list says so. It is not what makes the build work: webpack
-resolves `three/webgpu` from inside `packages/render`, which has its own copy,
-and would keep doing that if this entry were deleted. KEEP THE RANGE IN STEP
-WITH `packages/render`'s. Diverge it and the workspace installs a second copy of
-a megabyte-class package that nothing here imports, and the day something here
-does import `three` the site bundles both.
+Worker entrypoints belong to the host bundler. The `dagr-worker-runtime` plugin
+keeps webpack runtime code in the worker bundle and declares the bootstrap
+requirements Docusaurus's chunk plugin needs. Keep it for `LiveLayout`.
 
-ADDING A WORKSPACE DEPENDENCY IS TWO EDITS, the same trap `apps/demo/README.md`
-documents in its own form: a `paths` entry here, so typecheck reads source, and
-a `dependencies` entry in `package.json`, so the bundler can resolve the package
-at all. The `paths` map is longer than what this site imports by name, because
-typecheck follows `@dagr/campaign-stage`'s source into the packages it imports
-and `@dagr/living-stage`'s into `@dagr/react`. `render.yaml`'s `buildFilter` is
-a THIRD place the same list appears: a package missing from it is a change to
-the site that deploys nothing.
-A local gate proves nothing about a fresh clone while a stale `dist` is lying
-around: delete every `dist` in the workspace before trusting one.
+## Archived campaign
 
-The demo's copy of the corpus generator lives in `src/components/LiveLayout/corpus.ts`
-and is a port of the bench kit's, which is private and never built.
-`bench/test/docs-corpus-port.test.ts` runs both generators against each other,
-so the 1k preset stays the graph the committed baseline gates on.
+`/demos/campaign` and the historical `/docs/campaign` redirect now reach an
+archive notice. The public site does not mount the campaign. Its fixture,
+stage, host component, and captures remain in the repository. The local demo
+can still open it explicitly with `#view=campaign`; it is absent from the
+visible switch.
+
+`HeroGraph.tsx` and its generated data remain as an earlier design artifact.
+The homepage no longer uses them. The live benchmark's corpus port is checked
+against the bench generator by `bench/test/docs-corpus-port.test.ts`.

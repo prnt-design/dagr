@@ -17,45 +17,23 @@ explains choices already visible in `@dagr/graph` and `@dagr/layout`.
 
 ## The domain where node graphs actually win
 
-Visual programming has a mixed record, and it is worth being precise about
-which half Dagr is in.
+Graph interfaces are most useful when composition and dependencies are central
+to the task: materials, geometry, signals, workflows, and data pipelines.
+They can coexist with text rather than replace it. A node may contain code,
+a preview, or configuration, while edges describe how those pieces connect.
 
-General-purpose visual *languages* have largely failed. The constraint is
-usually stated as the Deutsch limit — you can fit only so many primitives on a
-screen — and text wins decisively below a certain granularity. Every attempt to
-replace a general-purpose textual language with boxes and wires has stayed a
-curiosity.
+Dagr targets that composition layer. It does not provide the evaluator,
+the domain vocabulary, or a general-purpose visual programming language.
 
-Domain-specific ones have won outright, repeatedly, wherever the domain is
-genuinely dataflow-shaped:
-
-| Tool | Domain |
-| --- | --- |
-| LabVIEW | instrumentation and test |
-| Simulink | control systems |
-| Nuke | film compositing |
-| Substance Designer | material and texture authoring |
-| Houdini | procedural geometry |
-| Blender geometry and shader nodes | modelling and shading |
-| Max/MSP, Pure Data | audio and interactive media |
-| Grasshopper | parametric architecture |
-| Node-RED | event wiring |
-| ComfyUI | diffusion pipelines |
-
-The pattern that holds across all of them: **the graph handles composition and
-dependency; text handles computation.** Nuke has expressions, Houdini has VEX
-snippets, Node-RED nodes contain JavaScript. None of them tried to make the
-leaves visual. A toolkit should not push you to either.
-
-The second pattern: successful node tools are narrow. Dagr is deliberately the
-layer *below* that narrowness — the part that is the same whether you are
+A visual language works best with a focused vocabulary. Dagr is deliberately the
+layer *below* that narrowness, the part that is the same whether you are
 wiring audio or compiling a query.
 
 ## What Dagr provides, and what you provide
 
 **Dagr provides** the graph model with stable node identity and patch-based
-mutation, layout that is incremental and does not reshuffle on edit, and
-rendering at a scale DOM cannot reach. Picking, selection and drag-to-connect
+mutation, incremental layout with explicit deltas, and
+instanced GPU rendering. Picking, selection and drag-to-connect
 are planned (M4.8, M5.2, M6.3).
 
 **You provide** the meaning. What node kinds exist, what a port carries,
@@ -70,56 +48,33 @@ node kinds and validates against it.
 This is a deliberate reversal of the obvious design. An ontology is the part
 every adopter has already decided for themselves, usually correctly, and a
 library that decides it again has no way to know which answer is right. What
-generalises is the mechanism — a port has a type token, a connection is legal
-if your predicate says so — not the vocabulary.
+generalises is the mechanism, a port has a type token, a connection is legal
+if your predicate says so, not the vocabulary.
 
 ## Layout stability is the thesis
 
-The common way to lay out an editable node graph is to run a batch layout
-after every change. `dagre` and ELK are both batch engines: neither preserves
-prior positions across an edit. That works right up until the graph is
-something a person is editing, at which point adding one node rearranges the
-other forty and the user loses their place.
+Recomputing layout after an edit can disturb the user's mental map. Dagr
+retains stable IDs and previous pipeline state, then reports a delta alongside
+the new layout so a renderer can animate the change.
 
-Dagr treats that as the central problem rather than a rough edge. Node identity
-is stable across layouts, ordering decisions are carried forward rather than
-recomputed from scratch, and the engine emits a delta so a renderer can animate
-from the old positions to the new ones instead of cutting. [Incremental
-layout](./layout.md) covers the mechanics.
+This is not a guarantee that every unaffected node stays at the same position.
+The graph, edit, and layout stages determine how far a change propagates.
+The [incremental layout guide](./incremental-layout.md) documents the measured
+behavior and limitations.
 
-If you are building a visual language, this is the property that decides
-whether the editor feels like a document or like a slideshow.
+Animation helps readers follow the change; predictable layout reduces the
+amount they need to relearn after each edit.
 
 ## Encapsulation
 
-The one thing a flat DAG genuinely cannot express is naming and reuse. Past a
-screenful of nodes, a graph needs a way to say "this cluster is one thing,
-called this" — and every serious node tool converged on the same answer: a node
-that contains other nodes, which you navigate into.
+Larger graphs often need named, reusable groups. Dagr's roadmap separates two
+possible interfaces: navigating into a subgraph, and drawing nested groups
+inline. These require different layout and lifecycle decisions.
 
-Houdini calls them subnets, Nuke calls them Groups, Blender node groups, Max
-subpatchers, Simulink subsystems, LabVIEW subVIs, Unreal collapsed graphs. A
-subgraph node is, functionally, a function.
-
-Containment in Dagr is a reference on a node, not a nested `Graph` instance.
-That keeps one patch stream and one delta flow, which is what lets collapse and
-expand rebind boundary edges in a single atomic patch.
-
-The two ways to draw it have very different costs:
-
-- **Drill-down**, planned for v0.2, replaces the canvas with the container's
-  children. This needs no layout *algorithm* change — the children lay out as
-  an ordinary graph. It does need one engine per container, kept alive across
-  navigation: an engine retains a single graph and a single warm start, so
-  re-running it on a different view is a cold run, and a cold run on every
-  drill-in is the reshuffle this page just argued against.
-- **Inline compound layout** draws parents and children together as nested
-  boxes. Much harder — containment constrains ranking, and the barycentre
-  crossing-reduction pass does not survive it — and is tracked separately.
-
-M5.5 reserves containment in the graph model before v0.1 publishes — the
-`parent` field, the `update-node-parent` patch op, and the invariants — so that
-neither choice needs a breaking change to `PatchOp` later.
+The graph model already supports a node `parent` reference, reparenting, and
+containment invariants. Navigation into subgraphs and compound layout are
+separate, planned capabilities. A parent reference alone does not make the
+renderer draw a nested group. See the [graph model](./graph-model.md).
 
 ## Status
 
