@@ -143,3 +143,11 @@
     padding-bottom: 3rem;
   }
 }
+
+/* Let code blocks scroll inside a narrow grid track instead of widening it. */
+.start > *,
+.intro > *,
+.storyBody > *,
+.sectionHead > * {
+  min-width: 0;
+}

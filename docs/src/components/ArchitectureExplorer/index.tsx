@@ -42,6 +42,19 @@ export default function ArchitectureExplorer() {
       </div>
       {mode === 'Architecture' && (
         <>
+          <label className={styles.mobileSelect}>
+            Inspect a system
+            <select
+              value={selected}
+              onChange={(event) => setSelected(event.target.value as SystemId)}
+            >
+              {systems.map((node) => (
+                <option key={node.id} value={node.id}>
+                  {node.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className={styles.workbench}>
             <div className={styles.diagramPanel}>
               <div className={styles.diagramHeading}>
@@ -59,7 +72,7 @@ export default function ArchitectureExplorer() {
                   className={styles.diagram}
                   style={{
                     width: `${Math.round(100 * zoom)}%`,
-                    minWidth: `${Math.round(740 * zoom)}px`,
+                    minWidth: `${Math.round(1000 * zoom)}px`,
                     aspectRatio: `${width} / ${height}`,
                   }}
                 >
@@ -260,10 +273,10 @@ export default function ArchitectureExplorer() {
             }
           >
             {() => {
-              const RichDemo = (
+              const RichDemo =
                 // eslint-disable-next-line @typescript-eslint/no-require-imports -- renderer modules must not evaluate during server rendering.
-                require('./RichDemo') as { default: typeof RichDemoModule }
-              ).default;
+                (require('./RichDemo') as { default: typeof RichDemoModule })
+                  .default;
               return <RichDemo />;
             }}
           </BrowserOnly>

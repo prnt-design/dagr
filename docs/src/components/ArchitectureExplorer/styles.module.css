@@ -405,3 +405,28 @@
     transition: none;
   }
 }
+
+.mobileSelect {
+  display: none;
+}
+@media (max-width: 600px) {
+  .mobileSelect {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    margin: 1rem 0;
+  }
+  .mobileSelect select {
+    min-height: 44px;
+    padding: 0.5rem;
+    background: var(--dagr-background);
+    color: var(--dagr-foreground);
+    border: 1px solid var(--contrast-20pct);
+    font: inherit;
+  }
+  .mobileSelect select:focus-visible {
+    outline: 3px solid var(--primary-text);
+    outline-offset: 3px;
+  }
+}
