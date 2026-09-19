@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import Link from '@docusaurus/Link';
 import BrowserOnly from '@docusaurus/BrowserOnly';
@@ -7,6 +7,7 @@ import type RichDemoModule from './RichDemo';
 import { architectureLayout, connections, SOURCE, systems } from './model';
 import type { SystemId } from './model';
 import styles from './styles.module.css';
+import GraphViewport from '../GraphViewport';
 
 const modes = ['Architecture', 'Follow an edit', 'Rich content'] as const;
 type Mode = (typeof modes)[number];
@@ -14,41 +15,6 @@ type Mode = (typeof modes)[number];
 export default function ArchitectureExplorer() {
   const [mode, setMode] = useState<Mode>('Architecture');
   const [selected, setSelected] = useState<SystemId>('layout');
-  const [zoom, setZoom] = useState(1);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const zoomHint = useId();
-  useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const wheel = (event: WheelEvent) => {
-      if (
-        !viewport.contains(document.activeElement) ||
-        event.ctrlKey ||
-        event.metaKey
-      )
-        return;
-      if (event.deltaY === 0 || event.shiftKey) return;
-      event.preventDefault();
-      const pixels =
-        event.deltaY *
-        (event.deltaMode === 1
-          ? 16
-          : event.deltaMode === 2
-            ? viewport.clientHeight
-            : 1);
-      setZoom((value) =>
-        Math.min(
-          2,
-          Math.max(
-            0.5,
-            value * Math.exp(-Math.max(-150, Math.min(150, pixels)) * 0.002),
-          ),
-        ),
-      );
-    };
-    viewport.addEventListener('wheel', wheel, { passive: false });
-    return () => viewport.removeEventListener('wheel', wheel);
-  }, [mode]);
   const drawing = useMemo(architectureLayout, []);
   const arrow = useId().replace(/:/g, '');
   const current = systems.find((node) => node.id === selected)!;
@@ -98,34 +64,12 @@ export default function ArchitectureExplorer() {
                   {systems.length} systems · {connections.length} connections
                 </span>
               </div>
-              <div
-                className={styles.viewport}
-                ref={viewportRef}
-                tabIndex={0}
-                aria-label="Architecture diagram"
-                aria-describedby={zoomHint}
-                onPointerDown={(event) => {
-                  if (
-                    !(event.target instanceof Element) ||
-                    !event.target.closest('button')
-                  )
-                    event.currentTarget.focus({ preventScroll: true });
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    (document.activeElement as HTMLElement | null)?.blur();
-                    event.stopPropagation();
-                  }
-                }}
+              <GraphViewport
+                label="Architecture diagram"
+                width={width}
+                height={height}
               >
-                <div
-                  className={styles.diagram}
-                  style={{
-                    width: `${Math.round(100 * zoom)}%`,
-                    minWidth: `${Math.round(1000 * zoom)}px`,
-                    aspectRatio: `${width} / ${height}`,
-                  }}
-                >
+                <div className={styles.diagram} style={{ width, height }}>
                   <svg
                     viewBox={`0 0 ${width} ${height}`}
                     className={styles.wires}
@@ -236,38 +180,7 @@ export default function ArchitectureExplorer() {
                     );
                   })}
                 </div>
-              </div>
-              <div className={styles.diagramFooter}>
-                <div
-                  className={styles.zoom}
-                  role="group"
-                  aria-label="Diagram zoom"
-                >
-                  <button
-                    type="button"
-                    aria-label="Zoom out"
-                    disabled={zoom <= 0.5}
-                    onClick={() => setZoom((v) => Math.max(0.5, v - 0.25))}
-                  >
-                    −
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Zoom in"
-                    disabled={zoom >= 2}
-                    onClick={() => setZoom((v) => Math.min(2, v + 0.25))}
-                  >
-                    +
-                  </button>
-                  <button type="button" onClick={() => setZoom(1)}>
-                    Reset zoom
-                  </button>
-                </div>
-                <span id={zoomHint}>
-                  Click or Tab into the graph, then scroll to zoom. Escape
-                  releases focus. Shift + scroll pans.
-                </span>
-              </div>
+              </GraphViewport>
             </div>
             <aside
               className={styles.inspector}

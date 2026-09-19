@@ -35,7 +35,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import type { LayoutDelta, LayoutResult } from '@dagr/layout';
 import { DagrCanvas, toWorldBounds, useDagrCanvas } from '@dagr/react';
 // From `@dagr/react`, not `@dagr/render`: this package's only contact with the
@@ -43,7 +43,12 @@ import { DagrCanvas, toWorldBounds, useDagrCanvas } from '@dagr/react';
 // are spelled in so a consumer does not take a dependency to write one
 // annotation. That re-export exists because writing this file wanted it.
 import type { SceneMotionOptions } from '@dagr/react';
-import { CLEAR_COLOR, STAGE_LEGEND, livingAppearance, touchedBy } from './appearance.js';
+import {
+  CLEAR_COLOR,
+  STAGE_LEGEND,
+  livingAppearance,
+  touchedBy,
+} from './appearance.js';
 import {
   EDIT_KINDS,
   INITIAL_SCRIPT_STATE,
@@ -53,7 +58,11 @@ import {
   takeStep,
 } from './edit-script.js';
 import type { EditKind, EditStep, ScriptState } from './edit-script.js';
-import { LIVING_LAYOUT_CONFIG, createLivingGraph, stageOf } from './living-graph.js';
+import {
+  LIVING_LAYOUT_CONFIG,
+  createLivingGraph,
+  stageOf,
+} from './living-graph.js';
 import type { Stage } from './living-graph.js';
 import { readEdit } from './readout.js';
 import type { Readout } from './readout.js';
@@ -104,6 +113,11 @@ const VERB_HINTS: Readonly<Record<EditKind, string>> = {
 
 /** What {@link LivingStage} takes. */
 export interface LivingStageProps {
+  /** Optional host viewport; receives the canvas and its failure state. */
+  readonly renderCanvas?: ((canvas: ReactNode) => ReactNode) | undefined;
+  /** Host camera adapter mounted inside the canvas context. Replaces refit. */
+  readonly canvasChildren?: ReactNode;
+
   /** The graph's seed. Read when it changes, which restarts the demo. */
   readonly seed?: number | undefined;
   /** Whether to start playing on its own. Default true, unless motion is reduced. */
@@ -134,7 +148,13 @@ function RefitButton(): ReactElement {
 }
 
 /** One number and its name. */
-function Stat({ value, label }: { value: string; label: string }): ReactElement {
+function Stat({
+  value,
+  label,
+}: {
+  value: string;
+  label: string;
+}): ReactElement {
   return (
     <div className="living__stat">
       <span className="living__statValue">{value}</span>
@@ -151,8 +171,8 @@ function Numbers({ readout }: { readout: Readout | null }): ReactElement {
   if (readout.kind === 'initial') {
     return (
       <p className="living__waiting">
-        {readout.nodes} nodes and {readout.edges} edges, laid out cold. Make an edit and this
-        becomes a count of what moved.
+        {readout.nodes} nodes and {readout.edges} edges, laid out cold. Make an
+        edit and this becomes a count of what moved.
       </p>
     );
   }
@@ -162,17 +182,24 @@ function Numbers({ readout }: { readout: Readout | null }): ReactElement {
     // from a drawing that never reached the screen. See `readout.ts`.
     return (
       <p className="living__waiting">
-        More than one edit arrived in a single frame, so there is no single edit to count.
+        More than one edit arrived in a single frame, so there is no single edit
+        to count.
       </p>
     );
   }
   return (
     <div className="living__stats">
-      <Stat value={`${readout.stayedPut} of ${readout.nodes}`} label="nodes stayed put" />
+      <Stat
+        value={`${readout.stayedPut} of ${readout.nodes}`}
+        label="nodes stayed put"
+      />
       <Stat value={String(readout.moved)} label="moved" />
       <Stat value={String(readout.added)} label="added" />
       <Stat value={String(readout.removed)} label="removed" />
-      <Stat value={`${readout.rerouted} of ${readout.edges}`} label="edges rerouted" />
+      <Stat
+        value={`${readout.rerouted} of ${readout.edges}`}
+        label="edges rerouted"
+      />
     </div>
   );
 }
@@ -244,7 +271,11 @@ export function LivingStage(props: LivingStageProps): ReactElement {
   }, [graph]);
 
   const onLayout = useCallback(
-    (result: LayoutResult, delta: LayoutDelta | null, from: LayoutResult | null): void => {
+    (
+      result: LayoutResult,
+      delta: LayoutDelta | null,
+      from: LayoutResult | null,
+    ): void => {
       setReadout(readEdit(result, delta, from, counted.current));
       setTouched(delta === null ? NOTHING_TOUCHED : touchedBy(delta));
       // Recorded WHATEVER the readout said, so one coalesced burst costs one
@@ -343,33 +374,37 @@ export function LivingStage(props: LivingStageProps): ReactElement {
   );
 
   return (
-    <section className={className === undefined ? 'living' : `living ${className}`}>
+    <section
+      className={className === undefined ? 'living' : `living ${className}`}
+    >
       <div className="living__canvas">
-        {failure === null ? (
-          <DagrCanvas
-            graph={graph}
-            config={LIVING_LAYOUT_CONFIG}
-            nodeAppearance={nodeAppearance}
-            clearColor={CLEAR_COLOR}
-            animate={reducedMotion ? undefined : FEEL}
-            onLayout={onLayout}
-            onError={setFailure}
-            style={{ width: '100%', height: '100%' }}
-          >
-            <RefitButton />
-          </DagrCanvas>
-        ) : (
-          <p className="living__failure" role="alert">
-            {/*
+        {(props.renderCanvas ?? ((canvas: ReactNode) => canvas))(
+          failure === null ? (
+            <DagrCanvas
+              graph={graph}
+              config={LIVING_LAYOUT_CONFIG}
+              nodeAppearance={nodeAppearance}
+              clearColor={CLEAR_COLOR}
+              animate={reducedMotion ? undefined : FEEL}
+              onLayout={onLayout}
+              onError={setFailure}
+              style={{ width: '100%', height: '100%' }}
+            >
+              {props.canvasChildren ?? <RefitButton />}
+            </DagrCanvas>
+          ) : (
+            <p className="living__failure" role="alert">
+              {/*
               No cause is named. `onError` is the one exit for a renderer that
               never arrived AND for a layout that failed, and the first version
               of this blamed the GPU for both, which would have sent a reader
               looking at their browser for a bug in this package. The error's own
               message is the only thing here that knows which it was.
             */}
-            This demo could not be drawn:{' '}
-            {failure instanceof Error ? failure.message : String(failure)}
-          </p>
+              This demo could not be drawn:{' '}
+              {failure instanceof Error ? failure.message : String(failure)}
+            </p>
+          ),
         )}
       </div>
 
@@ -392,8 +427,9 @@ export function LivingStage(props: LivingStageProps): ReactElement {
         </div>
         {reducedMotion ? (
           <p className="living__reduced">
-            Your system asks for reduced motion, so the drawing cuts to each layout instead of
-            gliding and nothing plays on its own. The counts are the same either way.
+            Your system asks for reduced motion, so the drawing cuts to each
+            layout instead of gliding and nothing plays on its own. The counts
+            are the same either way.
           </p>
         ) : (
           <button

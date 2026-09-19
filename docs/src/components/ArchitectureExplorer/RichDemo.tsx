@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Graph } from '@dagr/graph';
 import { DagrCanvas, Html, useDagrCanvas } from '@dagr/react';
 import styles from './styles.module.css';
+import GraphViewport from '../GraphViewport';
+import RendererAdapter from '../GraphViewport/RendererAdapter';
 
 const config = { defaultNodeSize: { width: 300, height: 160 }, rankSep: 70 };
 const appearance = () => ({ fillColor: 0x263d36, cornerRadius: 2 });
@@ -117,16 +119,19 @@ export default function RichDemo() {
           and rich-content guide remain available.
         </p>
       ) : (
-        <DagrCanvas
-          graph={graph}
-          config={config}
-          nodeAppearance={appearance}
-          clearColor={0x18231f}
-          className={styles.richCanvas}
-          onError={setFailure}
-        >
-          <Content seed={seed} onReady={setReady} />
-        </DagrCanvas>
+        <GraphViewport label="Rich content graph" native>
+          <DagrCanvas
+            graph={graph}
+            config={config}
+            nodeAppearance={appearance}
+            clearColor={0x18231f}
+            className={styles.richCanvas}
+            onError={setFailure}
+          >
+            <RendererAdapter />
+            <Content seed={seed} onReady={setReady} />
+          </DagrCanvas>
+        </GraphViewport>
       )}
       <p className={styles.caption}>
         This example draws three nodes through the renderer. React portals

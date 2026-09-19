@@ -38,7 +38,6 @@
   color: var(--dagr-background);
 }
 .explorer button:focus-visible,
-.viewport:focus-visible,
 .connections summary:focus-visible {
   outline: 3px solid var(--primary-text);
   outline-offset: 4px;
@@ -69,22 +68,12 @@
   padding: 1.5rem;
   color: var(--dagr-text-muted);
 }
-.viewport {
-  overflow: auto;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  min-height: 350px;
-  padding: 1.5rem 0;
-}
-.viewport:focus-within {
-  outline: 3px solid var(--primary-text);
-  outline-offset: -3px;
-}
 .diagram {
   container-type: inline-size;
-  position: relative;
-  flex-shrink: 0;
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
 }
 .wires {
   position: absolute;
@@ -334,9 +323,6 @@
   font: 11px var(--ifm-font-family-monospace);
 }
 @media (min-width: 1450px) {
-  .viewport {
-    min-height: 460px;
-  }
 }
 @media (max-width: 1000px) {
   .workbench {
@@ -355,15 +341,6 @@
   }
   .note {
     display: none;
-  }
-  .node strong {
-    font-size: 1rem;
-  }
-  .nodeRole {
-    font-size: 0.95cqw;
-  }
-  .nodeSummary {
-    font-size: 0.75rem;
   }
 }
 @media (max-width: 600px) {
@@ -389,9 +366,7 @@
   .diagramFooter > span {
     display: none;
   }
-  .viewport {
-    min-height: 300px;
-  }
+
   .diagramFooter {
     padding: 0.8rem 1rem;
   }
