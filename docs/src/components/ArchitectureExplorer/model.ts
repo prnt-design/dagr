@@ -162,7 +162,7 @@ export function architectureLayout() {
   return layout({
     graph,
     config: {
-      defaultNodeSize: { width: 108, height: 178 },
+      defaultNodeSize: { width: 148, height: 178 },
       nodeSep: 65,
       rankSep: 96,
     },
