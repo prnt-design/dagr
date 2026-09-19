@@ -175,7 +175,6 @@ type View = 'living' | 'campaign';
 
 const VIEWS: readonly { readonly id: View; readonly label: string }[] = [
   { id: 'living', label: 'living graph' },
-  { id: 'campaign', label: 'campaign' },
 ];
 
 /**

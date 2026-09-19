@@ -1,71 +1,85 @@
 ---
 id: intro
-title: Dagr
+title: Start here
 sidebar_position: 1
 slug: /
 ---
 
-<img src="/img/logo.svg" className="hero-mark" width="64" height="64" alt="" />
+# Build a graph people can follow
 
-# Dagr
+Dagr is a TypeScript toolkit for directed graphs: a graph model, a headless
+layout engine, a GPU renderer, and React bindings. Use the layers together or
+bring your own renderer. The visual-language toolkit adds node specifications
+and connection validation without deciding what your nodes mean.
 
-Dagr is a directed-graph toolkit for the web: a typed, headless Sugiyama layout
-engine, a WebGPU renderer built on the three.js `WebGPURenderer`, and the
-building blocks for visual DSLs (node graphs you can edit, not just look at).
+[Explore the architecture](/) to see how the pieces fit, try an actual mutation
+in [Follow an edit](/demos/living), or start with the example below.
 
-It is a successor to the dagre and d3 pairing that most node-graph UIs still
-reach for. The difference is that layout here is designed for animation from
-the start: nodes keep a stable identity across relayouts, mutations arrive as
-patches, and the layout engine emits deltas rather than a fresh set of
-coordinates. A renderer can spring every node from where it was to where it
-now belongs, so a graph that changes reads as a graph that moved.
+## Run it locally
 
-There are two live demos, and they answer different questions.
+Dagr is pre-release and **not published to npm**. Start from the repository
+with Node 20 or newer and pnpm:
 
-The [living graph](/demos/living) is the paragraph above, on screen. Press
-grow, prune or relayout and a build pipeline is edited in front of you, one
-`graph.batch` per edit and one `LayoutDelta` per batch. The nodes the edit
-touched light up and glide; the ones it did not are still exactly where they
-were, and a readout counts them off the delta. The measurements behind that are
-on the [incremental layout](./incremental-layout.md) page, and the demo's job is
-to make them legible rather than to add to them.
+```bash
+git clone https://github.com/prnt-design/dagr.git
+cd dagr
+pnpm install
+pnpm --filter docs... build
+pnpm --filter docs start
+```
 
-The [campaign](/demos/campaign) is the other question, scale: a mock D&D
-campaign of 3,010 nodes and 7,100 edges, laid out a tile at a time in a worker,
-instanced on the GPU, with names and then readable cards appearing as you zoom
-in. What it draws is a generated fixture rather than part of the toolkit, and it
-documents itself in
-[its own README](https://github.com/prnt-design/dagr/blob/main/packages/campaign/README.md).
+For the local renderer playground, run `pnpm --filter demo dev`.
 
-## Packages
+## Your first graph
 
-| Package | What it does |
+The graph and layout packages have no browser requirement. Layout returns node
+boxes and edge routes keyed by the IDs you supplied.
+
+```ts
+import { Graph } from '@dagr/graph';
+import { layout } from '@dagr/layout';
+
+const graph = new Graph();
+graph.addNode({ id: 'source' });
+graph.addNode({ id: 'preview' });
+graph.addEdge({ source: 'source', target: 'preview' });
+
+const result = layout({ graph });
+const preview = result.nodes.get('preview');
+// preview has x, y, width, and height. x and y are its center.
+```
+
+This example runs inside the workspace. Use the [React bindings](./react.md)
+to draw a graph with `DagrCanvas`, then add [rich content](./rich-content.md).
+
+## Choose the layer you need
+
+| Package | Use it for |
 | --- | --- |
-| [`@dagr/graph`](./graph-model.md) | Typed directed graph model: stable identity, zero dependencies |
-| [`@dagr/layout`](./layout.md) | Headless Sugiyama layout pipeline, incremental and animation first |
-| [`@dagr/render`](./render.md) | WebGPU renderer: SDF shapes, instancing, spring animation |
-| [`@dagr/react`](./react.md) | The `DagrCanvas` component and hooks |
+| [`@dagr/graph`](./graph-model.md) | Nodes, edges, attributes, ports, patches, and serialization |
+| [`@dagr/layout`](./layout.md) | Ranking, ordering, positioning, and routing without a UI |
+| [`@dagr/render`](./render.md) | Instanced shapes, edge ribbons, camera, and spring motion |
+| [`@dagr/react`](./react.md) | A canvas component, reactive layout, and HTML content |
+| [`@dagr/vdsl`](./vdsl.md) | Node specifications, port type tokens, and connection validation |
 
-## Status
+## Changes and animation
 
-Early, and moving fast, but past the point of being only scaffolding.
-`@dagr/graph` is the furthest along: identity, shape, adjacency, attributes,
-ports, patches, traversal, and serialization are implemented, tested, and
-documented on the [graph model](./graph-model.md) page. `@dagr/layout` has its
-pipeline skeleton, the types and stage boundaries every later milestone is
-built against, with real ranking and crossing reduction behind two of the four
-defaults and placeholders behind the other two; the [layout](./layout.md) page
-says which half is which. `@dagr/render` is past first light: an orthographic
-camera, the renderer seam, and rounded rectangles and circles drawn as signed
-distance fields through a three.js
-`WebGPURenderer`, described on the [renderer](./render.md) page. `@dagr/react`
-joins the three: one `<DagrCanvas>` takes a graph and draws it, with the layout
-watched for edits, `animate` gliding an edit to its new layout rather than
-cutting to it, and React content placed in world coordinates over the canvas, on
-the [React bindings](./react.md) page.
+Use a persistent layout engine for incremental changes. It retains previous
+pipeline state and returns both the new layout and a delta. With React,
+`DagrCanvas animate` connects this to spring motion. Group related edits in
+`graph.batch` so they arrive as one patch.
 
-Nothing is published to npm and there is no released API. Names and signatures
-change when a milestone learns something, without deprecation cycles, because
-there is nobody downstream to break yet. Expect that until the first published
-release. The [roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md)
-is the order things arrive in.
+Stable identity does not mean every existing node always stays in place.
+Topology changes can move other nodes. The [incremental layout guide](./incremental-layout.md)
+explains the guarantees, tradeoffs, and measured stability.
+
+## What is ready, and what is next
+
+The full layout pipeline, incremental deltas, instanced rendering, spring
+animation, HTML overlays, React integration, and port validation are implemented.
+GPU picking, editor selection/drag hooks, drag-to-connect, and subgraph editing
+remain planned. The homepage's architecture inspector is application UI, not
+an assertion that those editor APIs are complete.
+
+APIs may change before the first release. Check the
+[roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md) for current work.

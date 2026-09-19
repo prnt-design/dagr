@@ -44,7 +44,7 @@ export default function LivingDemo(): ReactNode {
         {() => {
           // eslint-disable-next-line @typescript-eslint/no-require-imports -- see the file header: a static import would evaluate the renderer during the server build.
           const { LivingStage } = require('@dagr/living-stage') as typeof LivingStageModule;
-          return <LivingStage />;
+          return <LivingStage autoplay={false} />;
         }}
       </BrowserOnly>
     </div>
