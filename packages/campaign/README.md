@@ -5,13 +5,18 @@ seeded generator. Private, unpublished, and zero dependencies, including on
 `@dagr/graph`, because it is a fixture rather than a product and a fixture that
 depended on the graph model would be unusable to anything that is not Dagr.
 
-The demo it feeds is at https://dagr.prnt.design/demos/campaign. A campaign is
-a genuinely graph-shaped domain: a real hierarchy, thousands of nodes, dense
-cross-links that are not the hierarchy, and content worth reading when you get
-close. That is the workload Dagr exists for, panning and zooming through a
-large structure, which is why the fixture is a campaign and not a random graph.
-The decision record is `plans/2026-08-14-campaign-demo.md`; this file describes
-what shipped.
+This is an archived showcase experiment. The fixture, renderer stage, and
+historical screenshots are retained for development; the public campaign route
+now shows an archive notice. To run it locally:
+
+```bash
+pnpm --filter demo dev
+# Open http://localhost:5173/#view=campaign
+```
+
+The original decision record is `plans/2026-08-14-campaign-demo.md`. The
+[public showcase](https://dagr.prnt.design) now focuses on Dagr's architecture,
+animated edits, and rich content.
 
 ## Usage
 
