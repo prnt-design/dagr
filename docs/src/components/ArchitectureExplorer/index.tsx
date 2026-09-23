@@ -7,6 +7,7 @@ import type RichDemoModule from './RichDemo';
 import { architectureLayout, connections, SOURCE, systems } from './model';
 import type { SystemId } from './model';
 import styles from './styles.module.css';
+import GraphViewport from '../GraphViewport';
 
 const modes = ['Architecture', 'Follow an edit', 'Rich content'] as const;
 type Mode = (typeof modes)[number];
@@ -14,7 +15,6 @@ type Mode = (typeof modes)[number];
 export default function ArchitectureExplorer() {
   const [mode, setMode] = useState<Mode>('Architecture');
   const [selected, setSelected] = useState<SystemId>('layout');
-  const [zoom, setZoom] = useState(1);
   const drawing = useMemo(architectureLayout, []);
   const arrow = useId().replace(/:/g, '');
   const current = systems.find((node) => node.id === selected)!;
@@ -64,19 +64,12 @@ export default function ArchitectureExplorer() {
                   {systems.length} systems · {connections.length} connections
                 </span>
               </div>
-              <div
-                className={styles.viewport}
-                tabIndex={0}
-                aria-label="Architecture diagram. Scroll to explore; select a node to inspect it."
+              <GraphViewport
+                label="Architecture diagram"
+                width={width}
+                height={height}
               >
-                <div
-                  className={styles.diagram}
-                  style={{
-                    width: `${Math.round(100 * zoom)}%`,
-                    minWidth: `${Math.round(1000 * zoom)}px`,
-                    aspectRatio: `${width} / ${height}`,
-                  }}
-                >
+                <div className={styles.diagram} style={{ width, height }}>
                   <svg
                     viewBox={`0 0 ${width} ${height}`}
                     className={styles.wires}
@@ -100,10 +93,33 @@ export default function ArchitectureExplorer() {
                         x: p.y - drawing.bounds.y + 32,
                         y: p.x - drawing.bounds.x + 32,
                       }));
-                      const middle = points[Math.floor(points.length / 2)]!;
-                      const from = points[0]!;
-                      const to = points[points.length - 1]!;
-                      const labelX = (from.x + to.x) / 2;
+                      // Locate the halfway point along the route, not the middle vertex.
+                      const lengths = points
+                        .slice(1)
+                        .map((point, i) =>
+                          Math.hypot(
+                            point.x - points[i]!.x,
+                            point.y - points[i]!.y,
+                          ),
+                        );
+                      let remaining =
+                        lengths.reduce((sum, length) => sum + length, 0) / 2;
+                      let middle = points[0]!;
+                      for (const [i, length] of lengths.entries()) {
+                        if (remaining <= length && length > 0) {
+                          const start = points[i]!;
+                          const end = points[i + 1]!;
+                          const fraction = remaining / length;
+                          middle = {
+                            x: start.x + (end.x - start.x) * fraction,
+                            y: start.y + (end.y - start.y) * fraction,
+                          };
+                          break;
+                        }
+                        remaining -= length;
+                      }
+                      const labelX = middle.x;
+                      const labelWidth = edge.label.length * 8 + 16;
                       return (
                         <g
                           key={edge.label}
@@ -122,12 +138,16 @@ export default function ArchitectureExplorer() {
                             markerEnd={`url(#${arrow})`}
                           />
                           <rect
-                            x={labelX - 48}
-                            y={middle.y - 23}
-                            width="96"
+                            x={labelX - labelWidth / 2}
+                            y={middle.y - 34}
+                            width={labelWidth}
                             height="22"
                           />
-                          <text x={labelX} y={middle.y - 8} textAnchor="middle">
+                          <text
+                            x={labelX}
+                            y={middle.y - 18}
+                            textAnchor="middle"
+                          >
                             {edge.label}
                           </text>
                         </g>
@@ -160,35 +180,7 @@ export default function ArchitectureExplorer() {
                     );
                   })}
                 </div>
-              </div>
-              <div className={styles.diagramFooter}>
-                <div
-                  className={styles.zoom}
-                  role="group"
-                  aria-label="Diagram zoom"
-                >
-                  <button
-                    type="button"
-                    aria-label="Zoom out"
-                    disabled={zoom <= 1}
-                    onClick={() => setZoom((v) => Math.max(1, v - 0.25))}
-                  >
-                    −
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Zoom in"
-                    disabled={zoom >= 2}
-                    onClick={() => setZoom((v) => Math.min(2, v + 0.25))}
-                  >
-                    +
-                  </button>
-                  <button type="button" onClick={() => setZoom(1)}>
-                    Reset zoom
-                  </button>
-                </div>
-                <span>Select a node. Follow the connections.</span>
-              </div>
+              </GraphViewport>
             </div>
             <aside
               className={styles.inspector}

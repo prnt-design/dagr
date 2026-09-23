@@ -32,11 +32,13 @@ import { Graph } from '@dagr/graph';
 import type { LayoutConfig, LayoutResult } from '@dagr/layout';
 import { createLayout } from '@dagr/layout';
 import clsx from 'clsx';
-import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CorpusPreset } from './corpus';
 import { BENCH_1K, CORPUS_PRESETS, layeredDag } from './corpus';
 import styles from './LiveLayout.module.css';
+import GraphViewport from '../GraphViewport';
+import SvgAdapter from '../GraphViewport/SvgAdapter';
 
 /** Node box and base separations: the drawing the static figure used, kept. */
 const NODE_SIZE = { width: 8, height: 8 } as const;
@@ -60,10 +62,6 @@ const NARROW = '(max-width: 600px)';
 
 /** How long a run in the worker may take before the page gives up on it. */
 const WORKER_TIMEOUT_MS = 10_000;
-
-/** How far the view may zoom out and in, as a multiple of the fitted box. */
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 40;
 
 interface Box {
   readonly x: number;
@@ -131,34 +129,6 @@ function drawingOf(result: LayoutResult): Drawing {
 }
 
 /**
- * The view a new drawing opens on: the fitted box, unless fitting it would
- * waste most of the figure.
- *
- * The stage is a wide box and a Sugiyama drawing is usually wider still, so
- * fitting is almost always right. The exception is the largest corpus, which
- * has more layers than the others but many more nodes inside each one, so it
- * comes out squarer than the stage: fitted at a 1440px viewport it filled 56%
- * of the width and drew each node at 1.9 pixels, which reads as a smear rather
- * than as a graph. Opening on the box that covers the stage instead shows the
- * whole rank axis at 1.8 times the scale and crops the top and bottom, which
- * Fit and a drag both undo. Fit stays honest: it is still the whole drawing.
- *
- * The threshold is a quarter of the stage's aspect off, which leaves the 250
- * and 1,000 presets fitted where they already read well.
- */
-function openingView(fit: Box, stageAspect: number): Box | null {
-  if (fit.width / fit.height >= stageAspect * 0.75) return null;
-  const width = Math.min(fit.width, fit.height * stageAspect);
-  const height = width / stageAspect;
-  return {
-    x: fit.x + (fit.width - width) / 2,
-    y: fit.y + (fit.height - height) / 2,
-    width,
-    height,
-  };
-}
-
-/**
  * How to ink an edge: its width in CSS pixels, and how much of the stroke
  * colour to use, from how many edges there are and how far the view is zoomed.
  *
@@ -171,8 +141,14 @@ function openingView(fit: Box, stageAspect: number): Box | null {
  * committed figure this replaced sat, and reaches full stroke by the time
  * individual routes are what a reader is looking at.
  */
-function edgeInk(edgeCount: number, zoom: number): { width: number; opacity: number } {
-  const forDensity = Math.min(0.8, Math.max(0.4, 0.55 * (4_000 / Math.max(1, edgeCount)) ** 0.3));
+function edgeInk(
+  edgeCount: number,
+  zoom: number,
+): { width: number; opacity: number } {
+  const forDensity = Math.min(
+    0.8,
+    Math.max(0.4, 0.55 * (4_000 / Math.max(1, edgeCount)) ** 0.3),
+  );
   return {
     width: forDensity * Math.min(2.5, Math.max(1, Math.sqrt(zoom))),
     opacity: 0.55 + 0.45 * Math.min(1, Math.max(0, (zoom - 1) / 7)),
@@ -246,28 +222,25 @@ export default function LiveLayout(): ReactNode {
   );
   const [spacing, setSpacing] = useState(1);
   const [drawing, setDrawing] = useState<Drawing | null>(null);
-  const [measurement, setMeasurement] = useState<Measurement>({ key: '', times: [] });
+  const [measurement, setMeasurement] = useState<Measurement>({
+    key: '',
+    times: [],
+  });
   const [mode, setMode] = useState<'worker' | 'main' | null>(null);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
-  const [view, setView] = useState<Box | null>(null);
 
   const workerRef = useRef<Worker | null>(null);
   const graphs = useRef(new Map<string, Graph>());
   const runToken = useRef(0);
   const warmed = useRef(false);
-  const svgRef = useRef<SVGSVGElement | null>(null);
-  // The stage rather than the drawing, because the opening view is chosen
-  // before the first drawing exists to measure.
-  const stageRef = useRef<HTMLDivElement | null>(null);
-
   const settingsKey = `${preset.id}:${String(spacing)}`;
 
   // Annotated rather than inferred because the warm-up path below calls it,
   // and a `const` whose type is inferred from an initializer that mentions it
   // has no type to infer from.
-  const run: (nextPreset: CorpusPreset, nextSpacing: number) => void = useCallback(
-    (nextPreset: CorpusPreset, nextSpacing: number): void => {
+  const run: (nextPreset: CorpusPreset, nextSpacing: number) => void =
+    useCallback((nextPreset: CorpusPreset, nextSpacing: number): void => {
       const token = runToken.current + 1;
       runToken.current = token;
       // The first run of a page is a warm-up and its time is not reported. It
@@ -353,9 +326,7 @@ export default function LiveLayout(): ReactNode {
           setBusy(false);
         },
       );
-    },
-    [],
-  );
+    }, []);
 
   // The opening size, once the page knows how wide it is. It runs before the
   // first run leaves the debounce below, and it is a mount-time choice rather
@@ -388,7 +359,9 @@ export default function LiveLayout(): ReactNode {
   useEffect(() => {
     let worker: Worker | null = null;
     try {
-      worker = new Worker(new URL('./layout.worker.ts', import.meta.url), { type: 'module' });
+      worker = new Worker(new URL('./layout.worker.ts', import.meta.url), {
+        type: 'module',
+      });
     } catch {
       worker = null;
     }
@@ -431,100 +404,11 @@ export default function LiveLayout(): ReactNode {
     };
   }, [preset, spacing, run]);
 
-  // A new fit box means a different drawing, so the view goes back to its
-  // opening one. Re-running the same settings keeps wherever the visitor
-  // panned to.
-  const fitKey = drawing === null ? '' : Object.values(drawing.fit).join(' ');
-  useEffect(() => {
-    const fit = drawing?.fit ?? null;
-    const rect = stageRef.current?.getBoundingClientRect();
-    setView(
-      fit === null || rect === undefined || rect.height === 0
-        ? null
-        : openingView(fit, rect.width / rect.height),
-    );
-    // Keyed on `fitKey`, the drawing's box as a string, and deliberately not on
-    // `drawing` itself: a re-run of the same settings produces an equal box in
-    // a new object, and must not move the view.
-  }, [fitKey]);
-
-  const box = view ?? drawing?.fit ?? null;
-
-  const zoomBy = useCallback(
-    (factor: number, originX = 0.5, originY = 0.5): void => {
-      setView((current) => {
-        const from = current ?? drawing?.fit ?? null;
-        const fit = drawing?.fit ?? null;
-        if (from === null || fit === null) return current;
-        const scale = fit.width / from.width;
-        const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale * factor));
-        const width = fit.width / next;
-        const height = fit.height / next;
-        return {
-          x: from.x + (from.width - width) * originX,
-          y: from.y + (from.height - height) * originY,
-          width,
-          height,
-        };
-      });
-    },
-    [drawing],
-  );
-
-  // Wheel zoom is bound here rather than as a React prop because it has to be
-  // non-passive to call `preventDefault`, and only Ctrl-wheel (which is what a
-  // trackpad pinch sends) zooms: a plain wheel over the figure scrolls the page,
-  // because a figure that eats the scroll is a figure you cannot scroll past.
-  useEffect(() => {
-    const element = svgRef.current;
-    if (element === null) return;
-    const onWheel = (event: WheelEvent): void => {
-      if (!event.ctrlKey && !event.metaKey) return;
-      event.preventDefault();
-      const rect = element.getBoundingClientRect();
-      zoomBy(
-        Math.exp(-event.deltaY * 0.01),
-        (event.clientX - rect.left) / rect.width,
-        (event.clientY - rect.top) / rect.height,
-      );
-    };
-    element.addEventListener('wheel', onWheel, { passive: false });
-    return () => {
-      element.removeEventListener('wheel', onWheel);
-    };
-  }, [zoomBy]);
-
-  const drag = useRef<{ pointer: number; x: number; y: number; box: Box } | null>(null);
-
-  const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>): void => {
-    if (box === null) return;
-    drag.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, box };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const onPointerMove = (event: ReactPointerEvent<SVGSVGElement>): void => {
-    const held = drag.current;
-    if (held === null || held.pointer !== event.pointerId) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    setView({
-      x: held.box.x - ((event.clientX - held.x) * held.box.width) / rect.width,
-      y: held.box.y - ((event.clientY - held.y) * held.box.height) / rect.height,
-      width: held.box.width,
-      height: held.box.height,
-    });
-  };
-
-  const endDrag = (event: ReactPointerEvent<SVGSVGElement>): void => {
-    if (drag.current?.pointer !== event.pointerId) return;
-    drag.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
-  };
-
   const config = useMemo(() => configFor(spacing), [spacing]);
   const ink =
-    drawing === null || box === null
+    drawing === null
       ? { width: 0.55, opacity: 0.55 }
-      : edgeInk(drawing.edgeCount, drawing.fit.width / box.width);
+      : edgeInk(drawing.edgeCount, 1);
   const times = measurement.key === settingsKey ? measurement.times : [];
   const latest = times[times.length - 1];
   const nodes = drawing?.nodeCount ?? preset.nodeCount;
@@ -543,7 +427,11 @@ export default function LiveLayout(): ReactNode {
           <span className={styles.groupLabel} id="live-size">
             Nodes
           </span>
-          <div className={styles.segmented} role="group" aria-labelledby="live-size">
+          <div
+            className={styles.segmented}
+            role="group"
+            aria-labelledby="live-size"
+          >
             {CORPUS_PRESETS.map((option) => {
               // Off the worker, the largest corpus is half a second of blocked
               // main thread, and moving that to an idle moment does not make it
@@ -611,38 +499,6 @@ export default function LiveLayout(): ReactNode {
           >
             {busy ? 'Laying out…' : 'Lay it out again'}
           </button>
-          <span className={styles.zoom}>
-            <button
-              type="button"
-              className={clsx('corner-cut-native-s', styles.segment)}
-              onClick={() => {
-                zoomBy(1 / 1.6);
-              }}
-              aria-label="Zoom out"
-            >
-              −
-            </button>
-            <button
-              type="button"
-              className={clsx('corner-cut-native-s', styles.segment)}
-              onClick={() => {
-                zoomBy(1.6);
-              }}
-              aria-label="Zoom in"
-            >
-              +
-            </button>
-            <button
-              type="button"
-              className={clsx('corner-cut-native-s', styles.segment)}
-              onClick={() => {
-                setView(null);
-              }}
-              disabled={view === null}
-            >
-              Fit
-            </button>
-          </span>
         </div>
       </div>
 
@@ -656,40 +512,37 @@ export default function LiveLayout(): ReactNode {
         <p className={styles.readout}>
           This figure runs the layout engine in your browser rather than showing
           a picture of a run on somebody else&apos;s machine, so it needs
-          JavaScript. The graph at the top of this page is the same engine&apos;s
-          output, laid out at build time and committed, and the{' '}
+          JavaScript. The graph at the top of this page is the same
+          engine&apos;s output, laid out at build time and committed, and the{' '}
           <Link to="/docs/layout#what-a-run-costs">layout docs</Link> publish
           what each stage costs on this corpus and on one ten times its size.
         </p>
       </noscript>
 
-      <div ref={stageRef} className={clsx('dagr-live-js-only', styles.stage)}>
-        {drawing === null || box === null ? (
-          <p className={styles.placeholder}>{failure === null ? 'Laying out…' : null}</p>
+      <div className="dagr-live-js-only">
+        {drawing === null ? (
+          <p className={styles.placeholder}>
+            {failure === null ? 'Laying out…' : null}
+          </p>
         ) : (
-          <svg
-            ref={svgRef}
-            className={styles.drawing}
-            viewBox={`${box.x} ${box.y} ${box.width} ${box.height}`}
-            role="img"
-            aria-label={label}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
-          >
-            <path
-              className={styles.edges}
-              strokeWidth={ink.width}
-              strokeOpacity={ink.opacity}
-              d={drawing.edgePath}
-            />
-            <path className={styles.nodes} d={drawing.nodePath} />
-          </svg>
+          <GraphViewport label="Layout benchmark graph" native>
+            <SvgAdapter bounds={drawing.fit} label={label}>
+              <path
+                className={styles.edges}
+                strokeWidth={ink.width}
+                strokeOpacity={ink.opacity}
+                d={drawing.edgePath}
+              />
+              <path className={styles.nodes} d={drawing.nodePath} />
+            </SvgAdapter>
+          </GraphViewport>
         )}
       </div>
 
-      <p className={clsx('dagr-live-js-only', styles.readout)} aria-live="polite">
+      <p
+        className={clsx('dagr-live-js-only', styles.readout)}
+        aria-live="polite"
+      >
         {failure !== null ? (
           <>Layout did not finish in this browser: {failure}.</>
         ) : latest === undefined ? (
@@ -698,10 +551,15 @@ export default function LiveLayout(): ReactNode {
           <>
             <strong className={styles.time}>{ms(latest)}</strong> to lay out{' '}
             {count(nodes)} nodes and {count(edges)} edges{' '}
-            {mode === 'main' ? 'on this page’s own thread' : 'in a web worker'}, measured
-            on your device
+            {mode === 'main' ? 'on this page’s own thread' : 'in a web worker'},
+            measured on your device
             {/* A median of two is one of the two, so it waits for a third. */}
-            {times.length > 2 ? <>, median {ms(median(times))} over {times.length} runs</> : null}.
+            {times.length > 2 ? (
+              <>
+                , median {ms(median(times))} over {times.length} runs
+              </>
+            ) : null}
+            .
           </>
         )}
       </p>
@@ -710,8 +568,8 @@ export default function LiveLayout(): ReactNode {
         Timed end to end around one <code>runAsync</code> call, so it counts
         preparing the graph and the trip to the worker, not the pipeline alone.
         The page&apos;s first run is a warm-up and is not reported, which is the
-        rule the repository&apos;s own benchmark captures follow. Drag to pan;
-        the buttons zoom.
+        rule the repository&apos;s own benchmark captures follow. Focus the
+        graph to scroll-zoom, or drag to pan.
         {mode === 'main' ? (
           <>
             {' '}

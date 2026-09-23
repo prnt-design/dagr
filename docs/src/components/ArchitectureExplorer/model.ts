@@ -164,7 +164,7 @@ export function architectureLayout() {
     config: {
       defaultNodeSize: { width: 148, height: 178 },
       nodeSep: 65,
-      rankSep: 96,
+      rankSep: 180,
     },
   });
 }

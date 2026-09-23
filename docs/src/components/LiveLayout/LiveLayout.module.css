@@ -132,9 +132,7 @@
   width: 100%;
   height: 100%;
   cursor: grab;
-  /* Vertical page scroll keeps working over the figure; a horizontal drag
-     pans it. Wheel zoom is Ctrl-wheel only, for the same reason. */
-  touch-action: pan-y;
+
 }
 
 .drawing:active {

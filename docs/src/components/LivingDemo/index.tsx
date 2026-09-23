@@ -29,6 +29,8 @@ import type { ReactNode } from 'react';
 import type * as LivingStageModule from '@dagr/living-stage';
 import '@dagr/living-stage/living.css';
 import styles from './LivingDemo.module.css';
+import GraphViewport from '../GraphViewport';
+import type RendererAdapterModule from '../GraphViewport/RendererAdapter';
 
 export default function LivingDemo(): ReactNode {
   return (
@@ -36,15 +38,31 @@ export default function LivingDemo(): ReactNode {
       <BrowserOnly
         fallback={
           <p className={styles.pending}>
-            The graph is laid out and drawn in your browser, so there is nothing to show until
-            the page has loaded.
+            The graph is laid out and drawn in your browser, so there is nothing
+            to show until the page has loaded.
           </p>
         }
       >
         {() => {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports -- see the file header: a static import would evaluate the renderer during the server build.
-          const { LivingStage } = require('@dagr/living-stage') as typeof LivingStageModule;
-          return <LivingStage autoplay={false} />;
+          const { LivingStage } =
+            // eslint-disable-next-line @typescript-eslint/no-require-imports -- browser-only renderer boundary.
+            require('@dagr/living-stage') as typeof LivingStageModule;
+          const { default: RendererAdapter } =
+            // eslint-disable-next-line @typescript-eslint/no-require-imports -- browser-only renderer boundary.
+            require('../GraphViewport/RendererAdapter') as {
+              default: typeof RendererAdapterModule;
+            };
+          return (
+            <LivingStage
+              autoplay={false}
+              canvasChildren={<RendererAdapter />}
+              renderCanvas={(canvas) => (
+                <GraphViewport label="Live edit graph" native>
+                  {canvas}
+                </GraphViewport>
+              )}
+            />
+          );
         }}
       </BrowserOnly>
     </div>
