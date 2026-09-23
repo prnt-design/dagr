@@ -26,7 +26,7 @@ export default function LivingDemoPage(): ReactNode {
             <Link to="/docs/incremental-layout">
               measurements and limitations
             </Link>
-            , or return <Link to="/">inside the graph</Link> to explore the
+            , or return <Link to="/#inside-the-graph">inside the graph</Link> to explore the
             architecture.
           </p>
         </header>

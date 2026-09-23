@@ -1,6 +1,7 @@
 import { useId, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import Link from '@docusaurus/Link';
+import useBrokenLinks from '@docusaurus/useBrokenLinks';
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import LivingDemo from '../LivingDemo';
 import type RichDemoModule from './RichDemo';
@@ -13,6 +14,7 @@ const modes = ['Architecture', 'Follow an edit', 'Rich content'] as const;
 type Mode = (typeof modes)[number];
 
 export default function ArchitectureExplorer() {
+  useBrokenLinks().collectAnchor('inside-the-graph');
   const [mode, setMode] = useState<Mode>('Architecture');
   const [selected, setSelected] = useState<SystemId>('layout');
   const drawing = useMemo(architectureLayout, []);
@@ -23,8 +25,16 @@ export default function ArchitectureExplorer() {
   return (
     <section
       className={styles.explorer}
+      id="inside-the-graph"
       aria-label="Inside the graph workbench"
     >
+      <div className={styles.introduction}>
+        <h2>Inside the graph</h2>
+        <p>
+          Explore how Dagr lays out a graph, animates an edit, and brings your
+          content into the scene.
+        </p>
+      </div>
       <div className={styles.modebar}>
         <div className={styles.modes} role="group" aria-label="Explore Dagr">
           {modes.map((item) => (
@@ -47,7 +57,9 @@ export default function ArchitectureExplorer() {
             <select
               aria-label="Inspect a system"
               value={selected}
-              onChange={(event) => setSelected(event.target.value as SystemId)}
+              onChange={(event) =>
+                setSelected(event.target.value as SystemId)
+              }
             >
               {systems.map((node) => (
                 <option key={node.id} value={node.id}>
@@ -124,7 +136,8 @@ export default function ArchitectureExplorer() {
                         <g
                           key={edge.label}
                           className={
-                            edge.source === selected || edge.target === selected
+                            edge.source === selected ||
+                            edge.target === selected
                               ? styles.activeWire
                               : undefined
                           }
@@ -132,7 +145,8 @@ export default function ArchitectureExplorer() {
                           <path
                             d={points
                               .map(
-                                (p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`,
+                                (p, i) =>
+                                  `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`,
                               )
                               .join(' ')}
                             markerEnd={`url(#${arrow})`}
@@ -205,9 +219,9 @@ export default function ArchitectureExplorer() {
             </aside>
           </div>
           <p className={styles.caption}>
-            Laid out by <code>@dagr/layout</code>, presented with HTML and SVG.
-            This map explains the runtime flow; it is not a live profiler or a
-            package dependency graph.
+            Laid out by <code>@dagr/layout</code>, presented with HTML and
+            SVG. This map explains the runtime flow; it is not a live profiler
+            or a package dependency graph.
           </p>
           <details className={styles.connections}>
             <summary>Read the connections</summary>
@@ -232,9 +246,9 @@ export default function ArchitectureExplorer() {
             <p className={styles.kicker}>02 / CHANGES YOU CAN FOLLOW</p>
             <h2>A small edit. A visible difference.</h2>
             <p>
-              Add or remove tasks in a build pipeline. The readout reports what
-              each actual layout delta added, removed, and moved. Animation is
-              opt-in; start with a single edit.
+              Add or remove tasks in a build pipeline. The readout reports
+              what each actual layout delta added, removed, and moved.
+              Animation is opt-in; start with a single edit.
             </p>
             <Link to="/docs/incremental-layout">
               How incremental layout works →

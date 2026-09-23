@@ -20,16 +20,16 @@ const result = layout({ graph });
 export default function Home() {
   return (
     <Layout
-      title="Inside the graph"
-      description="Explore Dagr from the inside: graph layout, animated changes, and rich content. An open-source toolkit by Nii Yeboah, creator of PRNT."
+      title="Graph layout, rendering, and motion"
+      description="Dagr: graph layout, rendering, animated changes, and rich content. An open-source toolkit by Nii Yeboah, creator of PRNT."
     >
       <main>
         <header className={styles.hero}>
-          <p className={styles.eyebrow}>DAGR / A GRAPH TOOLKIT FOR THE WEB</p>
+          <p className={styles.eyebrow}>A GRAPH TOOLKIT FOR THE WEB</p>
           <div className={styles.intro}>
             <div>
               <h1>
-                Inside the graph<span>.</span>
+                Dagr<span>.</span>
               </h1>
               <p className={styles.lede}>
                 Structure you can explore.

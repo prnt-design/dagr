@@ -1,7 +1,12 @@
 # Documentation site
 
 Docusaurus powers [dagr.prnt.design](https://dagr.prnt.design). The homepage is
-**Inside the graph**, an engineering showcase with three modes:
+**Dagr**, an engineering showcase led by a chess opening atlas. The atlas uses
+Dagr layout and a canvas scene with cached overview boards, zoom-dependent
+piece detail, and offscreen culling. Its inspector provides keyboard navigation
+and a single SVG board.
+
+**Inside the graph** is the architecture deep dive below it, with three modes:
 
 - **Architecture:** a source-derived runtime map, laid out by `@dagr/layout`
   and displayed with HTML and SVG. Node selection is application UI.
@@ -29,6 +34,7 @@ Render deployment filters in `render.yaml`.
 | Surface | Source |
 | --- | --- |
 | Landing page | `src/pages/index.tsx` and its CSS module |
+| Chess atlas | `src/components/ChessAtlas/` |
 | Architecture and inspector | `src/components/ArchitectureExplorer/` |
 | Live mutation demo | `src/components/LivingDemo/` and `packages/living-stage/` |
 | Scale measurement | `src/components/LiveLayout/` |
