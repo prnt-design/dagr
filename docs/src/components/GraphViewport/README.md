@@ -1,12 +1,14 @@
 # GraphViewport
 
-All public showcase graphs share this interaction surface. Architecture and the
-layout benchmark render DOM/SVG content into its camera plane. Rich content and
+All public showcase graphs share this interaction surface. Architecture renders HTML/SVG content into its camera plane. The layout
+benchmark uses SvgAdapter to update its vector viewBox at screen resolution. Rich content and
 the living demo use `RendererAdapter` to drive the native renderer camera without
 scaling a bitmap canvas.
 
 The viewport has a fixed responsive height and clips its drawing. Camera updates
-change only the plane transform or native camera, never the viewport dimensions.
+change the plane transform, SVG viewBox, or native camera, never the viewport
+dimensions. Do not force a composited layer for vector content: enlarging its
+cached raster can make high zoom blurry.
 A single requestAnimationFrame loop eases toward the latest input and stops when
 settled. Reduced motion applies changes immediately. Resize refits the view.
 

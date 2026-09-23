@@ -38,6 +38,7 @@ import type { CorpusPreset } from './corpus';
 import { BENCH_1K, CORPUS_PRESETS, layeredDag } from './corpus';
 import styles from './LiveLayout.module.css';
 import GraphViewport from '../GraphViewport';
+import SvgAdapter from '../GraphViewport/SvgAdapter';
 
 /** Node box and base separations: the drawing the static figure used, kept. */
 const NODE_SIZE = { width: 8, height: 8 } as const;
@@ -524,18 +525,8 @@ export default function LiveLayout(): ReactNode {
             {failure === null ? 'Laying out…' : null}
           </p>
         ) : (
-          <GraphViewport
-            label="Layout benchmark graph"
-            width={drawing.fit.width}
-            height={drawing.fit.height}
-          >
-            <svg
-              className={styles.drawing}
-              viewBox={`${drawing.fit.x} ${drawing.fit.y} ${drawing.fit.width} ${drawing.fit.height}`}
-              style={{ width: '100%', height: '100%' }}
-              role="img"
-              aria-label={label}
-            >
+          <GraphViewport label="Layout benchmark graph" native>
+            <SvgAdapter bounds={drawing.fit} label={label}>
               <path
                 className={styles.edges}
                 strokeWidth={ink.width}
@@ -543,7 +534,7 @@ export default function LiveLayout(): ReactNode {
                 d={drawing.edgePath}
               />
               <path className={styles.nodes} d={drawing.nodePath} />
-            </svg>
+            </SvgAdapter>
           </GraphViewport>
         )}
       </div>

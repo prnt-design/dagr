@@ -35,7 +35,7 @@ export function useGraphCamera(
         apply(current, viewportWidth, viewportHeight);
         return;
       }
-      diagram.style.transform = `translate3d(${current.x}px, ${current.y}px, 0) scale(${current.scale})`;
+      diagram.style.transform = `translate(${current.x}px, ${current.y}px) scale(${current.scale})`;
     };
     const tick = (time: number) => {
       frame = 0;

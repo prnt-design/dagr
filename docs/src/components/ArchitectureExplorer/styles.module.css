@@ -309,6 +309,10 @@
   margin-top: 14px;
 }
 .edgeLabel {
+  /* Point placements stay screen-sized; this label belongs to graph space. */
+  display: inline-block;
+  transform: scale(var(--dagr-overlay-zoom, 1));
+  transform-origin: center;
   padding: 4px 8px;
   background: oklch(0.94 0.01 160);
   color: oklch(0.25 0.03 160);
