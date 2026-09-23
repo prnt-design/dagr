@@ -1,7 +1,14 @@
-import { createContext, useContext, useId, useRef, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
 import type { ReactNode } from 'react';
 import { useGraphCamera } from './useGraphCamera';
-import type { Camera } from './useGraphCamera';
+import type { Camera, FocusBounds } from './useGraphCamera';
 import styles from './styles.module.css';
 
 export type ViewportAdapter = {
@@ -22,12 +29,14 @@ export default function GraphViewport({
   width = 1000,
   height = 500,
   native = false,
+  focusBounds,
 }: {
   children: ReactNode;
   label: string;
   width?: number;
   height?: number;
   native?: boolean;
+  focusBounds?: FocusBounds | null;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   const plane = useRef<HTMLDivElement>(null);
@@ -42,6 +51,9 @@ export default function GraphViewport({
     adapter?.apply,
     adapter?.getBounds,
   );
+  useEffect(() => {
+    if (focusBounds) camera.current.focus(focusBounds);
+  }, [focusBounds, camera]);
   return (
     <AdapterContext.Provider value={setAdapter}>
       <div className={styles.shell}>

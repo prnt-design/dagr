@@ -1,6 +1,12 @@
 import { useEffect, useRef } from 'react';
 import type { RefObject } from 'react';
 
+export type FocusBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 export type Camera = { x: number; y: number; scale: number };
 
 /** Keep camera changes out of document layout and React's render cycle. */
@@ -16,7 +22,8 @@ export function useGraphCamera(
   const controls = useRef<{
     zoom: (factor: number) => void;
     reset: () => void;
-  }>({ zoom: () => {}, reset: () => {} });
+    focus: (bounds: FocusBounds) => void;
+  }>({ zoom: () => {}, reset: () => {}, focus: () => {} });
   useEffect(() => {
     const viewport = viewportRef.current;
     const diagram = diagramRef.current;
@@ -136,7 +143,7 @@ export function useGraphCamera(
       if (
         event.button !== 0 ||
         (event.target as Element).closest(
-          'button, a, input, select, textarea, [contenteditable]',
+          'button, [role="button"], a, input, select, textarea, [contenteditable]',
         )
       )
         return;
@@ -209,7 +216,22 @@ export function useGraphCamera(
       target.y += dy;
       animate();
     };
-    controls.current = { zoom, reset };
+    const focus = (bounds: FocusBounds) => {
+      const scale = Math.min(
+        fit * 40,
+        Math.min(
+          (viewportWidth - 48) / bounds.width,
+          (viewportHeight - 48) / bounds.height,
+        ),
+      );
+      target = {
+        x: viewportWidth / 2 - (bounds.x + bounds.width / 2) * scale,
+        y: viewportHeight / 2 - (bounds.y + bounds.height / 2) * scale,
+        scale,
+      };
+      animate();
+    };
+    controls.current = { zoom, reset, focus };
     const observer = new ResizeObserver(reset);
     observer.observe(viewport);
     reset();
@@ -234,7 +256,7 @@ export function useGraphCamera(
       viewport.removeEventListener('lostpointercapture', up);
       viewport.removeEventListener('keydown', key);
       viewport.removeEventListener('focusin', reveal);
-      controls.current = { zoom: () => {}, reset: () => {} };
+      controls.current = { zoom: () => {}, reset: () => {}, focus: () => {} };
     };
   }, [viewportRef, diagramRef, width, height, enabled, apply, getBounds]);
   return controls;

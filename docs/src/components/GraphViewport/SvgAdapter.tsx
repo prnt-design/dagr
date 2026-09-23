@@ -6,10 +6,12 @@ import { useViewportAdapter } from './index';
 export default function SvgAdapter({
   bounds,
   label,
+  interactive = false,
   children,
 }: {
   bounds: { x: number; y: number; width: number; height: number };
   label: string;
+  interactive?: boolean;
   children: ReactNode;
 }) {
   const svg = useRef<SVGSVGElement>(null);
@@ -33,7 +35,7 @@ export default function SvgAdapter({
       ref={svg}
       style={{ width: '100%', height: '100%', display: 'block' }}
       viewBox={`${x} ${y} ${width} ${height}`}
-      role="img"
+      role={interactive ? 'group' : 'img'}
       aria-label={label}
     >
       {children}
