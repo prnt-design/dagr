@@ -229,11 +229,6 @@ const config: Config = {
           position: 'left',
         },
         {
-          to: '/',
-          label: 'Inside the graph',
-          position: 'left',
-        },
-        {
           href: 'https://github.com/prnt-design/dagr',
           label: 'GitHub',
           position: 'right',

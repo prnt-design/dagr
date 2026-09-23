@@ -9,7 +9,7 @@ layout engine designed for *animation* (incremental layout, stable node
 identity, delta output), a WebGPU renderer (three.js
 WebGPURenderer, SDF shapes, spring physics) and a React component on top.
 
-**[Inside the graph](https://dagr.prnt.design)** ·
+**[Explore Dagr](https://dagr.prnt.design)** ·
 **[Documentation](https://dagr.prnt.design/docs/)** ·
 **[Follow an edit](https://dagr.prnt.design/demos/living)**
 

@@ -1,8 +1,8 @@
-import { useId, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Graph } from '@dagr/graph';
 import { layout } from '@dagr/layout';
 import GraphViewport from '../GraphViewport';
-import SvgAdapter from '../GraphViewport/SvgAdapter';
+import AtlasCanvas from './AtlasCanvas';
 import Board from './Board';
 import type { FocusBounds } from '../GraphViewport/useGraphCamera';
 import positions from './positions.json';
@@ -31,7 +31,6 @@ export default function ChessAtlas() {
   const [family, setFamily] = useState('All openings');
   const [depth, setDepth] = useState(20);
   const [selected, setSelected] = useState('e2e4_e7e5_g1f3_b8c6_f1c4');
-  const arrow = useId().replace(/:/g, '');
   const nodes = useMemo(
     () =>
       positions.filter(
@@ -123,99 +122,13 @@ export default function ChessAtlas() {
             native
             focusBounds={focusBounds}
           >
-            <SvgAdapter
-              interactive
-              bounds={drawing.bounds}
-              label="Opening move tree. Select a position or use the position selector."
-            >
-              <defs>
-                <marker
-                  id={arrow}
-                  markerWidth="8"
-                  markerHeight="8"
-                  markerUnits="userSpaceOnUse"
-                  refX="7"
-                  refY="4"
-                  orient="auto"
-                >
-                  <path d="M0 0 L8 4 L0 8 Z" fill="var(--atlas-wire)" />
-                </marker>
-              </defs>
-              {nodes
-                .filter((node) => node.parent)
-                .map((node) => {
-                  const points = drawing.edges.get(node.id)!.points;
-                  const from = points[0]!,
-                    to = points[points.length - 1]!;
-                  const mid = {
-                    x: (from.x + to.x) / 2,
-                    y: (from.y + to.y) / 2,
-                  };
-                  return (
-                    <g
-                      key={node.id}
-                      className={
-                        routeIds.has(node.id) ? styles.activeEdge : styles.edge
-                      }
-                    >
-                      <path
-                        d={points
-                          .map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`)
-                          .join(' ')}
-                        markerEnd={`url(#${arrow})`}
-                      />
-                      <rect
-                        x={mid.x - 35}
-                        y={mid.y - 14}
-                        width={70}
-                        height={28}
-                      />
-                      <text x={mid.x} y={mid.y + 6} textAnchor="middle">
-                        {node.san}
-                      </text>
-                    </g>
-                  );
-                })}
-              {nodes.map((node) => {
-                const box = drawing.nodes.get(node.id)!;
-                return (
-                  <g
-                    key={node.id}
-                    transform={`translate(${box.x - 96},${box.y - 119})`}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`${node.openings[0]?.name ?? 'Position'}: ${sequence(node.moves) || 'Start'}`}
-                    aria-pressed={current.id === node.id}
-                    className={`${styles.node} ${routeIds.has(node.id) ? styles.onPath : ''}`}
-                    onClick={() => setSelected(node.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        setSelected(node.id);
-                      }
-                    }}
-                  >
-                    <rect className={styles.nodeBox} width={192} height={238} />
-                    <text x={16} y={24} className={styles.nodeTitle}>
-                      {node.ply
-                        ? `${node.ply % 2 ? Math.ceil(node.ply / 2) + '.' : node.ply / 2 + '…'} ${node.san}`
-                        : 'Initial position'}
-                    </text>
-                    <g transform="translate(16,38)">
-                      <Board board={node.board} lastMove={node.lastMove} />
-                    </g>
-                    <text x={16} y={219} className={styles.nodeMeta}>
-                      {node.openings[0]?.eco ?? `${node.turn} to move`}
-                    </text>
-                    <title>
-                      {node.openings.map((item) => item.name).join(' / ') ||
-                        sequence(node.moves) ||
-                        'Starting position'}
-                    </title>
-                  </g>
-                );
-              })}
-            </SvgAdapter>
+            <AtlasCanvas
+              nodes={nodes}
+              drawing={drawing}
+              selected={current.id}
+              routeIds={routeIds}
+              onSelect={setSelected}
+            />
           </GraphViewport>
         </div>
         <aside
@@ -231,7 +144,8 @@ export default function ChessAtlas() {
             >
               {nodes.map((node) => (
                 <option key={node.id} value={node.id}>
-                  {node.openings[0]?.name ?? (sequence(node.moves) || 'Start')}
+                  {node.openings[0]?.name ??
+                    (sequence(node.moves) || 'Start')}
                 </option>
               ))}
             </select>
@@ -315,7 +229,7 @@ export default function ChessAtlas() {
       <p className={styles.caption}>
         Boards are replayed from legal moves in the{' '}
         <a href={source}>Lichess opening dataset</a> (CC0). Dagr lays out and
-        routes this move tree; SVG keeps boards crisp at any zoom. This is a
+        routes this move tree; board detail appears as you zoom in. This is a
         curated atlas, not an engine evaluation. Different move orders stay
         separate.
       </p>

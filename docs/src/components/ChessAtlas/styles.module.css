@@ -144,51 +144,6 @@
   max-width: 100ch;
   margin: 1rem 0;
 }
-.edge path,
-.activeEdge path {
-  fill: none;
-  stroke: var(--atlas-wire);
-  stroke-width: 2;
-}
-.activeEdge path {
-  stroke: var(--primary-text);
-  stroke-width: 5;
-}
-.edge rect,
-.activeEdge rect {
-  fill: var(--dagr-background);
-}
-.edge text,
-.activeEdge text {
-  fill: var(--dagr-foreground);
-  font: 17px var(--ifm-font-family-monospace);
-}
-.node {
-  cursor: pointer;
-  outline: none;
-}
-.nodeBox {
-  fill: var(--dagr-background);
-  stroke: var(--contrast-20pct);
-  stroke-width: 2;
-}
-.onPath .nodeBox {
-  stroke: var(--primary-text);
-  stroke-width: 3;
-}
-.node[aria-pressed='true'] .nodeBox,
-.node:focus .nodeBox {
-  stroke: var(--primary-text);
-  stroke-width: 7;
-}
-.nodeTitle {
-  font: 600 19px var(--ifm-font-family-base);
-  fill: var(--dagr-foreground);
-}
-.nodeMeta {
-  font: 13px var(--ifm-font-family-monospace);
-  fill: var(--dagr-text-muted);
-}
 @media (max-width: 1000px) {
   .workbench {
     grid-template-columns: minmax(0, 1fr);

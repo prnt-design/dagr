@@ -19,7 +19,7 @@ export default function CampaignArchive() {
             repository as development artifacts.
           </p>
           <p>
-            <Link to="/">Explore Inside the graph →</Link>
+            <Link to="/">Explore Dagr →</Link>
           </p>
           <p>
             <a href="https://github.com/prnt-design/dagr/tree/main/packages/campaign">

@@ -10,7 +10,7 @@ A node can hold a preview, a configuration summary, a small chart, or a status.
 An edge can name the data it carries. Dagr draws the geometry; your application
 supplies the vocabulary and the content.
 
-Open **Rich content** in [Inside the graph](/) for a working example: three
+Open **Rich content** in [Inside the graph](/#inside-the-graph) for a working example: three
 GPU-drawn nodes, React content, a deterministic pattern preview, and an edge
 annotation. The preview is illustrative application logic, not a graph execution
 engine.

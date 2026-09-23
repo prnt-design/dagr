@@ -14,7 +14,7 @@ Dagr is a directed-graph toolkit for the web. Its showcase makes the engineering
 
 ## Brand Personality
 
-Precise, geometric, exploratory. Preserve the existing Dagr mark and the relationship to PRNT's Muslin design system. The user selected direction B, “Inside the graph,” on 2026-09-18.
+Precise, geometric, exploratory. Preserve the existing Dagr mark and the relationship to PRNT's Muslin design system. Dagr is the product identity. “Inside the graph” names only the architecture and engine deep dive, not the homepage or chess example.
 
 ## Anti-references
 

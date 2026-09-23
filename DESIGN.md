@@ -2,7 +2,7 @@
 
 ## Identity
 
-Extend the existing Muslin-derived theme and original Dagr logo. The approved direction is the “Inside the graph” workbench: an explorable graph canvas and a contextual inspector, preceded by a concise introduction. The chess atlas leads with branching miniature boards, move labels, family filters, and a readable position inspector; architecture remains the explanatory companion.
+Extend the existing Muslin-derived theme and original Dagr logo. The homepage leads with Dagr. “Inside the graph” is reserved for the architecture deep dive. Examples use a workbench: an explorable graph canvas and a contextual inspector, preceded by a concise introduction. The chess atlas leads with branching miniature boards, move labels, family filters, and a readable position inspector; architecture remains the explanatory companion.
 
 ## Color and surfaces
 
