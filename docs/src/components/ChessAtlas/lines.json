@@ -1,0 +1,170 @@
+[
+  {
+    "eco": "C50",
+    "name": "Italian Game: Giuoco Pianissimo",
+    "pgn": "1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. d3",
+    "volume": "c",
+    "family": "Italian"
+  },
+  {
+    "eco": "C51",
+    "name": "Italian Game: Evans Gambit Accepted",
+    "pgn": "1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. b4 Bxb4",
+    "volume": "c",
+    "family": "Italian"
+  },
+  {
+    "eco": "C51",
+    "name": "Italian Game: Evans Gambit Declined",
+    "pgn": "1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. b4 Bb6",
+    "volume": "c",
+    "family": "Italian"
+  },
+  {
+    "eco": "C55",
+    "name": "Italian Game: Two Knights Defense",
+    "pgn": "1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6",
+    "volume": "c",
+    "family": "Italian"
+  },
+  {
+    "eco": "C50",
+    "name": "Italian Game: Hungarian Defense",
+    "pgn": "1. e4 e5 2. Nf3 Nc6 3. Bc4 Be7",
+    "volume": "c",
+    "family": "Italian"
+  },
+  {
+    "eco": "C53",
+    "name": "Italian Game: Classical Variation",
+    "pgn": "1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3",
+    "volume": "c",
+    "family": "Italian"
+  },
+  {
+    "eco": "B90",
+    "name": "Sicilian Defense: Najdorf Variation",
+    "pgn": "1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 a6",
+    "volume": "b",
+    "family": "Sicilian"
+  },
+  {
+    "eco": "B70",
+    "name": "Sicilian Defense: Dragon Variation",
+    "pgn": "1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 g6",
+    "volume": "b",
+    "family": "Sicilian"
+  },
+  {
+    "eco": "B56",
+    "name": "Sicilian Defense: Classical Variation",
+    "pgn": "1. e4 c5 2. Nf3 d6 3. d4 cxd4 4. Nxd4 Nf6 5. Nc3 Nc6",
+    "volume": "b",
+    "family": "Sicilian"
+  },
+  {
+    "eco": "B22",
+    "name": "Sicilian Defense: Alapin Variation",
+    "pgn": "1. e4 c5 2. c3",
+    "volume": "b",
+    "family": "Sicilian"
+  },
+  {
+    "eco": "B23",
+    "name": "Sicilian Defense: Closed",
+    "pgn": "1. e4 c5 2. Nc3",
+    "volume": "b",
+    "family": "Sicilian"
+  },
+  {
+    "eco": "B21",
+    "name": "Sicilian Defense: Smith-Morra Gambit Accepted",
+    "pgn": "1. e4 c5 2. d4 cxd4 3. c3 dxc3",
+    "volume": "b",
+    "family": "Sicilian"
+  },
+  {
+    "eco": "C02",
+    "name": "French Defense: Advance Variation",
+    "pgn": "1. e4 e6 2. d4 d5 3. e5",
+    "volume": "c",
+    "family": "French"
+  },
+  {
+    "eco": "C01",
+    "name": "French Defense: Exchange Variation",
+    "pgn": "1. e4 e6 2. d4 d5 3. exd5",
+    "volume": "c",
+    "family": "French"
+  },
+  {
+    "eco": "C03",
+    "name": "French Defense: Tarrasch Variation",
+    "pgn": "1. e4 e6 2. d4 d5 3. Nd2",
+    "volume": "c",
+    "family": "French"
+  },
+  {
+    "eco": "C15",
+    "name": "French Defense: Winawer Variation",
+    "pgn": "1. e4 e6 2. d4 d5 3. Nc3 Bb4",
+    "volume": "c",
+    "family": "French"
+  },
+  {
+    "eco": "C11",
+    "name": "French Defense: Classical Variation",
+    "pgn": "1. e4 e6 2. d4 d5 3. Nc3 Nf6",
+    "volume": "c",
+    "family": "French"
+  },
+  {
+    "eco": "C10",
+    "name": "French Defense: Rubinstein Variation",
+    "pgn": "1. e4 e6 2. d4 d5 3. Nc3 dxe4",
+    "volume": "c",
+    "family": "French"
+  },
+  {
+    "eco": "D26",
+    "name": "Queen's Gambit Accepted: Classical Defense",
+    "pgn": "1. d4 d5 2. c4 dxc4 3. Nf3 Nf6 4. e3 e6 5. Bxc4 c5",
+    "volume": "d",
+    "family": "Queen’s Gambit"
+  },
+  {
+    "eco": "D35",
+    "name": "Queen's Gambit Declined: Exchange Variation",
+    "pgn": "1. d4 Nf6 2. c4 e6 3. Nc3 d5 4. cxd5",
+    "volume": "d",
+    "family": "Queen’s Gambit"
+  },
+  {
+    "eco": "D32",
+    "name": "Queen's Gambit Declined: Tarrasch Defense",
+    "pgn": "1. d4 d5 2. c4 e6 3. Nc3 c5 4. cxd5 exd5",
+    "volume": "d",
+    "family": "Queen’s Gambit"
+  },
+  {
+    "eco": "D07",
+    "name": "Queen's Gambit Declined: Chigorin Defense",
+    "pgn": "1. d4 d5 2. c4 Nc6",
+    "volume": "d",
+    "family": "Queen’s Gambit"
+  },
+  {
+    "eco": "D11",
+    "name": "Slav Defense: Modern Line",
+    "pgn": "1. d4 d5 2. c4 c6 3. Nf3",
+    "volume": "d",
+    "family": "Queen’s Gambit"
+  },
+  {
+    "eco": "D47",
+    "name": "Semi-Slav Defense: Meran Variation",
+    "pgn": "1. d4 d5 2. c4 c6 3. Nc3 Nf6 4. e3 e6 5. Nf3 Nbd7 6. Bd3 dxc4 7. Bxc4 b5",
+    "volume": "d",
+    "family": "Queen’s Gambit"
+  }
+]

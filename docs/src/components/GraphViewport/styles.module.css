@@ -6,7 +6,7 @@
   position: relative;
   overflow: clip;
   contain: layout paint;
-  height: 460px;
+  height: var(--graph-viewport-height, 460px);
   touch-action: none;
   cursor: grab;
   background: var(--dagr-background);

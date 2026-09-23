@@ -1,0 +1,1983 @@
+[
+  {
+    "id": "start",
+    "parent": null,
+    "ply": 0,
+    "san": "Start",
+    "moves": [],
+    "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    "board": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
+    "turn": "White",
+    "lastMove": [],
+    "families": [
+      "Italian",
+      "Sicilian",
+      "French",
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4",
+    "parent": "start",
+    "ply": 1,
+    "san": "e4",
+    "moves": [
+      "e4"
+    ],
+    "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+    "board": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      12,
+      28
+    ],
+    "families": [
+      "Italian",
+      "Sicilian",
+      "French"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_e7e5",
+    "parent": "e2e4",
+    "ply": 2,
+    "san": "e5",
+    "moves": [
+      "e4",
+      "e5"
+    ],
+    "fen": "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+    "board": "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR",
+    "turn": "White",
+    "lastMove": [
+      52,
+      36
+    ],
+    "families": [
+      "Italian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_e7e5_g1f3",
+    "parent": "e2e4_e7e5",
+    "ply": 3,
+    "san": "Nf3",
+    "moves": [
+      "e4",
+      "e5",
+      "Nf3"
+    ],
+    "fen": "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+    "board": "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R",
+    "turn": "Black",
+    "lastMove": [
+      6,
+      21
+    ],
+    "families": [
+      "Italian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_e7e5_g1f3_b8c6",
+    "parent": "e2e4_e7e5_g1f3",
+    "ply": 4,
+    "san": "Nc6",
+    "moves": [
+      "e4",
+      "e5",
+      "Nf3",
+      "Nc6"
+    ],
+    "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+    "board": "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R",
+    "turn": "White",
+    "lastMove": [
+      57,
+      42
+    ],
+    "families": [
+      "Italian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_e7e5_g1f3_b8c6_f1c4",
+    "parent": "e2e4_e7e5_g1f3_b8c6",
+    "ply": 5,
+    "san": "Bc4",
+    "moves": [
+      "e4",
+      "e5",
+      "Nf3",
+      "Nc6",
+      "Bc4"
+    ],
+    "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+    "board": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R",
+    "turn": "Black",
+    "lastMove": [
+      5,
+      26
+    ],
+    "families": [
+      "Italian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_e7e5_g1f3_b8c6_f1c4_f8c5",
+    "parent": "e2e4_e7e5_g1f3_b8c6_f1c4",
+    "ply": 6,
+    "san": "Bc5",
+    "moves": [
+      "e4",
+      "e5",
+      "Nf3",
+      "Nc6",
+      "Bc4",
+      "Bc5"
+    ],
+    "fen": "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",
+    "board": "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R",
+    "turn": "White",
+    "lastMove": [
+      61,
+      34
+    ],
+    "families": [
+      "Italian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_e7e5_g1f3_b8c6_f1c4_f8c5_d2d3",
+    "parent": "e2e4_e7e5_g1f3_b8c6_f1c4_f8c5",
+    "ply": 7,
+    "san": "d3",
+    "moves": [
+      "e4",
+      "e5",
+      "Nf3",
+      "Nc6",
+      "Bc4",
+      "Bc5",
+      "d3"
+    ],
+    "fen": "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R b KQkq - 0 4",
+    "board": "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R",
+    "turn": "Black",
+    "lastMove": [
+      11,
+      19
+    ],
+    "families": [
+      "Italian"
+    ],
+    "openings": [
+      {
+        "name": "Italian Game: Giuoco Pianissimo",
+        "eco": "C50"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_e7e5_g1f3_b8c6_f1c4_f8c5_b2b4",
+    "parent": "e2e4_e7e5_g1f3_b8c6_f1c4_f8c5",
+    "ply": 7,
+    "san": "b4",
+    "moves": [
+      "e4",
+      "e5",
+      "Nf3",
+      "Nc6",
+      "Bc4",
+      "Bc5",
+      "b4"
+    ],
+    "fen": "r1bqk1nr/pppp1ppp/2n5/2b1p3/1PB1P3/5N2/P1PP1PPP/RNBQK2R b KQkq - 0 4",
+    "board": "r1bqk1nr/pppp1ppp/2n5/2b1p3/1PB1P3/5N2/P1PP1PPP/RNBQK2R",
+    "turn": "Black",
+    "lastMove": [
+      9,
+      25
+    ],
+    "families": [
+      "Italian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_e7e5_g1f3_b8c6_f1c4_f8c5_b2b4_c5b4",
+    "parent": "e2e4_e7e5_g1f3_b8c6_f1c4_f8c5_b2b4",
+    "ply": 8,
+    "san": "Bxb4",
+    "moves": [
+      "e4",
+      "e5",
+      "Nf3",
+      "Nc6",
+      "Bc4",
+      "Bc5",
+      "b4",
+      "Bxb4"
+    ],
+    "fen": "r1bqk1nr/pppp1ppp/2n5/4p3/1bB1P3/5N2/P1PP1PPP/RNBQK2R w KQkq - 0 5",
+    "board": "r1bqk1nr/pppp1ppp/2n5/4p3/1bB1P3/5N2/P1PP1PPP/RNBQK2R",
+    "turn": "White",
+    "lastMove": [
+      34,
+      25
+    ],
+    "families": [
+      "Italian"
+    ],
+    "openings": [
+      {
+        "name": "Italian Game: Evans Gambit Accepted",
+        "eco": "C51"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_e7e5_g1f3_b8c6_f1c4_f8c5_b2b4_c5b6",
+    "parent": "e2e4_e7e5_g1f3_b8c6_f1c4_f8c5_b2b4",
+    "ply": 8,
+    "san": "Bb6",
+    "moves": [
+      "e4",
+      "e5",
+      "Nf3",
+      "Nc6",
+      "Bc4",
+      "Bc5",
+      "b4",
+      "Bb6"
+    ],
+    "fen": "r1bqk1nr/pppp1ppp/1bn5/4p3/1PB1P3/5N2/P1PP1PPP/RNBQK2R w KQkq - 1 5",
+    "board": "r1bqk1nr/pppp1ppp/1bn5/4p3/1PB1P3/5N2/P1PP1PPP/RNBQK2R",
+    "turn": "White",
+    "lastMove": [
+      34,
+      41
+    ],
+    "families": [
+      "Italian"
+    ],
+    "openings": [
+      {
+        "name": "Italian Game: Evans Gambit Declined",
+        "eco": "C51"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_e7e5_g1f3_b8c6_f1c4_g8f6",
+    "parent": "e2e4_e7e5_g1f3_b8c6_f1c4",
+    "ply": 6,
+    "san": "Nf6",
+    "moves": [
+      "e4",
+      "e5",
+      "Nf3",
+      "Nc6",
+      "Bc4",
+      "Nf6"
+    ],
+    "fen": "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",
+    "board": "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R",
+    "turn": "White",
+    "lastMove": [
+      62,
+      45
+    ],
+    "families": [
+      "Italian"
+    ],
+    "openings": [
+      {
+        "name": "Italian Game: Two Knights Defense",
+        "eco": "C55"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_e7e5_g1f3_b8c6_f1c4_f8e7",
+    "parent": "e2e4_e7e5_g1f3_b8c6_f1c4",
+    "ply": 6,
+    "san": "Be7",
+    "moves": [
+      "e4",
+      "e5",
+      "Nf3",
+      "Nc6",
+      "Bc4",
+      "Be7"
+    ],
+    "fen": "r1bqk1nr/ppppbppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",
+    "board": "r1bqk1nr/ppppbppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R",
+    "turn": "White",
+    "lastMove": [
+      61,
+      52
+    ],
+    "families": [
+      "Italian"
+    ],
+    "openings": [
+      {
+        "name": "Italian Game: Hungarian Defense",
+        "eco": "C50"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_e7e5_g1f3_b8c6_f1c4_f8c5_c2c3",
+    "parent": "e2e4_e7e5_g1f3_b8c6_f1c4_f8c5",
+    "ply": 7,
+    "san": "c3",
+    "moves": [
+      "e4",
+      "e5",
+      "Nf3",
+      "Nc6",
+      "Bc4",
+      "Bc5",
+      "c3"
+    ],
+    "fen": "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/2P2N2/PP1P1PPP/RNBQK2R b KQkq - 0 4",
+    "board": "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/2P2N2/PP1P1PPP/RNBQK2R",
+    "turn": "Black",
+    "lastMove": [
+      10,
+      18
+    ],
+    "families": [
+      "Italian"
+    ],
+    "openings": [
+      {
+        "name": "Italian Game: Classical Variation",
+        "eco": "C53"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_c7c5",
+    "parent": "e2e4",
+    "ply": 2,
+    "san": "c5",
+    "moves": [
+      "e4",
+      "c5"
+    ],
+    "fen": "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+    "board": "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR",
+    "turn": "White",
+    "lastMove": [
+      50,
+      34
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_c7c5_g1f3",
+    "parent": "e2e4_c7c5",
+    "ply": 3,
+    "san": "Nf3",
+    "moves": [
+      "e4",
+      "c5",
+      "Nf3"
+    ],
+    "fen": "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2",
+    "board": "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R",
+    "turn": "Black",
+    "lastMove": [
+      6,
+      21
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_c7c5_g1f3_d7d6",
+    "parent": "e2e4_c7c5_g1f3",
+    "ply": 4,
+    "san": "d6",
+    "moves": [
+      "e4",
+      "c5",
+      "Nf3",
+      "d6"
+    ],
+    "fen": "rnbqkbnr/pp2pppp/3p4/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3",
+    "board": "rnbqkbnr/pp2pppp/3p4/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R",
+    "turn": "White",
+    "lastMove": [
+      51,
+      43
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_c7c5_g1f3_d7d6_d2d4",
+    "parent": "e2e4_c7c5_g1f3_d7d6",
+    "ply": 5,
+    "san": "d4",
+    "moves": [
+      "e4",
+      "c5",
+      "Nf3",
+      "d6",
+      "d4"
+    ],
+    "fen": "rnbqkbnr/pp2pppp/3p4/2p5/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 0 3",
+    "board": "rnbqkbnr/pp2pppp/3p4/2p5/3PP3/5N2/PPP2PPP/RNBQKB1R",
+    "turn": "Black",
+    "lastMove": [
+      11,
+      27
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_c7c5_g1f3_d7d6_d2d4_c5d4",
+    "parent": "e2e4_c7c5_g1f3_d7d6_d2d4",
+    "ply": 6,
+    "san": "cxd4",
+    "moves": [
+      "e4",
+      "c5",
+      "Nf3",
+      "d6",
+      "d4",
+      "cxd4"
+    ],
+    "fen": "rnbqkbnr/pp2pppp/3p4/8/3pP3/5N2/PPP2PPP/RNBQKB1R w KQkq - 0 4",
+    "board": "rnbqkbnr/pp2pppp/3p4/8/3pP3/5N2/PPP2PPP/RNBQKB1R",
+    "turn": "White",
+    "lastMove": [
+      34,
+      27
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_c7c5_g1f3_d7d6_d2d4_c5d4_f3d4",
+    "parent": "e2e4_c7c5_g1f3_d7d6_d2d4_c5d4",
+    "ply": 7,
+    "san": "Nxd4",
+    "moves": [
+      "e4",
+      "c5",
+      "Nf3",
+      "d6",
+      "d4",
+      "cxd4",
+      "Nxd4"
+    ],
+    "fen": "rnbqkbnr/pp2pppp/3p4/8/3NP3/8/PPP2PPP/RNBQKB1R b KQkq - 0 4",
+    "board": "rnbqkbnr/pp2pppp/3p4/8/3NP3/8/PPP2PPP/RNBQKB1R",
+    "turn": "Black",
+    "lastMove": [
+      21,
+      27
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_c7c5_g1f3_d7d6_d2d4_c5d4_f3d4_g8f6",
+    "parent": "e2e4_c7c5_g1f3_d7d6_d2d4_c5d4_f3d4",
+    "ply": 8,
+    "san": "Nf6",
+    "moves": [
+      "e4",
+      "c5",
+      "Nf3",
+      "d6",
+      "d4",
+      "cxd4",
+      "Nxd4",
+      "Nf6"
+    ],
+    "fen": "rnbqkb1r/pp2pppp/3p1n2/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 1 5",
+    "board": "rnbqkb1r/pp2pppp/3p1n2/8/3NP3/8/PPP2PPP/RNBQKB1R",
+    "turn": "White",
+    "lastMove": [
+      62,
+      45
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_c7c5_g1f3_d7d6_d2d4_c5d4_f3d4_g8f6_b1c3",
+    "parent": "e2e4_c7c5_g1f3_d7d6_d2d4_c5d4_f3d4_g8f6",
+    "ply": 9,
+    "san": "Nc3",
+    "moves": [
+      "e4",
+      "c5",
+      "Nf3",
+      "d6",
+      "d4",
+      "cxd4",
+      "Nxd4",
+      "Nf6",
+      "Nc3"
+    ],
+    "fen": "rnbqkb1r/pp2pppp/3p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R b KQkq - 2 5",
+    "board": "rnbqkb1r/pp2pppp/3p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R",
+    "turn": "Black",
+    "lastMove": [
+      1,
+      18
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_c7c5_g1f3_d7d6_d2d4_c5d4_f3d4_g8f6_b1c3_a7a6",
+    "parent": "e2e4_c7c5_g1f3_d7d6_d2d4_c5d4_f3d4_g8f6_b1c3",
+    "ply": 10,
+    "san": "a6",
+    "moves": [
+      "e4",
+      "c5",
+      "Nf3",
+      "d6",
+      "d4",
+      "cxd4",
+      "Nxd4",
+      "Nf6",
+      "Nc3",
+      "a6"
+    ],
+    "fen": "rnbqkb1r/1p2pppp/p2p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 6",
+    "board": "rnbqkb1r/1p2pppp/p2p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R",
+    "turn": "White",
+    "lastMove": [
+      48,
+      40
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": [
+      {
+        "name": "Sicilian Defense: Najdorf Variation",
+        "eco": "B90"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_c7c5_g1f3_d7d6_d2d4_c5d4_f3d4_g8f6_b1c3_g7g6",
+    "parent": "e2e4_c7c5_g1f3_d7d6_d2d4_c5d4_f3d4_g8f6_b1c3",
+    "ply": 10,
+    "san": "g6",
+    "moves": [
+      "e4",
+      "c5",
+      "Nf3",
+      "d6",
+      "d4",
+      "cxd4",
+      "Nxd4",
+      "Nf6",
+      "Nc3",
+      "g6"
+    ],
+    "fen": "rnbqkb1r/pp2pp1p/3p1np1/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 6",
+    "board": "rnbqkb1r/pp2pp1p/3p1np1/8/3NP3/2N5/PPP2PPP/R1BQKB1R",
+    "turn": "White",
+    "lastMove": [
+      54,
+      46
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": [
+      {
+        "name": "Sicilian Defense: Dragon Variation",
+        "eco": "B70"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_c7c5_g1f3_d7d6_d2d4_c5d4_f3d4_g8f6_b1c3_b8c6",
+    "parent": "e2e4_c7c5_g1f3_d7d6_d2d4_c5d4_f3d4_g8f6_b1c3",
+    "ply": 10,
+    "san": "Nc6",
+    "moves": [
+      "e4",
+      "c5",
+      "Nf3",
+      "d6",
+      "d4",
+      "cxd4",
+      "Nxd4",
+      "Nf6",
+      "Nc3",
+      "Nc6"
+    ],
+    "fen": "r1bqkb1r/pp2pppp/2np1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 3 6",
+    "board": "r1bqkb1r/pp2pppp/2np1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R",
+    "turn": "White",
+    "lastMove": [
+      57,
+      42
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": [
+      {
+        "name": "Sicilian Defense: Classical Variation",
+        "eco": "B56"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_c7c5_c2c3",
+    "parent": "e2e4_c7c5",
+    "ply": 3,
+    "san": "c3",
+    "moves": [
+      "e4",
+      "c5",
+      "c3"
+    ],
+    "fen": "rnbqkbnr/pp1ppppp/8/2p5/4P3/2P5/PP1P1PPP/RNBQKBNR b KQkq - 0 2",
+    "board": "rnbqkbnr/pp1ppppp/8/2p5/4P3/2P5/PP1P1PPP/RNBQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      10,
+      18
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": [
+      {
+        "name": "Sicilian Defense: Alapin Variation",
+        "eco": "B22"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_c7c5_b1c3",
+    "parent": "e2e4_c7c5",
+    "ply": 3,
+    "san": "Nc3",
+    "moves": [
+      "e4",
+      "c5",
+      "Nc3"
+    ],
+    "fen": "rnbqkbnr/pp1ppppp/8/2p5/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 1 2",
+    "board": "rnbqkbnr/pp1ppppp/8/2p5/4P3/2N5/PPPP1PPP/R1BQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      1,
+      18
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": [
+      {
+        "name": "Sicilian Defense: Closed",
+        "eco": "B23"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_c7c5_d2d4",
+    "parent": "e2e4_c7c5",
+    "ply": 3,
+    "san": "d4",
+    "moves": [
+      "e4",
+      "c5",
+      "d4"
+    ],
+    "fen": "rnbqkbnr/pp1ppppp/8/2p5/3PP3/8/PPP2PPP/RNBQKBNR b KQkq - 0 2",
+    "board": "rnbqkbnr/pp1ppppp/8/2p5/3PP3/8/PPP2PPP/RNBQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      11,
+      27
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_c7c5_d2d4_c5d4",
+    "parent": "e2e4_c7c5_d2d4",
+    "ply": 4,
+    "san": "cxd4",
+    "moves": [
+      "e4",
+      "c5",
+      "d4",
+      "cxd4"
+    ],
+    "fen": "rnbqkbnr/pp1ppppp/8/8/3pP3/8/PPP2PPP/RNBQKBNR w KQkq - 0 3",
+    "board": "rnbqkbnr/pp1ppppp/8/8/3pP3/8/PPP2PPP/RNBQKBNR",
+    "turn": "White",
+    "lastMove": [
+      34,
+      27
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_c7c5_d2d4_c5d4_c2c3",
+    "parent": "e2e4_c7c5_d2d4_c5d4",
+    "ply": 5,
+    "san": "c3",
+    "moves": [
+      "e4",
+      "c5",
+      "d4",
+      "cxd4",
+      "c3"
+    ],
+    "fen": "rnbqkbnr/pp1ppppp/8/8/3pP3/2P5/PP3PPP/RNBQKBNR b KQkq - 0 3",
+    "board": "rnbqkbnr/pp1ppppp/8/8/3pP3/2P5/PP3PPP/RNBQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      10,
+      18
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_c7c5_d2d4_c5d4_c2c3_d4c3",
+    "parent": "e2e4_c7c5_d2d4_c5d4_c2c3",
+    "ply": 6,
+    "san": "dxc3",
+    "moves": [
+      "e4",
+      "c5",
+      "d4",
+      "cxd4",
+      "c3",
+      "dxc3"
+    ],
+    "fen": "rnbqkbnr/pp1ppppp/8/8/4P3/2p5/PP3PPP/RNBQKBNR w KQkq - 0 4",
+    "board": "rnbqkbnr/pp1ppppp/8/8/4P3/2p5/PP3PPP/RNBQKBNR",
+    "turn": "White",
+    "lastMove": [
+      27,
+      18
+    ],
+    "families": [
+      "Sicilian"
+    ],
+    "openings": [
+      {
+        "name": "Sicilian Defense: Smith-Morra Gambit Accepted",
+        "eco": "B21"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_e7e6",
+    "parent": "e2e4",
+    "ply": 2,
+    "san": "e6",
+    "moves": [
+      "e4",
+      "e6"
+    ],
+    "fen": "rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+    "board": "rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR",
+    "turn": "White",
+    "lastMove": [
+      52,
+      44
+    ],
+    "families": [
+      "French"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_e7e6_d2d4",
+    "parent": "e2e4_e7e6",
+    "ply": 3,
+    "san": "d4",
+    "moves": [
+      "e4",
+      "e6",
+      "d4"
+    ],
+    "fen": "rnbqkbnr/pppp1ppp/4p3/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq - 0 2",
+    "board": "rnbqkbnr/pppp1ppp/4p3/8/3PP3/8/PPP2PPP/RNBQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      11,
+      27
+    ],
+    "families": [
+      "French"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_e7e6_d2d4_d7d5",
+    "parent": "e2e4_e7e6_d2d4",
+    "ply": 4,
+    "san": "d5",
+    "moves": [
+      "e4",
+      "e6",
+      "d4",
+      "d5"
+    ],
+    "fen": "rnbqkbnr/ppp2ppp/4p3/3p4/3PP3/8/PPP2PPP/RNBQKBNR w KQkq - 0 3",
+    "board": "rnbqkbnr/ppp2ppp/4p3/3p4/3PP3/8/PPP2PPP/RNBQKBNR",
+    "turn": "White",
+    "lastMove": [
+      51,
+      35
+    ],
+    "families": [
+      "French"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_e7e6_d2d4_d7d5_e4e5",
+    "parent": "e2e4_e7e6_d2d4_d7d5",
+    "ply": 5,
+    "san": "e5",
+    "moves": [
+      "e4",
+      "e6",
+      "d4",
+      "d5",
+      "e5"
+    ],
+    "fen": "rnbqkbnr/ppp2ppp/4p3/3pP3/3P4/8/PPP2PPP/RNBQKBNR b KQkq - 0 3",
+    "board": "rnbqkbnr/ppp2ppp/4p3/3pP3/3P4/8/PPP2PPP/RNBQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      28,
+      36
+    ],
+    "families": [
+      "French"
+    ],
+    "openings": [
+      {
+        "name": "French Defense: Advance Variation",
+        "eco": "C02"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_e7e6_d2d4_d7d5_e4d5",
+    "parent": "e2e4_e7e6_d2d4_d7d5",
+    "ply": 5,
+    "san": "exd5",
+    "moves": [
+      "e4",
+      "e6",
+      "d4",
+      "d5",
+      "exd5"
+    ],
+    "fen": "rnbqkbnr/ppp2ppp/4p3/3P4/3P4/8/PPP2PPP/RNBQKBNR b KQkq - 0 3",
+    "board": "rnbqkbnr/ppp2ppp/4p3/3P4/3P4/8/PPP2PPP/RNBQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      28,
+      35
+    ],
+    "families": [
+      "French"
+    ],
+    "openings": [
+      {
+        "name": "French Defense: Exchange Variation",
+        "eco": "C01"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_e7e6_d2d4_d7d5_b1d2",
+    "parent": "e2e4_e7e6_d2d4_d7d5",
+    "ply": 5,
+    "san": "Nd2",
+    "moves": [
+      "e4",
+      "e6",
+      "d4",
+      "d5",
+      "Nd2"
+    ],
+    "fen": "rnbqkbnr/ppp2ppp/4p3/3p4/3PP3/8/PPPN1PPP/R1BQKBNR b KQkq - 1 3",
+    "board": "rnbqkbnr/ppp2ppp/4p3/3p4/3PP3/8/PPPN1PPP/R1BQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      1,
+      11
+    ],
+    "families": [
+      "French"
+    ],
+    "openings": [
+      {
+        "name": "French Defense: Tarrasch Variation",
+        "eco": "C03"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_e7e6_d2d4_d7d5_b1c3",
+    "parent": "e2e4_e7e6_d2d4_d7d5",
+    "ply": 5,
+    "san": "Nc3",
+    "moves": [
+      "e4",
+      "e6",
+      "d4",
+      "d5",
+      "Nc3"
+    ],
+    "fen": "rnbqkbnr/ppp2ppp/4p3/3p4/3PP3/2N5/PPP2PPP/R1BQKBNR b KQkq - 1 3",
+    "board": "rnbqkbnr/ppp2ppp/4p3/3p4/3PP3/2N5/PPP2PPP/R1BQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      1,
+      18
+    ],
+    "families": [
+      "French"
+    ],
+    "openings": []
+  },
+  {
+    "id": "e2e4_e7e6_d2d4_d7d5_b1c3_f8b4",
+    "parent": "e2e4_e7e6_d2d4_d7d5_b1c3",
+    "ply": 6,
+    "san": "Bb4",
+    "moves": [
+      "e4",
+      "e6",
+      "d4",
+      "d5",
+      "Nc3",
+      "Bb4"
+    ],
+    "fen": "rnbqk1nr/ppp2ppp/4p3/3p4/1b1PP3/2N5/PPP2PPP/R1BQKBNR w KQkq - 2 4",
+    "board": "rnbqk1nr/ppp2ppp/4p3/3p4/1b1PP3/2N5/PPP2PPP/R1BQKBNR",
+    "turn": "White",
+    "lastMove": [
+      61,
+      25
+    ],
+    "families": [
+      "French"
+    ],
+    "openings": [
+      {
+        "name": "French Defense: Winawer Variation",
+        "eco": "C15"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_e7e6_d2d4_d7d5_b1c3_g8f6",
+    "parent": "e2e4_e7e6_d2d4_d7d5_b1c3",
+    "ply": 6,
+    "san": "Nf6",
+    "moves": [
+      "e4",
+      "e6",
+      "d4",
+      "d5",
+      "Nc3",
+      "Nf6"
+    ],
+    "fen": "rnbqkb1r/ppp2ppp/4pn2/3p4/3PP3/2N5/PPP2PPP/R1BQKBNR w KQkq - 2 4",
+    "board": "rnbqkb1r/ppp2ppp/4pn2/3p4/3PP3/2N5/PPP2PPP/R1BQKBNR",
+    "turn": "White",
+    "lastMove": [
+      62,
+      45
+    ],
+    "families": [
+      "French"
+    ],
+    "openings": [
+      {
+        "name": "French Defense: Classical Variation",
+        "eco": "C11"
+      }
+    ]
+  },
+  {
+    "id": "e2e4_e7e6_d2d4_d7d5_b1c3_d5e4",
+    "parent": "e2e4_e7e6_d2d4_d7d5_b1c3",
+    "ply": 6,
+    "san": "dxe4",
+    "moves": [
+      "e4",
+      "e6",
+      "d4",
+      "d5",
+      "Nc3",
+      "dxe4"
+    ],
+    "fen": "rnbqkbnr/ppp2ppp/4p3/8/3Pp3/2N5/PPP2PPP/R1BQKBNR w KQkq - 0 4",
+    "board": "rnbqkbnr/ppp2ppp/4p3/8/3Pp3/2N5/PPP2PPP/R1BQKBNR",
+    "turn": "White",
+    "lastMove": [
+      35,
+      28
+    ],
+    "families": [
+      "French"
+    ],
+    "openings": [
+      {
+        "name": "French Defense: Rubinstein Variation",
+        "eco": "C10"
+      }
+    ]
+  },
+  {
+    "id": "d2d4",
+    "parent": "start",
+    "ply": 1,
+    "san": "d4",
+    "moves": [
+      "d4"
+    ],
+    "fen": "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq - 0 1",
+    "board": "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      11,
+      27
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5",
+    "parent": "d2d4",
+    "ply": 2,
+    "san": "d5",
+    "moves": [
+      "d4",
+      "d5"
+    ],
+    "fen": "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 0 2",
+    "board": "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR",
+    "turn": "White",
+    "lastMove": [
+      51,
+      35
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4",
+    "parent": "d2d4_d7d5",
+    "ply": 3,
+    "san": "c4",
+    "moves": [
+      "d4",
+      "d5",
+      "c4"
+    ],
+    "fen": "rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR b KQkq - 0 2",
+    "board": "rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      10,
+      26
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_d5c4",
+    "parent": "d2d4_d7d5_c2c4",
+    "ply": 4,
+    "san": "dxc4",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "dxc4"
+    ],
+    "fen": "rnbqkbnr/ppp1pppp/8/8/2pP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3",
+    "board": "rnbqkbnr/ppp1pppp/8/8/2pP4/8/PP2PPPP/RNBQKBNR",
+    "turn": "White",
+    "lastMove": [
+      35,
+      26
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_d5c4_g1f3",
+    "parent": "d2d4_d7d5_c2c4_d5c4",
+    "ply": 5,
+    "san": "Nf3",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "dxc4",
+      "Nf3"
+    ],
+    "fen": "rnbqkbnr/ppp1pppp/8/8/2pP4/5N2/PP2PPPP/RNBQKB1R b KQkq - 1 3",
+    "board": "rnbqkbnr/ppp1pppp/8/8/2pP4/5N2/PP2PPPP/RNBQKB1R",
+    "turn": "Black",
+    "lastMove": [
+      6,
+      21
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_d5c4_g1f3_g8f6",
+    "parent": "d2d4_d7d5_c2c4_d5c4_g1f3",
+    "ply": 6,
+    "san": "Nf6",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "dxc4",
+      "Nf3",
+      "Nf6"
+    ],
+    "fen": "rnbqkb1r/ppp1pppp/5n2/8/2pP4/5N2/PP2PPPP/RNBQKB1R w KQkq - 2 4",
+    "board": "rnbqkb1r/ppp1pppp/5n2/8/2pP4/5N2/PP2PPPP/RNBQKB1R",
+    "turn": "White",
+    "lastMove": [
+      62,
+      45
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_d5c4_g1f3_g8f6_e2e3",
+    "parent": "d2d4_d7d5_c2c4_d5c4_g1f3_g8f6",
+    "ply": 7,
+    "san": "e3",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "dxc4",
+      "Nf3",
+      "Nf6",
+      "e3"
+    ],
+    "fen": "rnbqkb1r/ppp1pppp/5n2/8/2pP4/4PN2/PP3PPP/RNBQKB1R b KQkq - 0 4",
+    "board": "rnbqkb1r/ppp1pppp/5n2/8/2pP4/4PN2/PP3PPP/RNBQKB1R",
+    "turn": "Black",
+    "lastMove": [
+      12,
+      20
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_d5c4_g1f3_g8f6_e2e3_e7e6",
+    "parent": "d2d4_d7d5_c2c4_d5c4_g1f3_g8f6_e2e3",
+    "ply": 8,
+    "san": "e6",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "dxc4",
+      "Nf3",
+      "Nf6",
+      "e3",
+      "e6"
+    ],
+    "fen": "rnbqkb1r/ppp2ppp/4pn2/8/2pP4/4PN2/PP3PPP/RNBQKB1R w KQkq - 0 5",
+    "board": "rnbqkb1r/ppp2ppp/4pn2/8/2pP4/4PN2/PP3PPP/RNBQKB1R",
+    "turn": "White",
+    "lastMove": [
+      52,
+      44
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_d5c4_g1f3_g8f6_e2e3_e7e6_f1c4",
+    "parent": "d2d4_d7d5_c2c4_d5c4_g1f3_g8f6_e2e3_e7e6",
+    "ply": 9,
+    "san": "Bxc4",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "dxc4",
+      "Nf3",
+      "Nf6",
+      "e3",
+      "e6",
+      "Bxc4"
+    ],
+    "fen": "rnbqkb1r/ppp2ppp/4pn2/8/2BP4/4PN2/PP3PPP/RNBQK2R b KQkq - 0 5",
+    "board": "rnbqkb1r/ppp2ppp/4pn2/8/2BP4/4PN2/PP3PPP/RNBQK2R",
+    "turn": "Black",
+    "lastMove": [
+      5,
+      26
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_d5c4_g1f3_g8f6_e2e3_e7e6_f1c4_c7c5",
+    "parent": "d2d4_d7d5_c2c4_d5c4_g1f3_g8f6_e2e3_e7e6_f1c4",
+    "ply": 10,
+    "san": "c5",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "dxc4",
+      "Nf3",
+      "Nf6",
+      "e3",
+      "e6",
+      "Bxc4",
+      "c5"
+    ],
+    "fen": "rnbqkb1r/pp3ppp/4pn2/2p5/2BP4/4PN2/PP3PPP/RNBQK2R w KQkq - 0 6",
+    "board": "rnbqkb1r/pp3ppp/4pn2/2p5/2BP4/4PN2/PP3PPP/RNBQK2R",
+    "turn": "White",
+    "lastMove": [
+      50,
+      34
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": [
+      {
+        "name": "Queen's Gambit Accepted: Classical Defense",
+        "eco": "D26"
+      }
+    ]
+  },
+  {
+    "id": "d2d4_g8f6",
+    "parent": "d2d4",
+    "ply": 2,
+    "san": "Nf6",
+    "moves": [
+      "d4",
+      "Nf6"
+    ],
+    "fen": "rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 1 2",
+    "board": "rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR",
+    "turn": "White",
+    "lastMove": [
+      62,
+      45
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_g8f6_c2c4",
+    "parent": "d2d4_g8f6",
+    "ply": 3,
+    "san": "c4",
+    "moves": [
+      "d4",
+      "Nf6",
+      "c4"
+    ],
+    "fen": "rnbqkb1r/pppppppp/5n2/8/2PP4/8/PP2PPPP/RNBQKBNR b KQkq - 0 2",
+    "board": "rnbqkb1r/pppppppp/5n2/8/2PP4/8/PP2PPPP/RNBQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      10,
+      26
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_g8f6_c2c4_e7e6",
+    "parent": "d2d4_g8f6_c2c4",
+    "ply": 4,
+    "san": "e6",
+    "moves": [
+      "d4",
+      "Nf6",
+      "c4",
+      "e6"
+    ],
+    "fen": "rnbqkb1r/pppp1ppp/4pn2/8/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3",
+    "board": "rnbqkb1r/pppp1ppp/4pn2/8/2PP4/8/PP2PPPP/RNBQKBNR",
+    "turn": "White",
+    "lastMove": [
+      52,
+      44
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_g8f6_c2c4_e7e6_b1c3",
+    "parent": "d2d4_g8f6_c2c4_e7e6",
+    "ply": 5,
+    "san": "Nc3",
+    "moves": [
+      "d4",
+      "Nf6",
+      "c4",
+      "e6",
+      "Nc3"
+    ],
+    "fen": "rnbqkb1r/pppp1ppp/4pn2/8/2PP4/2N5/PP2PPPP/R1BQKBNR b KQkq - 1 3",
+    "board": "rnbqkb1r/pppp1ppp/4pn2/8/2PP4/2N5/PP2PPPP/R1BQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      1,
+      18
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_g8f6_c2c4_e7e6_b1c3_d7d5",
+    "parent": "d2d4_g8f6_c2c4_e7e6_b1c3",
+    "ply": 6,
+    "san": "d5",
+    "moves": [
+      "d4",
+      "Nf6",
+      "c4",
+      "e6",
+      "Nc3",
+      "d5"
+    ],
+    "fen": "rnbqkb1r/ppp2ppp/4pn2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 4",
+    "board": "rnbqkb1r/ppp2ppp/4pn2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR",
+    "turn": "White",
+    "lastMove": [
+      51,
+      35
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_g8f6_c2c4_e7e6_b1c3_d7d5_c4d5",
+    "parent": "d2d4_g8f6_c2c4_e7e6_b1c3_d7d5",
+    "ply": 7,
+    "san": "cxd5",
+    "moves": [
+      "d4",
+      "Nf6",
+      "c4",
+      "e6",
+      "Nc3",
+      "d5",
+      "cxd5"
+    ],
+    "fen": "rnbqkb1r/ppp2ppp/4pn2/3P4/3P4/2N5/PP2PPPP/R1BQKBNR b KQkq - 0 4",
+    "board": "rnbqkb1r/ppp2ppp/4pn2/3P4/3P4/2N5/PP2PPPP/R1BQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      26,
+      35
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": [
+      {
+        "name": "Queen's Gambit Declined: Exchange Variation",
+        "eco": "D35"
+      }
+    ]
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_e7e6",
+    "parent": "d2d4_d7d5_c2c4",
+    "ply": 4,
+    "san": "e6",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "e6"
+    ],
+    "fen": "rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3",
+    "board": "rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/8/PP2PPPP/RNBQKBNR",
+    "turn": "White",
+    "lastMove": [
+      52,
+      44
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_e7e6_b1c3",
+    "parent": "d2d4_d7d5_c2c4_e7e6",
+    "ply": 5,
+    "san": "Nc3",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "e6",
+      "Nc3"
+    ],
+    "fen": "rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR b KQkq - 1 3",
+    "board": "rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      1,
+      18
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_e7e6_b1c3_c7c5",
+    "parent": "d2d4_d7d5_c2c4_e7e6_b1c3",
+    "ply": 6,
+    "san": "c5",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "e6",
+      "Nc3",
+      "c5"
+    ],
+    "fen": "rnbqkbnr/pp3ppp/4p3/2pp4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 4",
+    "board": "rnbqkbnr/pp3ppp/4p3/2pp4/2PP4/2N5/PP2PPPP/R1BQKBNR",
+    "turn": "White",
+    "lastMove": [
+      50,
+      34
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_e7e6_b1c3_c7c5_c4d5",
+    "parent": "d2d4_d7d5_c2c4_e7e6_b1c3_c7c5",
+    "ply": 7,
+    "san": "cxd5",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "e6",
+      "Nc3",
+      "c5",
+      "cxd5"
+    ],
+    "fen": "rnbqkbnr/pp3ppp/4p3/2pP4/3P4/2N5/PP2PPPP/R1BQKBNR b KQkq - 0 4",
+    "board": "rnbqkbnr/pp3ppp/4p3/2pP4/3P4/2N5/PP2PPPP/R1BQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      26,
+      35
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_e7e6_b1c3_c7c5_c4d5_e6d5",
+    "parent": "d2d4_d7d5_c2c4_e7e6_b1c3_c7c5_c4d5",
+    "ply": 8,
+    "san": "exd5",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "e6",
+      "Nc3",
+      "c5",
+      "cxd5",
+      "exd5"
+    ],
+    "fen": "rnbqkbnr/pp3ppp/8/2pp4/3P4/2N5/PP2PPPP/R1BQKBNR w KQkq - 0 5",
+    "board": "rnbqkbnr/pp3ppp/8/2pp4/3P4/2N5/PP2PPPP/R1BQKBNR",
+    "turn": "White",
+    "lastMove": [
+      44,
+      35
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": [
+      {
+        "name": "Queen's Gambit Declined: Tarrasch Defense",
+        "eco": "D32"
+      }
+    ]
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_b8c6",
+    "parent": "d2d4_d7d5_c2c4",
+    "ply": 4,
+    "san": "Nc6",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "Nc6"
+    ],
+    "fen": "r1bqkbnr/ppp1pppp/2n5/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 1 3",
+    "board": "r1bqkbnr/ppp1pppp/2n5/3p4/2PP4/8/PP2PPPP/RNBQKBNR",
+    "turn": "White",
+    "lastMove": [
+      57,
+      42
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": [
+      {
+        "name": "Queen's Gambit Declined: Chigorin Defense",
+        "eco": "D07"
+      }
+    ]
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_c7c6",
+    "parent": "d2d4_d7d5_c2c4",
+    "ply": 4,
+    "san": "c6",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "c6"
+    ],
+    "fen": "rnbqkbnr/pp2pppp/2p5/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3",
+    "board": "rnbqkbnr/pp2pppp/2p5/3p4/2PP4/8/PP2PPPP/RNBQKBNR",
+    "turn": "White",
+    "lastMove": [
+      50,
+      42
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_c7c6_g1f3",
+    "parent": "d2d4_d7d5_c2c4_c7c6",
+    "ply": 5,
+    "san": "Nf3",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "c6",
+      "Nf3"
+    ],
+    "fen": "rnbqkbnr/pp2pppp/2p5/3p4/2PP4/5N2/PP2PPPP/RNBQKB1R b KQkq - 1 3",
+    "board": "rnbqkbnr/pp2pppp/2p5/3p4/2PP4/5N2/PP2PPPP/RNBQKB1R",
+    "turn": "Black",
+    "lastMove": [
+      6,
+      21
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": [
+      {
+        "name": "Slav Defense: Modern Line",
+        "eco": "D11"
+      }
+    ]
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_c7c6_b1c3",
+    "parent": "d2d4_d7d5_c2c4_c7c6",
+    "ply": 5,
+    "san": "Nc3",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "c6",
+      "Nc3"
+    ],
+    "fen": "rnbqkbnr/pp2pppp/2p5/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR b KQkq - 1 3",
+    "board": "rnbqkbnr/pp2pppp/2p5/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      1,
+      18
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6",
+    "parent": "d2d4_d7d5_c2c4_c7c6_b1c3",
+    "ply": 6,
+    "san": "Nf6",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "c6",
+      "Nc3",
+      "Nf6"
+    ],
+    "fen": "rnbqkb1r/pp2pppp/2p2n2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4",
+    "board": "rnbqkb1r/pp2pppp/2p2n2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR",
+    "turn": "White",
+    "lastMove": [
+      62,
+      45
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3",
+    "parent": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6",
+    "ply": 7,
+    "san": "e3",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "c6",
+      "Nc3",
+      "Nf6",
+      "e3"
+    ],
+    "fen": "rnbqkb1r/pp2pppp/2p2n2/3p4/2PP4/2N1P3/PP3PPP/R1BQKBNR b KQkq - 0 4",
+    "board": "rnbqkb1r/pp2pppp/2p2n2/3p4/2PP4/2N1P3/PP3PPP/R1BQKBNR",
+    "turn": "Black",
+    "lastMove": [
+      12,
+      20
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3_e7e6",
+    "parent": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3",
+    "ply": 8,
+    "san": "e6",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "c6",
+      "Nc3",
+      "Nf6",
+      "e3",
+      "e6"
+    ],
+    "fen": "rnbqkb1r/pp3ppp/2p1pn2/3p4/2PP4/2N1P3/PP3PPP/R1BQKBNR w KQkq - 0 5",
+    "board": "rnbqkb1r/pp3ppp/2p1pn2/3p4/2PP4/2N1P3/PP3PPP/R1BQKBNR",
+    "turn": "White",
+    "lastMove": [
+      52,
+      44
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3_e7e6_g1f3",
+    "parent": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3_e7e6",
+    "ply": 9,
+    "san": "Nf3",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "c6",
+      "Nc3",
+      "Nf6",
+      "e3",
+      "e6",
+      "Nf3"
+    ],
+    "fen": "rnbqkb1r/pp3ppp/2p1pn2/3p4/2PP4/2N1PN2/PP3PPP/R1BQKB1R b KQkq - 1 5",
+    "board": "rnbqkb1r/pp3ppp/2p1pn2/3p4/2PP4/2N1PN2/PP3PPP/R1BQKB1R",
+    "turn": "Black",
+    "lastMove": [
+      6,
+      21
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3_e7e6_g1f3_b8d7",
+    "parent": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3_e7e6_g1f3",
+    "ply": 10,
+    "san": "Nbd7",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "c6",
+      "Nc3",
+      "Nf6",
+      "e3",
+      "e6",
+      "Nf3",
+      "Nbd7"
+    ],
+    "fen": "r1bqkb1r/pp1n1ppp/2p1pn2/3p4/2PP4/2N1PN2/PP3PPP/R1BQKB1R w KQkq - 2 6",
+    "board": "r1bqkb1r/pp1n1ppp/2p1pn2/3p4/2PP4/2N1PN2/PP3PPP/R1BQKB1R",
+    "turn": "White",
+    "lastMove": [
+      57,
+      51
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3_e7e6_g1f3_b8d7_f1d3",
+    "parent": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3_e7e6_g1f3_b8d7",
+    "ply": 11,
+    "san": "Bd3",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "c6",
+      "Nc3",
+      "Nf6",
+      "e3",
+      "e6",
+      "Nf3",
+      "Nbd7",
+      "Bd3"
+    ],
+    "fen": "r1bqkb1r/pp1n1ppp/2p1pn2/3p4/2PP4/2NBPN2/PP3PPP/R1BQK2R b KQkq - 3 6",
+    "board": "r1bqkb1r/pp1n1ppp/2p1pn2/3p4/2PP4/2NBPN2/PP3PPP/R1BQK2R",
+    "turn": "Black",
+    "lastMove": [
+      5,
+      19
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3_e7e6_g1f3_b8d7_f1d3_d5c4",
+    "parent": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3_e7e6_g1f3_b8d7_f1d3",
+    "ply": 12,
+    "san": "dxc4",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "c6",
+      "Nc3",
+      "Nf6",
+      "e3",
+      "e6",
+      "Nf3",
+      "Nbd7",
+      "Bd3",
+      "dxc4"
+    ],
+    "fen": "r1bqkb1r/pp1n1ppp/2p1pn2/8/2pP4/2NBPN2/PP3PPP/R1BQK2R w KQkq - 0 7",
+    "board": "r1bqkb1r/pp1n1ppp/2p1pn2/8/2pP4/2NBPN2/PP3PPP/R1BQK2R",
+    "turn": "White",
+    "lastMove": [
+      35,
+      26
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3_e7e6_g1f3_b8d7_f1d3_d5c4_d3c4",
+    "parent": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3_e7e6_g1f3_b8d7_f1d3_d5c4",
+    "ply": 13,
+    "san": "Bxc4",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "c6",
+      "Nc3",
+      "Nf6",
+      "e3",
+      "e6",
+      "Nf3",
+      "Nbd7",
+      "Bd3",
+      "dxc4",
+      "Bxc4"
+    ],
+    "fen": "r1bqkb1r/pp1n1ppp/2p1pn2/8/2BP4/2N1PN2/PP3PPP/R1BQK2R b KQkq - 0 7",
+    "board": "r1bqkb1r/pp1n1ppp/2p1pn2/8/2BP4/2N1PN2/PP3PPP/R1BQK2R",
+    "turn": "Black",
+    "lastMove": [
+      19,
+      26
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": []
+  },
+  {
+    "id": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3_e7e6_g1f3_b8d7_f1d3_d5c4_d3c4_b7b5",
+    "parent": "d2d4_d7d5_c2c4_c7c6_b1c3_g8f6_e2e3_e7e6_g1f3_b8d7_f1d3_d5c4_d3c4",
+    "ply": 14,
+    "san": "b5",
+    "moves": [
+      "d4",
+      "d5",
+      "c4",
+      "c6",
+      "Nc3",
+      "Nf6",
+      "e3",
+      "e6",
+      "Nf3",
+      "Nbd7",
+      "Bd3",
+      "dxc4",
+      "Bxc4",
+      "b5"
+    ],
+    "fen": "r1bqkb1r/p2n1ppp/2p1pn2/1p6/2BP4/2N1PN2/PP3PPP/R1BQK2R w KQkq - 0 8",
+    "board": "r1bqkb1r/p2n1ppp/2p1pn2/1p6/2BP4/2N1PN2/PP3PPP/R1BQK2R",
+    "turn": "White",
+    "lastMove": [
+      49,
+      33
+    ],
+    "families": [
+      "Queen’s Gambit"
+    ],
+    "openings": [
+      {
+        "name": "Semi-Slav Defense: Meran Variation",
+        "eco": "D47"
+      }
+    ]
+  }
+]

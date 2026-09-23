@@ -10,7 +10,7 @@ Engineering peers, potential collaborators, and portfolio visitors exploring Nii
 
 ## Product Purpose
 
-Dagr is a directed-graph toolkit for the web. Its showcase makes the engineering understandable through an explorable graph of its own architecture, rich content, and observable layout changes. It connects Nii's engineering practice with PRNT's generative-art work.
+Dagr is a directed-graph toolkit for the web. Its showcase makes the engineering understandable through a chess opening atlas, an explorable graph of its own architecture, rich content, and observable layout changes. The user approved the chess atlas as the richer flagship on 2026-09-22. It connects Nii's engineering practice with PRNT's generative-art work.
 
 ## Brand Personality
 

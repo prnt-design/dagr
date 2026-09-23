@@ -13,9 +13,10 @@ WebGPURenderer, SDF shapes, spring physics) and a React component on top.
 **[Documentation](https://dagr.prnt.design/docs/)** ·
 **[Follow an edit](https://dagr.prnt.design/demos/living)**
 
-Explore Dagr through a graph of its own architecture. Inspect the systems and
-what flows between them, edit a live build pipeline, or try rich React nodes
-with a generated pattern preview and an edge annotation.
+Explore 24 chess opening lines across 75 board positions, with branching moves,
+family filters, and a shared zoomable viewport. Then inspect Dagr's own
+architecture, edit a live build pipeline, or try rich React nodes with a
+generated pattern preview and an edge annotation.
 
 Dagr provides the structure; your application defines the meaning. Use it for
 codebase maps, application architectures, build pipelines, or the building
