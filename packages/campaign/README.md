@@ -2,7 +2,7 @@
 
 A deterministic mock D&D campaign dataset for Dagr demos: schema types and a
 seeded generator. Private, unpublished, and zero dependencies, including on
-`@dagr/graph`, because it is a fixture rather than a product and a fixture that
+`@prnt/dagr-graph`, because it is a fixture rather than a product and a fixture that
 depended on the graph model would be unusable to anything that is not Dagr.
 
 This is an archived showcase experiment. The fixture, renderer stage, and
@@ -42,7 +42,7 @@ node, as `@dagr/campaign-stage` does, and a size function or an overlay tier
 reads a kind without re-joining against the arrays:
 
 ```ts
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import type { CampaignNode } from '@dagr/campaign';
 
 const graph = new Graph<{ node: CampaignNode }>();

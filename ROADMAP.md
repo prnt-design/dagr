@@ -10,28 +10,24 @@ the decisions it took and the reasons, lives in
 reference elsewhere in the repo to "the roadmap's M4.6 entry" means the entry
 there. Milestone status is mirrored in the project brain.
 
-## Status (2026-09-14)
+## Status (2026-09-29)
 
-The engine is the part that is done. Over the six-session corpus (M3.10a) the
-incremental path moves 4.1x to 38.4x less of the drawing per patch than a cold
-run, with order churn at exactly zero, for 3.1% to 13.8% in crossings.
+The initial npm release is being prepared under `@prnt/dagr-*`, with the
+`dagr` umbrella, following maintainer authorization. v0.1 ships the currently documented graph, layout,
+renderer, React, and VDSL APIs. GPU picking and selection/drag hooks (M4.8b
+and M5.2) remain planned work after this initial release.
 
-What is not done is everything between that engine and a person who wants to
-use it. Nothing is on npm: M5.4a fixed the tarballs and gated them
-(`publint`, `arethetypeswrong`, a scratch install outside the workspace), and
-the publish itself is queued for the maintainer. The command is
-`pnpm publish`; `npm publish` ships `workspace:^` ranges that resolve to
-nothing. One engine caveat a consumer should know: Brandes-Koepf positioning
-is implemented and tested but unexported, and `gridPositionStage` is the
-default, with the reason written in `packages/layout/src/index.ts`.
+M5.4a gates the tarballs with `publint`, `arethetypeswrong`, and a scratch
+install outside the workspace. M5.4b now includes the `onLayout` continuity
+signal and external consumer checks for all six public packages. Publication
+uses `pnpm` so workspace dependency ranges resolve to released versions.
+Nothing has been published yet.
 
-The order to v0.1, decided 2026-08-26 and updated after M5.3b shipped
-(reasoning in the notes):
-
-1. **M5.2 + M4.8b**, interaction hooks and GPU picking, together. Blocked on a
-   machine with a WebGPU adapter.
-2. **M5.4b**, getting-started docs, API reference, v0.1 readiness review,
-   publish queued.
+Over the six-session corpus (M3.10a), the incremental path moves 4.1x to
+38.4x less of the drawing per patch than a cold run, with order churn at
+exactly zero, for 3.1% to 13.8% in crossings. Brandes-Koepf positioning is
+implemented and tested but unexported; `gridPositionStage` remains the
+default, with the reason in `packages/layout/src/index.ts`.
 
 M5.3b closed the gap this list opened with for three sessions: the flagship
 stability claim is now illustrated on the site that makes it. `/demos/living`
@@ -52,7 +48,7 @@ worth less than a slow path they can.
   workload, medians not means, tolerance widened by measured noise. Runs
   locally before a PR, not on CI; see [bench/README.md](bench/README.md).
 
-## M1: Graph model (`@dagr/graph`)
+## M1: Graph model (`@prnt/dagr-graph`)
 
 - [x] **M1.1** Core graph: node/edge add/remove/get, stable string IDs,
   adjacency queries.
@@ -65,7 +61,7 @@ worth less than a slow path they can.
 - [x] **M1.5** Serialization: `toJSON`/`fromJSON`, identity-preserving
   round-trips.
 
-## M2: Layout core (`@dagr/layout`)
+## M2: Layout core (`@prnt/dagr-layout`)
 
 - [x] **M2.1** Pipeline skeleton: stage interfaces (rank, order, position,
   route), runner, size and spacing config.
@@ -145,7 +141,7 @@ worth less than a slow path they can.
   decline to fire, the gap-policy measurements, and pricing the swap that
   would make M3.8a's position stage the default.
 
-## M4: Renderer (`@dagr/render`)
+## M4: Renderer (`@prnt/dagr-render`)
 
 - [x] **M4.1** First light: a three.js `WebGPURenderer` in `apps/demo`,
   orthographic 2D camera, pan and zoom, resize and devicePixelRatio.
@@ -199,7 +195,7 @@ worth less than a slow path they can.
 ## M5: React + demo = v0.1
 
 - [x] **M5.0** Landing page and the muslin re-port.
-- [x] **M5.1** `@dagr/react`: `<DagrCanvas>`, `useDagr`, `<Html>`.
+- [x] **M5.1** `@prnt/dagr-react`: `<DagrCanvas>`, `useDagr`, `<Html>`.
 - [ ] **M5.2** Interaction hooks: `useSelection`, hover and drag wired to GPU
   picking. Component tests.
 - [x] **M5.3a** The animation a consumer gets for free: `useDagr` over
@@ -227,24 +223,18 @@ worth less than a slow path they can.
   no changesets.
 - [ ] **M5.4b** Docs: Docusaurus getting-started, API reference pages for all
   packages, v0.1 readiness review, publish queued for the maintainer. At
-  publish time, confirm the `@dagr/graph` peer range against the versions
+  publish time, confirm the `@prnt/dagr-graph` peer range against the versions
   actually shipping.
-  ONE API CHANGE IS QUEUED AND MUST BE SEQUENCED BEFORE THE PUBLISH, because it
-  is free now and breaking after: `<DagrCanvas>` computes the delta-continuity
-  check for its own animation (`held.result === layout.from`) and does not hand
-  it over, so every consumer that shows delta numbers keeps its own ref and
-  re-derives it. Getting it wrong shows a wrong number beside a right picture,
-  silently, and two consumers in two days got it wrong (M5.3a shipped it, then
-  M5.3b's demo shipped the same class of it). The proposal is a fourth argument
-  `continues`, or an object-shaped `onLayout`. It needs its own tests for the
-  `animate` off case, where `appliedRef` is null and the check cannot come from
-  it. Raised by the M5.3b api-design review; the reasoning is in that task's
-  entry in the notes.
+  The pre-publish `onLayout` continuity change is implemented: a fourth
+  `continues` argument tells consumers whether the delta is relative to the
+  last successful committed layout, with or without animation. Tests cover
+  cold runs, skipped intermediate layouts, graph changes, and failed layouts.
+  The living demo consumes this signal instead of keeping its own comparison.
 - [x] **M5.5** Containment reserved in the graph model: `parent`,
   `update-node-parent`, the invariants, `PatchOp` documented as an open
   union. Layout ignores `parent` until M7.
 
-## M6: VDSL = v0.2 (`@dagr/vdsl`)
+## M6: VDSL core in v0.1, interactions planned for v0.2 (`@prnt/dagr-vdsl`)
 
 A toolkit for building a node-graph language, not a node-graph language. It
 defines no ontology: no built-in node kinds, no config schema of Dagr's
@@ -274,7 +264,7 @@ demonstrates the claim; it is not the claim.
   value-shaped, one with feedback and a real-time evaluator. The second is
   the one that finds the wrong assumptions.
 
-## M7: Compound layout (`@dagr/layout`)
+## M7: Compound layout (`@prnt/dagr-layout`)
 
 Inline nesting: parents and children drawn together as nested boxes, rather
 than M6.4's drill-down. What it touches, verified against the code: crossing

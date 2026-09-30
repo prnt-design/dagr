@@ -1,8 +1,8 @@
 /**
  * A graph on a canvas: the component this package exists for.
  *
- * It is the first thing in the workspace that closes the loop. `@dagr/graph`
- * holds the model, `@dagr/layout` says where everything goes, `@dagr/render`
+ * It is the first thing in the workspace that closes the loop. `@prnt/dagr-graph`
+ * holds the model, `@prnt/dagr-layout` says where everything goes, `@prnt/dagr-render`
  * draws what it is handed, and until now the code joining those three was
  * `@dagr/campaign-stage`: a private package, written for one dataset, that
  * every host had to copy to draw anything else. `<DagrCanvas>` is that wiring
@@ -66,9 +66,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
-import type { Graph } from '@dagr/graph';
-import type { LayoutConfig, LayoutDelta, LayoutResult } from '@dagr/layout';
-import { createHtmlOverlay, createMotionLoop, createRenderer, createSceneMotion } from '@dagr/render';
+import type { Graph } from '@prnt/dagr-graph';
+import type { LayoutConfig, LayoutDelta, LayoutResult } from '@prnt/dagr-layout';
+import { createHtmlOverlay, createMotionLoop, createRenderer, createSceneMotion } from '@prnt/dagr-render';
 import type {
   FrameScheduler,
   HtmlOverlay,
@@ -83,7 +83,7 @@ import type {
   SceneNode,
   SceneStyle,
   WorldBounds,
-} from '@dagr/render';
+} from '@prnt/dagr-render';
 import { retarget, toMotionRoster } from './animation.js';
 import { DagrCanvasContext } from './canvas-context.js';
 import type { DagrCanvasHandle } from './canvas-context.js';
@@ -151,7 +151,7 @@ export interface DagrCanvasProps {
    * Whether an edit glides to its new layout instead of cutting to it, and how
    * it should feel. Default false.
    *
-   * `true` takes `@dagr/render`'s default half-life and rest tolerance; an
+   * `true` takes `@prnt/dagr-render`'s default half-life and rest tolerance; an
    * object sets either, and setting either is also a way of saying yes. The
    * object is compared BY VALUE, like `config`, because a caller writes it as
    * a literal in their JSX and comparing by identity would rebuild the springs
@@ -211,9 +211,12 @@ export interface DagrCanvasProps {
    * every one, so two mutating calls in one task are two layouts and one call
    * to this. The `delta` you are handed is then measured from `from`, which is
    * a drawing you never saw, and a consumer counting "nodes moved by this edit"
-   * off it would count the last hop only. `from` is what lets you tell: compare
-   * it by identity with the `result` you last saw here. `graph.batch` is the
-   * other answer, and is the one to reach for first.
+   * off it would count the last hop only. The fourth argument, `continues`,
+   * is true only when `from` is the last successful layout committed by this
+   * canvas. It is false on a cold run, after a failed layout, or when React
+   * skipped an intermediate layout. This works with animation on or off and
+   * does not mean the GPU has finished drawing. Count delta changes only when
+   * it is true. `graph.batch` avoids skipped intermediate layouts.
    *
    * `delta` and `from` are both `null` for a run that was cold and had nothing
    * to be a difference from. See `DagrLayoutState.delta`.
@@ -226,7 +229,7 @@ export interface DagrCanvasProps {
    * whatever the cold run does not set for you, and nothing it does.
    */
   readonly onLayout?:
-    | ((result: LayoutResult, delta: LayoutDelta | null, from: LayoutResult | null) => void)
+    | ((result: LayoutResult, delta: LayoutDelta | null, from: LayoutResult | null, continues: boolean) => void)
     | undefined;
 
   /**
@@ -392,6 +395,8 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
    * reflects it.
    */
   const appliedRef = useRef<typeof layout | null>(null);
+  // Commit continuity is independent of whether a renderer or animation exists.
+  const reportedRef = useRef<LayoutResult | null>(null);
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
 
@@ -771,8 +776,11 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
   }, [stage, layout, rosterNow]);
 
   useEffect(() => {
+    const previous = reportedRef.current;
+    reportedRef.current = layout.result;
     if (layout.result === null) return;
-    latest.current.onLayout?.(layout.result, layout.delta, layout.from);
+    const continues = previous !== null && previous === layout.from;
+    latest.current.onLayout?.(layout.result, layout.delta, layout.from, continues);
   }, [layout]);
 
   const trouble = failure ?? error;

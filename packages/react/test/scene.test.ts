@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { Graph } from '@dagr/graph';
-import { layout } from '@dagr/layout';
-import type { LayoutResult, PositionedNode, RoutedEdge } from '@dagr/layout';
+import { Graph } from '@prnt/dagr-graph';
+import { layout } from '@prnt/dagr-layout';
+import type { LayoutResult, PositionedNode, RoutedEdge } from '@prnt/dagr-layout';
 import {
   DEFAULT_EDGE_COLOR,
   DEFAULT_NODE_APPEARANCE,

@@ -71,7 +71,7 @@ export interface Node<A extends object = Attrs> {
    * relation to one graph rather than a second graph inside it. A node has at
    * most one parent, the relation is acyclic, and an edge may cross a boundary
    * freely: containment says what is inside what, and edges say what flows
-   * where. Nothing in `@dagr/layout` reads this yet.
+   * where. Nothing in `@prnt/dagr-layout` reads this yet.
    */
   readonly parent?: NodeId;
 }

@@ -1,5 +1,5 @@
 /**
- * Errors thrown by `@dagr/react`, and why there is only one.
+ * Errors thrown by `@prnt/dagr-react`, and why there is only one.
  *
  * The rule the sibling packages follow applies here unchanged: an
  * out-of-range value is a `RangeError` naming the field, and anything else gets
@@ -8,7 +8,7 @@
  * renderer that checks it, so what is left is the one failure that is a fact
  * about a component tree rather than about a value.
  *
- * **There is no abstract base yet, on purpose, and `@dagr/render`'s errors file
+ * **There is no abstract base yet, on purpose, and `@prnt/dagr-render`'s errors file
  * is the precedent for both halves of that.** It carried a paragraph for two
  * milestones saying a base over a family of one would be a family only in the
  * sense that a single point is a line, and then added the base the moment M4.11

@@ -9,7 +9,7 @@
  * invariants. `plans/2026-08-14-campaign-demo.md` is the decision record.
  *
  * Private and unpublished: this is a fixture, not a product. It has zero
- * dependencies, including on `@dagr/graph`, so it stays usable as a fixture
+ * dependencies, including on `@prnt/dagr-graph`, so it stays usable as a fixture
  * for anything that reads plain nodes and edges.
  */
 

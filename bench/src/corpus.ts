@@ -2,9 +2,9 @@
  * The shared benchmark corpora.
  *
  * These emit plain descriptions, arrays of ids and endpoint pairs, and not a
- * `Graph`. That is deliberate on two counts. `@dagr/graph` is a zero-dependency
+ * `Graph`. That is deliberate on two counts. `@prnt/dagr-graph` is a zero-dependency
  * package and it benchmarks itself, so a corpus that imported it would make the
- * bench kit and the package it measures depend on each other. And `@dagr/render`
+ * bench kit and the package it measures depend on each other. And `@prnt/dagr-render`
  * (ROADMAP M4.10) wants the same 10k corpus as a pile of coordinates with no
  * graph model anywhere near it. A description each consumer builds from serves
  * all three.

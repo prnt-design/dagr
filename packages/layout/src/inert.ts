@@ -29,13 +29,13 @@
  *
  * Because the two spellings fail in opposite directions when the union grows.
  * `default: return false` refuses an op kind this file has never heard of,
- * which costs a full relayout on the day @dagr/graph adds one; the other
+ * which costs a full relayout on the day @prnt/dagr-graph adds one; the other
  * spelling would SKIP it, and a skip taken on an op nobody has classified is a
  * wrong drawing returned in silence. The same rule is why every switch over
  * this union in this repo is written out arm by arm.
  */
 
-import type { NodeId, Patch } from '@dagr/graph';
+import type { NodeId, Patch } from '@prnt/dagr-graph';
 import type { Size } from './types.js';
 
 /**

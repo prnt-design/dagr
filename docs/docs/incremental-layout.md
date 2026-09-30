@@ -187,7 +187,7 @@ evidence, and the compounding above is exactly the evidence that reopens it.
 ## Regenerating the numbers
 
 ```
-UPDATE_GOLDEN=1 pnpm --filter @dagr/layout test layout.sequence.golden
+UPDATE_GOLDEN=1 pnpm --filter @prnt/dagr-layout test layout.sequence.golden
 ```
 
 Do it when you deliberately changed what the pipeline does and can say what

@@ -1,5 +1,5 @@
-import { Graph } from '@dagr/graph';
-import type { Node, NodeId } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
+import type { Node, NodeId } from '@prnt/dagr-graph';
 import type { Size } from '../src/types.js';
 
 /**

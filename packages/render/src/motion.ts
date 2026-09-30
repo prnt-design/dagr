@@ -36,7 +36,7 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * place.
  *
  * **The delta is not `LayoutDelta`, and this package still does not depend on
- * `@dagr/layout`.** {@link NodeMotionDelta} carries a world-space CENTRE per
+ * `@prnt/dagr-layout`.** {@link NodeMotionDelta} carries a world-space CENTRE per
  * node, which is what a spring pulls towards, where `LayoutDelta` carries
  * y-down boxes. The conversion is the one `setNodes` already asks of a caller,
  * and `camera.ts` has said since M4.1 that the y flip belongs to whoever owns
@@ -73,7 +73,7 @@ export interface MotionTarget {
 /**
  * What changed about the nodes, in the shape M3.1's `NodeDelta` gives it.
  *
- * The three lists and their meanings are `@dagr/layout`'s: `added` is what the
+ * The three lists and their meanings are `@prnt/dagr-layout`'s: `added` is what the
  * next layout holds and the previous one did not, `removed` is ids the previous
  * one held and the next does not, and `moved` is what both hold in a different
  * place. ABSENT MEANS UNCHANGED, so a scene of ten thousand nodes where one

@@ -32,7 +32,7 @@ function distanceToSegment(point: Vec2, a: Vec2, b: Vec2): number {
 /**
  * The furthest any of `points` strays from the line `route` draws.
  *
- * This is one direction of the Hausdorff distance `@dagr/layout`'s
+ * This is one direction of the Hausdorff distance `@prnt/dagr-layout`'s
  * `maxRouteDistance` measures, and it is the metric this whole task is judged
  * by: a resampled route that measures zero here is the same drawing as the
  * route it came from, whatever its vertex count says.

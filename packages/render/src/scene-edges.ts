@@ -58,7 +58,7 @@ export interface SceneEdge {
   /**
    * The centreline, world units, y up, source to target.
    *
-   * `RoutedEdge.points` from `@dagr/layout` after the caller's y flip is
+   * `RoutedEdge.points` from `@prnt/dagr-layout` after the caller's y flip is
    * exactly this, and the direction is a contract there, which is what makes a
    * flowing dash mean "towards the target".
    */

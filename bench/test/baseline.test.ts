@@ -99,16 +99,16 @@ describe('recording a baseline', () => {
 describe('the machine profile', () => {
   it('records the probes the run measured', () => {
     const merged = mergeBaseline(undefined, { a: stat(1) }, AT, {
-      '@dagr/graph > graph.bench.ts': { alloc: 0.09, chase: 1 },
+      '@prnt/dagr-graph > graph.bench.ts': { alloc: 0.09, chase: 1 },
     });
-    expect(merged.machineProfile?.['@dagr/graph > graph.bench.ts']?.chase).toBe(1);
+    expect(merged.machineProfile?.['@prnt/dagr-graph > graph.bench.ts']?.chase).toBe(1);
   });
 
   it('omits the field rather than keeping the previous capture, probes and all', () => {
     const previous: BaselineReport = {
       schema: 1,
       benchmarks: {},
-      machineProfile: { '@dagr/graph > graph.bench.ts': { alloc: 0.09, chase: 1 } },
+      machineProfile: { '@prnt/dagr-graph > graph.bench.ts': { alloc: 0.09, chase: 1 } },
     };
     const merged = mergeBaseline(previous, { a: stat(1) }, AT, {});
     expect(merged.machineProfile).toBeUndefined();

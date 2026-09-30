@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { Graph } from '@dagr/graph';
-import { createLayout } from '@dagr/layout';
-import type { LayoutDelta } from '@dagr/layout';
-import { MotionDesyncError } from '@dagr/render';
+import { Graph } from '@prnt/dagr-graph';
+import { createLayout } from '@prnt/dagr-layout';
+import type { LayoutDelta } from '@prnt/dagr-layout';
+import { MotionDesyncError } from '@prnt/dagr-render';
 import type {
   SceneEdge,
   SceneMotion,
@@ -11,7 +11,7 @@ import type {
   SceneMotionRoster,
   SceneNode,
   WorldBounds,
-} from '@dagr/render';
+} from '@prnt/dagr-render';
 import { toMotionDelta, toMotionRoster, retarget } from '../src/animation.js';
 import { toSceneEdges, toSceneNodes, toWorldBounds } from '../src/scene.js';
 

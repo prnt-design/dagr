@@ -8,12 +8,12 @@ import type {
   PortDirection,
   PortId,
   ReadAttrs,
-} from '@dagr/graph';
+} from '@prnt/dagr-graph';
 
 /**
  * A port as a node kind declares it, rather than as a node carries it.
  *
- * `@dagr/graph`'s `Port` is what a node has; this is what every node of
+ * `@prnt/dagr-graph`'s `Port` is what a node has; this is what every node of
  * a kind is promised to have. The two differ by `maxEdges`, which is a rule
  * about a port and not a property of one, and which the graph model has no
  * business enforcing: `Graph` permits any topology by design.

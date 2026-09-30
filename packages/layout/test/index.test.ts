@@ -1,4 +1,4 @@
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { describe, expect, it } from 'vitest';
 import * as api from '../src/index.js';
 import type {
@@ -64,14 +64,14 @@ import type { RoutedState } from '../src/types.js';
 import { brandesKoepfPositionStage } from '../src/position.js';
 import { gridPositionStage, insertionOrderStage } from '../src/stages.js';
 
-describe('@dagr/layout public surface', () => {
+describe('@prnt/dagr-layout public surface', () => {
   it('exports the entry point', () => {
     expect(typeof api.layout).toBe('function');
   });
 
   // Three names for two sides of one boundary: the engine a caller builds, and
   // the call a worker module makes to answer it. The messages between them are
-  // not exported, the way `traversal.ts` is not exported from `@dagr/graph`:
+  // not exported, the way `traversal.ts` is not exported from `@prnt/dagr-graph`:
   // both speakers ship here and are upgraded together, so publishing the format
   // would freeze an agreement nobody outside can hold either end of.
   it('exports the engine and the worker side of it', () => {

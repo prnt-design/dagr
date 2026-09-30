@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createLayout } from '@dagr/layout';
+import { createLayout } from '@prnt/dagr-layout';
 import {
   CLEAR_COLOR,
   HIGHLIGHT_COLOR,

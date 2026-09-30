@@ -1,7 +1,7 @@
 /**
  * The checks shown failing, on packages constructed to be wrong.
  *
- * `pack.test.ts` runs the same predicates over the five real tarballs, where
+ * `pack.test.ts` runs the same predicates over the six real tarballs, where
  * they pass and are expected to keep passing. A guard whose only evidence is
  * a green run against a tree already known to be correct has never
  * demonstrated that it can go red, so each check gets a case here that makes
@@ -34,30 +34,30 @@ function map(sources: string[], extra: Record<string, unknown> = {}): string {
 
 describe('workspace ranges a consumer cannot resolve', () => {
   it('reports the range npm pack leaves behind', () => {
-    // The exact shape of packages/layout before this task: @dagr/graph is a
+    // The exact shape of packages/layout before this task: @prnt/dagr-graph is a
     // peer, and `npm pack` publishes the protocol string verbatim.
-    const found = workspaceRanges({ peerDependencies: { '@dagr/graph': 'workspace:^' } });
-    expect(found).toEqual(['peerDependencies.@dagr/graph is "workspace:^"']);
+    const found = workspaceRanges({ peerDependencies: { '@prnt/dagr-graph': 'workspace:^' } });
+    expect(found).toEqual(['peerDependencies.@prnt/dagr-graph is "workspace:^"']);
   });
 
   it('accepts the range pnpm pack rewrites it to', () => {
-    expect(workspaceRanges({ peerDependencies: { '@dagr/graph': '^0.1.0' } })).toEqual([]);
+    expect(workspaceRanges({ peerDependencies: { '@prnt/dagr-graph': '^0.1.0' } })).toEqual([]);
   });
 
   it('reads dependencies and optionalDependencies too', () => {
     const found = workspaceRanges({
-      dependencies: { '@dagr/layout': 'workspace:^' },
-      optionalDependencies: { '@dagr/render': 'workspace:*' },
+      dependencies: { '@prnt/dagr-layout': 'workspace:^' },
+      optionalDependencies: { '@prnt/dagr-render': 'workspace:*' },
     });
     expect(found).toEqual([
-      'dependencies.@dagr/layout is "workspace:^"',
-      'optionalDependencies.@dagr/render is "workspace:*"',
+      'dependencies.@prnt/dagr-layout is "workspace:^"',
+      'optionalDependencies.@prnt/dagr-render is "workspace:*"',
     ]);
   });
 
   it('ignores devDependencies, which no consumer install reads', () => {
     // @dagr/bench is private and will never be on npm, and its range survives
-    // into the published manifest of @dagr/graph and @dagr/layout. It reaches
+    // into the published manifest of @prnt/dagr-graph and @prnt/dagr-layout. It reaches
     // nobody: npm installs no devDependencies for a package it is installing
     // as a dependency. Asserted rather than left implicit, because the natural
     // reading of "no workspace ranges in the manifest" would fail here for a

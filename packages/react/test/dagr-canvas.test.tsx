@@ -3,12 +3,12 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 
 // Only the two builders are faked; see `fake-render.ts`. Everything else in
 // the package is the real thing, which is what lets a component test drive the
 // real springs and the real loop without a GPU.
-vi.mock('@dagr/render', async (importOriginal) => ({
+vi.mock('@prnt/dagr-render', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ...(await import('./fake-render.js')),
 }));

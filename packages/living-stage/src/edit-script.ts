@@ -33,7 +33,7 @@
  * pins all eight of them rather than the six a lap walks.
  */
 
-import type { EdgeId, Graph, NodeId } from '@dagr/graph';
+import type { EdgeId, Graph, NodeId } from '@prnt/dagr-graph';
 import { STAGES, STAGE_WIDTHS, WIDEST_STAGE, edgeIdFor, stageOf } from './living-graph.js';
 import type { Stage } from './living-graph.js';
 

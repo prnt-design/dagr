@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { MAX_NON_UNIFORMITY, compareMachineProfile } from '../src/profile.mjs';
 import type { MachineProfile } from '../src/profile.mjs';
 
-const FILE = '@dagr/graph > graph.bench.ts';
+const FILE = '@prnt/dagr-graph > graph.bench.ts';
 
 /** A profile for one bench file, in the order the probes are registered. */
 function profile(alloc: number, chase: number): MachineProfile {
@@ -58,12 +58,12 @@ describe('a machine with a different profile', () => {
 
   it('takes the widest non-uniformity across bench files, not the first', () => {
     const baseline: MachineProfile = {
-      '@dagr/graph > graph.bench.ts': { alloc: 0.09, chase: 1.0 },
-      '@dagr/layout > layout.bench.ts': { alloc: 0.09, chase: 1.0 },
+      '@prnt/dagr-graph > graph.bench.ts': { alloc: 0.09, chase: 1.0 },
+      '@prnt/dagr-layout > layout.bench.ts': { alloc: 0.09, chase: 1.0 },
     };
     const current: MachineProfile = {
-      '@dagr/graph > graph.bench.ts': { alloc: 0.09, chase: 1.0 },
-      '@dagr/layout > layout.bench.ts': { alloc: 0.09, chase: 2.0 },
+      '@prnt/dagr-graph > graph.bench.ts': { alloc: 0.09, chase: 1.0 },
+      '@prnt/dagr-layout > layout.bench.ts': { alloc: 0.09, chase: 2.0 },
     };
     const report = compareMachineProfile(baseline, current);
     expect(report.nonUniformity).toBeCloseTo(2, 6);
@@ -87,7 +87,7 @@ describe('a baseline that carries no profile', () => {
 
   it('is not comparable when the run and the baseline share no bench file', () => {
     const report = compareMachineProfile(profile(0.09, 1.0), {
-      '@dagr/render > render.bench.ts': { alloc: 0.09, chase: 1.0 },
+      '@prnt/dagr-render > render.bench.ts': { alloc: 0.09, chase: 1.0 },
     });
     expect(report.comparable).toBe(false);
   });

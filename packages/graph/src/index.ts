@@ -5,7 +5,7 @@ export { Graph } from './graph.js';
 // so `ancestors` can be `descendants` pointed the other way, and exporting it
 // would pin the package to that shape before anything outside has asked for it.
 // The traversal surface is the methods on `Graph`. This is the same call M2.2
-// made in `@dagr/layout`, where only `defaultStages` is public.
+// made in `@prnt/dagr-layout`, where only `defaultStages` is public.
 export {
   ContainmentCycleError,
   CycleError,

@@ -11,7 +11,7 @@
  * layout reads neither. Sending them would cost a copy of every bag on a graph
  * the far side has no use for, and worse, it would make a run FAIL for a reason
  * that has nothing to do with layout, because an attribute holding a function
- * or a DOM node is legal in `@dagr/graph` (it never reads one) and is not
+ * or a DOM node is legal in `@prnt/dagr-graph` (it never reads one) and is not
  * structured-cloneable. So a caller who keeps a React element or a callback in
  * a node's bag can still lay that graph out in a worker, and the failure mode
  * this avoids is the kind that shows up only in production and only for some
@@ -48,8 +48,8 @@
  * over the graph the caller already has.
  */
 
-import { Graph } from '@dagr/graph';
-import type { EdgeId, NodeId } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
+import type { EdgeId, NodeId } from '@prnt/dagr-graph';
 import { InternalLayoutError, StageContractError, WorkerTransportError } from './errors.js';
 import type { DagrLayoutError } from './errors.js';
 import type {
@@ -242,7 +242,7 @@ export function encodeRun(id: number, prepared: PreparedState): Encoded<LayoutRu
  *
  * The graph is built through the same public constructors any caller would use,
  * so a request naming an edge endpoint that is not there, or the same id twice,
- * comes back as the `@dagr/graph` error that call always throws rather than as
+ * comes back as the `@prnt/dagr-graph` error that call always throws rather than as
  * a half-built graph. That is `Graph.fromJSON`'s argument, made here without
  * the document: a document is a format to validate and this is a message this
  * package wrote.

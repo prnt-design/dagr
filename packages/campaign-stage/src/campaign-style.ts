@@ -1,5 +1,5 @@
 import type { CampaignNode, NodeKind } from '@dagr/campaign';
-import type { NodeShape, Size } from '@dagr/render';
+import type { NodeShape, Size } from '@prnt/dagr-render';
 
 /**
  * What each of the campaign's sixteen node kinds looks like: its shape, how big
@@ -13,7 +13,7 @@ import type { NodeShape, Size } from '@dagr/render';
  * So the numbers are here and {@link nodeColor} derives the string.
  *
  * Sizes are here for a third reason, and it is the one that would be a real bug
- * if it were got wrong. A node's size is an input to LAYOUT (`@dagr/layout` asks
+ * if it were got wrong. A node's size is an input to LAYOUT (`@prnt/dagr-layout` asks
  * for it through `nodeSize`) as well as to rendering, and the overlay places a
  * card against the node's box. Three readers of one number: if the drawn box and
  * the laid-out box disagree, nodes overlap in a picture whose layout says they
@@ -286,7 +286,7 @@ export function styleFor(kind: NodeKind, locationSubtype?: string): KindStyle {
  * module. And a STRING rather than a number because that is what an element's
  * `style` takes, and a CSS declaration whose value the parser rejects is DROPPED
  * SILENTLY: the element keeps whatever it inherited and nothing anywhere fails.
- * That is the same class of failure `@dagr/render`'s `cssNumber` exists for, and
+ * That is the same class of failure `@prnt/dagr-render`'s `cssNumber` exists for, and
  * the reason the conversion lives here rather than at each badge.
  *
  * **It takes the NODE and not its kind**, which is the second version of this
@@ -380,7 +380,7 @@ export const EDGE_INK_MIX = 0.75;
  * slightly towards the ground's blue as it darkens them. That is the cheaper
  * arithmetic and, here, the more useful drift: the ground is a cold near-black,
  * so every ink leans the same way and the FAMILY separations, which is what a
- * reader is tracing, survive. `linearFromHex` in `@dagr/render` converts to
+ * reader is tracing, survive. `linearFromHex` in `@prnt/dagr-render` converts to
  * linear on the way to the GPU, so this operates on the same numbers the palette
  * is written in and nothing here is a second colour space.
  */

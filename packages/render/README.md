@@ -1,4 +1,4 @@
-# @dagr/render
+# @prnt/dagr-render
 
 The renderer behind [Dagr](https://dagr.prnt.design): a three.js
 `WebGPURenderer` scene drawing nodes as signed distance fields, instanced, with
@@ -6,14 +6,14 @@ a DOM overlay for the content that has to be readable and springs for the
 content that has to move.
 
 ```sh
-pnpm add @dagr/render three
+pnpm add @prnt/dagr-render three
 ```
 
 `three` is a `peerDependency` (`>=0.180.0 <1.0.0`), so you install it yourself
 and there is exactly one copy of it.
 
 ```ts
-import { createRenderer } from '@dagr/render';
+import { createRenderer } from '@prnt/dagr-render';
 
 const renderer = await createRenderer({ canvas });
 renderer.setNodes([
@@ -35,9 +35,9 @@ renderer.render();
 
 It takes scene nodes with their own centres, sizes, shapes and colours, and
 that is deliberate rather than an omission. Naming a `LayoutResult` would make
-`@dagr/layout` a dependency of this package, and the **y-down to y-up
+`@prnt/dagr-layout` a dependency of this package, and the **y-down to y-up
 conversion belongs to whoever owns the layout**, not to the thing drawing it.
-`@dagr/react` is where the two are joined; if you are wiring them yourself,
+`@prnt/dagr-react` is where the two are joined; if you are wiring them yourself,
 that conversion is your one line.
 
 A node keeps its instance handle across `setNodes` calls, which keeps its
@@ -52,7 +52,7 @@ by **your** node id and never by a renderer handle, because where a node is on
 its way to is a fact about the node rather than about the slot it draws from:
 
 ```ts
-import { createNodeMotion } from '@dagr/render';
+import { createNodeMotion } from '@prnt/dagr-render';
 
 const motion = createNodeMotion();
 motion.resync([
@@ -72,7 +72,7 @@ for (const node of frame.nodes) {
 }
 ```
 
-`apply` takes a `NodeMotionDelta`, which is `@dagr/layout`'s delta **in this
+`apply` takes a `NodeMotionDelta`, which is `@prnt/dagr-layout`'s delta **in this
 package's coordinates**: centres in world units, y up. The conversion is yours,
 for the same reason `setNodes` takes no `LayoutResult`. It follows the same
 three rules the layout delta does, so absent means unchanged and a node you do
@@ -91,7 +91,7 @@ new directed route because it is a replacement, not a reroute.
 one clock, and `createMotionLoop` is the clock:
 
 ```ts
-import { createMotionLoop, createSceneMotion } from '@dagr/render';
+import { createMotionLoop, createSceneMotion } from '@prnt/dagr-render';
 
 const motion = createSceneMotion();
 motion.resync({ nodes, edges, bounds }); // once, from the first layout

@@ -31,19 +31,22 @@ See the [measured behavior](https://dagr.prnt.design/docs/incremental-layout).
 
 | Package | What | Status |
 | --- | --- | --- |
-| `@dagr/graph` | Typed directed graph model: patches, stable identity, zero deps | Identity, shape, adjacency, attributes, ports, patches, traversal, and serialization implemented |
-| `@dagr/layout` | Headless Sugiyama layout engine; incremental, animation-first | The full pipeline, cycle breaking, ranking, crossing reduction, coordinates and routes implemented, plus the incremental engine: patches in, deltas out, warm-started stages and a committed [stability corpus](https://dagr.prnt.design/docs/incremental-layout); an inert-patch fast path skips stages when an edit changes no layout inputs; broader fast paths are planned |
-| `@dagr/render` | WebGPU renderer: SDF shapes, instancing, spring animation | Camera, SDF shapes, an HTML overlay, instancing, edge ribbons, a real graph on screen, critically damped springs, node, edge and bounds motion driven as one scene, and the loop that drives it implemented; GPU picking is next |
-| `@dagr/react` | `<DagrCanvas>` component and hooks | The canvas, the `useDagr` hook over the incremental engine, `<Html>` over the overlay, the layout-to-scene conversion, and `animate`, which glides an edit to its new layout off the delta, implemented; interaction is next |
-| `@dagr/vdsl` | Visual DSL toolkit: node spec adapter, typed ports, drag-to-connect | The node spec adapter, its registry, port type tokens and connection validation implemented; drag-to-connect is next |
+| `dagr` | Convenience umbrella with graph exports at the root and five package subpaths | Initial release being prepared |
+| `@prnt/dagr-graph` | Typed directed graph model: patches, stable identity, zero deps | Identity, shape, adjacency, attributes, ports, patches, traversal, and serialization implemented |
+| `@prnt/dagr-layout` | Headless Sugiyama layout engine; incremental, animation-first | The full pipeline, cycle breaking, ranking, crossing reduction, coordinates and routes implemented, plus the incremental engine: patches in, deltas out, warm-started stages and a committed [stability corpus](https://dagr.prnt.design/docs/incremental-layout); an inert-patch fast path skips stages when an edit changes no layout inputs; broader fast paths are planned |
+| `@prnt/dagr-render` | WebGPU renderer: SDF shapes, instancing, spring animation | Camera, SDF shapes, an HTML overlay, instancing, edge ribbons, a real graph on screen, critically damped springs, node, edge and bounds motion driven as one scene, and the loop that drives it implemented; GPU picking is next |
+| `@prnt/dagr-react` | `<DagrCanvas>` component and hooks | The canvas, the `useDagr` hook over the incremental engine, `<Html>` over the overlay, the layout-to-scene conversion, and `animate`, which glides an edit to its new layout off the delta, implemented; interaction is next |
+| `@prnt/dagr-vdsl` | Visual DSL toolkit: node spec adapter, typed ports, drag-to-connect | The node spec adapter, its registry, port type tokens and connection validation implemented; drag-to-connect is next |
 
-Nothing is published to npm yet, so the only way to run any of this today is to
-clone the repo. The tarballs are ready: every package packs with a README, a
-LICENSE and source maps that resolve, `publint` and `arethetypeswrong` pass on
-all five, and a scratch project outside the workspace installs them and
-typechecks. The `packaging` member is the gate that keeps that true, and the
-publish command is `pnpm publish` rather than `npm publish`. The publish itself
-is the maintainer's, per [AGENTS.md](./AGENTS.md).
+The initial npm release is being prepared. `dagr` offers `dagr/graph`,
+`dagr/layout`, `dagr/render`, `dagr/react`, and `dagr/vdsl`; the scoped
+packages remain available as individual layers. The umbrella forwards the
+same implementations, and its root exports the graph model.
+
+Nothing is published yet. The `packaging` workspace checks packed manifests,
+source maps, public types, and installation outside the repository. Release
+validation also runs `publint` and `arethetypeswrong`. Publication uses
+`pnpm` to replace workspace dependency ranges with registry versions.
 
 ## Development
 

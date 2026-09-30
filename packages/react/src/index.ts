@@ -1,5 +1,5 @@
 /**
- * `@dagr/react`: a graph on a canvas, as one component.
+ * `@prnt/dagr-react`: a graph on a canvas, as one component.
  *
  * The package was scaffolded with the workspace and stayed empty by decision
  * until M5.1, because `<Html>` needed a context and the context is
@@ -21,10 +21,10 @@
  * - {@link useDagrCanvas} is how anything inside reaches the renderer, the
  *   overlay and the layout.
  * - {@link retarget} and the two conversions beside it are the delta half of
- *   `scene.ts`, for a caller driving `@dagr/render`'s scene motion themselves.
+ *   `scene.ts`, for a caller driving `@prnt/dagr-render`'s scene motion themselves.
  *
  * **What this package is FOR is the seam nothing else in the workspace owns.**
- * `@dagr/render` refuses to name a `LayoutResult`, on the argument that the
+ * `@prnt/dagr-render` refuses to name a `LayoutResult`, on the argument that the
  * y-down to y-up conversion belongs to whoever owns the layout, and until now
  * the only thing that owned both was `@dagr/campaign-stage`: private, written
  * for one dataset, and copied by every host that wanted a different one. The
@@ -43,7 +43,7 @@
  *   Deciding that a node of kind X draws as a hexagon is M6's, and M6 was
  *   rescoped precisely so that Dagr ships no ontology of its own.
  *
- * `PKG_NAME` is gone, as it went from `@dagr/render` for the same reason:
+ * `PKG_NAME` is gone, as it went from `@prnt/dagr-render` for the same reason:
  * scaffolding from the workspace's first commit, imported by nothing, and an
  * exported constant nobody uses is one more thing a consumer can depend on by
  * accident.
@@ -72,10 +72,10 @@ export { useDagr } from './use-dagr.js';
 export type { DagrLayoutState, UseDagrOptions } from './use-dagr.js';
 
 /**
- * The `@dagr/render` types this package's own surface is spelled in.
+ * The `@prnt/dagr-render` types this package's own surface is spelled in.
  *
  * TYPES ONLY, AND RE-EXPORTED RATHER THAN REDECLARED, so they stay the same
- * types: a caller can pass one of these to `@dagr/render` directly and a
+ * types: a caller can pass one of these to `@prnt/dagr-render` directly and a
  * structural copy that drifted would be a second source of truth.
  *
  * They are here because a consumer whose only contact with the renderer is
@@ -84,10 +84,10 @@ export type { DagrLayoutState, UseDagrOptions } from './use-dagr.js';
  * handler needs `SceneMotionFrame` and `Renderer`; `sceneStyle` and `edgeStyle`
  * need `SceneStyle` and `RibbonStyle`; and `toWorldBounds` returns
  * `WorldBounds`. Before this, the first consumer outside this package
- * (`@dagr/living-stage`) declared `@dagr/render` as a dependency it never
+ * (`@dagr/living-stage`) declared `@prnt/dagr-render` as a dependency it never
  * touched at runtime, purely to write one type annotation.
  *
- * `@dagr/render` stays a peer dependency and is still the place to import from
+ * `@prnt/dagr-render` stays a peer dependency and is still the place to import from
  * for anything that drives the renderer itself. This is the subset a caller of
  * THIS package needs, and nothing more.
  */
@@ -101,4 +101,4 @@ export type {
   SceneNode,
   SceneStyle,
   WorldBounds,
-} from '@dagr/render';
+} from '@prnt/dagr-render';

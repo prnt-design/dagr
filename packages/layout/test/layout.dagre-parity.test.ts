@@ -11,7 +11,7 @@ import {
   parityCorpus,
   parityNodeSizes,
 } from './dagre-parity-corpus.js';
-import type { EdgeId, Graph, NodeId } from '@dagr/graph';
+import type { EdgeId, Graph, NodeId } from '@prnt/dagr-graph';
 import type { ParityGraph } from './dagre-parity-corpus.js';
 import type { LayoutStageOverrides, Point, RouteStage, Size } from '../src/types.js';
 
@@ -205,7 +205,7 @@ import type { LayoutStageOverrides, Point, RouteStage, Size } from '../src/types
  *
  * ## Regenerating
  *
- *   UPDATE_GOLDEN=1 pnpm --filter @dagr/layout test layout.dagre-parity
+ *   UPDATE_GOLDEN=1 pnpm --filter @prnt/dagr-layout test layout.dagre-parity
  *
  * LEGITIMATE when this package deliberately changed what it draws, or when the
  * pinned dagre version was deliberately bumped, and in either case only when
@@ -996,7 +996,7 @@ describe('the dagre parity corpus', () => {
   if (updating) {
     it('rewrites the golden file, because UPDATE_GOLDEN was set', () => {
       const file: GoldenFile = {
-        regenerate: 'UPDATE_GOLDEN=1 pnpm --filter @dagr/layout test layout.dagre-parity',
+        regenerate: 'UPDATE_GOLDEN=1 pnpm --filter @prnt/dagr-layout test layout.dagre-parity',
         regenerateWhen:
           'Only for a deliberate change to what this package draws, or a deliberate ' +
           'bump of the pinned dagre version, and only when you can say which column ' +

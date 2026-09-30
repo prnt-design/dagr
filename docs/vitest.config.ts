@@ -5,7 +5,7 @@ export default defineConfig({
   resolve: {
     alias: Object.fromEntries(
       ['graph', 'layout', 'vdsl'].map((name) => [
-        `@dagr/${name}`,
+        `@prnt/dagr-${name}`,
         fileURLToPath(
           new URL(`../packages/${name}/src/index.ts`, import.meta.url),
         ),

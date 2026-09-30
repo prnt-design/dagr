@@ -10,7 +10,7 @@
  * a real external schema can retarget it.
  *
  * Everything here is plain data with string ids. Deliberately no dependency on
- * `@dagr/graph`: this package is a dataset, and the conversion to a `Graph` is
+ * `@prnt/dagr-graph`: this package is a dataset, and the conversion to a `Graph` is
  * the business of whoever draws it (the demo, in the campaign plan's P4).
  * Depending on the graph package from here would make the dataset unusable as
  * a fixture for anything that is not Dagr.

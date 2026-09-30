@@ -21,11 +21,11 @@ CI, and packaging changes across the Dagr monorepo.
 - Docusaurus pages: broken links, orphaned pages, stale getting-started steps.
 
 ### Dependency & size hygiene
-- New runtime dependencies need justification; `@dagr/graph` and
-  `@dagr/layout` are zero-runtime-dep packages: any runtime dep added there
+- New runtime dependencies need justification; `@prnt/dagr-graph` and
+  `@prnt/dagr-layout` are zero-runtime-dep packages: any runtime dep added there
   is high severity. Dev deps are cheaper but not free.
 - Watch for accidental deep imports of three.js pulling the full build into
-  `@dagr/render` consumers.
+  `@prnt/dagr-render` consumers.
 
 ### Release discipline
 - Changelog entries for user-visible changes; semver implications stated.

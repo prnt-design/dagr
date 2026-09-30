@@ -109,9 +109,9 @@
  */
 
 import { useMemo, useRef, useSyncExternalStore } from 'react';
-import type { Graph, Patch } from '@dagr/graph';
-import { EngineStateError, createLayout } from '@dagr/layout';
-import type { LayoutConfig, LayoutDelta, LayoutEngine, LayoutResult, Size } from '@dagr/layout';
+import type { Graph, Patch } from '@prnt/dagr-graph';
+import { EngineStateError, createLayout } from '@prnt/dagr-layout';
+import type { LayoutConfig, LayoutDelta, LayoutEngine, LayoutResult, Size } from '@prnt/dagr-layout';
 
 /** What a caller may say about the layout run. */
 export interface UseDagrOptions {
@@ -151,7 +151,7 @@ export interface DagrLayoutState {
    * nothing here describes it as a change and a consumer animating from deltas
    * has to reseat rather than retarget. It is what the first run of a graph
    * reports, what a config change reports, and what the recovery from an engine
-   * that fell out of step with its graph reports. `@dagr/react`'s `retarget`
+   * that fell out of step with its graph reports. `@prnt/dagr-react`'s `retarget`
    * is where that decision is written down, and `<DagrCanvas animate>` is where
    * it is taken.
    *
@@ -335,7 +335,7 @@ function createSession(graph: Graph, config: LayoutConfig | undefined): LayoutSe
       const { result, delta } = held.relayout(patch);
       state = { result, error: null, delta, from: before };
     } catch (cause: unknown) {
-      // `instanceof` rather than the `code` membership test `@dagr/graph`'s own
+      // `instanceof` rather than the `code` membership test `@prnt/dagr-graph`'s own
       // predicate argues for, and the difference is which engine threw: this
       // one was built by this module from this module's import of
       // `createLayout`, so the class it raises is this module's class. The

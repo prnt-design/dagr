@@ -14,9 +14,9 @@
     // by both hosts (apps/demo's vite.config.ts, docs/tsconfig.json).
     "paths": {
       "@dagr/campaign": ["../campaign/src/index.ts"],
-      "@dagr/graph": ["../graph/src/index.ts"],
-      "@dagr/layout": ["../layout/src/index.ts"],
-      "@dagr/render": ["../render/src/index.ts"]
+      "@prnt/dagr-graph": ["../graph/src/index.ts"],
+      "@prnt/dagr-layout": ["../layout/src/index.ts"],
+      "@prnt/dagr-render": ["../render/src/index.ts"]
     }
   },
   "include": ["src", "test", "vitest.config.ts"]

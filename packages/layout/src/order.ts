@@ -1,4 +1,4 @@
-import type { EdgeId, Graph, NodeId } from '@dagr/graph';
+import type { EdgeId, Graph, NodeId } from '@prnt/dagr-graph';
 import { authored } from './authorship.js';
 import { InternalLayoutError, InvalidConfigError } from './errors.js';
 import { forEachSegment } from './segments.js';
@@ -339,7 +339,7 @@ function resolveTransposeBudget(maxTransposePasses: number | undefined): number 
  *
  * Built once per run and never rebuilt. Everything after this reads node
  * NUMBERS, so no sweep touches a string, a `Map`, or the graph: the roadmap's
- * worry about this stage churning adjacency arrays (every `@dagr/graph`
+ * worry about this stage churning adjacency arrays (every `@prnt/dagr-graph`
  * adjacency query returns a fresh one) is answered by asking the graph nothing
  * after this function returns.
  */

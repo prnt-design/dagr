@@ -3,17 +3,17 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Graph } from '@dagr/graph';
-import { createLayout } from '@dagr/layout';
-import type { LayoutDelta, LayoutResult } from '@dagr/layout';
+import type { Graph } from '@prnt/dagr-graph';
+import { createLayout } from '@prnt/dagr-layout';
+import type { LayoutDelta, LayoutResult } from '@prnt/dagr-layout';
 // The module `vi.mock` below is replacing, as a type. A `typeof import(...)`
 // inline would be the obvious spelling and the repo's lint rule forbids it.
-import type * as DagrReact from '@dagr/react';
-import { toWorldBounds } from '@dagr/react';
+import type * as DagrReact from '@prnt/dagr-react';
+import { toWorldBounds } from '@prnt/dagr-react';
 
 // Only `DagrCanvas` is faked; see `fake-canvas.ts`. Everything else the
-// component imports from `@dagr/react` is the real export.
-vi.mock('@dagr/react', async (importOriginal) => {
+// component imports from `@prnt/dagr-react` is the real export.
+vi.mock('@prnt/dagr-react', async (importOriginal) => {
   const real = await importOriginal<typeof DagrReact>();
   const { makeFakeDagrCanvas } = await import('./fake-canvas.js');
   return {
@@ -244,10 +244,9 @@ describe('<LivingStage>', () => {
   it('starts the count over for a new seed, and counts the very first edit after it', async () => {
     // THE `[graph]` RESET EFFECT, WHICH NOTHING EXERCISED. Its whole body could
     // be deleted and the suite stayed green, which matters because a review
-    // round changed exactly this effect: it used to null `counted` here, and
-    // because React flushes a child's effects before its parent's that threw
-    // away a cold run `<DagrCanvas>` had already reported, so the first edit of
-    // every mount claimed "more than one edit arrived in a single frame".
+    // round changed exactly this effect: it used to reset a consumer-owned
+    // continuity ref here, and because React flushes a child's effects before
+    // its parent's that threw away a cold run the canvas had already reported.
     //
     // A seed change is the one way a host can make a new graph without
     // remounting, and it is the case the effect exists for.
@@ -270,7 +269,7 @@ describe('<LivingStage>', () => {
     });
 
     // AND THE FIRST EDIT AFTER THE RESEED COUNTS, which is the half that would
-    // go red if `counted.current = null` came back.
+    // go red if the consumer starts resetting continuity during this effect.
     const after = stats(tree.container);
     expect(after.get('nodes stayed put')).toBeDefined();
     expect(after.get('added')).toBe('3');
@@ -372,7 +371,8 @@ describe('<LivingStage>', () => {
     // Synthesised rather than caused, because the component cannot produce it:
     // `applyStep` batches, so every edit it makes is one patch and one commit.
     // A second engine supplies a delta and a `from` of the shape a burst would
-    // have had, and the component's own `counted` is the drawing on screen.
+    // have had, and the canvas reports that the delta does not continue from
+    // the last drawing it reported.
     const graph = await mountStage();
     const engine = createLayout({ config: LIVING_LAYOUT_CONFIG });
     engine.run(graph);
@@ -393,9 +393,8 @@ describe('<LivingStage>', () => {
 
     await flush(() => {
       // `from` is the drawing the SKIPPED delta produced, which never reached a
-      // frame. What the component last counted is the drawing on screen, which
-      // is not it.
-      lastCanvas().onLayout?.(arrived.result, arrived.delta, skipped.result);
+      // frame. The canvas reports this as a discontinuity.
+      lastCanvas().onLayout?.(arrived.result, arrived.delta, skipped.result, false);
     });
 
     if (tree === null) return;

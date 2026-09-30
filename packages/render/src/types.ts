@@ -4,7 +4,7 @@ import type { SceneNode } from './scene-nodes.js';
 import type { EdgeFrameStyle, SceneEdge, SceneEdgeGroup } from './scene-edges.js';
 
 /**
- * The public vocabulary of `@dagr/render`.
+ * The public vocabulary of `@prnt/dagr-render`.
  *
  * Not one three.js type appears in this file, and that is a decision rather
  * than an accident. `three` is a peer dependency, which means the application
@@ -36,7 +36,7 @@ export interface Size {
  * An axis-aligned region of WORLD space, as explicit extents: everything from
  * `minX` to `maxX` across, and from `minY` to `maxY` up.
  *
- * Not a `{x, y, width, height}` record, deliberately. `@dagr/layout`'s `Rect`
+ * Not a `{x, y, width, height}` record, deliberately. `@prnt/dagr-layout`'s `Rect`
  * is that shape with the opposite corner convention (its y grows downward, so
  * its `x, y` is the TOP-left corner, where world y up would make it the
  * bottom-left one). Two structurally identical four-number records distinguished
@@ -152,7 +152,7 @@ export interface GpuResource {
  * shape with nothing to check the guess against. {@link setNodes} is the answer
  * that survived contact with a real dataset, and what it is NOT is as
  * deliberate as what it is. It takes NODES and not a `LayoutResult`, so
- * `@dagr/layout` is not a dependency of this package and the y-down to y-up
+ * `@prnt/dagr-layout` is not a dependency of this package and the y-down to y-up
  * conversion stays with the caller who owns the layout (see {@link Camera2D});
  * it takes an ARRAY and not a graph, because a renderer has no use for
  * adjacency; and every node carries its own colours and size, because those are

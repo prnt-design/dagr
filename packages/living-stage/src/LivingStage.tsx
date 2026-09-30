@@ -36,13 +36,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement, ReactNode } from 'react';
-import type { LayoutDelta, LayoutResult } from '@dagr/layout';
-import { DagrCanvas, toWorldBounds, useDagrCanvas } from '@dagr/react';
-// From `@dagr/react`, not `@dagr/render`: this package's only contact with the
+import type { LayoutDelta, LayoutResult } from '@prnt/dagr-layout';
+import { DagrCanvas, toWorldBounds, useDagrCanvas } from '@prnt/dagr-react';
+// From `@prnt/dagr-react`, not `@prnt/dagr-render`: this package's only contact with the
 // renderer is through the component, and it re-exports the types its own props
 // are spelled in so a consumer does not take a dependency to write one
 // annotation. That re-export exists because writing this file wanted it.
-import type { SceneMotionOptions } from '@dagr/react';
+import type { SceneMotionOptions } from '@prnt/dagr-react';
 import {
   CLEAR_COLOR,
   STAGE_LEGEND,
@@ -78,7 +78,7 @@ import { usePrefersReducedMotion } from './use-reduced-motion.js';
 const AUTOPLAY_INTERVAL_MS = 2800;
 
 /**
- * The feel. Slower than `@dagr/render`'s 0.12 default, on purpose.
+ * The feel. Slower than `@prnt/dagr-render`'s 0.12 default, on purpose.
  *
  * The default is tuned for an application, where the animation's job is to keep
  * the user oriented and then get out of the way. Here the animation IS the
@@ -218,32 +218,16 @@ export function LivingStage(props: LivingStageProps): ReactElement {
   const [playing, setPlaying] = useState(autoplay);
   const [failure, setFailure] = useState<unknown>(null);
 
-  /**
-   * The result the readout last counted an edit against.
-   *
-   * A ref rather than state, because it is read inside the callback that sets
-   * the state and never rendered. Compared BY IDENTITY with the `from` that
-   * comes with each delta, which is the whole continuity check: see
-   * `readout.ts`, and M5.3a's entry for the defect that made `from` exist.
-   */
-  const counted = useRef<LayoutResult | null>(null);
-
   /** The graph the reset effect below has already run for. See that effect. */
   const seenGraph = useRef(graph);
 
   /**
    * A new graph is a new demo, so the script goes back to the top.
    *
-   * THIS EFFECT MUST NOT TOUCH `counted`, AND THAT IS NOT AN OVERSIGHT. React
-   * flushes a child's passive effects before its parent's, and `useDagr` lays a
-   * new graph out during RENDER, so `<DagrCanvas>` reports the cold run from
-   * its own effect on the first commit, which is BEFORE this one runs. A
-   * `counted.current = null` here therefore threw away the record of a drawing
-   * that had already been reported, and the first edit of every mount failed
-   * the continuity check and rendered "more than one edit arrived in a single
-   * frame", which was false: exactly one batched edit had. The cold run sets
-   * `counted` to the right object on its own, because a cold run carries no
-   * delta and `readEdit` returns `initial` for it whatever `counted` holds.
+   * The canvas owns layout continuity now and reports it as the fourth
+   * `onLayout` argument. This effect must not reset the readout: React flushes
+   * a child's passive effects before its parent's, so the canvas has already
+   * reported a cold run by the time this effect runs.
    *
    * The readout and the highlight are left alone here for the same reason:
    * `onLayout` has already set both from the cold run.
@@ -275,12 +259,10 @@ export function LivingStage(props: LivingStageProps): ReactElement {
       result: LayoutResult,
       delta: LayoutDelta | null,
       from: LayoutResult | null,
+      continues: boolean,
     ): void => {
-      setReadout(readEdit(result, delta, from, counted.current));
+      setReadout(readEdit(result, delta, from, continues));
       setTouched(delta === null ? NOTHING_TOUCHED : touchedBy(delta));
-      // Recorded WHATEVER the readout said, so one coalesced burst costs one
-      // edit's numbers rather than every edit's from then on.
-      counted.current = result;
     },
     [],
   );

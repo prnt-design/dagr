@@ -1,5 +1,5 @@
-import { Graph } from '@dagr/graph';
-import type { EdgeId, NodeId } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
+import type { EdgeId, NodeId } from '@prnt/dagr-graph';
 
 /**
  * What a cycle-breaking suite checks a feedback arc set WITH, shared by the

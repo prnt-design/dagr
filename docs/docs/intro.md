@@ -30,14 +30,22 @@ pnpm --filter docs start
 
 For the local renderer playground, run `pnpm --filter demo dev`.
 
+## Package entry points
+
+The initial release is being prepared under `@prnt/dagr-*`, with an optional
+`dagr` umbrella. The umbrella root exports the graph model. Its subpaths
+`dagr/graph`, `dagr/layout`, `dagr/render`, `dagr/react`, and `dagr/vdsl`
+forward to the matching scoped packages. Choose the individual scoped
+packages when you only need part of the stack.
+
 ## Your first graph
 
 The graph and layout packages have no browser requirement. Layout returns node
 boxes and edge routes keyed by the IDs you supplied.
 
 ```ts
-import { Graph } from '@dagr/graph';
-import { layout } from '@dagr/layout';
+import { Graph } from '@prnt/dagr-graph';
+import { layout } from '@prnt/dagr-layout';
 
 const graph = new Graph();
 graph.addNode({ id: 'source' });
@@ -56,11 +64,11 @@ to draw a graph with `DagrCanvas`, then add [rich content](./rich-content.md).
 
 | Package | Use it for |
 | --- | --- |
-| [`@dagr/graph`](./graph-model.md) | Nodes, edges, attributes, ports, patches, and serialization |
-| [`@dagr/layout`](./layout.md) | Ranking, ordering, positioning, and routing without a UI |
-| [`@dagr/render`](./render.md) | Instanced shapes, edge ribbons, camera, and spring motion |
-| [`@dagr/react`](./react.md) | A canvas component, reactive layout, and HTML content |
-| [`@dagr/vdsl`](./vdsl.md) | Node specifications, port type tokens, and connection validation |
+| [`@prnt/dagr-graph`](./graph-model.md) | Nodes, edges, attributes, ports, patches, and serialization |
+| [`@prnt/dagr-layout`](./layout.md) | Ranking, ordering, positioning, and routing without a UI |
+| [`@prnt/dagr-render`](./render.md) | Instanced shapes, edge ribbons, camera, and spring motion |
+| [`@prnt/dagr-react`](./react.md) | A canvas component, reactive layout, and HTML content |
+| [`@prnt/dagr-vdsl`](./vdsl.md) | Node specifications, port type tokens, and connection validation |
 
 ## Changes and animation
 

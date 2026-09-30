@@ -1,6 +1,6 @@
 import { EDGE_ROLES } from '@dagr/campaign';
 import type { Campaign, CampaignEdge, CampaignNode } from '@dagr/campaign';
-import type { Size } from '@dagr/render';
+import type { Size } from '@prnt/dagr-render';
 
 /**
  * How the campaign is cut into tiles, and how the tiles are packed.
@@ -26,7 +26,7 @@ import type { Size } from '@dagr/render';
  * ## Two kinds of tile, and the second one is not a shortcut
  *
  * A LAYOUT tile has routed edges among its members and goes through
- * `@dagr/layout`. A GRID tile does not, and is arranged in a near-square grid
+ * `@prnt/dagr-layout`. A GRID tile does not, and is arranged in a near-square grid
  * instead. That is not Sugiyama being avoided where it is inconvenient: 375
  * NPCs with no routed edge between them (every social edge is an OVERLAY edge,
  * see `EDGE_ROLES`) is a graph of 375 components, and a layer assignment puts
@@ -207,7 +207,7 @@ export interface Packing {
 }
 
 /**
- * Every gap in the campaign's drawing, from the two `@dagr/layout` separations
+ * Every gap in the campaign's drawing, from the two `@prnt/dagr-layout` separations
  * the rest are derived from.
  *
  * Four numbers rather than one, because they are read by three different pieces
@@ -216,7 +216,7 @@ export interface Packing {
  * written down four times, so raising the node gap carries the tile gutter and
  * the grid with it and no ratio can drift.
  *
- * `@dagr/layout`'s third separation, `edgeSep`, is deliberately NOT here and
+ * `@prnt/dagr-layout`'s third separation, `edgeSep`, is deliberately NOT here and
  * stays at the package default. It is the gap between two ROUTES sharing a rank
  * gap, so it decides how a bundle of parallel edges fans rather than how two
  * nodes sit, and D2's direction is about the nodes. Raising it is a separate
@@ -224,9 +224,9 @@ export interface Packing {
  * rather than the fitted view.
  */
 export interface CampaignSpacing {
-  /** Between two nodes in the same rank, in world units. `@dagr/layout`'s `nodeSep`. */
+  /** Between two nodes in the same rank, in world units. `@prnt/dagr-layout`'s `nodeSep`. */
   readonly nodeSep: number;
-  /** Between two ranks, in world units. `@dagr/layout`'s `rankSep`. */
+  /** Between two ranks, in world units. `@prnt/dagr-layout`'s `rankSep`. */
   readonly rankSep: number;
   /** Between two packed tiles. See {@link TILE_GUTTER_RATIO}. */
   readonly tileGutter: number;
@@ -251,9 +251,9 @@ export function campaignSpacing(nodeSep: number, rankSep: number): CampaignSpaci
 }
 
 /**
- * The campaign's own separations, which are not `@dagr/layout`'s defaults.
+ * The campaign's own separations, which are not `@prnt/dagr-layout`'s defaults.
  *
- * `@dagr/layout` defaults to 50 and 50, which is right for a graph of a few
+ * `@prnt/dagr-layout` defaults to 50 and 50, which is right for a graph of a few
  * dozen boxes read at a zoom where a box is a box. The campaign is 3,010 nodes
  * that a reader meets fitted into one viewport and then zooms into, and at both
  * ends 50 was too tight: the tiles fuse into slabs of ink at the far view, and
@@ -299,7 +299,7 @@ export function campaignSpacing(nodeSep: number, rankSep: number): CampaignSpaci
  * separations spend the same room on a gap that has something in it and one that
  * does not.
  *
- * One thing it improves for free: `@dagr/render`'s ribbon geometry inverts a
+ * One thing it improves for free: `@prnt/dagr-render`'s ribbon geometry inverts a
  * quad when a segment on screen is shorter than about `3.46 * (halfWidth + 1)`
  * pixels, which at the fitted view's floor width is 5.2. A rank step was 2.6
  * pixels there and is now 4.1, so the hairpin corners that could bow-tie are

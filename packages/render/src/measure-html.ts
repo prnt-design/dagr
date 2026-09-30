@@ -3,7 +3,7 @@ import type { Size } from './types.js';
 /**
  * Measuring HTML so a layout can reserve a box for it.
  *
- * `@dagr/layout` takes sizes through `LayoutConfig.nodeSize`, which it calls
+ * `@prnt/dagr-layout` takes sizes through `LayoutConfig.nodeSize`, which it calls
  * exactly once per node during prepare, on the caller's thread even when the
  * run itself is in M2.10's worker. So a DOM measurement CAN feed a layout, and
  * the question this module answers is how to do it without the quadratic.

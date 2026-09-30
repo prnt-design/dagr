@@ -1,5 +1,5 @@
-import { Graph } from '@dagr/graph';
-import type { Node } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
+import type { Node } from '@prnt/dagr-graph';
 import { describe, expect, it } from 'vitest';
 import { InvalidConfigError, createLayout, layout } from '../src/index.js';
 import { recordingStages } from './fakes.js';

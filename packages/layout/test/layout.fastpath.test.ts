@@ -1,6 +1,6 @@
 import { MessageChannel } from 'node:worker_threads';
 import { cpus, loadavg } from 'node:os';
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { largeCorpus } from '@dagr/bench';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -11,7 +11,7 @@ import {
 } from '../src/index.js';
 import type { LayoutEngine, LayoutPort, LayoutResult } from '../src/index.js';
 import type { GraphSpec } from '@dagr/bench';
-import type { Node, Patch } from '@dagr/graph';
+import type { Node, Patch } from '@prnt/dagr-graph';
 import { recordingStages } from './fakes.js';
 
 /**

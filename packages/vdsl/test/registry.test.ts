@@ -1,4 +1,4 @@
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { describe, expect, it, vi } from 'vitest';
 import { InvalidSpecError, NodeKindMissingError, UnknownNodeKindError } from '../src/errors.js';
 import { DEFAULT_KIND_KEY, defineRegistry } from '../src/registry.js';

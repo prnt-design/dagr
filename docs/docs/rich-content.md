@@ -21,7 +21,7 @@ box. Give the layout enough space for that content, and size the content to fill
 its host.
 
 ```tsx
-import { DagrCanvas, Html } from '@dagr/react';
+import { DagrCanvas, Html } from '@prnt/dagr-react';
 
 <DagrCanvas
   graph={graph}
@@ -76,7 +76,7 @@ React `Html` uses portals whose children stay mounted even while the overlay
 is culled. It is convenient for a small graph, but creating thousands of rich
 React subtrees defeats the purpose of viewport culling.
 
-For larger scenes, use `createRichNodes` from `@dagr/render`. It manages
+For larger scenes, use `createRichNodes` from `@prnt/dagr-render`. It manages
 zoom-dependent tiers and pools DOM elements. Start with a shape at a distance,
 show a label when it is readable, and reveal detailed content only when needed.
 The [renderer reference](./render.md) covers the underlying overlay and pooling

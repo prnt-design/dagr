@@ -7,10 +7,10 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: {
     alias: {
-      '@dagr/graph': fileURLToPath(new URL('../graph/src/index.ts', import.meta.url)),
-      '@dagr/layout': fileURLToPath(new URL('../layout/src/index.ts', import.meta.url)),
-      '@dagr/react': fileURLToPath(new URL('../react/src/index.ts', import.meta.url)),
-      '@dagr/render': fileURLToPath(new URL('../render/src/index.ts', import.meta.url)),
+      '@prnt/dagr-graph': fileURLToPath(new URL('../graph/src/index.ts', import.meta.url)),
+      '@prnt/dagr-layout': fileURLToPath(new URL('../layout/src/index.ts', import.meta.url)),
+      '@prnt/dagr-react': fileURLToPath(new URL('../react/src/index.ts', import.meta.url)),
+      '@prnt/dagr-render': fileURLToPath(new URL('../render/src/index.ts', import.meta.url)),
     },
   },
 });

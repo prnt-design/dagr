@@ -21,7 +21,7 @@ import { requireAtLeast } from './validate.js';
  * A layer of DOM elements positioned in world coordinates over a canvas, kept
  * registered with a {@link Camera2D}.
  *
- * This is `@dagr/render`'s answer to having no text. The GPU draws thousands of
+ * This is `@prnt/dagr-render`'s answer to having no text. The GPU draws thousands of
  * shapes and the DOM draws the tens of readable things, and the camera keeps
  * them lined up. The analogue is react-konva-utils' `Html`, which portals a div
  * and syncs its CSS transform to a Konva stage; this one answers to a

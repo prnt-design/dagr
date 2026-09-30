@@ -6,7 +6,7 @@ sidebar_position: 2
 
 # Graph model
 
-`@dagr/graph` holds the structure everything else in Dagr reads: a mutable
+`@prnt/dagr-graph` holds the structure everything else in Dagr reads: a mutable
 multi-digraph with stable string identity, no dependencies, and no opinion
 about how it is drawn.
 
@@ -30,7 +30,7 @@ The object init is the main entry point. `addNode` and `addEdge` also take a
 plain string form as shorthand when an id is all you have to say.
 
 ```ts
-import { Graph, NodeNotFoundError } from '@dagr/graph';
+import { Graph, NodeNotFoundError } from '@prnt/dagr-graph';
 
 const graph = new Graph();
 
@@ -373,7 +373,7 @@ and would have made `removeNode` partial in a way nothing else in this API is.
 The ops come out deepest first with the parent last, which is what makes the
 inverse of a removal add each parent before the children that name it.
 
-**`@dagr/layout` ignores `parent` entirely.** Nothing in the pipeline reads it,
+**`@prnt/dagr-layout` ignores `parent` entirely.** Nothing in the pipeline reads it,
 so a reparent draws exactly the picture the graph had before it, and
 `influenceRegion` reports an empty region for one. Drawing a parent and its
 children as nested boxes changes ranking, crossing reduction and positioning,
@@ -445,7 +445,7 @@ The clearest use is a second graph kept in step with the first, which is what
 incremental layout will do with the patches it is handed:
 
 ```ts
-import { Graph, apply } from '@dagr/graph';
+import { Graph, apply } from '@prnt/dagr-graph';
 
 const graph = new Graph();
 const mirror = new Graph();
@@ -599,8 +599,8 @@ edges that need it to exist. An unreversed inverse would try to add an edge to
 a node that is not there yet.
 
 ```ts
-import { apply, invert } from '@dagr/graph';
-import type { Patch } from '@dagr/graph';
+import { apply, invert } from '@prnt/dagr-graph';
+import type { Patch } from '@prnt/dagr-graph';
 
 const undo: Patch[] = [];
 const stop = graph.subscribe((patch) => {
@@ -730,7 +730,7 @@ queue outside the emission.
 `batch` runs a function and emits everything it changed as one patch:
 
 ```ts
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 
 const graph = new Graph();
 graph.subscribe((patch) => {
@@ -754,7 +754,7 @@ write. What it decides is which graph states a listener is shown.
 That is the whole reason it exists, and the reason is not performance. Building
 "add node, add edge, add edge" as three patches shows a layout consumer a
 disconnected singleton, which gets ranked and placed somewhere, and then
-corrects it as each edge arrives. `@dagr/layout`'s own suite measures it: a node
+corrects it as each edge arrives. `@prnt/dagr-layout`'s own suite measures it: a node
 added and then wired up unbatched is reported at two different positions, the
 first of which it does not end up in, while the same edit batched reports it
 once, where it stays. Under an animated renderer each of those reports is a
@@ -811,7 +811,7 @@ only its contents: the same nodes and edges with the same ids and attributes,
 and the same order, which in this model is part of what a graph is.
 
 ```ts
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 
 const graph = new Graph();
 
@@ -1083,7 +1083,7 @@ family, and it carries the `path` of the offending field written the way you
 would index into the document:
 
 ```ts
-import { InvalidGraphJSONError } from '@dagr/graph';
+import { InvalidGraphJSONError } from '@prnt/dagr-graph';
 
 try {
   Graph.fromJSON(JSON.parse(text));
@@ -1242,7 +1242,7 @@ another. Checking first therefore costs two walks on the happy path. Catching
 costs one, because `topologicalOrder` already finds the witness on its way out:
 
 ```ts
-import { isDagrGraphError } from '@dagr/graph';
+import { isDagrGraphError } from '@prnt/dagr-graph';
 
 try {
   return graph.topologicalOrder();
@@ -1268,7 +1268,7 @@ a heap, so the sweep is O((V + E) log V) and runs at about 10ms on a 10k node,
 
 **A self loop is a cycle.** A node cannot come after itself, so a graph with
 one has no topological order, and the node is neither a source nor a sink
-because a self loop is both an in-edge and an out-edge. `@dagr/layout`'s ranker
+because a self loop is both an in-edge and an out-edge. `@prnt/dagr-layout`'s ranker
 deliberately differs and drops self loops before its own sweep, because a self
 loop says nothing about which rank a node belongs on. Both are right for their
 own question.
@@ -1306,7 +1306,7 @@ on a class can do it through the base class and have the switch checked for
 exhaustiveness:
 
 ```ts
-import { DagrGraphError } from '@dagr/graph';
+import { DagrGraphError } from '@prnt/dagr-graph';
 
 try {
   graph.removeEdge('nope');
@@ -1354,7 +1354,7 @@ ergonomics should declare its own root class, its own code union, and its own
 predicate, so that each package's exhaustive switch stays exhaustive.
 
 ```ts
-import { isDagrGraphError } from '@dagr/graph';
+import { isDagrGraphError } from '@prnt/dagr-graph';
 
 try {
   graph.removePort('filter', 'fail');

@@ -6,8 +6,8 @@ sidebar_position: 3
 
 # Layout pipeline
 
-`@dagr/layout` turns a graph into coordinates. It takes a `Graph` from
-[`@dagr/graph`](./graph-model.md), never mutates it, and returns a
+`@prnt/dagr-layout` turns a graph into coordinates. It takes a `Graph` from
+[`@prnt/dagr-graph`](./graph-model.md), never mutates it, and returns a
 `LayoutResult`: where every node sits, how every edge runs, and the box around
 the lot.
 
@@ -549,7 +549,7 @@ Both real rank stages are exported by name, so a call site says which objective
 it wants rather than inheriting whichever one is currently the default:
 
 ```ts
-import { layout, longestPathRankStage, networkSimplexRankStage } from '@dagr/layout';
+import { layout, longestPathRankStage, networkSimplexRankStage } from '@prnt/dagr-layout';
 
 // Fewest layers. Also what a run with no `rank` override gets today.
 const short = layout({ graph }, { rank: longestPathRankStage });
@@ -585,7 +585,7 @@ churning ranks across a region that did not change and improving nothing, which
 is exactly what M3 re-running layout on every patch would suffer.
 
 ```ts
-import { layout, networkSimplexRank } from '@dagr/layout';
+import { layout, networkSimplexRank } from '@prnt/dagr-layout';
 
 // `previousRanks` is a ReadonlyMap<NodeId, number> from an earlier run.
 const again = layout(
@@ -892,7 +892,7 @@ is the round number just above both: a region wider than **1% of the roster**
 gets a cold sweep instead. Naming the stage is how you move it:
 
 ```ts
-import { longestPathRank, longestPathRankStage, layout } from '@dagr/layout';
+import { longestPathRank, longestPathRankStage, layout } from '@prnt/dagr-layout';
 
 layout({ graph });
 layout({ graph }, { rank: longestPathRankStage });
@@ -969,7 +969,7 @@ in graph insertion order. So a run that names no order stage gets crossing
 reduction, and naming one is how you turn its budgets:
 
 ```ts
-import { barycenterOrder, barycenterOrderStage, layout } from '@dagr/layout';
+import { barycenterOrder, barycenterOrderStage, layout } from '@prnt/dagr-layout';
 
 layout({ graph });
 layout({ graph }, { order: barycenterOrderStage });
@@ -1001,8 +1001,8 @@ turns the first back into the second. That is also why crossings are not part of
 a different axis in any case: a layout can be perfectly stable and badly drawn.
 
 ```ts
-import { barycenterOrderStage, countCrossings, layout } from '@dagr/layout';
-import type { OrderStage } from '@dagr/layout';
+import { barycenterOrderStage, countCrossings, layout } from '@prnt/dagr-layout';
+import type { OrderStage } from '@prnt/dagr-layout';
 
 const scored: OrderStage = {
   name: 'scored-order',
@@ -1685,8 +1685,8 @@ build one separately from the call.
 `defaultStages` is also how you wrap a default rather than replace it:
 
 ```ts
-import { defaultStages, layout } from '@dagr/layout';
-import type { PositionStage } from '@dagr/layout';
+import { defaultStages, layout } from '@prnt/dagr-layout';
+import type { PositionStage } from '@prnt/dagr-layout';
 
 const timed: PositionStage = {
   name: 'timed-position',
@@ -1908,8 +1908,8 @@ there would be a bug in this package rather than in a stage, so it throws an
 ## Usage
 
 ```ts
-import { Graph } from '@dagr/graph';
-import { layout } from '@dagr/layout';
+import { Graph } from '@prnt/dagr-graph';
+import { layout } from '@prnt/dagr-layout';
 
 const graph = new Graph();
 graph.addNode('ingest');
@@ -1946,7 +1946,7 @@ the same stages and the same config, or who wants the run to happen off the main
 thread, builds an engine instead:
 
 ```ts
-import { createLayout, networkSimplexRankStage } from '@dagr/layout';
+import { createLayout, networkSimplexRankStage } from '@prnt/dagr-layout';
 
 const engine = createLayout({
   stages: { rank: networkSimplexRankStage },
@@ -2164,14 +2164,14 @@ across it:
 
 ```ts
 // layout.worker.ts, the module you point a Worker at
-import { serveLayout, networkSimplexRankStage } from '@dagr/layout';
+import { serveLayout, networkSimplexRankStage } from '@prnt/dagr-layout';
 
 serveLayout(self, { rank: networkSimplexRankStage });
 ```
 
 ```ts
 // the main thread
-import { createLayout } from '@dagr/layout';
+import { createLayout } from '@prnt/dagr-layout';
 
 const worker = new Worker(new URL('./layout.worker.ts', import.meta.url), {
   type: 'module',
@@ -2191,7 +2191,7 @@ method silently stopped working once a worker was attached would be a trap.
 `removeEventListener`, and an optional `start`. A browser `Worker`, a dedicated
 worker's own `self`, a `MessagePort` from either a browser `MessageChannel` or
 Node's `worker_threads`, and anything else that speaks the same four all satisfy
-it, none of them needing a cast. `@dagr/layout` imports none of them, because it
+it, none of them needing a cast. `@prnt/dagr-layout` imports none of them, because it
 has no DOM dependency and no Node dependency and naming a parameter type is a
 strange thing to spend one on.
 
@@ -2209,7 +2209,7 @@ the port arrives as a message instead of being the global.
 ```ts
 // the main thread
 import { MessageChannel, Worker } from 'node:worker_threads';
-import { createLayout } from '@dagr/layout';
+import { createLayout } from '@prnt/dagr-layout';
 
 const { port1, port2 } = new MessageChannel();
 const worker = new Worker(new URL('./layout.worker.js', import.meta.url));
@@ -2220,7 +2220,7 @@ const engine = createLayout({ worker: port1 });
 ```ts
 // layout.worker.js, the module the Worker above runs
 import { parentPort } from 'node:worker_threads';
-import { serveLayout, networkSimplexRankStage } from '@dagr/layout';
+import { serveLayout, networkSimplexRankStage } from '@prnt/dagr-layout';
 
 parentPort.once('message', ({ port }) => {
   serveLayout(port, { rank: networkSimplexRankStage });
@@ -2271,7 +2271,7 @@ The graph crosses as ids and endpoints, not as a `Graph.toJSON` document.
 Attribute bags and ports are left behind, because layout reads neither. That
 saves copying every bag on a graph the far side has no use for, and it means a
 caller who keeps a React element, a DOM node or a callback in a node's bag can
-still lay that graph out in a worker. `@dagr/graph` never reads an attribute, so
+still lay that graph out in a worker. `@prnt/dagr-graph` never reads an attribute, so
 anything at all is legal in one; structured cloning is less relaxed, and sending
 the document would have turned a legal graph into a run that fails for a reason
 nothing about layout explains.
@@ -2447,7 +2447,7 @@ edge, cycle or not. `reversedEdges` is bookkeeping between the ranker and the
 router, and nothing downstream of the route stage should ever have to consult it
 to know which way an edge runs.
 
-`NodeId` and `EdgeId` are `@dagr/graph`'s own types, imported from there rather
+`NodeId` and `EdgeId` are `@prnt/dagr-graph`'s own types, imported from there rather
 than re-exported here. Layout keys everything by the ids the graph already
 minted, so there is only ever one kind of node id in play. `Point`, `Rect`, and
 `Size` are this package's, and are exported.
@@ -2499,7 +2499,7 @@ the whole of it: a pure function over two `LayoutResult`s, no engine, no graph,
 nothing retained between calls.
 
 ```ts
-import { applyDelta, diffLayout, isEmptyDelta } from '@dagr/layout';
+import { applyDelta, diffLayout, isEmptyDelta } from '@prnt/dagr-layout';
 
 const before = layout({ graph });
 graph.addNode('d');
@@ -2574,7 +2574,7 @@ order, `removed` in the previous one's, and both of those are graph insertion
 order.
 
 **An edge whose endpoints changed is a removal and an addition** under the one
-id, rather than a reroute. Nothing in `@dagr/graph` rebinds an edge's ends, but
+id, rather than a reroute. Nothing in `@prnt/dagr-graph` rebinds an edge's ends, but
 an edge id is your own string and two runs need not be of the same graph: a
 patch that removed `e1` from `a` to `b` and added `e1` from `a` to `c` produces
 exactly that, and calling it a reroute would leave you holding the old endpoints
@@ -2642,7 +2642,7 @@ difference whatsoever is a coordinate that was recomputed when it should have
 been kept.
 
 ```ts
-import { createLayout, stabilityViolations } from '@dagr/layout';
+import { createLayout, stabilityViolations } from '@prnt/dagr-layout';
 
 const engine = createLayout();
 let previous = engine.run(graph);
@@ -2664,7 +2664,7 @@ everything is entitled to move everything, so the contract passes without
 measuring a single coordinate.
 
 ```ts
-import { measureStability } from '@dagr/layout';
+import { measureStability } from '@prnt/dagr-layout';
 
 const report = measureStability(before, after);
 // report.nodes -> { shared, added, removed, moved, movedFraction,
@@ -2812,7 +2812,7 @@ coordinate stage that does not anchor its own origin, which is most of them.
 affect. `influenceRegion` computes it, and the engine calls it for you:
 
 ```ts
-import { influenceRegion, stabilityViolations } from '@dagr/layout';
+import { influenceRegion, stabilityViolations } from '@prnt/dagr-layout';
 
 const { result, delta, region } = engine.relayout(patch);
 region.nodes.has('n42'); // could this node have moved?
@@ -2941,13 +2941,13 @@ exact.
 Given the same graph and the same config, `layout` returns the same result,
 every time, in any process. There is no randomness and no iteration over a
 hashed key set. The result maps iterate in graph insertion order, which
-`@dagr/graph` guarantees. This is not a nicety: incremental layout in M3 is
+`@prnt/dagr-graph` guarantees. This is not a nicety: incremental layout in M3 is
 built on being able to say "this node did not move", which requires that a
 re-run of an unchanged input is bit for bit an old run.
 
 ## Errors
 
-Same shape as the `@dagr/graph` error family, so one `instanceof` check covers
+Same shape as the `@prnt/dagr-graph` error family, so one `instanceof` check covers
 the whole thing and every member carries a `code`.
 
 | Class | `code` | Thrown when |
@@ -2958,7 +2958,7 @@ the whole thing and every member carries a `code`.
 | `WorkerTransportError` | `WORKER` | A run sent to a worker came back, and what came back was not a layout. Carries a `detail`. Two things reach it, and both are wiring: the two ends were built from different versions and disagree about the shape of a result, so a box, count or point length does not match the graph it answers, or the stages on the far side threw something that is not a member of this family and so could not survive the crossing with its class. An answer this package does not recognise is NOT one of them: it is ignored, and the run stays pending. See [When a run fails over there](#when-a-run-fails-over-there). |
 | `DeltaMismatchError` | `DELTA_MISMATCH` | A [`LayoutDelta`](#deltas) was applied to a result it was not computed against: it moves a node that result does not hold, removes an edge that is not there, or adds one that already is. Carries the `id` that did not fit and a `detail` saying what was being done to it, both quoted in the message, and names the first one rather than counting them. Your bookkeeping rather than this package's invariant: a delta carries no evidence of which two results it came from, so pairing it with the wrong one is a mistake nothing in the type system can refuse. It is loud because the alternative is a scene that is wrong, stays wrong, and drifts further wrong with every later delta. |
 | `EngineStateError` | `ENGINE_STATE` | An engine was asked for something it cannot answer in the state it is in. Three things reach it: a [`relayout`](#relayout) before this engine has run at all, any call after [`dispose`](#ending-an-engine), and a patch that describes a graph the engine is not holding. Carries a `detail`. The first five members sort by whose bug it is; this one sorts by WHEN, and every case is a call that would have been fine a moment earlier or a moment later. The patch case is the loud one on purpose: `relayout` does not apply your patch, so a caller expecting the other contract would otherwise get an empty delta and a drawing that never changes. |
-| `InternalLayoutError` | `INTERNAL` | The pipeline caught itself breaking one of its own invariants. Carries a `detail`. Always a bug in `@dagr/layout`, never in your graph, your config, or a stage you supplied, which is why it is not a `StageContractError`: that class names a stage, and naming one here would blame whoever was plugged in. Nothing to fix on your side. Please report it. |
+| `InternalLayoutError` | `INTERNAL` | The pipeline caught itself breaking one of its own invariants. Carries a `detail`. Always a bug in `@prnt/dagr-layout`, never in your graph, your config, or a stage you supplied, which is why it is not a `StageContractError`: that class names a stage, and naming one here would blame whoever was plugged in. Nothing to fix on your side. Please report it. |
 
 They sort by whose bug it is, which is the only question a caller catching one
 has to answer: fix the input, fix the stage, fix the worker wiring, fix the
@@ -2978,7 +2978,7 @@ who builds an engine from config they did not write wants that call inside a
 `try` of its own.
 
 ```ts
-import { DagrLayoutError, createLayout } from '@dagr/layout';
+import { DagrLayoutError, createLayout } from '@prnt/dagr-layout';
 
 const engine = createLayout({ stages: { rank: myRankStage }, worker });
 
@@ -3046,7 +3046,7 @@ the graph. See [Dummy chains](#dummy-chains).
 Regenerate them on your own machine with:
 
 ```
-MEASURE_COST=1 pnpm --filter @dagr/layout test layout.cost
+MEASURE_COST=1 pnpm --filter @prnt/dagr-layout test layout.cost
 ```
 
 The corpora are committed generators rather than committed results, which is

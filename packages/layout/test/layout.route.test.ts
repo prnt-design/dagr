@@ -1,4 +1,4 @@
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { largeCorpus, smallCorpus } from '@dagr/bench';
 import { describe, expect, it } from 'vitest';
 import { layout } from '../src/pipeline.js';
@@ -6,7 +6,7 @@ import { brandesKoepfPositionStage } from '../src/position.js';
 import { defaultStages } from '../src/stages.js';
 import { buildCorpusGraph, goldenCorpus } from './golden-corpus.js';
 import { mulberry32 } from './random.js';
-import type { EdgeId, Node, NodeId } from '@dagr/graph';
+import type { EdgeId, Node, NodeId } from '@prnt/dagr-graph';
 import type { GraphSpec } from '@dagr/bench';
 import type {
   LayoutConfig,

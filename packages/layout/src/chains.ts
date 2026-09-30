@@ -1,4 +1,4 @@
-import type { EdgeId, Graph, NodeId } from '@dagr/graph';
+import type { EdgeId, Graph, NodeId } from '@prnt/dagr-graph';
 import { InternalLayoutError, StageContractError } from './errors.js';
 import type { Size } from './types.js';
 

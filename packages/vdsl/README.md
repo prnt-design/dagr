@@ -1,4 +1,4 @@
-# @dagr/vdsl
+# @prnt/dagr-vdsl
 
 A toolkit for building a node-graph language on [Dagr](https://dagr.prnt.design):
 the node spec adapter, its registry, and the rules that decide whether two ports
@@ -9,15 +9,15 @@ what types exist, or how they relate. You declare your kinds and your rules; thi
 package makes them typed and asks them in the right order.
 
 ```sh
-pnpm add @dagr/vdsl @dagr/graph
+pnpm add @prnt/dagr-vdsl @prnt/dagr-graph
 ```
 
-`@dagr/graph` is a types-only `peerDependency`. This package has **no runtime
+`@prnt/dagr-graph` is a types-only `peerDependency`. This package has **no runtime
 dependencies at all**.
 
 ```ts
-import { Graph } from '@dagr/graph';
-import { defineRegistry } from '@dagr/vdsl';
+import { Graph } from '@prnt/dagr-graph';
+import { defineRegistry } from '@prnt/dagr-vdsl';
 
 const registry = defineRegistry({
   source: { ports: [{ id: 'out', direction: 'out', type: 'number' }] },
@@ -64,7 +64,7 @@ that wants it rather than on the registry, because a connection rule is a rule
 about a pair and either end may hold one:
 
 ```ts
-import { defineRegistry, sameType } from '@dagr/vdsl';
+import { defineRegistry, sameType } from '@prnt/dagr-vdsl';
 
 const registry = defineRegistry({
   source: { ports: [{ id: 'out', direction: 'out', type: 'number' }] },

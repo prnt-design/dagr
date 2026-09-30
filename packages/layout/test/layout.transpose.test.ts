@@ -1,4 +1,4 @@
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { largeCorpus, smallCorpus } from '@dagr/bench';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LAYOUT_CONFIG } from '../src/config.js';
@@ -9,7 +9,7 @@ import { measureNodes, resolveConfig } from '../src/config.js';
 import { mulberry32, randomLayered } from './random.js';
 import { buildCorpusGraph, goldenCorpus } from './golden-corpus.js';
 import type { GraphSpec } from '@dagr/bench';
-import type { EdgeId, NodeId } from '@dagr/graph';
+import type { EdgeId, NodeId } from '@prnt/dagr-graph';
 import type { TransposeAdjacency } from '../src/order.js';
 import type { RankedState, Size } from '../src/types.js';
 

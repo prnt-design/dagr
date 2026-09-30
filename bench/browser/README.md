@@ -1,12 +1,12 @@
 # Browser measurements
 
 What a browser does that the rest of `bench/` cannot reach.
-`label-throughput.html` drives `@dagr/render`'s HTML overlay in a real browser
+`label-throughput.html` drives `@prnt/dagr-render`'s HTML overlay in a real browser
 and `label-throughput.mjs` opens it, runs a plan and prints the numbers.
 `card-heights.mjs` renders every campaign card and reports the tallest per kind.
 `backend-probe.html` and `backend-probe.mjs` are the odd ones out and the
 directory name undersells them: they do not measure anything, they CHECK
-something, which is which backend `@dagr/render` comes up on and whether the
+something, which is which backend `@prnt/dagr-render` comes up on and whether the
 shapes reach the canvas once it has. They live here because this is where the
 browser is, and because the rule below about a committed harness applies to them
 exactly as it does to a measurement.
@@ -29,7 +29,7 @@ having "passed" for an entire review cycle from a scratchpad.
 ## Running the overlay harness
 
 ```
-pnpm --filter @dagr/render build          # the page imports from dist
+pnpm --filter @prnt/dagr-render build          # the page imports from dist
 python3 -m http.server 8733               # from the REPO ROOT
 node bench/browser/label-throughput.mjs '[{"count":6000,"cap":20000,"zoom":0.387}]'
 ```
@@ -48,7 +48,7 @@ the layer.
 ## The backend probe
 
 ```
-pnpm --filter @dagr/render build          # the page imports from dist
+pnpm --filter @prnt/dagr-render build          # the page imports from dist
 npm --prefix bench/browser install --no-save playwright-core
 python3 -m http.server 8733               # from the REPO ROOT
 node bench/browser/backend-probe.mjs [screenshot.png]
@@ -81,7 +81,7 @@ three version in it and 404 silently after the next bump.
 
 **What it found on 2026-08-23**, on this box, headless Chromium through
 swiftshader with no GPU and no WebGPU adapter. `'gpu' in navigator` is `true`
-and `requestAdapter()` returns `null`, which is why `@dagr/render` reads the
+and `requestAdapter()` returns `null`, which is why `@prnt/dagr-render` reads the
 backend after `init()` rather than probing before it. `'auto'` came up on
 `'webgl2'` and drew 10,780 pixels above the clear colour in a 480 by 320 buffer,
 3,908 of them the rounded rectangle's amber fill against 3,901 of expected area,

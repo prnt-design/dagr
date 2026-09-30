@@ -5,14 +5,14 @@
 import { StrictMode, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Graph } from '@dagr/graph';
-import type { LayoutEngine, LayoutEngineOptions, LayoutResult } from '@dagr/layout';
+import { Graph } from '@prnt/dagr-graph';
+import type { LayoutEngine, LayoutEngineOptions, LayoutResult } from '@prnt/dagr-layout';
 import { useDagr } from '../src/use-dagr.js';
 import type { DagrLayoutState, UseDagrOptions } from '../src/use-dagr.js';
 import { flush, mount } from './mount.js';
 import type { Mounted } from './mount.js';
 
-/** As much of `@dagr/layout` as the wrapper below reads, plus the rest of it. */
+/** As much of `@prnt/dagr-layout` as the wrapper below reads, plus the rest of it. */
 type RealLayout = Record<string, unknown> & {
   createLayout: (options?: LayoutEngineOptions) => LayoutEngine;
 };
@@ -35,7 +35,7 @@ const spy = vi.hoisted(() => ({
   disposals: 0,
 }));
 
-vi.mock('@dagr/layout', async (importOriginal) => {
+vi.mock('@prnt/dagr-layout', async (importOriginal) => {
   const actual = await importOriginal<RealLayout>();
   return {
     ...actual,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Graph, Patch } from '@dagr/graph';
+import type { Graph, Patch } from '@prnt/dagr-graph';
 import {
   AUTOPLAY_CYCLE,
   EDIT_KINDS,

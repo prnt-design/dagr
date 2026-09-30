@@ -1,4 +1,4 @@
-import type { EdgeId, Graph, Node, NodeId } from '@dagr/graph';
+import type { EdgeId, Graph, Node, NodeId } from '@prnt/dagr-graph';
 import { InternalLayoutError } from './errors.js';
 
 /**
@@ -77,7 +77,7 @@ export interface AcyclicView {
  * way, which is what `feedbackArcSet` computed.
  *
  * It reads the graph and builds arrays; it never touches either. The edges come
- * out in `graph.edges()` order, which `@dagr/graph` guarantees to be insertion
+ * out in `graph.edges()` order, which `@prnt/dagr-graph` guarantees to be insertion
  * order, and that order is what a ranker's tie-breaks are stated against.
  */
 export function acyclicView(graph: Graph, reversedEdges: ReadonlySet<EdgeId>): AcyclicView {
@@ -216,7 +216,7 @@ export function longestPathRanks(view: AcyclicView, floor?: Int32Array): Int32Ar
  * would leave `b` waiting for an edge that never arrives and stall the sweep on
  * a node the caller can see.
  *
- * A generator rather than an array, for the reason `@dagr/graph`'s own
+ * A generator rather than an array, for the reason `@prnt/dagr-graph`'s own
  * traversal view gives: this is called once per node of a walk, and a
  * materialised neighbour array per node is the allocation the walk is trying
  * not to make. `graph.outEdges` does materialise one, which is the cost of

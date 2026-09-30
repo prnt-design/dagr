@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createLayout } from '@dagr/layout';
-import type { LayoutDelta, LayoutResult, PositionedNode, RoutedEdge } from '@dagr/layout';
+import { createLayout } from '@prnt/dagr-layout';
+import type { LayoutDelta, LayoutResult, PositionedNode, RoutedEdge } from '@prnt/dagr-layout';
 import { readEdit } from '../src/readout.js';
 import type { CountedReadout, Readout } from '../src/readout.js';
 import { createLivingGraph } from '../src/living-graph.js';
@@ -69,7 +69,7 @@ function counted(readout: Readout): CountedReadout {
 describe('the readout', () => {
   it('says nothing was compared for the first layout, because a cold run is not a difference', () => {
     const first = result(32, 47);
-    const readout = readEdit(first, null, null, null);
+    const readout = readEdit(first, null, null, false);
     expect(readout.kind).toBe('initial');
     expect(readout.nodes).toBe(32);
     expect(readout.edges).toBe(47);
@@ -78,7 +78,7 @@ describe('the readout', () => {
   it('counts what an edit moved, and what it left alone', () => {
     const drawn = result(35, 53);
     const next = result(38, 60);
-    const readout = readEdit(next, delta({ added: 3, moved: 6, rerouted: 18 }), drawn, drawn);
+    const readout = readEdit(next, delta({ added: 3, moved: 6, rerouted: 18 }), drawn, true);
     expect(readout).toEqual({
       kind: 'counted',
       nodes: 38,
@@ -97,7 +97,7 @@ describe('the readout', () => {
     // count would undercount what stayed put by exactly the number removed.
     const drawn = result(38, 60);
     const next = result(35, 53);
-    const readout = counted(readEdit(next, delta({ removed: 3, moved: 6, rerouted: 18 }), drawn, drawn));
+    const readout = counted(readEdit(next, delta({ removed: 3, moved: 6, rerouted: 18 }), drawn, true));
     expect(readout.stayedPut).toBe(29);
     expect(readout.nodes).toBe(35);
   });
@@ -107,28 +107,27 @@ describe('the readout', () => {
     // an external store, not every one, so two unbatched edits in one task are
     // two deltas and ONE call to `onLayout` carrying the second. Counting it
     // would report the last hop as though it were the whole edit: a wrong
-    // number, silently, beside a drawing that is right. `from` is what makes
-    // that detectable, and an identity comparison is the whole test.
-    const onScreen = result(32, 47);
+    // number, silently, beside a drawing that is right. The canvas computes
+    // continuity because it sees the skipped layout even though React only
+    // reports the latest one.
     const unseen = result(35, 53);
     const next = result(38, 60);
 
-    const readout = readEdit(next, delta({ added: 3, moved: 6 }), unseen, onScreen);
+    const readout = readEdit(next, delta({ added: 3, moved: 6 }), unseen, false);
 
     expect(readout.kind).toBe('coalesced');
     expect(readout).not.toHaveProperty('moved');
   });
 
   it('counts again on the very next edit, so one coalesced burst is not a permanent silence', () => {
-    const onScreen = result(32, 47);
     const unseen = result(35, 53);
     const afterBurst = result(38, 60);
-    expect(readEdit(afterBurst, delta({ moved: 1 }), unseen, onScreen).kind).toBe('coalesced');
+    expect(readEdit(afterBurst, delta({ moved: 1 }), unseen, false).kind).toBe('coalesced');
 
-    // The component records what it drew whatever the readout said, so the next
-    // edit is a difference from the drawing on screen again.
+    // The canvas reports the result it committed, so the next edit continues
+    // from that result even after the burst was marked coalesced.
     const next = result(38, 60);
-    expect(readEdit(next, delta({ moved: 4 }), afterBurst, afterBurst).kind).toBe('counted');
+    expect(readEdit(next, delta({ moved: 4 }), afterBurst, true).kind).toBe('counted');
   });
 
   it('is coalesced rather than counted through a real unbatched burst', () => {
@@ -159,7 +158,7 @@ describe('the readout', () => {
     if (last === undefined) return;
     // `drawn` is what a consumer would have on screen: the second delta is a
     // difference from the first result, which never reached a frame.
-    expect(readEdit(last.result, last.delta, last.from, drawn).kind).toBe('coalesced');
+    expect(readEdit(last.result, last.delta, last.from, false).kind).toBe('coalesced');
   });
 
   it('counts a real batched edit, which is the case the demo is built to hit', () => {
@@ -185,7 +184,7 @@ describe('the readout', () => {
     const only = landed[0];
     if (only === undefined) return;
     const { result: next, delta: change } = only;
-    const readout = counted(readEdit(next, change, drawn, drawn));
+    const readout = counted(readEdit(next, change, drawn, true));
     expect(readout.added).toBe(1);
     expect(readout.stayedPut).toBe(next.nodes.size - 1 - change.nodes.moved.length);
   });

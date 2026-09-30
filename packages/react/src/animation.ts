@@ -1,14 +1,14 @@
 /**
  * The other half of the conversion `scene.ts` owns: a `LayoutDelta` into the
- * shape `@dagr/render`'s scene motion takes, and the one decision a caller
+ * shape `@prnt/dagr-render`'s scene motion takes, and the one decision a caller
  * driving it has to get right.
  *
  * `scene.ts` turns a whole `LayoutResult` into a whole drawing. That is what a
  * renderer needs at mount and what it needs after a cold run, and it is exactly
  * what an animation must NOT be handed on every edit: a scene rebuilt from a
  * result is a scene with no history, and a spring with no history cuts. What an
- * animation needs is the difference, which `@dagr/layout` already computes and
- * `@dagr/render` already consumes, in two vocabularies that differ by one minus
+ * animation needs is the difference, which `@prnt/dagr-layout` already computes and
+ * `@prnt/dagr-render` already consumes, in two vocabularies that differ by one minus
  * sign. This file is that minus sign, applied to the three lists that carry a
  * position.
  *
@@ -38,8 +38,8 @@
  * `<DagrCanvas>` is then wiring rather than arithmetic.
  */
 
-import type { LayoutDelta, NodeGeometry, Point } from '@dagr/layout';
-import { MotionDesyncError } from '@dagr/render';
+import type { LayoutDelta, NodeGeometry, Point } from '@prnt/dagr-layout';
+import { MotionDesyncError } from '@prnt/dagr-render';
 import type {
   EdgeMotionTarget,
   MotionTarget,
@@ -49,7 +49,7 @@ import type {
   SceneMotionRoster,
   SceneNode,
   WorldBounds,
-} from '@dagr/render';
+} from '@prnt/dagr-render';
 import { toWorldBounds } from './scene.js';
 
 /** A layout-space box as the target of a spring, y up. */
@@ -133,7 +133,7 @@ export type Retargeting = 'applied' | 'resynced';
  * disagrees about, which catches the skipped delta that happens to introduce or
  * remove something, and a delta naming only ids the motion already holds applies
  * cleanly and leaves the drawing wrong in silence. The arm is the backstop for
- * the case the motion CAN see, and the recovery `@dagr/render` names in that
+ * the case the motion CAN see, and the recovery `@prnt/dagr-render` names in that
  * error's own message: the roster describes a whole state rather than a
  * difference, so a scene reseated from it agrees with the drawing whatever it
  * was holding before.

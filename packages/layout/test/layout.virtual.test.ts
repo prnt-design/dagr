@@ -1,5 +1,5 @@
-import { Graph } from '@dagr/graph';
-import type { EdgeId, NodeId } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
+import type { EdgeId, NodeId } from '@prnt/dagr-graph';
 import { describe, expect, it } from 'vitest';
 import { StageContractError, defaultStages, layout } from '../src/index.js';
 import type {
@@ -252,7 +252,7 @@ describe('virtual nodes', () => {
     // back, not a stage reaching into the one it was handed.
     //
     // What the caller must not get is `InternalLayoutError: ... This is a bug
-    // in @dagr/layout`, which is a third-party stage author being told to file
+    // in @prnt/dagr-layout`, which is a third-party stage author being told to file
     // a bug against us for their own mistake. M2.4b makes "just add the dummy
     // to the graph" the obvious wrong first attempt, so this is the error that
     // has to name the ranker.

@@ -1,4 +1,4 @@
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { NodeRegistry, NodeSpec, NodeSpecInit } from '../src/index.js';
 import { defineRegistry } from '../src/index.js';
@@ -11,7 +11,7 @@ import { defineRegistry } from '../src/index.js';
  * so the file failing to compile is the failure this suite exists to catch.
  * The runtime bodies are here because a vitest file has to hold at least one
  * test, and because a type promise no execution exercises is worth doubting.
- * This is `@dagr/graph`'s arrangement in `graph.types.test.ts`, for its reason.
+ * This is `@prnt/dagr-graph`'s arrangement in `graph.types.test.ts`, for its reason.
  */
 
 const registry = defineRegistry({

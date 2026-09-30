@@ -1,4 +1,4 @@
-import type { EdgeId, NodeId } from '@dagr/graph';
+import type { EdgeId, NodeId } from '@prnt/dagr-graph';
 import { DeltaMismatchError, InvalidConfigError } from './errors.js';
 import type {
   LayoutResult,
@@ -245,7 +245,7 @@ export function requireEpsilon(epsilon: number | undefined): number {
  * all.
  *
  * AN EDGE THAT CHANGED ENDPOINTS IS A REMOVAL AND AN ADDITION, listed in both
- * groups under the one id, rather than a reroute. Nothing in `@dagr/graph`
+ * groups under the one id, rather than a reroute. Nothing in `@prnt/dagr-graph`
  * rebinds an edge's ends, but an edge id is the caller's own string and two
  * runs need not be of the same graph: a patch that removed `e1` from `a` to `b`
  * and added `e1` from `a` to `c` produces exactly this, and reporting it as a

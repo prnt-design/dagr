@@ -1,6 +1,6 @@
 import { EDGE_ROLES } from '@dagr/campaign';
 import type { Campaign, CampaignEdge, CampaignNode } from '@dagr/campaign';
-import type { SceneEdge, SceneEdgeGroup } from '@dagr/render';
+import type { SceneEdge, SceneEdgeGroup } from '@prnt/dagr-render';
 import type { CampaignScene } from './campaign-scene.js';
 import { edgeInk, nodeFill } from './campaign-style.js';
 
@@ -182,13 +182,13 @@ export interface CampaignEdges {
   readonly overlay: readonly SceneEdge[];
 }
 
-/** A point, in world units. Structurally `@dagr/render`'s `Vec2`. */
+/** A point, in world units. Structurally `@prnt/dagr-render`'s `Vec2`. */
 interface Point {
   readonly x: number;
   readonly y: number;
 }
 
-/** A world box, as extents. Structurally `@dagr/render`'s `WorldBounds`. */
+/** A world box, as extents. Structurally `@prnt/dagr-render`'s `WorldBounds`. */
 interface Box {
   readonly minX: number;
   readonly minY: number;
@@ -205,7 +205,7 @@ function centreOf(box: Box): Point {
  * Where a line leaves the box around `centre` on its way to `toward`: the point
  * on the box's border, or the centre when the two coincide.
  *
- * The same parameterised border walk `@dagr/layout`'s `attachment` uses, and
+ * The same parameterised border walk `@prnt/dagr-layout`'s `attachment` uses, and
  * for the same reason: a line that started at a node's CENTRE would be drawn
  * underneath the node for its first half, so a hundred overlay lines leaving a
  * settlement would all be hidden until they cleared its box. Without layout's

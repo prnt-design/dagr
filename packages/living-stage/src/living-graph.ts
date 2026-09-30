@@ -16,9 +16,9 @@
  * demonstration.
  */
 
-import { Graph } from '@dagr/graph';
-import type { Node, NodeId } from '@dagr/graph';
-import type { LayoutConfig } from '@dagr/layout';
+import { Graph } from '@prnt/dagr-graph';
+import type { Node, NodeId } from '@prnt/dagr-graph';
+import type { LayoutConfig } from '@prnt/dagr-layout';
 
 /**
  * The config the demo lays this graph out with, which is the defaults.

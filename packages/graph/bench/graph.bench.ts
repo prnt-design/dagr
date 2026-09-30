@@ -6,7 +6,7 @@ import type { GraphSpec } from '@dagr/bench';
 import type { NodeId } from '../src/types.js';
 
 /**
- * `@dagr/graph`'s hot paths.
+ * `@prnt/dagr-graph`'s hot paths.
  *
  * The reason this file exists rather than a note saying the code looks fine:
  * the algorithms review during M1.3 verified that reverting the allocation

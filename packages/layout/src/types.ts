@@ -1,4 +1,4 @@
-import type { EdgeId, Graph, Node, NodeId } from '@dagr/graph';
+import type { EdgeId, Graph, Node, NodeId } from '@prnt/dagr-graph';
 
 /** A width and a height, both in layout units. Neither may be negative. */
 export interface Size {
@@ -26,7 +26,7 @@ export interface Rect {
  * before any stage sees it.
  *
  * Sizes arrive through the `nodeSize` callback rather than off the node record
- * on purpose. `@dagr/graph` has attribute bags as of M1.2, and a node's drawn
+ * on purpose. `@prnt/dagr-graph` has attribute bags as of M1.2, and a node's drawn
  * size still does not belong in one: it belongs to whoever is drawing it, not
  * to the graph. A caller who does keep sizes in attributes reads them straight
  * off the node the callback is handed, which is their convention rather than

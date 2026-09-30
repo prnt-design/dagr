@@ -1,5 +1,5 @@
-import { Graph } from '@dagr/graph';
-import type { EdgeId, NodeId } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
+import type { EdgeId, NodeId } from '@prnt/dagr-graph';
 import { largeCorpus, smallCorpus } from '@dagr/bench';
 import { describe, expect, it } from 'vitest';
 import { splitLongEdges } from '../src/chains.js';

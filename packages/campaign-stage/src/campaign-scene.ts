@@ -1,8 +1,8 @@
-import { Graph } from '@dagr/graph';
-import { createLayout } from '@dagr/layout';
-import type { LayoutPort } from '@dagr/layout';
+import { Graph } from '@prnt/dagr-graph';
+import { createLayout } from '@prnt/dagr-layout';
+import type { LayoutPort } from '@prnt/dagr-layout';
 import type { Campaign, CampaignNode } from '@dagr/campaign';
-import type { SceneNode, Size, Vec2, WorldBounds } from '@dagr/render';
+import type { SceneNode, Size, Vec2, WorldBounds } from '@prnt/dagr-render';
 import { SMALLEST_NODE_SIZE, glowReach, styleFor } from './campaign-style.js';
 import { CAMPAIGN_SPACING, assignTiles, gridPositions, isRouted, shelfPack } from './tiles.js';
 import type { CampaignSpacing, Tile, TileKind } from './tiles.js';
@@ -11,18 +11,18 @@ import type { CampaignSpacing, Tile, TileKind } from './tiles.js';
  * The campaign, laid out and packed into one scene the renderer can take.
  *
  * This is P4's orchestration and the only file in the demo that knows about all
- * four of `@dagr/campaign`, `@dagr/graph`, `@dagr/layout` and `@dagr/render` at
+ * four of `@dagr/campaign`, `@prnt/dagr-graph`, `@prnt/dagr-layout` and `@prnt/dagr-render` at
  * once. Everything decidable without them is in `tiles.ts` and
  * `campaign-style.ts` and is tested there; what is left here is the sequence,
  * the worker, and one coordinate conversion that is worth reading twice.
  *
  * ## THE Y FLIP, which M4.4 owns and which is silent when it is wrong
  *
- * `@dagr/layout` computes in y-DOWN coordinates: its `PositionedNode.y` grows
+ * `@prnt/dagr-layout` computes in y-DOWN coordinates: its `PositionedNode.y` grows
  * toward the bottom of the drawing, and its `Rect` is a top-left corner and a
  * size. `Camera2D` is y-UP. `camera.ts` has said since M4.1 that converting
  * between them is the business of whatever feeds a layout result to a scene,
- * which is this file, and `@dagr/render`'s `WorldBounds` is deliberately shaped
+ * which is this file, and `@prnt/dagr-render`'s `WorldBounds` is deliberately shaped
  * so a layout rectangle cannot be assigned into a world one by accident.
  *
  * The conversion happens ONCE, in {@link toWorld}, at the very end. Everything
@@ -145,7 +145,7 @@ function sizeOf(node: CampaignNode): Size {
 }
 
 /**
- * Lays out one tile through `@dagr/layout`, in the worker when there is one.
+ * Lays out one tile through `@prnt/dagr-layout`, in the worker when there is one.
  *
  * A graph per tile rather than one graph filtered per run, because layout takes
  * a graph and a tile's edges are the routed edges with BOTH ends inside it. An

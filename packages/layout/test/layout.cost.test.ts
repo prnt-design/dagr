@@ -1,6 +1,6 @@
 import { cpus, loadavg } from 'node:os';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { largeCorpus, smallCorpus } from '@dagr/bench';
 import { describe, expect, it } from 'vitest';
 import { layout } from '../src/pipeline.js';
@@ -57,7 +57,7 @@ import type {
  *
  * ## Regenerating
  *
- *   MEASURE_COST=1 pnpm --filter @dagr/layout test layout.cost
+ *   MEASURE_COST=1 pnpm --filter @prnt/dagr-layout test layout.cost
  *
  * The ordinary run does NOT measure. It reads the committed file and checks
  * that it still describes this pipeline: same stage names, same corpora, same
@@ -247,7 +247,7 @@ describe('what a layout run costs', () => {
     it('rewrites the cost file, because MEASURE_COST was set', () => {
       const cpu = cpus()[0];
       const file: CostFile = {
-        measure: 'MEASURE_COST=1 pnpm --filter @dagr/layout test layout.cost',
+        measure: 'MEASURE_COST=1 pnpm --filter @prnt/dagr-layout test layout.cost',
         isNotABaseline:
           'Wall-clock milliseconds on one machine, published so a reader can size a ' +
           'budget. Nothing gates on it and pnpm bench:ci never reads it. The gate ' +

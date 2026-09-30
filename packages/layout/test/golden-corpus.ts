@@ -1,4 +1,4 @@
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { layeredDag } from '@dagr/bench';
 import type { LayeredOptions } from '@dagr/bench';
 

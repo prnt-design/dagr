@@ -37,7 +37,7 @@ import { requireAtLeast, requireFinite, requirePositive } from './validate.js';
  * the scene and therefore lowers the derived floor, so the range on its stage is
  * now 0.026 to 19.2 and the factor is 748.
  *
- * The second argument is about what an edge IS. `@dagr/layout` gives a node a
+ * The second argument is about what an edge IS. `@prnt/dagr-layout` gives a node a
  * `Size` and gives an edge a polyline and nothing else, so any world width for
  * a ribbon would be invented here rather than laid out there. An edge is a
  * relation between two boxes; its thickness is a property of the drawing, like
@@ -152,7 +152,7 @@ export const DEFAULT_MITER_LIMIT = 2;
  *
  * A zero-length segment has no direction, so its normal is a division by zero
  * and every vertex downstream of it is a `NaN`. That is not hypothetical:
- * `polylineRouteStage` in `@dagr/layout` documents a self loop as two identical
+ * `polylineRouteStage` in `@prnt/dagr-layout` documents a self loop as two identical
  * points at one node's centre, so the shortest route in the campaign is exactly
  * this case. The threshold is absolute rather than relative because it exists
  * to keep the squared length out of underflow, and a world unit is a layout
@@ -259,7 +259,7 @@ export interface RibbonRoute {
 
   /**
    * The centreline, in world units, source to target. `RoutedEdge.points` from
-   * `@dagr/layout` is exactly this, and its direction is a contract there, which
+   * `@prnt/dagr-layout` is exactly this, and its direction is a contract there, which
    * is what makes {@link ribbonCoverage}'s dash flow mean "towards the target".
    */
   readonly points: readonly Vec2[];
@@ -271,7 +271,7 @@ export interface RibbonRoute {
  * Every field is declared `?: T | undefined` rather than `?: T`, which under
  * this repo's `exactOptionalPropertyTypes` are different types: the second
  * rejects an explicitly `undefined` value, and a caller threading its own
- * config through has exactly that. `@dagr/graph` and `@dagr/layout` settled
+ * config through has exactly that. `@prnt/dagr-graph` and `@prnt/dagr-layout` settled
  * the same question the same way, `NetworkSimplexOptions` with the argument
  * written out.
  */

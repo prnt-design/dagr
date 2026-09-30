@@ -3,7 +3,7 @@
  * as you like, here or in a worker.
  */
 
-import type { EdgeId, Graph, NodeId, Patch } from '@dagr/graph';
+import type { EdgeId, Graph, NodeId, Patch } from '@prnt/dagr-graph';
 import { isAuthored } from './authorship.js';
 import { resolveConfig } from './config.js';
 import { applyDelta, diffLayout, requireEpsilon } from './delta.js';
@@ -90,7 +90,7 @@ const noChange = (): LayoutDelta => ({
  * `Worker`, a dedicated worker's own `self`, a `MessagePort` from either a
  * browser `MessageChannel` or Node's `worker_threads`, and anything else that
  * speaks the same four members all satisfy it without a cast, and this package
- * imports none of them: `@dagr/layout` has no DOM dependency and no Node
+ * imports none of them: `@prnt/dagr-layout` has no DOM dependency and no Node
  * dependency, and taking one to name a parameter type would be a strange way to
  * spend that.
  *

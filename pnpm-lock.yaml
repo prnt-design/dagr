@@ -35,19 +35,19 @@ importers:
       '@dagr/campaign-stage':
         specifier: workspace:*
         version: link:../../packages/campaign-stage
-      '@dagr/graph':
-        specifier: workspace:*
-        version: link:../../packages/graph
-      '@dagr/layout':
-        specifier: workspace:*
-        version: link:../../packages/layout
       '@dagr/living-stage':
         specifier: workspace:*
         version: link:../../packages/living-stage
-      '@dagr/react':
+      '@prnt/dagr-graph':
+        specifier: workspace:*
+        version: link:../../packages/graph
+      '@prnt/dagr-layout':
+        specifier: workspace:*
+        version: link:../../packages/layout
+      '@prnt/dagr-react':
         specifier: workspace:*
         version: link:../../packages/react
-      '@dagr/render':
+      '@prnt/dagr-render':
         specifier: workspace:*
         version: link:../../packages/render
       react:
@@ -80,24 +80,9 @@ importers:
       '@dagr/campaign-stage':
         specifier: workspace:*
         version: link:../packages/campaign-stage
-      '@dagr/graph':
-        specifier: workspace:*
-        version: link:../packages/graph
-      '@dagr/layout':
-        specifier: workspace:*
-        version: link:../packages/layout
       '@dagr/living-stage':
         specifier: workspace:*
         version: link:../packages/living-stage
-      '@dagr/react':
-        specifier: workspace:*
-        version: link:../packages/react
-      '@dagr/render':
-        specifier: workspace:*
-        version: link:../packages/render
-      '@dagr/vdsl':
-        specifier: workspace:*
-        version: link:../packages/vdsl
       '@docusaurus/core':
         specifier: 3.10.2
         version: 3.10.2(@mdx-js/react@3.1.1(@types/react@19.2.17)(react@19.2.8))(postcss@8.5.23)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3)
@@ -110,6 +95,21 @@ importers:
       '@mdx-js/react':
         specifier: ^3.1.0
         version: 3.1.1(@types/react@19.2.17)(react@19.2.8)
+      '@prnt/dagr-graph':
+        specifier: workspace:*
+        version: link:../packages/graph
+      '@prnt/dagr-layout':
+        specifier: workspace:*
+        version: link:../packages/layout
+      '@prnt/dagr-react':
+        specifier: workspace:*
+        version: link:../packages/react
+      '@prnt/dagr-render':
+        specifier: workspace:*
+        version: link:../packages/render
+      '@prnt/dagr-vdsl':
+        specifier: workspace:*
+        version: link:../packages/vdsl
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -146,13 +146,13 @@ importers:
       '@dagr/campaign':
         specifier: workspace:*
         version: link:../campaign
-      '@dagr/graph':
+      '@prnt/dagr-graph':
         specifier: workspace:*
         version: link:../graph
-      '@dagr/layout':
+      '@prnt/dagr-layout':
         specifier: workspace:*
         version: link:../layout
-      '@dagr/render':
+      '@prnt/dagr-render':
         specifier: workspace:*
         version: link:../render
     devDependencies:
@@ -165,6 +165,43 @@ importers:
       react:
         specifier: ^19.2.8
         version: 19.2.8
+
+  packages/dagr:
+    dependencies:
+      '@prnt/dagr-graph':
+        specifier: workspace:^
+        version: link:../graph
+      '@prnt/dagr-layout':
+        specifier: workspace:^
+        version: link:../layout
+      '@prnt/dagr-react':
+        specifier: workspace:^
+        version: link:../react
+      '@prnt/dagr-render':
+        specifier: workspace:^
+        version: link:../render
+      '@prnt/dagr-vdsl':
+        specifier: workspace:^
+        version: link:../vdsl
+    devDependencies:
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      '@types/three':
+        specifier: ^0.185.0
+        version: 0.185.1
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
+      three:
+        specifier: ^0.185.1
+        version: 0.185.1
 
   packages/graph:
     devDependencies:
@@ -180,22 +217,22 @@ importers:
       '@dagr/bench':
         specifier: workspace:*
         version: link:../../bench
-      '@dagr/graph':
-        specifier: workspace:^
-        version: link:../graph
       '@dagrejs/dagre':
         specifier: 3.1.1
         version: 3.1.1
+      '@prnt/dagr-graph':
+        specifier: workspace:^
+        version: link:../graph
 
   packages/living-stage:
     dependencies:
-      '@dagr/graph':
+      '@prnt/dagr-graph':
         specifier: workspace:*
         version: link:../graph
-      '@dagr/layout':
+      '@prnt/dagr-layout':
         specifier: workspace:*
         version: link:../layout
-      '@dagr/react':
+      '@prnt/dagr-react':
         specifier: workspace:*
         version: link:../react
     devDependencies:
@@ -217,14 +254,14 @@ importers:
 
   packages/react:
     dependencies:
-      '@dagr/layout':
+      '@prnt/dagr-layout':
         specifier: workspace:^
         version: link:../layout
     devDependencies:
-      '@dagr/graph':
+      '@prnt/dagr-graph':
         specifier: workspace:^
         version: link:../graph
-      '@dagr/render':
+      '@prnt/dagr-render':
         specifier: workspace:^
         version: link:../render
       '@types/react':
@@ -257,7 +294,7 @@ importers:
 
   packages/vdsl:
     devDependencies:
-      '@dagr/graph':
+      '@prnt/dagr-graph':
         specifier: workspace:^
         version: link:../graph
 

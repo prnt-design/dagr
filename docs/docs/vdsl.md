@@ -6,7 +6,7 @@ sidebar_position: 7
 
 # Node spec toolkit
 
-`@dagr/vdsl` is the layer where your node graph stops being a graph and starts
+`@prnt/dagr-vdsl` is the layer where your node graph stops being a graph and starts
 being a language: what kinds of node exist, what ports they have, what counts
 as a valid configuration for one, and which pairs of ports may be joined.
 [Visual languages](./visual-languages.md) is the design brief for the
@@ -22,8 +22,8 @@ configuration is checked by a function you supply.
 ## Usage
 
 ```ts
-import { Graph } from '@dagr/graph';
-import { defineRegistry } from '@dagr/vdsl';
+import { Graph } from '@prnt/dagr-graph';
+import { defineRegistry } from '@prnt/dagr-vdsl';
 
 const registry = defineRegistry({
   source: { ports: [{ id: 'out', direction: 'out' }] },
@@ -103,7 +103,7 @@ const registry = defineRegistry({ source: {} }, { kindKey: 'type' });
 ## Ports and arity
 
 A `PortSpec` is what every node of a kind is promised to have, where
-`@dagr/graph`'s `Port` is what one node does have. They differ by `maxEdges`,
+`@prnt/dagr-graph`'s `Port` is what one node does have. They differ by `maxEdges`,
 which is a rule about a port rather than a property of one, and which the graph
 model deliberately does not enforce: `Graph` permits any topology by design.
 
@@ -137,7 +137,7 @@ A port may also carry a `type`, which is a token this package stores, hands to
 your own rule, and never interprets:
 
 ```ts
-import { defineRegistry, sameType } from '@dagr/vdsl';
+import { defineRegistry, sameType } from '@prnt/dagr-vdsl';
 
 const registry = defineRegistry(
   {
@@ -294,7 +294,7 @@ catches the family and a `switch` over `code` stays exhaustive.
 | `NodeKindMissingError` | `NODE_KIND_MISSING` | a node declares no legible kind |
 | `UnknownNodeKindError` | `UNKNOWN_NODE_KIND` | a node names a kind this registry does not hold |
 
-This is a separate family from `@dagr/graph`'s rather than a subclass of it,
+This is a separate family from `@prnt/dagr-graph`'s rather than a subclass of it,
 on that package's own instruction: each package keeps its own root, its own
 code union and its own predicate, so each one's exhaustive switch stays
 exhaustive over its own errors.
@@ -303,7 +303,7 @@ exhaustive over its own errors.
 
 - **Drag-to-connect** (M6.3), on top of the interaction hooks and GPU picking.
   That is the task where this package first needs React, which is why
-  `@dagr/react` is not a peer dependency yet.
+  `@prnt/dagr-react` is not a peer dependency yet.
 - **Subgraph nodes and drill-down** (M6.4), on the containment M5.5 reserves in
   the graph model.
 - **Collapse and expand** (M6.5), and **two reference languages** built on the
@@ -313,8 +313,8 @@ exhaustive over its own errors.
 There is also no per-kind payload of your own on a `NodeSpec`: no label, no
 colour, no category. That is a real want and the shape it should take is
 decided by what M6.3's callbacks actually need to read, so it waits for a
-consumer to ask, the way `@dagr/graph` keeps `traversal.ts` unexported and
-`@dagr/layout` keeps every stage but `defaultStages` internal. Until then,
+consumer to ask, the way `@prnt/dagr-graph` keeps `traversal.ts` unexported and
+`@prnt/dagr-layout` keeps every stage but `defaultStages` internal. Until then,
 `registry.kinds` is typed and exhaustive, so a
 `Record<Kind, YourPayload>` of your own is checked for completeness by the
 compiler.

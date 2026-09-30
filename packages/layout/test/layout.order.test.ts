@@ -1,4 +1,4 @@
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { largeCorpus, smallCorpus } from '@dagr/bench';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LAYOUT_CONFIG } from '../src/config.js';
@@ -10,7 +10,7 @@ import { defaultStages, insertionOrderStage } from '../src/stages.js';
 import { layout } from '../src/pipeline.js';
 import { mulberry32, randomDigraph, randomLayered } from './random.js';
 import type { GraphSpec } from '@dagr/bench';
-import type { NodeId } from '@dagr/graph';
+import type { NodeId } from '@prnt/dagr-graph';
 import type { RankedState, Size } from '../src/types.js';
 
 /**
@@ -619,8 +619,8 @@ describe('barycenterOrder, the options', () => {
    * `maxTransposePasses` takes the same rule as `maxSweeps`, down to rejecting
    * `Number.POSITIVE_INFINITY`, and for the same reason: it bounds a heuristic
    * with no optimality condition to converge to. The error is an
-   * `InvalidConfigError` naming the field, which is `@dagr/layout`'s rule and
-   * not `@dagr/render`'s `RangeError`.
+   * `InvalidConfigError` naming the field, which is `@prnt/dagr-layout`'s rule and
+   * not `@prnt/dagr-render`'s `RangeError`.
    */
   it('rejects a maxTransposePasses that is not a whole number of passes', () => {
     for (const maxTransposePasses of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {

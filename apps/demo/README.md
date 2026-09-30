@@ -36,7 +36,7 @@ two copies would drift. This app is the page around them.
 | --- | --- |
 | `App.tsx` | the header, the demo switch, the facts panels, and the worker this app builds |
 | `main.tsx` | the StrictMode mount, and the three stylesheets in order |
-| `layout-worker.ts` | the worker end of `@dagr/layout`'s protocol |
+| `layout-worker.ts` | the worker end of `@prnt/dagr-layout`'s protocol |
 | `styles.css` | the page: its palette, the facts panel, the stage's frame |
 | `scripts/capture.mjs` | the committed screenshots, taken reproducibly |
 
@@ -60,11 +60,11 @@ not have.
 
 The failure is worse than it sounds, because a local gate does not catch it:
 `dist` is usually lying around from an earlier build, and CI typechecks before
-it builds. M4.4 added `@dagr/layout` and shipped that mistake to review; the way
+it builds. M4.4 added `@prnt/dagr-layout` and shipped that mistake to review; the way
 to check is to delete every `dist` in the workspace and run `pnpm typecheck`.
 
 The alias map is LONGER than this app's dependency list, and that is deliberate:
-the stage's own source imports `@dagr/graph`, `@dagr/layout` and `@dagr/render`,
+the stage's own source imports `@prnt/dagr-graph`, `@prnt/dagr-layout` and `@prnt/dagr-render`,
 and an alias is a path mapping rather than a dependency, so those entries are
 what keep the whole tree on source. An alias key also matches anything under it
 as a path, which is why `@dagr/campaign-stage/stage.css` has an entry of its own

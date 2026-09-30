@@ -1,5 +1,5 @@
-import { Graph } from '@dagr/graph';
-import type { EdgeId } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
+import type { EdgeId } from '@prnt/dagr-graph';
 import { describe, expect, it } from 'vitest';
 import { feedbackArcSet } from '../src/cycles.js';
 import { acyclicView, build, referenceTopologicalOrder } from './cycles-check.js';

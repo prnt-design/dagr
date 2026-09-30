@@ -1,5 +1,5 @@
 {
-  "regenerate": "UPDATE_GOLDEN=1 pnpm --filter @dagr/layout test layout.dagre-parity",
+  "regenerate": "UPDATE_GOLDEN=1 pnpm --filter @prnt/dagr-layout test layout.dagre-parity",
   "regenerateWhen": "Only for a deliberate change to what this package draws, or a deliberate bump of the pinned dagre version, and only when you can say which column moved and why. A number that changed without an intended cause is something to investigate, not a file to refresh.",
   "dagreVersion": "3.1.1",
   "config": {

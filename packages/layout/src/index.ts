@@ -8,7 +8,7 @@ export { layout } from './pipeline.js';
 // object for the same reason.
 //
 // `serveLayout` is exported from the package root rather than from a
-// `@dagr/layout/worker` subpath. A subpath would suggest the two halves are
+// `@prnt/dagr-layout/worker` subpath. A subpath would suggest the two halves are
 // separately loadable, and they are not: the worker half pulls in the whole
 // pipeline, which is the point of it. A bundler splitting a worker module out
 // is what puts this code in a worker bundle and the engine in the main one, and
@@ -37,7 +37,7 @@ export { influenceRegion } from './influence.js';
 export type { InfluenceRegionInput, InfluenceSet } from './influence.js';
 export { serveLayout } from './worker.js';
 // `wire.ts` is not exported, the way `traversal.ts` is not exported from
-// `@dagr/graph`: the message shapes are an agreement between `createLayout` and
+// `@prnt/dagr-graph`: the message shapes are an agreement between `createLayout` and
 // `serveLayout`, both of which ship here, and publishing them would freeze a
 // format whose only two speakers are upgraded together. What a caller needs to
 // write down is the port, and `LayoutPort` is above.

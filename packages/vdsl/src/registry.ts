@@ -9,7 +9,7 @@ import type {
   PortId,
   PortInit,
   ReadAttrs,
-} from '@dagr/graph';
+} from '@prnt/dagr-graph';
 import { InvalidSpecError, NodeKindMissingError, UnknownNodeKindError } from './errors.js';
 import type {
   ConnectionAllowed,
