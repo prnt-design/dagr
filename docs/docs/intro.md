@@ -17,8 +17,7 @@ in [Follow an edit](/demos/living), or start with the example below.
 
 ## Run it locally
 
-Dagr is pre-release and **not published to npm**. Start from the repository
-with Node 20 or newer and pnpm:
+To run the examples from source, use Node 20 or newer and pnpm:
 
 ```bash
 git clone https://github.com/prnt-design/dagr.git
@@ -32,9 +31,9 @@ For the local renderer playground, run `pnpm --filter demo dev`.
 
 ## Package entry points
 
-The initial release is being prepared under `@prnt/dagr-*`, with an optional
-`dagr` umbrella. The umbrella root exports the graph model. Its subpaths
-`dagr/graph`, `dagr/layout`, `dagr/render`, `dagr/react`, and `dagr/vdsl`
+Dagr uses `@prnt/dagr-*` for individual packages, with an optional
+`@prnt/dagr` umbrella. The umbrella root exports the graph model. Its subpaths
+`@prnt/dagr/graph`, `@prnt/dagr/layout`, `@prnt/dagr/render`, `@prnt/dagr/react`, and `@prnt/dagr/vdsl`
 forward to the matching scoped packages. Choose the individual scoped
 packages when you only need part of the stack.
 

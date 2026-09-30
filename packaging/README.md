@@ -71,7 +71,7 @@ smoke. Run it whenever the packaging changes and before a publish.
 
 The scratch project is the strongest of the three and it is worth knowing what
 it proves. It compiles `layout({ graph })` with the `graph` built from the
-installed `@prnt/dagr-graph` and `dagr`, checks JSX props for `<DagrCanvas>` and `<Html>`, and
+installed `@prnt/dagr-graph` and `@prnt/dagr`, checks JSX props for `<DagrCanvas>` and `<Html>`, and
 checks renderer types without creating a GPU device. `Graph` carries `#private`
 fields, so if the peer range had resolved to a second copy that line would fail
 with `separate declarations of a private property '#nodes'`. It compiling is

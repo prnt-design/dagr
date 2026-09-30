@@ -1,5 +1,5 @@
 {
-  "name": "dagr",
+  "name": "@prnt/dagr",
   "version": "0.1.0",
   "description": "Dagr umbrella: typed graphs, incremental layout, rendering, React, and visual DSLs.",
   "license": "MIT",

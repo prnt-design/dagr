@@ -12,8 +12,8 @@ there. Milestone status is mirrored in the project brain.
 
 ## Status (2026-09-29)
 
-The initial npm release is being prepared under `@prnt/dagr-*`, with the
-`dagr` umbrella, following maintainer authorization. v0.1 ships the currently documented graph, layout,
+The initial npm release uses `@prnt/dagr-*`, with the
+`@prnt/dagr` umbrella, following maintainer authorization. v0.1 ships the currently documented graph, layout,
 renderer, React, and VDSL APIs. GPU picking and selection/drag hooks (M4.8b
 and M5.2) remain planned work after this initial release.
 
@@ -21,7 +21,6 @@ M5.4a gates the tarballs with `publint`, `arethetypeswrong`, and a scratch
 install outside the workspace. M5.4b now includes the `onLayout` continuity
 signal and external consumer checks for all six public packages. Publication
 uses `pnpm` so workspace dependency ranges resolve to released versions.
-Nothing has been published yet.
 
 Over the six-session corpus (M3.10a), the incremental path moves 4.1x to
 38.4x less of the drawing per patch than a cold run, with order churn at
