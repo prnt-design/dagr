@@ -503,3 +503,25 @@ animated bounds without resetting a valid close-up.
 `fit={false}` only skips the initial fit. Use `cameraLimits={false}` to opt out
 of content constraints when implementing a custom camera policy. Low-level
 `Camera2D` instances remain unrestricted until `setContentBounds` is called.
+
+## Edge path styles
+
+`edgePath` changes the visible route without rebuilding the renderer. It applies
+on every animation frame, so orthogonal edges keep right-angle bends during edits.
+
+```tsx
+<DagrCanvas graph={graph} edgePath={{ style: 'smooth' }} />
+<DagrCanvas graph={graph} edgePath={{ style: 'orthogonal', direction: 'vertical' }} />
+```
+
+The default `polyline` preserves routed segments. `smooth` curves through route
+anchors; two-anchor edges use a cubic with horizontal tangents by default.
+`orthogonal` inserts axis-aligned doglegs between anchors. `direction` can be
+`horizontal` or `vertical`; smoothing `tolerance` defaults to 0.5 world units.
+These are visual transformations, not obstacle-aware routing, so either style
+can introduce crossings or overlap nodes. Layout positions remain unchanged.
+
+SVG or canvas consumers can use `shapeEdgePath(points, options)` from
+`@prnt/dagr/render` (or `@prnt/dagr-render`) for the same geometry. Feed its
+returned points to an SVG polyline/path or to renderer edges with `curve: 'polyline'`
+to avoid smoothing them twice.

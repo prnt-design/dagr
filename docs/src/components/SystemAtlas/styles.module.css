@@ -64,6 +64,7 @@
 }
 .graphActions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
@@ -138,6 +139,17 @@
   outline: 3px solid var(--primary-text);
   outline-offset: 3px;
 }
+.graphActions label {
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+.graphActions select {
+  min-height: 36px;
+  color: var(--dagr-foreground);
+  background: var(--dagr-background);
+  border: 1px solid var(--contrast-20pct);
+  font: inherit;
+}
 .graphActions button {
   border: none;
   background: transparent;
@@ -202,6 +214,8 @@
 }
 .wire {
   fill: none;
+  stroke-linejoin: round;
+  stroke-linecap: round;
   stroke: currentColor;
   stroke-width: 2.2;
   opacity: 0.58;

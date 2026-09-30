@@ -636,7 +636,7 @@ function midpoint(a: Vec2, b: Vec2): Vec2 {
  * given rather than as a subdivision of themselves, so a flattened route still
  * passes through the coordinates the layout chose.
  */
-function flattenCubic(
+export function flattenCubic(
   out: Vec2[],
   p0: Vec2,
   p1: Vec2,

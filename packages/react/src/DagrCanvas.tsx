@@ -73,9 +73,10 @@ import type { Graph } from '@prnt/dagr-graph';
 import type { LayoutConfig, LayoutDelta, LayoutResult } from '@prnt/dagr-layout';
 import {
   createNodeGroupLayer, nodeGroupBounds, createHtmlOverlay,
-  createMotionLoop, createRenderer, createSceneMotion, fitZoom,
+  createMotionLoop, createRenderer, createSceneMotion, fitZoom, shapeEdgePath,
 } from '@prnt/dagr-render';
 import type {
+  EdgePathOptions,
   FrameScheduler,
   HtmlOverlay,
   MotionLoop,
@@ -157,6 +158,9 @@ export interface DagrCanvasProps {
 
   /** How the edge ribbons are drawn. Read once, at construction. */
   readonly edgeStyle?: RibbonStyle | undefined;
+
+  /** Visual route shaping, updated live and applied after animation. Default polyline. */
+  readonly edgePath?: EdgePathOptions | undefined;
 
   /**
    * Whether an edit glides to its new layout instead of cutting to it, and how
@@ -439,6 +443,12 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
   const sceneEdgesRef = useRef<SceneEdge[] | null>(sceneEdges);
   sceneEdgesRef.current = sceneEdges;
 
+  const shapeEdges = useCallback((edges: readonly SceneEdge[]): readonly SceneEdge[] => {
+    const options = latest.current.edgePath;
+    if (!options) return edges;
+    return edges.map((edge) => ({ ...edge, points: shapeEdgePath(edge.points, options) }));
+  }, []);
+
   /** The drawing as the layout has it, which is what a reseat is measured from. */
   const rosterNow = useCallback(
     () => toMotionRoster(sceneNodesRef.current ?? [], sceneEdgesRef.current ?? [], boundsRef.current),
@@ -553,7 +563,7 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
         if (latest.current.groups?.length) current.groups.setNodes(drawn);
         current.renderer.setEdges(
           DEFAULT_EDGE_GROUP_ID,
-          dressEdges(frame.edges, dressedEdgesRef.current),
+          shapeEdges(dressEdges(frame.edges, dressedEdgesRef.current)),
         );
         // Before the draw, so a camera the caller moves from the sprung box
         // moves on this frame rather than on the next one.
@@ -592,7 +602,7 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
         return true;
       }
     },
-    [syncCameraLimits],
+    [syncCameraLimits, shapeEdges],
   );
 
   const fitOnce = useCallback((): void => {
@@ -763,10 +773,10 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
 
   useEffect(() => {
     if (stage === null || sceneEdges === null) return;
-    if (motionRef.current !== null) return;
-    stage.renderer.setEdges(DEFAULT_EDGE_GROUP_ID, sceneEdges);
+    if (motionRef.current !== null) { loopRef.current?.wake(); return; }
+    stage.renderer.setEdges(DEFAULT_EDGE_GROUP_ID, shapeEdges(sceneEdges));
     requestDraw();
-  }, [stage, sceneEdges, requestDraw]);
+  }, [stage, sceneEdges, props.edgePath, requestDraw, shapeEdges]);
 
   /**
    * The springs and the loop, built together and torn down together.
@@ -811,11 +821,11 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
         if (latest.current.groups?.length) current.groups.setNodes(sceneNodesRef.current);
       }
       if (sceneEdgesRef.current !== null) {
-        current.renderer.setEdges(DEFAULT_EDGE_GROUP_ID, sceneEdgesRef.current);
+        current.renderer.setEdges(DEFAULT_EDGE_GROUP_ID, shapeEdges(sceneEdgesRef.current));
       }
       requestDraw();
     };
-  }, [stage, animation, scheduler, rosterNow, runAnimationFrame, requestDraw]);
+  }, [stage, animation, scheduler, rosterNow, runAnimationFrame, requestDraw, shapeEdges]);
 
   /**
    * One commit, one retarget, one wake.

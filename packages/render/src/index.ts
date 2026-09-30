@@ -231,3 +231,6 @@ export type {
 } from './types.js';
 export { createNodeGroupLayer, nodeGroupBounds } from './node-groups.js';
 export type { NodeGroup, NodeGroupMember, NodeGroupLayer } from './node-groups.js';
+
+export { shapeEdgePath } from './edge-path.js';
+export type { EdgePathOptions } from './edge-path.js';

@@ -1,3 +1,5 @@
+import { shapeEdgePath } from '@prnt/dagr-render';
+import type { EdgePathOptions } from '@prnt/dagr-render';
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import Link from '@docusaurus/Link';
@@ -73,6 +75,8 @@ export default function SystemAtlas() {
   const system = useMemo(buildSystem, []);
   const [selected, setSelected] = useState('checkout');
   const [query, setQuery] = useState('');
+  const [edgePath, setEdgePath] = useState<EdgePathOptions['style']>('smooth');
+  const paths = useMemo(() => new Map([...system.routes].map(([id, points]) => [id, shapeEdgePath(points, { style: edgePath })])), [system, edgePath]);
   const [trace, setTrace] = useState(false);
   const [tab, setTab] = useState<'inspect' | 'language'>('inspect');
   const [proposal, setProposal] = useState('valid');
@@ -190,6 +194,14 @@ export default function SystemAtlas() {
                   </span>
                 ))}
               </div>
+              <label>
+                Edges{' '}
+                <select aria-label="Edge style" value={edgePath} onChange={(event) => setEdgePath(event.target.value as EdgePathOptions['style'])}>
+                  <option value="polyline">Routed</option>
+                  <option value="smooth">Curved</option>
+                  <option value="orthogonal">Orthogonal</option>
+                </select>
+              </label>
               <button
                 type="button"
                 aria-pressed={trace}
@@ -239,7 +251,7 @@ export default function SystemAtlas() {
                     ))}
                   </defs>
                   {wires.map((edge) => {
-                    const points = system.routes.get(edge.id)!;
+                    const points = paths.get(edge.id)!;
                     const active =
                       edge.source === selected || edge.target === selected;
                     return (
@@ -267,6 +279,7 @@ export default function SystemAtlas() {
                     <button
                       type="button"
                       key={n.id}
+                      data-graph-node={n.id}
                       data-kind={n.kind}
                       className={styles.node}
                       style={

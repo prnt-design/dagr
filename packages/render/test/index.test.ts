@@ -103,6 +103,7 @@ describe('@prnt/dagr-render', () => {
       'nodeGroupBounds',
       'omegaForHalfLife',
       'ribbonWidthAt',
+      'shapeEdgePath',
       'stepSpring',
       'stepSpring2D',
     ]);
