@@ -15,6 +15,15 @@ and connection validation without deciding what your nodes mean.
 [Explore the architecture](/) to see how the pieces fit, try an actual mutation
 in [Follow an edit](/demos/living), or start with the example below.
 
+## Install
+
+```sh
+npm install @prnt/dagr react@19 react-dom@19 three
+```
+
+Import `DagrCanvas` from `@prnt/dagr/react`. Individual `@prnt/dagr-*`
+packages are also available when you only need part of the stack.
+
 ## Run it locally
 
 To run the examples from source, use Node 20 or newer and pnpm:
@@ -88,5 +97,5 @@ GPU picking, editor selection/drag hooks, drag-to-connect, and subgraph editing
 remain planned. The homepage's architecture inspector is application UI, not
 an assertion that those editor APIs are complete.
 
-APIs may change before the first release. Check the
+Dagr is in the 0.x release series. Check the
 [roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md) for current work.

@@ -104,7 +104,7 @@ export default function Home() {
             </p>
             <Link to="/docs/">Get started →</Link>
             <p className={styles.status}>
-              Pre-release. Not yet on npm.{' '}
+              Available on npm as @prnt/dagr.{' '}
               <a href="https://github.com/prnt-design/dagr">
                 Explore the repository ↗
               </a>

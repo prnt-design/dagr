@@ -10,9 +10,9 @@ the decisions it took and the reasons, lives in
 reference elsewhere in the repo to "the roadmap's M4.6 entry" means the entry
 there. Milestone status is mirrored in the project brain.
 
-## Status (2026-09-29)
+## Status (2026-09-30)
 
-The initial npm release uses `@prnt/dagr-*`, with the
+The published npm packages use `@prnt/dagr-*`, with the
 `@prnt/dagr` umbrella, following maintainer authorization. v0.1 ships the currently documented graph, layout,
 renderer, React, and VDSL APIs. GPU picking and selection/drag hooks (M4.8b
 and M5.2) remain planned work after this initial release.
@@ -218,13 +218,13 @@ worth less than a slow path they can.
 - [x] **M5.4a** The tarball a consumer installs: `workspace:^` fixed (the
   publish command is `pnpm publish`), `src` shipped so source maps resolve,
   per-package README and LICENSE, `publint` + `arethetypeswrong` + a scratch
-  install as a standing gate in `packaging/`. Lockstep versioning at `0.1.0`,
+  install as a standing gate in `packaging/`. Lockstep versioning across the six public packages,
   no changesets.
-- [ ] **M5.4b** Docs: Docusaurus getting-started, API reference pages for all
-  packages, v0.1 readiness review, publish queued for the maintainer. At
-  publish time, confirm the `@prnt/dagr-graph` peer range against the versions
-  actually shipping.
-  The pre-publish `onLayout` continuity change is implemented: a fourth
+- [x] **M5.4b** Docs: Docusaurus getting-started, API reference pages for all
+  packages, v0.1 readiness review, and all six packages published to npm.
+  Registry checksums, dependency ranges, and a fresh external consumer were
+  verified after publication.
+  The `onLayout` continuity change is implemented: a fourth
   `continues` argument tells consumers whether the delta is relative to the
   last successful committed layout, with or without animation. Tests cover
   cold runs, skipped intermediate layouts, graph changes, and failed layouts.
