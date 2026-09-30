@@ -1,6 +1,6 @@
 {
   "name": "@prnt/dagr-vdsl",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Toolkit for building a node-graph language on Dagr: the node spec adapter and its registry.",
   "license": "MIT",
   "type": "module",

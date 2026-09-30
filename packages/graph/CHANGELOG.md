@@ -9,6 +9,10 @@ and M5.4's pre-publish checklist is where a changelog tool gets picked. Starting
 the file now is what stops the v0.1 notes from having to be reconstructed by
 diffing five milestones of doc prose.
 
+## 0.1.2
+
+- Lockstep release with edge path styles. No runtime API changes in this package.
+
 ## 0.1.1
 
 - Lockstep 0.1.1 release with the camera-limit update. No runtime API changes in this package.
