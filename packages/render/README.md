@@ -170,3 +170,13 @@ numeric zoom range. Explicit numeric limits can further restrict content zoom;
 when their ranges do not overlap, the larger minimum wins.
 
 `DagrCanvas` supplies these bounds and real node sizes automatically.
+
+### Edge paths
+
+`shapeEdgePath(points, { style: 'smooth' })` returns sampled points for curved
+edges. Use `style: 'orthogonal'` for axis-aligned doglegs, or the default
+`polyline` for routed segments. `direction` defaults to `horizontal` and also
+accepts `vertical`; smoothing `tolerance` defaults to 0.5 world units.
+Endpoints and route anchors are preserved. This shapes presentation, without
+obstacle avoidance. Pass the result to SVG paths or renderer edges using
+`curve: 'polyline'` so they are not smoothed twice.

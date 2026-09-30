@@ -113,3 +113,11 @@ animated bounds without resetting a valid close-up.
 `fit={false}` only skips the initial fit. Use `cameraLimits={false}` to opt out
 of content constraints when implementing a custom camera policy. Low-level
 `Camera2D` instances remain unrestricted until `setContentBounds` is called.
+
+### Edge paths
+
+Set `edgePath={{ style: 'smooth' }}` or
+`edgePath={{ style: 'orthogonal', direction: 'vertical' }}` on `DagrCanvas`.
+The default `polyline` preserves routed segments. Options update live, including
+during animation. These visual styles preserve route anchors but do not avoid
+obstacles; see the [React guide](https://dagr.prnt.design/docs/react#edge-path-styles).

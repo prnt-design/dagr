@@ -9,6 +9,10 @@ which unit a number is in. A caller upgrading past one of those sees a drawing
 in a different place, and no compiler tells them. "Behaviour changed, types did
 not" is the category this file has a heading for.
 
+## Unreleased
+
+- Add `shapeEdgePath` for routed, smooth, and orthogonal edge presentation, with shared SVG and renderer geometry.
+
 ## 0.1.1
 
 - Add content-aware pan and zoom limits: fit the graph at minimum zoom, fit a node at maximum zoom, and keep navigation inside padded bounds. Limits follow resize and content changes. Available through `Camera2D.setContentBounds`.

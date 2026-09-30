@@ -41,7 +41,8 @@ export function useGraphCamera(
     let target = { ...current };
     let frame = 0;
     let lastTime = 0;
-    let drag: { id: number; x: number; y: number } | undefined;
+    let drag: { id: number; x: number; y: number; active: boolean } | undefined;
+    let suppressClick = false;
     const syncLimits = () => {
       if (viewportWidth <= 0 || viewportHeight <= 0) return;
       limiter.setViewport({ width: viewportWidth, height: viewportHeight, devicePixelRatio: 1 });
@@ -167,33 +168,50 @@ export function useGraphCamera(
       }
     };
     const down = (event: PointerEvent) => {
-      if (
-        event.button !== 0 ||
-        (event.target as Element).closest(
-          'button, [role="button"], a, input, select, textarea, [contenteditable]',
-        )
-      )
-        return;
-      viewport.focus({ preventScroll: true });
+      if (drag || event.button !== 0 || event.isPrimary === false) return;
+      suppressClick = false;
+      const control = (event.target as Element).closest(
+        'button, [role="button"], a, input, select, textarea, [contenteditable]',
+      );
+      if (control && !control.hasAttribute('data-graph-node')) return;
       cancelAnimationFrame(frame);
       frame = 0;
       current = constrain(current);
       target = { ...current };
-      drag = { id: event.pointerId, x: event.clientX, y: event.clientY };
-      viewport.setPointerCapture(event.pointerId);
-      viewport.dataset.dragging = 'true';
+      drag = { id: event.pointerId, x: event.clientX, y: event.clientY, active: false };
+      // Capture only after a drag begins, so a click still targets its node.
     };
     const move = (event: PointerEvent) => {
       if (!drag || drag.id !== event.pointerId) return;
+      if (!drag.active) {
+        if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 5) return;
+        drag.active = true;
+        suppressClick = true;
+        viewport.focus({ preventScroll: true });
+        viewport.setPointerCapture(event.pointerId);
+        viewport.dataset.dragging = 'true';
+      }
       target.x += event.clientX - drag.x;
       target.y += event.clientY - drag.y;
       drag.x = event.clientX;
       drag.y = event.clientY;
       animate();
     };
-    const up = () => {
+    const up = (event?: PointerEvent) => {
+      if (!drag || (event && event.pointerId !== drag.id)) return;
+      const id = drag.id;
       drag = undefined;
       delete viewport.dataset.dragging;
+      if (viewport.hasPointerCapture(id)) viewport.releasePointerCapture(id);
+    };
+    const lostCapture = (event: PointerEvent) => {
+      // Touch capture transfers from the pressed node to the viewport.
+      if (event.target === viewport) up(event);
+    };
+    const click = (event: MouseEvent) => {
+      if (!suppressClick || event.detail === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
     };
     const key = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -272,10 +290,12 @@ export function useGraphCamera(
     draw();
     viewport.addEventListener('wheel', wheel, { passive: false });
     viewport.addEventListener('pointerdown', down);
-    viewport.addEventListener('pointermove', move);
-    viewport.addEventListener('pointerup', up);
-    viewport.addEventListener('pointercancel', up);
-    viewport.addEventListener('lostpointercapture', up);
+    window.addEventListener('pointermove', move);
+    viewport.addEventListener('click', click, true);
+    viewport.addEventListener('dblclick', click, true);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    viewport.addEventListener('lostpointercapture', lostCapture);
     viewport.addEventListener('keydown', key);
     viewport.addEventListener('focusin', reveal);
     return () => {
@@ -283,10 +303,12 @@ export function useGraphCamera(
       observer.disconnect();
       viewport.removeEventListener('wheel', wheel);
       viewport.removeEventListener('pointerdown', down);
-      viewport.removeEventListener('pointermove', move);
-      viewport.removeEventListener('pointerup', up);
-      viewport.removeEventListener('pointercancel', up);
-      viewport.removeEventListener('lostpointercapture', up);
+      window.removeEventListener('pointermove', move);
+      viewport.removeEventListener('click', click, true);
+      viewport.removeEventListener('dblclick', click, true);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      viewport.removeEventListener('lostpointercapture', lostCapture);
       viewport.removeEventListener('keydown', key);
       viewport.removeEventListener('focusin', reveal);
       controls.current = { zoom: () => {}, reset: () => {}, refresh: () => {}, focus: () => {} };
