@@ -1,6 +1,5 @@
 import Link from '@docusaurus/Link';
-import ChessAtlas from '@site/src/components/ChessAtlas';
-import ArchitectureExplorer from '@site/src/components/ArchitectureExplorer';
+import SystemAtlas from '@site/src/components/SystemAtlas';
 import LiveLayout from '@site/src/components/LiveLayout';
 import CodeBlock from '@theme/CodeBlock';
 import Layout from '@theme/Layout';
@@ -40,8 +39,8 @@ export default function Home() {
             <div className={styles.context}>
               <p>
                 Graph layout, GPU rendering, and the building blocks for visual
-                languages. Follow branching chess openings, then explore the
-                engine that gives the graph its structure.
+                languages. Explore a complete system, from its architecture
+                to the typed contracts inside every node.
               </p>
               <p className={styles.byline}>
                 By <a href="https://niiyeboah.com">Nii Yeboah</a>, engineer and
@@ -51,8 +50,7 @@ export default function Home() {
             </div>
           </div>
         </header>
-        <ChessAtlas />
-        <ArchitectureExplorer />
+        <SystemAtlas />
         <section className={styles.story} aria-labelledby="meaning-title">
           <p className={styles.eyebrow}>THE GRAPH IS THE MEDIUM</p>
           <div className={styles.storyBody}>

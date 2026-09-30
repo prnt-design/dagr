@@ -10,7 +10,8 @@
     "serve": "docusaurus serve",
     "clear": "docusaurus clear",
     "typecheck": "tsc --noEmit",
-    "generate:hero": "node scripts/generate-hero-graph.mjs"
+    "generate:hero": "node scripts/generate-hero-graph.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@dagr/campaign": "workspace:*",
@@ -28,12 +29,14 @@
     "prism-react-renderer": "^2.4.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "three": "^0.185.1"
+    "three": "^0.185.1",
+    "@dagr/vdsl": "workspace:*"
   },
   "devDependencies": {
     "@docusaurus/module-type-aliases": "3.10.2",
     "@docusaurus/tsconfig": "3.10.2",
-    "@docusaurus/types": "3.10.2"
+    "@docusaurus/types": "3.10.2",
+    "vitest": "^4.1.10"
   },
   "browserslist": {
     "production": [
