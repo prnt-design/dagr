@@ -9,6 +9,10 @@ which unit a number is in. A caller upgrading past one of those sees a drawing
 in a different place, and no compiler tells them. "Behaviour changed, types did
 not" is the category this file has a heading for.
 
+## Unreleased
+
+- Add labeled node-group boundaries with camera synchronization and explicit visual membership.
+
 ## 0.1.0
 
 ### Added

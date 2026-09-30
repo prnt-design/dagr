@@ -37,6 +37,7 @@
  */
 
 import { vi } from 'vitest';
+import { Camera2D } from '../../render/src/camera.js';
 import type { Mock } from 'vitest';
 import type {
   HtmlOverlay,
@@ -47,8 +48,8 @@ import type {
   RendererOptions,
 } from '@prnt/dagr-render';
 
-/** The camera calls `DagrCanvas` makes. Not a `Camera2D`: that class is nominal. */
-export interface FakeCamera {
+/** Real projection for annotation tests, with an observable camera-fit call. */
+export interface FakeCamera extends Pick<Camera2D, 'worldToScreen' | 'viewport' | 'zoom'> {
   readonly fitBounds: Mock<(bounds: unknown, padding?: number) => void>;
 }
 
@@ -127,7 +128,10 @@ export function lastOverlay(): FakeOverlay {
 
 export function createRenderer(options: RendererOptions): Promise<Renderer> {
   const fake: FakeRenderer = {
-    camera: { fitBounds: vi.fn() },
+    camera: Object.assign(
+      new Camera2D({ viewport: { width: 800, height: 600, devicePixelRatio: 1 } }),
+      { fitBounds: vi.fn() },
+    ),
     setNodes: vi.fn(),
     setEdges: vi.fn(),
     resize: vi.fn(),

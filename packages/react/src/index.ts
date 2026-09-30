@@ -93,6 +93,7 @@ export type { DagrLayoutState, UseDagrOptions } from './use-dagr.js';
  */
 export type {
   HtmlOverlay,
+  NodeGroup,
   Renderer,
   RibbonStyle,
   SceneEdge,
