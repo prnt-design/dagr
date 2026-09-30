@@ -10,7 +10,8 @@ Dagr exists to draw graphs that change. The reason that is worth engineering is
 that a large class of tools are, underneath, a node graph someone edits: shader
 and texture networks, compositing trees, audio and signal chains, data
 pipelines, build and workflow orchestration, parametric geometry. `@prnt/dagr-vdsl`
-(planned for v0.2) is the toolkit layer for building one of those.
+is the toolkit layer for building one of those. Its node specifications,
+registry, and connection validation are included in v0.1.
 
 This page is the design brief for that layer, published early because it
 explains choices already visible in `@prnt/dagr-graph` and `@prnt/dagr-layout`.
@@ -78,11 +79,11 @@ renderer draw a nested group. See the [graph model](./graph-model.md).
 
 ## Status
 
-`@prnt/dagr-vdsl` is planned for v0.2 and has started: the [node spec
-toolkit](./vdsl.md) page covers the pieces that exist, which are the adapter
+`@prnt/dagr-vdsl` ships its core toolkit in v0.1. The [node spec
+toolkit](./vdsl.md) page covers the adapter
 interface and the registry that resolves a node to a spec (M6.1), and port
 type tokens with connection validation (M6.2). Drag-to-connect and subgraph
-nodes are M6.3 to M6.6 and are not built.
+nodes are planned for v0.2 (M6.3 to M6.6) and are not built.
 
 `@prnt/dagr-graph` and `@prnt/dagr-layout` are usable today: you can model and lay out a
 node graph on them now, and hit-testing, selection and drag-to-connect are

@@ -234,7 +234,7 @@ worth less than a slow path they can.
   `update-node-parent`, the invariants, `PatchOp` documented as an open
   union. Layout ignores `parent` until M7.
 
-## M6: VDSL = v0.2 (`@prnt/dagr-vdsl`)
+## M6: VDSL core in v0.1, interactions planned for v0.2 (`@prnt/dagr-vdsl`)
 
 A toolkit for building a node-graph language, not a node-graph language. It
 defines no ontology: no built-in node kinds, no config schema of Dagr's
