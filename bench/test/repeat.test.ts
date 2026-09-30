@@ -77,8 +77,8 @@ describe('reading one run', () => {
     // once instead of "the same entries failed every run" twice.
     const report = gate({
       ok: false,
-      errors: ['@dagr/layout produced no benchmarks at all'],
-      results: [result('@dagr/layout > f > g > a', 'missing')],
+      errors: ['@prnt/dagr-layout produced no benchmarks at all'],
+      results: [result('@prnt/dagr-layout > f > g > a', 'missing')],
     });
     expect(summarise(report, []).outcome).toBe('error');
   });

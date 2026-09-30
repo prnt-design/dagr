@@ -7,7 +7,7 @@ import {
   isDagrVdslError,
 } from '../src/errors.js';
 
-describe('@dagr/vdsl errors', () => {
+describe('@prnt/dagr-vdsl errors', () => {
   it('gives every error a code and the family a catch base', () => {
     const errors: DagrVdslError[] = [
       new InvalidSpecError('filter', 'port id must not be empty'),

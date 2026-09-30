@@ -1,5 +1,5 @@
-import { Graph } from '@dagr/graph';
-import type { NodeId, Patch } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
+import type { NodeId, Patch } from '@prnt/dagr-graph';
 import { describe, expect, it } from 'vitest';
 import { resolveConfig } from '../src/config.js';
 import { InvalidConfigError, createLayout, influenceRegion, stabilityViolations } from '../src/index.js';

@@ -3,7 +3,7 @@ import { requireFinite, requireFinitePoint, requirePositive } from './validate.j
 
 /**
  * The 2D camera every Dagr view is drawn through, and the only part of
- * `@dagr/render` that a unit test can reach: everything else in the package
+ * `@prnt/dagr-render` that a unit test can reach: everything else in the package
  * needs a GPU adapter, so this file carries the package's whole verified
  * contract. See `test/camera.test.ts`, where every sentence below that makes a
  * numerical claim is executed.
@@ -125,7 +125,7 @@ export interface Camera2DInit {
  * the sign again. Every one of the four has a test that would fail if its sign
  * flipped alone.
  *
- * Note that `@dagr/layout` computes in y-down coordinates. Converting between
+ * Note that `@prnt/dagr-layout` computes in y-down coordinates. Converting between
  * the two is the business of whatever feeds a layout result to a scene (M4.4),
  * not of this camera, which has one convention and states it. That package's
  * `Rect` is why {@link visibleWorldBounds} returns extents rather than a corner

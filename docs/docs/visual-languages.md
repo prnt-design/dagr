@@ -9,11 +9,11 @@ sidebar_position: 5
 Dagr exists to draw graphs that change. The reason that is worth engineering is
 that a large class of tools are, underneath, a node graph someone edits: shader
 and texture networks, compositing trees, audio and signal chains, data
-pipelines, build and workflow orchestration, parametric geometry. `@dagr/vdsl`
+pipelines, build and workflow orchestration, parametric geometry. `@prnt/dagr-vdsl`
 (planned for v0.2) is the toolkit layer for building one of those.
 
 This page is the design brief for that layer, published early because it
-explains choices already visible in `@dagr/graph` and `@dagr/layout`.
+explains choices already visible in `@prnt/dagr-graph` and `@prnt/dagr-layout`.
 
 ## The domain where node graphs actually win
 
@@ -42,7 +42,7 @@ graph does.
 
 Dagr will not ship an ontology. There is no built-in `Source` or `Transform`,
 no config schema format of Dagr's invention, and no opinion about what
-categories your nodes fall into. `@dagr/vdsl` takes an adapter describing your
+categories your nodes fall into. `@prnt/dagr-vdsl` takes an adapter describing your
 node kinds and validates against it.
 
 This is a deliberate reversal of the obvious design. An ontology is the part
@@ -78,13 +78,13 @@ renderer draw a nested group. See the [graph model](./graph-model.md).
 
 ## Status
 
-`@dagr/vdsl` is planned for v0.2 and has started: the [node spec
+`@prnt/dagr-vdsl` is planned for v0.2 and has started: the [node spec
 toolkit](./vdsl.md) page covers the pieces that exist, which are the adapter
 interface and the registry that resolves a node to a spec (M6.1), and port
 type tokens with connection validation (M6.2). Drag-to-connect and subgraph
 nodes are M6.3 to M6.6 and are not built.
 
-`@dagr/graph` and `@dagr/layout` are usable today: you can model and lay out a
+`@prnt/dagr-graph` and `@prnt/dagr-layout` are usable today: you can model and lay out a
 node graph on them now, and hit-testing, selection and drag-to-connect are
 yours to write until M4.8, M5.2 and M6.3 land. The toolkit will be convenience
 over those, not a separate engine.

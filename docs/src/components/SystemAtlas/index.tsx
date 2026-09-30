@@ -469,7 +469,7 @@ export default function SystemAtlas() {
                     <h3>The diagram has rules.</h3>
                     <p>
                       Seven node kinds declare typed ports. Every connection in
-                      this graph passes the actual <code>@dagr/vdsl</code>{' '}
+                      this graph passes the actual <code>@prnt/dagr-vdsl</code>{' '}
                       registry before layout.
                     </p>
                     <pre

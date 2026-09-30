@@ -87,7 +87,7 @@ const daybreakDark: PrismTheme = {
  * of them are invisible until the worker's first line throws
  * `__webpack_require__ is not defined`. The symptom is worse than the error: a
  * worker that dies never answers, a run that is never answered never settles by
- * design (see `runAsync` in @dagr/layout), and the demo sits saying it is
+ * design (see `runAsync` in @prnt/dagr-layout), and the demo sits saying it is
  * laying out, forever.
  *
  * `runtimeChunk: true` lifts each entrypoint's runtime into a file of its own,

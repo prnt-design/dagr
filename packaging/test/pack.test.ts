@@ -1,5 +1,5 @@
 /**
- * The five published packages, packed and read back.
+ * The six published packages, packed and read back.
  *
  * This is the only check in the gate that resolves a package the way a
  * consumer does. `pnpm typecheck` reads siblings through tsconfig `paths`,
@@ -33,7 +33,7 @@ beforeAll(() => {
   const result = packPublishedPackages();
   packed = result.packages;
   dispose = result.dispose;
-  // A tsc run for five packages, five packs and five extractions. Explicit
+  // A tsc run for six packages, six packs and six extractions. Explicit
   // rather than left to the default, because a default vitest timeout is not
   // a constant on a shared box (M4.8a).
 }, 300_000);
@@ -52,16 +52,17 @@ function each(): PackedPackage[] {
 describe('the tarball a consumer installs', () => {
   it('packs one tarball per published package', () => {
     expect(each().map((p) => p.name).sort()).toEqual([
-      '@dagr/graph',
-      '@dagr/layout',
-      '@dagr/react',
-      '@dagr/render',
-      '@dagr/vdsl',
+      '@prnt/dagr-graph',
+      '@prnt/dagr-layout',
+      '@prnt/dagr-react',
+      '@prnt/dagr-render',
+      '@prnt/dagr-vdsl',
+      'dagr',
     ]);
   });
 
   it('resolves every dependency range a consumer install reads', () => {
-    // @dagr/layout, @dagr/react and @dagr/vdsl each declare @dagr/graph with
+    // @prnt/dagr-layout, @prnt/dagr-react and @prnt/dagr-vdsl each declare @prnt/dagr-graph with
     // pnpm's workspace protocol. This passing is what makes `pnpm publish`
     // the command: `npm pack` on the same tree leaves the protocol string in
     // and each of these would ship a range resolving to nothing.
@@ -93,7 +94,7 @@ describe('the tarball a consumer installs', () => {
   });
 
   it('ships a LICENSE with the same text the repo licences under', () => {
-    // Against the repo's own LICENSE and not merely against each other: five
+    // Against the repo's own LICENSE and not merely against each other: six
     // identical copies that have all drifted from the root would satisfy a
     // pairwise check and still be the repo asserting a licence it did not
     // ship. This is the only assertion here that reads a file outside the

@@ -1,9 +1,9 @@
 /**
- * Which backend `@dagr/render` comes up on in a real browser, and whether the
+ * Which backend `@prnt/dagr-render` comes up on in a real browser, and whether the
  * TSL shape graphs draw once it is there.
  *
  * **This is M4.9a's device half, and it is the first thing in this repository
- * that checks a `@dagr/render` pixel rather than the arithmetic behind one.**
+ * that checks a `@prnt/dagr-render` pixel rather than the arithmetic behind one.**
  * `packages/render/src/webgpu-renderer.ts` carries a list of things it calls
  * UNVERIFIED, headed by "that any shape appears at all" and "that the shader
  * computes anything", because a TSL graph built in Node never reaches a
@@ -19,7 +19,7 @@
  * it, which is the rule `card-heights.mjs` learned the hard way.
  *
  * ```
- * pnpm --filter @dagr/render build      # the page imports from dist
+ * pnpm --filter @prnt/dagr-render build      # the page imports from dist
  * npm --prefix bench/browser install --no-save playwright-core
  * python3 -m http.server 8733           # from the REPO ROOT
  * node bench/browser/backend-probe.mjs
@@ -46,7 +46,7 @@ const LAUNCH_ARGS = ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe
 /**
  * The page's import map, filled in from this process's own module resolution.
  *
- * The two specifiers `@dagr/render`'s dist actually imports are `three/webgpu`
+ * The two specifiers `@prnt/dagr-render`'s dist actually imports are `three/webgpu`
  * and `three/tsl`, resolved against the package that declares three as a peer
  * dependency so the copy the page loads is the copy the package was built
  * against. Written this way rather than committed as literal paths because a

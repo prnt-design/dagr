@@ -1,4 +1,4 @@
-import type { Edge, EdgeId, Graph, NodeId } from '@dagr/graph';
+import type { Edge, EdgeId, Graph, NodeId } from '@prnt/dagr-graph';
 import { InternalLayoutError } from './errors.js';
 
 /**
@@ -410,7 +410,7 @@ function atFloat(values: Float64Array, index: number): number {
  * ## Determinism
  *
  * Same graph, same set, always. Vertices are numbered by `graph.nodes()` and
- * arcs are walked in `graph.edges()` order, both of which `@dagr/graph`
+ * arcs are walked in `graph.edges()` order, both of which `@prnt/dagr-graph`
  * guarantees to be insertion order, and every intermediate structure here is an
  * array whose contents are placed in one of those two orders. The solve is
  * floating point but it is not therefore unpredictable: every operation is an

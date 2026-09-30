@@ -7,8 +7,8 @@ import {
   createRenderer,
   createRichNodes,
   ribbonWidthAt,
-} from '@dagr/render';
-import type { Renderer, SceneEdge, Vec2, ViewportSize, WorldBounds } from '@dagr/render';
+} from '@prnt/dagr-render';
+import type { Renderer, SceneEdge, Vec2, ViewportSize, WorldBounds } from '@prnt/dagr-render';
 import {
   FIT,
   FIT_PADDING,
@@ -47,12 +47,12 @@ import { edgeIntensity, edgeNeighbourhoods } from './edge-highlight.js';
 import type { Campaign, CampaignNode } from '@dagr/campaign';
 
 /**
- * `@dagr/render` on a canvas, with pan and zoom wired to a real
+ * `@prnt/dagr-render` on a canvas, with pan and zoom wired to a real
  * {@link Camera2D}.
  *
  * **The scene is the campaign, as of M4.4.** Three thousand nodes of a mock D&D
  * campaign, cut into about a hundred tiles, laid out one tile at a time by
- * `@dagr/layout` in a worker, shelf-packed into a roughly 16:9 canvas and drawn
+ * `@prnt/dagr-layout` in a worker, shelf-packed into a roughly 16:9 canvas and drawn
  * instanced. `campaign-scene.ts` does all of that and hands back a list this
  * component passes straight to `Renderer.setNodes`.
  *
@@ -69,12 +69,12 @@ import type { Campaign, CampaignNode } from '@dagr/campaign';
  * {@link CampaignScene.nodeBounds} is.
  *
  * There is no test file for this component, and that is the same decision
- * `@dagr/render` documents for its own renderer rather than a gap. Everything
+ * `@prnt/dagr-render` documents for its own renderer rather than a gap. Everything
  * here needs a GPU adapter, a laid-out canvas, a worker and live input events;
  * a jsdom suite could only assert that a mock was called, which would pass just
  * as happily if nothing were ever drawn. The arithmetic that CAN be checked
  * lives in `camera-input.ts`, `tiles.ts` and `campaign-style.ts`, the overlay's
- * own wiring is tested in `@dagr/render`, and what is left is wiring, verified
+ * own wiring is tested in `@prnt/dagr-render`, and what is left is wiring, verified
  * by a committed screenshot.
  *
  * The name is M4.1's and outlives its accuracy on purpose: renaming a file
@@ -1289,7 +1289,7 @@ export function FirstLight({
           <p className="stage__failure-title">No renderer</p>
           <p className="stage__failure-message">{failure}</p>
           <p className="stage__failure-hint">
-            <code>@dagr/render</code> needs WebGPU, or WebGL2 for three.js to fall back to. A blank
+            <code>@prnt/dagr-render</code> needs WebGPU, or WebGL2 for three.js to fall back to. A blank
             canvas would have told you nothing, so here is what the adapter said.
           </p>
         </div>

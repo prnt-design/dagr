@@ -1,5 +1,5 @@
 {
-  "name": "@dagr/vdsl",
+  "name": "@prnt/dagr-vdsl",
   "version": "0.1.0",
   "description": "Toolkit for building a node-graph language on Dagr: the node spec adapter and its registry.",
   "license": "MIT",
@@ -26,10 +26,10 @@
   },
   "sideEffects": false,
   "peerDependencies": {
-    "@dagr/graph": "workspace:^"
+    "@prnt/dagr-graph": "workspace:^"
   },
   "devDependencies": {
-    "@dagr/graph": "workspace:^"
+    "@prnt/dagr-graph": "workspace:^"
   },
   "repository": {
     "type": "git",

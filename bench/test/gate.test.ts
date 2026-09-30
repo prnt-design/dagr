@@ -174,20 +174,20 @@ describe('the no-op guards', () => {
     // instead of reproducing it twice and reporting the same entries both
     // times, which is its strongest evidence for a REAL regression.
     const report = compareReports(
-      baseline({ '@dagr/graph > f > g > a': stat(4), '@dagr/layout > f > g > b': stat(4) }),
-      current({ '@dagr/graph > f > g > a': stat(4) }),
+      baseline({ '@prnt/dagr-graph > f > g > a': stat(4), '@prnt/dagr-layout > f > g > b': stat(4) }),
+      current({ '@prnt/dagr-graph > f > g > a': stat(4) }),
     );
-    expect(statusOf(report, '@dagr/layout > f > g > b')).toBe('missing');
-    expect(report.errors.join(' ')).toMatch(/@dagr\/layout produced no benchmarks/i);
+    expect(statusOf(report, '@prnt/dagr-layout > f > g > b')).toBe('missing');
+    expect(report.errors.join(' ')).toMatch(/@prnt\/dagr-layout produced no benchmarks/i);
     expect(report.ok).toBe(false);
   });
 
   it('does not call one missing entry a vanished package', () => {
     const report = compareReports(
-      baseline({ '@dagr/graph > f > g > a': stat(4), '@dagr/graph > f > g > b': stat(4) }),
-      current({ '@dagr/graph > f > g > a': stat(4) }),
+      baseline({ '@prnt/dagr-graph > f > g > a': stat(4), '@prnt/dagr-graph > f > g > b': stat(4) }),
+      current({ '@prnt/dagr-graph > f > g > a': stat(4) }),
     );
-    expect(statusOf(report, '@dagr/graph > f > g > b')).toBe('missing');
+    expect(statusOf(report, '@prnt/dagr-graph > f > g > b')).toBe('missing');
     expect(report.errors).toEqual([]);
   });
 

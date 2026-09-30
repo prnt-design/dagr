@@ -1,4 +1,4 @@
-import type { NodeId } from '@dagr/graph';
+import type { NodeId } from '@prnt/dagr-graph';
 import { acyclicView, longestPathRanks, warmLongestPathRanks } from './acyclic.js';
 import { authored } from './authorship.js';
 import { splitLongEdges } from './chains.js';

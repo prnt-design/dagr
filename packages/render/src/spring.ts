@@ -72,14 +72,14 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * `w * dt` takes the finite-state limit directly.
  *
  * **This module depends on nothing in this package that a device could break.**
- * The M4.6 entry asked for no dependency on anything else in `@dagr/render`, so
- * that splitting it into its own package stays cheap if `@dagr/react` ever
+ * The M4.6 entry asked for no dependency on anything else in `@prnt/dagr-render`, so
+ * that splitting it into its own package stays cheap if `@prnt/dagr-react` ever
  * wants it for interaction animation with no graph in it. It has two, both
  * deliberate: the `Vec2` TYPE, which is two numbers and would be redeclared by
  * any package that took this on, and `validate.ts`, whose own docstring already
  * refused a third copy of these checks once. Neither is three.js and neither is
  * a scene, so the split cost is a file that would travel unchanged rather than
- * code that would have to be rewritten. Keeping the module in `@dagr/render`
+ * code that would have to be rewritten. Keeping the module in `@prnt/dagr-render`
  * and exporting it is the third option that entry named, and it is now the
  * second time this package has taken it: `html-overlay.ts` is the first.
  */

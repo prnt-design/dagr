@@ -477,7 +477,7 @@ describe('tessellateRibbons: joins', () => {
 
 describe('tessellateRibbons: routes that cannot be drawn', () => {
   it('gives a self loop an empty range rather than a NaN', () => {
-    // `polylineRouteStage` in `@dagr/layout` documents a self loop as two
+    // `polylineRouteStage` in `@prnt/dagr-layout` documents a self loop as two
     // identical points at one node's centre, so this is the shortest route the
     // campaign contains and it has no direction at all.
     const geometry = ribbonOf([

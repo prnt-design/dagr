@@ -2,7 +2,7 @@
  * The campaign's overlay tiers.
  *
  * Two elements per node, and the split is the whole trick. `.campaign-node` is
- * what `@dagr/render`'s overlay positions and sizes: it IS the node's world
+ * what `@prnt/dagr-render`'s overlay positions and sizes: it IS the node's world
  * box, so it scales with the zoom and there is nothing to set here beyond
  * where its content hangs. The inner element counter-scales through
  * `--dagr-overlay-inv-zoom`, which the overlay publishes on its layer whenever

@@ -10,7 +10,7 @@ import { CAMPAIGN_SPACING, isRouted } from '../src/tiles.js';
  *
  * **This runs the real layout, on this thread.** `createLayout` without a bound
  * worker runs the pipeline synchronously and resolves, which is exactly the
- * fallback `@dagr/layout` documents, so a hundred Sugiyama passes over the real
+ * fallback `@prnt/dagr-layout` documents, so a hundred Sugiyama passes over the real
  * campaign are reachable from a bare Node suite. That is worth the couple of
  * seconds it costs: everything below is a property of the composition (the
  * packing, the offsets, the y flip) that no unit test of `tiles.ts` can see and
@@ -117,7 +117,7 @@ describe('the campaign scene', () => {
     // test rather than a comment: a route flipped differently from its endpoints
     // still STARTS AND ENDS near the right nodes, because the endpoints are on
     // the node boxes either way, and only bulges the wrong way in between. That
-    // reads as a routing bug and would be looked for in `@dagr/layout`.
+    // reads as a routing bug and would be looked for in `@prnt/dagr-layout`.
     //
     // So the assertion is on the whole polyline: every point of every route sits
     // inside the tile its edge belongs to. A y flip applied to the nodes and not
@@ -161,7 +161,7 @@ describe('the campaign scene', () => {
       const source = scene.nodeBounds.get(edge.source);
       const target = scene.nodeBounds.get(edge.target);
       if (source === undefined || target === undefined) throw new Error('unreachable');
-      // On the box, not at its centre: `@dagr/layout` attaches a route to the
+      // On the box, not at its centre: `@prnt/dagr-layout` attaches a route to the
       // border it leaves from as of M2.8.
       expect(first.x).toBeGreaterThanOrEqual(source.minX - 1e-6);
       expect(first.x).toBeLessThanOrEqual(source.maxX + 1e-6);

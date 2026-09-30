@@ -1,8 +1,8 @@
-import { serveLayout } from '@dagr/layout';
-import type { LayoutPort } from '@dagr/layout';
+import { serveLayout } from '@prnt/dagr-layout';
+import type { LayoutPort } from '@prnt/dagr-layout';
 
 /**
- * The worker end of `@dagr/layout`'s M2.10 protocol: one module whose whole job
+ * The worker end of `@prnt/dagr-layout`'s M2.10 protocol: one module whose whole job
  * is to answer layout runs.
  *
  * The campaign is cut into about a hundred tiles and each is a separate layout

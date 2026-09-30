@@ -6,15 +6,15 @@ sidebar_position: 6
 
 # React bindings
 
-`@dagr/react` is the package that joins the other three. A `Graph` goes in, a
+`@prnt/dagr-react` is the package that joins the other three. A `Graph` goes in, a
 canvas comes out, and the wiring in between (running the layout, converting it
 into a scene, building the renderer, keeping the overlay in step, taking it all
 back down on unmount) is the component rather than something every host writes
 again.
 
 ```tsx
-import { Graph } from '@dagr/graph';
-import { DagrCanvas, Html } from '@dagr/react';
+import { Graph } from '@prnt/dagr-graph';
+import { DagrCanvas, Html } from '@prnt/dagr-react';
 
 const graph = new Graph();
 graph.addNode({ id: 'plan' });
@@ -82,7 +82,7 @@ const { result, error, delta, from } = useDagr(graph);
 
 `delta` is a `LayoutDelta`: what appeared, what went away, what moved, and what
 the box around the lot became. It is what `<DagrCanvas animate>` animates from,
-and what a caller driving `@dagr/render` themselves wants. `from` is the drawing
+and what a caller driving `@prnt/dagr-render` themselves wants. `from` is the drawing
 that delta is a difference FROM, and it has a section of its own below.
 
 **`delta` is `null` on a cold run, and that is a statement rather than a missing
@@ -144,10 +144,34 @@ naming an id whose presence it disagrees about, which catches some of these, and
 a delta naming only ids it already holds applies cleanly and leaves the drawing
 wrong in silence. Creating a node and then labelling it, in one handler, is
 enough to produce one. `<DagrCanvas animate>` does this check for you, and
-`onLayout` hands you `from` for the same reason.
+`onLayout` supplies `from` and a fourth argument, `continues`, for the same reason.
 
 The other half of the answer is `graph.batch`: one patch, one layout, one delta,
 nothing to miss.
+
+## Read change counts safely
+
+`onLayout(result, delta, from, continues)` runs once per committed layout.
+`continues` is true when `from` matches the last successful layout committed by
+this canvas. It is false for initial/cold runs, after layout errors, and when
+React skipped intermediate layouts. It works with `animate` on or off; it does
+not report whether GPU drawing or a spring animation has finished.
+
+```tsx
+<DagrCanvas
+  graph={graph}
+  onLayout={(result, delta, _from, continues) => {
+    setNodeCount(result.nodes.size);
+    setMovedCount(continues && delta ? delta.nodes.moved.length : null);
+  }}
+/>
+```
+
+A `null` moved count means the last delta cannot describe the complete change
+since the prior commit. Batch related mutations with `graph.batch` to produce
+one layout per edit. Existing handlers taking fewer arguments still work.
+When driving a renderer yourself, compare `from` against the scene you actually
+hold; a canvas commit and your renderer's applied state may differ.
 
 ## The layout still runs during render, synchronously
 
@@ -212,13 +236,13 @@ drawing.
 
 ## The flip, and why it lives here
 
-`@dagr/render` refuses to name a `LayoutResult`. Naming one would make
-`@dagr/layout` a dependency of the renderer, and the y-down to y-up conversion
+`@prnt/dagr-render` refuses to name a `LayoutResult`. Naming one would make
+`@prnt/dagr-layout` a dependency of the renderer, and the y-down to y-up conversion
 belongs to whoever owns the layout. This package owns both, so the conversion
 is here, and it is exported rather than hidden:
 
 ```ts
-import { toSceneNodes, toSceneEdges, toWorldBounds } from '@dagr/react';
+import { toSceneNodes, toSceneEdges, toWorldBounds } from '@prnt/dagr-react';
 
 renderer.setNodes(toSceneNodes(result));
 renderer.setEdges('my-edges', toSceneEdges(result));
@@ -238,7 +262,7 @@ springs the node to the mirror of where it belongs and leaves it there. So
 in the same place for the same run, rather than against numbers written by hand.
 
 ```ts
-import { retarget, toMotionDelta, toMotionRoster } from '@dagr/react';
+import { retarget, toMotionDelta, toMotionRoster } from '@prnt/dagr-react';
 ```
 
 Appearance is a callback taking a node id:
@@ -293,7 +317,7 @@ The feel is the same prop:
 
 `halfLifeSeconds` is how long a spring takes to close half the remaining gap
 (default 0.12) and `restEpsilon` is how close, in world units, counts as arrived
-(default 0.05). Both are `@dagr/render`'s, one number each for the whole scene,
+(default 0.05). Both are `@prnt/dagr-render`'s, one number each for the whole scene,
 because one delta is one change and three arrival times would read as three. The
 object is compared by value, like `config`.
 
@@ -348,10 +372,10 @@ along with everything else, and writes the one line themselves:
 
 The types these props are spelled in are re-exported from this package, so a
 caller whose only contact with the renderer is `<DagrCanvas>` does not take a
-dependency on `@dagr/render` to write an annotation:
+dependency on `@prnt/dagr-render` to write an annotation:
 
 ```tsx
-import type { SceneMotionFrame, SceneMotionOptions, Renderer } from '@dagr/react';
+import type { SceneMotionFrame, SceneMotionOptions, Renderer } from '@prnt/dagr-react';
 
 const feel: SceneMotionOptions = { halfLifeSeconds: 0.3 };
 function follow(frame: SceneMotionFrame, renderer: Renderer): void {
@@ -360,8 +384,8 @@ function follow(frame: SceneMotionFrame, renderer: Renderer): void {
 ```
 
 They are the same types, re-exported rather than restated, so one can still be
-handed to `@dagr/render` directly. Anything that drives the renderer itself
-still imports from `@dagr/render`, which stays a peer dependency.
+handed to `@prnt/dagr-render` directly. Anything that drives the renderer itself
+still imports from `@prnt/dagr-render`, which stays a peer dependency.
 
 `onFrame` runs after the renderer has been told what to draw and before it
 draws, so a camera moved there moves on that frame rather than the next. The

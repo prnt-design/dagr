@@ -18,7 +18,7 @@
  * without reading anything.
  */
 
-import type { NodeAppearance, NodeAppearanceOf } from '@dagr/react';
+import type { NodeAppearance, NodeAppearanceOf } from '@prnt/dagr-react';
 import { STAGES } from './living-graph.js';
 import type { Stage } from './living-graph.js';
 

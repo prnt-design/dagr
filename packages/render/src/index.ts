@@ -1,5 +1,5 @@
 /**
- * `@dagr/render`: a WebGPU renderer for Dagr, built on three.js.
+ * `@prnt/dagr-render`: a WebGPU renderer for Dagr, built on three.js.
  *
  * M4.1 was first light: a camera, a way to get a renderer onto a canvas, and one
  * hard-coded quad to prove the pipeline works end to end. M4.2 replaced the quad
@@ -17,7 +17,7 @@
  * instead, so both also survive the shape change that replaces a handle.
  *
  * What `setNodes` deliberately does NOT take is a `LayoutResult`. Naming one
- * would make `@dagr/layout` a dependency of this package, and the y-down to
+ * would make `@prnt/dagr-layout` a dependency of this package, and the y-down to
  * y-up conversion belongs to whoever owns the layout, which `camera.ts` has said
  * since M4.1.
  *
@@ -74,7 +74,7 @@
  * here and touch no GPU at all.** {@link stepSpring} and
  * {@link stepSpring2D} are a critically damped integrator in closed form, and
  * they are exported rather than internal because motion is a feature a caller
- * drives: M4.7a runs them over `LayoutDelta`s, and `@dagr/react` in M5 wants
+ * drives: M4.7a runs them over `LayoutDelta`s, and `@prnt/dagr-react` in M5 wants
  * the same curve for interaction animation that has no graph in it at all. The
  * module imports nothing from this package but the `Vec2` type and the shared
  * validators, so the day a second consumer makes a package of it, the move is a
@@ -89,7 +89,7 @@
  * clock. Two things it deliberately does not take are a `LayoutResult` and a
  * `LayoutDelta`: {@link MotionTarget} is a world-space centre, so the y flip
  * stays with whoever owns the layout exactly as `setNodes` already requires,
- * and `@dagr/layout` stays out of this package's dependencies. The bounds
+ * and `@prnt/dagr-layout` stays out of this package's dependencies. The bounds
  * change and the loop that drives every one of these are M4.7c's, below.
  *
  * **M4.7b added the edge half, and it is one decision with a state machine

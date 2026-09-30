@@ -7,7 +7,7 @@
  * actually needs.
  */
 
-import type { EdgeId, Graph, NodeId, Patch } from '@dagr/graph';
+import type { EdgeId, Graph, NodeId, Patch } from '@prnt/dagr-graph';
 import { InvalidConfigError } from './errors.js';
 import type { LayoutResult, PreviousLayout, Size } from './types.js';
 

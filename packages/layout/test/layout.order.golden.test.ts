@@ -4,7 +4,7 @@ import { DEFAULT_LAYOUT_CONFIG } from '../src/config.js';
 import { barycenterOrder, countCrossings } from '../src/order.js';
 import { longestPathRankStage } from '../src/rank.js';
 import { buildCorpusGraph, goldenCorpus } from './golden-corpus.js';
-import type { Graph, NodeId } from '@dagr/graph';
+import type { Graph, NodeId } from '@prnt/dagr-graph';
 import type { CorpusEntry } from './golden-corpus.js';
 import type { RankedState, Size } from '../src/types.js';
 
@@ -44,7 +44,7 @@ import type { RankedState, Size } from '../src/types.js';
  *
  * HOW TO REGENERATE IT, and it is one command from the repo root:
  *
- *   UPDATE_GOLDEN=1 pnpm --filter @dagr/layout test layout.order.golden
+ *   UPDATE_GOLDEN=1 pnpm --filter @prnt/dagr-layout test layout.order.golden
  *
  * WHEN REGENERATING IS LEGITIMATE. When you deliberately changed what the
  * stage does and can say what moved and why: a different tie rule, a different
@@ -288,7 +288,7 @@ describe('barycenterOrder, the golden crossing-count corpus', () => {
   if (updating) {
     it('rewrites the golden file, because UPDATE_GOLDEN was set', () => {
       const file: GoldenFile = {
-        regenerate: 'UPDATE_GOLDEN=1 pnpm --filter @dagr/layout test layout.order.golden',
+        regenerate: 'UPDATE_GOLDEN=1 pnpm --filter @prnt/dagr-layout test layout.order.golden',
         regenerateWhen:
           'Only for a deliberate change to what the stage does, and only when you ' +
           'can say what moved and why. A count that changed without an intended ' +

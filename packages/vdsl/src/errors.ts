@@ -1,7 +1,7 @@
 /**
  * Errors thrown by the node spec toolkit.
  *
- * The shape is `@dagr/graph`'s and the reasons are its reasons: one abstract
+ * The shape is `@prnt/dagr-graph`'s and the reasons are its reasons: one abstract
  * base so a caller can catch the family with one `instanceof`, a `code` string
  * literal on every member for callers who would rather switch on a value, and
  * an explicit prototype restore per subclass so `instanceof` survives being

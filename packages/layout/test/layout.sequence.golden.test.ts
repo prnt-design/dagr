@@ -8,7 +8,7 @@ import {
   measureStability,
 } from '../src/index.js';
 import { applyOp, buildSessionGraph, planSession, sessionCorpus } from './sequence-corpus.js';
-import type { Graph, Patch } from '@dagr/graph';
+import type { Graph, Patch } from '@prnt/dagr-graph';
 import type { LayoutResult, OrderStage, RankStage, StabilityReport } from '../src/index.js';
 import type { SessionEntry, SessionStep } from './sequence-corpus.js';
 
@@ -64,7 +64,7 @@ import type { SessionEntry, SessionStep } from './sequence-corpus.js';
  *
  * HOW TO REGENERATE IT, one command from the repo root:
  *
- *   UPDATE_GOLDEN=1 pnpm --filter @dagr/layout test layout.sequence.golden
+ *   UPDATE_GOLDEN=1 pnpm --filter @prnt/dagr-layout test layout.sequence.golden
  *
  * WHEN REGENERATING IS LEGITIMATE, and it is the same rule
  * `layout.order.golden.test.ts` states: when you deliberately changed what the
@@ -442,7 +442,7 @@ describe('the incremental pipeline, over a session of edits', () => {
   if (updating) {
     it('rewrites the golden file, because UPDATE_GOLDEN was set', () => {
       const file: GoldenFile = {
-        regenerate: 'UPDATE_GOLDEN=1 pnpm --filter @dagr/layout test layout.sequence.golden',
+        regenerate: 'UPDATE_GOLDEN=1 pnpm --filter @prnt/dagr-layout test layout.sequence.golden',
         regenerateWhen:
           'Only for a deliberate change to what the pipeline does, and only when ' +
           'you can say what moved and why. A number that changed without an ' +

@@ -1,18 +1,18 @@
-# @dagr/react
+# @prnt/dagr-react
 
 [Dagr](https://dagr.prnt.design) as one React component: a graph goes in, a
 picture comes out.
 
 ```sh
-pnpm add @dagr/react @dagr/graph @dagr/render three react react-dom
+pnpm add @prnt/dagr-react @prnt/dagr-graph @prnt/dagr-render three react react-dom
 ```
 
-`@dagr/graph`, `@dagr/render`, `react` and `react-dom` are peer dependencies.
-`@dagr/layout` is a real dependency and comes with the install.
+`@prnt/dagr-graph`, `@prnt/dagr-render`, `react` and `react-dom` are peer dependencies.
+`@prnt/dagr-layout` is a real dependency and comes with the install.
 
 ```tsx
-import { Graph } from '@dagr/graph';
-import { DagrCanvas, Html } from '@dagr/react';
+import { Graph } from '@prnt/dagr-graph';
+import { DagrCanvas, Html } from '@prnt/dagr-react';
 
 const graph = new Graph();
 graph.addNode({ id: 'plan' });
@@ -34,7 +34,7 @@ layout on its own, for a caller drawing it their own way or reading the geometry
 beside a canvas somebody else owns. `Html` puts React content in world
 coordinates over the canvas. `useDagrCanvas` is how anything inside reaches the
 renderer. `retarget`, with `toMotionDelta` and `toMotionRoster` beside it, is
-the delta half of the scene conversion, for a caller driving `@dagr/render`'s
+the delta half of the scene conversion, for a caller driving `@prnt/dagr-render`'s
 scene motion themselves.
 
 **Add `animate` and an edit glides to its new layout instead of cutting to it:**
@@ -45,7 +45,7 @@ scene motion themselves.
 
 That is the whole of it. `useDagr` holds a layout engine across renders, so an
 edit is a `LayoutDelta` rather than a cold run, and the component drives
-`@dagr/render`'s springs and loop off that delta through its own coalesced
+`@prnt/dagr-render`'s springs and loop off that delta through its own coalesced
 frame. The camera is fitted once and then it is yours: a following camera is
 `fitBounds` on the sprung box handed to `onFrame`, which is your line of code
 rather than the component's.
@@ -78,6 +78,14 @@ adding a node and then wiring it up is three of each, computing two layouts that
 are never drawn: React commits once, holding the last. The component notices and
 reseats rather than animating from a delta it cannot trust, so the drawing is
 right either way, and a batch is one patch, one layout and one glide.
+
+## Reporting layout changes
+
+`onLayout(result, delta, from, continues)` reports each committed layout.
+Use `continues && delta !== null` before counting moved/added/removed nodes.
+`continues` is false for cold runs, after layout failures, and when React skips
+an intermediate layout. It works with animation enabled or disabled and does
+not mean rendering has finished. Handlers taking fewer arguments still work.
 
 ## Documentation
 

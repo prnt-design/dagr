@@ -3,7 +3,7 @@
  * without a GPU.
  *
  * A NON-TEST helper. It replaces `DagrCanvas` and NOTHING ELSE: the mock
- * spreads this file over the real `@dagr/react`, so `toWorldBounds`,
+ * spreads this file over the real `@prnt/dagr-react`, so `toWorldBounds`,
  * `useDagrCanvas` and every other export a component reaches for is the real
  * one. That is the shape `packages/react/test/fake-render.ts` settled on and it
  * is settled here for the same reason: fake the thing that needs a device, and
@@ -25,9 +25,9 @@
  * and when autoplay stops. What it does NOT cover is anything about DRAWING:
  * that one batched edit glides rather than reseating, that a removed node
  * leaves on the frame its spring settles, that the camera fits once. Those are
- * `@dagr/react`'s own claims about its own component and are tested in
+ * `@prnt/dagr-react`'s own claims about its own component and are tested in
  * `packages/react/test/dagr-canvas-animate.test.tsx`, against the real springs.
- * Re-testing them here would be testing `@dagr/react` badly.
+ * Re-testing them here would be testing `@prnt/dagr-react` badly.
  *
  * A test drives an edit by EDITING THE GRAPH, exactly as a visitor does. The
  * `onLayout` calls that follow are produced by the real hook from the real
@@ -42,8 +42,8 @@
  * test had already been imported for real:
  *
  * ```ts
- * vi.mock('@dagr/react', async (importOriginal) => {
- *   const real = await importOriginal<typeof import('@dagr/react')>();
+ * vi.mock('@prnt/dagr-react', async (importOriginal) => {
+ *   const real = await importOriginal<typeof import('@prnt/dagr-react')>();
  *   const { makeFakeDagrCanvas } = await import('./fake-canvas.js');
  *   return {
  *     ...real,
@@ -52,9 +52,9 @@
  * });
  * ```
  *
- * EVERY VALUE THIS FILE NEEDS FROM `@dagr/react` IS HANDED IN RATHER THAN
+ * EVERY VALUE THIS FILE NEEDS FROM `@prnt/dagr-react` IS HANDED IN RATHER THAN
  * IMPORTED, and that is not a style choice: this file is loaded BY the factory
- * that is mocking `@dagr/react`, so an `import { useDagr } from '@dagr/react'`
+ * that is mocking `@prnt/dagr-react`, so an `import { useDagr } from '@prnt/dagr-react'`
  * here waits on a module whose initialisation is waiting on this one. The suite
  * deadlocks with NO OUTPUT AT ALL, which is a worse symptom than a failure, and
  * it has now happened twice: once for `useDagr` and once for
@@ -64,12 +64,13 @@
 
 import { createElement, useEffect, useRef } from 'react';
 import type { ReactElement } from 'react';
+import type { LayoutResult } from '@prnt/dagr-layout';
 import type {
   DagrCanvasContext as DagrCanvasContextValue,
   DagrCanvasHandle,
   DagrCanvasProps,
   useDagr as UseDagr,
-} from '@dagr/react';
+} from '@prnt/dagr-react';
 
 /** Every `<DagrCanvas>` rendered since the last {@link resetCanvases}, in order. */
 const rendered: DagrCanvasProps[] = [];
@@ -138,6 +139,7 @@ export function makeFakeDagrCanvas(
     // The props as of the newest render, read from effects and never depended
     // on, exactly as `DagrCanvas` does it.
     const latest = useRef(props);
+    const reportedRef = useRef<LayoutResult | null>(null);
 
     // THE REAL HOOK AND THE REAL `onLayout` EFFECT, COPIED FROM
     // `DagrCanvas.tsx`. These four lines are the whole reason this fake is not
@@ -155,12 +157,15 @@ export function makeFakeDagrCanvas(
     // `[layout]` alone, which is the real component's dependency list. Reading
     // the callback out of a ref rather than depending on it is what stops an
     // unstable `onLayout` from re-firing for the SAME layout: the second fire
-    // would find `counted` already set to this result and render a spurious
-    // `coalesced` readout that the real component cannot produce, so a fake
-    // that depended on it would be able to fail a test the real one passes.
+    // would report the same layout twice and fire a callback that the real
+    // component cannot produce, so a fake that depended on it would be able to
+    // fail a test the real one passes.
     useEffect(() => {
+      const previous = reportedRef.current;
+      reportedRef.current = layout.result;
       if (layout.result === null) return;
-      latest.current.onLayout?.(layout.result, layout.delta, layout.from);
+      const continues = previous !== null && previous === layout.from;
+      latest.current.onLayout?.(layout.result, layout.delta, layout.from, continues);
     }, [layout]);
 
     // A layout that failed is reported, not thrown, and `LivingStage` takes the

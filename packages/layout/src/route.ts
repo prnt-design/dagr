@@ -1,4 +1,4 @@
-import type { EdgeId, NodeId } from '@dagr/graph';
+import type { EdgeId, NodeId } from '@prnt/dagr-graph';
 import { authored } from './authorship.js';
 import { InternalLayoutError } from './errors.js';
 import type { Point, RouteStage, Size } from './types.js';

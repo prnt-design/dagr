@@ -1,5 +1,5 @@
 {
-  "name": "@dagr/graph",
+  "name": "@prnt/dagr-graph",
   "version": "0.1.0",
   "description": "Typed directed graph model for Dagr: stable node identity, zero dependencies.",
   "license": "MIT",

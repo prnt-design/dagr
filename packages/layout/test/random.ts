@@ -1,5 +1,5 @@
-import { Graph } from '@dagr/graph';
-import type { NodeId } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
+import type { NodeId } from '@prnt/dagr-graph';
 
 /**
  * The seeded random graph population the cycle-breaking and ranking suites both
@@ -10,7 +10,7 @@ import type { NodeId } from '@dagr/graph';
  * quietly stopped producing cycles stays green while testing nothing.
  */
 
-/** mulberry32, a 32-bit seeded PRNG, as in `@dagr/graph`'s invariant suite. */
+/** mulberry32, a 32-bit seeded PRNG, as in `@prnt/dagr-graph`'s invariant suite. */
 export function mulberry32(seed: number): () => number {
   let state = seed >>> 0;
   return () => {

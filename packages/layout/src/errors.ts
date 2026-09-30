@@ -1,7 +1,7 @@
 /**
  * Errors thrown by the layout pipeline.
  *
- * Deliberately the same shape as the `@dagr/graph` error family, so a caller
+ * Deliberately the same shape as the `@prnt/dagr-graph` error family, so a caller
  * who has learned one has learned both: every error extends
  * {@link DagrLayoutError} and can be caught with one `instanceof` check, every
  * error carries a `code` string literal for callers who would rather switch on
@@ -282,7 +282,7 @@ export class EngineStateError extends DagrLayoutError {
  * that could not reach every node, `bounds` that do not enclose the drawing it
  * just computed them from, a cycle breaker with no vertex left to pick.
  *
- * This is always a bug in `@dagr/layout`, never in the caller and never in a
+ * This is always a bug in `@prnt/dagr-layout`, never in the caller and never in a
  * caller-supplied stage. That is the whole reason it is not a
  * {@link StageContractError}: that class names a stage, and naming one here
  * would pin this package's mistake on whoever happened to be plugged in when it
@@ -303,7 +303,7 @@ export class InternalLayoutError extends DagrLayoutError {
   readonly code = 'INTERNAL';
 
   constructor(readonly detail: string) {
-    super(`Layout invariant broken: ${detail}. This is a bug in @dagr/layout.`);
+    super(`Layout invariant broken: ${detail}. This is a bug in @prnt/dagr-layout.`);
     this.name = 'InternalLayoutError';
     Object.setPrototypeOf(this, InternalLayoutError.prototype);
   }

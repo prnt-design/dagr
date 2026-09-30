@@ -8,7 +8,7 @@
     "declarationMap": true,
     "sourceMap": true,
     // The build emits from `src` alone, so the source `paths` entries are
-    // dropped here, exactly as @dagr/layout drops its one: pulling
+    // dropped here, exactly as @prnt/dagr-layout drops its one: pulling
     // ../render/src into the program puts files outside `rootDir` and tsc
     // refuses to emit (TS6059, once per file the renderer imports). The build
     // resolves the four Dagr packages through node_modules to their published

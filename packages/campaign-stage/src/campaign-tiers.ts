@@ -1,6 +1,6 @@
 import { cardRows } from '@dagr/campaign';
 import type { CampaignNode, NodeKind } from '@dagr/campaign';
-import type { RichNodeTier } from '@dagr/render';
+import type { RichNodeTier } from '@prnt/dagr-render';
 import { GLYPH_STROKE_WIDTH, GLYPH_VIEWBOX, nodeGlyph } from './campaign-glyphs.js';
 // The rules these tiers write class names for live in `campaign-cards.css`,
 // which `stage.css` pulls in. NOT imported here, though this is the module that

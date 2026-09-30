@@ -5,8 +5,8 @@ import CodeBlock from '@theme/CodeBlock';
 import Layout from '@theme/Layout';
 import styles from './index.module.css';
 
-const EXAMPLE = `import { Graph } from '@dagr/graph';
-import { layout } from '@dagr/layout';
+const EXAMPLE = `import { Graph } from '@prnt/dagr-graph';
+import { layout } from '@prnt/dagr-layout';
 
 const graph = new Graph();
 graph.addNode({ id: 'source' });

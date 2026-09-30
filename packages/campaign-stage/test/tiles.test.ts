@@ -482,7 +482,7 @@ describe('the per-kind style table', () => {
 
   it('keeps every corner radius inside half the smaller dimension', () => {
     // Past it the corner arcs of opposite corners overlap and the field stops
-    // being a distance to anything: `@dagr/render` rejects it, so a bad number
+    // being a distance to anything: `@prnt/dagr-render` rejects it, so a bad number
     // here is a scene that will not build.
     for (const style of Object.values(CAMPAIGN_STYLE)) {
       expect(style.cornerRadius).toBeLessThanOrEqual(
@@ -576,7 +576,7 @@ describe('the per-kind style table', () => {
 
   it('separates the campaign by more than the package default, at both axes', () => {
     // The D2 direction, as an assertion rather than as a number nobody would
-    // notice reverting: `@dagr/layout` defaults to 50 and 50, and the whole
+    // notice reverting: `@prnt/dagr-layout` defaults to 50 and 50, and the whole
     // point of the measurement recorded on CAMPAIGN_SPACING is that the campaign
     // is not a graph those defaults were chosen for.
     expect(CAMPAIGN_SPACING.nodeSep).toBeGreaterThan(50);

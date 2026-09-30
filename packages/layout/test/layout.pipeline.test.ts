@@ -1,5 +1,5 @@
-import { Graph } from '@dagr/graph';
-import type { EdgeId } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
+import type { EdgeId } from '@prnt/dagr-graph';
 import { describe, expect, it } from 'vitest';
 import { defaultStages, layout } from '../src/index.js';
 import type {
@@ -170,7 +170,7 @@ describe('layout pipeline plumbing', () => {
       },
     };
     // Snapshotted before the run rather than written out as a literal, so this
-    // asserts the graph is unchanged rather than pinning @dagr/graph's record
+    // asserts the graph is unchanged rather than pinning @prnt/dagr-graph's record
     // shape. Records are frozen there and gain fields over time (`attrs` and
     // ports arrived in M1.2), and none of that is this test's business.
     const edgeBefore = graph.getEdge('ab');

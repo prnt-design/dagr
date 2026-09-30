@@ -1,4 +1,4 @@
-import type { EdgeId, Graph, NodeId } from '@dagr/graph';
+import type { EdgeId, Graph, NodeId } from '@prnt/dagr-graph';
 import { measureNodes, resolveConfig } from './config.js';
 import { InternalLayoutError, StageContractError } from './errors.js';
 import { defaultStages } from './stages.js';

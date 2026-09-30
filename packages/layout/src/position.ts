@@ -1,4 +1,4 @@
-import type { NodeId } from '@dagr/graph';
+import type { NodeId } from '@prnt/dagr-graph';
 import { authored } from './authorship.js';
 import { InternalLayoutError, InvalidConfigError } from './errors.js';
 import { forEachSegment } from './segments.js';

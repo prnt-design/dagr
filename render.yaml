@@ -41,8 +41,8 @@ services:
     # `--filter docs...` builds the site and everything it depends on, in
     # dependency order. The trailing `...` is what changed when the landing
     # page stopped quoting a committed benchmark figure and started running
-    # @dagr/layout in the visitor's browser: the site now imports the engine,
-    # so `@dagr/graph` and `@dagr/layout` have to have a `dist` before webpack
+    # @prnt/dagr-layout in the visitor's browser: the site now imports the engine,
+    # so `@prnt/dagr-graph` and `@prnt/dagr-layout` have to have a `dist` before webpack
     # resolves them. The alternative was compiling the packages' TypeScript
     # source inside the docs bundle, which would have given the site a second
     # build path for code that publishes from `dist`, and a demo built
@@ -50,7 +50,7 @@ services:
     # The campaign demo added three more packages behind the same `...`, and
     # `@dagr/campaign-stage` is the reason it matters twice over: webpack reads
     # its `dist`, so a stage change that is not built is a site that ships the
-    # last one. The living demo added `@dagr/living-stage` and `@dagr/react`
+    # last one. The living demo added `@dagr/living-stage` and `@prnt/dagr-react`
     # behind it on the same terms.
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter docs... build
     staticPublishPath: docs/build

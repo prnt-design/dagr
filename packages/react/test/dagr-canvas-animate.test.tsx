@@ -3,22 +3,22 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Graph } from '@dagr/graph';
-import type { LayoutDelta, LayoutResult } from '@dagr/layout';
+import { Graph } from '@prnt/dagr-graph';
+import type { LayoutDelta, LayoutResult } from '@prnt/dagr-layout';
 
 // Only the two builders are faked; see `fake-render.ts`. The scene motion and
 // the loop this file is about are the real ones, so what it asserts about a
 // node halfway to its target is the spring's own answer.
-vi.mock('@dagr/render', async (importOriginal) => ({
+vi.mock('@prnt/dagr-render', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   ...(await import('./fake-render.js')),
 }));
 
-import type { SceneMotionFrame, SceneNode } from '@dagr/render';
+import type { SceneMotionFrame, SceneNode } from '@prnt/dagr-render';
 import { DagrCanvas } from '../src/DagrCanvas.js';
 import type { DagrCanvasProps } from '../src/DagrCanvas.js';
 import { toSceneNodes } from '../src/scene.js';
-import { lastRenderer, resetFakes } from './fake-render.js';
+import { built, lastRenderer, resetFakes } from './fake-render.js';
 import { flush, mount } from './mount.js';
 import type { Mounted } from './mount.js';
 import { installFrameQueue, pendingFrames, runFrames, runFramesUntilIdle } from './frames.js';
@@ -336,6 +336,71 @@ describe('DagrCanvas animate', () => {
 });
 
 describe('DagrCanvas and what it reports', () => {
+  it.each([false, true])('reports delta continuity with animate=%s', async (animate) => {
+    const graph = chain();
+    const seen: boolean[] = [];
+    const onLayout: NonNullable<DagrCanvasProps['onLayout']> = (_result, _delta, _from, continues) => {
+      seen.push(continues);
+    };
+    tree = await mount(<DagrCanvas graph={graph} animate={animate} onLayout={onLayout} />);
+    resizeTo(800, 600);
+    await flush();
+    expect(seen).toEqual([false]);
+
+    await flush(() => addSibling(graph));
+    expect(seen).toEqual([false, true]);
+
+    await flush(() => {
+      graph.addNode({ id: 'd' });
+      graph.addNode({ id: 'e' });
+    });
+    expect(seen).toEqual([false, true, false]);
+
+    await flush(() => graph.addNode({ id: 'f' }));
+    expect(seen).toEqual([false, true, false, true]);
+
+    const replacement = chain();
+    await tree.rerender(<DagrCanvas graph={replacement} animate={animate} onLayout={onLayout} />);
+    expect(seen.at(-1)).toBe(false);
+    await flush(() => addSibling(replacement));
+    expect(seen.at(-1)).toBe(true);
+  });
+
+  it('reports continuity before the renderer is ready', async () => {
+    built.hold = true;
+    const graph = chain();
+    const seen: boolean[] = [];
+    tree = await mount(
+      <DagrCanvas graph={graph} animate onLayout={(_result, _delta, _from, continues) => seen.push(continues)} />,
+    );
+    expect(seen).toEqual([false]);
+    await flush(() => addSibling(graph));
+    expect(seen).toEqual([false, true]);
+    await flush(() => built.release?.());
+    expect(seen).toEqual([false, true]);
+  });
+
+  it('starts fresh after a failed layout or a configuration change', async () => {
+    const graph = chain();
+    const seen: boolean[] = [];
+    const failures: unknown[] = [];
+    const onLayout: NonNullable<DagrCanvasProps['onLayout']> = (_result, _delta, _from, continues) => { seen.push(continues); };
+    const onError = (error: unknown): void => { failures.push(error); };
+    tree = await mount(<DagrCanvas graph={graph} onLayout={onLayout} onError={onError} />);
+    await flush(() => addSibling(graph));
+    expect(seen).toEqual([false, true]);
+
+    await tree.rerender(<DagrCanvas graph={graph} config={{ nodeSep: -1 }} onLayout={onLayout} onError={onError} />);
+    expect(failures.length).toBeGreaterThan(0);
+    expect(seen).toEqual([false, true]);
+    await tree.rerender(<DagrCanvas graph={graph} config={{ nodeSep: 80 }} onLayout={onLayout} onError={onError} />);
+    expect(seen.at(-1)).toBe(false);
+    await flush(() => graph.addNode({ id: 'd' }));
+    expect(seen.at(-1)).toBe(true);
+    await tree.rerender(<DagrCanvas graph={graph} config={{ nodeSep: 100 }} onLayout={onLayout} onError={onError} />);
+    expect(seen.at(-1)).toBe(false);
+  });
+
   it('hands the delta to onLayout beside the result, so a consumer can show it', async () => {
     const graph = chain();
     const seen: (LayoutDelta | null)[] = [];

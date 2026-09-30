@@ -1,4 +1,4 @@
-import type { Vec2, WorldBounds } from '@dagr/render';
+import type { Vec2, WorldBounds } from '@prnt/dagr-render';
 
 /**
  * Which node is under a world point.

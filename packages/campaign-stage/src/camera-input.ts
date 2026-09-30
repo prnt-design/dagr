@@ -1,5 +1,5 @@
-import { fitZoom } from '@dagr/render';
-import type { Vec2, WorldBounds } from '@dagr/render';
+import { fitZoom } from '@prnt/dagr-render';
+import type { Vec2, WorldBounds } from '@prnt/dagr-render';
 
 /**
  * The arithmetic between a DOM input event and a {@link Camera2D} call.
@@ -84,7 +84,7 @@ export const FIT_PADDING = 0.05;
  * is in frame with {@link FIT_PADDING}, zoom in stops where the smallest node
  * fills the frame with the same padding.
  *
- * Both ends are `fitZoom` from `@dagr/render`, which is also what
+ * Both ends are `fitZoom` from `@prnt/dagr-render`, which is also what
  * `Camera2D.fitBounds` adopts, so the "0" key, the floor, and the ceiling
  * share one formula and one validation instead of three copies held together
  * by tests. The validation matters here: a zero-extent scene or node reaches

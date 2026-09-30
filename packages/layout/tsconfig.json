@@ -5,12 +5,12 @@
     "types": ["node"],
     // The Dagr packages publish from dist, which does not exist in a fresh
     // clone or in CI, where test runs before build. Typecheck therefore reads
-    // @dagr/graph straight from source, mirrored by the alias in
+    // @prnt/dagr-graph straight from source, mirrored by the alias in
     // vitest.config.ts.
     // The bench kit is private and never built, so it is read from source for
     // the same reason.
     "paths": {
-      "@dagr/graph": ["../graph/src/index.ts"],
+      "@prnt/dagr-graph": ["../graph/src/index.ts"],
       "@dagr/bench": ["../../bench/src/index.ts"]
     }
   },

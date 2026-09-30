@@ -27,7 +27,7 @@ import os from 'node:os';
  * difference is `MACHINE_IDENTITY` in `gate.mjs`.
  *
  * `loadAverageAtCapture` is here because its absence cost a run. Four
- * `@dagr/graph` entries read 26% to 41% faster than the committed baseline
+ * `@prnt/dagr-graph` entries read 26% to 41% faster than the committed baseline
  * across M2.4c, M2.6d, M2.8 and M2.9 with no commit to `packages/graph/src`
  * between them, and answering "was that baseline taken on a busy machine" meant
  * inferring it from the margins of error the entries happened to record. See

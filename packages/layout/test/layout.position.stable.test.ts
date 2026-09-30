@@ -1,7 +1,7 @@
 import { smallCorpus } from '@dagr/bench';
 import type { GraphSpec } from '@dagr/bench';
-import { Graph } from '@dagr/graph';
-import type { NodeId, Patch } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
+import type { NodeId, Patch } from '@prnt/dagr-graph';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LAYOUT_CONFIG, createLayout, measureStability } from '../src/index.js';
 import type { LayoutResult, OrderedState, Point, PreviousLayout, Size } from '../src/index.js';

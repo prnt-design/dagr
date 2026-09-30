@@ -13,7 +13,7 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * different problems wearing one entry. A node moves as a point, so one 2D
  * spring is the whole of it and the hard part is the bookkeeping between two
  * deltas. AN EDGE IS A POLYLINE WHOSE VERTEX COUNT CHANGES: a long edge that
- * gains a rank to cross gains a bend, and `@dagr/layout`'s `delta.ts` says in
+ * gains a rank to cross gains a bend, and `@prnt/dagr-layout`'s `delta.ts` says in
  * as many words that no per-point comparison catches it. There is nothing to
  * retarget until something decides what corresponds to what, so the hard part
  * here is a CORRESPONDENCE and the state machine is the part that comes free.
@@ -25,7 +25,7 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * is the one that gives up, since the bend appearing is exactly the change a
  * reader is trying to follow. The second needs a curve this package does not
  * have and would move the drawing off the line the layout computed even at
- * rest. The first is right, and the reason it is right is `@dagr/layout`'s own
+ * rest. The first is right, and the reason it is right is `@prnt/dagr-layout`'s own
  * `maxRouteDistance`: that metric is a Hausdorff distance between two
  * polylines taken as CURVES, and its
  * docstring already records what follows from that, that "a point added on the
@@ -79,7 +79,7 @@ export interface EdgeMotionTarget {
   /**
    * The centreline, world units, y up, source to target: at least two points.
    *
-   * `RoutedEdge.points` from `@dagr/layout` after the caller's y flip, which is
+   * `RoutedEdge.points` from `@prnt/dagr-layout` after the caller's y flip, which is
    * the same conversion `SceneEdge.points` already asks for. The direction is a
    * contract there and is preserved here, because a route reversed mid-flight
    * would spring every point to the far end of the line.
@@ -90,7 +90,7 @@ export interface EdgeMotionTarget {
 /**
  * What changed about the edges, in the shape M3.1's `EdgeDelta` gives it.
  *
- * The three lists are `@dagr/layout`'s: `added` is what the next layout holds
+ * The three lists are `@prnt/dagr-layout`'s: `added` is what the next layout holds
  * and the previous one did not, `removed` is ids the previous one held and the
  * next does not, and `rerouted` is edges both hold on a different polyline.
  * ABSENT MEANS UNCHANGED, so this iterates the change rather than the drawing.

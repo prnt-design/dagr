@@ -1,7 +1,6 @@
 # Changelog
 
-All notable changes to `@dagr/layout`. Nothing is published yet, so everything
-below is unreleased and the version in `package.json` has never been cut.
+All notable changes to `@prnt/dagr-layout`. The entries below describe the initial 0.1.0 release.
 
 This file exists because the milestones through M2 change what `layout` returns
 without changing a single type or exported name. A caller upgrading past one of
@@ -10,7 +9,7 @@ types did not" is the category this file has a heading for, so that the v0.1
 release notes do not have to be reconstructed by diffing five milestones' worth
 of doc prose.
 
-## Unreleased
+## 0.1.0
 
 ### Changed
 
@@ -167,7 +166,7 @@ of doc prose.
   `update-node-parent` explicitly.** Behaviour changed on one of them, types did
   not. (M5.5)
 
-  `@dagr/graph` grew containment, and both of this package's switches over a
+  `@prnt/dagr-graph` grew containment, and both of this package's switches over a
   patch had a `default: break` that would have swallowed the new op with no
   compile error. Nothing here reads `parent`, so `influenceRegion` reports an
   EMPTY region for a reparent, which is exact rather than optimistic: the
@@ -486,8 +485,8 @@ of doc prose.
   pipeline does, dated, and not as a compatibility statement.
 
   `@dagrejs/dagre` is a `devDependency` of this package at an exact version and
-  is not a runtime dependency of anything. A published `@dagr/layout` still
-  depends on `@dagr/graph` and nothing else.
+  is not a runtime dependency of anything. A published `@prnt/dagr-layout` still
+  depends on `@prnt/dagr-graph` and nothing else.
 
 - `polylineRouteStage`, exported, `name: 'polyline-route'`, and it is
   `defaultStages.route`. The route phase's first real algorithm and the third of
@@ -529,7 +528,7 @@ of doc prose.
 - `brandes-koepf-position`, the first real position stage, INTERNAL TO THE
   PACKAGE AND NOT EXPORTED. `brandesKoepfPosition(options)`,
   `brandesKoepfPositionStage` and the `BrandesKoepfOptions` type are all in
-  `src/position.ts` and none of them is reachable from `@dagr/layout`, so no
+  `src/position.ts` and none of them is reachable from `@prnt/dagr-layout`, so no
   caller can name this stage and nothing a caller already writes changes. It is
   Brandes and Koepf's horizontal coordinate assignment (GD 2001), which marks
   the conflicts where an ordinary edge crosses a dummy chain, aligns each node
@@ -730,7 +729,7 @@ of doc prose.
   `InvalidConfigError` is the member of this package's error family that means
   "the caller handed in nonsense", so it is the one a bad budget gets; the rule
   that an out-of-range value is a `RangeError` naming the field is scoped to
-  `@dagr/render` and does not reach here. The stage scores the layering after
+  `@prnt/dagr-render` and does not reach here. The stage scores the layering after
   every sweep and returns the BEST one seen rather than the last, because the
   sweeps are not monotone, so a larger budget is a weakly better answer rather
   than a different one.
@@ -1450,16 +1449,12 @@ of doc prose.
   graph no longer holds, which is asserted separately.
 
 - M3.3 changed no code here. `relayout` already took a patch of any length, so
-  `graph.batch` from `@dagr/graph` needed nothing widened: a batch arrives as one
+  `graph.batch` from `@prnt/dagr-graph` needed nothing widened: a batch arrives as one
   patch and relays out once. What landed in this package is the measurement that
   decided it, in `test/layout.relayout.test.ts`: a node added and then wired up
   is reported at two positions unbatched, the first of which it does not keep,
   and at one batched. `graph.batch` is the recommended shape for a multi-step
   edit and the docs page says so.
 
-- `@dagr/graph` is a peer dependency, not a regular one. Its `#private` fields
+- `@prnt/dagr-graph` is a peer dependency, not a regular one. Its `#private` fields
   make `Graph` nominally typed, so two copies in a tree are not interchangeable.
-
-## 0.1.0
-
-Not yet released.

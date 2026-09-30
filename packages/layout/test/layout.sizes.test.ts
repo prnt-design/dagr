@@ -1,4 +1,4 @@
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { describe, expect, it } from 'vitest';
 import { InvalidConfigError, layout } from '../src/index.js';
 import type { Size } from '../src/index.js';

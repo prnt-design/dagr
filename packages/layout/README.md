@@ -1,19 +1,19 @@
-# @dagr/layout
+# @prnt/dagr-layout
 
 The headless Sugiyama layout pipeline behind [Dagr](https://dagr.prnt.design),
 and the reason the project exists: a dagre successor designed for **animation
 and incremental relayout from the start**, not retrofitted with them.
 
 ```sh
-pnpm add @dagr/layout @dagr/graph
+pnpm add @prnt/dagr-layout @prnt/dagr-graph
 ```
 
-`@dagr/graph` is a `peerDependency`, so you install it yourself. See "one copy
-of `@dagr/graph`" below, which is not a formality.
+`@prnt/dagr-graph` is a `peerDependency`, so you install it yourself. See "one copy
+of `@prnt/dagr-graph`" below, which is not a formality.
 
 ```ts
-import { Graph } from '@dagr/graph';
-import { layout } from '@dagr/layout';
+import { Graph } from '@prnt/dagr-graph';
+import { layout } from '@prnt/dagr-layout';
 
 const graph = new Graph();
 graph.addNode('ingest');
@@ -40,7 +40,7 @@ moves when one node is added.
 Bind the stages and the config once with `createLayout`, then feed it patches:
 
 ```ts
-import { createLayout } from '@dagr/layout';
+import { createLayout } from '@prnt/dagr-layout';
 
 const engine = createLayout({ config: { nodeSep: 20, rankSep: 60 } });
 const first = engine.run(graph);
@@ -62,11 +62,11 @@ committed as a golden corpus rather than quoted from memory.
 A patch that no stage reads runs no stage at all: an inert relayout on a
 10,000-node drawing costs 1.955ms against 3,317ms for a full one.
 
-## Read this first: one copy of `@dagr/graph`
+## Read this first: one copy of `@prnt/dagr-graph`
 
 `Graph` uses `#private` fields, which makes it **nominally typed**. Two copies
 in your tree fail to compile with `separate declarations of a private property
-'#nodes'`, and `@dagr/graph` is all over this package's surface
+'#nodes'`, and `@prnt/dagr-graph` is all over this package's surface
 (`LayoutInput.graph`, `LayoutConfig.nodeSize`). It is a peer dependency for
 exactly that reason, and a caret range on a 0.x package does not cross a minor,
 so a version skew between the two is a resolution with two copies in it rather
@@ -82,7 +82,7 @@ relayout relies on all three:
 - **Removals apply before additions.**
 
 `applyDelta` is exported so the meaning ships as code rather than as prose.
-`@dagr/render`'s `createNodeMotion` is the consumer that springs between two of
+`@prnt/dagr-render`'s `createNodeMotion` is the consumer that springs between two of
 them.
 
 ## Choosing stages
@@ -91,7 +91,7 @@ them.
 `defaultStages`; override one at a time:
 
 ```ts
-import { layout, longestPathRankStage, networkSimplexRankStage } from '@dagr/layout';
+import { layout, longestPathRankStage, networkSimplexRankStage } from '@prnt/dagr-layout';
 
 layout({ graph }, { rank: longestPathRankStage }); // fewest layers
 layout({ graph }, { rank: networkSimplexRankStage }); // least total edge length

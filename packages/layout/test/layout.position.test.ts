@@ -1,7 +1,7 @@
 import { largeCorpus, smallCorpus } from '@dagr/bench';
 import type { GraphSpec } from '@dagr/bench';
-import { Graph } from '@dagr/graph';
-import type { NodeId } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
+import type { NodeId } from '@prnt/dagr-graph';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LAYOUT_CONFIG, InvalidConfigError, layout } from '../src/index.js';
 import type { LayoutResult, OrderedState, Point, PositionedNode, Size } from '../src/index.js';
@@ -641,7 +641,7 @@ describe('brandesKoepfPosition, determinism and options', () => {
       caught = error;
     }
     expect(caught).toBeInstanceOf(InvalidConfigError);
-    // NOT a `RangeError`: that is `@dagr/render`'s rule for an out-of-range
+    // NOT a `RangeError`: that is `@prnt/dagr-render`'s rule for an out-of-range
     // value and it does not reach this package, which has one error family and
     // one member of it meaning "the caller handed in nonsense".
     expect(caught).not.toBeInstanceOf(RangeError);

@@ -10,7 +10,7 @@ member.
 
 This member exists because of one fact about the other four steps:
 
-| Step | How it finds `@dagr/graph` |
+| Step | How it finds `@prnt/dagr-graph` |
 | --- | --- |
 | `pnpm typecheck` | tsconfig `paths` |
 | `pnpm test` | a vitest alias |
@@ -28,7 +28,7 @@ the first `npm install` after a publish. Every check here reads only what
 `src/checks.ts` holds the predicates, pure and over a structural description of
 a packed package, so `test/checks.test.ts` can show each one **failing** on a
 package built to be wrong. `test/pack.test.ts` runs the same predicates over the
-five real tarballs. A guard whose only evidence is a green run against a tree
+six real tarballs. A guard whose only evidence is a green run against a tree
 already known to be correct has never demonstrated that it can go red.
 
 - **No `workspace:` range a consumer install reads.** This is a check on the
@@ -49,7 +49,7 @@ already known to be correct has never demonstrated that it can go red.
 
 ## Packing is not conditional, and the build is not either
 
-`beforeAll` runs `tsc` for the five packages every time, then packs. CI runs
+`beforeAll` runs `tsc` for the six packages every time, then packs. CI runs
 `pnpm test` **before** `pnpm build`, so on a fresh checkout there is no `dist`
 to pack at all; and a `dist` that does exist may be stale, which would pass this
 gate on a tarball that is not the one the next publish would produce. It costs
@@ -64,19 +64,25 @@ pnpm --filter @dagr/packaging verify:tools
 ```
 
 That runs `publint` over every tarball, `arethetypeswrong` over every tarball,
-and a scratch project **outside the workspace** that installs the tarballs with
-`npm` and typechecks an `import { layout } from '@dagr/layout'`. Run it whenever
-the packaging changes and before a publish.
+and a scratch project **outside the workspace** that installs all six tarballs
+with `npm`, typechecks their public graph, layout, VDSL, renderer and React
+surfaces, including scoped and umbrella subpaths, and runs a headless runtime
+smoke. Run it whenever the packaging changes and before a publish.
 
 The scratch project is the strongest of the three and it is worth knowing what
 it proves. It compiles `layout({ graph })` with the `graph` built from the
-installed `@dagr/graph`. `Graph` carries `#private` fields, so if the peer range
-had resolved to a second copy that line would fail with `separate declarations
-of a private property '#nodes'`. It compiling is the evidence that the peer
-resolved to one copy.
+installed `@prnt/dagr-graph` and `dagr`, checks JSX props for `<DagrCanvas>` and `<Html>`, and
+checks renderer types without creating a GPU device. `Graph` carries `#private`
+fields, so if the peer range had resolved to a second copy that line would fail
+with `separate declarations of a private property '#nodes'`. It compiling is
+the evidence that the peer resolved to one copy. The runtime smoke then
+exercises headless graph, layout, VDSL, camera and renderer arithmetic, plus
+loading the React entrypoints, without requiring a browser or GPU. The smoke
+also asserts that the umbrella root and subpaths preserve runtime identity with
+their scoped package counterparts.
 
 `arethetypeswrong` runs under `--profile esm-only` rather than the default
-`strict`. All five packages are `"type": "module"` with no CommonJS build, so
+`strict`. All six packages are `"type": "module"` with no CommonJS build, so
 `strict` reports `CJSResolvesToESM` on every one of them, which is an accurate
 description of an ESM-only package rather than a defect. If a CommonJS build is
 ever added, that profile is the line that has to change.

@@ -1,7 +1,7 @@
 import type { BackendPreference, RendererBackend } from './types.js';
 
 /**
- * Errors thrown by `@dagr/render`, and the rule for which kind is which.
+ * Errors thrown by `@prnt/dagr-render`, and the rule for which kind is which.
  *
  * **An out-of-range value is a `RangeError` naming the field. Anything else
  * this package throws gets a named class.** That is the whole rule, and it is

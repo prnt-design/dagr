@@ -12,7 +12,7 @@ import * as api from '../src/index.js';
  * that dependency would fail this import under Node, which would make the
  * package unusable in any server-rendered application.
  */
-describe('@dagr/render', () => {
+describe('@prnt/dagr-render', () => {
   it('exports exactly the runtime surface, through the campaign demo P5', () => {
     // Types are erased, so only the runtime exports can be checked here. The
     // type surface is exercised by the other files in the suite importing from
@@ -32,7 +32,7 @@ describe('@dagr/render', () => {
     // M4.6 added the springs: a closed-form step, its two-axis form, the
     // half-life conversion a caller tunes with, and two constants of the
     // envelope that conversion reads. Nothing in the group touches a GPU. `spring.ts` is exported whole rather than kept internal
-    // because motion is driven by a caller's loop, and because `@dagr/react`
+    // because motion is driven by a caller's loop, and because `@prnt/dagr-react`
     // will want the same curve for interactions with no graph in them.
     //
     // `PickIdSpaceExhaustedError` joined at M4.8a, before anything public can

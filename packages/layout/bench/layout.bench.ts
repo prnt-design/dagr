@@ -1,4 +1,4 @@
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { largeCorpus, registerControl, smallCorpus } from '@dagr/bench';
 import { bench, describe } from 'vitest';
 
@@ -9,7 +9,7 @@ import type { GraphSpec } from '@dagr/bench';
 import type { PreparedState } from '../src/types.js';
 
 /**
- * `@dagr/layout`'s pipeline.
+ * `@prnt/dagr-layout`'s pipeline.
  *
  * Two numbers this pins, both argued about in the M2.2 review and both
  * previously living only in a review comment. The rank stage measured 33ms on

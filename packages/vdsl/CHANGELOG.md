@@ -1,15 +1,14 @@
 # Changelog
 
-All notable changes to `@dagr/vdsl`. Nothing is published yet, so everything
-below is unreleased and the version in `package.json` has never been cut.
+All notable changes to `@prnt/dagr-vdsl`. The entries below describe the initial 0.1.0 release.
 
-The file starts with the package for the reason `@dagr/graph`'s gives: this
+The file starts with the package for the reason `@prnt/dagr-graph`'s gives: this
 surface grows a milestone at a time, M6 has six of them, and M5.4's pre-publish
 checklist is where a changelog tool gets picked. Starting now is what stops the
 v0.2 notes from having to be reconstructed by diffing six milestones of doc
 prose.
 
-## Unreleased
+## 0.1.0
 
 ### Added
 

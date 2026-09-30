@@ -1,6 +1,6 @@
 import { largeCorpus, smallCorpus } from '@dagr/bench';
 import type { GraphSpec } from '@dagr/bench';
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { describe, expect, it } from 'vitest';
 import { barycenterOrder, layout } from '../src/index.js';
 import type { LayoutConfig, LayoutResult } from '../src/index.js';
@@ -8,7 +8,7 @@ import type { LayoutConfig, LayoutResult } from '../src/index.js';
 /**
  * A graph built from a script that exercises explicit ids, generated ids,
  * parallel edges, a self loop, and a removal, mirroring the determinism script
- * in `@dagr/graph`. Layout reproducibility rests on graph iteration order, so
+ * in `@prnt/dagr-graph`. Layout reproducibility rests on graph iteration order, so
  * the graph this runs on should be one whose order is not simply alphabetical.
  */
 function build(): Graph {

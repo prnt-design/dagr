@@ -5,7 +5,7 @@
     "types": ["node"],
     // The bench kit is private and never built, so `paths` reads it from
     // source, mirrored by the alias in vitest.config.ts. It is a devDependency
-    // only: nothing under `src` imports it, and `@dagr/graph` still ships with
+    // only: nothing under `src` imports it, and `@prnt/dagr-graph` still ships with
     // zero dependencies.
     "paths": {
       "@dagr/bench": ["../../bench/src/index.ts"]

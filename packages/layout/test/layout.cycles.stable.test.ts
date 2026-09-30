@@ -6,7 +6,7 @@ import { networkSimplexRankStage } from '../src/simplex.js';
 import { prepare, runPipeline } from '../src/pipeline.js';
 import { acyclicView, build, componentsOf, referenceTopologicalOrder } from './cycles-check.js';
 import { mulberry32, randomDigraph } from './random.js';
-import type { EdgeId, Graph, NodeId } from '@dagr/graph';
+import type { EdgeId, Graph, NodeId } from '@prnt/dagr-graph';
 import type { PreparedState, PreviousLayout, RoutedState, Size } from '../src/types.js';
 
 /**

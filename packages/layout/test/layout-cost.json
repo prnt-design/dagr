@@ -1,5 +1,5 @@
 {
-  "measure": "MEASURE_COST=1 pnpm --filter @dagr/layout test layout.cost",
+  "measure": "MEASURE_COST=1 pnpm --filter @prnt/dagr-layout test layout.cost",
   "isNotABaseline": "Wall-clock milliseconds on one machine, published so a reader can size a budget. Nothing gates on it and pnpm bench:ci never reads it. The gate lives in bench/baseline.json and holds ratios, which are the right thing to catch a regression with and the wrong thing to publish as a cost.",
   "machine": {
     "platform": "darwin",

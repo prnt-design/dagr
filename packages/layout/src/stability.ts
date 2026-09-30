@@ -42,7 +42,7 @@
  * gate. Additions and removals are reported as their own counts beside it.
  */
 
-import type { EdgeId, NodeId } from '@dagr/graph';
+import type { EdgeId, NodeId } from '@prnt/dagr-graph';
 import { diffLayout } from './delta.js';
 import type { LayoutDelta, LayoutDiffOptions } from './delta.js';
 import type { InfluenceSet } from './influence.js';

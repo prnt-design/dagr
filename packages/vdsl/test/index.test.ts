@@ -21,7 +21,7 @@ import type {
   RegistryOptions,
 } from '../src/index.js';
 
-describe('@dagr/vdsl public surface', () => {
+describe('@prnt/dagr-vdsl public surface', () => {
   it('exports the registry factory and its default key', () => {
     expect(typeof api.defineRegistry).toBe('function');
     expect(api.DEFAULT_KIND_KEY).toBe('kind');

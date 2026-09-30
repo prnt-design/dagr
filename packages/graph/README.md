@@ -1,15 +1,15 @@
-# @dagr/graph
+# @prnt/dagr-graph
 
 The typed directed graph model everything else in [Dagr](https://dagr.prnt.design)
 is built on: stable node identity, adjacency, attributes, ports, patches,
 traversal and serialization, with **zero runtime dependencies**.
 
 ```sh
-pnpm add @dagr/graph
+pnpm add @prnt/dagr-graph
 ```
 
 ```ts
-import { Graph, NodeNotFoundError } from '@dagr/graph';
+import { Graph, NodeNotFoundError } from '@prnt/dagr-graph';
 
 const graph = new Graph();
 
@@ -35,17 +35,17 @@ try {
 
 ## Read this first: `Graph` is nominally typed
 
-`Graph` carries `#private` fields, so **two copies of `@dagr/graph` in one
+`Graph` carries `#private` fields, so **two copies of `@prnt/dagr-graph` in one
 dependency tree are not interchangeable**. Passing one copy's `Graph` where the
 other's is expected does not merely behave oddly, it fails to compile with
 `separate declarations of a private property '#nodes'`.
 
-That is why `@dagr/layout` and `@dagr/vdsl` declare this package as a
+That is why `@prnt/dagr-layout` and `@prnt/dagr-vdsl` declare this package as a
 `peerDependency` rather than a dependency: a caret range on a 0.x package does
 not cross a minor, so `^0.1.0` and `^0.2.0` would resolve to two installed
 copies and every call that hands a graph across the boundary would stop
 compiling. If you see that error, run your package manager's dedupe and check
-you have one `@dagr/graph`, not a version mismatch in your own code.
+you have one `@prnt/dagr-graph`, not a version mismatch in your own code.
 
 ## Mutations are observable, and that is the point
 
@@ -81,7 +81,7 @@ property of the model rather than something a caller reimplements.
 
 ## Containment
 
-A node may carry `parent`, at most one, and containment is acyclic. `@dagr/layout`
+A node may carry `parent`, at most one, and containment is acyclic. `@prnt/dagr-layout`
 currently ignores it: the field is the model, not the layout. Inline compound
 layout is M7 on the [roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md).
 

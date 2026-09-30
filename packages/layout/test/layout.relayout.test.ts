@@ -1,6 +1,6 @@
 import { MessageChannel } from 'node:worker_threads';
-import { Graph } from '@dagr/graph';
-import type { Patch } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
+import type { Patch } from '@prnt/dagr-graph';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   EngineStateError,

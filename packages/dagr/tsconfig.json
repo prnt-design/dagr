@@ -1,0 +1,35 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "@prnt/dagr-graph": [
+        "../graph/src/index.ts"
+      ],
+      "@prnt/dagr-layout": [
+        "../layout/src/index.ts"
+      ],
+      "@prnt/dagr-render": [
+        "../render/src/index.ts"
+      ],
+      "@prnt/dagr-react": [
+        "../react/src/index.ts"
+      ],
+      "@prnt/dagr-vdsl": [
+        "../vdsl/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "src"
+  ]
+}

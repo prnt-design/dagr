@@ -1,4 +1,4 @@
-import type { Node, NodeId } from '@dagr/graph';
+import type { Node, NodeId } from '@prnt/dagr-graph';
 import { InvalidConfigError } from './errors.js';
 import type { LayoutConfig, PreparedState, ResolvedLayoutConfig, Size } from './types.js';
 

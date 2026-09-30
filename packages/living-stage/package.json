@@ -27,9 +27,9 @@
     "react": ">=19.0.0 <20.0.0"
   },
   "dependencies": {
-    "@dagr/graph": "workspace:*",
-    "@dagr/layout": "workspace:*",
-    "@dagr/react": "workspace:*"
+    "@prnt/dagr-graph": "workspace:*",
+    "@prnt/dagr-layout": "workspace:*",
+    "@prnt/dagr-react": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

@@ -1,8 +1,8 @@
 /**
- * The conversion `@dagr/render` refused: a `LayoutResult` into a drawable scene.
+ * The conversion `@prnt/dagr-render` refused: a `LayoutResult` into a drawable scene.
  *
- * `@dagr/render`'s own index says why it is not there. `setNodes` deliberately
- * does not take a `LayoutResult`, because naming one would make `@dagr/layout`
+ * `@prnt/dagr-render`'s own index says why it is not there. `setNodes` deliberately
+ * does not take a `LayoutResult`, because naming one would make `@prnt/dagr-layout`
  * a dependency of the renderer, and the y-down to y-up conversion belongs to
  * whoever owns the layout. This package owns both, which is the whole reason it
  * can exist: it is the first place in the workspace where a graph, a layout and
@@ -28,9 +28,9 @@
  * makes the common case go the long way round.
  */
 
-import type { EdgeId, NodeId } from '@dagr/graph';
-import type { LayoutResult, PositionedNode, Rect } from '@dagr/layout';
-import type { NodeShape, SceneEdge, SceneNode, WorldBounds } from '@dagr/render';
+import type { EdgeId, NodeId } from '@prnt/dagr-graph';
+import type { LayoutResult, PositionedNode, Rect } from '@prnt/dagr-layout';
+import type { NodeShape, SceneEdge, SceneNode, WorldBounds } from '@prnt/dagr-render';
 
 /**
  * What a caller may say about how one node is drawn.
@@ -85,7 +85,7 @@ export const DEFAULT_EDGE_COLOR = 0x6b7280;
  * `Rect.x` and `Rect.y` are the MINIMUM corner in layout space, so the flip
  * swaps which end of the y range is the minimum: the rectangle's top becomes
  * the box's `maxY`. Getting that backwards produces a box with `maxY` below
- * `minY`, which `@dagr/render` rejects by name rather than normalising, for
+ * `minY`, which `@prnt/dagr-render` rejects by name rather than normalising, for
  * exactly this reason.
  */
 export function toWorldBounds(rect: Rect): WorldBounds {
@@ -139,7 +139,7 @@ export function toSceneNodes(result: LayoutResult, appearanceOf?: NodeAppearance
  * Every edge in the result as a ribbon centreline, flipped point by point.
  *
  * The point order is left alone. `RoutedEdge.points` runs source to target
- * whatever the ranker reversed, which is a contract `@dagr/layout` states
+ * whatever the ranker reversed, which is a contract `@prnt/dagr-layout` states
  * because getting it wrong is silent, and `SceneEdge.points` is the same
  * contract on the other side: it is what makes a flowing dash mean "towards
  * the target". A flip that reversed the array as well would satisfy every

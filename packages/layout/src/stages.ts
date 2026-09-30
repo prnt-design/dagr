@@ -1,4 +1,4 @@
-import type { NodeId } from '@dagr/graph';
+import type { NodeId } from '@prnt/dagr-graph';
 import { authored } from './authorship.js';
 import { InternalLayoutError } from './errors.js';
 import { barycenterOrderStage } from './order.js';

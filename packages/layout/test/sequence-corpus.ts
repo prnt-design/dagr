@@ -1,7 +1,7 @@
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { layeredDag } from '@dagr/bench';
 import { mulberry32 } from './random.js';
-import type { EdgeId, NodeId } from '@dagr/graph';
+import type { EdgeId, NodeId } from '@prnt/dagr-graph';
 import type { LayeredOptions } from '@dagr/bench';
 
 /**

@@ -1,16 +1,15 @@
 # Changelog
 
-All notable changes to `@dagr/render`. Nothing is published yet, so everything
-below is unreleased and the version in `package.json` has never been cut.
+All notable changes to `@prnt/dagr-render`. The entries below describe the initial 0.1.0 release.
 
-This file exists for the same reason `@dagr/layout`'s does, one milestone
+This file exists for the same reason `@prnt/dagr-layout`'s does, one milestone
 earlier in its life. Rendering is where a decision changes what a user sees
 without changing a type or an exported name: a sign convention, a rounding rule,
 which unit a number is in. A caller upgrading past one of those sees a drawing
 in a different place, and no compiler tells them. "Behaviour changed, types did
 not" is the category this file has a heading for.
 
-## Unreleased
+## 0.1.0
 
 ### Added
 
@@ -103,7 +102,7 @@ not" is the category this file has a heading for.
   different vertex counts and there is nothing to retarget. `alignRoutes` takes
   the UNION of the two routes' own arc-length parameters, which keeps every
   vertex of each route exactly and puts every added point on a segment the route
-  already had. `@dagr/layout`'s `maxRouteDistance` measures a route by Hausdorff
+  already had. `@prnt/dagr-layout`'s `maxRouteDistance` measures a route by Hausdorff
   distance and says a point added on the line a route already ran along measures
   zero, so this correspondence is free in the metric that judges it.
 
@@ -134,7 +133,7 @@ not" is the category this file has a heading for.
 
   **IT TAKES CENTRES, NOT A `LayoutDelta`.** `MotionTarget` is an id and a
   world-space centre, y up, which is the conversion `setNodes` already asks a
-  caller for. `@dagr/layout` is not a dependency of this package and the y flip
+  caller for. `@prnt/dagr-layout` is not a dependency of this package and the y flip
   belongs to whoever owns the layout, which `camera.ts` has said since M4.1.
 
   **A DELTA THAT DOES NOT DESCRIBE THE SCENE THROWS.** A move naming an unknown
@@ -374,7 +373,7 @@ not" is the category this file has a heading for.
   anything: a caller who expected a world width gets a line that does not
   thicken as they zoom in. The reasoning is in `ribbon.ts` and the ROADMAP's
   M4.5 entry, and the short version is that a graph spanning decades of zoom
-  has no world width that is legible at both ends, while `@dagr/layout` gives
+  has no world width that is legible at both ends, while `@prnt/dagr-layout` gives
   an edge a polyline and no width at all. Three things fall out: one
   tessellation is valid at every camera, the antialiasing width is exactly one
   pixel by construction so the ribbon shader holds no derivative, and dashes
@@ -432,7 +431,7 @@ not" is the category this file has a heading for.
   meshes and an instance cannot move between them.
 
   **It takes NODES and not a `LayoutResult`.** Naming one would make
-  `@dagr/layout` a dependency of this package, and the y-down to y-up conversion
+  `@prnt/dagr-layout` a dependency of this package, and the y-down to y-up conversion
   belongs to whoever owns the layout, which `camera.ts` has said since M4.1.
   `WorldBounds` being extents rather than a corner and a size is what makes that
   seam a compile error rather than a convention.
@@ -637,7 +636,7 @@ not" is the category this file has a heading for.
   Three conventions are fixed here and are the ones every later M4 task
   inherits. **World y is up, screen y is down**, with the screen origin at the
   canvas top-left, which is where a `PointerEvent`'s `offsetX` and `offsetY`
-  already are. Note that `@dagr/layout` computes in y-down coordinates; the flip
+  already are. Note that `@prnt/dagr-layout` computes in y-down coordinates; the flip
   between the two is M4.4's business, not the camera's. **Zoom is CSS pixels per
   world unit**, so zoom 2 draws a one-unit box two CSS pixels wide. **The device
   pixel ratio is read in exactly one method, `drawingBufferSize`**, and the
@@ -728,7 +727,7 @@ not" is the category this file has a heading for.
   `WorldBounds` is `{minX, minY, maxX, maxY}` rather than the `{x, y, width,
   height}` rectangle first drafted here, and `Camera2D.visibleWorldRect()` is
   `visibleWorldBounds()` to match. The draft was structurally identical to
-  `@dagr/layout`'s `Rect` with the opposite corner convention (that one is
+  `@prnt/dagr-layout`'s `Rect` with the opposite corner convention (that one is
   y-down and top-left, this one was y-up and bottom-left), which the compiler
   cannot see: a layout rectangle assigned into a world slot compiled clean, and
   the symptom was a scene mirrored about the horizontal axis with nothing red
@@ -778,8 +777,8 @@ not" is the category this file has a heading for.
   first commit and nothing imported it. (M4.1)
 
 - `packages/render/tsconfig.json` sets `lib: ["ES2022", "DOM"]`, widening the
-  root base, which has no DOM. The base stays as it is so that `@dagr/graph` and
-  `@dagr/layout` keep failing to compile if a DOM global ever becomes reachable
+  root base, which has no DOM. The base stays as it is so that `@prnt/dagr-graph` and
+  `@prnt/dagr-layout` keep failing to compile if a DOM global ever becomes reachable
   from either. (M4.1)
 
 - **The tarball a consumer installs (M5.4a).** `files` now ships `src`,
@@ -807,7 +806,7 @@ not" is the category this file has a heading for.
 ### Notes
 
 - **`three` is a peer dependency, and also a dev dependency.** The same shape
-  `@dagr/layout` uses for `@dagr/graph`, for a related reason: an application
+  `@prnt/dagr-layout` uses for `@prnt/dagr-graph`, for a related reason: an application
   that renders a Dagr graph almost certainly has its own three.js scene, and two
   copies of three in one bundle is both a large amount of duplicated code and a
   source of instanceof checks that fail across the copies. Peer means the
@@ -992,7 +991,3 @@ not" is the category this file has a heading for.
   from "the quad happened to miss the sample points" needs a controlled comparison
   this task has no harness for. So the visual half is unresolved and the cost half
   is M4.10's, which is where the flag should be settled with numbers on both sides.
-
-## 0.1.0
-
-Not yet released.

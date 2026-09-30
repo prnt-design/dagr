@@ -20,8 +20,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { createLayout } from '@dagr/layout';
-import type { LayoutDelta, LayoutResult } from '@dagr/layout';
+import { createLayout } from '@prnt/dagr-layout';
+import type { LayoutDelta, LayoutResult } from '@prnt/dagr-layout';
 import {
   AUTOPLAY_CYCLE,
   EDIT_KINDS,

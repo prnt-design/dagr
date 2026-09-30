@@ -525,7 +525,7 @@ describe('createNodeMotion', () => {
   describe('the shape of a delta', () => {
     it('takes the lists in the order a LayoutDelta gives them', () => {
       // Structural, and deliberately not `LayoutDelta` itself: this package does
-      // not depend on `@dagr/layout`, and the conversion a caller does is the
+      // not depend on `@prnt/dagr-layout`, and the conversion a caller does is the
       // same y-flip `setNodes` already asks of them. The shape below is what
       // that conversion produces, written out so the compiler checks it.
       const converted: NodeMotionDelta = {

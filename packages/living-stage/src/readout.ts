@@ -22,10 +22,10 @@
  * delta, which is a difference from a drawing that never reached a frame.
  * Counting it would put a wrong number on screen beside a drawing that is
  * right, silently, which is the exact defect M5.3a shipped and then fixed. The
- * fix on this side is an identity comparison, and {@link readEdit} makes it.
+ * canvas now supplies that continuity check, and {@link readEdit} consumes it.
  */
 
-import type { LayoutDelta, LayoutResult } from '@dagr/layout';
+import type { LayoutDelta, LayoutResult } from '@prnt/dagr-layout';
 
 /** What every readout says, whatever else it can or cannot say. */
 export interface ReadoutBase {
@@ -83,16 +83,15 @@ export type Readout = InitialReadout | CoalescedReadout | CountedReadout;
 /**
  * Reads one call to `onLayout` into something displayable.
  *
- * `counted` is the result this readout last counted an edit against, which the
- * caller records after each call. Comparing it with `from` BY IDENTITY is the
- * whole continuity check: `useDagr` hands over the previous state's `result`,
- * the same object, so there is no counter to keep and nothing to get wrong.
+ * `continues` is true when `from` is the last successful layout the canvas
+ * committed. The canvas owns that identity check because it also knows when a
+ * layout was skipped or failed between commits.
  */
 export function readEdit(
   result: LayoutResult,
   delta: LayoutDelta | null,
   from: LayoutResult | null,
-  counted: LayoutResult | null,
+  continues: boolean,
 ): Readout {
   const size = { nodes: result.nodes.size, edges: result.edges.size };
 
@@ -102,7 +101,7 @@ export function readEdit(
   // demo shows, before anything has been edited.
   if (delta === null || from === null) return { kind: 'initial', ...size };
 
-  if (from !== counted) return { kind: 'coalesced', ...size };
+  if (!continues) return { kind: 'coalesced', ...size };
 
   const added = delta.nodes.added.length;
   const moved = delta.nodes.moved.length;

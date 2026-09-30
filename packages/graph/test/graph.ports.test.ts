@@ -149,8 +149,8 @@ describe('Graph addPort', () => {
   });
 
   /**
-   * `@dagr/layout` writes geometry back through an attribute update for every
-   * node on every run, and `@dagr/react` will put `node.ports` in a memo
+   * `@prnt/dagr-layout` writes geometry back through an attribute update for every
+   * node on every run, and `@prnt/dagr-react` will put `node.ports` in a memo
    * dependency, so a fresh array with identical contents would invalidate every
    * port memo on every layout pass. The record identity rule the class promises
    * has to cover `ports`, not only `attrs`.

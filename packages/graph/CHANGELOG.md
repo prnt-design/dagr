@@ -1,16 +1,15 @@
 # Changelog
 
-All notable changes to `@dagr/graph`. Nothing is published yet, so everything
-below is unreleased and the version in `package.json` has never been cut.
+All notable changes to `@prnt/dagr-graph`. The entries below describe the initial 0.1.0 release.
 
-`@dagr/layout` keeps one of these because its milestones change what it returns
+`@prnt/dagr-layout` keeps one of these because its milestones change what it returns
 without changing a type. This package's reason is different and simpler: it is
 the one every other package depends on, its surface grows a milestone at a time,
 and M5.4's pre-publish checklist is where a changelog tool gets picked. Starting
 the file now is what stops the v0.1 notes from having to be reconstructed by
 diffing five milestones of doc prose.
 
-## Unreleased
+## 0.1.0
 
 ### Added
 
@@ -18,7 +17,7 @@ diffing five milestones of doc prose.
   parent)`, `graph.children(id)`, the `update-node-parent` patch op,
   `ContainmentCycleError`, and `NodeJSON.parent` (M5.5). Additive for a reader,
   and `Node` is only ever produced by `Graph`, so nothing a caller holds
-  changes shape. `@dagr/layout` ignores `parent`: this is the model, not the
+  changes shape. `@prnt/dagr-layout` ignores `parent`: this is the model, not the
   layout.
 
   **Three rules and nothing else.** A node has at most one parent, containment
@@ -60,7 +59,7 @@ diffing five milestones of doc prose.
   is made, so a later call in the body reads the graph the earlier ones made.
   The reason it exists is not performance: unbatched, "add node, add edge, add
   edge" shows a layout consumer a disconnected singleton to place and then
-  corrects it, and `@dagr/layout`'s suite measures the same node being reported
+  corrects it, and `@prnt/dagr-layout`'s suite measures the same node being reported
   at two positions where a batch reports it at one.
 
   **A batch is a `Patch`**, not a type of its own, so `invert` reverses and

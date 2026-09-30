@@ -32,7 +32,7 @@ import type {
   UpdateNodeParentOp,
 } from '../src/index.js';
 
-describe('@dagr/graph public surface', () => {
+describe('@prnt/dagr-graph public surface', () => {
   it('exports the Graph class', () => {
     expect(typeof api.Graph).toBe('function');
     const graph = new api.Graph();

@@ -31,7 +31,7 @@ import type { GpuResource, Size, Vec2 } from './types.js';
  *
  * **No three.js type appears in anything this file exports**, which is the rule
  * `types.ts` sets. {@link SceneNode} is plain numbers and two string unions, so
- * a caller names a node without installing three, and `@dagr/layout` is not a
+ * a caller names a node without installing three, and `@prnt/dagr-layout` is not a
  * dependency of this package: a `LayoutResult` does not appear here, and the
  * conversion from layout's y-down rectangles to world y-up centres stays with
  * the caller, which is where the y-flip has to be decided anyway (see
@@ -48,7 +48,7 @@ export type NodeShape = ShapeFamily;
  * Centre and size rather than extents, deliberately, and the opposite of what
  * {@link WorldBounds} argues for elsewhere in this package. The reason is that
  * this record is CONSTRUCTED per node by a caller converting a layout result,
- * and a layout result gives a centre and a size (see `@dagr/layout`'s
+ * and a layout result gives a centre and a size (see `@prnt/dagr-layout`'s
  * `PositionedNode`), so extents here would make every caller do the same two
  * subtractions and give two of them the chance to get the y sign wrong.
  * `WorldBounds` earns its shape where a region is CONSUMED, by an overlap test

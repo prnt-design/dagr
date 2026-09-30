@@ -6,8 +6,8 @@ sidebar_position: 4
 
 # Renderer
 
-`@dagr/render` draws a graph. It takes coordinates, not a `Graph`: whatever
-[`@dagr/layout`](./layout.md) works out goes on screen through a three.js
+`@prnt/dagr-render` draws a graph. It takes coordinates, not a `Graph`: whatever
+[`@prnt/dagr-layout`](./layout.md) works out goes on screen through a three.js
 `WebGPURenderer`, with an orthographic camera, critically damped springs for
 carrying nodes between one layout and the next, and one draw call per shape
 family.
@@ -74,7 +74,7 @@ spring and M4.8's picking id survive that replacement while the handle does
 not.
 
 What `setNodes` deliberately does NOT take is a `LayoutResult`. Naming one would
-make `@dagr/layout` a dependency of this package, and the y-down to y-up
+make `@prnt/dagr-layout` a dependency of this package, and the y-down to y-up
 conversion belongs to whoever owns the layout. See the conventions section below,
 which has said so since M4.1.
 
@@ -324,7 +324,7 @@ The flip itself lives in four methods and nowhere else: `screenToWorld`,
 out independently rather than deriving it from the first two, so a future task
 revisiting the convention has four places to look, not two.
 
-Be aware that `@dagr/layout` computes in y-down coordinates. This package first
+Be aware that `@prnt/dagr-layout` computes in y-down coordinates. This package first
 drafted a `Rect` of `{x, y, width, height}` meaning the bottom-left corner,
 which was structurally identical to layout's `Rect` meaning the top-left one.
 The compiler cannot see the difference: a layout rectangle assigned into a world
@@ -646,9 +646,9 @@ here establishes that.
 
 ## three.js is a peer dependency
 
-`three` is a `peerDependency` of `@dagr/render`, and also a `devDependency`.
-That is the same shape `@dagr/layout` uses for `@dagr/graph`, and for a related
-reason rather than the same one: `@dagr/graph` is a peer because nominal typing
+`three` is a `peerDependency` of `@prnt/dagr-render`, and also a `devDependency`.
+That is the same shape `@prnt/dagr-layout` uses for `@prnt/dagr-graph`, and for a related
+reason rather than the same one: `@prnt/dagr-graph` is a peer because nominal typing
 through `#private` fields makes two copies incompatible at the type level, and
 three.js has no such fields. Its hazard is at runtime instead.
 
@@ -684,7 +684,7 @@ imports `three/webgpu` at module scope and `index.ts` re-exports it, so this
 package cannot be imported at all without three being present. The peer is a
 present necessity, not a forward commitment. What the empty surface changes is
 the FAILURE MODE of getting it wrong: with no three type in a signature, two
-copies compile cleanly and misbehave at runtime, where `@dagr/graph`'s
+copies compile cleanly and misbehave at runtime, where `@prnt/dagr-graph`'s
 `#private` fields would have made the same mistake a type error at the first
 signature that saw one. That is the weaker of the two guarantees, and it is the
 reason the peer declaration is doing real work here rather than documenting
@@ -808,7 +808,7 @@ and is M4.9b.
 ## Usage
 
 ```ts
-import { Camera2D, createRenderer } from '@dagr/render';
+import { Camera2D, createRenderer } from '@prnt/dagr-render';
 
 const canvas = document.querySelector('canvas')!;
 
@@ -922,7 +922,7 @@ transform to a Konva stage; this one answers to a `Camera2D` and carries no
 framework at all.
 
 ```ts
-import { Camera2D, createHtmlOverlay } from '@dagr/render';
+import { Camera2D, createHtmlOverlay } from '@prnt/dagr-render';
 
 // The parent has to establish a containing block, or the overlay throws
 // OverlayParentError naming the fix. It is the element the canvas fills.
@@ -1077,7 +1077,7 @@ the shape. There is no level-of-detail machinery anywhere in the overlay, and
 the three tiers the demo shows are three lines of configuration.
 
 ```ts
-import { createRichNodes } from '@dagr/render';
+import { createRichNodes } from '@prnt/dagr-render';
 
 const nodes = createRichNodes({
   overlay,
@@ -1133,7 +1133,7 @@ composed into the transform after the scale is 8 CSS pixels at every zoom.
 
 ### Sizes for layout: declare, or measure in one flush
 
-`@dagr/layout` takes sizes through `LayoutConfig.nodeSize`, called once per node
+`@prnt/dagr-layout` takes sizes through `LayoutConfig.nodeSize`, called once per node
 during prepare and on the caller's thread even when the run itself is in a
 worker. So a DOM measurement can feed a layout, and the recommendation is to
 declare where you can and measure only where you cannot. Declaring is right when
@@ -1234,13 +1234,13 @@ are.
 `setEdges(groupId, edges)` takes an edge as an id, a centreline in world units
 and a colour, and tessellates it into a ribbon: a polyline as a layout routed
 it, or a centripetal Catmull-Rom curve through the same points when the group
-asks for one. `RoutedEdge.points` from `@dagr/layout` is exactly the input,
+asks for one. `RoutedEdge.points` from `@prnt/dagr-layout` is exactly the input,
 after the caller's own y flip.
 
 **A ribbon is a fixed number of DEVICE pixels wide at every zoom**, and that is
 the thing to know before drawing one, because a caller expecting a world width
 gets a line that does not thicken as they zoom in. A graph spans decades of
-zoom and no world width is legible at both ends of one; `@dagr/layout` gives an
+zoom and no world width is legible at both ends of one; `@prnt/dagr-layout` gives an
 edge a polyline and no width at all, so any world width would be invented by
 the renderer rather than laid out. An outline is measured the same way and for
 the same reason.
@@ -1304,7 +1304,7 @@ feeling that would need a second parameter and a second formula, and a ratio a
 caller can set to 1.0001 is one they can set to 1.0001 by accident.
 
 ```ts
-import { omegaForHalfLife, stepSpring2D, type Spring2DState } from '@dagr/render';
+import { omegaForHalfLife, stepSpring2D, type Spring2DState } from '@prnt/dagr-render';
 
 // Half the distance closed in 120ms, released from rest.
 const w = omegaForHalfLife(0.12);
@@ -1426,10 +1426,10 @@ just under four half-lives.
 
 ### Where it lives
 
-Inside `@dagr/render`, exported, with no dependency on anything here that a
+Inside `@prnt/dagr-render`, exported, with no dependency on anything here that a
 device could break: the `Vec2` type and the shared validators, and nothing else.
 That is the third option the ROADMAP's M4.6 entry named, and it is the second
-time this package has taken it, after the HTML overlay. `@dagr/react` in M5 will
+time this package has taken it, after the HTML overlay. `@prnt/dagr-react` in M5 will
 want this curve for interaction animation with no graph in it, and if that turns
 out to be a package rather than an import, the split is a file that travels
 unchanged rather than code that has to be rewritten.
@@ -1441,8 +1441,8 @@ M4.6 shipped the arithmetic. **M4.7a is what holds it between two frames:**
 `LayoutDelta` names, and hands back the frame to draw.
 
 ```ts
-import { createNodeMotion } from '@dagr/render';
-import { diffLayout } from '@dagr/layout';
+import { createNodeMotion } from '@prnt/dagr-render';
+import { diffLayout } from '@prnt/dagr-layout';
 
 const motion = createNodeMotion({ halfLifeSeconds: 0.12 });
 
@@ -1548,7 +1548,7 @@ nothing to retarget until something decides what corresponds to what.
 defaults, so one delta's nodes and its edges arrive together:
 
 ```ts
-import { createEdgeMotion, createNodeMotion } from '@dagr/render';
+import { createEdgeMotion, createNodeMotion } from '@prnt/dagr-render';
 
 const edges = createEdgeMotion();
 
@@ -1576,7 +1576,7 @@ renderer.setEdges('flow', frame.edges.map(draw));
 resampling is free.** `alignRoutes(from, to)` gives both routes a common list of
 places along themselves: the **union of their own arc-length parameters**. Every
 vertex of each route survives in its own list exactly, and every point either
-list gains sits on a segment that list already had. `@dagr/layout`'s
+list gains sits on a segment that list already had. `@prnt/dagr-layout`'s
 `maxRouteDistance` measures a route by Hausdorff distance between the two
 polylines taken as curves, and it already records that a point added on the line
 a route already ran along measures zero. So the correspondence costs nothing in
@@ -1637,14 +1637,14 @@ driven as one scene, and the loop. Together they turn the five-line
 two calls, one per relayout and one at mount.
 
 ```ts
-import { createMotionLoop, createSceneMotion } from '@dagr/render';
-import { createLayout } from '@dagr/layout';
+import { createMotionLoop, createSceneMotion } from '@prnt/dagr-render';
+import { createLayout } from '@prnt/dagr-layout';
 
 const engine = createLayout();
 const motion = createSceneMotion();
 
 // The flip is the caller's, as it has been since M4.1, and this is it written
-// out. A caller who has `@dagr/react` does not write it: `toMotionRoster` with
+// out. A caller who has `@prnt/dagr-react` does not write it: `toMotionRoster` with
 // `toSceneNodes` and `toSceneEdges` is this roster, `toMotionDelta` is the whole
 // `motion.apply` argument below, and `retarget` is that call plus the one check
 // this example does not make (see the React page: a delta is only safe to apply

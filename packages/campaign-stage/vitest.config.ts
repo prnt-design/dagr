@@ -8,9 +8,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@dagr/campaign': fileURLToPath(new URL('../campaign/src/index.ts', import.meta.url)),
-      '@dagr/graph': fileURLToPath(new URL('../graph/src/index.ts', import.meta.url)),
-      '@dagr/layout': fileURLToPath(new URL('../layout/src/index.ts', import.meta.url)),
-      '@dagr/render': fileURLToPath(new URL('../render/src/index.ts', import.meta.url)),
+      '@prnt/dagr-graph': fileURLToPath(new URL('../graph/src/index.ts', import.meta.url)),
+      '@prnt/dagr-layout': fileURLToPath(new URL('../layout/src/index.ts', import.meta.url)),
+      '@prnt/dagr-render': fileURLToPath(new URL('../render/src/index.ts', import.meta.url)),
     },
   },
 });

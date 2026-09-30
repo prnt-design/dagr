@@ -95,7 +95,7 @@ export function useCampaignScene(createWorker: () => Worker): CampaignSceneState
     /**
      * A worker that dies is a run that is never answered.
      *
-     * `@dagr/layout`'s engine has no timeout by design (how long is too long
+     * `@prnt/dagr-layout`'s engine has no timeout by design (how long is too long
      * belongs to the caller and to the graph), and posting to a dead worker is a
      * silent no-op in both runtimes rather than a throw. So a worker script that
      * fails to load or throws while its module evaluates leaves every one of the

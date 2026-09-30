@@ -39,8 +39,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
-import type { NodeId } from '@dagr/graph';
-import type { OverlayEntry, OverlayPlacement } from '@dagr/render';
+import type { NodeId } from '@prnt/dagr-graph';
+import type { OverlayEntry, OverlayPlacement } from '@prnt/dagr-render';
 import { useDagrCanvas } from './canvas-context.js';
 import { nodeWorldBounds } from './scene.js';
 

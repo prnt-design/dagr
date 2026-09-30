@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import type { Manifest, PackedPackage } from './checks.js';
 
 /** The packages this repo publishes, in dependency order. */
-export const PUBLISHED_PACKAGES = ['graph', 'layout', 'render', 'react', 'vdsl'] as const;
+export const PUBLISHED_PACKAGES = ['graph', 'layout', 'render', 'react', 'vdsl', 'dagr'] as const;
 
 /** The repo root, from this file rather than from `process.cwd()`. */
 export const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -36,13 +36,24 @@ export const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 export function packPublishedPackages(): { packages: PackedPackage[]; dispose: () => void } {
   const workDir = mkdtempSync(join(tmpdir(), 'dagr-packaging-'));
   try {
-    run('pnpm', [...PUBLISHED_PACKAGES.flatMap((p) => ['--filter', `@dagr/${p}`]), 'build'], REPO_ROOT);
+    run(
+      'pnpm',
+      [
+        ...PUBLISHED_PACKAGES.flatMap((p) => [
+          '--filter',
+          p === 'dagr' ? 'dagr' : `@prnt/dagr-${p}`,
+        ]),
+        'build',
+      ],
+      REPO_ROOT,
+    );
 
     const packages = PUBLISHED_PACKAGES.map((name) => {
       const packageDir = join(REPO_ROOT, 'packages', name);
       const tarball = run('pnpm', ['pack', '--pack-destination', workDir], packageDir).trim().split('\n').pop();
       if (tarball === undefined || tarball === '') {
-        throw new Error(`pnpm pack printed no tarball path for @dagr/${name}`);
+        const packageName = name === 'dagr' ? 'dagr' : `@prnt/dagr-${name}`;
+        throw new Error(`pnpm pack printed no tarball path for ${packageName}`);
       }
 
       const extracted = mkdtempSync(join(workDir, 'x-'));

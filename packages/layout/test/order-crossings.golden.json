@@ -1,5 +1,5 @@
 {
-  "regenerate": "UPDATE_GOLDEN=1 pnpm --filter @dagr/layout test layout.order.golden",
+  "regenerate": "UPDATE_GOLDEN=1 pnpm --filter @prnt/dagr-layout test layout.order.golden",
   "regenerateWhen": "Only for a deliberate change to what the stage does, and only when you can say what moved and why. A count that changed without an intended cause is something to investigate, not a file to refresh.",
   "entries": [
     {

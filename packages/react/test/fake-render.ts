@@ -1,5 +1,5 @@
 /**
- * A stand-in for the two things in `@dagr/render` that need a device, so a
+ * A stand-in for the two things in `@prnt/dagr-render` that need a device, so a
  * component test can run without a GPU.
  *
  * A NON-TEST helper. It replaces `createRenderer` and `createHtmlOverlay` and
@@ -17,13 +17,13 @@
  * that the renderer and the overlay are not exercised at all here: a real
  * `createHtmlOverlay` refuses a parent that is not positioned, a real `resize`
  * refuses a zero viewport, and neither refusal happens on its own against this
- * file. `@dagr/render`'s own suite covers both, and the two places where this
+ * file. `@prnt/dagr-render`'s own suite covers both, and the two places where this
  * package has to hold up its end of those contracts are asserted directly
  * instead: the container's `position`, and the zero-size viewport guard.
  *
  * ONE HAZARD COMES WITH THE SPREAD: this file's own helpers (`built`,
  * `resetFakes`, `lastRenderer`, `lastOverlay`) land on the mocked module's
- * surface too, so a `@dagr/render` export that ever takes one of those names
+ * surface too, so a `@prnt/dagr-render` export that ever takes one of those names
  * would be shadowed here and nowhere else. Nothing in `src/` reaches for them,
  * and the alternative is a pick list that has to be updated every time the
  * component imports something new, which is the failure that is harder to
@@ -45,7 +45,7 @@ import type {
   OverlayEntryInit,
   Renderer,
   RendererOptions,
-} from '@dagr/render';
+} from '@prnt/dagr-render';
 
 /** The camera calls `DagrCanvas` makes. Not a `Camera2D`: that class is nominal. */
 export interface FakeCamera {

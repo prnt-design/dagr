@@ -109,7 +109,7 @@ export interface AdjacencyView {
  * A self loop makes a node point at itself, so its own arrival count can never
  * reach zero and it is never emitted. That is the honest answer rather than a
  * special case: a node cannot come after itself, so a graph with a self loop
- * has no topological order. `@dagr/layout`'s ranker deliberately differs and
+ * has no topological order. `@prnt/dagr-layout`'s ranker deliberately differs and
  * drops self loops before its own sweep, because a self loop constrains nothing
  * about which rank a node belongs on. Both are right for their question.
  */

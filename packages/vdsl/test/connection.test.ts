@@ -1,4 +1,4 @@
-import { Graph, NodeNotFoundError } from '@dagr/graph';
+import { Graph, NodeNotFoundError } from '@prnt/dagr-graph';
 import { describe, expect, it, vi } from 'vitest';
 import { UnknownNodeKindError } from '../src/errors.js';
 import { defineRegistry, sameType } from '../src/registry.js';

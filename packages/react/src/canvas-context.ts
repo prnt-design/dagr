@@ -24,8 +24,8 @@
  */
 
 import { createContext, useContext } from 'react';
-import type { LayoutResult } from '@dagr/layout';
-import type { HtmlOverlay, Renderer } from '@dagr/render';
+import type { LayoutResult } from '@prnt/dagr-layout';
+import type { HtmlOverlay, Renderer } from '@prnt/dagr-render';
 import { CanvasContextError } from './errors.js';
 
 /** The canvas, as everything inside it sees it. */

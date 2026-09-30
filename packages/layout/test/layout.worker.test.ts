@@ -1,5 +1,5 @@
 import { MessageChannel } from 'node:worker_threads';
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   StageContractError,
@@ -153,7 +153,7 @@ describe('a run that crosses a worker boundary', () => {
 
   // What crosses is the layout's view of the graph, so an attribute holding
   // something structured cloning cannot carry is not this package's problem.
-  // `@dagr/graph` never reads an attribute, so a callback or a DOM node in a
+  // `@prnt/dagr-graph` never reads an attribute, so a callback or a DOM node in a
   // bag is legal there, and sending the document would have turned that into a
   // run that fails for a reason nothing about layout explains.
   it('carries a graph whose attributes could never be cloned', async () => {

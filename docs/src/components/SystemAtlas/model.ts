@@ -1,6 +1,6 @@
-import { Graph } from '@dagr/graph';
-import { layout } from '@dagr/layout';
-import { defineRegistry, sameType } from '@dagr/vdsl';
+import { Graph } from '@prnt/dagr-graph';
+import { layout } from '@prnt/dagr-layout';
+import { defineRegistry, sameType } from '@prnt/dagr-vdsl';
 
 const port = (id: string, direction: 'in' | 'out', type: string) => ({
   id,

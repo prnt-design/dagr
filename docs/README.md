@@ -2,8 +2,8 @@
 
 Docusaurus powers [dagr.prnt.design](https://dagr.prnt.design). The homepage is
 **Dagr**, an engineering showcase led by a commerce system atlas. The atlas
-uses `@dagr/vdsl` to declare seven node kinds and validate typed connections,
-`@dagr/layout` for geometry, and HTML/SVG for rendering. Search finds names,
+uses `@prnt/dagr-vdsl` to declare seven node kinds and validate typed connections,
+`@prnt/dagr-layout` for geometry, and HTML/SVG for rendering. Search finds names,
 kinds, routes, and schema fields. Selecting a connection or search result zooms
 to its node; the overview, summary, and rich detail levels follow camera scale.
 The inspector mirrors node content and provides a live connection validator.

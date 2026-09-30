@@ -116,7 +116,7 @@ that stole it would leave the next arrow key scrolling the page. That is also
 why the limits are `aria-disabled` rather than `disabled`, since a real
 `disabled` arriving under a keyboard user's finger drops focus to the body.
 
-Spacing is the campaign's own rather than `@dagr/layout`'s default, and
+Spacing is the campaign's own rather than `@prnt/dagr-layout`'s default, and
 `CAMPAIGN_SPACING` in `tiles.ts` carries the measurement that chose it,
 including what the fitted view pays for it.
 
@@ -139,11 +139,11 @@ and the card sizes were budgeted against a real face. The token to pin is
 
 `tiles.ts`, `campaign-style.ts`, `camera-input.ts`, `campaign-edges.ts` and the
 tier builders are pure and covered in `test/`; `campaign-scene.test.ts` runs the
-whole build with no worker, which `@dagr/layout` supports by falling back to the
+whole build with no worker, which `@prnt/dagr-layout` supports by falling back to the
 calling thread, so the packing, the offsets and the flip are checked without a
 browser.
 
-`FirstLight.tsx` has no test file, which is the same decision `@dagr/render`
+`FirstLight.tsx` has no test file, which is the same decision `@prnt/dagr-render`
 documents for its own renderer rather than a gap: it needs a GPU adapter, a
 laid-out canvas, a worker and live input events, and a jsdom suite could only
 assert that a mock was called. `camera-input.ts` exists BECAUSE of that: it is

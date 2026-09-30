@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useDagrCanvas } from '@dagr/react';
+import { useDagrCanvas } from '@prnt/dagr-react';
 import { useViewportAdapter } from './index';
 
 /** This module is loaded only with a browser-only DagrCanvas. */

@@ -1,4 +1,4 @@
-import type { NodeId } from '@dagr/graph';
+import type { NodeId } from '@prnt/dagr-graph';
 import { acyclicView, longestPathRanks } from './acyclic.js';
 import type { AcyclicView } from './acyclic.js';
 import { authored } from './authorship.js';
@@ -36,7 +36,7 @@ function at(values: { readonly [index: number]: number | undefined }, index: num
  * On the first run of a session there is no previous ranking to hand over, so
  * the variable holding one is `Map | undefined` by construction, and `?: T`
  * would make the caller build the options object conditionally to say nothing.
- * `@dagr/graph` settled the same question the same way.
+ * `@prnt/dagr-graph` settled the same question the same way.
  */
 export interface NetworkSimplexOptions {
   /**

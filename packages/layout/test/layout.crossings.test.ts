@@ -1,4 +1,4 @@
-import { Graph } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
 import { describe, expect, it } from 'vitest';
 import { countCrossings } from '../src/order.js';
 import { longestPathRankStage } from '../src/rank.js';
@@ -6,7 +6,7 @@ import { forEachSegment } from '../src/segments.js';
 import { barycenterOrder } from '../src/order.js';
 import { measureNodes, resolveConfig } from '../src/config.js';
 import { mulberry32, randomLayered } from './random.js';
-import type { EdgeId, NodeId } from '@dagr/graph';
+import type { EdgeId, NodeId } from '@prnt/dagr-graph';
 
 /**
  * What `countCrossings` counts, checked twice over: by hand on graphs small

@@ -104,7 +104,7 @@ describe('layout errors', () => {
     // The message has to name this package, because the one thing a caller can
     // do about an invariant failure is report it, and nothing else in the
     // message says where to.
-    expect(error.message).toContain('@dagr/layout');
+    expect(error.message).toContain('@prnt/dagr-layout');
   });
 
   // The fifth culprit, and the one whose whole value is that it is loud: a

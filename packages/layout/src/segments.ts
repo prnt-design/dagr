@@ -1,4 +1,4 @@
-import type { EdgeId, Graph, NodeId } from '@dagr/graph';
+import type { EdgeId, Graph, NodeId } from '@prnt/dagr-graph';
 
 /**
  * What a drawing's SEGMENTS are, which is not the same thing as its edges.

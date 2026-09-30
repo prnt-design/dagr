@@ -1,5 +1,5 @@
 /**
- * The landing page's live demo: the bench corpus, laid out by @dagr/layout in
+ * The landing page's live demo: the bench corpus, laid out by @prnt/dagr-layout in
  * the visitor's browser, timed on their machine.
  *
  * It replaced a committed SVG of the same graph with a quoted millisecond
@@ -28,9 +28,9 @@
  */
 
 import Link from '@docusaurus/Link';
-import { Graph } from '@dagr/graph';
-import type { LayoutConfig, LayoutResult } from '@dagr/layout';
-import { createLayout } from '@dagr/layout';
+import { Graph } from '@prnt/dagr-graph';
+import type { LayoutConfig, LayoutResult } from '@prnt/dagr-layout';
+import { createLayout } from '@prnt/dagr-layout';
 import clsx from 'clsx';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';

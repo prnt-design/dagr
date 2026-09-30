@@ -1,24 +1,30 @@
-# @dagr/react
+# @prnt/dagr-react
 
-## Unreleased
+## 0.1.0
 
 ### Added
 
-- **M5.3b: the `@dagr/render` types this package's own props are spelled in are
+- `DagrCanvas.onLayout` supplies a fourth argument, `continues`, so consumers
+  can count delta changes only when the delta continues the prior committed
+  layout. The signal works with animation on or off and resets on cold runs,
+  failed layouts, and skipped intermediate layouts. Existing callback handlers
+  taking fewer arguments remain compatible.
+
+- **M5.3b: the `@prnt/dagr-render` types this package's own props are spelled in are
   re-exported**, as types: `Renderer`, `HtmlOverlay`, `RibbonStyle`,
   `SceneStyle`, `SceneMotionOptions`, `SceneMotionFrame`, `SceneNode`,
   `SceneEdge` and `WorldBounds`. A consumer whose only contact with the renderer
-  is `<DagrCanvas>` had to depend on `@dagr/render` to write one type
+  is `<DagrCanvas>` had to depend on `@prnt/dagr-render` to write one type
   annotation: naming an `animate` value needs `SceneMotionOptions`, and a named
   `onFrame` handler needs `SceneMotionFrame` and `Renderer`. The first consumer
   outside this package declared that dependency and never touched it at
   runtime, which is what surfaced this. Re-exported rather than redeclared, so
-  they stay the same types; `@dagr/render` remains a peer dependency and is
+  they stay the same types; `@prnt/dagr-render` remains a peer dependency and is
   still where anything driving the renderer itself imports from.
 
 - **M5.3a: an edit animates.** `<DagrCanvas animate>` glides a node to its new
   layout instead of cutting to it, and the same prop carries the feel:
-  `animate={{ halfLifeSeconds, restEpsilon }}` is `@dagr/render`'s two numbers,
+  `animate={{ halfLifeSeconds, restEpsilon }}` is `@prnt/dagr-render`'s two numbers,
   compared by value the way `config` is. A prop rather than a hook because the
   component already owns the four things a hook would have to hand back out
   (the coalesced frame, the renderer, the scene conversions, and the delta),
@@ -31,7 +37,7 @@
   is where a following camera lives: the component still fits once and never
   refits, and `fitBounds` on `frame.bounds` is the caller's line of code.
 - `animation.ts`: `toMotionDelta`, `toMotionRoster` and `retarget`, exported on
-  `scene.ts`'s precedent, for a caller driving `@dagr/render`'s scene motion
+  `scene.ts`'s precedent, for a caller driving `@prnt/dagr-render`'s scene motion
   themselves. `retarget` is where one decision is written down: a delta is a
   difference from a drawing, a cold run is not, and the second reseats.
 - `DagrLayoutState.delta`, the `LayoutDelta` of the edit that produced this
@@ -64,26 +70,26 @@
   first place in the workspace to flip y-down layout coordinates into the
   renderer's y-up world. M5.3a's `animation.ts` is the second, for deltas.
 - `CanvasContextError`, code `OUTSIDE_CANVAS`. No abstract base yet, on
-  `@dagr/render`'s precedent: a base over a family of one is a family only in
+  `@prnt/dagr-render`'s precedent: a base over a family of one is a family only in
   the sense that a single point is a line.
 - `DEFAULT_EDGE_GROUP_ID`, exported so a caller adding a group of their own
   does not collide with the component's.
 
 ### Removed
 
-- `PKG_NAME`, as it went from `@dagr/render` for the same reason: scaffolding
+- `PKG_NAME`, as it went from `@prnt/dagr-render` for the same reason: scaffolding
   from the workspace's first commit, imported by nothing, and an exported
   constant nobody uses is one more thing a consumer can depend on by accident.
 
 ### Dependencies
 
-- `@dagr/graph` and `@dagr/render` are PEER dependencies (plus devDependencies,
+- `@prnt/dagr-graph` and `@prnt/dagr-render` are PEER dependencies (plus devDependencies,
   for the workspace link and the topological build order), on the argument
-  `@dagr/layout` already makes about `@dagr/graph`: both put a class with
+  `@prnt/dagr-layout` already makes about `@prnt/dagr-graph`: both put a class with
   `#private` fields on this package's surface (`Graph`, and `Camera2D` through
   `Renderer.camera`), which makes them nominally typed, so two copies in a
   consumer's tree are not interchangeable.
-- `@dagr/layout` is a plain dependency. Everything it puts on this surface
+- `@prnt/dagr-layout` is a plain dependency. Everything it puts on this surface
   (`LayoutResult`, `LayoutConfig`) is a structural interface, so a duplicate
   copy is harmless, and a consumer who only wants a canvas should not have to
   install the layout engine to get one.
@@ -113,8 +119,8 @@
   declared `?: T | undefined` rather than `?: T`. Under
   `exactOptionalPropertyTypes`, which this repo sets and a careful consumer sets
   too, `?: T` refuses a key that is present holding `undefined`, so
-  `animate={reducedMotion ? undefined : feel}` did not compile. `@dagr/render`
-  and `@dagr/layout` widened their option types for the same reason.
+  `animate={reducedMotion ? undefined : feel}` did not compile. `@prnt/dagr-render`
+  and `@prnt/dagr-layout` widened their option types for the same reason.
 - The first run for a graph is still synchronous and still during render, and
   the whole state object is still referentially stable across a render that
   changed nothing. It is NOT guaranteed to be observed once per layout, which is

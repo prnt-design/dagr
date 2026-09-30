@@ -33,9 +33,9 @@ function run(packageName: string, vitestReport: VitestReport): PackageRun {
 describe('control normalisation', () => {
   it('records each benchmark as a ratio against the control in its own file', () => {
     const normalised = normalisePackageRun(
-      run('@dagr/graph', report('graph.bench.ts', { attrs: [benchmark('update', 2)] }, { control: 0.5 })),
+      run('@prnt/dagr-graph', report('graph.bench.ts', { attrs: [benchmark('update', 2)] }, { control: 0.5 })),
     );
-    const key = benchKey('@dagr/graph', 'graph.bench.ts > attrs', 'update');
+    const key = benchKey('@prnt/dagr-graph', 'graph.bench.ts > attrs', 'update');
     expect(normalised.benchmarks[key]?.ratio).toBe(4);
     expect(normalised.benchmarks[key]?.medianMs).toBe(2);
     expect(normalised.errors).toEqual([]);
@@ -43,21 +43,21 @@ describe('control normalisation', () => {
 
   it('produces the same ratio on a machine that is uniformly slower', () => {
     const fast = normalisePackageRun(
-      run('@dagr/graph', report('graph.bench.ts', { attrs: [benchmark('update', 2)] }, { control: 0.5 })),
+      run('@prnt/dagr-graph', report('graph.bench.ts', { attrs: [benchmark('update', 2)] }, { control: 0.5 })),
     );
     const slow = normalisePackageRun(
-      run('@dagr/graph', report('graph.bench.ts', { attrs: [benchmark('update', 6)] }, { control: 1.5 })),
+      run('@prnt/dagr-graph', report('graph.bench.ts', { attrs: [benchmark('update', 6)] }, { control: 1.5 })),
     );
-    const key = benchKey('@dagr/graph', 'graph.bench.ts > attrs', 'update');
+    const key = benchKey('@prnt/dagr-graph', 'graph.bench.ts > attrs', 'update');
     expect(slow.benchmarks[key]?.ratio).toBe(fast.benchmarks[key]?.ratio);
   });
 
   it('does not record the control as a gated benchmark', () => {
     const normalised = normalisePackageRun(
-      run('@dagr/graph', report('graph.bench.ts', { attrs: [benchmark('update', 2)] }, { control: 0.5 })),
+      run('@prnt/dagr-graph', report('graph.bench.ts', { attrs: [benchmark('update', 2)] }, { control: 0.5 })),
     );
     expect(Object.keys(normalised.benchmarks)).toHaveLength(1);
-    expect(normalised.controls['@dagr/graph > graph.bench.ts']).toBe(0.5);
+    expect(normalised.controls['@prnt/dagr-graph > graph.bench.ts']).toBe(0.5);
   });
 
   it('normalises each file against its own control', () => {
@@ -69,16 +69,16 @@ describe('control normalisation', () => {
         ...report('b.bench.ts', { g: [benchmark('x', 2)] }, { control: 2 }).files,
       ],
     };
-    const normalised = normalisePackageRun(run('@dagr/graph', merged));
-    expect(normalised.benchmarks[benchKey('@dagr/graph', 'a.bench.ts > g', 'x')]?.ratio).toBe(4);
-    expect(normalised.benchmarks[benchKey('@dagr/graph', 'b.bench.ts > g', 'x')]?.ratio).toBe(1);
+    const normalised = normalisePackageRun(run('@prnt/dagr-graph', merged));
+    expect(normalised.benchmarks[benchKey('@prnt/dagr-graph', 'a.bench.ts > g', 'x')]?.ratio).toBe(4);
+    expect(normalised.benchmarks[benchKey('@prnt/dagr-graph', 'b.bench.ts > g', 'x')]?.ratio).toBe(1);
   });
 });
 
 describe('guards against measuring nothing', () => {
   it('rejects a bench file with no control', () => {
     const normalised = normalisePackageRun(
-      run('@dagr/graph', report('graph.bench.ts', { attrs: [benchmark('update', 2)] })),
+      run('@prnt/dagr-graph', report('graph.bench.ts', { attrs: [benchmark('update', 2)] })),
     );
     expect(normalised.errors.join(' ')).toMatch(/registers no control/);
     expect(normalised.benchmarks).toEqual({});
@@ -86,20 +86,20 @@ describe('guards against measuring nothing', () => {
 
   it('rejects a control that measured zero', () => {
     const normalised = normalisePackageRun(
-      run('@dagr/graph', report('graph.bench.ts', { attrs: [benchmark('update', 2)] }, { control: 0 })),
+      run('@prnt/dagr-graph', report('graph.bench.ts', { attrs: [benchmark('update', 2)] }, { control: 0 })),
     );
     expect(normalised.errors.join(' ')).toMatch(/control median of zero/);
   });
 
   it('rejects two packages reporting the same key', () => {
     const same = report('shared.bench.ts', { g: [benchmark('x', 1)] }, { control: 1 });
-    const normalised = normaliseRuns([run('@dagr/graph', same), run('@dagr/graph', same)]);
+    const normalised = normaliseRuns([run('@prnt/dagr-graph', same), run('@prnt/dagr-graph', same)]);
     expect(normalised.errors.join(' ')).toMatch(/reported twice/);
   });
 
   it('keeps benchmarks from different packages apart', () => {
     const shape = report('same.bench.ts', { g: [benchmark('x', 1)] }, { control: 1 });
-    const normalised = normaliseRuns([run('@dagr/graph', shape), run('@dagr/layout', shape)]);
+    const normalised = normaliseRuns([run('@prnt/dagr-graph', shape), run('@prnt/dagr-layout', shape)]);
     expect(normalised.errors).toEqual([]);
     expect(Object.keys(normalised.benchmarks)).toHaveLength(2);
   });
@@ -122,34 +122,34 @@ describe('machine probes', () => {
 
   it('records each probe median under its bench file', () => {
     const normalised = normalisePackageRun(
-      run('@dagr/graph', withProbes('graph.bench.ts', { alloc: 0.09, chase: 1 }, 0.1)),
+      run('@prnt/dagr-graph', withProbes('graph.bench.ts', { alloc: 0.09, chase: 1 }, 0.1)),
     );
-    expect(normalised.machine['@dagr/graph > graph.bench.ts']).toEqual({ alloc: 0.09, chase: 1 });
+    expect(normalised.machine['@prnt/dagr-graph > graph.bench.ts']).toEqual({ alloc: 0.09, chase: 1 });
     expect(normalised.errors).toEqual([]);
   });
 
   it('does not record a probe as a gated benchmark', () => {
     const normalised = normalisePackageRun(
-      run('@dagr/graph', withProbes('graph.bench.ts', { alloc: 0.09, chase: 1 }, 0.1)),
+      run('@prnt/dagr-graph', withProbes('graph.bench.ts', { alloc: 0.09, chase: 1 }, 0.1)),
     );
     expect(normalised.benchmarks).toEqual({});
   });
 
   it('drops a probe that measured zero, as a note rather than an error', () => {
     const normalised = normalisePackageRun(
-      run('@dagr/graph', withProbes('graph.bench.ts', { alloc: 0, chase: 1 }, 0.1)),
+      run('@prnt/dagr-graph', withProbes('graph.bench.ts', { alloc: 0, chase: 1 }, 0.1)),
     );
     // A probe is advisory by contract, so a probe measuring nothing must not
     // fail the run: it is dropped, the sentence lands in `notes`, and the
     // profile comparison reports the file as not comparable on its own.
     expect(normalised.errors).toEqual([]);
     expect(normalised.notes.join(' ')).toMatch(/probe .*alloc.* measured a median of zero/);
-    expect(normalised.machine['@dagr/graph > graph.bench.ts']).toEqual({ chase: 1 });
+    expect(normalised.machine['@prnt/dagr-graph > graph.bench.ts']).toEqual({ chase: 1 });
   });
 
   it('leaves the profile empty for a file that registers no probes', () => {
     const normalised = normalisePackageRun(
-      run('@dagr/graph', report('graph.bench.ts', { g: [benchmark('x', 1)] }, { control: 0.5 })),
+      run('@prnt/dagr-graph', report('graph.bench.ts', { g: [benchmark('x', 1)] }, { control: 0.5 })),
     );
     expect(normalised.machine).toEqual({});
     expect(normalised.errors).toEqual([]);

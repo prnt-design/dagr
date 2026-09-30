@@ -227,7 +227,7 @@ const SET_TITLES = {
 const SET_NOTES = {
   d2: [
     'D2, before and after: the campaign spacing and the edge ink.',
-    '  before: nodeSep 50, rankSep 50, tile gutter 200 (the @dagr/layout defaults), edges',
+    '  before: nodeSep 50, rankSep 50, tile gutter 200 (the @prnt/dagr-layout defaults), edges',
     '          inked in two colours by ROLE, and only the routed group dashed.',
     '  after:  nodeSep 120, rankSep 160, tile gutter 480, edges inked from the SOURCE node',
     '          kind, and both routed-role groups dashed. See CAMPAIGN_SPACING in tiles.ts',

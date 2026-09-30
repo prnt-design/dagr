@@ -64,8 +64,8 @@ function LivingView(): JSX.Element {
       <section className="facts">
         <h2 className="facts__title">what is on the canvas</h2>
         <p className="facts__lead">
-          A seeded build pipeline, laid out by <code>@dagr/layout</code> and drawn by{' '}
-          <code>@dagr/render</code> through <code>&lt;DagrCanvas animate&gt;</code>. Press a verb,
+          A seeded build pipeline, laid out by <code>@prnt/dagr-layout</code> and drawn by{' '}
+          <code>@prnt/dagr-render</code> through <code>&lt;DagrCanvas animate&gt;</code>. Press a verb,
           or let it play. Each verb is ONE <code>graph.batch</code>, so the engine sees one patch
           and answers with one <code>LayoutDelta</code>, and the drawing glides from where it was
           to where it belongs instead of cutting.
@@ -120,8 +120,8 @@ function CampaignView(): JSX.Element {
         <h2 className="facts__title">what is on the canvas</h2>
         <p className="facts__lead">
           A deterministic mock D&amp;D campaign (seed {campaign.seed}), generated in this page,
-          laid out one tile at a time by <code>@dagr/layout</code> in a worker, and drawn by{' '}
-          <code>@dagr/render</code> as two instanced draw calls and one mesh per edge group. Drag to pan, scroll to zoom.
+          laid out one tile at a time by <code>@prnt/dagr-layout</code> in a worker, and drawn by{' '}
+          <code>@prnt/dagr-render</code> as two instanced draw calls and one mesh per edge group. Drag to pan, scroll to zoom.
         </p>
         <div className="facts__grid">
           <div>

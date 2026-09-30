@@ -1,5 +1,5 @@
-import { Graph } from '@dagr/graph';
-import type { EdgeId, NodeId } from '@dagr/graph';
+import { Graph } from '@prnt/dagr-graph';
+import type { EdgeId, NodeId } from '@prnt/dagr-graph';
 import { describe, expect, it, vi } from 'vitest';
 import { measureNodes, resolveConfig } from '../src/config.js';
 import { StageContractError, defaultStages, layout } from '../src/index.js';
@@ -275,7 +275,7 @@ describe('longestPathRankStage', () => {
   it('never touches the graph it was handed', () => {
     const graph = tangled();
     // Snapshotted rather than written out as literals, so this asserts the
-    // graph is unchanged rather than pinning `@dagr/graph`'s record shape,
+    // graph is unchanged rather than pinning `@prnt/dagr-graph`'s record shape,
     // which gains fields over time and is none of this test's business.
     const nodesBefore = graph.nodes();
     const edgesBefore = graph.edges();

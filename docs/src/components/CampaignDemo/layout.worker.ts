@@ -24,8 +24,8 @@
  * forever with nothing thrown.
  */
 
-import type { LayoutPort } from '@dagr/layout';
-import { serveLayout } from '@dagr/layout';
+import type { LayoutPort } from '@prnt/dagr-layout';
+import { serveLayout } from '@prnt/dagr-layout';
 
 // A dedicated worker's global scope has the four members `LayoutPort` asks for,
 // but the DOM lib types `self` as a `Window`, whose `postMessage` takes an

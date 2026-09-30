@@ -1,4 +1,4 @@
-import { Camera2D } from '@dagr/render';
+import { Camera2D } from '@prnt/dagr-render';
 import { describe, expect, it } from 'vitest';
 import {
   nodeIdFromHash,
@@ -27,7 +27,7 @@ import { SMALLEST_NODE_SIZE } from '../src/campaign-style.js';
  *
  * `FirstLight.tsx` is React glue over a GPU device: every line of it needs a
  * canvas, an adapter and a live layout, so it is verified by a screenshot the
- * way `@dagr/render`'s own renderer is. These functions are the exception. They
+ * way `@prnt/dagr-render`'s own renderer is. These functions are the exception. They
  * are the arithmetic and the string parsing that sit between a DOM event or a
  * URL and a `Camera2D` call, they have sign conventions, unit conversions and
  * coercion holes that are easy to get subtly wrong, and they need nothing but

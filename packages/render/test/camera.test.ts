@@ -17,7 +17,7 @@ import { CAMERA_FAR, CAMERA_NEAR, CAMERA_Z } from '../src/webgpu-renderer.js';
  * seen the suite approach is a bound nobody has tested.
  */
 
-/** mulberry32, a 32-bit seeded PRNG, as in `@dagr/graph` and `@dagr/layout`. */
+/** mulberry32, a 32-bit seeded PRNG, as in `@prnt/dagr-graph` and `@prnt/dagr-layout`. */
 function mulberry32(seed: number): () => number {
   let state = seed >>> 0;
   return () => {
