@@ -154,3 +154,19 @@ MIT © prnt.design
 around explicit node sets. `nodeGroupBounds(nodes, group)` computes their world
 bounds for camera focus. See the [grouping guide](https://dagr.prnt.design/docs/node-groups)
 for synchronization, accessibility, and layout limitations.
+
+## Content navigation limits
+
+Call `camera.setContentBounds(bounds, nodeSize, padding, nodes)` with y-up world bounds
+and a representative node size to constrain every camera mutation, including
+wheel anchors, direct setters, fitting, and resize. The default node size is
+160 by 80 and padding is 0.05. The zoom range runs from full content to a single
+node. Smaller axes stay centered; other axes pan inside the padded bounds.
+Optional `nodes` supplies node bounds and keeps part of a node visible even in
+sparse regions. These bounds also expand the content bounds when needed.
+At a boundary, keeping content visible takes precedence over cursor anchoring.
+`setContentBounds(null)` clears these constraints and restores the explicit
+numeric zoom range. Explicit numeric limits can further restrict content zoom;
+when their ranges do not overlap, the larger minimum wins.
+
+`DagrCanvas` supplies these bounds and real node sizes automatically.

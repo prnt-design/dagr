@@ -99,6 +99,7 @@ export default function SystemAtlas() {
       miniCamera.current.setAttribute('height', String(height / camera.scale));
     }
   }, []);
+  const getNodes = useCallback(() => [...system.boxes.values()], [system]);
   const camera = useGraphCamera(
     viewport,
     plane,
@@ -106,6 +107,8 @@ export default function SystemAtlas() {
     system.height,
     true,
     apply,
+    undefined,
+    getNodes,
   );
   const current = nodes.find((n) => n.id === selected)!;
   const adjacent = neighbors(selected);

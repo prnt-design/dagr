@@ -12,9 +12,11 @@ import type { Camera, FocusBounds } from './useGraphCamera';
 import styles from './styles.module.css';
 
 export type ViewportAdapter = {
+  revision?: unknown;
   width: number;
   height: number;
   getBounds?: () => { x: number; y: number; width: number; height: number };
+  getNodes?: () => readonly { width: number; height: number; x?: number; y?: number }[];
   apply: (camera: Camera, width: number, height: number) => void;
 };
 const AdapterContext = createContext<(adapter: ViewportAdapter | null) => void>(
@@ -50,6 +52,8 @@ export default function GraphViewport({
     !native || adapter !== null,
     adapter?.apply,
     adapter?.getBounds,
+    adapter?.getNodes,
+    adapter?.revision,
   );
   useEffect(() => {
     if (focusBounds) camera.current.focus(focusBounds);
