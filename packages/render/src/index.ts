@@ -229,3 +229,5 @@ export type {
   ViewportSize,
   WorldBounds,
 } from './types.js';
+export { createNodeGroupLayer, nodeGroupBounds } from './node-groups.js';
+export type { NodeGroup, NodeGroupMember, NodeGroupLayer } from './node-groups.js';

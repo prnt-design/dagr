@@ -147,3 +147,10 @@ The scene model, the shapes, the instancing, the overlay tiers and the
 measurements are on the [renderer](https://dagr.prnt.design/docs/render) page.
 
 MIT © prnt.design
+
+## Node groups
+
+`createNodeGroupLayer({ parent, camera })` draws transparent labeled boundaries
+around explicit node sets. `nodeGroupBounds(nodes, group)` computes their world
+bounds for camera focus. See the [grouping guide](https://dagr.prnt.design/docs/node-groups)
+for synchronization, accessibility, and layout limitations.

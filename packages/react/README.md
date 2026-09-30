@@ -93,3 +93,9 @@ The component, the hook, the animation, the overlay and the two conversions are
 on the [React bindings](https://dagr.prnt.design/docs/react) page.
 
 MIT © prnt.design
+
+## Node groups
+
+Pass `groups={[{ id: 'processing', label: 'Processing', nodeIds: ['parse', 'validate'] }]}`
+to `DagrCanvas` to draw a boundary that follows those nodes. This is visual
+membership, not a layout constraint. See the [grouping guide](https://dagr.prnt.design/docs/node-groups).

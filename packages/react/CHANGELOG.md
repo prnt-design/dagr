@@ -1,5 +1,9 @@
 # @prnt/dagr-react
 
+## Unreleased
+
+- Add labeled node-group boundaries with camera synchronization and explicit visual membership.
+
 ## 0.1.0
 
 ### Added

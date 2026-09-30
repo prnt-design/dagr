@@ -160,7 +160,7 @@ try {
       'const onFrame = (_frame: Parameters<NonNullable<DagrCanvasProps[\'onFrame\']>>[0], renderer: Renderer) => renderer.camera.setZoom(1);',
       "const htmlProps: HtmlProps = { node: 'a', interactive: true };",
       'const umbrellaHtmlProps: UmbrellaHtmlProps = htmlProps;',
-      'const umbrellaCanvasProps: UmbrellaCanvasProps = { graph, onFrame };',
+      "const umbrellaCanvasProps: UmbrellaCanvasProps = { graph, onFrame, groups: [{ id: 'g', nodeIds: ['a'], label: 'Group' }] };",
       'function App() {',
       '  return <DagrCanvas graph={graph} onFrame={onFrame}><Html {...htmlProps}>Node {result.nodes.get(\'a\')?.x}</Html></DagrCanvas>;',
       '}',

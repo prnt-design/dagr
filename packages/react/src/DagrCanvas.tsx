@@ -68,7 +68,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import type { Graph } from '@prnt/dagr-graph';
 import type { LayoutConfig, LayoutDelta, LayoutResult } from '@prnt/dagr-layout';
-import { createHtmlOverlay, createMotionLoop, createRenderer, createSceneMotion } from '@prnt/dagr-render';
+import {
+  createNodeGroupLayer, nodeGroupBounds, createHtmlOverlay,
+  createMotionLoop, createRenderer, createSceneMotion,
+} from '@prnt/dagr-render';
 import type {
   FrameScheduler,
   HtmlOverlay,
@@ -78,6 +81,8 @@ import type {
   SceneEdge,
   SceneEdgeGroup,
   SceneMotion,
+  NodeGroup,
+  NodeGroupLayer,
   SceneMotionFrame,
   SceneMotionOptions,
   SceneNode,
@@ -118,6 +123,9 @@ const LOOP_FRAME = Symbol('dagr-canvas-loop-frame');
 
 /** What `<DagrCanvas>` takes. */
 export interface DagrCanvasProps {
+  /** Visual boundaries around explicit member IDs. Does not constrain layout or enforce security. */
+  readonly groups?: readonly NodeGroup[] | undefined;
+
   /** The graph to draw. Watched, so an in-place edit redraws. */
   readonly graph: Graph;
 
@@ -248,6 +256,7 @@ export interface DagrCanvasProps {
 interface Stage {
   readonly renderer: Renderer;
   readonly overlay: HtmlOverlay;
+  readonly groups: NodeGroupLayer;
 }
 
 /** The `animate` prop, normalised, so nothing downstream reads a union. */
@@ -380,6 +389,7 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
   // a spring. `motionRef` being null is also the ONE test for "is this
   // component animating", so the effects below cannot disagree about it.
   const motionRef = useRef<SceneMotion | null>(null);
+  const drawnNodesRef = useRef<readonly SceneNode[]>([]);
   const loopRef = useRef<MotionLoop | null>(null);
   const loopFrameRef = useRef<((nowMs: number) => void) | null>(null);
   const dressedNodesRef = useRef(new Map<string, SceneNode>());
@@ -453,6 +463,7 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
       const current = stageRef.current;
       if (current === null) return;
       current.renderer.render();
+      current.groups.sync();
       current.overlay.sync();
     });
   }, []);
@@ -495,7 +506,10 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
       if (current === null) return true;
       try {
         const frame = motion.advance(dtSeconds);
-        current.renderer.setNodes(dressNodes(frame.nodes, dressedNodesRef.current));
+        const drawn = dressNodes(frame.nodes, dressedNodesRef.current);
+        drawnNodesRef.current = drawn;
+        current.renderer.setNodes(drawn);
+        if (latest.current.groups?.length) current.groups.setNodes(drawn);
         current.renderer.setEdges(
           DEFAULT_EDGE_GROUP_ID,
           dressEdges(frame.edges, dressedEdgesRef.current),
@@ -504,6 +518,7 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
         // moves on this frame rather than on the next one.
         latest.current.onFrame?.(frame, current.renderer);
         current.renderer.render();
+        current.groups.sync();
         current.overlay.sync();
         if (frame.settled) {
           // The departed are gone: the dressing is whatever the layout holds
@@ -546,7 +561,15 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
     if (!wanted) return;
     const bounds = boundsRef.current;
     if (bounds === null) return;
-    current.renderer.camera.fitBounds(bounds, padding);
+    let framed = bounds;
+    for (const group of latest.current.groups ?? []) {
+      const box = nodeGroupBounds(sceneNodesRef.current ?? [], group);
+      if (box) framed = {
+        minX: Math.min(framed.minX, box.minX), minY: Math.min(framed.minY, box.minY),
+        maxX: Math.max(framed.maxX, box.maxX), maxY: Math.max(framed.maxY, box.maxY),
+      };
+    }
+    current.renderer.camera.fitBounds(framed, padding);
     fittedRef.current = true;
     requestDraw();
   }, [requestDraw]);
@@ -586,13 +609,16 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
         // nothing left that could dispose it: `made` is still null, so the
         // cleanup below has nothing to take back.
         let overlay;
+        let groups;
         try {
+          groups = createNodeGroupLayer({ parent: host, camera: renderer.camera });
           overlay = createHtmlOverlay({ parent: host, camera: renderer.camera });
         } catch (cause: unknown) {
+          groups?.dispose();
           renderer.dispose();
           throw cause;
         }
-        made = { renderer, overlay };
+        made = { renderer, overlay, groups };
         stageRef.current = made;
         setStage(made);
       })
@@ -609,6 +635,8 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
       // The overlay first: it holds elements inside the host, and disposing the
       // renderer does not know about them.
       made?.overlay.dispose();
+      made?.groups.dispose();
+      drawnNodesRef.current = [];
       made?.renderer.dispose();
       made = null;
       stageRef.current = null;
@@ -644,6 +672,13 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
     };
   }, [stage, fitOnce, requestDraw]);
 
+  useEffect(() => {
+    if (stage === null) return;
+    stage.groups.setGroups(props.groups ?? []);
+    stage.groups.setNodes(props.groups?.length ? drawnNodesRef.current : []);
+    requestDraw();
+  }, [stage, props.groups, requestDraw]);
+
   /**
    * The dressing an animated frame draws from, kept up to date only while
    * something is animating.
@@ -676,7 +711,9 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
     // than from the layout, and setting them here as well would cut to the
     // layout on the frame the animation was supposed to begin.
     if (motionRef.current !== null) return;
+    drawnNodesRef.current = sceneNodes;
     stage.renderer.setNodes(sceneNodes);
+    if (latest.current.groups?.length) stage.groups.setNodes(sceneNodes);
     requestDraw();
   }, [stage, sceneNodes, fitOnce, requestDraw]);
 
@@ -724,7 +761,11 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
       // cleanup runs first and takes the renderer with it.
       const current = stageRef.current;
       if (current === null) return;
-      if (sceneNodesRef.current !== null) current.renderer.setNodes(sceneNodesRef.current);
+      if (sceneNodesRef.current !== null) {
+        drawnNodesRef.current = sceneNodesRef.current;
+        current.renderer.setNodes(sceneNodesRef.current);
+        if (latest.current.groups?.length) current.groups.setNodes(sceneNodesRef.current);
+      }
       if (sceneEdgesRef.current !== null) {
         current.renderer.setEdges(DEFAULT_EDGE_GROUP_ID, sceneEdgesRef.current);
       }
