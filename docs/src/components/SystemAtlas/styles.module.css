@@ -257,6 +257,7 @@
   color: var(--dagr-text-muted);
 }
 .rich {
+  display: block;
   margin-top: 8px;
 }
 .rows {
@@ -273,7 +274,9 @@
   color: var(--dagr-foreground);
   font-size: 11px;
 }
-.rich pre {
+.nodeCode {
+  display: block;
+  white-space: pre;
   background: transparent;
   border: 0;
   color: var(--role);
@@ -303,6 +306,7 @@
 }
 .viewport[data-detail='overview'] .rich,
 .viewport[data-detail='summary'] .rich {
+  display: block;
   visibility: hidden;
 }
 .viewport[data-detail='overview'] .subtitle,

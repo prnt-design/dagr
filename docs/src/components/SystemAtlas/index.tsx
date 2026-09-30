@@ -37,33 +37,33 @@ const kindNames = {
 function RichNode({ node }: { node: SystemNode }) {
   return (
     <>
-      <div className={styles.nodeTop}>
+      <span className={styles.nodeTop}>
         <span>
           {symbols[node.kind]} {kindNames[node.kind]}
         </span>
         <span>{node.id}</span>
-      </div>
+      </span>
       <strong className={styles.nodeName}>{node.name}</strong>
       <span className={styles.subtitle}>{node.subtitle}</span>
-      <div className={styles.rich}>
-        <div className={styles.rows}>
+      <span className={styles.rich}>
+        <span className={styles.rows}>
           {node.rows.map(([key, value]) => (
             <span key={key}>
               {key}
               <b>{value}</b>
             </span>
           ))}
-        </div>
-        <pre>{node.code.join('\n')}</pre>
-      </div>
-      <div className={styles.ports}>
+        </span>
+        <span className={styles.nodeCode}>{node.code.join('\n')}</span>
+      </span>
+      <span className={styles.ports}>
         {registry.get(node.kind).ports.map((p) => (
           <span key={p.id}>
             {p.direction === 'in' ? '●' : '○'} {p.id}
             <small>{p.type}</small>
           </span>
         ))}
-      </div>
+      </span>
     </>
   );
 }
@@ -116,6 +116,11 @@ export default function SystemAtlas() {
   );
   function focus(id: string) {
     setSelected(id);
+    setTab('inspect');
+    const rect = viewport.current?.getBoundingClientRect();
+    if (rect && (rect.bottom < 80 || rect.top > window.innerHeight)) {
+      viewport.current?.scrollIntoView({ block: 'center' });
+    }
     const b = system.boxes.get(id)!;
     // Keep enough surrounding graph in view to preserve context.
     const padding = (viewport.current?.clientWidth ?? 0) < 600 ? 12 : 150;
@@ -175,7 +180,7 @@ export default function SystemAtlas() {
           <div className={styles.graphColumn}>
             <div className={styles.graphActions}>
               <div className={styles.legend}>
-                {['service', 'stream', 'worker', 'store'].map((k) => (
+                {registry.kinds.map((k) => (
                   <span key={k} data-kind={k}>
                     <i />
                     {kindNames[k as keyof typeof kindNames]}
