@@ -10,8 +10,8 @@ A node group draws a labeled, dashed rectangle around selected nodes. Use it
 for trust boundaries, ownership, deployment zones, or a subsystem outline.
 
 ```tsx
-import { DagrCanvas, Html } from 'dagr/react';
-import type { NodeGroup } from 'dagr/react';
+import { DagrCanvas, Html } from '@prnt/dagr/react';
+import type { NodeGroup } from '@prnt/dagr/react';
 
 const groups: readonly NodeGroup[] = [{
   id: 'processing',
@@ -67,7 +67,7 @@ in a large graph.
 ## Use the renderer directly
 
 ```ts
-import { createNodeGroupLayer, nodeGroupBounds } from 'dagr/render';
+import { createNodeGroupLayer, nodeGroupBounds } from '@prnt/dagr/render';
 
 // Mount after the canvas and before rich-node overlays.
 // host is connected, positioned, and has the camera viewport's dimensions.

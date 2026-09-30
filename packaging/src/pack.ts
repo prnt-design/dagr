@@ -41,7 +41,7 @@ export function packPublishedPackages(): { packages: PackedPackage[]; dispose: (
       [
         ...PUBLISHED_PACKAGES.flatMap((p) => [
           '--filter',
-          p === 'dagr' ? 'dagr' : `@prnt/dagr-${p}`,
+          p === 'dagr' ? '@prnt/dagr' : `@prnt/dagr-${p}`,
         ]),
         'build',
       ],
@@ -52,7 +52,7 @@ export function packPublishedPackages(): { packages: PackedPackage[]; dispose: (
       const packageDir = join(REPO_ROOT, 'packages', name);
       const tarball = run('pnpm', ['pack', '--pack-destination', workDir], packageDir).trim().split('\n').pop();
       if (tarball === undefined || tarball === '') {
-        const packageName = name === 'dagr' ? 'dagr' : `@prnt/dagr-${name}`;
+        const packageName = name === 'dagr' ? '@prnt/dagr' : `@prnt/dagr-${name}`;
         throw new Error(`pnpm pack printed no tarball path for ${packageName}`);
       }
 

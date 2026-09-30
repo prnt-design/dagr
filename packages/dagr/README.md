@@ -1,16 +1,16 @@
-# dagr
+# @prnt/dagr
 
 The convenience entry point for Dagr. The root exports the graph model;
 subpaths expose each package without merging conflicting names.
 
 ```sh
-npm install dagr react react-dom three
+npm install @prnt/dagr react react-dom three
 ```
 
 ```ts
-import { Graph } from 'dagr';
-import { layout } from 'dagr/layout';
-// Also available: dagr/graph, dagr/render, dagr/react, dagr/vdsl.
+import { Graph } from '@prnt/dagr';
+import { layout } from '@prnt/dagr/layout';
+// Also available: @prnt/dagr/graph, @prnt/dagr/render, @prnt/dagr/react, @prnt/dagr/vdsl.
 
 const graph = new Graph();
 graph.addNode('source');
@@ -20,7 +20,7 @@ const result = layout({ graph });
 ```
 
 Each entry point forwards the same exports and types as its corresponding
-`@prnt/dagr-*` package. `dagr` and `dagr/graph` both forward
+`@prnt/dagr-*` package. `@prnt/dagr` and `@prnt/dagr/graph` both forward
 `@prnt/dagr-graph`. Importing the root does not initialize a renderer.
 The umbrella installs all five packages. For a smaller dependency set,
 install the scoped packages individually.

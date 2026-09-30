@@ -52,12 +52,12 @@ function each(): PackedPackage[] {
 describe('the tarball a consumer installs', () => {
   it('packs one tarball per published package', () => {
     expect(each().map((p) => p.name).sort()).toEqual([
+      '@prnt/dagr',
       '@prnt/dagr-graph',
       '@prnt/dagr-layout',
       '@prnt/dagr-react',
       '@prnt/dagr-render',
       '@prnt/dagr-vdsl',
-      'dagr',
     ]);
   });
 

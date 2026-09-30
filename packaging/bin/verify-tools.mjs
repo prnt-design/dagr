@@ -55,7 +55,7 @@ try {
     [
       ...PACKAGES.flatMap((p) => [
         '--filter',
-        p === 'dagr' ? 'dagr' : `@prnt/dagr-${p}`,
+        p === 'dagr' ? '@prnt/dagr' : `@prnt/dagr-${p}`,
       ]),
       'build',
     ],
@@ -114,20 +114,20 @@ try {
     join(scratch, 'index.tsx'),
     [
       "import { Graph as ScopedGraph } from '@prnt/dagr-graph';",
-      "import { Graph as RootGraph } from 'dagr';",
-      "import { Graph as SubpathGraph } from 'dagr/graph';",
+      "import { Graph as RootGraph } from '@prnt/dagr';",
+      "import { Graph as SubpathGraph } from '@prnt/dagr/graph';",
       "import { layout } from '@prnt/dagr-layout';",
-      "import { layout as UmbrellaLayout } from 'dagr/layout';",
+      "import { layout as UmbrellaLayout } from '@prnt/dagr/layout';",
       "import { defineRegistry, sameType } from '@prnt/dagr-vdsl';",
-      "import { defineRegistry as UmbrellaRegistry } from 'dagr/vdsl';",
+      "import { defineRegistry as UmbrellaRegistry } from '@prnt/dagr/vdsl';",
       "import { DagrCanvas, Html } from '@prnt/dagr-react';",
-      "import { DagrCanvas as UmbrellaCanvas, Html as UmbrellaHtml } from 'dagr/react';",
+      "import { DagrCanvas as UmbrellaCanvas, Html as UmbrellaHtml } from '@prnt/dagr/react';",
       "import type { DagrCanvasProps, HtmlProps } from '@prnt/dagr-react';",
-      "import type { DagrCanvasProps as UmbrellaCanvasProps, HtmlProps as UmbrellaHtmlProps } from 'dagr/react';",
+      "import type { DagrCanvasProps as UmbrellaCanvasProps, HtmlProps as UmbrellaHtmlProps } from '@prnt/dagr/react';",
       "import { Camera2D, fitZoom, ribbonWidthAt, stepSpring2D } from '@prnt/dagr-render';",
-      "import { Camera2D as UmbrellaCamera } from 'dagr/render';",
+      "import { Camera2D as UmbrellaCamera } from '@prnt/dagr/render';",
       "import type { Renderer, RendererOptions, SceneNode, WorldBounds } from '@prnt/dagr-render';",
-      "import type { Renderer as UmbrellaRenderer, RendererOptions as UmbrellaRendererOptions } from 'dagr/render';",
+      "import type { Renderer as UmbrellaRenderer, RendererOptions as UmbrellaRendererOptions } from '@prnt/dagr/render';",
       "import { createRoot } from 'react-dom/client';",
       '',
       'const graph = new RootGraph();',
@@ -183,16 +183,16 @@ try {
     join(scratch, 'smoke.mjs'),
     [
       "import { Graph as ScopedGraph } from '@prnt/dagr-graph';",
-      "import { Graph as RootGraph } from 'dagr';",
-      "import { Graph as SubpathGraph } from 'dagr/graph';",
+      "import { Graph as RootGraph } from '@prnt/dagr';",
+      "import { Graph as SubpathGraph } from '@prnt/dagr/graph';",
       "import { layout as ScopedLayout } from '@prnt/dagr-layout';",
-      "import { layout as UmbrellaLayout } from 'dagr/layout';",
+      "import { layout as UmbrellaLayout } from '@prnt/dagr/layout';",
       "import { Camera2D as ScopedCamera, fitZoom, ribbonWidthAt, stepSpring2D } from '@prnt/dagr-render';",
-      "import { Camera2D as UmbrellaCamera } from 'dagr/render';",
+      "import { Camera2D as UmbrellaCamera } from '@prnt/dagr/render';",
       "import { defineRegistry as ScopedRegistry, sameType } from '@prnt/dagr-vdsl';",
-      "import { defineRegistry as UmbrellaRegistry } from 'dagr/vdsl';",
+      "import { defineRegistry as UmbrellaRegistry } from '@prnt/dagr/vdsl';",
       "import * as react from '@prnt/dagr-react';",
-      "import * as umbrellaReact from 'dagr/react';",
+      "import * as umbrellaReact from '@prnt/dagr/react';",
       '',
       "if (ScopedGraph !== RootGraph || ScopedGraph !== SubpathGraph) throw new Error('graph umbrella identity failed');",
       "if (ScopedCamera !== UmbrellaCamera) throw new Error('render umbrella identity failed');",
@@ -228,8 +228,8 @@ try {
   const renderTarball = pick('render');
   const reactTarball = pick('react');
   const vdslTarball = pick('vdsl');
-  const umbrellaTarball = tarballs.find((t) => /^dagr-\d.*\.tgz$/.test(basename(t)));
-  if (umbrellaTarball === undefined) throw new Error('no tarball was packed for dagr');
+  const umbrellaTarball = tarballs.find((t) => /^prnt-dagr-\d.*\.tgz$/.test(basename(t)));
+  if (umbrellaTarball === undefined) throw new Error('no tarball was packed for @prnt/dagr');
   run(
     'npm',
     [
