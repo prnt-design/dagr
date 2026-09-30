@@ -99,3 +99,17 @@ MIT © prnt.design
 Pass `groups={[{ id: 'processing', label: 'Processing', nodeIds: ['parse', 'validate'] }]}`
 to `DagrCanvas` to draw a boundary that follows those nodes. This is visual
 membership, not a layout constraint. See the [grouping guide](https://dagr.prnt.design/docs/node-groups).
+
+## Default navigation limits
+
+`DagrCanvas` constrains its camera by default. The minimum zoom fits the complete
+graph, including group labels and padding. The maximum fits a single node with
+5% margin (or `fitPadding`); for mixed node sizes the smallest fitting node sets
+the ceiling. Panning stays within the padded content bounds and keeps part of an actual node
+visible, including in sparse graphs. An axis smaller
+than the viewport stays centered. Limits follow resizing, layout changes, and
+animated bounds without resetting a valid close-up.
+
+`fit={false}` only skips the initial fit. Use `cameraLimits={false}` to opt out
+of content constraints when implementing a custom camera policy. Low-level
+`Camera2D` instances remain unrestricted until `setContentBounds` is called.

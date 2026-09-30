@@ -22,7 +22,10 @@
  * who does want to animate one holds the renderer, through `useDagrCanvas`, and
  * `setEdgeStyle` is on it.
  *
- * **The camera is fitted once and then it is the user's.** The first frame that
+ * **The camera fits once, then preserves exploration within content limits.**
+ * The default limits update on resize and edits, clamping only when needed.
+ * Set `cameraLimits={false}` to manage an unrestricted camera.
+ * The first frame that
  * has both a layout and a viewport frames the graph; nothing refits after that,
  * and `fit={false}` skips even the first. Refitting on every edit would be a
  * camera that jumps whenever the graph changes, which is the instability the
@@ -70,7 +73,7 @@ import type { Graph } from '@prnt/dagr-graph';
 import type { LayoutConfig, LayoutDelta, LayoutResult } from '@prnt/dagr-layout';
 import {
   createNodeGroupLayer, nodeGroupBounds, createHtmlOverlay,
-  createMotionLoop, createRenderer, createSceneMotion,
+  createMotionLoop, createRenderer, createSceneMotion, fitZoom,
 } from '@prnt/dagr-render';
 import type {
   FrameScheduler,
@@ -192,6 +195,9 @@ export interface DagrCanvasProps {
 
   /** Whether to frame the graph on the first drawable frame. Default true. */
   readonly fit?: boolean | undefined;
+
+  /** Constrain zoom to overview/detail and pan to content. Default true. */
+  readonly cameraLimits?: boolean | undefined;
 
   /** The margin the fit leaves, as a fraction of the viewport. Default the camera's. */
   readonly fitPadding?: number | undefined;
@@ -468,6 +474,40 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
     });
   }, []);
 
+  const limitsOwnedRef = useRef(false);
+  const syncCameraLimits = useCallback((nodes = sceneNodesRef.current, box = boundsRef.current): void => {
+    const current = stageRef.current;
+    if (!current || !viewportRef.current) return;
+    const camera = current.renderer.camera;
+    if (latest.current.cameraLimits === false || !nodes?.length || !box) {
+      if (limitsOwnedRef.current) camera.setContentBounds(null);
+      limitsOwnedRef.current = false;
+      return;
+    }
+    let framed = box;
+    for (const group of latest.current.groups ?? []) {
+      const groupBox = nodeGroupBounds(nodes, group);
+      if (groupBox) framed = {
+        minX: Math.min(framed.minX, groupBox.minX), minY: Math.min(framed.minY, groupBox.minY),
+        maxX: Math.max(framed.maxX, groupBox.maxX), maxY: Math.max(framed.maxY, groupBox.maxY),
+      };
+    }
+    // The smallest fitting node sets the ceiling, so every node can be inspected.
+    let detail = { width: 160, height: 80 };
+    let max = 0;
+    for (const node of nodes) {
+      if (node.size.width <= 0 || node.size.height <= 0) continue;
+      const zoom = fitZoom({ minX: 0, minY: 0, maxX: node.size.width, maxY: node.size.height }, camera.viewport);
+      if (zoom > max) { max = zoom; detail = node.size; }
+    }
+    const regions = nodes.filter((node) => node.size.width > 0 && node.size.height > 0).map((node) => ({
+      minX: node.center.x - node.size.width / 2, maxX: node.center.x + node.size.width / 2,
+      minY: node.center.y - node.size.height / 2, maxY: node.center.y + node.size.height / 2,
+    }));
+    camera.setContentBounds(framed, detail, latest.current.fitPadding, regions);
+    limitsOwnedRef.current = true;
+  }, []);
+
   /**
    * The loop's scheduler, which is this component's own coalesced frame.
    *
@@ -508,6 +548,7 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
         const frame = motion.advance(dtSeconds);
         const drawn = dressNodes(frame.nodes, dressedNodesRef.current);
         drawnNodesRef.current = drawn;
+        syncCameraLimits(drawn, frame.bounds);
         current.renderer.setNodes(drawn);
         if (latest.current.groups?.length) current.groups.setNodes(drawn);
         current.renderer.setEdges(
@@ -551,7 +592,7 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
         return true;
       }
     },
-    [],
+    [syncCameraLimits],
   );
 
   const fitOnce = useCallback((): void => {
@@ -663,6 +704,7 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
         devicePixelRatio: window.devicePixelRatio,
       });
       viewportRef.current = true;
+      syncCameraLimits();
       fitOnce();
       requestDraw();
     });
@@ -670,14 +712,15 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
     return () => {
       observer.disconnect();
     };
-  }, [stage, fitOnce, requestDraw]);
+  }, [stage, fitOnce, requestDraw, syncCameraLimits]);
 
   useEffect(() => {
     if (stage === null) return;
+    syncCameraLimits();
     stage.groups.setGroups(props.groups ?? []);
     stage.groups.setNodes(props.groups?.length ? drawnNodesRef.current : []);
     requestDraw();
-  }, [stage, props.groups, requestDraw]);
+  }, [stage, props.groups, props.cameraLimits, props.fitPadding, requestDraw, syncCameraLimits]);
 
   /**
    * The dressing an animated frame draws from, kept up to date only while
@@ -706,6 +749,7 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
 
   useEffect(() => {
     if (stage === null || sceneNodes === null) return;
+    if (motionRef.current === null) syncCameraLimits();
     fitOnce();
     // The loop draws the nodes while it is running, from the springs rather
     // than from the layout, and setting them here as well would cut to the
@@ -715,7 +759,7 @@ export function DagrCanvas(props: DagrCanvasProps): ReactElement {
     stage.renderer.setNodes(sceneNodes);
     if (latest.current.groups?.length) stage.groups.setNodes(sceneNodes);
     requestDraw();
-  }, [stage, sceneNodes, fitOnce, requestDraw]);
+  }, [stage, sceneNodes, fitOnce, requestDraw, syncCameraLimits]);
 
   useEffect(() => {
     if (stage === null || sceneEdges === null) return;

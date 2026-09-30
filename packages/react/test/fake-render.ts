@@ -49,8 +49,8 @@ import type {
 } from '@prnt/dagr-render';
 
 /** Real projection for annotation tests, with an observable camera-fit call. */
-export interface FakeCamera extends Pick<Camera2D, 'worldToScreen' | 'viewport' | 'zoom'> {
-  readonly fitBounds: Mock<(bounds: unknown, padding?: number) => void>;
+export interface FakeCamera extends Camera2D {
+  readonly fitBounds: Mock<Camera2D['fitBounds']>;
 }
 
 /** Every renderer method, recorded. */
@@ -127,14 +127,12 @@ export function lastOverlay(): FakeOverlay {
 }
 
 export function createRenderer(options: RendererOptions): Promise<Renderer> {
+  const camera = new Camera2D({ viewport: { width: 800, height: 600, devicePixelRatio: 1 } });
   const fake: FakeRenderer = {
-    camera: Object.assign(
-      new Camera2D({ viewport: { width: 800, height: 600, devicePixelRatio: 1 } }),
-      { fitBounds: vi.fn() },
-    ),
+    camera: Object.assign(camera, { fitBounds: vi.fn(camera.fitBounds.bind(camera)) }),
     setNodes: vi.fn(),
     setEdges: vi.fn(),
-    resize: vi.fn(),
+    resize: vi.fn((viewport) => camera.setViewport(viewport as Parameters<Camera2D['setViewport']>[0])),
     render: vi.fn(),
     dispose: vi.fn(),
     options,

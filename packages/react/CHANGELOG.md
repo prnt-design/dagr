@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add content-aware pan and zoom limits: fit the graph at minimum zoom, fit a node at maximum zoom, and keep navigation inside padded bounds. Limits follow resize and content changes. Enabled by default in `DagrCanvas`; opt out with `cameraLimits={false}`.
+
 - Add labeled node-group boundaries with camera synchronization and explicit visual membership.
 
 ## 0.1.0

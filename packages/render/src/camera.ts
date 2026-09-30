@@ -161,6 +161,9 @@ export class Camera2D {
   #viewport: ViewportSize;
   #minZoom: number;
   #maxZoom: number;
+  #content: { bounds: WorldBounds; nodeSize: Size; padding: number; nodes: readonly WorldBounds[] } | null = null;
+  #contentMin = Number.MIN_VALUE;
+  #contentMax = Number.MAX_VALUE;
 
   /**
    * Builds a camera, rejecting anything that cannot describe one.
@@ -218,17 +221,17 @@ export class Camera2D {
 
   /** The smallest zoom this camera will settle on. */
   get minZoom(): number {
-    return this.#minZoom;
+    return Math.max(this.#minZoom, this.#contentMin);
   }
 
   /** The largest zoom this camera will settle on. */
   get maxZoom(): number {
-    return this.#maxZoom;
+    return Math.max(this.minZoom, Math.min(this.#maxZoom, this.#contentMax));
   }
 
   /** Moves the camera to a world point. Rejects a non-finite coordinate. */
   setCenter(center: Vec2): void {
-    this.#center = requireFinitePoint(center, 'center');
+    this.#center = this.#clampCenter(requireFinitePoint(center, 'center'));
   }
 
   /**
@@ -242,6 +245,7 @@ export class Camera2D {
    */
   setZoom(zoom: number): void {
     this.#zoom = this.#clampZoom(requirePositive(zoom, 'zoom'));
+    this.#center = this.#clampCenter(this.#center);
   }
 
   /**
@@ -257,6 +261,7 @@ export class Camera2D {
   setZoomLimits(minZoom: number, maxZoom: number): void {
     [this.#minZoom, this.#maxZoom] = Camera2D.#requireZoomRange(minZoom, maxZoom);
     this.#zoom = this.#clampZoom(this.#zoom);
+    this.#center = this.#clampCenter(this.#center);
   }
 
   /**
@@ -294,14 +299,15 @@ export class Camera2D {
     // caller deriving limits from the same fit gets the same number; see its
     // docstring for why it is a function and not a private method.
     this.#zoom = this.#clampZoom(fitZoom(bounds, this.#viewport, padding));
-    this.#center = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
+    this.#center = this.#clampCenter({ x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 });
   }
 
   /**
    * Adopts a new canvas size.
    *
-   * **The centre and the zoom are preserved, so the visible world GROWS when
-   * the canvas grows.** That is the decision, and it is worth stating because
+   * With content limits, resize first recomputes the range and clamps the view.
+   * Otherwise the centre and zoom are preserved, so the visible world GROWS when
+   * the canvas grows. That is the decision, and it is worth stating because
    * the alternative is defensible elsewhere: a camera that preserved the
    * visible RECT would rescale the drawing to fit, which is what an image
    * viewer does. A graph canvas is not an image viewer. A user who has zoomed
@@ -312,6 +318,7 @@ export class Camera2D {
    */
   setViewport(viewport: ViewportSize): void {
     this.#viewport = requireViewport(viewport, 'viewport');
+    this.#refreshContentLimits();
   }
 
   /**
@@ -417,10 +424,10 @@ export class Camera2D {
   panByScreen(dx: number, dy: number): void {
     requireFinite(dx, 'dx');
     requireFinite(dy, 'dy');
-    this.#center = {
+    this.#center = this.#clampCenter({
       x: this.#center.x - dx / this.#zoom,
       y: this.#center.y + dy / this.#zoom,
-    };
+    });
   }
 
   /**
@@ -445,11 +452,78 @@ export class Camera2D {
     const zoom = this.#clampZoom(this.#zoom * factor);
 
     // Solve worldToScreen(world) === anchor for the centre, at the new zoom.
-    this.#center = {
+    this.#zoom = zoom;
+    this.#center = this.#clampCenter({
       x: world.x - (anchor.x - this.#viewport.width / 2) / zoom,
       y: world.y + (anchor.y - this.#viewport.height / 2) / zoom,
+    });
+  }
+
+  /**
+   * Constrain navigation to content. The floor fits the full bounds, the ceiling
+   * fits nodeSize (default 160 by 80). Small axes stay centered; larger axes pan
+   * within the padded content. Resize recalculates limits automatically.
+   * Pass null to remove content constraints, preserving explicit zoom limits.
+   * Optional node bounds prevent losing all nodes in sparse content; a node
+   * retains up to 32 CSS pixels of visible overlap on each axis. Bounds expand
+   * to include these nodes. Cursor anchoring yields to pan boundaries.
+   */
+  setContentBounds(bounds: WorldBounds | null, nodeSize: Size = { width: 160, height: 80 }, padding = 0.05, nodes: readonly WorldBounds[] = []): void {
+    if (bounds === null) {
+      this.#content = null;
+    } else {
+      fitZoom(bounds, this.#viewport, padding);
+      requirePositive(nodeSize.width, 'nodeSize.width');
+      requirePositive(nodeSize.height, 'nodeSize.height');
+      const framed = { ...bounds };
+      const regions = nodes.map((node) => {
+        fitZoom(node, this.#viewport, padding);
+        framed.minX = Math.min(framed.minX, node.minX);
+        framed.minY = Math.min(framed.minY, node.minY);
+        framed.maxX = Math.max(framed.maxX, node.maxX);
+        framed.maxY = Math.max(framed.maxY, node.maxY);
+        return { ...node };
+      });
+      this.#content = { bounds: framed, nodeSize: { ...nodeSize }, padding, nodes: regions };
+    }
+    this.#refreshContentLimits();
+  }
+
+  #refreshContentLimits(): void {
+    const content = this.#content;
+    this.#contentMin = content ? fitZoom(content.bounds, this.#viewport, content.padding) : Number.MIN_VALUE;
+    this.#contentMax = content ? Math.max(this.#contentMin, fitZoom({ minX: 0, minY: 0, maxX: content.nodeSize.width, maxY: content.nodeSize.height }, this.#viewport, content.padding)) : Number.MAX_VALUE;
+    this.#zoom = this.#clampZoom(this.#zoom);
+    this.#center = this.#clampCenter(this.#center);
+  }
+
+  #clampCenter(center: Vec2): Vec2 {
+    if (!this.#content) return center;
+    const { bounds, padding } = this.#content;
+    const axis = (value: number, min: number, max: number, pixels: number): number => {
+      const half = pixels * (0.5 - padding) / this.#zoom;
+      if (max - min <= 2 * half) return (min + max) / 2;
+      return Math.max(min + half, Math.min(max - half, value));
     };
-    this.#zoom = zoom;
+    const clamped = {
+      x: axis(center.x, bounds.minX, bounds.maxX, this.#viewport.width),
+      y: axis(center.y, bounds.minY, bounds.maxY, this.#viewport.height),
+    };
+    if (!this.#content.nodes.length) return clamped;
+    const halfWidth = this.#viewport.width / (2 * this.#zoom);
+    const halfHeight = this.#viewport.height / (2 * this.#zoom);
+    let nearest = clamped;
+    let distance = Infinity;
+    for (const node of this.#content.nodes) {
+      const marginX = Math.min(32 / this.#zoom, (node.maxX - node.minX) / 2, halfWidth);
+      const marginY = Math.min(32 / this.#zoom, (node.maxY - node.minY) / 2, halfHeight);
+      const x = Math.max(node.minX - halfWidth + marginX, Math.min(node.maxX + halfWidth - marginX, clamped.x));
+      const y = Math.max(node.minY - halfHeight + marginY, Math.min(node.maxY + halfHeight - marginY, clamped.y));
+      const d = Math.hypot(x - clamped.x, y - clamped.y);
+      if (d === 0) return clamped;
+      if (d < distance) { distance = d; nearest = { x, y }; }
+    }
+    return nearest;
   }
 
   /**
@@ -460,6 +534,6 @@ export class Camera2D {
    * `Infinity` clamps to `maxZoom` rather than escaping as a non-finite zoom.
    */
   #clampZoom(zoom: number): number {
-    return Math.min(this.#maxZoom, Math.max(this.#minZoom, zoom));
+    return Math.min(this.maxZoom, Math.max(this.minZoom, zoom));
   }
 }
