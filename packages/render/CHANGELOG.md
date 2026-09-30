@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `@prnt/dagr-render`. The entries below describe the initial 0.1.0 release.
+All notable changes to `@prnt/dagr-render`. Release history for the renderer.
 
 This file exists for the same reason `@prnt/dagr-layout`'s does, one milestone
 earlier in its life. Rendering is where a decision changes what a user sees
@@ -9,13 +9,14 @@ which unit a number is in. A caller upgrading past one of those sees a drawing
 in a different place, and no compiler tells them. "Behaviour changed, types did
 not" is the category this file has a heading for.
 
-## Unreleased
+## 0.1.1
 
 - Add content-aware pan and zoom limits: fit the graph at minimum zoom, fit a node at maximum zoom, and keep navigation inside padded bounds. Limits follow resize and content changes. Available through `Camera2D.setContentBounds`.
 
+## 0.1.0
+
 - Add labeled node-group boundaries with camera synchronization and explicit visual membership.
 
-## 0.1.0
 
 ### Added
 

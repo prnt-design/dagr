@@ -8,6 +8,10 @@ checklist is where a changelog tool gets picked. Starting now is what stops the
 v0.2 notes from having to be reconstructed by diffing six milestones of doc
 prose.
 
+## 0.1.1
+
+- Lockstep 0.1.1 release with the camera-limit update. No runtime API changes in this package.
+
 ## 0.1.0
 
 ### Added

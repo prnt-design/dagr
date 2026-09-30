@@ -9,6 +9,10 @@ types did not" is the category this file has a heading for, so that the v0.1
 release notes do not have to be reconstructed by diffing five milestones' worth
 of doc prose.
 
+## 0.1.1
+
+- Lockstep 0.1.1 release with the camera-limit update. No runtime API changes in this package.
+
 ## 0.1.0
 
 ### Changed
