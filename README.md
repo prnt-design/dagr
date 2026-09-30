@@ -13,10 +13,10 @@ WebGPURenderer, SDF shapes, spring physics) and a React component on top.
 **[Documentation](https://dagr.prnt.design/docs/)** ·
 **[Follow an edit](https://dagr.prnt.design/demos/living)**
 
-Explore 24 chess opening lines across 75 board positions, with branching moves,
-family filters, and a shared zoomable viewport. Then inspect Dagr's own
-architecture, edit a live build pipeline, or try rich React nodes with a
-generated pattern preview and an edge annotation.
+Explore an event-driven commerce architecture with rich nodes, typed ports,
+search, connection tracing, and zoom-to-node navigation. Zoom out for topology
+and in for routes, schemas, and configuration. The example uses the VDSL
+registry to validate every connection before Dagr lays it out.
 
 Dagr provides the structure; your application defines the meaning. Use it for
 codebase maps, application architectures, build pipelines, or the building

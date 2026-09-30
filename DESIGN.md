@@ -2,7 +2,7 @@
 
 ## Identity
 
-Extend the existing Muslin-derived theme and original Dagr logo. The homepage leads with Dagr. “Inside the graph” is reserved for the architecture deep dive. Examples use a workbench: an explorable graph canvas and a contextual inspector, preceded by a concise introduction. The chess atlas leads with branching miniature boards, move labels, family filters, and a readable position inspector; architecture remains the explanatory companion.
+Extend the existing Muslin-derived theme and original Dagr logo. The homepage leads with Dagr. The system atlas pairs a dominant graph viewport with a searchable inspector. A dense overview reveals topology; semantic zoom exposes service configuration, event schemas, and typed ports. Connections support focus navigation and tracing. Keep the page chrome quiet so the graph carries the visual interest.
 
 ## Color and surfaces
 
@@ -18,4 +18,4 @@ Square controls, thin complete borders, and occasional 45-degree corner cuts con
 
 ## Interaction
 
-Architecture selection updates the inspector without navigating away. Modes distinguish the architecture, a guided edit, and rich content. Controls have visible focus and pressed states. Motion explains changes, never blocks reading, and respects reduced-motion preferences. Loading and rendering failures retain a useful path to the documentation.
+Node selection updates the inspector without navigating away. Search and connection selection focus the camera. The language panel demonstrates actual VDSL validation. Controls have visible focus and pressed states. Motion explains changes, never blocks reading, and respects reduced-motion preferences. Loading and rendering failures retain a useful path to the documentation.

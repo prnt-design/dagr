@@ -10,11 +10,11 @@ Engineering peers, potential collaborators, and portfolio visitors exploring Nii
 
 ## Product Purpose
 
-Dagr is a directed-graph toolkit for the web. Its showcase makes the engineering understandable through a chess opening atlas, an explorable graph of its own architecture, rich content, and observable layout changes. The user approved the chess atlas as the richer flagship on 2026-09-22. It connects Nii's engineering practice with PRNT's generative-art work.
+Dagr is a directed-graph toolkit for the web. Its showcase makes the VDSL goal tangible through a complex commerce architecture with typed connections, rich node content, semantic zoom, search, and focus navigation. On 2026-09-29 the user requested replacing the chess atlas and internal architecture example with this direction. It connects Nii's engineering practice with PRNT's generative-art work.
 
 ## Brand Personality
 
-Precise, geometric, exploratory. Preserve the existing Dagr mark and the relationship to PRNT's Muslin design system. Dagr is the product identity. “Inside the graph” names only the architecture and engine deep dive, not the homepage or chess example.
+Precise, geometric, exploratory. Preserve the existing Dagr mark and the relationship to PRNT's Muslin design system. Dagr is the product identity. The system atlas demonstrates a consumer-defined visual language.
 
 ## Anti-references
 

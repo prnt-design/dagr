@@ -64,6 +64,7 @@ services:
         - docs/**
         - packages/campaign/**
         - packages/campaign-stage/**
+        - packages/vdsl/**
         - packages/graph/**
         - packages/layout/**
         - packages/living-stage/**
