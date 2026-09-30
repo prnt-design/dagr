@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Expose live React edge path styles and renderer route shaping through the umbrella exports.
+
 ## 0.1.1
 
 - Include default graph-aware camera limits through the React and renderer entry points.

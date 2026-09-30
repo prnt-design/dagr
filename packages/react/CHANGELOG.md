@@ -1,6 +1,6 @@
 # @prnt/dagr-react
 
-## Unreleased
+## 0.1.2
 
 - Add live `edgePath` options for routed, smooth, and orthogonal edges, including animated graphs.
 
