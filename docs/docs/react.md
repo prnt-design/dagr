@@ -482,9 +482,10 @@ holds the renderer and calls `setEdgeStyle` on it.
 
 ## What is not here yet
 
-- **Interaction.** Hover, selection and drag are M5.2, and they want the GPU
-  picking pass of M4.8 underneath rather than a hit test invented here against
-  a scene array.
+- **Interaction.** M5.2a adds shared gestures and selection around a hit-target
+  provider; M5.2b adds native node hits from displayed geometry. GPU picking
+  (M4.8b) is a separate future adapter, not a prerequisite for these hooks.
+  The docs atlas currently owns its interaction code; it is not an exported API.
 - **A node ontology.** What a node looks like is a callback and it stays one.
   Deciding that a node of kind X draws as a hexagon belongs to the
   [visual-language toolkit](./visual-languages.md), which is scoped precisely so

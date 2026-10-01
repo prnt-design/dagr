@@ -34,8 +34,9 @@
  *
  * **What is deliberately NOT here**, each waiting on the task that decides it:
  *
- * - No interaction. Hover, selection and drag are M5.2 and they want M4.8's
- *   picking pass underneath, not a hit test invented here against a scene array.
+ * - No interaction yet. M5.2a defines shared gestures and selection around a
+ *   hit-target provider; M5.2b adds native node hits from displayed geometry.
+ *   M4.8 GPU picking is a later adapter, not a prerequisite for the contract.
  * - No worker. See `use-dagr.ts`: the `Worker` has to be the caller's, and
  *   M3.9b owns the worker-side session that makes a per-edit round trip worth
  *   taking.

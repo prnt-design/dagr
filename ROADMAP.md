@@ -10,12 +10,19 @@ the decisions it took and the reasons, lives in
 reference elsewhere in the repo to "the roadmap's M4.6 entry" means the entry
 there. Milestone status is mirrored in the project brain.
 
-## Status (2026-09-30)
+## Status (2026-10-01 UTC)
 
 The published npm packages use `@prnt/dagr-*`, with the
-`@prnt/dagr` umbrella, following maintainer authorization. v0.1 ships the currently documented graph, layout,
-renderer, React, and VDSL APIs. GPU picking and selection/drag hooks (M4.8b
-and M5.2) remain planned work after this initial release.
+`@prnt/dagr` umbrella. All six packages are published at **0.1.2** (PRs
+#87 through #93). Recent releases added generic node-group boundaries,
+content-derived camera limits, and routed, smooth, and orthogonal edge styles.
+The generic System Atlas demonstrates rich VDSL nodes, search, and focus.
+
+Two gaps matter for the next consumer: node click-versus-pan handling lives in
+the docs camera hook, not in the React package, and edge styles change geometry
+without obstacle avoidance. Visual groups are annotations, not compound layout
+or enforced trust boundaries. Neither GPU picking nor reusable selection hooks
+have shipped. Do not mark M5.2 or M7 complete based on these demos.
 
 M5.4a gates the tarballs with `publint`, `arethetypeswrong`, and a scratch
 install outside the workspace. M5.4b now includes the `onLayout` continuity
@@ -35,8 +42,39 @@ counts off the `LayoutDelta` what moved and what did not, beside a drawing in
 which the unmoved nodes visibly do not move. It is an illustration of M3.10a's
 corpus rather than a second measurement of it.
 
-M3.8b and M3.9b are demoted on purpose: a fast path nobody can install is
-worth less than a slow path they can.
+Publication is no longer the reason to defer M3.8b and M3.9b. Reusable
+interaction is the immediate consumer gap; M4.10a supplies current profiling
+evidence before choosing the next layout fast path.
+
+## Next jobs, in priority order
+
+Choose the first ready, unfinished slice below, not the first unchecked box in
+milestone order. Check main and open PRs before claiming work. Correctness or
+install regressions in a released API preempt this queue. A missing WebGPU
+adapter blocks claims about that backend, not backend-independent interaction.
+
+| Order | Task | Concrete outcome and exit check |
+| --- | --- | --- |
+| 1 | **M5.2a: shared gestures and selection** | Export reusable React interaction with a caller-supplied hit provider. Specify stable node/port identity, CSS-pixel versus world coordinates, camera/DPR conversion, displayed animation revision and stale-target rejection before adapting consumers. Click selects on release; crossing a drag threshold pans without selecting. Cover pointer cancellation, touch capture, controls, keyboard, and graph edits. Migrate the generic atlas to the shared implementation and verify an external consumer. Record a bounded CPU pointer-query baseline at 100, 1k and 10k nodes before the native adapter, with backend, machine and work per event named. No GPU dependency. |
+| 2 | **M5.2b: native node hit adapter** | Make the same interaction usable with `DagrCanvas` and its current animated geometry. Respect supported shape silhouettes, draw order, camera/DPR, removed nodes, and rich HTML controls. Test circles outside their box corners and mid-animation picking; repeat the M5.2a CPU baseline and explain regressions. Document CPU scope and unsupported edge/port hits; do not reuse the campaign's approximate hover boxes as exact selection. |
+| 3 | **M2.11a: edge legibility** | Record port direction, node intersections, overlaps and route length on a small generic architecture corpus. Ship one bounded routing improvement with a failing fixture first. Keep presentation styles separate from route planning and preserve stable anchors during edits. No blanket claim that orthogonal means obstacle-free. |
+| 4 | **M6.3a: port hit adapter** | Implement port geometry and stable node/port identities through the M5.2a provider contract. Specify coordinate space, draw order, animation revision, stale/removed ports, and hit radius at zoom/DPR. Test and measure this adapter before wiring a connection gesture. |
+| 5 | **M6.3b: VDSL connections** | One in-flight edge, valid/invalid drop feedback, cancellation, and exactly one validated graph mutation. Reuse M6.2 validation, M5.2 interactions and M6.3a targets; include a keyboard-accessible connection path. |
+| 6 | **M4.10a: consumer performance profile** | Extend the early M5.2a/b CPU baseline to interaction, rich labels, route shaping and animated updates at named sizes on a named machine/backend. Record frame-time distribution and memory; use the measured bottleneck to select M3.9b or rendering work. Do not infer WebGPU performance from a WebGL fallback. |
+
+**Deferred:** new showcase rewrites, 3D productization, new wrapper packages,
+additional edge decorations, and broad layout algorithm work without a measured
+consumer problem. M4.8b remains valuable for exact GPU picking, but it is a
+separate adapter path after the interaction contract, not a prerequisite for
+M5.2a. Probe backend availability at execution time rather than carrying an old
+machine report forward as a permanent blocker. M4.9b still needs both backends.
+
+**Job guardrails:** each run delivers one bounded increment with tests, docs,
+required diff/tree reviews, and the full local/CI gates in AGENTS.md. Do not
+repeat initial publication or the already shipped `onLayout` continuity change.
+Record the actual successor task after merging. Scheduled publication still
+requires explicit maintainer authorization. Confidential private demo data and
+branches never enter public docs, source, npm artifacts, or job fixtures.
 
 ## M0: Foundation
 
@@ -91,6 +129,10 @@ worth less than a slow path they can.
   the rank axis.
 - [x] **M2.9** Golden corpus vs dagre; first 1k and 10k layout benchmarks.
 - [x] **M2.10** Worker mode: `layoutAsync`, same API, transferable-friendly.
+
+- [ ] **M2.11a** Port-aware edge legibility: generic regression corpus and a
+  bounded route-planning fix, assessed separately from `shapeEdgePath` styles.
+  Prioritized after reusable node interaction; see the next-jobs queue.
 
 ## M3: Incremental layout
 
@@ -180,6 +222,9 @@ worth less than a slow path they can.
 - [ ] **M4.9b** Backend parity: the same TSL drawn through both backends on
   one machine, compared by screenshot. Blocked on a WebGPU adapter. Derive
   the tolerance from the antialiasing ramp; decide whether it becomes a gate.
+- [ ] **M4.10a** Profile the consumer path before optimizing: named backend,
+  machine, graph sizes, rich-node tiers, edge styles, hit testing, update cost,
+  frame-time distribution and memory. This is evidence, not a 60fps claim.
 - [ ] **M4.10** Performance: 10k nodes at 60fps, animating, springs in flight,
   zoom and DPR named, frame time broken down by pass (instance update, node
   draw, edge draw, ID buffer), recorded as a local baseline naming the
@@ -195,8 +240,16 @@ worth less than a slow path they can.
 
 - [x] **M5.0** Landing page and the muslin re-port.
 - [x] **M5.1** `@prnt/dagr-react`: `<DagrCanvas>`, `useDagr`, `<Html>`.
-- [ ] **M5.2** Interaction hooks: `useSelection`, hover and drag wired to GPU
-  picking. Component tests.
+- [ ] **M5.2** Reusable selection, hover and gesture interaction. Split into
+  the independently shippable slices below; GPU picking is one future adapter.
+- [ ] **M5.2a** Shared React gesture and controlled selection contract with a
+  caller-supplied hit provider, demonstrated by the generic atlas. Define stable
+  node/port identity, coordinate and scene-revision semantics, and stale-target
+  rejection first. Record a bounded CPU interaction baseline before M5.2b. Click selects;
+  drag pans. DOM controls and keyboard activation keep their native behavior.
+- [ ] **M5.2b** Native `DagrCanvas` node hit adapter using current displayed
+  geometry, with shape, draw-order and stale-target tests. CPU implementation
+  may ship independently of M4.8b; its limits and cost must be explicit.
 - [x] **M5.3a** The animation a consumer gets for free: `useDagr` over
   `createLayout`, so an edit is a `relayout(patch)` with a `LayoutDelta` rather
   than a cold run, and `<DagrCanvas animate>` driving M4.7c's
@@ -247,8 +300,13 @@ demonstrates the claim; it is not the claim.
 - [x] **M6.2** Port typing and connection validation: a type token per port,
   a consumer-supplied compatibility predicate. Cycle rejection is a policy
   the adapter declares, not a default.
-- [ ] **M6.3** Drag-to-connect on M5.2's hooks and M4.8's picking: port
-  hit-testing, an in-flight edge, drop targets filtered by M6.2's predicate.
+- [ ] **M6.3** Drag-to-connect on M5.2's interaction contract: add explicit port
+  hit targets, an in-flight edge, and drop targets filtered by M6.2's predicate.
+  Include keyboard connection and cancellation. GPU picking is not mandatory.
+- [ ] **M6.3a** Port hit adapter through M5.2a's provider contract, including
+  geometry, coordinate space, draw order, animation and stale-port semantics.
+- [ ] **M6.3b** Accessible connection gesture on M6.3a, using M6.2 validation
+  and committing exactly one graph mutation per successful connection.
 - [ ] **M6.4** Subgraph nodes, drill-down form: containment via M5.5's
   `parent`, navigation into a container. The real work: one engine per
   container kept alive across navigation (re-entering must not be a cold
@@ -304,5 +362,6 @@ From [plans/2026-08-15-demo-into-docs.md](plans/2026-08-15-demo-into-docs.md).
 
 ## Tracked, not promised
 
-Web-component wrapper, 3D camera experiment, Remotion tutorials, npm publish
-(human-gated).
+Web-component wrapper, private 3D camera exploration, Remotion tutorials, and
+release automation. Initial npm publication is complete; future publication
+remains human-gated. Private experiments are not public release fixtures.

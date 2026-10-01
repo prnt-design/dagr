@@ -301,9 +301,10 @@ exhaustive over its own errors.
 
 ## Not here yet
 
-- **Drag-to-connect** (M6.3), on top of the interaction hooks and GPU picking.
-  That is the task where this package first needs React, which is why
-  `@prnt/dagr-react` is not a peer dependency yet.
+- **Drag-to-connect** (M6.3), on top of shared interaction and explicit port
+  hit targets, using the validation already available here. GPU picking is
+  not required. The React integration boundary belongs to that task; the
+  current VDSL core remains headless.
 - **Subgraph nodes and drill-down** (M6.4), on the containment M5.5 reserves in
   the graph model.
 - **Collapse and expand** (M6.5), and **two reference languages** built on the

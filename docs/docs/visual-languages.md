@@ -35,7 +35,9 @@ wiring audio or compiling a query.
 **Dagr provides** the graph model with stable node identity and patch-based
 mutation, incremental layout with explicit deltas, and
 instanced GPU rendering. Picking, selection and drag-to-connect
-are planned (M4.8, M5.2, M6.3).
+are planned (M4.8, M5.2, M6.3). Shared gestures and selection come first,
+with native node hit targets next. GPU picking is an optional future adapter,
+not a prerequisite for reusable interaction or typed connections.
 
 **You provide** the meaning. What node kinds exist, what a port carries,
 whether two ports may connect, what a config field is, and what evaluating the

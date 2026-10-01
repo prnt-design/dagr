@@ -16,6 +16,36 @@ The checklist in `ROADMAP.md` is the live one. New tasks keep the same shape:
 the one-line entry lands there, and the working record lands here under the
 same ID.
 
+## Priority reset (2026-10-01 UTC)
+
+The live order is now in ROADMAP.md, "Next jobs, in priority order". The
+August prioritization below is a historical decision record, not the next-run
+queue. PRs #87 through #93 completed publication and shipped 0.1.0 through
+0.1.2. The `onLayout` continuity change, rich VDSL atlas, group annotations,
+camera limits and edge presentation styles are available.
+
+M5.2a comes next: move click-versus-pan and selection into reusable package
+interaction with a caller-supplied hit target. The provider contract covers stable node/port identity, coordinate space and
+scene revisions. A small CPU interaction baseline lands before M5.2b and is
+repeated by that adapter. M5.2b follows with a native node
+adapter that respects displayed shapes and animated geometry. These replace the
+old requirement to complete GPU picking before any interaction can ship. The
+campaign's CPU hover boxes are deliberately approximate and are not an exact
+selection implementation. Keep that distinction, and retain M4.8b for a later
+GPU adapter with real backend evidence.
+
+After those, M2.11a addresses edge legibility with measured fixtures and a
+bounded route fix; M6.3a implements port hits through the same provider
+contract before M6.3b connects them; M4.10a measures current
+consumer costs before selecting a fast path. M3 remains unfinished, but
+"nobody can install it" is no longer a valid reason to defer optimization.
+A profile, rather than task numbering or demo novelty, chooses that work.
+
+The existing Dispatch `dagr-daily` job was disabled when reviewed. Its prompt
+and shared handoff must follow this queue when resumed. This review does not
+change its schedule or enable it. Private 3D research stays separate from the
+public implementation and test fixtures.
+
 ## Where this stands, and what to do next
 
 Written 2026-08-26, after six pull requests merged in one sitting: M3.7b (#64),
