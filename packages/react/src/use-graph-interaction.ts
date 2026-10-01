@@ -113,9 +113,9 @@ export function useGraphInteraction<Revision>(
     };
 
     const down = (event: PointerEvent): void => {
+      suppressPointerClick = false;
       const control = nativeControl(event.target);
       if (control !== null && !control.hasAttribute(GRAPH_TARGET_ATTRIBUTE)) return;
-      suppressPointerClick = false;
       apply(machine.pointerDown(pointer(event), latest.current.displayedRevision));
     };
     const move = (event: PointerEvent): void => {

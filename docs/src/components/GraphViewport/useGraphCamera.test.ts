@@ -4,21 +4,49 @@ import { createElement, useRef } from 'react';
 import { installFrameQueue, runFramesUntilIdle } from '../../../../packages/react/test/frames.js';
 import { mount } from '../../../../packages/react/test/mount.js';
 import type { Mounted } from '../../../../packages/react/test/mount.js';
+import { useGraphInteraction } from '@prnt/dagr-react';
+import type { GraphHitTarget } from '@prnt/dagr-react';
 import { useGraphCamera } from './useGraphCamera';
 let tree: Mounted | null = null;
 let bounds = { x: 0, y: 0, width: 2000, height: 1000 };
 const getBounds = () => bounds;
 let nodes: { x?: number; y?: number; width: number; height: number }[] = [{ width: 200, height: 100 }];
 const getNodes = () => nodes;
-function Harness({ revision }: { revision: number }) {
+function Harness({
+  revision,
+  onSelected = () => undefined,
+}: {
+  revision: number;
+  onSelected?: (target: GraphHitTarget | null) => void;
+}) {
   const viewport = useRef<HTMLDivElement>(null);
   const plane = useRef<HTMLDivElement>(null);
   const camera = useGraphCamera(viewport, plane, 2000, 1000, true, undefined, getBounds, getNodes, revision);
+  useGraphInteraction({
+    surfaceRef: viewport,
+    displayedRevision: revision,
+    screenToWorld: (point) => camera.current.screenToWorld(point),
+    hitTarget: (query) => ({
+      target: { kind: 'node', nodeId: 'test' },
+      displayedRevision: query.displayedRevision,
+    }),
+    selection: null,
+    onSelectionChange: onSelected,
+    onPanStart: () => camera.current.beginPan(),
+    onPanBy: (delta) => camera.current.panBy(delta),
+  });
   return createElement('div', { ref: viewport },
     createElement('div', { ref: plane, 'data-plane': true }),
     createElement('button', { onClick: () => camera.current.zoom(100) }, 'zoom'),
     createElement('button', { onClick: () => camera.current.focus({x:0,y:0,width:200,height:100}) }, 'first'),
-    createElement('button', { onClick: () => camera.current.focus({x:8000,y:9000,width:200,height:100}) }, 'last'));
+    createElement('button', { onClick: () => camera.current.focus({x:8000,y:9000,width:200,height:100}) }, 'last'),
+    createElement('button', {
+      'data-graph-node': 'test',
+      'data-dagr-interaction-target': true,
+      onClick: (event) => {
+        if (event.detail === 0) onSelected({ kind: 'node', nodeId: 'test' });
+      },
+    }, 'node'));
 }
 beforeEach(() => {
   installFrameQueue();
@@ -68,19 +96,17 @@ it('finishes animated focus across empty gaps while rendering a visible node', a
 
 it('pans from node buttons after a threshold without selecting, while preserving clicks and controls', async () => {
   const selected = vi.fn();
-  tree = await mount(createElement(Harness, { revision: 0 }));
+  tree = await mount(createElement(Harness, { revision: 0, onSelected: selected }));
   const viewport = tree.container.firstElementChild as HTMLElement;
   const plane = tree.container.querySelector('[data-plane]') as HTMLElement;
-  const node = document.createElement('button');
-  node.dataset.graphNode = 'test';
-  node.addEventListener('click', selected);
-  viewport.append(node);
+  const node = viewport.querySelector('[data-graph-node]') as HTMLElement;
   viewport.setPointerCapture = vi.fn();
   viewport.hasPointerCapture = vi.fn(() => true);
   viewport.releasePointerCapture = vi.fn();
   const pointer = (target: EventTarget, type: string, x: number, y: number, pointerId = 1) => {
     const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
     Object.defineProperty(event, 'pointerId', { value: pointerId });
+    Object.defineProperty(event, 'isPrimary', { value: true });
     target.dispatchEvent(event);
   };
   const click = () => node.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 }));
@@ -95,15 +121,15 @@ it('pans from node buttons after a threshold without selecting, while preserving
   pointer(node, 'pointerdown', 100, 100);
   pointer(node, 'pointermove', 140, 140);
   expect(plane.style.transform).not.toBe(before);
-  expect(viewport.dataset.dragging).toBe('true');
+  expect(viewport.dataset.dagrDragging).toBe('true');
   pointer(node, 'lostpointercapture', 140, 140);
-  expect(viewport.dataset.dragging).toBe('true');
+  expect(viewport.dataset.dagrDragging).toBe('true');
   pointer(window, 'pointerup', 140, 140, 2);
-  expect(viewport.dataset.dragging).toBe('true');
+  expect(viewport.dataset.dagrDragging).toBe('true');
   pointer(window, 'pointerup', 140, 140);
   click();
   expect(selected).toHaveBeenCalledTimes(1);
-  expect(viewport.dataset.dragging).toBeUndefined();
+  expect(viewport.dataset.dagrDragging).toBeUndefined();
   const toolbar = viewport.querySelector('button')!;
   const action = vi.fn();
   toolbar.addEventListener('click', action);

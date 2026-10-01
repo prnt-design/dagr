@@ -17,7 +17,7 @@
   outline: 3px solid var(--primary-text);
   outline-offset: -3px;
 }
-.viewport[data-dragging='true'] {
+.viewport[data-dagr-dragging='true'] {
   cursor: grabbing;
 }
 .plane {

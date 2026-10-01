@@ -7,6 +7,7 @@ import {
   useState,
 } from 'react';
 import type { ReactNode } from 'react';
+import { useGraphInteraction } from '@prnt/dagr-react';
 import { useGraphCamera } from './useGraphCamera';
 import type { Camera, FocusBounds } from './useGraphCamera';
 import styles from './styles.module.css';
@@ -55,6 +56,16 @@ export default function GraphViewport({
     adapter?.getNodes,
     adapter?.revision,
   );
+  useGraphInteraction({
+    surfaceRef: viewport,
+    displayedRevision: adapter?.revision,
+    screenToWorld: (point) => camera.current.screenToWorld(point),
+    hitTarget: () => null,
+    selection: null,
+    onSelectionChange: () => undefined,
+    onPanStart: () => camera.current.beginPan(),
+    onPanBy: (delta) => camera.current.panBy(delta),
+  });
   useEffect(() => {
     if (focusBounds) camera.current.focus(focusBounds);
   }, [focusBounds, camera]);
