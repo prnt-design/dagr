@@ -122,60 +122,66 @@ describe('the tarball a consumer installs', () => {
     }
   });
 
-  it('typechecks shared interaction from extracted packages without workspace aliases', () => {
-    const consumer = mkdtempSync(join(tmpdir(), 'dagr-interaction-consumer-'));
-    try {
-      const localPackages = Object.fromEntries(
-        [...roots].map(([name, root]) => [name, `file:${root}`]),
-      );
-      writeFileSync(
-        join(consumer, 'package.json'),
-        JSON.stringify({
-          private: true,
-          type: 'module',
-          dependencies: {
-            ...localPackages,
-            react: '19.2.8',
-            'react-dom': '19.2.8',
-            three: '0.185.1',
-          },
-          devDependencies: {
-            '@types/react': '19.2.17',
-            '@types/react-dom': '19.2.3',
-            '@types/three': '0.185.1',
-            typescript: '5.9.3',
-          },
-          pnpm: { overrides: localPackages },
-        }),
-      );
+  it(
+    'typechecks shared interaction from extracted packages without workspace aliases',
+    () => {
+      const consumer = mkdtempSync(join(tmpdir(), 'dagr-interaction-consumer-'));
       try {
-        execFileSync('pnpm', ['install', '--offline', '--ignore-scripts', '--no-frozen-lockfile'], {
-          cwd: consumer,
-          encoding: 'utf8',
-          stdio: 'pipe',
-        });
-      } catch (error) {
-        const output = error as { readonly stdout?: string; readonly stderr?: string };
-        throw new Error(`${output.stdout ?? ''}${output.stderr ?? ''}`, { cause: error });
-      }
-      writeFileSync(
-        join(consumer, 'tsconfig.json'),
-        JSON.stringify({
-          compilerOptions: {
-            strict: true,
-            exactOptionalPropertyTypes: true,
-            noEmit: true,
-            module: 'NodeNext',
-            moduleResolution: 'NodeNext',
-            target: 'ES2022',
-            lib: ['ES2022', 'DOM'],
-          },
-          include: ['consumer.ts'],
-        }),
-      );
-      writeFileSync(
-        join(consumer, 'consumer.ts'),
-        `import type { RefObject } from 'react';
+        const localPackages = Object.fromEntries(
+          [...roots].map(([name, root]) => [name, `file:${root}`]),
+        );
+        writeFileSync(
+          join(consumer, 'package.json'),
+          JSON.stringify({
+            private: true,
+            type: 'module',
+            dependencies: {
+              ...localPackages,
+              react: '19.2.8',
+              'react-dom': '19.2.8',
+              three: '0.185.1',
+            },
+            devDependencies: {
+              '@types/react': '19.2.17',
+              '@types/react-dom': '19.2.3',
+              '@types/three': '0.185.1',
+              typescript: '5.9.3',
+            },
+            pnpm: { overrides: localPackages },
+          }),
+        );
+        try {
+          execFileSync(
+            'pnpm',
+            ['install', '--offline', '--ignore-scripts', '--no-frozen-lockfile'],
+            {
+              cwd: consumer,
+              encoding: 'utf8',
+              stdio: 'pipe',
+            },
+          );
+        } catch (error) {
+          const output = error as { readonly stdout?: string; readonly stderr?: string };
+          throw new Error(`${output.stdout ?? ''}${output.stderr ?? ''}`, { cause: error });
+        }
+        writeFileSync(
+          join(consumer, 'tsconfig.json'),
+          JSON.stringify({
+            compilerOptions: {
+              strict: true,
+              exactOptionalPropertyTypes: true,
+              noEmit: true,
+              module: 'NodeNext',
+              moduleResolution: 'NodeNext',
+              target: 'ES2022',
+              lib: ['ES2022', 'DOM'],
+            },
+            include: ['consumer.ts'],
+          }),
+        );
+        writeFileSync(
+          join(consumer, 'consumer.ts'),
+          `import type { RefObject } from 'react';
 import {
   useGraphInteraction,
   type GraphHitProvider,
@@ -199,19 +205,24 @@ useGraphInteraction({
   onPanBy: (_delta) => undefined,
 });
 `,
-      );
-      try {
-        execFileSync(join(REPO_ROOT, 'node_modules', '.bin', 'tsc'), ['-p', consumer], {
-          cwd: consumer,
-          encoding: 'utf8',
-          stdio: 'pipe',
-        });
-      } catch (error) {
-        const output = error as { readonly stdout?: string; readonly stderr?: string };
-        throw new Error(`${output.stdout ?? ''}${output.stderr ?? ''}`, { cause: error });
+        );
+        try {
+          execFileSync(join(REPO_ROOT, 'node_modules', '.bin', 'tsc'), ['-p', consumer], {
+            cwd: consumer,
+            encoding: 'utf8',
+            stdio: 'pipe',
+          });
+        } catch (error) {
+          const output = error as { readonly stdout?: string; readonly stderr?: string };
+          throw new Error(`${output.stdout ?? ''}${output.stderr ?? ''}`, { cause: error });
+        }
+      } finally {
+        rmSync(consumer, { recursive: true, force: true });
       }
-    } finally {
-      rmSync(consumer, { recursive: true, force: true });
-    }
-  });
+    },
+    // This test starts an offline package install and tsc process. It takes
+    // about three seconds alone and seven while workspace tests run in
+    // parallel, so Vitest's five-second unit-test default is not applicable.
+    30_000,
+  );
 });
