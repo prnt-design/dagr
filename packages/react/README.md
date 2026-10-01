@@ -29,13 +29,11 @@ export function Board() {
 }
 ```
 
-Five exports carry the package. `DagrCanvas` is the component. `useDagr` is the
-layout on its own, for a caller drawing it their own way or reading the geometry
-beside a canvas somebody else owns. `Html` puts React content in world
-coordinates over the canvas. `useDagrCanvas` is how anything inside reaches the
-renderer. `retarget`, with `toMotionDelta` and `toMotionRoster` beside it, is
-the delta half of the scene conversion, for a caller driving `@prnt/dagr-render`'s
-scene motion themselves.
+`DagrCanvas` is the component. `useDagr` is the layout on its own, `Html` puts
+React content in world coordinates, and `useDagrCanvas` reaches the renderer.
+`retarget`, `toMotionDelta`, and `toMotionRoster` support callers driving scene
+motion themselves. `useGraphInteraction` adds controlled selection and
+click-versus-pan gestures around hit geometry the caller supplies.
 
 **Add `animate` and an edit glides to its new layout instead of cutting to it:**
 
@@ -50,8 +48,51 @@ frame. The camera is fitted once and then it is yours: a following camera is
 `fitBounds` on the sprung box handed to `onFrame`, which is your line of code
 rather than the component's.
 
-What is not here yet, so you know before you reach for it: no hover, selection
-or drag (M5.2).
+## Shared selection and gestures
+
+`useGraphInteraction` works with DOM, SVG, canvas, and future GPU picking
+because the package does not guess where your nodes are. Your synchronous hit
+provider receives a surface-relative CSS point, the same point converted
+through your camera, the displayed DPR you supply, and an opaque
+displayed-scene revision. It returns a stable node, port, or empty result
+stamped with the revision it queried.
+
+```tsx
+useGraphInteraction({
+  surfaceRef,
+  displayedRevision: frame,
+  devicePixelRatio: renderedDpr,
+  screenToWorld: (point) => camera.screenToWorld(point),
+  hitTarget: (query) => hitIndex.query(query),
+  selection,
+  onSelectionChange: setSelection,
+  onPanStart: () => camera.stop(),
+  onPanBy: (delta) => camera.panByScreen(delta),
+});
+```
+
+Coordinates stay in CSS pixels until your provider chooses otherwise. Do not
+multiply the point by DPR before `screenToWorld`; use `devicePixelRatio` only
+when reading a device-pixel buffer. Change `displayedRevision` whenever target
+geometry, draw order, membership, or its paired DPR changes on screen,
+including animation frames. Hits and misses both carry a stamp. The hook
+rejects a provider result with an older stamp and rejects a click when the
+revision changed between press and release.
+
+Selection is controlled. A click selects on release only when press and release
+hit the same stable identity. Five CSS pixels turns the sequence into a pan and
+suppresses its pointer-generated click. Pointer cancellation never selects.
+
+Native controls are excluded. A focusable graph target opts in with
+`data-dagr-interaction-target`; a nested input still wins and remains native.
+The hook does not handle keyboard events, so keep graph targets focusable and
+handle their keyboard `click` (`event.detail === 0`) in your component. Set
+`touch-action: none` on the surface for touch panning and `user-select: none`
+for drag presentation.
+
+This API has no built-in hit geometry. Exact `DagrCanvas` node shapes are
+M5.2b; port geometry and connection gestures are M6.3. Edges are not hit
+targets in this slice.
 
 ## Read this first: the `graph` prop is watched, not compared
 

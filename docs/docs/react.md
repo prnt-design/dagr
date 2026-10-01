@@ -480,12 +480,84 @@ device context because a colour changed would drop every instance handle in the
 scene to honour a prop nobody animates. A caller who does want to animate one
 holds the renderer and calls `setEdgeStyle` on it.
 
+## Shared selection and click-versus-pan
+
+`useGraphInteraction` owns the pointer sequence and leaves hit geometry,
+selection, and the camera with you:
+
+```tsx
+const surface = useRef<HTMLDivElement>(null);
+const [selection, setSelection] = useState<GraphHitTarget | null>(null);
+
+useGraphInteraction({
+  surfaceRef: surface,
+  displayedRevision: frame.revision,
+  devicePixelRatio: frame.devicePixelRatio,
+  screenToWorld: (point) => camera.screenToWorld(point),
+  hitTarget: (query) => index.hit(query),
+  selection,
+  onSelectionChange: setSelection,
+  onPanStart: () => camera.stop(),
+  onPanBy: (delta) => camera.panByScreen(delta),
+});
+```
+
+The provider is synchronous. Every query carries four pieces of evidence:
+
+| Field | Meaning |
+| --- | --- |
+| `css` | CSS pixels from the surface's top-left border box, with positive `y` down |
+| `world` | That point converted through the camera displaying this scene |
+| `devicePixelRatio` | The caller-supplied CSS-to-device ratio used for this display |
+| `displayedRevision` | Opaque identity for displayed geometry, draw order, target membership, and the paired DPR |
+
+Do not multiply `css` by DPR before `screenToWorld`. A provider reading a
+device-pixel target multiplies at that boundary. A provider returns a stable
+node identity (`nodeId`), port identity (`nodeId` plus `portId`), or `null`
+target and stamps every hit or miss with the displayed revision it queried.
+Renderer slots, array positions, and pick colors are not stable identities.
+
+The stamp is load-bearing. The hook rejects a result whose stamp differs from
+the query and rejects the whole click when `displayedRevision` changed between
+press and release. Use the revision of what is **on screen**, not a graph model
+revision that runs ahead of animation. Change it on every animated geometry
+frame and whenever the displayed DPR changes. A graph edit that changes hit
+geometry then cancels an in-flight click; a pan continues because it means
+screen movement, not target identity.
+
+Selection is controlled through `selection` and `onSelectionChange`. The hook
+selects on release only when press and release hit the same target. A fresh
+empty-to-empty click requests `null`. Crossing the default 5 CSS-pixel
+threshold switches permanently to pan, reports the full first delta and
+incremental later deltas, captures the pointer, and suppresses the generated
+`click` and `dblclick`. Cancellation and lost capture never select.
+
+Native controls are excluded by default. Add
+`data-dagr-interaction-target` to a focusable graph target that should
+participate. The closest control wins, so an input nested in a rich node keeps
+its native behavior. Keyboard events are not intercepted: keep graph targets
+focusable and process their keyboard-generated `click`, whose `detail` is `0`,
+in your component. Set `touch-action: none` on the surface for touch panning
+and `user-select: none` if drag text selection would be misleading.
+
+The 2026-10-01 Apple M4 CPU baseline scans 100, 1,000, and 10,000 synthetic
+rectangles in reverse draw order. Median pointer-down query time was
+0.000125 ms, 0.000792 ms, and 0.008416 ms respectively. Each event makes one
+provider call and one displayed-revision check, then checks every rectangle.
+The 100-node value is recorded but not gated because it is only three clock
+ticks. These are CPU query medians, not browser frame time or GPU evidence.
+
+The generic System Atlas uses this API with reverse draw-order rectangles. It
+is proof that a consumer can supply geometry; it is not an exact
+`DagrCanvas` adapter. M5.2b supplies current animated node silhouettes. Port
+geometry is M6.3a. Edge hits, hover, asynchronous providers, and GPU picking
+are outside this slice.
+
 ## What is not here yet
 
-- **Interaction.** M5.2a adds shared gestures and selection around a hit-target
-  provider; M5.2b adds native node hits from displayed geometry. GPU picking
-  (M4.8b) is a separate future adapter, not a prerequisite for these hooks.
-  The docs atlas currently owns its interaction code; it is not an exported API.
+- **Native hit geometry.** Shared gestures and controlled selection are
+  exported. M5.2b adds exact `DagrCanvas` node hits from displayed geometry.
+  GPU picking (M4.8b) is a separate future provider, not a prerequisite.
 - **A node ontology.** What a node looks like is a callback and it stays one.
   Deciding that a node of kind X draws as a hexagon belongs to the
   [visual-language toolkit](./visual-languages.md), which is scoped precisely so

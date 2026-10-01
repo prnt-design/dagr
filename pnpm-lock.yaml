@@ -258,6 +258,9 @@ importers:
         specifier: workspace:^
         version: link:../layout
     devDependencies:
+      '@dagr/bench':
+        specifier: workspace:*
+        version: link:../../bench
       '@prnt/dagr-graph':
         specifier: workspace:^
         version: link:../graph

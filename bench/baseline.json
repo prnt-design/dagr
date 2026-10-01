@@ -18,6 +18,10 @@
     "@prnt/dagr-layout > bench/layout.bench.ts": {
       "alloc": 0.037750000000187356,
       "chase": 0.08162500000003092
+    },
+    "@prnt/dagr-react > bench/interaction.bench.ts": {
+      "alloc": 0.042834000000084416,
+      "chase": 0.10083299999996598
     }
   },
   "benchmarks": {
@@ -141,6 +145,32 @@
       "rme": 2.984653163735441,
       "samples": 142,
       "ratio": 88.00142887391034
+    },
+    "@prnt/dagr-react > bench/interaction.bench.ts > CPU rectangle pointer query > 100 nodes": {
+      "gate": "off",
+      "reason": "The 0.000125 ms median is three clock ticks on this machine and all five measured runs reported the same quantized value. It records the bounded 100-node result, but a one-tick movement would look like a 33% regression, so this entry remains evidence rather than a gate.",
+      "note": "Captured 2026-10-01 on the baseline Apple M4 with the synthetic CPU rectangle provider. One pointer-down event performs one provider call, one displayed-revision check, and 100 reverse draw-order rectangle checks.",
+      "medianMs": 0.00012500000002546585,
+      "meanMs": 0.00011578124686677131,
+      "rme": 1.7251318887865095,
+      "samples": 4318489,
+      "ratio": 0.0032967612624084895
+    },
+    "@prnt/dagr-react > bench/interaction.bench.ts > CPU rectangle pointer query > 10k nodes": {
+      "note": "Captured 2026-10-01 on the baseline Apple M4 with the synthetic CPU rectangle provider. One pointer-down event performs one provider call, one displayed-revision check, and 10,000 reverse draw-order rectangle checks.",
+      "medianMs": 0.00841599999967002,
+      "meanMs": 0.013245751933877984,
+      "rme": 4.296668582337042,
+      "samples": 37748,
+      "ratio": 0.2219643422215158
+    },
+    "@prnt/dagr-react > bench/interaction.bench.ts > CPU rectangle pointer query > 1k nodes": {
+      "note": "Captured 2026-10-01 on the baseline Apple M4 with the synthetic CPU rectangle provider. One pointer-down event performs one provider call, one displayed-revision check, and 1,000 reverse draw-order rectangle checks.",
+      "medianMs": 0.0007919999998193816,
+      "meanMs": 0.0009426164120659031,
+      "rme": 1.7431287868450454,
+      "samples": 530439,
+      "ratio": 0.020888279349601042
     }
   }
 }

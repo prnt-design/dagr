@@ -1,5 +1,7 @@
 import { shapeEdgePath } from '@prnt/dagr-render';
 import type { EdgePathOptions } from '@prnt/dagr-render';
+import { useGraphInteraction } from '@prnt/dagr-react';
+import type { GraphHitProvider } from '@prnt/dagr-react';
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import Link from '@docusaurus/Link';
@@ -114,6 +116,40 @@ export default function SystemAtlas() {
     undefined,
     getNodes,
   );
+  const hitTarget = useCallback<GraphHitProvider<typeof system>>(
+    (query) => {
+      for (let index = nodes.length - 1; index >= 0; index -= 1) {
+        const node = nodes[index]!;
+        const box = system.boxes.get(node.id)!;
+        if (
+          query.world.x >= box.x &&
+          query.world.x <= box.x + box.width &&
+          query.world.y >= box.y &&
+          query.world.y <= box.y + box.height
+        ) {
+          return {
+            target: { kind: 'node', nodeId: node.id },
+            displayedRevision: system,
+          };
+        }
+      }
+      return { target: null, displayedRevision: system };
+    },
+    [system],
+  );
+  useGraphInteraction({
+    surfaceRef: viewport,
+    displayedRevision: system,
+    devicePixelRatio: globalThis.devicePixelRatio || 1,
+    screenToWorld: (point) => camera.current.screenToWorld(point),
+    hitTarget,
+    selection: { kind: 'node', nodeId: selected },
+    onSelectionChange: (target) => {
+      if (target?.kind === 'node') setSelected(target.nodeId);
+    },
+    onPanStart: () => camera.current.beginPan(),
+    onPanBy: (delta) => camera.current.panBy(delta),
+  });
   const current = nodes.find((n) => n.id === selected)!;
   const adjacent = neighbors(selected);
   const matches = searchNodes(query);
@@ -280,6 +316,7 @@ export default function SystemAtlas() {
                       type="button"
                       key={n.id}
                       data-graph-node={n.id}
+                      data-dagr-interaction-target
                       data-kind={n.kind}
                       className={styles.node}
                       style={
@@ -293,7 +330,9 @@ export default function SystemAtlas() {
                       }
                       aria-label={`${n.name}, ${kindNames[n.kind]}`}
                       aria-pressed={n.id === selected}
-                      onClick={() => setSelected(n.id)}
+                      onClick={(event) => {
+                        if (event.detail === 0) setSelected(n.id);
+                      }}
                       onDoubleClick={() => focus(n.id)}
                       onFocus={(event) => {
                         if (event.currentTarget.matches(':focus-visible'))

@@ -27,7 +27,18 @@ export function useGraphCamera(
     reset: () => void;
     refresh: () => void;
     focus: (bounds: FocusBounds) => void;
-  }>({ zoom: () => {}, reset: () => {}, refresh: () => {}, focus: () => {} });
+    beginPan: () => void;
+    panBy: (delta: { x: number; y: number }) => void;
+    screenToWorld: (point: { x: number; y: number }) => { x: number; y: number };
+  }>({
+    zoom: () => {},
+    reset: () => {},
+    refresh: () => {},
+    focus: () => {},
+    beginPan: () => {},
+    panBy: () => {},
+    screenToWorld: ({ x, y }) => ({ x, y }),
+  });
   useEffect(() => {
     const viewport = viewportRef.current;
     const diagram = diagramRef.current;
@@ -41,8 +52,6 @@ export function useGraphCamera(
     let target = { ...current };
     let frame = 0;
     let lastTime = 0;
-    let drag: { id: number; x: number; y: number; active: boolean } | undefined;
-    let suppressClick = false;
     const syncLimits = () => {
       if (viewportWidth <= 0 || viewportHeight <= 0) return;
       limiter.setViewport({ width: viewportWidth, height: viewportHeight, devicePixelRatio: 1 });
@@ -167,56 +176,27 @@ export function useGraphCamera(
         );
       }
     };
-    const down = (event: PointerEvent) => {
-      if (drag || event.button !== 0 || event.isPrimary === false) return;
-      suppressClick = false;
-      const control = (event.target as Element).closest(
-        'button, [role="button"], a, input, select, textarea, [contenteditable]',
-      );
-      if (control && !control.hasAttribute('data-graph-node')) return;
+    const beginPan = () => {
       cancelAnimationFrame(frame);
       frame = 0;
       current = constrain(current);
       target = { ...current };
-      drag = { id: event.pointerId, x: event.clientX, y: event.clientY, active: false };
-      // Capture only after a drag begins, so a click still targets its node.
     };
-    const move = (event: PointerEvent) => {
-      if (!drag || drag.id !== event.pointerId) return;
-      if (!drag.active) {
-        if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 5) return;
-        drag.active = true;
-        suppressClick = true;
-        viewport.focus({ preventScroll: true });
-        viewport.setPointerCapture(event.pointerId);
-        viewport.dataset.dragging = 'true';
-      }
-      target.x += event.clientX - drag.x;
-      target.y += event.clientY - drag.y;
-      drag.x = event.clientX;
-      drag.y = event.clientY;
+    const panBy = (delta: { x: number; y: number }) => {
+      target.x += delta.x;
+      target.y += delta.y;
       animate();
     };
-    const up = (event?: PointerEvent) => {
-      if (!drag || (event && event.pointerId !== drag.id)) return;
-      const id = drag.id;
-      drag = undefined;
-      delete viewport.dataset.dragging;
-      if (viewport.hasPointerCapture(id)) viewport.releasePointerCapture(id);
-    };
-    const lostCapture = (event: PointerEvent) => {
-      // Touch capture transfers from the pressed node to the viewport.
-      if (event.target === viewport) up(event);
-    };
-    const click = (event: MouseEvent) => {
-      if (!suppressClick || event.detail === 0) return;
-      event.preventDefault();
-      event.stopPropagation();
+    const screenToWorld = (point: { x: number; y: number }) => {
+      const rendered = constrain(current);
+      return {
+        x: (point.x - rendered.x) / rendered.scale,
+        y: (point.y - rendered.y) / rendered.scale,
+      };
     };
     const key = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         (document.activeElement as HTMLElement | null)?.blur();
-        up();
         return;
       }
       if (
@@ -278,7 +258,7 @@ export function useGraphCamera(
       };
       animate();
     };
-    controls.current = { zoom, reset, focus, refresh: () => {
+    controls.current = { zoom, reset, focus, beginPan, panBy, screenToWorld, refresh: () => {
       syncLimits();
       current = constrain(current);
       animate();
@@ -289,29 +269,23 @@ export function useGraphCamera(
     current = { ...target };
     draw();
     viewport.addEventListener('wheel', wheel, { passive: false });
-    viewport.addEventListener('pointerdown', down);
-    window.addEventListener('pointermove', move);
-    viewport.addEventListener('click', click, true);
-    viewport.addEventListener('dblclick', click, true);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
-    viewport.addEventListener('lostpointercapture', lostCapture);
     viewport.addEventListener('keydown', key);
     viewport.addEventListener('focusin', reveal);
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
       viewport.removeEventListener('wheel', wheel);
-      viewport.removeEventListener('pointerdown', down);
-      window.removeEventListener('pointermove', move);
-      viewport.removeEventListener('click', click, true);
-      viewport.removeEventListener('dblclick', click, true);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
-      viewport.removeEventListener('lostpointercapture', lostCapture);
       viewport.removeEventListener('keydown', key);
       viewport.removeEventListener('focusin', reveal);
-      controls.current = { zoom: () => {}, reset: () => {}, refresh: () => {}, focus: () => {} };
+      controls.current = {
+        zoom: () => {},
+        reset: () => {},
+        refresh: () => {},
+        focus: () => {},
+        beginPan: () => {},
+        panBy: () => {},
+        screenToWorld: ({ x, y }) => ({ x, y }),
+      };
     };
   }, [viewportRef, diagramRef, width, height, enabled, apply, getBounds, getNodes]);
   useEffect(() => { controls.current.refresh(); }, [contentVersion]);

@@ -24,11 +24,12 @@ queue. PRs #87 through #93 completed publication and shipped 0.1.0 through
 0.1.2. The `onLayout` continuity change, rich VDSL atlas, group annotations,
 camera limits and edge presentation styles are available.
 
-M5.2a comes next: move click-versus-pan and selection into reusable package
-interaction with a caller-supplied hit target. The provider contract covers stable node/port identity, coordinate space and
-scene revisions. A small CPU interaction baseline lands before M5.2b and is
-repeated by that adapter. M5.2b follows with a native node
-adapter that respects displayed shapes and animated geometry. These replace the
+M5.2a shipped reusable click-versus-pan and controlled selection with a
+caller-supplied hit target. Its provider contract covers stable node/port
+identity, coordinate space and displayed scene revisions. The bounded CPU
+interaction baseline landed with it. M5.2b comes next with a native node
+adapter that respects displayed shapes and animated geometry, and repeats the
+baseline. These replace the
 old requirement to complete GPU picking before any interaction can ship. The
 campaign's CPU hover boxes are deliberately approximate and are not an exact
 selection implementation. Keep that distinction, and retain M4.8b for a later
