@@ -3,6 +3,10 @@
 ## 0.1.2
 
 - Add live `edgePath` options for routed, smooth, and orthogonal edges, including animated graphs.
+- Add `useGraphInteraction` for revision-safe controlled node and port
+  selection, click-versus-pan gestures, pointer cancellation, touch capture,
+  native controls, and caller-owned camera movement through a synchronous hit
+  provider.
 
 ## 0.1.1
 

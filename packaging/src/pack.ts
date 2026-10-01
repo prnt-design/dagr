@@ -33,7 +33,11 @@ export const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
  *
  * The caller owns the returned directory and must `dispose()` it.
  */
-export function packPublishedPackages(): { packages: PackedPackage[]; dispose: () => void } {
+export function packPublishedPackages(): {
+  packages: PackedPackage[];
+  roots: ReadonlyMap<string, string>;
+  dispose: () => void;
+} {
   const workDir = mkdtempSync(join(tmpdir(), 'dagr-packaging-'));
   try {
     run(
@@ -48,6 +52,7 @@ export function packPublishedPackages(): { packages: PackedPackage[]; dispose: (
       REPO_ROOT,
     );
 
+    const roots = new Map<string, string>();
     const packages = PUBLISHED_PACKAGES.map((name) => {
       const packageDir = join(REPO_ROOT, 'packages', name);
       const tarball = run('pnpm', ['pack', '--pack-destination', workDir], packageDir).trim().split('\n').pop();
@@ -58,10 +63,13 @@ export function packPublishedPackages(): { packages: PackedPackage[]; dispose: (
 
       const extracted = mkdtempSync(join(workDir, 'x-'));
       run('tar', ['-xzf', tarball, '-C', extracted], workDir);
-      return readExtracted(join(extracted, 'package'));
+      const root = join(extracted, 'package');
+      const packed = readExtracted(root);
+      roots.set(packed.name, root);
+      return packed;
     });
 
-    return { packages, dispose: () => rmSync(workDir, { recursive: true, force: true }) };
+    return { packages, roots, dispose: () => rmSync(workDir, { recursive: true, force: true }) };
   } catch (error) {
     rmSync(workDir, { recursive: true, force: true });
     throw error;

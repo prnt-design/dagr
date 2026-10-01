@@ -11,7 +11,14 @@
  * alternative is a check nobody runs until the publish fails.
  */
 
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -27,11 +34,13 @@ import {
 import { PUBLISHED_PACKAGES, REPO_ROOT, packPublishedPackages } from '../src/pack.js';
 
 let packed: PackedPackage[] = [];
+let roots: ReadonlyMap<string, string> = new Map();
 let dispose = () => {};
 
 beforeAll(() => {
   const result = packPublishedPackages();
   packed = result.packages;
+  roots = result.roots;
   dispose = result.dispose;
   // A tsc run for six packages, six packs and six extractions. Explicit
   // rather than left to the default, because a default vitest timeout is not
@@ -110,6 +119,99 @@ describe('the tarball a consumer installs', () => {
     for (const p of each()) {
       expect(p.files.filter((f) => f.startsWith('src/')).length).toBeGreaterThan(0);
       expect(p.files.filter((f) => /\.(test|bench)\.tsx?$/.test(f))).toEqual([]);
+    }
+  });
+
+  it('typechecks shared interaction from extracted packages without workspace aliases', () => {
+    const consumer = mkdtempSync(join(tmpdir(), 'dagr-interaction-consumer-'));
+    try {
+      const localPackages = Object.fromEntries(
+        [...roots].map(([name, root]) => [name, `file:${root}`]),
+      );
+      writeFileSync(
+        join(consumer, 'package.json'),
+        JSON.stringify({
+          private: true,
+          type: 'module',
+          dependencies: {
+            ...localPackages,
+            react: '19.2.8',
+            'react-dom': '19.2.8',
+            three: '0.185.1',
+          },
+          devDependencies: {
+            '@types/react': '19.2.17',
+            '@types/react-dom': '19.2.3',
+            '@types/three': '0.185.1',
+            typescript: '5.9.3',
+          },
+          pnpm: { overrides: localPackages },
+        }),
+      );
+      try {
+        execFileSync('pnpm', ['install', '--offline', '--ignore-scripts', '--no-frozen-lockfile'], {
+          cwd: consumer,
+          encoding: 'utf8',
+          stdio: 'pipe',
+        });
+      } catch (error) {
+        const output = error as { readonly stdout?: string; readonly stderr?: string };
+        throw new Error(`${output.stdout ?? ''}${output.stderr ?? ''}`, { cause: error });
+      }
+      writeFileSync(
+        join(consumer, 'tsconfig.json'),
+        JSON.stringify({
+          compilerOptions: {
+            strict: true,
+            exactOptionalPropertyTypes: true,
+            noEmit: true,
+            module: 'NodeNext',
+            moduleResolution: 'NodeNext',
+            target: 'ES2022',
+            lib: ['ES2022', 'DOM'],
+          },
+          include: ['consumer.ts'],
+        }),
+      );
+      writeFileSync(
+        join(consumer, 'consumer.ts'),
+        `import type { RefObject } from 'react';
+import {
+  useGraphInteraction,
+  type GraphHitProvider,
+  type GraphHitTarget,
+} from '@prnt/dagr-react';
+
+declare const surfaceRef: RefObject<HTMLElement | null>;
+const node: GraphHitTarget = { kind: 'node', nodeId: 'checkout' };
+const port: GraphHitTarget = { kind: 'port', nodeId: 'checkout', portId: 'event' };
+const provider: GraphHitProvider<number> = (query) => ({
+  target: query.css.x < 10 ? node : port,
+  displayedRevision: query.displayedRevision,
+});
+useGraphInteraction({
+  surfaceRef,
+  displayedRevision: 1,
+  screenToWorld: ({ x, y }) => ({ x, y: -y }),
+  hitTarget: provider,
+  selection: node,
+  onSelectionChange: (_target) => undefined,
+  onPanBy: (_delta) => undefined,
+});
+`,
+      );
+      try {
+        execFileSync(join(REPO_ROOT, 'node_modules', '.bin', 'tsc'), ['-p', consumer], {
+          cwd: consumer,
+          encoding: 'utf8',
+          stdio: 'pipe',
+        });
+      } catch (error) {
+        const output = error as { readonly stdout?: string; readonly stderr?: string };
+        throw new Error(`${output.stdout ?? ''}${output.stderr ?? ''}`, { cause: error });
+      }
+    } finally {
+      rmSync(consumer, { recursive: true, force: true });
     }
   });
 });
