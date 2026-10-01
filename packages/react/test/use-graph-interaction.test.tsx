@@ -230,6 +230,7 @@ it('captures touch only after threshold, cancels without selection, and preserve
     }),
   );
   const node = tree.container.querySelector('[data-node]') as HTMLElement;
+  const toolbar = tree.container.querySelector('[data-toolbar]') as HTMLElement;
   const surface = tree.container.querySelector('[data-surface]') as HTMLElement;
   const capture = vi.fn();
   const release = vi.fn();
@@ -264,6 +265,13 @@ it('captures touch only after threshold, cancels without selection, and preserve
   expect(node.dispatchEvent(pointerClick)).toBe(false);
   expect(node.dispatchEvent(pointerDoubleClick)).toBe(false);
   expect(selected).toEqual([]);
+
+  const toolbarClicks = vi.fn();
+  toolbar.addEventListener('click', toolbarClicks);
+  expect(
+    toolbar.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 })),
+  ).toBe(true);
+  expect(toolbarClicks).toHaveBeenCalledOnce();
 
   node.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
   expect(selected).toEqual([{ kind: 'node', nodeId: 'checkout' }]);

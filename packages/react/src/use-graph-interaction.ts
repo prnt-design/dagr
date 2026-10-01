@@ -47,7 +47,7 @@ export interface UseGraphInteractionOptions<Revision> {
   readonly thresholdCssPixels?: number | undefined;
 }
 
-function nativeControl(event: PointerEvent, surface: Element): Element | null {
+function nativeControl(event: Event, surface: Element): Element | null {
   for (const target of event.composedPath()) {
     if (target instanceof Element && target.matches(NATIVE_CONTROL)) return target;
     if (target === surface) break;
@@ -150,6 +150,8 @@ export function useGraphInteraction<Revision>(
     };
     const suppress = (event: MouseEvent): void => {
       if (!suppressPointerClick || event.detail === 0) return;
+      const control = nativeControl(event, surface);
+      if (control !== null && !control.hasAttribute(GRAPH_TARGET_ATTRIBUTE)) return;
       event.preventDefault();
       event.stopPropagation();
     };
