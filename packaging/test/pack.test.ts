@@ -153,7 +153,7 @@ describe('the tarball a consumer installs', () => {
         try {
           execFileSync(
             'pnpm',
-            ['install', '--offline', '--ignore-scripts', '--no-frozen-lockfile'],
+            ['install', '--prefer-offline', '--ignore-scripts', '--no-frozen-lockfile'],
             {
               cwd: consumer,
               encoding: 'utf8',
@@ -232,7 +232,7 @@ useGraphInteraction({
         rmSync(consumer, { recursive: true, force: true });
       }
     },
-    // This test starts an offline package install and tsc process. It takes
+    // This test starts an external package install and tsc process. It takes
     // about three seconds alone and seven while workspace tests run in
     // parallel, so Vitest's five-second unit-test default is not applicable.
     30_000,
