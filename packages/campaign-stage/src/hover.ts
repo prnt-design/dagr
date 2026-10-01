@@ -3,8 +3,9 @@ import type { Vec2, WorldBounds } from '@prnt/dagr-render';
 /**
  * Which node is under a world point.
  *
- * **This is hover without picking, and the trade is deliberate.** M4.8 will put
- * an id per pixel on the GPU, which is what a scene of arbitrary shapes needs.
+ * **This is approximate legacy demo hover, not exact selection.** M4.8 will
+ * provide a GPU picking adapter. M5.2b plans native CPU node hits against
+ * supported displayed shapes; neither should inherit this helper's box policy.
  * A campaign node is an axis-aligned box whose extents the demo already holds,
  * because the overlay is positioned from exactly the same boxes, so the same
  * question can be answered here with arithmetic and no readback, no extra
@@ -18,7 +19,8 @@ import type { Vec2, WorldBounds } from '@prnt/dagr-render';
  *
  * A linear scan over every node, deliberately. At 3,010 boxes a pass is a few
  * microseconds, so an index would be a structure to keep in step with the scene
- * for no measurable gain. A scene that made this matter would want M4.8 anyway.
+ * for no measurable gain in this demo. General interaction must measure its
+ * own cost and choose an adapter rather than inherit that assumption.
  *
  * **Hover is visible from title tier up, and that is a consequence rather than
  * a rule this file enforces.** What the demo does with the answer is put a
