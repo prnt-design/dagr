@@ -538,6 +538,13 @@ focusable and process their keyboard-generated `click`, whose `detail` is `0`,
 in your component. Set `touch-action: none` on the surface for touch panning
 and `user-select: none` if drag text selection would be misleading.
 
+The 2026-10-01 Apple M4 CPU baseline scans 100, 1,000, and 10,000 synthetic
+rectangles in reverse draw order. Median pointer-down query time was
+0.000125 ms, 0.000792 ms, and 0.008416 ms respectively. Each event makes one
+provider call and one displayed-revision check, then checks every rectangle.
+The 100-node value is recorded but not gated because it is only three clock
+ticks. These are CPU query medians, not browser frame time or GPU evidence.
+
 The generic System Atlas uses this API with reverse draw-order rectangles. It
 is proof that a consumer can supply geometry; it is not an exact
 `DagrCanvas` adapter. M5.2b supplies current animated node silhouettes. Port

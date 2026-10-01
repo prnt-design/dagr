@@ -42,6 +42,37 @@ The CI argument above is unchanged by the baseline being arm64 macOS: the
 remaining reason the gate stays local is runner noise and runner identity, not
 which architecture the file happens to name.
 
+## M5.2a CPU pointer-query baseline
+
+The first interaction baseline was measured on 2026-10-01 on the same Apple M4
+and Node `v25.6.1` named by `baseline.json`. The backend is
+`CPU synthetic rectangle scan`, not WebGPU, WebGL, or a browser frame. Each
+pointer-down event performs one provider call, one displayed-revision check,
+and a reverse draw-order scan of exactly `N` rectangles before finding
+`node-0`.
+
+| Displayed boxes | Median per event | Work per event |
+| ---: | ---: | --- |
+| 100 | 0.000125 ms | 1 provider call, 1 revision check, 100 rectangle checks |
+| 1,000 | 0.000792 ms | 1 provider call, 1 revision check, 1,000 rectangle checks |
+| 10,000 | 0.008416 ms | 1 provider call, 1 revision check, 10,000 rectangle checks |
+
+One warmup and five measured runs were taken. The 100-node median was
+0.000125 ms in all five, which is three clock ticks on this machine. Moving one
+tick would read as a 33% regression, so that entry is recorded with its gate
+off. The 1,000-node medians ranged from 0.000792 to 0.000875 ms (10.5% band);
+the 10,000-node medians ranged from 0.008125 to 0.008625 ms (6.2% band).
+Run 3 is committed because its 1,000-node and 10,000-node medians are the
+five-run medians. The one-minute load rose from 5.10 to 6.86 while collecting
+the set, above the original capture's 2.4 to 3.5, so the choice uses the
+same-file control and machine probes rather than raw means distorted by
+outliers.
+
+This is the contract overhead plus a deliberately simple worst-order rectangle
+provider. It is not the M5.2b shape-aware `DagrCanvas` adapter, a frame-time
+claim, an edge or port measurement, or GPU evidence. M5.2b repeats these sizes
+against displayed animated node geometry and explains any regression.
+
 **The current file was captured on 2026-09-01 on the maintainer's Apple M4
 (darwin arm64, 10 cores, Node v25.6.1), authorized by the maintainer in
 session after a week of identity refusals on this box.** One warmup run
