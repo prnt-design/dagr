@@ -59,8 +59,9 @@ export default function GraphViewport({
   useGraphInteraction({
     surfaceRef: viewport,
     displayedRevision: adapter?.revision,
+    devicePixelRatio: globalThis.devicePixelRatio || 1,
     screenToWorld: (point) => camera.current.screenToWorld(point),
-    hitTarget: () => null,
+    hitTarget: (query) => ({ target: null, displayedRevision: query.displayedRevision }),
     selection: null,
     onSelectionChange: () => undefined,
     onPanStart: () => camera.current.beginPan(),
@@ -75,6 +76,7 @@ export default function GraphViewport({
         <div
           ref={viewport}
           className={styles.viewport}
+          role="region"
           tabIndex={0}
           aria-label={label}
           aria-describedby={hint}

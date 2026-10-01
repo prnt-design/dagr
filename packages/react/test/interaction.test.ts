@@ -106,8 +106,8 @@ describe('graph pointer selection', () => {
     }];
     const machine = createGraphInteraction({
       hitTarget: (query) => {
-        const target = hits.shift();
-        return target ? { target, displayedRevision: query.displayedRevision } : null;
+        const target = hits.shift() ?? null;
+        return { target, displayedRevision: query.displayedRevision };
       },
       onSelectionChange: (target) => selected.push(target),
       onPanBy: () => undefined,
@@ -124,8 +124,9 @@ describe('graph pointer selection', () => {
   it('rejects changed display revisions and stale provider stamps', () => {
     const selected: Array<GraphHitTarget | null> = [];
     let providerRevision = revision;
+    let providerTarget: GraphHitTarget | null = checkout;
     const machine = createGraphInteraction({
-      hitTarget: () => ({ target: checkout, displayedRevision: providerRevision }),
+      hitTarget: () => ({ target: providerTarget, displayedRevision: providerRevision }),
       onSelectionChange: (target) => selected.push(target),
       onPanBy: () => undefined,
     });
@@ -136,6 +137,10 @@ describe('graph pointer selection', () => {
     machine.pointerDown(pointer(2, 0, 0), revision);
     providerRevision = revision;
     machine.pointerUp(pointer(2, 0, 0), revision);
+    providerTarget = null;
+    providerRevision = revision - 1;
+    machine.pointerDown(pointer(3, 0, 0), revision);
+    machine.pointerUp(pointer(3, 0, 0), revision);
 
     expect(selected).toEqual([]);
   });
@@ -185,7 +190,7 @@ describe('graph pointer panning', () => {
     const pans: Array<{ readonly x: number; readonly y: number }> = [];
     const ended: boolean[] = [];
     const machine = createGraphInteraction({
-      hitTarget: () => null,
+      hitTarget: (query) => ({ target: null, displayedRevision: query.displayedRevision }),
       onSelectionChange: () => undefined,
       onPanBy: (delta) => pans.push(delta),
       onPanEnd: (cancelled) => ended.push(cancelled),
@@ -216,5 +221,25 @@ describe('graph pointer panning', () => {
       { x: 5, y: 0 },
     ]);
     expect(ended).toEqual([true, true]);
+  });
+
+  it('cancels an active captured pan when disposed', () => {
+    const ended: boolean[] = [];
+    const machine = createGraphInteraction({
+      hitTarget: (query) => ({ target: null, displayedRevision: query.displayedRevision }),
+      onSelectionChange: () => undefined,
+      onPanBy: () => undefined,
+      onPanEnd: (cancelled) => ended.push(cancelled),
+    });
+
+    machine.pointerDown(pointer(1, 0, 0), revision);
+    machine.pointerMove(pointer(1, 5, 0), revision);
+
+    expect(machine.cancelActive()).toEqual([
+      { kind: 'release', pointerId: 1 },
+      { kind: 'dragging', active: false },
+    ]);
+    expect(machine.cancelActive()).toEqual([]);
+    expect(ended).toEqual([true]);
   });
 });

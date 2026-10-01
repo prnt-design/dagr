@@ -53,13 +53,15 @@ rather than the component's.
 `useGraphInteraction` works with DOM, SVG, canvas, and future GPU picking
 because the package does not guess where your nodes are. Your synchronous hit
 provider receives a surface-relative CSS point, the same point converted
-through your camera, the current DPR, and an opaque displayed-scene revision.
-It returns a stable node or port identity stamped with the revision it queried.
+through your camera, the displayed DPR you supply, and an opaque
+displayed-scene revision. It returns a stable node, port, or empty result
+stamped with the revision it queried.
 
 ```tsx
 useGraphInteraction({
   surfaceRef,
   displayedRevision: frame,
+  devicePixelRatio: renderedDpr,
   screenToWorld: (point) => camera.screenToWorld(point),
   hitTarget: (query) => hitIndex.query(query),
   selection,
@@ -72,9 +74,10 @@ useGraphInteraction({
 Coordinates stay in CSS pixels until your provider chooses otherwise. Do not
 multiply the point by DPR before `screenToWorld`; use `devicePixelRatio` only
 when reading a device-pixel buffer. Change `displayedRevision` whenever target
-geometry, draw order, or membership on screen changes, including animation
-frames. The hook rejects a provider result with an older stamp and rejects a
-click when the revision changed between press and release.
+geometry, draw order, membership, or its paired DPR changes on screen,
+including animation frames. Hits and misses both carry a stamp. The hook
+rejects a provider result with an older stamp and rejects a click when the
+revision changed between press and release.
 
 Selection is controlled. A click selects on release only when press and release
 hit the same stable identity. Five CSS pixels turns the sequence into a pan and

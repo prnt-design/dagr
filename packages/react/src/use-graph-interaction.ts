@@ -10,15 +10,22 @@ import type {
 } from './interaction.js';
 
 const NATIVE_CONTROL =
-  'button, [role="button"], a, input, select, textarea, [contenteditable]';
+  'button, a, input, select, textarea, summary, label, audio[controls], video[controls], ' +
+  '[role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="switch"], ' +
+  '[role="slider"], [role="spinbutton"], [role="textbox"], [role="combobox"], ' +
+  '[role="listbox"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], ' +
+  '[role="option"], [role="tab"], [role="treeitem"], ' +
+  '[contenteditable]:not([contenteditable="false"])';
 const GRAPH_TARGET_ATTRIBUTE = 'data-dagr-interaction-target';
 
 /** Options for controlled graph selection and click-versus-pan gestures. */
 export interface UseGraphInteractionOptions<Revision> {
   /** The element whose border box defines CSS hit coordinates. */
-  readonly surfaceRef: RefObject<HTMLElement | null>;
+  readonly surfaceRef: RefObject<HTMLElement | SVGElement | null>;
   /** Identity of the target geometry currently displayed. */
   readonly displayedRevision: Revision;
+  /** CSS-to-device ratio used to render the displayed revision. */
+  readonly devicePixelRatio: number;
   /** Convert a surface-relative CSS point through the currently displayed camera. */
   readonly screenToWorld: (css: { readonly x: number; readonly y: number }) => {
     readonly x: number;
@@ -40,8 +47,12 @@ export interface UseGraphInteractionOptions<Revision> {
   readonly thresholdCssPixels?: number | undefined;
 }
 
-function nativeControl(target: EventTarget | null): Element | null {
-  return target instanceof Element ? target.closest(NATIVE_CONTROL) : null;
+function nativeControl(event: PointerEvent, surface: Element): Element | null {
+  for (const target of event.composedPath()) {
+    if (target instanceof Element && target.matches(NATIVE_CONTROL)) return target;
+    if (target === surface) break;
+  }
+  return null;
 }
 
 /**
@@ -60,6 +71,7 @@ export function useGraphInteraction<Revision>(
     const surface = options.surfaceRef.current;
     if (surface === null) return;
     let suppressPointerClick = false;
+    let activePointerId: number | null = null;
 
     const machine = createGraphInteraction<Revision>({
       thresholdCssPixels: options.thresholdCssPixels,
@@ -82,7 +94,7 @@ export function useGraphInteraction<Revision>(
           return latest.current.screenToWorld(css);
         },
         get devicePixelRatio() {
-          return globalThis.devicePixelRatio || 1;
+          return latest.current.devicePixelRatio;
         },
       };
     };
@@ -113,9 +125,11 @@ export function useGraphInteraction<Revision>(
     };
 
     const down = (event: PointerEvent): void => {
-      suppressPointerClick = false;
-      const control = nativeControl(event.target);
+      const control = nativeControl(event, surface);
       if (control !== null && !control.hasAttribute(GRAPH_TARGET_ATTRIBUTE)) return;
+      if (activePointerId !== null || event.button !== 0 || !event.isPrimary) return;
+      suppressPointerClick = false;
+      activePointerId = event.pointerId;
       apply(machine.pointerDown(pointer(event), latest.current.displayedRevision));
     };
     const move = (event: PointerEvent): void => {
@@ -123,12 +137,16 @@ export function useGraphInteraction<Revision>(
     };
     const up = (event: PointerEvent): void => {
       apply(machine.pointerUp(pointer(event), latest.current.displayedRevision));
+      if (activePointerId === event.pointerId) activePointerId = null;
     };
     const cancel = (event: PointerEvent): void => {
       apply(machine.pointerCancel(event.pointerId));
+      if (activePointerId === event.pointerId) activePointerId = null;
     };
     const lost = (event: PointerEvent): void => {
-      if (event.target === surface) apply(machine.lostPointerCapture(event.pointerId));
+      if (event.target !== surface) return;
+      apply(machine.lostPointerCapture(event.pointerId));
+      if (activePointerId === event.pointerId) activePointerId = null;
     };
     const suppress = (event: MouseEvent): void => {
       if (!suppressPointerClick || event.detail === 0) return;
@@ -136,22 +154,23 @@ export function useGraphInteraction<Revision>(
       event.stopPropagation();
     };
 
-    surface.addEventListener('pointerdown', down);
+    surface.addEventListener('pointerdown', down as EventListener);
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', cancel);
-    surface.addEventListener('lostpointercapture', lost);
-    surface.addEventListener('click', suppress, true);
-    surface.addEventListener('dblclick', suppress, true);
+    surface.addEventListener('lostpointercapture', lost as EventListener);
+    surface.addEventListener('click', suppress as EventListener, true);
+    surface.addEventListener('dblclick', suppress as EventListener, true);
     return () => {
-      surface.removeEventListener('pointerdown', down);
+      surface.removeEventListener('pointerdown', down as EventListener);
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', cancel);
-      surface.removeEventListener('lostpointercapture', lost);
-      surface.removeEventListener('click', suppress, true);
-      surface.removeEventListener('dblclick', suppress, true);
-      delete surface.dataset.dagrDragging;
+      surface.removeEventListener('lostpointercapture', lost as EventListener);
+      surface.removeEventListener('click', suppress as EventListener, true);
+      surface.removeEventListener('dblclick', suppress as EventListener, true);
+      apply(machine.cancelActive());
+      activePointerId = null;
     };
   }, [options.surfaceRef, options.thresholdCssPixels]);
 }

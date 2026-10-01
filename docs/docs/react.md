@@ -492,6 +492,7 @@ const [selection, setSelection] = useState<GraphHitTarget | null>(null);
 useGraphInteraction({
   surfaceRef: surface,
   displayedRevision: frame.revision,
+  devicePixelRatio: frame.devicePixelRatio,
   screenToWorld: (point) => camera.screenToWorld(point),
   hitTarget: (query) => index.hit(query),
   selection,
@@ -507,21 +508,22 @@ The provider is synchronous. Every query carries four pieces of evidence:
 | --- | --- |
 | `css` | CSS pixels from the surface's top-left border box, with positive `y` down |
 | `world` | That point converted through the camera displaying this scene |
-| `devicePixelRatio` | The CSS-to-device ratio, reported separately |
-| `displayedRevision` | Opaque identity for displayed geometry, draw order, and target membership |
+| `devicePixelRatio` | The caller-supplied CSS-to-device ratio used for this display |
+| `displayedRevision` | Opaque identity for displayed geometry, draw order, target membership, and the paired DPR |
 
 Do not multiply `css` by DPR before `screenToWorld`. A provider reading a
 device-pixel target multiplies at that boundary. A provider returns a stable
-node identity (`nodeId`) or port identity (`nodeId` plus `portId`) and stamps
-the answer with the displayed revision it queried. Renderer slots, array
-positions, and pick colors are not stable identities.
+node identity (`nodeId`), port identity (`nodeId` plus `portId`), or `null`
+target and stamps every hit or miss with the displayed revision it queried.
+Renderer slots, array positions, and pick colors are not stable identities.
 
 The stamp is load-bearing. The hook rejects a result whose stamp differs from
 the query and rejects the whole click when `displayedRevision` changed between
 press and release. Use the revision of what is **on screen**, not a graph model
 revision that runs ahead of animation. Change it on every animated geometry
-frame. A graph edit that changes hit geometry then cancels an in-flight click;
-a pan continues because it means screen movement, not target identity.
+frame and whenever the displayed DPR changes. A graph edit that changes hit
+geometry then cancels an in-flight click; a pan continues because it means
+screen movement, not target identity.
 
 Selection is controlled through `selection` and `onSelectionChange`. The hook
 selects on release only when press and release hit the same target. A fresh

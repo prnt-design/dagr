@@ -25,6 +25,7 @@ function Harness({
   useGraphInteraction({
     surfaceRef: viewport,
     displayedRevision: revision,
+    devicePixelRatio: 1,
     screenToWorld: (point) => camera.current.screenToWorld(point),
     hitTarget: (query) => ({
       target: { kind: 'node', nodeId: 'test' },

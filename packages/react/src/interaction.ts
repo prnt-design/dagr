@@ -13,22 +13,22 @@ export interface GraphHitQuery<Revision> {
   readonly css: { readonly x: number; readonly y: number };
   /** The same point converted by the camera displaying this revision. */
   readonly world: { readonly x: number; readonly y: number };
-  /** Reported separately because CSS points are not device-pixel points. */
+  /** Caller-supplied ratio for the displayed revision, kept separate from CSS points. */
   readonly devicePixelRatio: number;
   /** Opaque identity of the displayed geometry and target membership. */
   readonly displayedRevision: Revision;
 }
 
-/** A hit stamped with the displayed geometry the provider actually queried. */
+/** A hit or miss stamped with the displayed geometry the provider actually queried. */
 export interface GraphHit<Revision> {
-  readonly target: GraphHitTarget;
+  readonly target: GraphHitTarget | null;
   readonly displayedRevision: Revision;
 }
 
 /** A synchronous hit provider owned by the caller. */
 export type GraphHitProvider<Revision> = (
   query: GraphHitQuery<Revision>,
-) => GraphHit<Revision> | null;
+) => GraphHit<Revision>;
 
 /** A pointer sample after browser coordinates have been made surface-relative. */
 export interface GraphPointer {
@@ -65,6 +65,7 @@ export interface GraphInteractionMachine<Revision> {
   pointerUp(pointer: GraphPointer, displayedRevision: Revision): readonly GraphInteractionEffect[];
   pointerCancel(pointerId: number): readonly GraphInteractionEffect[];
   lostPointerCapture(pointerId: number): readonly GraphInteractionEffect[];
+  cancelActive(): readonly GraphInteractionEffect[];
 }
 
 /** Whether two hit results name the same stable graph object. */
@@ -95,7 +96,6 @@ function queryHit<Revision>(
     devicePixelRatio: pointer.devicePixelRatio,
     displayedRevision,
   });
-  if (hit === null) return null;
   return Object.is(hit.displayedRevision, displayedRevision) ? hit.target : undefined;
 }
 
@@ -193,6 +193,9 @@ export function createGraphInteraction<Revision>(
     },
     lostPointerCapture(pointerId) {
       return cancel(pointerId, false);
+    },
+    cancelActive() {
+      return press === null ? [] : cancel(press.pointerId, true);
     },
   };
 }

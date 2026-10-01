@@ -189,6 +189,7 @@ import {
 } from '@prnt/dagr-react';
 
 declare const surfaceRef: RefObject<HTMLElement | null>;
+declare const svgSurfaceRef: RefObject<SVGSVGElement | null>;
 const node: GraphHitTarget = { kind: 'node', nodeId: 'checkout' };
 const port: GraphHitTarget = { kind: 'port', nodeId: 'checkout', portId: 'event' };
 const provider: GraphHitProvider<number> = (query) => ({
@@ -198,9 +199,20 @@ const provider: GraphHitProvider<number> = (query) => ({
 useGraphInteraction({
   surfaceRef,
   displayedRevision: 1,
+  devicePixelRatio: 2,
   screenToWorld: ({ x, y }) => ({ x, y: -y }),
   hitTarget: provider,
   selection: node,
+  onSelectionChange: (_target) => undefined,
+  onPanBy: (_delta) => undefined,
+});
+useGraphInteraction({
+  surfaceRef: svgSurfaceRef,
+  displayedRevision: 1,
+  devicePixelRatio: 2,
+  screenToWorld: ({ x, y }) => ({ x, y }),
+  hitTarget: provider,
+  selection: port,
   onSelectionChange: (_target) => undefined,
   onPanBy: (_delta) => undefined,
 });

@@ -133,13 +133,14 @@ export default function SystemAtlas() {
           };
         }
       }
-      return null;
+      return { target: null, displayedRevision: system };
     },
     [system],
   );
   useGraphInteraction({
     surfaceRef: viewport,
     displayedRevision: system,
+    devicePixelRatio: globalThis.devicePixelRatio || 1,
     screenToWorld: (point) => camera.current.screenToWorld(point),
     hitTarget,
     selection: { kind: 'node', nodeId: selected },

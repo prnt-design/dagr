@@ -37,7 +37,7 @@ function pointerQuery(nodeCount: number): () => void {
         };
       }
     }
-    return null;
+    return { target: null, displayedRevision: query.displayedRevision };
   };
   const machine = createGraphInteraction({
     hitTarget: provider,

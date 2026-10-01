@@ -25,6 +25,7 @@ function dispatchPointer(
   const event = new MouseEvent(type, {
     bubbles: true,
     cancelable: true,
+    composed: true,
     clientX: x,
     clientY: y,
     button: overrides.button ?? 0,
@@ -41,6 +42,7 @@ interface HarnessProps {
   readonly hitTarget: GraphHitProvider<number>;
   readonly onSelectionChange: (target: GraphHitTarget | null) => void;
   readonly onPanBy?: (delta: { readonly x: number; readonly y: number }) => void;
+  readonly onPanEnd?: (cancelled: boolean) => void;
   readonly screenToWorld?: (css: { readonly x: number; readonly y: number }) => {
     readonly x: number;
     readonly y: number;
@@ -51,17 +53,20 @@ function Harness({
   hitTarget,
   onSelectionChange,
   onPanBy = () => undefined,
+  onPanEnd,
   screenToWorld = ({ x, y }) => ({ x: x / 2, y: -y / 2 }),
 }: HarnessProps) {
   const surfaceRef = useRef<HTMLDivElement>(null);
   useGraphInteraction({
     surfaceRef,
     displayedRevision: 4,
+    devicePixelRatio: 2,
     screenToWorld,
     hitTarget,
     selection: null,
     onSelectionChange,
     onPanBy,
+    onPanEnd,
   });
   const keyboardSelect = (event: ReactPointerEvent<HTMLButtonElement> | React.MouseEvent) => {
     if (event.detail === 0) onSelectionChange({ kind: 'node', nodeId: 'checkout' });
@@ -80,6 +85,16 @@ function Harness({
       'Checkout',
     ),
     createElement('button', { type: 'button', 'data-toolbar': true }, 'Fit'),
+    createElement('summary', { 'data-summary': true }, 'Details'),
+    createElement(
+      'div',
+      {
+        contentEditable: false,
+        'data-dagr-interaction-target': true,
+        'data-noneditable': true,
+      },
+      'Node',
+    ),
     createElement(
       'div',
       { 'data-dagr-interaction-target': true },
@@ -148,8 +163,11 @@ it('selects opted-in graph controls with surface-relative CSS and current world 
   ]);
 });
 
-it('leaves ordinary controls and nested inputs native and removes listeners on unmount', async () => {
-  const hitTarget = vi.fn<GraphHitProvider<number>>(() => null);
+it('leaves native, shadow, and nested controls alone without excluding noneditable targets', async () => {
+  const hitTarget = vi.fn<GraphHitProvider<number>>((query) => ({
+    target: null,
+    displayedRevision: query.displayedRevision,
+  }));
   tree = await mount(
     createElement(Harness, {
       hitTarget,
@@ -158,23 +176,35 @@ it('leaves ordinary controls and nested inputs native and removes listeners on u
   );
   const toolbar = tree.container.querySelector('[data-toolbar]')!;
   const input = tree.container.querySelector('[data-nested-input]')!;
+  const summary = tree.container.querySelector('[data-summary]')!;
+  const noneditable = tree.container.querySelector('[data-noneditable]')!;
   const surface = tree.container.querySelector('[data-surface]')!;
+  const shadowHost = document.createElement('div');
+  const shadowButton = document.createElement('button');
+  shadowHost.attachShadow({ mode: 'open' }).append(shadowButton);
+  surface.append(shadowHost);
 
   dispatchPointer(toolbar, 'pointerdown', 110, 220);
   dispatchPointer(input, 'pointerdown', 110, 220);
+  dispatchPointer(summary, 'pointerdown', 110, 220);
+  dispatchPointer(shadowButton, 'pointerdown', 110, 220);
   expect(hitTarget).not.toHaveBeenCalled();
+
+  dispatchPointer(noneditable, 'pointerdown', 110, 220);
+  dispatchPointer(window, 'pointerup', 110, 220);
+  expect(hitTarget).toHaveBeenCalledTimes(2);
 
   await tree.unmount();
   tree = null;
   dispatchPointer(surface, 'pointerdown', 110, 220);
-  expect(hitTarget).not.toHaveBeenCalled();
+  expect(hitTarget).toHaveBeenCalledTimes(2);
 });
 
 it('does not convert unrelated window pointer movement', async () => {
   const screenToWorld = vi.fn(({ x, y }) => ({ x, y }));
   tree = await mount(
     createElement(Harness, {
-      hitTarget: () => null,
+      hitTarget: (query) => ({ target: null, displayedRevision: query.displayedRevision }),
       onSelectionChange: () => undefined,
       screenToWorld,
     }),
@@ -214,6 +244,7 @@ it('captures touch only after threshold, cancels without selection, and preserve
   expect(capture).toHaveBeenCalledWith(8);
   expect(surface.dataset.dagrDragging).toBe('true');
   expect(pans).toEqual([{ x: 3, y: 4 }]);
+  dispatchPointer(node, 'pointerdown', 113, 224, 9, { isPrimary: false });
 
   dispatchPointer(window, 'pointercancel', 113, 224, 8);
   expect(release).toHaveBeenCalledWith(8);
@@ -236,4 +267,27 @@ it('captures touch only after threshold, cancels without selection, and preserve
 
   node.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
   expect(selected).toEqual([{ kind: 'node', nodeId: 'checkout' }]);
+});
+
+it('cancels an active pan and releases capture on unmount', async () => {
+  const ended: boolean[] = [];
+  tree = await mount(
+    createElement(Harness, {
+      hitTarget: (query) => ({ target: null, displayedRevision: query.displayedRevision }),
+      onSelectionChange: () => undefined,
+      onPanEnd: (cancelled) => ended.push(cancelled),
+    }),
+  );
+  const surface = tree.container.querySelector('[data-surface]') as HTMLElement;
+  surface.setPointerCapture = vi.fn();
+  surface.hasPointerCapture = vi.fn(() => true);
+  surface.releasePointerCapture = vi.fn();
+
+  dispatchPointer(surface, 'pointerdown', 110, 220, 6);
+  dispatchPointer(window, 'pointermove', 115, 220, 6);
+  await tree.unmount();
+  tree = null;
+
+  expect(surface.releasePointerCapture).toHaveBeenCalledWith(6);
+  expect(ended).toEqual([true]);
 });

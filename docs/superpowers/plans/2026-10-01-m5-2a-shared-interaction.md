@@ -23,8 +23,9 @@ provider owns hit geometry and the caller owns camera movement and selection.
 - Hit providers are synchronous.
 - CSS coordinates are surface-relative and world coordinates use the caller's
   current displayed camera.
-- `displayedRevision` changes with displayed geometry, draw order, or target
-  membership, including animation frames.
+- `displayedRevision` changes with displayed geometry, draw order, target
+  membership, or displayed DPR, including animation frames.
+- Providers stamp both hits and misses with the revision they queried.
 - Selection is controlled. The hook stores no selected target.
 - No native `DagrCanvas` hit adapter, hover, edge hit, or connection gesture.
 - No em dashes in project prose.
@@ -147,6 +148,7 @@ buttons and nested inputs activate normally, and unmount stops interaction.
 useGraphInteraction({
   surfaceRef,
   displayedRevision: revision,
+  devicePixelRatio: renderedDpr,
   screenToWorld: ({ x, y }) => ({ x: x / 2, y: -y / 2 }),
   hitTarget,
   selection,

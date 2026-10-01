@@ -51,36 +51,38 @@ interface GraphHitQuery<Revision> {
 }
 
 interface GraphHit<Revision> {
-  readonly target: GraphHitTarget;
+  readonly target: GraphHitTarget | null;
   readonly displayedRevision: Revision;
 }
 
 type GraphHitProvider<Revision> =
-  (query: GraphHitQuery<Revision>) => GraphHit<Revision> | null;
+  (query: GraphHitQuery<Revision>) => GraphHit<Revision>;
 ```
 
 `css` is measured from the interaction surface's top-left border box in CSS
 pixels. `world` is the caller's conversion of that point against the camera
 that currently displays the scene. Positive screen `y` points down. World-axis
-direction is the caller's camera convention. `devicePixelRatio` is reported
-separately because CSS coordinates must not be multiplied before camera
-conversion. A provider that reads a device-pixel buffer performs that multiply
-at its own boundary.
+direction is the caller's camera convention. The caller supplies
+`devicePixelRatio` from the displayed scene because CSS coordinates must not be
+multiplied before camera conversion. A provider that reads a device-pixel
+buffer performs that multiply at its own boundary.
 
 `displayedRevision` is opaque to the hook and compared with `Object.is`. The
-caller must change it whenever displayed hit geometry, draw order, or target
-membership changes, including every animated geometry frame. A graph model
-revision that runs ahead of animation is not a displayed revision.
+caller must change it whenever displayed hit geometry, draw order, target
+membership, or the paired DPR changes, including every animated geometry
+frame. A graph model revision that runs ahead of animation is not a displayed
+revision.
 
-The provider stamps its answer with the revision of the geometry it queried.
-The hook rejects the target unless that stamp matches the query. It also rejects
-a click when the displayed revision changed between press and release. This is
-the stale-result boundary M5.2b, M6.3a, and M4.8b share.
+The provider stamps every hit or miss with the revision of the geometry it
+queried. The hook rejects the result unless that stamp matches the query. It
+also rejects a click when the displayed revision changed between press and
+release. This is the stale-result boundary M5.2b, M6.3a, and M4.8b share.
 
 The React hook takes:
 
 - a `surfaceRef`;
 - the current `displayedRevision`;
+- the DPR used for that displayed revision;
 - `screenToWorld(css)`;
 - `hitTarget(query)`;
 - controlled `selection` and `onSelectionChange`;
