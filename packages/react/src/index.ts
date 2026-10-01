@@ -61,6 +61,20 @@ export type { DagrCanvasHandle } from './canvas-context.js';
 export { CanvasContextError } from './errors.js';
 export type { DagrReactErrorCode } from './errors.js';
 export {
+  createGraphInteraction,
+  sameGraphHitTarget,
+} from './interaction.js';
+export type {
+  GraphHit,
+  GraphHitProvider,
+  GraphHitQuery,
+  GraphHitTarget,
+  GraphInteractionEffect,
+  GraphInteractionMachine,
+  GraphInteractionOptions,
+  GraphPointer,
+} from './interaction.js';
+export {
   DEFAULT_EDGE_COLOR,
   DEFAULT_NODE_APPEARANCE,
   nodeWorldBounds,
@@ -71,6 +85,8 @@ export {
 export type { EdgeColorOf, NodeAppearance, NodeAppearanceOf } from './scene.js';
 export { useDagr } from './use-dagr.js';
 export type { DagrLayoutState, UseDagrOptions } from './use-dagr.js';
+export { useGraphInteraction } from './use-graph-interaction.js';
+export type { UseGraphInteractionOptions } from './use-graph-interaction.js';
 
 /**
  * The `@prnt/dagr-render` types this package's own surface is spelled in.
