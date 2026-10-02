@@ -1,13 +1,13 @@
 .section {
-  max-width: 100rem;
+  max-width: var(--dagr-page-width, 100rem);
   margin: 0 auto;
-  padding: 1.5rem 2rem 3rem;
+  padding: 1.5rem var(--dagr-page-gutter, 2rem) 3rem;
 }
 .heading {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--dagr-heading-columns, minmax(0, 3fr) minmax(0, 2fr));
   align-items: end;
-  justify-content: space-between;
-  gap: 3rem;
+  gap: var(--dagr-heading-gap, 5rem);
   margin-bottom: 1.8rem;
 }
 .eyebrow {
@@ -665,13 +665,6 @@
   .workspace {
     grid-template-columns: minmax(0, 1fr) 260px;
   }
-  .heading {
-    display: block;
-  }
-  .heading > p {
-    max-width: 65ch;
-    margin-top: 1rem;
-  }
   .legend {
     gap: 0.5rem;
   }
@@ -685,9 +678,18 @@
     display: none;
   }
 }
+@media (max-width: 900px) {
+  .heading {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.8rem;
+  }
+  .heading > p {
+    max-width: 65ch;
+  }
+}
 @media (max-width: 760px) {
   .section {
-    padding: 1rem;
+    padding: 1rem var(--dagr-page-gutter, 1rem);
   }
   .workspace {
     grid-template-columns: 1fr;

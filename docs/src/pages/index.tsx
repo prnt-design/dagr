@@ -22,7 +22,7 @@ export default function Home() {
       title="Graph layout, rendering, and motion"
       description="Dagr: graph layout, rendering, animated changes, and rich content. An open-source toolkit by Nii Yeboah, creator of PRNT."
     >
-      <main>
+      <main className={styles.page}>
         <header className={styles.hero}>
           <p className={styles.eyebrow}>A GRAPH TOOLKIT FOR THE WEB</p>
           <div className={styles.intro}>

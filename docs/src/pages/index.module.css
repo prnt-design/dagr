@@ -1,11 +1,17 @@
+.page {
+  --dagr-page-width: 100rem;
+  --dagr-page-gutter: 2rem;
+  --dagr-heading-columns: minmax(0, 3fr) minmax(0, 2fr);
+  --dagr-heading-gap: 5rem;
+}
 .hero,
 .story,
 .scale,
 .start {
-  max-width: 88rem;
+  max-width: var(--dagr-page-width);
   margin: 0 auto;
-  padding-left: 2rem;
-  padding-right: 2rem;
+  padding-left: var(--dagr-page-gutter);
+  padding-right: var(--dagr-page-gutter);
 }
 .hero {
   padding-top: clamp(3rem, 6vw, 6rem);
@@ -19,9 +25,9 @@
 }
 .intro {
   display: grid;
-  grid-template-columns: 3fr 2fr;
-  align-items: end;
-  gap: 5rem;
+  grid-template-columns: var(--dagr-heading-columns);
+  align-items: start;
+  gap: var(--dagr-heading-gap);
 }
 .intro h1 {
   font-size: clamp(3.5rem, 7vw, 7rem);
@@ -105,6 +111,10 @@
   margin-top: 2rem;
 }
 @media (max-width: 900px) {
+  .page {
+    --dagr-heading-columns: minmax(0, 1fr);
+    --dagr-heading-gap: 1.8rem;
+  }
   .intro,
   .storyBody,
   .sectionHead,
@@ -122,14 +132,12 @@
     padding-top: 4rem;
   }
 }
-@media (max-width: 600px) {
-  .hero,
-  .story,
-  .scale,
-  .start {
-    padding-left: 1rem;
-    padding-right: 1rem;
+@media (max-width: 760px) {
+  .page {
+    --dagr-page-gutter: 1rem;
   }
+}
+@media (max-width: 600px) {
   .hero {
     padding-bottom: 2rem;
   }
