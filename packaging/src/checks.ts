@@ -11,7 +11,7 @@
  *
  * The checks are pure so they can be shown failing on a constructed package.
  * `test/checks.test.ts` does exactly that, and `test/pack.test.ts` runs them
- * over the six real tarballs. A guard that only ever runs against a tree
+ * over the seven real tarballs. A guard that only ever runs against a tree
  * already known to be correct never demonstrates that it can fail.
  */
 
