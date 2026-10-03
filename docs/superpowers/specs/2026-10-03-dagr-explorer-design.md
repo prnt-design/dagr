@@ -168,6 +168,11 @@ boxes after layout, with padding, and does not move any node. This matches
 are offset symmetrically about the routed line, so each is visible, and both
 ends stay on their nodes.
 
+**Self loops are kept and not drawn.** An edge whose source is its target
+stays in the data and in the drawer's connections. It is left out of layout
+and has an empty route, because the router gives it a zero-length line.
+Drawing a loop is deferred.
+
 **Layout is keyed on shape.** The key is node ids and resolved sizes, edge ids
 and endpoints, group ids and membership, and the layout options. Data
 re-created on every render with the same shape keeps its layout and its
@@ -502,6 +507,7 @@ height is fixed, so nothing shifts.
 | `duplicate-node-id` | two nodes in one view share an id |
 | `duplicate-edge-id` | two edges in one view share an id |
 | `duplicate-group-id` | two groups in one view share an id |
+| `invalid-node-size` | a node's resolved width or height is not finite and greater than zero |
 | `missing-edge-endpoint` | an edge names a node its view lacks |
 | `missing-group-member` | a group names a node its view lacks |
 | `empty-group` | a group has no members |
@@ -618,4 +624,5 @@ Each of these is its own spec and plan.
   logic exists in both.
 - **Animated relayout** through `createLayout` deltas, **ports,** and **edge
   hit targets.** M6.3a owns port hits.
+- **Self-loop drawing.** A loop needs a route the router does not produce.
 - **A spatial index** for the visible set, if the M5.6f bench asks for one.
