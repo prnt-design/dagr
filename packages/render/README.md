@@ -154,6 +154,25 @@ a DOM event and `Camera2D.zoomAtScreen` / `panByScreen`, the same ones
 gated by zoom, so names appear before cards do. Elements are **pooled**, which
 means a tier must clear its own per-node state on every bind.
 
+## The three-free entry
+
+`@prnt/dagr-render/core` exports `Camera2D`, `fitZoom` and `shapeEdgePath`, with
+their types, from modules that never import `three`.
+
+```ts
+import { Camera2D, shapeEdgePath } from '@prnt/dagr-render/core';
+```
+
+Use it when you want the camera or the edge-path arithmetic and no renderer: an
+SVG or DOM drawing, or a server render. The full entry imports `three/webgpu`
+at module scope, so a server that externalizes its dependencies loads three.js
+to import it, and the core entry is how you avoid that.
+
+They are the same objects the full entry exports. A camera built from one entry
+is an `instanceof` the other's `Camera2D`. `three` is still a peer dependency
+of the package, so it is installed either way. The core entry is about what
+gets evaluated, not what gets installed.
+
 ## Documentation
 
 The scene model, the shapes, the instancing, the overlay tiers and the

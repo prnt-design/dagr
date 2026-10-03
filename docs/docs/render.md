@@ -704,6 +704,36 @@ signature that saw one. That is the weaker of the two guarantees, and it is the
 reason the peer declaration is doing real work here rather than documenting
 something the compiler already enforces.
 
+### The entry that does not need it
+
+"Cannot be imported at all without three" is true of the full entry. It is not
+true of `@prnt/dagr-render/core`, which exports `Camera2D`, `fitZoom` and
+`shapeEdgePath` and nothing else at runtime.
+
+Those three come from `camera.ts` and `edge-path.ts`, and neither imports
+`three`, directly or through anything it imports. The core entry re-exports
+them without going through `index.ts`, so loading it evaluates no renderer
+module.
+
+The case it exists for is a server render. A bundler already drops
+`three/webgpu` for a consumer who only imports the camera, because this package
+is side-effect free. A server that externalizes its dependencies has no such
+step: it evaluates the entry it is given. `@prnt/dagr-explorer` draws SVG from
+exactly these three functions and has to render on a server, which is why the
+entry was cut.
+
+The objects are the same ones the full entry exports, so a `Camera2D` from
+either satisfies `instanceof` against the other. `three` remains a required
+peer, so the entry changes what is evaluated and not what is installed.
+
+Two tests hold the property. `test/core.test.ts` replaces `three`,
+`three/webgpu` and `three/tsl` with modules that throw on load, imports the
+core entry under them, and asserts as a control that the same mocks do fail the
+full entry. The packaging gate loads the built `dist/core.js` from the
+extracted tarball, in a directory `three` cannot be resolved from, and asserts
+that `dist/index.js` fails there. A guard that had only ever passed would not
+have shown it can fail.
+
 ## Two backends, and which one you got
 
 three's `WebGPURenderer` falls back to a WebGL2 backend by itself when WebGPU is

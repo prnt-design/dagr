@@ -11,6 +11,9 @@ not" is the category this file has a heading for.
 
 ## 0.1.3
 
+- Add the `@prnt/dagr-render/core` entry: `Camera2D`, `fitZoom` and
+  `shapeEdgePath` with their types, from modules that never import `three`. The
+  objects are the ones the full entry exports. Nothing moved.
 - Add `detectBackendSupport()`: which of WebGPU (a real adapter) and WebGL 2 can
   start, and which `backend: 'auto'` will pick. Never throws.
 - Add the pure camera input functions `wheelZoomFactor`, `canvasPoint` and
