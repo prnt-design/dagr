@@ -2343,8 +2343,11 @@ space: y-down CSS pixels at zoom 1, padded 40 off the origin.
 
 Three behaviors are the explorer's, not the layout engine's:
 
-- **Parallel edges bow apart.** Edges joining the same two nodes, in either
-  direction, are separated by 16. Both ends stay on their nodes.
+- **Parallel edges on one line bow apart.** Edges joining the same two nodes,
+  in either direction, are drawn on one line when they span a single rank.
+  Those are separated by 16, with both ends left on their nodes. A pair that
+  spans more ranks is left as the layout engine routed it, which is already
+  apart.
 - **A self loop is not drawn.** An edge from a node to itself stays in your
   data and has an empty route. It moves nothing.
 - **A group moves no node.** It is the padded hull of its members with a band
@@ -2399,8 +2402,8 @@ Not published. The package is private until M5.6f.
   and `validateViews` with `ExplorerDataError`, `layoutView`, and
   `searchNodes`.
 - Layout flows `'right'` by default or `'down'`, in y-down world pixels padded
-  40 off the origin. Parallel edges between one pair of nodes bow 16 apart. A
-  self loop has an empty route. A group is the padded hull of its members and
+  40 off the origin. Parallel edges that span one rank bow 16 apart. A self
+  loop has an empty route. A group is the padded hull of its members and
   moves no node.
 ```
 
@@ -2522,3 +2525,33 @@ Remove the claim from `dagr/workboard`. Update the brain object `dagr/explorer`:
 set `status` to `m5-6b-merged` and add the pull request URL and merge commit.
 Append an event to the `dagr` collection, kind `shipped`, subject `M5.6b`, with
 the date, the actor, the pull request URL, and the gate result.
+
+---
+
+## Amendments during execution
+
+Changes made while executing this plan on 2026-10-03. The task text above is
+as planned, except Task 5's README and changelog wording, which was corrected
+before that task ran.
+
+- **Before execution,** the API design review of the spec changed this plan's
+  error codes to UPPER_SNAKE, added `id` and `viewId` to `ExplorerDataError`,
+  and took `layoutKey` and four spacing constants out of the public entry.
+  Those edits are in the task text.
+- **Parallel edges.** Task 2 separated every pair of edges that shared two
+  nodes. The algorithms review showed, from the router's own contract, that a
+  pair spanning more than one rank is already apart. A follow-up commit
+  separates only two-point routes, and replaces a per-edge `indexOf` with a map
+  built once.
+- **Invariants.** A new `test/layout-invariants.test.ts` lays out twelve seeded
+  graphs in both directions and both edge styles and holds four properties: no
+  boxes overlap, each route starts on its source and ends on its target, no
+  route doubles back along the flow, and everything lies inside the plane.
+- **Test gaps** the task reviews found: Task 2's strict-groups test asserted
+  the error's fields inside a `catch`, which is vacuous if the throw goes away.
+  It now captures the error. Tests were added for four siblings, a bowed pair
+  under the orthogonal style, and an outline at exact contact.
+- **Task 4's consumer smoke runs with `NODE_PATH` removed.** The test runner
+  exports one pointing at the repo's own `node_modules`, where `three` is, and
+  the smoke's control followed it. A real consumer has no such variable.
+

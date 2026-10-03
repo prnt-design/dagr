@@ -170,9 +170,12 @@ coming out, once, in the layout module.
 boxes after layout, with padding, and does not move any node. This matches
 `@prnt/dagr-render`'s `NodeGroup`, hence `nodeIds`. Compound layout is M7.
 
-**Parallel edges bow apart.** Edges between the same unordered pair of nodes
-are offset symmetrically about the routed line, so each is visible, and both
-ends stay on their nodes.
+**Parallel edges the router draws on one line bow apart.** Edges between the
+same unordered pair of nodes share a line only when they span one rank. Those
+are offset symmetrically about that line, so each is visible, and both ends
+stay on their nodes. A pair that spans more ranks is left as the engine routed
+it: each edge already runs through its own dummy nodes, a `nodeSep` apart, and
+moving those would undo an ordering the engine chose.
 
 **Self loops are kept and not drawn.** An edge whose source is its target
 stays in the data and in the drawer's connections. It is left out of layout
@@ -727,6 +730,12 @@ can see what moved without diffing.
    API design review: a public constant cannot change value or become an
    option without a break.
 
-Amendments 3 to 9 were made by the agent executing the plan and have not been
-separately approved. They ride in the M5.6a pull request for the maintainer to
-accept or reverse.
+10. **Only parallel edges the router draws on one line are separated.**
+    Found by the algorithms review of M5.6b, and checked against the router's
+    own contract in `packages/layout/src/route.ts`: a parallel pair spanning
+    more than one rank is already apart. The spec had said every parallel pair
+    bows.
+
+Amendments 3 to 10 were made by the agent executing the plans and have not
+been separately approved. 3 to 9 rode in the M5.6a pull request and 10 rides
+in the M5.6b one, for the maintainer to accept or reverse.
