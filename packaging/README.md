@@ -63,6 +63,12 @@ flag comes off.
 - **A packed consumer compiles against the public surfaces**, under `NodeNext`
   resolution and without workspace aliases, which is what catches an `exports`
   key that a bundler-style resolver would have forgiven.
+- **`@prnt/dagr-explorer` runs from installed tarballs with `three` absent.** A
+  consumer installs the graph, layout, renderer and explorer tarballs with
+  peers left out, then lays out a view and searches it from the built entry.
+  The control comes first: the smoke fails if `three` can be resolved from
+  where the renderer is installed. It runs without the test runner's
+  `NODE_PATH`, which points at this repo's own `node_modules`.
 
 ## Packing is not conditional, and the build is not either
 
@@ -82,9 +88,9 @@ pnpm --filter @dagr/packaging verify:tools
 
 That runs `publint` over every tarball, `arethetypeswrong` over every tarball,
 and a scratch project **outside the workspace** that installs all seven tarballs
-with `npm`, typechecks their public graph, layout, VDSL, renderer and React
-surfaces, including scoped and umbrella subpaths, and runs a headless runtime
-smoke. Run it whenever the packaging changes and before a publish.
+with `npm`, typechecks their public graph, layout, VDSL, renderer, explorer and
+React surfaces, including scoped and umbrella subpaths, and runs a headless
+runtime smoke. Run it whenever the packaging changes and before a publish.
 
 The scratch project is the strongest of the three and it is worth knowing what
 it proves. It compiles `layout({ graph })` with the `graph` built from the

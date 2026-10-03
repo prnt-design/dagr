@@ -300,8 +300,8 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
 - [x] **M5.6a** `@prnt/dagr-render/core`: a three-free entry for `Camera2D`,
   `fitZoom` and `shapeEdgePath`, so a server never evaluates `three` to draw
   SVG.
-- [ ] **M5.6b** Package scaffold and pure core: types, validation, layout,
-  search.
+- [x] **M5.6b** Package scaffold and pure core: types, validation, layout,
+  search. Private until M5.6f. Self loops are kept and not drawn.
 - [ ] **M5.6c** Camera, viewport, SVG base, visible set, overlay tiers, pins.
 - [ ] **M5.6d** Root state, remaining parts, `labels`, `DagrExplorer`,
   `styles.css`.

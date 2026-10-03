@@ -272,7 +272,7 @@ try {
     'npm install of all seven tarballs and their public peers',
   );
   run('npx', ['tsc', '--noEmit'], scratch, 'tsc over scoped and umbrella public package surfaces');
-  run('node', ['smoke.mjs'], scratch, 'headless scoped and umbrella graph, layout, VDSL, render, and React smoke');
+  run('node', ['smoke.mjs'], scratch, 'headless scoped and umbrella graph, layout, VDSL, render, explorer, and React smoke');
 } finally {
   rmSync(workDir, { recursive: true, force: true });
 }
