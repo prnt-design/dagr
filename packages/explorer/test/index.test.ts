@@ -10,8 +10,11 @@ describe('@prnt/dagr-explorer', () => {
   it('exports exactly this runtime surface', () => {
     expect(Object.keys(api).sort()).toEqual(
       [
+        'DEFAULT_NODE_SEP',
         'DEFAULT_NODE_SIZE',
+        'DEFAULT_RANK_SEP',
         'ExplorerDataError',
+        'layoutView',
         'resolveNodeSize',
         'validateView',
         'validateViews',

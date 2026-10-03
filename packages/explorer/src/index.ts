@@ -12,6 +12,15 @@
 
 export { ExplorerDataError } from './errors.js';
 export type { DagrExplorerErrorCode } from './errors.js';
+// `layoutKey` and the fixed spacing constants stay internal on purpose. A
+// public constant cannot change value, or become an option, without a break.
+export { DEFAULT_NODE_SEP, DEFAULT_RANK_SEP, layoutView } from './layout.js';
+export type {
+  ExplorerBox,
+  ExplorerGroupBox,
+  ExplorerLayout,
+  LayoutViewOptions,
+} from './layout.js';
 export { DEFAULT_NODE_SIZE, resolveNodeSize } from './size.js';
 export { validateView, validateViews } from './validate.js';
 export type {
@@ -22,3 +31,4 @@ export type {
   ExplorerView,
   Size,
 } from './types.js';
+export type { Vec2 } from '@prnt/dagr-render/core';
