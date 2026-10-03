@@ -130,6 +130,28 @@ describe('validateView', () => {
     );
     expect([size.code, size.id, size.viewId]).toEqual(['INVALID_NODE_SIZE', 'a', 'v']);
 
+    const dupEdge = caught(() =>
+      validateView(
+        view({ edges: [{ id: 'e', source: 'a', target: 'b' }, { id: 'e', source: 'b', target: 'a' }] }),
+      ),
+    );
+    expect([dupEdge.code, dupEdge.id, dupEdge.viewId]).toEqual(['DUPLICATE_EDGE_ID', 'e', 'v']);
+
+    const dupGroup = caught(() =>
+      validateView(
+        view({
+          groups: [
+            { id: 'g', label: 'One', nodeIds: ['a'] },
+            { id: 'g', label: 'Two', nodeIds: ['b'] },
+          ],
+        }),
+      ),
+    );
+    expect([dupGroup.code, dupGroup.id, dupGroup.viewId]).toEqual(['DUPLICATE_GROUP_ID', 'g', 'v']);
+
+    const empty = caught(() => validateView(view({ groups: [{ id: 'g', label: 'G', nodeIds: [] }] })));
+    expect([empty.code, empty.id, empty.viewId]).toEqual(['EMPTY_GROUP', 'g', 'v']);
+
     // A view error is about the view itself, so there is no enclosing view.
     const dup = caught(() => validateViews([view(), view()]));
     expect([dup.code, dup.id, dup.viewId]).toEqual(['DUPLICATE_VIEW_ID', 'v', undefined]);

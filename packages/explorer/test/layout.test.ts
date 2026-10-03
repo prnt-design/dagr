@@ -201,6 +201,34 @@ describe('layoutView, parallel edges', () => {
     expect(route(layout, 'e1')).toHaveLength(2);
     expect(route(layout, 'e2')).toHaveLength(2);
   });
+  it('spreads four siblings symmetrically: 8 and 24 either side', () => {
+    const layout = layoutView(
+      pair([e('e1', 'a', 'b'), e('e2', 'a', 'b'), e('e3', 'a', 'b'), e('e4', 'a', 'b')]),
+    );
+    expect(route(layout, 'e1')).toContainEqual({ x: 340, y: 76 });
+    expect(route(layout, 'e2')).toContainEqual({ x: 340, y: 92 });
+    expect(route(layout, 'e3')).toContainEqual({ x: 340, y: 108 });
+    expect(route(layout, 'e4')).toContainEqual({ x: 340, y: 124 });
+  });
+
+  it('keeps a bowed pair axis-aligned under the orthogonal style', () => {
+    const layout = layoutView(
+      pair([e('ab', 'a', 'b'), e('ab2', 'a', 'b')], { layout: { edgeStyle: 'orthogonal' } }),
+    );
+    for (const id of ['ab', 'ab2']) {
+      const points = route(layout, id);
+      const [start, end] = ends(points);
+      expect(start).toEqual({ x: 280, y: 100 });
+      expect(end).toEqual({ x: 400, y: 100 });
+      for (let i = 1; i < points.length; i += 1) {
+        const from = points[i - 1];
+        const to = points[i];
+        if (from === undefined || to === undefined) throw new Error('hole in route');
+        expect(from.x === to.x || from.y === to.y).toBe(true);
+      }
+    }
+    expect(route(layout, 'ab')).not.toEqual(route(layout, 'ab2'));
+  });
 });
 
 describe('layoutView, long parallel edges', () => {
@@ -292,14 +320,16 @@ describe('layoutView, groups', () => {
     const view = chain({ groups: [{ id: 'g', label: 'G', nodeIds: ['a', 'c'] }] });
     expect(codeOf(() => layoutView(view, { strictGroups: true }))).toBe('GROUP_ENCLOSES_NON_MEMBER');
     expect(() => layoutView(view, { strictGroups: true })).toThrow(/"g".*"b"/);
+    // The subject is the group. The enclosed node is in the message.
+    let caught: unknown;
     try {
       layoutView(view, { strictGroups: true });
     } catch (error) {
-      // The subject is the group. The enclosed node is in the message.
-      expect(error).toBeInstanceOf(ExplorerDataError);
-      expect((error as ExplorerDataError).id).toBe('g');
-      expect((error as ExplorerDataError).viewId).toBe('v');
+      caught = error;
     }
+    expect(caught).toBeInstanceOf(ExplorerDataError);
+    expect((caught as ExplorerDataError).id).toBe('g');
+    expect((caught as ExplorerDataError).viewId).toBe('v');
   });
 
   it('passes strictGroups when the outline is clear', () => {
@@ -311,6 +341,18 @@ describe('layoutView, groups', () => {
     const once = layoutView(chain({ groups: [{ id: 'g', label: 'G', nodeIds: ['b'] }] }));
     const twice = layoutView(chain({ groups: [{ id: 'g', label: 'G', nodeIds: ['b', 'b'] }] }));
     expect(twice.groups).toEqual(once.groups);
+  });
+
+  it('lets an outline touch a non-member under strictGroups, and rejects one pixel more', () => {
+    // The outline of {a} reaches 24 past a's right edge. With ranks 24 apart b
+    // starts exactly there, which is contact and not overlap. At 23 it overlaps.
+    const group = [{ id: 'g', label: 'G', nodeIds: ['a'] }];
+    const touching = chain({ groups: group, layout: { rankSep: 24 } });
+    expect(codeOf(() => layoutView(touching, { strictGroups: true }))).toBe('no error');
+    const overlapping = chain({ groups: group, layout: { rankSep: 23 } });
+    expect(codeOf(() => layoutView(overlapping, { strictGroups: true }))).toBe(
+      'GROUP_ENCLOSES_NON_MEMBER',
+    );
   });
 });
 
