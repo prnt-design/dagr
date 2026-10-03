@@ -74,8 +74,9 @@ Three behaviors are the explorer's, not the layout engine's:
   data and has an empty route. It moves nothing.
 - **A group moves no node.** It is the padded hull of its members with a band
   above for its label. Pass `{ strictGroups: true }` to throw
-  `GROUP_ENCLOSES_NON_MEMBER` when an outline would take in a node that is not
-  a member, for a diagram where that would be a false statement.
+  `GROUP_ENCLOSES_NON_MEMBER` when an outline would overlap a node that is not
+  a member, even partly, for a diagram where that would be a false statement.
+  An outline that only touches a neighbor is not an overlap.
 
 ## Search
 
@@ -89,8 +90,8 @@ pattern.
 
 A malformed view throws `ExplorerDataError`. Switch on its `code`. Its `id` is
 the view, node, edge or group the error is about, and its `viewId` is the view
-that was found in, so a host can point at the offender without parsing the
-message.
+that was found in (`undefined` when the error is about a view itself), so a
+host can point at the offender without parsing the message.
 
 | `code` | When |
 | --- | --- |
