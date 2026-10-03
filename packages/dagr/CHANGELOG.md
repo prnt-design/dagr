@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.3
 
 - Expose `DagrCanvas` navigation, node click and hover events, camera `focusNode` and `fit`, `nodeTiers` level of detail, `detectBackendSupport` and the camera input helpers through the umbrella exports.
 

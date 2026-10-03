@@ -9,7 +9,7 @@ which unit a number is in. A caller upgrading past one of those sees a drawing
 in a different place, and no compiler tells them. "Behaviour changed, types did
 not" is the category this file has a heading for.
 
-## Unreleased
+## 0.1.3
 
 - Add `detectBackendSupport()`: which of WebGPU (a real adapter) and WebGL 2 can
   start, and which `backend: 'auto'` will pick. Never throws.

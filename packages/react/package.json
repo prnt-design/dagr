@@ -1,6 +1,6 @@
 {
   "name": "@prnt/dagr-react",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "React bindings for Dagr: the DagrCanvas component and hooks.",
   "license": "MIT",
   "type": "module",
