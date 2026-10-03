@@ -24,7 +24,14 @@ export interface BackendProbeEnvironment {
   /** `navigator.gpu`, when the browser has it. */
   readonly gpu?: { requestAdapter(): Promise<unknown> } | null | undefined;
   /** Makes a throwaway canvas. Default `document.createElement('canvas')`. */
-  readonly createCanvas?: (() => { getContext(id: string): unknown }) | undefined;
+  readonly createCanvas?: (() => { getContext(id: string, attributes?: object): unknown }) | undefined;
+  /**
+   * Refuse a software-rendered WebGL 2 context (`failIfMajorPerformanceCaveat`).
+   * A phone or VM that reports WebGL 2 through a CPU rasterizer draws a large
+   * graph at a few frames per second; strict mode reports it as unavailable so
+   * the host can choose its fallback instead. Default false.
+   */
+  readonly strict?: boolean | undefined;
 }
 
 function defaultEnvironment(): BackendProbeEnvironment {
@@ -35,7 +42,7 @@ function defaultEnvironment(): BackendProbeEnvironment {
     createCanvas:
       doc === undefined
         ? undefined
-        : () => doc.createElement('canvas') as { getContext(id: string): unknown },
+        : () => doc.createElement('canvas') as { getContext(id: string, attributes?: object): unknown },
   };
 }
 
@@ -44,12 +51,23 @@ function defaultEnvironment(): BackendProbeEnvironment {
  * a backend that is not available.
  *
  * Takes one adapter request and, at most, one throwaway WebGL context (released
- * straight away), so it is cheap enough to call once at startup. Do not infer
+ * straight away), and the default environment's answer is memoised, so it is
+ * cheap to call from any component. This is what a browser CAN start, not what
+ * `createRenderer` will end up with: read `renderer.backend` for that. Do not infer
  * WebGPU performance from this: it says a backend starts, not how fast.
  */
-export async function detectBackendSupport(
-  env: BackendProbeEnvironment = defaultEnvironment(),
-): Promise<BackendSupport> {
+export function detectBackendSupport(env?: BackendProbeEnvironment): Promise<BackendSupport> {
+  // The default environment is memoised for the page: the answer does not
+  // change within a session, and each probe takes an adapter request and a
+  // WebGL context. An explicit environment (tests, server rendering) never is.
+  if (env !== undefined) return probe(env);
+  memo ??= probe(defaultEnvironment());
+  return memo;
+}
+
+let memo: Promise<BackendSupport> | undefined;
+
+async function probe(env: BackendProbeEnvironment): Promise<BackendSupport> {
   let webgpu = false;
   if (env.gpu) {
     try {
@@ -61,7 +79,10 @@ export async function detectBackendSupport(
   let webgl2 = false;
   if (env.createCanvas) {
     try {
-      const context = env.createCanvas().getContext('webgl2') as
+      const context = env.createCanvas().getContext(
+        'webgl2',
+        env.strict === true ? { failIfMajorPerformanceCaveat: true } : undefined,
+      ) as
         | { getExtension?(name: string): { loseContext?(): void } | null }
         | null;
       webgl2 = context != null;

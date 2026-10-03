@@ -16,6 +16,9 @@ not" is the category this file has a heading for.
 - Add the pure camera input functions `wheelZoomFactor`, `canvasPoint` and
   `keyCommand`, with the frozen commands `ZOOM_IN`, `ZOOM_OUT` and `FIT`, moved from the private campaign demo so hosts
   and `<DagrCanvas navigation>` share one wheel feel and key map.
+- Add `onContextLost` to `createRenderer` (WebGPU `device.lost`, WebGL
+  `webglcontextlost`) and `ContextLostInfo`. `detectBackendSupport` memoises its
+  default probe and takes `strict` to refuse software WebGL 2.
 
 ## 0.1.2
 

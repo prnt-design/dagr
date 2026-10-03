@@ -1,3 +1,4 @@
+import { watchForContextLoss } from './context-loss.js';
 import { Color, OrthographicCamera, Scene, WebGPURenderer } from 'three/webgpu';
 import {
   DEFAULT_BACKEND,
@@ -723,7 +724,7 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
   // `catch` for that reason: see {@link buildSceneRenderer}. What is drawn now
   // comes from `setNodes`, which is M4.4's whole point: the package stopped
   // shipping a hard-coded scene the day it could take a real one.
-  return buildSceneRenderer(
+  const built = buildSceneRenderer(
     camera,
     renderer,
     backend,
@@ -732,4 +733,14 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     options.nodes,
     options.edgeGroups,
   );
+  if (options.onContextLost !== undefined) {
+    const device = (renderer.backend as { device?: unknown } | undefined)?.device;
+    watchForContextLoss(
+      built,
+      canvas,
+      device as Parameters<typeof watchForContextLoss>[2],
+      options.onContextLost,
+    );
+  }
+  return built;
 }

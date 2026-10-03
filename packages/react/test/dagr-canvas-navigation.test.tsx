@@ -9,7 +9,7 @@ vi.mock('@prnt/dagr-render', async (original) => ({
 import type { RichNodeTier, SceneNode } from '@prnt/dagr-render';
 import { DagrCanvas } from '../src/DagrCanvas.js';
 import type { DagrCanvasApi } from '../src/index.js';
-import { lastOverlay, lastRenderer, resetFakes } from './fake-render.js';
+import { built, lastOverlay, lastRenderer, resetFakes } from './fake-render.js';
 import { installFrameQueue, runFrames, runFramesUntilIdle } from './frames.js';
 import { flush, mount } from './mount.js';
 import type { Mounted } from './mount.js';
@@ -457,5 +457,121 @@ describe('touch pinch', () => {
       touch(window, 'pointerup', 1, a.x, a.y);
     });
     expect(onNodeClick).not.toHaveBeenCalled();
+  });
+});
+
+describe('lifecycle, failure and phones', () => {
+  it('survives StrictMode: the abandoned renderer is aborted and disposed, one stays live', async () => {
+    const { StrictMode } = await import('react');
+    tree = await mount(
+      <StrictMode>
+        <DagrCanvas graph={twoNodes()} config={config} />
+      </StrictMode>,
+    );
+    await flush(() => resizeTo(800, 600));
+    expect(built.renderers.length).toBe(2);
+    const [first, second] = built.renderers;
+    expect(first?.options.signal?.aborted).toBe(true);
+    expect(second?.options.signal?.aborted).toBe(false);
+    expect(first?.dispose).toHaveBeenCalled();
+    expect(second?.dispose).not.toHaveBeenCalled();
+    await tree.unmount();
+    tree = null;
+    expect(second?.dispose).toHaveBeenCalled();
+  });
+
+  it('rebuilds after a lost context, tells the caller, and gives up after repeated loss', async () => {
+    const onContextLost = vi.fn();
+    const onError = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} onContextLost={onContextLost} onError={onError} />);
+    const lose = async (): Promise<void> => {
+      const options = built.renderers.at(-1)?.options;
+      await flush(() => options?.onContextLost?.({ backend: 'webgl2', reason: 'context-lost' }));
+    };
+    await lose();
+    expect(onContextLost).toHaveBeenCalledOnce();
+    expect(built.renderers).toHaveLength(2);
+    expect(built.renderers[0]?.dispose).toHaveBeenCalled();
+    await lose();
+    await lose();
+    expect(built.renderers).toHaveLength(4);
+    expect(onError).not.toHaveBeenCalled();
+    await lose();
+    expect(onError).toHaveBeenCalledOnce();
+    expect(String(onError.mock.calls[0]?.[0])).toContain('lost 4 times');
+  });
+
+  it('shows the fallback instead of throwing when the device cannot be built', async () => {
+    built.rendererFailure = new Error('no adapter');
+    const onError = vi.fn();
+    tree = await mount(
+      <DagrCanvas graph={twoNodes()} config={config} onError={onError} fallback={<p>plain list</p>} />,
+    );
+    expect(tree.container.textContent).toContain('plain list');
+    expect(onError).toHaveBeenCalledOnce();
+  });
+
+  it('caps the pixel ratio it renders at', async () => {
+    vi.stubGlobal('devicePixelRatio', 3);
+    await ready(<DagrCanvas graph={twoNodes()} config={config} maxPixelRatio={2} />);
+    const last = lastRenderer().resize.mock.calls.at(-1)?.[0] as { devicePixelRatio: number };
+    expect(last.devicePixelRatio).toBe(2);
+  });
+
+  it('chooses touch-action by touch mode, and in two-finger mode a lone finger does not pan', async () => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" touchNavigation="two-finger" />);
+    expect(host().style.touchAction).toBe('pan-x pan-y');
+    const camera = lastRenderer().camera;
+    const before = camera.center.x;
+    const a = screenOf('a');
+    const touch = (target: EventTarget, type: string, x: number): void => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: a.y, button: 0 });
+      Object.defineProperties(event, { pointerId: { value: 1 }, isPrimary: { value: true }, pointerType: { value: 'touch' } });
+      target.dispatchEvent(event);
+    };
+    await flush(() => {
+      touch(host(), 'pointerdown', a.x);
+      touch(window, 'pointermove', a.x + 60);
+      touch(window, 'pointerup', a.x + 60);
+    });
+    expect(camera.center.x).toBe(before);
+    await tree?.rerender(<DagrCanvas graph={twoNodes()} config={config} navigation label="g" />);
+    expect(host().style.touchAction).toBe('none');
+  });
+
+  it('a finger lands on a tiny far-out node by tolerance, a mouse needs to be close', async () => {
+    const onNodeClick = vi.fn();
+    const graph = twoNodes();
+    await ready(<DagrCanvas graph={graph} config={{ defaultNodeSize: { width: 4, height: 4 } }} cameraLimits={false} fit={false} onNodeClick={onNodeClick} />);
+    const camera = lastRenderer().camera;
+    await flush(() => {
+      camera.setZoom(1);
+      camera.setCenter({ x: 0, y: 0 });
+    });
+    const a = screenOf('a');
+    const near = { x: a.x + 15, y: a.y };
+    const tap = (type: 'touch' | 'mouse'): void => {
+      const mk = (name: string, target: EventTarget): void => {
+        const event = new MouseEvent(name, { bubbles: true, cancelable: true, composed: true, clientX: near.x, clientY: near.y, button: 0 });
+        Object.defineProperties(event, { pointerId: { value: 1 }, isPrimary: { value: true }, pointerType: { value: type } });
+        target.dispatchEvent(event);
+      };
+      mk('pointerdown', host());
+      mk('pointerup', window);
+    };
+    await flush(() => tap('mouse'));
+    expect(onNodeClick).not.toHaveBeenCalled();
+    await flush(() => tap('touch'));
+    expect(onNodeClick).toHaveBeenCalledWith('a');
+  });
+
+  it('leaves the wheel to editable content inside the canvas', async () => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation label="g" />);
+    const editor = document.createElement('div');
+    editor.setAttribute('contenteditable', 'true');
+    host().append(editor);
+    const wheel = new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true });
+    await flush(() => editor.dispatchEvent(wheel));
+    expect(wheel.defaultPrevented).toBe(false);
   });
 });

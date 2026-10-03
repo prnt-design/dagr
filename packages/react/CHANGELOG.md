@@ -20,6 +20,16 @@
   unchanged. `DagrCanvasProps` is now a type alias of `DagrCanvasBaseProps` and
   `DagrNodeTierProps<T>`, all exported. `fit()` returns whether it moved.
   Focus on a tier card survives pooling and tier swaps.
+- Add `touchNavigation` (`'drag'` default, or `'two-finger'` to leave one-finger
+  scroll to the page), `maxPixelRatio`, `onContextLost` (the canvas rebuilds its
+  renderer, up to three times in ten seconds) and `fallback` (rendered instead of
+  throwing when the renderer cannot be built).
+- Node hits fall back to the nearest centre within 22 CSS pixels for touch and
+  4 for a mouse, and the hit grid is sized from the median node.
+- Animated frames feed `nodeTiers` only the nodes that moved, call `nodeData`
+  once per node, and skip recomputing camera limits when the hull is unchanged.
+  Regions that scroll or edit themselves (`textarea`, `contenteditable`,
+  overflow, `data-dagr-no-zoom`) keep the wheel and the pointer.
 - Re-export the `RichNode` and `RichNodeTier` types.
 
 ## 0.1.2

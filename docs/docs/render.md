@@ -775,7 +775,10 @@ This is not the `navigator.gpu` probe the paragraph above warns against. It
 awaits `requestAdapter()` and counts only a non-null adapter, so a device that
 exposes `navigator.gpu` and returns no adapter reports `webgpu: false`, and it
 tries one throwaway WebGL 2 context, released straight away. It never throws:
-a probe that fails is a backend that is not available. `preferred` is what
+a probe that fails is a backend that is not available. The default environment's
+answer is memoised. `strict: true` refuses a software-rendered WebGL 2 context.
+The probe is not the backend you get: `createRenderer` can still land on a
+different one, so read `renderer.backend`. `preferred` is what
 `'auto'` will pick (`'webgpu'`, else `'webgl2'`, else `null`). The environment
 is injectable (`detectBackendSupport({ gpu, createCanvas })`) for tests and for
 server rendering, where both are absent and the answer is `null`.
@@ -784,6 +787,12 @@ It says a backend can start, not that the scene will be fast or that the first
 device request will succeed, so keep handling the rejection of `createRenderer`
 too (`<DagrCanvas onError>` in React). Nothing here measures a real phone; see
 the roadmap's M4.10a for the profile that will.
+
+`createRenderer` also takes `onContextLost(info)`, called once if the device or
+context is lost after the renderer was built (WebGPU's `device.lost`, WebGL's
+`webglcontextlost`, which it cancels so recovery is yours). A lost renderer
+cannot draw again: dispose it and build a new one. It is not called for a normal
+`dispose()`.
 
 ### What differs between the two
 

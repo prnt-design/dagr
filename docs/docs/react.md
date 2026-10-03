@@ -577,8 +577,27 @@ the cursor, two-finger touch pinch (zoom about the midpoint, panning with it),
 drag to pan, and keyboard control while the canvas itself has
 focus: Left/Right pan, Shift+Up/Down pan vertically, `+`/`-` and Up/Down zoom,
 Page Up/Down zoom further, `0` or Home fits. A pinch never selects a node, and
-single-finger pan is paused while two fingers are down. Content that scrolls itself (a textarea, or
-any element marked `data-dagr-no-zoom`) keeps the wheel. The
+single-finger pan is paused while two fingers are down. Content that handles the gesture itself keeps it: a textarea, a
+`contenteditable`, anything that scrolls (`overflow: auto` with overflow), and
+anything marked `data-dagr-no-zoom`, which is also excluded from pan, pinch and
+selection starts.
+
+**Phones.** `touchNavigation="drag"` (default) gives the canvas every touch
+(`touch-action: none`): one finger pans, two pinch, and the page cannot scroll
+from the canvas. For a canvas embedded in a scrolling page use
+`touchNavigation="two-finger"` (`touch-action: pan-x pan-y`): a lone finger
+scrolls the page and the camera moves only with two fingers. In that mode the
+browser can still claim a two-finger gesture that starts as a scroll, so pinch
+is dependable when both fingers land before either moves; test it on your
+target devices, which nothing here has. A second finger never takes over an
+active single-pointer gesture. `maxPixelRatio` (try `2`) caps the render
+resolution, which matters on 3x phones and large displays; the canvas also
+resizes when the browser's ratio changes.
+
+**Tolerance.** A hit that lands inside no silhouette falls back to the nearest
+node centre within 22 CSS pixels for touch and 4 for a mouse, so far-out dots
+are tappable; an exact hit always wins. The pixel slack is converted at the
+current zoom, and it applies to hover too. The
 canvas becomes focusable (`tabindex="0"`, `role="group"`, named by `label`; pass one, or the focus stop is unnamed and a development
 warning says so once). `label` names the region whenever it is set, with or
 without `navigation` and
@@ -649,6 +668,18 @@ moves through what is on screen; the GPU shapes below the first tier are not in
 the tab order, and a host that needs a complete keyboard path to every node
 should offer a list or search beside the canvas and call `focusNode`.
 
+### Context loss and failure
+
+If the GPU device (WebGPU) or context (WebGL 2) is lost after drawing began (a
+driver reset, a GPU process crash, a mobile tab whose GPU memory was reclaimed),
+`onContextLost({ backend, reason })` fires and the canvas rebuilds its renderer
+by itself, restarting from a fresh camera fit. More than three losses in ten
+seconds stops the rebuilding and reports the failure through `onError`. If the
+renderer cannot be built at all, the default is still to throw to the nearest
+error boundary; pass `fallback={<List />}` to render a plain alternative in
+place instead (`onError` still fires). React StrictMode is supported: the
+renderer the dev double-mount abandons is aborted and disposed.
+
 ### CPU cost of picking
 
 Measured 2026-10-03 on the same Apple M4 and Node `v25.6.1` as the M5.2a
@@ -700,13 +731,30 @@ only, so it can lag a node that moves under a still cursor (keyboard pan, a
 flight, an animation).
 
 Tiers follow the nodes as drawn, so with `animate` a card glides with its
-node. A tier is plain DOM; to render React into one, create a root in `create`
+node. Each animated frame feeds only the nodes whose box changed and calls
+`nodeData` once per node (not per frame); the frame an animation settles on
+replaces the whole set. A local run with 10,000 nodes and 100 in motion measured the incremental feed
+about 7x faster than rebuilding all of it (taken on a loaded machine, so
+indicative, not gated; CPU time only). A tier is plain DOM; to render React into one, create a root in `create`
 and render from `update`, and unmount the roots you created when you drop the
 tiers. A first-class React tier helper is not shipped yet.
 
 Pair the tiers with `navigation` and the camera limits above: the maximum zoom
 is the smallest node filling the viewport, so the richest tier is always
 reachable.
+
+### Known limits of this slice
+
+- Hover is evaluated on pointer movement and reuses a hit index up to 100 ms old
+  while nodes glide; clicks always use the index of the nodes as drawn.
+- Overlay tiers have a cap on mounted elements, but there is no per-frame budget
+  for how many mount at once when a pan reveals many nodes, and `onFrame` is
+  called only on animated frames, not on plain pans.
+- Camera flights use a fixed 450 ms ease-in-out with a straight centre path and
+  geometric zoom. A long flight across a large graph does not zoom out and in
+  (the van Wijk path); call `fit()` then `focusNode()` if you want that.
+- Resizing the canvas can show a stale frame for one frame before the next draw.
+- `cursor` is written directly on the canvas element while a node is hovered.
 
 ## When there is no GPU
 
@@ -722,9 +770,12 @@ const support = await detectBackendSupport();
 if (support.preferred === null) return <StaticFallback />; // list, table, image
 ```
 
-`detectBackendSupport()` asks for a WebGPU adapter (not just `navigator.gpu`,
+`detectBackendSupport()` (memoised for the page) asks for a WebGPU adapter (not just `navigator.gpu`,
 which many devices expose with no adapter behind it) and tries a throwaway
-WebGL 2 context, and never throws. It says what *can* start, not that your scene
+WebGL 2 context, and never throws. `detectBackendSupport({ gpu, createCanvas, strict: true })` also refuses a
+software-rendered WebGL 2 context (`failIfMajorPerformanceCaveat`), which
+reports as available and draws a large graph at a few frames per second; pass
+the real browser objects, or omit the environment to use the page's. It says what *can* start, not that your scene
 will run well: a low-end phone on WebGL 2 draws the same graph more slowly, and
 no benchmark here speaks for it. The other half is `onError`: a layout that fails or a device that never
 arrives is reported there instead of thrown, so a host can swap in the same

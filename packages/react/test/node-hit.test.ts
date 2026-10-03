@@ -71,4 +71,27 @@ describe('createNodeHitIndex', () => {
     expect(index.hit({ x: 5 * 120, y: 7 * 80 })).toBe('n705');
     expect(index.hit({ x: 5 * 120 + 60, y: 7 * 80 })).toBeNull();
   });
+
+  it('with a tolerance, picks the nearest centre when no silhouette is hit, and exact hits still win', () => {
+    const tiny = (id: string, x: number): SceneNode =>
+      node(id, x, 0, { shape: 'circle', size: { width: 2, height: 2 } });
+    const index = createNodeHitIndex([tiny('a', 0), tiny('b', 10)]);
+    expect(index.hit({ x: 4, y: 0 })).toBeNull();
+    expect(index.hit({ x: 4, y: 0 }, 5)).toBe('a');
+    expect(index.hit({ x: 6.5, y: 0 }, 5)).toBe('b');
+    expect(index.hit({ x: 4, y: 0 }, 3)).toBeNull();
+    expect(index.hit({ x: 0.5, y: 0 }, 5)).toBe('a');
+    expect(index.hit({ x: 0, y: 40 }, 5)).toBeNull();
+  });
+
+  it('sizes the grid from the typical node so one huge node does not make every cell a crowd', () => {
+    const small = Array.from({ length: 400 }, (_, i) =>
+      node(`s${String(i)}`, (i % 20) * 30, Math.floor(i / 20) * 30, { size: { width: 10, height: 10 } }),
+    );
+    const huge = node('huge', 5000, 5000, { size: { width: 4000, height: 4000 } });
+    const index = createNodeHitIndex([...small, huge]);
+    expect(index.hit({ x: 30, y: 30 })).toBe('s21');
+    expect(index.hit({ x: 4000, y: 4000 })).toBe('huge');
+    expect(index.hit({ x: 7500, y: 5000 })).toBeNull();
+  });
 });

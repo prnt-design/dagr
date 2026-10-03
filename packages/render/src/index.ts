@@ -145,6 +145,7 @@
 
 export { createBoundsMotion } from './bounds-motion.js';
 export type { BoundsMotion, BoundsMotionFrame, BoundsMotionOptions } from './bounds-motion.js';
+export type { ContextLostInfo } from './context-loss.js';
 export { detectBackendSupport } from './backend-support.js';
 export type { BackendProbeEnvironment, BackendSupport } from './backend-support.js';
 export { Camera2D, fitZoom } from './camera.js';

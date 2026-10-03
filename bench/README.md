@@ -84,7 +84,7 @@ clock's resolution). Compare M5.2a's linear scan at 0.008416 ms for 10,000
 boxes: there is no regression. Building the index for 10,000 nodes costs a median
 1.86 ms, paid once per change of the drawn nodes and only when the pointer is
 used, so an animating 10,000 node scene with a moving pointer pays it each
-frame. These four entries are in the report but **not in `baseline.json`**: the
+frame. Also `packages/react/bench/tier-feed.bench.ts` (10,000 nodes, 100 in motion): feeding only moved nodes to the tiers measured about 7x faster than rebuilding every node on a loaded machine, so the figure is indicative, not a gate. These entries are in the report but **not in `baseline.json`**: the
 gate prints them as `new`. Recording them means `pnpm bench:baseline`, which
 rewrites the whole machine-matched file and is the maintainer's call. This is
 CPU query time, not a browser frame, an edge or port measurement, or GPU

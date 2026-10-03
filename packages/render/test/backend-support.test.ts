@@ -35,4 +35,12 @@ describe('detectBackendSupport', () => {
     });
     expect(loseContext).toHaveBeenCalledOnce();
   });
+
+  it('passes failIfMajorPerformanceCaveat only in strict mode', async () => {
+    const getContext = vi.fn(() => ({}));
+    await detectBackendSupport({ createCanvas: () => ({ getContext }) });
+    expect(getContext).toHaveBeenLastCalledWith('webgl2', undefined);
+    await detectBackendSupport({ createCanvas: () => ({ getContext }), strict: true });
+    expect(getContext).toHaveBeenLastCalledWith('webgl2', { failIfMajorPerformanceCaveat: true });
+  });
 });
