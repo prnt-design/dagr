@@ -76,6 +76,7 @@ describe('@prnt/dagr-render', () => {
       'DEFAULT_MOTION_HALF_LIFE',
       'DEFAULT_MOTION_REST',
       'DagrRenderError',
+      'FIT',
       'HALF_LIFE_OMEGA',
       'MotionDesyncError',
       'OVERLAY_INV_ZOOM_PROPERTY',
@@ -87,8 +88,11 @@ describe('@prnt/dagr-render', () => {
       'SETTLE_OMEGA_1_PERCENT',
       'SceneDisposedError',
       'UnknownInstanceHandleError',
+      'ZOOM_IN',
+      'ZOOM_OUT',
       'advanceDashFlow',
       'alignRoutes',
+      'canvasPoint',
       'createBoundsMotion',
       'createEdgeMotion',
       'createHtmlOverlay',
@@ -98,7 +102,9 @@ describe('@prnt/dagr-render', () => {
       'createRenderer',
       'createRichNodes',
       'createSceneMotion',
+      'detectBackendSupport',
       'fitZoom',
+      'keyCommand',
       'measureHtmlSizes',
       'nodeGroupBounds',
       'omegaForHalfLife',
@@ -106,6 +112,7 @@ describe('@prnt/dagr-render', () => {
       'shapeEdgePath',
       'stepSpring',
       'stepSpring2D',
+      'wheelZoomFactor',
     ]);
   });
 

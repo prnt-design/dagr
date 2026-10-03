@@ -73,6 +73,23 @@ provider. It is not the M5.2b shape-aware `DagrCanvas` adapter, a frame-time
 claim, an edge or port measurement, or GPU evidence. M5.2b repeats these sizes
 against displayed animated node geometry and explains any regression.
 
+## M5.2b shape-aware node hit
+
+Measured 2026-10-03 on the same Apple M4 and Node `v25.6.1`, with
+`packages/react/bench/node-hit.bench.ts`: the grid-indexed, silhouette-exact
+adapter `DagrCanvas` uses, over a grid of mixed circles and rounded rectangles.
+One query is 0.000083 ms at 100, 1,000 and 10,000 nodes (the same median in all
+three: the grid makes a query independent of node count, and the value is the
+clock's resolution). Compare M5.2a's linear scan at 0.008416 ms for 10,000
+boxes: there is no regression. Building the index for 10,000 nodes costs a median
+1.86 ms, paid once per change of the drawn nodes and only when the pointer is
+used, so an animating 10,000 node scene with a moving pointer pays it each
+frame. Also `packages/react/bench/tier-feed.bench.ts` (10,000 nodes, 100 in motion): feeding only moved nodes to the tiers measured about 7x faster than rebuilding every node on a loaded machine, so the figure is indicative, not a gate. These entries are in the report but **not in `baseline.json`**: the
+gate prints them as `new`. Recording them means `pnpm bench:baseline`, which
+rewrites the whole machine-matched file and is the maintainer's call. This is
+CPU query time, not a browser frame, an edge or port measurement, or GPU
+evidence.
+
 **The current file was captured on 2026-09-01 on the maintainer's Apple M4
 (darwin arm64, 10 cores, Node v25.6.1), authorized by the maintainer in
 session after a week of identity refusals on this box.** One warmup run

@@ -1,5 +1,5 @@
 import { fitZoom } from '@prnt/dagr-render';
-import type { Vec2, WorldBounds } from '@prnt/dagr-render';
+import type { WorldBounds } from '@prnt/dagr-render';
 
 /**
  * The arithmetic between a DOM input event and a {@link Camera2D} call.
@@ -12,37 +12,8 @@ import type { Vec2, WorldBounds } from '@prnt/dagr-render';
  * bounding rect satisfy them.
  */
 
-/**
- * Pixels a line of `deltaMode === 1` scrolling stands for.
- *
- * Firefox reports wheel deltas in lines rather than pixels, and the DOM gives
- * no way to ask how tall a line is here, so this is a convention: 16 is the
- * default `font-size` and therefore roughly one line of body text. Being a few
- * pixels out changes how fast a Firefox wheel zooms and nothing else.
- */
-export const WHEEL_LINE_HEIGHT = 16;
-
-/** Pixels a page of `deltaMode === 2` scrolling stands for, on the same terms. */
-export const WHEEL_PAGE_HEIGHT = 400;
-
-/**
- * Zoom response, in e-folds per pixel of wheel travel.
- *
- * At 0.0015, a 100 pixel notch (one detent on a typical mouse) changes the zoom
- * by about 16%, which is brisk without overshooting a target on one flick.
- */
-export const WHEEL_ZOOM_SPEED = 0.0015;
-
-/**
- * The largest wheel delta, in pixels, that one event is allowed to mean.
- *
- * A trackpad fling in Safari can report several thousand pixels in a single
- * event, and an unclamped exponential turns that into a factor of e^4 or worse:
- * the view jumps from readable to a dot between two frames, with nothing on
- * screen to say which way to scroll back. Clamping costs a fast gesture
- * nothing, because the events keep arriving and the factors compose.
- */
-export const WHEEL_MAX_PIXELS = 200;
+export { FIT, ZOOM_IN, ZOOM_OUT, canvasPoint, keyCommand, wheelZoomFactor } from '@prnt/dagr-render';
+export type { ClientPoint, ClientRect, KeyCommand, WheelLike } from '@prnt/dagr-render';
 
 /**
  * The zoom the demo's camera starts at, in CSS pixels per world unit.
@@ -115,83 +86,6 @@ export function zoomLimits(
     FIT_PADDING,
   );
   return fit <= fill ? { minZoom: fit, maxZoom: fill } : { minZoom: fill, maxZoom: fit };
-}
-
-/**
- * One keyboard zoom step, as a factor. Exactly one wheel detent
- * ({@link WHEEL_MAX_PIXELS} / 2 pixels of travel at {@link WHEEL_ZOOM_SPEED}),
- * so holding a key and rolling the wheel move at the same speed and there is
- * one zoom feel, not two. Spelled in terms of the two constants it claims
- * parity with, so retuning either retunes this with it.
- */
-export const KEY_ZOOM_FACTOR = Math.exp((WHEEL_MAX_PIXELS / 2) * WHEEL_ZOOM_SPEED);
-
-/** One keyboard pan step, in CSS pixels. */
-export const KEY_PAN_STEP = 64;
-
-/** What one keypress asks the camera to do. */
-export type KeyCommand =
-  | { readonly kind: 'zoom'; readonly factor: number }
-  | { readonly kind: 'pan'; readonly dx: number; readonly dy: number }
-  | { readonly kind: 'fit' };
-
-/**
- * The three commands a POINTER can ask for too, as the objects {@link
- * keyCommand} itself returns.
- *
- * D6's zoom control has three buttons, and they are wired to these rather than
- * to `camera.zoomAtScreen` and `camera.fitBounds` directly. That is the whole
- * shape of the decision: a button is a key being pressed, so it goes through
- * the same `KeyCommand` and the same apply, and the anchor rule (a zoom with no
- * cursor is anchored at the viewport centre) is written once. Two paths to the
- * camera would agree on the day they were written and drift on the day one of
- * them is retuned.
- *
- * Exported as CONSTANTS rather than rebuilt at each call site so the test can
- * assert identity: `keyCommand('+') === ZOOM_IN` is the claim, and two object
- * literals that happen to hold the same factor today is not.
- */
-export const ZOOM_IN: KeyCommand = { kind: 'zoom', factor: KEY_ZOOM_FACTOR };
-export const ZOOM_OUT: KeyCommand = { kind: 'zoom', factor: 1 / KEY_ZOOM_FACTOR };
-export const FIT: KeyCommand = { kind: 'fit' };
-
-/**
- * The key map, while the canvas has focus. `null` means "not ours": the
- * caller must not `preventDefault`, so keys like Tab keep their meaning.
- *
- * Up and Down ZOOM rather than pan, because that is the ask this map exists
- * to satisfy: with the visualization focused, the keys that would scroll the
- * page zoom the scene instead. Vertical panning moves to Shift+Up/Down;
- * Left and Right pan horizontally, since nothing else wants them. The pan
- * deltas are in `panByScreen`'s drag convention (the content follows the
- * delta), so panning the VIEW left means a positive dx.
- */
-export function keyCommand(key: string, shift = false): KeyCommand | null {
-  if (shift && key === 'ArrowUp') return { kind: 'pan', dx: 0, dy: KEY_PAN_STEP };
-  if (shift && key === 'ArrowDown') return { kind: 'pan', dx: 0, dy: -KEY_PAN_STEP };
-  switch (key) {
-    case 'ArrowUp':
-    case '+':
-    case '=':
-      return ZOOM_IN;
-    case 'ArrowDown':
-    case '-':
-    case '_':
-      return ZOOM_OUT;
-    case 'PageUp':
-      return { kind: 'zoom', factor: KEY_ZOOM_FACTOR ** 3 };
-    case 'PageDown':
-      return { kind: 'zoom', factor: 1 / KEY_ZOOM_FACTOR ** 3 };
-    case 'ArrowLeft':
-      return { kind: 'pan', dx: KEY_PAN_STEP, dy: 0 };
-    case 'ArrowRight':
-      return { kind: 'pan', dx: -KEY_PAN_STEP, dy: 0 };
-    case '0':
-    case 'Home':
-      return FIT;
-    default:
-      return null;
-  }
 }
 
 /**
@@ -271,74 +165,4 @@ export function nodeIdFromHash(hash: string): string | null {
   const raw = new URLSearchParams(body).get('node');
   if (raw === null || raw === '') return null;
   return raw;
-}
-
-/** The part of a `WheelEvent` that {@link wheelPixels} reads. */
-export interface WheelLike {
-  readonly deltaY: number;
-  readonly deltaMode: number;
-}
-
-/** The part of a `PointerEvent` (or any `MouseEvent`) a canvas point needs. */
-export interface ClientPoint {
-  readonly clientX: number;
-  readonly clientY: number;
-}
-
-/** The part of a `DOMRect` a canvas point needs. */
-export interface ClientRect {
-  readonly left: number;
-  readonly top: number;
-}
-
-/**
- * A wheel event's vertical travel in CSS pixels, normalised across the three
- * `deltaMode` units and clamped to {@link WHEEL_MAX_PIXELS}.
- *
- * A non-finite delta reports 0, meaning "this event moves nothing". That is a
- * fallback with a genuinely neutral answer, unlike the ones `Camera2D` refuses:
- * there is no zoom that a `NaN` wheel event wanted, and the useful behaviour is
- * to ignore the event rather than to throw out of a listener.
- */
-export function wheelPixels(event: WheelLike): number {
-  const scale =
-    event.deltaMode === 1 ? WHEEL_LINE_HEIGHT : event.deltaMode === 2 ? WHEEL_PAGE_HEIGHT : 1;
-  const pixels = event.deltaY * scale;
-  if (!Number.isFinite(pixels)) return 0;
-  return Math.min(WHEEL_MAX_PIXELS, Math.max(-WHEEL_MAX_PIXELS, pixels));
-}
-
-/**
- * The multiplier to hand `Camera2D.zoomAtScreen` for one wheel event.
- *
- * Exponential rather than linear, and that is the whole reason this is a
- * function rather than one inline expression. Zoom is a scale, so the operation
- * a user expects to be uniform is multiplication: two notches should zoom the
- * same amount whether they start at zoom 0.1 or zoom 10, which `exp` gives and
- * `1 + k * delta` does not. Exponential also composes exactly, so a fast
- * gesture delivered as one big event and the same gesture delivered as ten
- * small ones land on the same zoom, and it can never produce a factor of zero
- * or a negative one, both of which `zoomAtScreen` rejects outright.
- *
- * The sign: `deltaY` is positive when the wheel scrolls away from the user,
- * which every map and every canvas treats as zooming OUT, so the exponent is
- * negated and the factor comes out below 1.
- */
-export function wheelZoomFactor(event: WheelLike): number {
-  return Math.exp(-wheelPixels(event) * WHEEL_ZOOM_SPEED);
-}
-
-/**
- * Turns a pointer or wheel event's viewport coordinates into CSS pixels from
- * the canvas's top-left corner, which is the space `Camera2D` calls "screen".
- *
- * `getBoundingClientRect` rather than `offsetX` and `offsetY`, even though
- * those are already canvas-relative. `offsetX` is relative to the event's
- * TARGET, which during a pointer capture or a drag that leaves the canvas is
- * not the canvas, and it is missing from a synthetic event a test writes. The
- * rect is passed in rather than measured here so this stays pure, and so the
- * caller can measure once for a burst of events if it ever needs to.
- */
-export function canvasPoint(event: ClientPoint, rect: ClientRect): Vec2 {
-  return { x: event.clientX - rect.left, y: event.clientY - rect.top };
 }

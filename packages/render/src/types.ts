@@ -1,3 +1,4 @@
+import type { ContextLostInfo } from './context-loss.js';
 import type { Camera2D } from './camera.js';
 import type { SceneStyle } from './instance-attributes.js';
 import type { SceneNode } from './scene-nodes.js';
@@ -404,4 +405,13 @@ export interface RendererOptions {
    * dispose a renderer it did not receive.**
    */
   readonly signal?: AbortSignal;
+
+  /**
+   * Called once if the GPU device (WebGPU) or context (WebGL 2) is lost after
+   * the renderer was built: a driver reset, a backgrounded mobile tab whose GPU
+   * memory was reclaimed, a GPU process crash. A lost renderer cannot draw
+   * again; dispose it and call {@link createRenderer} for a new one. Not called
+   * for {@link Renderer.dispose}.
+   */
+  readonly onContextLost?: (info: ContextLostInfo) => void;
 }

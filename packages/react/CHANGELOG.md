@@ -1,5 +1,37 @@
 # @prnt/dagr-react
 
+## Unreleased
+
+- Add `navigation` (wheel zoom, two-finger touch pinch, drag pan, keyboard) to `DagrCanvas`,
+  inside the default camera limits. Off by default.
+- Add `onNodeClick`, `onNodeHover` and `onBackgroundClick`, backed by an exact
+  CPU hit test of the node silhouettes currently drawn, including mid-animation
+  geometry (M5.2b). `createNodeHitIndex` is exported for hosts with their own
+  surface. Edges, ports and GPU picking are not hit targets.
+- Add `apiRef` and the same methods on `useDagrCanvas()`: `focusNode(id, options)`
+  and `fit(options)` fly the camera, interruptibly, and jump under
+  `prefers-reduced-motion`.
+- Add `nodeTiers` and `nodeData` for level of detail by zoom: HTML tiers gated
+  by on-screen node width over the GPU shape, only for nodes in view. Tier
+  elements are tagged with `data-dagr-node-id` and activate on Enter or Space.
+- `DagrCanvasProps` and `DagrCanvas` gain a defaulted type parameter `T = string`
+  for the tier data. `nodeTiers` and `nodeData` are a typed pair: `nodeData` is
+  required unless the tiers are `RichNodeTier<string>`. Existing code compiles
+  unchanged. `DagrCanvasProps` is now a type alias of `DagrCanvasBaseProps` and
+  `DagrNodeTierProps<T>`, all exported. `fit()` returns whether it moved.
+  Focus on a tier card survives pooling and tier swaps.
+- Add `touchNavigation` (`'drag'` default, or `'two-finger'` to leave one-finger
+  scroll to the page), `maxPixelRatio`, `onContextLost` (the canvas rebuilds its
+  renderer, up to three times in ten seconds) and `fallback` (rendered instead of
+  throwing when the renderer cannot be built).
+- Node hits fall back to the nearest centre within 22 CSS pixels for touch and
+  4 for a mouse, and the hit grid is sized from the median node.
+- Animated frames feed `nodeTiers` only the nodes that moved, call `nodeData`
+  once per node, and skip recomputing camera limits when the hull is unchanged.
+  Regions that scroll or edit themselves (`textarea`, `contenteditable`,
+  overflow, `data-dagr-no-zoom`) keep the wheel and the pointer.
+- Re-export the `RichNode` and `RichNodeTier` types.
+
 ## 0.1.2
 
 - Add live `edgePath` options for routed, smooth, and orthogonal edges, including animated graphs.

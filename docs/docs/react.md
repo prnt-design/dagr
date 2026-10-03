@@ -549,15 +549,250 @@ ticks. These are CPU query medians, not browser frame time or GPU evidence.
 
 The generic System Atlas uses this API with reverse draw-order rectangles. It
 is proof that a consumer can supply geometry; it is not an exact
-`DagrCanvas` adapter. M5.2b supplies current animated node silhouettes. Port
-geometry is M6.3a. Edge hits, hover, asynchronous providers, and GPU picking
-are outside this slice.
+`DagrCanvas` adapter. `DagrCanvas` now supplies one, described in the next
+section. Port geometry is M6.3a. Edge hits, asynchronous providers, and GPU
+picking are outside this slice.
+
+## Navigation, node events and camera control
+
+`DagrCanvas` can host the whole interaction a large graph needs without you
+wiring a camera: pan, zoom, click, hover and "fly to this node".
+
+```tsx
+const api = useRef<DagrCanvasApi>(null);
+
+<DagrCanvas
+  graph={graph}
+  navigation
+  label="Relationship graph"
+  apiRef={api}
+  onNodeClick={(id) => { openDrawer(id); api.current?.focusNode(id); }}
+  onNodeHover={(id) => setHovered(id)}
+  onBackgroundClick={() => closeDrawer()}
+/>
+```
+
+**`navigation`** turns on wheel zoom (including trackpad pinch) anchored under
+the cursor, two-finger touch pinch (zoom about the midpoint, panning with it),
+drag to pan, and keyboard control while the canvas itself has
+focus: Left/Right pan, Shift+Up/Down pan vertically, `+`/`-` and Up/Down zoom,
+Page Up/Down zoom further, `0` or Home fits. A pinch never selects a node, and
+single-finger pan is paused while two fingers are down. Content that handles the gesture itself keeps it: a textarea, a
+`contenteditable`, anything that scrolls (`overflow: auto` with overflow), and
+anything marked `data-dagr-no-zoom`, which is also excluded from pan, pinch and
+selection starts.
+
+**Phones.** `touchNavigation="drag"` (default) gives the canvas every touch
+(`touch-action: none`): one finger pans, two pinch, and the page cannot scroll
+from the canvas. For a canvas embedded in a scrolling page use
+`touchNavigation="two-finger"` (`touch-action: pan-x pan-y`): a lone finger
+scrolls the page and the camera moves only with two fingers. In that mode the
+browser can still claim a two-finger gesture that starts as a scroll, so pinch
+is dependable when both fingers land before either moves; test it on your
+target devices, which nothing here has. A second finger never takes over an
+active single-pointer gesture. `maxPixelRatio` (try `2`) caps the render
+resolution, which matters on 3x phones and large displays; the canvas also
+resizes when the browser's ratio changes.
+
+**Tolerance.** A hit that lands inside no silhouette falls back to the nearest
+node centre within 22 CSS pixels for touch and 4 for a mouse, so far-out dots
+are tappable; an exact hit always wins. The pixel slack is converted at the
+current zoom, and it applies to hover too. The
+canvas becomes focusable (`tabindex="0"`, `role="group"`, named by `label`; pass one, or the focus stop is unnamed and a development
+warning says so once). `label` names the region whenever it is set, with or
+without `navigation` and
+sets `touch-action: none`. It is off by default because a canvas that begins
+capturing the wheel would trap page scroll under a caller who did not ask. All
+of it stays inside the default [camera limits](#default-navigation-limits), and
+any input cancels a camera flight in progress. The arithmetic (`wheelZoomFactor`,
+`keyCommand`, `canvasPoint`) is exported from `@prnt/dagr-render` if you drive your own camera
+and want the same feel.
+
+**`onNodeClick(nodeId)`**, **`onNodeHover(nodeId | null)`** and
+**`onBackgroundClick()`** report stable node ids. They work without
+`navigation`: a drag then simply does not pan, and still does not click.
+Clicks use the [shared gesture contract](#shared-selection-and-click-versus-pan)
+above, so a press that turns into a drag never selects, and a click whose
+drawing changed between press and release (an animation frame, a relayout) is
+refused rather than landing on a different node. Hover uses the same hit test
+and sets `cursor: pointer` over a node when `onNodeClick` is set.
+
+**Hits are exact, on the CPU.** The hit test (`createNodeHitIndex`, also
+exported for hosts that run their own surface) evaluates the silhouette the
+shader draws: a circle is a circle, so the empty corner of its box is a miss,
+and a rounded rectangle's corners are cut. It tests the nodes **as currently
+drawn**, which during `animate` means the sprung positions, not the layout's
+final ones. Overlaps resolve by draw order (circles over rectangles, later over
+earlier). A uniform grid keeps a query to a few shape tests; the index is rebuilt
+when the drawn nodes change and not otherwise.
+
+What is not a hit target: edges, ports, and glow halos. HTML inside a tier
+(next section) is the DOM's to hit: native controls inside a card keep their
+native behavior, and a click on a non-interactive part of a card selects its
+node because the card sits on the node. GPU picking (M4.8b) is a separate,
+future provider behind the same contract.
+
+**Camera control.** `apiRef` (and `useDagrCanvas()` inside the canvas) gives the
+methods below. It is `apiRef` rather than `ref` on purpose: `ref` on a React
+component reads as the DOM element, and this is an imperative API object; it
+accepts a ref object or a callback, and is `null` until the canvas has mounted.
+The flight is stepped from the component's own coalesced frame, so it shares
+drawing's frame budget.
+
+| Method | Does |
+| --- | --- |
+| `focusNode(id, { zoom?, durationMs? })` | Flies to centre the node. Default zoom makes the node fill about half the viewport. Returns `false` and moves nothing for an unknown id or an unsized canvas. |
+| `fit({ durationMs? })` | Flies back to the whole graph, including group boundaries, with `fitPadding`. Returns `false`, moving nothing, before there is a layout and a size. |
+
+Flights take 450 ms (zoom is interpolated geometrically, so it feels even) and
+jump instantly under `prefers-reduced-motion: reduce`; pass `durationMs: 0` to
+jump. Every intermediate view passes through the camera's limits, so a target
+outside them lands on the nearest legal view. The camera itself
+(`renderer.camera`, a `Camera2D`) remains available from the handle for anything
+else, such as reading `camera.zoom` to drive a zoom readout from `onFrame`.
+
+**Keyboard access to nodes.** Canvas shortcuts are the keyboard story for the
+camera. For the nodes, give your tier elements `tabindex="0"` (and an accessible
+name): every element a tier creates is tagged with `data-dagr-node-id`, and
+Enter or Space on a focused tagged element that is not already a native control
+calls `onNodeClick` with that id (only when `onNodeClick` is set; otherwise the
+keys are left alone). When `onNodeClick` is set, a tier element without its own
+`role` or `tabindex` gets `role="button"` and `tabindex="0"`, so it is reachable
+and announced. **Focus survives the overlay.** Cards are removed or pooled when
+they leave the view or their tier gives way to another; the canvas remembers the
+node whose card held focus and, on the next frame, moves focus to that node's
+new element, or to the canvas itself (`preventScroll`) if the node has none. It
+stops as soon as you focus something outside the canvas. A native `<button>` inside a card activates
+through its own `click`, as it should. Only nodes in view mount elements, so Tab
+moves through what is on screen; the GPU shapes below the first tier are not in
+the tab order, and a host that needs a complete keyboard path to every node
+should offer a list or search beside the canvas and call `focusNode`.
+
+### Context loss and failure
+
+If the GPU device (WebGPU) or context (WebGL 2) is lost after drawing began (a
+driver reset, a GPU process crash, a mobile tab whose GPU memory was reclaimed),
+`onContextLost({ backend, reason })` fires and the canvas rebuilds its renderer
+by itself, restarting from a fresh camera fit. More than three losses in ten
+seconds stops the rebuilding and reports the failure through `onError`. If the
+renderer cannot be built at all, the default is still to throw to the nearest
+error boundary; pass `fallback={<List />}` to render a plain alternative in
+place instead (`onError` still fires). React StrictMode is supported: the
+renderer the dev double-mount abandons is aborted and disposed.
+
+### CPU cost of picking
+
+Measured 2026-10-03 on the same Apple M4 and Node `v25.6.1` as the M5.2a
+baseline, on a grid of mixed circles and rounded rectangles: a query is about
+0.00008 ms (the median is the clock's resolution here, so it is not gated) at
+100, 1,000 and 10,000 nodes alike, because the grid makes it independent of
+node count. Building the index for 10,000 nodes takes about 1.9 ms. It is built
+lazily on the first pointer event after the drawn nodes change, so during an
+`animate` glide with a moving pointer a 10,000-node scene pays that 1.9 ms per
+frame; a static scene pays it once per edit. That is CPU time for the query,
+not browser frame time or GPU evidence, and the entries are recorded in
+[`bench/README.md`](https://github.com/prnt-design/dagr/blob/main/bench/README.md)
+without a gate until the baseline is next recaptured.
+
+## Level of detail: node tiers
+
+`nodeTiers` makes a node's presentation depend on how big it is on screen,
+which is how a graph of thousands of nodes stays cheap when zoomed out and rich
+when zoomed in:
+
+```tsx
+const nodeData = useCallback((id: string) => items.get(id) ?? EMPTY_ITEM, [items]);
+const tiers = useMemo<RichNodeTier<Item>[]>(() => [
+  { name: 'label', minScreenWidth: 28, maxScreenWidth: 300,
+    create: () => document.createElement('div'),
+    update: (el, { data }) => { el.textContent = data.title; } },
+  { name: 'card', minScreenWidth: 300, interactive: true,
+    create: makeCardElement, update: fillCard },
+], []);
+
+<DagrCanvas graph={graph} navigation nodeTiers={tiers} nodeData={nodeData} />
+```
+
+The tiers are the same `RichNodeTier` the [renderer's rich nodes](./render.md)
+use, gated by the node's width in CSS pixels at the current zoom and disjoint
+by construction (overlapping gates throw). Below the lowest `minScreenWidth`
+there is no tier, so the node is just its instanced GPU shape: no DOM at all.
+Between gates exactly one tier's element is mounted, and only for nodes
+currently in view up to the overlay's cap; elements are pooled across a pan,
+so `update` must fully overwrite what the previous node left. The two props are a typed pair: tiers over your own data type
+(`RichNodeTier<Item>`) require `nodeData`, and the compiler rejects them without
+it; tiers over `RichNodeTier<string>` may omit it and receive the node id.
+`nodeData` maps a node id to the value each tier's `update` receives as
+`node.data`, and an entry whose value is not the same reference as last
+time is re-rendered. `nodeTiers` is compared by identity, so memoise it. Return the same object
+from `nodeData` for an unchanged node: a fresh object each call re-renders every
+visible tier on every animated frame. Hover is evaluated on pointer movement
+only, so it can lag a node that moves under a still cursor (keyboard pan, a
+flight, an animation).
+
+Tiers follow the nodes as drawn, so with `animate` a card glides with its
+node. Each animated frame feeds only the nodes whose box changed and calls
+`nodeData` once per node (not per frame); the frame an animation settles on
+replaces the whole set. A local run with 10,000 nodes and 100 in motion measured the incremental feed
+about 7x faster than rebuilding all of it (taken on a loaded machine, so
+indicative, not gated; CPU time only). A tier is plain DOM; to render React into one, create a root in `create`
+and render from `update`, and unmount the roots you created when you drop the
+tiers. A first-class React tier helper is not shipped yet.
+
+Pair the tiers with `navigation` and the camera limits above: the maximum zoom
+is the smallest node filling the viewport, so the richest tier is always
+reachable.
+
+### Known limits of this slice
+
+- Hover is evaluated on pointer movement and reuses a hit index up to 100 ms old
+  while nodes glide; clicks always use the index of the nodes as drawn.
+- Overlay tiers have a cap on mounted elements, but there is no per-frame budget
+  for how many mount at once when a pan reveals many nodes, and `onFrame` is
+  called only on animated frames, not on plain pans.
+- Camera flights use a fixed 450 ms ease-in-out with a straight centre path and
+  geometric zoom. A long flight across a large graph does not zoom out and in
+  (the van Wijk path); call `fit()` then `focusNode()` if you want that.
+- Resizing the canvas can show a stale frame for one frame before the next draw.
+- `cursor` is written directly on the canvas element while a node is hovered.
+
+## When there is no GPU
+
+`createRenderer` already prefers WebGPU and falls back to WebGL 2 on its own, so
+most phones that lack WebGPU still draw, and `renderer.backend` reports what you
+got. What nothing can fix is a device with neither, or a GPU process that
+crashes. Handle it in two places:
+
+```tsx
+import { detectBackendSupport } from '@prnt/dagr-render';
+
+const support = await detectBackendSupport();
+if (support.preferred === null) return <StaticFallback />; // list, table, image
+```
+
+`detectBackendSupport()` (memoised for the page) asks for a WebGPU adapter (not just `navigator.gpu`,
+which many devices expose with no adapter behind it) and tries a throwaway
+WebGL 2 context, and never throws. `detectBackendSupport({ gpu, createCanvas, strict: true })` also refuses a
+software-rendered WebGL 2 context (`failIfMajorPerformanceCaveat`), which
+reports as available and draws a large graph at a few frames per second; pass
+the real browser objects, or omit the environment to use the page's. It says what *can* start, not that your scene
+will run well: a low-end phone on WebGL 2 draws the same graph more slowly, and
+no benchmark here speaks for it. The other half is `onError`: a layout that fails or a device that never
+arrives is reported there instead of thrown, so a host can swap in the same
+fallback when the canvas dies late. Keep the fallback content-equivalent (a list
+of the same items with the same details panel), since the graph is a view of the
+data and not the only way to reach it.
 
 ## What is not here yet
 
-- **Native hit geometry.** Shared gestures and controlled selection are
-  exported. M5.2b adds exact `DagrCanvas` node hits from displayed geometry.
-  GPU picking (M4.8b) is a separate future provider, not a prerequisite.
+- **Edge, port and GPU hits.** Exact CPU node hits ship with `DagrCanvas`.
+  Ports are M6.3a; GPU picking (M4.8b) is a separate future provider behind
+  the same contract. Edges are not hit targets yet.
+- **A React tier helper.** Tiers are DOM elements. Rendering React into them is
+  possible by hand and not wrapped.
+- **Tile-at-a-time layout.** The campaign demo's worker layout is specific to
+  its tile packer and is not exposed (see the roadmap's M7 for the generic
+  version).
 - **A node ontology.** What a node looks like is a callback and it stays one.
   Deciding that a node of kind X draws as a hexagon belongs to the
   [visual-language toolkit](./visual-languages.md), which is scoped precisely so

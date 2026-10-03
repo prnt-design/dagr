@@ -135,6 +135,19 @@ WebGPU where the browser has an adapter, WebGL2 otherwise, and
 `requestAdapter()` then returns `null`, so a capability probe before `init()`
 is a lie. Let `createRenderer` resolve and read the answer back.
 
+To choose a non-GPU fallback UI before mounting, `await detectBackendSupport()`
+returns `{ webgpu, webgl2, preferred }`. It requests an actual adapter (so a
+device exposing `navigator.gpu` with none reports `webgpu: false`), tries one
+throwaway WebGL 2 context, and never throws. `preferred === null` means neither
+backend can start. It says a backend can start, not how fast the scene runs.
+
+## Wheel and key arithmetic
+
+`wheelZoomFactor`, `canvasPoint` and `keyCommand` are the pure functions between
+a DOM event and `Camera2D.zoomAtScreen` / `panByScreen`, the same ones
+`<DagrCanvas navigation>` uses. See the
+[renderer page](https://dagr.prnt.design/docs/render#wheel-and-key-arithmetic).
+
 ## The overlay
 
 `createRichNodes` places DOM over the canvas in world coordinates, in tiers

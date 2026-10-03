@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Expose `DagrCanvas` navigation, node click and hover events, camera `focusNode` and `fit`, `nodeTiers` level of detail, `detectBackendSupport` and the camera input helpers through the umbrella exports.
+
 ## 0.1.2
 
 - Expose live React edge path styles and renderer route shaping through the umbrella exports.

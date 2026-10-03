@@ -9,6 +9,17 @@ which unit a number is in. A caller upgrading past one of those sees a drawing
 in a different place, and no compiler tells them. "Behaviour changed, types did
 not" is the category this file has a heading for.
 
+## Unreleased
+
+- Add `detectBackendSupport()`: which of WebGPU (a real adapter) and WebGL 2 can
+  start, and which `backend: 'auto'` will pick. Never throws.
+- Add the pure camera input functions `wheelZoomFactor`, `canvasPoint` and
+  `keyCommand`, with the frozen commands `ZOOM_IN`, `ZOOM_OUT` and `FIT`, moved from the private campaign demo so hosts
+  and `<DagrCanvas navigation>` share one wheel feel and key map.
+- Add `onContextLost` to `createRenderer` (WebGPU `device.lost`, WebGL
+  `webglcontextlost`) and `ContextLostInfo`. `detectBackendSupport` memoises its
+  default probe and takes `strict` to refuse software WebGL 2.
+
 ## 0.1.2
 
 - Add `shapeEdgePath` for routed, smooth, and orthogonal edge presentation, with shared SVG and renderer geometry.

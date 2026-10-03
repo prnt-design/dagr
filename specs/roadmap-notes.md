@@ -27,9 +27,8 @@ camera limits and edge presentation styles are available.
 M5.2a shipped reusable click-versus-pan and controlled selection with a
 caller-supplied hit target. Its provider contract covers stable node/port
 identity, coordinate space and displayed scene revisions. The bounded CPU
-interaction baseline landed with it. M5.2b comes next with a native node
-adapter that respects displayed shapes and animated geometry, and repeats the
-baseline. These replace the
+interaction baseline landed with it. M5.2b then shipped a native node
+adapter that respects displayed shapes and animated geometry (entry below). These replace the
 old requirement to complete GPU picking before any interaction can ship. The
 campaign's CPU hover boxes are deliberately approximate and are not an exact
 selection implementation. Keep that distinction, and retain M4.8b for a later
@@ -7080,6 +7079,56 @@ it settled rather than restating the argument.
   drawing, and that case becomes a wrong narrow bound rather than a documented
   no-op. It is written out rather than folded into the `default` arm for exactly
   that reason, so the task that changes it finds a case rather than a silence.
+
+### M5.2b: native node hits, navigation, camera flights, tiers (2026-10-03)
+
+Delivered the roadmap's next job, widened by a consumer request for a large
+interactive graph page (pan and zoom with bounds, nodes that get richer as you
+zoom, click to open a details panel) built only on published packages. The
+request was met by finishing M5.2b and wiring existing pieces into `DagrCanvas`,
+not by a parallel API. What already existed: `Camera2D` content limits (0.1.1),
+`createRichNodes` tiers (M4.12) and the M5.2a gesture contract. What was missing
+was the join.
+
+Decisions and reasons:
+
+- **Hit test is a pure grid index (`createNodeHitIndex`)**, built lazily and
+  keyed on the identity of the drawn node array, which is also the displayed
+  revision handed to M5.2a's `useGraphInteraction`. Shapes are evaluated exactly
+  (circle radius `width / 2`, rounded rect corner radius clamped to the short
+  half-side). Draw order is circles over rectangles, later over earlier; within
+  a family the renderer may reuse freed slots, so overlap order after removals is
+  array order, stated in the doc comment. Mid-animation clicks use sprung
+  positions and a frame between press and release refuses the click (tested).
+- **Navigation is opt-in.** A default that takes the wheel would break page
+  scroll for existing hosts. Wheel, key and pan arithmetic moved from the
+  private campaign package into `@prnt/dagr-render` (pure, tested) and the
+  campaign package now imports it, so the demo and the component share one feel.
+- **Camera flights live in `DagrCanvas`, not `Camera2D`**, as a stepper driven from
+  the component's own coalesced frame (one frame budget with drawing and the
+  overlay), over `setZoom` then `setCenter`, so the camera's own limits clamp every step.
+  Reduced motion jumps. Interruptible by any input. Two-finger touch pinch
+  zooms about the midpoint. The review round (API reviewer) also made
+  `nodeTiers`/`nodeData` a typed pair, restored focus across overlay pooling,
+  and trimmed the render exports to the four input functions plus frozen commands.
+- **Level of detail reuses `RichNodeTier`** rather than a render-prop API: the
+  gates are screen-width based, the far tier is the GPU shape (no DOM), and
+  pooling already caps cost. The prop is generic over the tier data (`T`,
+  default `string`). Tiers are re-fed every animated frame so cards follow
+  springs; that is O(nodes) per frame and unmeasured above the campaign's size.
+- **Backend detection** is `detectBackendSupport()`, which requests a real
+  adapter, because the render page measured `'gpu' in navigator` true with a
+  null adapter. It does not replace reading `renderer.backend`.
+
+Measured (Apple M4, Node v25.6.1): 100/1k/10k hit queries all ~0.00008 ms
+(clock resolution; not gated), index build for 10k ~1.9 ms. New bench entries
+are unbaselined: `bench:baseline` rewrites the machine-matched file, which is
+the maintainer's call.
+
+Not done, on purpose: a React tier helper (roots-in-pooled-elements needs a
+disposal story), edge and port hits (M6.3a), GPU picking (M4.8b), the campaign
+worker's tile-at-a-time layout (specific to its packer; M7 is the generic
+version), and any real-device WebGPU or phone measurement (none available).
 
 ## M6: VDSL = v0.2 (`@dagr/vdsl`)
 

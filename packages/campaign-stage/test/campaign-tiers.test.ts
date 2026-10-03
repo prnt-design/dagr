@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { cardRows, generateCampaign } from '@dagr/campaign';
 import type { CampaignNode, NodeKind } from '@dagr/campaign';
 import type { RichNode } from '@prnt/dagr-render';
-import { KEY_ZOOM_FACTOR, zoomLimits } from '../src/camera-input.js';
+import { zoomLimits } from '../src/camera-input.js';
+import { KEY_ZOOM_FACTOR } from '../../render/src/camera-input.js';
 import { GLYPH_VIEWBOX, nodeGlyph } from '../src/campaign-glyphs.js';
 import { SMALLEST_NODE_SIZE, nodeColor, styleFor } from '../src/campaign-style.js';
 import {

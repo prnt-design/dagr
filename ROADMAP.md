@@ -19,12 +19,13 @@ content-derived camera limits, and routed, smooth, and orthogonal edge styles.
 The generic System Atlas demonstrates rich VDSL nodes, search, and focus.
 
 Shared click-versus-pan and controlled selection now ship from the React package
-through a caller-supplied, displayed-revision hit provider. The remaining
-interaction gap is exact `DagrCanvas` node geometry. Edge styles still change
-geometry without obstacle avoidance. Visual groups are annotations, not
-compound layout or enforced trust boundaries. Neither GPU picking nor the
-native node adapter has shipped. Do not mark M5.2 or M7 complete based on the
-shared contract or demos.
+through a caller-supplied, displayed-revision hit provider, and `DagrCanvas`
+now supplies exact CPU node hits (M5.2b, unreleased) with opt-in navigation,
+camera flights and zoom-tiered node rendering. Edge and port hits are not
+shipped. Edge styles still change geometry without obstacle avoidance. Visual
+groups are annotations, not compound layout or enforced trust boundaries. GPU
+picking has not shipped. Do not mark M5.2 or M7 complete based on the shared
+contract or demos.
 
 M5.4a gates the tarballs with `publint`, `arethetypeswrong`, and a scratch
 install outside the workspace. M5.4b now includes the `onLayout` continuity
@@ -44,9 +45,8 @@ counts off the `LayoutDelta` what moved and what did not, beside a drawing in
 which the unmoved nodes visibly do not move. It is an illustration of M3.10a's
 corpus rather than a second measurement of it.
 
-Publication is no longer the reason to defer M3.8b and M3.9b. Exact native
-node hits are the immediate consumer gap; M4.10a supplies current profiling
-evidence before choosing the next layout fast path.
+Publication is no longer the reason to defer M3.8b and M3.9b. M4.10a supplies
+current profiling evidence before choosing the next layout fast path.
 
 ## Next jobs, in priority order
 
@@ -57,7 +57,7 @@ adapter blocks claims about that backend, not backend-independent interaction.
 
 | Order | Task | Concrete outcome and exit check |
 | --- | --- | --- |
-| 1 | **M5.2b: native node hit adapter** | Make the shared interaction usable with `DagrCanvas` and its current animated geometry. Respect supported shape silhouettes, draw order, camera/DPR, removed nodes, and rich HTML controls. Test circles outside their box corners and mid-animation picking; repeat the M5.2a CPU baseline and explain regressions. Document CPU scope and unsupported edge/port hits; do not reuse the campaign's approximate hover boxes as exact selection. |
+| 1 | **M5.2b: native node hit adapter** (shipped, see M5.2b below) | Make the shared interaction usable with `DagrCanvas` and its current animated geometry. Respect supported shape silhouettes, draw order, camera/DPR, removed nodes, and rich HTML controls. Test circles outside their box corners and mid-animation picking; repeat the M5.2a CPU baseline and explain regressions. Document CPU scope and unsupported edge/port hits; do not reuse the campaign's approximate hover boxes as exact selection. |
 | 2 | **M2.11a: edge legibility** | Record node intersections, overlaps and route length on a small generic architecture corpus. RoutedEdge has no port attachment metadata today: define an explicit input/output contract before claiming port-aware routing, or keep the first fix node-only. Ship one bounded routing improvement with a failing fixture first. Keep presentation styles separate from route planning and preserve stable anchors during edits. No blanket claim that orthogonal means obstacle-free. |
 | 3 | **M6.3a: port hit adapter** | Implement port geometry and stable node/port identities through the M5.2a provider contract. Specify coordinate space, draw order, animation revision, stale/removed ports, and hit radius at zoom/DPR. Test and measure this adapter before wiring a connection gesture. |
 | 4 | **M6.3b: VDSL connections** | One in-flight edge, valid/invalid drop feedback, cancellation, and exactly one validated graph mutation. Reuse M5.2 interactions, M6.3a targets, and M6.2 validation; include a keyboard-accessible connection path. |
@@ -248,9 +248,13 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   node/port identity, coordinate and scene-revision semantics, and stale-target
   rejection first. Record a bounded CPU interaction baseline before M5.2b. Click selects;
   drag pans. DOM controls and keyboard activation keep their native behavior.
-- [ ] **M5.2b** Native `DagrCanvas` node hit adapter using current displayed
+- [x] **M5.2b** Native `DagrCanvas` node hit adapter using current displayed
   geometry, with shape, draw-order and stale-target tests. CPU implementation
   may ship independently of M4.8b; its limits and cost must be explicit.
+  Shipped with `onNodeClick`, `onNodeHover`, `onBackgroundClick`, opt-in
+  `navigation`, `apiRef` camera flights (`focusNode`, `fit`), `nodeTiers`
+  level of detail, and `detectBackendSupport`. Edges and ports are not hit
+  targets (M6.3a owns ports); see roadmap-notes.
 - [x] **M5.3a** The animation a consumer gets for free: `useDagr` over
   `createLayout`, so an edit is a `relayout(patch)` with a `LayoutDelta` rather
   than a cold run, and `<DagrCanvas animate>` driving M4.7c's

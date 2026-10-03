@@ -390,6 +390,20 @@ the anchor a little further with every further notch of a wheel that is already
 at its limit, which is exactly when a user keeps scrolling.
 
 `drawingBufferSize` rounds to the nearest whole device pixel and floors at 1.
+
+### Wheel and key arithmetic
+
+The numbers between a DOM event and these calls are exported so a host that
+owns its camera feels the same as `<DagrCanvas navigation>`:
+`wheelZoomFactor(event)` (wheel travel is clamped inside it) turns a `WheelEvent` (or `{ deltaY, deltaMode }`) into
+the factor for `zoomAtScreen`, converting line and page modes and clamping a
+trackpad fling to 200 pixels per event so a single flick cannot jump from
+readable to a dot; `canvasPoint(event, rect)` gives the CSS-pixel anchor; and
+`keyCommand(key, shift)` maps `+`, `-`, arrows, Page Up/Down and `0`/Home to a
+`{ kind: 'zoom' | 'pan' | 'fit' }` command (`pan` deltas are `panByScreen`
+arguments). `ZOOM_IN`, `ZOOM_OUT` and `FIT` are frozen commands for toolbar buttons. The
+tuning constants stay private. Pure functions, tested without a canvas.
+
 Nearest rather than floor, because flooring accumulates a bias that shows up as
 a hairline of unpainted canvas along two edges. The floor at 1 exists because a
 zero-sized texture is not a legal GPU resource, and 1 is the nearest size that
@@ -742,6 +756,43 @@ cannot be named. Refusing a working renderer over a naming problem would be
 worse than saying so, so `'auto'` reports `'unknown'` and hands it back. A caller
 who NAMED a backend asked for a guarantee that can no longer be made, and gets
 the error instead. The same fact, reported one way and refused the other.
+
+### When neither backend exists
+
+`'auto'` covers a browser without WebGPU. It cannot cover a browser with no
+usable GPU at all (GPU access disabled, a locked-down WebView, a headless
+crawler): `createRenderer` rejects with the browser's error. A host that would
+rather show a static or DOM alternative than an error probes first:
+
+```ts
+import { detectBackendSupport } from '@prnt/dagr-render';
+
+const { webgpu, webgl2, preferred } = await detectBackendSupport();
+if (preferred === null) showFallback();
+```
+
+This is not the `navigator.gpu` probe the paragraph above warns against. It
+awaits `requestAdapter()` and counts only a non-null adapter, so a device that
+exposes `navigator.gpu` and returns no adapter reports `webgpu: false`, and it
+tries one throwaway WebGL 2 context, released straight away. It never throws:
+a probe that fails is a backend that is not available. The default environment's
+answer is memoised. `strict: true` refuses a software-rendered WebGL 2 context.
+The probe is not the backend you get: `createRenderer` can still land on a
+different one, so read `renderer.backend`. `preferred` is what
+`'auto'` will pick (`'webgpu'`, else `'webgl2'`, else `null`). The environment
+is injectable (`detectBackendSupport({ gpu, createCanvas })`) for tests and for
+server rendering, where both are absent and the answer is `null`.
+
+It says a backend can start, not that the scene will be fast or that the first
+device request will succeed, so keep handling the rejection of `createRenderer`
+too (`<DagrCanvas onError>` in React). Nothing here measures a real phone; see
+the roadmap's M4.10a for the profile that will.
+
+`createRenderer` also takes `onContextLost(info)`, called once if the device or
+context is lost after the renderer was built (WebGPU's `device.lost`, WebGL's
+`webglcontextlost`, which it cancels so recovery is yours). A lost renderer
+cannot draw again: dispose it and build a new one. It is not called for a normal
+`dispose()`.
 
 ### What differs between the two
 

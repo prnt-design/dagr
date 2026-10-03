@@ -145,7 +145,12 @@
 
 export { createBoundsMotion } from './bounds-motion.js';
 export type { BoundsMotion, BoundsMotionFrame, BoundsMotionOptions } from './bounds-motion.js';
+export type { ContextLostInfo } from './context-loss.js';
+export { detectBackendSupport } from './backend-support.js';
+export type { BackendProbeEnvironment, BackendSupport } from './backend-support.js';
 export { Camera2D, fitZoom } from './camera.js';
+export { FIT, ZOOM_IN, ZOOM_OUT, canvasPoint, keyCommand, wheelZoomFactor } from './camera-input.js';
+export type { ClientPoint, ClientRect, KeyCommand, WheelLike } from './camera-input.js';
 export type { Camera2DInit } from './camera.js';
 export {
   BackendUnavailableError,
