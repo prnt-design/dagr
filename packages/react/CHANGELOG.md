@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Add `navigation` (wheel and pinch zoom, drag pan, keyboard) to `DagrCanvas`,
+- Add `navigation` (wheel zoom, drag pan, keyboard) to `DagrCanvas`,
   inside the default camera limits. Off by default.
 - Add `onNodeClick`, `onNodeHover` and `onBackgroundClick`, backed by an exact
   CPU hit test of the node silhouettes currently drawn, including mid-animation

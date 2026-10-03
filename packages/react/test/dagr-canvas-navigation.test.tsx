@@ -278,3 +278,31 @@ describe('nodeTiers', () => {
     expect(lastOverlay().entries.every((e) => e.removed)).toBe(true);
   });
 });
+
+describe('keyboard activation and wheel ownership', () => {
+  it('leaves Enter and Space to native controls inside a tagged card', async () => {
+    const onNodeClick = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation onNodeClick={onNodeClick} />);
+    const card = document.createElement('div');
+    card.dataset.dagrNodeId = 'a';
+    const input = document.createElement('input');
+    card.append(input);
+    host().append(card);
+    const key = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    await flush(() => input.dispatchEvent(key));
+    expect(key.defaultPrevented).toBe(false);
+    expect(onNodeClick).not.toHaveBeenCalled();
+  });
+
+  it('lets a marked scroller keep the wheel, and rejects a non-positive focus zoom', async () => {
+    const api = createRef<DagrCanvasApi>();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} apiRef={api} />);
+    const scroller = document.createElement('div');
+    scroller.dataset.dagrNoZoom = '';
+    host().append(scroller);
+    const wheel = new WheelEvent('wheel', { deltaY: -100, bubbles: true, cancelable: true });
+    await flush(() => scroller.dispatchEvent(wheel));
+    expect(wheel.defaultPrevented).toBe(false);
+    expect(api.current?.focusNode('a', { zoom: 0 })).toBe(false);
+  });
+});

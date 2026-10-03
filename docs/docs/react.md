@@ -572,10 +572,14 @@ const api = useRef<DagrCanvasApi>(null);
 />
 ```
 
-**`navigation`** turns on wheel and pinch zoom anchored under the cursor, drag
-to pan, and keyboard control while the canvas itself has focus: arrows pan,
-`+`/`-` and Up/Down zoom, Page Up/Down zoom further, `0` or Home fits. The
-canvas becomes focusable (`tabindex="0"`, `role="group"`, named by `label`) and
+**`navigation`** turns on wheel zoom (including trackpad pinch) anchored under
+the cursor, drag to pan, and keyboard control while the canvas itself has
+focus: Left/Right pan, Shift+Up/Down pan vertically, `+`/`-` and Up/Down zoom,
+Page Up/Down zoom further, `0` or Home fits. **Two-finger touch pinch is not
+implemented**: touch gets drag pan only, so offer zoom buttons (`focusNode`,
+`renderer.camera`) on touch devices. Content that scrolls itself (a textarea, or
+any element marked `data-dagr-no-zoom`) keeps the wheel. The
+canvas becomes focusable (`tabindex="0"`, `role="group"`, named by `label`; pass one, or the focus stop is unnamed) and
 sets `touch-action: none`. It is off by default because a canvas that begins
 capturing the wheel would trap page scroll under a caller who did not ask. All
 of it stays inside the default [camera limits](#default-navigation-limits), and
@@ -672,7 +676,11 @@ currently in view up to the overlay's cap; elements are pooled across a pan,
 so `update` must fully overwrite what the previous node left. `nodeData` maps a
 node id to the value each tier's `update` receives as `node.data` (without it,
 `data` is the id), and an entry whose value is not the same reference as last
-time is re-rendered. `nodeTiers` is compared by identity, so memoise it.
+time is re-rendered. `nodeTiers` is compared by identity, so memoise it. Return the same object
+from `nodeData` for an unchanged node: a fresh object each call re-renders every
+visible tier on every animated frame. Hover is evaluated on pointer movement
+only, so it can lag a node that moves under a still cursor (keyboard pan, a
+flight, an animation).
 
 Tiers follow the nodes as drawn, so with `animate` a card glides with its
 node. A tier is plain DOM; to render React into one, create a root in `create`

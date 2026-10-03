@@ -754,6 +754,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
             current.renderer.camera.viewport,
             0.25,
           );
+        if (!(Number.isFinite(zoom) && zoom > 0)) return false;
         flyTo({ x: node.center.x, y: node.center.y }, zoom, options);
         return true;
       },
@@ -820,6 +821,9 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     let hovered: string | null = null;
 
     const wheel = (event: WheelEvent): void => {
+      // Content that scrolls itself (a textarea, or anything marked
+      // `data-dagr-no-zoom`) keeps the wheel.
+      if (event.target instanceof Element && event.target.closest('textarea, [data-dagr-no-zoom]')) return;
       event.preventDefault();
       cancelFlight();
       camera.zoomAtScreen(canvasPoint(event, host.getBoundingClientRect()), wheelZoomFactor(event));
@@ -829,10 +833,15 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target instanceof Element ? event.target : null;
       const owner = target?.closest('[data-dagr-node-id]');
+      const NATIVE = 'button, a[href], input, select, textarea, summary, [contenteditable]';
+      const control = target?.closest(NATIVE) ?? null;
+      // A native control inside the card (or the tagged element itself) keeps
+      // its own Enter and Space behavior.
       if (
         owner instanceof HTMLElement &&
         (event.key === 'Enter' || event.key === ' ') &&
-        !owner.matches('button, a[href], input, select, textarea, summary')
+        (control === null || !owner.contains(control)) &&
+        !owner.matches(NATIVE)
       ) {
         event.preventDefault();
         const id = owner.dataset.dagrNodeId;
@@ -848,6 +857,9 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       else if (command.kind === 'pan') camera.panByScreen(command.dx, command.dy);
       else camera.zoomAtScreen({ x: camera.viewport.width / 2, y: camera.viewport.height / 2 }, command.factor);
       requestDraw();
+    };
+    const press = (): void => {
+      cancelFlight();
     };
     const move = (event: PointerEvent): void => {
       if (latest.current.onNodeHover === undefined && latest.current.onNodeClick === undefined) return;
@@ -868,15 +880,19 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
 
     if (navigation) host.addEventListener('wheel', wheel, { passive: false });
     host.addEventListener('keydown', keydown);
+    host.addEventListener('pointerdown', press);
     host.addEventListener('pointermove', move);
     host.addEventListener('pointerleave', leave);
     return () => {
       host.removeEventListener('wheel', wheel);
       host.removeEventListener('keydown', keydown);
+      host.removeEventListener('pointerdown', press);
       host.removeEventListener('pointermove', move);
       host.removeEventListener('pointerleave', leave);
       host.style.cursor = '';
       cancelFlight();
+      // The listeners are gone, so tell the caller the hover ended.
+      if (hovered !== null) latest.current.onNodeHover?.(null);
     };
   }, [stage, navigation, api, cancelFlight, requestDraw]);
 

@@ -101,7 +101,7 @@ const api = useRef<DagrCanvasApi>(null);
 
 <DagrCanvas
   graph={graph}
-  navigation                      // wheel/pinch zoom, drag pan, keyboard; inside camera limits
+  navigation                      // wheel zoom, drag pan, keyboard; inside camera limits
   label="Relationship graph"
   apiRef={api}                    // api.current.focusNode(id), .fit()
   onNodeClick={(id) => open(id)}  // exact CPU hit test on the drawn silhouettes
