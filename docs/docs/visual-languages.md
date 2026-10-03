@@ -34,9 +34,9 @@ wiring audio or compiling a query.
 
 **Dagr provides** the graph model with stable node identity and patch-based
 mutation, incremental layout with explicit deltas, and
-instanced GPU rendering. Picking, selection and drag-to-connect
-are planned (M4.8, M5.2, M6.3). Shared gestures and selection come first,
-with native node hit targets next. GPU picking is an optional future adapter,
+instanced GPU rendering. Shared gestures, selection and exact
+`DagrCanvas` node hits ship in `@prnt/dagr-react`. Port hits and
+drag-to-connect are planned (M6.3). GPU picking is an optional future adapter,
 not a prerequisite for reusable interaction or typed connections.
 
 **You provide** the meaning. What node kinds exist, what a port carries,
@@ -88,10 +88,10 @@ type tokens with connection validation (M6.2). Drag-to-connect and subgraph
 nodes are planned for v0.2 (M6.3 to M6.6) and are not built.
 
 `@prnt/dagr-graph` and `@prnt/dagr-layout` are usable today: you can model and lay out a
-node graph on them now. Reusable selection is planned in M5.2a, with native
-node hit-testing in M5.2b, independently of GPU picking. Port hit targets
-(M6.3a) precede drag-to-connect (M6.3b). Until each API ships, callers own that
-interaction. The toolkit will be convenience over the same graph engine.
+node graph on them now. Reusable selection (M5.2a) and native
+node hit-testing (M5.2b) have shipped in `@prnt/dagr-react`, independently of
+GPU picking. Port hit targets (M6.3a) precede drag-to-connect (M6.3b). Until
+those ship, callers own that interaction. The toolkit will be convenience over the same graph engine.
 
 See the [roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md) for
 the task breakdown.

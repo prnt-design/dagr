@@ -27,9 +27,8 @@ camera limits and edge presentation styles are available.
 M5.2a shipped reusable click-versus-pan and controlled selection with a
 caller-supplied hit target. Its provider contract covers stable node/port
 identity, coordinate space and displayed scene revisions. The bounded CPU
-interaction baseline landed with it. M5.2b comes next with a native node
-adapter that respects displayed shapes and animated geometry, and repeats the
-baseline. These replace the
+interaction baseline landed with it. M5.2b then shipped a native node
+adapter that respects displayed shapes and animated geometry (entry below). These replace the
 old requirement to complete GPU picking before any interaction can ship. The
 campaign's CPU hover boxes are deliberately approximate and are not an exact
 selection implementation. Keep that distinction, and retain M4.8b for a later

@@ -90,8 +90,8 @@ handle their keyboard `click` (`event.detail === 0`) in your component. Set
 `touch-action: none` on the surface for touch panning and `user-select: none`
 for drag presentation.
 
-This API has no built-in hit geometry. Exact `DagrCanvas` node shapes are
-M5.2b; port geometry and connection gestures are M6.3. Edges are not hit
+The hook itself has no hit geometry: you supply the provider. `DagrCanvas`
+supplies exact node hits (M5.2b); port geometry and connection gestures are M6.3. Edges are not hit
 targets in this slice.
 
 ## Navigation, node events and level of detail
