@@ -21,6 +21,7 @@ export type {
   ExplorerLayout,
   LayoutViewOptions,
 } from './layout.js';
+export { defaultSearchText, searchNodes } from './search.js';
 export { DEFAULT_NODE_SIZE, resolveNodeSize } from './size.js';
 export { validateView, validateViews } from './validate.js';
 export type {
