@@ -9,7 +9,7 @@ which unit a number is in. A caller upgrading past one of those sees a drawing
 in a different place, and no compiler tells them. "Behaviour changed, types did
 not" is the category this file has a heading for.
 
-## 0.1.3
+## Unreleased
 
 - Add the `@prnt/dagr-render/core` entry: `Camera2D`, `fitZoom` and
   `shapeEdgePath` with their types, from modules that never import `three`, at
@@ -17,6 +17,9 @@ not" is the category this file has a heading for.
   exports. To keep the declarations three-free, `Vec2`, `Size`, `WorldBounds`,
   `ViewportSize` and `OrthoFrustum` are now declared in an internal leaf module
   and re-exported from where they were. No public name moved.
+
+## 0.1.3
+
 - Add `detectBackendSupport()`: which of WebGPU (a real adapter) and WebGL 2 can
   start, and which `backend: 'auto'` will pick. Never throws.
 - Add the pure camera input functions `wheelZoomFactor`, `canvasPoint` and

@@ -30,7 +30,7 @@ M5.6b of that spec.
 - `"private": true` in this slice. M5.6f removes it. `publishConfig.access` is
   `public` from the start.
 - Initial `version` is the workspace's version on the day this lands: read it
-  from `packages/graph/package.json`. It is `0.1.2` as this plan is written.
+  from `packages/graph/package.json`. It is `0.1.3` since the release on 2026-10-03.
 - Peers: `react` and `react-dom`, both `>=18.2.0 <20.0.0`.
 - Dependencies: `@prnt/dagr-graph`, `@prnt/dagr-layout`, `@prnt/dagr-render`,
   each `workspace:^`.
@@ -132,7 +132,7 @@ printed:
 ```json
 {
   "name": "@prnt/dagr-explorer",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "An interactive graph explorer for Dagr: views, search, connection tracing, groups and a details drawer, with virtualized node content.",
   "license": "MIT",
