@@ -145,7 +145,25 @@
 
 export { createBoundsMotion } from './bounds-motion.js';
 export type { BoundsMotion, BoundsMotionFrame, BoundsMotionOptions } from './bounds-motion.js';
+export { detectBackendSupport } from './backend-support.js';
+export type { BackendProbeEnvironment, BackendSupport } from './backend-support.js';
 export { Camera2D, fitZoom } from './camera.js';
+export {
+  FIT,
+  KEY_PAN_STEP,
+  KEY_ZOOM_FACTOR,
+  WHEEL_LINE_HEIGHT,
+  WHEEL_MAX_PIXELS,
+  WHEEL_PAGE_HEIGHT,
+  WHEEL_ZOOM_SPEED,
+  ZOOM_IN,
+  ZOOM_OUT,
+  canvasPoint,
+  keyCommand,
+  wheelPixels,
+  wheelZoomFactor,
+} from './camera-input.js';
+export type { ClientPoint, ClientRect, KeyCommand, WheelLike } from './camera-input.js';
 export type { Camera2DInit } from './camera.js';
 export {
   BackendUnavailableError,

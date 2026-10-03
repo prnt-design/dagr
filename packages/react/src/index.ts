@@ -34,9 +34,10 @@
  *
  * **What is deliberately NOT here**, each waiting on the task that decides it:
  *
- * - Interaction is provider-driven. `useGraphInteraction` owns gestures and
- *   controlled selection; M5.2b adds native node hits from displayed geometry.
- *   M4.8 GPU picking is a later provider, not a prerequisite for the contract.
+ * - GPU picking. `useGraphInteraction` owns gestures and controlled selection
+ *   over a caller-supplied hit provider, and `<DagrCanvas>` supplies one
+ *   (M5.2b, CPU, exact node silhouettes). M4.8b GPU picking is a later provider
+ *   behind the same contract. Edge and port hits are not here.
  * - No worker. See `use-dagr.ts`: the `Worker` has to be the caller's, and
  *   M3.9b owns the worker-side session that makes a per-edit round trip worth
  *   taking.
@@ -57,7 +58,14 @@ export type { Retargeting } from './animation.js';
 export { Html } from './Html.js';
 export type { HtmlProps } from './Html.js';
 export { DagrCanvasContext, useDagrCanvas } from './canvas-context.js';
-export type { DagrCanvasHandle } from './canvas-context.js';
+export type {
+  DagrCanvasApi,
+  DagrCanvasHandle,
+  FitOptions,
+  FocusNodeOptions,
+} from './canvas-context.js';
+export { createNodeHitIndex } from './node-hit.js';
+export type { NodeHitIndex } from './node-hit.js';
 export { CanvasContextError } from './errors.js';
 export type { DagrReactErrorCode } from './errors.js';
 export {
@@ -113,6 +121,8 @@ export type {
   NodeGroup,
   Renderer,
   RibbonStyle,
+  RichNode,
+  RichNodeTier,
   SceneEdge,
   SceneMotionFrame,
   SceneMotionOptions,

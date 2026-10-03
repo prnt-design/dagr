@@ -28,8 +28,35 @@ import type { LayoutResult } from '@prnt/dagr-layout';
 import type { HtmlOverlay, Renderer } from '@prnt/dagr-render';
 import { CanvasContextError } from './errors.js';
 
+/** Options for {@link DagrCanvasApi.fit}. */
+export interface FitOptions {
+  /** Flight time in ms. 0 jumps. Default 450, or 0 under `prefers-reduced-motion`. */
+  readonly durationMs?: number | undefined;
+}
+
+/** Options for {@link DagrCanvasApi.focusNode}. */
+export interface FocusNodeOptions extends FitOptions {
+  /** CSS pixels per world unit to end at, clamped by the camera's limits. Default: the node fills about half the viewport. */
+  readonly zoom?: number | undefined;
+}
+
+/**
+ * Programmatic camera moves, available from `<DagrCanvas apiRef>` and from
+ * {@link useDagrCanvas}. Both fly the camera (interruptible by any pointer,
+ * wheel or key input) and respect the camera's content limits.
+ */
+export interface DagrCanvasApi {
+  /** Frames the whole graph (and any groups), as the first-frame fit does. */
+  fit(options?: FitOptions): void;
+  /**
+   * Centres a node and zooms to it. Returns `false`, moving nothing, when the
+   * id is not on the canvas or the canvas has no size yet.
+   */
+  focusNode(nodeId: string, options?: FocusNodeOptions): boolean;
+}
+
 /** The canvas, as everything inside it sees it. */
-export interface DagrCanvasHandle {
+export interface DagrCanvasHandle extends DagrCanvasApi {
   /** The renderer drawing this canvas. Its camera is the one the overlay follows. */
   readonly renderer: Renderer;
 

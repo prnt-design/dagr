@@ -94,6 +94,33 @@ This API has no built-in hit geometry. Exact `DagrCanvas` node shapes are
 M5.2b; port geometry and connection gestures are M6.3. Edges are not hit
 targets in this slice.
 
+## Navigation, node events and level of detail
+
+```tsx
+const api = useRef<DagrCanvasApi>(null);
+
+<DagrCanvas
+  graph={graph}
+  navigation                      // wheel/pinch zoom, drag pan, keyboard; inside camera limits
+  label="Relationship graph"
+  apiRef={api}                    // api.current.focusNode(id), .fit()
+  onNodeClick={(id) => open(id)}  // exact CPU hit test on the drawn silhouettes
+  onNodeHover={(id) => hover(id)}
+  onBackgroundClick={close}
+  nodeTiers={tiers}               // dot -> label -> card, gated by on-screen width
+  nodeData={(id) => items.get(id)!}
+/>
+```
+
+`nodeTiers` are the renderer's `RichNodeTier`s: below the first gate a node is
+only its instanced GPU shape, and only nodes in view mount DOM, pooled across a
+pan. Elements are tagged `data-dagr-node-id`; Enter or Space on a focused one
+calls `onNodeClick`. Hits cover node silhouettes only (no edges or ports), and
+`navigation` is off by default. When neither WebGPU nor WebGL 2 exists, probe
+with `detectBackendSupport()` from `@prnt/dagr-render` and render a fallback;
+`onError` covers a device that dies late. Full details: the
+[React guide](https://dagr.prnt.design/docs/react#navigation-node-events-and-camera-control).
+
 ## Read this first: the `graph` prop is watched, not compared
 
 A `Graph` is mutable, so comparing it by identity the way React compares

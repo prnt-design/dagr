@@ -1,5 +1,23 @@
 # @prnt/dagr-react
 
+## Unreleased
+
+- Add `navigation` (wheel and pinch zoom, drag pan, keyboard) to `DagrCanvas`,
+  inside the default camera limits. Off by default.
+- Add `onNodeClick`, `onNodeHover` and `onBackgroundClick`, backed by an exact
+  CPU hit test of the node silhouettes currently drawn, including mid-animation
+  geometry (M5.2b). `createNodeHitIndex` is exported for hosts with their own
+  surface. Edges, ports and GPU picking are not hit targets.
+- Add `apiRef` and the same methods on `useDagrCanvas()`: `focusNode(id, options)`
+  and `fit(options)` fly the camera, interruptibly, and jump under
+  `prefers-reduced-motion`.
+- Add `nodeTiers` and `nodeData` for level of detail by zoom: HTML tiers gated
+  by on-screen node width over the GPU shape, only for nodes in view. Tier
+  elements are tagged with `data-dagr-node-id` and activate on Enter or Space.
+- `DagrCanvasProps` and `DagrCanvas` gain a defaulted type parameter `T = string`
+  for the tier data. Existing code compiles unchanged.
+- Re-export the `RichNode` and `RichNodeTier` types.
+
 ## 0.1.2
 
 - Add live `edgePath` options for routed, smooth, and orthogonal edges, including animated graphs.
