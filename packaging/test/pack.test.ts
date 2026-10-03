@@ -20,6 +20,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -122,6 +123,30 @@ describe('the tarball a consumer installs', () => {
     }
   });
 
+  it('loads @prnt/dagr-render/core from its tarball where three cannot be resolved', () => {
+    // The extracted tarball sits in the OS temp directory with no
+    // `node_modules` above it, so `three` is unresolvable from here. That is
+    // the condition a server with externalized dependencies and no three
+    // installed would be in.
+    const root = roots.get('@prnt/dagr-render');
+    if (root === undefined) throw new Error('@prnt/dagr-render was not packed');
+    const load = (entry: string): string =>
+      execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '--eval',
+          `await import(${JSON.stringify(pathToFileURL(join(root, entry)).href)});`,
+        ],
+        { cwd: root, encoding: 'utf8', stdio: 'pipe' },
+      );
+
+    expect(() => load('dist/core.js')).not.toThrow();
+    // The control: the full entry must fail here, and on three. If it loaded,
+    // three was resolvable after all and the line above proved nothing.
+    expect(() => load('dist/index.js')).toThrow(/three/);
+  });
+
   it(
     'typechecks shared interaction from extracted packages without workspace aliases',
     () => {
@@ -187,6 +212,17 @@ import {
   type GraphHitProvider,
   type GraphHitTarget,
 } from '@prnt/dagr-react';
+import {
+  Camera2D as CoreCamera,
+  shapeEdgePath as coreShapeEdgePath,
+  type EdgePathOptions as CoreEdgePathOptions,
+  type WorldBounds as CoreWorldBounds,
+} from '@prnt/dagr-render/core';
+
+const coreBounds: CoreWorldBounds = { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+const coreOptions: CoreEdgePathOptions = { style: 'smooth' };
+new CoreCamera().fitBounds(coreBounds);
+coreShapeEdgePath([{ x: 0, y: 0 }, { x: 1, y: 1 }], coreOptions);
 
 declare const surfaceRef: RefObject<HTMLElement | null>;
 declare const svgSurfaceRef: RefObject<SVGSVGElement | null>;
