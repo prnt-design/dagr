@@ -13,9 +13,8 @@ not" is the category this file has a heading for.
 
 - Add `detectBackendSupport()`: which of WebGPU (a real adapter) and WebGL 2 can
   start, and which `backend: 'auto'` will pick. Never throws.
-- Add the pure camera input functions `wheelZoomFactor`, `wheelPixels`,
-  `canvasPoint` and `keyCommand` with their constants (`WHEEL_*`, `KEY_*`,
-  `ZOOM_IN`, `ZOOM_OUT`, `FIT`), moved from the private campaign demo so hosts
+- Add the pure camera input functions `wheelZoomFactor`, `canvasPoint` and
+  `keyCommand`, with the frozen commands `ZOOM_IN`, `ZOOM_OUT` and `FIT`, moved from the private campaign demo so hosts
   and `<DagrCanvas navigation>` share one wheel feel and key map.
 
 ## 0.1.2

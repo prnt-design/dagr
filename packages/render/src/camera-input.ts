@@ -87,11 +87,11 @@ export type KeyCommand =
   | { readonly kind: 'fit' };
 
 /** Zoom in one notch. */
-export const ZOOM_IN: KeyCommand = { kind: 'zoom', factor: KEY_ZOOM_FACTOR };
+export const ZOOM_IN: KeyCommand = Object.freeze({ kind: 'zoom', factor: KEY_ZOOM_FACTOR });
 /** Zoom out one notch. */
-export const ZOOM_OUT: KeyCommand = { kind: 'zoom', factor: 1 / KEY_ZOOM_FACTOR };
+export const ZOOM_OUT: KeyCommand = Object.freeze({ kind: 'zoom', factor: 1 / KEY_ZOOM_FACTOR });
 /** Frame the whole graph. */
-export const FIT: KeyCommand = { kind: 'fit' };
+export const FIT: KeyCommand = Object.freeze({ kind: 'fit' });
 
 /**
  * Maps a `KeyboardEvent.key` to a camera command, or `null` for a key that is

@@ -46,8 +46,11 @@ export interface FocusNodeOptions extends FitOptions {
  * wheel or key input) and respect the camera's content limits.
  */
 export interface DagrCanvasApi {
-  /** Frames the whole graph (and any groups), as the first-frame fit does. */
-  fit(options?: FitOptions): void;
+  /**
+   * Frames the whole graph (and any groups), as the first-frame fit does.
+   * Returns `false`, moving nothing, before the canvas has a layout and a size.
+   */
+  fit(options?: FitOptions): boolean;
   /**
    * Centres a node and zooms to it. Returns `false`, moving nothing, when the
    * id is not on the canvas or the canvas has no size yet.

@@ -26,53 +26,42 @@ export function interpolateCamera(from: CameraTarget, to: CameraTarget, t: numbe
   };
 }
 
-/** A flight in progress. */
+/** A flight in progress, advanced by whoever owns the frame. */
 export interface CameraFlight {
-  /** Stops where it is. Idempotent, and a no-op after the flight finished. */
-  cancel(): void;
+  /**
+   * Advances to the frame time `nowMs` (the `requestAnimationFrame` timestamp)
+   * and returns whether the flight has finished. The first call fixes the
+   * start time.
+   */
+  step(nowMs: number): boolean;
 }
 
 /**
- * Moves `camera` to `target` over `durationMs`, one `requestAnimationFrame`
- * step at a time, calling `onStep` after each so the host can redraw.
+ * Starts a flight of `camera` to `target` over `durationMs`. It owns no
+ * timer: the caller steps it from its own coalesced frame, so a flight shares
+ * the frame budget with drawing and the HTML overlay instead of adding a second
+ * `requestAnimationFrame` loop that could land a frame out of step with them.
  *
- * A duration of zero (or below) jumps in the same call and never schedules a
- * frame, which is also what a host honouring `prefers-reduced-motion` asks
- * for. Each step goes through `setZoom` then `setCenter`, so the camera's own
- * limits clamp every intermediate state and a target outside the content
- * limits lands on the nearest legal view rather than throwing.
+ * Each step goes through `setZoom` then `setCenter`, so the camera's own limits
+ * clamp every intermediate state and a target outside the content limits lands
+ * on the nearest legal view rather than throwing. Cancel by dropping the
+ * object.
  */
-export function flyCamera(
+export function startCameraFlight(
   camera: Camera2D,
   target: CameraTarget,
   durationMs: number,
-  onStep: () => void,
 ): CameraFlight {
-  const apply = (state: CameraTarget): void => {
-    camera.setZoom(state.zoom);
-    camera.setCenter(state.center);
-  };
-  if (!(durationMs > 0)) {
-    apply(target);
-    onStep();
-    return { cancel() {} };
-  }
   const from: CameraTarget = { center: camera.center, zoom: camera.zoom };
   let start: number | null = null;
-  let handle: number | null = null;
-  const step = (now: number): void => {
-    handle = null;
-    start ??= now;
-    const t = (now - start) / durationMs;
-    apply(interpolateCamera(from, target, t));
-    onStep();
-    if (t < 1) handle = requestAnimationFrame(step);
-  };
-  handle = requestAnimationFrame(step);
   return {
-    cancel() {
-      if (handle !== null) cancelAnimationFrame(handle);
-      handle = null;
+    step(nowMs) {
+      start ??= nowMs;
+      const t = durationMs > 0 ? (nowMs - start) / durationMs : 1;
+      const state = interpolateCamera(from, target, t);
+      camera.setZoom(state.zoom);
+      camera.setCenter(state.center);
+      return t >= 1;
     },
   };
 }

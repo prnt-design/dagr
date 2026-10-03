@@ -52,7 +52,7 @@
  */
 
 export { DEFAULT_EDGE_GROUP_ID, DagrCanvas } from './DagrCanvas.js';
-export type { DagrCanvasProps } from './DagrCanvas.js';
+export type { DagrCanvasBaseProps, DagrCanvasProps, DagrNodeTierProps } from './DagrCanvas.js';
 export { retarget, toMotionDelta, toMotionRoster } from './animation.js';
 export type { Retargeting } from './animation.js';
 export { Html } from './Html.js';

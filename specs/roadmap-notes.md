@@ -7104,9 +7104,13 @@ Decisions and reasons:
   scroll for existing hosts. Wheel, key and pan arithmetic moved from the
   private campaign package into `@prnt/dagr-render` (pure, tested) and the
   campaign package now imports it, so the demo and the component share one feel.
-- **Camera flights live in `DagrCanvas`, not `Camera2D`**, as a rAF driver over
-  `setZoom` then `setCenter`, so the camera's own limits clamp every step.
-  Reduced motion jumps. Interruptible by any input.
+- **Camera flights live in `DagrCanvas`, not `Camera2D`**, as a stepper driven from
+  the component's own coalesced frame (one frame budget with drawing and the
+  overlay), over `setZoom` then `setCenter`, so the camera's own limits clamp every step.
+  Reduced motion jumps. Interruptible by any input. Two-finger touch pinch
+  zooms about the midpoint. The review round (API reviewer) also made
+  `nodeTiers`/`nodeData` a typed pair, restored focus across overlay pooling,
+  and trimmed the render exports to the four input functions plus frozen commands.
 - **Level of detail reuses `RichNodeTier`** rather than a render-prop API: the
   gates are screen-width based, the far tier is the GPU shape (no DOM), and
   pooling already caps cost. The prop is generic over the tier data (`T`,

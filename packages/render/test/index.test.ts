@@ -78,8 +78,6 @@ describe('@prnt/dagr-render', () => {
       'DagrRenderError',
       'FIT',
       'HALF_LIFE_OMEGA',
-      'KEY_PAN_STEP',
-      'KEY_ZOOM_FACTOR',
       'MotionDesyncError',
       'OVERLAY_INV_ZOOM_PROPERTY',
       'OVERLAY_ZOOM_PROPERTY',
@@ -90,10 +88,6 @@ describe('@prnt/dagr-render', () => {
       'SETTLE_OMEGA_1_PERCENT',
       'SceneDisposedError',
       'UnknownInstanceHandleError',
-      'WHEEL_LINE_HEIGHT',
-      'WHEEL_MAX_PIXELS',
-      'WHEEL_PAGE_HEIGHT',
-      'WHEEL_ZOOM_SPEED',
       'ZOOM_IN',
       'ZOOM_OUT',
       'advanceDashFlow',
@@ -118,7 +112,6 @@ describe('@prnt/dagr-render', () => {
       'shapeEdgePath',
       'stepSpring',
       'stepSpring2D',
-      'wheelPixels',
       'wheelZoomFactor',
     ]);
   });

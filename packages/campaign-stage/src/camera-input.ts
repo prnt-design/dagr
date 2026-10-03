@@ -12,21 +12,7 @@ import type { WorldBounds } from '@prnt/dagr-render';
  * bounding rect satisfy them.
  */
 
-export {
-  FIT,
-  KEY_PAN_STEP,
-  KEY_ZOOM_FACTOR,
-  WHEEL_LINE_HEIGHT,
-  WHEEL_MAX_PIXELS,
-  WHEEL_PAGE_HEIGHT,
-  WHEEL_ZOOM_SPEED,
-  ZOOM_IN,
-  ZOOM_OUT,
-  canvasPoint,
-  keyCommand,
-  wheelPixels,
-  wheelZoomFactor,
-} from '@prnt/dagr-render';
+export { FIT, ZOOM_IN, ZOOM_OUT, canvasPoint, keyCommand, wheelZoomFactor } from '@prnt/dagr-render';
 export type { ClientPoint, ClientRect, KeyCommand, WheelLike } from '@prnt/dagr-render';
 
 /**

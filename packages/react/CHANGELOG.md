@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Add `navigation` (wheel zoom, drag pan, keyboard) to `DagrCanvas`,
+- Add `navigation` (wheel zoom, two-finger touch pinch, drag pan, keyboard) to `DagrCanvas`,
   inside the default camera limits. Off by default.
 - Add `onNodeClick`, `onNodeHover` and `onBackgroundClick`, backed by an exact
   CPU hit test of the node silhouettes currently drawn, including mid-animation
@@ -15,7 +15,11 @@
   by on-screen node width over the GPU shape, only for nodes in view. Tier
   elements are tagged with `data-dagr-node-id` and activate on Enter or Space.
 - `DagrCanvasProps` and `DagrCanvas` gain a defaulted type parameter `T = string`
-  for the tier data. Existing code compiles unchanged.
+  for the tier data. `nodeTiers` and `nodeData` are a typed pair: `nodeData` is
+  required unless the tiers are `RichNodeTier<string>`. Existing code compiles
+  unchanged. `DagrCanvasProps` is now a type alias of `DagrCanvasBaseProps` and
+  `DagrNodeTierProps<T>`, all exported. `fit()` returns whether it moved.
+  Focus on a tier card survives pooling and tier swaps.
 - Re-export the `RichNode` and `RichNodeTier` types.
 
 ## 0.1.2

@@ -97,7 +97,7 @@ import type {
   WorldBounds,
 } from '@prnt/dagr-render';
 import { retarget, toMotionRoster } from './animation.js';
-import { flyCamera } from './camera-flight.js';
+import { startCameraFlight } from './camera-flight.js';
 import type { CameraFlight } from './camera-flight.js';
 import { DagrCanvasContext } from './canvas-context.js';
 import type { DagrCanvasApi, DagrCanvasHandle, FitOptions, FocusNodeOptions } from './canvas-context.js';
@@ -119,6 +119,9 @@ import { useDagr } from './use-dagr.js';
  */
 export const DEFAULT_EDGE_GROUP_ID = 'dagr-edges';
 
+/** Whether the unlabelled-navigation warning has been shown in this page. */
+let warnedUnlabelled = false;
+
 /** A plain undashed ribbon, thin enough to read at any zoom the fit produces. */
 const DEFAULT_EDGE_STYLE: RibbonStyle = { halfWidthPixels: 1 };
 
@@ -134,7 +137,7 @@ const DEFAULT_EDGE_STYLE: RibbonStyle = { halfWidthPixels: 1 };
 const LOOP_FRAME = Symbol('dagr-canvas-loop-frame');
 
 /** What `<DagrCanvas>` takes. */
-export interface DagrCanvasProps<T = string> {
+export interface DagrCanvasBaseProps {
   /** Visual boundaries around explicit member IDs. Does not constrain layout or enforce security. */
   readonly groups?: readonly NodeGroup[] | undefined;
 
@@ -239,23 +242,6 @@ export interface DagrCanvasProps<T = string> {
   /** A click that landed on empty canvas. */
   readonly onBackgroundClick?: (() => void) | undefined;
 
-  /**
-   * Level of detail by zoom. Each tier is an HTML presentation of every node,
-   * gated by the node's width on screen (`minScreenWidth`/`maxScreenWidth` in
-   * CSS pixels, disjoint across tiers). Below the lowest gate the node is just
-   * the GPU shape, so a far-out view of thousands of nodes costs no DOM; only
-   * nodes in view, up to the overlay's cap, mount elements, and elements are
-   * pooled across a pan. Compared by identity, so memoise it.
-   */
-  readonly nodeTiers?: readonly RichNodeTier<T>[] | undefined;
-
-  /**
-   * What each tier's `update` receives as `node.data`, by node id. Compared by
-   * identity, and a node whose returned value is not the same reference as last
-   * time is re-rendered. Without it, `data` is the node id.
-   */
-  readonly nodeData?: ((nodeId: string) => T) | undefined;
-
   /** Receives the camera API ({@link DagrCanvasApi}) once the canvas is mounted. */
   readonly apiRef?: Ref<DagrCanvasApi> | undefined;
 
@@ -314,6 +300,38 @@ export interface DagrCanvasProps<T = string> {
    */
   readonly onError?: ((error: unknown) => void) | undefined;
 }
+
+/**
+ * The pair `nodeTiers` and `nodeData`, typed so the data a tier receives is
+ * never a lie. Three legal shapes:
+ *
+ * - neither: no tiers.
+ * - `nodeTiers` alone: tiers over `RichNodeTier<string>`, and `node.data` is the
+ *   node id.
+ * - `nodeTiers` with `nodeData`: tiers over `RichNodeTier<T>`, where `T` is
+ *   whatever `nodeData` returns. `nodeData` is REQUIRED here, so tiers written
+ *   for your own data type cannot be handed an id.
+ *
+ * Level of detail by zoom. Each tier is an HTML presentation of every node,
+ * gated by the node's width on screen (`minScreenWidth`/`maxScreenWidth` in
+ * CSS pixels, disjoint across tiers). Below the lowest gate the node is just
+ * the GPU shape, so a far-out view of thousands of nodes costs no DOM; only
+ * nodes in view, up to the overlay's cap, mount elements, and elements are
+ * pooled across a pan. `nodeTiers` is compared by identity, so memoise it, and
+ * memoise `nodeData` (`useCallback`) so it is not a new function every render.
+ * A node whose `nodeData` value is not the same reference as last time is
+ * re-rendered.
+ */
+export type DagrNodeTierProps<T> =
+  | { readonly nodeTiers?: undefined; readonly nodeData?: undefined }
+  | { readonly nodeTiers: readonly RichNodeTier<string>[]; readonly nodeData?: undefined }
+  | {
+      readonly nodeTiers: readonly RichNodeTier<T>[];
+      readonly nodeData: (nodeId: string) => T;
+    };
+
+/** What `<DagrCanvas>` takes. */
+export type DagrCanvasProps<T = string> = DagrCanvasBaseProps & DagrNodeTierProps<T>;
 
 /** The renderer and the overlay, which are built together and torn down together. */
 interface Stage {
@@ -512,7 +530,37 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
    * The rich-node tiers bound to the overlay, or null when no `nodeTiers` prop.
    * Kept in a ref because the animated frame feeds it outside React.
    */
-  const richRef = useRef<RichNodes<T> | null>(null);
+  const richRef = useRef<RichNodes<unknown> | null>(null);
+
+  /** A camera flight in progress, stepped from the coalesced frame below. */
+  const flightRef = useRef<CameraFlight | null>(null);
+  /** A two-finger pinch happened in the current touch sequence. */
+  const pinchedRef = useRef(false);
+
+  /**
+   * The node whose tier element last held focus. A focused card is removed or
+   * returned to its pool when it leaves the view or its tier gives way to
+   * another, and the browser then drops focus to the body; this lets the next
+   * frame put it back on that node's new element, or on the canvas itself when
+   * the node has none.
+   */
+  const focusedNodeRef = useRef<string | null>(null);
+  const restoreFocus = useCallback((): void => {
+    const id = focusedNodeRef.current;
+    const host = hostRef.current;
+    if (id === null || host === null) return;
+    const active = document.activeElement;
+    if (active instanceof Element && active !== document.body && !host.contains(active)) {
+      focusedNodeRef.current = null; // the user moved on deliberately
+      return;
+    }
+    const owner = active instanceof Element ? active.closest<HTMLElement>('[data-dagr-node-id]') : null;
+    if (owner !== null && owner.dataset.dagrNodeId === id) return;
+    const next = Array.from(host.querySelectorAll<HTMLElement>('[data-dagr-node-id]')).find(
+      (element) => element.dataset.dagrNodeId === id,
+    );
+    (next ?? host).focus({ preventScroll: true });
+  }, []);
 
   /** Places every tier on the nodes as drawn, so cards follow the springs. */
   const syncTiers = useCallback((nodes: readonly SceneNode[]): void => {
@@ -528,7 +576,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
           minY: node.center.y - node.size.height / 2,
           maxY: node.center.y + node.size.height / 2,
         },
-        data: dataOf === undefined ? (node.id as T) : dataOf(node.id),
+        data: dataOf === undefined ? node.id : dataOf(node.id),
       })),
     );
   }, []);
@@ -548,6 +596,12 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     if (frameRef.current !== null) return;
     frameRef.current = requestAnimationFrame((nowMs) => {
       frameRef.current = null;
+      const flight = flightRef.current;
+      if (flight !== null) {
+        const camera = stageRef.current?.renderer.camera;
+        if (camera === undefined || flight.step(nowMs)) flightRef.current = null;
+        else requestDraw();
+      }
       const loopFrame = loopFrameRef.current;
       loopFrameRef.current = null;
       if (loopFrame !== null) {
@@ -559,8 +613,9 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       current.renderer.render();
       current.groups.sync();
       current.overlay.sync();
+      restoreFocus();
     });
-  }, []);
+  }, [restoreFocus]);
 
   const limitsOwnedRef = useRef(false);
   const syncCameraLimits = useCallback((nodes = sceneNodesRef.current, box = boundsRef.current): void => {
@@ -650,6 +705,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         current.renderer.render();
         current.groups.sync();
         current.overlay.sync();
+        restoreFocus();
         if (frame.settled) {
           // The departed are gone: the dressing is whatever the layout holds
           // now. Done on settling rather than per frame because that is the one
@@ -681,7 +737,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         return true;
       }
     },
-    [syncCameraLimits, shapeEdges, syncTiers],
+    [syncCameraLimits, shapeEdges, syncTiers, restoreFocus],
   );
 
   /** The box a fit frames: the layout plus any group boundaries, or null before a layout. */
@@ -710,35 +766,41 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     requestDraw();
   }, [requestDraw, framedBounds]);
 
-  // Camera flights. One at a time; any navigation input cancels it.
-  const flightRef = useRef<CameraFlight | null>(null);
+  // Camera flights. One at a time; any navigation input cancels it. The
+  // component's coalesced frame steps it, so it shares drawing's frame budget.
   const cancelFlight = useCallback((): void => {
-    flightRef.current?.cancel();
     flightRef.current = null;
   }, []);
   const flyTo = useCallback(
     (center: { x: number; y: number }, zoom: number, options: FitOptions | undefined): void => {
       const current = stageRef.current;
       if (current === null) return;
-      cancelFlight();
       const reduced =
         typeof window.matchMedia === 'function' &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const duration = options?.durationMs ?? (reduced ? 0 : 450);
-      flightRef.current = flyCamera(current.renderer.camera, { center, zoom }, duration, requestDraw);
+      const flight = startCameraFlight(current.renderer.camera, { center, zoom }, duration);
+      if (duration > 0) {
+        flightRef.current = flight;
+      } else {
+        flightRef.current = null;
+        flight.step(0);
+      }
+      requestDraw();
     },
-    [cancelFlight, requestDraw],
+    [requestDraw],
   );
 
   const api = useMemo<DagrCanvasApi>(
     () => ({
-      fit(options?: FitOptions): void {
+      fit(options?: FitOptions): boolean {
         const current = stageRef.current;
         const framed = framedBounds();
-        if (current === null || framed === null || !viewportRef.current) return;
+        if (current === null || framed === null || !viewportRef.current) return false;
         const camera = current.renderer.camera;
         const zoom = fitZoom(framed, camera.viewport, latest.current.fitPadding);
         flyTo({ x: (framed.minX + framed.maxX) / 2, y: (framed.minY + framed.maxY) / 2 }, zoom, options);
+        return true;
       },
       focusNode(nodeId: string, options?: FocusNodeOptions): boolean {
         const current = stageRef.current;
@@ -800,20 +862,31 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     },
     selection: null,
     onSelectionChange: (target) => {
+      if (pinchedRef.current) return;
       if (target === null) latest.current.onBackgroundClick?.();
       else latest.current.onNodeClick?.(target.nodeId);
     },
     onPanStart: cancelFlight,
     onPanBy: ({ x, y }) => {
       const current = stageRef.current;
-      if (current === null || latest.current.navigation !== true) return;
+      if (current === null || latest.current.navigation !== true || pinchedRef.current) return;
       current.renderer.camera.panByScreen(x, y);
       requestDraw();
     },
   });
 
-  // Wheel zoom, keyboard camera control, hover and keyboard activation.
   const navigation = props.navigation === true;
+  useEffect(() => {
+    if (!navigation || props.label !== undefined || warnedUnlabelled) return;
+    const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+    if (env?.NODE_ENV === 'production') return;
+    warnedUnlabelled = true;
+    console.warn(
+      '<DagrCanvas navigation> is focusable but has no accessible name. Pass `label` so assistive technology can announce it.',
+    );
+  }, [navigation, props.label]);
+
+  // Wheel zoom, keyboard camera control, hover and keyboard activation.
   useEffect(() => {
     const host = hostRef.current;
     if (stage === null || host === null) return;
@@ -839,6 +912,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       // its own Enter and Space behavior.
       if (
         owner instanceof HTMLElement &&
+        latest.current.onNodeClick !== undefined &&
         (event.key === 'Enter' || event.key === ' ') &&
         (control === null || !owner.contains(control)) &&
         !owner.matches(NATIVE)
@@ -858,8 +932,55 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       else camera.zoomAtScreen({ x: camera.viewport.width / 2, y: camera.viewport.height / 2 }, command.factor);
       requestDraw();
     };
+    // Two-finger pinch: zoom about the midpoint and pan with it. Touch only;
+    // a mouse or pen has one pointer. While two touches are down the single
+    // pointer pan and any click are suppressed (`pinchedRef`), and the flag is
+    // cleared when the next fresh sequence begins, after the release handlers.
+    const touches = new Map<number, { x: number; y: number }>();
+    const spread = (): { mid: { x: number; y: number }; distance: number } | null => {
+      if (touches.size !== 2) return null;
+      const [a, b] = [...touches.values()];
+      if (a === undefined || b === undefined) return null;
+      return {
+        mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        distance: Math.hypot(a.x - b.x, a.y - b.y),
+      };
+    };
+    const touchDown = (event: PointerEvent): void => {
+      if (event.pointerType !== 'touch') return;
+      if (touches.size === 0) pinchedRef.current = false;
+      touches.set(event.pointerId, canvasPoint(event, host.getBoundingClientRect()));
+      if (touches.size >= 2) pinchedRef.current = true;
+    };
+    const touchMove = (event: PointerEvent): void => {
+      if (!touches.has(event.pointerId)) return;
+      const before = spread();
+      touches.set(event.pointerId, canvasPoint(event, host.getBoundingClientRect()));
+      const after = spread();
+      if (before === null || after === null || !(before.distance > 0) || !(after.distance > 0)) return;
+      camera.panByScreen(after.mid.x - before.mid.x, after.mid.y - before.mid.y);
+      camera.zoomAtScreen(after.mid, after.distance / before.distance);
+      requestDraw();
+    };
+    const touchEnd = (event: PointerEvent): void => {
+      touches.delete(event.pointerId);
+    };
     const press = (): void => {
       cancelFlight();
+    };
+    const focusin = (event: FocusEvent): void => {
+      const target = event.target instanceof Element ? event.target : null;
+      const owner = target?.closest<HTMLElement>('[data-dagr-node-id]');
+      if (owner) focusedNodeRef.current = owner.dataset.dagrNodeId ?? null;
+      else if (target !== host) focusedNodeRef.current = null;
+    };
+    const focusout = (event: FocusEvent): void => {
+      const target = event.target;
+      // A removed element is the overlay recycling it, and keeps its claim;
+      // an element that is still attached lost focus because the user moved it.
+      queueMicrotask(() => {
+        if (target instanceof Element && target.isConnected) focusedNodeRef.current = null;
+      });
     };
     const move = (event: PointerEvent): void => {
       if (latest.current.onNodeHover === undefined && latest.current.onNodeClick === undefined) return;
@@ -881,12 +1002,26 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     if (navigation) host.addEventListener('wheel', wheel, { passive: false });
     host.addEventListener('keydown', keydown);
     host.addEventListener('pointerdown', press);
+    host.addEventListener('focusin', focusin);
+    host.addEventListener('focusout', focusout);
+    if (navigation) {
+      host.addEventListener('pointerdown', touchDown);
+      window.addEventListener('pointermove', touchMove);
+      window.addEventListener('pointerup', touchEnd);
+      window.addEventListener('pointercancel', touchEnd);
+    }
     host.addEventListener('pointermove', move);
     host.addEventListener('pointerleave', leave);
     return () => {
       host.removeEventListener('wheel', wheel);
       host.removeEventListener('keydown', keydown);
       host.removeEventListener('pointerdown', press);
+      host.removeEventListener('focusin', focusin);
+      host.removeEventListener('focusout', focusout);
+      host.removeEventListener('pointerdown', touchDown);
+      window.removeEventListener('pointermove', touchMove);
+      window.removeEventListener('pointerup', touchEnd);
+      window.removeEventListener('pointercancel', touchEnd);
       host.removeEventListener('pointermove', move);
       host.removeEventListener('pointerleave', leave);
       host.style.cursor = '';
@@ -900,16 +1035,22 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
   // the nodes as drawn. Each element is tagged with its node id so keyboard
   // activation and host-side lookups can find the node from a DOM target.
   useEffect(() => {
-    const tiers = props.nodeTiers;
+    const tiers: readonly RichNodeTier<unknown>[] | undefined = props.nodeTiers;
     if (stage === null || tiers === undefined || tiers.length === 0) return;
     const tagged = tiers.map((tier) => ({
       ...tier,
-      update(element: HTMLElement, node: Parameters<RichNodeTier<T>['update']>[1]): void {
+      update(element: HTMLElement, node: Parameters<RichNodeTier<unknown>['update']>[1]): void {
         element.dataset.dagrNodeId = node.id;
+        // A clickable node should be reachable and announced as a control, but
+        // only where the tier did not choose its own semantics.
+        if (latest.current.onNodeClick !== undefined) {
+          if (!element.hasAttribute('role')) element.setAttribute('role', 'button');
+          if (!element.hasAttribute('tabindex')) element.tabIndex = 0;
+        }
         tier.update(element, node);
       },
     }));
-    const rich = createRichNodes<T>({ overlay: stage.overlay, tiers: tagged });
+    const rich = createRichNodes<unknown>({ overlay: stage.overlay, tiers: tagged });
     richRef.current = rich;
     syncTiers(drawnNodesRef.current);
     requestDraw();
@@ -1210,7 +1351,9 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       // resolve against whatever positioned ancestor happens to be further up
       // the page and cover the document with labels.
       style={{ ...style, position: 'relative', ...(navigation ? { touchAction: 'none' } : {}) }}
-      {...(navigation ? { tabIndex: 0, role: 'group', 'aria-label': props.label } : {})}
+      {...(navigation ? { tabIndex: 0 } : {})}
+      {...(navigation || props.label !== undefined ? { role: 'group' } : {})}
+      {...(props.label !== undefined ? { 'aria-label': props.label } : {})}
     >
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: '100%' }} />
       {handle === null ? null : (

@@ -1,23 +1,25 @@
 import { Camera2D } from '@prnt/dagr-render';
 import { describe, expect, it } from 'vitest';
 import {
-  nodeIdFromHash,
   FIT,
-  FIT_PADDING,
-  INITIAL_ZOOM,
-  ZOOM_IN,
-  ZOOM_OUT,
   KEY_PAN_STEP,
   KEY_ZOOM_FACTOR,
   WHEEL_LINE_HEIGHT,
   WHEEL_MAX_PIXELS,
   WHEEL_PAGE_HEIGHT,
   WHEEL_ZOOM_SPEED,
+  ZOOM_IN,
+  ZOOM_OUT,
   canvasPoint,
-  initialZoomFromHash,
   keyCommand,
   wheelPixels,
   wheelZoomFactor,
+} from '../../render/src/camera-input.js';
+import {
+  nodeIdFromHash,
+  FIT_PADDING,
+  INITIAL_ZOOM,
+  initialZoomFromHash,
   zoomLimits,
 } from '../src/camera-input.js';
 import { SMALLEST_NODE_SIZE } from '../src/campaign-style.js';

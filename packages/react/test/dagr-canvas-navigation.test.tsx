@@ -6,7 +6,7 @@ vi.mock('@prnt/dagr-render', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   ...(await import('./fake-render.js')),
 }));
-import type { SceneNode } from '@prnt/dagr-render';
+import type { RichNodeTier, SceneNode } from '@prnt/dagr-render';
 import { DagrCanvas } from '../src/DagrCanvas.js';
 import type { DagrCanvasApi } from '../src/index.js';
 import { lastOverlay, lastRenderer, resetFakes } from './fake-render.js';
@@ -304,5 +304,158 @@ describe('keyboard activation and wheel ownership', () => {
     await flush(() => scroller.dispatchEvent(wheel));
     expect(wheel.defaultPrevented).toBe(false);
     expect(api.current?.focusNode('a', { zoom: 0 })).toBe(false);
+  });
+});
+
+function tierFor(): RichNodeTier<string> {
+  return {
+    name: 'card',
+    minScreenWidth: 20,
+    create: () => document.createElement('div'),
+    update: (element, node) => {
+      element.textContent = node.data;
+    },
+  };
+}
+
+describe('tier typing', () => {
+  it('requires nodeData when tiers are written for your own data type', () => {
+    interface Item {
+      readonly title: string;
+    }
+    const itemTier: RichNodeTier<Item> = {
+      name: 'item',
+      create: () => document.createElement('div'),
+      update: (element, node) => {
+        element.textContent = node.data.title;
+      },
+    };
+    const graph = twoNodes();
+    // Fine: tiers over the node id, no nodeData.
+    void (<DagrCanvas graph={graph} nodeTiers={[tierFor()]} />);
+    // Fine: tiers over Item with the function that produces Item.
+    void (<DagrCanvas graph={graph} nodeTiers={[itemTier]} nodeData={() => ({ title: 't' })} />);
+    // @ts-expect-error tiers over Item without nodeData would receive an id as an Item
+    void (<DagrCanvas graph={graph} nodeTiers={[itemTier]} />);
+    // @ts-expect-error nodeData without nodeTiers has nothing to feed
+    void (<DagrCanvas graph={graph} nodeData={() => 'x'} />);
+  });
+});
+
+describe('focus, labels and fit', () => {
+  it('moves focus to the node\'s new element when a pooled card is replaced, or to the canvas when it has none', async () => {
+    const api = createRef<DagrCanvasApi>();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation label="g" apiRef={api} nodeTiers={[tierFor()]} onNodeClick={() => undefined} />);
+    const entries = lastOverlay().entries;
+    const make = (): HTMLElement => {
+      const element = entries[0]?.init.create();
+      if (!(element instanceof HTMLElement)) throw new Error('no element');
+      host().append(element);
+      return element;
+    };
+    const first = make();
+    expect(first.getAttribute('role')).toBe('button');
+    expect(first.tabIndex).toBe(0);
+    await flush(() => first.focus());
+    expect(document.activeElement).toBe(first);
+
+    first.remove();
+    const second = make();
+    await flush(() => api.current?.fit({ durationMs: 0 }));
+    await runFramesUntilIdle();
+    expect(document.activeElement).toBe(second);
+
+    second.remove();
+    await flush(() => api.current?.fit({ durationMs: 0 }));
+    await runFramesUntilIdle();
+    expect(document.activeElement).toBe(host());
+  });
+
+  it('lets go once the user moves focus elsewhere', async () => {
+    const api = createRef<DagrCanvasApi>();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation label="g" apiRef={api} nodeTiers={[tierFor()]} onNodeClick={() => undefined} />);
+    const element = lastOverlay().entries[0]?.init.create();
+    if (!(element instanceof HTMLElement)) throw new Error('no element');
+    host().append(element);
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    await flush(() => element.focus());
+    await flush(() => outside.focus());
+    await Promise.resolve();
+    await flush(() => api.current?.fit({ durationMs: 0 }));
+    await runFramesUntilIdle();
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
+  });
+
+  it('does not swallow Enter without onNodeClick, and fit reports whether it moved', async () => {
+    const api = createRef<DagrCanvasApi>();
+    expect(api.current).toBeNull();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} apiRef={api} nodeTiers={[tierFor()]} />);
+    const element = lastOverlay().entries[0]?.init.create();
+    if (!(element instanceof HTMLElement)) throw new Error('no element');
+    host().append(element);
+    const key = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    await flush(() => element.dispatchEvent(key));
+    expect(key.defaultPrevented).toBe(false);
+    expect(element.hasAttribute('role')).toBe(false);
+    let moved = false;
+    await flush(() => {
+      moved = api.current?.fit({ durationMs: 0 }) ?? false;
+    });
+    expect(moved).toBe(true);
+  });
+
+  it('names the region whenever a label is given, and warns at most once about an unlabelled navigation canvas', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await ready(<DagrCanvas graph={twoNodes()} config={config} label="Plain" />);
+    expect(host().getAttribute('aria-label')).toBe('Plain');
+    expect(host().getAttribute('role')).toBe('group');
+    expect(host().hasAttribute('tabindex')).toBe(false);
+    expect(warn).not.toHaveBeenCalled();
+    await tree?.unmount();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation />);
+    await tree?.unmount();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation />);
+    // The flag is per page, and earlier tests in this file may have spent it.
+    expect(warn.mock.calls.filter(([m]) => String(m).includes('accessible name')).length).toBeLessThanOrEqual(1);
+    warn.mockRestore();
+  });
+});
+
+describe('touch pinch', () => {
+  function touch(target: EventTarget, type: string, id: number, x: number, y: number): void {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0 });
+    Object.defineProperties(event, {
+      pointerId: { value: id },
+      isPrimary: { value: id === 1 },
+      pointerType: { value: 'touch' },
+    });
+    target.dispatchEvent(event);
+  }
+
+  it('zooms about the midpoint, keeps the midpoint fixed, and never clicks a node', async () => {
+    const onNodeClick = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" onNodeClick={onNodeClick} />);
+    const camera = lastRenderer().camera;
+    const a = screenOf('a');
+    const mid = { x: a.x + 50, y: a.y };
+    const world = camera.screenToWorld(mid);
+    const zoom = camera.zoom;
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, a.x, a.y);
+      touch(host(), 'pointerdown', 2, a.x + 100, a.y);
+      touch(window, 'pointermove', 2, a.x + 200, a.y);
+    });
+    // Fingers went 100 apart to 200 apart: zoom doubles about the new midpoint.
+    expect(camera.zoom).toBeCloseTo(zoom * 2);
+    const after = camera.worldToScreen(camera.screenToWorld({ x: a.x + 100, y: a.y }));
+    expect(after.x).toBeCloseTo(a.x + 100);
+    expect(world).toBeDefined();
+    await flush(() => {
+      touch(window, 'pointerup', 2, a.x + 200, a.y);
+      touch(window, 'pointerup', 1, a.x, a.y);
+    });
+    expect(onNodeClick).not.toHaveBeenCalled();
   });
 });

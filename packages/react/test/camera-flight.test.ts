@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { Camera2D } from '@prnt/dagr-render';
-import { flyCamera, interpolateCamera } from '../src/camera-flight.js';
+import { interpolateCamera, startCameraFlight } from '../src/camera-flight.js';
 
 const from = { center: { x: 0, y: 0 }, zoom: 1 };
 const to = { center: { x: 100, y: -40 }, zoom: 4 };
@@ -22,62 +22,29 @@ describe('interpolateCamera', () => {
   });
 });
 
-describe('flyCamera', () => {
-  let queue: FrameRequestCallback[] = [];
-  beforeEach(() => {
-    queue = [];
-    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => queue.push(cb));
-    vi.stubGlobal('cancelAnimationFrame', () => {
-      queue = [];
-    });
-  });
-  afterEach(() => vi.unstubAllGlobals());
-  const run = (now: number): void => {
-    const cb = queue.shift();
-    cb?.(now);
-  };
-
-  it('jumps without scheduling a frame for a zero duration', () => {
+describe('startCameraFlight', () => {
+  it('steps to the target over its duration and reports completion', () => {
     const camera = new Camera2D();
-    const onStep = vi.fn();
-    flyCamera(camera, to, 0, onStep);
-    expect(camera.zoom).toBe(4);
-    expect(camera.center).toEqual(to.center);
-    expect(onStep).toHaveBeenCalledOnce();
-    expect(queue).toHaveLength(0);
-  });
-
-  it('steps to the target over its duration and stops scheduling', () => {
-    const camera = new Camera2D();
-    const onStep = vi.fn();
-    flyCamera(camera, to, 400, onStep);
-    run(1000);
+    const flight = startCameraFlight(camera, to, 400);
+    expect(flight.step(1000)).toBe(false);
     expect(camera.zoom).toBeCloseTo(1);
-    run(1200);
+    expect(flight.step(1200)).toBe(false);
     expect(camera.zoom).toBeGreaterThan(1);
     expect(camera.zoom).toBeLessThan(4);
-    run(1400);
+    expect(flight.step(1400)).toBe(true);
     expect(camera.zoom).toBeCloseTo(4);
     expect(camera.center.x).toBeCloseTo(100);
-    expect(queue).toHaveLength(0);
-    expect(onStep).toHaveBeenCalledTimes(3);
   });
 
-  it('cancel stops mid-flight and is idempotent', () => {
+  it('finishes on the first step for a zero duration', () => {
     const camera = new Camera2D();
-    const flight = flyCamera(camera, to, 400, () => undefined);
-    run(0);
-    run(100);
-    const zoom = camera.zoom;
-    flight.cancel();
-    flight.cancel();
-    expect(queue).toHaveLength(0);
-    expect(camera.zoom).toBe(zoom);
+    expect(startCameraFlight(camera, to, 0).step(0)).toBe(true);
+    expect(camera.zoom).toBe(4);
   });
 
   it('lands on the nearest legal view when the target is outside the limits', () => {
     const camera = new Camera2D({ minZoom: 0.5, maxZoom: 2 });
-    flyCamera(camera, { center: { x: 0, y: 0 }, zoom: 50 }, 0, () => undefined);
+    startCameraFlight(camera, { center: { x: 0, y: 0 }, zoom: 50 }, 0).step(0);
     expect(camera.zoom).toBe(2);
   });
 });

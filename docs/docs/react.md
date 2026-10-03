@@ -573,18 +573,20 @@ const api = useRef<DagrCanvasApi>(null);
 ```
 
 **`navigation`** turns on wheel zoom (including trackpad pinch) anchored under
-the cursor, drag to pan, and keyboard control while the canvas itself has
+the cursor, two-finger touch pinch (zoom about the midpoint, panning with it),
+drag to pan, and keyboard control while the canvas itself has
 focus: Left/Right pan, Shift+Up/Down pan vertically, `+`/`-` and Up/Down zoom,
-Page Up/Down zoom further, `0` or Home fits. **Two-finger touch pinch is not
-implemented**: touch gets drag pan only, so offer zoom buttons (`focusNode`,
-`renderer.camera`) on touch devices. Content that scrolls itself (a textarea, or
+Page Up/Down zoom further, `0` or Home fits. A pinch never selects a node, and
+single-finger pan is paused while two fingers are down. Content that scrolls itself (a textarea, or
 any element marked `data-dagr-no-zoom`) keeps the wheel. The
-canvas becomes focusable (`tabindex="0"`, `role="group"`, named by `label`; pass one, or the focus stop is unnamed) and
+canvas becomes focusable (`tabindex="0"`, `role="group"`, named by `label`; pass one, or the focus stop is unnamed and a development
+warning says so once). `label` names the region whenever it is set, with or
+without `navigation` and
 sets `touch-action: none`. It is off by default because a canvas that begins
 capturing the wheel would trap page scroll under a caller who did not ask. All
 of it stays inside the default [camera limits](#default-navigation-limits), and
 any input cancels a camera flight in progress. The arithmetic (`wheelZoomFactor`,
-`keyCommand`) is exported from `@prnt/dagr-render` if you drive your own camera
+`keyCommand`, `canvasPoint`) is exported from `@prnt/dagr-render` if you drive your own camera
 and want the same feel.
 
 **`onNodeClick(nodeId)`**, **`onNodeHover(nodeId | null)`** and
@@ -611,12 +613,17 @@ native behavior, and a click on a non-interactive part of a card selects its
 node because the card sits on the node. GPU picking (M4.8b) is a separate,
 future provider behind the same contract.
 
-**Camera control.** `apiRef` (and `useDagrCanvas()` inside the canvas) gives:
+**Camera control.** `apiRef` (and `useDagrCanvas()` inside the canvas) gives the
+methods below. It is `apiRef` rather than `ref` on purpose: `ref` on a React
+component reads as the DOM element, and this is an imperative API object; it
+accepts a ref object or a callback, and is `null` until the canvas has mounted.
+The flight is stepped from the component's own coalesced frame, so it shares
+drawing's frame budget.
 
 | Method | Does |
 | --- | --- |
 | `focusNode(id, { zoom?, durationMs? })` | Flies to centre the node. Default zoom makes the node fill about half the viewport. Returns `false` and moves nothing for an unknown id or an unsized canvas. |
-| `fit({ durationMs? })` | Flies back to the whole graph, including group boundaries, with `fitPadding`. |
+| `fit({ durationMs? })` | Flies back to the whole graph, including group boundaries, with `fitPadding`. Returns `false`, moving nothing, before there is a layout and a size. |
 
 Flights take 450 ms (zoom is interpolated geometrically, so it feels even) and
 jump instantly under `prefers-reduced-motion: reduce`; pass `durationMs: 0` to
@@ -629,7 +636,14 @@ else, such as reading `camera.zoom` to drive a zoom readout from `onFrame`.
 camera. For the nodes, give your tier elements `tabindex="0"` (and an accessible
 name): every element a tier creates is tagged with `data-dagr-node-id`, and
 Enter or Space on a focused tagged element that is not already a native control
-calls `onNodeClick` with that id. A native `<button>` inside a card activates
+calls `onNodeClick` with that id (only when `onNodeClick` is set; otherwise the
+keys are left alone). When `onNodeClick` is set, a tier element without its own
+`role` or `tabindex` gets `role="button"` and `tabindex="0"`, so it is reachable
+and announced. **Focus survives the overlay.** Cards are removed or pooled when
+they leave the view or their tier gives way to another; the canvas remembers the
+node whose card held focus and, on the next frame, moves focus to that node's
+new element, or to the canvas itself (`preventScroll`) if the node has none. It
+stops as soon as you focus something outside the canvas. A native `<button>` inside a card activates
 through its own `click`, as it should. Only nodes in view mount elements, so Tab
 moves through what is on screen; the GPU shapes below the first tier are not in
 the tab order, and a host that needs a complete keyboard path to every node
@@ -656,6 +670,7 @@ which is how a graph of thousands of nodes stays cheap when zoomed out and rich
 when zoomed in:
 
 ```tsx
+const nodeData = useCallback((id: string) => items.get(id) ?? EMPTY_ITEM, [items]);
 const tiers = useMemo<RichNodeTier<Item>[]>(() => [
   { name: 'label', minScreenWidth: 28, maxScreenWidth: 300,
     create: () => document.createElement('div'),
@@ -664,7 +679,7 @@ const tiers = useMemo<RichNodeTier<Item>[]>(() => [
     create: makeCardElement, update: fillCard },
 ], []);
 
-<DagrCanvas graph={graph} navigation nodeTiers={tiers} nodeData={(id) => items.get(id)!} />
+<DagrCanvas graph={graph} navigation nodeTiers={tiers} nodeData={nodeData} />
 ```
 
 The tiers are the same `RichNodeTier` the [renderer's rich nodes](./render.md)
@@ -673,9 +688,11 @@ by construction (overlapping gates throw). Below the lowest `minScreenWidth`
 there is no tier, so the node is just its instanced GPU shape: no DOM at all.
 Between gates exactly one tier's element is mounted, and only for nodes
 currently in view up to the overlay's cap; elements are pooled across a pan,
-so `update` must fully overwrite what the previous node left. `nodeData` maps a
-node id to the value each tier's `update` receives as `node.data` (without it,
-`data` is the id), and an entry whose value is not the same reference as last
+so `update` must fully overwrite what the previous node left. The two props are a typed pair: tiers over your own data type
+(`RichNodeTier<Item>`) require `nodeData`, and the compiler rejects them without
+it; tiers over `RichNodeTier<string>` may omit it and receive the node id.
+`nodeData` maps a node id to the value each tier's `update` receives as
+`node.data`, and an entry whose value is not the same reference as last
 time is re-rendered. `nodeTiers` is compared by identity, so memoise it. Return the same object
 from `nodeData` for an unchanged node: a fresh object each call re-renders every
 visible tier on every animated frame. Hover is evaluated on pointer movement

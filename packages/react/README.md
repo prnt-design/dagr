@@ -101,21 +101,21 @@ const api = useRef<DagrCanvasApi>(null);
 
 <DagrCanvas
   graph={graph}
-  navigation                      // wheel zoom, drag pan, keyboard; inside camera limits
+  navigation                      // wheel/pinch zoom, drag pan, keyboard; inside camera limits
   label="Relationship graph"
   apiRef={api}                    // api.current.focusNode(id), .fit()
   onNodeClick={(id) => open(id)}  // exact CPU hit test on the drawn silhouettes
   onNodeHover={(id) => hover(id)}
   onBackgroundClick={close}
   nodeTiers={tiers}               // dot -> label -> card, gated by on-screen width
-  nodeData={(id) => items.get(id)!}
+  nodeData={nodeData}             // memoised; required when tiers use your own data type
 />
 ```
 
 `nodeTiers` are the renderer's `RichNodeTier`s: below the first gate a node is
 only its instanced GPU shape, and only nodes in view mount DOM, pooled across a
 pan. Elements are tagged `data-dagr-node-id`; Enter or Space on a focused one
-calls `onNodeClick`. Hits cover node silhouettes only (no edges or ports), and
+calls `onNodeClick`; focus is restored to a node's element when the overlay recycles it. Hits cover node silhouettes only (no edges or ports), and
 `navigation` is off by default. When neither WebGPU nor WebGL 2 exists, probe
 with `detectBackendSupport()` from `@prnt/dagr-render` and render a fallback;
 `onError` covers a device that dies late. Full details: the

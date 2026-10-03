@@ -395,14 +395,14 @@ at its limit, which is exactly when a user keeps scrolling.
 
 The numbers between a DOM event and these calls are exported so a host that
 owns its camera feels the same as `<DagrCanvas navigation>`:
-`wheelZoomFactor(event)` turns a `WheelEvent` (or `{ deltaY, deltaMode }`) into
+`wheelZoomFactor(event)` (wheel travel is clamped inside it) turns a `WheelEvent` (or `{ deltaY, deltaMode }`) into
 the factor for `zoomAtScreen`, converting line and page modes and clamping a
 trackpad fling to 200 pixels per event so a single flick cannot jump from
 readable to a dot; `canvasPoint(event, rect)` gives the CSS-pixel anchor; and
 `keyCommand(key, shift)` maps `+`, `-`, arrows, Page Up/Down and `0`/Home to a
 `{ kind: 'zoom' | 'pan' | 'fit' }` command (`pan` deltas are `panByScreen`
-arguments). `WHEEL_ZOOM_SPEED`, `KEY_ZOOM_FACTOR` and the other constants are
-exported for tuning. Pure functions, tested without a canvas.
+arguments). `ZOOM_IN`, `ZOOM_OUT` and `FIT` are frozen commands for toolbar buttons. The
+tuning constants stay private. Pure functions, tested without a canvas.
 
 Nearest rather than floor, because flooring accumulates a bias that shows up as
 a hairline of unpainted canvas along two edges. The floor at 1 exists because a
