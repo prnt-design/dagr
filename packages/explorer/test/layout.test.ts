@@ -1,3 +1,6 @@
+import { Graph } from '@prnt/dagr-graph';
+import { layout as engineLayout } from '@prnt/dagr-layout';
+import { shapeEdgePath } from '@prnt/dagr-render/core';
 import { describe, expect, it } from 'vitest';
 import { ExplorerDataError, layoutView } from '../src/index.js';
 // `layoutKey` is internal: the package entry does not export it.
@@ -197,6 +200,61 @@ describe('layoutView, parallel edges', () => {
     });
     expect(route(layout, 'e1')).toHaveLength(2);
     expect(route(layout, 'e2')).toHaveLength(2);
+  });
+});
+
+describe('layoutView, long parallel edges', () => {
+  /** A route with its first point moved to the origin, so translation drops out. */
+  const shape = (points: readonly Vec2[]): number[][] => {
+    const origin = points[0];
+    if (origin === undefined) return [];
+    return points.map((p) => [p.x - origin.x, p.y - origin.y]);
+  };
+
+  it('leaves siblings that span more than one rank exactly as the engine routed them', () => {
+    // a -> c twice, and a -> b -> c, so both a -> c edges cross two ranks. The
+    // router gives each its own dummy node, a nodeSep apart, so they are
+    // already separate. The explorer must not move them.
+    const view: ExplorerView = {
+      id: 'v',
+      label: 'View',
+      nodes: [n('a'), n('b'), n('c')],
+      edges: [e('ac1', 'a', 'c'), e('ac2', 'a', 'c'), e('ab', 'a', 'b'), e('bc', 'b', 'c')],
+    };
+    const laid = layoutView(view);
+
+    // The same graph through the engine directly, with the explorer's defaults
+    // and its transpose for flowing right: sizes swapped in, x and y swapped out.
+    const graph = new Graph();
+    for (const node of view.nodes) graph.addNode({ id: node.id });
+    for (const edge of view.edges) {
+      graph.addEdge({ id: edge.id, source: edge.source, target: edge.target });
+    }
+    const engine = engineLayout({
+      graph,
+      config: { nodeSep: 40, rankSep: 120, nodeSize: () => ({ width: 120, height: 240 }) },
+    });
+
+    for (const id of ['ac1', 'ac2']) {
+      const routed = engine.edges.get(id);
+      if (routed === undefined) throw new Error(`engine returned no route for ${id}`);
+      // More than two points is what "spans more than one rank" looks like.
+      expect(routed.points.length).toBeGreaterThan(2);
+      const expected = shapeEdgePath(
+        routed.points.map((p) => ({ x: p.y, y: p.x })),
+        { style: 'smooth', direction: 'horizontal' },
+      );
+      const actual = shape(route(laid, id));
+      const wanted = shape(expected);
+      expect(actual).toHaveLength(wanted.length);
+      actual.forEach((point, i) => {
+        expect(point[0]).toBeCloseTo(wanted[i]?.[0] ?? Number.NaN, 6);
+        expect(point[1]).toBeCloseTo(wanted[i]?.[1] ?? Number.NaN, 6);
+      });
+    }
+
+    // And the engine did separate them: the two routes are not the same line.
+    expect(shape(route(laid, 'ac1'))).not.toEqual(shape(route(laid, 'ac2')));
   });
 });
 

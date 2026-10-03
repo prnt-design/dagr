@@ -69,22 +69,16 @@ export interface LayoutViewOptions {
 const pairKey = (a: string, b: string): string => JSON.stringify(a < b ? [a, b] : [b, a]);
 
 /**
- * Moves a route's interior sideways, across the flow, leaving both ends where
- * they are. A two-point route has no interior, so it is given its midpoint.
+ * Gives a two-point route a middle point, moved sideways across the flow, so
+ * two edges the router drew on one line can be told apart. Both ends stay
+ * where they are.
  */
 function bow(points: readonly Vec2[], offset: number, right: boolean): Vec2[] {
   const first = points[0];
-  const last = points[points.length - 1];
-  if (first === undefined || last === undefined || points.length < 2) return [...points];
-  const interior =
-    points.length > 2
-      ? points.slice(1, -1)
-      : [{ x: (first.x + last.x) / 2, y: (first.y + last.y) / 2 }];
-  return [
-    first,
-    ...interior.map((p) => (right ? { x: p.x, y: p.y + offset } : { x: p.x + offset, y: p.y })),
-    last,
-  ];
+  const last = points[1];
+  if (first === undefined || last === undefined) return [...points];
+  const mid = { x: (first.x + last.x) / 2, y: (first.y + last.y) / 2 };
+  return [first, right ? { x: mid.x, y: mid.y + offset } : { x: mid.x + offset, y: mid.y }, last];
 }
 
 /**
@@ -96,9 +90,11 @@ function bow(points: readonly Vec2[], offset: number, right: boolean): Vec2[] {
  *
  * Three things the layout engine does not do are done here:
  *
- * - **Parallel edges.** The router draws every edge between one pair of nodes
- *   on the same line. Their interiors are moved apart, symmetrically about
- *   that line, so each can be seen. Both ends stay on their nodes.
+ * - **Parallel edges.** The router draws edges between one pair of nodes on
+ *   the same line only when they span one rank. Those are given a middle point
+ *   and moved apart, symmetrically about that line, so each can be seen. Both
+ *   ends stay on their nodes. A pair that spans more ranks is left alone: the
+ *   engine already routes each through its own dummy nodes.
  * - **Self loops.** The router gives an edge from a node to itself a
  *   zero-length line. Such an edge is left out of layout and has an empty
  *   route. It stays in the data, and drawing a loop is a later slice.
@@ -130,6 +126,13 @@ export function layoutView<N extends ExplorerNode, E extends ExplorerEdge>(
     const list = siblings.get(key);
     if (list === undefined) siblings.set(key, [edge.id]);
     else list.push(edge.id);
+  }
+
+  // Each edge's place among the edges that join its pair, looked up once here
+  // so the route loop below does not search a list per edge.
+  const siblingOf = new Map<string, { readonly index: number; readonly count: number }>();
+  for (const list of siblings.values()) {
+    list.forEach((id, index) => siblingOf.set(id, { index, count: list.length }));
   }
 
   const sizeOf = (id: string): Size => {
@@ -176,9 +179,15 @@ export function layoutView<N extends ExplorerNode, E extends ExplorerEdge>(
     const routed = result.edges.get(edge.id);
     if (routed === undefined) throw new Error(`layout returned no route for edge "${edge.id}"`);
     let points = routed.points.map(toWorld);
-    const group = siblings.get(pairKey(edge.source, edge.target)) ?? [edge.id];
-    const offset = (group.indexOf(edge.id) - (group.length - 1) / 2) * PARALLEL_EDGE_GAP;
-    if (offset !== 0) points = bow(points, offset, right);
+    // Only a route of two points needs separating. That is a pair spanning one
+    // rank, which the router draws on one line. A longer route already has its
+    // own dummy nodes, a nodeSep from its siblings', and moving those would
+    // undo an ordering the engine chose. See `route.ts` in `@prnt/dagr-layout`.
+    const place = siblingOf.get(edge.id);
+    if (place !== undefined && points.length === 2) {
+      const offset = (place.index - (place.count - 1) / 2) * PARALLEL_EDGE_GAP;
+      if (offset !== 0) points = bow(points, offset, right);
+    }
     routes.set(
       edge.id,
       shapeEdgePath(points, { style, direction: right ? 'horizontal' : 'vertical' }),
