@@ -157,7 +157,8 @@ means a tier must clear its own per-node state on every bind.
 ## The three-free entry
 
 `@prnt/dagr-render/core` exports `Camera2D`, `fitZoom` and `shapeEdgePath`, with
-their types, from modules that never import `three`.
+their types, from modules that never import `three`: not at runtime, and not in
+their type declarations.
 
 ```ts
 import { Camera2D, shapeEdgePath } from '@prnt/dagr-render/core';
@@ -171,7 +172,7 @@ to import it, and the core entry is how you avoid that.
 They are the same objects the full entry exports. A camera built from one entry
 is an `instanceof` the other's `Camera2D`. `three` is still a peer dependency
 of the package, so it is installed either way. The core entry is about what
-gets evaluated, not what gets installed.
+gets evaluated and type-checked, not what gets installed.
 
 ## Documentation
 

@@ -639,3 +639,28 @@ Remove the claim from `dagr/workboard`. Update the brain object `dagr/explorer`:
 set `status` to `m5-6a-merged` and add the pull request URL and merge commit.
 Append an event to the `dagr` collection, kind `shipped`, subject `M5.6a`, with
 the date, the actor, the pull request URL, and the gate result.
+
+---
+
+## Amendments during execution
+
+The whole-branch reviews on 2026-10-03 found what Tasks 1 to 3 did not cover.
+These landed as follow-up commits on the same branch.
+
+- **The entry's declarations reached three's types.** `core.d.ts` imported
+  `types.d.ts`, which names the scene types, whose declarations import
+  `three/webgpu`. The Global constraint "Nothing existing moves" is narrowed
+  to "no public name moves": `Vec2`, `Size`, `WorldBounds`, `ViewportSize` and
+  `OrthoFrustum` moved into `packages/render/src/geometry.ts`, a leaf with no
+  imports, and `types.ts` re-exports them. The packaging gate gained a
+  typecheck of the core entry with `skipLibCheck` off and no three types, with
+  the full entry failing as its control.
+- **The tarball load control** now matches `Cannot find package 'three'`
+  rather than the bare word.
+- **Docs:** the renderer page no longer describes `@prnt/dagr-explorer` in the
+  present tense, and says "the full entry" where it said "this package". The
+  packaging README lists the new checks. The roadmap says M5.6 runs outside the
+  daily queue, and `specs/roadmap-notes.md` has an M5.6a entry.
+- **Spec:** its status line records the maintainer's approval, and its
+  `@prnt/dagr-render/core` section names all six types and the declarations
+  rule.

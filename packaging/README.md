@@ -46,6 +46,18 @@ already known to be correct has never demonstrated that it can go red.
   byte-identical to the one the repo licences under.
 - **`publishConfig.access` is `public`**, without which a scoped package does
   not publish public.
+- **`@prnt/dagr-render/core` loads where `three` cannot be resolved.** The built
+  `dist/core.js` is executed from the extracted tarball, which has no
+  `node_modules` above it. The control is `dist/index.js` failing there on
+  `three`: without it, a `three` that happened to be resolvable would make the
+  check pass for nothing.
+- **`@prnt/dagr-render/core` type-checks with no three types installed.** A
+  consumer installs the renderer tarball with its peers left out and compiles
+  against the core entry with `skipLibCheck` off. The control is the same
+  consumer importing the full entry and failing on `three/webgpu`.
+- **A packed consumer compiles against the public surfaces**, under `NodeNext`
+  resolution and without workspace aliases, which is what catches an `exports`
+  key that a bundler-style resolver would have forgiven.
 
 ## Packing is not conditional, and the build is not either
 

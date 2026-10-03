@@ -1,7 +1,7 @@
 # DagrExplorer design
 
 **Date:** 2026-10-03
-**Status:** Design approved section by section by the maintainer in session. Written spec awaiting review.
+**Status:** Approved by the maintainer on 2026-10-03. Two amendments (the `invalid-node-size` error, and self loops kept and not drawn) were approved the same day with the M5.6a and M5.6b plans.
 **Repo:** `prnt-design/dagr`
 **Roadmap:** M5.6, slices a to f
 
@@ -89,11 +89,17 @@ the explorer needs and nothing that reaches `three`:
 
 - `Camera2D`, `fitZoom`
 - `shapeEdgePath`, `EdgePathOptions`
-- the types those signatures name (`Vec2`, `Size`, `ViewportSize`, `WorldBounds`)
+- the types those signatures name (`Camera2DInit`, `OrthoFrustum`, `Size`, `Vec2`, `ViewportSize`, `WorldBounds`)
 
-Nothing existing moves, and the index keeps exporting all of them. A test
+No public name moves, and the index keeps exporting all of them. A test
 loads the built `core` entry with `three` unresolvable and fails if anything
 in its import graph asks for it.
+
+The entry's declarations must not reach three's types either. `Vec2`,
+`Size`, `WorldBounds`, `ViewportSize` and `OrthoFrustum` move from `types.ts`,
+which names the scene types, into a leaf module with no imports, and
+`types.ts` re-exports them. A second test type-checks a consumer of the built
+entry with `skipLibCheck` off and no `@types/three` installed.
 
 This adds one key to `exports` in an existing manifest. `AGENTS.md` reserves
 publish configuration in existing manifests for the maintainer, so approving
