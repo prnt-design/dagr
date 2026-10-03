@@ -1,5 +1,6 @@
 import type { ContextLostInfo } from './context-loss.js';
 import type { Camera2D } from './camera.js';
+import type { ViewportSize } from './geometry.js';
 import type { SceneStyle } from './instance-attributes.js';
 import type { SceneNode } from './scene-nodes.js';
 import type { EdgeFrameStyle, SceneEdge, SceneEdgeGroup } from './scene-edges.js';
@@ -21,78 +22,10 @@ import type { EdgeFrameStyle, SceneEdge, SceneEdgeGroup } from './scene-edges.js
  * literals rather than three's `Backend` class.
  */
 
-/** A point or a vector in two dimensions. Whose space it is, the field says. */
-export interface Vec2 {
-  readonly x: number;
-  readonly y: number;
-}
-
-/** A width and a height. Whose unit it is, the field or the return type says. */
-export interface Size {
-  readonly width: number;
-  readonly height: number;
-}
-
-/**
- * An axis-aligned region of WORLD space, as explicit extents: everything from
- * `minX` to `maxX` across, and from `minY` to `maxY` up.
- *
- * Not a `{x, y, width, height}` record, deliberately. `@prnt/dagr-layout`'s `Rect`
- * is that shape with the opposite corner convention (its y grows downward, so
- * its `x, y` is the TOP-left corner, where world y up would make it the
- * bottom-left one). Two structurally identical four-number records distinguished
- * only by a sentence in a docstring are freely interchangeable to the compiler,
- * so a layout rectangle could flow into a world slot with nothing red anywhere,
- * and the symptom was a scene mirrored about the horizontal axis. A phantom
- * brand does not close that: an optional marker property still leaves the two
- * mutually assignable, and only a required one raises an error, which then has
- * to be constructed by hand at every call site.
- *
- * Extents are not structurally assignable from either shape, so the mistake is
- * a type error rather than a naming convention, and "which corner is x, y"
- * stops being a question instead of being answered. It is also the shape a
- * culling test wants: an overlap check is four comparisons on these fields and
- * four additions plus four comparisons on the other shape.
- */
-export interface WorldBounds {
-  readonly minX: number;
-  readonly minY: number;
-  readonly maxX: number;
-  readonly maxY: number;
-}
-
-/**
- * How big the canvas is, in CSS pixels, plus the ratio between a CSS pixel and
- * a device pixel.
- *
- * Both units are in one record on purpose. They always travel together (a
- * resize handler reads `clientWidth` and `devicePixelRatio` in the same breath)
- * and keeping them apart is how a renderer ends up sizing a drawing buffer from
- * last frame's ratio. Everything downstream of this record is in CSS pixels:
- * see {@link Camera2D} for where the ratio is allowed to be used.
- */
-export interface ViewportSize {
-  readonly width: number;
-  readonly height: number;
-  readonly devicePixelRatio: number;
-}
-
-/**
- * The extents an orthographic projection needs, in world units.
- *
- * These are CENTRE-RELATIVE: `left` is negative and `right` positive for any
- * camera, and where the camera actually is comes from its centre, carried
- * separately. That is the three.js idiom (an `OrthographicCamera` holds a
- * frustum and a `position`, and moving the camera does not touch the frustum),
- * and it means a pan re-uses the frustum object unchanged where an absolute
- * frustum would have to be rebuilt on every mouse move.
- */
-export interface OrthoFrustum {
-  readonly left: number;
-  readonly right: number;
-  readonly bottom: number;
-  readonly top: number;
-}
+// The geometry types live in `geometry.ts`, a leaf that imports nothing, so
+// the core entry's declarations reach no three types. Re-exported here so
+// every existing import of them from this file keeps working.
+export type { OrthoFrustum, Size, Vec2, ViewportSize, WorldBounds } from './geometry.js';
 
 /**
  * Which GPU API a renderer ended up drawing through.

@@ -1,6 +1,6 @@
 import { fillCoverage } from './sdf.js';
 import type { Arith } from './sdf.js';
-import type { Vec2 } from './types.js';
+import type { Vec2 } from './geometry.js';
 import { requireAtLeast, requireFinite, requirePositive } from './validate.js';
 
 /**

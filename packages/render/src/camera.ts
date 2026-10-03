@@ -1,4 +1,4 @@
-import type { OrthoFrustum, Size, Vec2, ViewportSize, WorldBounds } from './types.js';
+import type { OrthoFrustum, Size, Vec2, ViewportSize, WorldBounds } from './geometry.js';
 import { requireFinite, requireFinitePoint, requirePositive } from './validate.js';
 
 /**
