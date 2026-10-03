@@ -16,7 +16,9 @@ not" is the category this file has a heading for.
   runtime or in their declarations. The objects are the ones the full entry
   exports. To keep the declarations three-free, `Vec2`, `Size`, `WorldBounds`,
   `ViewportSize` and `OrthoFrustum` are now declared in an internal leaf module
-  and re-exported from where they were. No public name moved.
+  and re-exported from where they were. No public name moved. Additive: no
+  existing export or signature changed, so it needs no more than the patch bump
+  the 0.1.x releases have used for additions.
 
 ## 0.1.3
 
