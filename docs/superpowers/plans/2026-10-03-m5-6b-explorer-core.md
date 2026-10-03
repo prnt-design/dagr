@@ -41,10 +41,22 @@ M5.6b of that spec.
 - World space is y-down CSS pixels at zoom 1, padded `40` off the origin.
 - Sizes are declared, never measured. `node.size`, then the view's `nodeSize`,
   then the default.
-- Error codes, exact: `duplicate-view-id`, `duplicate-node-id`,
-  `duplicate-edge-id`, `duplicate-group-id`, `invalid-node-size`,
-  `missing-edge-endpoint`, `missing-group-member`, `empty-group`,
-  `group-encloses-non-member`.
+- Error codes, exact: `DUPLICATE_VIEW_ID`, `DUPLICATE_NODE_ID`,
+  `DUPLICATE_EDGE_ID`, `DUPLICATE_GROUP_ID`, `INVALID_NODE_SIZE`,
+  `MISSING_EDGE_ENDPOINT`, `MISSING_GROUP_MEMBER`, `EMPTY_GROUP`,
+  `GROUP_ENCLOSES_NON_MEMBER`. UPPER_SNAKE, and their type is
+  `DagrExplorerErrorCode`, as in every sibling package.
+- `ExplorerDataError` carries `code`, the `id` of what it is about (a view,
+  node, edge or group) and the `viewId` it was found in (`undefined` when the
+  error is about a view itself). A host must not have to parse the message.
+- The package's runtime exports after this slice are exactly:
+  `DEFAULT_NODE_SEP`, `DEFAULT_NODE_SIZE`, `DEFAULT_RANK_SEP`,
+  `ExplorerDataError`, `defaultSearchText`, `layoutView`, `resolveNodeSize`,
+  `searchNodes`, `validateView`, `validateViews`. `layoutKey` and the layout's
+  fixed spacing constants (`WORLD_PADDING`, `GROUP_PADDING`,
+  `GROUP_LABEL_BAND`, `PARALLEL_EDGE_GAP`) are exported from
+  `src/layout.ts` for the tests and NOT from the package entry: a public
+  constant cannot change value or become an option without a break.
 - Clean reimplementation. Work from this plan, the spec, and dagr's own files.
   Do not open or copy from the `MytraAI/mytra-os-uis` repository.
 - Do not edit `LICENSE`, `AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md`, or
@@ -104,7 +116,10 @@ M5.6b of that spec.
 - Produces:
   - Types `ExplorerNode`, `ExplorerEdge`, `ExplorerGroup`,
     `ExplorerLayoutOptions<N>`, `ExplorerView<N, E>`, `Size`.
-  - `class ExplorerDataError extends Error` with `readonly code: ExplorerDataErrorCode`.
+  - `class ExplorerDataError extends Error` with
+    `readonly code: DagrExplorerErrorCode`, `readonly id: string`,
+    `readonly viewId: string | undefined`, and
+    `constructor(code: DagrExplorerErrorCode, message: string, id: string, viewId?: string)`.
   - `const DEFAULT_NODE_SIZE: Size` (`240` by `120`).
   - `resolveNodeSize<N extends ExplorerNode>(layout: ExplorerLayoutOptions<N> | undefined, node: N): Size`
   - `validateView<N, E>(view: ExplorerView<N, E>): void`
@@ -381,7 +396,7 @@ describe('validateView', () => {
       { id: 'a', label: 'A' },
       { id: 'a', label: 'Again' },
     ];
-    expect(codeOf(() => validateView(view({ nodes, edges: [] })))).toBe('duplicate-node-id');
+    expect(codeOf(() => validateView(view({ nodes, edges: [] })))).toBe('DUPLICATE_NODE_ID');
     expect(() => validateView(view({ nodes, edges: [] }))).toThrow(/"a".*view "v"/);
   });
 
@@ -390,12 +405,12 @@ describe('validateView', () => {
       { id: 'e', source: 'a', target: 'b' },
       { id: 'e', source: 'b', target: 'a' },
     ];
-    expect(codeOf(() => validateView(view({ edges })))).toBe('duplicate-edge-id');
+    expect(codeOf(() => validateView(view({ edges })))).toBe('DUPLICATE_EDGE_ID');
   });
 
   it('rejects an edge whose endpoint is not in the view, and names both', () => {
     const edges = [{ id: 'ax', source: 'a', target: 'x' }];
-    expect(codeOf(() => validateView(view({ edges })))).toBe('missing-edge-endpoint');
+    expect(codeOf(() => validateView(view({ edges })))).toBe('MISSING_EDGE_ENDPOINT');
     expect(() => validateView(view({ edges }))).toThrow(/"ax".*"x"/);
   });
 
@@ -404,17 +419,17 @@ describe('validateView', () => {
       { id: 'g', label: 'One', nodeIds: ['a'] },
       { id: 'g', label: 'Two', nodeIds: ['b'] },
     ];
-    expect(codeOf(() => validateView(view({ groups })))).toBe('duplicate-group-id');
+    expect(codeOf(() => validateView(view({ groups })))).toBe('DUPLICATE_GROUP_ID');
   });
 
   it('rejects a group with no members', () => {
     const groups = [{ id: 'g', label: 'Empty', nodeIds: [] }];
-    expect(codeOf(() => validateView(view({ groups })))).toBe('empty-group');
+    expect(codeOf(() => validateView(view({ groups })))).toBe('EMPTY_GROUP');
   });
 
   it('rejects a group naming a node the view lacks, and names both', () => {
     const groups = [{ id: 'g', label: 'G', nodeIds: ['a', 'x'] }];
-    expect(codeOf(() => validateView(view({ groups })))).toBe('missing-group-member');
+    expect(codeOf(() => validateView(view({ groups })))).toBe('MISSING_GROUP_MEMBER');
     expect(() => validateView(view({ groups }))).toThrow(/"g".*"x"/);
   });
 
@@ -422,16 +437,51 @@ describe('validateView', () => {
     'rejects a node whose own width is %s, and names the node',
     (width) => {
       const nodes = [{ id: 'a', label: 'A', size: { width, height: 10 } }];
-      expect(codeOf(() => validateView(view({ nodes, edges: [] })))).toBe('invalid-node-size');
+      expect(codeOf(() => validateView(view({ nodes, edges: [] })))).toBe('INVALID_NODE_SIZE');
       expect(() => validateView(view({ nodes, edges: [] }))).toThrow(/"a"/);
     },
   );
 
   it('rejects a bad size from the view value and from the view function', () => {
     const value = view({ layout: { nodeSize: { width: 100, height: 0 } } });
-    expect(codeOf(() => validateView(value))).toBe('invalid-node-size');
+    expect(codeOf(() => validateView(value))).toBe('INVALID_NODE_SIZE');
     const fn = view({ layout: { nodeSize: () => ({ width: Number.NaN, height: 10 }) } });
-    expect(codeOf(() => validateView(fn))).toBe('invalid-node-size');
+    expect(codeOf(() => validateView(fn))).toBe('INVALID_NODE_SIZE');
+  });
+
+  it('carries the offender and its view as fields, not only in the message', () => {
+    const caught = (run: () => void): ExplorerDataError => {
+      try {
+        run();
+      } catch (error) {
+        if (error instanceof ExplorerDataError) return error;
+        throw error;
+      }
+      throw new Error('did not throw');
+    };
+
+    const node = caught(() =>
+      validateView(view({ nodes: [{ id: 'a', label: 'A' }, { id: 'a', label: 'Again' }], edges: [] })),
+    );
+    expect([node.code, node.id, node.viewId]).toEqual(['DUPLICATE_NODE_ID', 'a', 'v']);
+
+    // For an edge error the subject is the EDGE. The missing node is in the message.
+    const edge = caught(() => validateView(view({ edges: [{ id: 'ax', source: 'a', target: 'x' }] })));
+    expect([edge.code, edge.id, edge.viewId]).toEqual(['MISSING_EDGE_ENDPOINT', 'ax', 'v']);
+
+    const group = caught(() =>
+      validateView(view({ groups: [{ id: 'g', label: 'G', nodeIds: ['a', 'x'] }] })),
+    );
+    expect([group.code, group.id, group.viewId]).toEqual(['MISSING_GROUP_MEMBER', 'g', 'v']);
+
+    const size = caught(() =>
+      validateView(view({ nodes: [{ id: 'a', label: 'A', size: { width: 0, height: 1 } }], edges: [] })),
+    );
+    expect([size.code, size.id, size.viewId]).toEqual(['INVALID_NODE_SIZE', 'a', 'v']);
+
+    // A view error is about the view itself, so there is no enclosing view.
+    const dup = caught(() => validateViews([view(), view()]));
+    expect([dup.code, dup.id, dup.viewId]).toEqual(['DUPLICATE_VIEW_ID', 'v', undefined]);
   });
 
   it('throws a real Error subclass with a name', () => {
@@ -448,7 +498,7 @@ describe('validateView', () => {
 
 describe('validateViews', () => {
   it('rejects two views with one id', () => {
-    expect(codeOf(() => validateViews([view(), view()]))).toBe('duplicate-view-id');
+    expect(codeOf(() => validateViews([view(), view()]))).toBe('DUPLICATE_VIEW_ID');
   });
 
   it('lets two views reuse node and edge ids', () => {
@@ -457,7 +507,7 @@ describe('validateViews', () => {
 
   it('validates every view, not only the first', () => {
     const bad = view({ id: 'w', edges: [{ id: 'ax', source: 'a', target: 'x' }] });
-    expect(codeOf(() => validateViews([view(), bad]))).toBe('missing-edge-endpoint');
+    expect(codeOf(() => validateViews([view(), bad]))).toBe('MISSING_EDGE_ENDPOINT');
   });
 
   it('accepts no views at all', () => {
@@ -567,7 +617,7 @@ export interface ExplorerView<
 > {
   readonly id: string;
   readonly label: string;
-  readonly description?: ReactNode;
+  readonly description?: ReactNode | undefined;
   readonly nodes: readonly N[];
   readonly edges: readonly E[];
   readonly groups?: readonly ExplorerGroup[] | undefined;
@@ -583,32 +633,53 @@ Create `packages/explorer/src/errors.ts`:
  *
  * One class with a `code`, because a caller switches on the code and never on
  * the class: the failures are all "this view is malformed", and they differ
- * only in how. The message names the offending id, so the fix does not start
- * with a search.
+ * only in how. Codes are UPPER_SNAKE and the type is named for the package, as
+ * in every sibling.
+ *
+ * **The offender is a field, not only a phrase in the message.** A host that
+ * wants to highlight the bad node, or list the errors of one view, reads `id`
+ * and `viewId` and never parses prose. What `id` names depends on the code:
+ *
+ * - `DUPLICATE_VIEW_ID`: the view. `viewId` is `undefined`.
+ * - `DUPLICATE_NODE_ID`, `INVALID_NODE_SIZE`: the node.
+ * - `DUPLICATE_EDGE_ID`, `MISSING_EDGE_ENDPOINT`: the edge.
+ * - `DUPLICATE_GROUP_ID`, `EMPTY_GROUP`, `MISSING_GROUP_MEMBER`,
+ *   `GROUP_ENCLOSES_NON_MEMBER`: the group.
+ *
+ * The message still names every id involved, including the second one a
+ * missing endpoint or an enclosed node adds, so a log line is enough to fix it.
  *
  * The prototype is restored explicitly, as every sibling package does, so
  * `instanceof` stays correct when the output is downlevelled below ES2022.
  */
 
 /** The `code` of every data error this package throws. */
-export type ExplorerDataErrorCode =
-  | 'duplicate-view-id'
-  | 'duplicate-node-id'
-  | 'duplicate-edge-id'
-  | 'duplicate-group-id'
-  | 'invalid-node-size'
-  | 'missing-edge-endpoint'
-  | 'missing-group-member'
-  | 'empty-group'
-  | 'group-encloses-non-member';
+export type DagrExplorerErrorCode =
+  | 'DUPLICATE_VIEW_ID'
+  | 'DUPLICATE_NODE_ID'
+  | 'DUPLICATE_EDGE_ID'
+  | 'DUPLICATE_GROUP_ID'
+  | 'INVALID_NODE_SIZE'
+  | 'MISSING_EDGE_ENDPOINT'
+  | 'MISSING_GROUP_MEMBER'
+  | 'EMPTY_GROUP'
+  | 'GROUP_ENCLOSES_NON_MEMBER';
 
 export class ExplorerDataError extends Error {
-  readonly code: ExplorerDataErrorCode;
+  readonly code: DagrExplorerErrorCode;
 
-  constructor(code: ExplorerDataErrorCode, message: string) {
+  /** The view, node, edge or group the error is about. See the table above. */
+  readonly id: string;
+
+  /** The view it was found in. `undefined` when the error is about a view. */
+  readonly viewId: string | undefined;
+
+  constructor(code: DagrExplorerErrorCode, message: string, id: string, viewId?: string) {
     super(message);
     this.name = 'ExplorerDataError';
     this.code = code;
+    this.id = id;
+    this.viewId = viewId;
     Object.setPrototypeOf(this, ExplorerDataError.prototype);
   }
 }
@@ -669,14 +740,21 @@ export function validateView<N extends ExplorerNode, E extends ExplorerEdge>(
   const nodeIds = new Set<string>();
   for (const node of view.nodes) {
     if (nodeIds.has(node.id)) {
-      throw new ExplorerDataError('duplicate-node-id', `Duplicate node id "${node.id}" in ${where}`);
+      throw new ExplorerDataError(
+        'DUPLICATE_NODE_ID',
+        `Duplicate node id "${node.id}" in ${where}`,
+        node.id,
+        view.id,
+      );
     }
     nodeIds.add(node.id);
     const size = resolveNodeSize(view.layout, node);
     if (!positive(size.width) || !positive(size.height)) {
       throw new ExplorerDataError(
-        'invalid-node-size',
+        'INVALID_NODE_SIZE',
         `Node "${node.id}" in ${where} has size ${String(size.width)} by ${String(size.height)}. Width and height must be finite and greater than zero`,
+        node.id,
+        view.id,
       );
     }
   }
@@ -684,14 +762,21 @@ export function validateView<N extends ExplorerNode, E extends ExplorerEdge>(
   const edgeIds = new Set<string>();
   for (const edge of view.edges) {
     if (edgeIds.has(edge.id)) {
-      throw new ExplorerDataError('duplicate-edge-id', `Duplicate edge id "${edge.id}" in ${where}`);
+      throw new ExplorerDataError(
+        'DUPLICATE_EDGE_ID',
+        `Duplicate edge id "${edge.id}" in ${where}`,
+        edge.id,
+        view.id,
+      );
     }
     edgeIds.add(edge.id);
     for (const end of [edge.source, edge.target]) {
       if (!nodeIds.has(end)) {
         throw new ExplorerDataError(
-          'missing-edge-endpoint',
+          'MISSING_EDGE_ENDPOINT',
           `Edge "${edge.id}" in ${where} names missing node "${end}"`,
+          edge.id,
+          view.id,
         );
       }
     }
@@ -700,17 +785,29 @@ export function validateView<N extends ExplorerNode, E extends ExplorerEdge>(
   const groupIds = new Set<string>();
   for (const group of view.groups ?? []) {
     if (groupIds.has(group.id)) {
-      throw new ExplorerDataError('duplicate-group-id', `Duplicate group id "${group.id}" in ${where}`);
+      throw new ExplorerDataError(
+        'DUPLICATE_GROUP_ID',
+        `Duplicate group id "${group.id}" in ${where}`,
+        group.id,
+        view.id,
+      );
     }
     groupIds.add(group.id);
     if (group.nodeIds.length === 0) {
-      throw new ExplorerDataError('empty-group', `Group "${group.id}" in ${where} has no nodes`);
+      throw new ExplorerDataError(
+        'EMPTY_GROUP',
+        `Group "${group.id}" in ${where} has no nodes`,
+        group.id,
+        view.id,
+      );
     }
     for (const id of group.nodeIds) {
       if (!nodeIds.has(id)) {
         throw new ExplorerDataError(
-          'missing-group-member',
+          'MISSING_GROUP_MEMBER',
           `Group "${group.id}" in ${where} names missing node "${id}"`,
+          group.id,
+          view.id,
         );
       }
     }
@@ -724,7 +821,7 @@ export function validateViews<N extends ExplorerNode, E extends ExplorerEdge>(
   const viewIds = new Set<string>();
   for (const view of views) {
     if (viewIds.has(view.id)) {
-      throw new ExplorerDataError('duplicate-view-id', `Duplicate view id "${view.id}"`);
+      throw new ExplorerDataError('DUPLICATE_VIEW_ID', `Duplicate view id "${view.id}"`, view.id);
     }
     viewIds.add(view.id);
     validateView(view);
@@ -748,7 +845,7 @@ Create `packages/explorer/src/index.ts`:
  */
 
 export { ExplorerDataError } from './errors.js';
-export type { ExplorerDataErrorCode } from './errors.js';
+export type { DagrExplorerErrorCode } from './errors.js';
 export { DEFAULT_NODE_SIZE, resolveNodeSize } from './size.js';
 export { validateView, validateViews } from './validate.js';
 export type {
@@ -823,10 +920,12 @@ EOF
   - `interface ExplorerLayout { readonly boxes: ReadonlyMap<string, ExplorerBox>; readonly routes: ReadonlyMap<string, readonly Vec2[]>; readonly groups: readonly ExplorerGroupBox[]; readonly width: number; readonly height: number }`
   - `interface LayoutViewOptions { readonly strictGroups?: boolean | undefined }`
   - `layoutView<N, E>(view: ExplorerView<N, E>, options?: LayoutViewOptions): ExplorerLayout`
-  - `layoutKey<N, E>(view: ExplorerView<N, E>): string`
-  - Constants `DEFAULT_NODE_SEP` (40), `DEFAULT_RANK_SEP` (120),
-    `WORLD_PADDING` (40), `GROUP_PADDING` (24), `GROUP_LABEL_BAND` (24),
-    `PARALLEL_EDGE_GAP` (16).
+  - Public constants `DEFAULT_NODE_SEP` (40) and `DEFAULT_RANK_SEP` (120).
+  - Internal to the package, exported from `src/layout.ts` and NOT from the
+    entry: `layoutKey<N, E>(view: ExplorerView<N, E>): string`, and the fixed
+    spacing constants `WORLD_PADDING` (40), `GROUP_PADDING` (24),
+    `GROUP_LABEL_BAND` (24), `PARALLEL_EDGE_GAP` (16). M5.6d's root imports
+    `layoutKey` from `./layout.js`.
   - The type `Vec2` re-exported from the entry.
 
 - [ ] **Step 1: Write the failing tests**
@@ -839,7 +938,9 @@ Create `packages/explorer/test/layout.test.ts`:
 
 ```ts
 import { describe, expect, it } from 'vitest';
-import { ExplorerDataError, layoutKey, layoutView } from '../src/index.js';
+import { ExplorerDataError, layoutView } from '../src/index.js';
+// `layoutKey` is internal: the package entry does not export it.
+import { layoutKey } from '../src/layout.js';
 import type {
   ExplorerBox,
   ExplorerEdge,
@@ -1070,8 +1171,16 @@ describe('layoutView, groups', () => {
 
   it('throws under strictGroups when an outline would enclose a non-member', () => {
     const view = chain({ groups: [{ id: 'g', label: 'G', nodeIds: ['a', 'c'] }] });
-    expect(codeOf(() => layoutView(view, { strictGroups: true }))).toBe('group-encloses-non-member');
+    expect(codeOf(() => layoutView(view, { strictGroups: true }))).toBe('GROUP_ENCLOSES_NON_MEMBER');
     expect(() => layoutView(view, { strictGroups: true })).toThrow(/"g".*"b"/);
+    try {
+      layoutView(view, { strictGroups: true });
+    } catch (error) {
+      // The subject is the group. The enclosed node is in the message.
+      expect(error).toBeInstanceOf(ExplorerDataError);
+      expect((error as ExplorerDataError).id).toBe('g');
+      expect((error as ExplorerDataError).viewId).toBe('v');
+    }
   });
 
   it('passes strictGroups when the outline is clear', () => {
@@ -1105,7 +1214,7 @@ describe('layoutView, edges of the input', () => {
 
   it('validates before it lays out', () => {
     const view = chain({ edges: [e('ax', 'a', 'x')] });
-    expect(codeOf(() => layoutView(view))).toBe('missing-edge-endpoint');
+    expect(codeOf(() => layoutView(view))).toBe('MISSING_EDGE_ENDPOINT');
   });
 
   it('draws orthogonal edges as axis-aligned segments', () => {
@@ -1176,11 +1285,6 @@ In `packages/explorer/test/index.test.ts`, replace the array inside
         'DEFAULT_NODE_SIZE',
         'DEFAULT_RANK_SEP',
         'ExplorerDataError',
-        'GROUP_LABEL_BAND',
-        'GROUP_PADDING',
-        'PARALLEL_EDGE_GAP',
-        'WORLD_PADDING',
-        'layoutKey',
         'layoutView',
         'resolveNodeSize',
         'validateView',
@@ -1192,8 +1296,8 @@ In `packages/explorer/test/index.test.ts`, replace the array inside
 
 Run: `pnpm --filter @prnt/dagr-explorer test`
 
-Expected: FAIL. `layout.test.ts` fails because `layoutKey` and `layoutView` are
-not exported, and `index.test.ts` fails on the missing names.
+Expected: FAIL. `layout.test.ts` fails because `../src/layout.js` does not
+exist, and `index.test.ts` fails on the missing names.
 
 - [ ] **Step 3: Write the module**
 
@@ -1214,6 +1318,10 @@ import { validateView } from './validate.js';
 export const DEFAULT_NODE_SEP = 40;
 /** Gap between ranks along the flow, when the view does not say. */
 export const DEFAULT_RANK_SEP = 120;
+// The four constants below are exported for this package's tests and are NOT
+// re-exported from the entry. They are fixed values today. Publishing them
+// would make a change to any one a silent behavior break for whoever read it.
+
 /** How far the content sits from the world origin, and from the far edges. */
 export const WORLD_PADDING = 40;
 /** Space between a group's outline and its members. `NodeGroup`'s default. */
@@ -1414,8 +1522,10 @@ export function layoutView<N extends ExplorerNode, E extends ExplorerEdge>(
           other.y + other.height > rect.y;
         if (overlaps) {
           throw new ExplorerDataError(
-            'group-encloses-non-member',
+            'GROUP_ENCLOSES_NON_MEMBER',
             `Group "${group.id}" in view "${view.id}" would enclose non-member node "${id}"`,
+            group.id,
+            view.id,
           );
         }
       }
@@ -1467,6 +1577,8 @@ export function layoutView<N extends ExplorerNode, E extends ExplorerEdge>(
  * same shape keeps its layout.
  *
  * JSON, for the reason `pairKey` gives: ids are the caller's.
+ *
+ * Internal: the root uses it to memoize, and the entry does not export it.
  */
 export function layoutKey<N extends ExplorerNode, E extends ExplorerEdge>(
   view: ExplorerView<N, E>,
@@ -1487,19 +1599,12 @@ export function layoutKey<N extends ExplorerNode, E extends ExplorerEdge>(
 ```
 
 In `packages/explorer/src/index.ts`, add these lines directly after the line
-`export type { ExplorerDataErrorCode } from './errors.js';`:
+`export type { DagrExplorerErrorCode } from './errors.js';`:
 
 ```ts
-export {
-  DEFAULT_NODE_SEP,
-  DEFAULT_RANK_SEP,
-  GROUP_LABEL_BAND,
-  GROUP_PADDING,
-  PARALLEL_EDGE_GAP,
-  WORLD_PADDING,
-  layoutKey,
-  layoutView,
-} from './layout.js';
+// `layoutKey` and the fixed spacing constants stay internal on purpose. A
+// public constant cannot change value, or become an option, without a break.
+export { DEFAULT_NODE_SEP, DEFAULT_RANK_SEP, layoutView } from './layout.js';
 export type {
   ExplorerBox,
   ExplorerGroupBox,
@@ -1652,12 +1757,7 @@ In `packages/explorer/test/index.test.ts`, replace the array inside
         'DEFAULT_NODE_SIZE',
         'DEFAULT_RANK_SEP',
         'ExplorerDataError',
-        'GROUP_LABEL_BAND',
-        'GROUP_PADDING',
-        'PARALLEL_EDGE_GAP',
-        'WORLD_PADDING',
         'defaultSearchText',
-        'layoutKey',
         'layoutView',
         'resolveNodeSize',
         'searchNodes',
@@ -2226,7 +2326,7 @@ a function of the node), else 240 by 120. The explorer virtualizes node
 content, and a node with no element cannot be measured.
 
 A width or height that is not finite and greater than zero throws
-`invalid-node-size`, naming the node.
+`INVALID_NODE_SIZE`, naming the node.
 
 ## Layout
 
@@ -2249,11 +2349,8 @@ Three behaviors are the explorer's, not the layout engine's:
   data and has an empty route. It moves nothing.
 - **A group moves no node.** It is the padded hull of its members with a band
   above for its label. Pass `{ strictGroups: true }` to throw
-  `group-encloses-non-member` when an outline would take in a node that is not
+  `GROUP_ENCLOSES_NON_MEMBER` when an outline would take in a node that is not
   a member, for a diagram where that would be a false statement.
-
-`layoutKey(view)` is equal for two views exactly when they lay out the same.
-Labels, colors and descriptions are not in it.
 
 ## Search
 
@@ -2265,20 +2362,22 @@ pattern.
 
 ## Errors
 
-A malformed view throws `ExplorerDataError`. Switch on its `code`. The message
-names the offending id.
+A malformed view throws `ExplorerDataError`. Switch on its `code`. Its `id` is
+the view, node, edge or group the error is about, and its `viewId` is the view
+that was found in, so a host can point at the offender without parsing the
+message.
 
 | `code` | When |
 | --- | --- |
-| `duplicate-view-id` | two views share an id |
-| `duplicate-node-id` | two nodes in one view share an id |
-| `duplicate-edge-id` | two edges in one view share an id |
-| `duplicate-group-id` | two groups in one view share an id |
-| `invalid-node-size` | a node's width or height is not finite and greater than zero |
-| `missing-edge-endpoint` | an edge names a node its view lacks |
-| `missing-group-member` | a group names a node its view lacks |
-| `empty-group` | a group has no members |
-| `group-encloses-non-member` | `strictGroups` only |
+| `DUPLICATE_VIEW_ID` | two views share an id |
+| `DUPLICATE_NODE_ID` | two nodes in one view share an id |
+| `DUPLICATE_EDGE_ID` | two edges in one view share an id |
+| `DUPLICATE_GROUP_ID` | two groups in one view share an id |
+| `INVALID_NODE_SIZE` | a node's width or height is not finite and greater than zero |
+| `MISSING_EDGE_ENDPOINT` | an edge names a node its view lacks |
+| `MISSING_GROUP_MEMBER` | a group names a node its view lacks |
+| `EMPTY_GROUP` | a group has no members |
+| `GROUP_ENCLOSES_NON_MEMBER` | `strictGroups` only |
 
 Ids may repeat across views.
 
@@ -2297,8 +2396,8 @@ Replace the whole of `packages/explorer/CHANGELOG.md` with:
 Not published. The package is private until M5.6f.
 
 - Add the headless core (M5.6b): the `ExplorerView` data model, `validateView`
-  and `validateViews` with `ExplorerDataError`, `layoutView` and `layoutKey`,
-  and `searchNodes`.
+  and `validateViews` with `ExplorerDataError`, `layoutView`, and
+  `searchNodes`.
 - Layout flows `'right'` by default or `'down'`, in y-down world pixels padded
   40 off the origin. Parallel edges between one pair of nodes bow 16 apart. A
   self loop has an empty route. A group is the padded hull of its members and

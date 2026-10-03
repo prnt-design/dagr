@@ -1,7 +1,7 @@
 # DagrExplorer design
 
 **Date:** 2026-10-03
-**Status:** Approved by the maintainer on 2026-10-03. Two amendments (the `invalid-node-size` error, and self loops kept and not drawn) were approved the same day with the M5.6a and M5.6b plans.
+**Status:** Approved by the maintainer on 2026-10-03, and amended the same day during planning and review. Every change since approval is listed under Amendments at the end.
 **Repo:** `prnt-design/dagr`
 **Roadmap:** M5.6, slices a to f
 
@@ -148,7 +148,7 @@ interface ExplorerLayoutOptions<N extends ExplorerNode> {
 interface ExplorerView<N extends ExplorerNode, E extends ExplorerEdge> {
   readonly id: string;
   readonly label: string;
-  readonly description?: ReactNode;
+  readonly description?: ReactNode | undefined;
   readonly nodes: readonly N[];
   readonly edges: readonly E[];
   readonly groups?: readonly ExplorerGroup[];
@@ -187,6 +187,13 @@ camera. A label or color change never relayouts.
 **World space** is y-down CSS pixels at zoom 1, with the content's top-left
 padded off the origin.
 
+**The layout's spacing constants and its shape key are internal.** The padding
+off the origin, the group padding and label band, and the gap between parallel
+edges are fixed values today. Exporting them would make a change to any one a
+silent behavior break, and would stand in the way of turning them into options.
+The default node size and the default `nodeSep` and `rankSep` are public,
+because a caller overriding one wants to name the other.
+
 ## Composition
 
 ### Parts
@@ -201,7 +208,7 @@ padded off the origin.
 | `ExplorerDetails` | drawer: close button, scroll region, focus restoration |
 | `ExplorerToolbar` | zoom out, zoom readout, zoom in, fit, zoom to selected |
 | `ExplorerTraceToggle` | trace on and off |
-| `useExplorer()` | everything the built-in parts read and call |
+| `useExplorer<N, E>()` | everything the built-in parts read and call |
 
 Named exports, not properties of `DagrExplorer`. They tree-shake, and they
 survive a server-component boundary.
@@ -210,17 +217,39 @@ survive a server-component boundary.
 the parts.
 
 One `ExplorerViewport` per `ExplorerRoot`. A second throws `ExplorerContextError`.
+The viewport registers with its root in an effect, with cleanup, and the
+second registration is what throws. Counting viewports during render would
+misfire under StrictMode's double render, and when Suspense or Activity keeps
+an old tree alive beside a new one.
+
+**The type parameters on a part are a claim, not a check.** `DagrExplorer`
+infers `N` and `E` from `views` and types its slots from them. The parts talk
+through a context, and a context erases type parameters, so
+`<ExplorerViewport<MyNode> renderNode={...} />` asserts the node type and
+nothing verifies it against the root's `views`. A mismatch compiles and fails
+at runtime. Every part and `useExplorer<N, E>()` default to
+`N = ExplorerNode` and `E = ExplorerEdge`, so an unannotated part sees only
+the fields the explorer itself guarantees. A `createExplorer<N, E>()` that
+returns parts already bound to the types can close this later without a
+break. It is deferred until a host asks for it.
 
 ### `ExplorerRoot` props
 
 - `label: string`, required: the accessible name the parts derive theirs from.
-- Data, one of:
+- Data, exactly one of two shapes. Each shape types the other's props as
+  `never`, so passing both is a compile error and not a silent precedence rule:
   - `views: readonly ExplorerView<N, E>[]`
-  - `nodes`, `edges`, optional `groups` and `layout`: the single-graph shorthand.
+  - `nodes`, `edges`, optional `groups` and `layout`: the single-graph
+    shorthand. It is one view whose `id` is `'default'` and whose `label` is
+    the root's `label`. That view is what `onViewChange` and
+    `selectOnViewChange` see.
 - `viewId`, `defaultViewId`, `onViewChange`: controllable.
 - `selectedId`, `defaultSelectedId`, `onSelectedChange`: controllable.
-  `defaultSelectedId` is a node id or `(view) => string | null`, evaluated
-  when a view becomes active.
+  `defaultSelectedId` is a node id or `null`, read once at mount, as every
+  React `default*` prop is.
+- `selectOnViewChange?: (view: ExplorerView<N, E>) => string | null`: which
+  node to select when a view becomes active by a switch. Without it, a view
+  switch clears the selection.
 - `searchText?: (node: N) => string`, default `id` and `label`.
 - `strictGroups?: boolean`, default `false`.
 - `labels?: Partial<ExplorerLabels>`.
@@ -240,12 +269,26 @@ A background click focuses the graph and does not change selection. Clearing
 on a background click would close the drawer every time a reader clicked the
 diagram to enable wheel zoom.
 
-Changing view resets query, trace, drawer, and camera, and sets selection from
-`defaultSelectedId`. A removed view is forgotten, so it is not reselected if
-it returns.
+Changing view resets query, trace, drawer, and camera, and sets selection to
+what `selectOnViewChange` returns for the new view, or to none. A removed view
+is forgotten, so it is not reselected if it returns.
 
 If the selected node leaves the data, selection clears, the drawer closes, and
 focus is restored as described under Drawer.
+
+**A controlled value is the owner's, and the explorer never renders past it.**
+Three changes start inside the explorer: a view switch reselecting, the
+selected node leaving the data, and the active view being removed. Under a
+controlled `selectedId` or `viewId`, each of them calls `onSelectedChange` or
+`onViewChange` with the new value and changes nothing on screen until the prop
+changes. The same holds for a click, a search pick, and every `ExplorerApi`
+call.
+
+A controlled value the data does not contain renders as its fallback: an
+unknown `selectedId` renders as no selection with the drawer closed, and an
+unknown `viewId` renders the first view. The explorer does not call back to
+correct it. The owner holds the value, and a callback fired from render to
+fix the owner's own prop is how update loops start.
 
 ```ts
 interface ExplorerApi {
@@ -256,8 +299,14 @@ interface ExplorerApi {
   select(id: string | null): void;
   inspect(id: string): void;
   closeDetails(): void;
+  selectView(id: string): void;
+  setQuery(query: string): void;
+  setTrace(on: boolean): void;
 }
 ```
+
+`useExplorer()` returns the current state and these same methods, so a custom
+part and a host holding `apiRef` can do exactly the same things.
 
 Camera calls before the viewport mounts are no-ops.
 
@@ -505,24 +554,31 @@ height is fixed, so nothing shifts.
 
 ## Errors
 
-`ExplorerDataError` carries a `code` and names the offending id:
+`ExplorerDataError` carries a `code`, the `id` of what it is about (a view,
+node, edge or group), and the `viewId` it was found in, which is absent when
+the error is about a view itself. A host can highlight the offender without
+parsing the message, which names both as well.
+
+Codes are UPPER_SNAKE and their type is `DagrExplorerErrorCode`, as in every
+sibling package:
 
 | Code | When |
 | --- | --- |
-| `duplicate-view-id` | two views share an id |
-| `duplicate-node-id` | two nodes in one view share an id |
-| `duplicate-edge-id` | two edges in one view share an id |
-| `duplicate-group-id` | two groups in one view share an id |
-| `invalid-node-size` | a node's resolved width or height is not finite and greater than zero |
-| `missing-edge-endpoint` | an edge names a node its view lacks |
-| `missing-group-member` | a group names a node its view lacks |
-| `empty-group` | a group has no members |
-| `group-encloses-non-member` | `strictGroups` only: an outline overlaps a non-member's box |
+| `DUPLICATE_VIEW_ID` | two views share an id |
+| `DUPLICATE_NODE_ID` | two nodes in one view share an id |
+| `DUPLICATE_EDGE_ID` | two edges in one view share an id |
+| `DUPLICATE_GROUP_ID` | two groups in one view share an id |
+| `INVALID_NODE_SIZE` | a node's resolved width or height is not finite and greater than zero |
+| `MISSING_EDGE_ENDPOINT` | an edge names a node its view lacks |
+| `MISSING_GROUP_MEMBER` | a group names a node its view lacks |
+| `EMPTY_GROUP` | a group has no members |
+| `GROUP_ENCLOSES_NON_MEMBER` | `strictGroups` only: an outline overlaps a non-member's box |
 
 They are thrown during render, so an error boundary catches them.
 
-`ExplorerContextError` is thrown by a part outside `ExplorerRoot`, and by a
-second `ExplorerViewport`.
+`ExplorerContextError` is thrown by a part outside `ExplorerRoot`, with code
+`OUTSIDE_EXPLORER`, and by a second `ExplorerViewport`, with code
+`SECOND_VIEWPORT`.
 
 A view with no nodes renders `labels.emptyView`. No views renders `labels.noViews`.
 Neither is an error.
@@ -632,3 +688,45 @@ Each of these is its own spec and plan.
   hit targets.** M6.3a owns port hits.
 - **Self-loop drawing.** A loop needs a route the router does not produce.
 - **A spatial index** for the visible set, if the M5.6f bench asks for one.
+- **`createExplorer<N, E>()`,** parts bound to the node and edge types, if a
+  host composing by hand asks for the check the context cannot give.
+
+## Amendments
+
+Changes made after the maintainer approved the written spec on 2026-10-03, in
+the order they were made. Each is in the text above. This list is so a reader
+can see what moved without diffing.
+
+1. **`INVALID_NODE_SIZE`.** Found while measuring the layout engine for the
+   M5.6b plan: it accepts a zero-size node and reports `NaN` as a fault in its
+   own config. Approved by the maintainer with the plans.
+2. **Self loops are kept and not drawn.** Found the same way: the router gives
+   one a zero-length line. Approved by the maintainer with the plans.
+3. **The core entry's declarations must not reach three's types.** Found by
+   the whole-branch review of M5.6a. The geometry types moved to a leaf
+   module, and "nothing existing moves" became "no public name moves".
+4. **Error codes are UPPER_SNAKE, typed `DagrExplorerErrorCode`, and the error
+   carries `id` and `viewId`.** Found by the API design review: every sibling
+   package uses UPPER_SNAKE codes and the graph's errors expose the offending
+   id. Renaming codes after a release is a break.
+5. **Controlled selection and view semantics are stated,** and
+   `defaultSelectedId` is a true default, read once at mount.
+   `selectOnViewChange` is the new prop for reselecting on a view switch. API
+   design review: the spec did not say what a controlled value does when the
+   explorer itself wants to change it, and a `default*` prop that re-evaluates
+   is not what React users expect.
+6. **The data props are a union with `never` guards,** and the shorthand's
+   view has a defined id and label. API design review.
+7. **`ExplorerApi` gains `selectView`, `setQuery` and `setTrace`,** and the
+   second-viewport error is raised from a registration effect. API design
+   review: the State section already promised the first three through
+   `apiRef`, and counting viewports in render misfires under StrictMode.
+8. **Type parameters on hand-composed parts are documented as unchecked,**
+   with defaults and a deferred `createExplorer<N, E>()`. API design review.
+9. **The layout's fixed spacing constants and its shape key are internal.**
+   API design review: a public constant cannot change value or become an
+   option without a break.
+
+Amendments 3 to 9 were made by the agent executing the plan and have not been
+separately approved. They ride in the M5.6a pull request for the maintainer to
+accept or reverse.
