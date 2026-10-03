@@ -20,6 +20,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -122,6 +123,145 @@ describe('the tarball a consumer installs', () => {
     }
   });
 
+  it('loads @prnt/dagr-render/core from its tarball where three cannot be resolved', () => {
+    // The extracted tarball sits in the OS temp directory with no
+    // `node_modules` above it, so `three` is unresolvable from here. That is
+    // the condition a server with externalized dependencies and no three
+    // installed would be in.
+    const root = roots.get('@prnt/dagr-render');
+    if (root === undefined) throw new Error('@prnt/dagr-render was not packed');
+    const load = (entry: string): string =>
+      execFileSync(
+        process.execPath,
+        [
+          '--input-type=module',
+          '--eval',
+          `await import(${JSON.stringify(pathToFileURL(join(root, entry)).href)});`,
+        ],
+        { cwd: root, encoding: 'utf8', stdio: 'pipe' },
+      );
+
+    expect(() => load('dist/core.js')).not.toThrow();
+    // The control: the full entry must fail here, and on three. If it loaded,
+    // three was resolvable after all and the line above proved nothing.
+    expect(() => load('dist/index.js')).toThrow(/Cannot find package 'three'/);
+  });
+
+  it(
+    'typechecks @prnt/dagr-render/core with no three types installed and skipLibCheck off',
+    () => {
+      const consumer = mkdtempSync(join(tmpdir(), 'dagr-core-types-consumer-'));
+      try {
+        const root = roots.get('@prnt/dagr-render');
+        if (root === undefined) throw new Error('@prnt/dagr-render was not packed');
+        const local = { '@prnt/dagr-render': `file:${root}` };
+        writeFileSync(
+          join(consumer, 'package.json'),
+          JSON.stringify({
+            private: true,
+            type: 'module',
+            dependencies: local,
+            pnpm: { overrides: local },
+          }),
+        );
+        // Peers are left uninstalled on purpose: no `three`, and so no types
+        // for it either. That is the consumer this entry is for.
+        writeFileSync(
+          join(consumer, '.npmrc'),
+          'auto-install-peers=false\nstrict-peer-dependencies=false\n',
+        );
+        try {
+          execFileSync(
+            'pnpm',
+            ['install', '--prefer-offline', '--ignore-scripts', '--no-frozen-lockfile'],
+            { cwd: consumer, encoding: 'utf8', stdio: 'pipe' },
+          );
+        } catch (error) {
+          const output = error as { readonly stdout?: string; readonly stderr?: string };
+          throw new Error(`${output.stdout ?? ''}${output.stderr ?? ''}`, { cause: error });
+        }
+
+        // `skipLibCheck: false` is the point. With it on, a declaration file
+        // that cannot find three's types is silently skipped and this test
+        // would pass whatever the entry's declarations reached.
+        const compilerOptions = {
+          strict: true,
+          exactOptionalPropertyTypes: true,
+          noEmit: true,
+          skipLibCheck: false,
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          target: 'ES2022',
+          lib: ['ES2022', 'DOM'],
+          types: [],
+        };
+        writeFileSync(
+          join(consumer, 'tsconfig.core.json'),
+          JSON.stringify({ compilerOptions, files: ['core.ts'] }),
+        );
+        writeFileSync(
+          join(consumer, 'tsconfig.full.json'),
+          JSON.stringify({ compilerOptions, files: ['full.ts'] }),
+        );
+        writeFileSync(
+          join(consumer, 'core.ts'),
+          `import { Camera2D, fitZoom, shapeEdgePath } from '@prnt/dagr-render/core';
+import type {
+  Camera2DInit,
+  EdgePathOptions,
+  OrthoFrustum,
+  Size,
+  Vec2,
+  ViewportSize,
+  WorldBounds,
+} from '@prnt/dagr-render/core';
+
+const viewport: ViewportSize = { width: 320, height: 200, devicePixelRatio: 1 };
+const init: Camera2DInit = { viewport };
+const bounds: WorldBounds = { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+const camera = new Camera2D(init);
+camera.fitBounds(bounds);
+const frustum: OrthoFrustum = camera.orthoFrustum();
+const buffer: Size = camera.drawingBufferSize();
+const options: EdgePathOptions = { style: 'smooth' };
+const points: Vec2[] = shapeEdgePath([{ x: 0, y: 0 }, { x: 1, y: 1 }], options);
+export const result = [fitZoom(bounds, viewport), frustum.left, buffer.width, points.length];
+`,
+        );
+        writeFileSync(
+          join(consumer, 'full.ts'),
+          `import type { WorldBounds } from '@prnt/dagr-render';
+
+export const bounds: WorldBounds = { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+`,
+        );
+
+        const tsc = (project: string): string => {
+          try {
+            return execFileSync(join(REPO_ROOT, 'node_modules', '.bin', 'tsc'), ['-p', project], {
+              cwd: consumer,
+              encoding: 'utf8',
+              stdio: 'pipe',
+            });
+          } catch (error) {
+            const output = error as { readonly stdout?: string; readonly stderr?: string };
+            throw new Error(`${output.stdout ?? ''}${output.stderr ?? ''}`, { cause: error });
+          }
+        };
+
+        expect(() => tsc('tsconfig.core.json')).not.toThrow();
+        // The control: the full entry's declarations do name three's types, so
+        // the same consumer must fail on them. If it compiled, three's types
+        // were resolvable after all and the line above proved nothing.
+        expect(() => tsc('tsconfig.full.json')).toThrow(/three\/webgpu/);
+      } finally {
+        rmSync(consumer, { recursive: true, force: true });
+      }
+    },
+    // An external install and two tsc processes, as the typecheck below is.
+    30_000,
+  );
+
   it(
     'typechecks shared interaction from extracted packages without workspace aliases',
     () => {
@@ -187,6 +327,17 @@ import {
   type GraphHitProvider,
   type GraphHitTarget,
 } from '@prnt/dagr-react';
+import {
+  Camera2D as CoreCamera,
+  shapeEdgePath as coreShapeEdgePath,
+  type EdgePathOptions as CoreEdgePathOptions,
+  type WorldBounds as CoreWorldBounds,
+} from '@prnt/dagr-render/core';
+
+const coreBounds: CoreWorldBounds = { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+const coreOptions: CoreEdgePathOptions = { style: 'smooth' };
+new CoreCamera().fitBounds(coreBounds);
+coreShapeEdgePath([{ x: 0, y: 0 }, { x: 1, y: 1 }], coreOptions);
 
 declare const surfaceRef: RefObject<HTMLElement | null>;
 declare const svgSurfaceRef: RefObject<SVGSVGElement | null>;

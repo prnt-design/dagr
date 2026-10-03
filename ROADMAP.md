@@ -290,6 +290,23 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
 - [x] **M5.5** Containment reserved in the graph model: `parent`,
   `update-node-parent`, the invariants, `PatchOp` documented as an open
   union. Layout ignores `parent` until M7.
+- [ ] **M5.6** `@prnt/dagr-explorer`: `DagrExplorer`, a generic interactive
+  graph explorer (views, search, connection tracing, groups, details drawer)
+  composed from named parts, with node content virtualized by on-screen size
+  over a swappable base layer. Spec:
+  `docs/superpowers/specs/2026-10-03-dagr-explorer-design.md`. Built in a
+  maintainer-directed session, outside the queue above: M5.6b onward join that
+  queue only if the maintainer places them there.
+- [x] **M5.6a** `@prnt/dagr-render/core`: a three-free entry for `Camera2D`,
+  `fitZoom` and `shapeEdgePath`, so a server never evaluates `three` to draw
+  SVG.
+- [ ] **M5.6b** Package scaffold and pure core: types, validation, layout,
+  search.
+- [ ] **M5.6c** Camera, viewport, SVG base, visible set, overlay tiers, pins.
+- [ ] **M5.6d** Root state, remaining parts, `labels`, `DagrExplorer`,
+  `styles.css`.
+- [ ] **M5.6e** Roving focus, spatial navigation, reveal, server rendering.
+- [ ] **M5.6f** Docs, demos, bench, browser validation, measured SVG ceiling.
 
 ## M6: VDSL core in v0.1, interactions planned for v0.2 (`@prnt/dagr-vdsl`)
 

@@ -7130,6 +7130,38 @@ disposal story), edge and port hits (M6.3a), GPU picking (M4.8b), the campaign
 worker's tile-at-a-time layout (specific to its packer; M7 is the generic
 version), and any real-device WebGPU or phone measurement (none available).
 
+### M5.6a: `@prnt/dagr-render/core`, a three-free entry (2026-10-03)
+
+The full record for M5.6 is its spec,
+`docs/superpowers/specs/2026-10-03-dagr-explorer-design.md`, and the plan for
+this slice, `docs/superpowers/plans/2026-10-03-m5-6a-render-core.md`. What is
+here is what those two did not know when they were written.
+
+- THE ENTRY IS A WAY IN, NOT A MOVE. `src/core.ts` re-exports `Camera2D`,
+  `fitZoom` and `shapeEdgePath` from the modules that already held them, and
+  the full entry still exports all three. They are the same objects, and
+  `test/core-identity.test.ts` holds that.
+- "NEVER IMPORTS THREE" HAD TWO HALVES AND THE PLAN ONLY NAMED ONE. At runtime
+  the entry was three-free as planned. Its DECLARATIONS were not: `core.d.ts`
+  reached `types.d.ts`, which names the scene types, whose declarations import
+  `three/webgpu`. `import type` is erased from the JavaScript and kept in the
+  `.d.ts`, so a consumer type-checking the entry with `skipLibCheck` off and no
+  `@types/three` failed inside this package. The whole-branch review caught it.
+  The fix is `src/geometry.ts`, a leaf with no imports holding `Vec2`, `Size`,
+  `WorldBounds`, `ViewportSize` and `OrthoFrustum`, re-exported from `types.ts`
+  so no public name moved.
+- EVERY GUARD HAS A CONTROL. Three checks hold the property and each asserts
+  that the full entry FAILS under the same conditions: the source-level mocks,
+  the tarball load with `three` unresolvable, and the tarball typecheck with no
+  three types. A check that had only ever passed would not have shown it can
+  fail, and the tarball ones could otherwise pass because `three` happened to
+  be resolvable from the temp directory.
+- NOT DONE: `three` is still a required peer, so it is installed beside the
+  entry and never evaluated. Making it optional changes install behavior for
+  existing consumers and is the maintainer's call. There is no `typesVersions`
+  entry for the legacy `node10` resolver either, which would be a second
+  manifest key.
+
 ## M6: VDSL = v0.2 (`@dagr/vdsl`)
 
 Task breakdown is finalised when M5 completes. The scope below replaces the

@@ -1,4 +1,4 @@
-import type { Vec2 } from './types.js';
+import type { Vec2 } from './geometry.js';
 
 /**
  * The value checks this package shares, and the rule they implement.

@@ -1,4 +1,4 @@
-import type { Size } from './types.js';
+import type { Size } from './geometry.js';
 import { requireFinite, requireNonNegative } from './validate.js';
 
 /**

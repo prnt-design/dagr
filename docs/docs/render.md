@@ -694,8 +694,8 @@ is exactly the churn a peer dependency exists to avoid.
 **No three.js type appears anywhere in this package's public surface.** That is
 a separate decision, and the dependency answer follows from it rather than the
 other way around. It does not make the peer optional, though: `webgpu-renderer.ts`
-imports `three/webgpu` at module scope and `index.ts` re-exports it, so this
-package cannot be imported at all without three being present. The peer is a
+imports `three/webgpu` at module scope and `index.ts` re-exports it, so the full
+entry cannot be imported at all without three being present. The peer is a
 present necessity, not a forward commitment. What the empty surface changes is
 the FAILURE MODE of getting it wrong: with no three type in a signature, two
 copies compile cleanly and misbehave at runtime, where `@prnt/dagr-graph`'s
@@ -703,6 +703,49 @@ copies compile cleanly and misbehave at runtime, where `@prnt/dagr-graph`'s
 signature that saw one. That is the weaker of the two guarantees, and it is the
 reason the peer declaration is doing real work here rather than documenting
 something the compiler already enforces.
+
+### The entry that does not need it
+
+"Cannot be imported at all without three" is true of the full entry. It is not
+true of `@prnt/dagr-render/core`, which exports `Camera2D`, `fitZoom` and
+`shapeEdgePath` and nothing else at runtime.
+
+Those three come from `camera.ts` and `edge-path.ts`, and neither imports
+`three` at runtime, directly or through anything it imports. The core entry
+re-exports them without going through `index.ts`, so loading it evaluates no
+renderer module.
+
+The same holds for its types, and that half took a change. `Vec2`, `Size`,
+`WorldBounds`, `ViewportSize` and `OrthoFrustum` used to be declared in
+`types.ts`, beside the renderer's own types, and `types.ts` names the scene
+types, whose declarations import `three/webgpu`. An `import type` is erased at
+runtime and is not erased from a `.d.ts`, so a consumer type-checking the core
+entry with `skipLibCheck` off and no `@types/three` got a missing-module error
+from inside this package. The five now live in `geometry.ts`, which imports
+nothing, and `types.ts` re-exports them, so no public name moved.
+
+The case the entry exists for is a server render. A bundler already drops
+`three/webgpu` for a consumer who only imports the camera, because this package
+is side-effect free. A server that externalizes its dependencies has no such
+step: it evaluates the entry it is given. The planned `@prnt/dagr-explorer`
+(M5.6) will draw SVG from exactly these three functions and has to render on a
+server, which is why the entry was cut.
+
+The objects are the same ones the full entry exports, so a `Camera2D` from
+either satisfies `instanceof` against the other. `three` remains a required
+peer, so the entry changes what is evaluated and type-checked, not what is
+installed.
+
+Three tests hold the property. `test/core.test.ts` replaces `three`,
+`three/webgpu` and `three/tsl` with modules that throw on load, imports the
+core entry under them, and asserts as a control that the same mocks do fail the
+full entry. The packaging gate loads the built `dist/core.js` from the
+extracted tarball, in a directory `three` cannot be resolved from, and asserts
+that `dist/index.js` fails there. It also type-checks a consumer of the core
+entry with `skipLibCheck` off and neither `three` nor `@types/three` installed,
+and asserts that the same consumer importing the full entry fails on
+`three/webgpu`. A guard that had only ever passed would not have shown it can
+fail.
 
 ## Two backends, and which one you got
 
