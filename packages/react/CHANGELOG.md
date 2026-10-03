@@ -1,6 +1,6 @@
 # @prnt/dagr-react
 
-## Unreleased
+## 0.1.3
 
 - Add `navigation` (wheel zoom, two-finger touch pinch, drag pan, keyboard) to `DagrCanvas`,
   inside the default camera limits. Off by default.
