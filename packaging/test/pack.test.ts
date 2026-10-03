@@ -144,7 +144,7 @@ describe('the tarball a consumer installs', () => {
     expect(() => load('dist/core.js')).not.toThrow();
     // The control: the full entry must fail here, and on three. If it loaded,
     // three was resolvable after all and the line above proved nothing.
-    expect(() => load('dist/index.js')).toThrow(/three/);
+    expect(() => load('dist/index.js')).toThrow(/Cannot find package 'three'/);
   });
 
   it(
