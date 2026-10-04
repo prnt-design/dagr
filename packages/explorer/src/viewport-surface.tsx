@@ -13,20 +13,27 @@
  * button is placed in world coordinates once, when it mounts, and the plane
  * carries it.
  *
+ * **Most frames skip the scan.** The set was computed over the view plus a
+ * margin on every side, so while the view stays inside half that margin, at
+ * the same scale, every node it can show is already in the set. A frame
+ * like that does not call `computeVisibleSet` at all.
+ *
  * **One listener per gesture, on the viewport.** No node has a listener of
  * its own. A click on a button resolves to that node, a click anywhere else
  * resolves through the layout, so a base mark (which has no element the
  * overlay owns) is clickable at every tier.
  *
- * Nothing here forces a composited layer: no `will-change`, no
- * `translateZ`. A cached raster of text enlarged by the camera goes blurry.
+ * The plane is a composited layer only while the camera moves, which the
+ * camera hook decides, and never through `translateZ`. A cached raster of
+ * text enlarged by the camera goes blurry, so at rest there is none.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MutableRefObject, ReactElement, ReactNode } from 'react';
 import type { ExplorerBase, ExplorerEmphasis } from './base.js';
+import { visibleWorld } from './camera.js';
 import type { ExplorerCamera, ExplorerViewportSize } from './camera.js';
-import type { ExplorerLayout } from './layout.js';
+import type { ExplorerBox, ExplorerLayout } from './layout.js';
 import { svgBase } from './svg-base.js';
 import type { ExplorerEdge, ExplorerGroup, ExplorerNode, ExplorerView } from './types.js';
 import { useExplorerCamera } from './use-explorer-camera.js';
@@ -34,6 +41,7 @@ import type { ExplorerCameraControls } from './use-explorer-camera.js';
 import {
   DEFAULT_MAX_OVERLAY_NODES,
   DEFAULT_TIERS,
+  OVERSCAN,
   computeVisibleSet,
   indexLayout,
   nodeAtPoint,
@@ -116,6 +124,38 @@ function defaultName(node: ExplorerNode, groups: readonly ExplorerGroup[]): stri
   return [node.label, ...groups.map((group) => `in ${group.label}`)].join(', ');
 }
 
+/**
+ * What the last scan covered: the options and index it ran with, its scale,
+ * and the world rect a later view may move within and need no new scan.
+ */
+interface Scan {
+  readonly index: LayoutIndex;
+  readonly options: VisibleSetOptions;
+  readonly scale: number;
+  readonly within: ExplorerBox;
+}
+
+/**
+ * The world rect a view may move within without a scan: the view at scan
+ * time, grown by half the overscan on each side. The scan itself covered the
+ * full overscan, so a node in the actual view is a node the scan saw.
+ */
+function slack(world: ExplorerBox): ExplorerBox {
+  const margin = OVERSCAN / 2;
+  return {
+    x: world.x - world.width * margin,
+    y: world.y - world.height * margin,
+    width: world.width * (1 + margin * 2),
+    height: world.height * (1 + margin * 2),
+  };
+}
+
+const inside = (inner: ExplorerBox, outer: ExplorerBox): boolean =>
+  inner.x >= outer.x &&
+  inner.y >= outer.y &&
+  inner.x + inner.width <= outer.x + outer.width &&
+  inner.y + inner.height <= outer.y + outer.height;
+
 /** A visible set, and the index it was computed over, so a stale one is never drawn. */
 interface Shown {
   readonly index: LayoutIndex;
@@ -168,11 +208,24 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
   const [shown, setShown] = useState<Shown>(() => ({ index, set: everythingAsMarks(index) }));
   const shownRef = useRef(shown);
   const lastViewportRef = useRef<ExplorerViewportSize | null>(null);
+  const scanRef = useRef<Scan | null>(null);
 
   const onFrame = useCallback(
     (camera: ExplorerCamera, viewport: ExplorerViewportSize) => {
       lastViewportRef.current = viewport;
+      const world = visibleWorld(camera, viewport);
+      const scan = scanRef.current;
+      if (
+        scan !== null &&
+        scan.index === index &&
+        scan.options === options &&
+        scan.scale === camera.scale &&
+        inside(world, scan.within)
+      ) {
+        return;
+      }
       const next = computeVisibleSet(index, camera, viewport, options);
+      scanRef.current = { index, options, scale: camera.scale, within: slack(world) };
       const previous = shownRef.current;
       if (previous.index === index && sameVisibleSet(previous.set, next)) return;
       const value = { index, set: next };

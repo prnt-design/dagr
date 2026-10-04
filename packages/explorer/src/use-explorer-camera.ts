@@ -119,10 +119,28 @@ function createEngine(
   let frame = 0;
   let lastTime = 0;
   let disposed = false;
+  // Whether a drag or a pinch is moving the camera, which `composite` reads.
+  let dragging = false;
+  let composited = false;
+
+  /**
+   * A composited layer while the camera moves, and none at rest. Moving, it
+   * spares a repaint per frame. At rest, the content is rasterized again at
+   * the scale it is shown at: a layer cached at one scale and enlarged by the
+   * camera shows text blurred.
+   */
+  const composite = (): void => {
+    const moving = !disposed && (frame !== 0 || dragging);
+    if (moving === composited) return;
+    composited = moving;
+    if (moving) plane.style.willChange = 'transform';
+    else plane.style.removeProperty('will-change');
+  };
 
   const stop = (): void => {
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
+    composite();
   };
 
   const draw = (): void => {
@@ -148,6 +166,7 @@ function createEngine(
     if (cameraSettled(next, target)) {
       current = target;
       draw();
+      composite();
       return;
     }
     current = next;
@@ -166,6 +185,7 @@ function createEngine(
     } else if (frame === 0) {
       lastTime = performance.now();
       frame = requestAnimationFrame(tick);
+      composite();
     }
   };
 
@@ -282,7 +302,11 @@ function createEngine(
     if (panned) {
       suppress = true;
       release(pointerId);
-      if (pinch === null) viewport.removeAttribute('data-dragging');
+      if (pinch === null) {
+        viewport.removeAttribute('data-dragging');
+        dragging = false;
+        composite();
+      }
     }
   };
 
@@ -303,6 +327,8 @@ function createEngine(
     pinch = reading;
     for (const id of touches.keys()) capture(id);
     viewport.setAttribute('data-dragging', 'true');
+    dragging = true;
+    composite();
   };
 
   const movePinch = (): void => {
@@ -320,6 +346,8 @@ function createEngine(
     for (const id of touches.keys()) release(id);
     viewport.removeAttribute('data-dragging');
     suppress = true;
+    dragging = false;
+    composite();
   };
 
   const onPointerDown = (event: PointerEvent): void => {
@@ -386,6 +414,8 @@ function createEngine(
       }
       press.panning = true;
       viewport.setAttribute('data-dragging', 'true');
+      dragging = true;
+      composite();
     }
     const dx = event.clientX - press.lastX;
     const dy = event.clientY - press.lastY;
@@ -568,6 +598,7 @@ function createEngine(
       press = null;
       pinch = null;
       touches.clear();
+      dragging = false;
       viewport.style.touchAction = '';
       limits = null;
       current = target = drawn = null;

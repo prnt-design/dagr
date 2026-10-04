@@ -777,6 +777,26 @@ describe('useExplorerCamera: flights', () => {
     expect(cameraNow().scale).not.toBe(before.scale);
   });
 
+  it('composites the plane only while the camera moves, and not at rest', async () => {
+    await ready();
+    const plane = byTestId('plane');
+    const node = byTestId('node');
+    expect(plane.style.willChange).toBe('');
+
+    camera().zoomBy(2);
+    await runFrame();
+    expect(pendingFrames()).toBe(1);
+    expect(plane.style.willChange).toBe('transform');
+    await runFramesUntilIdle();
+    expect(plane.style.willChange).toBe('');
+
+    await fire(node, pointer('pointerdown', 100, 100));
+    await fire(node, pointer('pointermove', 140, 100));
+    expect(plane.style.willChange).toBe('transform');
+    await fire(node, pointer('pointerup', 140, 100));
+    expect(plane.style.willChange).toBe('');
+  });
+
   it('applies a change in one frame under reduced motion', async () => {
     uninstallDom();
     installDom({ reducedMotion: true });
@@ -909,9 +929,11 @@ describe('useExplorerCamera: lifetime', () => {
     const drawn = plane.style.transform;
     const count = frames.length;
 
+    expect(plane.style.willChange).toBe('transform');
     await tree?.unmount();
     expect(pendingFrames()).toBe(0);
     expect(watchCount()).toBe(0);
+    expect(plane.style.willChange).toBe('');
     for (const [, type, listener] of own) {
       expect(removed.some(([target, t, l]) => target === viewport && t === type && l === listener)).toBe(true);
     }
