@@ -12,4 +12,10 @@ export default defineConfig({
       '@prnt/dagr-render/core': fileURLToPath(new URL('../render/src/core.ts', import.meta.url)),
     },
   },
+  test: {
+    // The React major this config runs against. `test/react-version.test.tsx`
+    // holds the runtime to it, so an alias that silently misses cannot make
+    // the React 18 run a second React 19 run.
+    env: { DAGR_REACT_MAJOR: '19' },
+  },
 });
