@@ -16,6 +16,7 @@
   "dependencies": {
     "@dagr/campaign": "workspace:*",
     "@dagr/campaign-stage": "workspace:*",
+    "@prnt/dagr-explorer": "workspace:*",
     "@prnt/dagr-graph": "workspace:*",
     "@prnt/dagr-layout": "workspace:*",
     "@dagr/living-stage": "workspace:*",
