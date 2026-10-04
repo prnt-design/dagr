@@ -19,7 +19,7 @@
 
 import * as React from 'react';
 import type { ReactNode } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import { vi } from 'vitest';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -75,6 +75,41 @@ export async function mount(node: ReactNode): Promise<Mounted> {
       live = false;
       await act(async () => {
         root.unmount();
+      });
+      container.remove();
+    },
+  };
+}
+
+/**
+ * Hydrates `node` into `container`, which holds server HTML and is attached
+ * to the document. `onRecoverableError` hears what React recovers from,
+ * which is where both majors report a hydration mismatch.
+ */
+export async function hydrate(
+  container: HTMLElement,
+  node: ReactNode,
+  onRecoverableError: (error: unknown) => void,
+): Promise<Mounted> {
+  let root: ReturnType<typeof hydrateRoot> | null = null;
+  await act(async () => {
+    root = hydrateRoot(container, node, { onRecoverableError });
+  });
+  const hydrated = root as ReturnType<typeof hydrateRoot> | null;
+  if (hydrated === null) throw new Error('hydrateRoot returned nothing');
+  let live = true;
+  return {
+    container,
+    async rerender(next: ReactNode): Promise<void> {
+      await act(async () => {
+        hydrated.render(next);
+      });
+    },
+    async unmount(): Promise<void> {
+      if (!live) return;
+      live = false;
+      await act(async () => {
+        hydrated.unmount();
       });
       container.remove();
     },
