@@ -95,6 +95,7 @@ host can point at the offender without parsing the message.
 
 | `code` | When |
 | --- | --- |
+| `INVALID_ID` | a view, node, edge or group has an empty id |
 | `DUPLICATE_VIEW_ID` | two views share an id |
 | `DUPLICATE_NODE_ID` | two nodes in one view share an id |
 | `DUPLICATE_EDGE_ID` | two edges in one view share an id |

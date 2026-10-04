@@ -413,6 +413,27 @@ describe('layoutView, edges of the input', () => {
   });
 });
 
+describe('layoutView, empty ids', () => {
+  const codeOf = (view: ExplorerView): string | undefined => {
+    try {
+      layoutView(view);
+    } catch (error) {
+      // The explorer's error, never the graph package's `InvalidIdError`.
+      expect(error).toBeInstanceOf(ExplorerDataError);
+      return (error as ExplorerDataError).code;
+    }
+    return undefined;
+  };
+
+  it('rejects a node with an empty id', () => {
+    expect(codeOf(chain({ nodes: [n('a'), n('')], edges: [] }))).toBe('INVALID_ID');
+  });
+
+  it('rejects a self loop with an empty id', () => {
+    expect(codeOf(pair([e('', 'a', 'a')]))).toBe('INVALID_ID');
+  });
+});
+
 describe('layoutKey', () => {
   it('is equal for data re-created with the same shape', () => {
     expect(layoutKey(chain())).toBe(layoutKey(chain()));

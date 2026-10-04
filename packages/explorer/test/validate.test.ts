@@ -203,6 +203,40 @@ describe('validateView', () => {
   });
 });
 
+describe('validateView empty ids', () => {
+  it('rejects an empty view id', () => {
+    expect(codeOf(() => validateView(view({ id: '' })))).toBe('INVALID_ID');
+  });
+
+  it('rejects an empty node id', () => {
+    const nodes = [{ id: '', label: 'Empty' }];
+    expect(codeOf(() => validateView(view({ nodes, edges: [] })))).toBe('INVALID_ID');
+  });
+
+  it('rejects an empty edge id', () => {
+    const edges = [{ id: '', source: 'a', target: 'b' }];
+    expect(codeOf(() => validateView(view({ edges })))).toBe('INVALID_ID');
+  });
+
+  it('rejects an empty group id', () => {
+    const groups = [{ id: '', label: 'G', nodeIds: ['a'] }];
+    expect(codeOf(() => validateView(view({ groups })))).toBe('INVALID_ID');
+  });
+
+  it('names the empty id, and the view it was found in', () => {
+    const nodes = [{ id: '', label: 'Empty' }];
+    const node = caught(() => validateView(view({ nodes, edges: [] })));
+    expect([node.code, node.id, node.viewId]).toEqual(['INVALID_ID', '', 'v']);
+    const whole = caught(() => validateView(view({ id: '' })));
+    expect([whole.code, whole.id, whole.viewId]).toEqual(['INVALID_ID', '', undefined]);
+  });
+
+  it('still reports an empty edge endpoint as a missing endpoint', () => {
+    const edges = [{ id: 'ab', source: '', target: 'b' }];
+    expect(codeOf(() => validateView(view({ edges })))).toBe('MISSING_EDGE_ENDPOINT');
+  });
+});
+
 describe('validateViews', () => {
   it('rejects two views with one id', () => {
     expect(codeOf(() => validateViews([view(), view()]))).toBe('DUPLICATE_VIEW_ID');

@@ -10,6 +10,7 @@
  * wants to highlight the bad node, or list the errors of one view, reads `id`
  * and `viewId` and never parses prose. What `id` names depends on the code:
  *
+ * - `INVALID_ID`: the empty id itself, so `id` is `''`. `viewId` is the view, or `undefined` when the empty id is a view's.
  * - `DUPLICATE_VIEW_ID`: the view. `viewId` is `undefined`.
  * - `INVALID_LAYOUT_OPTION`: the view. `viewId` is `undefined`.
  * - `DUPLICATE_NODE_ID`, `INVALID_NODE_SIZE`: the node.
@@ -26,6 +27,7 @@
 
 /** The `code` of every data error this package throws. */
 export type DagrExplorerErrorCode =
+  | 'INVALID_ID'
   | 'DUPLICATE_VIEW_ID'
   | 'DUPLICATE_NODE_ID'
   | 'DUPLICATE_EDGE_ID'

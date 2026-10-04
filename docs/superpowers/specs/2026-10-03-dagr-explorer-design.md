@@ -567,6 +567,7 @@ sibling package:
 
 | Code | When |
 | --- | --- |
+| `INVALID_ID` | a view, node, edge or group has an empty id |
 | `DUPLICATE_VIEW_ID` | two views share an id |
 | `DUPLICATE_NODE_ID` | two nodes in one view share an id |
 | `DUPLICATE_EDGE_ID` | two edges in one view share an id |
@@ -743,7 +744,9 @@ can see what moved without diffing.
     explorer now rejects them itself.
 12. **A layout's group rectangles are a map keyed by group id,** like its
     boxes and routes. Same review: a consumer looked a group up with `find`.
+13. **`INVALID_ID`.** Found by the whole-branch review of M5.6b: an empty id
+    passed validation and then failed in the graph package with its own error.
 
-Amendments 3 to 12 were made by the agent executing the plans and have not
-been separately approved. 3 to 9 rode in the M5.6a pull request and 10 to 12
+Amendments 3 to 13 were made by the agent executing the plans and have not
+been separately approved. 3 to 9 rode in the M5.6a pull request and 10 to 13
 ride in the M5.6b one, for the maintainer to accept or reverse.

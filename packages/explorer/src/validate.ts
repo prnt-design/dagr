@@ -24,6 +24,10 @@ export function validateView<N extends ExplorerNode, E extends ExplorerEdge>(
 ): void {
   const where = `view "${view.id}"`;
 
+  if (view.id === '') {
+    throw new ExplorerDataError('INVALID_ID', 'A view has an empty id. Ids must not be empty', '');
+  }
+
   const layoutOptions = view.layout;
   if (layoutOptions !== undefined) {
     for (const key of ['nodeSep', 'rankSep'] as const) {
@@ -55,6 +59,14 @@ export function validateView<N extends ExplorerNode, E extends ExplorerEdge>(
 
   const nodeIds = new Set<string>();
   for (const node of view.nodes) {
+    if (node.id === '') {
+      throw new ExplorerDataError(
+        'INVALID_ID',
+        `A node in view "${view.id}" has an empty id. Ids must not be empty`,
+        '',
+        view.id,
+      );
+    }
     if (nodeIds.has(node.id)) {
       throw new ExplorerDataError(
         'DUPLICATE_NODE_ID',
@@ -77,6 +89,14 @@ export function validateView<N extends ExplorerNode, E extends ExplorerEdge>(
 
   const edgeIds = new Set<string>();
   for (const edge of view.edges) {
+    if (edge.id === '') {
+      throw new ExplorerDataError(
+        'INVALID_ID',
+        `An edge in view "${view.id}" has an empty id. Ids must not be empty`,
+        '',
+        view.id,
+      );
+    }
     if (edgeIds.has(edge.id)) {
       throw new ExplorerDataError(
         'DUPLICATE_EDGE_ID',
@@ -100,6 +120,14 @@ export function validateView<N extends ExplorerNode, E extends ExplorerEdge>(
 
   const groupIds = new Set<string>();
   for (const group of view.groups ?? []) {
+    if (group.id === '') {
+      throw new ExplorerDataError(
+        'INVALID_ID',
+        `A group in view "${view.id}" has an empty id. Ids must not be empty`,
+        '',
+        view.id,
+      );
+    }
     if (groupIds.has(group.id)) {
       throw new ExplorerDataError(
         'DUPLICATE_GROUP_ID',
