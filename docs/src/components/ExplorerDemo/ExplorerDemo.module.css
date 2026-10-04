@@ -1,0 +1,137 @@
+/* The explorer demos' look: @prnt/dagr-explorer/styles.css, themed by the
+   docs site.
+
+   THE MAPPING IS THE WORKED EXAMPLE. The stylesheet reads eight
+   --dagr-explorer-* variables and this class sets each one to an Infima
+   variable, so the explorer follows the site's light and dark modes with no
+   rule of its own for either: Infima swaps its variables under
+   html[data-theme='dark'], and these resolve at use time. The docs page
+   shows this block, so keep the two in step. */
+
+.theme {
+  /* The accent is also text (a pressed view, the selected result), so it
+     takes the site's link colour, the primary cut that stays legible as
+     text, rather than the primary itself. */
+  --dagr-explorer-accent: var(--ifm-link-color);
+  --dagr-explorer-fg: var(--ifm-color-content);
+  --dagr-explorer-fg-muted: var(--ifm-color-content-secondary);
+  --dagr-explorer-border: var(--ifm-color-emphasis-300);
+  --dagr-explorer-bg: var(--ifm-background-surface-color);
+  --dagr-explorer-bg-subtle: var(--ifm-color-emphasis-100);
+  --dagr-explorer-focus: var(--ifm-color-primary);
+  --dagr-explorer-font-mono: var(--ifm-font-family-monospace);
+
+  margin: 1.5rem 0 2rem;
+}
+
+/* The stylesheet's selectors have no specificity, so a plain host rule wins:
+   here, the site's own typeface instead of the stylesheet's system stack. */
+.theme [data-dagr-explorer='root'] {
+  font-family: var(--ifm-font-family-base);
+}
+
+.large {
+  --dagr-explorer-height: 560px;
+}
+
+/* Node content, from renderNode. */
+
+.nodeKind {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ifm-color-content-secondary);
+}
+
+.nodeLabel {
+  display: block;
+  font-weight: 600;
+}
+
+.nodeSummary {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ifm-color-content-secondary);
+}
+
+/* The drawer's body, from renderDetails. */
+
+.detailsTitle {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.facts dt {
+  font-weight: 400;
+  color: var(--ifm-color-content-secondary);
+}
+
+.facts dd {
+  margin: 0;
+}
+
+.detailsSummary {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.connections {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connections li {
+  margin: 0 0 4px;
+}
+
+.connections button {
+  width: 100%;
+  text-align: left;
+}
+
+.connectionLabel {
+  display: block;
+  font-size: 12px;
+  color: var(--ifm-color-content-secondary);
+}
+
+/* The large demo's readout, which the browser checks read. */
+
+.readout {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+  color: var(--ifm-color-content-secondary);
+}
+
+.readout strong {
+  font-family: var(--ifm-font-family-monospace);
+  font-weight: 600;
+  color: var(--ifm-color-content);
+}
+
+.pending {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: var(--dagr-explorer-height, 480px);
+  margin: 0;
+  padding: 2rem 1rem;
+  border: 1px dashed var(--ifm-color-emphasis-300);
+  color: var(--ifm-color-content-secondary);
+  text-align: center;
+}
