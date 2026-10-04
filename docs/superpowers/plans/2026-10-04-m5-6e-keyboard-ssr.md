@@ -102,3 +102,25 @@ Packaging: the smoke renders on the server from the tarball.
 
 Docs pages, demos, the bench, browser verification, making the package public,
 and the umbrella subpath are M5.6f.
+
+---
+
+## Amendments during execution
+
+Choices the implementer made where this brief was silent, all judged sound by
+the review and recorded in the spec's amendment 16:
+
+- The nearest-to-center tab target is recomputed at each scan of the visible
+  set, not every frame.
+- Keyboard focus is "the last input on the page was a key", from document
+  listeners, not `:focus-visible`.
+- The focused node and an arrow's target are pinned as well as the tab target,
+  outside the cap, so tests that counted buttons under a cap expect one more.
+- `Enter` and `Space` inspect on key down; repeats are ignored; an arrow with no
+  candidate still prevents the page from scrolling.
+- The viewport element's scroll is reset to zero.
+- The camera hook ignores a plain arrow on a node, which the surface handles.
+- `useIsomorphicLayoutEffect` is shared from a leaf module.
+- The React 18 config gained a `react-dom/server` alias.
+- The hint names the arrow keys.
+
