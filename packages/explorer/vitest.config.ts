@@ -7,6 +7,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: {
     alias: {
+      // For `bench/`, which imports the bench kit. Resolved from source, as in
+      // packages/react, so the kit needs no build.
+      '@dagr/bench': fileURLToPath(new URL('../../bench/src/index.ts', import.meta.url)),
       '@prnt/dagr-graph': fileURLToPath(new URL('../graph/src/index.ts', import.meta.url)),
       '@prnt/dagr-layout': fileURLToPath(new URL('../layout/src/index.ts', import.meta.url)),
       '@prnt/dagr-render/core': fileURLToPath(new URL('../render/src/core.ts', import.meta.url)),

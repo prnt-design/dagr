@@ -67,3 +67,7 @@ Not published. The package is private until M5.6f.
   every node as a mark, the plane hidden and no node elements until the
   client measures the graph. It hydrates without a mismatch. No part needed
   a change for it.
+- Add the docs page, `/docs/explorer`, with two live demos, an
+  architecture graph and a 2,000 node synthetic graph, and Node benches
+  for the visible set at 1,000 and 10,000 nodes and for layout at 1,000
+  (M5.6f-1). No package code changed.
