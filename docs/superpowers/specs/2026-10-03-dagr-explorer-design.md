@@ -402,7 +402,7 @@ On every camera frame a pure function computes:
 - **Base nodes and edges:** nodes that intersect the expanded viewport and are
   not overlay nodes, and edges whose route bounds intersect it.
 
-The function allocates nothing on a frame where the result is unchanged.
+The viewport keeps the previous result, by reference, on a frame where nothing changed, so an unchanged frame gives React nothing new to see.
 
 **React renders only when membership or a tier changes.** The camera writes
 one transform on the plane per frame. A node element is positioned in world
@@ -464,6 +464,8 @@ and pan limits from the content bounds and node boxes. One
 `requestAnimationFrame` loop eases toward the latest input and stops when
 settled. Under `prefers-reduced-motion` changes apply immediately. A resize refits.
 
+A focus fits the node with 24 CSS pixels to spare on each side, up to the zoom ceiling. The ease has a 55 millisecond time constant, and a frame longer than 64 milliseconds counts as 64, so a tab that was in the background does not jump.
+
 Pointer behavior is the documented behavior of the three existing copies:
 
 - Wheel zooms only while focus is inside the graph, anchored at the pointer.
@@ -509,7 +511,7 @@ releases graph focus. Keys typed in an input are ignored.
 
 **Keyboard focus reveals by panning at the current zoom.** `reveal` moves the
 camera the minimum distance that brings the node's box 12 CSS pixels inside
-the viewport, or centers it if it is larger than the viewport. Zooming on each
+the viewport, or centers it if it cannot fit inside that margin. Zooming on each
 arrow press would be disorienting. Zoom to a node stays on search pick, double
 click, and the toolbar.
 
@@ -752,6 +754,8 @@ can see what moved without diffing.
     boxes and routes. Same review: a consumer looked a group up with `find`.
 13. **`INVALID_ID`.** Found by the whole-branch review of M5.6b: an empty id
     passed validation and then failed in the graph package with its own error.
+
+One change is bookkeeping and not design: M5.6c was split into M5.6c-1, the pure core, and M5.6c-2, the React viewport, so each plan could be exact.
 
 Amendments 3 to 13 were made by the agent executing the plans, after review
 findings. The maintainer approved all of them on 2026-10-03.
