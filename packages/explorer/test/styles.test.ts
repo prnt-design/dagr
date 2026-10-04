@@ -73,7 +73,7 @@ describe('styles.css', () => {
 
   it('names no host framework, and no em-dash', () => {
     expect(css).not.toMatch(/docusaurus|ifm-|navbar|tailwind|chakra|mui|bootstrap|data-theme/i);
-    expect(css).not.toContain('—');
+    expect(css).not.toContain(String.fromCodePoint(0x2014));
   });
 
   it('is imported by no module, so the JavaScript entry loads no CSS', () => {
