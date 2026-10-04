@@ -409,12 +409,15 @@ useGraphInteraction({
           JSON.stringify({
             private: true,
             type: 'module',
-            dependencies: localPackages,
+            // The explorer's own peers, which its parts import at load. The
+            // same versions the interaction consumer above installs.
+            dependencies: { ...localPackages, react: '19.2.8', 'react-dom': '19.2.8' },
             pnpm: { overrides: localPackages },
           }),
         );
-        // Peers are left uninstalled on purpose. `three` is a required peer of
-        // the renderer, and this test is about the explorer working without it.
+        // Every other peer is left uninstalled on purpose. `three` is a
+        // required peer of the renderer, and this test is about the explorer
+        // working without it.
         writeFileSync(
           join(consumer, '.npmrc'),
           'auto-install-peers=false\nstrict-peer-dependencies=false\n',
@@ -432,8 +435,10 @@ useGraphInteraction({
 
         writeFileSync(
           join(consumer, 'smoke.mjs'),
-          `import { createRequire } from 'node:module';
-import { layoutView, searchNodes } from '@prnt/dagr-explorer';
+          `import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { DagrExplorer, ExplorerRoot, layoutView, searchNodes, useExplorer } from '@prnt/dagr-explorer';
 
 // The control: if three could be resolved from where the renderer is
 // installed, everything below would prove nothing.
@@ -460,6 +465,13 @@ const laid = layoutView(view);
 if (laid.boxes.size !== 2) throw new Error('explorer layout smoke failed: boxes');
 if (laid.routes.get('ab')?.length !== 2) throw new Error('explorer layout smoke failed: route');
 if (searchNodes(view.nodes, 'alp').length !== 1) throw new Error('explorer search smoke failed');
+for (const part of [DagrExplorer, ExplorerRoot, useExplorer]) {
+  if (typeof part !== 'function') throw new Error('explorer parts smoke failed');
+}
+// The stylesheet is a subpath of its own, resolved the way a bundler does.
+if (!existsSync(fileURLToPath(import.meta.resolve('@prnt/dagr-explorer/styles.css')))) {
+  throw new Error('explorer stylesheet smoke failed');
+}
 `,
         );
         // Without NODE_PATH. The vitest bin shim exports one pointing at the
