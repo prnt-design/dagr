@@ -322,6 +322,36 @@ describe('useExplorerCamera: wheel', () => {
     expect(cameraNow()).toEqual(before);
   });
 
+  it('holds a wheel listener only while focus is inside', async () => {
+    // Found by the browser check (M5.6f-2). Any non-passive wheel listener
+    // under the pointer, even one that returns at once, stops WebKit from
+    // scrolling a page whose root sets `overscroll-behavior: none`, as the
+    // docs site does. So an unfocused graph has none at all.
+    const add = vi.spyOn(EventTarget.prototype, 'addEventListener');
+    const remove = vi.spyOn(EventTarget.prototype, 'removeEventListener');
+    /** Wheel listeners added to `target` and not removed, from the spies' records. */
+    const wheelListeners = (target: EventTarget): number => {
+      const count = (spy: typeof add | typeof remove): number =>
+        spy.mock.calls.filter((call, i) => call[0] === 'wheel' && spy.mock.contexts[i] === target).length;
+      return count(add) - count(remove);
+    };
+    try {
+      await ready();
+      const viewport = byTestId('viewport');
+      expect(wheelListeners(viewport)).toBe(0);
+      await flush(() => viewport.focus());
+      expect(wheelListeners(viewport)).toBe(1);
+      // Focus moving within the graph keeps the one listener.
+      await flush(() => byTestId('node').focus());
+      expect(wheelListeners(viewport)).toBe(1);
+      await flush(() => byTestId('node').blur());
+      expect(wheelListeners(viewport)).toBe(0);
+    } finally {
+      add.mockRestore();
+      remove.mockRestore();
+    }
+  });
+
   it('zooms while focused, keeping the world point under the pointer', async () => {
     await ready();
     const viewport = byTestId('viewport');
@@ -734,6 +764,22 @@ describe('useExplorerCamera: keys', () => {
     expect(document.activeElement).not.toBe(viewport);
   });
 
+  it('does not blur on an Escape something above it already handled', async () => {
+    // The root takes an Escape in the capture phase to close the drawer, and
+    // marks it handled, so the graph keeps focus for the next Escape.
+    await ready();
+    const viewport = byTestId('viewport');
+    viewport.focus();
+    const handled = (event: Event): void => event.preventDefault();
+    document.addEventListener('keydown', handled, true);
+    try {
+      await fire(viewport, key('Escape'));
+    } finally {
+      document.removeEventListener('keydown', handled, true);
+    }
+    expect(document.activeElement).toBe(viewport);
+  });
+
   it('does not blur the viewport on Escape typed in an input inside it', async () => {
     await ready();
     const input = byTestId('input');
@@ -918,6 +964,8 @@ describe('useExplorerCamera: lifetime', () => {
     await ready();
     const viewport = byTestId('viewport');
     const plane = byTestId('plane');
+    // Focused, so the wheel listener, held only while focused, is among them.
+    await flush(() => viewport.focus());
     const own = added.filter(([target]) => target === viewport);
     expect(own.map(([, type]) => type)).toEqual(
       expect.arrayContaining(['wheel', 'keydown', 'pointerdown', 'pointermove', 'pointerup', 'click', 'dblclick']),
@@ -992,7 +1040,7 @@ describe('useExplorerCamera: lifetime', () => {
     await render(chain, true);
     await resizeTo(SIZE.width, SIZE.height);
     // The effect really did run twice, and the first run cleaned up after itself.
-    expect(ever.get('wheel')).toBe(2);
+    expect(ever.get('keydown')).toBe(2);
     expect(live.size).toBeGreaterThan(0);
     expect(watchCount()).toBe(1);
     for (const [type, count] of live) expect([type, count]).toEqual([type, 1]);

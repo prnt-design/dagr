@@ -480,6 +480,9 @@ function createEngine(
     // Keys typed in a field are the field's, Escape included.
     if (event.target instanceof Element && event.target.closest(TEXT_ENTRY) !== null) return;
     if (event.key === 'Escape') {
+      // Handled above, as the root does when the Escape closes the drawer:
+      // the graph keeps focus, and the next Escape leaves it.
+      if (event.defaultPrevented) return;
       const active = document.activeElement;
       if (active instanceof HTMLElement && viewport.contains(active)) active.blur();
       return;
@@ -521,20 +524,34 @@ function createEngine(
     event.preventDefault();
   };
 
+  // A wheel listener only while the graph holds focus, when it can act.
+  // Unfocused it would do nothing, and its mere presence costs the page its
+  // scroll in WebKit under a root with `overscroll-behavior: none`: a
+  // non-passive wheel listener under the pointer, even one that returns at
+  // once, and the page does not move (found by the M5.6f-2 browser check).
+  let wheeling = false;
+  const listenForWheel = (on: boolean): void => {
+    if (on === wheeling) return;
+    wheeling = on;
+    if (on) viewport.addEventListener('wheel', onWheel, { passive: false });
+    else viewport.removeEventListener('wheel', onWheel);
+  };
+
   // `touch-action: none` only while the graph holds focus, so an unfocused
   // graph never traps a page scroll on touch.
   const onFocusIn = (): void => {
     viewport.style.touchAction = 'none';
+    listenForWheel(true);
   };
   const onFocusOut = (event: FocusEvent): void => {
     const next = event.relatedTarget;
     if (next instanceof Node && viewport.contains(next)) return;
     viewport.style.touchAction = '';
+    listenForWheel(false);
   };
 
   const observer = new ResizeObserver(measure);
   observer.observe(viewport);
-  viewport.addEventListener('wheel', onWheel, { passive: false });
   viewport.addEventListener('keydown', onKeyDown);
   viewport.addEventListener('pointerdown', onPointerDown);
   viewport.addEventListener('pointermove', onPointerMove);
@@ -589,7 +606,7 @@ function createEngine(
       disposed = true;
       stop();
       observer.disconnect();
-      viewport.removeEventListener('wheel', onWheel);
+      listenForWheel(false);
       viewport.removeEventListener('keydown', onKeyDown);
       viewport.removeEventListener('pointerdown', onPointerDown);
       viewport.removeEventListener('pointermove', onPointerMove);
