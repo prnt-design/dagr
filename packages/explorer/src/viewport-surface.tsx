@@ -90,6 +90,7 @@ export interface ViewportSurfaceProps<N extends ExplorerNode, E extends Explorer
   /** The id of the element that describes the region. */
   readonly describedBy?: string | undefined;
   readonly className?: string | undefined;
+  /** Sizing and decoration pass through. `position` and `overflow` stay the viewport's own, because the graph needs them. */
   readonly style?: CSSProperties | undefined;
 }
 
@@ -423,10 +424,12 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
       tabIndex={-1}
       className={className}
       style={{
-        position: 'relative',
-        overflow: 'hidden',
         height: 'var(--dagr-explorer-height, 480px)',
         ...style,
+        // Last, so a caller cannot break the graph: the plane and the nodes
+        // are absolutely positioned against this element and clipped by it.
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
       {base.space === 'viewport' ? layer : null}

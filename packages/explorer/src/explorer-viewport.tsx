@@ -58,7 +58,11 @@ export interface ExplorerViewportProps<N extends ExplorerNode = ExplorerNode> {
   /** What draws the nodes that have no element. Default: the SVG base. Experimental. */
   readonly base?: ExplorerBase | undefined;
   readonly className?: string | undefined;
-  /** Spread last, so it wins: `{ height: 600 }` replaces `--dagr-explorer-height`. */
+  /**
+   * Sizing and decoration pass through: `{ height: 600 }` replaces
+   * `--dagr-explorer-height`. `position` and `overflow` stay the viewport's
+   * own, because the graph needs them.
+   */
   readonly style?: CSSProperties | undefined;
   /**
    * Overlays positioned against the graph, such as `ExplorerDetails`. They

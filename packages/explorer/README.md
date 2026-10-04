@@ -53,13 +53,43 @@ The node type is inferred from your data, so `renderNode` above sees `team`.
 that owns its layout can rebuild it, or arrange them differently:
 
 ```tsx
-<ExplorerRoot label="Architecture" views={views}>
-  <ExplorerSearch />
-  <ExplorerViewport<MyNode> renderNode={(node) => node.title}>
-    <ExplorerDetails />
-  </ExplorerViewport>
-  <ExplorerToolbar />
-</ExplorerRoot>
+import {
+  ExplorerDetails,
+  ExplorerRoot,
+  ExplorerSearch,
+  ExplorerToolbar,
+  ExplorerViewport,
+  type ExplorerNode,
+  type ExplorerView,
+} from '@prnt/dagr-explorer';
+
+interface MyNode extends ExplorerNode {
+  readonly title: string;
+}
+
+const views: ExplorerView<MyNode>[] = [
+  {
+    id: 'overview',
+    label: 'Overview',
+    nodes: [
+      { id: 'app', label: 'Application', title: 'App' },
+      { id: 'store', label: 'Store', title: 'Store' },
+    ],
+    edges: [{ id: 'read', source: 'app', target: 'store' }],
+  },
+];
+
+export function Architecture() {
+  return (
+    <ExplorerRoot label="Architecture" views={views}>
+      <ExplorerSearch />
+      <ExplorerViewport<MyNode> renderNode={(node) => node.title}>
+        <ExplorerDetails />
+      </ExplorerViewport>
+      <ExplorerToolbar />
+    </ExplorerRoot>
+  );
+}
 ```
 
 | Part | Owns |
@@ -74,7 +104,10 @@ that owns its layout can rebuild it, or arrange them differently:
 
 Every part takes `className` and `style`, and your `style` wins over the
 part's own: `<ExplorerViewport style={{ height: 600 }} />` sets the graph's
-height, which is otherwise `--dagr-explorer-height`.
+height, which is otherwise `--dagr-explorer-height`. The one exception is
+the viewport's `position` and `overflow`: they stay the viewport's own
+(`relative` and `hidden`), because the graph's nodes are positioned against
+it and clipped by it.
 
 One `ExplorerViewport` per root: a second throws `ExplorerContextError` with
 the code `SECOND_VIEWPORT`. A part outside a root throws it with

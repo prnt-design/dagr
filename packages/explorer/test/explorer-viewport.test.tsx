@@ -166,16 +166,22 @@ describe('ExplorerViewport: inside a root', () => {
     expect(button('a')?.getAttribute('aria-label')).toBe('Alpha, within Trust boundary');
   });
 
-  it('lets the caller style win, the height included, on the graph and on the empty state', async () => {
-    await ready({}, { style: { height: 600, overflow: 'visible' } });
+  it('lets the caller style set the height, on the graph and on the empty state', async () => {
+    await ready({}, { style: { height: 600 } });
     expect(part('viewport').style.height).toBe('600px');
-    expect(part('viewport').style.overflow).toBe('visible');
     await tree?.unmount();
     await ready({}, {});
     expect(part('viewport').style.height).toBe('var(--dagr-explorer-height, 480px)');
     await tree?.unmount();
     await ready({ views: [empty] }, { style: { height: 600 } });
     expect(part('viewport').style.height).toBe('600px');
+  });
+
+  it('keeps the position and overflow the graph needs against a caller override', async () => {
+    await ready({}, { style: { height: 600, position: 'static', overflow: 'visible' } });
+    expect(part('viewport').style.height).toBe('600px');
+    expect(part('viewport').style.position).toBe('relative');
+    expect(part('viewport').style.overflow).toBe('hidden');
   });
 
   it('renders its children in a positioned stage with the graph, and the hint after the stage', async () => {
