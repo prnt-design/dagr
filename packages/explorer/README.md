@@ -55,10 +55,9 @@ that owns its layout can rebuild it, or arrange them differently:
 ```tsx
 <ExplorerRoot label="Architecture" views={views}>
   <ExplorerSearch />
-  <div style={{ position: 'relative' }}>
-    <ExplorerViewport<MyNode> renderNode={(node) => node.title} />
+  <ExplorerViewport<MyNode> renderNode={(node) => node.title}>
     <ExplorerDetails />
-  </div>
+  </ExplorerViewport>
   <ExplorerToolbar />
 </ExplorerRoot>
 ```
@@ -67,11 +66,15 @@ that owns its layout can rebuild it, or arrange them differently:
 | --- | --- |
 | `ExplorerRoot` | the data, its validation and layout, and the state below. Renders one element around its children |
 | `ExplorerViews` | the view switcher. Renders nothing for a single view. Children `({ views, activeView, selectView })` replace it |
-| `ExplorerSearch` | the search field, a live match count, and the matches as buttons |
+| `ExplorerSearch` | the search field, a live match count, and the matches as buttons, at most `maxResults` (default 50) |
 | `ExplorerTraceToggle` | trace on and off |
-| `ExplorerViewport` | the graph: pan and zoom, the SVG base, node elements for nodes large enough to read. Takes `renderNode`, `nodeAriaLabel`, `tiers`, `maxOverlayNodes`, `base` |
+| `ExplorerViewport` | the graph: pan and zoom, the SVG base, node elements for nodes large enough to read. Takes `renderNode`, `nodeAriaLabel`, `tiers`, `maxOverlayNodes`, `base`. Its children, such as `ExplorerDetails`, share a positioned stage with the graph, and the graph's hint comes after the stage, where an overlay cannot cover it |
 | `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body. Children `({ node, connections, inspect })` replace the body, and `renderConnection(edge, otherNode)` draws one connection in the default body |
 | `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node |
+
+Every part takes `className` and `style`, and your `style` wins over the
+part's own: `<ExplorerViewport style={{ height: 600 }} />` sets the graph's
+height, which is otherwise `--dagr-explorer-height`.
 
 One `ExplorerViewport` per root: a second throws `ExplorerContextError` with
 the code `SECOND_VIEWPORT`. A part outside a root throws it with
@@ -100,12 +103,18 @@ clears and the drawer closes.
 The other props: `searchText` (what search reads from a node, default the id
 and label), `strictGroups`, `labels`, `apiRef`, `className` and `style`.
 
-### `useExplorer` and `apiRef`
+### `useExplorer`, `useExplorerApi` and `apiRef`
 
 `useExplorer()` returns the explorer's state (`views`, `activeView`,
 `layout`, `selectedId`, `selectedNode`, `query`, `matches`, `trace`,
 `detailsOpen`, `dimmed`, `labels`, and `camera` for a readout of your own) and
-the same methods `apiRef` hands out:
+the same methods `apiRef` hands out. It re-renders its caller on every change
+of state.
+
+`useExplorerApi()` returns the methods alone, the same stable functions, and
+never re-renders its caller: use it in a component that only calls them, such
+as a button of your own. Called twice in one tick, the methods see each other,
+so `select('a'); select(null)` ends with nothing selected.
 
 | Method | Does |
 | --- | --- |
@@ -125,24 +134,35 @@ case ignored. `Enter` inspects the first match and flies to it, and choosing a
 result does the same. The result list stays mounted while a node is
 inspected. Search is the complete way to every node: a node too small on
 screen to read has no element, and the graph's accessible description says
-so.
+so. The list shows the first `maxResults` matches in data order, then a line
+saying how many more there are. The count and `Enter` cover every match, and
+a longer query narrows the list.
 
 When the drawer closes with focus inside it, focus returns to what opened
-it, or to the search field if that element is gone. A control of yours that
-closes the drawer keeps its focus. A connection button in the drawer inspects its
-neighbor and keeps the original opener. `Escape` in the search field closes
+it, or to the search field if that element is gone, or to the root element
+if there is no search field. A control of yours that closes the drawer keeps
+its focus. A connection button in the drawer inspects its neighbor and keeps
+the original opener. `Escape` closes the drawer from anywhere in the root,
+with two exceptions that keep their own order. In the search field it closes
 the drawer first and clears the query second. Inside the graph it closes the
 drawer and releases graph focus, without moving focus back into the graph,
-which would re-enable wheel zoom.
+which would re-enable wheel zoom. A control of yours that handles `Escape`
+and calls `preventDefault()` keeps it.
 
 ### Labels
 
 Every string the parts show comes from `labels`, an `ExplorerLabels` object
 whose neutral English defaults are `DEFAULT_EXPLORER_LABELS`. Pass any subset
 to `ExplorerRoot` or `DagrExplorer`. Counts and names are formatters, such as
-`matches(count)`, `stats({ nodes, edges })`, `zoomLevel(percent)` and
-`zoomTo(label)`. `showDetails` and `hideDetails` are for a details toggle of
-your own; no built-in part shows one.
+`matches(count)`, `moreMatches(count)` (the matches the capped list does not
+show), `stats({ nodes, edges })`, `zoomLevel(percent)`, `zoomTo(label)` and
+`inGroup(groupLabel)` (one group in a node's default accessible name, as in
+"Store, in Data tier").
+
+An inline object is fine: `labels={{ search: 'Find' }}` is kept by value,
+so re-creating it on every render with the same contents changes nothing.
+An inline formatter is a new function each time, and so a change; define it
+outside the component to keep it stable.
 
 ### Styling
 
@@ -167,7 +187,11 @@ above the explorer:
 | `--dagr-explorer-focus` | focus rings |
 | `--dagr-explorer-font-mono` | the zoom readout |
 
-Its selectors are wrapped in `:where()`, so any rule of yours wins.
+Its selectors are wrapped in `:where()`, so they have no specificity and any
+rule of yours wins. The exceptions are the `:hover`, `:focus` and
+`:focus-visible` rules, whose pseudo-class sits outside the `:where()`: each
+weighs as one class, so override it with a class that comes later or with a
+more specific selector.
 `--dagr-explorer-height` sets the graph's height, 480px by default, with or
 without the stylesheet.
 
@@ -175,10 +199,12 @@ without the stylesheet.
 
 Nodes too small to read, edges and group outlines are drawn by a base layer,
 SVG by default. `ExplorerViewport`'s `base` swaps it, through the
-`ExplorerBase`, `ExplorerBaseProps`, `ExplorerCameraSource` and
-`ExplorerEmphasis` types. They are exported and experimental: a seam with one
-implementation is a guess, and they may change when a native base over
-`DagrCanvas` lands and confirms or corrects them.
+`ExplorerBase`, `ExplorerBaseProps`, `ExplorerCameraSource`,
+`ExplorerEmphasis` and `ExplorerVisibleSet` types. They are exported and
+experimental: a seam with one implementation is a guess, and they may change
+when a native base over `DagrCanvas` lands and confirms or corrects them.
+`ExplorerCamera` (`{ x, y, scale }`), what `camera.get()` returns, is
+exported as a type too.
 
 ## The core
 
