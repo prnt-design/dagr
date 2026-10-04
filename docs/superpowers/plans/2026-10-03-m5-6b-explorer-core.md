@@ -2554,4 +2554,9 @@ before that task ran.
 - **Task 4's consumer smoke runs with `NODE_PATH` removed.** The test runner
   exports one pointing at the repo's own `node_modules`, where `three` is, and
   the smoke's control followed it. A real consumer has no such variable.
+- **After the API design review of the code as built:** a new error code,
+  `INVALID_LAYOUT_OPTION`, for a bad `nodeSep`, `rankSep`, `direction` or
+  `edgeStyle`, which used to escape as the engine's or the renderer's own
+  error. `ExplorerLayout.groups` is a map keyed by group id, and the
+  `ExplorerGroupBox` type the task text above names no longer exists.
 

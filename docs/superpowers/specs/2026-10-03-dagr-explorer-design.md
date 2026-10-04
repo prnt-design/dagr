@@ -737,6 +737,13 @@ can see what moved without diffing.
     more than one rank is already apart. The spec had said every parallel pair
     bows.
 
-Amendments 3 to 10 were made by the agent executing the plans and have not
-been separately approved. 3 to 9 rode in the M5.6a pull request and 10 rides
-in the M5.6b one, for the maintainer to accept or reverse.
+11. **`INVALID_LAYOUT_OPTION`.** Found by the API design review of M5.6b as
+    built: a bad `nodeSep`, `rankSep`, `direction` or `edgeStyle` escaped as
+    the layout engine's or the renderer's own error, with no view id. The
+    explorer now rejects them itself.
+12. **A layout's group rectangles are a map keyed by group id,** like its
+    boxes and routes. Same review: a consumer looked a group up with `find`.
+
+Amendments 3 to 12 were made by the agent executing the plans and have not
+been separately approved. 3 to 9 rode in the M5.6a pull request and 10 to 12
+ride in the M5.6b one, for the maintainer to accept or reverse.
