@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    // The build emits from `src` alone, so the source `paths` entries are
+    // dropped here, as `@prnt/dagr-react` drops its own: pulling
+    // ../render/src into the program puts files outside `rootDir` and tsc
+    // refuses to emit (TS6059). The build resolves the Dagr packages through
+    // node_modules to their built types instead.
+    "paths": {}
+  },
+  "include": ["src"],
+  "exclude": ["test", "dist"]
+}

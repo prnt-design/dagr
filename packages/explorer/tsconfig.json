@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    // The base sets `lib: ["ES2022"]` with no DOM. The core in this package is
+    // headless, but the package is a React one and its parts own a viewport,
+    // a `ResizeObserver` and focus, so DOM is here from the start.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    // The Dagr packages publish from dist, which does not exist in a fresh
+    // clone or in CI, where typecheck runs before build. Typecheck reads them
+    // from source, mirrored by the aliases in vitest.config.ts.
+    //
+    // `@prnt/dagr-render` itself is deliberately NOT mapped: this package may
+    // only import the three-free `core` entry, and `test/imports.test.ts`
+    // holds that.
+    "paths": {
+      "@prnt/dagr-graph": ["../graph/src/index.ts"],
+      "@prnt/dagr-layout": ["../layout/src/index.ts"],
+      "@prnt/dagr-render/core": ["../render/src/core.ts"]
+    }
+  },
+  "include": ["src", "test", "vitest.config.ts"]
+}

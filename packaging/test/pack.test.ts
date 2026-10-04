@@ -1,5 +1,5 @@
 /**
- * The six published packages, packed and read back.
+ * The seven published packages, packed and read back.
  *
  * This is the only check in the gate that resolves a package the way a
  * consumer does. `pnpm typecheck` reads siblings through tsconfig `paths`,
@@ -43,7 +43,7 @@ beforeAll(() => {
   packed = result.packages;
   roots = result.roots;
   dispose = result.dispose;
-  // A tsc run for six packages, six packs and six extractions. Explicit
+  // A tsc run for seven packages, seven packs and seven extractions. Explicit
   // rather than left to the default, because a default vitest timeout is not
   // a constant on a shared box (M4.8a).
 }, 300_000);
@@ -63,6 +63,7 @@ describe('the tarball a consumer installs', () => {
   it('packs one tarball per published package', () => {
     expect(each().map((p) => p.name).sort()).toEqual([
       '@prnt/dagr',
+      '@prnt/dagr-explorer',
       '@prnt/dagr-graph',
       '@prnt/dagr-layout',
       '@prnt/dagr-react',
@@ -104,7 +105,7 @@ describe('the tarball a consumer installs', () => {
   });
 
   it('ships a LICENSE with the same text the repo licences under', () => {
-    // Against the repo's own LICENSE and not merely against each other: six
+    // Against the repo's own LICENSE and not merely against each other: seven
     // identical copies that have all drifted from the root would satisfy a
     // pairwise check and still be the repo asserting a licence it did not
     // ship. This is the only assertion here that reads a file outside the
@@ -386,6 +387,104 @@ useGraphInteraction({
     // This test starts an external package install and tsc process. It takes
     // about three seconds alone and seven while workspace tests run in
     // parallel, so Vitest's five-second unit-test default is not applicable.
+    30_000,
+  );
+
+  it(
+    'runs @prnt/dagr-explorer from installed tarballs with three absent',
+    () => {
+      const consumer = mkdtempSync(join(tmpdir(), 'dagr-explorer-consumer-'));
+      try {
+        const localPackages = Object.fromEntries(
+          ['@prnt/dagr-graph', '@prnt/dagr-layout', '@prnt/dagr-render', '@prnt/dagr-explorer'].map(
+            (name) => {
+              const root = roots.get(name);
+              if (root === undefined) throw new Error(`${name} was not packed`);
+              return [name, `file:${root}`];
+            },
+          ),
+        );
+        writeFileSync(
+          join(consumer, 'package.json'),
+          JSON.stringify({
+            private: true,
+            type: 'module',
+            dependencies: localPackages,
+            pnpm: { overrides: localPackages },
+          }),
+        );
+        // Peers are left uninstalled on purpose. `three` is a required peer of
+        // the renderer, and this test is about the explorer working without it.
+        writeFileSync(
+          join(consumer, '.npmrc'),
+          'auto-install-peers=false\nstrict-peer-dependencies=false\n',
+        );
+        try {
+          execFileSync(
+            'pnpm',
+            ['install', '--prefer-offline', '--ignore-scripts', '--no-frozen-lockfile'],
+            { cwd: consumer, encoding: 'utf8', stdio: 'pipe' },
+          );
+        } catch (error) {
+          const output = error as { readonly stdout?: string; readonly stderr?: string };
+          throw new Error(`${output.stdout ?? ''}${output.stderr ?? ''}`, { cause: error });
+        }
+
+        writeFileSync(
+          join(consumer, 'smoke.mjs'),
+          `import { createRequire } from 'node:module';
+import { layoutView, searchNodes } from '@prnt/dagr-explorer';
+
+// The control: if three could be resolved from where the renderer is
+// installed, everything below would prove nothing.
+const fromRenderer = createRequire(import.meta.resolve('@prnt/dagr-render/core'));
+let three = 'absent';
+try {
+  fromRenderer.resolve('three');
+  three = 'present';
+} catch {
+  // Unresolvable, which is the condition under test.
+}
+if (three !== 'absent') throw new Error('three is resolvable, so this smoke proves nothing');
+
+const view = {
+  id: 'v',
+  label: 'View',
+  nodes: [
+    { id: 'a', label: 'Alpha' },
+    { id: 'b', label: 'Beta' },
+  ],
+  edges: [{ id: 'ab', source: 'a', target: 'b' }],
+};
+const laid = layoutView(view);
+if (laid.boxes.size !== 2) throw new Error('explorer layout smoke failed: boxes');
+if (laid.routes.get('ab')?.length !== 2) throw new Error('explorer layout smoke failed: route');
+if (searchNodes(view.nodes, 'alp').length !== 1) throw new Error('explorer search smoke failed');
+`,
+        );
+        // Without NODE_PATH. The vitest bin shim exports one pointing at the
+        // repo's hoisted `node_modules/.pnpm/node_modules`, where three is,
+        // and `require.resolve` honours it. A consumer has no such variable,
+        // and with it inherited the control above would find three here.
+        const env = Object.fromEntries(
+          Object.entries(process.env).filter(([key]) => key !== 'NODE_PATH'),
+        );
+        try {
+          execFileSync(process.execPath, ['smoke.mjs'], {
+            cwd: consumer,
+            encoding: 'utf8',
+            stdio: 'pipe',
+            env,
+          });
+        } catch (error) {
+          const output = error as { readonly stdout?: string; readonly stderr?: string };
+          throw new Error(`${output.stdout ?? ''}${output.stderr ?? ''}`, { cause: error });
+        }
+      } finally {
+        rmSync(consumer, { recursive: true, force: true });
+      }
+    },
+    // An external install and a node process, as the typecheck above is.
     30_000,
   );
 });

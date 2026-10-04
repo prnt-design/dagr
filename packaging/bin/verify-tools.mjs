@@ -5,7 +5,7 @@
  *
  * 1. `publint` over every tarball.
  * 2. `arethetypeswrong` over every tarball, under the `esm-only` profile.
- * 3. A scratch project OUTSIDE the workspace that installs all six tarballs,
+ * 3. A scratch project OUTSIDE the workspace that installs all seven tarballs,
  *    typechecks their public surfaces, and runs a headless runtime smoke.
  *
  * The vitest suite beside this is the gate: it runs on every `pnpm test`, needs
@@ -17,7 +17,7 @@
  *
  * WHY THE PROFILE IS `esm-only` AND NOT THE DEFAULT `strict`. Every one of these
  * packages is `"type": "module"` with no CommonJS build, on purpose. Under
- * `strict`, attw reports `CJSResolvesToESM` on all six, which is not a defect:
+ * `strict`, attw reports `CJSResolvesToESM` on all seven, which is not a defect:
  * it is the accurate description of an ESM-only package, and the profile exists
  * to say so. If a CommonJS build is ever added, this profile is the line that
  * has to change.
@@ -30,7 +30,7 @@ import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
-const PACKAGES = ['graph', 'layout', 'render', 'react', 'vdsl', 'dagr'];
+const PACKAGES = ['graph', 'layout', 'render', 'explorer', 'react', 'vdsl', 'dagr'];
 
 const workDir = mkdtempSync(join(tmpdir(), 'dagr-verify-'));
 let failures = 0;
@@ -121,6 +121,8 @@ try {
       "import { defineRegistry, sameType } from '@prnt/dagr-vdsl';",
       "import { defineRegistry as UmbrellaRegistry } from '@prnt/dagr/vdsl';",
       "import { DagrCanvas, Html } from '@prnt/dagr-react';",
+      "import { layoutView, searchNodes } from '@prnt/dagr-explorer';",
+      "import type { ExplorerView } from '@prnt/dagr-explorer';",
       "import { DagrCanvas as UmbrellaCanvas, Html as UmbrellaHtml } from '@prnt/dagr/react';",
       "import type { DagrCanvasProps, HtmlProps } from '@prnt/dagr-react';",
       "import type { DagrCanvasProps as UmbrellaCanvasProps, HtmlProps as UmbrellaHtmlProps } from '@prnt/dagr/react';",
@@ -141,6 +143,9 @@ try {
       '',
       'const result = layout({ graph });',
       'const umbrellaResult = UmbrellaLayout({ graph });',
+      "const explorerView: ExplorerView = { id: 'v', label: 'V', nodes: [{ id: 'a', label: 'A' }], edges: [] };",
+      'void layoutView(explorerView).width;',
+      "void searchNodes(explorerView.nodes, 'a');",
       "const registry = defineRegistry({ box: { ports: [{ id: 'out', direction: 'out', type: 'event' }], canConnect: sameType } });",
       "const umbrellaRegistry = UmbrellaRegistry({ box: { ports: [{ id: 'out', direction: 'out', type: 'event' }], canConnect: sameType } });",
       "const registryNode = graph.addNode(registry.nodeInit('box', { id: 'registry-node' }));",
@@ -193,6 +198,7 @@ try {
       "import { Graph as SubpathGraph } from '@prnt/dagr/graph';",
       "import { layout as ScopedLayout } from '@prnt/dagr-layout';",
       "import { layout as UmbrellaLayout } from '@prnt/dagr/layout';",
+      "import { layoutView as explorerLayoutView } from '@prnt/dagr-explorer';",
       "import { Camera2D as ScopedCamera, fitZoom, ribbonWidthAt, stepSpring2D } from '@prnt/dagr-render';",
       "import { Camera2D as UmbrellaCamera } from '@prnt/dagr/render';",
       "import { Camera2D as CoreCamera, fitZoom as coreFitZoom, shapeEdgePath as coreShapeEdgePath } from '@prnt/dagr-render/core';",
@@ -211,6 +217,7 @@ try {
       "graph.addNode('b');",
       "graph.addEdge('a', 'b');",
       "if (ScopedLayout({ graph }).nodes.size !== 2 || UmbrellaLayout({ graph }).nodes.size !== 2) throw new Error('layout smoke failed');",
+      "if (explorerLayoutView({ id: 'v', label: 'V', nodes: [{ id: 'a', label: 'A' }], edges: [] }).boxes.size !== 1) throw new Error('explorer smoke failed');",
       "if (ScopedRegistry !== UmbrellaRegistry) throw new Error('VDSL umbrella identity failed');",
       "const registry = ScopedRegistry({ source: { ports: [{ id: 'out', direction: 'out', type: 'event' }] }, sink: { ports: [{ id: 'in', direction: 'in', type: 'event' }], canConnect: sameType } });",
       "const source = graph.addNode(registry.nodeInit('source', { id: 'source' }));",
@@ -235,6 +242,7 @@ try {
   const graphTarball = pick('graph');
   const layoutTarball = pick('layout');
   const renderTarball = pick('render');
+  const explorerTarball = pick('explorer');
   const reactTarball = pick('react');
   const vdslTarball = pick('vdsl');
   const umbrellaTarball = tarballs.find((t) => /^prnt-dagr-\d.*\.tgz$/.test(basename(t)));
@@ -248,6 +256,7 @@ try {
       graphTarball,
       layoutTarball,
       renderTarball,
+      explorerTarball,
       reactTarball,
       vdslTarball,
       umbrellaTarball,
@@ -260,10 +269,10 @@ try {
       '@types/react-dom',
     ],
     scratch,
-    'npm install of all six tarballs and their public peers',
+    'npm install of all seven tarballs and their public peers',
   );
   run('npx', ['tsc', '--noEmit'], scratch, 'tsc over scoped and umbrella public package surfaces');
-  run('node', ['smoke.mjs'], scratch, 'headless scoped and umbrella graph, layout, VDSL, render, and React smoke');
+  run('node', ['smoke.mjs'], scratch, 'headless scoped and umbrella graph, layout, VDSL, render, explorer, and React smoke');
 } finally {
   rmSync(workDir, { recursive: true, force: true });
 }

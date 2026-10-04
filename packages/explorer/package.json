@@ -1,0 +1,56 @@
+{
+  "name": "@prnt/dagr-explorer",
+  "version": "0.1.3",
+  "private": true,
+  "description": "An interactive graph explorer for Dagr: views, search, connection tracing, groups and a details drawer, with virtualized node content.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "CHANGELOG.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": [
+    "*.css"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prnt-design/dagr.git",
+    "directory": "packages/explorer"
+  },
+  "dependencies": {
+    "@prnt/dagr-graph": "workspace:^",
+    "@prnt/dagr-layout": "workspace:^",
+    "@prnt/dagr-render": "workspace:^"
+  },
+  "peerDependencies": {
+    "react": ">=18.2.0 <20.0.0",
+    "react-dom": ">=18.2.0 <20.0.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  }
+}

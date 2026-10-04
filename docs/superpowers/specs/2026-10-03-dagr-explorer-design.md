@@ -170,9 +170,12 @@ coming out, once, in the layout module.
 boxes after layout, with padding, and does not move any node. This matches
 `@prnt/dagr-render`'s `NodeGroup`, hence `nodeIds`. Compound layout is M7.
 
-**Parallel edges bow apart.** Edges between the same unordered pair of nodes
-are offset symmetrically about the routed line, so each is visible, and both
-ends stay on their nodes.
+**Parallel edges the router draws on one line bow apart.** Edges between the
+same unordered pair of nodes share a line only when they span one rank. Those
+are offset symmetrically about that line, so each is visible, and both ends
+stay on their nodes. A pair that spans more ranks is left as the engine routed
+it: each edge already runs through its own dummy nodes, a `nodeSep` apart, and
+moving those would undo an ordering the engine chose.
 
 **Self loops are kept and not drawn.** An edge whose source is its target
 stays in the data and in the drawer's connections. It is left out of layout
@@ -183,6 +186,11 @@ Drawing a loop is deferred.
 and endpoints, group ids and membership, and the layout options. Data
 re-created on every render with the same shape keeps its layout and its
 camera. A label or color change never relayouts.
+
+**A layout is three maps and a size.** `layoutView` returns `boxes` (a box
+per node), `routes` (a route per edge) and `groups` (a rectangle per group),
+each a map keyed by id in the order the view lists them, plus the plane's
+`width` and `height`.
 
 **World space** is y-down CSS pixels at zoom 1, with the content's top-left
 padded off the origin.
@@ -564,11 +572,13 @@ sibling package:
 
 | Code | When |
 | --- | --- |
+| `INVALID_ID` | a view, node, edge or group has an empty id |
 | `DUPLICATE_VIEW_ID` | two views share an id |
 | `DUPLICATE_NODE_ID` | two nodes in one view share an id |
 | `DUPLICATE_EDGE_ID` | two edges in one view share an id |
 | `DUPLICATE_GROUP_ID` | two groups in one view share an id |
 | `INVALID_NODE_SIZE` | a node's resolved width or height is not finite and greater than zero |
+| `INVALID_LAYOUT_OPTION` | a view's layout spacing is not finite and zero or greater, or its `direction` or `edgeStyle` is not an allowed value |
 | `MISSING_EDGE_ENDPOINT` | an edge names a node its view lacks |
 | `MISSING_GROUP_MEMBER` | a group names a node its view lacks |
 | `EMPTY_GROUP` | a group has no members |
@@ -727,6 +737,21 @@ can see what moved without diffing.
    API design review: a public constant cannot change value or become an
    option without a break.
 
-Amendments 3 to 9 were made by the agent executing the plan and have not been
-separately approved. They ride in the M5.6a pull request for the maintainer to
-accept or reverse.
+10. **Only parallel edges the router draws on one line are separated.**
+    Found by the algorithms review of M5.6b, and checked against the router's
+    own contract in `packages/layout/src/route.ts`: a parallel pair spanning
+    more than one rank is already apart. The spec had said every parallel pair
+    bows.
+
+11. **`INVALID_LAYOUT_OPTION`.** Found by the API design review of M5.6b as
+    built: a bad `nodeSep`, `rankSep`, `direction` or `edgeStyle` escaped as
+    the layout engine's or the renderer's own error, with no view id. The
+    explorer now rejects them itself.
+12. **A layout's group rectangles are a map keyed by group id,** like its
+    boxes and routes. Same review: a consumer looked a group up with `find`.
+13. **`INVALID_ID`.** Found by the whole-branch review of M5.6b: an empty id
+    passed validation and then failed in the graph package with its own error.
+
+Amendments 3 to 13 were made by the agent executing the plans and have not
+been separately approved. 3 to 9 rode in the M5.6a pull request and 10 to 13
+ride in the M5.6b one, for the maintainer to accept or reverse.

@@ -16,8 +16,22 @@ import { fileURLToPath } from 'node:url';
 
 import type { Manifest, PackedPackage } from './checks.js';
 
-/** The packages this repo publishes, in dependency order. */
-export const PUBLISHED_PACKAGES = ['graph', 'layout', 'render', 'react', 'vdsl', 'dagr'] as const;
+/**
+ * The packages this repo publishes, in dependency order.
+ *
+ * `explorer` is `"private": true` until M5.6f and is here regardless. `pnpm
+ * pack` packs a private package, and a broken `exports` map is cheaper to find
+ * on the day it is written than on the day the flag comes off.
+ */
+export const PUBLISHED_PACKAGES = [
+  'graph',
+  'layout',
+  'render',
+  'explorer',
+  'react',
+  'vdsl',
+  'dagr',
+] as const;
 
 /** The repo root, from this file rather than from `process.cwd()`. */
 export const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
