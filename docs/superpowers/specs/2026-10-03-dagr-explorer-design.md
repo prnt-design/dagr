@@ -217,6 +217,7 @@ because a caller overriding one wants to name the other.
 | `ExplorerToolbar` | zoom out, zoom readout, zoom in, fit, zoom to selected |
 | `ExplorerTraceToggle` | trace on and off |
 | `useExplorer<N, E>()` | everything the built-in parts read and call |
+| `useExplorerApi()` | the methods alone, from a context that never changes, so its caller never re-renders |
 
 Named exports, not properties of `DagrExplorer`. They tree-shake, and they
 survive a server-component boundary.
@@ -334,7 +335,7 @@ Defaults exist for all of them and use only `label`.
 
 `ExplorerLabels` is one object of strings and formatters with neutral English
 defaults: search field label and placeholder, `matches(count)`,
-`stats({ nodes, edges })`, show and hide details, trace on and off, zoom
+`stats({ nodes, edges })`, `moreMatches(count)`, `inGroup(label)`, trace on and off, zoom
 controls, fit, `zoomTo(label)`, empty view, no views, drawer title, close, and
 the interaction hint. No part hardcodes copy.
 
@@ -777,10 +778,35 @@ can see what moved without diffing.
       spec said vector content is never composited.) A frame that cannot
       change the visible set skips computing it.
 
+15. **The parts, as built in M5.6d.** Found by the API design review and the
+    code review of the root and the parts:
+    - `useExplorerApi()` returns the methods alone and never re-renders its
+      caller. Two `ExplorerApi` calls in one tick see each other.
+    - `labels` are kept by value: an equal object passed inline changes
+      nothing. A formatter compares by identity, so define it outside the
+      component. The label keys for showing and hiding details are dropped,
+      since no part renders them; `moreMatches` and `inGroup` are added.
+    - `ExplorerSearch` shows at most `maxResults` results (default 50) and a
+      line saying how many more match. The count and `Enter` cover every
+      match.
+    - The drawer returns focus to its opener, else the search input, else the
+      root element. `Escape` closes it from anywhere in the root unless a
+      host control already handled the key.
+    - `ExplorerViewport` takes `children`, rendered beside the graph in a
+      positioned stage, so `DagrExplorer` puts the drawer there and it does
+      not cover the hint below the graph.
+    - A part's `style` is applied over its own sizing. The viewport keeps the
+      `position` and `overflow` the graph needs to clip and place its nodes.
+    - Data that arrives after mount, or after every view was gone, is not a
+      view switch: nothing resets and a deep-linked selection survives.
+    - `ExplorerCamera` and `ExplorerVisibleSet` are exported as types, the
+      second experimental like the rest of the seam, because public
+      signatures already return them.
+
 One change is bookkeeping and not design: M5.6c was split into M5.6c-1, the pure core, and M5.6c-2, the React viewport, so each plan could be exact.
 
 Amendments 3 to 13 were made by the agent executing the plans, after review
 findings. The maintainer approved all of them on 2026-10-03. Amendment 14 was
 made the same way on 2026-10-04, under the maintainer's instruction to carry on
-through the remaining slices, and is listed in its pull request for the
-maintainer to accept or reverse.
+through the remaining slices, and so was amendment 15. Each is listed in its
+pull request for the maintainer to accept or reverse.
