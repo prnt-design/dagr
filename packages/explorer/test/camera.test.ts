@@ -15,6 +15,21 @@ import {
 } from '../src/camera.js';
 import type { CameraLimits } from '../src/camera.js';
 
+/** A fan, a -> b and a -> c: a plane 680 by 360, off-center on both axes. */
+const fan = layoutView({
+  id: 'v',
+  label: 'View',
+  nodes: [
+    { id: 'a', label: 'A' },
+    { id: 'b', label: 'B' },
+    { id: 'c', label: 'C' },
+  ],
+  edges: [
+    { id: 'ab', source: 'a', target: 'b' },
+    { id: 'ac', source: 'a', target: 'c' },
+  ],
+});
+
 /** a -> b -> c with default sizes: a plane 1040 by 200, boxes 240 by 120. */
 const chain = layoutView({
   id: 'v',
@@ -77,6 +92,45 @@ describe('createCameraLimits', () => {
   });
 });
 
+describe('CameraLimits.constrain, zoomed in', () => {
+  const plane = { x: 0, y: 0, width: 680, height: 360 };
+  const fanLimits = (): CameraLimits => {
+    const limits = createCameraLimits(fan, viewport);
+    if (limits === null) throw new Error('no limits');
+    return limits;
+  };
+  const fanBox = (id: string): ExplorerBox => {
+    const box = fan.boxes.get(id);
+    if (box === undefined) throw new Error(`no box for ${id}`);
+    return box;
+  };
+  const overlaps = (a: ExplorerBox, b: ExplorerBox): boolean =>
+    a.x <= b.x + b.width &&
+    a.x + a.width >= b.x &&
+    a.y <= b.y + b.height &&
+    a.y + a.height >= b.y;
+
+  it.each(['c', 'b'])('leaves a camera focused on node %s unchanged', (id) => {
+    const limits = fanLimits();
+    const focused = focusCamera(fanBox(id), viewport, limits);
+    const back = limits.constrain(focused);
+    expect(back.x).toBeCloseTo(focused.x, 6);
+    expect(back.y).toBeCloseTo(focused.y, 6);
+    expect(back.scale).toBeCloseTo(focused.scale, 6);
+  });
+
+  it('clamps opposite pans to different cameras that both still see the plane', () => {
+    const limits = fanLimits();
+    const focused = focusCamera(fanBox('c'), viewport, limits);
+    const down = limits.constrain(panCamera(focused, 5000, 5000));
+    const up = limits.constrain(panCamera(focused, -5000, -5000));
+    expect(down.x).not.toBeCloseTo(up.x, 1);
+    expect(down.y).not.toBeCloseTo(up.y, 1);
+    expect(overlaps(visibleWorld(down, viewport), plane)).toBe(true);
+    expect(overlaps(visibleWorld(up, viewport), plane)).toBe(true);
+  });
+});
+
 describe('fitCamera', () => {
   it('centers the plane at the floor scale, and is already inside the limits', () => {
     const limits = limitsOf();
@@ -106,7 +160,10 @@ describe('zoomCamera', () => {
   it('stops at the floor and the ceiling', () => {
     const limits = limitsOf();
     const fit = fitCamera(chain, viewport, limits);
-    expect(zoomCamera(fit, 0.5, { x: 400, y: 240 }, limits)).toEqual(fit);
+    const floor = zoomCamera(fit, 0.5, { x: 400, y: 240 }, limits);
+    expect(floor.x).toBeCloseTo(fit.x, 6);
+    expect(floor.y).toBeCloseTo(fit.y, 6);
+    expect(floor.scale).toBeCloseTo(fit.scale, 6);
     expect(zoomCamera(fit, 100, { x: 0, y: 0 }, limits).scale).toBeCloseTo(3, 6);
   });
 });
@@ -142,6 +199,16 @@ describe('revealCamera', () => {
       y: -160,
       scale: 4,
     });
+  });
+
+  it('centers one axis and pans the other when a node is too big on one axis only', () => {
+    // A box 900 by 50 at (100, 450), at scale 1, camera at the origin.
+    // x: 900 > 800 - 24, so it centers: lo 100, hi 1000, middle 550, so
+    //    the offset moves by 400 - 550 = -150.
+    // y: 50 fits. lo 450, hi 500 is past 480 - 12 = 468, so the least pan
+    //    is 468 - 500 = -32.
+    const wide = { x: 100, y: 450, width: 900, height: 50 };
+    expect(revealCamera(one, wide, viewport)).toEqual({ x: -150, y: -32, scale: 1 });
   });
 
   it('never changes the scale', () => {

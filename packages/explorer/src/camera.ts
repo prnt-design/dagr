@@ -36,6 +36,11 @@ export interface ExplorerViewportSize {
 export interface CameraLimits {
   readonly minScale: number;
   readonly maxScale: number;
+  /**
+   * Throws a `RangeError` for a camera whose `scale` is not a positive finite
+   * number or whose `x` or `y` is not finite, because `Camera2D` validates
+   * what it is given. Callers hold cameras that came from these functions.
+   */
   constrain(camera: ExplorerCamera): ExplorerCamera;
 }
 
@@ -107,6 +112,7 @@ export function fitCamera(
   };
 }
 
+/** Divides by `camera.scale`: expects a positive scale, as every camera from `fitCamera` and `constrain` has. */
 export function zoomCamera(
   camera: ExplorerCamera,
   factor: number,
@@ -163,6 +169,7 @@ export function revealCamera(
   };
 }
 
+/** Divides by `camera.scale`: expects a positive scale, as every camera from `fitCamera` and `constrain` has. */
 export function visibleWorld(camera: ExplorerCamera, viewport: ExplorerViewportSize): ExplorerBox {
   return {
     x: -camera.x / camera.scale,
@@ -172,6 +179,7 @@ export function visibleWorld(camera: ExplorerCamera, viewport: ExplorerViewportS
   };
 }
 
+/** Divides by `camera.scale`: expects a positive scale, as every camera from `fitCamera` and `constrain` has. */
 export function screenToWorld(camera: ExplorerCamera, point: Vec2): Vec2 {
   return { x: (point.x - camera.x) / camera.scale, y: (point.y - camera.y) / camera.scale };
 }

@@ -152,6 +152,12 @@ export function computeVisibleSet(
   return { overlay, baseNodes, edges };
 }
 
+/**
+ * Whether two sets hold the same nodes at the same tiers, and the same marks
+ * and edges in the same order. Overlay order is not compared:
+ * `computeVisibleSet` always emits the overlay in the index's data order, so
+ * two sets over one index cannot differ in order alone.
+ */
 export function sameVisibleSet(a: ExplorerVisibleSet, b: ExplorerVisibleSet): boolean {
   if (a === b) return true;
   if (

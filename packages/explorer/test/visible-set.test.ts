@@ -7,7 +7,9 @@ import {
   nodeAtPoint,
   sameVisibleSet,
 } from '../src/visible-set.js';
-import type { ExplorerVisibleSet } from '../src/visible-set.js';
+import type { ExplorerVisibleSet, LayoutIndex } from '../src/visible-set.js';
+
+const square = (x: number, y: number) => ({ x, y, width: 100, height: 100 });
 
 /**
  * a -> b -> c with default sizes, plus a self loop on a. Boxes are 240 by 120
@@ -111,9 +113,22 @@ describe('computeVisibleSet, culling', () => {
     expect(computeVisibleSet(index, one, viewport).edges).not.toContain('aa');
   });
 
-  it('does not change for a pan inside the overscan margin', () => {
-    const before = computeVisibleSet(index, fit, viewport);
-    const after = computeVisibleSet(index, { ...fit, x: fit.x + 10 }, viewport);
+  it('keeps a node inside the 25% overscan and drops one beyond it', () => {
+    // At scale 1 the viewport is 800 wide, so the overscan is 200 a side.
+    // Node a spans 40 to 280. At x -400 the viewport starts at world 400,
+    // so a is outside it, but the expanded box starts at 200 and holds a.
+    const inside = computeVisibleSet(index, { x: -400, y: 0, scale: 1 }, viewport);
+    expect(inside.overlay.has('a')).toBe(true);
+    // At x -500 the expanded box starts at 300, past a's right edge.
+    const beyond = computeVisibleSet(index, { x: -500, y: 0, scale: 1 }, viewport);
+    expect(beyond.overlay.has('a')).toBe(false);
+    expect(beyond.baseNodes).not.toContain('a');
+  });
+
+  it('does not change for a pan of a few pixels inside the margin', () => {
+    const before = computeVisibleSet(index, { x: -400, y: 0, scale: 1 }, viewport);
+    const after = computeVisibleSet(index, { x: -405, y: 0, scale: 1 }, viewport);
+    expect(before.overlay.has('a')).toBe(true);
     expect(sameVisibleSet(before, after)).toBe(true);
   });
 });
@@ -131,6 +146,23 @@ describe('computeVisibleSet, the cap', () => {
     // a and c are equally far from the center. With room for two, b and a.
     const set = computeVisibleSet(index, fit, viewport, { maxOverlayNodes: 2 });
     expect([...set.overlay.keys()]).toEqual(['a', 'b']);
+  });
+
+  it('keeps the smaller id when data order says otherwise', () => {
+    // Data order is z, m, a. z and a are both 200 from the center (400, 240)
+    // and m is nearer. With room for two, m stays and the tie goes to a.
+    const tied: LayoutIndex = {
+      nodeIds: ['z', 'm', 'a'],
+      nodeBoxes: [square(150, 190), square(350, 50), square(550, 190)],
+      edgeIds: [],
+      edgeBounds: [],
+    };
+    const set = computeVisibleSet(tied, one, viewport, {
+      tiers: { summary: 50, rich: 200 },
+      maxOverlayNodes: 2,
+    });
+    expect(new Set(set.overlay.keys())).toEqual(new Set(['m', 'a']));
+    expect(set.baseNodes).toContain('z');
   });
 
   it('treats a cap of zero as no overlay at all', () => {
@@ -171,7 +203,7 @@ describe('computeVisibleSet, pins', () => {
 });
 
 describe('sameVisibleSet', () => {
-  it('compares membership, tier and order, not identity', () => {
+  it('compares membership and tier, and the order of marks and edges, not identity', () => {
     const a = computeVisibleSet(index, fit, viewport);
     expect(sameVisibleSet(a, a)).toBe(true);
     expect(sameVisibleSet(a, computeVisibleSet(index, fit, viewport))).toBe(true);
@@ -202,5 +234,16 @@ describe('nodeAtPoint', () => {
 
   it('finds nothing between nodes', () => {
     expect(nodeAtPoint(index, { x: 300, y: 100 })).toBeNull();
+  });
+
+  it('returns the later box in data order where two overlap', () => {
+    const stacked: LayoutIndex = {
+      nodeIds: ['under', 'over'],
+      nodeBoxes: [square(0, 0), square(50, 50)],
+      edgeIds: [],
+      edgeBounds: [],
+    };
+    expect(nodeAtPoint(stacked, { x: 75, y: 75 })).toBe('over');
+    expect(nodeAtPoint(stacked, { x: 25, y: 25 })).toBe('under');
   });
 });
