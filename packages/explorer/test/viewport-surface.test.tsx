@@ -449,6 +449,25 @@ describe('ViewportSurface: activation', () => {
     expect(part('viewport').hasAttribute('data-dragging')).toBe(false);
   });
 
+  it('on touch, the first tap only focuses: its click activates nothing, and the next tap does', async () => {
+    const onNodeActivate = vi.fn();
+    await ready({ onNodeActivate });
+    const b = button('b');
+    if (b === null) throw new Error('no b');
+    const touch = { pointerType: 'touch' };
+    await fire(b, pointer('pointerdown', 300, 200, touch));
+    await fire(b, pointer('pointerup', 300, 200, touch));
+    await fire(b, mouse('click', 300, 200));
+    expect(document.activeElement).toBe(part('viewport'));
+    expect(onNodeActivate).not.toHaveBeenCalled();
+
+    await fire(b, pointer('pointerdown', 300, 200, touch));
+    await fire(b, pointer('pointerup', 300, 200, touch));
+    await fire(b, mouse('click', 300, 200));
+    expect(onNodeActivate).toHaveBeenCalledTimes(1);
+    expect(onNodeActivate).toHaveBeenCalledWith('b', b);
+  });
+
   it('calls onNodeZoom on a double click on a node or a mark, and not on empty space', async () => {
     const onNodeZoom = vi.fn();
     await ready({ onNodeZoom, tiers: { summary: 0, rich: 10_000 }, maxOverlayNodes: 1 });

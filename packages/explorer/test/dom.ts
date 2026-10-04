@@ -108,10 +108,13 @@ interface Watch {
 }
 
 const watches: Watch[] = [];
+/** Every observation ever made, disconnected or not, for a notification that arrives late. */
+const everWatched: Watch[] = [];
 
 /** Installs the observer. Call it per test, before mounting. */
 export function installResizeObserver(): void {
   watches.length = 0;
+  everWatched.length = 0;
   vi.stubGlobal(
     'ResizeObserver',
     class implements ResizeObserver {
@@ -122,7 +125,9 @@ export function installResizeObserver(): void {
       }
 
       observe(target: Element): void {
-        watches.push({ target, notify: this.#notify, observer: this });
+        const watch = { target, notify: this.#notify, observer: this };
+        watches.push(watch);
+        everWatched.push(watch);
       }
 
       unobserve(target: Element): void {
@@ -160,6 +165,23 @@ export function setSize(element: Element, width: number, height: number): void {
 export async function resizeTo(width: number, height: number): Promise<void> {
   await flush(() => {
     for (const watch of [...watches]) {
+      setSize(watch.target, width, height);
+      watch.notify(
+        [{ target: watch.target, contentRect: { width, height } } as ResizeObserverEntry],
+        watch.observer,
+      );
+    }
+  });
+}
+
+/**
+ * Delivers a resize to every observer that ever watched, including one that
+ * has since disconnected: a notification the browser queued before the
+ * disconnect and delivers after it.
+ */
+export async function resizeLate(width: number, height: number): Promise<void> {
+  await flush(() => {
+    for (const watch of [...everWatched]) {
       setSize(watch.target, width, height);
       watch.notify(
         [{ target: watch.target, contentRect: { width, height } } as ResizeObserverEntry],
@@ -298,13 +320,23 @@ function uninstallPointerCapture(): void {
   savedCapture = null;
 }
 
-/** A pointer event with the fields the camera reads. */
+/**
+ * A pointer event with the fields the camera reads. `buttons` defaults to
+ * none for the events that end a press and the primary button otherwise.
+ */
 export function pointer(
-  type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel',
+  type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel' | 'lostpointercapture',
   x: number,
   y: number,
-  init: { readonly pointerType?: string; readonly button?: number; readonly pointerId?: number } = {},
+  init: {
+    readonly pointerType?: string;
+    readonly button?: number;
+    readonly buttons?: number;
+    readonly pointerId?: number;
+    readonly isPrimary?: boolean;
+  } = {},
 ): PointerEvent {
+  const ends = type === 'pointerup' || type === 'pointercancel' || type === 'lostpointercapture';
   return new PointerEvent(type, {
     bubbles: true,
     cancelable: true,
@@ -312,15 +344,18 @@ export function pointer(
     clientX: x,
     clientY: y,
     button: init.button ?? 0,
-    buttons: type === 'pointerup' ? 0 : 1,
+    buttons: init.buttons ?? (ends ? 0 : 1),
     pointerId: init.pointerId ?? 1,
     pointerType: init.pointerType ?? 'mouse',
-    isPrimary: true,
+    isPrimary: init.isPrimary ?? true,
   });
 }
 
-/** A mouse event of `type` at a point, for `click` and `dblclick`. */
-export function mouse(type: 'click' | 'dblclick', x: number, y: number): MouseEvent {
+/**
+ * A mouse event of `type` at a point, for `click` and `dblclick`. `detail` is
+ * the click count, which is 0 for a click the keyboard made.
+ */
+export function mouse(type: 'click' | 'dblclick', x: number, y: number, detail?: number): MouseEvent {
   return new MouseEvent(type, {
     bubbles: true,
     cancelable: true,
@@ -328,7 +363,7 @@ export function mouse(type: 'click' | 'dblclick', x: number, y: number): MouseEv
     clientX: x,
     clientY: y,
     button: 0,
-    detail: type === 'dblclick' ? 2 : 1,
+    detail: detail ?? (type === 'dblclick' ? 2 : 1),
   });
 }
 
@@ -348,5 +383,6 @@ export function uninstallDom(): void {
   uninstallPointerCapture();
   queue.clear();
   watches.length = 0;
+  everWatched.length = 0;
   captured.clear();
 }

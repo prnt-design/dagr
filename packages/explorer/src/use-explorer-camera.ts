@@ -67,6 +67,13 @@ export interface UseExplorerCameraOptions {
 
 /** CSS pixels a press travels before it is a pan rather than a click. */
 const DRAG_THRESHOLD = 5;
+/** Zoom per unit of wheel delta, for a wheel and for a trackpad pinch. */
+const WHEEL_GAIN = 0.002;
+const PINCH_GAIN = 0.01;
+/** The most wheel delta one event counts, in pixels. */
+const WHEEL_CLAMP = 150;
+/** What a flight's first frame counts as elapsed: one frame at 60 Hz. */
+const FIRST_FRAME_MS = 16.7;
 const KEY_ZOOM_IN = 1.25;
 const KEY_ZOOM_OUT = 0.8;
 const KEY_PAN = 60;
@@ -130,7 +137,9 @@ function createEngine(
   const tick = (time: number): void => {
     frame = 0;
     if (disposed || current === null || target === null) return;
-    const elapsed = time - lastTime;
+    // A frame's timestamp is when the frame began, which can be before the
+    // flight did. Counted as no time, the first frame would not move.
+    const elapsed = time > lastTime ? time - lastTime : FIRST_FRAME_MS;
     lastTime = time;
     const next = easeCamera(current, target, elapsed);
     if (cameraSettled(next, target)) {
@@ -159,6 +168,7 @@ function createEngine(
 
   /** Rebuilds the limits for the layout and size, and fits. */
   const refit = (place: boolean): void => {
+    if (disposed) return;
     limits = createCameraLimits(layout, size);
     if (limits === null) {
       stop();
@@ -173,6 +183,7 @@ function createEngine(
   };
 
   const measure = (): void => {
+    if (disposed) return;
     const width = viewport.clientWidth;
     const height = viewport.clientHeight;
     // A zero dimension is a hidden viewport, not a tiny one. Keeping the last
@@ -194,8 +205,14 @@ function createEngine(
     lastY: number;
     panning: boolean;
   } | null = null;
-  // Set when a drag ends, and cleared by the next press: the click and
-  // dblclick in between belong to the drag.
+  // Touch pointers down on the viewport, at their last point in viewport
+  // coordinates. Two of them are a pinch, which `pinch` holds the last
+  // reading of.
+  const touches = new Map<number, Vec2>();
+  let pinch: { readonly distance: number; readonly mid: Vec2 } | null = null;
+  // Set when a drag or a focusing tap ends: the click that follows is the
+  // gesture's own. Cleared once that click is swallowed, and by the next
+  // press or key, so a gesture that makes no click cannot eat a later one.
   let suppress = false;
   // Clicks let through since the last one suppressed. A dblclick follows
   // two clicks, and is the drag's own if either of them was.
@@ -205,30 +222,111 @@ function createEngine(
   const focusViewport = (): void => {
     if (!containsFocus()) viewport.focus({ preventScroll: true });
   };
+  const local = (event: MouseEvent): Vec2 => {
+    const box = viewport.getBoundingClientRect();
+    return {
+      x: event.clientX - box.left - viewport.clientLeft,
+      y: event.clientY - box.top - viewport.clientTop,
+    };
+  };
+  const capture = (pointerId: number): boolean => {
+    try {
+      viewport.setPointerCapture(pointerId);
+      return true;
+    } catch {
+      // The pointer is already gone, which ends the gesture it began.
+      return false;
+    }
+  };
+  const release = (pointerId: number): void => {
+    if (viewport.hasPointerCapture(pointerId)) viewport.releasePointerCapture(pointerId);
+  };
+
+  /** Takes a gesture's camera from where it is on screen, not from the end of a flight. */
+  const grab = (): boolean => {
+    if (limits === null || current === null) return false;
+    stop();
+    current = target = drawn ?? limits.constrain(current);
+    return true;
+  };
 
   const endPress = (pointerId: number): void => {
     if (press === null || press.id !== pointerId) return;
-    if (press.panning) {
-      suppress = true;
-      if (viewport.hasPointerCapture(pointerId)) viewport.releasePointerCapture(pointerId);
-      viewport.removeAttribute('data-dragging');
-    }
+    const panned = press.panning;
     press = null;
+    if (panned) {
+      suppress = true;
+      release(pointerId);
+      if (pinch === null) viewport.removeAttribute('data-dragging');
+    }
+  };
+
+  const pinchReading = (): { readonly distance: number; readonly mid: Vec2 } | null => {
+    const [a, b] = [...touches.values()];
+    if (a === undefined || b === undefined) return null;
+    return {
+      distance: Math.hypot(b.x - a.x, b.y - a.y),
+      mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+    };
+  };
+
+  const startPinch = (): void => {
+    const reading = pinchReading();
+    if (reading === null || !grab()) return;
+    // The pinch takes over the press its first finger began.
+    press = null;
+    pinch = reading;
+    for (const id of touches.keys()) capture(id);
+    viewport.setAttribute('data-dragging', 'true');
+  };
+
+  const movePinch = (): void => {
+    const reading = pinchReading();
+    if (pinch === null || reading === null || limits === null || current === null) return;
+    const factor = pinch.distance > 0 && reading.distance > 0 ? reading.distance / pinch.distance : 1;
+    const moved = panCamera(current, reading.mid.x - pinch.mid.x, reading.mid.y - pinch.mid.y);
+    current = target = limits.constrain(zoomCamera(moved, factor, reading.mid, limits));
+    pinch = reading;
+    draw();
+  };
+
+  const endPinch = (): void => {
+    pinch = null;
+    for (const id of touches.keys()) release(id);
+    viewport.removeAttribute('data-dragging');
+    suppress = true;
   };
 
   const onPointerDown = (event: PointerEvent): void => {
+    if (event.pointerType === 'touch' && event.isPrimary) {
+      // The first finger of a new gesture: any finger still recorded lifted
+      // where this viewport did not hear it.
+      if (pinch !== null) endPinch();
+      touches.clear();
+    }
     suppress = false;
-    if (!event.isPrimary || event.button !== 0) return;
+    if (event.button !== 0) return;
     if (event.target instanceof Element) {
       const control = event.target.closest(CONTROL);
       if (control !== null && viewport.contains(control) && !control.matches(NODE)) return;
     }
-    if (event.pointerType === 'touch' && !containsFocus()) {
-      // The first tap only focuses, so an unfocused graph never traps a swipe
-      // meant to scroll the page.
-      focusViewport();
-      return;
+    if (event.pointerType === 'touch') {
+      if (!containsFocus()) {
+        // The first tap only focuses, so an unfocused graph never traps a
+        // swipe meant to scroll the page, and the click it makes activates
+        // nothing.
+        focusViewport();
+        suppress = true;
+        return;
+      }
+      if (touches.size >= 2) return;
+      touches.set(event.pointerId, local(event));
+      if (touches.size === 2) {
+        startPinch();
+        return;
+      }
     }
+    if (!event.isPrimary) return;
     press = {
       id: event.pointerId,
       startX: event.clientX,
@@ -240,38 +338,54 @@ function createEngine(
   };
 
   const onPointerMove = (event: PointerEvent): void => {
+    if (touches.has(event.pointerId)) {
+      touches.set(event.pointerId, local(event));
+      if (pinch !== null) {
+        movePinch();
+        return;
+      }
+    }
     if (press === null || press.id !== event.pointerId) return;
+    // No button down is a press released where this viewport did not hear it.
+    if (event.buttons === 0) {
+      endPress(event.pointerId);
+      return;
+    }
     if (!press.panning) {
       const travelled = Math.hypot(event.clientX - press.startX, event.clientY - press.startY);
       if (travelled <= DRAG_THRESHOLD) return;
-      if (limits === null || current === null) {
+      focusViewport();
+      if (!capture(event.pointerId) || !grab()) {
         press = null;
         return;
       }
       press.panning = true;
-      focusViewport();
-      viewport.setPointerCapture(event.pointerId);
       viewport.setAttribute('data-dragging', 'true');
-      // Take the pan from where the camera is on screen, not from the end of
-      // a flight in progress.
-      stop();
-      current = drawn ?? limits.constrain(current);
-      target = current;
     }
     const dx = event.clientX - press.lastX;
     const dy = event.clientY - press.lastY;
     press.lastX = event.clientX;
     press.lastY = event.clientY;
-    if (target !== null) aim(panCamera(target, dx, dy));
+    // A drag is drawn in the event that moved it, with no ease: the content
+    // stays under the pointer.
+    if (limits === null || current === null) return;
+    current = target = limits.constrain(panCamera(current, dx, dy));
+    draw();
   };
 
-  const onPointerUp = (event: PointerEvent): void => endPress(event.pointerId);
+  /** `pointerup`, `pointercancel` and `lostpointercapture` all end what the pointer began. */
+  const onPointerEnd = (event: PointerEvent): void => {
+    endPress(event.pointerId);
+    if (touches.delete(event.pointerId) && pinch !== null) endPinch();
+  };
 
   const onClick = (event: MouseEvent): void => {
-    if (!suppress) {
+    // A click with no count came from a key or a script, never from a drag.
+    if (!suppress || event.detail === 0) {
       clicksSinceSuppressed += 1;
       return;
     }
+    suppress = false;
     clicksSinceSuppressed = 0;
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -284,32 +398,35 @@ function createEngine(
   };
 
   const onWheel = (event: WheelEvent): void => {
-    // Ctrl and Command wheel are the browser's zoom, and an unfocused wheel
-    // scrolls the page.
-    if (event.ctrlKey || event.metaKey || !containsFocus()) return;
+    // Command wheel is the browser's zoom, and an unfocused wheel, a pinch
+    // included, belongs to the page.
+    if (event.metaKey || !containsFocus()) return;
     if (limits === null || target === null) return;
+    // A trackpad pinch arrives as a Ctrl wheel.
+    const pinching = event.ctrlKey;
+    // A sideways swipe has nothing to do here, so the page or a scroller
+    // around the graph keeps it.
+    if (event.deltaY === 0 && (pinching || !event.shiftKey)) return;
     event.preventDefault();
     const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? size.height : 1;
-    if (event.shiftKey) {
+    if (event.shiftKey && !pinching) {
       aim(panCamera(target, -(event.deltaX || event.deltaY) * unit, 0));
       return;
     }
-    const box = viewport.getBoundingClientRect();
-    const anchor = {
-      x: event.clientX - box.left - viewport.clientLeft,
-      y: event.clientY - box.top - viewport.clientTop,
-    };
-    const factor = Math.exp(-Math.max(-150, Math.min(150, event.deltaY * unit)) * 0.002);
-    aim(zoomCamera(target, factor, anchor, limits));
+    const delta = Math.max(-WHEEL_CLAMP, Math.min(WHEEL_CLAMP, event.deltaY * unit));
+    const factor = Math.exp(-delta * (pinching ? PINCH_GAIN : WHEEL_GAIN));
+    aim(zoomCamera(target, factor, local(event), limits));
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
+    suppress = false;
+    // Keys typed in a field are the field's, Escape included.
+    if (event.target instanceof Element && event.target.closest(TEXT_ENTRY) !== null) return;
     if (event.key === 'Escape') {
       const active = document.activeElement;
       if (active instanceof HTMLElement && viewport.contains(active)) active.blur();
       return;
     }
-    if (event.target instanceof Element && event.target.closest(TEXT_ENTRY) !== null) return;
     // Ctrl and Command with + - 0 are the browser's zoom.
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (limits === null || target === null) return;
@@ -360,8 +477,9 @@ function createEngine(
   viewport.addEventListener('keydown', onKeyDown);
   viewport.addEventListener('pointerdown', onPointerDown);
   viewport.addEventListener('pointermove', onPointerMove);
-  viewport.addEventListener('pointerup', onPointerUp);
-  viewport.addEventListener('pointercancel', onPointerUp);
+  viewport.addEventListener('pointerup', onPointerEnd);
+  viewport.addEventListener('pointercancel', onPointerEnd);
+  viewport.addEventListener('lostpointercapture', onPointerEnd);
   // Capture, so a suppressed click is gone before any listener on the
   // viewport or below it sees it.
   viewport.addEventListener('click', onClick, true);
@@ -394,7 +512,7 @@ function createEngine(
       return drawn === null ? null : screenToWorld(drawn, point);
     },
     setLayout(next) {
-      if (next === layout) return;
+      if (disposed || next === layout) return;
       layout = next;
       // New content is placed, not flown to: easing from a camera framed on
       // other content shows nothing meaningful on the way.
@@ -408,17 +526,19 @@ function createEngine(
       viewport.removeEventListener('keydown', onKeyDown);
       viewport.removeEventListener('pointerdown', onPointerDown);
       viewport.removeEventListener('pointermove', onPointerMove);
-      viewport.removeEventListener('pointerup', onPointerUp);
-      viewport.removeEventListener('pointercancel', onPointerUp);
+      viewport.removeEventListener('pointerup', onPointerEnd);
+      viewport.removeEventListener('pointercancel', onPointerEnd);
+      viewport.removeEventListener('lostpointercapture', onPointerEnd);
       viewport.removeEventListener('click', onClick, true);
       viewport.removeEventListener('dblclick', onDoubleClick, true);
       viewport.removeEventListener('focusin', onFocusIn);
       viewport.removeEventListener('focusout', onFocusOut);
-      if (press?.panning === true) {
-        if (viewport.hasPointerCapture(press.id)) viewport.releasePointerCapture(press.id);
-        viewport.removeAttribute('data-dragging');
-      }
+      if (press?.panning === true) release(press.id);
+      for (const id of touches.keys()) release(id);
+      viewport.removeAttribute('data-dragging');
       press = null;
+      pinch = null;
+      touches.clear();
       viewport.style.touchAction = '';
       limits = null;
       current = target = drawn = null;

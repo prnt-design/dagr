@@ -6,6 +6,7 @@ import {
   createCameraLimits,
   fitCamera,
   focusCamera,
+  panCamera,
   revealCamera,
   screenToWorld,
   zoomCamera,
@@ -25,6 +26,7 @@ import {
   pendingFrames,
   pointer,
   queuedFrames,
+  resizeLate,
   resizeTo,
   runFrame,
   runFramesUntilIdle,
@@ -173,6 +175,13 @@ function expectCamera(actual: ExplorerCamera | null, expected: ExplorerCamera): 
 
 function transformOf(value: ExplorerCamera): string {
   return `translate(${String(value.x)}px, ${String(value.y)}px) scale(${String(value.scale)})`;
+}
+
+/** The camera the plane's transform shows, read back from the style. */
+function drawnTransform(): ExplorerCamera {
+  const match = /^translate\((.+)px, (.+)px\) scale\((.+)\)$/.exec(byTestId('plane').style.transform);
+  if (match === null) throw new Error('no transform');
+  return { x: Number(match[1]), y: Number(match[2]), scale: Number(match[3]) };
 }
 
 function fitted(layout: ExplorerLayout = chain, size: ExplorerViewportSize = SIZE): ExplorerCamera {
@@ -324,13 +333,42 @@ describe('useExplorerCamera: wheel', () => {
     expectCamera(cameraNow(), limits.constrain(zoomCamera(before, Math.exp(0.3), { x: 300, y: 200 }, limits)));
   });
 
-  it('leaves a Ctrl or Command wheel to the browser', async () => {
+  it('zooms on a Ctrl wheel (a trackpad pinch) while focused, at a gain of 0.01, anchored at the pointer', async () => {
     await ready();
     const viewport = byTestId('viewport');
     viewport.focus();
+    const limits = limitsFor();
+    const anchor = { x: 300, y: 200 };
+
+    let before = cameraNow();
+    expect(await fire(viewport, wheel({ deltaY: -10, ctrlKey: true }))).toBe(false);
+    await runFramesUntilIdle();
+    expectCamera(cameraNow(), limits.constrain(zoomCamera(before, Math.exp(0.1), anchor, limits)));
+
+    // Clamped like the plain wheel, at 150.
+    before = cameraNow();
+    expect(await fire(viewport, wheel({ deltaY: 1000, ctrlKey: true }))).toBe(false);
+    await runFramesUntilIdle();
+    expectCamera(cameraNow(), limits.constrain(zoomCamera(before, Math.exp(-1.5), anchor, limits)));
+  });
+
+  it('leaves a Ctrl wheel to the browser while unfocused, and a Command wheel always', async () => {
+    await ready();
+    const viewport = byTestId('viewport');
     expect(await fire(viewport, wheel({ deltaY: -100, ctrlKey: true }))).toBe(true);
+    viewport.focus();
     expect(await fire(viewport, wheel({ deltaY: -100, metaKey: true }))).toBe(true);
     expect(pendingFrames()).toBe(0);
+  });
+
+  it('leaves a horizontal-only wheel alone', async () => {
+    await ready();
+    const viewport = byTestId('viewport');
+    const before = await zoomedIn();
+    viewport.focus();
+    expect(await fire(viewport, wheel({ deltaY: 0, deltaX: 40 }))).toBe(true);
+    expect(pendingFrames()).toBe(0);
+    expect(cameraNow()).toEqual(before);
   });
 
   it('pans horizontally on a Shift wheel', async () => {
@@ -434,6 +472,167 @@ describe('useExplorerCamera: pointer', () => {
     expect(cameraNow()).toEqual(before);
   });
 
+  it('tracks the pointer 1:1 during a drag, with no frame stepped', async () => {
+    await ready();
+    const node = byTestId('node');
+    const before = await zoomedIn();
+    await fire(node, pointer('pointerdown', 100, 100));
+    await fire(node, pointer('pointermove', 140, 100));
+    expect(pendingFrames()).toBe(0);
+    const shown = drawnTransform();
+    expect(Math.abs(shown.x - (before.x + 40))).toBeLessThan(1e-9);
+    expect(Math.abs(shown.y - before.y)).toBeLessThan(1e-9);
+    expect(shown.scale).toBe(before.scale);
+    expect(frames.at(-1)?.camera).toEqual(cameraNow());
+    await fire(node, pointer('pointerup', 140, 100));
+  });
+
+  it('after a mouse drag that starts on a node, Enter on that node activates it', async () => {
+    await ready();
+    const viewport = byTestId('viewport');
+    const node = byTestId('node');
+    await zoomedIn();
+    const clicks = vi.fn();
+    viewport.addEventListener('click', clicks);
+
+    await fire(node, pointer('pointerdown', 100, 100));
+    await fire(node, pointer('pointermove', 140, 100));
+    await fire(node, pointer('pointerup', 140, 100));
+    // No click followed the drag. Enter makes one, with a detail of 0.
+    await fire(node, key('Enter'));
+    expect(await fire(node, mouse('click', 0, 0, 0))).toBe(true);
+    expect(clicks).toHaveBeenCalledTimes(1);
+  });
+
+  it('never suppresses a click with a detail of 0, which no pointer made', async () => {
+    await ready();
+    const viewport = byTestId('viewport');
+    const node = byTestId('node');
+    await zoomedIn();
+    const clicks = vi.fn();
+    viewport.addEventListener('click', clicks);
+
+    await fire(node, pointer('pointerdown', 100, 100));
+    await fire(node, pointer('pointermove', 140, 100));
+    await fire(node, pointer('pointerup', 140, 100));
+    expect(await fire(node, mouse('click', 0, 0, 0))).toBe(true);
+    expect(clicks).toHaveBeenCalledTimes(1);
+  });
+
+  it('after a touch pan with no click, the next real click activates', async () => {
+    await ready();
+    const viewport = byTestId('viewport');
+    const plane = byTestId('plane');
+    const node = byTestId('node');
+    await zoomedIn();
+    viewport.focus();
+    const clicks = vi.fn();
+    viewport.addEventListener('click', clicks);
+
+    await fire(plane, pointer('pointerdown', 100, 100, { pointerType: 'touch' }));
+    await fire(plane, pointer('pointermove', 130, 100, { pointerType: 'touch' }));
+    await fire(plane, pointer('pointerup', 130, 100, { pointerType: 'touch' }));
+    // A touch pan makes no click, so nothing is waiting to be swallowed.
+    await fire(node, pointer('pointerdown', 10, 10, { pointerType: 'touch' }));
+    await fire(node, pointer('pointerup', 10, 10, { pointerType: 'touch' }));
+    expect(await fire(node, mouse('click', 10, 10))).toBe(true);
+    expect(clicks).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['pointercancel', 'lostpointercapture'] as const)(
+    '%s mid-drag ends the drag and stops panning',
+    async (type) => {
+      await ready();
+      const viewport = byTestId('viewport');
+      const node = byTestId('node');
+      await zoomedIn();
+      await fire(node, pointer('pointerdown', 100, 100));
+      await fire(node, pointer('pointermove', 140, 100));
+      expect(viewport.getAttribute('data-dragging')).toBe('true');
+      const moved = cameraNow();
+
+      await fire(viewport, pointer(type, 140, 100));
+      expect(viewport.hasAttribute('data-dragging')).toBe(false);
+      expect(captured.size).toBe(0);
+      await fire(viewport, pointer('pointermove', 200, 160));
+      expect(pendingFrames()).toBe(0);
+      expect(cameraNow()).toEqual(moved);
+    },
+  );
+
+  it('does not pan for a press released outside the viewport, when the pointer returns', async () => {
+    await ready();
+    const viewport = byTestId('viewport');
+    const node = byTestId('node');
+    const before = await zoomedIn();
+    await fire(node, pointer('pointerdown', 100, 100));
+    await fire(node, pointer('pointermove', 103, 100));
+    // Released elsewhere: the next move here has no button down.
+    await fire(viewport, pointer('pointermove', 160, 100, { buttons: 0 }));
+    await fire(viewport, pointer('pointermove', 200, 100));
+    expect(viewport.hasAttribute('data-dragging')).toBe(false);
+    expect(pendingFrames()).toBe(0);
+    expect(cameraNow()).toEqual(before);
+  });
+
+  it('ends the press, and pans nothing, when pointer capture throws', async () => {
+    await ready();
+    const viewport = byTestId('viewport');
+    const node = byTestId('node');
+    const before = await zoomedIn();
+    vi.spyOn(Element.prototype, 'setPointerCapture').mockImplementation(() => {
+      throw new DOMException('no such pointer', 'NotFoundError');
+    });
+    const clicks = vi.fn();
+    viewport.addEventListener('click', clicks);
+
+    await fire(node, pointer('pointerdown', 100, 100));
+    await fire(node, pointer('pointermove', 140, 100));
+    await fire(node, pointer('pointermove', 180, 100));
+    expect(viewport.hasAttribute('data-dragging')).toBe(false);
+    expect(cameraNow()).toEqual(before);
+    await fire(node, pointer('pointerup', 180, 100));
+    await fire(node, mouse('click', 180, 100));
+    expect(clicks).toHaveBeenCalledTimes(1);
+  });
+
+  it('pinches with two touches: zooms by the ratio of their distances at their midpoint, and pans by its movement', async () => {
+    await ready();
+    const viewport = byTestId('viewport');
+    const plane = byTestId('plane');
+    const before = await zoomedIn();
+    viewport.focus();
+    const limits = limitsFor();
+    const touch = (pointerId: number) => ({ pointerType: 'touch', pointerId, isPrimary: pointerId === 1 });
+
+    await fire(plane, pointer('pointerdown', 300, 200, touch(1)));
+    await fire(plane, pointer('pointerdown', 400, 200, touch(2)));
+    expect(viewport.getAttribute('data-dragging')).toBe('true');
+
+    // Apart by 10%: the midpoint moves from 350 to 355.
+    await fire(plane, pointer('pointermove', 410, 200, touch(2)));
+    expect(pendingFrames()).toBe(0);
+    const pinched = cameraNow();
+    expectCamera(pinched, limits.constrain(zoomCamera(panCamera(before, 5, 0), 1.1, { x: 355, y: 200 }, limits)));
+
+    // One finger at a time, each move is a pan by the midpoint and a zoom
+    // by the distance, drawn as it happens.
+    await fire(plane, pointer('pointermove', 330, 200, touch(1)));
+    const first = limits.constrain(zoomCamera(panCamera(pinched, 15, 0), 80 / 110, { x: 370, y: 200 }, limits));
+    expectCamera(cameraNow(), first);
+    await fire(plane, pointer('pointermove', 440, 200, touch(2)));
+    expectCamera(cameraNow(), limits.constrain(zoomCamera(panCamera(first, 15, 0), 110 / 80, { x: 385, y: 200 }, limits)));
+    expect(pendingFrames()).toBe(0);
+
+    await fire(plane, pointer('pointerup', 440, 200, touch(2)));
+    expect(viewport.hasAttribute('data-dragging')).toBe(false);
+    const after = cameraNow();
+    // The finger left behind does not pan.
+    await fire(plane, pointer('pointermove', 380, 260, touch(1)));
+    expect(cameraNow()).toEqual(after);
+    await fire(plane, pointer('pointerup', 380, 260, touch(1)));
+  });
+
   it('on touch, a press while unfocused only focuses the viewport', async () => {
     await ready();
     const viewport = byTestId('viewport');
@@ -513,6 +712,14 @@ describe('useExplorerCamera: keys', () => {
     expect(document.activeElement).not.toBe(viewport);
   });
 
+  it('does not blur the viewport on Escape typed in an input inside it', async () => {
+    await ready();
+    const input = byTestId('input');
+    input.focus();
+    await fire(input, key('Escape'));
+    expect(document.activeElement).toBe(input);
+  });
+
   it('ignores keys typed in an input, and keys with Ctrl, Command or Alt', async () => {
     await ready();
     const input = byTestId('input');
@@ -537,6 +744,15 @@ describe('useExplorerCamera: flights', () => {
     expect(middle.scale).toBeLessThan(before.scale * 2);
     expect(await runFramesUntilIdle()).toBeGreaterThan(1);
     expect(pendingFrames()).toBe(0);
+  });
+
+  it('moves the camera on the first frame of a flight, even one stamped when the flight began', async () => {
+    await ready();
+    const before = cameraNow();
+    camera().focusBox(boxOf(chain, 'c'));
+    await runFrame(0);
+    expect(cameraNow().x).not.toBe(before.x);
+    expect(cameraNow().scale).not.toBe(before.scale);
   });
 
   it('applies a change in one frame under reduced motion', async () => {
@@ -657,6 +873,19 @@ describe('useExplorerCamera: lifetime', () => {
     camera().zoomBy(2);
     expect(camera().getCamera()).toBeNull();
     expect(pendingFrames()).toBe(0);
+  });
+
+  it('a resize delivered after unmount measures nothing and draws nothing', async () => {
+    await ready();
+    const plane = byTestId('plane');
+    const drawn = plane.style.transform;
+    const count = frames.length;
+    await tree?.unmount();
+    await resizeLate(1000, 600);
+    expect(plane.style.transform).toBe(drawn);
+    expect(frames).toHaveLength(count);
+    expect(pendingFrames()).toBe(0);
+    expect(camera().getCamera()).toBeNull();
   });
 
   it("leaves one set of listeners and one frame loop after StrictMode's double effect", async () => {
