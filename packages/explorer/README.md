@@ -7,10 +7,9 @@ virtualized by on-screen size.
 ## Read this first: it is not published yet
 
 The package is built in slices, M5.6a to M5.6f in `ROADMAP.md`, and stays
-`"private": true` until the last. Today it has the headless core and the
-React parts below. Keyboard navigation between nodes (one tab stop with
-arrow keys), `reveal` on keyboard focus and server rendering arrive in
-M5.6e; docs, demos and browser validation in M5.6f.
+`"private": true` until the last. Today it has the headless core, the
+React parts below, keyboard navigation and server rendering. Docs, demos
+and browser validation arrive in M5.6f.
 
 It runs on React 18 and React 19 (`react` and `react-dom` `>=18.2.0 <20.0.0`).
 
@@ -181,6 +180,50 @@ the drawer first and clears the query second. Inside the graph it closes the
 drawer and releases graph focus, without moving focus back into the graph,
 which would re-enable wheel zoom. A control of yours that handles `Escape`
 and calls `preventDefault()` keeps it.
+
+### Keyboard
+
+The graph is one tab stop. Exactly one node is in the tab order: the
+selected node, else the last node you focused from the keyboard, else the
+node nearest the center of the view. That node always has an element, at
+any zoom, so once the graph is on screen Tab always lands on a node. Tab
+again leaves the graph. The
+graph's surface takes focus when you click it, and is not in the tab order.
+
+With a node focused:
+
+| Key | Does |
+| --- | --- |
+| Arrow keys | move focus to the nearest node in that direction, on screen or not |
+| `Shift` with an arrow | pans |
+| `Enter`, `Space` | inspect the node |
+
+With the surface focused, the arrow keys pan. In both cases `+` and `=` zoom
+in, `-` zooms out, `0` fits, and `Escape` leaves the graph (and closes the
+drawer). A key with `Ctrl`, `Command` or `Alt` is left to the browser.
+
+A node that takes focus from the keyboard is brought into view by the
+least pan, at the current zoom. A node you click is not moved to.
+
+Only the nodes on screen and large enough to read have elements, so a
+screen reader finds only those in the graph. Search is the way to every
+node: it reaches all of them whatever is on screen, and the graph's
+accessible description says so and gives the node and edge counts.
+
+The node in the tab order, the focused node and the selected node are
+mounted outside `maxOverlayNodes`, so the page can hold a few more node
+elements than the cap.
+
+### Server rendering
+
+Every part renders on a server, with no DOM: layout is pure, so the HTML
+carries the shell and the base layer, every node as a mark and every routed
+edge. The camera and the node elements start on the client, once the
+viewport is measured. Until then the plane is hidden, so no unscaled frame
+is painted, and the graph has no tab stop. The viewport's height is fixed by
+`--dagr-explorer-height` (or your `style`), so nothing shifts when it fits.
+A data error throws `ExplorerDataError` on the server as it does on the
+client.
 
 ### Labels
 
