@@ -29,7 +29,7 @@ export interface ExplorerCamera {
   readonly y: number;
   readonly scale: number;
 }
-export interface ViewportSize {
+export interface ExplorerViewportSize {
   readonly width: number;
   readonly height: number;
 }
@@ -46,7 +46,7 @@ export const EASE_MS = 55;
 
 export function createCameraLimits(
   layout: ExplorerLayout,
-  viewport: ViewportSize,
+  viewport: ExplorerViewportSize,
 ): CameraLimits | null {
   if (!(viewport.width > 0) || !(viewport.height > 0) || !(layout.width > 0) || !(layout.height > 0)) {
     return null;
@@ -96,7 +96,7 @@ export function createCameraLimits(
 
 export function fitCamera(
   layout: ExplorerLayout,
-  viewport: ViewportSize,
+  viewport: ExplorerViewportSize,
   limits: CameraLimits,
 ): ExplorerCamera {
   const scale = limits.minScale;
@@ -128,7 +128,7 @@ export function panCamera(camera: ExplorerCamera, dx: number, dy: number): Explo
 
 export function focusCamera(
   box: ExplorerBox,
-  viewport: ViewportSize,
+  viewport: ExplorerViewportSize,
   limits: CameraLimits,
 ): ExplorerCamera {
   const fill = Math.min(
@@ -146,7 +146,7 @@ export function focusCamera(
 export function revealCamera(
   camera: ExplorerCamera,
   box: ExplorerBox,
-  viewport: ViewportSize,
+  viewport: ExplorerViewportSize,
 ): ExplorerCamera {
   const axis = (offset: number, start: number, size: number, extent: number): number => {
     const lo = offset + start * camera.scale;
@@ -163,7 +163,7 @@ export function revealCamera(
   };
 }
 
-export function visibleWorld(camera: ExplorerCamera, viewport: ViewportSize): ExplorerBox {
+export function visibleWorld(camera: ExplorerCamera, viewport: ExplorerViewportSize): ExplorerBox {
   return {
     x: -camera.x / camera.scale,
     y: -camera.y / camera.scale,

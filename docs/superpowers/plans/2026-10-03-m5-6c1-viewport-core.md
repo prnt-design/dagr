@@ -322,7 +322,7 @@ import type { ExplorerBox, ExplorerLayout } from './layout.js';
 import type { Vec2 } from '@prnt/dagr-render/core';
 
 export interface ExplorerCamera { readonly x: number; readonly y: number; readonly scale: number }
-export interface ViewportSize { readonly width: number; readonly height: number }
+export interface ExplorerViewportSize { readonly width: number; readonly height: number }
 export interface CameraLimits {
   readonly minScale: number;
   readonly maxScale: number;
@@ -334,7 +334,7 @@ export const FOCUS_MARGIN = 24;
 export const REVEAL_MARGIN = 12;
 export const EASE_MS = 55;
 
-export function createCameraLimits(layout: ExplorerLayout, viewport: ViewportSize): CameraLimits | null {
+export function createCameraLimits(layout: ExplorerLayout, viewport: ExplorerViewportSize): CameraLimits | null {
   if (!(viewport.width > 0) || !(viewport.height > 0) || !(layout.width > 0) || !(layout.height > 0)) return null;
   const limiter = new Camera2D({ viewport: { width: viewport.width, height: viewport.height, devicePixelRatio: 1 } });
   let detail = { width: 160, height: 80 };
@@ -357,7 +357,7 @@ export function createCameraLimits(layout: ExplorerLayout, viewport: ViewportSiz
   };
 }
 
-export function fitCamera(layout: ExplorerLayout, viewport: ViewportSize, limits: CameraLimits): ExplorerCamera {
+export function fitCamera(layout: ExplorerLayout, viewport: ExplorerViewportSize, limits: CameraLimits): ExplorerCamera {
   const scale = limits.minScale;
   return { x: (viewport.width - layout.width * scale) / 2, y: (viewport.height - layout.height * scale) / 2, scale };
 }
@@ -369,11 +369,11 @@ export function zoomCamera(camera: ExplorerCamera, factor: number, anchor: Vec2,
 export function panCamera(camera: ExplorerCamera, dx: number, dy: number): ExplorerCamera {
   return { x: camera.x + dx, y: camera.y + dy, scale: camera.scale };
 }
-export function focusCamera(box: ExplorerBox, viewport: ViewportSize, limits: CameraLimits): ExplorerCamera {
+export function focusCamera(box: ExplorerBox, viewport: ExplorerViewportSize, limits: CameraLimits): ExplorerCamera {
   const scale = Math.max(limits.minScale, Math.min(limits.maxScale, Math.min((viewport.width - FOCUS_MARGIN * 2) / box.width, (viewport.height - FOCUS_MARGIN * 2) / box.height)));
   return { x: viewport.width / 2 - (box.x + box.width / 2) * scale, y: viewport.height / 2 - (box.y + box.height / 2) * scale, scale };
 }
-export function revealCamera(camera: ExplorerCamera, box: ExplorerBox, viewport: ViewportSize): ExplorerCamera {
+export function revealCamera(camera: ExplorerCamera, box: ExplorerBox, viewport: ExplorerViewportSize): ExplorerCamera {
   const axis = (offset: number, start: number, size: number, extent: number): number => {
     const lo = offset + start * camera.scale;
     const hi = lo + size * camera.scale;
@@ -384,7 +384,7 @@ export function revealCamera(camera: ExplorerCamera, box: ExplorerBox, viewport:
   };
   return { x: axis(camera.x, box.x, box.width, viewport.width), y: axis(camera.y, box.y, box.height, viewport.height), scale: camera.scale };
 }
-export function visibleWorld(camera: ExplorerCamera, viewport: ViewportSize): ExplorerBox {
+export function visibleWorld(camera: ExplorerCamera, viewport: ExplorerViewportSize): ExplorerBox {
   return { x: -camera.x / camera.scale, y: -camera.y / camera.scale, width: viewport.width / camera.scale, height: viewport.height / camera.scale };
 }
 export function screenToWorld(camera: ExplorerCamera, point: Vec2): Vec2 {
@@ -700,7 +700,7 @@ Create `packages/explorer/src/visible-set.ts`:
 import type { ExplorerBox, ExplorerLayout } from './layout.js';
 import type { Vec2 } from '@prnt/dagr-render/core';
 import { visibleWorld } from './camera.js';
-import type { ExplorerCamera, ViewportSize } from './camera.js';
+import type { ExplorerCamera, ExplorerViewportSize } from './camera.js';
 
 export type ExplorerTier = 'summary' | 'rich';
 export interface ExplorerTiers { readonly summary: number; readonly rich: number }
@@ -750,7 +750,7 @@ function intersects(a: ExplorerBox, b: ExplorerBox): boolean {
   return a.x <= b.x + b.width && a.x + a.width >= b.x && a.y <= b.y + b.height && a.y + a.height >= b.y;
 }
 
-export function computeVisibleSet(index: LayoutIndex, camera: ExplorerCamera, viewport: ViewportSize, options: VisibleSetOptions = {}): ExplorerVisibleSet {
+export function computeVisibleSet(index: LayoutIndex, camera: ExplorerCamera, viewport: ExplorerViewportSize, options: VisibleSetOptions = {}): ExplorerVisibleSet {
   const tiers = options.tiers ?? DEFAULT_TIERS;
   const cap = options.maxOverlayNodes ?? DEFAULT_MAX_OVERLAY_NODES;
   const pinned = new Set(options.pinned ?? []);
@@ -803,7 +803,7 @@ export function sameVisibleSet(a: ExplorerVisibleSet, b: ExplorerVisibleSet): bo
   return true;
 }
 
-export function nearestToCenter(index: LayoutIndex, camera: ExplorerCamera, viewport: ViewportSize): string | null {
+export function nearestToCenter(index: LayoutIndex, camera: ExplorerCamera, viewport: ExplorerViewportSize): string | null {
   const world = visibleWorld(camera, viewport);
   const centerX = world.x + world.width / 2;
   const centerY = world.y + world.height / 2;

@@ -16,7 +16,7 @@
 import type { ExplorerBox, ExplorerLayout } from './layout.js';
 import type { Vec2 } from '@prnt/dagr-render/core';
 import { visibleWorld } from './camera.js';
-import type { ExplorerCamera, ViewportSize } from './camera.js';
+import type { ExplorerCamera, ExplorerViewportSize } from './camera.js';
 
 export type ExplorerTier = 'summary' | 'rich';
 export interface ExplorerTiers {
@@ -93,7 +93,7 @@ function intersects(a: ExplorerBox, b: ExplorerBox): boolean {
 export function computeVisibleSet(
   index: LayoutIndex,
   camera: ExplorerCamera,
-  viewport: ViewportSize,
+  viewport: ExplorerViewportSize,
   options: VisibleSetOptions = {},
 ): ExplorerVisibleSet {
   const tiers = options.tiers ?? DEFAULT_TIERS;
@@ -176,7 +176,7 @@ export function sameVisibleSet(a: ExplorerVisibleSet, b: ExplorerVisibleSet): bo
 export function nearestToCenter(
   index: LayoutIndex,
   camera: ExplorerCamera,
-  viewport: ViewportSize,
+  viewport: ExplorerViewportSize,
 ): string | null {
   const world = visibleWorld(camera, viewport);
   const centerX = world.x + world.width / 2;
