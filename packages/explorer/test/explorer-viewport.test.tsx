@@ -178,6 +178,38 @@ describe('ExplorerViewport: inside a root', () => {
     expect(part('viewport').style.height).toBe('600px');
   });
 
+  it('renders its children in a positioned stage with the graph, and the hint after the stage', async () => {
+    tree = await mount(
+      <ExplorerRoot<Item, ExplorerEdge> label="Map" views={[overview]}>
+        <ExplorerViewport>
+          <aside data-testid="overlay" />
+        </ExplorerViewport>
+      </ExplorerRoot>,
+    );
+    const stage = part('stage');
+    expect(stage.style.position).toBe('relative');
+    expect([...stage.children].map((child) => child.getAttribute('data-dagr-explorer') ?? child.getAttribute('data-testid'))).toEqual([
+      'viewport',
+      'overlay',
+    ]);
+    expect(stage.nextElementSibling).toBe(part('hint'));
+  });
+
+  it('does not render the graph again for a keystroke that changes neither the dimming nor the selection', async () => {
+    const renderNode = vi.fn((node: Item) => node.label);
+    await ready({}, { renderNode });
+    await flush(() => api().setQuery('alp'));
+    expect(dimmedIds()).toEqual(['b', 'c', 'd']);
+    renderNode.mockClear();
+    await flush(() => api().setQuery('alph'));
+    await flush(() => api().setQuery('alpha'));
+    expect(state().query).toBe('alpha');
+    expect(renderNode).not.toHaveBeenCalled();
+    // A keystroke that changes the matches does.
+    await flush(() => api().setQuery('a'));
+    expect(renderNode).toHaveBeenCalled();
+  });
+
   it('shows labels.emptyView for a view with no nodes, and labels.noViews for no views', async () => {
     await ready({ views: [empty] });
     expect(part('viewport').textContent).toBe('This view has no nodes.');

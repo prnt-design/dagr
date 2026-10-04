@@ -69,17 +69,16 @@ export function DagrExplorer<N extends ExplorerNode = ExplorerNode, E extends Ex
       <ExplorerViews<N, E>>{renderViews}</ExplorerViews>
       <ExplorerSearch />
       <ExplorerTraceToggle />
-      {/* Positioned, so the drawer overlays the graph rather than the whole explorer. */}
-      <div data-dagr-explorer="stage" style={{ position: 'relative' }}>
-        <ExplorerViewport<N, E>
-          renderNode={renderNode}
-          nodeAriaLabel={nodeAriaLabel}
-          tiers={tiers}
-          maxOverlayNodes={maxOverlayNodes}
-          base={base}
-        />
+      {/* The drawer in the viewport's stage overlays the graph, not the whole explorer or the hint. */}
+      <ExplorerViewport<N, E>
+        renderNode={renderNode}
+        nodeAriaLabel={nodeAriaLabel}
+        tiers={tiers}
+        maxOverlayNodes={maxOverlayNodes}
+        base={base}
+      >
         <ExplorerDetails<N, E> renderConnection={renderConnection}>{renderDetails}</ExplorerDetails>
-      </div>
+      </ExplorerViewport>
       <ExplorerToolbar />
     </ExplorerRoot>
   );

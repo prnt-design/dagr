@@ -60,6 +60,18 @@ describe('DagrExplorer', () => {
     expect(part('details').parentElement?.style.position).toBe('relative');
   });
 
+  it('keeps the hint outside the stage the drawer covers', async () => {
+    tree = await mount(<DagrExplorer label="Map" views={[overview]} apiRef={apiRef} />);
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+    await flush(() => api().inspect('b'));
+    const stage = part('details').parentElement;
+    expect(stage?.style.position).toBe('relative');
+    expect(stage?.contains(part('viewport'))).toBe(true);
+    expect(stage?.contains(part('hint'))).toBe(false);
+    expect(part('viewport').getAttribute('aria-describedby')).toBe(part('hint').id);
+  });
+
   it('forwards renderNode, renderDetails, renderConnection and renderViews', async () => {
     const renderNode = vi.fn((node: Item) => `node:${node.kind}`);
     const renderDetails = vi.fn(({ node }: { node: Item }) => <p data-testid="details">details:{node.kind}</p>);

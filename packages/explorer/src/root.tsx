@@ -96,6 +96,9 @@ function useSame<T>(value: T, same: (a: T, b: T) => boolean): T {
 const sameItems = <T,>(a: readonly T[], b: readonly T[]): boolean =>
   a === b || (a.length === b.length && a.every((item, i) => item === b[i]));
 
+const sameSet = (a: ReadonlySet<string>, b: ReadonlySet<string>): boolean =>
+  a === b || (a.size === b.size && [...a].every((id) => b.has(id)));
+
 interface ExplorerRootCommonProps<N extends ExplorerNode, E extends ExplorerEdge> {
   /** Required. The accessible name the parts derive theirs from. */
   readonly label: string;
@@ -267,7 +270,8 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
     sameItems,
   );
   const hasQuery = query.trim() !== '';
-  const dimmed = useMemo<ReadonlySet<string>>(() => {
+  // Kept by value too: the graph renders again only when the dimming does.
+  const dimmedNow = useMemo<ReadonlySet<string>>(() => {
     if (activeView === null || (!hasQuery && !(trace && selectedId !== null))) return NOTHING;
     const out = new Set<string>();
     if (hasQuery) {
@@ -284,6 +288,7 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
     }
     return out.size === 0 ? NOTHING : out;
   }, [activeView, hasQuery, matches, trace, selectedId]);
+  const dimmed = useSame(dimmedNow, sameSet);
 
   const snapshot: Latest<N, E> = {
     views,

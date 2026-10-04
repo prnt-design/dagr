@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExplorerState } from '../src/context.js';
@@ -125,8 +128,21 @@ describe('ExplorerDetails: what it shows', () => {
     const body = part('details-body');
     expect(body.tabIndex).toBe(0);
     expect(body.style.overflow).toBe('auto');
+    // A scroll stop is named, from the drawer title.
+    expect(body.getAttribute('role')).toBe('region');
+    expect(document.getElementById(body.getAttribute('aria-labelledby') ?? '')?.textContent).toBe('Details');
     // Opening it never resizes the graph.
     expect(part('viewport').style.height).toBe('var(--dagr-explorer-height, 480px)');
+  });
+
+  it('falls back to the same background with no stylesheet as the stylesheet does', async () => {
+    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'styles.css'), 'utf8');
+    const block = /:where\(\[data-dagr-explorer='details'\]\) \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    const background = /background: ([^;]+);/.exec(block)?.[1];
+    expect(background).toBe('var(--dagr-explorer-bg, #ffffff)');
+    await ready();
+    await flush(() => state().inspect('b'));
+    expect(part('details').getAttribute('style')).toContain(`background: ${String(background)}`);
   });
 
   it('shows the label and the connections in edge order, each the other node', async () => {

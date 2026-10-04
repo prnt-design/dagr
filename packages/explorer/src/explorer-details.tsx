@@ -2,8 +2,9 @@
  * `ExplorerDetails`: the drawer that shows the inspected node.
  *
  * It renders nothing while closed. Open, it is an overlay at every width,
- * positioned against the nearest positioned ancestor (the root, or a host's
- * own wrapper), so opening it never resizes the graph.
+ * positioned against the nearest positioned ancestor (the viewport's stage
+ * when it is `ExplorerViewport`'s child, else the root or a host's own
+ * wrapper), so opening it never resizes the graph.
  *
  * The body is a keyboard scroll stop and scrolls to the top when the
  * inspected node changes. Its content is the slot's, or by default the
@@ -101,7 +102,8 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
         display: 'flex',
         flexDirection: 'column',
         zIndex: 1,
-        background: 'var(--dagr-explorer-bg, Canvas)',
+        // The stylesheet's fallback, so the drawer looks the same with or without it.
+        background: 'var(--dagr-explorer-bg, #ffffff)',
         ...style,
       }}
     >
@@ -118,6 +120,9 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
         ref={bodyRef}
         data-dagr-explorer="details-body"
         tabIndex={0}
+        // A keyboard scroll stop is announced, so it needs a name: the drawer's title.
+        role="region"
+        aria-labelledby={titleId}
         style={{ overflow: 'auto', flex: '1 1 auto', minHeight: 0 }}
       >
         {children !== undefined ? (

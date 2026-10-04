@@ -15,13 +15,23 @@
  * **A view switch remounts the surface,** keyed by view id. That is the
  * camera reset the spec asks of a switch: a new surface fits its layout on
  * its first measure, with no flight from a camera framed on other content.
+ *
+ * **The surface renders only for what it shows.** It is memoized, and given
+ * only the state it draws (the view, the layout, the selection, the dimming)
+ * and the root's stable methods, so a keystroke that changes neither the
+ * dimming nor the selection does not render the graph.
+ *
+ * **A stage for overlays.** The surface sits in a positioned element with
+ * the part's children, such as `ExplorerDetails`, which position against it.
+ * The hint, the graph's description, comes after the stage, so an overlay
+ * never covers it.
  */
 
-import { useEffect, useId, useRef } from 'react';
+import { memo, useEffect, useId, useRef } from 'react';
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import type { ExplorerBase, ExplorerCameraSource } from './base.js';
-import { useExplorerContext } from './context.js';
-import type { ExplorerInternals, ExplorerState } from './context.js';
+import { useExplorerApiContext, useExplorerContext } from './context.js';
+import type { ExplorerApi, ExplorerInternals } from './context.js';
 import type { ExplorerLayout } from './layout.js';
 import type { ExplorerEdge, ExplorerGroup, ExplorerNode, ExplorerView } from './types.js';
 import { ViewportSurface } from './viewport-surface.js';
@@ -50,19 +60,34 @@ export interface ExplorerViewportProps<N extends ExplorerNode = ExplorerNode> {
   readonly className?: string | undefined;
   /** Spread last, so it wins: `{ height: 600 }` replaces `--dagr-explorer-height`. */
   readonly style?: CSSProperties | undefined;
+  /**
+   * Overlays positioned against the graph, such as `ExplorerDetails`. They
+   * share a positioned stage with the graph, and the hint comes after it.
+   */
+  readonly children?: ReactNode;
 }
 
-interface PaneProps<N extends ExplorerNode, E extends ExplorerEdge> extends ExplorerViewportProps<N> {
-  readonly state: ExplorerState;
-  readonly internals: ExplorerInternals;
+interface PaneProps<N extends ExplorerNode, E extends ExplorerEdge>
+  extends Omit<ExplorerViewportProps<N>, 'children'> {
+  readonly label: string;
+  readonly inGroup: (groupLabel: string) => string;
   readonly view: ExplorerView<N, E>;
   readonly layout: ExplorerLayout;
+  readonly selectedId: string | null;
+  readonly dimmed: ReadonlySet<string>;
+  readonly api: ExplorerApi;
+  readonly internals: ExplorerInternals;
   readonly describedBy: string;
 }
 
-/** One surface for one view, attached to the root's camera hub while it lives. */
-function ViewportPane<N extends ExplorerNode, E extends ExplorerEdge>(props: PaneProps<N, E>): ReactElement {
-  const { state, internals, view, layout, describedBy, ...rest } = props;
+/**
+ * One surface for one view, attached to the root's camera hub while it lives.
+ * Memoized: every prop is stable unless what it draws changes.
+ */
+const ViewportPane = memo(function ViewportPane<N extends ExplorerNode, E extends ExplorerEdge>(
+  props: PaneProps<N, E>,
+): ReactElement {
+  const { api, internals, describedBy, ...rest } = props;
   const sourceRef = useRef<ExplorerCameraSource | null>(null);
 
   // The surface's own effects have run by now, so its source is in the ref.
@@ -74,25 +99,23 @@ function ViewportPane<N extends ExplorerNode, E extends ExplorerEdge>(props: Pan
   return (
     <ViewportSurface<N, E>
       {...rest}
-      label={state.label}
-      inGroup={state.labels.inGroup}
-      view={view}
-      layout={layout}
-      selectedId={state.selectedId}
-      dimmed={state.dimmed}
-      onNodeActivate={(id, trigger) => state.inspect(id, trigger)}
-      onNodeZoom={(id) => state.focusNode(id)}
+      onNodeActivate={(id, trigger) => api.inspect(id, trigger)}
+      onNodeZoom={(id) => api.focusNode(id)}
       controlsRef={internals.controlsRef}
       cameraSourceRef={sourceRef}
       describedBy={describedBy}
     />
   );
-}
+}) as <N extends ExplorerNode, E extends ExplorerEdge>(props: PaneProps<N, E>) => ReactElement;
+
+const STAGE: CSSProperties = { position: 'relative' };
 
 export function ExplorerViewport<N extends ExplorerNode = ExplorerNode, E extends ExplorerEdge = ExplorerEdge>(
   props: ExplorerViewportProps<N>,
 ): ReactElement {
+  const { children, ...rest } = props;
   const { state, internals } = useExplorerContext('ExplorerViewport');
+  const api = useExplorerApiContext('ExplorerViewport');
   const describedBy = useId();
 
   useEffect(() => internals.registerViewport(), [internals]);
@@ -101,43 +124,54 @@ export function ExplorerViewport<N extends ExplorerNode = ExplorerNode, E extend
   const view = state.activeView as ExplorerView<N, E> | null;
   const { layout, labels } = state;
 
-  if (view === null || layout === null || view.nodes.length === 0) {
-    return (
-      <div
-        data-dagr-explorer="viewport"
-        data-empty="true"
-        role="region"
-        aria-label={state.label}
-        className={props.className}
-        style={{
-          position: 'relative',
-          height: 'var(--dagr-explorer-height, 480px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          ...props.style,
-        }}
-      >
-        {view === null ? labels.noViews : labels.emptyView}
-      </div>
-    );
-  }
+  const empty = view === null || layout === null || view.nodes.length === 0;
 
+  // One shape for both states, so the stage and its children survive a view
+  // that empties and fills again.
   return (
     <>
-      <ViewportPane<N, E>
-        key={view.id}
-        {...props}
-        state={state}
-        internals={internals}
-        view={view}
-        layout={layout}
-        describedBy={describedBy}
-      />
-      <p id={describedBy} data-dagr-explorer="hint">
-        <span>{labels.stats({ nodes: view.nodes.length, edges: view.edges.length })}</span>{' '}
-        <span>{labels.hint}</span>
-      </p>
+      <div data-dagr-explorer="stage" style={STAGE}>
+        {empty ? (
+          <div
+            data-dagr-explorer="viewport"
+            data-empty="true"
+            role="region"
+            aria-label={state.label}
+            className={rest.className}
+            style={{
+              position: 'relative',
+              height: 'var(--dagr-explorer-height, 480px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              ...rest.style,
+            }}
+          >
+            {view === null ? labels.noViews : labels.emptyView}
+          </div>
+        ) : (
+          <ViewportPane<N, E>
+            key={view.id}
+            {...rest}
+            label={state.label}
+            inGroup={labels.inGroup}
+            view={view}
+            layout={layout}
+            selectedId={state.selectedId}
+            dimmed={state.dimmed}
+            api={api}
+            internals={internals}
+            describedBy={describedBy}
+          />
+        )}
+        {children}
+      </div>
+      {empty ? null : (
+        <p id={describedBy} data-dagr-explorer="hint">
+          <span>{labels.stats({ nodes: view.nodes.length, edges: view.edges.length })}</span>{' '}
+          <span>{labels.hint}</span>
+        </p>
+      )}
     </>
   );
 }

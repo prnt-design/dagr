@@ -174,6 +174,7 @@ describe('ExplorerSearch', () => {
     expect(part('search-results')).toBe(list);
     expect(list.scrollTop).toBe(40);
     expect(results()[1]?.dataset['selected']).toBe('true');
+    expect(results().map((b) => b.getAttribute('aria-current'))).toEqual([null, 'true']);
   });
 
   it('clears the query on Escape', async () => {

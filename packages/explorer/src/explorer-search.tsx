@@ -99,6 +99,7 @@ export function ExplorerSearch(props: ExplorerSearchProps): ReactElement {
                   type="button"
                   data-node-id={node.id}
                   data-selected={node.id === selectedId ? 'true' : undefined}
+                  aria-current={node.id === selectedId ? 'true' : undefined}
                   onClick={(event) => {
                     inspect(node.id, event.currentTarget);
                     focusNode(node.id);
