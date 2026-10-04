@@ -21,7 +21,8 @@ hundred elements. Layout is Dagr's own, and runs anywhere, a server included.
 :::note[Not published yet]
 
 The package is built in slices and stays private until browser validation
-lands. This page documents it as it is in the repository today.
+lands. This page documents it as it is in the repository today. The command
+below works once the package is published, and does not before.
 
 :::
 
@@ -146,7 +147,25 @@ import {
   ExplorerSearch,
   ExplorerToolbar,
   ExplorerViewport,
+  type ExplorerNode,
+  type ExplorerView,
 } from '@prnt/dagr-explorer';
+
+interface MyNode extends ExplorerNode {
+  readonly title: string;
+}
+
+const views: ExplorerView<MyNode>[] = [
+  {
+    id: 'overview',
+    label: 'Overview',
+    nodes: [
+      { id: 'app', label: 'Application', title: 'App' },
+      { id: 'store', label: 'Store', title: 'Store' },
+    ],
+    edges: [{ id: 'read', source: 'app', target: 'store' }],
+  },
+];
 
 export function Architecture() {
   return (
@@ -386,8 +405,8 @@ implementation, which is a guess: they may change when a native base over
 
 ## A 2,000 node graph
 
-A generated system of 40 layers of 50 nodes and 2,661 edges, the few dashed
-ones skipping a layer or two, laid out in your browser. Fitted, every node is
+A generated system of 40 layers of 50 nodes and 2,661 edges, 123 of them
+dashed and skipping a layer or two, laid out in your browser. Fitted, every node is
 a mark except the one in the tab order, which always has an element. Zoom in
 and the readout shows node elements arriving, and staying within a few of the
 cap of 200 however far you pan.

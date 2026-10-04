@@ -16,6 +16,7 @@
 
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import { DagrExplorer } from '@prnt/dagr-explorer';
+import type { ExplorerTier } from '@prnt/dagr-explorer';
 import '@prnt/dagr-explorer/styles.css';
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -54,10 +55,34 @@ function useMountedNodeCount(root: HTMLElement | null): number {
   return mounted;
 }
 
+const renderNode = (node: SyntheticNode, { tier }: { tier: ExplorerTier }): ReactNode =>
+  tier === 'rich' ? (
+    <>
+      <span className={styles.nodeKind}>
+        {node.role}, layer {node.layer + 1}
+      </span>
+      <span className={styles.nodeLabel}>{node.label}</span>
+    </>
+  ) : (
+    node.label
+  );
+
+/** Owns the count, so a change re-renders this paragraph and not the explorer. */
+function Readout({ root, nodes, edges }: { root: HTMLElement | null; nodes: number; edges: number }): ReactNode {
+  const mounted = useMountedNodeCount(root);
+  return (
+    <p className={styles.readout} data-readout="large">
+      <strong>{count(nodes)}</strong> nodes, <strong>{count(edges)}</strong> edges.
+      Node elements mounted:{' '}
+      <strong data-mounted={mounted}>{count(mounted)}</strong>, against a cap of{' '}
+      <strong data-cap={MAX_OVERLAY_NODES}>{MAX_OVERLAY_NODES}</strong> plus the pinned nodes.
+    </p>
+  );
+}
+
 function LargeGraph(): ReactNode {
   const view = useMemo(() => syntheticView(), []);
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
-  const mounted = useMountedNodeCount(root);
   return (
     <>
       <div ref={setRoot}>
@@ -68,26 +93,10 @@ function LargeGraph(): ReactNode {
           layout={view.layout}
           searchText={searchText}
           maxOverlayNodes={MAX_OVERLAY_NODES}
-          renderNode={(node, { tier }) =>
-            tier === 'rich' ? (
-              <>
-                <span className={styles.nodeKind}>
-                  {node.role}, layer {node.layer + 1}
-                </span>
-                <span className={styles.nodeLabel}>{node.label}</span>
-              </>
-            ) : (
-              node.label
-            )
-          }
+          renderNode={renderNode}
         />
       </div>
-      <p className={styles.readout} data-readout="large">
-        <strong>{count(view.nodes.length)}</strong> nodes, <strong>{count(view.edges.length)}</strong> edges.
-        Node elements mounted:{' '}
-        <strong data-mounted={mounted}>{count(mounted)}</strong>, against a cap of{' '}
-        <strong data-cap={MAX_OVERLAY_NODES}>{MAX_OVERLAY_NODES}</strong> plus the pinned nodes.
-      </p>
+      <Readout root={root} nodes={view.nodes.length} edges={view.edges.length} />
     </>
   );
 }

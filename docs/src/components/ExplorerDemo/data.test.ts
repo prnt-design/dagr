@@ -12,6 +12,12 @@ describe('the synthetic large graph', () => {
     expect(() => validateView(view)).not.toThrow();
   });
 
+  it('pins the edge and dash counts the docs page quotes', () => {
+    const view = syntheticView();
+    expect(view.edges).toHaveLength(2_661);
+    expect(view.edges.filter((edge) => edge.dash === true)).toHaveLength(123);
+  });
+
   it('is deterministic for a seed, and differs between seeds', () => {
     expect(syntheticView()).toEqual(syntheticView());
     expect(syntheticView(7)).toEqual(syntheticView(7));
