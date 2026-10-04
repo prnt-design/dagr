@@ -7,8 +7,237 @@ virtualized by on-screen size.
 ## Read this first: it is not published yet
 
 The package is built in slices, M5.6a to M5.6f in `ROADMAP.md`, and stays
-`"private": true` until the last. What exists today is the headless core
-below. The React parts arrive in M5.6c to M5.6e.
+`"private": true` until the last. Today it has the headless core and the
+React parts below. Keyboard navigation between nodes (one tab stop with
+arrow keys), `reveal` on keyboard focus and server rendering arrive in
+M5.6e; docs, demos and browser validation in M5.6f.
+
+It runs on React 18 and React 19 (`react` and `react-dom` `>=18.2.0 <20.0.0`).
+
+## The explorer
+
+```tsx
+import { DagrExplorer } from '@prnt/dagr-explorer';
+import '@prnt/dagr-explorer/styles.css'; // optional
+
+<DagrExplorer
+  label="Architecture"
+  views={[
+    {
+      id: 'overview',
+      label: 'Overview',
+      nodes: [
+        { id: 'app', label: 'Application', team: 'web' },
+        { id: 'store', label: 'Store', team: 'data' },
+      ],
+      edges: [{ id: 'read', source: 'app', target: 'store' }],
+    },
+  ]}
+  renderNode={(node) => `${node.label} (${node.team})`}
+/>;
+```
+
+`label` is required: it is the accessible name of the graph, and the parts
+derive theirs from it. For one graph, pass `nodes`, `edges` and optionally
+`groups` and `layout` instead of `views`. That is one view with the id
+`'default'` and `label` as its label. Passing both shapes is a type error.
+
+The node type is inferred from your data, so `renderNode` above sees `team`.
+`DagrExplorer` takes the root's props (below) plus `renderNode`,
+`renderDetails`, `renderConnection`, `renderViews`, `tiers`,
+`maxOverlayNodes`, `base` and `nodeAriaLabel`, which it forwards to the parts.
+
+### The parts
+
+`DagrExplorer` is built only from these, with no private access, so a host
+that owns its layout can rebuild it, or arrange them differently:
+
+```tsx
+import {
+  ExplorerDetails,
+  ExplorerRoot,
+  ExplorerSearch,
+  ExplorerToolbar,
+  ExplorerViewport,
+  type ExplorerNode,
+  type ExplorerView,
+} from '@prnt/dagr-explorer';
+
+interface MyNode extends ExplorerNode {
+  readonly title: string;
+}
+
+const views: ExplorerView<MyNode>[] = [
+  {
+    id: 'overview',
+    label: 'Overview',
+    nodes: [
+      { id: 'app', label: 'Application', title: 'App' },
+      { id: 'store', label: 'Store', title: 'Store' },
+    ],
+    edges: [{ id: 'read', source: 'app', target: 'store' }],
+  },
+];
+
+export function Architecture() {
+  return (
+    <ExplorerRoot label="Architecture" views={views}>
+      <ExplorerSearch />
+      <ExplorerViewport<MyNode> renderNode={(node) => node.title}>
+        <ExplorerDetails />
+      </ExplorerViewport>
+      <ExplorerToolbar />
+    </ExplorerRoot>
+  );
+}
+```
+
+| Part | Owns |
+| --- | --- |
+| `ExplorerRoot` | the data, its validation and layout, and the state below. Renders one element around its children |
+| `ExplorerViews` | the view switcher. Renders nothing for a single view. Children `({ views, activeView, selectView })` replace it |
+| `ExplorerSearch` | the search field, a live match count, and the matches as buttons, at most `maxResults` (default 50) |
+| `ExplorerTraceToggle` | trace on and off |
+| `ExplorerViewport` | the graph: pan and zoom, the SVG base, node elements for nodes large enough to read. Takes `renderNode`, `nodeAriaLabel`, `tiers`, `maxOverlayNodes`, `base`. Its children, such as `ExplorerDetails`, share a positioned stage with the graph, and the graph's hint comes after the stage, where an overlay cannot cover it |
+| `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body. Children `({ node, connections, inspect })` replace the body, and `renderConnection(edge, otherNode)` draws one connection in the default body |
+| `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node |
+
+Every part takes `className` and `style`, and your `style` wins over the
+part's own: `<ExplorerViewport style={{ height: 600 }} />` sets the graph's
+height, which is otherwise `--dagr-explorer-height`. The one exception is
+the viewport's `position` and `overflow`: they stay the viewport's own
+(`relative` and `hidden`), because the graph's nodes are positioned against
+it and clipped by it.
+
+One `ExplorerViewport` per root: a second throws `ExplorerContextError` with
+the code `SECOND_VIEWPORT`. A part outside a root throws it with
+`OUTSIDE_EXPLORER`, naming the part.
+
+**A part's type parameters are a claim, not a check.** The parts talk through
+a context, which erases them, so `ExplorerViewport<MyNode>` asserts the node
+type and nothing verifies it against the root's data. Unannotated, a part
+sees only `id` and `label`. `DagrExplorer` has no such gap: it infers the
+types from `views`.
+
+### The root's props and state
+
+`viewId` and `selectedId` are controllable (with `defaultViewId`,
+`defaultSelectedId`, `onViewChange` and `onSelectedChange`), because they are
+what a host syncs to a URL. Under a controlled value, every change the
+explorer starts calls the callback and changes nothing on screen until the
+prop does. A controlled id the data lacks renders as no selection, or as the
+first view, with no corrective callback.
+
+The query, trace, the drawer and the camera are internal. Changing view
+resets all four, and sets the selection to what `selectOnViewChange(view)`
+returns, or clears it. If the selected node leaves the data, the selection
+clears and the drawer closes.
+
+The other props: `searchText` (what search reads from a node, default the id
+and label), `strictGroups`, `labels`, `apiRef`, `className` and `style`.
+
+### `useExplorer`, `useExplorerApi` and `apiRef`
+
+`useExplorer()` returns the explorer's state (`views`, `activeView`,
+`layout`, `selectedId`, `selectedNode`, `query`, `matches`, `trace`,
+`detailsOpen`, `dimmed`, `labels`, and `camera` for a readout of your own) and
+the same methods `apiRef` hands out. It re-renders its caller on every change
+of state.
+
+`useExplorerApi()` returns the methods alone, the same stable functions, and
+never re-renders its caller: use it in a component that only calls them, such
+as a button of your own. Called twice in one tick, the methods see each other,
+so `select('a'); select(null)` ends with nothing selected.
+
+| Method | Does |
+| --- | --- |
+| `fit()`, `zoomBy(factor)` | the camera. No-ops before the viewport has a size |
+| `focusNode(id)` | flies the camera to fit the node |
+| `reveal(id)` | pans the least distance that brings the node into view |
+| `select(id \| null)` | sets the current node, without opening the drawer |
+| `inspect(id, trigger?)` | selects and opens the drawer. Focus returns to `trigger` when it closes |
+| `closeDetails()` | closes the drawer |
+| `selectView(id)` | switches view |
+| `setQuery(query)`, `setTrace(on)` | search and trace |
+
+### Search, drawer and Escape
+
+Search matches nodes whose text contains every whitespace-separated token,
+case ignored. `Enter` inspects the first match and flies to it, and choosing a
+result does the same. The result list stays mounted while a node is
+inspected. Search is the complete way to every node: a node too small on
+screen to read has no element, and the graph's accessible description says
+so. The list shows the first `maxResults` matches in data order, then a line
+saying how many more there are. The count and `Enter` cover every match, and
+a longer query narrows the list.
+
+When the drawer closes with focus inside it, focus returns to what opened
+it, or to the search field if that element is gone, or to the root element
+if there is no search field. A control of yours that closes the drawer keeps
+its focus. A connection button in the drawer inspects its neighbor and keeps
+the original opener. `Escape` closes the drawer from anywhere in the root,
+with two exceptions that keep their own order. In the search field it closes
+the drawer first and clears the query second. Inside the graph it closes the
+drawer and releases graph focus, without moving focus back into the graph,
+which would re-enable wheel zoom. A control of yours that handles `Escape`
+and calls `preventDefault()` keeps it.
+
+### Labels
+
+Every string the parts show comes from `labels`, an `ExplorerLabels` object
+whose neutral English defaults are `DEFAULT_EXPLORER_LABELS`. Pass any subset
+to `ExplorerRoot` or `DagrExplorer`. Counts and names are formatters, such as
+`matches(count)`, `moreMatches(count)` (the matches the capped list does not
+show), `stats({ nodes, edges })`, `zoomLevel(percent)`, `zoomTo(label)` and
+`inGroup(groupLabel)` (one group in a node's default accessible name, as in
+"Store, in Data tier").
+
+An inline object is fine: `labels={{ search: 'Find' }}` is kept by value,
+so re-creating it on every render with the same contents changes nothing.
+An inline formatter is a new function each time, and so a change; define it
+outside the component to keep it stable.
+
+### Styling
+
+The parts work with no stylesheet: what they need to function is inline. Each
+carries a `data-dagr-explorer` hook (`root`, `views`, `search`, `trace`,
+`viewport`, `node`, `details`, `toolbar` and others), and state hooks
+`data-tier`, `data-selected`, `data-dimmed`, `data-dragging` and
+`data-active`. Nothing names a host framework.
+
+`@prnt/dagr-explorer/styles.css` is the optional default look, for a light
+page. No module imports it. It reads these variables, which you set anywhere
+above the explorer:
+
+| Variable | For |
+| --- | --- |
+| `--dagr-explorer-accent` | selection and pressed controls |
+| `--dagr-explorer-fg` | text |
+| `--dagr-explorer-fg-muted` | secondary text, marks and edges |
+| `--dagr-explorer-border` | borders |
+| `--dagr-explorer-bg` | nodes, controls and the drawer |
+| `--dagr-explorer-bg-subtle` | the graph's background, hover |
+| `--dagr-explorer-focus` | focus rings |
+| `--dagr-explorer-font-mono` | the zoom readout |
+
+Its selectors are wrapped in `:where()`, so they have no specificity and any
+rule of yours wins. The exceptions are the `:hover`, `:focus` and
+`:focus-visible` rules, whose pseudo-class sits outside the `:where()`: each
+weighs as one class, so override it with a class that comes later or with a
+more specific selector.
+`--dagr-explorer-height` sets the graph's height, 480px by default, with or
+without the stylesheet.
+
+### The base layer is experimental
+
+Nodes too small to read, edges and group outlines are drawn by a base layer,
+SVG by default. `ExplorerViewport`'s `base` swaps it, through the
+`ExplorerBase`, `ExplorerBaseProps`, `ExplorerCameraSource`,
+`ExplorerEmphasis` and `ExplorerVisibleSet` types. They are exported and
+experimental: a seam with one implementation is a guess, and they may change
+when a native base over `DagrCanvas` lands and confirms or corrects them.
+`ExplorerCamera` (`{ x, y, scale }`), what `camera.get()` returns, is
+exported as a type too.
 
 ## The core
 
@@ -33,13 +262,13 @@ layout.routes.get('read'); // [{ x: 280, y: 100 }, { x: 400, y: 100 }]
 searchNodes(view.nodes, 'sto'); // [{ id: 'store', label: 'Store' }]
 ```
 
-None of it touches the DOM or imports React at runtime, so it runs on a server.
+These functions touch no DOM and render nothing, so they run on a server.
 
 ## A node is an id and a label
 
 Those two fields are all the explorer reads. Everything else about a node is
 your own fields on a type that extends `ExplorerNode`, and that type flows
-through to every function and, later, every slot.
+through to every function and every slot.
 
 ## Sizes are declared, never measured
 
@@ -88,7 +317,9 @@ pattern.
 
 ## Errors
 
-A malformed view throws `ExplorerDataError`. Switch on its `code`. Its `id` is
+A malformed view throws `ExplorerDataError`. `ExplorerRoot` validates every
+view and lays out the active one during render, so an error boundary
+catches it. Switch on its `code`. Its `id` is
 the view, node, edge or group the error is about, and its `viewId` is the view
 that was found in (`undefined` when the error is about a view itself), so a
 host can point at the offender without parsing the message.

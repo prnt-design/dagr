@@ -10,7 +10,8 @@
  * microseconds. The renderer's overlay scans the same way and names a spatial
  * index as the fix if a measurement ever asks for one.
  *
- * Internal to the package. Nothing here is exported from the entry.
+ * Internal to the package. Only the tier types and `ExplorerVisibleSet` are
+ * exported from the entry, as types: a base layer is given a visible set.
  */
 
 import type { ExplorerBox, ExplorerLayout } from './layout.js';
@@ -71,6 +72,11 @@ export interface VisibleSetOptions {
   readonly pinned?: readonly string[] | undefined;
 }
 
+/**
+ * What is in view: the nodes with an element, the nodes and edges a base
+ * layer draws. Exported as a type, and experimental like the base-layer seam
+ * that is given it: it may change until a native base confirms it.
+ */
 export interface ExplorerVisibleSet {
   /** Overlay nodes and their tier, in data order. */
   readonly overlay: ReadonlyMap<string, ExplorerTier>;

@@ -17,7 +17,8 @@
  * module's top-left, y-down camera lives in `createCameraLimits` and nowhere
  * else.
  *
- * Internal to the package. Nothing here is exported from the entry.
+ * Internal to the package. Only the `ExplorerCamera` type is exported from
+ * the entry, because `ExplorerCameraSource` hands one out.
  */
 
 import { Camera2D, fitZoom } from '@prnt/dagr-render/core';

@@ -1,0 +1,253 @@
+/*
+ * @prnt/dagr-explorer/styles.css: the explorer's optional default look.
+ *
+ * The parts work without it: everything they need to function is inline.
+ * This file is the look on top, written only against the parts'
+ * `data-dagr-explorer` hooks and their state hooks (`data-tier`,
+ * `data-selected`, `data-dimmed`, `data-dragging`, `data-active`).
+ *
+ * Theme it with these variables, set anywhere above the explorer. Each has
+ * a fallback here for a light page, and none is defined by this file, so a
+ * value a host sets on `:root` is the one used:
+ *
+ *   --dagr-explorer-accent      selection and pressed controls
+ *   --dagr-explorer-fg          text
+ *   --dagr-explorer-fg-muted    secondary text, marks and edges
+ *   --dagr-explorer-border      borders
+ *   --dagr-explorer-bg          surfaces: nodes, controls, the drawer
+ *   --dagr-explorer-bg-subtle   the graph's background, hover
+ *   --dagr-explorer-focus       focus rings
+ *   --dagr-explorer-font-mono   the zoom readout
+ *
+ * `--dagr-explorer-height` sets the graph's height (default 480px).
+ *
+ * Every selector is wrapped in `:where()`, so it has no specificity and any
+ * rule of the host's wins without a fight. The exceptions are the `:hover`,
+ * `:focus` and `:focus-visible` rules: the pseudo-class sits outside the
+ * `:where()`, so each of those weighs as one class. A host rule overrides
+ * them with a class and a later position in the cascade, or with more
+ * specificity.
+ */
+
+:where([data-dagr-explorer='root']) {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--dagr-explorer-fg, #1d2430);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* Controls */
+
+:where([data-dagr-explorer='views'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button) {
+  font: inherit;
+  color: inherit;
+  background: var(--dagr-explorer-bg, #ffffff);
+  border: 1px solid var(--dagr-explorer-border, #d3d9e3);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+:where([data-dagr-explorer='views'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search'] button):hover {
+  background: var(--dagr-explorer-bg-subtle, #f3f5f8);
+}
+
+:where([data-dagr-explorer='root'] button, [data-dagr-explorer='root'] input, [data-dagr-explorer='details-body']):focus-visible {
+  outline: 2px solid var(--dagr-explorer-focus, #2f6fdf);
+  outline-offset: 2px;
+}
+
+:where([data-dagr-explorer='views'] button[aria-pressed='true'], [data-dagr-explorer='trace'][data-active='true']) {
+  border-color: var(--dagr-explorer-accent, #2f6fdf);
+  color: var(--dagr-explorer-accent, #2f6fdf);
+}
+
+:where([data-dagr-explorer='toolbar'] button:disabled) {
+  opacity: 0.5;
+  cursor: default;
+}
+
+:where([data-dagr-explorer='views'], [data-dagr-explorer='toolbar']) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+:where([data-dagr-explorer='zoom-level']) {
+  min-width: 5ch;
+  text-align: center;
+  font-family: var(--dagr-explorer-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  color: var(--dagr-explorer-fg-muted, #5c6778);
+}
+
+:where([data-dagr-explorer='trace']) {
+  align-self: flex-start;
+}
+
+/* Search */
+
+:where([data-dagr-explorer='search']) {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+:where([data-dagr-explorer='search'] label) {
+  font-weight: 600;
+}
+
+:where([data-dagr-explorer='search'] input) {
+  font: inherit;
+  color: inherit;
+  background: var(--dagr-explorer-bg, #ffffff);
+  border: 1px solid var(--dagr-explorer-border, #d3d9e3);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+:where([data-dagr-explorer='search-count']) {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 12px;
+  color: var(--dagr-explorer-fg-muted, #5c6778);
+}
+
+:where([data-dagr-explorer='search-results']) {
+  max-height: 12em;
+  border: 1px solid var(--dagr-explorer-border, #d3d9e3);
+  border-radius: 6px;
+}
+
+:where([data-dagr-explorer='search-results'] button) {
+  display: block;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+:where([data-dagr-explorer='search-results'] button[data-selected='true']) {
+  color: var(--dagr-explorer-accent, #2f6fdf);
+  font-weight: 600;
+}
+
+/* Graph */
+
+:where([data-dagr-explorer='viewport']) {
+  background: var(--dagr-explorer-bg-subtle, #f3f5f8);
+  border: 1px solid var(--dagr-explorer-border, #d3d9e3);
+  border-radius: 8px;
+  cursor: grab;
+  color: var(--dagr-explorer-fg-muted, #5c6778);
+}
+
+:where([data-dagr-explorer='viewport'][data-dragging='true']) {
+  cursor: grabbing;
+}
+
+/* Graph focus is what turns wheel zoom on, so it always shows. */
+:where([data-dagr-explorer='viewport']):focus {
+  outline: 2px solid var(--dagr-explorer-focus, #2f6fdf);
+  outline-offset: 2px;
+}
+
+:where([data-dagr-explorer='plane'] svg [data-dimmed='true']) {
+  opacity: 0.25;
+}
+
+:where([data-dagr-explorer='node']) {
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--dagr-explorer-fg, #1d2430);
+  background: var(--dagr-explorer-bg, #ffffff);
+  border: 1px solid var(--dagr-explorer-border, #d3d9e3);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* A summary is small on screen: its text is counter-scaled to stay legible, up to a point. */
+:where([data-dagr-explorer='node'][data-tier='summary']) {
+  font-size: calc(12px * min(var(--dagr-explorer-inv-zoom, 1), 2.5));
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+:where([data-dagr-explorer='node'][data-selected='true']) {
+  border-color: var(--dagr-explorer-accent, #2f6fdf);
+  box-shadow: 0 0 0 2px var(--dagr-explorer-accent, #2f6fdf);
+}
+
+:where([data-dagr-explorer='node']):focus-visible {
+  outline: 2px solid var(--dagr-explorer-focus, #2f6fdf);
+  outline-offset: 2px;
+}
+
+:where([data-dagr-explorer='node'][data-dimmed='true']) {
+  opacity: 0.3;
+}
+
+:where([data-dagr-explorer='hint']) {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dagr-explorer-fg-muted, #5c6778);
+}
+
+/* Drawer */
+
+:where([data-dagr-explorer='details']) {
+  box-sizing: border-box;
+  background: var(--dagr-explorer-bg, #ffffff);
+  border-left: 1px solid var(--dagr-explorer-border, #d3d9e3);
+  border-radius: 0 8px 8px 0;
+  box-shadow: -8px 0 24px rgb(20 30 50 / 0.12);
+}
+
+:where([data-dagr-explorer='details-header']) {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--dagr-explorer-border, #d3d9e3);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dagr-explorer-fg-muted, #5c6778);
+}
+
+:where([data-dagr-explorer='details-header'] button) {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+:where([data-dagr-explorer='details-body']) {
+  padding: 12px;
+}
+
+:where([data-dagr-explorer='details-label']) {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--dagr-explorer-fg, #1d2430);
+}
+
+:where([data-dagr-explorer='connections']) {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+:where([data-dagr-explorer='connections'] button) {
+  width: 100%;
+  text-align: left;
+}

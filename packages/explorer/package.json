@@ -13,11 +13,13 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
-    }
+    },
+    "./styles.css": "./styles.css"
   },
   "files": [
     "dist",
     "src",
+    "styles.css",
     "CHANGELOG.md",
     "README.md",
     "LICENSE"

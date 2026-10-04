@@ -306,8 +306,9 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   The pure core (camera arithmetic, the visible set, the point-to-node lookup)
   landed first as M5.6c-1. The React viewport that uses it landed as M5.6c-2,
   internal until M5.6d.
-- [ ] **M5.6d** Root state, remaining parts, `labels`, `DagrExplorer`,
-  `styles.css`.
+- [x] **M5.6d** Root state, remaining parts, `labels`, `DagrExplorer`,
+  `styles.css`. Landed with `useExplorerApi` and a capped search list. The
+  package is still private.
 - [ ] **M5.6e** Roving focus, spatial navigation, reveal, server rendering.
 - [ ] **M5.6f** Docs, demos, bench, browser validation, measured SVG ceiling.
 

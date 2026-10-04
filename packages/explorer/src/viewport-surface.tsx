@@ -74,12 +74,23 @@ export interface ViewportSurfaceProps<N extends ExplorerNode, E extends Explorer
   readonly nodeAriaLabel?:
     | ((node: N, context: { groups: readonly ExplorerGroup[] }) => string)
     | undefined;
+  /** One group in the default accessible name. Default: `in <group>`. */
+  readonly inGroup?: ((groupLabel: string) => string) | undefined;
   /** Click, Enter, Space. `trigger` is the node's button, or `null` for a mark. */
   readonly onNodeActivate?: ((id: string, trigger: HTMLElement | null) => void) | undefined;
   /** Double click. */
   readonly onNodeZoom?: ((id: string) => void) | undefined;
   readonly controlsRef?: MutableRefObject<ExplorerCameraControls | null> | undefined;
+  /**
+   * The camera on screen and every drawn frame, the same source the base
+   * gets, for a part outside the viewport that follows the camera without
+   * re-rendering (the toolbar's zoom readout).
+   */
+  readonly cameraSourceRef?: MutableRefObject<ExplorerCameraSource | null> | undefined;
+  /** The id of the element that describes the region. */
+  readonly describedBy?: string | undefined;
   readonly className?: string | undefined;
+  /** Sizing and decoration pass through. `position` and `overflow` stay the viewport's own, because the graph needs them. */
   readonly style?: CSSProperties | undefined;
 }
 
@@ -118,8 +129,14 @@ function everythingAsMarks(index: LayoutIndex): ExplorerVisibleSet {
   };
 }
 
-function defaultName(node: ExplorerNode, groups: readonly ExplorerGroup[]): string {
-  return [node.label, ...groups.map((group) => `in ${group.label}`)].join(', ');
+const IN_GROUP = (groupLabel: string): string => `in ${groupLabel}`;
+
+function defaultName(
+  node: ExplorerNode,
+  groups: readonly ExplorerGroup[],
+  inGroup: (groupLabel: string) => string,
+): string {
+  return [node.label, ...groups.map((group) => inGroup(group.label))].join(', ');
 }
 
 /**
@@ -175,9 +192,12 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
     base = svgBase,
     renderNode,
     nodeAriaLabel,
+    inGroup = IN_GROUP,
     onNodeActivate,
     onNodeZoom,
     controlsRef,
+    cameraSourceRef,
+    describedBy,
     className,
     style,
   } = props;
@@ -280,6 +300,14 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
     };
   }, [controls, controlsRef]);
 
+  useEffect(() => {
+    if (cameraSourceRef === undefined) return undefined;
+    cameraSourceRef.current = cameraSource;
+    return () => {
+      if (cameraSourceRef.current === cameraSource) cameraSourceRef.current = null;
+    };
+  }, [cameraSource, cameraSourceRef]);
+
   // The click handlers read the latest props through a ref, so the listeners
   // are attached once per viewport and not on every render.
   const latest = useRef({ index, onNodeActivate, onNodeZoom });
@@ -373,7 +401,7 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
         data-selected={selected ? 'true' : undefined}
         data-dimmed={isDimmed ? 'true' : undefined}
         aria-pressed={selected}
-        aria-label={nodeAriaLabel === undefined ? defaultName(node, groups) : nodeAriaLabel(node, { groups })}
+        aria-label={nodeAriaLabel === undefined ? defaultName(node, groups, inGroup) : nodeAriaLabel(node, { groups })}
         style={{ position: 'absolute', left: box.x, top: box.y, width: box.width, height: box.height }}
       >
         {renderNode === undefined ? node.label : renderNode(node, { tier, selected, dimmed: isDimmed })}
@@ -392,13 +420,16 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
       data-dagr-explorer="viewport"
       role="region"
       aria-label={label}
+      aria-describedby={describedBy}
       tabIndex={-1}
       className={className}
       style={{
+        height: 'var(--dagr-explorer-height, 480px)',
         ...style,
+        // Last, so a caller cannot break the graph: the plane and the nodes
+        // are absolutely positioned against this element and clipped by it.
         position: 'relative',
         overflow: 'hidden',
-        height: 'var(--dagr-explorer-height, 480px)',
       }}
     >
       {base.space === 'viewport' ? layer : null}

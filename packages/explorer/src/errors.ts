@@ -57,3 +57,29 @@ export class ExplorerDataError extends Error {
     Object.setPrototypeOf(this, ExplorerDataError.prototype);
   }
 }
+
+/**
+ * The `code` of every composition error: a part used where it cannot work.
+ *
+ * - `OUTSIDE_EXPLORER`: a part, or `useExplorer()`, rendered outside an
+ *   `ExplorerRoot`. The message names the part.
+ * - `SECOND_VIEWPORT`: a second `ExplorerViewport` in one root.
+ */
+export type ExplorerContextErrorCode = 'OUTSIDE_EXPLORER' | 'SECOND_VIEWPORT';
+
+/**
+ * A mistake in how the parts are put together, as opposed to the data. A
+ * separate class from {@link ExplorerDataError}, because a host that shows
+ * data errors to its users should never show these: they are the host's own
+ * bug, found the first time the page renders.
+ */
+export class ExplorerContextError extends Error {
+  readonly code: ExplorerContextErrorCode;
+
+  constructor(code: ExplorerContextErrorCode, message: string) {
+    super(message);
+    this.name = 'ExplorerContextError';
+    this.code = code;
+    Object.setPrototypeOf(this, ExplorerContextError.prototype);
+  }
+}
