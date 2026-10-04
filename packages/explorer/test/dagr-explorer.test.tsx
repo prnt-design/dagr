@@ -238,8 +238,7 @@ describe('DagrExplorer: labels', () => {
     stats: ({ nodes, edges }) => `«stats ${String(nodes)} ${String(edges)}»`,
     hint: '«hint»',
     views: '«views»',
-    showDetails: '«showDetails»',
-    hideDetails: '«hideDetails»',
+    inGroup: (label) => `«inGroup ${label}»`,
     traceOn: '«traceOn»',
     traceOff: '«traceOff»',
     zoomControls: '«zoomControls»',
@@ -262,6 +261,10 @@ describe('DagrExplorer: labels', () => {
     ...[0, 1, 2, 3, 4].map((count) => DEFAULT_EXPLORER_LABELS.matches(count)),
     DEFAULT_EXPLORER_LABELS.stats({ nodes: 4, edges: 3 }),
     ...['Alpha', 'Beta', 'Gamma', 'Delta'].map((label) => DEFAULT_EXPLORER_LABELS.zoomTo(label)),
+    // `overview` has a group, so its members' accessible names reach this.
+    DEFAULT_EXPLORER_LABELS.inGroup('Trust boundary'),
+    // Hardcoded before `inGroup` existed: any copy left from it is a leak.
+    'in Trust boundary',
   ];
 
   /** Every text node and every attribute a person can hear or read. */
@@ -310,7 +313,7 @@ describe('DagrExplorer: labels', () => {
     for (const name of [
       'search', 'searchPlaceholder', 'searchResults', 'matches 4', 'stats 4 3', 'hint', 'views',
       'traceOn', 'traceOff', 'zoomControls', 'zoomIn', 'zoomOut', 'zoomLevel', 'fit', 'zoomTo Beta',
-      'zoomToSelected', 'drawerTitle', 'close', 'connections',
+      'zoomToSelected', 'drawerTitle', 'close', 'connections', 'inGroup Trust boundary',
     ]) {
       expect([name, all.includes(`«${name}`)]).toEqual([name, true]);
     }
@@ -323,6 +326,14 @@ describe('DagrExplorer: labels', () => {
     await tree.rerender(<DagrExplorer label="Map" views={[]} labels={sentinels} />);
     expect(part('viewport').textContent).toBe('«noViews»');
     expect(leftovers(tree.container)).toEqual([]);
+  });
+
+  it('has no key that no part renders', () => {
+    expect(Object.keys(DEFAULT_EXPLORER_LABELS)).not.toContain('showDetails');
+    expect(Object.keys(DEFAULT_EXPLORER_LABELS)).not.toContain('hideDetails');
+    // @ts-expect-error: `showDetails` is not a label: no part shows a details toggle.
+    const unknown: Partial<ExplorerLabels> = { showDetails: 'Show' };
+    expect(unknown).toBeDefined();
   });
 
   it('replaces a subset, keeping the rest, including a key set to undefined', async () => {

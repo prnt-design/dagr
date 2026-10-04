@@ -22,12 +22,8 @@ export interface ExplorerLabels {
   readonly hint: string;
   /** The accessible name of the view switcher. */
   readonly views: string;
-  /**
-   * For a host's own control that opens and closes the drawer. No built-in
-   * part shows one: a node opens the drawer and the drawer closes itself.
-   */
-  readonly showDetails: string;
-  readonly hideDetails: string;
+  /** One group a node is in, as part of the node's default accessible name. */
+  readonly inGroup: (groupLabel: string) => string;
   /** The trace toggle while trace is off, so pressing it turns trace on. */
   readonly traceOn: string;
   /** The trace toggle while trace is on. */
@@ -67,8 +63,7 @@ export const DEFAULT_EXPLORER_LABELS: ExplorerLabels = Object.freeze({
     `${plural(nodes, 'node', 'nodes')}, ${plural(edges, 'edge', 'edges')}.`,
   hint: 'Search reaches every node. Click the graph to zoom with the wheel, drag to pan, and press Escape to leave it.',
   views: 'Views',
-  showDetails: 'Show details',
-  hideDetails: 'Hide details',
+  inGroup: (groupLabel: string) => `in ${groupLabel}`,
   traceOn: 'Trace connections',
   traceOff: 'Stop tracing',
   zoomControls: 'Zoom',
@@ -96,4 +91,16 @@ export function resolveLabels(overrides: Partial<ExplorerLabels> | undefined): E
     Object.entries(overrides).filter(([, value]) => value !== undefined),
   ) as Partial<ExplorerLabels>;
   return { ...DEFAULT_EXPLORER_LABELS, ...defined };
+}
+
+/** Whether two label objects hold the same value under every key, by `Object.is`. */
+export function sameLabels(a: ExplorerLabels, b: ExplorerLabels): boolean {
+  if (a === b) return true;
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (!Object.is((a as unknown as Record<string, unknown>)[key], (b as unknown as Record<string, unknown>)[key])) {
+      return false;
+    }
+  }
+  return true;
 }

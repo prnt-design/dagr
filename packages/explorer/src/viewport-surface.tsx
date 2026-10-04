@@ -74,6 +74,8 @@ export interface ViewportSurfaceProps<N extends ExplorerNode, E extends Explorer
   readonly nodeAriaLabel?:
     | ((node: N, context: { groups: readonly ExplorerGroup[] }) => string)
     | undefined;
+  /** One group in the default accessible name. Default: `in <group>`. */
+  readonly inGroup?: ((groupLabel: string) => string) | undefined;
   /** Click, Enter, Space. `trigger` is the node's button, or `null` for a mark. */
   readonly onNodeActivate?: ((id: string, trigger: HTMLElement | null) => void) | undefined;
   /** Double click. */
@@ -126,8 +128,14 @@ function everythingAsMarks(index: LayoutIndex): ExplorerVisibleSet {
   };
 }
 
-function defaultName(node: ExplorerNode, groups: readonly ExplorerGroup[]): string {
-  return [node.label, ...groups.map((group) => `in ${group.label}`)].join(', ');
+const IN_GROUP = (groupLabel: string): string => `in ${groupLabel}`;
+
+function defaultName(
+  node: ExplorerNode,
+  groups: readonly ExplorerGroup[],
+  inGroup: (groupLabel: string) => string,
+): string {
+  return [node.label, ...groups.map((group) => inGroup(group.label))].join(', ');
 }
 
 /**
@@ -183,6 +191,7 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
     base = svgBase,
     renderNode,
     nodeAriaLabel,
+    inGroup = IN_GROUP,
     onNodeActivate,
     onNodeZoom,
     controlsRef,
@@ -391,7 +400,7 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
         data-selected={selected ? 'true' : undefined}
         data-dimmed={isDimmed ? 'true' : undefined}
         aria-pressed={selected}
-        aria-label={nodeAriaLabel === undefined ? defaultName(node, groups) : nodeAriaLabel(node, { groups })}
+        aria-label={nodeAriaLabel === undefined ? defaultName(node, groups, inGroup) : nodeAriaLabel(node, { groups })}
         style={{ position: 'absolute', left: box.x, top: box.y, width: box.width, height: box.height }}
       >
         {renderNode === undefined ? node.label : renderNode(node, { tier, selected, dimmed: isDimmed })}
@@ -414,10 +423,10 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
       tabIndex={-1}
       className={className}
       style={{
-        ...style,
         position: 'relative',
         overflow: 'hidden',
         height: 'var(--dagr-explorer-height, 480px)',
+        ...style,
       }}
     >
       {base.space === 'viewport' ? layer : null}

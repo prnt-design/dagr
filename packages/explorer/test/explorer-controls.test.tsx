@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { Profiler } from 'react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExplorerCamera } from '../src/camera.js';
@@ -7,6 +8,8 @@ import { ExplorerToolbar } from '../src/explorer-toolbar.js';
 import { ExplorerViewport } from '../src/explorer-viewport.js';
 import { ExplorerViews } from '../src/explorer-views.js';
 import type { ExplorerViewsProps } from '../src/explorer-views.js';
+import { ExplorerSearch } from '../src/explorer-search.js';
+import { ExplorerTraceToggle } from '../src/explorer-trace-toggle.js';
 import { ExplorerRoot } from '../src/root.js';
 import type { ExplorerRootProps } from '../src/root.js';
 import type { ExplorerEdge } from '../src/types.js';
@@ -225,5 +228,47 @@ describe('ExplorerToolbar', () => {
 
   it('throws OUTSIDE_EXPLORER outside a root, naming the part', async () => {
     await outside(<ExplorerToolbar />, 'ExplorerToolbar');
+  });
+});
+
+describe('ExplorerRoot: labels by value', () => {
+  it('keeps an inline labels object that has not changed, so no part re-renders and the readout keeps its subscription', async () => {
+    const views = [overview, detail];
+    const onRender = vi.fn();
+    // Built once, so a part renders again only if the root's context changes.
+    const parts = (
+      <Profiler id="parts" onRender={onRender}>
+        <ExplorerViews />
+        <ExplorerSearch />
+        <ExplorerTraceToggle />
+        <ExplorerViewport />
+        <ExplorerToolbar />
+        <Probe />
+      </Profiler>
+    );
+    const at = (labels: { readonly search: string }): ReactNode => (
+      <ExplorerRoot<Item, ExplorerEdge> label="Map" views={views} labels={labels}>
+        {parts}
+      </ExplorerRoot>
+    );
+    tree = await mount(at({ search: 'Find' }));
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+    const labels = state().labels;
+    expect(labels.search).toBe('Find');
+    const subscribe = vi.spyOn(state().camera, 'subscribe');
+    onRender.mockClear();
+    const before = renders;
+
+    await tree.rerender(at({ search: 'Find' }));
+    expect(onRender).not.toHaveBeenCalled();
+    expect(renders).toBe(before);
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(state().labels).toBe(labels);
+
+    // A real change still arrives.
+    await tree.rerender(at({ search: 'Seek' }));
+    expect(state().labels.search).toBe('Seek');
+    expect(part('search').querySelector('label')?.textContent).toBe('Seek');
   });
 });

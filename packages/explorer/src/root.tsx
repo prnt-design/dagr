@@ -38,10 +38,10 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode, Ref } from 'react';
-import { ExplorerContext, createCameraHub } from './context.js';
+import { ExplorerApiContext, ExplorerContext, createCameraHub } from './context.js';
 import type { ExplorerApi, ExplorerContextValue, ExplorerInternals, ExplorerState } from './context.js';
 import { ExplorerContextError } from './errors.js';
-import { resolveLabels } from './labels.js';
+import { resolveLabels, sameLabels } from './labels.js';
 import type { ExplorerLabels } from './labels.js';
 import { layoutKey, layoutView } from './layout.js';
 import type { ExplorerLayout } from './layout.js';
@@ -179,7 +179,12 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
   // that ships it and not on the day somebody switches to it.
   useMemo(() => validateViews(views), [views]);
 
-  const labels = useMemo(() => resolveLabels(labelOverrides), [labelOverrides]);
+  // Kept by value, so an inline `labels={{ search: 'Find' }}` re-created on
+  // every parent render changes nothing downstream while it says the same.
+  const resolvedLabels = resolveLabels(labelOverrides);
+  const labelsRef = useRef(resolvedLabels);
+  if (!sameLabels(labelsRef.current, resolvedLabels)) labelsRef.current = resolvedLabels;
+  const labels = labelsRef.current;
 
   // View.
   const [viewState, setViewState] = useState<string | null>(() => defaultViewId ?? null);
@@ -447,19 +452,21 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
   const value = useMemo<ExplorerContextValue>(() => ({ state, internals }), [state, internals]);
 
   return (
-    <ExplorerContext.Provider value={value}>
-      <div
-        ref={rootRef}
-        data-dagr-explorer="root"
-        className={className}
-        style={{ position: 'relative', ...style }}
-        onKeyDown={onKeyDown}
-      >
-        {children}
-        <div data-dagr-explorer="announcer" aria-live="polite" style={VISUALLY_HIDDEN}>
-          {detailsOpen && selectedNode !== null ? selectedNode.label : ''}
+    <ExplorerApiContext.Provider value={api}>
+      <ExplorerContext.Provider value={value}>
+        <div
+          ref={rootRef}
+          data-dagr-explorer="root"
+          className={className}
+          style={{ position: 'relative', ...style }}
+          onKeyDown={onKeyDown}
+        >
+          {children}
+          <div data-dagr-explorer="announcer" aria-live="polite" style={VISUALLY_HIDDEN}>
+            {detailsOpen && selectedNode !== null ? selectedNode.label : ''}
+          </div>
         </div>
-      </div>
-    </ExplorerContext.Provider>
+      </ExplorerContext.Provider>
+    </ExplorerApiContext.Provider>
   );
 }

@@ -5,6 +5,7 @@ import type {
   ExplorerApi,
   ExplorerBase,
   ExplorerBaseProps,
+  ExplorerCamera,
   ExplorerCameraSource,
   ExplorerConnection,
   ExplorerContextErrorCode,
@@ -24,6 +25,7 @@ import type {
   ExplorerViewportProps,
   ExplorerViewsContext,
   ExplorerViewsProps,
+  ExplorerVisibleSet,
 } from '../src/index.js';
 
 /**
@@ -55,6 +57,7 @@ describe('@prnt/dagr-explorer', () => {
         'resolveNodeSize',
         'searchNodes',
         'useExplorer',
+        'useExplorerApi',
         'validateView',
         'validateViews',
       ].sort(),
@@ -67,6 +70,7 @@ describe('@prnt/dagr-explorer', () => {
       ExplorerApi,
       ExplorerBase,
       ExplorerBaseProps<ExplorerNode, ExplorerEdge>,
+      ExplorerCamera,
       ExplorerCameraSource,
       ExplorerConnection,
       ExplorerContextErrorCode,
@@ -84,8 +88,18 @@ describe('@prnt/dagr-explorer', () => {
       ExplorerViewportProps,
       ExplorerViewsContext,
       ExplorerViewsProps,
+      ExplorerVisibleSet,
     ];
-    const count: Exported['length'] = 21;
-    expect(count).toBe(21);
+    const count: Exported['length'] = 23;
+    expect(count).toBe(23);
+  });
+
+  it('exports the camera and the visible set as the shapes the public api hands out', () => {
+    const camera: ExplorerCamera = { x: 1, y: 2, scale: 0.5 };
+    const visible: ExplorerVisibleSet = { overlay: new Map([['a', 'rich']]), baseNodes: ['b'], edges: ['ab'] };
+    // What `ExplorerCameraSource.get` returns, and what a base layer is given.
+    const read: ExplorerCameraSource['get'] = () => camera;
+    const given: ExplorerBaseProps<ExplorerNode, ExplorerEdge>['visible'] = visible;
+    expect([read(), given]).toEqual([camera, visible]);
   });
 });

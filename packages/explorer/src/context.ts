@@ -1,7 +1,10 @@
 /**
- * The one context the parts talk through, and the public shapes it carries.
+ * The contexts the parts talk through, and the public shapes they carry.
  *
- * `ExplorerRoot` provides it and every part reads it. It holds two things:
+ * `ExplorerRoot` provides two. The api context holds only the stable
+ * `ExplorerApi`, and its value never changes, so a component that only calls
+ * methods (`useExplorerApi()`) never re-renders for a keystroke. The main
+ * context holds two things:
  * the state a host may read and the methods it may call (`useExplorer()`
  * returns exactly that), and a few internals only the built-in parts use to
  * wire themselves to the root: the viewport's registration, its camera
@@ -146,8 +149,20 @@ export function useExplorerContext(part: string): ExplorerContextValue {
   if (value === null) {
     throw new ExplorerContextError(
       'OUTSIDE_EXPLORER',
-      `${part} must be used inside an ExplorerRoot or a DagrExplorer`,
+      `${part} must be used inside an ExplorerRoot`,
     );
+  }
+  return value;
+}
+
+/** The root's stable methods alone. Its value is the same object for the root's life. */
+export const ExplorerApiContext = createContext<ExplorerApi | null>(null);
+
+/** The root's stable methods, or `OUTSIDE_EXPLORER` naming `part`. */
+export function useExplorerApiContext(part: string): ExplorerApi {
+  const value = useContext(ExplorerApiContext);
+  if (value === null) {
+    throw new ExplorerContextError('OUTSIDE_EXPLORER', `${part} must be used inside an ExplorerRoot`);
   }
   return value;
 }

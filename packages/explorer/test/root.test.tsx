@@ -6,7 +6,7 @@ import { ExplorerContextError } from '../src/errors.js';
 import { ExplorerRoot } from '../src/root.js';
 import type { ExplorerRootProps } from '../src/root.js';
 import type { ExplorerApi, ExplorerState } from '../src/context.js';
-import { useExplorer } from '../src/use-explorer.js';
+import { useExplorer, useExplorerApi } from '../src/use-explorer.js';
 import type { ExplorerEdge, ExplorerView } from '../src/types.js';
 import { flush, installDom, mount, uninstallDom } from './dom.js';
 import type { Mounted } from './dom.js';
@@ -392,6 +392,54 @@ describe('ExplorerRoot: apiRef', () => {
   });
 });
 
+describe('useExplorerApi', () => {
+  it('hands out the same stable methods and never re-renders a caller that only calls them', async () => {
+    const apiRef = createRef<ExplorerApi>();
+    let renders = 0;
+    let api: ExplorerApi | null = null;
+    function Caller(): null {
+      api = useExplorerApi();
+      renders += 1;
+      return null;
+    }
+    tree = await mount(
+      root(
+        { apiRef },
+        <>
+          <Caller />
+          <Probe />
+        </>,
+      ),
+    );
+    expect(renders).toBe(1);
+    expect(api).toBe(apiRef.current);
+    await call((state) => state.setQuery('alp'));
+    await call((state) => state.select('b'));
+    await call((state) => state.setTrace(true));
+    await call((state) => state.inspect('c'));
+    expect(state().query).toBe('alp');
+    expect(state().selectedId).toBe('c');
+    expect(renders).toBe(1);
+  });
+
+  it('throws OUTSIDE_EXPLORER outside a root, naming it', async () => {
+    const restore = quietErrors();
+    const onError = vi.fn();
+    function Caller(): null {
+      useExplorerApi();
+      return null;
+    }
+    tree = await mount(
+      <Boundary onError={onError}>
+        <Caller />
+      </Boundary>,
+    );
+    expect(tree.container.textContent).toBe('OUTSIDE_EXPLORER');
+    expect((onError.mock.calls[0]?.[0] as Error).message).toMatch(/^useExplorerApi\(\) /);
+    restore();
+  });
+});
+
 describe('ExplorerRoot: errors', () => {
   it('throws a data error in render, so an error boundary catches it, from any view', async () => {
     const restore = quietErrors();
@@ -423,7 +471,9 @@ describe('ExplorerRoot: errors', () => {
     const error = onError.mock.calls[0]?.[0] as unknown;
     expect(error).toBeInstanceOf(ExplorerContextError);
     expect((error as Error).message).toMatch(/useExplorer\(\)/);
-    expect((error as Error).message).toMatch(/ExplorerRoot/);
+    expect((error as Error).message).toMatch(/inside an ExplorerRoot$/);
+    // DagrExplorer takes no children, so naming it would send a reader nowhere.
+    expect((error as Error).message).not.toMatch(/DagrExplorer/);
     restore();
   });
 

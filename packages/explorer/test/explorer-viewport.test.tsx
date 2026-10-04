@@ -157,6 +157,27 @@ describe('ExplorerViewport: inside a root', () => {
     expect(tree?.container.querySelector('[data-testid="native"]')?.parentElement).toBe(part('viewport'));
   });
 
+  it('names a grouped node through labels.inGroup', async () => {
+    await ready();
+    expect(button('a')?.getAttribute('aria-label')).toBe('Alpha, in Trust boundary');
+    expect(button('c')?.getAttribute('aria-label')).toBe('Gamma');
+    await tree?.unmount();
+    await ready({ labels: { inGroup: (group) => `within ${group}` } });
+    expect(button('a')?.getAttribute('aria-label')).toBe('Alpha, within Trust boundary');
+  });
+
+  it('lets the caller style win, the height included, on the graph and on the empty state', async () => {
+    await ready({}, { style: { height: 600, overflow: 'visible' } });
+    expect(part('viewport').style.height).toBe('600px');
+    expect(part('viewport').style.overflow).toBe('visible');
+    await tree?.unmount();
+    await ready({}, {});
+    expect(part('viewport').style.height).toBe('var(--dagr-explorer-height, 480px)');
+    await tree?.unmount();
+    await ready({ views: [empty] }, { style: { height: 600 } });
+    expect(part('viewport').style.height).toBe('600px');
+  });
+
   it('shows labels.emptyView for a view with no nodes, and labels.noViews for no views', async () => {
     await ready({ views: [empty] });
     expect(part('viewport').textContent).toBe('This view has no nodes.');

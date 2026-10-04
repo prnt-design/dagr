@@ -34,7 +34,7 @@ export { ExplorerToolbar } from './explorer-toolbar.js';
 export type { ExplorerToolbarProps } from './explorer-toolbar.js';
 export { ExplorerTraceToggle } from './explorer-trace-toggle.js';
 export type { ExplorerTraceToggleProps } from './explorer-trace-toggle.js';
-export { useExplorer } from './use-explorer.js';
+export { useExplorer, useExplorerApi } from './use-explorer.js';
 export type { ExplorerApi, ExplorerState } from './context.js';
 export { DEFAULT_EXPLORER_LABELS } from './labels.js';
 export type { ExplorerLabels } from './labels.js';
@@ -45,9 +45,12 @@ export type {
   ExplorerCameraSource,
   ExplorerEmphasis,
 } from './base.js';
-// Only the tier types. The camera arithmetic and the visible set stay
-// internal: their shapes are the viewport's business.
-export type { ExplorerTier, ExplorerTiers } from './visible-set.js';
+// The camera and the visible set as types only, because the public api
+// already hands them out: `ExplorerCameraSource.get()` returns a camera, and
+// a base layer is given a visible set (experimental, like the seam above). The
+// camera arithmetic and the visible set computation stay internal.
+export type { ExplorerCamera } from './camera.js';
+export type { ExplorerTier, ExplorerTiers, ExplorerVisibleSet } from './visible-set.js';
 
 export { ExplorerContextError, ExplorerDataError } from './errors.js';
 export type { DagrExplorerErrorCode, ExplorerContextErrorCode } from './errors.js';

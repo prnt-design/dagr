@@ -37,7 +37,7 @@ export interface ExplorerViewportProps<N extends ExplorerNode = ExplorerNode> {
   readonly renderNode?:
     | ((node: N, context: { readonly tier: ExplorerTier; readonly selected: boolean; readonly dimmed: boolean }) => ReactNode)
     | undefined;
-  /** A node's accessible name. Default: its label, then "in <group>" for each group. */
+  /** A node's accessible name. Default: its label, then `labels.inGroup(group)` for each group. */
   readonly nodeAriaLabel?:
     | ((node: N, context: { readonly groups: readonly ExplorerGroup[] }) => string)
     | undefined;
@@ -48,6 +48,7 @@ export interface ExplorerViewportProps<N extends ExplorerNode = ExplorerNode> {
   /** What draws the nodes that have no element. Default: the SVG base. Experimental. */
   readonly base?: ExplorerBase | undefined;
   readonly className?: string | undefined;
+  /** Spread last, so it wins: `{ height: 600 }` replaces `--dagr-explorer-height`. */
   readonly style?: CSSProperties | undefined;
 }
 
@@ -74,6 +75,7 @@ function ViewportPane<N extends ExplorerNode, E extends ExplorerEdge>(props: Pan
     <ViewportSurface<N, E>
       {...rest}
       label={state.label}
+      inGroup={state.labels.inGroup}
       view={view}
       layout={layout}
       selectedId={state.selectedId}
@@ -108,12 +110,12 @@ export function ExplorerViewport<N extends ExplorerNode = ExplorerNode, E extend
         aria-label={state.label}
         className={props.className}
         style={{
-          ...props.style,
           position: 'relative',
           height: 'var(--dagr-explorer-height, 480px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          ...props.style,
         }}
       >
         {view === null ? labels.noViews : labels.emptyView}

@@ -1,5 +1,5 @@
-import { useExplorerContext } from './context.js';
-import type { ExplorerState } from './context.js';
+import { useExplorerApiContext, useExplorerContext } from './context.js';
+import type { ExplorerApi, ExplorerState } from './context.js';
 import type { ExplorerEdge, ExplorerNode } from './types.js';
 
 /**
@@ -17,4 +17,16 @@ export function useExplorer<
   E extends ExplorerEdge = ExplorerEdge,
 >(): ExplorerState<N, E> {
   return useExplorerContext('useExplorer()').state as unknown as ExplorerState<N, E>;
+}
+
+/**
+ * The explorer's methods alone: the same stable functions `apiRef` and
+ * `useExplorer()` hand out. A component that only calls them should use this,
+ * because it never re-renders for a change of state: not a keystroke, not a
+ * selection, not a trace toggle.
+ *
+ * @throws {ExplorerContextError} `OUTSIDE_EXPLORER` outside an `ExplorerRoot`.
+ */
+export function useExplorerApi(): ExplorerApi {
+  return useExplorerApiContext('useExplorerApi()');
 }
