@@ -197,13 +197,14 @@ function createEngine(
   const atFit = (bounds: CameraLimits | null, at: ExplorerViewportSize): boolean =>
     bounds !== null && target !== null && cameraSettled(target, bounds.constrain(fitCamera(layout, at, bounds)));
 
-  /** Rebuilds the limits for the layout and size, and says whether there are any. */
-  const rebuild = (): boolean => {
+  /** Rebuilds the limits for the layout and size. With none, there is no camera. */
+  const rebuild = (): CameraLimits | null => {
     limits = createCameraLimits(layout, size);
-    if (limits !== null) return true;
-    stop();
-    current = target = drawn = null;
-    return false;
+    if (limits === null) {
+      stop();
+      current = target = drawn = null;
+    }
+    return limits;
   };
 
   /** Puts `camera` on screen at once, with no flight. */
@@ -224,9 +225,10 @@ function createEngine(
     const previous = size;
     const wasAtFit = atFit(limits, previous);
     size = { width, height };
-    if (!rebuild() || limits === null) return;
+    const bounds = rebuild();
+    if (bounds === null) return;
     if (current === null || target === null) {
-      place(fitCamera(layout, size, limits));
+      place(fitCamera(layout, size, bounds));
       return;
     }
     // The user's place is the world point at the center and the scale. The
@@ -237,7 +239,7 @@ function createEngine(
     current = panCamera(current, dx, dy);
     target = panCamera(target, dx, dy);
     draw();
-    aim(wasAtFit ? fitCamera(layout, size, limits) : target);
+    aim(wasAtFit ? fitCamera(layout, size, bounds) : target);
   };
 
   // Gestures. A press records where it began, and becomes a pan only past
@@ -408,7 +410,7 @@ function createEngine(
       const travelled = Math.hypot(event.clientX - press.startX, event.clientY - press.startY);
       if (travelled <= DRAG_THRESHOLD) return;
       focusViewport();
-      if (!capture(event.pointerId) || !grab()) {
+      if (!grab() || !capture(event.pointerId)) {
         press = null;
         return;
       }
@@ -571,11 +573,13 @@ function createEngine(
       const wasAtFit = atFit(limits, size);
       const kept = drawn;
       layout = next;
-      if (!(size.width > 0 && size.height > 0) || !rebuild() || limits === null) return;
+      if (!(size.width > 0 && size.height > 0)) return;
+      const bounds = rebuild();
+      if (bounds === null) return;
       // New content is placed, not flown to: easing from a camera framed on
       // other content shows nothing meaningful on the way. At the same size,
       // the same camera keeps the center's world point and the scale.
-      place(kept === null || wasAtFit ? fitCamera(layout, size, limits) : kept);
+      place(kept === null || wasAtFit ? fitCamera(layout, size, bounds) : kept);
     },
     dispose() {
       disposed = true;

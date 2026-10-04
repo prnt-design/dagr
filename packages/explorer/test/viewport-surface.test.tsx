@@ -265,6 +265,11 @@ describe('ViewportSurface: shape', () => {
     expect(heard.at(-1)?.camera).toEqual(cameraNow());
     expect((source as ExplorerCameraSource | null)?.get()).toEqual(cameraNow());
 
+    // A prop that changes the set draws no frame, so the listeners hear nothing.
+    const still = heard.length;
+    await tree?.rerender(surface({ base: { space: 'viewport', Layer: Native }, pinned: ['c'] }));
+    expect(heard.length).toBe(still);
+
     // An unsubscribed listener hears nothing more.
     await tree?.rerender(surface({ base: svgBase }));
     const after = heard.length;

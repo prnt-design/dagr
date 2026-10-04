@@ -209,11 +209,9 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
   const scanRef = useRef<Scan | null>(null);
   const [listeners] = useState(() => new Set<(camera: ExplorerCamera) => void>());
 
-  const onFrame = useCallback(
+  /** Brings the visible set up to date with a camera, scanning only when it can have changed. */
+  const refresh = useCallback(
     (camera: ExplorerCamera, viewport: ExplorerViewportSize) => {
-      lastViewportRef.current = viewport;
-      // First, so a base that draws its own camera moves in step with the plane.
-      for (const listener of [...listeners]) listener(camera);
       const world = visibleWorld(camera, viewport);
       const scan = scanRef.current;
       if (
@@ -233,7 +231,17 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
       shownRef.current = value;
       setShown(value);
     },
-    [index, options, listeners],
+    [index, options],
+  );
+
+  const onFrame = useCallback(
+    (camera: ExplorerCamera, viewport: ExplorerViewportSize) => {
+      lastViewportRef.current = viewport;
+      // First, so a base that draws its own camera moves in step with the plane.
+      for (const listener of [...listeners]) listener(camera);
+      refresh(camera, viewport);
+    },
+    [refresh, listeners],
   );
 
   const controls = useExplorerCamera({ viewportRef, planeRef, layout, onFrame });
@@ -256,12 +264,13 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
   // A prop that changes the set without moving the camera: pins, tiers, the
   // cap. The camera's own effects have run by now, so a new layout has
   // already been placed and drawn through the new `onFrame`, and this finds
-  // nothing to change.
+  // nothing to change. No frame was drawn, so the base's listeners hear
+  // nothing.
   useEffect(() => {
     const camera = controls.getCamera();
     const viewport = lastViewportRef.current;
-    if (camera !== null && viewport !== null) onFrame(camera, viewport);
-  }, [controls, onFrame]);
+    if (camera !== null && viewport !== null) refresh(camera, viewport);
+  }, [controls, refresh]);
 
   useEffect(() => {
     if (controlsRef === undefined) return undefined;
