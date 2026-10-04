@@ -35,7 +35,6 @@
 import {
   useEffect,
   useImperativeHandle,
-  useLayoutEffect,
   useMemo,
   useReducer,
   useRef,
@@ -45,6 +44,7 @@ import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode, Ref } from 
 import { ExplorerApiContext, ExplorerContext, createCameraHub } from './context.js';
 import type { ExplorerApi, ExplorerContextValue, ExplorerInternals, ExplorerState } from './context.js';
 import { ExplorerContextError } from './errors.js';
+import { useIsomorphicLayoutEffect } from './isomorphic-layout-effect.js';
 import { resolveLabels, sameLabels } from './labels.js';
 import type { ExplorerLabels } from './labels.js';
 import { layoutKey, layoutView } from './layout.js';
@@ -76,12 +76,6 @@ const VISUALLY_HIDDEN: CSSProperties = {
   whiteSpace: 'nowrap',
   border: 0,
 };
-
-/**
- * A layout effect in the browser and a plain one on a server, where React 18
- * warns that a layout effect does nothing.
- */
-export const useIsomorphicLayoutEffect = typeof document === 'undefined' ? useEffect : useLayoutEffect;
 
 /**
  * `value`, or the one this hook returned last render if `same` says they are

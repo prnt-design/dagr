@@ -186,9 +186,9 @@ and calls `preventDefault()` keeps it.
 The graph is one tab stop. Exactly one node is in the tab order: the
 selected node, else the last node you focused from the keyboard, else the
 node nearest the center of the view. That node always has an element, at
-any zoom, so once the graph is on screen Tab always lands on a node. Tab
-again leaves the graph. The
-graph's surface takes focus when you click it, and is not in the tab order.
+any zoom, so once the graph has been measured Tab always lands on a node.
+Tab again leaves the graph. The graph's surface takes focus when you click
+it, and is not in the tab order.
 
 With a node focused:
 
@@ -204,6 +204,10 @@ drawer). A key with `Ctrl`, `Command` or `Alt` is left to the browser.
 
 A node that takes focus from the keyboard is brought into view by the
 least pan, at the current zoom. A node you click is not moved to.
+"Keyboard focus" means focus that followed a key press: a pointer press ends
+it, and only keyboard focus moves the camera.
+
+Keys typed into content you render inside a node are left to that content.
 
 Only the nodes on screen and large enough to read have elements, so a
 screen reader finds only those in the graph. Search is the way to every

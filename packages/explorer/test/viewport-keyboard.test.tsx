@@ -382,6 +382,48 @@ describe('ViewportSurface: arrows on a focused node', () => {
     await press('Enter', { repeat: true });
     expect(onNodeActivate).toHaveBeenCalledTimes(2);
   });
+
+  it('activates once for Space, whose click a browser may fire on keyup', async () => {
+    const onNodeActivate = vi.fn();
+    await ready({ onNodeActivate });
+    byTestId('before').focus();
+    await tab();
+    const target = mustButton('b');
+    await press(' ');
+    const up = await fire(target, new KeyboardEvent('keyup', { key: ' ', bubbles: true, cancelable: true }));
+    // A button's click follows an unprevented Space keyup, with no pointer.
+    if (up) await fire(target, new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }));
+    expect(onNodeActivate).toHaveBeenCalledTimes(1);
+  });
+
+  it('still activates once for a lone click from assistive technology', async () => {
+    const onNodeActivate = vi.fn();
+    await ready({ onNodeActivate });
+    await fire(mustButton('b'), new MouseEvent('click', { bubbles: true, cancelable: true, detail: 0 }));
+    expect(onNodeActivate).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves keys typed into a host element inside a node to that element', async () => {
+    const onNodeActivate = vi.fn();
+    await ready({
+      onNodeActivate,
+      renderNode: (node) => (
+        <span tabIndex={0} data-testid={`inner-${node.id}`}>
+          {node.label}
+        </span>
+      ),
+    });
+    byTestId('before').focus();
+    await tab();
+    const inner = byTestId('inner-b');
+    inner.focus();
+    for (const name of [' ', 'Enter', 'ArrowRight']) {
+      expect(await fire(inner, key(name))).toBe(true);
+    }
+    await runFramesUntilIdle();
+    expect(onNodeActivate).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(inner);
+  });
 });
 
 describe('ViewportSurface: focus and the camera', () => {

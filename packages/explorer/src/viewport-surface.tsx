@@ -49,7 +49,7 @@ import type { ExplorerCamera, ExplorerViewportSize } from './camera.js';
 import type { ExplorerBox, ExplorerLayout } from './layout.js';
 import { nearestInDirection } from './navigation.js';
 import type { ExplorerDirection } from './navigation.js';
-import { useIsomorphicLayoutEffect } from './root.js';
+import { useIsomorphicLayoutEffect } from './isomorphic-layout-effect.js';
 import { svgBase } from './svg-base.js';
 import type { ExplorerEdge, ExplorerGroup, ExplorerNode, ExplorerView } from './types.js';
 import { useExplorerCamera } from './use-explorer-camera.js';
@@ -480,7 +480,8 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
       // Modified keys are the browser's, and a key the camera took is taken.
       if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
       const hit = nodeOf(event.target);
-      if (hit === null) return;
+      // Keys typed into content a host renders inside a node are the host's.
+      if (hit === null || event.target !== hit.element) return;
       if (event.key === 'Enter' || event.key === ' ') {
         // Handled here rather than left to the button's own click, so a key
         // inspects exactly once and a held key inspects once.
@@ -498,6 +499,15 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
       setMovingTo(next);
     };
 
+    // A button fires its Space click on keyup, and Firefox has not always
+    // cancelled that click when only keydown was prevented. Keydown has
+    // already activated, so the keyup is prevented too.
+    const onKeyUp = (event: KeyboardEvent): void => {
+      if (event.key !== ' ') return;
+      const hit = nodeOf(event.target);
+      if (hit !== null && event.target === hit.element) event.preventDefault();
+    };
+
     // The viewport clips and never scrolls. A browser scrolls it anyway to
     // show a node that takes focus from Tab, which would offset everything
     // from the camera, so any scroll is put back.
@@ -512,6 +522,7 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
     viewport.addEventListener('focusin', onFocusIn);
     viewport.addEventListener('focusout', onFocusOut);
     viewport.addEventListener('keydown', onKeyDown);
+    viewport.addEventListener('keyup', onKeyUp);
     viewport.addEventListener('scroll', onScroll);
     return () => {
       doc.removeEventListener('keydown', onAnyKey, true);
@@ -520,6 +531,7 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
       viewport.removeEventListener('focusin', onFocusIn);
       viewport.removeEventListener('focusout', onFocusOut);
       viewport.removeEventListener('keydown', onKeyDown);
+      viewport.removeEventListener('keyup', onKeyUp);
       viewport.removeEventListener('scroll', onScroll);
     };
   }, [controls]);
