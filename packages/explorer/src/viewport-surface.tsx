@@ -100,7 +100,9 @@ function tiersOf(tiers: ExplorerTiers | undefined): ExplorerTiers {
  * What the base draws before there is a camera: every node as a mark and
  * every routed edge, and no overlay. It is what a server can render, and on
  * the client it is replaced on the first frame. The plane is hidden until
- * then, so it is never seen unscaled.
+ * then, so it is never seen unscaled. Once there is a camera, a new layout's
+ * first render is windowed from it instead, so a swap to a large graph never
+ * commits every node.
  */
 function everythingAsMarks(index: LayoutIndex): ExplorerVisibleSet {
   return {
@@ -145,7 +147,6 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
   const viewportRef = useRef<HTMLDivElement>(null);
   const planeRef = useRef<HTMLDivElement>(null);
   const index = useMemo(() => indexLayout(layout), [layout]);
-  const initial = useMemo(() => everythingAsMarks(index), [index]);
 
   // The options, keyed by value, so a caller that re-creates `pinned` or
   // `tiers` on every render does not recompute the set on every render.
@@ -164,7 +165,7 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
     [summary, rich, cap, pinKey],
   );
 
-  const [shown, setShown] = useState<Shown>(() => ({ index, set: initial }));
+  const [shown, setShown] = useState<Shown>(() => ({ index, set: everythingAsMarks(index) }));
   const shownRef = useRef(shown);
   const lastViewportRef = useRef<ExplorerViewportSize | null>(null);
 
@@ -248,7 +249,19 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
     };
   }, [controls]);
 
-  const visible = shown.index === index ? shown.set : initial;
+  // A layout the camera has not drawn yet. Its set comes from the camera on
+  // screen, and the camera's own effect replaces it once it has placed the
+  // new layout.
+  const pending = shown.index !== index;
+  const first = useMemo(() => {
+    if (!pending) return null;
+    const camera = controls.getCamera();
+    const viewport = lastViewportRef.current;
+    return camera === null || viewport === null
+      ? everythingAsMarks(index)
+      : computeVisibleSet(index, camera, viewport, options);
+  }, [pending, controls, index, options]);
+  const visible = first ?? shown.set;
   // The seam is typed over the base node and edge types, since a base reads
   // ids, labels and colors and never a caller's own fields. A view of `N`
   // is one of those except for `layout.nodeSize`, a function of `N`, which

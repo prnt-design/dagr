@@ -356,7 +356,7 @@ describe('ViewportSurface: the overlay follows the visible set', () => {
     }
   });
 
-  it('refits and rebuilds the visible set when the layout is swapped', async () => {
+  it('keeps the camera and rebuilds the visible set when the layout is swapped', async () => {
     await ready();
     controls().zoomBy(3);
     await runFramesUntilIdle();
@@ -368,6 +368,48 @@ describe('ViewportSurface: the overlay follows the visible set', () => {
       visible.edges,
     );
     expect(pendingFrames()).toBe(0);
+  });
+});
+
+describe('ViewportSurface: a layout swap', () => {
+  it('windows the first commit for a new layout from the current camera, rather than drawing every mark', async () => {
+    const seen: ExplorerBaseProps<ExplorerNode, ExplorerEdge>[] = [];
+    const recording: ExplorerBase = {
+      space: 'plane',
+      Layer: (props) => {
+        seen.push(props);
+        return null;
+      },
+    };
+    await ready({ base: recording });
+    controls().zoomBy(3);
+    await runFramesUntilIdle();
+
+    const big = grid(2000);
+    await tree?.rerender(surface({ base: recording, view: big.view, layout: big.layout }));
+    const forBig = seen.filter((props) => props.layout === big.layout);
+    expect(forBig.length).toBeGreaterThan(0);
+    for (const props of forBig) {
+      expect(props.visible.overlay.size + props.visible.baseNodes.length).toBeLessThanOrEqual(
+        DEFAULT_MAX_OVERLAY_NODES,
+      );
+    }
+    expect(buttons().length).toBeLessThanOrEqual(DEFAULT_MAX_OVERLAY_NODES);
+  });
+
+  it('draws every mark before the first fit, and only then', async () => {
+    const seen: ExplorerVisibleSet[] = [];
+    const recording: ExplorerBase = {
+      space: 'plane',
+      Layer: (props) => {
+        seen.push(props.visible);
+        return null;
+      },
+    };
+    const big = grid(2000);
+    tree = await mount(surface({ base: recording }));
+    await tree.rerender(surface({ base: recording, view: big.view, layout: big.layout }));
+    expect(seen.at(-1)?.baseNodes).toHaveLength(2000);
   });
 });
 

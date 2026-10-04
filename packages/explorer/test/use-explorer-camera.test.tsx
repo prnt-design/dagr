@@ -255,7 +255,29 @@ describe('useExplorerCamera: fitting', () => {
     expect(pendingFrames()).toBe(0);
   });
 
-  it('refits when the viewport is resized', async () => {
+  it('keeps the world point at the center and the scale when resized away from fit', async () => {
+    await ready();
+    camera().focusBox(boxOf(chain, 'b'));
+    await runFramesUntilIdle();
+    const before = cameraNow();
+    const b = boxOf(chain, 'b');
+    const centerOf = (value: ExplorerCamera) => ({
+      x: value.x + (b.x + b.width / 2) * value.scale,
+      y: value.y + (b.y + b.height / 2) * value.scale,
+    });
+    // The premise: b is centered.
+    expect(centerOf(before).x).toBeCloseTo(SIZE.width / 2, 2);
+    expect(centerOf(before).y).toBeCloseTo(SIZE.height / 2, 2);
+
+    await resizeTo(1000, 600);
+    await runFramesUntilIdle();
+    expect(cameraNow().scale).toBeCloseTo(before.scale, 9);
+    expect(centerOf(cameraNow()).x).toBeCloseTo(500, 2);
+    expect(centerOf(cameraNow()).y).toBeCloseTo(300, 2);
+    expect(frames.at(-1)?.viewport).toEqual({ width: 1000, height: 600 });
+  });
+
+  it('refits when the viewport is resized at fit', async () => {
     await ready();
     await resizeTo(1000, 600);
     await runFramesUntilIdle();
@@ -800,12 +822,11 @@ describe('useExplorerCamera: flights', () => {
 });
 
 describe('useExplorerCamera: layout', () => {
-  it('rebuilds the limits and refits when the layout is swapped, even mid-drag', async () => {
+  it('places the new fit when the layout is swapped at fit, even mid-drag', async () => {
     await ready();
     const node = byTestId('node');
-    await zoomedIn();
     await fire(node, pointer('pointerdown', 100, 100));
-    await fire(node, pointer('pointermove', 140, 100));
+    await fire(node, pointer('pointermove', 101, 100));
 
     await rerender(fan);
     expectCamera(camera().getCamera(), fitted(fan));
@@ -816,7 +837,36 @@ describe('useExplorerCamera: layout', () => {
     camera().zoomBy(1e6);
     await runFramesUntilIdle();
     expect(cameraNow().scale).toBeCloseTo(limitsFor(fan).maxScale, 6);
-    await fire(node, pointer('pointerup', 140, 100));
+    await fire(node, pointer('pointerup', 101, 100));
+  });
+
+  it('keeps the center and the scale, re-constrained, when the layout is swapped away from fit, even mid-drag', async () => {
+    await ready();
+    const node = byTestId('node');
+    await zoomedIn();
+    await fire(node, pointer('pointerdown', 100, 100));
+    await fire(node, pointer('pointermove', 140, 100));
+    const before = cameraNow();
+
+    await rerender(fan);
+    const kept = limitsFor(fan).constrain(before);
+    expectCamera(camera().getCamera(), kept);
+    expectCamera(frames.at(-1)?.camera ?? null, kept);
+    expect(pendingFrames()).toBe(0);
+
+    // The drag goes on from the kept camera.
+    await fire(node, pointer('pointermove', 150, 100));
+    expectCamera(cameraNow(), limitsFor(fan).constrain(panCamera(kept, 10, 0)));
+    await fire(node, pointer('pointerup', 150, 100));
+  });
+
+  it('places the fit for a layout swapped before the first fit', async () => {
+    await render();
+    await rerender(fan);
+    expect(camera().getCamera()).toBeNull();
+    await resizeTo(SIZE.width, SIZE.height);
+    expectCamera(camera().getCamera(), fitted(fan));
+    expect(pendingFrames()).toBe(0);
   });
 });
 

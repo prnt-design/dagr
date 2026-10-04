@@ -21,8 +21,11 @@
  * **No size, no camera.** A viewport measured at zero (a hidden tab,
  * `display: none`, the server) has no limits, so there is no camera to
  * draw: the controls are no-ops and the plane stays hidden. The first real
- * size places the fitted camera at once, without a flight, and every later
- * size refits by easing.
+ * size places the fitted camera at once, without a flight.
+ *
+ * **A resize or a new layout keeps the user's place:** the world point at
+ * the center and the scale, under the new limits. Only a camera that was at
+ * fit is fitted again, so a user zoomed in on a node keeps it.
  *
  * Internal to the package. Nothing here is exported from the entry.
  */
@@ -166,20 +169,28 @@ function createEngine(
     }
   };
 
-  /** Rebuilds the limits for the layout and size, and fits. */
-  const refit = (place: boolean): void => {
-    if (disposed) return;
+  /**
+   * Whether the camera is at the fit for the current layout and `at`, the
+   * size `bounds` were built for. Read from the target, so a flight to the
+   * fit counts as at fit.
+   */
+  const atFit = (bounds: CameraLimits | null, at: ExplorerViewportSize): boolean =>
+    bounds !== null && target !== null && cameraSettled(target, bounds.constrain(fitCamera(layout, at, bounds)));
+
+  /** Rebuilds the limits for the layout and size, and says whether there are any. */
+  const rebuild = (): boolean => {
     limits = createCameraLimits(layout, size);
-    if (limits === null) {
-      stop();
-      current = target = drawn = null;
-      return;
-    }
-    if (place) {
-      stop();
-      current = null;
-    }
-    aim(fitCamera(layout, size, limits));
+    if (limits !== null) return true;
+    stop();
+    current = target = drawn = null;
+    return false;
+  };
+
+  /** Puts `camera` on screen at once, with no flight. */
+  const place = (camera: ExplorerCamera): void => {
+    stop();
+    current = null;
+    aim(camera);
   };
 
   const measure = (): void => {
@@ -190,9 +201,23 @@ function createEngine(
     // camera means showing it again needs no refit when the size comes back.
     if (!(width > 0) || !(height > 0)) return;
     if (width === size.width && height === size.height && limits !== null) return;
-    const first = drawn === null;
+    const previous = size;
+    const wasAtFit = atFit(limits, previous);
     size = { width, height };
-    refit(first);
+    if (!rebuild() || limits === null) return;
+    if (current === null || target === null) {
+      place(fitCamera(layout, size, limits));
+      return;
+    }
+    // The user's place is the world point at the center and the scale. The
+    // plane is anchored at its top left, so keeping the center is a pan by
+    // half the change in size, drawn now so the content does not jump.
+    const dx = (size.width - previous.width) / 2;
+    const dy = (size.height - previous.height) / 2;
+    current = panCamera(current, dx, dy);
+    target = panCamera(target, dx, dy);
+    draw();
+    aim(wasAtFit ? fitCamera(layout, size, limits) : target);
   };
 
   // Gestures. A press records where it began, and becomes a pan only past
@@ -513,10 +538,14 @@ function createEngine(
     },
     setLayout(next) {
       if (disposed || next === layout) return;
+      const wasAtFit = atFit(limits, size);
+      const kept = drawn;
       layout = next;
+      if (!(size.width > 0 && size.height > 0) || !rebuild() || limits === null) return;
       // New content is placed, not flown to: easing from a camera framed on
-      // other content shows nothing meaningful on the way.
-      if (size.width > 0 && size.height > 0) refit(true);
+      // other content shows nothing meaningful on the way. At the same size,
+      // the same camera keeps the center's world point and the scale.
+      place(kept === null || wasAtFit ? fitCamera(layout, size, limits) : kept);
     },
     dispose() {
       disposed = true;
