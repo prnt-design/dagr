@@ -358,6 +358,31 @@ describe('ViewportSurface: the overlay follows the visible set', () => {
     expect(renderNode.mock.calls.length).toBe(calls);
   });
 
+  it('does not re-render for a drag of 20 small moves inside the overscan margin', async () => {
+    const renderNode = vi.fn((node: Item) => node.label);
+    await ready({ renderNode });
+    const b = chain.boxes.get('b');
+    if (b === undefined) throw new Error('no b');
+    controls().focusBox(b);
+    await runFramesUntilIdle();
+    const before = expected(chain);
+    const plane = part('plane');
+    const viewport = part('viewport');
+    const calls = renderNode.mock.calls.length;
+
+    await fire(viewport, pointer('pointerdown', 400, 240));
+    const transforms = new Set<string>();
+    for (let step = 1; step <= 20; step += 1) {
+      await fire(viewport, pointer('pointermove', 400 + step * 2, 240 + step));
+      transforms.add(plane.style.transform);
+    }
+    await fire(viewport, pointer('pointerup', 440, 260));
+    // The premise: the drag drew frame after frame, and the set it gives is the same.
+    expect(transforms.size).toBeGreaterThan(15);
+    expect(sameVisibleSet(before, expected(chain))).toBe(true);
+    expect(renderNode).toHaveBeenCalledTimes(calls);
+  });
+
   it('changes data-tier when a zoom crosses a gate', async () => {
     await ready();
     expect(button('b')?.dataset['tier']).toBe('summary');
@@ -409,6 +434,32 @@ describe('ViewportSurface: the overlay follows the visible set', () => {
       );
       expect(buttons().map((b) => [b.dataset['nodeId'], b.dataset['tier']])).toEqual([...visible.overlay]);
     }
+  });
+
+  it('sanitizes each tier gate on its own', async () => {
+    const cases: [ExplorerTiers, ExplorerTiers][] = [
+      [{ summary: Number.NaN, rich: 100 }, { summary: DEFAULT_TIERS.summary, rich: 100 }],
+      [{ summary: 10, rich: -1 }, { summary: 10, rich: DEFAULT_TIERS.rich }],
+      // A caller with no types can leave a gate out.
+      [{ rich: 100 } as unknown as ExplorerTiers, { summary: DEFAULT_TIERS.summary, rich: 100 }],
+      [{ summary: 300 } as unknown as ExplorerTiers, { summary: 300, rich: DEFAULT_TIERS.rich }],
+    ];
+    await ready();
+    for (const [given, resolved] of cases) {
+      await tree?.rerender(surface({ tiers: given }));
+      const visible = expected(chain, { tiers: resolved });
+      expect([given, buttons().map((b) => [b.dataset['nodeId'], b.dataset['tier']])]).toEqual([
+        given,
+        [...visible.overlay],
+      ]);
+    }
+  });
+
+  it('floors maxOverlayNodes, so 2.7 mounts 2', async () => {
+    await ready({ tiers: { summary: 0, rich: 10_000 }, maxOverlayNodes: 2.7 });
+    const visible = expected(chain, { tiers: { summary: 0, rich: 10_000 }, maxOverlayNodes: 2 });
+    expect(visible.overlay.size).toBe(2);
+    expect(buttons().map((b) => b.dataset['nodeId'])).toEqual([...visible.overlay.keys()]);
   });
 
   it('keeps the camera and rebuilds the visible set when the layout is swapped', async () => {

@@ -91,13 +91,11 @@ const usable = (value: number | undefined): value is number =>
   value !== undefined && Number.isFinite(value) && value >= 0;
 
 /**
- * A pair of gates with each bad one replaced by its default. Per gate rather
- * than all or nothing, so one mistyped number does not discard the other.
+ * A pair of gates with each bad or missing one replaced by its default. Per
+ * gate rather than all or nothing, so one mistyped number does not discard
+ * the other.
  */
-function tiersOf(tiers: ExplorerTiers | undefined): ExplorerTiers {
-  const summary = tiers?.summary;
-  const rich = tiers?.rich;
-  if (usable(summary) && usable(rich)) return tiers ?? DEFAULT_TIERS;
+function tiersOf(summary: number | undefined, rich: number | undefined): ExplorerTiers {
   return {
     summary: usable(summary) ? summary : DEFAULT_TIERS.summary,
     rich: usable(rich) ? rich : DEFAULT_TIERS.rich,
@@ -198,7 +196,7 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
   const pinKey = JSON.stringify(pins);
   const options = useMemo<VisibleSetOptions>(
     () => ({
-      tiers: tiersOf(summary === undefined || rich === undefined ? undefined : { summary, rich }),
+      tiers: tiersOf(summary, rich),
       maxOverlayNodes: cap,
       pinned: JSON.parse(pinKey) as string[],
     }),
