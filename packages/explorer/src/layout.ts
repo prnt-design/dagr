@@ -33,13 +33,9 @@ export interface ExplorerBox {
   readonly height: number;
 }
 
-export interface ExplorerGroupBox extends ExplorerBox {
-  readonly id: string;
-}
-
 /**
  * A view, placed. World space is y-down CSS pixels at zoom 1, and the content
- * is padded {@link WORLD_PADDING} off the origin, so `width` and `height`
+ * is padded 40 off the origin, so `width` and `height`
  * describe a plane that starts at (0, 0).
  */
 export interface ExplorerLayout {
@@ -50,7 +46,8 @@ export interface ExplorerLayout {
    * the edge's source to its target. A self loop has an empty route.
    */
   readonly routes: ReadonlyMap<string, readonly Vec2[]>;
-  readonly groups: readonly ExplorerGroupBox[];
+  /** One rectangle per group, in the order the view lists its groups. */
+  readonly groups: ReadonlyMap<string, ExplorerBox>;
   readonly width: number;
   readonly height: number;
 }
@@ -194,7 +191,8 @@ export function layoutView<N extends ExplorerNode, E extends ExplorerEdge>(
     );
   }
 
-  const groups: ExplorerGroupBox[] = (view.groups ?? []).map((group) => {
+  const groups = new Map<string, ExplorerBox>();
+  for (const group of view.groups ?? []) {
     const members = new Set(group.nodeIds);
     let minX = Infinity;
     let minY = Infinity;
@@ -208,8 +206,7 @@ export function layoutView<N extends ExplorerNode, E extends ExplorerEdge>(
       maxX = Math.max(maxX, member.x + member.width);
       maxY = Math.max(maxY, member.y + member.height);
     }
-    const rect: ExplorerGroupBox = {
-      id: group.id,
+    const rect: ExplorerBox = {
       x: minX - GROUP_PADDING,
       y: minY - GROUP_PADDING - GROUP_LABEL_BAND,
       width: maxX - minX + GROUP_PADDING * 2,
@@ -233,8 +230,8 @@ export function layoutView<N extends ExplorerNode, E extends ExplorerEdge>(
         }
       }
     }
-    return rect;
-  });
+    groups.set(group.id, rect);
+  }
 
   // Everything above is in the layout engine's frame, which is centered on
   // nothing in particular. Move it so the hull of every box, group and route
@@ -250,11 +247,11 @@ export function layoutView<N extends ExplorerNode, E extends ExplorerEdge>(
     maxY = Math.max(maxY, y1);
   };
   for (const b of boxes.values()) grow(b.x, b.y, b.x + b.width, b.y + b.height);
-  for (const g of groups) grow(g.x, g.y, g.x + g.width, g.y + g.height);
+  for (const g of groups.values()) grow(g.x, g.y, g.x + g.width, g.y + g.height);
   for (const points of routes.values()) for (const p of points) grow(p.x, p.y, p.x, p.y);
 
   if (minX === Infinity) {
-    return { boxes: new Map(), routes: new Map(), groups: [], width: 0, height: 0 };
+    return { boxes: new Map(), routes: new Map(), groups: new Map(), width: 0, height: 0 };
   }
 
   const dx = WORLD_PADDING - minX;
@@ -264,7 +261,7 @@ export function layoutView<N extends ExplorerNode, E extends ExplorerEdge>(
     routes: new Map(
       [...routes].map(([id, points]) => [id, points.map((p) => ({ x: p.x + dx, y: p.y + dy }))]),
     ),
-    groups: groups.map((g) => ({ ...g, x: g.x + dx, y: g.y + dy })),
+    groups: new Map([...groups].map(([id, g]) => [id, { ...g, x: g.x + dx, y: g.y + dy }])),
     width: maxX - minX + WORLD_PADDING * 2,
     height: maxY - minY + WORLD_PADDING * 2,
   };

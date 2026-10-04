@@ -309,16 +309,28 @@ describe('layoutView, layout options', () => {
 describe('layoutView, groups', () => {
   it('outlines its members with 24 of padding and a 24 label band above', () => {
     const layout = layoutView(chain({ groups: [{ id: 'g', label: 'G', nodeIds: ['b'] }] }));
-    expect(layout.groups).toEqual([{ id: 'g', x: 376, y: 40, width: 288, height: 192 }]);
+    expect([...layout.groups]).toEqual([['g', { x: 376, y: 40, width: 288, height: 192 }]]);
     expect(box(layout, 'a')).toEqual({ x: 40, y: 88, width: 240, height: 120 });
     expect(box(layout, 'b')).toEqual({ x: 400, y: 88, width: 240, height: 120 });
     expect(layout.width).toBe(1040);
     expect(layout.height).toBe(272);
   });
 
+  it('returns groups in the order the view lists them', () => {
+    const layout = layoutView(
+      chain({
+        groups: [
+          { id: 'second', label: 'Two', nodeIds: ['c'] },
+          { id: 'first', label: 'One', nodeIds: ['a'] },
+        ],
+      }),
+    );
+    expect([...layout.groups.keys()]).toEqual(['second', 'first']);
+  });
+
   it('draws an outline that encloses a non-member unless strict', () => {
     const layout = layoutView(chain({ groups: [{ id: 'g', label: 'G', nodeIds: ['a', 'c'] }] }));
-    expect(layout.groups).toEqual([{ id: 'g', x: 40, y: 40, width: 1008, height: 192 }]);
+    expect([...layout.groups]).toEqual([['g', { x: 40, y: 40, width: 1008, height: 192 }]]);
     expect(box(layout, 'a')).toEqual({ x: 64, y: 88, width: 240, height: 120 });
     expect(layout.width).toBe(1088);
     expect(layout.height).toBe(272);
@@ -348,7 +360,7 @@ describe('layoutView, groups', () => {
   it('treats a member listed twice as listed once', () => {
     const once = layoutView(chain({ groups: [{ id: 'g', label: 'G', nodeIds: ['b'] }] }));
     const twice = layoutView(chain({ groups: [{ id: 'g', label: 'G', nodeIds: ['b', 'b'] }] }));
-    expect(twice.groups).toEqual(once.groups);
+    expect([...twice.groups]).toEqual([...once.groups]);
   });
 
   it('lets an outline touch a non-member under strictGroups, and rejects one pixel more', () => {
@@ -369,7 +381,7 @@ describe('layoutView, edges of the input', () => {
     const layout = layoutView({ id: 'v', label: 'View', nodes: [], edges: [] });
     expect(layout.boxes.size).toBe(0);
     expect(layout.routes.size).toBe(0);
-    expect(layout.groups).toEqual([]);
+    expect(layout.groups.size).toBe(0);
     expect(layout.width).toBe(0);
     expect(layout.height).toBe(0);
   });

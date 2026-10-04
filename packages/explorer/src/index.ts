@@ -17,7 +17,6 @@ export type { DagrExplorerErrorCode } from './errors.js';
 export { DEFAULT_NODE_SEP, DEFAULT_RANK_SEP, layoutView } from './layout.js';
 export type {
   ExplorerBox,
-  ExplorerGroupBox,
   ExplorerLayout,
   LayoutViewOptions,
 } from './layout.js';
