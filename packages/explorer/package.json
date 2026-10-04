@@ -48,7 +48,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run && vitest run --config vitest.react18.config.ts",
     "test:react18": "vitest run --config vitest.react18.config.ts",
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json",
+    "bench": "vitest bench --run --outputJson bench-report.json"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",
