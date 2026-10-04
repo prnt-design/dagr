@@ -427,6 +427,7 @@ elements and base marks. Nothing remounts. With no selection, trace dims nothing
 
 ```ts
 interface ExplorerBaseProps {
+  readonly view: Omit<ExplorerView, 'layout'>; // nodes, edges, groups, labels
   readonly layout: ExplorerLayout;      // boxes, routes, group rects, bounds
   readonly visible: ExplorerVisibleSet; // base nodes and edges in view
   readonly emphasis: ExplorerEmphasis;  // selected, dimmed
@@ -779,4 +780,7 @@ can see what moved without diffing.
 One change is bookkeeping and not design: M5.6c was split into M5.6c-1, the pure core, and M5.6c-2, the React viewport, so each plan could be exact.
 
 Amendments 3 to 13 were made by the agent executing the plans, after review
-findings. The maintainer approved all of them on 2026-10-03.
+findings. The maintainer approved all of them on 2026-10-03. Amendment 14 was
+made the same way on 2026-10-04, under the maintainer's instruction to carry on
+through the remaining slices, and is listed in its pull request for the
+maintainer to accept or reverse.

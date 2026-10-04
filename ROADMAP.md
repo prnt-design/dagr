@@ -302,9 +302,10 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   SVG.
 - [x] **M5.6b** Package scaffold and pure core: types, validation, layout,
   search. Private until M5.6f. Self loops are kept and not drawn.
-- [ ] **M5.6c** Camera, viewport, SVG base, visible set, overlay tiers, pins.
+- [x] **M5.6c** Camera, viewport, SVG base, visible set, overlay tiers, pins.
   The pure core (camera arithmetic, the visible set, the point-to-node lookup)
-  landed first as M5.6c-1. The React viewport that uses it is M5.6c-2.
+  landed first as M5.6c-1. The React viewport that uses it landed as M5.6c-2,
+  internal until M5.6d.
 - [ ] **M5.6d** Root state, remaining parts, `labels`, `DagrExplorer`,
   `styles.css`.
 - [ ] **M5.6e** Roving focus, spatial navigation, reveal, server rendering.
