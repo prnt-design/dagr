@@ -103,7 +103,14 @@ describe('ExplorerViewport: inside a root', () => {
     expect(description?.getAttribute('data-dagr-explorer')).toBe('hint');
     expect(description?.textContent).toContain('4 nodes, 3 edges.');
     expect(description?.textContent).toContain('Search reaches every node');
+    expect(description?.textContent).toContain('arrow keys');
     expect(button('a')).not.toBeNull();
+  });
+
+  it('builds the description from labels.stats and labels.hint', async () => {
+    await ready({ labels: { stats: ({ nodes, edges }) => `${String(nodes)}/${String(edges)}`, hint: 'Find any node.' } });
+    const description = document.getElementById(part('viewport').getAttribute('aria-describedby') ?? '');
+    expect(description?.textContent).toBe('4/3 Find any node.');
   });
 
   it('inspects a node on click, with the button as the opener, and flies to it on double click', async () => {
