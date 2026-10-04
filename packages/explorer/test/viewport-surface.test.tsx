@@ -285,6 +285,29 @@ describe('ViewportSurface: shape', () => {
     expect(controlsRef.current).toBeNull();
   });
 
+  it('points aria-describedby at describedBy, and leaves it off without one', async () => {
+    await ready({ describedBy: 'hint-1' });
+    expect(part('viewport').getAttribute('aria-describedby')).toBe('hint-1');
+    await tree?.rerender(surface());
+    expect(part('viewport').hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('hands its camera source out through cameraSourceRef, and takes it back on unmount', async () => {
+    const cameraSourceRef: MutableRefObject<ExplorerCameraSource | null> = { current: null };
+    await ready({ cameraSourceRef });
+    const source = cameraSourceRef.current as ExplorerCameraSource | null;
+    if (source === null) throw new Error('no camera source');
+    expect(source.get()).toEqual(cameraNow());
+    const heard: ExplorerCamera[] = [];
+    const off = source.subscribe((camera) => heard.push(camera));
+    controls().zoomBy(2);
+    const ran = await runFramesUntilIdle();
+    expect(heard).toHaveLength(ran);
+    off();
+    await tree?.unmount();
+    expect(cameraSourceRef.current).toBeNull();
+  });
+
   it('renders nothing that names a host framework', async () => {
     await ready({ selectedId: 'b' });
     const html = tree?.container.innerHTML ?? '';

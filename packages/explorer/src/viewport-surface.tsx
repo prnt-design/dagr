@@ -79,6 +79,14 @@ export interface ViewportSurfaceProps<N extends ExplorerNode, E extends Explorer
   /** Double click. */
   readonly onNodeZoom?: ((id: string) => void) | undefined;
   readonly controlsRef?: MutableRefObject<ExplorerCameraControls | null> | undefined;
+  /**
+   * The camera on screen and every drawn frame, the same source the base
+   * gets, for a part outside the viewport that follows the camera without
+   * re-rendering (the toolbar's zoom readout).
+   */
+  readonly cameraSourceRef?: MutableRefObject<ExplorerCameraSource | null> | undefined;
+  /** The id of the element that describes the region. */
+  readonly describedBy?: string | undefined;
   readonly className?: string | undefined;
   readonly style?: CSSProperties | undefined;
 }
@@ -178,6 +186,8 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
     onNodeActivate,
     onNodeZoom,
     controlsRef,
+    cameraSourceRef,
+    describedBy,
     className,
     style,
   } = props;
@@ -279,6 +289,14 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
       if (controlsRef.current === controls) controlsRef.current = null;
     };
   }, [controls, controlsRef]);
+
+  useEffect(() => {
+    if (cameraSourceRef === undefined) return undefined;
+    cameraSourceRef.current = cameraSource;
+    return () => {
+      if (cameraSourceRef.current === cameraSource) cameraSourceRef.current = null;
+    };
+  }, [cameraSource, cameraSourceRef]);
 
   // The click handlers read the latest props through a ref, so the listeners
   // are attached once per viewport and not on every render.
@@ -392,6 +410,7 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
       data-dagr-explorer="viewport"
       role="region"
       aria-label={label}
+      aria-describedby={describedBy}
       tabIndex={-1}
       className={className}
       style={{
