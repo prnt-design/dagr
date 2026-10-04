@@ -357,8 +357,8 @@ these variables: `--dagr-explorer-accent`, `--dagr-explorer-fg`,
 `--dagr-explorer-bg-subtle`, `--dagr-explorer-focus`, `--dagr-explorer-font-mono`.
 It names no host framework. Mapping Docusaurus tokens onto them is a wrapper's job.
 
-Vector content is never forced onto a composited layer. A cached raster of
-text enlarged by the camera goes blurry at high zoom.
+Vector content is composited only while the camera moves, and never at rest.
+A cached raster of text enlarged by the camera goes blurry at high zoom.
 
 ## Tiers and virtualization
 
@@ -402,7 +402,7 @@ On every camera frame a pure function computes:
 - **Base nodes and edges:** nodes that intersect the expanded viewport and are
   not overlay nodes, and edges whose route bounds intersect it.
 
-The viewport keeps the previous result, by reference, on a frame where nothing changed, so an unchanged frame gives React nothing new to see.
+The viewport keeps the previous result, by reference, on a frame where nothing changed, so an unchanged frame gives React nothing new to see. A frame at the same zoom whose view stays within half the overscan margin of the last computation skips the computation: every node that view can show was already in the margin.
 
 **React renders only when membership or a tier changes.** The camera writes
 one transform on the plane per frame. A node element is positioned in world
@@ -427,6 +427,7 @@ elements and base marks. Nothing remounts. With no selection, trace dims nothing
 
 ```ts
 interface ExplorerBaseProps {
+  readonly view: Omit<ExplorerView, 'layout'>; // nodes, edges, groups, labels
   readonly layout: ExplorerLayout;      // boxes, routes, group rects, bounds
   readonly visible: ExplorerVisibleSet; // base nodes and edges in view
   readonly emphasis: ExplorerEmphasis;  // selected, dimmed
@@ -462,17 +463,24 @@ experimental until the native base lands and confirms or corrects them.
 The camera is a port of dagr's docs `useGraphCamera`. `Camera2D` supplies zoom
 and pan limits from the content bounds and node boxes. One
 `requestAnimationFrame` loop eases toward the latest input and stops when
-settled. Under `prefers-reduced-motion` changes apply immediately. A resize refits.
+settled. The ease is for the wheel, keys and flights: a drag tracks the
+pointer exactly. Under `prefers-reduced-motion` changes apply immediately.
+
+A resize or a relayout keeps the user's place: the world point at the center
+and the scale, under the new limits. It refits only when the camera was at
+fit.
 
 A focus fits the node with 24 CSS pixels to spare on each side, up to the zoom ceiling. The ease has a 55 millisecond time constant, and a frame longer than 64 milliseconds counts as 64, so a tab that was in the background does not jump.
 
 Pointer behavior is the documented behavior of the three existing copies:
 
 - Wheel zooms only while focus is inside the graph, anchored at the pointer.
-- `Ctrl` and `Command` wheel stay the browser's zoom. `Shift` wheel pans
-  horizontally. Unfocused wheel input scrolls the page.
-- On touch, the first tap focuses the graph, and swipes scroll the page until
-  then. The viewport sets `touch-action: none` only while it holds focus, so
+- A pinch zooms the graph while it has focus, from a trackpad (a `Ctrl`
+  wheel) or two touches. Unfocused, a pinch is the browser's, and a
+  `Command` wheel always is. `Shift` wheel pans horizontally. Unfocused
+  wheel input scrolls the page.
+- On touch, the first tap focuses the graph and activates nothing, and swipes
+  scroll the page until then. The viewport sets `touch-action: none` only while it holds focus, so
   an unfocused graph never traps a page scroll.
 - A drag pans after 5 CSS pixels and suppresses the click that would follow.
   Pointer capture starts at the threshold, so a tap keeps its target.
@@ -754,8 +762,25 @@ can see what moved without diffing.
     boxes and routes. Same review: a consumer looked a group up with `find`.
 13. **`INVALID_ID`.** Found by the whole-branch review of M5.6b: an empty id
     passed validation and then failed in the graph package with its own error.
+14. **A resize or a relayout keeps the user's place, a drag tracks the
+    pointer, and a pinch zooms the graph.** Found by the graphics-and-feel
+    review of M5.6c-2.
+    - A resize or a relayout keeps the user's place: the world point at the
+      center and the scale, re-constrained. It refits only when the camera
+      was at fit. (The spec said a resize refits.)
+    - A drag tracks the pointer exactly. The ease is for wheel, keys and
+      flights.
+    - Pinch zooms the graph while it has focus, from a trackpad (`Ctrl`
+      wheel) or two touches. Unfocused, a pinch is the browser's. (The spec
+      said `Ctrl` and `Command` wheel stay the browser's zoom.)
+    - The plane is composited while the camera moves and not at rest. (The
+      spec said vector content is never composited.) A frame that cannot
+      change the visible set skips computing it.
 
 One change is bookkeeping and not design: M5.6c was split into M5.6c-1, the pure core, and M5.6c-2, the React viewport, so each plan could be exact.
 
 Amendments 3 to 13 were made by the agent executing the plans, after review
-findings. The maintainer approved all of them on 2026-10-03.
+findings. The maintainer approved all of them on 2026-10-03. Amendment 14 was
+made the same way on 2026-10-04, under the maintainer's instruction to carry on
+through the remaining slices, and is listed in its pull request for the
+maintainer to accept or reverse.
