@@ -32,6 +32,7 @@ const everything: ExplorerVisibleSet = {
   edges: ['ab', 'bc', 'cc'],
 };
 const noEmphasis = { selectedId: null, dimmed: new Set<string>() };
+const noCamera = { get: () => null, subscribe: () => () => undefined };
 
 let tree: Mounted | null = null;
 afterEach(async () => {
@@ -42,7 +43,7 @@ afterEach(async () => {
 async function draw(props: Partial<ExplorerBaseProps<ExplorerNode, ExplorerEdge>> = {}): Promise<SVGSVGElement> {
   const Layer = svgBase.Layer;
   tree = await mount(
-    <Layer view={view} layout={layout} visible={everything} emphasis={noEmphasis} {...props} />,
+    <Layer view={view} layout={layout} visible={everything} emphasis={noEmphasis} camera={noCamera} {...props} />,
   );
   const svg = tree.container.querySelector('svg');
   if (svg === null) throw new Error('no svg');
@@ -118,16 +119,65 @@ describe('svgBase', () => {
     }
   });
 
-  it('gives two layers on one page different marker ids', async () => {
+  it('defines the same marker under the same id in two React roots, whatever each draws', async () => {
     const Layer = svgBase.Layer;
+    // The two roots meet their colors in different orders, so an id counted
+    // per root would name a red arrowhead in one and a black one in the other.
     tree = await mount(
-      <>
-        <Layer view={view} layout={layout} visible={everything} emphasis={noEmphasis} />
-        <Layer view={view} layout={layout} visible={everything} emphasis={noEmphasis} />
-      </>,
+      <Layer view={view} layout={layout} visible={everything} emphasis={noEmphasis} camera={noCamera} />,
     );
-    const markers = [...tree.container.querySelectorAll('marker')].map((m) => m.id);
-    expect(new Set(markers).size).toBe(markers.length);
+    const other = await mount(
+      <Layer
+        view={view}
+        layout={layout}
+        visible={{ ...everything, edges: ['bc'] }}
+        emphasis={noEmphasis}
+        camera={noCamera}
+      />,
+    );
+    try {
+      const definitions = (root: Element): Map<string, string> =>
+        new Map([...root.querySelectorAll('marker')].map((marker) => [marker.id, marker.outerHTML]));
+      const mine = definitions(tree.container);
+      const theirs = definitions(other.container);
+      expect(theirs.size).toBe(1);
+      for (const [id, html] of theirs) expect(mine.get(id)).toBe(html);
+    } finally {
+      await other.unmount();
+    }
+  });
+
+  it('names each color its own marker, with an id that is a valid url(#...) target', async () => {
+    // The last two strip to the same characters, and must not share a marker.
+    const colors = ['rgba(0, 128, 255, 0.5)', '#ff0000', 'hsl(10 20% 30% / 0.5)', 'rgb(1, 23, 4)', 'rgb(12, 3, 4)'];
+    const tinted: ExplorerView = {
+      ...view,
+      edges: colors.map((color, i) => ({ id: `e${String(i)}`, source: 'a', target: 'b', color })),
+    };
+    const svg = await draw({
+      view: tinted,
+      layout: { ...layout, routes: new Map(colors.map((_, i) => [`e${String(i)}`, [{ x: 0, y: 0 }, { x: 10, y: 10 }]])) },
+      visible: { overlay: new Map(), baseNodes: [], edges: colors.map((_, i) => `e${String(i)}`) },
+    });
+    const ids = new Set<string>();
+    for (const [i, color] of colors.entries()) {
+      const path = svg.querySelector(`path[data-edge-id="e${String(i)}"]`);
+      const reference = /^url\(#([A-Za-z0-9-]+)\)$/.exec(path?.getAttribute('marker-end') ?? '');
+      const id = reference?.[1] ?? '';
+      expect(id).toMatch(/^dagr-explorer-arrow-[A-Za-z0-9-]+$/);
+      expect(svg.querySelector(`#${id}`)?.querySelector('path')?.getAttribute('fill')).toBe(color);
+      ids.add(id);
+    }
+    expect(ids.size).toBe(colors.length);
+  });
+
+  it('keeps the strokes of edges and group outlines one width at any zoom, and lets arrowheads scale', async () => {
+    const svg = await draw();
+    for (const path of svg.querySelectorAll('path[data-edge-id]')) {
+      expect(path.getAttribute('vector-effect')).toBe('non-scaling-stroke');
+    }
+    expect(svg.querySelector('[data-group-id="g"] rect')?.getAttribute('vector-effect')).toBe('non-scaling-stroke');
+    expect(svg.querySelector('marker')?.getAttribute('markerUnits')).toBe('userSpaceOnUse');
   });
 
   it('dims a mark, and an edge with a dimmed end at either side', async () => {
@@ -143,6 +193,7 @@ describe('svgBase', () => {
         layout={layout}
         visible={everything}
         emphasis={{ selectedId: null, dimmed: new Set(['a']) }}
+        camera={noCamera}
       />,
     );
     expect(svg.querySelector('path[data-edge-id="ab"]')?.hasAttribute('data-dimmed')).toBe(true);

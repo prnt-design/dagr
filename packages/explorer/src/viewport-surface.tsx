@@ -30,7 +30,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MutableRefObject, ReactElement, ReactNode } from 'react';
-import type { ExplorerBase, ExplorerEmphasis } from './base.js';
+import type { ExplorerBase, ExplorerCameraSource, ExplorerEmphasis } from './base.js';
 import { visibleWorld } from './camera.js';
 import type { ExplorerCamera, ExplorerViewportSize } from './camera.js';
 import type { ExplorerBox, ExplorerLayout } from './layout.js';
@@ -209,10 +209,13 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
   const shownRef = useRef(shown);
   const lastViewportRef = useRef<ExplorerViewportSize | null>(null);
   const scanRef = useRef<Scan | null>(null);
+  const [listeners] = useState(() => new Set<(camera: ExplorerCamera) => void>());
 
   const onFrame = useCallback(
     (camera: ExplorerCamera, viewport: ExplorerViewportSize) => {
       lastViewportRef.current = viewport;
+      // First, so a base that draws its own camera moves in step with the plane.
+      for (const listener of [...listeners]) listener(camera);
       const world = visibleWorld(camera, viewport);
       const scan = scanRef.current;
       if (
@@ -232,10 +235,25 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
       shownRef.current = value;
       setShown(value);
     },
-    [index, options],
+    [index, options, listeners],
   );
 
   const controls = useExplorerCamera({ viewportRef, planeRef, layout, onFrame });
+  const cameraSource = useMemo<ExplorerCameraSource>(
+    () => ({
+      get: () => controls.getCamera(),
+      subscribe(listener) {
+        // Wrapped, so one listener subscribed twice is two subscriptions,
+        // each ended by its own unsubscribe.
+        const own = (camera: ExplorerCamera): void => listener(camera);
+        listeners.add(own);
+        return () => {
+          listeners.delete(own);
+        };
+      },
+    }),
+    [controls, listeners],
+  );
 
   // A prop that changes the set without moving the camera: pins, tiers, the
   // cap. The camera's own effects have run by now, so a new layout has
@@ -315,15 +333,6 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
       : computeVisibleSet(index, camera, viewport, options);
   }, [pending, controls, index, options]);
   const visible = first ?? shown.set;
-  // The seam is typed over the base node and edge types, since a base reads
-  // ids, labels and colors and never a caller's own fields. A view of `N`
-  // is one of those except for `layout.nodeSize`, a function of `N`, which
-  // a base has no use for: the layout is already done. So the base is
-  // handed the view without it, rather than the view cast.
-  const baseView = useMemo<ExplorerView>(
-    () => ({ id: view.id, label: view.label, nodes: view.nodes, edges: view.edges, groups: view.groups }),
-    [view.id, view.label, view.nodes, view.edges, view.groups],
-  );
   const emphasis = useMemo<ExplorerEmphasis>(() => ({ selectedId, dimmed }), [selectedId, dimmed]);
   const nodes = useMemo(() => new Map(view.nodes.map((node) => [node.id, node])), [view.nodes]);
   const groupsOf = useMemo(() => {
@@ -366,7 +375,9 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
   }
 
   const Layer = base.Layer;
-  const layer = <Layer view={baseView} layout={layout} visible={visible} emphasis={emphasis} />;
+  const layer = (
+    <Layer view={view} layout={layout} visible={visible} emphasis={emphasis} camera={cameraSource} />
+  );
 
   return (
     <div

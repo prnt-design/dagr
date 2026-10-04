@@ -16,10 +16,20 @@
  * browser this package supports draws. So the arrowhead for a red edge is a
  * red marker, and the markers are as many as the colors in view.
  *
+ * **A marker's id is its color, escaped.** Ids live in the document, not
+ * in a React root, and two roots (two explorers, or two copies of React)
+ * can count `useId` the same way. Named by color, a marker one root reaches
+ * in another root's tree is the same arrowhead.
+ *
+ * **Strokes keep their width at any zoom** (`vector-effect`), so an edge
+ * never thins to nothing zoomed out or thickens to a bar zoomed in.
+ * Arrowheads are not strokes: the marker is in user space, so they scale
+ * with the camera like the marks they point at.
+ *
  * Internal to the package. Nothing here is exported from the entry.
  */
 
-import { useId, useMemo } from 'react';
+import { useMemo } from 'react';
 import type { ReactElement } from 'react';
 import type { ExplorerBase, ExplorerBaseProps } from './base.js';
 import type { ExplorerEdge, ExplorerNode } from './types.js';
@@ -27,9 +37,16 @@ import type { ExplorerEdge, ExplorerNode } from './types.js';
 const DEFAULT_COLOR = 'currentColor';
 const DASH = '6 4';
 
-/** `useId` output is not a valid fragment in every React (`:r1:`, `«r1»`), so keep word characters only. */
-function fragmentOf(id: string): string {
-  return `dagr-explorer-${id.replace(/[^A-Za-z0-9_-]/g, '')}`;
+/**
+ * The marker id for a color: letters and digits as they are, and every other
+ * character, `-` included, as `-<hex code point>-`. Escaped rather than
+ * stripped, so two colors never share an id (`rgb(1, 23, 4)` and
+ * `rgb(12, 3, 4)` strip to the same characters), and the result is a valid
+ * `url(#...)` fragment for any CSS color.
+ */
+function markerIdOf(color: string): string {
+  const escaped = color.replace(/[^A-Za-z0-9]/gu, (char) => `-${(char.codePointAt(0) ?? 0).toString(16)}-`);
+  return `dagr-explorer-arrow-${escaped}`;
 }
 
 function SvgBaseLayer({
@@ -38,7 +55,6 @@ function SvgBaseLayer({
   visible,
   emphasis,
 }: ExplorerBaseProps<ExplorerNode, ExplorerEdge>): ReactElement {
-  const prefix = fragmentOf(useId());
   const nodes = useMemo(() => new Map(view.nodes.map((node) => [node.id, node])), [view.nodes]);
   const edges = useMemo(() => new Map(view.edges.map((edge) => [edge.id, edge])), [view.edges]);
 
@@ -46,7 +62,7 @@ function SvgBaseLayer({
   const markerFor = (color: string): string => {
     let id = markers.get(color);
     if (id === undefined) {
-      id = `${prefix}-arrow-${String(markers.size)}`;
+      id = markerIdOf(color);
       markers.set(color, id);
     }
     return id;
@@ -70,6 +86,7 @@ function SvgBaseLayer({
         fill="none"
         stroke={color}
         strokeWidth={1.5}
+        vectorEffect="non-scaling-stroke"
         strokeDasharray={edge.dash === true ? DASH : undefined}
         markerEnd={`url(#${markerFor(color)})`}
       />,
@@ -111,6 +128,7 @@ function SvgBaseLayer({
           rx={8}
           fill="none"
           stroke={color}
+          vectorEffect="non-scaling-stroke"
           strokeDasharray="4 4"
         />
         <text x={box.x + 12} y={box.y + 17} fill={color} fontSize={12}>

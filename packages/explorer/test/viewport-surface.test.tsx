@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { StrictMode } from 'react';
+import { StrictMode, useEffect } from 'react';
 import type { MutableRefObject, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ExplorerBase, ExplorerBaseProps } from '../src/base.js';
+import type { ExplorerBase, ExplorerBaseProps, ExplorerCameraSource } from '../src/base.js';
 import type { ExplorerCamera } from '../src/camera.js';
 import { layoutView } from '../src/index.js';
 import type { ExplorerEdge, ExplorerLayout, ExplorerNode, ExplorerView } from '../src/index.js';
+import { svgBase } from '../src/svg-base.js';
 import type { ExplorerCameraControls } from '../src/use-explorer-camera.js';
 import { ViewportSurface } from '../src/viewport-surface.js';
 import type { ViewportSurfaceProps } from '../src/viewport-surface.js';
@@ -216,6 +217,60 @@ describe('ViewportSurface: shape', () => {
     expect(last?.layout).toBe(chain);
     expect(last?.emphasis.selectedId).toBe('a');
     expect([...(last?.emphasis.dimmed ?? [])]).toEqual(['c']);
+  });
+
+  it('hands the base the whole view, every field of it', async () => {
+    const seen: ExplorerBaseProps<ExplorerNode, ExplorerEdge>[] = [];
+    const recording: ExplorerBase = {
+      space: 'plane',
+      Layer: (props) => {
+        seen.push(props);
+        return null;
+      },
+    };
+    const described: ExplorerView<Item> = { ...chainView, description: 'A chain of three' };
+    await ready({ base: recording, view: described });
+    expect(seen.at(-1)?.view).toBe(described);
+    expect(seen.at(-1)?.view.description).toBe('A chain of three');
+  });
+
+  it('gives a viewport base the camera, calling its listeners on each drawn frame right after the transform', async () => {
+    const heard: { camera: ExplorerCamera; transform: string }[] = [];
+    let source: ExplorerCameraSource | null = null;
+    function Native(props: ExplorerBaseProps<ExplorerNode, ExplorerEdge>) {
+      source = props.camera;
+      const { camera } = props;
+      useEffect(
+        () =>
+          camera.subscribe((value) => {
+            const plane = document.querySelector('[data-dagr-explorer="plane"]');
+            heard.push({ camera: value, transform: plane instanceof HTMLElement ? plane.style.transform : '' });
+          }),
+        [camera],
+      );
+      return <canvas />;
+    }
+    await ready({ base: { space: 'viewport', Layer: Native } });
+    expect(heard.length).toBeGreaterThan(0);
+
+    const before = heard.length;
+    controls().zoomBy(2);
+    const ran = await runFramesUntilIdle();
+    expect(heard.length - before).toBe(ran);
+    for (const { camera, transform } of heard) {
+      expect(transform).toBe(
+        `translate(${String(camera.x)}px, ${String(camera.y)}px) scale(${String(camera.scale)})`,
+      );
+    }
+    expect(heard.at(-1)?.camera).toEqual(cameraNow());
+    expect((source as ExplorerCameraSource | null)?.get()).toEqual(cameraNow());
+
+    // An unsubscribed listener hears nothing more.
+    await tree?.rerender(surface({ base: svgBase }));
+    const after = heard.length;
+    controls().zoomBy(0.5);
+    await runFramesUntilIdle();
+    expect(heard.length).toBe(after);
   });
 
   it('hands the controls out through controlsRef, and takes them back on unmount', async () => {
