@@ -187,6 +187,11 @@ and endpoints, group ids and membership, and the layout options. Data
 re-created on every render with the same shape keeps its layout and its
 camera. A label or color change never relayouts.
 
+**A layout is three maps and a size.** `layoutView` returns `boxes` (a box
+per node), `routes` (a route per edge) and `groups` (a rectangle per group),
+each a map keyed by id in the order the view lists them, plus the plane's
+`width` and `height`.
+
 **World space** is y-down CSS pixels at zoom 1, with the content's top-left
 padded off the origin.
 

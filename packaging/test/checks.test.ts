@@ -1,7 +1,7 @@
 /**
  * The checks shown failing, on packages constructed to be wrong.
  *
- * `pack.test.ts` runs the same predicates over the six real tarballs, where
+ * `pack.test.ts` runs the same predicates over the seven real tarballs, where
  * they pass and are expected to keep passing. A guard whose only evidence is
  * a green run against a tree already known to be correct has never
  * demonstrated that it can go red, so each check gets a case here that makes

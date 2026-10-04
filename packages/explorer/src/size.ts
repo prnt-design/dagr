@@ -14,7 +14,7 @@ export function resolveNodeSize<N extends ExplorerNode>(
   layout: ExplorerLayoutOptions<N> | undefined,
   node: N,
 ): Size {
-  if (node.size !== undefined) return node.size;
+  if (node.size !== undefined && node.size !== null) return node.size;
   const configured = layout?.nodeSize;
   if (configured === undefined) return DEFAULT_NODE_SIZE;
   // The `??` is for a function that returns nothing: a JavaScript caller, or a

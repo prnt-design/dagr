@@ -34,6 +34,12 @@ describe('resolveNodeSize', () => {
     });
   });
 
+  it('treats a null node size as absent', () => {
+    // A JavaScript caller. `null` already falls back for `nodeSize`.
+    const nulled = { id: 'a', label: 'A', size: null } as never;
+    expect(resolveNodeSize(undefined, nulled)).toEqual({ width: 240, height: 120 });
+  });
+
   it('falls back when a view function returns nothing', () => {
     // A JavaScript caller, or a function with a missing branch.
     const broken = (() => undefined) as unknown as (n: ExplorerNode) => { width: number; height: number };

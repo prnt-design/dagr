@@ -295,7 +295,7 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   composed from named parts, with node content virtualized by on-screen size
   over a swappable base layer. Spec:
   `docs/superpowers/specs/2026-10-03-dagr-explorer-design.md`. Built in a
-  maintainer-directed session, outside the queue above: M5.6b onward join that
+  maintainer-directed session, outside the queue above: M5.6c onward join that
   queue only if the maintainer places them there.
 - [x] **M5.6a** `@prnt/dagr-render/core`: a three-free entry for `Camera2D`,
   `fitZoom` and `shapeEdgePath`, so a server never evaluates `three` to draw

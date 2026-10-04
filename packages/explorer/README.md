@@ -93,6 +93,11 @@ the view, node, edge or group the error is about, and its `viewId` is the view
 that was found in (`undefined` when the error is about a view itself), so a
 host can point at the offender without parsing the message.
 
+`layoutView` validates its view first, so it throws these too. `validateView`
+and `validateViews` run the same checks without laying out. Only
+`validateViews` can raise `DUPLICATE_VIEW_ID`, since it is the only one that
+sees more than one view.
+
 | `code` | When |
 | --- | --- |
 | `INVALID_ID` | a view, node, edge or group has an empty id |
