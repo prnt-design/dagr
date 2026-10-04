@@ -21,6 +21,15 @@
  * it is the accurate description of an ESM-only package, and the profile exists
  * to say so. If a CommonJS build is ever added, this profile is the line that
  * has to change.
+ *
+ * WHY `./styles.css` IS EXCLUDED. The explorer exports its stylesheet as
+ * `@prnt/dagr-explorer/styles.css`. A CSS file has no JavaScript and no type
+ * declarations, so attw reports `NoResolution` for that entry point under every
+ * resolution mode. That is a false positive for a stylesheet, and the packaging
+ * test already checks that the file is in the tarball. Only that one entry
+ * point is excluded, for every tarball: it is a no-op where no such export
+ * exists, and every other entry point and rule is still checked. The tarball
+ * comes first in the arguments because the flag takes a list.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -77,7 +86,12 @@ try {
 
   console.log('\narethetypeswrong (profile esm-only):');
   for (const tarball of tarballs) {
-    run('pnpm', ['exec', 'attw', '--profile', 'esm-only', tarball], REPO_ROOT, tarball);
+    run(
+      'pnpm',
+      ['exec', 'attw', tarball, '--profile', 'esm-only', '--exclude-entrypoints', './styles.css'],
+      REPO_ROOT,
+      tarball,
+    );
   }
 
   console.log('\nA scratch project outside the workspace:');
