@@ -16,6 +16,13 @@
  * not run during render. A layout effect re-renders before paint, so the
  * stale frame is never seen.
  *
+ * **Closing the drawer restores focus here,** whichever way it closed: to
+ * the element that opened it, else to the search field. Only when focus was
+ * lost with the drawer (it was inside it, or on a node that left the data),
+ * so a host control that closes the drawer keeps its focus. `Escape` inside
+ * the graph closes the drawer and restores nothing: focus moving back into
+ * the graph would silently re-enable wheel zoom.
+ *
  * **Validation and layout run in render,** so a data error reaches an error
  * boundary. Every view is validated; only the active one is laid out, and
  * its layout is memoized by shape, so data re-created on every render keeps
@@ -30,7 +37,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { CSSProperties, ReactElement, ReactNode, Ref } from 'react';
+import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode, Ref } from 'react';
 import { ExplorerContext, createCameraHub } from './context.js';
 import type { ExplorerApi, ExplorerContextValue, ExplorerInternals, ExplorerState } from './context.js';
 import { ExplorerContextError } from './errors.js';
@@ -52,6 +59,19 @@ import { validateViews } from './validate.js';
 /** The id of the one view the `nodes` and `edges` shorthand makes. */
 const DEFAULT_VIEW_ID = 'default';
 const NOTHING: ReadonlySet<string> = new Set();
+
+/** Hidden from sight and not from a screen reader. */
+const VISUALLY_HIDDEN: CSSProperties = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  margin: -1,
+  padding: 0,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+  border: 0,
+};
 
 /**
  * A layout effect in the browser and a plain one on a server, where React 18
@@ -269,6 +289,9 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
     };
   });
   const openerRef = useRef<HTMLElement | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Set by Escape inside the graph, whose close restores nothing.
+  const skipRestore = useRef(false);
 
   const [{ api, changeSelection }] = useState(() => {
     const changeSelection = (next: string | null): void => {
@@ -374,6 +397,33 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
     if (was !== null && was.view === activeId && rawSelected === was.id) changeSelection(null);
   });
 
+  const wasOpen = useRef(detailsOpen);
+  useEffect(() => {
+    const was = wasOpen.current;
+    wasOpen.current = detailsOpen;
+    if (detailsOpen || !was) return;
+    const skip = skipRestore.current;
+    skipRestore.current = false;
+    if (skip) return;
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) return;
+    const opener = openerRef.current;
+    const target = opener !== null && opener.isConnected ? opener : internals.searchInputRef.current;
+    target?.focus();
+  }, [detailsOpen, internals]);
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'Escape' || !detailsOpen || !(event.target instanceof Element)) return;
+    // The camera has already released graph focus by now: its listener is
+    // on the viewport, below this one.
+    const inGraph =
+      event.target.closest('[data-dagr-explorer="viewport"]') !== null &&
+      event.target.closest('[data-dagr-explorer="root"]') === rootRef.current;
+    if (!inGraph) return;
+    skipRestore.current = true;
+    api.closeDetails();
+  };
+
   const state = useMemo<ExplorerState>(
     () =>
       ({
@@ -398,8 +448,17 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
 
   return (
     <ExplorerContext.Provider value={value}>
-      <div data-dagr-explorer="root" className={className} style={{ position: 'relative', ...style }}>
+      <div
+        ref={rootRef}
+        data-dagr-explorer="root"
+        className={className}
+        style={{ position: 'relative', ...style }}
+        onKeyDown={onKeyDown}
+      >
         {children}
+        <div data-dagr-explorer="announcer" aria-live="polite" style={VISUALLY_HIDDEN}>
+          {detailsOpen && selectedNode !== null ? selectedNode.label : ''}
+        </div>
       </div>
     </ExplorerContext.Provider>
   );
