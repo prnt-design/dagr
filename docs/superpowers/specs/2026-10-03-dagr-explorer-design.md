@@ -1,7 +1,7 @@
 # DagrExplorer design
 
 **Date:** 2026-10-03
-**Status:** Approved by the maintainer on 2026-10-03, and amended the same day during planning and review. Every change since approval is listed under Amendments at the end.
+**Status:** Approved by the maintainer on 2026-10-03, with the thirteen amendments listed at the end, which the maintainer also approved that day.
 **Repo:** `prnt-design/dagr`
 **Roadmap:** M5.6, slices a to f
 
@@ -660,7 +660,8 @@ One pull request per slice, each through the full local gate and both reviews.
 | --- | --- |
 | M5.6a | `@prnt/dagr-render/core` and its no-three guard |
 | M5.6b | package scaffold, types, validation, layout, search |
-| M5.6c | camera, viewport, SVG base, visible set, overlay tiers, pins |
+| M5.6c-1 | camera arithmetic, the visible set, the point-to-node lookup |
+| M5.6c-2 | the camera hook, viewport, SVG base, overlay tiers, pins |
 | M5.6d | root state, remaining parts, `labels`, `DagrExplorer`, `styles.css` |
 | M5.6e | roving focus, spatial navigation, reveal, server rendering |
 | M5.6f | docs, demos, bench, browser validation, measured ceiling |
@@ -752,6 +753,5 @@ can see what moved without diffing.
 13. **`INVALID_ID`.** Found by the whole-branch review of M5.6b: an empty id
     passed validation and then failed in the graph package with its own error.
 
-Amendments 3 to 13 were made by the agent executing the plans and have not
-been separately approved. 3 to 9 rode in the M5.6a pull request and 10 to 13
-ride in the M5.6b one, for the maintainer to accept or reverse.
+Amendments 3 to 13 were made by the agent executing the plans, after review
+findings. The maintainer approved all of them on 2026-10-03.
