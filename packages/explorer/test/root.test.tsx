@@ -99,6 +99,19 @@ describe('ExplorerRoot: shape', () => {
     expect(both).toBeDefined();
   });
 
+  it('computes the layout key once per view, not on every render', async () => {
+    const nodeSize = vi.fn(() => ({ width: 200, height: 100 }));
+    const sized: ExplorerView<Item> = { ...overview, layout: { nodeSize } };
+    await render({ views: [sized, detail] });
+    expect(nodeSize).toHaveBeenCalled();
+    nodeSize.mockClear();
+    await call((api) => api.setQuery('a'));
+    await call((api) => api.setQuery('al'));
+    await call((api) => api.select('b'));
+    expect(state().query).toBe('al');
+    expect(nodeSize).not.toHaveBeenCalled();
+  });
+
   it('keeps the layout for data re-created with the same shape, and relays it out for strictGroups', async () => {
     await render();
     const first = state().layout;
@@ -216,6 +229,34 @@ describe('ExplorerRoot: view', () => {
     expect(onViewChange).toHaveBeenCalledTimes(1);
   });
 
+  it('treats data that arrives after mount as data, not as a view switch', async () => {
+    const onSelectedChange = vi.fn();
+    const onViewChange = vi.fn();
+    const selectOnViewChange = vi.fn(() => 'c');
+    // A deep link: the owner's selection is there before the data is.
+    await render({ views: [], selectedId: 'b', onSelectedChange, onViewChange, selectOnViewChange });
+    expect(state().selectedId).toBeNull();
+    await call((api) => api.setQuery('alp'));
+    await tree?.rerender(root({ selectedId: 'b', onSelectedChange, onViewChange, selectOnViewChange }));
+    expect(state().activeView?.id).toBe('overview');
+    expect(state().selectedId).toBe('b');
+    expect(state().query).toBe('alp');
+    expect(onSelectedChange).not.toHaveBeenCalled();
+    expect(onViewChange).not.toHaveBeenCalled();
+    expect(selectOnViewChange).not.toHaveBeenCalled();
+  });
+
+  it('keeps an uncontrolled defaultSelectedId through data that starts empty', async () => {
+    const onSelectedChange = vi.fn();
+    await render({ views: [], defaultSelectedId: 'b', onSelectedChange });
+    await tree?.rerender(root({ onSelectedChange }));
+    expect(state().selectedId).toBe('b');
+    expect(onSelectedChange).not.toHaveBeenCalled();
+    // A switch after that is a switch.
+    await call((api) => api.selectView('detail'));
+    expect(state().selectedId).toBeNull();
+  });
+
   it('renders no views as no active view and no layout, without throwing', async () => {
     await render({ views: [] });
     expect(state().activeView).toBeNull();
@@ -307,6 +348,58 @@ describe('ExplorerRoot: selection', () => {
     expect(state().selectedId).toBe('c');
     await call((api) => api.inspect('nowhere'));
     expect(state().detailsOpen).toBe(false);
+  });
+
+  it('ends two selects in one tick on the last one asked for', async () => {
+    const onSelectedChange = vi.fn();
+    await render({ onSelectedChange });
+    await call((api) => {
+      api.select('a');
+      api.select(null);
+    });
+    expect(state().selectedId).toBeNull();
+    expect(onSelectedChange.mock.calls).toEqual([['a'], [null]]);
+  });
+
+  it('ends two inspects in one tick on the last one asked for, with the first opener kept', async () => {
+    const onSelectedChange = vi.fn();
+    await render({ defaultSelectedId: 'b', onSelectedChange });
+    const trigger = document.createElement('button');
+    document.body.append(trigger);
+    await call((api) => {
+      api.inspect('a', trigger);
+      api.inspect('b');
+    });
+    expect(state().selectedId).toBe('b');
+    expect(state().detailsOpen).toBe(true);
+    expect(onSelectedChange.mock.calls).toEqual([['a'], ['b']]);
+    // The second call found the drawer open, so it kept the first opener.
+    await call((api) => api.closeDetails());
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('under a controlled selection, calls back for each of two selects in one tick', async () => {
+    const onSelectedChange = vi.fn();
+    await render({ selectedId: null, onSelectedChange });
+    await call((api) => {
+      api.select('a');
+      api.select(null);
+    });
+    expect(onSelectedChange.mock.calls).toEqual([['a'], [null]]);
+    // The owner did not move, so asking for 'a' again is asked again.
+    await call((api) => api.select('a'));
+    expect(onSelectedChange.mock.calls).toEqual([['a'], [null], ['a']]);
+  });
+
+  it('ends two view switches in one tick on the last one asked for', async () => {
+    const onViewChange = vi.fn();
+    await render({ onViewChange });
+    await call((api) => {
+      api.selectView('detail');
+      api.selectView('overview');
+    });
+    expect(state().activeView?.id).toBe('overview');
+    expect(onViewChange.mock.calls).toEqual([['detail'], ['overview']]);
   });
 
   it('closes the drawer when the selection is cleared, and does not reopen it on the next select', async () => {

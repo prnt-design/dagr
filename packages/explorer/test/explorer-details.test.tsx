@@ -5,6 +5,8 @@ import type { ExplorerState } from '../src/context.js';
 import { ExplorerDetails } from '../src/explorer-details.js';
 import type { ExplorerDetailsProps } from '../src/explorer-details.js';
 import { ExplorerSearch } from '../src/explorer-search.js';
+import { ExplorerToolbar } from '../src/explorer-toolbar.js';
+import { ExplorerTraceToggle } from '../src/explorer-trace-toggle.js';
 import { ExplorerViewport } from '../src/explorer-viewport.js';
 import { ExplorerRoot } from '../src/root.js';
 import type { ExplorerRootProps } from '../src/root.js';
@@ -320,6 +322,83 @@ describe('ExplorerDetails: focus and Escape', () => {
     expect(onSelectedChange.mock.calls).toEqual([['a'], [null]]);
     expect(opener.isConnected).toBe(false);
     expect(document.activeElement).toBe(searchInput());
+  });
+
+  it('sends focus to the root, not the page, when the opener is gone and there is no search field', async () => {
+    tree = await mount(
+      <ExplorerRoot<Item, ExplorerEdge> label="Map" views={[overview]}>
+        <ExplorerViewport />
+        <ExplorerDetails />
+        <Probe />
+      </ExplorerRoot>,
+    );
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+    const root = part('root');
+    expect(root.tabIndex).toBe(-1);
+    await flush(() => state().inspect('b', null));
+    part('details-body').focus();
+    await escape(part('details-body'));
+    expect(find('details')).toBeNull();
+    expect(document.activeElement).toBe(root);
+  });
+
+  it('closes on Escape from a search result, keeping focus there', async () => {
+    await ready();
+    await flush(() => state().setQuery('gam'));
+    const result = part('search-results').querySelector('button');
+    if (result === null) throw new Error('no result');
+    result.focus();
+    await flush(() => result.click());
+    expect(state().detailsOpen).toBe(true);
+    await escape(result);
+    expect(find('details')).toBeNull();
+    expect(state().selectedId).toBe('c');
+    expect(document.activeElement).toBe(result);
+  });
+
+  it('closes on Escape from a toolbar button and from the trace toggle', async () => {
+    tree = await mount(
+      <ExplorerRoot<Item, ExplorerEdge> label="Map" views={[overview]}>
+        <ExplorerTraceToggle />
+        <ExplorerViewport />
+        <ExplorerDetails />
+        <ExplorerToolbar />
+        <Probe />
+      </ExplorerRoot>,
+    );
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+    await flush(() => state().inspect('b'));
+    const fit = part('toolbar').querySelector<HTMLButtonElement>('[data-action="fit"]');
+    if (fit === null) throw new Error('no fit');
+    fit.focus();
+    await escape(fit);
+    expect(find('details')).toBeNull();
+    expect(document.activeElement).toBe(fit);
+
+    await flush(() => state().inspect('c'));
+    part('trace').focus();
+    await escape(part('trace'));
+    expect(find('details')).toBeNull();
+    expect(document.activeElement).toBe(part('trace'));
+  });
+
+  it('leaves an Escape a host control handled alone', async () => {
+    tree = await mount(
+      <ExplorerRoot<Item, ExplorerEdge> label="Map" views={[overview]}>
+        <ExplorerViewport />
+        <ExplorerDetails />
+        <input data-testid="own" onKeyDown={(event) => event.preventDefault()} />
+        <Probe />
+      </ExplorerRoot>,
+    );
+    await flush(() => state().inspect('b'));
+    const own = tree.container.querySelector<HTMLInputElement>('[data-testid="own"]');
+    if (own === null) throw new Error('no input');
+    own.focus();
+    await escape(own);
+    expect(state().detailsOpen).toBe(true);
   });
 
   it('resets on a view switch with the drawer open and a query typed', async () => {

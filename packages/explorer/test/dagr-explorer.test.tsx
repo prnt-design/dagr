@@ -235,6 +235,7 @@ describe('DagrExplorer: labels', () => {
     searchPlaceholder: '«searchPlaceholder»',
     searchResults: '«searchResults»',
     matches: (count) => `«matches ${String(count)}»`,
+    moreMatches: (count) => `«moreMatches ${String(count)}»`,
     stats: ({ nodes, edges }) => `«stats ${String(nodes)} ${String(edges)}»`,
     hint: '«hint»',
     views: '«views»',

@@ -16,6 +16,8 @@ export interface ExplorerLabels {
   readonly searchResults: string;
   /** The live match count, shown while the query is not blank. */
   readonly matches: (count: number) => string;
+  /** The line under a capped result list: how many matches it does not show. */
+  readonly moreMatches: (count: number) => string;
   /** The graph's node and edge counts, part of its accessible description. */
   readonly stats: (counts: { readonly nodes: number; readonly edges: number }) => string;
   /** How to use the graph, the rest of its accessible description. */
@@ -59,6 +61,7 @@ export const DEFAULT_EXPLORER_LABELS: ExplorerLabels = Object.freeze({
   searchPlaceholder: 'Name or id',
   searchResults: 'Search results',
   matches: (count: number) => (count === 0 ? 'No matches' : plural(count, 'match', 'matches')),
+  moreMatches: (count: number) => plural(count, 'more match', 'more matches'),
   stats: ({ nodes, edges }: { readonly nodes: number; readonly edges: number }) =>
     `${plural(nodes, 'node', 'nodes')}, ${plural(edges, 'edge', 'edges')}.`,
   hint: 'Search reaches every node. Click the graph to zoom with the wheel, drag to pan, and press Escape to leave it.',

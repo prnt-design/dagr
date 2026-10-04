@@ -17,11 +17,14 @@
  * stale frame is never seen.
  *
  * **Closing the drawer restores focus here,** whichever way it closed: to
- * the element that opened it, else to the search field. Only when focus was
- * lost with the drawer (it was inside it, or on a node that left the data),
- * so a host control that closes the drawer keeps its focus. `Escape` inside
- * the graph closes the drawer and restores nothing: focus moving back into
- * the graph would silently re-enable wheel zoom.
+ * the element that opened it, else to the search field, else to the root
+ * element itself, never to the page. Only when focus was lost with the
+ * drawer (it was inside it, or on a node that left the data), so a host
+ * control that closes the drawer keeps its focus. `Escape` anywhere in the
+ * root closes the drawer, except where a part has its own precedence (the
+ * search field, the drawer) or a host control handled the key. Inside the
+ * graph it restores nothing: focus moving back into the graph would silently
+ * re-enable wheel zoom.
  *
  * **Validation and layout run in render,** so a data error reaches an error
  * boundary. Every view is validated; only the active one is laid out, and
@@ -34,6 +37,7 @@ import {
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
 } from 'react';
@@ -78,6 +82,19 @@ const VISUALLY_HIDDEN: CSSProperties = {
  * warns that a layout effect does nothing.
  */
 export const useIsomorphicLayoutEffect = typeof document === 'undefined' ? useEffect : useLayoutEffect;
+
+/**
+ * `value`, or the one this hook returned last render if `same` says they are
+ * equal, so a value re-created with the same contents keeps its identity.
+ */
+function useSame<T>(value: T, same: (a: T, b: T) => boolean): T {
+  const kept = useRef(value);
+  if (!same(kept.current, value)) kept.current = value;
+  return kept.current;
+}
+
+const sameItems = <T,>(a: readonly T[], b: readonly T[]): boolean =>
+  a === b || (a.length === b.length && a.every((item, i) => item === b[i]));
 
 interface ExplorerRootCommonProps<N extends ExplorerNode, E extends ExplorerEdge> {
   /** Required. The accessible name the parts derive theirs from. */
@@ -133,13 +150,21 @@ export type ExplorerRootProps<
   E extends ExplorerEdge = ExplorerEdge,
 > = ExplorerRootCommonProps<N, E> & (ExplorerRootViews<N, E> | ExplorerRootGraph<N, E>);
 
-/** What the stable methods read: the latest committed render. */
+/**
+ * What the stable methods read: the latest committed render, with each
+ * method's own writes on top until the next commit, so two calls in one tick
+ * see each other.
+ */
 interface Latest<N extends ExplorerNode, E extends ExplorerEdge> {
   readonly views: readonly ExplorerView<N, E>[];
+  /** The active view, or the one a call asked for since the last commit. */
   readonly activeId: string | null;
   readonly layout: ExplorerLayout | null;
   readonly nodeById: ReadonlyMap<string, N>;
+  /** The selection, or the one a call asked for since the last commit. */
   readonly rawSelected: string | null;
+  /** The selection as committed: under control, the owner's prop. */
+  readonly committedSelected: string | null;
   readonly selectionControlled: boolean;
   readonly viewControlled: boolean;
   readonly detailsOpen: boolean;
@@ -181,10 +206,7 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
 
   // Kept by value, so an inline `labels={{ search: 'Find' }}` re-created on
   // every parent render changes nothing downstream while it says the same.
-  const resolvedLabels = resolveLabels(labelOverrides);
-  const labelsRef = useRef(resolvedLabels);
-  if (!sameLabels(labelsRef.current, resolvedLabels)) labelsRef.current = resolvedLabels;
-  const labels = labelsRef.current;
+  const labels = useSame(resolveLabels(labelOverrides), sameLabels);
 
   // View.
   const [viewState, setViewState] = useState<string | null>(() => defaultViewId ?? null);
@@ -194,8 +216,10 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
   const activeId = activeView?.id ?? null;
 
   // Layout, by shape. The key is a string, so the memo holds across data
-  // re-created with the same shape and a label or color change.
-  const key = activeView === null ? null : layoutKey(activeView);
+  // re-created with the same shape and a label or color change. The key
+  // itself is linear in the view and calls the host's `nodeSize`, so it is
+  // computed once per view object, not on every render.
+  const key = useMemo(() => (activeView === null ? null : layoutKey(activeView)), [activeView]);
   const layout = useMemo(
     () => (activeView === null ? null : layoutView(activeView, { strictGroups })),
     // Keyed by shape, on purpose: `activeView` is read for the key's sake.
@@ -233,9 +257,14 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
   if (selectedId === null && drawerOpen) setDrawerOpen(false);
   const detailsOpen = drawerOpen && selectedId !== null;
 
-  const matches = useMemo(
-    () => (activeView === null ? [] : searchNodes(activeView.nodes, query, searchText)),
-    [activeView, query, searchText],
+  // Kept while the same nodes match, so a keystroke that changes nothing
+  // found re-renders no list and re-dims nothing.
+  const matches = useSame(
+    useMemo(
+      () => (activeView === null ? [] : searchNodes(activeView.nodes, query, searchText)),
+      [activeView, query, searchText],
+    ),
+    sameItems,
   );
   const hasQuery = query.trim() !== '';
   const dimmed = useMemo<ReadonlySet<string>>(() => {
@@ -262,6 +291,7 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
     layout,
     nodeById,
     rawSelected,
+    committedSelected: rawSelected,
     selectionControlled,
     viewControlled,
     detailsOpen,
@@ -269,6 +299,9 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
     onViewChange,
   };
   const latest = useRef(snapshot);
+  // A render after a call under control, so the commit puts the owner's
+  // value back in `latest` even when the owner does not move.
+  const [, recommit] = useReducer((n: number) => n + 1, 0);
   useIsomorphicLayoutEffect(() => {
     latest.current = snapshot;
   });
@@ -302,7 +335,9 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
     const changeSelection = (next: string | null): void => {
       const s = latest.current;
       if (next === s.rawSelected) return;
-      if (!s.selectionControlled) setSelectedState(next);
+      latest.current = { ...s, rawSelected: next };
+      if (s.selectionControlled) recommit();
+      else setSelectedState(next);
       s.onSelectedChange?.(next);
     };
     const box = (id: string) => latest.current.layout?.boxes.get(id);
@@ -334,9 +369,10 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
           const active = document.activeElement;
           openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
         }
-        if (!s.selectionControlled || s.rawSelected === id) {
+        if (!s.selectionControlled || s.committedSelected === id) {
           setPendingOpen(null);
           setDrawerOpen(true);
+          latest.current = { ...s, detailsOpen: true };
         } else {
           setPendingOpen(id);
         }
@@ -345,11 +381,14 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
       closeDetails() {
         setPendingOpen(null);
         setDrawerOpen(false);
+        latest.current = { ...latest.current, detailsOpen: false };
       },
       selectView(id) {
         const s = latest.current;
         if (id === s.activeId || !s.views.some((view) => view.id === id)) return;
-        if (!s.viewControlled) setViewState(id);
+        latest.current = { ...s, activeId: id };
+        if (s.viewControlled) recommit();
+        else setViewState(id);
         s.onViewChange?.(id);
       },
       setQuery(next) {
@@ -372,6 +411,11 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
     // A removed view, or an unknown default, is forgotten, so it is not
     // reselected if it appears later.
     if (!viewControlled && activeId !== null && viewState !== activeId) setViewState(activeId);
+
+    // Data arriving after mount, or after every view was gone, is not a
+    // switch: there was nothing to switch from. Recorded, and nothing reset,
+    // so a deep-linked selection survives data that starts empty.
+    if (seenView.current === null && activeId !== null) seenView.current = activeId;
 
     if (seenView.current !== activeId) {
       const previous = seenView.current;
@@ -413,19 +457,27 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
     const active = document.activeElement;
     if (active !== null && active !== document.body) return;
     const opener = openerRef.current;
-    const target = opener !== null && opener.isConnected ? opener : internals.searchInputRef.current;
+    // Never the page: the root takes focus when nothing better is left.
+    const target =
+      opener !== null && opener.isConnected ? opener : (internals.searchInputRef.current ?? rootRef.current);
     target?.focus();
   }, [detailsOpen, internals]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    if (event.key !== 'Escape' || !detailsOpen || !(event.target instanceof Element)) return;
-    // The camera has already released graph focus by now: its listener is
-    // on the viewport, below this one.
-    const inGraph =
-      event.target.closest('[data-dagr-explorer="viewport"]') !== null &&
-      event.target.closest('[data-dagr-explorer="root"]') === rootRef.current;
-    if (!inGraph) return;
-    skipRestore.current = true;
+    const target = event.target;
+    if (event.key !== 'Escape' || !detailsOpen || !(target instanceof Element)) return;
+    // A root nested in this one handles its own.
+    if (target.closest('[data-dagr-explorer="root"]') !== rootRef.current) return;
+    if (target.closest('[data-dagr-explorer="viewport"]') !== null) {
+      // The camera has already released graph focus by now: its listener is
+      // on the viewport, below this one.
+      skipRestore.current = true;
+      api.closeDetails();
+      return;
+    }
+    // The search field and the drawer keep their own precedence, and so
+    // does a host control that handled the key.
+    if (event.defaultPrevented || target === internals.searchInputRef.current) return;
     api.closeDetails();
   };
 
@@ -457,6 +509,8 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
         <div
           ref={rootRef}
           data-dagr-explorer="root"
+          // Where focus goes when the drawer closes with nothing else to take it.
+          tabIndex={-1}
           className={className}
           style={{ position: 'relative', ...style }}
           onKeyDown={onKeyDown}

@@ -8,7 +8,7 @@ import { ExplorerTraceToggle } from '../src/explorer-trace-toggle.js';
 import { ExplorerViewport } from '../src/explorer-viewport.js';
 import { ExplorerRoot } from '../src/root.js';
 import type { ExplorerRootProps } from '../src/root.js';
-import type { ExplorerEdge } from '../src/types.js';
+import type { ExplorerEdge, ExplorerView } from '../src/types.js';
 import { useExplorer } from '../src/use-explorer.js';
 import { fire, flush, installDom, mount, resizeTo, runFramesUntilIdle, uninstallDom } from './dom.js';
 import type { Mounted } from './dom.js';
@@ -197,6 +197,53 @@ describe('ExplorerSearch', () => {
     await key(input(), 'Escape');
     expect(state().query).toBe('');
     expect(document.activeElement).toBe(input());
+  });
+
+  it('caps the result list at maxResults, says how many more, and still counts and enters every match', async () => {
+    const many: ExplorerView<Item> = {
+      id: 'many',
+      label: 'Many',
+      nodes: Array.from({ length: 500 }, (_, i) => ({ id: `n${String(i)}`, label: `Node ${String(i)}`, kind: 'x' })),
+      edges: [],
+    };
+    tree = await mount(
+      <ExplorerRoot<Item, ExplorerEdge> label="Map" views={[many]}>
+        <ExplorerSearch />
+        <Probe />
+      </ExplorerRoot>,
+    );
+    await type('node');
+    expect(state().matches).toHaveLength(500);
+    expect(results()).toHaveLength(50);
+    expect(results()[0]?.dataset['nodeId']).toBe('n0');
+    expect(results()[49]?.dataset['nodeId']).toBe('n49');
+    const more = part('search-more');
+    expect(more.textContent).toBe('450 more matches');
+    expect(more.querySelector('button, a, [tabindex]')).toBeNull();
+    expect(count()).toBe('500 matches');
+    input().focus();
+    await key(input(), 'Enter');
+    expect(state().selectedId).toBe('n0');
+    await tree.unmount();
+
+    tree = await mount(
+      <ExplorerRoot<Item, ExplorerEdge> label="Map" views={[many]} labels={{ moreMatches: (n) => `+${String(n)}` }}>
+        <ExplorerSearch maxResults={10} />
+        <Probe />
+      </ExplorerRoot>,
+    );
+    // Every number from 0 to 499 with a 1 in it: 176.
+    await type('node 1');
+    expect(count()).toBe('176 matches');
+    expect(results()).toHaveLength(10);
+    expect(part('search-more').textContent).toBe('+166');
+    // 33, 133, 233, 330 to 339, 433: 14.
+    await type('node 33');
+    expect(part('search-more').textContent).toBe('+4');
+    // 99, 199, 299, 399, 499: under the cap, so no line.
+    await type('node 99');
+    expect(results()).toHaveLength(5);
+    expect(tree.container.querySelector('[data-dagr-explorer="search-more"]')).toBeNull();
   });
 
   it('follows a query set through the api, and is cleared by a view switch', async () => {
