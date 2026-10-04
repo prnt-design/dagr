@@ -19,7 +19,7 @@
 
 import * as React from 'react';
 import type { ReactNode } from 'react';
-import { createRoot } from 'react-dom/client';
+import { createRoot, hydrateRoot } from 'react-dom/client';
 import { vi } from 'vitest';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -75,6 +75,41 @@ export async function mount(node: ReactNode): Promise<Mounted> {
       live = false;
       await act(async () => {
         root.unmount();
+      });
+      container.remove();
+    },
+  };
+}
+
+/**
+ * Hydrates `node` into `container`, which holds server HTML and is attached
+ * to the document. `onRecoverableError` hears what React recovers from,
+ * which is where both majors report a hydration mismatch.
+ */
+export async function hydrate(
+  container: HTMLElement,
+  node: ReactNode,
+  onRecoverableError: (error: unknown) => void,
+): Promise<Mounted> {
+  let root: ReturnType<typeof hydrateRoot> | null = null;
+  await act(async () => {
+    root = hydrateRoot(container, node, { onRecoverableError });
+  });
+  const hydrated = root as ReturnType<typeof hydrateRoot> | null;
+  if (hydrated === null) throw new Error('hydrateRoot returned nothing');
+  let live = true;
+  return {
+    container,
+    async rerender(next: ReactNode): Promise<void> {
+      await act(async () => {
+        hydrated.render(next);
+      });
+    },
+    async unmount(): Promise<void> {
+      if (!live) return;
+      live = false;
+      await act(async () => {
+        hydrated.unmount();
       });
       container.remove();
     },
@@ -364,6 +399,41 @@ export function mouse(type: 'click' | 'dblclick', x: number, y: number, detail?:
     clientY: y,
     button: 0,
     detail: detail ?? (type === 'dblclick' ? 2 : 1),
+  });
+}
+
+/** A key press on `target`: a `keydown` that bubbles and can be cancelled. */
+export function key(
+  name: string,
+  init: { readonly shiftKey?: boolean; readonly ctrlKey?: boolean; readonly metaKey?: boolean; readonly altKey?: boolean; readonly repeat?: boolean } = {},
+): KeyboardEvent {
+  return new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true, composed: true, ...init });
+}
+
+/** What sequential focus visits: no positive `tabIndex` is used in this package, so document order. */
+function tabbable(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]')].filter(
+    (element) => element.tabIndex >= 0 && !(element as HTMLButtonElement).disabled,
+  );
+}
+
+/**
+ * Tab, or Shift-Tab, as a browser does it. jsdom does not move focus on Tab,
+ * so this dispatches the `keydown` on the focused element and, unless it was
+ * cancelled, focuses the next element in sequential focus order, or blurs
+ * at the end of it.
+ */
+export async function tab(options: { readonly shift?: boolean } = {}): Promise<void> {
+  const from = document.activeElement instanceof HTMLElement ? document.activeElement : document.body;
+  const allowed = await fire(from, key('Tab', { shiftKey: options.shift ?? false }));
+  if (!allowed) return;
+  const order = tabbable();
+  const at = order.indexOf(from);
+  const next =
+    options.shift === true ? (at < 0 ? order.at(-1) : order[at - 1]) : at < 0 ? order[0] : order[at + 1];
+  await flush(() => {
+    if (next === undefined) from.blur();
+    else next.focus();
   });
 }
 

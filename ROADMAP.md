@@ -309,7 +309,9 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
 - [x] **M5.6d** Root state, remaining parts, `labels`, `DagrExplorer`,
   `styles.css`. Landed with `useExplorerApi` and a capped search list. The
   package is still private.
-- [ ] **M5.6e** Roving focus, spatial navigation, reveal, server rendering.
+- [x] **M5.6e** Roving focus, spatial navigation, reveal, server rendering.
+  One tab stop with arrow navigation to any node, mounted or not; every part
+  renders on a server and hydrates cleanly. The package is still private.
 - [ ] **M5.6f** Docs, demos, bench, browser validation, measured SVG ceiling.
 
 ## M6: VDSL core in v0.1, interactions planned for v0.2 (`@prnt/dagr-vdsl`)

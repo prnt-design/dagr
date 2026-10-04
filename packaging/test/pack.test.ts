@@ -439,6 +439,8 @@ useGraphInteraction({
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { DagrExplorer, ExplorerRoot, layoutView, searchNodes, useExplorer } from '@prnt/dagr-explorer';
+import { createElement } from 'react';
+import { renderToString } from 'react-dom/server';
 
 // The control: if three could be resolved from where the renderer is
 // installed, everything below would prove nothing.
@@ -472,6 +474,15 @@ for (const part of [DagrExplorer, ExplorerRoot, useExplorer]) {
 if (!existsSync(fileURLToPath(import.meta.resolve('@prnt/dagr-explorer/styles.css')))) {
   throw new Error('explorer stylesheet smoke failed');
 }
+// Server rendering, in a process with no DOM: the shell and the base, with
+// one mark per node and no node button until a client measures the graph.
+if (typeof document !== 'undefined') throw new Error('a document exists, so the server smoke proves nothing');
+const html = renderToString(createElement(DagrExplorer, { label: 'Smoke', views: [view] }));
+if (!html.includes('aria-label="Smoke"')) throw new Error('explorer server smoke failed: viewport');
+if ((html.match(/<rect[^>]*data-node-id="/g) ?? []).length !== 2) {
+  throw new Error('explorer server smoke failed: marks');
+}
+if (html.includes('data-dagr-explorer="node"')) throw new Error('explorer server smoke failed: node buttons');
 `,
         );
         // Without NODE_PATH. The vitest bin shim exports one pointing at the

@@ -26,6 +26,9 @@ export default mergeConfig(
         { find: /^react\/jsx-dev-runtime$/, replacement: react18('jsx-dev-runtime.js') },
         { find: /^react-dom$/, replacement: reactDom18('index.js') },
         { find: /^react-dom\/client$/, replacement: reactDom18('client.js') },
+        // The Node build, in every environment: the tests run in Node, and
+        // `test/server.test.tsx` holds this to React 18.
+        { find: /^react-dom\/server$/, replacement: reactDom18('server.node.js') },
         { find: /^react-dom\/test-utils$/, replacement: reactDom18('test-utils.js') },
       ],
     },

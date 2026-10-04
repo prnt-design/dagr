@@ -124,8 +124,9 @@ describe('DagrExplorer', () => {
     );
     await resizeTo(800, 480);
     await runFramesUntilIdle();
+    // The cap of two, and the tab target, pinned outside it.
     const nodes = part('viewport').querySelectorAll('button[data-dagr-explorer="node"]');
-    expect(nodes).toHaveLength(2);
+    expect(nodes).toHaveLength(3);
     expect(nodes[0]?.getAttribute('aria-label')).toMatch(/^kind /);
     expect(nodes[0]?.getAttribute('data-tier')).toBe('summary');
     expect(layers.length).toBeGreaterThan(0);

@@ -103,7 +103,14 @@ describe('ExplorerViewport: inside a root', () => {
     expect(description?.getAttribute('data-dagr-explorer')).toBe('hint');
     expect(description?.textContent).toContain('4 nodes, 3 edges.');
     expect(description?.textContent).toContain('Search reaches every node');
+    expect(description?.textContent).toContain('arrow keys');
     expect(button('a')).not.toBeNull();
+  });
+
+  it('builds the description from labels.stats and labels.hint', async () => {
+    await ready({ labels: { stats: ({ nodes, edges }) => `${String(nodes)}/${String(edges)}`, hint: 'Find any node.' } });
+    const description = document.getElementById(part('viewport').getAttribute('aria-describedby') ?? '');
+    expect(description?.textContent).toBe('4/3 Find any node.');
   });
 
   it('inspects a node on click, with the button as the opener, and flies to it on double click', async () => {
@@ -144,8 +151,9 @@ describe('ExplorerViewport: inside a root', () => {
     const renderNode = vi.fn((node: Item, context: { tier: string }) => `${node.kind}/${context.tier}`);
     const nodeAriaLabel = vi.fn((node: Item) => `node ${node.kind}`);
     await ready({}, { renderNode, nodeAriaLabel, tiers: { summary: 0, rich: 10_000 }, maxOverlayNodes: 1, className: 'graph', style: { border: '1px solid' } });
+    // The cap of one, and the tab target, pinned outside it.
     const mounted = tree?.container.querySelectorAll('button[data-dagr-explorer="node"]') ?? [];
-    expect(mounted).toHaveLength(1);
+    expect(mounted).toHaveLength(2);
     expect(mounted[0]?.textContent).toMatch(/^(service|store|queue)\/summary$/);
     expect(mounted[0]?.getAttribute('aria-label')).toMatch(/^node /);
     expect(part('viewport').className).toBe('graph');

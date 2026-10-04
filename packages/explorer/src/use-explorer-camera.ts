@@ -486,6 +486,10 @@ function createEngine(
     }
     // Ctrl and Command with + - 0 are the browser's zoom.
     if (event.ctrlKey || event.metaKey || event.altKey) return;
+    // An arrow on a node moves focus, which the viewport surface does. With
+    // Shift it pans, as it does on the surface.
+    const onNode = event.target instanceof Element && event.target.closest(NODE) !== null;
+    if (onNode && !event.shiftKey && event.key.startsWith('Arrow')) return;
     if (limits === null || target === null) return;
     const center = { x: size.width / 2, y: size.height / 2 };
     switch (event.key) {

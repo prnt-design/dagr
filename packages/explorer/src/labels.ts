@@ -64,7 +64,7 @@ export const DEFAULT_EXPLORER_LABELS: ExplorerLabels = Object.freeze({
   moreMatches: (count: number) => plural(count, 'more match', 'more matches'),
   stats: ({ nodes, edges }: { readonly nodes: number; readonly edges: number }) =>
     `${plural(nodes, 'node', 'nodes')}, ${plural(edges, 'edge', 'edges')}.`,
-  hint: 'Search reaches every node. Click the graph to zoom with the wheel, drag to pan, and press Escape to leave it.',
+  hint: 'Search reaches every node. In the graph, the arrow keys move between nodes and Shift with an arrow pans. Click the graph to zoom with the wheel, drag to pan, and press Escape to leave it.',
   views: 'Views',
   inGroup: (groupLabel: string) => `in ${groupLabel}`,
   traceOn: 'Trace connections',

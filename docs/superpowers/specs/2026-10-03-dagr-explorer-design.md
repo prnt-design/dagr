@@ -803,10 +803,32 @@ can see what moved without diffing.
       second experimental like the rest of the seam, because public
       signatures already return them.
 
+16. **Keyboard navigation and server rendering, as built in M5.6e.** Found
+    by the review of M5.6e, which judged each choice sound:
+    - The tab target is the selected node, else the last node focused from
+      the keyboard, else the node nearest the center as of the last scan of
+      the visible set, so it can trail the camera by up to half the
+      overscan. Before the first fit it is the selected or the first node,
+      and on a server, where nothing has been measured, there is no tab stop.
+      A target that leaves the data is replaced; focus is not moved.
+    - Keyboard focus is focus that follows a key press anywhere on the page.
+      A pointer press ends it. Only keyboard focus is remembered and reveals.
+    - The tab target, the focused node and an arrow's target are all pinned,
+      outside `maxOverlayNodes`, so the page can hold a few more elements than
+      the cap. The old node stays pinned until the new one has focus, so focus
+      is never on the page body in between.
+    - `Enter` and `Space` inspect on key down, once per press. An arrow with no
+      candidate still prevents the page from scrolling. Keys inside content a
+      host renders in a node are left to that content.
+    - A scroll of the viewport element, which a browser makes to show a node
+      focused by Tab, is undone: the camera is the only thing that moves the
+      graph.
+    - The graph's description names the arrow keys.
+
 One change is bookkeeping and not design: M5.6c was split into M5.6c-1, the pure core, and M5.6c-2, the React viewport, so each plan could be exact.
 
 Amendments 3 to 13 were made by the agent executing the plans, after review
 findings. The maintainer approved all of them on 2026-10-03. Amendment 14 was
 made the same way on 2026-10-04, under the maintainer's instruction to carry on
-through the remaining slices, and so was amendment 15. Each is listed in its
+through the remaining slices, and so were amendments 15 and 16. Each is listed in its
 pull request for the maintainer to accept or reverse.

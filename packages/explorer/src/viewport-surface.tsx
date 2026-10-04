@@ -26,6 +26,19 @@
  * The plane is a composited layer only while the camera moves, which the
  * camera hook decides, and never through `translateZ`. A cached raster of
  * text enlarged by the camera goes blurry, so at rest there is none.
+ *
+ * **The graph is one tab stop.** Exactly one node button has `tabIndex` 0:
+ * the selected node, else the last node focused from the keyboard, else the
+ * node nearest the viewport center as of the last scan, else (before there
+ * is a camera) the first node. It is pinned, so it is always mounted, and so
+ * is the node that has focus and the node an arrow is moving focus to. An
+ * arrow on a focused node moves focus to `nearestInDirection`: the target is
+ * pinned, mounted, focused, and only then does the old node lose its pin, so
+ * focus never falls to the page in between. A node focused from the keyboard
+ * is revealed by the least pan; one focused by a pointer moves nothing.
+ *
+ * **Nothing reads the DOM in render,** so the surface renders on a server:
+ * the base draws every mark, the plane is hidden, and no node has a button.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -34,6 +47,9 @@ import type { ExplorerBase, ExplorerCameraSource, ExplorerEmphasis } from './bas
 import { visibleWorld } from './camera.js';
 import type { ExplorerCamera, ExplorerViewportSize } from './camera.js';
 import type { ExplorerBox, ExplorerLayout } from './layout.js';
+import { nearestInDirection } from './navigation.js';
+import type { ExplorerDirection } from './navigation.js';
+import { useIsomorphicLayoutEffect } from './isomorphic-layout-effect.js';
 import { svgBase } from './svg-base.js';
 import type { ExplorerEdge, ExplorerGroup, ExplorerNode, ExplorerView } from './types.js';
 import { useExplorerCamera } from './use-explorer-camera.js';
@@ -44,6 +60,7 @@ import {
   OVERSCAN,
   computeVisibleSet,
   indexLayout,
+  nearestToCenter,
   nodeAtPoint,
   sameVisibleSet,
 } from './visible-set.js';
@@ -97,6 +114,12 @@ export interface ViewportSurfaceProps<N extends ExplorerNode, E extends Explorer
 const NODE = '[data-dagr-explorer="node"]';
 const NO_DIMMED: ReadonlySet<string> = new Set();
 const NO_GROUPS: readonly ExplorerGroup[] = [];
+const ARROWS: Readonly<Record<string, ExplorerDirection>> = {
+  ArrowUp: 'up',
+  ArrowDown: 'down',
+  ArrowLeft: 'left',
+  ArrowRight: 'right',
+};
 
 const usable = (value: number | undefined): value is number =>
   value !== undefined && Number.isFinite(value) && value >= 0;
@@ -171,10 +194,23 @@ const inside = (inner: ExplorerBox, outer: ExplorerBox): boolean =>
   inner.x + inner.width <= outer.x + outer.width &&
   inner.y + inner.height <= outer.y + outer.height;
 
-/** A visible set, and the index it was computed over, so a stale one is never drawn. */
+/**
+ * A visible set, and the index it was computed over, so a stale one is never
+ * drawn. `center` is the node nearest the viewport center at the same scan,
+ * or `null` before there is a camera.
+ */
 interface Shown {
   readonly index: LayoutIndex;
   readonly set: ExplorerVisibleSet;
+  readonly center: string | null;
+}
+
+/** The node button for `id` inside `viewport`, if it is mounted. */
+function nodeButton(viewport: HTMLElement, id: string): HTMLElement | null {
+  for (const element of viewport.querySelectorAll(NODE)) {
+    if (element instanceof HTMLElement && element.dataset['nodeId'] === id) return element;
+  }
+  return null;
 }
 
 export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
@@ -206,13 +242,51 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
   const planeRef = useRef<HTMLDivElement>(null);
   const index = useMemo(() => indexLayout(layout), [layout]);
 
+  const [shown, setShown] = useState<Shown>(() => ({ index, set: everythingAsMarks(index), center: null }));
+  const shownRef = useRef(shown);
+  const lastViewportRef = useRef<ExplorerViewportSize | null>(null);
+  // The last drawn camera, read where the controls do not exist yet: the
+  // pins decide the options, which `onFrame` and so the camera depend on.
+  const lastCameraRef = useRef<ExplorerCamera | null>(null);
+  const scanRef = useRef<Scan | null>(null);
+  const [listeners] = useState(() => new Set<(camera: ExplorerCamera) => void>());
+
+  // Focus. `focusedId` has focus now, by any means. `keyedId` last had focus
+  // from the keyboard, and is the tab target's fallback. `movingTo` is where
+  // an arrow is moving focus, until its button mounts and takes it.
+  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [keyedId, setKeyedId] = useState<string | null>(null);
+  const [movingTo, setMovingTo] = useState<string | null>(null);
+  const movingRef = useRef<string | null>(null);
+
+  // A layout the camera has not drawn yet. Its set comes from the camera on
+  // screen, and the camera's own effect replaces it once it has placed the
+  // new layout.
+  const pending = shown.index !== index;
+  const pendingCenter = useMemo(() => {
+    if (!pending) return null;
+    const camera = lastCameraRef.current;
+    const viewport = lastViewportRef.current;
+    return camera === null || viewport === null ? null : nearestToCenter(index, camera, viewport);
+  }, [pending, index]);
+  const center = pending ? pendingCenter : shown.center;
+
+  const has = (id: string | null): id is string => id !== null && layout.boxes.has(id);
+  const tabTarget = has(selectedId)
+    ? selectedId
+    : has(keyedId)
+      ? keyedId
+      : (center ?? index.nodeIds[0] ?? null);
+
   // The options, keyed by value, so a caller that re-creates `pinned` or
   // `tiers` on every render does not recompute the set on every render.
   const summary = tiers?.summary;
   const rich = tiers?.rich;
   const cap = usable(maxOverlayNodes) ? Math.floor(maxOverlayNodes) : DEFAULT_MAX_OVERLAY_NODES;
   const pins = [...(pinned ?? [])];
-  if (selectedId !== null && layout.boxes.has(selectedId)) pins.push(selectedId);
+  for (const id of [selectedId, tabTarget, focusedId, movingTo]) {
+    if (has(id) && !pins.includes(id)) pins.push(id);
+  }
   const pinKey = JSON.stringify(pins);
   const options = useMemo<VisibleSetOptions>(
     () => ({
@@ -223,13 +297,11 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
     [summary, rich, cap, pinKey],
   );
 
-  const [shown, setShown] = useState<Shown>(() => ({ index, set: everythingAsMarks(index) }));
-  const shownRef = useRef(shown);
-  const lastViewportRef = useRef<ExplorerViewportSize | null>(null);
-  const scanRef = useRef<Scan | null>(null);
-  const [listeners] = useState(() => new Set<(camera: ExplorerCamera) => void>());
-
-  /** Brings the visible set up to date with a camera, scanning only when it can have changed. */
+  /**
+   * Brings the visible set up to date with a camera, scanning only when it
+   * can have changed. The node nearest the center is found at the same scan,
+   * so between scans it can trail the camera by up to half the overscan.
+   */
   const refresh = useCallback(
     (camera: ExplorerCamera, viewport: ExplorerViewportSize) => {
       const world = visibleWorld(camera, viewport);
@@ -245,9 +317,10 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
       }
       const next = computeVisibleSet(index, camera, viewport, options);
       scanRef.current = { index, options, scale: camera.scale, within: slack(world) };
+      const center = nearestToCenter(index, camera, viewport);
       const previous = shownRef.current;
-      if (previous.index === index && sameVisibleSet(previous.set, next)) return;
-      const value = { index, set: next };
+      if (previous.index === index && previous.center === center && sameVisibleSet(previous.set, next)) return;
+      const value = { index, set: next, center };
       shownRef.current = value;
       setShown(value);
     },
@@ -257,6 +330,7 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
   const onFrame = useCallback(
     (camera: ExplorerCamera, viewport: ExplorerViewportSize) => {
       lastViewportRef.current = viewport;
+      lastCameraRef.current = camera;
       // First, so a base that draws its own camera moves in step with the plane.
       for (const listener of [...listeners]) listener(camera);
       refresh(camera, viewport);
@@ -355,10 +429,132 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
     };
   }, [controls]);
 
-  // A layout the camera has not drawn yet. Its set comes from the camera on
-  // screen, and the camera's own effect replaces it once it has placed the
-  // new layout.
-  const pending = shown.index !== index;
+  // Keys and focus. Whether a focus came from the keyboard is whether the
+  // last input anywhere on the page was a key, heard in the capture phase on
+  // the document, so a Tab pressed outside the graph counts.
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (viewport === null) return undefined;
+    const doc = viewport.ownerDocument;
+    let keyed = false;
+    const onAnyKey = (): void => {
+      keyed = true;
+    };
+    const onAnyPointer = (): void => {
+      keyed = false;
+    };
+    const nodeOf = (target: EventTarget | null): { id: string; element: HTMLElement } | null => {
+      if (!(target instanceof Element)) return null;
+      const element = target.closest(NODE);
+      const id = element instanceof HTMLElement ? element.dataset['nodeId'] : undefined;
+      return element instanceof HTMLElement && id !== undefined && viewport.contains(element) ? { id, element } : null;
+    };
+
+    // Set only on a change, so focus moving about the graph costs no render
+    // when the pins it decides are the same.
+    let focused: string | null = null;
+    let lastKeyed: string | null = null;
+    const focus = (id: string | null): void => {
+      if (id === focused) return;
+      focused = id;
+      setFocusedId(id);
+    };
+
+    const onFocusIn = (event: FocusEvent): void => {
+      const hit = nodeOf(event.target);
+      focus(hit === null ? null : hit.id);
+      if (hit === null || !keyed) return;
+      if (hit.id !== lastKeyed) {
+        lastKeyed = hit.id;
+        setKeyedId(hit.id);
+      }
+      const { index: current } = latest.current;
+      const box = current.nodeBoxes[current.nodeIds.indexOf(hit.id)];
+      if (box !== undefined) controls.revealBox(box);
+    };
+    const onFocusOut = (event: FocusEvent): void => {
+      if (nodeOf(event.relatedTarget) === null) focus(null);
+    };
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      // Modified keys are the browser's, and a key the camera took is taken.
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      const hit = nodeOf(event.target);
+      // Keys typed into content a host renders inside a node are the host's.
+      if (hit === null || event.target !== hit.element) return;
+      if (event.key === 'Enter' || event.key === ' ') {
+        // Handled here rather than left to the button's own click, so a key
+        // inspects exactly once and a held key inspects once.
+        event.preventDefault();
+        if (!event.repeat) latest.current.onNodeActivate?.(hit.id, hit.element);
+        return;
+      }
+      const direction = ARROWS[event.key];
+      // Shift with an arrow pans, which the camera does.
+      if (direction === undefined || event.shiftKey) return;
+      event.preventDefault();
+      const next = nearestInDirection(latest.current.index, hit.id, direction);
+      if (next === null) return;
+      movingRef.current = next;
+      setMovingTo(next);
+    };
+
+    // A button fires its Space click on keyup, and Firefox has not always
+    // cancelled that click when only keydown was prevented. Keydown has
+    // already activated, so the keyup is prevented too.
+    const onKeyUp = (event: KeyboardEvent): void => {
+      if (event.key !== ' ') return;
+      const hit = nodeOf(event.target);
+      if (hit !== null && event.target === hit.element) event.preventDefault();
+    };
+
+    // The viewport clips and never scrolls. A browser scrolls it anyway to
+    // show a node that takes focus from Tab, which would offset everything
+    // from the camera, so any scroll is put back.
+    const onScroll = (): void => {
+      if (viewport.scrollTop !== 0) viewport.scrollTop = 0;
+      if (viewport.scrollLeft !== 0) viewport.scrollLeft = 0;
+    };
+
+    doc.addEventListener('keydown', onAnyKey, true);
+    doc.addEventListener('pointerdown', onAnyPointer, true);
+    doc.addEventListener('mousedown', onAnyPointer, true);
+    viewport.addEventListener('focusin', onFocusIn);
+    viewport.addEventListener('focusout', onFocusOut);
+    viewport.addEventListener('keydown', onKeyDown);
+    viewport.addEventListener('keyup', onKeyUp);
+    viewport.addEventListener('scroll', onScroll);
+    return () => {
+      doc.removeEventListener('keydown', onAnyKey, true);
+      doc.removeEventListener('pointerdown', onAnyPointer, true);
+      doc.removeEventListener('mousedown', onAnyPointer, true);
+      viewport.removeEventListener('focusin', onFocusIn);
+      viewport.removeEventListener('focusout', onFocusOut);
+      viewport.removeEventListener('keydown', onKeyDown);
+      viewport.removeEventListener('keyup', onKeyUp);
+      viewport.removeEventListener('scroll', onScroll);
+    };
+  }, [controls]);
+
+  // An arrow's target takes focus in the first commit that mounts it. The
+  // node it leaves stays pinned, because it still has focus, until then.
+  useIsomorphicLayoutEffect(() => {
+    const want = movingRef.current;
+    const viewport = viewportRef.current;
+    if (want === null || viewport === null) return;
+    if (!layout.boxes.has(want) || !viewport.contains(viewport.ownerDocument.activeElement)) {
+      // Gone from the data, or focus left the graph while it mounted.
+      movingRef.current = null;
+      setMovingTo(null);
+      return;
+    }
+    const element = nodeButton(viewport, want);
+    if (element === null) return;
+    movingRef.current = null;
+    element.focus({ preventScroll: true });
+    setMovingTo(null);
+  });
+
   const first = useMemo(() => {
     if (!pending) return null;
     const camera = controls.getCamera();
@@ -394,7 +590,7 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
       <button
         key={id}
         type="button"
-        tabIndex={-1}
+        tabIndex={id === tabTarget ? 0 : -1}
         data-dagr-explorer="node"
         data-node-id={id}
         data-tier={tier}

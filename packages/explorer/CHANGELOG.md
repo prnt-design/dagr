@@ -54,3 +54,16 @@ Not published. The package is private until M5.6f.
   type.
 - The test suite runs under React 18 and React 19. The React 18 run needs
   Node 22.15 or later, for `module.registerHooks`.
+- Add keyboard navigation (M5.6e). The graph is one tab stop: the selected
+  node, else the last node focused from the keyboard, else the node nearest
+  the center, always mounted. Arrow keys on a focused node move focus to the
+  nearest node in that direction, mounted or not; Shift with an arrow pans,
+  and Enter and Space inspect. A node focused from the keyboard is revealed
+  by the least pan at the current zoom; a click moves nothing. The default
+  `hint` now names the arrow keys. The tab target and the focused node are
+  pinned outside `maxOverlayNodes`, so the page can hold a few more node
+  elements than the cap.
+- Every part renders on a server (M5.6e): the shell and the base layer, with
+  every node as a mark, the plane hidden and no node elements until the
+  client measures the graph. It hydrates without a mismatch. No part needed
+  a change for it.
