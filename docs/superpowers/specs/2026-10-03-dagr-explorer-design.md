@@ -410,8 +410,9 @@ one transform on the plane per frame. A node element is positioned in world
 coordinates when it mounts and is not written again. A pan inside the overscan
 margin is one style write and no React work.
 
-**The scan is linear on purpose.** Testing 10,000 boxes costs tens of
-microseconds. `@prnt/dagr-render`'s overlay scans the same way and names a
+**The scan is linear on purpose.** Testing 10,000 boxes costs about half a
+millisecond per call (0.4 to 0.6 ms measured in `packages/explorer/bench`, the
+output lists included), well inside a 16 ms frame. `@prnt/dagr-render`'s overlay scans the same way and names a
 spatial index as the fix if a measurement asks for one. The M5.6f bench is
 that measurement.
 

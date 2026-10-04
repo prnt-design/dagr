@@ -6,8 +6,9 @@
  * gates, the rule `@prnt/dagr-render`'s rich nodes use. Below the `summary`
  * gate it is a mark and has NO element: the base layer draws it.
  *
- * **The scan is linear on purpose.** Testing 10,000 boxes costs tens of
- * microseconds. The renderer's overlay scans the same way and names a spatial
+ * **The scan is linear on purpose.** Testing 10,000 boxes costs about half a
+ * millisecond per call (0.4 to 0.6 ms measured in `packages/explorer/bench`,
+ * the output lists included), well inside a 16 ms frame. The renderer's overlay scans the same way and names a spatial
  * index as the fix if a measurement ever asks for one.
  *
  * Internal to the package. Only the tier types and `ExplorerVisibleSet` are
