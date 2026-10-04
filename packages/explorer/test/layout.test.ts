@@ -298,6 +298,14 @@ describe('layoutView, self loops', () => {
   });
 });
 
+describe('layoutView, layout options', () => {
+  it('rejects a bad option with ExplorerDataError, not the engine error', () => {
+    expect(codeOf(() => layoutView(chain({ layout: { nodeSep: Number.NaN } })))).toBe(
+      'INVALID_LAYOUT_OPTION',
+    );
+  });
+});
+
 describe('layoutView, groups', () => {
   it('outlines its members with 24 of padding and a 24 label band above', () => {
     const layout = layoutView(chain({ groups: [{ id: 'g', label: 'G', nodeIds: ['b'] }] }));

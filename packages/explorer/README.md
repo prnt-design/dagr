@@ -100,6 +100,7 @@ host can point at the offender without parsing the message.
 | `DUPLICATE_EDGE_ID` | two edges in one view share an id |
 | `DUPLICATE_GROUP_ID` | two groups in one view share an id |
 | `INVALID_NODE_SIZE` | a node's width or height is not finite and greater than zero |
+| `INVALID_LAYOUT_OPTION` | a view's `nodeSep` or `rankSep` is not finite and zero or greater, or its `direction` or `edgeStyle` is not one of the allowed values |
 | `MISSING_EDGE_ENDPOINT` | an edge names a node its view lacks |
 | `MISSING_GROUP_MEMBER` | a group names a node its view lacks |
 | `EMPTY_GROUP` | a group has no members |

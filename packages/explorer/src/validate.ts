@@ -11,6 +11,11 @@ const positive = (value: number): boolean => Number.isFinite(value) && value > 0
  * a zero-size node and reports `NaN` as a fault in its own config. Neither
  * tells the caller which node to fix.
  *
+ * Layout options are checked for the same reason: the engine rejects a bad
+ * spacing with an error that names no view, the renderer throws a bare
+ * `RangeError` for an unknown edge style, and an unknown direction would be
+ * read as `'down'` without a word.
+ *
  * A self loop and parallel edges are valid data. What happens to them is
  * `layout.ts`'s business.
  */
@@ -18,6 +23,35 @@ export function validateView<N extends ExplorerNode, E extends ExplorerEdge>(
   view: ExplorerView<N, E>,
 ): void {
   const where = `view "${view.id}"`;
+
+  const layoutOptions = view.layout;
+  if (layoutOptions !== undefined) {
+    for (const key of ['nodeSep', 'rankSep'] as const) {
+      const value = layoutOptions[key];
+      if (value !== undefined && !(Number.isFinite(value) && value >= 0)) {
+        throw new ExplorerDataError(
+          'INVALID_LAYOUT_OPTION',
+          `View "${view.id}" has layout.${key} ${String(value)}. It must be a finite number that is zero or greater`,
+          view.id,
+        );
+      }
+    }
+    const { direction, edgeStyle } = layoutOptions;
+    if (direction !== undefined && direction !== 'right' && direction !== 'down') {
+      throw new ExplorerDataError(
+        'INVALID_LAYOUT_OPTION',
+        `View "${view.id}" has layout.direction ${JSON.stringify(direction)}. It must be "right" or "down"`,
+        view.id,
+      );
+    }
+    if (edgeStyle !== undefined && edgeStyle !== 'smooth' && edgeStyle !== 'orthogonal') {
+      throw new ExplorerDataError(
+        'INVALID_LAYOUT_OPTION',
+        `View "${view.id}" has layout.edgeStyle ${JSON.stringify(edgeStyle)}. It must be "smooth" or "orthogonal"`,
+        view.id,
+      );
+    }
+  }
 
   const nodeIds = new Set<string>();
   for (const node of view.nodes) {

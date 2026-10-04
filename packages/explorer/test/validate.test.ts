@@ -24,6 +24,17 @@ function codeOf(run: () => void): string {
   return 'no error';
 }
 
+/** The `ExplorerDataError` a call throws. Fails the test if it does not throw one. */
+const caught = (run: () => void): ExplorerDataError => {
+  try {
+    run();
+  } catch (error) {
+    if (error instanceof ExplorerDataError) return error;
+    throw error;
+  }
+  throw new Error('did not throw');
+};
+
 describe('validateView', () => {
   it('accepts a well-formed view', () => {
     expect(codeOf(() => validateView(view()))).toBe('no error');
@@ -100,17 +111,32 @@ describe('validateView', () => {
     expect(codeOf(() => validateView(fn))).toBe('INVALID_NODE_SIZE');
   });
 
-  it('carries the offender and its view as fields, not only in the message', () => {
-    const caught = (run: () => void): ExplorerDataError => {
-      try {
-        run();
-      } catch (error) {
-        if (error instanceof ExplorerDataError) return error;
-        throw error;
-      }
-      throw new Error('did not throw');
-    };
+  it.each(['nodeSep', 'rankSep'] as const)('rejects a %s that is not finite and zero or greater', (key) => {
+    for (const bad of [Number.NaN, -1, Number.POSITIVE_INFINITY]) {
+      expect(codeOf(() => validateView(view({ layout: { [key]: bad } })))).toBe(
+        'INVALID_LAYOUT_OPTION',
+      );
+    }
+  });
 
+  it.each(['nodeSep', 'rankSep'] as const)('accepts a %s of zero', (key) => {
+    expect(codeOf(() => validateView(view({ layout: { [key]: 0 } })))).toBe('no error');
+  });
+
+  it('rejects a direction and an edgeStyle the types forbid', () => {
+    expect(codeOf(() => validateView(view({ layout: { direction: 'left' as never } })))).toBe(
+      'INVALID_LAYOUT_OPTION',
+    );
+    expect(codeOf(() => validateView(view({ layout: { edgeStyle: 'wavy' as never } })))).toBe(
+      'INVALID_LAYOUT_OPTION',
+    );
+  });
+
+  it('names the view, the option and the value in a layout option message', () => {
+    expect(() => validateView(view({ layout: { nodeSep: Number.NaN } }))).toThrow(/"v".*nodeSep/);
+  });
+
+  it('carries the offender and its view as fields, not only in the message', () => {
     const node = caught(() =>
       validateView(view({ nodes: [{ id: 'a', label: 'A' }, { id: 'a', label: 'Again' }], edges: [] })),
     );
@@ -151,6 +177,14 @@ describe('validateView', () => {
 
     const empty = caught(() => validateView(view({ groups: [{ id: 'g', label: 'G', nodeIds: [] }] })));
     expect([empty.code, empty.id, empty.viewId]).toEqual(['EMPTY_GROUP', 'g', 'v']);
+
+    // A layout option error is about the view itself too.
+    const layoutOption = caught(() => validateView(view({ layout: { nodeSep: -1 } })));
+    expect([layoutOption.code, layoutOption.id, layoutOption.viewId]).toEqual([
+      'INVALID_LAYOUT_OPTION',
+      'v',
+      undefined,
+    ]);
 
     // A view error is about the view itself, so there is no enclosing view.
     const dup = caught(() => validateViews([view(), view()]));

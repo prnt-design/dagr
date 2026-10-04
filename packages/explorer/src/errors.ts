@@ -11,6 +11,7 @@
  * and `viewId` and never parses prose. What `id` names depends on the code:
  *
  * - `DUPLICATE_VIEW_ID`: the view. `viewId` is `undefined`.
+ * - `INVALID_LAYOUT_OPTION`: the view. `viewId` is `undefined`.
  * - `DUPLICATE_NODE_ID`, `INVALID_NODE_SIZE`: the node.
  * - `DUPLICATE_EDGE_ID`, `MISSING_EDGE_ENDPOINT`: the edge.
  * - `DUPLICATE_GROUP_ID`, `EMPTY_GROUP`, `MISSING_GROUP_MEMBER`,
@@ -30,6 +31,7 @@ export type DagrExplorerErrorCode =
   | 'DUPLICATE_EDGE_ID'
   | 'DUPLICATE_GROUP_ID'
   | 'INVALID_NODE_SIZE'
+  | 'INVALID_LAYOUT_OPTION'
   | 'MISSING_EDGE_ENDPOINT'
   | 'MISSING_GROUP_MEMBER'
   | 'EMPTY_GROUP'
