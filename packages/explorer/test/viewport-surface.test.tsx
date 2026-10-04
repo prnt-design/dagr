@@ -328,7 +328,8 @@ describe('ViewportSurface: the overlay follows the visible set', () => {
       const box = chain.boxes.get(id);
       expect(element?.dataset['tier']).toBe(tier);
       expect(element?.getAttribute('type')).toBe('button');
-      expect(element?.getAttribute('tabindex')).toBe('-1');
+      // One tab stop: b, the node nearest the center of the fitted chain.
+      expect(element?.getAttribute('tabindex')).toBe(id === 'b' ? '0' : '-1');
       expect(element?.style.position).toBe('absolute');
       expect(element?.style.left).toBe(`${String(box?.x)}px`);
       expect(element?.style.top).toBe(`${String(box?.y)}px`);
@@ -340,9 +341,10 @@ describe('ViewportSurface: the overlay follows the visible set', () => {
 
   it('gives a node under the summary gate no button, and leaves it to the base', async () => {
     await ready({ tiers: MARKS_ONLY });
-    expect(buttons()).toEqual([]);
+    // Only the tab target, which is pinned so the graph keeps a tab stop.
+    expect(buttons().map((b) => b.dataset['nodeId'])).toEqual(['b']);
     const marks = part('plane').querySelectorAll('svg rect[data-node-id]');
-    expect([...marks].map((m) => m.getAttribute('data-node-id'))).toEqual(['a', 'b', 'c']);
+    expect([...marks].map((m) => m.getAttribute('data-node-id'))).toEqual(['a', 'c']);
   });
 
   it('mounts the selected node even when it is off screen', async () => {
@@ -475,7 +477,8 @@ describe('ViewportSurface: the overlay follows the visible set', () => {
     await ready();
     for (const [given, resolved] of cases) {
       await tree?.rerender(surface({ tiers: given }));
-      const visible = expected(chain, { tiers: resolved });
+      // b is the tab target, pinned.
+      const visible = expected(chain, { tiers: resolved, pinned: ['b'] });
       expect([given, buttons().map((b) => [b.dataset['nodeId'], b.dataset['tier']])]).toEqual([
         given,
         [...visible.overlay],
@@ -483,9 +486,10 @@ describe('ViewportSurface: the overlay follows the visible set', () => {
     }
   });
 
-  it('floors maxOverlayNodes, so 2.7 mounts 2', async () => {
-    await ready({ tiers: { summary: 0, rich: 10_000 }, maxOverlayNodes: 2.7 });
-    const visible = expected(chain, { tiers: { summary: 0, rich: 10_000 }, maxOverlayNodes: 2 });
+  it('floors maxOverlayNodes, so 1.7 mounts 1 besides the pins', async () => {
+    await ready({ tiers: { summary: 0, rich: 10_000 }, maxOverlayNodes: 1.7 });
+    // b is the tab target, pinned and outside the cap.
+    const visible = expected(chain, { tiers: { summary: 0, rich: 10_000 }, maxOverlayNodes: 1, pinned: ['b'] });
     expect(visible.overlay.size).toBe(2);
     expect(buttons().map((b) => b.dataset['nodeId'])).toEqual([...visible.overlay.keys()]);
   });
@@ -592,12 +596,13 @@ describe('ViewportSurface: activation', () => {
   it('activates a mark through the layout, with a null trigger', async () => {
     const onNodeActivate = vi.fn();
     await ready({ onNodeActivate, tiers: MARKS_ONLY });
-    const point = screenOf(chain, 'b');
-    const mark = part('plane').querySelector('svg rect[data-node-id="b"]');
+    // Not b, which is the tab target and so has a button at every tier.
+    const point = screenOf(chain, 'c');
+    const mark = part('plane').querySelector('svg rect[data-node-id="c"]');
     if (mark === null) throw new Error('no mark');
     await fire(mark, mouse('click', point.x, point.y));
     expect(onNodeActivate).toHaveBeenCalledTimes(1);
-    expect(onNodeActivate).toHaveBeenCalledWith('b', null);
+    expect(onNodeActivate).toHaveBeenCalledWith('c', null);
   });
 
   it('activates nothing on empty space, and focuses the viewport', async () => {
@@ -646,7 +651,8 @@ describe('ViewportSurface: activation', () => {
 
   it('calls onNodeZoom on a double click on a node or a mark, and not on empty space', async () => {
     const onNodeZoom = vi.fn();
-    await ready({ onNodeZoom, tiers: { summary: 0, rich: 10_000 }, maxOverlayNodes: 1 });
+    // A cap of none leaves one button: the tab target, which is pinned.
+    await ready({ onNodeZoom, tiers: { summary: 0, rich: 10_000 }, maxOverlayNodes: 0 });
     const mounted = buttons();
     expect(mounted).toHaveLength(1);
     const onButton = mounted[0];

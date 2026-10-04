@@ -144,8 +144,9 @@ describe('ExplorerViewport: inside a root', () => {
     const renderNode = vi.fn((node: Item, context: { tier: string }) => `${node.kind}/${context.tier}`);
     const nodeAriaLabel = vi.fn((node: Item) => `node ${node.kind}`);
     await ready({}, { renderNode, nodeAriaLabel, tiers: { summary: 0, rich: 10_000 }, maxOverlayNodes: 1, className: 'graph', style: { border: '1px solid' } });
+    // The cap of one, and the tab target, pinned outside it.
     const mounted = tree?.container.querySelectorAll('button[data-dagr-explorer="node"]') ?? [];
-    expect(mounted).toHaveLength(1);
+    expect(mounted).toHaveLength(2);
     expect(mounted[0]?.textContent).toMatch(/^(service|store|queue)\/summary$/);
     expect(mounted[0]?.getAttribute('aria-label')).toMatch(/^node /);
     expect(part('viewport').className).toBe('graph');

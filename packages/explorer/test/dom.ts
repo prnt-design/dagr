@@ -367,6 +367,41 @@ export function mouse(type: 'click' | 'dblclick', x: number, y: number, detail?:
   });
 }
 
+/** A key press on `target`: a `keydown` that bubbles and can be cancelled. */
+export function key(
+  name: string,
+  init: { readonly shiftKey?: boolean; readonly ctrlKey?: boolean; readonly metaKey?: boolean; readonly altKey?: boolean; readonly repeat?: boolean } = {},
+): KeyboardEvent {
+  return new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true, composed: true, ...init });
+}
+
+/** What sequential focus visits: no positive `tabIndex` is used in this package, so document order. */
+function tabbable(): HTMLElement[] {
+  return [...document.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]')].filter(
+    (element) => element.tabIndex >= 0 && !(element as HTMLButtonElement).disabled,
+  );
+}
+
+/**
+ * Tab, or Shift-Tab, as a browser does it. jsdom does not move focus on Tab,
+ * so this dispatches the `keydown` on the focused element and, unless it was
+ * cancelled, focuses the next element in sequential focus order, or blurs
+ * at the end of it.
+ */
+export async function tab(options: { readonly shift?: boolean } = {}): Promise<void> {
+  const from = document.activeElement instanceof HTMLElement ? document.activeElement : document.body;
+  const allowed = await fire(from, key('Tab', { shiftKey: options.shift ?? false }));
+  if (!allowed) return;
+  const order = tabbable();
+  const at = order.indexOf(from);
+  const next =
+    options.shift === true ? (at < 0 ? order.at(-1) : order[at - 1]) : at < 0 ? order[0] : order[at + 1];
+  await flush(() => {
+    if (next === undefined) from.blur();
+    else next.focus();
+  });
+}
+
 /** Installs every stand-in above. Call it in `beforeEach`. */
 export function installDom(options: { readonly reducedMotion?: boolean } = {}): void {
   installResizeObserver();
