@@ -19,9 +19,9 @@ import type { Manifest, PackedPackage } from './checks.js';
 /**
  * The packages this repo publishes, in dependency order.
  *
- * `explorer` is `"private": true` until M5.6f and is here regardless. `pnpm
- * pack` packs a private package, and a broken `exports` map is cheaper to find
- * on the day it is written than on the day the flag comes off.
+ * `explorer` was here from its first slice, while it was still `"private":
+ * true`, because a broken `exports` map is cheaper to find on the day it is
+ * written than on the day the flag comes off. The flag came off in M5.6f-2.
  */
 export const PUBLISHED_PACKAGES = [
   'graph',

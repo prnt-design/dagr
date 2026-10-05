@@ -21,6 +21,12 @@
       "@prnt/dagr-render": [
         "../render/src/index.ts"
       ],
+      "@prnt/dagr-render/core": [
+        "../render/src/core.ts"
+      ],
+      "@prnt/dagr-explorer": [
+        "../explorer/src/index.ts"
+      ],
       "@prnt/dagr-react": [
         "../react/src/index.ts"
       ],

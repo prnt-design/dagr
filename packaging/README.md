@@ -31,10 +31,10 @@ package built to be wrong. `test/pack.test.ts` runs the same predicates over the
 seven real tarballs. A guard whose only evidence is a green run against a tree
 already known to be correct has never demonstrated that it can go red.
 
-One of the seven, `@prnt/dagr-explorer`, is `"private": true` until M5.6f and
-is packed regardless. `pnpm pack` packs a private package, and a broken
-`exports` map is cheaper to find on the day it is written than on the day the
-flag comes off.
+One of the seven, `@prnt/dagr-explorer`, was `"private": true` until M5.6f-2
+and was packed regardless from its first slice, because a broken `exports`
+map is cheaper to find on the day it is written than on the day the flag
+comes off. The flag is off now, and it publishes with the other six.
 
 - **No `workspace:` range a consumer install reads.** This is a check on the
   packer as much as on the manifest, and it is why the publish command is
@@ -69,6 +69,11 @@ flag comes off.
   The control comes first: the smoke fails if `three` can be resolved from
   where the renderer is installed. It runs without the test runner's
   `NODE_PATH`, which points at this repo's own `node_modules`.
+- **The umbrella's `@prnt/dagr/explorer` and `@prnt/dagr/render/core` are
+  the scoped packages, with `three` absent.** A consumer installs all seven
+  tarballs with no `three`, then checks that each subpath exports the same
+  names as its scoped package and that every one is the same object, not a
+  second copy. The control is `@prnt/dagr/render` failing there on `three`.
 
 ## Packing is not conditional, and the build is not either
 

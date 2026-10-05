@@ -481,7 +481,7 @@ describe('ExplorerViewport: keyboard through the root', () => {
     );
   }
 
-  it('inspects the focused node on Enter, and Escape releases graph focus', async () => {
+  it('inspects the focused node on Enter, the first Escape closes the drawer, the second releases graph focus', async () => {
     tree = await mount(explorer([overview]));
     await resizeTo(SIZE.width, SIZE.height);
     await runFramesUntilIdle();
@@ -491,6 +491,8 @@ describe('ExplorerViewport: keyboard through the root', () => {
     expect(id).not.toBeNull();
     await press('Enter');
     expect(mustButton(id ?? '').dataset['selected']).toBe('true');
+    await press('Escape');
+    expect(focusedNode()).toBe(id);
     await press('Escape');
     expect(viewport().contains(document.activeElement)).toBe(false);
   });

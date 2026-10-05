@@ -22,9 +22,11 @@
  * drawer (it was inside it, or on a node that left the data), so a host
  * control that closes the drawer keeps its focus. `Escape` anywhere in the
  * root closes the drawer, except where a part has its own precedence (the
- * search field, the drawer) or a host control handled the key. Inside the
- * graph it restores nothing: focus moving back into the graph would silently
- * re-enable wheel zoom.
+ * search field, the drawer) or a host control handled the key. On a node or
+ * the graph's surface it closes the drawer and nothing else, so focus stays
+ * where it is and a second `Escape` leaves the graph. It is taken in the
+ * capture phase for that, before the camera's own `Escape` would blur the
+ * graph and drop focus to the page.
  *
  * **Validation and layout run in render,** so a data error reaches an error
  * boundary. Every view is validated; only the active one is laid out, and
@@ -462,12 +464,28 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
     target?.focus();
   }, [detailsOpen, internals]);
 
+  // The capture phase, so it runs before the camera's listener on the
+  // viewport, which blurs the graph on an Escape nobody has handled. Only a
+  // node's own button or the surface: content a host renders inside a node
+  // gets the key first, as everywhere else.
+  const onKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>): void => {
+    const target = event.target;
+    if (event.key !== 'Escape' || !detailsOpen || !(target instanceof HTMLElement)) return;
+    const viewport = target.closest('[data-dagr-explorer="viewport"]');
+    if (viewport === null || viewport.closest('[data-dagr-explorer="root"]') !== rootRef.current) return;
+    if (target !== viewport && target.getAttribute('data-dagr-explorer') !== 'node') return;
+    event.preventDefault();
+    api.closeDetails();
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     const target = event.target;
     if (event.key !== 'Escape' || !detailsOpen || !(target instanceof Element)) return;
     // A root nested in this one handles its own.
     if (target.closest('[data-dagr-explorer="root"]') !== rootRef.current) return;
     if (target.closest('[data-dagr-explorer="viewport"]') !== null) {
+      // Closed already in the capture phase, or handled by content in a node.
+      if (event.defaultPrevented) return;
       // The camera has already released graph focus by now: its listener is
       // on the viewport, below this one.
       skipRestore.current = true;
@@ -512,6 +530,7 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
           tabIndex={-1}
           className={className}
           style={{ position: 'relative', ...style }}
+          onKeyDownCapture={onKeyDownCapture}
           onKeyDown={onKeyDown}
         >
           {children}

@@ -18,11 +18,9 @@ hundred elements. Layout is Dagr's own, and runs anywhere, a server included.
 
 ## Install
 
-:::note[Not published yet]
+:::note[Available on npm]
 
-The package is built in slices and stays private until browser validation
-lands. This page documents it as it is in the repository today. The command
-below works once the package is published, and does not before.
+`@prnt/dagr-explorer` is available on npm from version 0.1.3.
 
 :::
 
@@ -31,10 +29,12 @@ npm install @prnt/dagr-explorer
 ```
 
 It runs on React 18 and React 19 (`react` and `react-dom` `>=18.2.0 <20.0.0`).
-The umbrella package, `@prnt/dagr`, requires React 19, so a React 18 site
-installs `@prnt/dagr-explorer` directly. It does not depend on
-`@prnt/dagr-react` or load three.js: from `@prnt/dagr-render` it imports only
-the three-free `core` entry.
+The umbrella package re-exports it as `@prnt/dagr/explorer`, but the umbrella
+requires React 19, so a React 18 site installs `@prnt/dagr-explorer`
+directly. It does not depend on `@prnt/dagr-react`, and it never loads
+three.js at runtime: from `@prnt/dagr-render` it imports only the
+three-free `core` entry. Package managers still install `three` (or warn
+about it), because `@prnt/dagr-render` declares it as a required peer.
 
 ## The explorer
 
@@ -363,8 +363,8 @@ any zoom. Tab again leaves the graph.
 | `Enter`, `Space` | inspect the node |
 
 With the graph's surface focused (click it), the arrow keys pan. Either way
-`+` and `=` zoom in, `-` zooms out, `0` fits, and `Escape` leaves the graph
-and closes the drawer. Wheel zoom only works while the graph has focus, so
+`+` and `=` zoom in, `-` zooms out and `0` fits. `Escape` closes the drawer
+if it is open, keeping focus where it is, and otherwise leaves the graph. Wheel zoom only works while the graph has focus, so
 the page scrolls past it untouched.
 
 Only nodes on screen and large enough to read have elements, so a screen
@@ -415,9 +415,25 @@ cap of 200 however far you pan.
 
 ## Limits
 
-- **No measured ceiling yet.** How many nodes the SVG base carries before
-  panning stops being smooth has not been measured in a browser. It will be,
-  and this section will give the number.
+- **The SVG base is smooth to about 4,000 nodes.** Measured by panning
+  graphs of 500 to 8,000 nodes at one and a half times the fit zoom, where
+  every node and edge is in the base, in Chromium 153 on an Apple M4 (macOS,
+  16 GB, device pixel ratio 1), on 2026-10-04. A size is smooth when its 95th
+  percentile frame stays within one 16.7 ms frame. Above the ceiling the
+  answer is a native base, which is not built yet.
+
+  | Nodes | Edges | Median frame | 95th percentile | Frames dropped |
+  | --- | --- | --- | --- | --- |
+  | 500 | 643 | 16.7 ms | 18.3 ms (1 frame) | 0% |
+  | 1,000 | 1,314 | 16.7 ms | 18.3 ms (1 frame) | 0% |
+  | 2,000 | 2,661 | 16.7 ms | 18.1 ms (1 frame) | 0% |
+  | 4,000 | 5,407 | 16.7 ms | 18.4 ms (1 frame) | 1% |
+  | 8,000 | 10,826 | 16.7 ms | 33.4 ms (2 frames) | 11% |
+
+  The 95th percentile is counted in frames, because frame timestamps jitter
+  by a millisecond or two: a page moving one div measures 18.2 ms on the same
+  machine. How it was taken is in `bench/browser/README.md`, and the harness
+  beside it reruns it.
 - **A self loop is not drawn.** An edge from a node to itself stays in your
   data, appears in the node's connections, and has an empty route.
 - **A group moves no node.** It is the padded hull of its members, with a band

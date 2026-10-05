@@ -37,6 +37,16 @@
       "types": "./dist/vdsl.d.ts",
       "import": "./dist/vdsl.js",
       "default": "./dist/vdsl.js"
+    },
+    "./explorer": {
+      "types": "./dist/explorer.d.ts",
+      "import": "./dist/explorer.js",
+      "default": "./dist/explorer.js"
+    },
+    "./render/core": {
+      "types": "./dist/render-core.d.ts",
+      "import": "./dist/render-core.js",
+      "default": "./dist/render-core.js"
     }
   },
   "files": [
@@ -64,12 +74,18 @@
     "@prnt/dagr-layout": "workspace:^",
     "@prnt/dagr-render": "workspace:^",
     "@prnt/dagr-react": "workspace:^",
-    "@prnt/dagr-vdsl": "workspace:^"
+    "@prnt/dagr-vdsl": "workspace:^",
+    "@prnt/dagr-explorer": "workspace:^"
   },
   "peerDependencies": {
     "react": ">=19.0.0 <20.0.0",
     "react-dom": ">=19.0.0 <20.0.0",
     "three": ">=0.180.0 <1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

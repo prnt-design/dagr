@@ -1,8 +1,9 @@
 # @prnt/dagr-explorer
 
-## Unreleased
+## 0.1.3
 
-Not published. The package is private until M5.6f.
+The first release. Built in slices M5.6a to M5.6f; the entries below are in
+the order they landed.
 
 - Add the headless core (M5.6b): the `ExplorerView` data model, `validateView`
   and `validateViews` with `ExplorerDataError`, `layoutView`, and
@@ -41,7 +42,8 @@ Not published. The package is private until M5.6f.
 - The drawer returns focus to what opened it, or to the search field, or to
   the root, never to the page. Escape closes it from anywhere in the root.
   In the search field it closes the drawer before it clears the query, and
-  inside the graph it closes the drawer without moving focus back in.
+  on a node or the graph's surface it closes the drawer before it leaves
+  the graph (see the M5.6f-2 entry below).
 - Every string comes from `labels`, with neutral English defaults in
   `DEFAULT_EXPLORER_LABELS`, including the `moreMatches` and `inGroup`
   formatters. An inline `labels` object is kept by value. A part outside a
@@ -71,3 +73,21 @@ Not published. The package is private until M5.6f.
   architecture graph and a 2,000 node synthetic graph, and Node benches
   for the visible set at 1,000 and 10,000 nodes and for layout at 1,000
   (M5.6f-1). No package code changed.
+- Validate the explorer in real browsers (M5.6f-2): the docs demos in
+  Chromium 153 and WebKit 26.6, at 1440 by 900 and at 390 by 844 with
+  touch, with `bench/browser/explorer-check.mjs`. Every check passes in
+  both. The README's "Known browser differences" records what differs.
+- Fix: `Escape` on a node or the graph's surface with the drawer open
+  closes the drawer and keeps focus where it is, and a second `Escape`
+  leaves the graph. One `Escape` used to do both, which left focus on the
+  page body. An `Escape` that content inside a node handles is left to it.
+- Fix: the graph holds its wheel listener only while it has focus. WebKit
+  does not scroll a page whose root sets `overscroll-behavior: none` while
+  the pointer is over any non-passive wheel listener, so the page would not
+  scroll past an unfocused graph there.
+- Measure the SVG base's ceiling: smooth (a 95th percentile frame within
+  one 16.7 ms frame) to about 4,000 nodes and 5,400 edges, panned at one and
+  a half times the fit zoom in Chromium on an Apple M4. The table is in the
+  README.
+- This is the first published version. The umbrella package re-exports it
+  as `@prnt/dagr/explorer`.

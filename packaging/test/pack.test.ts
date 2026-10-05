@@ -510,4 +510,93 @@ if (html.includes('data-dagr-explorer="node"')) throw new Error('explorer server
     // An external install and a node process, as the typecheck above is.
     30_000,
   );
+
+  it(
+    'resolves the umbrella explorer and render core subpaths to the scoped packages, with three absent',
+    () => {
+      const consumer = mkdtempSync(join(tmpdir(), 'dagr-umbrella-consumer-'));
+      try {
+        const localPackages = Object.fromEntries(
+          [...roots].map(([name, root]) => [name, `file:${root}`]),
+        );
+        writeFileSync(
+          join(consumer, 'package.json'),
+          JSON.stringify({
+            private: true,
+            type: 'module',
+            dependencies: { ...localPackages, react: '19.2.8', 'react-dom': '19.2.8' },
+            pnpm: { overrides: localPackages },
+          }),
+        );
+        // `three` is left out: the umbrella declares it an optional peer, and
+        // neither of these two subpaths loads it.
+        writeFileSync(
+          join(consumer, '.npmrc'),
+          'auto-install-peers=false\nstrict-peer-dependencies=false\n',
+        );
+        try {
+          execFileSync(
+            'pnpm',
+            ['install', '--prefer-offline', '--ignore-scripts', '--no-frozen-lockfile'],
+            { cwd: consumer, encoding: 'utf8', stdio: 'pipe' },
+          );
+        } catch (error) {
+          const output = error as { readonly stdout?: string; readonly stderr?: string };
+          throw new Error(`${output.stdout ?? ''}${output.stderr ?? ''}`, { cause: error });
+        }
+
+        writeFileSync(
+          join(consumer, 'smoke.mjs'),
+          `import * as explorer from '@prnt/dagr-explorer';
+import * as umbrellaExplorer from '@prnt/dagr/explorer';
+import * as core from '@prnt/dagr-render/core';
+import * as umbrellaCore from '@prnt/dagr/render/core';
+
+const same = (scoped, umbrella, label) => {
+  const names = Object.keys(scoped).sort();
+  if (names.length === 0) throw new Error(label + ': the scoped package exports nothing');
+  if (JSON.stringify(Object.keys(umbrella).sort()) !== JSON.stringify(names)) {
+    throw new Error(label + ': the umbrella exports other names');
+  }
+  for (const name of names) {
+    if (umbrella[name] !== scoped[name]) throw new Error(label + ': ' + name + ' is a second copy');
+  }
+};
+same(explorer, umbrellaExplorer, '@prnt/dagr/explorer');
+same(core, umbrellaCore, '@prnt/dagr/render/core');
+
+// The control: the umbrella's full renderer entry does need three, so its
+// failing here is what shows three really is absent.
+let control = 'loaded';
+try {
+  await import('@prnt/dagr/render');
+} catch (error) {
+  control = String(error);
+}
+if (!control.includes("Cannot find package 'three'")) {
+  throw new Error('@prnt/dagr/render did not fail on three, so this smoke proves nothing: ' + control);
+}
+`,
+        );
+        const env = Object.fromEntries(
+          Object.entries(process.env).filter(([key]) => key !== 'NODE_PATH'),
+        );
+        try {
+          execFileSync(process.execPath, ['smoke.mjs'], {
+            cwd: consumer,
+            encoding: 'utf8',
+            stdio: 'pipe',
+            env,
+          });
+        } catch (error) {
+          const output = error as { readonly stdout?: string; readonly stderr?: string };
+          throw new Error(`${output.stdout ?? ''}${output.stderr ?? ''}`, { cause: error });
+        }
+      } finally {
+        rmSync(consumer, { recursive: true, force: true });
+      }
+    },
+    // An external install and a node process, as the smoke above is.
+    30_000,
+  );
 });

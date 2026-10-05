@@ -452,8 +452,11 @@ emphasis changes.
 
 **Culling does not help at fit zoom,** where everything is in view. There the
 SVG base costs one element per node and per edge, static while panning. That
-has a ceiling. M5.6f measures it on a named machine and the guide states the
-number. Above it the answer is the native base.
+has a ceiling, measured in M5.6f-2 at about 4,000 nodes (5,407 edges): the
+largest generated graph whose 95th percentile frame stays within one 16.7 ms
+frame while panned at 1.5625 times the fit zoom, in Chromium 153 on an Apple
+M4 (macOS, 16 GB). 8,000 nodes drop one frame in nine. The guide states the
+number with its table. Above it the answer is the native base.
 
 **A seam with one implementation is a guess.** `ExplorerBase` is shaped on
 `docs/src/components/GraphViewport/RendererAdapter.tsx`, which already drives
@@ -516,8 +519,9 @@ itself is focusable by click and is not in the tab order.
 
 **While the surface is focused,** arrows pan.
 
-**In both cases** `+` and `=` zoom in, `-` zooms out, `0` fits, and `Escape`
-releases graph focus. Keys typed in an input are ignored.
+**In both cases** `+` and `=` zoom in, `-` zooms out, `0` fits. `Escape` with
+the drawer open closes it and keeps focus on its opener; with the drawer
+closed, it releases graph focus. Keys typed in an input are ignored.
 
 **Keyboard focus reveals by panning at the current zoom.** `reveal` moves the
 camera the minimum distance that brings the node's box 12 CSS pixels inside
@@ -561,8 +565,8 @@ position survives.
   element is gone, focus goes to the search input.
 - `Escape` precedence: in the search field with the drawer open, the first
   press closes the drawer and the second clears the query. Inside the graph,
-  it closes the drawer and releases graph focus without restoring focus into
-  the graph, which would silently re-enable wheel zoom.
+  with the drawer open, the first press closes it and keeps focus on its
+  opener; with the drawer closed, `Escape` releases graph focus.
 - Connection buttons inspect the adjacent node and keep the original opener.
 
 ## Server rendering
@@ -686,9 +690,11 @@ in an existing manifest, which `AGENTS.md` reserves for the maintainer, so
 approving this spec is the approval for that one edit, and the M5.6f pull
 request calls it out. Publishing is the maintainer's, as it always is.
 
-It does not join the `@prnt/dagr` umbrella. The umbrella requires React 19 and
-`three`, which contradicts the explorer's React 18 support. That is a
-release-time decision for the maintainer.
+It joins the `@prnt/dagr` umbrella as `@prnt/dagr/explorer`, beside
+`@prnt/dagr/render/core`, which the maintainer decided on 2026-10-04 (option
+A, amendment 17). The umbrella requires React 19, so a React 18 site installs
+`@prnt/dagr-explorer` directly, and the umbrella's `three` peer becomes
+optional, since the explorer and the render core never load it.
 
 ## Deferred
 
@@ -826,10 +832,34 @@ can see what moved without diffing.
       graph.
     - The graph's description names the arrow keys.
 
+17. **Release readiness, as built in M5.6f-2.** Found by the browser check
+    of the docs demos in Chromium and WebKit, and decided by the maintainer:
+    - The explorer joins the `@prnt/dagr` umbrella as `@prnt/dagr/explorer`,
+      with `@prnt/dagr/render/core` beside it, reversing "Release posture"'s
+      "does not join". The umbrella's `three` peer is optional. React 18
+      sites install the scoped package. Approved by the maintainer on
+      2026-10-04 as option A.
+    - The SVG base's ceiling is about 4,000 nodes, measured headed: headless
+      Chromium on the measuring machine paced animation frames at 67 to 100
+      ms on an empty page, so it could not measure a frame. Smooth is a 95th
+      percentile of one frame, counted in display ticks, because timestamps
+      jitter around the tick and an empty page's 95th percentile in
+      milliseconds is 18.2.
+    - `Escape` on a node or the graph's surface with the drawer open closes
+      the drawer and keeps focus, and a second `Escape` leaves the graph.
+      One `Escape` used to do both, which dropped focus to the page body.
+      This reverses the in-graph half of amendment 15's `Escape` rule.
+    - The camera holds its wheel listener only while the graph has focus.
+      WebKit does not scroll a page whose root sets `overscroll-behavior:
+      none` while the pointer is over any non-passive wheel listener, so an
+      unfocused graph trapped the page's scroll there.
+
 One change is bookkeeping and not design: M5.6c was split into M5.6c-1, the pure core, and M5.6c-2, the React viewport, so each plan could be exact.
 
 Amendments 3 to 13 were made by the agent executing the plans, after review
 findings. The maintainer approved all of them on 2026-10-03. Amendment 14 was
 made the same way on 2026-10-04, under the maintainer's instruction to carry on
-through the remaining slices, and so were amendments 15 and 16. Each is listed in its
-pull request for the maintainer to accept or reverse.
+through the remaining slices, and so were amendments 15 and 16. Amendment 17's umbrella
+change is the maintainer's own decision; its other three items were made by
+the agent the same way. Each is listed in its pull request for the
+maintainer to accept or reverse.

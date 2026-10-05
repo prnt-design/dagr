@@ -283,21 +283,41 @@ describe('ExplorerDetails: focus and Escape', () => {
     expect(document.activeElement).toBe(result);
   });
 
-  it('inside the graph, closes the drawer and releases focus without restoring it into the graph', async () => {
+  it('inside the graph, closes the drawer on the first Escape keeping focus, and leaves the graph on the second', async () => {
+    // Found by the browser check (M5.6f-2): one Escape that both closed the
+    // drawer and blurred the node left focus on the page body.
     await ready();
     const opener = await openFrom('b');
     expect(document.activeElement).toBe(opener);
     await escape(opener);
     expect(find('details')).toBeNull();
+    expect(state().selectedId).toBe('b');
+    expect(document.activeElement).toBe(opener);
+    await escape(opener);
     expect(part('viewport').contains(document.activeElement)).toBe(false);
-    expect(document.activeElement).toBe(document.body);
 
     // The same from the surface itself.
     await flush(() => state().inspect('c'));
     part('viewport').focus();
     await escape(part('viewport'));
     expect(find('details')).toBeNull();
+    expect(document.activeElement).toBe(part('viewport'));
+    await escape(part('viewport'));
     expect(document.activeElement).toBe(document.body);
+  });
+
+  it('inside the graph, leaves an Escape that content in a node handled alone', async () => {
+    await ready();
+    await flush(() => state().inspect('b'));
+    const button = node('b');
+    const own = document.createElement('span');
+    own.tabIndex = -1;
+    own.addEventListener('keydown', (event) => event.preventDefault());
+    button.append(own);
+    own.focus();
+    await escape(own);
+    expect(state().detailsOpen).toBe(true);
+    own.remove();
   });
 
   it('does not take focus from the host when closed through the api', async () => {

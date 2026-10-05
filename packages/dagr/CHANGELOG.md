@@ -2,6 +2,7 @@
 
 ## 0.1.3
 
+- Add `@prnt/dagr/explorer`, forwarding `@prnt/dagr-explorer`, and `@prnt/dagr/render/core`, forwarding the renderer's three-free core. The umbrella now depends on `@prnt/dagr-explorer`, and its `three` peer is marked optional, since only `@prnt/dagr/render` and `@prnt/dagr/react` load three.js at runtime. Package managers still install `three`, because `@prnt/dagr-render` declares it as a required peer. The umbrella still requires React 19; a React 18 site installs `@prnt/dagr-explorer` directly.
 - Expose `DagrCanvas` navigation, node click and hover events, camera `focusNode` and `fit`, `nodeTiers` level of detail, `detectBackendSupport` and the camera input helpers through the umbrella exports.
 
 ## 0.1.2
