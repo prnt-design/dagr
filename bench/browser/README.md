@@ -142,3 +142,98 @@ Three things follow, and they are in `docs/docs/render.md` in full.
   `will-change`, because a promoted layer is rasterised once and scaled, so the
   text softens under a zoom. A consumer who pans far more than they zoom can set
   it themselves on the layer, and now knows what it buys.
+
+## The explorer check and the SVG ceiling
+
+`explorer-check.mjs` is the browser validation of `@prnt/dagr-explorer`
+(M5.6f-2), and like `backend-probe.mjs` it CHECKS rather than measures, with
+one measuring mode beside it. `explorer-ceiling-page.mjs` is the page that
+mode bundles; it runs in the browser, not in node.
+
+```
+pnpm build                                   # the docs site and every dist
+npm --prefix bench/browser install --no-save playwright-core esbuild
+node bench/browser/explorer-check.mjs        # [--out=DIR] [--browsers=chromium,webkit] [--only=NAME]
+node bench/browser/explorer-check.mjs ceiling  # [--out=DIR] [--sizes=500,1000] [--headless]
+```
+
+Neither package is a workspace dependency. Installed anywhere else, point
+`DAGR_BROWSER_DEPS` at the directory whose `node_modules` holds them. The
+browsers are Playwright's own, from its cache (`npx playwright-core install
+chromium webkit`), not a path at the top of the file, so this one runs on a
+Mac as it is. `DAGR_CHROMIUM` overrides the Chromium executable. The runner
+serves `docs/build` itself on a free port and stops the server when it ends.
+
+**The check** drives `/docs/explorer` in Chromium and WebKit, at 1440 by 900
+and at 390 by 844 with touch and `isMobile`, a fresh page per check. Every
+check is an assertion, and every one that could pass vacuously carries a
+control that has to fail first: the focusing click is checked to focus, the
+tap that only focuses is followed by one that opens, reduced motion is read
+against the same zoom without it, the composited-at-rest check first sees
+`will-change` while moving, the resize checks the width really changed. A
+check a profile cannot run (Playwright refuses a mouse wheel in mobile WebKit,
+and the desktop profiles have no touch) reports `n/a` with the reason, never
+`pass`. It exits non-zero on any failure and writes `report.json` and 48
+screenshots (browser, width, demo, theme, and `rest`, `zoomed` or `drawer`)
+to the output directory, a temporary one by default.
+
+The pinch is synthesized two ways: as touch pointer events dispatched in the
+page, in both browsers, and in Chromium also as real touch input through the
+DevTools protocol. WebKit has no protocol for it.
+
+The overlay bound is the cap plus four, the most pins the explorer holds (the
+selected node, the tab stop, the focused node and an arrow's target on its way
+to focus). The last is not in the DOM, so the bound is the documented most,
+and the report also lists every sample over the cap plus the pins the DOM
+does show. On 2026-10-04 there was one, 202 elements with one visible pin,
+during a drag that began on a node: the browser focused the node on the press,
+and for one commit the set still held the tab stop it had been computed with
+while the render had moved the tab stop to the focused node. The next commit
+dropped it.
+
+**What it found on 2026-10-04**, on an Apple M4 (macOS 26, Darwin 25.6),
+Chromium 153 and WebKit 26.6 from Playwright 1.63: 48 results, 44 passes and
+4 `n/a`, after two fixes in the package. Before them, the keyboard check failed
+in both browsers at both widths, because `Escape` on a node with the drawer
+open also blurred the graph and left focus on the page body; and the wheel
+check failed in WebKit, because WebKit does not scroll a page whose root sets
+`overscroll-behavior: none` (the docs site does) when the pointer is over a
+non-passive wheel listener, even one that returns at once. Both are in the
+explorer's changelog, each with its test.
+
+**The ceiling** mode bundles the page with esbuild against the built explorer
+and React 19, and for each size lays out a generated graph shaped like the
+large demo's but with its layer count growing as the square root of the node
+count, so every size fits the 1280 by 600 stage at about the same aspect. It
+zooms in to 1.5625 times the fit (two toolbar steps; at the fit itself the
+camera cannot pan at all, and at this zoom the overscan still keeps every
+node in the base), presses the mouse for real, and then dispatches one
+`pointermove` per animation frame from the page, for three runs of four
+seconds after a warm-up. A move per frame from the runner instead made each
+one a protocol round trip, and the intervals measured those.
+
+It runs HEADED by default. Headless Chromium on this machine paced
+`requestAnimationFrame` at 67 to 100 ms on a page with nothing on it but one
+moving div, at every graph size alike, so a headless interval measured the
+pacing and not the page. The control row is that div, measured first on every
+run, and is how a reader tells which of the two a run measured. Smooth means
+a 95th percentile of one frame, counted in 60 Hz ticks: the timestamps jitter
+by a millisecond or two around each tick, so the control's own 95th
+percentile in milliseconds is 18.2, above 16.7, on a page doing nothing.
+
+Taken on 2026-10-04, Apple M4, 10 cores, 16 GB, macOS (Darwin 25.6),
+Chromium 153 headed through ANGLE on Metal, device pixel ratio 1, at a load
+average of about 4.5 from other work on the machine. Two runs agreed on every
+row's tick count; the table is the second.
+
+| Nodes | Edges | Median | 95th percentile | Frames past one tick |
+| --- | --- | --- | --- | --- |
+| control | | 16.7 ms | 18.2 ms (1 frame) | 0% |
+| 500 | 643 | 16.7 ms | 18.3 ms (1 frame) | 0% |
+| 1,000 | 1,314 | 16.7 ms | 18.3 ms (1 frame) | 0% |
+| 2,000 | 2,661 | 16.7 ms | 18.1 ms (1 frame) | 0% |
+| 4,000 | 5,407 | 16.7 ms | 18.4 ms (1 frame) | 1% |
+| 8,000 | 10,826 | 16.7 ms | 33.4 ms (2 frames) | 11% |
+
+**The ceiling is 4,000 nodes** with their 5,400 edges: the largest size whose
+95th percentile stays within one frame. At 8,000 one frame in nine runs long.
