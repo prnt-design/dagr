@@ -6,12 +6,14 @@ virtualized by on-screen size.
 
 ## Read this first: it is not published yet
 
-The package is built in slices, M5.6a to M5.6f in `ROADMAP.md`, and stays
-`"private": true` until the last. Today it has the headless core, the
-React parts below, keyboard navigation and server rendering. Docs, demos
-and browser validation arrive in M5.6f.
+The package is complete, browser-validated in Chromium and WebKit (see
+"Known browser differences" below), and ready to publish. Publishing is the
+maintainer's step, so until it is on npm, `npm install @prnt/dagr-explorer`
+finds nothing.
 
 It runs on React 18 and React 19 (`react` and `react-dom` `>=18.2.0 <20.0.0`).
+The umbrella package re-exports it as `@prnt/dagr/explorer`, but the umbrella
+requires React 19, so a React 18 site installs this package directly.
 
 ## The explorer
 
@@ -175,11 +177,11 @@ it, or to the search field if that element is gone, or to the root element
 if there is no search field. A control of yours that closes the drawer keeps
 its focus. A connection button in the drawer inspects its neighbor and keeps
 the original opener. `Escape` closes the drawer from anywhere in the root,
-with two exceptions that keep their own order. In the search field it closes
-the drawer first and clears the query second. Inside the graph it closes the
-drawer and releases graph focus, without moving focus back into the graph,
-which would re-enable wheel zoom. A control of yours that handles `Escape`
-and calls `preventDefault()` keeps it.
+with two places that keep their own order. In the search field it closes
+the drawer first and clears the query second. On a node or the graph's
+surface it closes the drawer first, keeping focus where it is, and releases
+graph focus second. A control of yours that handles `Escape` and calls
+`preventDefault()` keeps it.
 
 ### Keyboard
 
@@ -199,8 +201,8 @@ With a node focused:
 | `Enter`, `Space` | inspect the node |
 
 With the surface focused, the arrow keys pan. In both cases `+` and `=` zoom
-in, `-` zooms out, `0` fits, and `Escape` leaves the graph (and closes the
-drawer). A key with `Ctrl`, `Command` or `Alt` is left to the browser.
+in, `-` zooms out and `0` fits. `Escape` closes the drawer if it is open,
+and otherwise leaves the graph. A key with `Ctrl`, `Command` or `Alt` is left to the browser.
 
 A node that takes focus from the keyboard is brought into view by the
 least pan, at the current zoom. A node you click is not moved to.
@@ -285,6 +287,44 @@ experimental: a seam with one implementation is a guess, and they may change
 when a native base over `DagrCanvas` lands and confirms or corrects them.
 `ExplorerCamera` (`{ x, y, scale }`), what `camera.get()` returns, is
 exported as a type too.
+
+**The SVG base is smooth to about 4,000 nodes.** Panned at one and a half
+times the fit zoom, where every node and edge is in the base, in Chromium
+153 on an Apple M4 (macOS, 16 GB, device pixel ratio 1), on 2026-10-04:
+
+| Nodes | Edges | Median frame | 95th percentile | Frames dropped |
+| --- | --- | --- | --- | --- |
+| 500 | 643 | 16.7 ms | 18.3 ms (1 frame) | 0% |
+| 1,000 | 1,314 | 16.7 ms | 18.3 ms (1 frame) | 0% |
+| 2,000 | 2,661 | 16.7 ms | 18.1 ms (1 frame) | 0% |
+| 4,000 | 5,407 | 16.7 ms | 18.4 ms (1 frame) | 1% |
+| 8,000 | 10,826 | 16.7 ms | 33.4 ms (2 frames) | 11% |
+
+A size is smooth when its 95th percentile frame stays within one 16.7 ms
+frame, counted in frames because timestamps jitter by a millisecond or two.
+The method and the harness are in the repository's `bench/browser`. Above
+the ceiling the answer is a native base, which is not built yet.
+
+### Known browser differences
+
+Checked on 2026-10-04 in Chromium 153 and WebKit 26.6 (Playwright 1.63), at
+1440 by 900 and at 390 by 844 with touch, against the docs demos. Every
+check passed in both. What differs is the browsers, not the explorer:
+
+- **WebKit, with macOS's default keyboard setting, leaves buttons out of the
+  Tab order,** as it does on every page: the view switcher, the trace toggle,
+  the search results and the toolbar. The graph's tab stop is still reached,
+  because the explorer gives that node `tabIndex` 0 explicitly.
+- **WebKit stops a page from scrolling under a non-passive wheel listener
+  when the page's root sets `overscroll-behavior: none`.** The explorer holds
+  its wheel listener only while the graph has focus, so the page scrolls past
+  an unfocused graph, and a host's own non-passive wheel listener on an
+  ancestor would bring the problem back.
+- **A phone has no wheel, so neither does the check.** The wheel and
+  `Ctrl` wheel checks were run on the 390 profile in Chromium and not in
+  WebKit, where Playwright has no wheel for a mobile page. The touch pinch
+  was checked in both, synthesized as pointer events, and in Chromium also
+  as real touch input.
 
 ## The core
 
