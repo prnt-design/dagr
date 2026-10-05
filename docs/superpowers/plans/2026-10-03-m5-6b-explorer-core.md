@@ -58,7 +58,7 @@ M5.6b of that spec.
   `src/layout.ts` for the tests and NOT from the package entry: a public
   constant cannot change value or become an option without a break.
 - Clean reimplementation. Work from this plan, the spec, and dagr's own files.
-  Do not open or copy from the `MytraAI/mytra-os-uis` repository.
+  Do not open or copy from the earlier private implementation.
 - Do not edit `LICENSE`, `AGENTS.md`, `CONTRIBUTING.md`, `SECURITY.md`, or
   anything under `.claude/`. Copying the root `LICENSE` into the new package
   is creating a file, not editing one.
