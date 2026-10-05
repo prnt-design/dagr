@@ -26,7 +26,7 @@ through a caller-supplied, displayed-revision hit provider, and `DagrCanvas`
 now supplies exact CPU node hits (M5.2b, released in 0.1.3) with opt-in navigation,
 camera flights and zoom-tiered node rendering. Edge and port hits are not
 shipped. Edge styles still change geometry without obstacle avoidance. Visual
-groups are annotations, not compound layout or enforced trust boundaries. GPU
+groups are annotations, not compound layout or enforced boundaries. GPU
 picking has not shipped. Do not mark M5.2 or M7 complete based on the shared
 contract or demos.
 

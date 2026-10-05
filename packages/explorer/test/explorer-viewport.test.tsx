@@ -167,11 +167,11 @@ describe('ExplorerViewport: inside a root', () => {
 
   it('names a grouped node through labels.inGroup', async () => {
     await ready();
-    expect(button('a')?.getAttribute('aria-label')).toBe('Alpha, in Trust boundary');
+    expect(button('a')?.getAttribute('aria-label')).toBe('Alpha, in Platform team');
     expect(button('c')?.getAttribute('aria-label')).toBe('Gamma');
     await tree?.unmount();
     await ready({ labels: { inGroup: (group) => `within ${group}` } });
-    expect(button('a')?.getAttribute('aria-label')).toBe('Alpha, within Trust boundary');
+    expect(button('a')?.getAttribute('aria-label')).toBe('Alpha, within Platform team');
   });
 
   it('lets the caller style set the height, on the graph and on the empty state', async () => {

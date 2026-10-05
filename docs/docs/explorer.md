@@ -75,8 +75,9 @@ node with no element cannot be measured.
 ## Try it
 
 Tidewater is an invented ferry booking system in two views. The overview
-flows right and outlines four groups. The trust view flows down, outlines the
-public and perimeter zones, and dashes every edge that crosses a zone. Both
+flows right and outlines four groups. The deployment view flows down,
+outlines what runs on devices and what runs at the edge, and dashes every
+edge that crosses from one place to another. Both
 bow the parallel edges between Booking and its database, and between
 Payments and the card processor, apart.
 

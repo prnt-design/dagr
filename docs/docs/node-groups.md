@@ -7,7 +7,7 @@ sidebar_position: 8
 # Node groups and boundaries
 
 A node group draws a labeled, dashed rectangle around selected nodes. Use it
-for trust boundaries, ownership, deployment zones, or a subsystem outline.
+for team ownership, deployment regions, layers, or a subsystem outline.
 
 ```tsx
 import { DagrCanvas, Html } from '@prnt/dagr/react';
@@ -44,7 +44,7 @@ Use new arrays when updating the React prop.
 members together or keep other nodes outside a boundary. A rectangle around
 separated members can enclose unrelated nodes. Choose positions and membership
 that communicate your architecture accurately. Compound layout remains planned.
-A trust boundary is an annotation, not an authorization mechanism.
+A group is a visual annotation: it enforces nothing about the nodes inside it.
 
 The graph model's `parent` relationship is separate. To show its direct
 children, supply `nodeIds: graph.children(parentId)`.

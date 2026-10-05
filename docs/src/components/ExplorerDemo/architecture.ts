@@ -2,9 +2,10 @@
  * The architecture demo's data: Tidewater, an invented ferry booking system.
  *
  * Twenty components in two views of the same system. The overview flows right
- * and groups by what a component is for. The trust view flows down, outlines the
- * public and perimeter zones, and dashes every edge that crosses from one
- * zone to another, third parties included. Both have parallel
+ * and groups by what a component is for. The deployment view flows down,
+ * outlines what runs on devices and what runs at the edge, and dashes every
+ * edge that crosses from where one component runs to where another does,
+ * third parties included. Both have parallel
  * edges, which the explorer bows apart.
  *
  * Plain data and no React, so the docs test can validate it in Node.
@@ -105,22 +106,22 @@ const overviewGroups: readonly ExplorerGroup[] = [
   { id: 'listeners', label: 'Event listeners', nodeIds: ['notify', 'report-builder'] },
 ];
 
-/** The trust zone of every node, for the trust view's groups and dashes. */
-const zoneOf: Readonly<Record<string, string>> = {
-  'rider-app': 'public',
-  'harbor-kiosk': 'public',
-  'ops-console': 'public',
-  'content-edge': 'perimeter',
-  'api-gateway': 'perimeter',
+/** Where every node runs, for the deployment view's groups and dashes. */
+const placeOf: Readonly<Record<string, string>> = {
+  'rider-app': 'device',
+  'harbor-kiosk': 'device',
+  'ops-console': 'device',
+  'content-edge': 'edge',
+  'api-gateway': 'edge',
   'card-processor': 'third-party',
   'sms-provider': 'third-party',
   'port-authority': 'third-party',
 };
-const zone = (id: string): string => zoneOf[id] ?? 'private';
+const place = (id: string): string => placeOf[id] ?? 'cloud';
 
-const trustGroups: readonly ExplorerGroup[] = [
-  { id: 'public', label: 'Public internet', nodeIds: nodes.filter((n) => zone(n.id) === 'public').map((n) => n.id) },
-  { id: 'perimeter', label: 'Perimeter', nodeIds: nodes.filter((n) => zone(n.id) === 'perimeter').map((n) => n.id) },
+const deploymentGroups: readonly ExplorerGroup[] = [
+  { id: 'devices', label: 'On devices', nodeIds: nodes.filter((n) => place(n.id) === 'device').map((n) => n.id) },
+  { id: 'edge-network', label: 'Edge network', nodeIds: nodes.filter((n) => place(n.id) === 'edge').map((n) => n.id) },
 ];
 
 export const architectureViews: readonly ExplorerView<ArchitectureNode, ArchitectureEdge>[] = [
@@ -132,11 +133,11 @@ export const architectureViews: readonly ExplorerView<ArchitectureNode, Architec
     groups: overviewGroups,
   },
   {
-    id: 'trust',
-    label: 'Trust boundaries',
+    id: 'deployment',
+    label: 'Deployment',
     nodes,
-    edges: edges.map((e) => (zone(e.source) !== zone(e.target) ? { ...e, dash: true } : e)),
-    groups: trustGroups,
+    edges: edges.map((e) => (place(e.source) !== place(e.target) ? { ...e, dash: true } : e)),
+    groups: deploymentGroups,
     layout: { direction: 'down' },
   },
 ];

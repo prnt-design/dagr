@@ -22,7 +22,7 @@ afterEach(async () => {
   tree = null;
   vi.unstubAllGlobals();
 });
-const groups = [{ id: 'trust', nodeIds: ['a', 'b'], label: 'Trust boundary' }];
+const groups = [{ id: 'platform', nodeIds: ['a', 'b'], label: 'Platform team' }];
 
 describe('canvas node groups', () => {
   it.each([false, true])('tracks node edits with animate=%s and cleans up', async (animate) => {

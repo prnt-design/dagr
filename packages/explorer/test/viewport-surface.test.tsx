@@ -50,7 +50,7 @@ const chainView: ExplorerView<Item> = {
     { id: 'bc', source: 'b', target: 'c' },
   ],
   groups: [
-    { id: 'trust', label: 'Trust boundary', nodeIds: ['a', 'b'] },
+    { id: 'platform', label: 'Platform team', nodeIds: ['a', 'b'] },
     { id: 'data', label: 'Data plane', nodeIds: ['b'] },
   ],
 };
@@ -568,8 +568,8 @@ describe('ViewportSurface: content and names', () => {
 
   it('names a node by its label and the groups it is in', async () => {
     await ready();
-    expect(button('a')?.getAttribute('aria-label')).toBe('Alpha, in Trust boundary');
-    expect(button('b')?.getAttribute('aria-label')).toBe('Beta, in Trust boundary, in Data plane');
+    expect(button('a')?.getAttribute('aria-label')).toBe('Alpha, in Platform team');
+    expect(button('b')?.getAttribute('aria-label')).toBe('Beta, in Platform team, in Data plane');
     expect(button('c')?.getAttribute('aria-label')).toBe('Gamma');
   });
 
@@ -579,7 +579,7 @@ describe('ViewportSurface: content and names', () => {
         `${node.kind} ${node.label} (${context.groups.map((g) => g.label).join('/')})`,
     );
     await ready({ nodeAriaLabel });
-    expect(button('b')?.getAttribute('aria-label')).toBe('store Beta (Trust boundary/Data plane)');
+    expect(button('b')?.getAttribute('aria-label')).toBe('store Beta (Platform team/Data plane)');
   });
 });
 

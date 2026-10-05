@@ -537,8 +537,8 @@ the virtualization. Search is the complete path: it reaches every node
 whatever is mounted, and the graph's accessible description says so and gives
 the node and edge counts.
 
-A node's accessible name is its `label` followed by its groups ("in Trust
-boundary"). `nodeAriaLabel?: (node, { groups }) => string` on
+A node's accessible name is its `label` followed by its groups ("in Edge
+network"). `nodeAriaLabel?: (node, { groups }) => string` on
 `ExplorerViewport` replaces it.
 
 Two live regions: the match count, and the inspected node's label when the

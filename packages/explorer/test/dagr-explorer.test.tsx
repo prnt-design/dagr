@@ -276,9 +276,9 @@ describe('DagrExplorer: labels', () => {
     DEFAULT_EXPLORER_LABELS.stats({ nodes: 4, edges: 3 }),
     ...['Alpha', 'Beta', 'Gamma', 'Delta'].map((label) => DEFAULT_EXPLORER_LABELS.zoomTo(label)),
     // `overview` has a group, so its members' accessible names reach this.
-    DEFAULT_EXPLORER_LABELS.inGroup('Trust boundary'),
+    DEFAULT_EXPLORER_LABELS.inGroup('Platform team'),
     // Hardcoded before `inGroup` existed: any copy left from it is a leak.
-    'in Trust boundary',
+    'in Platform team',
   ];
 
   /** Every text node and every attribute a person can hear or read. */
@@ -327,7 +327,7 @@ describe('DagrExplorer: labels', () => {
     for (const name of [
       'search', 'searchPlaceholder', 'searchResults', 'matches 4', 'stats 4 3', 'hint', 'views',
       'traceOn', 'traceOff', 'zoomControls', 'zoomIn', 'zoomOut', 'zoomLevel', 'fit', 'zoomTo Beta',
-      'zoomToSelected', 'drawerTitle', 'close', 'connections', 'inGroup Trust boundary',
+      'zoomToSelected', 'drawerTitle', 'close', 'connections', 'inGroup Platform team',
     ]) {
       expect([name, all.includes(`«${name}`)]).toEqual([name, true]);
     }
