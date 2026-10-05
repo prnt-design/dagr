@@ -69,6 +69,11 @@ flag comes off.
   The control comes first: the smoke fails if `three` can be resolved from
   where the renderer is installed. It runs without the test runner's
   `NODE_PATH`, which points at this repo's own `node_modules`.
+- **The umbrella's `@prnt/dagr/explorer` and `@prnt/dagr/render/core` are
+  the scoped packages, with `three` absent.** A consumer installs all seven
+  tarballs with no `three`, then checks that each subpath exports the same
+  names as its scoped package and that every one is the same object, not a
+  second copy. The control is `@prnt/dagr/render` failing there on `three`.
 
 ## Packing is not conditional, and the build is not either
 

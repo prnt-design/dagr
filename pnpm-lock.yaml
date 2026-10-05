@@ -171,6 +171,9 @@ importers:
 
   packages/dagr:
     dependencies:
+      '@prnt/dagr-explorer':
+        specifier: workspace:^
+        version: link:../explorer
       '@prnt/dagr-graph':
         specifier: workspace:^
         version: link:../graph

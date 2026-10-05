@@ -31,15 +31,17 @@ See the [measured behavior](https://dagr.prnt.design/docs/incremental-layout).
 
 | Package | What | Status |
 | --- | --- | --- |
-| `@prnt/dagr` | Convenience umbrella with graph exports at the root and five package subpaths | Forwards the five scoped packages |
+| `@prnt/dagr` | Convenience umbrella with graph exports at the root and a subpath per package | Forwards the six scoped packages, and the renderer's three-free core |
 | `@prnt/dagr-graph` | Typed directed graph model: patches, stable identity, zero deps | Identity, shape, adjacency, attributes, ports, patches, traversal, and serialization implemented |
 | `@prnt/dagr-layout` | Headless Sugiyama layout engine; incremental, animation-first | The full pipeline, cycle breaking, ranking, crossing reduction, coordinates and routes implemented, plus the incremental engine: patches in, deltas out, warm-started stages and a committed [stability corpus](https://dagr.prnt.design/docs/incremental-layout); an inert-patch fast path skips stages when an edit changes no layout inputs; broader fast paths are planned |
 | `@prnt/dagr-render` | WebGPU renderer: SDF shapes, instancing, spring animation | Camera, SDF shapes, an HTML overlay, instancing, edge ribbons, a real graph on screen, critically damped springs, node, edge and bounds motion driven as one scene, and the loop that drives it implemented; GPU picking is next |
 | `@prnt/dagr-react` | `<DagrCanvas>` component and hooks | The canvas, the `useDagr` hook over the incremental engine, `<Html>` over the overlay, the layout-to-scene conversion, and `animate`, which glides an edit to its new layout off the delta, implemented; interaction is next |
 | `@prnt/dagr-vdsl` | Visual DSL toolkit: node spec adapter, typed ports, drag-to-connect | The node spec adapter, its registry, port type tokens and connection validation implemented; drag-to-connect is next |
+| `@prnt/dagr-explorer` | React graph explorer: views, search, connection tracing, groups and a details drawer over a pannable DOM and SVG surface, on React 18 and 19 | Complete and browser-validated in Chromium and WebKit; the SVG base is smooth to about 4,000 nodes, and a native base is planned. Ready to publish, not yet on npm |
 
-`@prnt/dagr` offers `@prnt/dagr/graph`,
-`@prnt/dagr/layout`, `@prnt/dagr/render`, `@prnt/dagr/react`, and `@prnt/dagr/vdsl`; the scoped
+`@prnt/dagr` offers `@prnt/dagr/graph`, `@prnt/dagr/layout`,
+`@prnt/dagr/render`, `@prnt/dagr/render/core`, `@prnt/dagr/react`,
+`@prnt/dagr/vdsl` and `@prnt/dagr/explorer`; the scoped
 packages remain available as individual layers. The umbrella forwards the
 same implementations, and its root exports the graph model.
 
