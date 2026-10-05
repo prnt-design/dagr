@@ -10,7 +10,9 @@ pnpm add @prnt/dagr-render three
 ```
 
 `three` is a `peerDependency` (`>=0.180.0 <1.0.0`), so you install it yourself
-and there is exactly one copy of it.
+and there is exactly one copy of it. The peer is marked optional, because the
+core entry below does not need it, so a package manager will not install it
+for you: the full entry fails to import without it.
 
 ```ts
 import { createRenderer } from '@prnt/dagr-render';
@@ -170,9 +172,8 @@ at module scope, so a server that externalizes its dependencies loads three.js
 to import it, and the core entry is how you avoid that.
 
 They are the same objects the full entry exports. A camera built from one entry
-is an `instanceof` the other's `Camera2D`. `three` is still a peer dependency
-of the package, so it is installed either way. The core entry is about what
-gets evaluated and type-checked, not what gets installed.
+is an `instanceof` the other's `Camera2D`. `three` is an optional peer, so a
+consumer of only the core entry does not install it at all.
 
 ## Documentation
 

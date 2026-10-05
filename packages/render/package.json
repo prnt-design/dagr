@@ -33,6 +33,11 @@
   "peerDependencies": {
     "three": ">=0.180.0 <1.0.0"
   },
+  "peerDependenciesMeta": {
+    "three": {
+      "optional": true
+    }
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/prnt-design/dagr.git",

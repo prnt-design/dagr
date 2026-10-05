@@ -106,9 +106,8 @@ publish configuration in existing manifests for the maintainer, so approving
 this spec is the approval for that one addition, and the M5.6a pull request
 calls it out.
 
-`three` stays a required peer of `@prnt/dagr-render`, so it is still installed
-beside the explorer and never bundled. Making it optional changes install
-behavior for existing consumers, and that decision is the maintainer's.
+`three` is an optional peer of `@prnt/dagr-render`, so it is not installed
+beside the explorer. This was decided by the maintainer in amendment 18.
 
 ## Data model
 
@@ -853,6 +852,13 @@ can see what moved without diffing.
       WebKit does not scroll a page whose root sets `overscroll-behavior:
       none` while the pointer is over any non-passive wheel listener, so an
       unfocused graph trapped the page's scroll there.
+18. **`three` is an optional peer of `@prnt/dagr-render`.** Found by the
+    M5.6f-2 review: with `three` a required peer there, the umbrella's
+    optional peer was moot and package managers still installed three.js for
+    explorer sites. Decided by the maintainer on 2026-10-04. Consumers of the
+    renderer's full entry install `three` themselves, as its install line
+    already said, and one who forgets it gets an import error instead of a
+    peer warning.
 
 One change is bookkeeping and not design: M5.6c was split into M5.6c-1, the pure core, and M5.6c-2, the React viewport, so each plan could be exact.
 
@@ -861,5 +867,5 @@ findings. The maintainer approved all of them on 2026-10-03. Amendment 14 was
 made the same way on 2026-10-04, under the maintainer's instruction to carry on
 through the remaining slices, and so were amendments 15 and 16. Amendment 17's umbrella
 change is the maintainer's own decision; its other three items were made by
-the agent the same way. Each is listed in its pull request for the
+the agent the same way. Amendment 18 is the maintainer's decision. Each is listed in its pull request for the
 maintainer to accept or reverse.

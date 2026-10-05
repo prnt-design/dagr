@@ -18,6 +18,12 @@ not" is the category this file has a heading for.
   `ViewportSize` and `OrthoFrustum` are now declared in an internal leaf module
   and re-exported from where they were. No public name moved, and no existing
   export or signature changed.
+- **`three` is now an optional peer.** Package managers no longer install it,
+  or warn about it, for a consumer that only uses the core entry, such as
+  `@prnt/dagr-explorer`. The full entry still imports `three/webgpu` at module
+  scope, so a consumer of it installs `three` themselves, as the install line
+  always said. Forgetting it is now a "Cannot find package 'three'" error at
+  import rather than a peer warning at install.
 - Add `detectBackendSupport()`: which of WebGPU (a real adapter) and WebGL 2 can
   start, and which `backend: 'auto'` will pick. Never throws.
 - Add the pure camera input functions `wheelZoomFactor`, `canvasPoint` and

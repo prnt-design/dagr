@@ -415,12 +415,13 @@ useGraphInteraction({
             pnpm: { overrides: localPackages },
           }),
         );
-        // Every other peer is left uninstalled on purpose. `three` is a
-        // required peer of the renderer, and this test is about the explorer
-        // working without it.
+        // Peers install the way pnpm installs them by default, set here so a
+        // user-level `.npmrc` cannot change it. `three` is an optional peer of
+        // the renderer, so a default install leaves it out, and the control in
+        // the smoke below fails if it does not.
         writeFileSync(
           join(consumer, '.npmrc'),
-          'auto-install-peers=false\nstrict-peer-dependencies=false\n',
+          'auto-install-peers=true\nstrict-peer-dependencies=false\n',
         );
         try {
           execFileSync(
@@ -528,11 +529,12 @@ if (html.includes('data-dagr-explorer="node"')) throw new Error('explorer server
             pnpm: { overrides: localPackages },
           }),
         );
-        // `three` is left out: the umbrella declares it an optional peer, and
-        // neither of these two subpaths loads it.
+        // Peers install the way pnpm installs them by default. The umbrella and
+        // the renderer both declare `three` an optional peer, so it is left
+        // out, and neither of these two subpaths loads it.
         writeFileSync(
           join(consumer, '.npmrc'),
-          'auto-install-peers=false\nstrict-peer-dependencies=false\n',
+          'auto-install-peers=true\nstrict-peer-dependencies=false\n',
         );
         try {
           execFileSync(

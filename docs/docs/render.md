@@ -693,10 +693,11 @@ is exactly the churn a peer dependency exists to avoid.
 
 **No three.js type appears anywhere in this package's public surface.** That is
 a separate decision, and the dependency answer follows from it rather than the
-other way around. It does not make the peer optional, though: `webgpu-renderer.ts`
-imports `three/webgpu` at module scope and `index.ts` re-exports it, so the full
-entry cannot be imported at all without three being present. The peer is a
-present necessity, not a forward commitment. What the empty surface changes is
+other way around. The full entry needs three: `webgpu-renderer.ts` imports
+`three/webgpu` at module scope and `index.ts` re-exports it, so that entry
+cannot be imported at all without three being present. The peer is marked
+optional anyway, for the core entry below, and the section after it gives the
+trade. What the empty surface changes is
 the FAILURE MODE of getting it wrong: with no three type in a signature, two
 copies compile cleanly and misbehave at runtime, where `@prnt/dagr-graph`'s
 `#private` fields would have made the same mistake a type error at the first
@@ -732,9 +733,16 @@ step: it evaluates the entry it is given. The planned `@prnt/dagr-explorer`
 server, which is why the entry was cut.
 
 The objects are the same ones the full entry exports, so a `Camera2D` from
-either satisfies `instanceof` against the other. `three` remains a required
-peer, so the entry changes what is evaluated and type-checked, not what is
-installed.
+either satisfies `instanceof` against the other.
+
+`three` is an optional peer (`peerDependenciesMeta`), so the entry changes what
+is installed too. A required peer would install three.js, or warn about it, for
+every consumer of the core entry, `@prnt/dagr-explorer` among them, which never
+loads it. The cost lands on consumers of the full entry: one who forgets
+`three` no longer gets a peer warning at install, and gets "Cannot find package
+'three'" at import instead. That error names the package and fails on the first
+run, and the install line has always listed `three`, so it is the cheaper of
+the two mistakes. The range still applies whenever three is present.
 
 Three tests hold the property. `test/core.test.ts` replaces `three`,
 `three/webgpu` and `three/tsl` with modules that throw on load, imports the
