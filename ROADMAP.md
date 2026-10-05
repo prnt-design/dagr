@@ -290,7 +290,7 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
 - [x] **M5.5** Containment reserved in the graph model: `parent`,
   `update-node-parent`, the invariants, `PatchOp` documented as an open
   union. Layout ignores `parent` until M7.
-- [ ] **M5.6** `@prnt/dagr-explorer`: `DagrExplorer`, a generic interactive
+- [x] **M5.6** `@prnt/dagr-explorer`: `DagrExplorer`, a generic interactive
   graph explorer (views, search, connection tracing, groups, details drawer)
   composed from named parts, with node content virtualized by on-screen size
   over a swappable base layer. Spec:
@@ -312,7 +312,15 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
 - [x] **M5.6e** Roving focus, spatial navigation, reveal, server rendering.
   One tab stop with arrow navigation to any node, mounted or not; every part
   renders on a server and hydrates cleanly. The package is still private.
-- [ ] **M5.6f** Docs, demos, bench, browser validation, measured SVG ceiling.
+- [x] **M5.6f** Docs, demos, bench, browser validation, measured SVG ceiling.
+  The docs page, live demos and Node benches landed as M5.6f-1. M5.6f-2
+  checked the demos in Chromium and WebKit at desktop and phone widths
+  (`bench/browser/explorer-check.mjs`), which found and fixed two defects
+  (`Escape` dropping focus to the page, and WebKit not scrolling past an
+  unfocused graph), measured the SVG base smooth to about 4,000 nodes on an
+  Apple M4, added `@prnt/dagr/explorer` and `@prnt/dagr/render/core` to the
+  umbrella, and removed the package's `private` flag. Publishing is the
+  maintainer's.
 
 ## M6: VDSL core in v0.1, interactions planned for v0.2 (`@prnt/dagr-vdsl`)
 
