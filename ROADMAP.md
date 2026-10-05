@@ -279,10 +279,11 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
 - [x] **M5.4a** The tarball a consumer installs: `workspace:^` fixed (the
   publish command is `pnpm publish`), `src` shipped so source maps resolve,
   per-package README and LICENSE, `publint` + `arethetypeswrong` + a scratch
-  install as a standing gate in `packaging/`. Lockstep versioning across the six public packages,
+  install as a standing gate in `packaging/`. Lockstep versioning across the public packages (seven since 0.1.3),
   no changesets.
 - [x] **M5.4b** Docs: Docusaurus getting-started, API reference pages for all
-  packages, v0.1 readiness review, and all six packages published to npm.
+  packages, v0.1 readiness review, and all six packages published to npm
+  (seven from 0.1.3, with the explorer).
   Registry checksums, dependency ranges, and a fresh external consumer were
   verified after publication.
   The `onLayout` continuity change is implemented: a fourth
@@ -322,8 +323,8 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   (`Escape` dropping focus to the page, and WebKit not scrolling past an
   unfocused graph), measured the SVG base smooth to about 4,000 nodes on an
   Apple M4, added `@prnt/dagr/explorer` and `@prnt/dagr/render/core` to the
-  umbrella, and removed the package's `private` flag. Publishing is the
-  maintainer's.
+  umbrella, and removed the package's `private` flag. Published in 0.1.3 on
+  2026-10-05, with the maintainer's approval.
 
 ## M6: VDSL core in v0.1, interactions planned for v0.2 (`@prnt/dagr-vdsl`)
 
