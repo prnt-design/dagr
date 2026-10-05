@@ -525,6 +525,8 @@ if (html.includes('data-dagr-explorer="node"')) throw new Error('explorer server
           JSON.stringify({
             private: true,
             type: 'module',
+            // React is pinned rather than auto-installed, so the smoke runs on
+            // the same versions as the consumers above.
             dependencies: { ...localPackages, react: '19.2.8', 'react-dom': '19.2.8' },
             pnpm: { overrides: localPackages },
           }),
