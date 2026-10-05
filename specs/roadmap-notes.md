@@ -7158,7 +7158,9 @@ here is what those two did not know when they were written.
   be resolvable from the temp directory.
 - NOT DONE: `three` is still a required peer, so it is installed beside the
   entry and never evaluated. Making it optional changes install behavior for
-  existing consumers and is the maintainer's call. There is no `typesVersions`
+  existing consumers and is the maintainer's call. (Decided and done on
+  2026-10-04: the maintainer made it optional, explorer spec amendment 18.)
+  There is no `typesVersions`
   entry for the legacy `node10` resolver either, which would be a second
   manifest key.
 

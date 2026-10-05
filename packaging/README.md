@@ -65,7 +65,9 @@ comes off. The flag is off now, and it publishes with the other six.
   key that a bundler-style resolver would have forgiven.
 - **`@prnt/dagr-explorer` runs from installed tarballs with `three` absent.** A
   consumer installs the graph, layout, renderer and explorer tarballs with
-  peers left out, then lays out a view and searches it from the built entry.
+  pnpm's default `auto-install-peers=true`, which leaves `three` out because
+  the renderer marks it optional, then lays out a view and searches it from
+  the built entry.
   The control comes first: the smoke fails if `three` can be resolved from
   where the renderer is installed. It runs without the test runner's
   `NODE_PATH`, which points at this repo's own `node_modules`.

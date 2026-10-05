@@ -35,7 +35,7 @@ explorer itself also runs on React 18, so a React 18 site installs
 (>=0.180.0 <1.0.0) is marked an optional peer: `@prnt/dagr/render` and
 `@prnt/dagr/react` load it, and the root, `@prnt/dagr/graph`,
 `@prnt/dagr/layout`, `@prnt/dagr/render/core`, `@prnt/dagr/vdsl` and
-`@prnt/dagr/explorer` never do. It is still installed, though, because
-`@prnt/dagr-render` declares it as a required peer and the umbrella depends
-on that package. See the [documentation](https://dagr.prnt.design/)
+`@prnt/dagr/explorer` never do. `@prnt/dagr-render` marks it optional too,
+so a site that uses neither of those two entries installs no three.js. Install
+`three` yourself to use `@prnt/dagr/render` or `@prnt/dagr/react`. See the [documentation](https://dagr.prnt.design/)
 and the scoped package READMEs for API details and runtime requirements.

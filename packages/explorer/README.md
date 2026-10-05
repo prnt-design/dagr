@@ -14,9 +14,8 @@ The package is browser-validated in Chromium and WebKit (see "Known browser
 differences" below).
 
 The explorer never loads three.js at runtime: from `@prnt/dagr-render` it
-imports only the three-free `core` entry. Package managers still install
-`three` (or warn about it), because `@prnt/dagr-render` declares it as a
-required peer.
+imports only the three-free `core` entry, and `@prnt/dagr-render` declares
+`three` an optional peer, so it is not installed either.
 
 It runs on React 18 and React 19 (`react` and `react-dom` `>=18.2.0 <20.0.0`).
 The umbrella package re-exports it as `@prnt/dagr/explorer`, but the umbrella

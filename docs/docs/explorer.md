@@ -33,8 +33,8 @@ The umbrella package re-exports it as `@prnt/dagr/explorer`, but the umbrella
 requires React 19, so a React 18 site installs `@prnt/dagr-explorer`
 directly. It does not depend on `@prnt/dagr-react`, and it never loads
 three.js at runtime: from `@prnt/dagr-render` it imports only the
-three-free `core` entry. Package managers still install `three` (or warn
-about it), because `@prnt/dagr-render` declares it as a required peer.
+three-free `core` entry, and `@prnt/dagr-render` declares `three` an optional
+peer, so it is not installed either.
 
 ## The explorer
 
