@@ -30,7 +30,7 @@ export const overview: ExplorerView<Item> = {
     { id: 'bc', source: 'b', target: 'c' },
     { id: 'cd', source: 'c', target: 'd' },
   ],
-  groups: [{ id: 'trust', label: 'Trust boundary', nodeIds: ['a', 'b'] }],
+  groups: [{ id: 'platform', label: 'Platform team', nodeIds: ['a', 'b'] }],
 };
 
 /** x -> y. Shares no node id with `overview`. */

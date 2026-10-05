@@ -22,7 +22,7 @@ const view: ExplorerView = {
     { id: 'bc', source: 'b', target: 'c' },
     { id: 'cc', source: 'c', target: 'c' },
   ],
-  groups: [{ id: 'g', label: 'Trust boundary', nodeIds: ['a', 'b'] }],
+  groups: [{ id: 'g', label: 'Platform team', nodeIds: ['a', 'b'] }],
 };
 const layout = layoutView(view);
 
@@ -93,7 +93,7 @@ describe('svgBase', () => {
     expect(rect?.getAttribute('y')).toBe(String(box?.y));
     expect(rect?.getAttribute('width')).toBe(String(box?.width));
     expect(rect?.getAttribute('height')).toBe(String(box?.height));
-    expect(group?.querySelector('text')?.textContent).toBe('Trust boundary');
+    expect(group?.querySelector('text')?.textContent).toBe('Platform team');
   });
 
   it('draws an edge through its route, with dash, color and an arrowhead', async () => {

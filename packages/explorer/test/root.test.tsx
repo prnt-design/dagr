@@ -88,7 +88,7 @@ describe('ExplorerRoot: shape', () => {
     expect(state().activeView?.id).toBe('default');
     expect(state().activeView?.label).toBe('Shorthand');
     expect(state().activeView?.groups).toBe(overview.groups);
-    expect(state().layout?.groups.has('trust')).toBe(true);
+    expect(state().layout?.groups.has('platform')).toBe(true);
   });
 
   it('rejects both data shapes at once, as a type error', () => {

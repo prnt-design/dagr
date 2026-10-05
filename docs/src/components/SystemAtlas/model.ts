@@ -97,7 +97,7 @@ export const nodes: SystemNode[] = [
     'internal',
     'Admin gateway',
     'gateway',
-    'Ingress / trusted traffic',
+    'Ingress / staff traffic',
     [
       ['access', 'Role based'],
       ['audit', 'Every request'],

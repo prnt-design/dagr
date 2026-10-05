@@ -14,7 +14,7 @@ afterEach(() => document.body.replaceChildren());
 describe('node group bounds', () => {
   it('contains exactly the selected node boxes with padding and a title band, in y-up coordinates', () => {
     expect(
-      nodeGroupBounds(nodes, { id: 'trust', nodeIds: ['a', 'b'], padding: 10, label: 'Trust' }),
+      nodeGroupBounds(nodes, { id: 'platform', nodeIds: ['a', 'b'], padding: 10, label: 'Platform' }),
     ).toEqual({ minX: -70, maxX: 80, minY: -50, maxY: 74 });
   });
   it('ignores missing and repeated members and hides an empty group', () => {
@@ -48,7 +48,7 @@ function setup() {
   document.body.append(parent);
   const camera = new Camera2D({ viewport: { width: 640, height: 400, devicePixelRatio: 2 } });
   const layer = createNodeGroupLayer({ parent, camera });
-  layer.setGroups([{ id: 'trust', nodeIds: ['a', 'b'], label: 'Trust' }]);
+  layer.setGroups([{ id: 'platform', nodeIds: ['a', 'b'], label: 'Platform' }]);
   layer.setNodes(nodes);
   layer.sync();
   return { parent, camera, layer, rect: parent.querySelector('rect')! };
@@ -102,7 +102,7 @@ describe('node group layer', () => {
         { id: 'x', nodeIds: [] },
       ]),
     ).toThrow(RangeError);
-    expect(parent.querySelector('g')?.getAttribute('data-group-id')).toBe('trust');
+    expect(parent.querySelector('g')?.getAttribute('data-group-id')).toBe('platform');
     layer.setGroups([{ id: 'x', nodeIds: ['a'], label: '<script>bad</script>' }]);
     layer.setNodes(nodes);
     layer.sync();

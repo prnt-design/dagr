@@ -30,13 +30,13 @@ The same shell exists three times and has drifted:
 
 - `docs/src/components/GraphViewport`, the camera and viewport the docs demos share;
 - `docs/src/components/SystemAtlas`, the docs site's own architecture view;
-- `@mytraai/architecture-map`, a private package in `MytraAI/mytra-os-uis`
-  built on `@prnt/dagr-layout` and a copy of the docs camera as of #92.
+- an earlier private implementation outside this repository, built on
+  `@prnt/dagr-layout` and a copy of the docs camera as of #92.
 
 The third is the proof that consumers want this as a component and not as a
 recipe. Its camera has already missed the changes dagr made after #92. A
-component dagr maintains removes the copies, and lets the Mytra package shrink
-to a wrapper that supplies its node schema, copy, and theme.
+component dagr maintains removes the copies, and lets that implementation
+shrink to a wrapper that supplies its node schema, copy, and theme.
 
 None of the three virtualizes. Each mounts every node and every edge at all
 times, which holds for a docs diagram and fails for a memory or knowledge map
@@ -50,11 +50,11 @@ This is a clean reimplementation. The maintainer chose it on 2026-10-03.
 
 - The camera descends from dagr's own `docs/src/components/GraphViewport/useGraphCamera.ts`.
 - The shell is written new against this spec.
-- `@mytraai/architecture-map` is a behavioral reference only. The behaviors
-  this spec keeps are the ones its README documents. Its source was read once
-  during design to understand those behaviors. No Mytra source is copied or
-  adapted, and implementers work from this spec and dagr's own files without
-  opening the Mytra repository.
+- The earlier private implementation is a behavioral reference only. The
+  behaviors this spec keeps are the ones its README documents. Its source was
+  read once during design to understand those behaviors. None of its source is
+  copied or adapted, and implementers work from this spec and dagr's own files
+  without opening its repository.
 
 ## Package and entry points
 
@@ -69,8 +69,8 @@ This is a clean reimplementation. The maintainer chose it on 2026-10-03.
 Dependencies: `@prnt/dagr-graph`, `@prnt/dagr-layout`, `@prnt/dagr-render`.
 
 It does not depend on `@prnt/dagr-react`. That package requires React 19, and
-a dependency on it would fail installs on the React 18 sites the Mytra package
-supports today.
+a dependency on it would fail installs on the React 18 sites that existing
+consumers support today.
 
 `sideEffects` is `["*.css"]`. The JavaScript entry imports no CSS.
 
@@ -537,8 +537,8 @@ the virtualization. Search is the complete path: it reaches every node
 whatever is mounted, and the graph's accessible description says so and gives
 the node and edge counts.
 
-A node's accessible name is its `label` followed by its groups ("in Trust
-boundary"). `nodeAriaLabel?: (node, { groups }) => string` on
+A node's accessible name is its `label` followed by its groups ("in Edge
+network"). `nodeAriaLabel?: (node, { groups }) => string` on
 `ExplorerViewport` replaces it.
 
 Two live regions: the match count, and the inspected node's label when the
@@ -706,9 +706,10 @@ Each of these is its own spec and plan.
   edges, and the overlay in this spec mounts the same `renderNode` output on
   top. Optional peers `@prnt/dagr-react`, `three`, React 19. Unblocked by
   M5.6c, and it settles the `ExplorerBase` types.
-- **Mytra wrapper.** `@mytraai/architecture-map` becomes `DagrExplorer` plus
-  its node schema, copy, `strictGroups`, and a stylesheet mapping
-  `--dagr-explorer-*` to its host's tokens. Unblocked by a publish.
+- **Downstream wrapper.** The earlier private implementation becomes
+  `DagrExplorer` plus its node schema, copy, `strictGroups`, and a stylesheet
+  mapping `--dagr-explorer-*` to its host's tokens. Done outside this
+  repository; unblocked by the 0.1.3 publish.
 - **Shared gesture machine.** Move the framework-free pointer machine to where
   both `@prnt/dagr-react` and the explorer can use it. Until then the gesture
   logic exists in both.
