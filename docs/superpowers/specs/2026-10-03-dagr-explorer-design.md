@@ -706,7 +706,7 @@ Each of these is its own spec and plan.
   edges, and the overlay in this spec mounts the same `renderNode` output on
   top. Optional peers `@prnt/dagr-react`, `three`, React 19. Unblocked by
   M5.6c, and it settles the `ExplorerBase` types.
-- **Downstream wrappers.** The earlier private implementation becomes
+- **Downstream wrapper.** The earlier private implementation becomes
   `DagrExplorer` plus its node schema, copy, `strictGroups`, and a stylesheet
   mapping `--dagr-explorer-*` to its host's tokens. Done outside this
   repository; unblocked by the 0.1.3 publish.
