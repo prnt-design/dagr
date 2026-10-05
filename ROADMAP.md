@@ -10,17 +10,20 @@ the decisions it took and the reasons, lives in
 reference elsewhere in the repo to "the roadmap's M4.6 entry" means the entry
 there. Milestone status is mirrored in the project brain.
 
-## Status (2026-10-01 UTC)
+## Status (2026-10-05 UTC)
 
 The published npm packages use `@prnt/dagr-*`, with the
-`@prnt/dagr` umbrella. All six packages are published at **0.1.2** (PRs
-#87 through #93). Recent releases added generic node-group boundaries,
-content-derived camera limits, and routed, smooth, and orthogonal edge styles.
-The generic System Atlas demonstrates rich VDSL nodes, search, and focus.
+`@prnt/dagr` umbrella. All seven packages are published at **0.1.3**
+(2026-10-05), including the new `@prnt/dagr-explorer` (M5.6), which the
+umbrella also exposes as `@prnt/dagr/explorer`. `three` is an optional peer, so
+an explorer site does not install it. Earlier releases added generic node-group
+boundaries, content-derived camera limits, and routed, smooth, and orthogonal
+edge styles. The generic System Atlas demonstrates rich VDSL nodes, search, and
+focus.
 
 Shared click-versus-pan and controlled selection now ship from the React package
 through a caller-supplied, displayed-revision hit provider, and `DagrCanvas`
-now supplies exact CPU node hits (M5.2b, unreleased) with opt-in navigation,
+now supplies exact CPU node hits (M5.2b, released in 0.1.3) with opt-in navigation,
 camera flights and zoom-tiered node rendering. Edge and port hits are not
 shipped. Edge styles still change geometry without obstacle avoidance. Visual
 groups are annotations, not compound layout or enforced trust boundaries. GPU
@@ -29,7 +32,7 @@ contract or demos.
 
 M5.4a gates the tarballs with `publint`, `arethetypeswrong`, and a scratch
 install outside the workspace. M5.4b now includes the `onLayout` continuity
-signal and external consumer checks for all six public packages. Publication
+signal and external consumer checks for all seven public packages. Publication
 uses `pnpm` so workspace dependency ranges resolve to released versions.
 
 Over the six-session corpus (M3.10a), the incremental path moves 4.1x to
@@ -276,10 +279,11 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
 - [x] **M5.4a** The tarball a consumer installs: `workspace:^` fixed (the
   publish command is `pnpm publish`), `src` shipped so source maps resolve,
   per-package README and LICENSE, `publint` + `arethetypeswrong` + a scratch
-  install as a standing gate in `packaging/`. Lockstep versioning across the six public packages,
+  install as a standing gate in `packaging/`. Lockstep versioning across the public packages (seven since 0.1.3),
   no changesets.
 - [x] **M5.4b** Docs: Docusaurus getting-started, API reference pages for all
-  packages, v0.1 readiness review, and all six packages published to npm.
+  packages, v0.1 readiness review, and all six packages published to npm
+  (seven from 0.1.3, with the explorer).
   Registry checksums, dependency ranges, and a fresh external consumer were
   verified after publication.
   The `onLayout` continuity change is implemented: a fourth
@@ -319,8 +323,8 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   (`Escape` dropping focus to the page, and WebKit not scrolling past an
   unfocused graph), measured the SVG base smooth to about 4,000 nodes on an
   Apple M4, added `@prnt/dagr/explorer` and `@prnt/dagr/render/core` to the
-  umbrella, and removed the package's `private` flag. Publishing is the
-  maintainer's.
+  umbrella, and removed the package's `private` flag. Published in 0.1.3 on
+  2026-10-05, with the maintainer's approval.
 
 ## M6: VDSL core in v0.1, interactions planned for v0.2 (`@prnt/dagr-vdsl`)
 
