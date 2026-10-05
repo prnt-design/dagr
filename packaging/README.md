@@ -31,10 +31,10 @@ package built to be wrong. `test/pack.test.ts` runs the same predicates over the
 seven real tarballs. A guard whose only evidence is a green run against a tree
 already known to be correct has never demonstrated that it can go red.
 
-One of the seven, `@prnt/dagr-explorer`, is `"private": true` until M5.6f and
-is packed regardless. `pnpm pack` packs a private package, and a broken
-`exports` map is cheaper to find on the day it is written than on the day the
-flag comes off.
+One of the seven, `@prnt/dagr-explorer`, was `"private": true` until M5.6f-2
+and was packed regardless from its first slice, because a broken `exports`
+map is cheaper to find on the day it is written than on the day the flag
+comes off. The flag is off now, and it publishes with the other six.
 
 - **No `workspace:` range a consumer install reads.** This is a check on the
   packer as much as on the manifest, and it is why the publish command is
