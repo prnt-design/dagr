@@ -10,17 +10,20 @@ the decisions it took and the reasons, lives in
 reference elsewhere in the repo to "the roadmap's M4.6 entry" means the entry
 there. Milestone status is mirrored in the project brain.
 
-## Status (2026-10-01 UTC)
+## Status (2026-10-05 UTC)
 
 The published npm packages use `@prnt/dagr-*`, with the
-`@prnt/dagr` umbrella. All six packages are published at **0.1.2** (PRs
-#87 through #93). Recent releases added generic node-group boundaries,
-content-derived camera limits, and routed, smooth, and orthogonal edge styles.
-The generic System Atlas demonstrates rich VDSL nodes, search, and focus.
+`@prnt/dagr` umbrella. All seven packages are published at **0.1.3**
+(2026-10-05), including the new `@prnt/dagr-explorer` (M5.6), which the
+umbrella also exposes as `@prnt/dagr/explorer`. `three` is an optional peer, so
+an explorer site does not install it. Earlier releases added generic node-group
+boundaries, content-derived camera limits, and routed, smooth, and orthogonal
+edge styles. The generic System Atlas demonstrates rich VDSL nodes, search, and
+focus.
 
 Shared click-versus-pan and controlled selection now ship from the React package
 through a caller-supplied, displayed-revision hit provider, and `DagrCanvas`
-now supplies exact CPU node hits (M5.2b, unreleased) with opt-in navigation,
+now supplies exact CPU node hits (M5.2b, released in 0.1.3) with opt-in navigation,
 camera flights and zoom-tiered node rendering. Edge and port hits are not
 shipped. Edge styles still change geometry without obstacle avoidance. Visual
 groups are annotations, not compound layout or enforced trust boundaries. GPU
@@ -29,7 +32,7 @@ contract or demos.
 
 M5.4a gates the tarballs with `publint`, `arethetypeswrong`, and a scratch
 install outside the workspace. M5.4b now includes the `onLayout` continuity
-signal and external consumer checks for all six public packages. Publication
+signal and external consumer checks for all seven public packages. Publication
 uses `pnpm` so workspace dependency ranges resolve to released versions.
 
 Over the six-session corpus (M3.10a), the incremental path moves 4.1x to

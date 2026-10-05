@@ -22,7 +22,9 @@ The live order is now in ROADMAP.md, "Next jobs, in priority order". The
 August prioritization below is a historical decision record, not the next-run
 queue. PRs #87 through #93 completed publication and shipped 0.1.0 through
 0.1.2. The `onLayout` continuity change, rich VDSL atlas, group annotations,
-camera limits and edge presentation styles are available.
+camera limits and edge presentation styles are available. 0.1.3 (#98, published
+2026-10-05) added the seventh package, `@prnt/dagr-explorer` (M5.6), and the
+umbrella's `explorer` and `render/core` subpaths.
 
 M5.2a shipped reusable click-versus-pan and controlled selection with a
 caller-supplied hit target. Its provider contract covers stable node/port
