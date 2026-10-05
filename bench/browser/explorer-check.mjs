@@ -13,8 +13,9 @@
  * **Ceiling mode** (`ceiling` as the first argument) bundles
  * `explorer-ceiling-page.mjs` against the built explorer and measures frame
  * intervals while dragging the camera across generated graphs of 500 to 8,000
- * nodes in headless Chromium. See `README.md` beside this file for what the
- * numbers mean and the ones it produced.
+ * nodes in Chromium, headed by default (`--headless` opts out). See
+ * `README.md` beside this file for what the numbers mean and the ones it
+ * produced.
  *
  * Neither is part of `pnpm test`, `pnpm bench:ci` or CI, for the reason
  * everything in this directory is outside them: this repo has no browser on

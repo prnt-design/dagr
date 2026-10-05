@@ -36,7 +36,9 @@ node bench/browser/label-throughput.mjs '[{"count":6000,"cap":20000,"zoom":0.387
 
 The runner needs `playwright-core` and a Chromium; on the dispatch box that is
 `~/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome`, and the path is at
-the top of the `.mjs`. Both runners here want the same two. Each plan step takes 90 frames, discards the first 30, and
+the top of the `.mjs`. The overlay harness and the other older runners want that Chromium path; the
+explorer runner (`explorer-check.mjs`) instead takes `DAGR_BROWSER_DEPS` and
+Playwright's own browser cache. Each plan step takes 90 frames, discards the first 30, and
 reports medians; one warm-up run happens before the plan, which is the rule
 `bench/README.md` already states for a capture.
 

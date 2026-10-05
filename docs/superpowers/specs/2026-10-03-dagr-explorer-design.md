@@ -519,8 +519,9 @@ itself is focusable by click and is not in the tab order.
 
 **While the surface is focused,** arrows pan.
 
-**In both cases** `+` and `=` zoom in, `-` zooms out, `0` fits, and `Escape`
-releases graph focus. Keys typed in an input are ignored.
+**In both cases** `+` and `=` zoom in, `-` zooms out, `0` fits. `Escape` with
+the drawer open closes it and keeps focus on its opener; with the drawer
+closed, it releases graph focus. Keys typed in an input are ignored.
 
 **Keyboard focus reveals by panning at the current zoom.** `reveal` moves the
 camera the minimum distance that brings the node's box 12 CSS pixels inside
@@ -564,8 +565,8 @@ position survives.
   element is gone, focus goes to the search input.
 - `Escape` precedence: in the search field with the drawer open, the first
   press closes the drawer and the second clears the query. Inside the graph,
-  it closes the drawer and releases graph focus without restoring focus into
-  the graph, which would silently re-enable wheel zoom.
+  with the drawer open, the first press closes it and keeps focus on its
+  opener; with the drawer closed, `Escape` releases graph focus.
 - Connection buttons inspect the adjacent node and keep the original opener.
 
 ## Server rendering

@@ -4,12 +4,19 @@ An interactive graph explorer for [Dagr](https://dagr.prnt.design): views,
 search, connection tracing, groups and a details drawer, with node content
 virtualized by on-screen size.
 
-## Read this first: it is not published yet
+## Install and requirements
 
-The package is complete, browser-validated in Chromium and WebKit (see
-"Known browser differences" below), and ready to publish. Publishing is the
-maintainer's step, so until it is on npm, `npm install @prnt/dagr-explorer`
-finds nothing.
+```bash
+npm install @prnt/dagr-explorer
+```
+
+The package is browser-validated in Chromium and WebKit (see "Known browser
+differences" below).
+
+The explorer never loads three.js at runtime: from `@prnt/dagr-render` it
+imports only the three-free `core` entry. Package managers still install
+`three` (or warn about it), because `@prnt/dagr-render` declares it as a
+required peer.
 
 It runs on React 18 and React 19 (`react` and `react-dom` `>=18.2.0 <20.0.0`).
 The umbrella package re-exports it as `@prnt/dagr/explorer`, but the umbrella

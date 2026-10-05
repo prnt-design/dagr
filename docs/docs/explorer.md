@@ -18,11 +18,9 @@ hundred elements. Layout is Dagr's own, and runs anywhere, a server included.
 
 ## Install
 
-:::note[Not published yet]
+:::note[Available on npm]
 
-The package is complete and ready to publish, and publishing is the
-maintainer's step. The command below works once it is on npm, and does not
-before.
+`@prnt/dagr-explorer` is available on npm from version 0.1.3.
 
 :::
 
@@ -33,9 +31,10 @@ npm install @prnt/dagr-explorer
 It runs on React 18 and React 19 (`react` and `react-dom` `>=18.2.0 <20.0.0`).
 The umbrella package re-exports it as `@prnt/dagr/explorer`, but the umbrella
 requires React 19, so a React 18 site installs `@prnt/dagr-explorer`
-directly. It does not depend on
-`@prnt/dagr-react` or load three.js: from `@prnt/dagr-render` it imports only
-the three-free `core` entry.
+directly. It does not depend on `@prnt/dagr-react`, and it never loads
+three.js at runtime: from `@prnt/dagr-render` it imports only the
+three-free `core` entry. Package managers still install `three` (or warn
+about it), because `@prnt/dagr-render` declares it as a required peer.
 
 ## The explorer
 

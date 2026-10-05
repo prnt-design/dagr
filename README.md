@@ -37,7 +37,7 @@ See the [measured behavior](https://dagr.prnt.design/docs/incremental-layout).
 | `@prnt/dagr-render` | WebGPU renderer: SDF shapes, instancing, spring animation | Camera, SDF shapes, an HTML overlay, instancing, edge ribbons, a real graph on screen, critically damped springs, node, edge and bounds motion driven as one scene, and the loop that drives it implemented; GPU picking is next |
 | `@prnt/dagr-react` | `<DagrCanvas>` component and hooks | The canvas, the `useDagr` hook over the incremental engine, `<Html>` over the overlay, the layout-to-scene conversion, and `animate`, which glides an edit to its new layout off the delta, implemented; interaction is next |
 | `@prnt/dagr-vdsl` | Visual DSL toolkit: node spec adapter, typed ports, drag-to-connect | The node spec adapter, its registry, port type tokens and connection validation implemented; drag-to-connect is next |
-| `@prnt/dagr-explorer` | React graph explorer: views, search, connection tracing, groups and a details drawer over a pannable DOM and SVG surface, on React 18 and 19 | Complete and browser-validated in Chromium and WebKit; the SVG base is smooth to about 4,000 nodes, and a native base is planned. Ready to publish, not yet on npm |
+| `@prnt/dagr-explorer` | React graph explorer: views, search, connection tracing, groups and a details drawer over a pannable DOM and SVG surface, on React 18 and 19 | Complete and browser-validated in Chromium and WebKit; the SVG base is smooth to about 4,000 nodes, and a native base is planned. Install it with `npm install @prnt/dagr-explorer` |
 
 `@prnt/dagr` offers `@prnt/dagr/graph`, `@prnt/dagr/layout`,
 `@prnt/dagr/render`, `@prnt/dagr/render/core`, `@prnt/dagr/react`,

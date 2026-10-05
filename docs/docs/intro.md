@@ -21,6 +21,8 @@ in [Follow an edit](/demos/living), or start with the example below.
 npm install @prnt/dagr react@19 react-dom@19 three
 ```
 
+The `react@19`, `react-dom@19` and `three` peers are for the renderer and
+React parts. A React 18 site installs `@prnt/dagr-explorer` directly.
 Import `DagrCanvas` from `@prnt/dagr/react`. Individual `@prnt/dagr-*`
 packages are also available when you only need part of the stack.
 
@@ -42,8 +44,9 @@ For the local renderer playground, run `pnpm --filter demo dev`.
 
 Dagr uses `@prnt/dagr-*` for individual packages, with an optional
 `@prnt/dagr` umbrella. The umbrella root exports the graph model. Its subpaths
-`@prnt/dagr/graph`, `@prnt/dagr/layout`, `@prnt/dagr/render`, `@prnt/dagr/react`, and `@prnt/dagr/vdsl`
-forward to the matching scoped packages. Choose the individual scoped
+`@prnt/dagr/graph`, `@prnt/dagr/layout`, `@prnt/dagr/render`,
+`@prnt/dagr/render/core`, `@prnt/dagr/react`, `@prnt/dagr/vdsl` and
+`@prnt/dagr/explorer` forward to the matching scoped packages. Choose the individual scoped
 packages when you only need part of the stack.
 
 ## Your first graph

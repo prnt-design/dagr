@@ -89,5 +89,5 @@ the order they landed.
   one 16.7 ms frame) to about 4,000 nodes and 5,400 edges, panned at one and
   a half times the fit zoom in Chromium on an Apple M4. The table is in the
   README.
-- The package is no longer private, and is ready to publish. The umbrella
-  package re-exports it as `@prnt/dagr/explorer`.
+- This is the first published version. The umbrella package re-exports it
+  as `@prnt/dagr/explorer`.
