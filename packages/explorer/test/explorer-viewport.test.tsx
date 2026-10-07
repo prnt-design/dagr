@@ -282,6 +282,33 @@ describe('ExplorerViewport: the camera through the root', () => {
     expect(cameraNow().x).not.toBe(onD.x);
   });
 
+  it('gives the viewport keyboard focus from focusViewport, keeping a focus already inside it', async () => {
+    await ready();
+    const viewport = part('viewport');
+    expect(document.activeElement).toBe(document.body);
+    await flush(() => api().focusViewport());
+    expect(document.activeElement).toBe(viewport);
+    const b = button('b');
+    if (b === null) throw new Error('no b');
+    b.focus();
+    await flush(() => api().focusViewport());
+    expect(document.activeElement).toBe(b);
+  });
+
+  it('does nothing from focusViewport before a viewport exists', async () => {
+    tree = await mount(
+      <ExplorerRoot<Item, ExplorerEdge> label="Map" views={[overview]} apiRef={apiRef}>
+        <button type="button" data-testid="host">
+          host
+        </button>
+      </ExplorerRoot>,
+    );
+    const host = tree.container.querySelector<HTMLButtonElement>('[data-testid="host"]');
+    host?.focus();
+    await flush(() => api().focusViewport());
+    expect(document.activeElement).toBe(host);
+  });
+
   it('tells camera subscribers of every frame, and reads the camera through get', async () => {
     await ready();
     const heard: ExplorerCamera[] = [];

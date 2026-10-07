@@ -206,6 +206,15 @@ describe('ExplorerToolbar', () => {
     expect(cameraNow().scale).toBeGreaterThan(before.scale);
   });
 
+  it('leaves focus in the viewport after zoom to selected, so the wheel and keys apply at once', async () => {
+    await ready();
+    await flush(() => state().select('c'));
+    const button = action('zoom-to-selected');
+    button.focus();
+    await flush(() => button.click());
+    expect(document.activeElement).toBe(part('viewport'));
+  });
+
   it('shows the zoom as a percent, updated from the camera without rendering the root', async () => {
     await ready();
     const readout = part('zoom-level');

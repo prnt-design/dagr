@@ -4,6 +4,8 @@
 
 - A pan or a zoom no longer selects text: the viewport sets
   `user-select: none`. The drawer's text stays selectable.
+- `api.focusViewport()` gives the graph keyboard focus. The toolbar's zoom-to
+  button calls it, so the wheel and the camera keys apply right after.
 
 ## 0.1.3
 

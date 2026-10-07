@@ -163,6 +163,7 @@ so `select('a'); select(null)` ends with nothing selected.
 | `fit()`, `zoomBy(factor)` | the camera. No-ops before the viewport has a size |
 | `focusNode(id)` | flies the camera to fit the node |
 | `reveal(id)` | pans the least distance that brings the node into view |
+| `focusViewport()` | gives the graph keyboard focus, so the wheel and the camera keys apply at once. The toolbar's zoom-to button calls it |
 | `select(id \| null)` | sets the current node, without opening the drawer |
 | `inspect(id, trigger?)` | selects and opens the drawer. Focus returns to `trigger` when it closes |
 | `closeDetails()` | closes the drawer |

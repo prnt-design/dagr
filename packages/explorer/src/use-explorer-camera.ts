@@ -55,6 +55,8 @@ export interface ExplorerCameraControls {
   focusBox(box: ExplorerBox): void;
   /** The least pan that brings the box into view, at the current scale. */
   revealBox(box: ExplorerBox): void;
+  /** Focuses the viewport without scrolling, unless focus is already inside it. */
+  focus(): void;
   /** The camera on screen, or `null` before the first fit. */
   getCamera(): ExplorerCamera | null;
   screenToWorld(point: Vec2): Vec2 | null;
@@ -583,6 +585,9 @@ function createEngine(
       if (target === null || !isFiniteBox(box)) return;
       aim(revealCamera(target, box, size));
     },
+    focus() {
+      if (!disposed) focusViewport();
+    },
     getCamera() {
       return drawn;
     },
@@ -648,6 +653,7 @@ export function useExplorerCamera(options: UseExplorerCameraOptions): ExplorerCa
     zoomBy: (factor) => engineRef.current?.zoomBy(factor),
     focusBox: (box) => engineRef.current?.focusBox(box),
     revealBox: (box) => engineRef.current?.revealBox(box),
+    focus: () => engineRef.current?.focus(),
     getCamera: () => engineRef.current?.getCamera() ?? null,
     screenToWorld: (point) => engineRef.current?.screenToWorld(point) ?? null,
   }));

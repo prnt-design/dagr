@@ -67,7 +67,9 @@ export function ExplorerToolbar(props: ExplorerToolbarProps): ReactElement {
         data-action="zoom-to-selected"
         disabled={selectedNode === null}
         onClick={() => {
-          if (selectedNode !== null) state.focusNode(selectedNode.id);
+          if (selectedNode === null) return;
+          state.focusNode(selectedNode.id);
+          state.focusViewport();
         }}
       >
         {selectedNode === null ? labels.zoomToSelected : labels.zoomTo(selectedNode.label)}

@@ -42,6 +42,12 @@ export interface ExplorerApi {
   focusNode(id: string): void;
   /** Pans the least distance that brings the node into view, at the current zoom. */
   reveal(id: string): void;
+  /**
+   * Gives the graph keyboard focus, so the wheel and the camera keys apply
+   * at once. A no-op before a viewport exists, or while focus is already in
+   * the graph.
+   */
+  focusViewport(): void;
   /** Sets the current node, or clears it. Does not open the drawer. */
   select(id: string | null): void;
   /**

@@ -237,10 +237,10 @@ function ShowStore() {
 ```
 
 The same methods reach a host outside the root through `apiRef`: `fit()`,
-`zoomBy(factor)`, `focusNode(id)`, `reveal(id)`, `select(id)`, `inspect(id,
-trigger)`, `closeDetails()`, `selectView(id)`, `setQuery(query)` and
-`setTrace(on)`. Two calls in one tick see each other, so `select('a');
-select(null)` ends with nothing selected.
+`zoomBy(factor)`, `focusNode(id)`, `reveal(id)`, `focusViewport()`,
+`select(id)`, `inspect(id, trigger)`, `closeDetails()`, `selectView(id)`,
+`setQuery(query)` and `setTrace(on)`. Two calls in one tick see each other,
+so `select('a'); select(null)` ends with nothing selected.
 
 ## Labels
 

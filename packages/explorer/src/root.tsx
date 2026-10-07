@@ -357,6 +357,9 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
         const found = box(id);
         if (found !== undefined) internals.controlsRef.current?.revealBox(found);
       },
+      focusViewport() {
+        internals.controlsRef.current?.focus();
+      },
       select(id) {
         if (id !== null && !latest.current.nodeById.has(id)) return;
         setPendingOpen(null);
