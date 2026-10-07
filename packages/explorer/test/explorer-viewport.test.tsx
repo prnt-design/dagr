@@ -14,7 +14,7 @@ import { ExplorerRoot } from '../src/root.js';
 import type { ExplorerRootProps } from '../src/root.js';
 import type { ExplorerEdge } from '../src/types.js';
 import { useExplorer } from '../src/use-explorer.js';
-import { fire, flush, installDom, mount, mouse, resizeTo, runFrame, runFramesUntilIdle, uninstallDom, watchCount } from './dom.js';
+import { fire, flush, installDom, mount, mouse, notifyResize, resizeTo, runFrame, runFramesUntilIdle, uninstallDom, watchCount } from './dom.js';
 import type { Mounted } from './dom.js';
 import { Boundary, detail, empty, overview, quietErrors } from './fixtures.js';
 import type { Item } from './fixtures.js';
@@ -445,6 +445,46 @@ describe('ExplorerViewport: the frame the drawer leaves', () => {
     await tree?.rerender(explorer({ views: [overview] }, {}));
     await runFramesUntilIdle();
     expectCamera(fitIn(SIZE));
+  });
+
+  it('takes the larger of the inset prop and the drawer on a side, not their sum', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, { ...withDrawer, inset: { right: 200 } });
+    expectCamera(fitIn({ x: 0, y: 0, width: 600, height: SIZE.height }));
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    expectCamera(fitIn(narrow));
+  });
+
+  it('zooms about the center of the frame the drawer leaves', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    const worldAt = (x: number, y: number) => {
+      const camera = cameraNow();
+      return { x: (x - camera.x) / camera.scale, y: (y - camera.y) / camera.scale };
+    };
+    const center = worldAt(220, 240);
+    const viewportCenter = worldAt(400, 240);
+    await flush(() => api().zoomBy(2));
+    await runFramesUntilIdle();
+    expect(worldAt(220, 240).x).toBeCloseTo(center.x, 4);
+    expect(worldAt(220, 240).y).toBeCloseTo(center.y, 4);
+    expect(worldAt(400, 240).x).not.toBeCloseTo(viewportCenter.x, 1);
+  });
+
+  it('refits when the open drawer resizes', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    expectCamera(fitIn(narrow));
+    vi.restoreAllMocks();
+    drawerAt(240, 800);
+    await notifyResize(part('details'));
+    await runFramesUntilIdle();
+    expectCamera(fitIn({ x: 0, y: 0, width: 240, height: SIZE.height }));
   });
 
   it('fits and limits the camera with the contentPadding', async () => {
