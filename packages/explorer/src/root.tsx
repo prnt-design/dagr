@@ -43,7 +43,7 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode, Ref } from 'react';
-import { ExplorerApiContext, ExplorerContext, createCameraHub } from './context.js';
+import { ExplorerApiContext, ExplorerContext, createCameraHub, createObstructions } from './context.js';
 import type { ExplorerApi, ExplorerContextValue, ExplorerInternals, ExplorerState } from './context.js';
 import { ExplorerContextError } from './errors.js';
 import { useIsomorphicLayoutEffect } from './isomorphic-layout-effect.js';
@@ -67,7 +67,7 @@ const DEFAULT_VIEW_ID = 'default';
 const NOTHING: ReadonlySet<string> = new Set();
 
 /** Hidden from sight and not from a screen reader. */
-const VISUALLY_HIDDEN: CSSProperties = {
+export const VISUALLY_HIDDEN: CSSProperties = {
   position: 'absolute',
   width: 1,
   height: 1,
@@ -324,6 +324,7 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
       },
       controlsRef: { current: null as ExplorerCameraControls | null },
       camera: createCameraHub(),
+      obstructions: createObstructions(),
       searchInputRef: { current: null as HTMLInputElement | null },
     };
   });
@@ -356,6 +357,9 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
       reveal(id) {
         const found = box(id);
         if (found !== undefined) internals.controlsRef.current?.revealBox(found);
+      },
+      focusViewport() {
+        internals.controlsRef.current?.focus();
       },
       select(id) {
         if (id !== null && !latest.current.nodeById.has(id)) return;

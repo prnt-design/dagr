@@ -45,7 +45,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MutableRefObject, ReactElement, ReactNode } from 'react';
 import type { ExplorerBase, ExplorerCameraSource, ExplorerEmphasis } from './base.js';
 import { visibleWorld } from './camera.js';
-import type { ExplorerCamera, ExplorerViewportSize } from './camera.js';
+import type { ExplorerCamera, ExplorerInset, ExplorerViewportSize } from './camera.js';
 import type { ExplorerBox, ExplorerLayout } from './layout.js';
 import { nearestInDirection } from './navigation.js';
 import type { ExplorerDirection } from './navigation.js';
@@ -53,7 +53,7 @@ import { useIsomorphicLayoutEffect } from './isomorphic-layout-effect.js';
 import { svgBase } from './svg-base.js';
 import type { ExplorerEdge, ExplorerGroup, ExplorerNode, ExplorerView } from './types.js';
 import { useExplorerCamera } from './use-explorer-camera.js';
-import type { ExplorerCameraControls } from './use-explorer-camera.js';
+import type { CameraObstructions, ExplorerCameraControls } from './use-explorer-camera.js';
 import {
   DEFAULT_MAX_OVERLAY_NODES,
   DEFAULT_TIERS,
@@ -106,8 +106,14 @@ export interface ViewportSurfaceProps<N extends ExplorerNode, E extends Explorer
   readonly cameraSourceRef?: MutableRefObject<ExplorerCameraSource | null> | undefined;
   /** The id of the element that describes the region. */
   readonly describedBy?: string | undefined;
+  /** Overlays the camera frames around. */
+  readonly obstructions?: CameraObstructions | undefined;
+  /** CSS pixels the host's own overlays cover on each side. */
+  readonly inset?: ExplorerInset | undefined;
+  /** The fraction of the frame content may be panned past its edge. */
+  readonly contentPadding?: number | undefined;
   readonly className?: string | undefined;
-  /** Sizing and decoration pass through. `position` and `overflow` stay the viewport's own, because the graph needs them. */
+  /** Sizing and decoration pass through. `position`, `overflow` and `user-select` stay the viewport's own, because the graph needs them. */
   readonly style?: CSSProperties | undefined;
 }
 
@@ -234,6 +240,9 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
     controlsRef,
     cameraSourceRef,
     describedBy,
+    obstructions,
+    inset,
+    contentPadding,
     className,
     style,
   } = props;
@@ -338,7 +347,22 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
     [refresh, listeners],
   );
 
-  const controls = useExplorerCamera({ viewportRef, planeRef, layout, onFrame });
+  const selectedBoxRef = useRef<ExplorerBox | null>(null);
+  useIsomorphicLayoutEffect(() => {
+    selectedBoxRef.current = selectedId === null ? null : (layout.boxes.get(selectedId) ?? null);
+  });
+  const keepInView = useCallback(() => selectedBoxRef.current, []);
+
+  const controls = useExplorerCamera({
+    viewportRef,
+    planeRef,
+    layout,
+    onFrame,
+    obstructions,
+    inset,
+    contentPadding,
+    keepInView,
+  });
   const cameraSource = useMemo<ExplorerCameraSource>(
     () => ({
       get: () => controls.getCamera(),
@@ -624,8 +648,12 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
         ...style,
         // Last, so a caller cannot break the graph: the plane and the nodes
         // are absolutely positioned against this element and clipped by it.
+        // A browser starts a text selection on the press, before the camera
+        // knows the press is a pan, so nothing in the graph is selectable.
         position: 'relative',
         overflow: 'hidden',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
       }}
     >
       {base.space === 'viewport' ? layer : null}

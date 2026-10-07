@@ -2,10 +2,12 @@
 import { createRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExplorerBase } from '../src/base.js';
+import { createCameraLimits } from '../src/camera.js';
 import type { ExplorerApi } from '../src/context.js';
 import { DagrExplorer } from '../src/dagr-explorer.js';
 import { DEFAULT_EXPLORER_LABELS } from '../src/labels.js';
 import type { ExplorerLabels } from '../src/labels.js';
+import { layoutView } from '../src/layout.js';
 import type { ExplorerEdge, ExplorerNode } from '../src/types.js';
 import { flush, installDom, mount, resizeTo, runFramesUntilIdle, uninstallDom } from './dom.js';
 import type { Mounted } from './dom.js';
@@ -130,6 +132,15 @@ describe('DagrExplorer', () => {
     expect(nodes[0]?.getAttribute('aria-label')).toMatch(/^kind /);
     expect(nodes[0]?.getAttribute('data-tier')).toBe('summary');
     expect(layers.length).toBeGreaterThan(0);
+  });
+
+  it('forwards inset and contentPadding', async () => {
+    tree = await mount(<DagrExplorer label="Map" views={[overview]} inset={{ right: 360 }} contentPadding={0.3} />);
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+    const limits = createCameraLimits(layoutView(overview), { x: 0, y: 0, width: 440, height: 480 }, 0.3);
+    const scale = /scale\(([^)]+)\)/.exec(part('plane').style.transform)?.[1];
+    expect(Number(scale)).toBeCloseTo(limits?.minScale ?? Number.NaN, 6);
   });
 
   it('takes the shorthand, and the root props', async () => {
@@ -267,6 +278,8 @@ describe('DagrExplorer: labels', () => {
     drawerTitle: '«drawerTitle»',
     close: '«close»',
     connections: '«connections»',
+    connectionTo: (label) => `«connectionTo ${label}»`,
+    connectionFrom: (label) => `«connectionFrom ${label}»`,
   };
 
   /** Every default string, and every default formatter's output for the values these tests reach. */
@@ -275,6 +288,10 @@ describe('DagrExplorer: labels', () => {
     ...[0, 1, 2, 3, 4].map((count) => DEFAULT_EXPLORER_LABELS.matches(count)),
     DEFAULT_EXPLORER_LABELS.stats({ nodes: 4, edges: 3 }),
     ...['Alpha', 'Beta', 'Gamma', 'Delta'].map((label) => DEFAULT_EXPLORER_LABELS.zoomTo(label)),
+    ...['Alpha', 'Beta', 'Gamma', 'Delta'].flatMap((label) => [
+      DEFAULT_EXPLORER_LABELS.connectionTo(label),
+      DEFAULT_EXPLORER_LABELS.connectionFrom(label),
+    ]),
     // `overview` has a group, so its members' accessible names reach this.
     DEFAULT_EXPLORER_LABELS.inGroup('Platform team'),
     // Hardcoded before `inGroup` existed: any copy left from it is a leak.
@@ -327,7 +344,8 @@ describe('DagrExplorer: labels', () => {
     for (const name of [
       'search', 'searchPlaceholder', 'searchResults', 'matches 4', 'stats 4 3', 'hint', 'views',
       'traceOn', 'traceOff', 'zoomControls', 'zoomIn', 'zoomOut', 'zoomLevel', 'fit', 'zoomTo Beta',
-      'zoomToSelected', 'drawerTitle', 'close', 'connections', 'inGroup Platform team',
+      'zoomToSelected', 'drawerTitle', 'close', 'connections', 'connectionTo Gamma', 'connectionFrom Alpha',
+      'inGroup Platform team',
     ]) {
       expect([name, all.includes(`«${name}`)]).toEqual([name, true]);
     }
@@ -353,8 +371,8 @@ describe('DagrExplorer: labels', () => {
   it('replaces a subset, keeping the rest, including a key set to undefined', async () => {
     const partial = { fit: 'Encuadrar', close: undefined } as unknown as Partial<ExplorerLabels>;
     tree = await mount(<DagrExplorer label="Map" views={[overview]} apiRef={apiRef} labels={partial} />);
-    expect(part('toolbar').querySelector('[data-action="fit"]')?.textContent).toBe('Encuadrar');
+    expect(part('toolbar').querySelector('[data-action="fit"]')?.getAttribute('aria-label')).toBe('Encuadrar');
     await flush(() => api().inspect('a'));
-    expect(part('details-close').textContent).toBe('Close');
+    expect(part('details-close').getAttribute('aria-label')).toBe('Close');
   });
 });

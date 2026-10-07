@@ -27,9 +27,10 @@
  * never covers it.
  */
 
-import { memo, useEffect, useId, useRef } from 'react';
+import { memo, useEffect, useId, useMemo, useRef } from 'react';
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import type { ExplorerBase, ExplorerCameraSource } from './base.js';
+import type { ExplorerInset } from './camera.js';
 import { useExplorerApiContext, useExplorerContext } from './context.js';
 import type { ExplorerApi, ExplorerInternals } from './context.js';
 import type { ExplorerLayout } from './layout.js';
@@ -57,11 +58,23 @@ export interface ExplorerViewportProps<N extends ExplorerNode = ExplorerNode> {
   readonly maxOverlayNodes?: number | undefined;
   /** What draws the nodes that have no element. Default: the SVG base. Experimental. */
   readonly base?: ExplorerBase | undefined;
+  /**
+   * CSS pixels your own overlays cover on each side of the graph. The camera
+   * fits, focuses and reveals within what is left, as it does for the open
+   * drawer, which it measures on its own.
+   */
+  readonly inset?: ExplorerInset | undefined;
+  /**
+   * The fraction of the uncovered graph the content may be panned past its
+   * edge, in [0, 0.45]. A finite value outside is clamped, anything else is
+   * the default, 0.05.
+   */
+  readonly contentPadding?: number | undefined;
   readonly className?: string | undefined;
   /**
    * Sizing and decoration pass through: `{ height: 600 }` replaces
-   * `--dagr-explorer-height`. `position` and `overflow` stay the viewport's
-   * own, because the graph needs them.
+   * `--dagr-explorer-height`. `position`, `overflow` and `user-select` stay
+   * the viewport's own, because the graph needs them.
    */
   readonly style?: CSSProperties | undefined;
   /**
@@ -107,6 +120,7 @@ const ViewportPane = memo(function ViewportPane<N extends ExplorerNode, E extend
       onNodeZoom={(id) => api.focusNode(id)}
       controlsRef={internals.controlsRef}
       cameraSourceRef={sourceRef}
+      obstructions={internals.obstructions}
       describedBy={describedBy}
     />
   );
@@ -117,10 +131,13 @@ const STAGE: CSSProperties = { position: 'relative' };
 export function ExplorerViewport<N extends ExplorerNode = ExplorerNode, E extends ExplorerEdge = ExplorerEdge>(
   props: ExplorerViewportProps<N>,
 ): ReactElement {
-  const { children, ...rest } = props;
+  const { children, inset: insetProp, ...rest } = props;
   const { state, internals } = useExplorerContext('ExplorerViewport');
   const api = useExplorerApiContext('ExplorerViewport');
   const describedBy = useId();
+  // By its sides, so an inline object does not render the memoized pane again.
+  const { top, right, bottom, left } = insetProp ?? {};
+  const inset = useMemo(() => ({ top, right, bottom, left }), [top, right, bottom, left]);
 
   useEffect(() => internals.registerViewport(), [internals]);
 
@@ -157,6 +174,7 @@ export function ExplorerViewport<N extends ExplorerNode = ExplorerNode, E extend
           <ViewportPane<N, E>
             key={view.id}
             {...rest}
+            inset={inset}
             label={state.label}
             inGroup={labels.inGroup}
             view={view}

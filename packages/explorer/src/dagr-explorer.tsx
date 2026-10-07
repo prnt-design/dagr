@@ -35,6 +35,10 @@ interface DagrExplorerParts<N extends ExplorerNode, E extends ExplorerEdge> {
   readonly maxOverlayNodes?: number | undefined;
   /** Experimental. See `ExplorerBase`. */
   readonly base?: ExplorerBase | undefined;
+  /** `ExplorerViewport`'s `inset`. */
+  readonly inset?: ExplorerViewportProps<N>['inset'];
+  /** `ExplorerViewport`'s `contentPadding`. */
+  readonly contentPadding?: ExplorerViewportProps<N>['contentPadding'];
   /** `ExplorerDetails`'s children. */
   readonly renderDetails?: ExplorerDetailsProps<N, E>['children'];
   /** `ExplorerDetails`'s `renderConnection`. */
@@ -59,6 +63,8 @@ export function DagrExplorer<N extends ExplorerNode = ExplorerNode, E extends Ex
     tiers,
     maxOverlayNodes,
     base,
+    inset,
+    contentPadding,
     renderDetails,
     renderConnection,
     renderViews,
@@ -76,6 +82,8 @@ export function DagrExplorer<N extends ExplorerNode = ExplorerNode, E extends Ex
         tiers={tiers}
         maxOverlayNodes={maxOverlayNodes}
         base={base}
+        inset={inset}
+        contentPadding={contentPadding}
       >
         <ExplorerDetails<N, E> renderConnection={renderConnection}>{renderDetails}</ExplorerDetails>
       </ExplorerViewport>

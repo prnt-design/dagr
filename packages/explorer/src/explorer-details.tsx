@@ -8,9 +8,18 @@
  *
  * The body is a keyboard scroll stop and scrolls to the top when the
  * inspected node changes. Its content is the slot's, or by default the
- * node's label and its connections as buttons, each inspecting the node at
- * the other end. Those buttons keep the drawer's original opener, so
- * `Escape` after following three edges still returns where the reader began.
+ * node's label and its connections as buttons, each following its edge: it
+ * inspects the node at the other end and pans it into view. Those buttons
+ * keep the drawer's original opener, so `Escape` after following three edges
+ * still returns where the reader began.
+ *
+ * A default connection shows its direction as an arrow, hidden from a
+ * screen reader, which hears `labels.connectionTo` or `labels.connectionFrom`
+ * instead. Content from `renderConnection` replaces all of it, and is given
+ * the direction to show its own.
+ *
+ * Open, it registers with the root as an obstruction, so the camera frames
+ * the part of the graph it leaves uncovered. See `use-explorer-camera.ts`.
  *
  * Closing restores focus, and the root does it, because every way the drawer
  * closes (this part's `Escape` and close button, the api, the selected node
@@ -20,6 +29,9 @@
 import { useEffect, useId, useMemo, useRef } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { useExplorerContext } from './context.js';
+import { CloseIcon } from './icons.js';
+import { useIsomorphicLayoutEffect } from './isomorphic-layout-effect.js';
+import { VISUALLY_HIDDEN } from './root.js';
 import type { ExplorerEdge, ExplorerNode } from './types.js';
 
 /** An edge touching the inspected node, and the node at its other end. */
@@ -36,13 +48,18 @@ export interface ExplorerDetailsContext<N extends ExplorerNode = ExplorerNode, E
   readonly connections: readonly ExplorerConnection<N, E>[];
   /** Inspects another node, keeping the drawer's opener. */
   readonly inspect: (id: string) => void;
+  /** Inspects another node, as `inspect` does, and pans the least distance that brings it into view. */
+  readonly follow: (id: string) => void;
 }
 
 export interface ExplorerDetailsProps<N extends ExplorerNode = ExplorerNode, E extends ExplorerEdge = ExplorerEdge> {
   /** The drawer's content. Default: the label and the connection list. */
   readonly children?: ((context: ExplorerDetailsContext<N, E>) => ReactNode) | undefined;
-  /** One connection's content in the default list. Default: the other node's label. */
-  readonly renderConnection?: ((edge: E, otherNode: N) => ReactNode) | undefined;
+  /**
+   * One connection's whole content in the default list. `direction` is
+   * `'self'` for a self loop. Default: an arrow and the other node's label.
+   */
+  readonly renderConnection?: ((edge: E, otherNode: N, direction: 'to' | 'from' | 'self') => ReactNode) | undefined;
   readonly className?: string | undefined;
   readonly style?: CSSProperties | undefined;
 }
@@ -51,7 +68,7 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
   props: ExplorerDetailsProps<N, E>,
 ): ReactElement | null {
   const { children, renderConnection, className, style } = props;
-  const { state } = useExplorerContext('ExplorerDetails');
+  const { state, internals } = useExplorerContext('ExplorerDetails');
   const { labels, activeView, detailsOpen } = state;
   // The part's type parameters are a claim about the root's data. See context.ts.
   const node = detailsOpen ? (state.selectedNode as N | null) : null;
@@ -59,6 +76,14 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
   const titleId = useId();
   const connectionsId = useId();
   const bodyRef = useRef<HTMLDivElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
+  const open = node !== null;
+
+  // Before paint, so the camera has made room for the drawer by the frame it shows in.
+  useIsomorphicLayoutEffect(() => {
+    const aside = asideRef.current;
+    return open && aside !== null ? internals.obstructions.add(aside) : undefined;
+  }, [open, internals]);
 
   useEffect(() => {
     if (nodeId !== null && bodyRef.current !== null) bodyRef.current.scrollTop = 0;
@@ -80,6 +105,10 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
 
   // No trigger, and the drawer is open: the root keeps the opener it has.
   const inspect = (id: string): void => state.inspect(id);
+  const follow = (id: string): void => {
+    state.inspect(id);
+    state.reveal(id);
+  };
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
     if (event.key !== 'Escape') return;
@@ -89,6 +118,7 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
 
   return (
     <aside
+      ref={asideRef}
       data-dagr-explorer="details"
       aria-labelledby={titleId}
       className={className}
@@ -112,8 +142,14 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flex: 'none' }}
       >
         <span id={titleId}>{labels.drawerTitle}</span>
-        <button type="button" data-dagr-explorer="details-close" onClick={() => state.closeDetails()}>
-          {labels.close}
+        <button
+          type="button"
+          data-dagr-explorer="details-close"
+          aria-label={labels.close}
+          title={labels.close}
+          onClick={() => state.closeDetails()}
+        >
+          <CloseIcon />
         </button>
       </div>
       <div
@@ -126,7 +162,7 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
         style={{ overflow: 'auto', flex: '1 1 auto', minHeight: 0 }}
       >
         {children !== undefined ? (
-          children({ node, connections, inspect })
+          children({ node, connections, inspect, follow })
         ) : (
           <>
             <p data-dagr-explorer="details-label">{node.label}</p>
@@ -138,13 +174,29 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
                   aria-labelledby={connectionsId}
                   style={{ listStyle: 'none', margin: 0, padding: 0 }}
                 >
-                  {connections.map(({ edge, node: other }) => (
-                    <li key={edge.id}>
-                      <button type="button" data-node-id={other.id} onClick={() => inspect(other.id)}>
-                        {renderConnection === undefined ? other.label : renderConnection(edge, other)}
-                      </button>
-                    </li>
-                  ))}
+                  {connections.map(({ edge, node: other }) => {
+                    const outward = edge.source === node.id;
+                    const direction = outward ? (edge.target === node.id ? 'self' : 'to') : 'from';
+                    return (
+                      <li key={edge.id}>
+                        <button type="button" data-node-id={other.id} onClick={() => follow(other.id)}>
+                          {renderConnection !== undefined ? (
+                            renderConnection(edge, other, direction)
+                          ) : (
+                            <>
+                              <span data-dagr-explorer="connection-arrow" aria-hidden="true">
+                                {direction === 'self' ? '↻' : outward ? '→' : '←'}
+                              </span>{' '}
+                              <span data-dagr-explorer="connection-direction" style={VISUALLY_HIDDEN}>
+                                {outward ? labels.connectionTo(other.label) : labels.connectionFrom(other.label)}
+                              </span>
+                              <span aria-hidden="true">{other.label}</span>
+                            </>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </>
             )}

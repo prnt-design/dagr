@@ -107,7 +107,7 @@ What the demo passes, beyond `views`:
       node.label
     )
   }
-  renderDetails={({ node, connections, inspect }) => (
+  renderDetails={({ node, connections, follow }) => (
     <>
       <p>{node.label}</p>
       <dl>
@@ -119,7 +119,7 @@ What the demo passes, beyond `views`:
       <ul>
         {connections.map(({ edge, node: other }) => (
           <li key={edge.id}>
-            <button type="button" onClick={() => inspect(other.id)}>
+            <button type="button" onClick={() => follow(other.id)}>
               {other.label}
             </button>
           </li>
@@ -132,9 +132,12 @@ What the demo passes, beyond `views`:
 
 `searchText` is what search reads from a node, by default the id and label.
 `renderNode`'s output sits inside the explorer's own node button, so it must
-not be interactive. `renderDetails` replaces the drawer's body, and
-`inspect` opens another node while keeping the drawer's original opener for
-focus to return to.
+not be interactive. `renderDetails` replaces the drawer's body. `inspect`
+opens another node while keeping the drawer's original opener for focus to
+return to, and `follow` does the same and pans the node into view at the
+current zoom, which is what the default list's connection buttons do. Those
+buttons show an arrow for the edge's direction, read out through
+`labels.connectionTo` and `labels.connectionFrom`.
 
 ## The parts and your own layout
 
@@ -189,18 +192,23 @@ export function Architecture() {
 | `ExplorerTraceToggle` | trace on and off |
 | `ExplorerViewport` | the graph: pan and zoom, the base layer, and node elements for nodes large enough to read |
 | `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body |
-| `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node |
+| `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node. Zoom out, zoom in, fit and the drawer's close button are icons, named and titled by their labels |
 
 Children of `ExplorerViewport`, such as `ExplorerDetails`, share a positioned
 stage with the graph, so the drawer overlays the graph and not the hint below
-it. One viewport per root: a second throws `ExplorerContextError` with the
-code `SECOND_VIEWPORT`, and a part outside a root throws it with
+it. The camera frames the part the drawer leaves uncovered: fit, focus,
+reveal and zoom work beside it, and a node under it can be panned out. Pass
+`inset={{ right: 320 }}` (CSS pixels per side) for an overlay of your own,
+and `contentPadding` (default 0.05, in [0, 0.45]) for how far content may be
+panned past the frame's edge, to `ExplorerViewport` or `DagrExplorer`. One
+viewport per root: a second throws `ExplorerContextError` with the code
+`SECOND_VIEWPORT`, and a part outside a root throws it with
 `OUTSIDE_EXPLORER`.
 
 Every part takes `className` and `style`, and your `style` wins over the
 part's own: `<ExplorerViewport style={{ height: 600 }} />` sets the graph's
 height. The viewport keeps its own `position` and `overflow`, which place and
-clip its nodes.
+clip its nodes, and `user-select: none`, so a pan never selects their text.
 
 **A part's type parameters are a claim, not a check.** The parts talk through
 a context, which erases them, so `ExplorerViewport<MyNode>` asserts the node
@@ -237,10 +245,10 @@ function ShowStore() {
 ```
 
 The same methods reach a host outside the root through `apiRef`: `fit()`,
-`zoomBy(factor)`, `focusNode(id)`, `reveal(id)`, `select(id)`, `inspect(id,
-trigger)`, `closeDetails()`, `selectView(id)`, `setQuery(query)` and
-`setTrace(on)`. Two calls in one tick see each other, so `select('a');
-select(null)` ends with nothing selected.
+`zoomBy(factor)`, `focusNode(id)`, `reveal(id)`, `focusViewport()`,
+`select(id)`, `inspect(id, trigger)`, `closeDetails()`, `selectView(id)`,
+`setQuery(query)` and `setTrace(on)`. Two calls in one tick see each other,
+so `select('a'); select(null)` ends with nothing selected.
 
 ## Labels
 

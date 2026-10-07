@@ -77,6 +77,21 @@
   gap: 4px;
 }
 
+:where([data-dagr-explorer='toolbar'] [data-action='zoom-out'], [data-dagr-explorer='toolbar'] [data-action='zoom-in'], [data-dagr-explorer='toolbar'] [data-action='fit'], [data-dagr-explorer='details-close']) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+:where([data-dagr-explorer='toolbar'] [data-action='zoom-to-selected']) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 :where([data-dagr-explorer='zoom-level']) {
   min-width: 5ch;
   text-align: center;

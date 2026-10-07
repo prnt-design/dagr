@@ -209,6 +209,15 @@ export async function resizeTo(width: number, height: number): Promise<void> {
   });
 }
 
+/** Tells the observers watching `target` that it resized, inside `act`, leaving its size as it reads. */
+export async function notifyResize(target: Element): Promise<void> {
+  await flush(() => {
+    for (const watch of watches.filter((each) => each.target === target)) {
+      watch.notify([{ target } as ResizeObserverEntry], watch.observer);
+    }
+  });
+}
+
 /**
  * Delivers a resize to every observer that ever watched, including one that
  * has since disconnected: a notification the browser queued before the

@@ -4,8 +4,9 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExplorerBase } from '../src/base.js';
 import { createCameraLimits, fitCamera } from '../src/camera.js';
-import type { ExplorerCamera } from '../src/camera.js';
+import type { CameraFrame, ExplorerCamera } from '../src/camera.js';
 import type { ExplorerApi, ExplorerState } from '../src/context.js';
+import { ExplorerDetails } from '../src/explorer-details.js';
 import { ExplorerViewport } from '../src/explorer-viewport.js';
 import type { ExplorerViewportProps } from '../src/explorer-viewport.js';
 import { layoutView } from '../src/layout.js';
@@ -13,7 +14,7 @@ import { ExplorerRoot } from '../src/root.js';
 import type { ExplorerRootProps } from '../src/root.js';
 import type { ExplorerEdge } from '../src/types.js';
 import { useExplorer } from '../src/use-explorer.js';
-import { fire, flush, installDom, mount, mouse, resizeTo, runFramesUntilIdle, uninstallDom } from './dom.js';
+import { fire, flush, installDom, mount, mouse, notifyResize, pointer, resizeTo, runFrame, runFramesUntilIdle, uninstallDom, watchCount } from './dom.js';
 import type { Mounted } from './dom.js';
 import { Boundary, detail, empty, overview, quietErrors } from './fixtures.js';
 import type { Item } from './fixtures.js';
@@ -192,6 +193,32 @@ describe('ExplorerViewport: inside a root', () => {
     expect(part('viewport').style.overflow).toBe('hidden');
   });
 
+  it('turns off text selection on the graph, so a press that becomes a pan selects nothing, and leaves the drawer selectable', async () => {
+    tree = await mount(
+      <ExplorerRoot<Item, ExplorerEdge> label="Map" views={[overview]}>
+        <ExplorerViewport style={{ userSelect: 'text' }}>
+          <ExplorerDetails />
+        </ExplorerViewport>
+        <Probe />
+      </ExplorerRoot>,
+    );
+    await resizeTo(SIZE.width, SIZE.height);
+    await runFramesUntilIdle();
+    await flush(() => state().inspect('b'));
+    const viewport = part('viewport');
+    expect(viewport.style.getPropertyValue('user-select')).toBe('none');
+    expect(viewport.style.getPropertyValue('-webkit-user-select')).toBe('none');
+    const drawer = part('details');
+    expect(viewport.contains(drawer)).toBe(false);
+    const root = part('root');
+    for (let at: HTMLElement | null = drawer; at !== null && at !== root.parentElement; at = at.parentElement) {
+      expect(at.style.getPropertyValue('user-select')).toBe('');
+    }
+    for (const inner of drawer.querySelectorAll<HTMLElement>('*')) {
+      expect(inner.style.getPropertyValue('user-select')).toBe('');
+    }
+  });
+
   it('renders its children in a positioned stage with the graph, and the hint after the stage', async () => {
     tree = await mount(
       <ExplorerRoot<Item, ExplorerEdge> label="Map" views={[overview]}>
@@ -221,6 +248,16 @@ describe('ExplorerViewport: inside a root', () => {
     expect(renderNode).not.toHaveBeenCalled();
     // A keystroke that changes the matches does.
     await flush(() => api().setQuery('a'));
+    expect(renderNode).toHaveBeenCalled();
+  });
+
+  it('does not render the graph again for an inline inset with the same sides', async () => {
+    const renderNode = vi.fn((node: Item) => node.label);
+    await ready({}, { renderNode, inset: { right: 120 } });
+    renderNode.mockClear();
+    await tree?.rerender(explorer({}, { renderNode, inset: { right: 120 } }));
+    expect(renderNode).not.toHaveBeenCalled();
+    await tree?.rerender(explorer({}, { renderNode, inset: { right: 160 } }));
     expect(renderNode).toHaveBeenCalled();
   });
 
@@ -255,6 +292,33 @@ describe('ExplorerViewport: the camera through the root', () => {
     expect(cameraNow().x).not.toBe(onD.x);
   });
 
+  it('gives the viewport keyboard focus from focusViewport, keeping a focus already inside it', async () => {
+    await ready();
+    const viewport = part('viewport');
+    expect(document.activeElement).toBe(document.body);
+    await flush(() => api().focusViewport());
+    expect(document.activeElement).toBe(viewport);
+    const b = button('b');
+    if (b === null) throw new Error('no b');
+    b.focus();
+    await flush(() => api().focusViewport());
+    expect(document.activeElement).toBe(b);
+  });
+
+  it('does nothing from focusViewport before a viewport exists', async () => {
+    tree = await mount(
+      <ExplorerRoot<Item, ExplorerEdge> label="Map" views={[overview]} apiRef={apiRef}>
+        <button type="button" data-testid="host">
+          host
+        </button>
+      </ExplorerRoot>,
+    );
+    const host = tree.container.querySelector<HTMLButtonElement>('[data-testid="host"]');
+    host?.focus();
+    await flush(() => api().focusViewport());
+    expect(document.activeElement).toBe(host);
+  });
+
   it('tells camera subscribers of every frame, and reads the camera through get', async () => {
     await ready();
     const heard: ExplorerCamera[] = [];
@@ -278,6 +342,181 @@ describe('ExplorerViewport: the camera through the root', () => {
     const limits = createCameraLimits(layout, SIZE);
     if (limits === null) throw new Error('no limits');
     expect(cameraNow()).toEqual(limits.constrain(fitCamera(layout, SIZE, limits)));
+  });
+});
+
+describe('ExplorerViewport: the frame the drawer leaves', () => {
+  const placed = layoutView(overview);
+  const narrow = { x: 0, y: 0, width: 440, height: SIZE.height };
+
+  /** Puts the drawer at `left` to `right` on screen, full height. jsdom lays nothing out. */
+  function drawerAt(left: number, right: number): void {
+    const own = Element.prototype.getBoundingClientRect;
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.getAttribute('data-dagr-explorer') !== 'details') return own.call(this);
+      return { left, right, top: 0, bottom: SIZE.height, width: right - left, height: SIZE.height, x: left, y: 0 } as DOMRect;
+    });
+  }
+
+  function fitIn(frame: CameraFrame, padding?: number): ExplorerCamera {
+    const limits = createCameraLimits(placed, frame, padding);
+    if (limits === null) throw new Error('no limits');
+    return limits.constrain(fitCamera(placed, frame, limits));
+  }
+
+  function expectCamera(expected: ExplorerCamera): void {
+    const now = cameraNow();
+    expect(now.x).toBeCloseTo(expected.x, 4);
+    expect(now.y).toBeCloseTo(expected.y, 4);
+    expect(now.scale).toBeCloseTo(expected.scale, 6);
+  }
+
+  const withDrawer: ViewportProps = { children: <ExplorerDetails /> };
+
+  it('refits to the part the drawer leaves when it opens at fit, and to the whole viewport when it closes', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    expectCamera(fitIn(SIZE));
+    expect(watchCount()).toBe(1);
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    expectCamera(fitIn(narrow));
+    // The drawer is observed with the viewport, so its own resize moves the frame.
+    expect(watchCount()).toBe(2);
+    await flush(() => api().closeDetails());
+    await runFramesUntilIdle();
+    expectCamera(fitIn(SIZE));
+    expect(watchCount()).toBe(1);
+  });
+
+  it('eases to the new fit when the drawer closes, with no jump in the first frame', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    const open = fitIn(narrow);
+    const closed = fitIn(SIZE);
+    await flush(() => api().closeDetails());
+    expectCamera(open);
+    await runFrame();
+    const first = cameraNow();
+    expect(first.scale).toBeGreaterThan(open.scale);
+    expect(first.scale).toBeLessThan(closed.scale);
+    await runFramesUntilIdle();
+    expectCamera(closed);
+  });
+
+  it('eases to the new fit when the drawer opens, with no jump in the first frame', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    const closed = fitIn(SIZE);
+    const open = fitIn(narrow);
+    await flush(() => api().inspect('a'));
+    expectCamera(closed);
+    await runFrame();
+    const first = cameraNow();
+    expect(first.x).toBeLessThan(closed.x);
+    expect(first.x).toBeGreaterThan(open.x);
+    expect(first.scale).toBeLessThan(closed.scale);
+    expect(first.scale).toBeGreaterThan(open.scale);
+  });
+
+  it('clamps to the new frame when a drag takes over the ease', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    const closed = fitIn(SIZE);
+    await flush(() => api().closeDetails());
+    await runFrame();
+    expect(cameraNow().scale).toBeLessThan(closed.scale);
+    await fire(part('viewport'), pointer('pointerdown', 400, 240));
+    await fire(part('viewport'), pointer('pointermove', 420, 240));
+    expect(cameraNow().scale).toBeCloseTo(closed.scale, 6);
+  });
+
+  it('takes no inset from a drawer as wide as the viewport', async () => {
+    drawerAt(0, 800);
+    await ready({ views: [overview] }, withDrawer);
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    expectCamera(fitIn(SIZE));
+  });
+
+  it('reveals the node the drawer opens over, at the zoom it had', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    await flush(() => api().zoomBy(2));
+    await runFramesUntilIdle();
+    const before = cameraNow();
+    const c = placed.boxes.get('c');
+    if (c === undefined) throw new Error('no c');
+    expect(before.x + (c.x + c.width) * before.scale).toBeGreaterThan(440);
+    await flush(() => api().inspect('c'));
+    await runFramesUntilIdle();
+    const after = cameraNow();
+    expect(after.scale).toBeCloseTo(before.scale, 6);
+    expect(after.x + (c.x + c.width) * after.scale).toBeLessThanOrEqual(440);
+    expect(after.x + c.x * after.scale).toBeGreaterThanOrEqual(0);
+  });
+
+  it('insets the frame by the inset prop, with no drawer', async () => {
+    await ready({ views: [overview] }, { inset: { right: 360 } });
+    expectCamera(fitIn(narrow));
+    await tree?.rerender(explorer({ views: [overview] }, { inset: { right: 360 } }));
+    await runFramesUntilIdle();
+    expectCamera(fitIn(narrow));
+    await tree?.rerender(explorer({ views: [overview] }, {}));
+    await runFramesUntilIdle();
+    expectCamera(fitIn(SIZE));
+  });
+
+  it('takes the larger of the inset prop and the drawer on a side, not their sum', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, { ...withDrawer, inset: { right: 200 } });
+    expectCamera(fitIn({ x: 0, y: 0, width: 600, height: SIZE.height }));
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    expectCamera(fitIn(narrow));
+  });
+
+  it('zooms about the center of the frame the drawer leaves', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    const worldAt = (x: number, y: number) => {
+      const camera = cameraNow();
+      return { x: (x - camera.x) / camera.scale, y: (y - camera.y) / camera.scale };
+    };
+    const center = worldAt(220, 240);
+    const viewportCenter = worldAt(400, 240);
+    await flush(() => api().zoomBy(2));
+    await runFramesUntilIdle();
+    expect(worldAt(220, 240).x).toBeCloseTo(center.x, 4);
+    expect(worldAt(220, 240).y).toBeCloseTo(center.y, 4);
+    expect(worldAt(400, 240).x).not.toBeCloseTo(viewportCenter.x, 1);
+  });
+
+  it('refits when the open drawer resizes', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    expectCamera(fitIn(narrow));
+    vi.restoreAllMocks();
+    drawerAt(240, 800);
+    await notifyResize(part('details'));
+    await runFramesUntilIdle();
+    expectCamera(fitIn({ x: 0, y: 0, width: 240, height: SIZE.height }));
+  });
+
+  it('fits and limits the camera with the contentPadding', async () => {
+    await ready({ views: [overview] }, { contentPadding: 0.3 });
+    expectCamera(fitIn(SIZE, 0.3));
+    await tree?.rerender(explorer({ views: [overview] }, { contentPadding: Number.NaN }));
+    await runFramesUntilIdle();
+    expectCamera(fitIn(SIZE));
   });
 });
 

@@ -52,7 +52,8 @@ derive theirs from it. For one graph, pass `nodes`, `edges` and optionally
 The node type is inferred from your data, so `renderNode` above sees `team`.
 `DagrExplorer` takes the root's props (below) plus `renderNode`,
 `renderDetails`, `renderConnection`, `renderViews`, `tiers`,
-`maxOverlayNodes`, `base` and `nodeAriaLabel`, which it forwards to the parts.
+`maxOverlayNodes`, `base`, `nodeAriaLabel`, `inset` and `contentPadding`,
+which it forwards to the parts.
 
 ### The parts
 
@@ -105,16 +106,29 @@ export function Architecture() {
 | `ExplorerViews` | the view switcher. Renders nothing for a single view. Children `({ views, activeView, selectView })` replace it |
 | `ExplorerSearch` | the search field, a live match count, and the matches as buttons, at most `maxResults` (default 50) |
 | `ExplorerTraceToggle` | trace on and off |
-| `ExplorerViewport` | the graph: pan and zoom, the SVG base, node elements for nodes large enough to read. Takes `renderNode`, `nodeAriaLabel`, `tiers`, `maxOverlayNodes`, `base`. Its children, such as `ExplorerDetails`, share a positioned stage with the graph, and the graph's hint comes after the stage, where an overlay cannot cover it |
-| `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body. Children `({ node, connections, inspect })` replace the body, and `renderConnection(edge, otherNode)` draws one connection in the default body |
-| `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node |
+| `ExplorerViewport` | the graph: pan and zoom, the SVG base, node elements for nodes large enough to read. Takes `renderNode`, `nodeAriaLabel`, `tiers`, `maxOverlayNodes`, `base`, `inset`, `contentPadding`. Its children, such as `ExplorerDetails`, share a positioned stage with the graph, and the graph's hint comes after the stage, where an overlay cannot cover it |
+| `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body. Children `({ node, connections, inspect, follow })` replace the body, and `renderConnection(edge, otherNode, direction)` draws one connection in the default body, given `'to'`, `'from'` or `'self'` |
+| `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node. Zoom out, zoom in, fit and the drawer's close button are icons, named and titled by their labels |
 
 Every part takes `className` and `style`, and your `style` wins over the
 part's own: `<ExplorerViewport style={{ height: 600 }} />` sets the graph's
 height, which is otherwise `--dagr-explorer-height`. The one exception is
-the viewport's `position` and `overflow`: they stay the viewport's own
-(`relative` and `hidden`), because the graph's nodes are positioned against
-it and clipped by it.
+the viewport's `position`, `overflow` and `user-select`: they stay the
+viewport's own (`relative`, `hidden` and `none`), because the graph's nodes
+are positioned against it and clipped by it, and a press that becomes a pan
+must not select their text. The drawer is outside the viewport, so its text
+stays selectable.
+
+**The camera frames what the drawer leaves uncovered.** With the drawer
+open, fit, `focusNode`, `reveal`, the zoom buttons and keys all work in the
+part of the graph beside it, a node under the drawer can be panned out, and
+the node the drawer opens on is revealed if the drawer covers it. A camera at
+fit eases to the new fit as the drawer opens and closes. A drawer that would
+leave less than 160px, or a quarter of the graph's width, is ignored, so on a
+phone the camera keeps the whole graph. For overlays of your own, pass
+`inset={{ top, right, bottom, left }}` in CSS pixels. `contentPadding` is how
+far, as a fraction of the frame, content may be panned past its edge: default
+0.05, clamped into [0, 0.45].
 
 One `ExplorerViewport` per root: a second throws `ExplorerContextError` with
 the code `SECOND_VIEWPORT`. A part outside a root throws it with
@@ -161,6 +175,7 @@ so `select('a'); select(null)` ends with nothing selected.
 | `fit()`, `zoomBy(factor)` | the camera. No-ops before the viewport has a size |
 | `focusNode(id)` | flies the camera to fit the node |
 | `reveal(id)` | pans the least distance that brings the node into view |
+| `focusViewport()` | gives the graph keyboard focus, so the wheel and the camera keys apply at once. The toolbar's zoom-to button calls it |
 | `select(id \| null)` | sets the current node, without opening the drawer |
 | `inspect(id, trigger?)` | selects and opens the drawer. Focus returns to `trigger` when it closes |
 | `closeDetails()` | closes the drawer |
@@ -181,13 +196,17 @@ a longer query narrows the list.
 When the drawer closes with focus inside it, focus returns to what opened
 it, or to the search field if that element is gone, or to the root element
 if there is no search field. A control of yours that closes the drawer keeps
-its focus. A connection button in the drawer inspects its neighbor and keeps
-the original opener. `Escape` closes the drawer from anywhere in the root,
-with two places that keep their own order. In the search field it closes
-the drawer first and clears the query second. On a node or the graph's
-surface it closes the drawer first, keeping focus where it is, and releases
-graph focus second. A control of yours that handles `Escape` and calls
-`preventDefault()` keeps it.
+its focus. A connection button in the drawer follows its edge: it inspects
+the neighbor, keeping the original opener, and pans it into view at the
+current zoom. It shows the edge's direction as an arrow (`→` out, `←` in, `↻`
+a self loop), which a screen reader hears as `labels.connectionTo(label)` or
+`labels.connectionFrom(label)`. A `renderConnection` replaces all of it, and
+is given the direction to show its own. `Escape` closes the drawer from
+anywhere in the root, with two places that keep their own order. In the
+search field it closes the drawer first and clears the query second. On a
+node or the graph's surface it closes the drawer first, keeping focus where
+it is, and releases graph focus second. A control of yours that handles
+`Escape` and calls `preventDefault()` keeps it.
 
 ### Keyboard
 
@@ -243,9 +262,10 @@ Every string the parts show comes from `labels`, an `ExplorerLabels` object
 whose neutral English defaults are `DEFAULT_EXPLORER_LABELS`. Pass any subset
 to `ExplorerRoot` or `DagrExplorer`. Counts and names are formatters, such as
 `matches(count)`, `moreMatches(count)` (the matches the capped list does not
-show), `stats({ nodes, edges })`, `zoomLevel(percent)`, `zoomTo(label)` and
+show), `stats({ nodes, edges })`, `zoomLevel(percent)`, `zoomTo(label)`,
 `inGroup(groupLabel)` (one group in a node's default accessible name, as in
-"Store, in Data tier").
+"Store, in Data tier"), and `connectionTo(label)` and `connectionFrom(label)`
+(a drawer connection's direction).
 
 An inline object is fine: `labels={{ search: 'Find' }}` is kept by value,
 so re-creating it on every render with the same contents changes nothing.

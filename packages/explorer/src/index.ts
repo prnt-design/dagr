@@ -49,7 +49,7 @@ export type {
 // already hands them out: `ExplorerCameraSource.get()` returns a camera, and
 // a base layer is given a visible set (experimental, like the seam above). The
 // camera arithmetic and the visible set computation stay internal.
-export type { ExplorerCamera } from './camera.js';
+export type { ExplorerCamera, ExplorerInset } from './camera.js';
 export type { ExplorerTier, ExplorerTiers, ExplorerVisibleSet } from './visible-set.js';
 
 export { ExplorerContextError, ExplorerDataError } from './errors.js';

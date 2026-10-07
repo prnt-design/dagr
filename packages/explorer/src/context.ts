@@ -8,7 +8,8 @@
  * the state a host may read and the methods it may call (`useExplorer()`
  * returns exactly that), and a few internals only the built-in parts use to
  * wire themselves to the root: the viewport's registration, its camera
- * controls, and the elements focus is restored to.
+ * controls, the overlays its camera frames around, and the elements focus is
+ * restored to.
  *
  * **The type parameters are a claim, not a check.** A context erases them, so
  * the state is stored over the base node and edge types and each part casts
@@ -23,7 +24,7 @@ import { ExplorerContextError } from './errors.js';
 import type { ExplorerLabels } from './labels.js';
 import type { ExplorerLayout } from './layout.js';
 import type { ExplorerEdge, ExplorerNode, ExplorerView } from './types.js';
-import type { ExplorerCameraControls } from './use-explorer-camera.js';
+import type { CameraObstructions, ExplorerCameraControls } from './use-explorer-camera.js';
 
 /**
  * Everything a host can do to an explorer. `ExplorerRoot`'s `apiRef` and
@@ -42,6 +43,12 @@ export interface ExplorerApi {
   focusNode(id: string): void;
   /** Pans the least distance that brings the node into view, at the current zoom. */
   reveal(id: string): void;
+  /**
+   * Gives the graph keyboard focus, so the wheel and the camera keys apply
+   * at once. A no-op before a viewport exists, or while focus is already in
+   * the graph.
+   */
+  focusViewport(): void;
   /** Sets the current node, or clears it. Does not open the drawer. */
   select(id: string | null): void;
   /**
@@ -126,12 +133,44 @@ export function createCameraHub(): CameraHub {
   };
 }
 
+/** The overlays registered with a root, such as the open drawer. */
+export interface ObstructionRegistry extends CameraObstructions {
+  /** Registers `element` while it covers the graph. Returns the unregister. */
+  add(element: Element): () => void;
+}
+
+export function createObstructions(): ObstructionRegistry {
+  const elements = new Set<Element>();
+  const listeners = new Set<() => void>();
+  const changed = (): void => {
+    for (const listener of [...listeners]) listener();
+  };
+  return {
+    list: () => [...elements],
+    subscribe(listener) {
+      const own = (): void => listener();
+      listeners.add(own);
+      return () => {
+        listeners.delete(own);
+      };
+    },
+    add(element) {
+      elements.add(element);
+      changed();
+      return () => {
+        if (elements.delete(element)) changed();
+      };
+    },
+  };
+}
+
 /** What only the built-in parts use. Stable for the root's life. */
 export interface ExplorerInternals {
   /** Called from the viewport's effect. Throws `SECOND_VIEWPORT` for a second. */
   registerViewport(): () => void;
   readonly controlsRef: MutableRefObject<ExplorerCameraControls | null>;
   readonly camera: CameraHub;
+  readonly obstructions: ObstructionRegistry;
   /** Where focus goes when the drawer closes and its opener is gone. */
   readonly searchInputRef: MutableRefObject<HTMLInputElement | null>;
 }
