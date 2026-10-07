@@ -347,7 +347,6 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
     [refresh, listeners],
   );
 
-  // The selected node, kept in view when the frame changes over it.
   const selectedBoxRef = useRef<ExplorerBox | null>(null);
   useIsomorphicLayoutEffect(() => {
     selectedBoxRef.current = selectedId === null ? null : (layout.boxes.get(selectedId) ?? null);

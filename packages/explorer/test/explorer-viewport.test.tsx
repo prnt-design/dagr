@@ -14,7 +14,7 @@ import { ExplorerRoot } from '../src/root.js';
 import type { ExplorerRootProps } from '../src/root.js';
 import type { ExplorerEdge } from '../src/types.js';
 import { useExplorer } from '../src/use-explorer.js';
-import { fire, flush, installDom, mount, mouse, notifyResize, resizeTo, runFrame, runFramesUntilIdle, uninstallDom, watchCount } from './dom.js';
+import { fire, flush, installDom, mount, mouse, notifyResize, pointer, resizeTo, runFrame, runFramesUntilIdle, uninstallDom, watchCount } from './dom.js';
 import type { Mounted } from './dom.js';
 import { Boundary, detail, empty, overview, quietErrors } from './fixtures.js';
 import type { Item } from './fixtures.js';
@@ -419,6 +419,20 @@ describe('ExplorerViewport: the frame the drawer leaves', () => {
     expect(first.x).toBeGreaterThan(open.x);
     expect(first.scale).toBeLessThan(closed.scale);
     expect(first.scale).toBeGreaterThan(open.scale);
+  });
+
+  it('clamps to the new frame when a drag takes over the ease', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    const closed = fitIn(SIZE);
+    await flush(() => api().closeDetails());
+    await runFrame();
+    expect(cameraNow().scale).toBeLessThan(closed.scale);
+    await fire(part('viewport'), pointer('pointerdown', 400, 240));
+    await fire(part('viewport'), pointer('pointermove', 420, 240));
+    expect(cameraNow().scale).toBeCloseTo(closed.scale, 6);
   });
 
   it('takes no inset from a drawer as wide as the viewport', async () => {
