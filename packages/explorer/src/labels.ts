@@ -51,6 +51,10 @@ export interface ExplorerLabels {
   readonly close: string;
   /** The heading of the drawer's default connection list. */
   readonly connections: string;
+  /** A connection's accessible direction, for an edge from the inspected node (and a self loop). */
+  readonly connectionTo: (label: string) => string;
+  /** A connection's accessible direction, for an edge into the inspected node. */
+  readonly connectionFrom: (label: string) => string;
 }
 
 const plural = (count: number, one: string, many: string): string =>
@@ -81,6 +85,8 @@ export const DEFAULT_EXPLORER_LABELS: ExplorerLabels = Object.freeze({
   drawerTitle: 'Details',
   close: 'Close',
   connections: 'Connections',
+  connectionTo: (label: string) => `to ${label}`,
+  connectionFrom: (label: string) => `from ${label}`,
 });
 
 /**

@@ -10,6 +10,10 @@
   and zoom work in the part of the graph beside it, a node under it can be
   panned out, and the node it opens on is revealed. `ExplorerViewport` takes
   `inset` for a host's own overlays and `contentPadding` (default 0.05).
+- A connection in the drawer follows its edge: it inspects the neighbor and
+  pans it into view at the current zoom. Each shows its direction (`→`, `←`,
+  `↻`), read out through the new `connectionTo` and `connectionFrom` labels.
+  The drawer's slot context gains `follow(id)`.
 
 ## 0.1.3
 

@@ -98,8 +98,8 @@ describe('DagrExplorer', () => {
     tree = await mount(<DagrExplorer label="Map" views={[overview]} apiRef={apiRef} renderConnection={renderConnection} />);
     await flush(() => api().inspect('c'));
     expect([...(find('connections')?.querySelectorAll('button') ?? [])].map((b) => b.textContent)).toEqual([
-      'bc>store',
-      'cd>store',
+      '← from Beta bc>store',
+      '→ to Delta cd>store',
     ]);
   });
 
@@ -267,6 +267,8 @@ describe('DagrExplorer: labels', () => {
     drawerTitle: '«drawerTitle»',
     close: '«close»',
     connections: '«connections»',
+    connectionTo: (label) => `«connectionTo ${label}»`,
+    connectionFrom: (label) => `«connectionFrom ${label}»`,
   };
 
   /** Every default string, and every default formatter's output for the values these tests reach. */
@@ -275,6 +277,10 @@ describe('DagrExplorer: labels', () => {
     ...[0, 1, 2, 3, 4].map((count) => DEFAULT_EXPLORER_LABELS.matches(count)),
     DEFAULT_EXPLORER_LABELS.stats({ nodes: 4, edges: 3 }),
     ...['Alpha', 'Beta', 'Gamma', 'Delta'].map((label) => DEFAULT_EXPLORER_LABELS.zoomTo(label)),
+    ...['Alpha', 'Beta', 'Gamma', 'Delta'].flatMap((label) => [
+      DEFAULT_EXPLORER_LABELS.connectionTo(label),
+      DEFAULT_EXPLORER_LABELS.connectionFrom(label),
+    ]),
     // `overview` has a group, so its members' accessible names reach this.
     DEFAULT_EXPLORER_LABELS.inGroup('Platform team'),
     // Hardcoded before `inGroup` existed: any copy left from it is a leak.
@@ -327,7 +333,8 @@ describe('DagrExplorer: labels', () => {
     for (const name of [
       'search', 'searchPlaceholder', 'searchResults', 'matches 4', 'stats 4 3', 'hint', 'views',
       'traceOn', 'traceOff', 'zoomControls', 'zoomIn', 'zoomOut', 'zoomLevel', 'fit', 'zoomTo Beta',
-      'zoomToSelected', 'drawerTitle', 'close', 'connections', 'inGroup Platform team',
+      'zoomToSelected', 'drawerTitle', 'close', 'connections', 'connectionTo Gamma', 'connectionFrom Alpha',
+      'inGroup Platform team',
     ]) {
       expect([name, all.includes(`«${name}`)]).toEqual([name, true]);
     }

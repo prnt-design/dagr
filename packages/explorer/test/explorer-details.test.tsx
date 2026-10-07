@@ -88,6 +88,20 @@ function connections(): HTMLButtonElement[] {
   return [...(find('connections')?.querySelectorAll('button') ?? [])];
 }
 
+/** What a screen reader hears from an element: its text, less anything `aria-hidden`. */
+function spoken(element: Element): string {
+  const copy = element.cloneNode(true) as Element;
+  for (const hidden of copy.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+  return (copy.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+/** What a sighted reader sees: its text, less the visually hidden direction. */
+function shown(element: Element): string {
+  const copy = element.cloneNode(true) as Element;
+  for (const hidden of copy.querySelectorAll('[data-dagr-explorer="connection-direction"]')) hidden.remove();
+  return (copy.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
 function searchInput(): HTMLInputElement {
   const element = part('search').querySelector('input');
   if (element === null) throw new Error('no input');
@@ -145,21 +159,50 @@ describe('ExplorerDetails: what it shows', () => {
     expect(part('details').getAttribute('style')).toContain(`background: ${String(background)}`);
   });
 
-  it('shows the label and the connections in edge order, each the other node', async () => {
+  it('shows the label and the connections in edge order, each the other node with its direction', async () => {
     await ready();
     await flush(() => state().inspect('b'));
     expect(part('details-label').textContent).toBe('Beta');
-    expect(connections().map((b) => [b.dataset['nodeId'], b.textContent])).toEqual([
-      ['a', 'Alpha'],
-      ['c', 'Gamma'],
+    expect(connections().map((b) => [b.dataset['nodeId'], shown(b), spoken(b)])).toEqual([
+      ['a', '← Alpha', 'from Alpha'],
+      ['c', '→ Gamma', 'to Gamma'],
     ]);
   });
 
-  it('draws each connection with renderConnection, given the edge and the other node', async () => {
+  it('names the direction through labels.connectionTo and labels.connectionFrom', async () => {
+    await ready({ labels: { connectionTo: (label) => `${label}, downstream`, connectionFrom: (label) => `${label}, upstream` } });
+    await flush(() => state().inspect('b'));
+    expect(connections().map(spoken)).toEqual(['Alpha, upstream', 'Gamma, downstream']);
+  });
+
+  it('draws each connection with renderConnection, given the edge and the other node, with the direction before it', async () => {
     const renderConnection = vi.fn((edge: ExplorerEdge, other: Item) => `${edge.id}:${other.kind}`);
     await ready({}, { renderConnection });
     await flush(() => state().inspect('b'));
-    expect(connections().map((b) => b.textContent)).toEqual(['ab:service', 'bc:queue']);
+    expect(connections().map(shown)).toEqual(['← ab:service', '→ bc:queue']);
+    expect(connections().map(spoken)).toEqual(['from Alpha ab:service', 'to Gamma bc:queue']);
+  });
+
+  it('follows a connection: inspects the other node and pans it into view at the same zoom', async () => {
+    await ready();
+    await flush(() => state().inspect('a'));
+    await flush(() => state().focusNode('a'));
+    await runFramesUntilIdle();
+    const before = state().camera.get();
+    const b = state().layout?.boxes.get('b');
+    if (before === null || b === undefined) throw new Error('no camera');
+    expect(before.x + b.x * before.scale).toBeGreaterThan(800);
+    const beta = connections()[0];
+    if (beta === undefined) throw new Error('no connection');
+    await flush(() => beta.click());
+    await runFramesUntilIdle();
+    expect(state().selectedId).toBe('b');
+    expect(state().detailsOpen).toBe(true);
+    const after = state().camera.get();
+    if (after === null) throw new Error('no camera');
+    expect(after.scale).toBeCloseTo(before.scale, 6);
+    expect(after.x + b.x * after.scale).toBeGreaterThanOrEqual(0);
+    expect(after.x + (b.x + b.width) * after.scale).toBeLessThanOrEqual(800);
   });
 
   it('hands its slot the node, the connections and inspect, and puts the result in the body', async () => {
@@ -172,9 +215,18 @@ describe('ExplorerDetails: what it shows', () => {
     await flush(() => state().inspect('c'));
     expect(part('details-body').querySelector('[data-testid="slot"]')?.textContent).toBe('queue:bc>b,cd>d');
     expect(find('details-label')).toBeNull();
-    const inspect = slot.mock.calls.at(-1)?.[0] as unknown as { inspect: (id: string) => void };
-    await flush(() => inspect.inspect('d'));
+    const context = slot.mock.calls.at(-1)?.[0] as unknown as { inspect: (id: string) => void; follow: (id: string) => void };
+    await flush(() => context.inspect('d'));
     expect(state().selectedId).toBe('d');
+    await flush(() => state().focusNode('d'));
+    await runFramesUntilIdle();
+    const before = state().camera.get();
+    await flush(() => context.follow('a'));
+    await runFramesUntilIdle();
+    expect(state().selectedId).toBe('a');
+    const after = state().camera.get();
+    expect(after?.scale).toBe(before?.scale);
+    expect(after?.x).not.toBe(before?.x);
   });
 
   it('keeps a self loop in the connections, with the node itself as the other end', async () => {
@@ -182,6 +234,11 @@ describe('ExplorerDetails: what it shows', () => {
     await ready({ views: [looped] });
     await flush(() => state().inspect('a'));
     expect(connections().map((b) => b.dataset['nodeId'])).toEqual(['b', 'a']);
+    expect(connections().map(shown)).toEqual(['→ Beta', '↻ Alpha']);
+    expect(connections().map(spoken)).toEqual(['to Beta', 'to Alpha']);
+    for (const arrow of part('connections').querySelectorAll('[data-dagr-explorer="connection-arrow"]')) {
+      expect(arrow.getAttribute('aria-hidden')).toBe('true');
+    }
   });
 
   it('scrolls the body to the top when the inspected node changes', async () => {

@@ -106,7 +106,7 @@ export function Architecture() {
 | `ExplorerSearch` | the search field, a live match count, and the matches as buttons, at most `maxResults` (default 50) |
 | `ExplorerTraceToggle` | trace on and off |
 | `ExplorerViewport` | the graph: pan and zoom, the SVG base, node elements for nodes large enough to read. Takes `renderNode`, `nodeAriaLabel`, `tiers`, `maxOverlayNodes`, `base`, `inset`, `contentPadding`. Its children, such as `ExplorerDetails`, share a positioned stage with the graph, and the graph's hint comes after the stage, where an overlay cannot cover it |
-| `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body. Children `({ node, connections, inspect })` replace the body, and `renderConnection(edge, otherNode)` draws one connection in the default body |
+| `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body. Children `({ node, connections, inspect, follow })` replace the body, and `renderConnection(edge, otherNode)` draws one connection in the default body |
 | `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node |
 
 Every part takes `className` and `style`, and your `style` wins over the
@@ -194,8 +194,11 @@ a longer query narrows the list.
 When the drawer closes with focus inside it, focus returns to what opened
 it, or to the search field if that element is gone, or to the root element
 if there is no search field. A control of yours that closes the drawer keeps
-its focus. A connection button in the drawer inspects its neighbor and keeps
-the original opener. `Escape` closes the drawer from anywhere in the root,
+its focus. A connection button in the drawer follows its edge: it inspects
+the neighbor, keeping the original opener, and pans it into view at the
+current zoom. It shows the edge's direction as an arrow (`→` out, `←` in, `↻`
+a self loop), which a screen reader hears as `labels.connectionTo(label)` or
+`labels.connectionFrom(label)` before the content. `Escape` closes the drawer from anywhere in the root,
 with two places that keep their own order. In the search field it closes
 the drawer first and clears the query second. On a node or the graph's
 surface it closes the drawer first, keeping focus where it is, and releases

@@ -67,7 +67,7 @@ const DEFAULT_VIEW_ID = 'default';
 const NOTHING: ReadonlySet<string> = new Set();
 
 /** Hidden from sight and not from a screen reader. */
-const VISUALLY_HIDDEN: CSSProperties = {
+export const VISUALLY_HIDDEN: CSSProperties = {
   position: 'absolute',
   width: 1,
   height: 1,

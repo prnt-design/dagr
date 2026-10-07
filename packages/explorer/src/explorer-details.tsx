@@ -8,9 +8,15 @@
  *
  * The body is a keyboard scroll stop and scrolls to the top when the
  * inspected node changes. Its content is the slot's, or by default the
- * node's label and its connections as buttons, each inspecting the node at
- * the other end. Those buttons keep the drawer's original opener, so
- * `Escape` after following three edges still returns where the reader began.
+ * node's label and its connections as buttons, each following its edge: it
+ * inspects the node at the other end and pans it into view. Those buttons
+ * keep the drawer's original opener, so `Escape` after following three edges
+ * still returns where the reader began.
+ *
+ * A connection shows its direction as an arrow, hidden from a screen reader,
+ * which hears `labels.connectionTo` or `labels.connectionFrom` instead, as
+ * visually hidden text before the content. So content from
+ * `renderConnection` is still what is read after it.
  *
  * Open, it registers with the root as an obstruction, so the camera frames
  * the part of the graph it leaves uncovered. See `use-explorer-camera.ts`.
@@ -24,6 +30,7 @@ import { useEffect, useId, useMemo, useRef } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { useExplorerContext } from './context.js';
 import { useIsomorphicLayoutEffect } from './isomorphic-layout-effect.js';
+import { VISUALLY_HIDDEN } from './root.js';
 import type { ExplorerEdge, ExplorerNode } from './types.js';
 
 /** An edge touching the inspected node, and the node at its other end. */
@@ -40,6 +47,8 @@ export interface ExplorerDetailsContext<N extends ExplorerNode = ExplorerNode, E
   readonly connections: readonly ExplorerConnection<N, E>[];
   /** Inspects another node, keeping the drawer's opener. */
   readonly inspect: (id: string) => void;
+  /** Inspects another node, as `inspect` does, and pans the least distance that brings it into view. */
+  readonly follow: (id: string) => void;
 }
 
 export interface ExplorerDetailsProps<N extends ExplorerNode = ExplorerNode, E extends ExplorerEdge = ExplorerEdge> {
@@ -92,6 +101,10 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
 
   // No trigger, and the drawer is open: the root keeps the opener it has.
   const inspect = (id: string): void => state.inspect(id);
+  const follow = (id: string): void => {
+    state.inspect(id);
+    state.reveal(id);
+  };
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>): void => {
     if (event.key !== 'Escape') return;
@@ -139,7 +152,7 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
         style={{ overflow: 'auto', flex: '1 1 auto', minHeight: 0 }}
       >
         {children !== undefined ? (
-          children({ node, connections, inspect })
+          children({ node, connections, inspect, follow })
         ) : (
           <>
             <p data-dagr-explorer="details-label">{node.label}</p>
@@ -151,13 +164,30 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
                   aria-labelledby={connectionsId}
                   style={{ listStyle: 'none', margin: 0, padding: 0 }}
                 >
-                  {connections.map(({ edge, node: other }) => (
-                    <li key={edge.id}>
-                      <button type="button" data-node-id={other.id} onClick={() => inspect(other.id)}>
-                        {renderConnection === undefined ? other.label : renderConnection(edge, other)}
-                      </button>
-                    </li>
-                  ))}
+                  {connections.map(({ edge, node: other }) => {
+                    const outward = edge.source === node.id;
+                    const arrow = outward ? (edge.target === node.id ? '↻' : '→') : '←';
+                    return (
+                      <li key={edge.id}>
+                        <button type="button" data-node-id={other.id} onClick={() => follow(other.id)}>
+                          <span data-dagr-explorer="connection-arrow" aria-hidden="true">
+                            {arrow}
+                          </span>{' '}
+                          <span data-dagr-explorer="connection-direction" style={VISUALLY_HIDDEN}>
+                            {outward ? labels.connectionTo(other.label) : labels.connectionFrom(other.label)}
+                          </span>
+                          {renderConnection === undefined ? (
+                            <span aria-hidden="true">{other.label}</span>
+                          ) : (
+                            <>
+                              {' '}
+                              {renderConnection(edge, other)}
+                            </>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </>
             )}

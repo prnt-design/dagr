@@ -107,7 +107,7 @@ What the demo passes, beyond `views`:
       node.label
     )
   }
-  renderDetails={({ node, connections, inspect }) => (
+  renderDetails={({ node, connections, follow }) => (
     <>
       <p>{node.label}</p>
       <dl>
@@ -119,7 +119,7 @@ What the demo passes, beyond `views`:
       <ul>
         {connections.map(({ edge, node: other }) => (
           <li key={edge.id}>
-            <button type="button" onClick={() => inspect(other.id)}>
+            <button type="button" onClick={() => follow(other.id)}>
               {other.label}
             </button>
           </li>
@@ -132,9 +132,12 @@ What the demo passes, beyond `views`:
 
 `searchText` is what search reads from a node, by default the id and label.
 `renderNode`'s output sits inside the explorer's own node button, so it must
-not be interactive. `renderDetails` replaces the drawer's body, and
-`inspect` opens another node while keeping the drawer's original opener for
-focus to return to.
+not be interactive. `renderDetails` replaces the drawer's body. `inspect`
+opens another node while keeping the drawer's original opener for focus to
+return to, and `follow` does the same and pans the node into view at the
+current zoom, which is what the default list's connection buttons do. Those
+buttons show an arrow for the edge's direction, read out through
+`labels.connectionTo` and `labels.connectionFrom`.
 
 ## The parts and your own layout
 
