@@ -14,7 +14,7 @@ import { ExplorerRoot } from '../src/root.js';
 import type { ExplorerRootProps } from '../src/root.js';
 import type { ExplorerEdge } from '../src/types.js';
 import { useExplorer } from '../src/use-explorer.js';
-import { fire, flush, installDom, mount, mouse, resizeTo, runFramesUntilIdle, uninstallDom, watchCount } from './dom.js';
+import { fire, flush, installDom, mount, mouse, resizeTo, runFrame, runFramesUntilIdle, uninstallDom, watchCount } from './dom.js';
 import type { Mounted } from './dom.js';
 import { Boundary, detail, empty, overview, quietErrors } from './fixtures.js';
 import type { Item } from './fixtures.js';
@@ -377,6 +377,38 @@ describe('ExplorerViewport: the frame the drawer leaves', () => {
     await runFramesUntilIdle();
     expectCamera(fitIn(SIZE));
     expect(watchCount()).toBe(1);
+  });
+
+  it('eases to the new fit when the drawer closes, with no jump in the first frame', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    const open = fitIn(narrow);
+    const closed = fitIn(SIZE);
+    await flush(() => api().closeDetails());
+    expectCamera(open);
+    await runFrame();
+    const first = cameraNow();
+    expect(first.scale).toBeGreaterThan(open.scale);
+    expect(first.scale).toBeLessThan(closed.scale);
+    await runFramesUntilIdle();
+    expectCamera(closed);
+  });
+
+  it('eases to the new fit when the drawer opens, with no jump in the first frame', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    const closed = fitIn(SIZE);
+    const open = fitIn(narrow);
+    await flush(() => api().inspect('a'));
+    expectCamera(closed);
+    await runFrame();
+    const first = cameraNow();
+    expect(first.x).toBeLessThan(closed.x);
+    expect(first.x).toBeGreaterThan(open.x);
+    expect(first.scale).toBeLessThan(closed.scale);
+    expect(first.scale).toBeGreaterThan(open.scale);
   });
 
   it('takes no inset from a drawer as wide as the viewport', async () => {

@@ -163,6 +163,10 @@ function createEngine(
   let current: ExplorerCamera | null = null;
   let target: ExplorerCamera | null = null;
   let drawn: ExplorerCamera | null = null;
+  // Set by a change of frame at the same size, until its flight settles or a
+  // gesture takes over: `current` is drawn unconstrained, because the new
+  // limits would snap it to their edge before the ease could move it.
+  let framing = false;
   let frame = 0;
   let lastTime = 0;
   let disposed = false;
@@ -192,7 +196,7 @@ function createEngine(
 
   const draw = (): void => {
     if (disposed || limits === null || current === null) return;
-    const next = limits.constrain(current);
+    const next = framing ? current : limits.constrain(current);
     plane.style.transform = `translate(${String(next.x)}px, ${String(next.y)}px) scale(${String(next.scale)})`;
     if (drawn === null || drawn.scale !== next.scale) {
       plane.style.setProperty('--dagr-explorer-inv-zoom', String(1 / next.scale));
@@ -211,6 +215,7 @@ function createEngine(
     lastTime = time;
     const next = easeCamera(current, target, elapsed);
     if (cameraSettled(next, target)) {
+      framing = false;
       current = target;
       draw();
       composite();
@@ -227,6 +232,7 @@ function createEngine(
     target = limits.constrain(next);
     if (reduced?.matches === true || current === null) {
       stop();
+      framing = false;
       current = target;
       draw();
     } else if (frame === 0) {
@@ -298,11 +304,16 @@ function createEngine(
     // The user's place is the world point at the center and the scale. The
     // plane is anchored at its top left, so keeping the center is a pan by
     // half the change in size, drawn now so the content does not jump.
-    const dx = (size.width - previous.width) / 2;
-    const dy = (size.height - previous.height) / 2;
-    current = panCamera(current, dx, dy);
-    target = panCamera(target, dx, dy);
-    draw();
+    if (resized) {
+      const dx = (size.width - previous.width) / 2;
+      const dy = (size.height - previous.height) / 2;
+      framing = false;
+      current = panCamera(current, dx, dy);
+      target = panCamera(target, dx, dy);
+      draw();
+    } else {
+      framing = true;
+    }
     if (wasAtFit) {
       aim(fitCamera(layout, area, bounds));
       return;
@@ -380,7 +391,8 @@ function createEngine(
   const grab = (): boolean => {
     if (limits === null || current === null) return false;
     stop();
-    current = target = drawn ?? limits.constrain(current);
+    current = target = framing || drawn === null ? limits.constrain(current) : drawn;
+    framing = false;
     return true;
   };
 
