@@ -285,8 +285,11 @@ describe('a frame: the part of the viewport nothing covers', () => {
     expect(fit.x + (chain.width * fit.scale) / 2).toBeCloseTo(220, 6);
     expect(fit.y + (chain.height * fit.scale) / 2).toBeCloseTo(240, 6);
     const shifted = { x: 360, y: 0, width: 440, height: 480 };
-    const right = fitCamera(chain, shifted, limits);
+    const shiftedLimits = createCameraLimits(chain, shifted);
+    if (shiftedLimits === null) throw new Error('no limits');
+    const right = fitCamera(chain, shifted, shiftedLimits);
     expect(right.x).toBeCloseTo(fit.x + 360, 6);
+    expect(shiftedLimits.constrain(right)).toEqual(right);
     const constrained = limits.constrain(fit);
     expect(constrained.x).toBeCloseTo(fit.x, 6);
     expect(constrained.y).toBeCloseTo(fit.y, 6);
@@ -363,6 +366,10 @@ describe('cameraFrame and obstructionInset', () => {
     expect(obstructionInset(whole, rect(440, 0, 800, 480))).toEqual({ right: 360 });
     expect(obstructionInset(whole, rect(0, 0, 300, 480))).toEqual({ left: 300 });
     expect(obstructionInset(whole, rect(0, 0, 800, 60))).toEqual({ top: 60 });
+  });
+
+  it('insets the docked side of a full-height drawer wider than half the viewport', () => {
+    expect(obstructionInset(whole, rect(300, 0, 800, 480))).toEqual({ right: 500 });
   });
 
   it('measures against where the viewport is, and only the part that overlaps it', () => {

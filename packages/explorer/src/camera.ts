@@ -119,8 +119,9 @@ export function cameraFrame(viewport: ExplorerViewportSize, ...insets: readonly 
 /**
  * What an overlay takes off the viewport: one side, by the overlap, when the
  * overlay touches that side (within a pixel) and spans at least half of it.
- * Of the sides it qualifies on, the one it reaches in from least, so a drawer
- * the full height of the viewport insets the side it is docked to.
+ * Of the sides it qualifies on, the one it reaches in from least as a share
+ * of its axis, so a drawer the full height of the viewport insets the side it
+ * is docked to however wide it is.
  */
 export function obstructionInset(viewport: ScreenRect, overlay: ScreenRect): ExplorerInset {
   const left = Math.max(viewport.left, overlay.left);
@@ -133,17 +134,17 @@ export function obstructionInset(viewport: ScreenRect, overlay: ScreenRect): Exp
   const width = viewport.right - viewport.left;
   const height = viewport.bottom - viewport.top;
   const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
-  const sides: [keyof ExplorerInset, number][] = [];
+  const sides: [keyof ExplorerInset, number, number][] = [];
   if (down >= height / 2) {
-    if (near(overlay.left, viewport.left) || overlay.left < viewport.left) sides.push(['left', right - viewport.left]);
-    if (near(overlay.right, viewport.right) || overlay.right > viewport.right) sides.push(['right', viewport.right - left]);
+    if (near(overlay.left, viewport.left) || overlay.left < viewport.left) sides.push(['left', right - viewport.left, width]);
+    if (near(overlay.right, viewport.right) || overlay.right > viewport.right) sides.push(['right', viewport.right - left, width]);
   }
   if (across >= width / 2) {
-    if (near(overlay.top, viewport.top) || overlay.top < viewport.top) sides.push(['top', bottom - viewport.top]);
-    if (near(overlay.bottom, viewport.bottom) || overlay.bottom > viewport.bottom) sides.push(['bottom', viewport.bottom - top]);
+    if (near(overlay.top, viewport.top) || overlay.top < viewport.top) sides.push(['top', bottom - viewport.top, height]);
+    if (near(overlay.bottom, viewport.bottom) || overlay.bottom > viewport.bottom) sides.push(['bottom', viewport.bottom - top, height]);
   }
-  let best: [keyof ExplorerInset, number] | null = null;
-  for (const each of sides) if (best === null || each[1] < best[1]) best = each;
+  let best: [keyof ExplorerInset, number, number] | null = null;
+  for (const each of sides) if (best === null || each[1] / each[2] < best[1] / best[2]) best = each;
   return best === null ? {} : { [best[0]]: best[1] };
 }
 
