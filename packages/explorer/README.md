@@ -112,9 +112,11 @@ export function Architecture() {
 Every part takes `className` and `style`, and your `style` wins over the
 part's own: `<ExplorerViewport style={{ height: 600 }} />` sets the graph's
 height, which is otherwise `--dagr-explorer-height`. The one exception is
-the viewport's `position` and `overflow`: they stay the viewport's own
-(`relative` and `hidden`), because the graph's nodes are positioned against
-it and clipped by it.
+the viewport's `position`, `overflow` and `user-select`: they stay the
+viewport's own (`relative`, `hidden` and `none`), because the graph's nodes
+are positioned against it and clipped by it, and a press that becomes a pan
+must not select their text. The drawer is outside the viewport, so its text
+stays selectable.
 
 One `ExplorerViewport` per root: a second throws `ExplorerContextError` with
 the code `SECOND_VIEWPORT`. A part outside a root throws it with

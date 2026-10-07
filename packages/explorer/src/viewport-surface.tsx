@@ -107,7 +107,7 @@ export interface ViewportSurfaceProps<N extends ExplorerNode, E extends Explorer
   /** The id of the element that describes the region. */
   readonly describedBy?: string | undefined;
   readonly className?: string | undefined;
-  /** Sizing and decoration pass through. `position` and `overflow` stay the viewport's own, because the graph needs them. */
+  /** Sizing and decoration pass through. `position`, `overflow` and `user-select` stay the viewport's own, because the graph needs them. */
   readonly style?: CSSProperties | undefined;
 }
 
@@ -624,8 +624,12 @@ export function ViewportSurface<N extends ExplorerNode, E extends ExplorerEdge>(
         ...style,
         // Last, so a caller cannot break the graph: the plane and the nodes
         // are absolutely positioned against this element and clipped by it.
+        // A browser starts a text selection on the press, before the camera
+        // knows the press is a pan, so nothing in the graph is selectable.
         position: 'relative',
         overflow: 'hidden',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
       }}
     >
       {base.space === 'viewport' ? layer : null}

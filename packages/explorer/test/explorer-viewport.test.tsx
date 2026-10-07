@@ -6,6 +6,7 @@ import type { ExplorerBase } from '../src/base.js';
 import { createCameraLimits, fitCamera } from '../src/camera.js';
 import type { ExplorerCamera } from '../src/camera.js';
 import type { ExplorerApi, ExplorerState } from '../src/context.js';
+import { ExplorerDetails } from '../src/explorer-details.js';
 import { ExplorerViewport } from '../src/explorer-viewport.js';
 import type { ExplorerViewportProps } from '../src/explorer-viewport.js';
 import { layoutView } from '../src/layout.js';
@@ -190,6 +191,32 @@ describe('ExplorerViewport: inside a root', () => {
     expect(part('viewport').style.height).toBe('600px');
     expect(part('viewport').style.position).toBe('relative');
     expect(part('viewport').style.overflow).toBe('hidden');
+  });
+
+  it('turns off text selection on the graph, so a press that becomes a pan selects nothing, and leaves the drawer selectable', async () => {
+    tree = await mount(
+      <ExplorerRoot<Item, ExplorerEdge> label="Map" views={[overview]}>
+        <ExplorerViewport style={{ userSelect: 'text' }}>
+          <ExplorerDetails />
+        </ExplorerViewport>
+        <Probe />
+      </ExplorerRoot>,
+    );
+    await resizeTo(SIZE.width, SIZE.height);
+    await runFramesUntilIdle();
+    await flush(() => state().inspect('b'));
+    const viewport = part('viewport');
+    expect(viewport.style.getPropertyValue('user-select')).toBe('none');
+    expect(viewport.style.getPropertyValue('-webkit-user-select')).toBe('none');
+    const drawer = part('details');
+    expect(viewport.contains(drawer)).toBe(false);
+    const root = part('root');
+    for (let at: HTMLElement | null = drawer; at !== null && at !== root.parentElement; at = at.parentElement) {
+      expect(at.style.getPropertyValue('user-select')).toBe('');
+    }
+    for (const inner of drawer.querySelectorAll<HTMLElement>('*')) {
+      expect(inner.style.getPropertyValue('user-select')).toBe('');
+    }
   });
 
   it('renders its children in a positioned stage with the graph, and the hint after the stage', async () => {

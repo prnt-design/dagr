@@ -60,8 +60,8 @@ export interface ExplorerViewportProps<N extends ExplorerNode = ExplorerNode> {
   readonly className?: string | undefined;
   /**
    * Sizing and decoration pass through: `{ height: 600 }` replaces
-   * `--dagr-explorer-height`. `position` and `overflow` stay the viewport's
-   * own, because the graph needs them.
+   * `--dagr-explorer-height`. `position`, `overflow` and `user-select` stay
+   * the viewport's own, because the graph needs them.
    */
   readonly style?: CSSProperties | undefined;
   /**

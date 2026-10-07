@@ -200,7 +200,7 @@ code `SECOND_VIEWPORT`, and a part outside a root throws it with
 Every part takes `className` and `style`, and your `style` wins over the
 part's own: `<ExplorerViewport style={{ height: 600 }} />` sets the graph's
 height. The viewport keeps its own `position` and `overflow`, which place and
-clip its nodes.
+clip its nodes, and `user-select: none`, so a pan never selects their text.
 
 **A part's type parameters are a claim, not a check.** The parts talk through
 a context, which erases them, so `ExplorerViewport<MyNode>` asserts the node

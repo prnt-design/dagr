@@ -1,5 +1,10 @@
 # @prnt/dagr-explorer
 
+## Unreleased
+
+- A pan or a zoom no longer selects text: the viewport sets
+  `user-select: none`. The drawer's text stays selectable.
+
 ## 0.1.3
 
 The first release. Built in slices M5.6a to M5.6f; the entries below are in
