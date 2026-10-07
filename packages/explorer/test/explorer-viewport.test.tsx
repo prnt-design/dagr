@@ -251,6 +251,16 @@ describe('ExplorerViewport: inside a root', () => {
     expect(renderNode).toHaveBeenCalled();
   });
 
+  it('does not render the graph again for an inline inset with the same sides', async () => {
+    const renderNode = vi.fn((node: Item) => node.label);
+    await ready({}, { renderNode, inset: { right: 120 } });
+    renderNode.mockClear();
+    await tree?.rerender(explorer({}, { renderNode, inset: { right: 120 } }));
+    expect(renderNode).not.toHaveBeenCalled();
+    await tree?.rerender(explorer({}, { renderNode, inset: { right: 160 } }));
+    expect(renderNode).toHaveBeenCalled();
+  });
+
   it('shows labels.emptyView for a view with no nodes, and labels.noViews for no views', async () => {
     await ready({ views: [empty] });
     expect(part('viewport').textContent).toBe('This view has no nodes.');

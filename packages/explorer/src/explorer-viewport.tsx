@@ -27,7 +27,7 @@
  * never covers it.
  */
 
-import { memo, useEffect, useId, useRef } from 'react';
+import { memo, useEffect, useId, useMemo, useRef } from 'react';
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import type { ExplorerBase, ExplorerCameraSource } from './base.js';
 import type { ExplorerInset } from './camera.js';
@@ -131,10 +131,13 @@ const STAGE: CSSProperties = { position: 'relative' };
 export function ExplorerViewport<N extends ExplorerNode = ExplorerNode, E extends ExplorerEdge = ExplorerEdge>(
   props: ExplorerViewportProps<N>,
 ): ReactElement {
-  const { children, ...rest } = props;
+  const { children, inset: insetProp, ...rest } = props;
   const { state, internals } = useExplorerContext('ExplorerViewport');
   const api = useExplorerApiContext('ExplorerViewport');
   const describedBy = useId();
+  // By its sides, so an inline object does not render the memoized pane again.
+  const { top, right, bottom, left } = insetProp ?? {};
+  const inset = useMemo(() => ({ top, right, bottom, left }), [top, right, bottom, left]);
 
   useEffect(() => internals.registerViewport(), [internals]);
 
@@ -171,6 +174,7 @@ export function ExplorerViewport<N extends ExplorerNode = ExplorerNode, E extend
           <ViewportPane<N, E>
             key={view.id}
             {...rest}
+            inset={inset}
             label={state.label}
             inGroup={labels.inGroup}
             view={view}
