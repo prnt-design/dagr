@@ -123,8 +123,9 @@ stays selectable.
 open, fit, `focusNode`, `reveal`, the zoom buttons and keys all work in the
 part of the graph beside it, a node under the drawer can be panned out, and
 the node the drawer opens on is revealed if the drawer covers it. A camera at
-fit refits as the drawer opens and closes. A drawer as wide as the graph (on a
-phone) leaves the camera the whole graph. For overlays of your own, pass
+fit eases to the new fit as the drawer opens and closes. A drawer that would
+leave less than 160px, or a quarter of the graph's width, is ignored, so on a
+phone the camera keeps the whole graph. For overlays of your own, pass
 `inset={{ top, right, bottom, left }}` in CSS pixels. `contentPadding` is how
 far, as a fraction of the frame, content may be panned past its edge: default
 0.05, clamped into [0, 0.45].

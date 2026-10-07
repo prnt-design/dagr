@@ -8,7 +8,8 @@
   button calls it, so the wheel and the camera keys apply right after.
 - The open drawer no longer covers what the camera shows: fit, focus, reveal
   and zoom work in the part of the graph beside it, a node under it can be
-  panned out, and the node it opens on is revealed. `ExplorerViewport` and
+  panned out, and the node it opens on is revealed. A camera at fit eases to
+  the new fit as the drawer opens and closes. `ExplorerViewport` and
   `DagrExplorer` take `inset` for a host's own overlays, typed by the new
   `ExplorerInset` export, and `contentPadding` (default 0.05).
 - A connection in the drawer follows its edge: it inspects the neighbor and
@@ -18,7 +19,8 @@
   draws the whole button, and gets the direction (`'to'`, `'from'` or
   `'self'`) as a third argument.
 - Zoom out, zoom in, fit and the drawer's close button are icon buttons,
-  named and titled by their labels. Zoom to selected keeps its text.
+  named and titled by their labels. Zoom to selected keeps its text and
+  gains an icon.
 
 ### Upgrading from 0.1.3
 
