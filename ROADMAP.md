@@ -10,12 +10,13 @@ the decisions it took and the reasons, lives in
 reference elsewhere in the repo to "the roadmap's M4.6 entry" means the entry
 there. Milestone status is mirrored in the project brain.
 
-## Status (2026-10-05 UTC)
+## Status (2026-10-07 UTC)
 
 The published npm packages use `@prnt/dagr-*`, with the
-`@prnt/dagr` umbrella. All seven packages are published at **0.1.3**
-(2026-10-05), including the new `@prnt/dagr-explorer` (M5.6), which the
-umbrella also exposes as `@prnt/dagr/explorer`. `three` is an optional peer, so
+`@prnt/dagr` umbrella. All seven packages are published at **0.1.4**
+(2026-10-07). `@prnt/dagr-explorer` (M5.6, new in 0.1.3) is also exposed by
+the umbrella as `@prnt/dagr/explorer`; 0.1.4 makes its camera frame the part
+of the graph the open drawer leaves uncovered. `three` is an optional peer, so
 an explorer site does not install it. Earlier releases added generic node-group
 boundaries, content-derived camera limits, and routed, smooth, and orthogonal
 edge styles. The generic System Atlas demonstrates rich VDSL nodes, search, and

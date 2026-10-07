@@ -8,6 +8,10 @@ checklist is where a changelog tool gets picked. Starting now is what stops the
 v0.2 notes from having to be reconstructed by diffing six milestones of doc
 prose.
 
+## 0.1.4
+
+- Lockstep release with the explorer's drawer-aware camera and icon controls. No runtime API changes in this package.
+
 ## 0.1.3
 
 - Lockstep release with DagrCanvas navigation and node events. No runtime API changes in this package.

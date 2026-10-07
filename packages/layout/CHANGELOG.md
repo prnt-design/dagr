@@ -9,6 +9,10 @@ types did not" is the category this file has a heading for, so that the v0.1
 release notes do not have to be reconstructed by diffing five milestones' worth
 of doc prose.
 
+## 0.1.4
+
+- Lockstep release with the explorer's drawer-aware camera and icon controls. No runtime API changes in this package.
+
 ## 0.1.3
 
 - Lockstep release with DagrCanvas navigation and node events. No runtime API changes in this package.
