@@ -27,6 +27,12 @@
  * the center and the scale, under the new limits. Only a camera that was at
  * fit is fitted again, so a user zoomed in on a node keeps it.
  *
+ * **The camera frames what nothing covers.** The frame is the viewport less
+ * the host's `inset` and the overlays registered as obstructions (the
+ * drawer), measured on every resize of either. A frame that changes refits a
+ * camera at fit, and otherwise keeps the camera and reveals the `keepInView`
+ * box (the selected node) if the change covered it.
+ *
  * Internal to the package. Nothing here is exported from the entry.
  */
 
@@ -34,22 +40,33 @@ import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import type { Vec2 } from '@prnt/dagr-render/core';
 import {
+  CONTENT_PADDING,
+  cameraFrame,
   cameraSettled,
   createCameraLimits,
   easeCamera,
   fitCamera,
   focusCamera,
+  frameCenter,
+  obstructionInset,
   panCamera,
   revealCamera,
   screenToWorld,
   zoomCamera,
 } from './camera.js';
-import type { CameraLimits, ExplorerCamera, ExplorerViewportSize } from './camera.js';
+import type { CameraFrame, CameraLimits, ExplorerCamera, ExplorerInset, ExplorerViewportSize } from './camera.js';
 import type { ExplorerBox, ExplorerLayout } from './layout.js';
+
+/** Overlays the camera keeps its frame clear of. */
+export interface CameraObstructions {
+  list(): readonly Element[];
+  /** Calls `listener` when one is added or removed. Returns the unsubscribe. */
+  subscribe(listener: () => void): () => void;
+}
 
 export interface ExplorerCameraControls {
   fit(): void;
-  /** Anchored at the viewport center. */
+  /** Anchored at the frame's center. */
   zoomBy(factor: number): void;
   /** A flight to fit the box. */
   focusBox(box: ExplorerBox): void;
@@ -68,6 +85,18 @@ export interface UseExplorerCameraOptions {
   readonly layout: ExplorerLayout;
   /** Called on every drawn frame, after the transform is written. */
   readonly onFrame: (camera: ExplorerCamera, viewport: ExplorerViewportSize) => void;
+  readonly obstructions?: CameraObstructions | undefined;
+  /** CSS pixels the host's own overlays cover on each side. */
+  readonly inset?: ExplorerInset | undefined;
+  /** The fraction of the frame content may be panned past its edge. Default 0.05. */
+  readonly contentPadding?: number | undefined;
+  /** The box to bring back into the frame when a change of frame covers it. */
+  readonly keepInView?: (() => ExplorerBox | null) | undefined;
+}
+
+interface FrameOptions {
+  readonly inset: ExplorerInset;
+  readonly contentPadding: number;
 }
 
 /** CSS pixels a press travels before it is a pan rather than a click. */
@@ -90,6 +119,7 @@ const TEXT_ENTRY = 'input, select, textarea, [contenteditable]';
 
 interface Engine extends ExplorerCameraControls {
   setLayout(layout: ExplorerLayout): void;
+  setFrameOptions(options: FrameOptions): void;
   dispose(): void;
 }
 
@@ -99,11 +129,23 @@ const isFiniteBox = (box: ExplorerBox): boolean =>
   Number.isFinite(box.width) &&
   Number.isFinite(box.height);
 
+/** What a frame leaves covered on each side: how a change of frame differs from a resize. */
+const covered = (area: CameraFrame, size: ExplorerViewportSize): string =>
+  [
+    area.x ?? 0,
+    area.y ?? 0,
+    size.width - (area.x ?? 0) - area.width,
+    size.height - (area.y ?? 0) - area.height,
+  ].join(' ');
+
 function createEngine(
   viewport: HTMLElement,
   plane: HTMLElement,
   initialLayout: ExplorerLayout,
   onFrame: (camera: ExplorerCamera, size: ExplorerViewportSize) => void,
+  initialOptions: FrameOptions,
+  obstructions: CameraObstructions | undefined,
+  keepInView: () => ExplorerBox | null,
 ): Engine {
   const reduced =
     typeof window.matchMedia === 'function'
@@ -111,6 +153,9 @@ function createEngine(
       : null;
   let layout = initialLayout;
   let size: ExplorerViewportSize = { width: 0, height: 0 };
+  // The part of the viewport nothing covers, which the camera frames.
+  let area: CameraFrame = size;
+  let options = initialOptions;
   let limits: CameraLimits | null = null;
   // `current` is what the ease has reached and `target` where it is going,
   // both as asked for. `drawn` is `current` constrained, which is what the
@@ -193,15 +238,15 @@ function createEngine(
 
   /**
    * Whether the camera is at the fit for the current layout and `at`, the
-   * size `bounds` were built for. Read from the target, so a flight to the
+   * frame `bounds` were built for. Read from the target, so a flight to the
    * fit counts as at fit.
    */
-  const atFit = (bounds: CameraLimits | null, at: ExplorerViewportSize): boolean =>
+  const atFit = (bounds: CameraLimits | null, at: CameraFrame): boolean =>
     bounds !== null && target !== null && cameraSettled(target, bounds.constrain(fitCamera(layout, at, bounds)));
 
-  /** Rebuilds the limits for the layout and size. With none, there is no camera. */
+  /** Rebuilds the limits for the layout and frame. With none, there is no camera. */
   const rebuild = (): CameraLimits | null => {
-    limits = createCameraLimits(layout, size);
+    limits = createCameraLimits(layout, area, options.contentPadding);
     if (limits === null) {
       stop();
       current = target = drawn = null;
@@ -216,21 +261,38 @@ function createEngine(
     aim(camera);
   };
 
-  const measure = (): void => {
+  /** What the registered obstructions cover, measured against the viewport's content box. */
+  const obstructed = (): ExplorerInset[] => {
+    const overlays = obstructions?.list() ?? [];
+    if (overlays.length === 0) return [];
+    const box = viewport.getBoundingClientRect();
+    const left = box.left + viewport.clientLeft;
+    const top = box.top + viewport.clientTop;
+    const inner = { left, top, right: left + viewport.clientWidth, bottom: top + viewport.clientHeight };
+    return overlays.map((overlay) => obstructionInset(inner, overlay.getBoundingClientRect()));
+  };
+
+  /** `force` rebuilds the limits even when neither the size nor the frame changed. */
+  const measure = (force = false): void => {
     if (disposed) return;
     const width = viewport.clientWidth;
     const height = viewport.clientHeight;
     // A zero dimension is a hidden viewport, not a tiny one. Keeping the last
     // camera means showing it again needs no refit when the size comes back.
     if (!(width > 0) || !(height > 0)) return;
-    if (width === size.width && height === size.height && limits !== null) return;
+    const nextSize = { width, height };
+    const nextFrame = cameraFrame(nextSize, options.inset, ...obstructed());
+    const resized = width !== size.width || height !== size.height;
+    const uncovered = covered(nextFrame, nextSize) !== covered(area, size);
+    if (!force && !resized && !uncovered && limits !== null) return;
     const previous = size;
-    const wasAtFit = atFit(limits, previous);
-    size = { width, height };
+    const wasAtFit = atFit(limits, area);
+    size = nextSize;
+    area = nextFrame;
     const bounds = rebuild();
     if (bounds === null) return;
     if (current === null || target === null) {
-      place(fitCamera(layout, size, bounds));
+      place(fitCamera(layout, area, bounds));
       return;
     }
     // The user's place is the world point at the center and the scale. The
@@ -241,7 +303,30 @@ function createEngine(
     current = panCamera(current, dx, dy);
     target = panCamera(target, dx, dy);
     draw();
-    aim(wasAtFit ? fitCamera(layout, size, bounds) : target);
+    if (wasAtFit) {
+      aim(fitCamera(layout, area, bounds));
+      return;
+    }
+    const keep = uncovered ? keepInView() : null;
+    aim(keep !== null && isFiniteBox(keep) ? revealCamera(target, keep, area) : target);
+  };
+
+  // The obstructions are observed with the viewport, so a drawer that
+  // resizes moves the frame.
+  const watched = new Set<Element>();
+  const observeObstructions = (): void => {
+    const now = new Set(obstructions?.list() ?? []);
+    for (const element of watched) {
+      if (now.has(element)) continue;
+      watched.delete(element);
+      observer.unobserve(element);
+    }
+    for (const element of now) {
+      if (watched.has(element)) continue;
+      watched.add(element);
+      observer.observe(element);
+    }
+    measure();
   };
 
   // Gestures. A press records where it began, and becomes a pan only past
@@ -496,7 +581,7 @@ function createEngine(
     const onNode = event.target instanceof Element && event.target.closest(NODE) !== null;
     if (onNode && !event.shiftKey && event.key.startsWith('Arrow')) return;
     if (limits === null || target === null) return;
-    const center = { x: size.width / 2, y: size.height / 2 };
+    const center = frameCenter(area);
     switch (event.key) {
       case '+':
       case '=':
@@ -506,7 +591,7 @@ function createEngine(
         aim(zoomCamera(target, KEY_ZOOM_OUT, center, limits));
         break;
       case '0':
-        aim(fitCamera(layout, size, limits));
+        aim(fitCamera(layout, area, limits));
         break;
       case 'ArrowLeft':
         aim(panCamera(target, KEY_PAN, 0));
@@ -552,8 +637,9 @@ function createEngine(
     listenForWheel(false);
   };
 
-  const observer = new ResizeObserver(measure);
+  const observer = new ResizeObserver(() => measure());
   observer.observe(viewport);
+  const unsubscribe = obstructions?.subscribe(observeObstructions);
   viewport.addEventListener('keydown', onKeyDown);
   viewport.addEventListener('pointerdown', onPointerDown);
   viewport.addEventListener('pointermove', onPointerMove);
@@ -567,23 +653,23 @@ function createEngine(
   viewport.addEventListener('focusin', onFocusIn);
   viewport.addEventListener('focusout', onFocusOut);
   if (containsFocus()) onFocusIn();
-  measure();
+  observeObstructions();
 
   return {
     fit() {
-      if (limits !== null) aim(fitCamera(layout, size, limits));
+      if (limits !== null) aim(fitCamera(layout, area, limits));
     },
     zoomBy(factor) {
       if (limits === null || target === null || !(factor > 0) || !Number.isFinite(factor)) return;
-      aim(zoomCamera(target, factor, { x: size.width / 2, y: size.height / 2 }, limits));
+      aim(zoomCamera(target, factor, frameCenter(area), limits));
     },
     focusBox(box) {
       if (limits === null || !isFiniteBox(box)) return;
-      aim(focusCamera(box, size, limits));
+      aim(focusCamera(box, area, limits));
     },
     revealBox(box) {
       if (target === null || !isFiniteBox(box)) return;
-      aim(revealCamera(target, box, size));
+      aim(revealCamera(target, box, area));
     },
     focus() {
       if (!disposed) focusViewport();
@@ -594,9 +680,17 @@ function createEngine(
     screenToWorld(point) {
       return drawn === null ? null : screenToWorld(drawn, point);
     },
+    setFrameOptions(next) {
+      const same =
+        next.contentPadding === options.contentPadding &&
+        (['top', 'right', 'bottom', 'left'] as const).every((side) => next.inset[side] === options.inset[side]);
+      if (disposed || same) return;
+      options = next;
+      measure(true);
+    },
     setLayout(next) {
       if (disposed || next === layout) return;
-      const wasAtFit = atFit(limits, size);
+      const wasAtFit = atFit(limits, area);
       const kept = drawn;
       layout = next;
       if (!(size.width > 0 && size.height > 0)) return;
@@ -605,11 +699,12 @@ function createEngine(
       // New content is placed, not flown to: easing from a camera framed on
       // other content shows nothing meaningful on the way. At the same size,
       // the same camera keeps the center's world point and the scale.
-      place(kept === null || wasAtFit ? fitCamera(layout, size, bounds) : kept);
+      place(kept === null || wasAtFit ? fitCamera(layout, area, bounds) : kept);
     },
     dispose() {
       disposed = true;
       stop();
+      unsubscribe?.();
       observer.disconnect();
       listenForWheel(false);
       viewport.removeEventListener('keydown', onKeyDown);
@@ -637,15 +732,20 @@ function createEngine(
 }
 
 export function useExplorerCamera(options: UseExplorerCameraOptions): ExplorerCameraControls {
-  const { viewportRef, planeRef, layout, onFrame } = options;
+  const { viewportRef, planeRef, layout, onFrame, obstructions, keepInView } = options;
   const engineRef = useRef<Engine | null>(null);
   const layoutRef = useRef(layout);
   const onFrameRef = useRef(onFrame);
+  const keepInViewRef = useRef(keepInView);
+  const { top, right, bottom, left } = options.inset ?? {};
+  const contentPadding = options.contentPadding ?? CONTENT_PADDING;
+  const frameOptionsRef = useRef<FrameOptions>({ inset: { top, right, bottom, left }, contentPadding });
 
   // Declared first, so it has run by the time the effects below draw: a
   // frame drawn for a new layout reaches the `onFrame` of the same render.
   useEffect(() => {
     onFrameRef.current = onFrame;
+    keepInViewRef.current = keepInView;
   });
 
   const [controls] = useState<ExplorerCameraControls>(() => ({
@@ -662,15 +762,28 @@ export function useExplorerCamera(options: UseExplorerCameraOptions): ExplorerCa
     const viewport = viewportRef.current;
     const plane = planeRef.current;
     if (viewport === null || plane === null) return undefined;
-    const engine = createEngine(viewport, plane, layoutRef.current, (camera, size) => {
-      onFrameRef.current(camera, size);
-    });
+    const engine = createEngine(
+      viewport,
+      plane,
+      layoutRef.current,
+      (camera, size) => {
+        onFrameRef.current(camera, size);
+      },
+      frameOptionsRef.current,
+      obstructions,
+      () => keepInViewRef.current?.() ?? null,
+    );
     engineRef.current = engine;
     return () => {
       engine.dispose();
       if (engineRef.current === engine) engineRef.current = null;
     };
-  }, [viewportRef, planeRef]);
+  }, [viewportRef, planeRef, obstructions]);
+
+  useEffect(() => {
+    frameOptionsRef.current = { inset: { top, right, bottom, left }, contentPadding };
+    engineRef.current?.setFrameOptions(frameOptionsRef.current);
+  }, [top, right, bottom, left, contentPadding]);
 
   useEffect(() => {
     layoutRef.current = layout;

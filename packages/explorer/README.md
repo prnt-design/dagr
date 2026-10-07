@@ -105,7 +105,7 @@ export function Architecture() {
 | `ExplorerViews` | the view switcher. Renders nothing for a single view. Children `({ views, activeView, selectView })` replace it |
 | `ExplorerSearch` | the search field, a live match count, and the matches as buttons, at most `maxResults` (default 50) |
 | `ExplorerTraceToggle` | trace on and off |
-| `ExplorerViewport` | the graph: pan and zoom, the SVG base, node elements for nodes large enough to read. Takes `renderNode`, `nodeAriaLabel`, `tiers`, `maxOverlayNodes`, `base`. Its children, such as `ExplorerDetails`, share a positioned stage with the graph, and the graph's hint comes after the stage, where an overlay cannot cover it |
+| `ExplorerViewport` | the graph: pan and zoom, the SVG base, node elements for nodes large enough to read. Takes `renderNode`, `nodeAriaLabel`, `tiers`, `maxOverlayNodes`, `base`, `inset`, `contentPadding`. Its children, such as `ExplorerDetails`, share a positioned stage with the graph, and the graph's hint comes after the stage, where an overlay cannot cover it |
 | `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body. Children `({ node, connections, inspect })` replace the body, and `renderConnection(edge, otherNode)` draws one connection in the default body |
 | `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node |
 
@@ -117,6 +117,16 @@ viewport's own (`relative`, `hidden` and `none`), because the graph's nodes
 are positioned against it and clipped by it, and a press that becomes a pan
 must not select their text. The drawer is outside the viewport, so its text
 stays selectable.
+
+**The camera frames what the drawer leaves uncovered.** With the drawer
+open, fit, `focusNode`, `reveal`, the zoom buttons and keys all work in the
+part of the graph beside it, a node under the drawer can be panned out, and
+the node the drawer opens on is revealed if the drawer covers it. A camera at
+fit refits as the drawer opens and closes. A drawer as wide as the graph (on a
+phone) leaves the camera the whole graph. For overlays of your own, pass
+`inset={{ top, right, bottom, left }}` in CSS pixels. `contentPadding` is how
+far, as a fraction of the frame, content may be panned past its edge: default
+0.05, clamped into [0, 0.45].
 
 One `ExplorerViewport` per root: a second throws `ExplorerContextError` with
 the code `SECOND_VIEWPORT`. A part outside a root throws it with

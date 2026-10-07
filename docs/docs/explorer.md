@@ -193,7 +193,11 @@ export function Architecture() {
 
 Children of `ExplorerViewport`, such as `ExplorerDetails`, share a positioned
 stage with the graph, so the drawer overlays the graph and not the hint below
-it. One viewport per root: a second throws `ExplorerContextError` with the
+it. The camera frames the part the drawer leaves uncovered: fit, focus,
+reveal and zoom work beside it, and a node under it can be panned out. Pass
+`inset={{ right: 320 }}` (CSS pixels per side) for an overlay of your own,
+and `contentPadding` (default 0.05, in [0, 0.45]) for how far content may be
+panned past the frame's edge. One viewport per root: a second throws `ExplorerContextError` with the
 code `SECOND_VIEWPORT`, and a part outside a root throws it with
 `OUTSIDE_EXPLORER`.
 

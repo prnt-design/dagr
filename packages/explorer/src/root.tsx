@@ -43,7 +43,7 @@ import {
   useState,
 } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode, Ref } from 'react';
-import { ExplorerApiContext, ExplorerContext, createCameraHub } from './context.js';
+import { ExplorerApiContext, ExplorerContext, createCameraHub, createObstructions } from './context.js';
 import type { ExplorerApi, ExplorerContextValue, ExplorerInternals, ExplorerState } from './context.js';
 import { ExplorerContextError } from './errors.js';
 import { useIsomorphicLayoutEffect } from './isomorphic-layout-effect.js';
@@ -324,6 +324,7 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
       },
       controlsRef: { current: null as ExplorerCameraControls | null },
       camera: createCameraHub(),
+      obstructions: createObstructions(),
       searchInputRef: { current: null as HTMLInputElement | null },
     };
   });

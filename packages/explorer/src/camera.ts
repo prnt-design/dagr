@@ -12,6 +12,12 @@
  * camera again when it is drawn, so a flight can cross a sparse gap without
  * being trapped against the nearest node on the way.
  *
+ * **A frame is the part of the viewport nothing covers,** such as the area
+ * left of an open drawer. Limits, the fit, a focus and a reveal all work in
+ * it, so content can be panned out from under an overlay and a flight lands
+ * where it can be seen. A size alone is a frame over the whole viewport. What
+ * is mounted, `visibleWorld`, still covers the whole viewport.
+ *
  * Limits come from `Camera2D` in `@prnt/dagr-render/core`, which speaks a
  * y-up world with a center and a zoom. The conversion to and from this
  * module's top-left, y-down camera lives in `createCameraLimits` and nowhere
@@ -34,6 +40,25 @@ export interface ExplorerViewportSize {
   readonly width: number;
   readonly height: number;
 }
+/** A rect in viewport CSS pixels. Without `x` and `y`, it starts at the viewport's top left. */
+export interface CameraFrame extends ExplorerViewportSize {
+  readonly x?: number | undefined;
+  readonly y?: number | undefined;
+}
+/** CSS pixels taken off each side of the viewport. */
+export interface ExplorerInset {
+  readonly top?: number | undefined;
+  readonly right?: number | undefined;
+  readonly bottom?: number | undefined;
+  readonly left?: number | undefined;
+}
+/** A box on screen, as `getBoundingClientRect` reports one. */
+export interface ScreenRect {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
 export interface CameraLimits {
   readonly minScale: number;
   readonly maxScale: number;
@@ -46,19 +71,94 @@ export interface CameraLimits {
 }
 
 export const CONTENT_PADDING = 0.05;
+/** The range `Camera2D` accepts for a padding. */
+const MAX_CONTENT_PADDING = 0.45;
+/** The narrowest and shortest a frame may be, at least, before its insets are ignored. */
+const MIN_FRAME_WIDTH = 160;
+const MIN_FRAME_HEIGHT = 120;
+const MIN_FRAME_SHARE = 0.25;
 export const FOCUS_MARGIN = 24;
 export const REVEAL_MARGIN = 12;
 export const EASE_MS = 55;
 
+export const frameCenter = (frame: CameraFrame): Vec2 => ({
+  x: (frame.x ?? 0) + frame.width / 2,
+  y: (frame.y ?? 0) + frame.height / 2,
+});
+
+/** A padding `Camera2D` accepts: a finite value clamped into [0, 0.45], anything else the default. */
+function paddingOf(padding: number): number {
+  if (!Number.isFinite(padding)) return CONTENT_PADDING;
+  return Math.max(0, Math.min(MAX_CONTENT_PADDING, padding));
+}
+
+/**
+ * The viewport less the insets, the largest on each side. A negative or
+ * non-finite inset counts as none, and an axis the insets would squeeze under
+ * its minimum keeps the whole viewport: a drawer as wide as a phone must not
+ * shrink the graph to nothing.
+ */
+export function cameraFrame(viewport: ExplorerViewportSize, ...insets: readonly ExplorerInset[]): CameraFrame {
+  const side = (key: keyof ExplorerInset): number => {
+    let most = 0;
+    for (const inset of insets) {
+      const value = inset[key];
+      if (value !== undefined && Number.isFinite(value) && value > most) most = value;
+    }
+    return most;
+  };
+  const axis = (extent: number, start: number, end: number, least: number): [number, number] => {
+    const remaining = extent - start - end;
+    return remaining < Math.max(least, extent * MIN_FRAME_SHARE) ? [0, extent] : [start, remaining];
+  };
+  const [x, width] = axis(viewport.width, side('left'), side('right'), MIN_FRAME_WIDTH);
+  const [y, height] = axis(viewport.height, side('top'), side('bottom'), MIN_FRAME_HEIGHT);
+  return { x, y, width, height };
+}
+
+/**
+ * What an overlay takes off the viewport: one side, by the overlap, when the
+ * overlay touches that side (within a pixel) and spans at least half of it.
+ * Of the sides it qualifies on, the one it reaches in from least, so a drawer
+ * the full height of the viewport insets the side it is docked to.
+ */
+export function obstructionInset(viewport: ScreenRect, overlay: ScreenRect): ExplorerInset {
+  const left = Math.max(viewport.left, overlay.left);
+  const right = Math.min(viewport.right, overlay.right);
+  const top = Math.max(viewport.top, overlay.top);
+  const bottom = Math.min(viewport.bottom, overlay.bottom);
+  const across = right - left;
+  const down = bottom - top;
+  if (!(across > 0) || !(down > 0)) return {};
+  const width = viewport.right - viewport.left;
+  const height = viewport.bottom - viewport.top;
+  const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
+  const sides: [keyof ExplorerInset, number][] = [];
+  if (down >= height / 2) {
+    if (near(overlay.left, viewport.left) || overlay.left < viewport.left) sides.push(['left', right - viewport.left]);
+    if (near(overlay.right, viewport.right) || overlay.right > viewport.right) sides.push(['right', viewport.right - left]);
+  }
+  if (across >= width / 2) {
+    if (near(overlay.top, viewport.top) || overlay.top < viewport.top) sides.push(['top', bottom - viewport.top]);
+    if (near(overlay.bottom, viewport.bottom) || overlay.bottom > viewport.bottom) sides.push(['bottom', viewport.bottom - top]);
+  }
+  let best: [keyof ExplorerInset, number] | null = null;
+  for (const each of sides) if (best === null || each[1] < best[1]) best = each;
+  return best === null ? {} : { [best[0]]: best[1] };
+}
+
+/** `padding` is the fraction of the frame the content may be panned past its edge. */
 export function createCameraLimits(
   layout: ExplorerLayout,
-  viewport: ExplorerViewportSize,
+  frame: CameraFrame,
+  padding: number = CONTENT_PADDING,
 ): CameraLimits | null {
-  if (!(viewport.width > 0) || !(viewport.height > 0) || !(layout.width > 0) || !(layout.height > 0)) {
+  if (!(frame.width > 0) || !(frame.height > 0) || !(layout.width > 0) || !(layout.height > 0)) {
     return null;
   }
+  const middle = frameCenter(frame);
   const limiter = new Camera2D({
-    viewport: { width: viewport.width, height: viewport.height, devicePixelRatio: 1 },
+    viewport: { width: frame.width, height: frame.height, devicePixelRatio: 1 },
   });
   let detail = { width: 160, height: 80 };
   let best = 0;
@@ -79,7 +179,7 @@ export function createCameraLimits(
   limiter.setContentBounds(
     { minX: 0, maxX: layout.width, minY: -layout.height, maxY: 0 },
     detail,
-    CONTENT_PADDING,
+    paddingOf(padding),
     regions,
   );
   return {
@@ -88,12 +188,12 @@ export function createCameraLimits(
     constrain(camera) {
       limiter.setZoom(camera.scale);
       limiter.setCenter({
-        x: (viewport.width / 2 - camera.x) / limiter.zoom,
-        y: -(viewport.height / 2 - camera.y) / limiter.zoom,
+        x: (middle.x - camera.x) / limiter.zoom,
+        y: -(middle.y - camera.y) / limiter.zoom,
       });
       return {
-        x: viewport.width / 2 - limiter.center.x * limiter.zoom,
-        y: viewport.height / 2 + limiter.center.y * limiter.zoom,
+        x: middle.x - limiter.center.x * limiter.zoom,
+        y: middle.y + limiter.center.y * limiter.zoom,
         scale: limiter.zoom,
       };
     },
@@ -102,13 +202,14 @@ export function createCameraLimits(
 
 export function fitCamera(
   layout: ExplorerLayout,
-  viewport: ExplorerViewportSize,
+  frame: CameraFrame,
   limits: CameraLimits,
 ): ExplorerCamera {
   const scale = limits.minScale;
+  const middle = frameCenter(frame);
   return {
-    x: (viewport.width - layout.width * scale) / 2,
-    y: (viewport.height - layout.height * scale) / 2,
+    x: middle.x - (layout.width * scale) / 2,
+    y: middle.y - (layout.height * scale) / 2,
     scale,
   };
 }
@@ -135,17 +236,18 @@ export function panCamera(camera: ExplorerCamera, dx: number, dy: number): Explo
 
 export function focusCamera(
   box: ExplorerBox,
-  viewport: ExplorerViewportSize,
+  frame: CameraFrame,
   limits: CameraLimits,
 ): ExplorerCamera {
   const fill = Math.min(
-    (viewport.width - FOCUS_MARGIN * 2) / box.width,
-    (viewport.height - FOCUS_MARGIN * 2) / box.height,
+    (frame.width - FOCUS_MARGIN * 2) / box.width,
+    (frame.height - FOCUS_MARGIN * 2) / box.height,
   );
   const scale = Math.max(limits.minScale, Math.min(limits.maxScale, fill));
+  const middle = frameCenter(frame);
   return {
-    x: viewport.width / 2 - (box.x + box.width / 2) * scale,
-    y: viewport.height / 2 - (box.y + box.height / 2) * scale,
+    x: middle.x - (box.x + box.width / 2) * scale,
+    y: middle.y - (box.y + box.height / 2) * scale,
     scale,
   };
 }
@@ -153,10 +255,11 @@ export function focusCamera(
 export function revealCamera(
   camera: ExplorerCamera,
   box: ExplorerBox,
-  viewport: ExplorerViewportSize,
+  frame: CameraFrame,
 ): ExplorerCamera {
-  const axis = (offset: number, start: number, size: number, extent: number): number => {
-    const lo = offset + start * camera.scale;
+  // `lo` and `hi` are measured from the frame's own edge.
+  const axis = (offset: number, start: number, size: number, extent: number, origin: number): number => {
+    const lo = offset + start * camera.scale - origin;
     const hi = lo + size * camera.scale;
     if (hi - lo > extent - REVEAL_MARGIN * 2) return offset + (extent / 2 - (lo + hi) / 2);
     if (lo < REVEAL_MARGIN) return offset + (REVEAL_MARGIN - lo);
@@ -164,8 +267,8 @@ export function revealCamera(
     return offset;
   };
   return {
-    x: axis(camera.x, box.x, box.width, viewport.width),
-    y: axis(camera.y, box.y, box.height, viewport.height),
+    x: axis(camera.x, box.x, box.width, frame.width, frame.x ?? 0),
+    y: axis(camera.y, box.y, box.height, frame.height, frame.y ?? 0),
     scale: camera.scale,
   };
 }

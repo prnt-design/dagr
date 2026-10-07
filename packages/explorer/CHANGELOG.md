@@ -6,6 +6,10 @@
   `user-select: none`. The drawer's text stays selectable.
 - `api.focusViewport()` gives the graph keyboard focus. The toolbar's zoom-to
   button calls it, so the wheel and the camera keys apply right after.
+- The open drawer no longer covers what the camera shows: fit, focus, reveal
+  and zoom work in the part of the graph beside it, a node under it can be
+  panned out, and the node it opens on is revealed. `ExplorerViewport` takes
+  `inset` for a host's own overlays and `contentPadding` (default 0.05).
 
 ## 0.1.3
 

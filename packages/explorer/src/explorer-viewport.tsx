@@ -30,6 +30,7 @@
 import { memo, useEffect, useId, useRef } from 'react';
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import type { ExplorerBase, ExplorerCameraSource } from './base.js';
+import type { ExplorerInset } from './camera.js';
 import { useExplorerApiContext, useExplorerContext } from './context.js';
 import type { ExplorerApi, ExplorerInternals } from './context.js';
 import type { ExplorerLayout } from './layout.js';
@@ -57,6 +58,18 @@ export interface ExplorerViewportProps<N extends ExplorerNode = ExplorerNode> {
   readonly maxOverlayNodes?: number | undefined;
   /** What draws the nodes that have no element. Default: the SVG base. Experimental. */
   readonly base?: ExplorerBase | undefined;
+  /**
+   * CSS pixels your own overlays cover on each side of the graph. The camera
+   * fits, focuses and reveals within what is left, as it does for the open
+   * drawer, which it measures on its own.
+   */
+  readonly inset?: ExplorerInset | undefined;
+  /**
+   * The fraction of the uncovered graph the content may be panned past its
+   * edge, in [0, 0.45]. A finite value outside is clamped, anything else is
+   * the default, 0.05.
+   */
+  readonly contentPadding?: number | undefined;
   readonly className?: string | undefined;
   /**
    * Sizing and decoration pass through: `{ height: 600 }` replaces
@@ -107,6 +120,7 @@ const ViewportPane = memo(function ViewportPane<N extends ExplorerNode, E extend
       onNodeZoom={(id) => api.focusNode(id)}
       controlsRef={internals.controlsRef}
       cameraSourceRef={sourceRef}
+      obstructions={internals.obstructions}
       describedBy={describedBy}
     />
   );

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExplorerBase } from '../src/base.js';
 import { createCameraLimits, fitCamera } from '../src/camera.js';
-import type { ExplorerCamera } from '../src/camera.js';
+import type { CameraFrame, ExplorerCamera } from '../src/camera.js';
 import type { ExplorerApi, ExplorerState } from '../src/context.js';
 import { ExplorerDetails } from '../src/explorer-details.js';
 import { ExplorerViewport } from '../src/explorer-viewport.js';
@@ -14,7 +14,7 @@ import { ExplorerRoot } from '../src/root.js';
 import type { ExplorerRootProps } from '../src/root.js';
 import type { ExplorerEdge } from '../src/types.js';
 import { useExplorer } from '../src/use-explorer.js';
-import { fire, flush, installDom, mount, mouse, resizeTo, runFramesUntilIdle, uninstallDom } from './dom.js';
+import { fire, flush, installDom, mount, mouse, resizeTo, runFramesUntilIdle, uninstallDom, watchCount } from './dom.js';
 import type { Mounted } from './dom.js';
 import { Boundary, detail, empty, overview, quietErrors } from './fixtures.js';
 import type { Item } from './fixtures.js';
@@ -332,6 +332,95 @@ describe('ExplorerViewport: the camera through the root', () => {
     const limits = createCameraLimits(layout, SIZE);
     if (limits === null) throw new Error('no limits');
     expect(cameraNow()).toEqual(limits.constrain(fitCamera(layout, SIZE, limits)));
+  });
+});
+
+describe('ExplorerViewport: the frame the drawer leaves', () => {
+  const placed = layoutView(overview);
+  const narrow = { x: 0, y: 0, width: 440, height: SIZE.height };
+
+  /** Puts the drawer at `left` to `right` on screen, full height. jsdom lays nothing out. */
+  function drawerAt(left: number, right: number): void {
+    const own = Element.prototype.getBoundingClientRect;
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.getAttribute('data-dagr-explorer') !== 'details') return own.call(this);
+      return { left, right, top: 0, bottom: SIZE.height, width: right - left, height: SIZE.height, x: left, y: 0 } as DOMRect;
+    });
+  }
+
+  function fitIn(frame: CameraFrame, padding?: number): ExplorerCamera {
+    const limits = createCameraLimits(placed, frame, padding);
+    if (limits === null) throw new Error('no limits');
+    return limits.constrain(fitCamera(placed, frame, limits));
+  }
+
+  function expectCamera(expected: ExplorerCamera): void {
+    const now = cameraNow();
+    expect(now.x).toBeCloseTo(expected.x, 4);
+    expect(now.y).toBeCloseTo(expected.y, 4);
+    expect(now.scale).toBeCloseTo(expected.scale, 6);
+  }
+
+  const withDrawer: ViewportProps = { children: <ExplorerDetails /> };
+
+  it('refits to the part the drawer leaves when it opens at fit, and to the whole viewport when it closes', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    expectCamera(fitIn(SIZE));
+    expect(watchCount()).toBe(1);
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    expectCamera(fitIn(narrow));
+    // The drawer is observed with the viewport, so its own resize moves the frame.
+    expect(watchCount()).toBe(2);
+    await flush(() => api().closeDetails());
+    await runFramesUntilIdle();
+    expectCamera(fitIn(SIZE));
+    expect(watchCount()).toBe(1);
+  });
+
+  it('takes no inset from a drawer as wide as the viewport', async () => {
+    drawerAt(0, 800);
+    await ready({ views: [overview] }, withDrawer);
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    expectCamera(fitIn(SIZE));
+  });
+
+  it('reveals the node the drawer opens over, at the zoom it had', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    await flush(() => api().zoomBy(2));
+    await runFramesUntilIdle();
+    const before = cameraNow();
+    const c = placed.boxes.get('c');
+    if (c === undefined) throw new Error('no c');
+    expect(before.x + (c.x + c.width) * before.scale).toBeGreaterThan(440);
+    await flush(() => api().inspect('c'));
+    await runFramesUntilIdle();
+    const after = cameraNow();
+    expect(after.scale).toBeCloseTo(before.scale, 6);
+    expect(after.x + (c.x + c.width) * after.scale).toBeLessThanOrEqual(440);
+    expect(after.x + c.x * after.scale).toBeGreaterThanOrEqual(0);
+  });
+
+  it('insets the frame by the inset prop, with no drawer', async () => {
+    await ready({ views: [overview] }, { inset: { right: 360 } });
+    expectCamera(fitIn(narrow));
+    await tree?.rerender(explorer({ views: [overview] }, { inset: { right: 360 } }));
+    await runFramesUntilIdle();
+    expectCamera(fitIn(narrow));
+    await tree?.rerender(explorer({ views: [overview] }, {}));
+    await runFramesUntilIdle();
+    expectCamera(fitIn(SIZE));
+  });
+
+  it('fits and limits the camera with the contentPadding', async () => {
+    await ready({ views: [overview] }, { contentPadding: 0.3 });
+    expectCamera(fitIn(SIZE, 0.3));
+    await tree?.rerender(explorer({ views: [overview] }, { contentPadding: Number.NaN }));
+    await runFramesUntilIdle();
+    expectCamera(fitIn(SIZE));
   });
 });
 
