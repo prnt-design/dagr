@@ -2,10 +2,12 @@
 import { createRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExplorerBase } from '../src/base.js';
+import { createCameraLimits } from '../src/camera.js';
 import type { ExplorerApi } from '../src/context.js';
 import { DagrExplorer } from '../src/dagr-explorer.js';
 import { DEFAULT_EXPLORER_LABELS } from '../src/labels.js';
 import type { ExplorerLabels } from '../src/labels.js';
+import { layoutView } from '../src/layout.js';
 import type { ExplorerEdge, ExplorerNode } from '../src/types.js';
 import { flush, installDom, mount, resizeTo, runFramesUntilIdle, uninstallDom } from './dom.js';
 import type { Mounted } from './dom.js';
@@ -130,6 +132,15 @@ describe('DagrExplorer', () => {
     expect(nodes[0]?.getAttribute('aria-label')).toMatch(/^kind /);
     expect(nodes[0]?.getAttribute('data-tier')).toBe('summary');
     expect(layers.length).toBeGreaterThan(0);
+  });
+
+  it('forwards inset and contentPadding', async () => {
+    tree = await mount(<DagrExplorer label="Map" views={[overview]} inset={{ right: 360 }} contentPadding={0.3} />);
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+    const limits = createCameraLimits(layoutView(overview), { x: 0, y: 0, width: 440, height: 480 }, 0.3);
+    const scale = /scale\(([^)]+)\)/.exec(part('plane').style.transform)?.[1];
+    expect(Number(scale)).toBeCloseTo(limits?.minScale ?? Number.NaN, 6);
   });
 
   it('takes the shorthand, and the root props', async () => {

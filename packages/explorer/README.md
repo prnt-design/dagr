@@ -52,7 +52,8 @@ derive theirs from it. For one graph, pass `nodes`, `edges` and optionally
 The node type is inferred from your data, so `renderNode` above sees `team`.
 `DagrExplorer` takes the root's props (below) plus `renderNode`,
 `renderDetails`, `renderConnection`, `renderViews`, `tiers`,
-`maxOverlayNodes`, `base` and `nodeAriaLabel`, which it forwards to the parts.
+`maxOverlayNodes`, `base`, `nodeAriaLabel`, `inset` and `contentPadding`,
+which it forwards to the parts.
 
 ### The parts
 
