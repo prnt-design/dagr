@@ -107,7 +107,7 @@ export function Architecture() {
 | `ExplorerSearch` | the search field, a live match count, and the matches as buttons, at most `maxResults` (default 50) |
 | `ExplorerTraceToggle` | trace on and off |
 | `ExplorerViewport` | the graph: pan and zoom, the SVG base, node elements for nodes large enough to read. Takes `renderNode`, `nodeAriaLabel`, `tiers`, `maxOverlayNodes`, `base`, `inset`, `contentPadding`. Its children, such as `ExplorerDetails`, share a positioned stage with the graph, and the graph's hint comes after the stage, where an overlay cannot cover it |
-| `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body. Children `({ node, connections, inspect, follow })` replace the body, and `renderConnection(edge, otherNode)` draws one connection in the default body |
+| `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body. Children `({ node, connections, inspect, follow })` replace the body, and `renderConnection(edge, otherNode, direction)` draws one connection in the default body, given `'to'`, `'from'` or `'self'` |
 | `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node. Zoom out, zoom in, fit and the drawer's close button are icons, named and titled by their labels |
 
 Every part takes `className` and `style`, and your `style` wins over the
@@ -199,12 +199,13 @@ its focus. A connection button in the drawer follows its edge: it inspects
 the neighbor, keeping the original opener, and pans it into view at the
 current zoom. It shows the edge's direction as an arrow (`→` out, `←` in, `↻`
 a self loop), which a screen reader hears as `labels.connectionTo(label)` or
-`labels.connectionFrom(label)` before the content. `Escape` closes the drawer from anywhere in the root,
-with two places that keep their own order. In the search field it closes
-the drawer first and clears the query second. On a node or the graph's
-surface it closes the drawer first, keeping focus where it is, and releases
-graph focus second. A control of yours that handles `Escape` and calls
-`preventDefault()` keeps it.
+`labels.connectionFrom(label)`. A `renderConnection` replaces all of it, and
+is given the direction to show its own. `Escape` closes the drawer from
+anywhere in the root, with two places that keep their own order. In the
+search field it closes the drawer first and clears the query second. On a
+node or the graph's surface it closes the drawer first, keeping focus where
+it is, and releases graph focus second. A control of yours that handles
+`Escape` and calls `preventDefault()` keeps it.
 
 ### Keyboard
 
@@ -260,9 +261,10 @@ Every string the parts show comes from `labels`, an `ExplorerLabels` object
 whose neutral English defaults are `DEFAULT_EXPLORER_LABELS`. Pass any subset
 to `ExplorerRoot` or `DagrExplorer`. Counts and names are formatters, such as
 `matches(count)`, `moreMatches(count)` (the matches the capped list does not
-show), `stats({ nodes, edges })`, `zoomLevel(percent)`, `zoomTo(label)` and
+show), `stats({ nodes, edges })`, `zoomLevel(percent)`, `zoomTo(label)`,
 `inGroup(groupLabel)` (one group in a node's default accessible name, as in
-"Store, in Data tier").
+"Store, in Data tier"), and `connectionTo(label)` and `connectionFrom(label)`
+(a drawer connection's direction).
 
 An inline object is fine: `labels={{ search: 'Find' }}` is kept by value,
 so re-creating it on every render with the same contents changes nothing.

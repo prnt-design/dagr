@@ -8,14 +8,32 @@
   button calls it, so the wheel and the camera keys apply right after.
 - The open drawer no longer covers what the camera shows: fit, focus, reveal
   and zoom work in the part of the graph beside it, a node under it can be
-  panned out, and the node it opens on is revealed. `ExplorerViewport` takes
-  `inset` for a host's own overlays and `contentPadding` (default 0.05).
+  panned out, and the node it opens on is revealed. `ExplorerViewport` and
+  `DagrExplorer` take `inset` for a host's own overlays, typed by the new
+  `ExplorerInset` export, and `contentPadding` (default 0.05).
 - A connection in the drawer follows its edge: it inspects the neighbor and
   pans it into view at the current zoom. Each shows its direction (`→`, `←`,
   `↻`), read out through the new `connectionTo` and `connectionFrom` labels.
-  The drawer's slot context gains `follow(id)`.
+  The drawer's slot context gains `follow(id)`. `renderConnection` still
+  draws the whole button, and gets the direction (`'to'`, `'from'` or
+  `'self'`) as a third argument.
 - Zoom out, zoom in, fit and the drawer's close button are icon buttons,
   named and titled by their labels. Zoom to selected keeps its text.
+
+### Upgrading from 0.1.3
+
+- `ExplorerLabels` gains the required `connectionTo` and `connectionFrom`. A
+  full value typed `ExplorerLabels` adds them. A partial `labels` override is
+  unaffected.
+- `ExplorerApi` gains `focusViewport`. A hand-written mock adds it.
+- `ExplorerDetailsContext` gains `follow`. Code that builds one by hand adds
+  it.
+- Close, zoom in, zoom out and fit render an icon, not text. Query them by
+  role and name, not by text. A custom label still reaches `aria-label` and
+  `title`.
+- A default connection button starts with an arrow and a visually hidden
+  "to X" or "from X", and a click pans the camera to the node. A test that
+  matched its text matches the new text.
 
 ## 0.1.3
 
