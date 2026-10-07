@@ -13,10 +13,10 @@
  * keep the drawer's original opener, so `Escape` after following three edges
  * still returns where the reader began.
  *
- * A connection shows its direction as an arrow, hidden from a screen reader,
- * which hears `labels.connectionTo` or `labels.connectionFrom` instead, as
- * visually hidden text before the content. So content from
- * `renderConnection` is still what is read after it.
+ * A default connection shows its direction as an arrow, hidden from a
+ * screen reader, which hears `labels.connectionTo` or `labels.connectionFrom`
+ * instead. Content from `renderConnection` replaces all of it, and is given
+ * the direction to show its own.
  *
  * Open, it registers with the root as an obstruction, so the camera frames
  * the part of the graph it leaves uncovered. See `use-explorer-camera.ts`.
@@ -55,8 +55,11 @@ export interface ExplorerDetailsContext<N extends ExplorerNode = ExplorerNode, E
 export interface ExplorerDetailsProps<N extends ExplorerNode = ExplorerNode, E extends ExplorerEdge = ExplorerEdge> {
   /** The drawer's content. Default: the label and the connection list. */
   readonly children?: ((context: ExplorerDetailsContext<N, E>) => ReactNode) | undefined;
-  /** One connection's content in the default list. Default: the other node's label. */
-  readonly renderConnection?: ((edge: E, otherNode: N) => ReactNode) | undefined;
+  /**
+   * One connection's whole content in the default list. `direction` is
+   * `'self'` for a self loop. Default: an arrow and the other node's label.
+   */
+  readonly renderConnection?: ((edge: E, otherNode: N, direction: 'to' | 'from' | 'self') => ReactNode) | undefined;
   readonly className?: string | undefined;
   readonly style?: CSSProperties | undefined;
 }
@@ -173,22 +176,21 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
                 >
                   {connections.map(({ edge, node: other }) => {
                     const outward = edge.source === node.id;
-                    const arrow = outward ? (edge.target === node.id ? '↻' : '→') : '←';
+                    const direction = outward ? (edge.target === node.id ? 'self' : 'to') : 'from';
                     return (
                       <li key={edge.id}>
                         <button type="button" data-node-id={other.id} onClick={() => follow(other.id)}>
-                          <span data-dagr-explorer="connection-arrow" aria-hidden="true">
-                            {arrow}
-                          </span>{' '}
-                          <span data-dagr-explorer="connection-direction" style={VISUALLY_HIDDEN}>
-                            {outward ? labels.connectionTo(other.label) : labels.connectionFrom(other.label)}
-                          </span>
-                          {renderConnection === undefined ? (
-                            <span aria-hidden="true">{other.label}</span>
+                          {renderConnection !== undefined ? (
+                            renderConnection(edge, other, direction)
                           ) : (
                             <>
-                              {' '}
-                              {renderConnection(edge, other)}
+                              <span data-dagr-explorer="connection-arrow" aria-hidden="true">
+                                {direction === 'self' ? '↻' : outward ? '→' : '←'}
+                              </span>{' '}
+                              <span data-dagr-explorer="connection-direction" style={VISUALLY_HIDDEN}>
+                                {outward ? labels.connectionTo(other.label) : labels.connectionFrom(other.label)}
+                              </span>
+                              <span aria-hidden="true">{other.label}</span>
                             </>
                           )}
                         </button>

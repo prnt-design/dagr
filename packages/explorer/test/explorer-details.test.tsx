@@ -180,12 +180,31 @@ describe('ExplorerDetails: what it shows', () => {
     expect(connections().map(spoken)).toEqual(['Alpha, upstream', 'Gamma, downstream']);
   });
 
-  it('draws each connection with renderConnection, given the edge and the other node, with the direction before it', async () => {
-    const renderConnection = vi.fn((edge: ExplorerEdge, other: Item) => `${edge.id}:${other.kind}`);
+  it('draws each connection with renderConnection alone, given the edge, the other node and the direction', async () => {
+    const renderConnection = vi.fn<(edge: ExplorerEdge, other: Item, direction: 'to' | 'from' | 'self') => string>(
+      (edge, other) => `${edge.id}:${other.kind}`,
+    );
     await ready({}, { renderConnection });
     await flush(() => state().inspect('b'));
-    expect(connections().map(shown)).toEqual(['← ab:service', '→ bc:queue']);
-    expect(connections().map(spoken)).toEqual(['from Alpha ab:service', 'to Gamma bc:queue']);
+    expect(connections().map(shown)).toEqual(['ab:service', 'bc:queue']);
+    expect(connections().map(spoken)).toEqual(['ab:service', 'bc:queue']);
+    expect(renderConnection.mock.calls.map(([edge, other, direction]) => [edge.id, other.id, direction])).toEqual([
+      ['ab', 'a', 'from'],
+      ['bc', 'c', 'to'],
+    ]);
+  });
+
+  it('passes renderConnection the direction self for a self loop', async () => {
+    const looped: ExplorerView<Item> = { ...overview, edges: [...overview.edges, { id: 'aa', source: 'a', target: 'a' }] };
+    const renderConnection = vi.fn<(edge: ExplorerEdge, other: Item, direction: 'to' | 'from' | 'self') => string>(
+      (edge) => edge.id,
+    );
+    await ready({ views: [looped] }, { renderConnection });
+    await flush(() => state().inspect('a'));
+    expect(renderConnection.mock.calls.map(([edge, , direction]) => [edge.id, direction])).toEqual([
+      ['ab', 'to'],
+      ['aa', 'self'],
+    ]);
   });
 
   it('follows a connection: inspects the other node and pans it into view at the same zoom', async () => {
