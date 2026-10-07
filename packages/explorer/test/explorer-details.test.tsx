@@ -138,7 +138,12 @@ describe('ExplorerDetails: what it shows', () => {
     expect(drawer.style.width).toBe('300px');
     const title = document.getElementById(drawer.getAttribute('aria-labelledby') ?? '');
     expect(title?.textContent).toBe('Details');
-    expect(part('details-close').textContent).toBe('Close');
+    const close = part('details-close');
+    expect(close.getAttribute('aria-label')).toBe('Close');
+    expect(close.title).toBe('Close');
+    expect(close.textContent).toBe('');
+    expect(close.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(close.querySelector('svg')?.getAttribute('focusable')).toBe('false');
     const body = part('details-body');
     expect(body.tabIndex).toBe(0);
     expect(body.style.overflow).toBe('auto');

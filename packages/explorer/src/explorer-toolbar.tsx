@@ -2,6 +2,9 @@
  * `ExplorerToolbar`: zoom out, the zoom readout, zoom in, fit, and zoom to
  * the selected node.
  *
+ * Zoom out, zoom in and fit are icons, named by their labels, which are also
+ * their tooltips. Zoom to selected keeps its text, which names the node.
+ *
  * **The readout follows the camera without a render.** It subscribes to the
  * root's camera source and writes its own text when the whole percent
  * changes, so a zoom that runs for twenty frames re-renders nothing. React
@@ -13,6 +16,7 @@ import { useEffect, useRef } from 'react';
 import type { CSSProperties, ReactElement } from 'react';
 import type { ExplorerCamera } from './camera.js';
 import { useExplorerContext } from './context.js';
+import { FitIcon, MinusIcon, PlusIcon, TargetIcon } from './icons.js';
 
 /** The same steps as the `+` and `-` keys. */
 const ZOOM_IN = 1.25;
@@ -52,15 +56,27 @@ export function ExplorerToolbar(props: ExplorerToolbarProps): ReactElement {
       className={props.className}
       style={props.style}
     >
-      <button type="button" data-action="zoom-out" onClick={() => state.zoomBy(ZOOM_OUT)}>
-        {labels.zoomOut}
+      <button
+        type="button"
+        data-action="zoom-out"
+        aria-label={labels.zoomOut}
+        title={labels.zoomOut}
+        onClick={() => state.zoomBy(ZOOM_OUT)}
+      >
+        <MinusIcon />
       </button>
       <span ref={readoutRef} data-dagr-explorer="zoom-level" />
-      <button type="button" data-action="zoom-in" onClick={() => state.zoomBy(ZOOM_IN)}>
-        {labels.zoomIn}
+      <button
+        type="button"
+        data-action="zoom-in"
+        aria-label={labels.zoomIn}
+        title={labels.zoomIn}
+        onClick={() => state.zoomBy(ZOOM_IN)}
+      >
+        <PlusIcon />
       </button>
-      <button type="button" data-action="fit" onClick={() => state.fit()}>
-        {labels.fit}
+      <button type="button" data-action="fit" aria-label={labels.fit} title={labels.fit} onClick={() => state.fit()}>
+        <FitIcon />
       </button>
       <button
         type="button"
@@ -72,6 +88,7 @@ export function ExplorerToolbar(props: ExplorerToolbarProps): ReactElement {
           state.focusViewport();
         }}
       >
+        <TargetIcon />{' '}
         {selectedNode === null ? labels.zoomToSelected : labels.zoomTo(selectedNode.label)}
       </button>
     </div>

@@ -360,8 +360,8 @@ describe('DagrExplorer: labels', () => {
   it('replaces a subset, keeping the rest, including a key set to undefined', async () => {
     const partial = { fit: 'Encuadrar', close: undefined } as unknown as Partial<ExplorerLabels>;
     tree = await mount(<DagrExplorer label="Map" views={[overview]} apiRef={apiRef} labels={partial} />);
-    expect(part('toolbar').querySelector('[data-action="fit"]')?.textContent).toBe('Encuadrar');
+    expect(part('toolbar').querySelector('[data-action="fit"]')?.getAttribute('aria-label')).toBe('Encuadrar');
     await flush(() => api().inspect('a'));
-    expect(part('details-close').textContent).toBe('Close');
+    expect(part('details-close').getAttribute('aria-label')).toBe('Close');
   });
 });

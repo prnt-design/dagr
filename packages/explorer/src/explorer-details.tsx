@@ -29,6 +29,7 @@
 import { useEffect, useId, useMemo, useRef } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { useExplorerContext } from './context.js';
+import { CloseIcon } from './icons.js';
 import { useIsomorphicLayoutEffect } from './isomorphic-layout-effect.js';
 import { VISUALLY_HIDDEN } from './root.js';
 import type { ExplorerEdge, ExplorerNode } from './types.js';
@@ -138,8 +139,14 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flex: 'none' }}
       >
         <span id={titleId}>{labels.drawerTitle}</span>
-        <button type="button" data-dagr-explorer="details-close" onClick={() => state.closeDetails()}>
-          {labels.close}
+        <button
+          type="button"
+          data-dagr-explorer="details-close"
+          aria-label={labels.close}
+          title={labels.close}
+          onClick={() => state.closeDetails()}
+        >
+          <CloseIcon />
         </button>
       </div>
       <div

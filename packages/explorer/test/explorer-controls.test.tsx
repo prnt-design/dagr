@@ -87,6 +87,15 @@ function action(name: string): HTMLButtonElement {
   return element;
 }
 
+/** The toolbar's button with this accessible name: its `aria-label`, else its text. */
+function named(name: string): HTMLButtonElement {
+  const found = [...part('toolbar').querySelectorAll('button')].filter(
+    (button) => (button.getAttribute('aria-label') ?? button.textContent?.trim()) === name,
+  );
+  if (found.length !== 1 || found[0] === undefined) throw new Error(`${String(found.length)} buttons named ${name}`);
+  return found[0];
+}
+
 function cameraNow(): ExplorerCamera {
   const camera = state().camera.get();
   if (camera === null) throw new Error('no camera');
@@ -171,10 +180,47 @@ describe('ExplorerToolbar', () => {
       'fit',
       'zoom-to-selected',
     ]);
-    expect(action('zoom-out').textContent).toBe('Zoom out');
-    expect(action('zoom-in').textContent).toBe('Zoom in');
-    expect(action('fit').textContent).toBe('Fit');
     for (const button of toolbar.querySelectorAll('button')) expect(button.getAttribute('type')).toBe('button');
+  });
+
+  it('draws zoom out, zoom in and fit as icons, named and titled by their labels', async () => {
+    await ready();
+    for (const [name, label] of [
+      ['zoom-out', 'Zoom out'],
+      ['zoom-in', 'Zoom in'],
+      ['fit', 'Fit'],
+    ] as const) {
+      const button = named(label);
+      expect(button).toBe(action(name));
+      expect(button.title).toBe(label);
+      expect(button.textContent).toBe('');
+      const icons = button.querySelectorAll('svg');
+      expect(icons).toHaveLength(1);
+      expect(icons[0]?.getAttribute('aria-hidden')).toBe('true');
+      expect(icons[0]?.getAttribute('focusable')).toBe('false');
+    }
+  });
+
+  it('gives custom labels to the icon buttons as their name and title', async () => {
+    await ready({ labels: { zoomOut: 'Smaller', zoomIn: 'Larger', fit: 'Everything' } });
+    for (const [name, label] of [
+      ['zoom-out', 'Smaller'],
+      ['zoom-in', 'Larger'],
+      ['fit', 'Everything'],
+    ] as const) {
+      expect(named(label)).toBe(action(name));
+      expect(action(name).title).toBe(label);
+    }
+  });
+
+  it('keeps zoom to selected named by its visible text, after a hidden icon', async () => {
+    await ready();
+    await flush(() => state().select('c'));
+    const button = named('Zoom to Gamma');
+    expect(button).toBe(action('zoom-to-selected'));
+    expect(button.hasAttribute('aria-label')).toBe(false);
+    expect(button.firstElementChild?.tagName.toLowerCase()).toBe('svg');
+    expect(button.firstElementChild?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('zooms in and out about the center, and fits', async () => {
@@ -196,10 +242,10 @@ describe('ExplorerToolbar', () => {
     await ready();
     const button = action('zoom-to-selected');
     expect(button.disabled).toBe(true);
-    expect(button.textContent).toBe('Zoom to selection');
+    expect(button.textContent?.trim()).toBe('Zoom to selection');
     await flush(() => state().select('c'));
     expect(button.disabled).toBe(false);
-    expect(button.textContent).toBe('Zoom to Gamma');
+    expect(button.textContent?.trim()).toBe('Zoom to Gamma');
     const before = cameraNow();
     await flush(() => button.click());
     await runFramesUntilIdle();

@@ -14,6 +14,8 @@
   pans it into view at the current zoom. Each shows its direction (`→`, `←`,
   `↻`), read out through the new `connectionTo` and `connectionFrom` labels.
   The drawer's slot context gains `follow(id)`.
+- Zoom out, zoom in, fit and the drawer's close button are icon buttons,
+  named and titled by their labels. Zoom to selected keeps its text.
 
 ## 0.1.3
 

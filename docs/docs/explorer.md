@@ -192,7 +192,7 @@ export function Architecture() {
 | `ExplorerTraceToggle` | trace on and off |
 | `ExplorerViewport` | the graph: pan and zoom, the base layer, and node elements for nodes large enough to read |
 | `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body |
-| `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node |
+| `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node. Zoom out, zoom in, fit and the drawer's close button are icons, named and titled by their labels |
 
 Children of `ExplorerViewport`, such as `ExplorerDetails`, share a positioned
 stage with the graph, so the drawer overlays the graph and not the hint below
