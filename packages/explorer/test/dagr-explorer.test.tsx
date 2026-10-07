@@ -98,8 +98,8 @@ describe('DagrExplorer', () => {
     tree = await mount(<DagrExplorer label="Map" views={[overview]} apiRef={apiRef} renderConnection={renderConnection} />);
     await flush(() => api().inspect('c'));
     expect([...(find('connections')?.querySelectorAll('button') ?? [])].map((b) => b.textContent)).toEqual([
-      '← from Beta bc>store',
-      '→ to Delta cd>store',
+      'bc>store',
+      'cd>store',
     ]);
   });
 
