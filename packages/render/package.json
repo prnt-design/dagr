@@ -1,6 +1,6 @@
 {
   "name": "@prnt/dagr-render",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "WebGPU renderer for Dagr: a three.js WebGPURenderer scene with SDF shapes and spring animation.",
   "license": "MIT",
   "type": "module",

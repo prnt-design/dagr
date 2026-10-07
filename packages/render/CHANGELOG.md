@@ -9,6 +9,10 @@ which unit a number is in. A caller upgrading past one of those sees a drawing
 in a different place, and no compiler tells them. "Behaviour changed, types did
 not" is the category this file has a heading for.
 
+## 0.1.4
+
+- Lockstep release with the explorer's drawer-aware camera and icon controls. No runtime API changes in this package.
+
 ## 0.1.3
 
 - Add the `@prnt/dagr-render/core` entry: `Camera2D`, `fitZoom` and

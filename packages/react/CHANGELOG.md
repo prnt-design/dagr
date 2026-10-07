@@ -1,5 +1,9 @@
 # @prnt/dagr-react
 
+## 0.1.4
+
+- Lockstep release with the explorer's drawer-aware camera and icon controls. No runtime API changes in this package.
+
 ## 0.1.3
 
 - Add `navigation` (wheel zoom, two-finger touch pinch, drag pan, keyboard) to `DagrCanvas`,
