@@ -2,6 +2,9 @@
  * The parts' icons: 16px line drawings in `currentColor`. Each is hidden from
  * a screen reader, which hears the button's label instead.
  *
+ * Strokes are 2px: centered on the whole-pixel coordinates the paths use, a
+ * 1.5px stroke straddles pixels and renders soft at 1x.
+ *
  * Internal to the package. Nothing here is exported from the entry.
  */
 
@@ -17,7 +20,7 @@ function Icon({ d }: { readonly d: string }): ReactElement {
       focusable="false"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.5}
+      strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
     >
