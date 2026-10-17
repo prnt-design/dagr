@@ -14,7 +14,8 @@ there. Milestone status is mirrored in the project brain.
 
 On 2026-10-17 the maintainer chose dagr's lead identity: the GPU renderer for
 big directed graphs that animate as they change. The queue below now proves
-the WebGPU renderer first.
+the WebGPU renderer first. A [daily report track](#daily-report-track) of this
+repository's own activity runs in parallel, never ahead of the queue.
 
 The published npm packages use `@prnt/dagr-*`, with the
 `@prnt/dagr` umbrella. All seven packages are published at **0.1.4**
@@ -78,10 +79,11 @@ Stage 1 proves the renderer; stage 2 makes it usable as a product.
 | 9 | **WebGL2 fallback parity** (stage 2) | The fallback looks and behaves the same as WebGPU, as item 2 measures. |
 
 **Parked:** VDSL drag-to-connect (M6.3a, M6.3b), compound layout and
-drill-down (M7, M6.4, M6.5), audio, and explorer reading features beyond what
-a daily report of this repo's activity, built as a host app on the explorer
-outside this repo, asks for. M2.11a edge legibility moves behind
-the stage 1 and 2 items. The explorer keeps getting correctness fixes.
+drill-down (M7, M6.4, M6.5), audio beyond R6's narration experiment, and
+explorer reading features beyond what the
+[daily report track](#daily-report-track) asks for. M2.11a edge legibility
+moves behind the stage 1 and 2 items. The explorer keeps getting correctness
+fixes.
 
 **Deferred:** new showcase rewrites, 3D productization, new wrapper packages,
 additional edge decorations, and broad layout algorithm work without a measured
@@ -414,6 +416,40 @@ From [plans/2026-08-15-demo-into-docs.md](plans/2026-08-15-demo-into-docs.md).
 - [x] **D4** The fixture out of the product docs and into its own package.
 - [x] **D5** A drawn mark per kind, on the title tag and on the card.
 - [x] **D6** The zoom as something a reader can read and press.
+
+## Daily report track
+
+Maintainer-requested (2026-10-17), in parallel with the renderer queue above
+and never ahead of it. A daily report of this repository's own activity
+(merged PRs, packages touched, milestones, reviews), published as an explorer
+graph and read by the maintainer first. It lives in a folder of this
+repository, runs on the shipped `@prnt/dagr-explorer`, and changes a package
+only where the report hits a gap that R4's log records. The generated reports
+are data, not source: they are written append-only outside `main`, never as a
+PR a day. R tasks are taken by maintainer-directed sessions or a job dedicated
+to this track, not by the renderer queue's daily increment, so "the first
+ready slice" above never means an R task. The decision record is in
+`specs/roadmap-notes.md` under "Daily report track".
+
+- [ ] **R1** Report format v0 and its validator: views, nodes with rich
+  content, sources, confidence, status against the previous report, and a
+  tour. Node ids derive from stable names (PR number, package name, milestone
+  id), so a thing that persists keeps its place from one day to the next.
+- [ ] **R2** Generator: one JSON report a day from the repository's history
+  and PR records, written to the agreed append-only location, which R2
+  decides and records.
+- [ ] **R3** Host app on `DagrExplorer`: a tour bar, deep links and a source
+  list built on `ExplorerApi`, with a zero-click text outline. No package
+  changes.
+- [ ] **R4** Two to three weeks of daily use by the maintainer, with a short
+  log of what was skipped, what confused, and what was missing. The log
+  decides R5.
+- [ ] **R5** Promote only what the log asks for into `@prnt/dagr-explorer`:
+  highlight sets, fit to a set, deep-link helpers, then an `ExplorerTour`
+  part, then cross-day stability through the incremental engine.
+- [ ] **R6** Narration experiment: one TTS clip per tour step with a
+  transcript, played by a plain `<audio>` element. Kept only if used. Ambient
+  sound is out of scope.
 
 ## Tracked, not promised
 
