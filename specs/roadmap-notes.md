@@ -25,6 +25,31 @@ crossings parity with dagre, a native explorer base, WebGL2 fallback parity).
 The 2026-10-01 order below, which put M2.11a and M6.3 ahead of the renderer,
 is superseded.
 
+## Daily report track (2026-10-17 UTC)
+
+Three maintainer decisions on 2026-10-17, in order. The track runs in parallel
+with the renderer queue rather than after it. Its subject is this repository's
+own activity, because the data is real, the maintainer is the first reader,
+and the result doubles as a demo. It lives in a folder of this repository
+rather than a separate one, which replaces the same day's earlier wording in
+ROADMAP.md's Parked line ("outside this repo", PR #115).
+
+WHAT THE FOLDER DECISION COSTS, AND THE RULE THAT PAYS FOR IT. Work in this
+repository reaches `main` one reviewed PR at a time (AGENTS.md), and a report
+generated every day would be a PR a day with nothing to review. So the
+generated reports are data and are written append-only somewhere other than
+`main` (a `reports` branch or the docs site's deploy artifact; R2 decides and
+records which). Only the generator, the host app and the format are source.
+
+WHY THE TRACK TOUCHES PACKAGES LAST. The explorer's public api already carries
+what a tour needs (`focusNode`, `inspect`, `selectView`, `setTrace`, a camera
+source, controlled `viewId` and `selectedId`), so R3 builds the tour, deep
+links and sources in the host and R5 moves into `@prnt/dagr-explorer` only
+what R4's log of two to three weeks of use asks for. Audio is one experiment
+(R6), a plain `<audio>` element per tour step, because the multimedia-learning
+evidence favours short, author-paced narration synced to a highlight and is
+null to negative for ambient sound; ambient is out of scope.
+
 ## Priority reset (2026-10-01 UTC)
 
 The live order is now in ROADMAP.md, "Next jobs, in priority order". The
