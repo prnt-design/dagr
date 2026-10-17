@@ -97,10 +97,10 @@ explains the guarantees, tradeoffs, and measured stability.
 The full layout pipeline, incremental deltas, instanced rendering, spring
 animation, HTML overlays, React integration, click selection and hover, port
 validation, and the explorer are implemented. The work now proves the WebGPU
-renderer, in order: the same scene drawn through WebGPU and WebGL2 and
-compared, then a published performance profile, then a measured large-graph
-animation target. GPU picking follows. Drag-to-connect and subgraph editing
-are parked until then. The homepage's architecture inspector is application UI, not an
+renderer. The same scene drawn through WebGPU and WebGL2 is byte-identical on
+one machine (an Apple M4 in Chrome 155, the probe scene only); a published
+performance profile and a measured large-graph animation target come next,
+then GPU picking. Drag-to-connect and subgraph editing are parked until then. The homepage's architecture inspector is application UI, not an
 assertion that those editor APIs are complete.
 
 Dagr is in the 0.x release series. Check the

@@ -25,8 +25,10 @@ make changes traceable, while layout stability depends on the graph and edit.
 See the [measured behavior](https://dagr.prnt.design/docs/incremental-layout).
 
 > ⚠️ Dagr is in the 0.x series, so expect change. The current focus is proving
-> the WebGPU renderer: backend parity first, then a measured large-graph
-> target. The queue lives in [ROADMAP.md](./ROADMAP.md).
+> the WebGPU renderer: backend parity is measured on one machine (byte-identical
+> to WebGL2 on the probe scene), and a published performance profile and a
+> measured large-graph target come next. The queue lives in
+> [ROADMAP.md](./ROADMAP.md).
 
 ## Packages
 
