@@ -5763,7 +5763,7 @@ through the WebGL2 backend. M4.9b is the fifth, the parity screenshot.
   that was a roadmap prediction wrong about its own subject: the sentence is
   corrected in place rather than left, because it is the kind a later task
   implements from.
-- [ ] **M4.9b** (`@dagr/render`, `bench/browser`) Backend parity: the same TSL
+- [x] **M4.9b** (`@dagr/render`, `bench/browser`) Backend parity: the same TSL
   node graphs drawn through BOTH backends on one machine and compared, by
   screenshot over M4.2's shape scene. Everything it needs exists: the probe page
   takes a `backend` preference, `backend: 'webgl2'` forces the compatible path
@@ -5787,6 +5787,34 @@ through the WebGL2 backend. M4.9b is the fifth, the parity screenshot.
   same box has no adapter and falls back to WebGL2 without complaint beyond a
   console line. `backend-probe.mjs` now takes the browser from `DAGR_CHROMIUM`
   and prints the browser, mode, flags and adapter with every result.
+  **SHIPPED: BYTE-IDENTICAL, WHICH THE ENTRY SAID TO EXPECT NOT TO SEE.** "Two
+  rasterisers do not produce identical bytes" was a prediction, and on this
+  machine it is wrong for this scene: Dawn and ANGLE both draw through Metal on the
+  same GPU, and the shader is the same float arithmetic, so all 153,600 pixels
+  match. The tolerance was fixed before the first comparison ran, from the
+  ramp as the entry asked. Pixels within one `aaWidth` of the fill boundary or
+  the outline's inner edge may differ by anything, since `aaWidth` is the one
+  input derived from backend derivatives; every other pixel may differ by 1 in
+  255 per channel, the 8-bit rounding of what is expected to be the same value
+  (WGSL and GLSL compilers may still contract or round differently). That holds
+  while `aaWidth` stays under 1.2 device pixels, because the outline's inner
+  edge moves with it, and while `glowWorld` exceeds it. A tolerance that
+  only ever passes is the failure the entry warned about, so the check carries
+  a control: the rectangle moved a third of a pixel on the WebGL2 side must
+  fail, and it does (1,036 glow pixels off by up to 13). It fails through the
+  glow, because a sub-pixel shift keeps the fill and outline edges inside the
+  band; a shape without glow would pass it. The band's 1,760 pixels against
+  the 1,755 the perimeters predict checks the page's distance arithmetic, not
+  its alignment with the shader. A misplaced band would hold real edge pixels
+  to 1 in 255, so that error makes the check stricter, not looser.
+  **NOT A GATE, ON THE RUNNER RATHER THAN THE ARGUMENT.** The entry was right
+  that the timing argument does not carry. CI is an `ubuntu-latest` runner
+  with no GPU and no browser step, so the check is `--parity` on
+  `backend-probe.mjs`, run by hand with a full Chrome, and it exits non-zero
+  on a mismatch or a control that passes.
+  **SCOPE.** One machine, Chrome 155, the two-shape probe scene, zoom 1, DPR 1.
+  Edge ribbons, other zooms and other GPUs are unchecked; queue item 9 (WebGL2
+  fallback parity) is where they belong.
 - [ ] **M4.10** (`@dagr/render`) Performance: 10k nodes at 60fps, this
   project's headline rendering target. Benchmark driving a real 10k-node
   laid-out graph, with frame time broken down by pass (instance update, node
