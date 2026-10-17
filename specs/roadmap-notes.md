@@ -5795,12 +5795,18 @@ through the WebGL2 backend. M4.9b is the fifth, the parity screenshot.
   ramp as the entry asked. Pixels within one `aaWidth` of the fill boundary or
   the outline's inner edge may differ by anything, since `aaWidth` is the one
   input derived from backend derivatives; every other pixel may differ by 1 in
-  255 per channel, which is 8-bit rounding of the same value. A tolerance that
+  255 per channel, the 8-bit rounding of what is expected to be the same value
+  (WGSL and GLSL compilers may still contract or round differently). That holds
+  while `aaWidth` stays under 1.2 device pixels, because the outline's inner
+  edge moves with it, and while `glowWorld` exceeds it. A tolerance that
   only ever passes is the failure the entry warned about, so the check carries
   a control: the rectangle moved a third of a pixel on the WebGL2 side must
-  fail, and it does (1,036 glow pixels off by up to 13). The band's 1,760
-  pixels against the 1,755 the perimeters predict is the evidence that the
-  page's distance arithmetic lands where the shader's edges are.
+  fail, and it does (1,036 glow pixels off by up to 13). It fails through the
+  glow, because a sub-pixel shift keeps the fill and outline edges inside the
+  band; a shape without glow would pass it. The band's 1,760 pixels against
+  the 1,755 the perimeters predict checks the page's distance arithmetic, not
+  its alignment with the shader. A misplaced band would hold real edge pixels
+  to 1 in 255, so that error makes the check stricter, not looser.
   **NOT A GATE, ON THE RUNNER RATHER THAN THE ARGUMENT.** The entry was right
   that the timing argument does not carry. CI is an `ubuntu-latest` runner
   with no GPU and no browser step, so the check is `--parity` on

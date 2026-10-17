@@ -100,17 +100,6 @@
         return width * height - (4 - Math.PI) * radius * radius;
       };
 
-      /**
-       * Builds a renderer under one preference, draws one frame, and counts
-       * what reached the canvas.
-       *
-       * The pixel counts are the point. "It drew" asserted from the absence of
-       * a thrown error is a claim an empty canvas satisfies, which is the trap
-       * D1's entry already names about the demo's own check ("the DOM tiers are
-       * satisfied by a blank canvas"), so this reads the drawing buffer back and
-       * counts pixels that are not the clear colour, plus the two fills it
-       * should be able to find by hue and compare against their own areas.
-       */
       // The drawn canvas holds a WebGL or WebGPU context, so it has no 2d
       // context to read pixels out of. The reading happens through a second
       // canvas the drawn one is copied into, which is what a screenshot does
@@ -124,6 +113,17 @@
         return ctx.getImageData(0, 0, scratch.width, scratch.height).data;
       };
 
+      /**
+       * Builds a renderer under one preference, draws one frame, and counts
+       * what reached the canvas.
+       *
+       * The pixel counts are the point. "It drew" asserted from the absence of
+       * a thrown error is a claim an empty canvas satisfies, which is the trap
+       * D1's entry already names about the demo's own check ("the DOM tiers are
+       * satisfied by a blank canvas"), so this reads the drawing buffer back and
+       * counts pixels that are not the clear colour, plus the two fills it
+       * should be able to find by hue and compare against their own areas.
+       */
       window.probe = async (backend, keep = false) => {
         // A FRESH canvas per run, which the first version of this page did not
         // do and paid for: a canvas holds one context for its whole life, so
@@ -215,15 +215,19 @@
        * `fillCoverage` and `outlineCoverage` in `sdf.ts` are smoothsteps one
        * `aaWidth` wide, centred on the shape's boundary and on the outline's
        * inner edge. `aaWidth` comes from screen-space derivatives, the one
-       * input the two backends may compute differently. A pixel centre more
-       * than one `aaWidth` (one device pixel here) from both edges has coverage
-       * exactly 0 or 1 whatever that width is, so the rest of its colour is the
-       * same float arithmetic on both and may differ only by 8-bit rounding.
-       * Inside that band any difference is allowed and counted.
+       * input the two backends may compute differently; it is one device
+       * pixel here. A pixel centre more than one device pixel from both edges
+       * has coverage exactly 0 or 1 for any `aaWidth` up to 1.2 (the inner
+       * edge sits at `outlinePixels * aaWidth`, so it moves with the width
+       * too), and the glow ignores `aaWidth` while `glowWorld` exceeds it. The
+       * rest of that pixel's colour is the same arithmetic on both backends,
+       * expected to differ by 8-bit rounding at most. Inside the band any
+       * difference is allowed and counted.
        *
        * `shiftX` moves the first node on the WebGL2 side only. It is the
-       * control: a third of a pixel must fail, or the check cannot see a real
-       * difference and its pass means nothing.
+       * control and must fail. A sub-pixel shift moves the fill and outline
+       * edges only within the band, so it is the glow's gradient that catches
+       * it; a shape without glow shifted the same way would pass.
        */
       const EDGE_BAND_DEVICE_PX = 1;
       const ROUNDING = 1;
@@ -292,7 +296,12 @@
         }
         const backends = { webgpu: gpu.reported, webgl2: gl.reported };
         return {
-          pass: gpu.reported === 'webgpu' && gl.reported === 'webgl2' && interior.maxDelta <= ROUNDING,
+          pass:
+            gpu.reported === 'webgpu' &&
+            gl.reported === 'webgl2' &&
+            gl.width === gpu.width &&
+            gl.height === gpu.height &&
+            interior.maxDelta <= ROUNDING,
           backends,
           tolerance: { edgeBandDevicePx: EDGE_BAND_DEVICE_PX, interiorMaxDelta: ROUNDING },
           shiftX,

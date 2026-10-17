@@ -136,23 +136,28 @@ came up as named, the comparison passes, and a control fails.
 **The tolerance comes from the antialiasing ramp.** `fillCoverage` and
 `outlineCoverage` in `sdf.ts` are smoothsteps one `aaWidth` wide, centred on
 the shape's boundary and on the outline's inner edge, and `aaWidth` comes from
-screen-space derivatives, the one input two backends may compute differently.
-A pixel centre more than one `aaWidth` (one device pixel at zoom 1, DPR 1) from
-both edges has coverage exactly 0 or 1 whatever that width is, so the rest of
-its colour is the same float arithmetic on both backends and may differ by 8-bit
-rounding only: at most 1 per channel. Inside that band any difference is
-allowed, and it is counted. The page computes each pixel's distance from the
+screen-space derivatives, the one input two backends may compute differently;
+at zoom 1 and DPR 1 it is one device pixel. A pixel centre more than one device
+pixel from both edges has coverage exactly 0 or 1 for any `aaWidth` up to 1.2
+(the inner edge sits at `outlinePixels * aaWidth`, so it moves with the width),
+and the glow ignores `aaWidth` while `glowWorld` exceeds it. The rest of that
+pixel's colour is the same arithmetic on both backends, so it is expected to
+differ by 8-bit rounding at most: 1 per channel. Inside the band any difference
+is allowed, and it is counted. The page computes each pixel's distance from the
 same node records the renderer draws.
 
 **The control is what makes a pass mean something.** It reruns the comparison
 with the rectangle moved a third of a device pixel on the WebGL2 side only. If
-that passes, the check cannot see a real geometry error, and the run fails.
+that passes, the check cannot see a real geometry error, and the run fails. It
+fails through the glow: a sub-pixel shift moves the fill and outline edges only
+inside the band, so a shape without glow shifted the same way would pass.
 
 **What it found on 2026-10-17**, on the Apple M4 Mac mini in Google Chrome
 155.0.8059.82, headless, no flags: the two frames are byte-identical. Of
 153,600 pixels, 1,760 are in the edge band (the perimeters of the rectangle,
-its outline's inner edge, the circle and its inner edge come to 878 pixels,
-times a band two pixels wide is 1,755) and 151,840 are not, and none of either
+its outline's inner edge, the circle and its inner edge come to 877.5 pixels,
+times a band two pixels wide is 1,755, which checks the page's distance
+arithmetic but not that it lines up with the shader's) and 151,840 are not, and none of either
 differ. The control failed as it should: 308 band pixels differ, by up to 137,
 and 1,036 glow pixels away from any edge, by up to 13.
 

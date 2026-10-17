@@ -83,7 +83,8 @@ import type {
  * beside them (the `length` in `antialiasWidth`, the colour `mix` in
  * `shapeShading`, and the `mul(size, 0.5)` inside `roundedRectSDF`'s deferred
  * `Fn` body) were the sharpest form of the shader entry, and they are now
- * covered on WebGL2 by a drawn frame rather than by structural assertions
+ * covered on WebGL2, and for the probe scene on one machine on WebGPU, by a
+ * drawn frame rather than by structural assertions
  * standing in for execution. `sdf.ts` still tests the arithmetic as arithmetic,
  * which is what makes a WRONG picture diagnosable rather than merely visible.
  *

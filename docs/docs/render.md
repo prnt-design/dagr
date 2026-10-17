@@ -604,12 +604,12 @@ checks:
   does not stretch the canvas afterwards.
 - That `dispose` frees GPU memory. That every resource in the list is disposed
   exactly once, and that a disposed renderer then refuses to draw, IS tested.
-- That `init()` succeeds ON WEBGPU, and therefore that the shapes compile and
-  draw there. **M4.9a took the WebGL2 half of this entry off the list**, with a
-  browser probe that draws through the built package and counts the pixels: see
+- That the shapes compile and draw ON WEBGPU beyond one machine, browser and
+  scene. **M4.9a took the WebGL2 half of this entry off the list**, with a
+  browser probe that draws through the built package and counts the pixels, and
+  **M4.9b took the WebGPU half for that probe scene** on an Apple M4 in Chrome
+  155: see
   [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
-  Nothing it found is evidence about WGSL, which the other backend generates
-  from the same TSL graphs.
 - The abort check AFTER `init()`, which cannot be reached without a device to
   hand back AND an abort in the window between the request and the resolution.
   Deleting it leaves the suite green, which was measured rather than assumed.
