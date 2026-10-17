@@ -27,8 +27,9 @@ is superseded.
 
 ## Daily report track (2026-10-17 UTC)
 
-Three maintainer decisions on 2026-10-17, in order. The track runs in parallel
-with the renderer queue rather than after it. Its subject is this repository's
+Two further maintainer decisions on 2026-10-17, after the identity decision
+in the entry above. The track runs in parallel with the renderer queue rather
+than after it. Its subject is this repository's
 own activity, because the data is real, the maintainer is the first reader,
 and the result doubles as a demo. It lives in a folder of this repository
 rather than a separate one, which replaces the same day's earlier wording in
@@ -47,8 +48,11 @@ source, controlled `viewId` and `selectedId`), so R3 builds the tour, deep
 links and sources in the host and R5 moves into `@prnt/dagr-explorer` only
 what R4's log of two to three weeks of use asks for. Audio is one experiment
 (R6), a plain `<audio>` element per tour step, because the multimedia-learning
-evidence favours short, author-paced narration synced to a highlight and is
-null to negative for ambient sound; ambient is out of scope.
+evidence favours short, author-paced narration synced to a highlight (Mayer's
+modality, signalling and segmenting principles; the reverse modality effect
+under learner pacing, Tabbers et al. 2004) and is null to negative for
+background audio (Moreno and Mayer 2000; the seductive-details meta-analyses,
+Rey 2012 and Sundararajan and Adesope 2020); ambient is out of scope.
 
 ## Priority reset (2026-10-01 UTC)
 
