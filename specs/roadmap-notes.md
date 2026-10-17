@@ -5738,8 +5738,8 @@ through the WebGL2 backend. M4.9b is the fifth, the parity screenshot.
   node graphs drawn through BOTH backends on one machine and compared, by
   screenshot over M4.2's shape scene. Everything it needs exists: the probe page
   takes a `backend` preference, `backend: 'webgl2'` forces the compatible path
-  deterministically, and the pixel counting is already there. What it needs is a
-  machine with a WebGPU adapter, which is the whole of why it is separate.
+  deterministically, and the pixel counting is already there. What it needed
+  was a machine with a WebGPU adapter, which is the whole of why it is separate.
   Two things to settle when it runs. WHAT COUNTS AS AGREEMENT: two rasterisers
   do not produce identical bytes, and a tolerance invented to make a first
   comparison pass is a tolerance that measures nothing, so derive it from

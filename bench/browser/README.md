@@ -56,13 +56,15 @@ python3 -m http.server 8733               # from the REPO ROOT
 node bench/browser/backend-probe.mjs [screenshot.png] [--headed]
 ```
 
-The browser is Playwright's default Chromium unless `DAGR_CHROMIUM` names
-another executable, and `DAGR_CHROMIUM_ARGS` adds space-separated launch flags
-(the 2026-08-23 run below used `--no-sandbox --use-angle=swiftshader
---enable-unsafe-swiftshader`). `DAGR_BROWSER_DEPS` points at a directory whose
-`node_modules` holds `playwright-core`, if not this one. The output starts with
-the browser version, executable, mode and flags, and the adapter's vendor and
-architecture, because a backend result without them cannot be reproduced.
+The browser is Playwright's default Chromium (`npx playwright-core install
+chromium` fetches it) unless `DAGR_CHROMIUM` names another executable.
+`DAGR_CHROMIUM_ARGS` adds launch flags, split on spaces, so no flag can contain
+one. A box without a GPU still needs the flags the 2026-08-23 run below used:
+`DAGR_CHROMIUM_ARGS="--no-sandbox --use-angle=swiftshader --enable-unsafe-swiftshader"`.
+`DAGR_BROWSER_DEPS` points at a directory whose `node_modules` holds
+`playwright-core`, if not this one. The output starts with the browser version,
+executable, mode and flags, and the adapter's vendor and architecture, because
+a backend result without them cannot be reproduced.
 
 It builds a renderer three times, once per `backend` preference, on a fresh
 canvas each time (a canvas holds one context for its whole life, so reusing one

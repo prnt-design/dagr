@@ -18,8 +18,8 @@ import {
  * `test/picking.test.ts` decides it: the round trip over the FULL id range, the
  * flip a pointer coordinate goes through, and which node an id still means
  * after the scene has moved on. What M4.8b adds is a material, an offscreen
- * target and an asynchronous readback, none of which this box can run, since
- * its headless Chromium has no WebGPU. Writing them in the same increment would
+ * target and an asynchronous readback, none of which the box M4.8a was written
+ * on could run, since it had no WebGPU. Writing them in the same increment would
  * put unverifiable code and verifiable code behind the same green tick.
  *
  * ## An id, and not a slot or a handle

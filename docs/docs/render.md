@@ -872,8 +872,9 @@ what M4.9's roadmap entry asks for. Every entry names where it comes from.
   Nothing in this package computes. This is the line that would matter first if
   anything did.
 - **Performance is unmeasured, and that is the honest statement rather than a
-  hedge.** The machine this package's probe runs on has no WebGPU adapter at
-  all, so there is no pair of numbers to compare and no cliff to quote. M4.9's
+  hedge.** Nobody has yet timed both backends on one machine, so there is no
+  pair of numbers to compare and no cliff to quote; an Apple M4 in full Chrome
+  now has both (`bench/browser/README.md`, 2026-10-17). M4.9's
   own entry says an automatic fallback hides a performance cliff, and an
   unmeasured cliff is one a consumer finds first, so: assume WebGL2 is slower,
   and read `renderer.backend` if that matters to what you draw.

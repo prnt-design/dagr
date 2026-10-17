@@ -119,7 +119,7 @@ if (screenshotPath !== undefined) {
   await page.locator('#stage').screenshot({ path: screenshotPath });
 }
 const launch = {
-  browser: `chromium ${browser.version()}`,
+  browserVersion: browser.version(),
   executable: EXECUTABLE ?? 'playwright default',
   mode: headless ? 'headless' : 'headed',
   args: LAUNCH_ARGS,
