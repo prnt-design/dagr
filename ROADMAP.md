@@ -68,10 +68,10 @@ Stage 1 proves the renderer; stage 2 makes it usable as a product.
 | Order | Task | Concrete outcome and exit check |
 | --- | --- | --- |
 | 1 | **WebGPU adapter in the loop** (stage 1) | Probe at execution time and record what `renderer.backend` reports, on which machine and browser, headed or headless, and with which flags. A WebGL2 fallback is never recorded as a WebGPU result. If no adapter comes up, record what was tried and make the next attempt reproducible. |
-| 2 | **M4.9b: backend parity** (stage 1) | The same TSL drawn through WebGPU and WebGL2 on one machine, compared by screenshot, with the tolerance derived from the antialiasing ramp. A committed parity check that both backends pass. |
+| 2 | **M4.9b: backend parity** (stage 1) | The same TSL drawn through WebGPU and WebGL2 on one machine, compared by screenshot, with the tolerance derived from the antialiasing ramp. A committed parity check that both backends pass; the M4.9b entry decides whether it becomes a gate. |
 | 3 | **M4.10a: consumer performance profile** (stage 1) | Named backend, machine and graph sizes, rich-node tiers, edge styles, hit testing and animated updates. Frame-time distribution and memory per pass, published. Do not infer WebGPU performance from a WebGL fallback. |
 | 4 | **M4.10: 10k nodes at 60fps, animating** (stage 1) | Frame time broken down by pass. If the number is not met, publish the profile and move the number. |
-| 5 | **M4.8b: GPU picking, then edge hits** (stage 2) | Hover and selection at 10k nodes through the M5.2a provider contract; edges become hit targets. |
+| 5 | **M4.8b: GPU picking, then edge hits** (stage 2) | Hover and selection at 10k nodes through the M5.2a provider contract; edges become hit targets. When the pass runs stays provisional until M4.10 prices it. |
 | 6 | **M3.9b: fast paths** (stage 2) | Edits on a 10k graph relayout within the frame budget, judged against M3.10a's tables. |
 | 7 | **Cold-layout crossings parity with dagre** (stage 2) | Close the gap on the M2.9 corpus: 147 crossings between node centres against dagre's 109 with the default `grid-position`, 96 with `brandes-koepf-position` (docs/docs/layout.md). |
 | 8 | **Native explorer base on `DagrCanvas`** (stage 2) | The explorer renders through `DagrCanvas` behind its experimental base seam and keeps its search, drawer and keyboard access. |
@@ -79,7 +79,8 @@ Stage 1 proves the renderer; stage 2 makes it usable as a product.
 
 **Parked:** VDSL drag-to-connect (M6.3a, M6.3b), compound layout and
 drill-down (M7, M6.4, M6.5), audio, and explorer reading features beyond what
-the parallel daily-report track asks for. M2.11a edge legibility moves behind
+a daily report of this repo's activity, built as a host app on the explorer
+outside this repo, asks for. M2.11a edge legibility moves behind
 the stage 1 and 2 items. The explorer keeps getting correctness fixes.
 
 **Deferred:** new showcase rewrites, 3D productization, new wrapper packages,
@@ -149,7 +150,7 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
 
 - [ ] **M2.11a** Edge legibility: generic regression corpus and a
   bounded route-planning fix, assessed separately from `shapeEdgePath` styles.
-  Prioritized after reusable node interaction; see the next-jobs queue.
+  Parked behind the renderer stages; see the next-jobs queue.
 
 ## M3: Incremental layout
 
