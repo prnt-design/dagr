@@ -67,7 +67,7 @@ Stage 1 proves the renderer; stage 2 makes it usable as a product.
 
 | Order | Task | Concrete outcome and exit check |
 | --- | --- | --- |
-| 1 | **WebGPU adapter in the loop** (stage 1) | Probe at execution time and record what `renderer.backend` reports, on which machine and browser, headed or headless, and with which flags. A WebGL2 fallback is never recorded as a WebGPU result. If no adapter comes up, record what was tried and make the next attempt reproducible. |
+| 1 | **WebGPU adapter in the loop** (stage 1, done 2026-10-17: Apple M4, Chrome 155, `renderer.backend` is `webgpu`; see `bench/browser/README.md`) | Probe at execution time and record what `renderer.backend` reports, on which machine and browser, headed or headless, and with which flags. A WebGL2 fallback is never recorded as a WebGPU result. If no adapter comes up, record what was tried and make the next attempt reproducible. |
 | 2 | **M4.9b: backend parity** (stage 1) | The same TSL drawn through WebGPU and WebGL2 on one machine, compared by screenshot, with the tolerance derived from the antialiasing ramp. A committed parity check that both backends pass; the M4.9b entry decides whether it becomes a gate. |
 | 3 | **M4.10a: consumer performance profile** (stage 1) | Named backend, machine and graph sizes, rich-node tiers, edge styles, hit testing and animated updates. Frame-time distribution and memory per pass, published. Do not infer WebGPU performance from a WebGL fallback. |
 | 4 | **M4.10: 10k nodes at 60fps, animating** (stage 1) | Frame time broken down by pass. If the number is not met, publish the profile and move the number. |
