@@ -53,8 +53,16 @@ the layer.
 pnpm --filter @prnt/dagr-render build          # the page imports from dist
 npm --prefix bench/browser install --no-save playwright-core
 python3 -m http.server 8733               # from the REPO ROOT
-node bench/browser/backend-probe.mjs [screenshot.png]
+node bench/browser/backend-probe.mjs [screenshot.png] [--headed]
 ```
+
+The browser is Playwright's default Chromium unless `DAGR_CHROMIUM` names
+another executable, and `DAGR_CHROMIUM_ARGS` adds space-separated launch flags
+(the 2026-08-23 run below used `--no-sandbox --use-angle=swiftshader
+--enable-unsafe-swiftshader`). `DAGR_BROWSER_DEPS` points at a directory whose
+`node_modules` holds `playwright-core`, if not this one. The output starts with
+the browser version, executable, mode and flags, and the adapter's vendor and
+architecture, because a backend result without them cannot be reproduced.
 
 It builds a renderer three times, once per `backend` preference, on a fresh
 canvas each time (a canvas holds one context for its whole life, so reusing one
@@ -97,6 +105,20 @@ antialiased boundary pixels blend toward the halo and fail the hue test, and a
 60 pixel circle is far more boundary per unit area than a 90 by 50 rectangle is.
 A count OVER the area would be the interesting result, and it is not what
 happened.
+
+**What it found on 2026-10-17**, on an Apple M4 Mac mini (macOS 26.6.2), with
+no launch flags. In Google Chrome 155.0.8059.82
+(`DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`),
+headless and `--headed` alike, the adapter is vendor `apple`, architecture
+`metal-3`, not a fallback adapter; `'auto'` and `'webgpu'` both came up on
+`'webgpu'`, and `'webgl2'` on `'webgl2'`. All three drew the same 10,780 lit,
+3,908 amber and 2,432 blue pixels as the swiftshader run. Chrome for Testing
+153.0.8010.12 from Playwright's cache also has the adapter. THE HEADLESS SHELL
+`playwright-core` 1.60 LAUNCHES BY DEFAULT DOES NOT: on the same machine its
+Chromium 148.0.7778.96 logs "No available adapters", `'auto'` falls back to
+`'webgl2'` and `'webgpu'` is refused with `BACKEND_UNAVAILABLE`. So a
+WebGPU result needs `DAGR_CHROMIUM` set to a full Chrome, and the `launch` and
+`reported` fields are what to check before calling one.
 
 ## What the overlay harness measures, and what it does not
 

@@ -238,8 +238,9 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   `renderer.backend` reports what came up, the differences documented, a
   browser probe harness counting pixels.
 - [ ] **M4.9b** Backend parity: the same TSL drawn through both backends on
-  one machine, compared by screenshot. Blocked on a WebGPU adapter. Derive
-  the tolerance from the antialiasing ramp; decide whether it becomes a gate.
+  one machine, compared by screenshot. An Apple M4 in full Chrome has a WebGPU
+  adapter (2026-10-17, `bench/browser/README.md`). Derive the tolerance from
+  the antialiasing ramp; decide whether it becomes a gate.
 - [ ] **M4.10a** Profile the consumer path before optimizing: named backend,
   machine, graph sizes, rich-node tiers, edge styles, hit testing, update cost,
   frame-time distribution and memory. This is evidence, not a 60fps claim.

@@ -8,10 +8,8 @@
  * UNVERIFIED, headed by "that any shape appears at all" and "that the shader
  * computes anything", because a TSL graph built in Node never reaches a
  * backend and never generates code. Opening the same package in a browser is
- * what closes that, and the box this runs on has WebGL2 through swiftshader and
- * no WebGPU adapter, so it closes it for one backend of two. What it therefore
- * CANNOT do is the parity comparison M4.9b owns, which needs both backends on
- * one machine.
+ * what closes that. On a machine without a WebGPU adapter it closes it for
+ * WebGL2 only; see the README for which machines and browsers have one.
  *
  * Outside `pnpm bench:ci` for the reason everything in this directory is: it
  * answers a question once, with numbers, and records how they were taken. It is
@@ -22,26 +20,29 @@
  * pnpm --filter @prnt/dagr-render build      # the page imports from dist
  * npm --prefix bench/browser install --no-save playwright-core
  * python3 -m http.server 8733           # from the REPO ROOT
- * node bench/browser/backend-probe.mjs
+ * node bench/browser/backend-probe.mjs  # [screenshot.png] [--headed]
  * ```
  *
- * Pass a path as the first argument to write the drawn frame there as a PNG.
+ * Pass a path to write the drawn frame there as a PNG. The browser is
+ * Playwright's own Chromium unless `DAGR_CHROMIUM` names another executable,
+ * and `DAGR_CHROMIUM_ARGS` adds space-separated launch flags. The output
+ * records the browser, mode and flags, because a backend result without them
+ * cannot be reproduced.
  */
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const require = createRequire(import.meta.url);
+const DEPS = process.env.DAGR_BROWSER_DEPS ?? fileURLToPath(new URL('.', import.meta.url));
+const require = createRequire(join(DEPS, 'package.json'));
 const { chromium } = require('playwright-core');
 
 const ROOT = new URL('../..', import.meta.url).pathname;
 const ORIGIN = 'http://127.0.0.1:8733';
 
-// The Chromium the rest of this directory uses, and the same swiftshader flags.
-// This box has no GPU at all, so WebGL2 is software rasterised; that makes the
-// timings meaningless and the PICTURE exactly as correct as a real one, which
-// is the half this file is about.
-const EXECUTABLE = '/home/dispatch/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome';
-const LAUNCH_ARGS = ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
+const EXECUTABLE = process.env.DAGR_CHROMIUM;
+const LAUNCH_ARGS = (process.env.DAGR_CHROMIUM_ARGS ?? '').split(' ').filter(Boolean);
 
 /**
  * The page's import map, filled in from this process's own module resolution.
@@ -76,8 +77,14 @@ function pageHtml() {
     .replace('__THREE_TSL__', served('three/tsl'));
 }
 
-const screenshotPath = process.argv[2];
-const browser = await chromium.launch({ executablePath: EXECUTABLE, args: LAUNCH_ARGS });
+const cliArgs = process.argv.slice(2);
+const headless = !cliArgs.includes('--headed');
+const screenshotPath = cliArgs.find((arg) => !arg.startsWith('--'));
+const browser = await chromium.launch({
+  headless,
+  args: LAUNCH_ARGS,
+  ...(EXECUTABLE === undefined ? {} : { executablePath: EXECUTABLE }),
+});
 const page = await browser.newPage({
   viewport: { width: 640, height: 420 },
   deviceScaleFactor: 1,
@@ -111,5 +118,12 @@ if (screenshotPath !== undefined) {
   await page.evaluate((value) => window.probe(value, true), 'auto');
   await page.locator('#stage').screenshot({ path: screenshotPath });
 }
-console.log(JSON.stringify({ advertised, results, warnings }, null, 1));
+const launch = {
+  browser: `chromium ${browser.version()}`,
+  executable: EXECUTABLE ?? 'playwright default',
+  mode: headless ? 'headless' : 'headed',
+  args: LAUNCH_ARGS,
+  userAgent: await page.evaluate('navigator.userAgent'),
+};
+console.log(JSON.stringify({ launch, advertised, results, warnings }, null, 1));
 await browser.close();
