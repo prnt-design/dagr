@@ -614,8 +614,10 @@ checks:
   hand back AND an abort in the window between the request and the resolution.
   Deleting it leaves the suite green, which was measured rather than assumed.
   The abort check before `init()` is tested.
-- That the two backends agree with each other. That one is M4.9b's, by
-  screenshot comparison, and it needs a machine with both.
+- That the two backends agree beyond what M4.9b compared: one machine (an
+  Apple M4 in Chrome 155), the two-shape probe scene, zoom 1, device pixel
+  ratio 1. Other GPUs, zooms and edge ribbons are unchecked. See
+  [What is verified, and on which backend](#what-is-verified-and-on-which-backend).
 - That a browser composes the overlay's two transforms the way the algebra says.
   The layer's `translate() scale()` and an entry's own transform are asserted as
   strings by a suite that never renders them, so a wrong composition order or a
@@ -904,9 +906,19 @@ package drew rather than the arithmetic behind one, and it closes most of the
 UNVERIFIED list in `webgpu-renderer.ts` **on WebGL2 only**. The shapes appear, in
 the right place, at the right size and in the intended colours, so the TSL graphs
 compile and the shader computes. None of that is evidence about WGSL, which a
-different backend generates from the same graphs. The screenshot comparison
-between the two backends that M4.9's entry asks for needs a machine with both,
-and is M4.9b.
+different backend generates from the same graphs.
+
+M4.9b closed that for one machine. On 2026-10-17, on an Apple M4 Mac mini in
+Google Chrome 155, the same frame through WebGPU and WebGL2 is byte-identical:
+none of its 153,600 pixels differ. The check allows more than that. The fill
+and outline antialias over a ramp one device pixel wide whose width comes from
+screen-space derivatives, the one input the backends may compute differently,
+so pixels within one device pixel of a coverage edge may differ by any amount,
+and every other pixel by at most 1 in 255 per channel. A control run shifts one
+shape a third of a pixel on one side and must fail; it does, by up to 13 in 255
+on 1,036 pixels of glow away from any edge. The check is
+`node bench/browser/backend-probe.mjs --parity`; `bench/browser/README.md` has
+how to run it and why it is not a CI gate.
 
 ## Usage
 
@@ -1077,7 +1089,7 @@ Chromium on a machine with no GPU has. That bears on the shapes and not on the
 overlay, which never touches a GPU: what these frames are evidence for is the
 transform composition and the counter-scale, and those are the browser's
 compositor either way. Whether the two backends draw the same shapes is M4.9b's
-question, and it is on the untested list above.
+question, answered above for the probe scene on one machine.
 
 ### What one sync does, and what it costs
 
@@ -1975,8 +1987,7 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
   offscreen target, the readback and a `pick()` on `Renderer` (M4.8b). What
   a pixel says and which node an id still means are decided and tested; see
   [Picking](#picking-decided-and-half-built).
-- A screenshot comparison between the WebGPU and WebGL2 backends, which needs a
-  machine with both (M4.9b). The selection, the reporting and the differences
-  landed at M4.9a and are two sections above.
+- Backend parity beyond the probe scene and the one machine M4.9b compared on:
+  other GPUs, zooms, and edge ribbons.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
   (M4.10).

@@ -54,19 +54,19 @@ import type {
  * area against 3,908 counted, and the blue is the 60 diameter circle inset the
  * same way, 2,463 against 2,432. So a shape appears, in the right place, at the
  * right size and in the intended colour; the shader computes; the derivatives
- * antialias; and the buffer size computed here reaches a real canvas. What is NOT covered is WebGPU, because
- * this box has no adapter (see `backend.ts`), so every claim in this paragraph
- * is scoped to the backend that drew it. That scope is the whole of why M4.9
- * is split, and M4.9b owns closing it.
+ * antialias; and the buffer size computed here reaches a real canvas. That box
+ * had no WebGPU adapter, so every claim in this paragraph was scoped to WebGL2.
+ * **M4.9b extended it to WebGPU** on an Apple M4 in Chrome 155: the same frame
+ * through both backends is byte-identical, every one of 153,600 pixels
+ * (`bench/browser/backend-probe.mjs --parity`).
  *
  * What is therefore still UNVERIFIED, stated plainly rather than left to be
  * discovered. M4.2 amended M4.1's list rather than replacing it, and M4.9a is
  * the first task to take entries OFF it:
  *
- * - Everything above, ON WEBGPU. The TSL graphs are compiled by a different
- *   backend into a different shading language there, and "it compiles on
- *   WebGL2" is not evidence about WGSL. M4.9b's parity check is exactly this
- *   entry and it needs a machine with both.
+ * - Everything above on WebGPU beyond that one machine, browser and scene:
+ *   other GPUs, other zooms and device pixel ratios, and edge ribbons, which
+ *   the probe scene does not draw.
  * - That `dispose` actually frees GPU memory, only that every resource in the
  *   list is disposed exactly once.
  * - The abort check AFTER `init()`, which is the branch that gives a device back

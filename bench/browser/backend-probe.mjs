@@ -20,14 +20,15 @@
  * pnpm --filter @prnt/dagr-render build      # the page imports from dist
  * npm --prefix bench/browser install --no-save playwright-core
  * python3 -m http.server 8733           # from the REPO ROOT
- * node bench/browser/backend-probe.mjs  # [screenshot.png] [--headed]
+ * node bench/browser/backend-probe.mjs  # [screenshot.png] [--headed] [--parity]
  * ```
  *
  * Pass a path to write the drawn frame there as a PNG. The browser is
  * Playwright's own Chromium unless `DAGR_CHROMIUM` names another executable,
  * and `DAGR_CHROMIUM_ARGS` adds space-separated launch flags. The output
  * records the browser, mode and flags, because a backend result without them
- * cannot be reproduced.
+ * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
+ * non-zero unless it passes and its control fails.
  */
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -111,6 +112,14 @@ const results = [];
 for (const preference of ['auto', 'webgpu', 'webgl2']) {
   results.push(await page.evaluate((value) => window.probe(value), preference));
 }
+let parity;
+if (cliArgs.includes('--parity')) {
+  parity = {
+    check: await page.evaluate(() => window.parity()),
+    control: await page.evaluate(() => window.parity(1 / 3)),
+  };
+  if (!parity.check.pass || parity.control.pass) process.exitCode = 1;
+}
 if (screenshotPath !== undefined) {
   // `keep` matters: a disposed renderer releases its context and the canvas
   // goes white, so a screenshot taken after the ordinary probe run is a picture
@@ -125,5 +134,5 @@ const launch = {
   args: LAUNCH_ARGS,
   userAgent: await page.evaluate('navigator.userAgent'),
 };
-console.log(JSON.stringify({ launch, advertised, results, warnings }, null, 1));
+console.log(JSON.stringify({ launch, advertised, results, parity, warnings }, null, 1));
 await browser.close();

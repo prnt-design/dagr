@@ -111,6 +111,19 @@
        * counts pixels that are not the clear colour, plus the two fills it
        * should be able to find by hue and compare against their own areas.
        */
+      // The drawn canvas holds a WebGL or WebGPU context, so it has no 2d
+      // context to read pixels out of. The reading happens through a second
+      // canvas the drawn one is copied into, which is what a screenshot does
+      // anyway.
+      const readPixels = (canvas) => {
+        const scratch = document.createElement('canvas');
+        scratch.width = canvas.width;
+        scratch.height = canvas.height;
+        const ctx = scratch.getContext('2d');
+        ctx.drawImage(canvas, 0, 0);
+        return ctx.getImageData(0, 0, scratch.width, scratch.height).data;
+      };
+
       window.probe = async (backend, keep = false) => {
         // A FRESH canvas per run, which the first version of this page did not
         // do and paid for: a canvas holds one context for its whole life, so
@@ -132,16 +145,7 @@
         }
         renderer.camera.setViewport(viewport);
         renderer.render();
-        // The drawn canvas holds a WebGL or WebGPU context, so it has no 2d
-        // context to read pixels out of. The counting happens through a second
-        // canvas the drawn one is copied into, which is what a screenshot does
-        // anyway.
-        const scratch = document.createElement('canvas');
-        scratch.width = canvas.width;
-        scratch.height = canvas.height;
-        const ctx = scratch.getContext('2d');
-        ctx.drawImage(canvas, 0, 0);
-        const { data } = ctx.getImageData(0, 0, scratch.width, scratch.height);
+        const data = readPixels(canvas);
         let lit = 0;
         let amber = 0;
         let blue = 0;
@@ -201,6 +205,99 @@
             description,
             isFallbackAdapter: adapter.info.isFallbackAdapter ?? adapter.isFallbackAdapter,
           },
+        };
+      };
+
+      /**
+       * M4.9b: the same scene through WebGPU and WebGL2, compared pixel by
+       * pixel, with the tolerance taken from the antialiasing ramp.
+       *
+       * `fillCoverage` and `outlineCoverage` in `sdf.ts` are smoothsteps one
+       * `aaWidth` wide, centred on the shape's boundary and on the outline's
+       * inner edge. `aaWidth` comes from screen-space derivatives, the one
+       * input the two backends may compute differently. A pixel centre more
+       * than one `aaWidth` (one device pixel here) from both edges has coverage
+       * exactly 0 or 1 whatever that width is, so the rest of its colour is the
+       * same float arithmetic on both and may differ only by 8-bit rounding.
+       * Inside that band any difference is allowed and counted.
+       *
+       * `shiftX` moves the first node on the WebGL2 side only. It is the
+       * control: a third of a pixel must fail, or the check cannot see a real
+       * difference and its pass means nothing.
+       */
+      const EDGE_BAND_DEVICE_PX = 1;
+      const ROUNDING = 1;
+
+      const signedDistance = (node, x, y) => {
+        const px = x - node.center.x;
+        const py = y - node.center.y;
+        if (node.shape === 'circle') return Math.hypot(px, py) - node.size.width / 2;
+        const r = node.cornerRadius;
+        const qx = Math.abs(px) - node.size.width / 2 + r;
+        const qy = Math.abs(py) - node.size.height / 2 + r;
+        return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+      };
+
+      window.parity = async (shiftX = 0) => {
+        const draw = async (backend, nodes) => {
+          const previous = document.getElementById('stage');
+          const canvas = document.createElement('canvas');
+          canvas.id = 'stage';
+          previous.replaceWith(canvas);
+          const renderer = await createRenderer({ canvas, backend, nodes });
+          renderer.camera.setViewport({ width: 480, height: 320, devicePixelRatio: 1 });
+          renderer.render();
+          const data = readPixels(canvas);
+          const reported = renderer.backend;
+          renderer.dispose();
+          return { data, reported, width: canvas.width, height: canvas.height };
+        };
+        const shifted = NODES.map((node, i) =>
+          i === 0 ? { ...node, center: { x: node.center.x + shiftX, y: node.center.y } } : node,
+        );
+        let gpu;
+        let gl;
+        try {
+          gpu = await draw('webgpu', NODES);
+          gl = await draw('webgl2', shifted);
+        } catch (error) {
+          return { pass: false, error: String(error), code: error && error.code };
+        }
+        const band = { pixels: 0, differing: 0, maxDelta: 0 };
+        const interior = { pixels: 0, differing: 0, maxDelta: 0 };
+        for (let row = 0; row < gpu.height; row += 1) {
+          for (let col = 0; col < gpu.width; col += 1) {
+            // Device pixel centres in world units: zoom 1, DPR 1, the origin at
+            // the canvas centre. Both shapes are symmetric in y, so the sign of
+            // the y axis does not matter here.
+            const x = col + 0.5 - gpu.width / 2;
+            const y = gpu.height / 2 - (row + 0.5);
+            let nearest = Infinity;
+            for (const node of NODES) {
+              const d = signedDistance(node, x, y);
+              nearest = Math.min(nearest, Math.abs(d), Math.abs(d + OUTLINE_DEVICE_PX));
+            }
+            const i = (row * gpu.width + col) * 4;
+            const delta = Math.max(
+              Math.abs(gpu.data[i] - gl.data[i]),
+              Math.abs(gpu.data[i + 1] - gl.data[i + 1]),
+              Math.abs(gpu.data[i + 2] - gl.data[i + 2]),
+              Math.abs(gpu.data[i + 3] - gl.data[i + 3]),
+            );
+            const bucket = nearest < EDGE_BAND_DEVICE_PX ? band : interior;
+            bucket.pixels += 1;
+            if (delta > 0) bucket.differing += 1;
+            bucket.maxDelta = Math.max(bucket.maxDelta, delta);
+          }
+        }
+        const backends = { webgpu: gpu.reported, webgl2: gl.reported };
+        return {
+          pass: gpu.reported === 'webgpu' && gl.reported === 'webgl2' && interior.maxDelta <= ROUNDING,
+          backends,
+          tolerance: { edgeBandDevicePx: EDGE_BAND_DEVICE_PX, interiorMaxDelta: ROUNDING },
+          shiftX,
+          band,
+          interior,
         };
       };
 
