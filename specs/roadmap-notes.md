@@ -16,6 +16,15 @@ The checklist in `ROADMAP.md` is the live one. New tasks keep the same shape:
 the one-line entry lands there, and the working record lands here under the
 same ID.
 
+## Priority reset: WebGPU renderer first (2026-10-17 UTC)
+
+The maintainer, Nii Yeboah, chose the WebGPU renderer as dagr's lead identity
+on 2026-10-17, and ROADMAP.md's queue was reordered to match: prove the
+renderer (adapter, M4.9b, M4.10a, M4.10), then make it usable (M4.8b, M3.9b,
+crossings parity with dagre, a native explorer base, WebGL2 fallback parity).
+The 2026-10-01 order below, which put M2.11a and M6.3 ahead of the renderer,
+is superseded.
+
 ## Priority reset (2026-10-01 UTC)
 
 The live order is now in ROADMAP.md, "Next jobs, in priority order". The

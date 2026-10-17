@@ -10,7 +10,11 @@ the decisions it took and the reasons, lives in
 reference elsewhere in the repo to "the roadmap's M4.6 entry" means the entry
 there. Milestone status is mirrored in the project brain.
 
-## Status (2026-10-07 UTC)
+## Status (2026-10-17 UTC)
+
+On 2026-10-17 the maintainer chose dagr's lead identity: the GPU renderer for
+big directed graphs that animate as they change. The queue below now proves
+the WebGPU renderer first.
 
 The published npm packages use `@prnt/dagr-*`, with the
 `@prnt/dagr` umbrella. All seven packages are published at **0.1.4**
@@ -59,20 +63,28 @@ milestone order. Check main and open PRs before claiming work. Correctness or
 install regressions in a released API preempt this queue. A missing WebGPU
 adapter blocks claims about that backend, not backend-independent interaction.
 
+Stage 1 proves the renderer; stage 2 makes it usable as a product.
+
 | Order | Task | Concrete outcome and exit check |
 | --- | --- | --- |
-| 1 | **M5.2b: native node hit adapter** (shipped, see M5.2b below) | Make the shared interaction usable with `DagrCanvas` and its current animated geometry. Respect supported shape silhouettes, draw order, camera/DPR, removed nodes, and rich HTML controls. Test circles outside their box corners and mid-animation picking; repeat the M5.2a CPU baseline and explain regressions. Document CPU scope and unsupported edge/port hits; do not reuse the campaign's approximate hover boxes as exact selection. |
-| 2 | **M2.11a: edge legibility** | Record node intersections, overlaps and route length on a small generic architecture corpus. RoutedEdge has no port attachment metadata today: define an explicit input/output contract before claiming port-aware routing, or keep the first fix node-only. Ship one bounded routing improvement with a failing fixture first. Keep presentation styles separate from route planning and preserve stable anchors during edits. No blanket claim that orthogonal means obstacle-free. |
-| 3 | **M6.3a: port hit adapter** | Implement port geometry and stable node/port identities through the M5.2a provider contract. Specify coordinate space, draw order, animation revision, stale/removed ports, and hit radius at zoom/DPR. Test and measure this adapter before wiring a connection gesture. |
-| 4 | **M6.3b: VDSL connections** | One in-flight edge, valid/invalid drop feedback, cancellation, and exactly one validated graph mutation. Reuse M5.2 interactions, M6.3a targets, and M6.2 validation; include a keyboard-accessible connection path. |
-| 5 | **M4.10a: consumer performance profile** | Extend the early M5.2a/b CPU baseline to interaction, rich labels, route shaping and animated updates at named sizes on a named machine/backend. Record frame-time distribution and memory; use the measured bottleneck to select M3.9b or rendering work. Do not infer WebGPU performance from a WebGL fallback. |
+| 1 | **WebGPU adapter in the loop** (stage 1) | Probe at execution time and record what `renderer.backend` reports, on which machine and browser, headed or headless, and with which flags. A WebGL2 fallback is never recorded as a WebGPU result. If no adapter comes up, record what was tried and make the next attempt reproducible. |
+| 2 | **M4.9b: backend parity** (stage 1) | The same TSL drawn through WebGPU and WebGL2 on one machine, compared by screenshot, with the tolerance derived from the antialiasing ramp. A committed parity check that both backends pass. |
+| 3 | **M4.10a: consumer performance profile** (stage 1) | Named backend, machine and graph sizes, rich-node tiers, edge styles, hit testing and animated updates. Frame-time distribution and memory per pass, published. Do not infer WebGPU performance from a WebGL fallback. |
+| 4 | **M4.10: 10k nodes at 60fps, animating** (stage 1) | Frame time broken down by pass. If the number is not met, publish the profile and move the number. |
+| 5 | **M4.8b: GPU picking, then edge hits** (stage 2) | Hover and selection at 10k nodes through the M5.2a provider contract; edges become hit targets. |
+| 6 | **M3.9b: fast paths** (stage 2) | Edits on a 10k graph relayout within the frame budget, judged against M3.10a's tables. |
+| 7 | **Cold-layout crossings parity with dagre** (stage 2) | Close the gap on the M2.9 corpus: 147 crossings between node centres against dagre's 109 with the default `grid-position`, 96 with `brandes-koepf-position` (docs/docs/layout.md). |
+| 8 | **Native explorer base on `DagrCanvas`** (stage 2) | The explorer renders through `DagrCanvas` behind its experimental base seam and keeps its search, drawer and keyboard access. |
+| 9 | **WebGL2 fallback parity** (stage 2) | The fallback looks and behaves the same as WebGPU, as item 2 measures. |
+
+**Parked:** VDSL drag-to-connect (M6.3a, M6.3b), compound layout and
+drill-down (M7, M6.4, M6.5), audio, and explorer reading features beyond what
+the parallel daily-report track asks for. M2.11a edge legibility moves behind
+the stage 1 and 2 items. The explorer keeps getting correctness fixes.
 
 **Deferred:** new showcase rewrites, 3D productization, new wrapper packages,
 additional edge decorations, and broad layout algorithm work without a measured
-consumer problem. M4.8b remains valuable for exact GPU picking, but it is a
-separate adapter path after the interaction contract, not a prerequisite for
-M5.2a. Probe backend availability at execution time rather than carrying an old
-machine report forward as a permanent blocker. M4.9b still needs both backends.
+consumer problem.
 
 **Job guardrails:** each run delivers one bounded increment with tests, docs,
 required diff/tree reviews, and the full local/CI gates in AGENTS.md. Do not
