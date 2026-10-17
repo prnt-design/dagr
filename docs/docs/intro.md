@@ -95,10 +95,13 @@ explains the guarantees, tradeoffs, and measured stability.
 ## What is ready, and what is next
 
 The full layout pipeline, incremental deltas, instanced rendering, spring
-animation, HTML overlays, React integration, and port validation are implemented.
-GPU picking, editor selection/drag hooks, drag-to-connect, and subgraph editing
-remain planned. The homepage's architecture inspector is application UI, not
-an assertion that those editor APIs are complete.
+animation, HTML overlays, React integration, click selection and hover, port
+validation, and the explorer are implemented. The work now proves the WebGPU
+renderer: the same scene drawn through WebGPU and WebGL2 and compared, a
+published performance profile, and a measured large-graph animation target.
+GPU picking follows. Drag-to-connect and subgraph editing are parked until
+then. The homepage's architecture inspector is application UI, not an
+assertion that those editor APIs are complete.
 
 Dagr is in the 0.x release series. Check the
 [roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md) for current work.
