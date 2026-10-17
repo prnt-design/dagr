@@ -187,11 +187,22 @@
        * rather than probing before it, so the page reports both halves rather
        * than the conclusion.
        */
-      window.webgpuAdvertised = async () => ({
-        navigatorGpu: 'gpu' in navigator,
-        adapter:
-          'gpu' in navigator ? (await navigator.gpu.requestAdapter()) !== null : false,
-      });
+      window.webgpuAdvertised = async () => {
+        if (!('gpu' in navigator)) return { navigatorGpu: false, adapter: null };
+        const adapter = await navigator.gpu.requestAdapter();
+        if (adapter === null) return { navigatorGpu: true, adapter: null };
+        const { vendor, architecture, device, description } = adapter.info;
+        return {
+          navigatorGpu: true,
+          adapter: {
+            vendor,
+            architecture,
+            device,
+            description,
+            isFallbackAdapter: adapter.info.isFallbackAdapter ?? adapter.isFallbackAdapter,
+          },
+        };
+      };
 
       window.ready = true;
     </script>

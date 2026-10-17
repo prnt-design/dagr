@@ -5738,8 +5738,8 @@ through the WebGL2 backend. M4.9b is the fifth, the parity screenshot.
   node graphs drawn through BOTH backends on one machine and compared, by
   screenshot over M4.2's shape scene. Everything it needs exists: the probe page
   takes a `backend` preference, `backend: 'webgl2'` forces the compatible path
-  deterministically, and the pixel counting is already there. What it needs is a
-  machine with a WebGPU adapter, which is the whole of why it is separate.
+  deterministically, and the pixel counting is already there. What it needed
+  was a machine with a WebGPU adapter, which is the whole of why it is separate.
   Two things to settle when it runs. WHAT COUNTS AS AGREEMENT: two rasterisers
   do not produce identical bytes, and a tolerance invented to make a first
   comparison pass is a tolerance that measures nothing, so derive it from
@@ -5751,6 +5751,13 @@ through the WebGL2 backend. M4.9b is the fifth, the parity screenshot.
   cannot re-measure it honestly, and a parity check is not a measurement, so the
   argument does not automatically carry. It still needs a runner with both
   backends, which CI does not obviously have.
+  **THE ADAPTER EXISTS NOW (2026-10-17).** On an Apple M4 Mac mini, Google
+  Chrome 155 headless with no flags reports a `metal-3` adapter that is not a
+  fallback, and `renderer.backend` reads `webgpu` under `auto`. The trap is the
+  browser, not the machine: `playwright-core`'s default headless shell on the
+  same box has no adapter and falls back to WebGL2 without complaint beyond a
+  console line. `backend-probe.mjs` now takes the browser from `DAGR_CHROMIUM`
+  and prints the browser, mode, flags and adapter with every result.
 - [ ] **M4.10** (`@dagr/render`) Performance: 10k nodes at 60fps, this
   project's headline rendering target. Benchmark driving a real 10k-node
   laid-out graph, with frame time broken down by pass (instance update, node
