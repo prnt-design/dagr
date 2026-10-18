@@ -27,7 +27,6 @@ const { chromium } = require('playwright-core');
 const ROOT = new URL('../..', import.meta.url).pathname;
 const ORIGIN = 'http://127.0.0.1:8733';
 const PAGE = `${ORIGIN}/bench/browser/frame-profile.html`;
-const TICK_MS = 1000 / 60;
 
 const EXECUTABLE = process.env.DAGR_CHROMIUM;
 const LAUNCH_ARGS = (process.env.DAGR_CHROMIUM_ARGS ?? '').split(' ').filter(Boolean);
@@ -41,11 +40,16 @@ const positive = (name, text) => {
   if (!(value > 0) || !Number.isFinite(value)) throw new Error(`--${name} has to be a positive number, got ${text}`);
   return value;
 };
+const count = (name, text) => {
+  const value = positive(name, text);
+  if (!Number.isInteger(value)) throw new Error(`--${name} has to be a whole number, got ${text}`);
+  return value;
+};
 const sizes = option('sizes', '1000,2500,5000,10000')
   .split(',')
-  .map((size) => positive('sizes', size));
-const frames = positive('frames', option('frames', '300'));
-const warmup = positive('warmup', option('warmup', '60'));
+  .map((size) => count('sizes', size));
+const frames = count('frames', option('frames', '300'));
+const warmup = count('warmup', option('warmup', '60'));
 const zoomOption = option('zoom', 'fit');
 const zoom = zoomOption === 'fit' ? null : positive('zoom', zoomOption);
 const dpr = positive('dpr', option('dpr', '1'));
@@ -68,7 +72,7 @@ function pageHtml() {
     .replace('__THREE_TSL__', served('three/tsl'));
 }
 
-const quantile = (sorted, q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
+const quantile = (sorted, q) => sorted[Math.max(0, Math.ceil(q * sorted.length) - 1)];
 
 function summarise(values) {
   const sorted = [...values].sort((a, b) => a - b);
@@ -83,14 +87,15 @@ function summarise(values) {
 
 // Timestamps jitter a millisecond or two around each vsync, so an interval is
 // counted in ticks and "past one tick" means at least one frame was missed.
-function intervals(values) {
-  const missed = values.filter((ms) => Math.round(ms / TICK_MS) > 1).length;
+// The tick is the control's median, so a 120 Hz display is counted at 120 Hz.
+function intervals(values, tickMs) {
+  const missed = values.filter((ms) => Math.round(ms / tickMs) > 1).length;
   return { ...summarise(values), pastOneTick: Math.round((missed / values.length) * 1000) / 10 };
 }
 
-function mode(run) {
+function mode(run, tickMs) {
   return {
-    interval: intervals(run.intervals),
+    interval: intervals(run.intervals, tickMs),
     steps: Object.fromEntries(Object.entries(run.steps).map(([name, v]) => [name, summarise(v)])),
   };
 }
@@ -124,31 +129,29 @@ const launch = {
 };
 const adapter = await page.evaluate(() => window.adapter());
 
-const rows = [];
-for (const count of sizes) {
-  const run = await page.evaluate(([n, w, f, z]) => window.profile(n, w, f, z), [
-    count,
-    warmup,
-    frames,
-    zoom,
-  ]);
-  rows.push({
-    count: run.count,
-    edges: run.edges,
-    backend: run.backend,
-    zoom: Math.round(run.zoom * 10_000) / 10_000,
-    buildMs: Math.round(run.buildMs),
-    heapMb: Object.fromEntries(
-      Object.entries(run.heap).map(([k, v]) => [k, v === null ? null : Math.round(v / 2 ** 20)]),
-    ),
-    still: mode(run.still),
-    animated: mode(run.animated),
-  });
+const runs = [];
+for (const size of sizes) {
+  runs.push(
+    await page.evaluate(([n, w, f, z]) => window.profile(n, w, f, z), [size, warmup, frames, zoom]),
+  );
 }
-// Last rather than first: measured first, it caught the headed window
-// settling and read worse than every graph after it.
-const control = mode(await page.evaluate(([w, f]) => window.control(w, f), [warmup, frames]));
+const controlRun = await page.evaluate(([w, f]) => window.control(w, f), [warmup, frames]);
 await browser.close();
+
+const tickMs = summarise(controlRun.intervals).median;
+const control = mode(controlRun, tickMs);
+const rows = runs.map((run) => ({
+  count: run.count,
+  edges: run.edges,
+  backend: run.backend,
+  zoom: Math.round(run.zoom * 10_000) / 10_000,
+  buildMs: Math.round(run.buildMs),
+  heapMb: Object.fromEntries(
+    Object.entries(run.heap).map(([k, v]) => [k, v === null ? null : Math.round(v / 2 ** 20)]),
+  ),
+  still: mode(run.still, tickMs),
+  animated: mode(run.animated, tickMs),
+}));
 
 const report = {
   machine,
@@ -156,6 +159,7 @@ const report = {
   adapter,
   viewport: { width: 1280, height: 720, devicePixelRatio: dpr },
   plan: { warmup, frames, zoom: zoomOption },
+  tickMs,
   control,
   rows,
   warnings,

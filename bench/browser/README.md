@@ -188,36 +188,40 @@ modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
 `animated` also replaces every node centre and every edge route each frame
 through `setNodes` and `setEdges`, which is what a consumer driving
 `createSceneMotion` hands the renderer while every spring is in flight. The
-report gives the interval between animation frames and the CPU time of each
-call, and the runner prints the machine, browser, launch mode and adapter with
-them. It runs headed by default, for the pacing reason the explorer ceiling
-below gives. Its control is a page moving one 8 pixel square a frame, measured
-last: a page that paints nothing new gets fewer frames from Chrome, and a
-control that paints nothing missed a frame 20 to 36% of the time.
+arrays are built before the clock starts on those two calls and timed as
+`input`. The report gives the interval between animation frames and the CPU
+time of each step, and the runner prints the machine, browser, launch mode and
+adapter with them. It runs headed by default, for the pacing reason the
+explorer ceiling below gives. The control, measured last, is a page moving one
+8 pixel square a frame, and its median interval is the tick: "past one tick"
+is the share of intervals that rounded to two ticks or more.
 
 `render()` returns once the frame is submitted, so its time is CPU time, not
 GPU time. A GPU that fell behind would show in the interval, not in `render`.
 
 **What it found on 2026-10-17**, Apple M4 Mac mini (10 cores, 16 GB, macOS
 26.6.2), Google Chrome 155.0.8059.82 headed with no flags, adapter `apple`
-`metal-3`, not a fallback, `renderer.backend` `webgpu` on every row. Viewport
-1280 by 720 CSS pixels at DPR 1, camera fitted to the graph, so at 10,000 nodes
-a rectangle is 6.4 pixels wide. Load average 4.5 to 6 from other work on the
-machine. Two runs agreed on every row's tick count; the table is the second.
-Times are median / 95th percentile in milliseconds.
+`metal-3`, not a fallback, `renderer.backend` `webgpu` on every row, tick 16.7
+ms. Viewport 1280 by 720 CSS pixels at DPR 1, camera fitted to the graph, so at
+10,000 nodes a rectangle is 6.4 pixels wide. Load average 4.2 to 5.1 from other
+work on the machine. Times are median / 95th percentile in milliseconds.
 
-| Nodes | Edges | Still frame | Animated frame | Animated past one tick | `setNodes` | `setEdges` | `render` |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| control | | 16.7 / 18.7 | | 0% | | | |
-| 1,000 | 1,281 | 16.7 / 18.6 | 16.7 / 18.7 | 0% | 1.1 / 1.7 | 1.2 / 1.8 | 0.4 / 0.5 |
-| 2,500 | 3,238 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 1.7 / 2.0 | 1.6 / 2.3 | 0.2 / 0.4 |
-| 5,000 | 6,551 | 16.7 / 18.6 | 16.7 / 18.5 | 0% | 1.5 / 3.3 | 1.8 / 2.9 | 0.3 / 0.5 |
-| 10,000 | 13,169 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 2.7 / 4.1 | 3.5 / 4.0 | 0.4 / 0.5 |
+| Nodes | Edges | Still frame | Animated frame | Animated past one tick | `input` | `setNodes` | `setEdges` | `render` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| control | | 16.7 / 18.5 | | 0% | | | | |
+| 1,000 | 1,281 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.1 / 0.2 | 0.3 / 0.6 | 0.3 / 0.6 | 0.2 / 0.3 |
+| 2,500 | 3,238 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.2 / 0.4 | 0.6 / 1.6 | 0.8 / 1.9 | 0.2 / 0.4 |
+| 5,000 | 6,551 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.4 / 0.8 | 1.3 / 2.9 | 1.3 / 1.8 | 0.2 / 0.3 |
+| 10,000 | 13,169 | 16.7 / 18.6 | 16.7 / 18.4 | 0% | 0.6 / 1.0 | 2.4 / 2.7 | 2.6 / 3.3 | 0.4 / 0.5 |
 
-At 10,000 nodes the same run at DPR 2 gave an animated frame of 16.7 / 18.5,
-0% past one tick, `setNodes` 2.7 / 4.9 and `setEdges` 3.6 / 5.7; at DPR 2 and
-zoom 1, where a rectangle is 180 device pixels wide and nodes cover about 40%
-of the screen, 16.7 / 18.5 and 0%.
+A second run of the same plan matched every row to within one interval past
+one tick, except 10,000 nodes animated: the load rose to 14.6 during that row,
+2.7% of its intervals ran past one tick, and `setNodes` and `setEdges` reached
+10.3 and 12.0 ms at the 95th percentile. At 10,000 nodes and DPR 2 the animated
+frame was 16.7 / 18.5, 0% past one tick, `setNodes` 2.4 / 2.9 and `setEdges`
+3.1 / 3.7. At DPR 2 and zoom 1, where a rectangle is 180 device pixels wide and
+the shapes cover about 28% of the screen (40% with their glow), it was 16.7 /
+18.4 and 0%.
 
 Three things follow.
 
@@ -225,13 +229,12 @@ Three things follow.
   second on WebGPU**, still and with every node and edge moving. That is not
   M4.10: the scene has no rich nodes, no dashed or smooth edges and no picking
   pass, and the GPU time per pass is not measured.
-- **The per-frame cost is the CPU-side update, not the draw.** At 10,000 nodes
-  `setNodes` and `setEdges` take about 6 ms together and `render` 0.4 ms, so the
+- **The CPU cost per frame is the update.** At 10,000 nodes `setNodes` and
+  `setEdges` take about 5 ms together and `render` 0.4 ms of CPU, so the
   updates are what M3.9b and M4.10 should price first.
-- **The tail grows under load.** In earlier runs of the same scene, before the
-  control was fixed, two of six 10,000-node animated runs at load 5 to 6 had 2
-  to 4% of frames past one tick, with `setNodes` and `setEdges` reaching 17 to
-  20 ms at the 99th percentile. The still rows never did.
+- **The tail grows under load, and it is the update that grows.** The still
+  rows held one tick in both runs; the animated 10,000-node row did not when
+  the machine got busy.
 
 Not measured yet, and the rest of M4.10a: rich-node tiers, dashed and smooth
 edge styles, hit testing, and memory per pass. The report's `heapMb` is the

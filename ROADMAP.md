@@ -249,9 +249,9 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   First slice: `bench/browser/frame-profile.mjs`, shapes and straight edges
   from 1,000 to 10,000 nodes, still and animating, on WebGPU on an Apple M4 in
   Chrome 155. Every row holds one 60 Hz tick at the 95th percentile, and the
-  per-frame cost is `setNodes` and `setEdges` (about 6 ms at 10,000), not
-  `render`. Rich-node tiers, edge styles, hit testing and memory per pass
-  remain.
+  CPU cost per frame is `setNodes` and `setEdges` (about 5 ms at 10,000)
+  rather than `render`'s 0.4 ms; GPU time is not measured. Rich-node tiers,
+  edge styles, hit testing and memory per pass remain.
 - [ ] **M4.10** Performance: 10k nodes at 60fps, animating, springs in flight,
   zoom and DPR named, frame time broken down by pass (instance update, node
   draw, edge draw, ID buffer), recorded as a local baseline naming the

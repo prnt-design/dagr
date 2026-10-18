@@ -114,10 +114,10 @@
           let previous = null;
           let seen = 0;
           const tick = (ts) => {
-            if (previous !== null && seen > warmup) intervals.push(ts - previous);
+            if (previous !== null && seen >= warmup) intervals.push(ts - previous);
             previous = ts;
             const timings = work(ts);
-            if (seen > warmup) {
+            if (seen >= warmup) {
               for (const [name, ms] of Object.entries(timings)) (steps[name] ??= []).push(ms);
             }
             seen += 1;
@@ -140,14 +140,8 @@
         });
       };
 
-      /**
-       * One size, two modes. `still` renders the same scene every frame, which
-       * is the cost of holding the graph on screen under a moving camera
-       * without the camera's own cost. `animated` replaces every node centre
-       * and every edge route each frame through `setNodes` and `setEdges`,
-       * which is what a consumer driving `createSceneMotion` hands the renderer
-       * while every spring is in flight.
-       */
+      // `still` is the cost of holding the graph on screen, without a camera
+      // move's own cost.
       window.profile = async (count, warmup, frames, zoom) => {
         const { home, links, bounds } = buildGraph(count);
         const heapBefore = heap();
@@ -174,13 +168,16 @@
         const animated = await sample(warmup, frames, (ts) => {
           const t0 = performance.now();
           const centres = swayed(home, ts);
-          renderer.setNodes(nodesAt(centres));
+          const nodes = nodesAt(centres);
+          const edges = edgesAt(centres, links);
           const t1 = performance.now();
-          renderer.setEdges('edges', edgesAt(centres, links));
+          renderer.setNodes(nodes);
           const t2 = performance.now();
-          renderer.render();
+          renderer.setEdges('edges', edges);
           const t3 = performance.now();
-          return { setNodes: t1 - t0, setEdges: t2 - t1, render: t3 - t2 };
+          renderer.render();
+          const t4 = performance.now();
+          return { input: t1 - t0, setNodes: t2 - t1, setEdges: t3 - t2, render: t4 - t3 };
         });
         const heapAfter = heap();
         const backend = renderer.backend;
