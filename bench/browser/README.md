@@ -205,7 +205,7 @@ control would make every row look clean.
 also flows the dash 40 pixels a second through `advanceDashFlow` and
 `setEdgeStyle`, timed as `setEdgeStyle`. `smooth` sets the group's `curve` to
 `'smooth'`, and because a two-point route has nothing to curve through, each
-smooth edge gets a bend point 25 world units to the side of its chord's middle.
+smooth edge gets a bend point 25 world units to the right of its chord's middle.
 
 `render()` returns once the frame is submitted, so its time is CPU time, not
 GPU time. A GPU that fell behind would show in the interval, not in `render`.
@@ -250,8 +250,8 @@ Three things follow.
 **Edge styles, on 2026-10-18**, same machine, browser, adapter, viewport and
 zoom, `renderer.backend` `webgpu` on every row, tick 16.7 ms, load average 3.5
 to 4.3. Two runs of `--edges=straight,dashed,smooth` agreed on every row
-within 0.5 ms in the update medians and 0.3% past one tick; the table is the
-second. Times are median / 95th percentile in milliseconds, and `render`
+within 0.5 ms in the update medians and 0.7 points past one tick; the table is
+the second. Times are median / 95th percentile in milliseconds, and `render`
 is the animated mode's.
 
 | Nodes | Edges | Style | Still frame | Animated frame | Animated past one tick | `setEdges` | `setNodes` | `render` |
@@ -270,23 +270,29 @@ is the animated mode's.
 | 10,000 | 13,169 | dashed | 16.7 / 18.6 | 16.7 / 18.2 | 0% | 3.3 / 3.8 | 2.2 / 2.4 | 0.3 / 0.4 |
 | 10,000 | 13,169 | smooth | 16.7 / 18.6 | 33.3 / 50.0 | 81% | 25.9 / 30.7 | 2.5 / 2.7 | 0.8 / 1.0 |
 
-`setEdgeStyle` was 0.0 / 0.1 ms or less on every dashed row. The straight
-`setEdges` at 10,000 nodes is 3.3 ms here against 2.6 ms in the table above
-with the same code path, which is the run-to-run spread to read these against.
+`setEdgeStyle` was 0.0 / 0.1 ms or less on every dashed row. The straight rows
+sit above the first slice's table at the small sizes (`setEdges` 1.2 against
+0.3 ms at 1,000 nodes), and that is the machine, not the change: the first
+slice's harness from `main`, run twice alternating with this one in the same
+session, gave 0.7 and 1.3 ms there and 3.0 and 3.6 ms at 10,000 nodes. So
+compare rows within one table, not across the two, and read `setNodes` (which
+no edge style touches, and which moves by about 1 ms between rows) as noise at
+that size.
 
-- **A dash is free.** Dashed rows match straight ones in every column: the
-  pattern is fragment arithmetic and its flow is one uniform a frame.
+- **A dash is free.** Dashed rows match straight ones in `setEdges`, `render`
+  and the frame columns: the pattern is fragment arithmetic and its flow is one
+  uniform a frame.
 - **A smooth curve is not, and it is the CPU that pays.** Its `setEdges` grows
-  about linearly with the edge count, 1.8 to 2.0 ms per thousand edges, and at 10,000
-  nodes and 13,169 edges it alone is longer than a frame, so the animated frame
-  drops to 30 frames a second with 81% of intervals past one tick. Holding the
-  same graph still costs nothing extra: the still rows hold one tick, because a
-  still frame does not tessellate.
+  about linearly with the edge count, 1.8 to 2.0 ms per thousand edges, and at
+  10,000 nodes and 13,169 edges it alone is longer than a frame, so the
+  animated frame drops to 30 frames a second with 81% of intervals past one
+  tick. Holding the same graph still costs nothing extra: the still rows hold
+  one tick, because a still frame does not tessellate.
 - **The cost is the curve, not the extra point.** A one-off run of the same
   10,000-node scene with the bent routes drawn as polylines (the `smooth` edges'
   points under `straight`'s group, not a committed mode) took 4.2 / 4.7 ms in
-  `setEdges`, with an animated frame of 16.7 / 18.4; smoothing the same points
-takes 25.9.
+  `setEdges`, with an animated frame of 16.7 / 18.4; smoothing the same
+  points takes 25.9.
 
 So re-tessellating smooth edges every frame is the first thing past the 60 Hz
 budget at 10,000 nodes on this machine, and it is what M3.9b's fast paths and
@@ -294,10 +300,9 @@ M4.10 should price first; motion that moves only the edges whose ends moved
 would pay it for those edges alone.
 
 Not measured yet, and the rest of M4.10a: rich-node tiers, hit testing, and
-memory per pass. The report's `heapMb` is the
-page's JavaScript heap from `performance.memory`, which Chrome rounds and
-which includes whatever the previous row left for the collector, so it is not
-a memory figure for a pass. Every renderer logs `THREE.AttributeNode: Vertex
+memory per pass. The report's `heapMb` is the page's JavaScript heap from
+`performance.memory`, which Chrome rounds and which includes whatever the
+previous row left for the collector, so it is not a memory figure for a pass. Every renderer logs `THREE.AttributeNode: Vertex
 attribute "position" not found on geometry.` once, which nothing here has
 traced yet.
 
