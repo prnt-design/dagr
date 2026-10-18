@@ -173,13 +173,13 @@ one machine, the two-shape probe scene, zoom 1, DPR 1, no edge ribbons.
 ## Frame profile on WebGPU (M4.10a)
 
 ```
-pnpm --filter @prnt/dagr-render build          # the page imports from dist
+pnpm --filter @prnt/dagr-render --filter @prnt/dagr-react build   # the page imports from dist
 npm --prefix bench/browser install --no-save playwright-core
 python3 -m http.server 8733               # from the REPO ROOT
 DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   node bench/browser/frame-profile.mjs
   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
-  # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--headless]
+  # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--headless]
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
@@ -218,6 +218,17 @@ moves every node's box with `setNode`, which is the `setNode` half of
 `DagrCanvas`'s tier feed step when every node is in flight (the feed's own
 change check is not included), timed as `richNodes`. The tier a node reaches
 depends on the zoom, so the harness is run once per `--zoom`.
+
+`--hit` adds node hit testing to every row, through `createNodeHitIndex`, the
+CPU index `DagrCanvas` builds over the nodes as drawn (the page imports its
+module file, since the package index imports React). Every frame queries a
+pointer sweeping the viewport, with `DagrCanvas`'s 4 CSS pixel mouse tolerance,
+timed as `hit`. A still frame queries one index built before the clock starts,
+as `DagrCanvas`'s cache by the drawn array's identity does. An animated frame
+first rebuilds the index over that frame's nodes, timed as `hitIndex`: a click
+pays that on the frame it lands, and hover, which reuses an index up to 100 ms
+old, on about one frame in six. The report's `hit` gives the untimed build and
+how many queries, warm-up included, landed on a node.
 
 `render()` returns once the frame is submitted, so its time is CPU time, not
 GPU time. A GPU that fell behind would show in the interval, not in `render`.
@@ -374,7 +385,45 @@ that grows is the per-node `setNode` work, which motion that moves only the
 nodes in flight would pay for those nodes alone; a spatial index in `sync`,
 the remedy the M4.12 entry names, would only shorten the still frame's scan.
 
-Not measured yet, and the rest of M4.10a: hit testing and memory per pass.
+**Node hit testing, on 2026-10-18**, same machine, browser, adapter and
+viewport, `renderer.backend` `webgpu` on every row, straight edges, shape nodes,
+tick 16.7 ms, load average 3.3 to 4.3. Run once at `fit` and once at zoom 1, twice
+each; the two runs agreed on every median within 0.1 ms, and the table is the
+second, at `fit`. Times are median / 95th percentile in milliseconds, and the
+untimed build is the one before the still mode.
+
+| Nodes | Still frame | Animated frame | Animated past one tick | `hit` (still) | `hitIndex` | `hit` (animated) | Untimed build | `setNodes` | `setEdges` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1,000 | 16.7 / 18.7 | 16.7 / 18.6 | 0% | 0.0 / 0.1 | 0.5 / 0.6 | 0.0 / 0.0 | 0.8 | 1.1 / 1.5 | 1.1 / 1.6 |
+| 2,500 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.0 / 0.1 | 0.4 / 0.8 | 0.0 / 0.0 | 0.4 | 1.5 / 1.7 | 1.7 / 2.0 |
+| 5,000 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.0 / 0.1 | 0.7 / 1.2 | 0.0 / 0.0 | 0.9 | 1.2 / 2.6 | 1.4 / 1.7 |
+| 10,000 | 16.7 / 18.6 | 16.7 / 18.4 | 0% | 0.0 / 0.1 | 1.5 / 1.6 | 0.0 / 0.0 | 1.6 | 2.3 / 2.4 | 3.1 / 3.6 |
+
+At zoom 1 every row matched these within 0.1 ms in `hitIndex` and the update
+medians, also with no interval past one tick. Between 10% and 38% of queries
+landed on a node, depending on size and zoom, so both the exact test and the
+tolerance search ran.
+
+- **A query is free.** It reads 0.0 ms at the median on every row because it
+  is under the 0.1 ms the page's clock resolves, which agrees with the Node
+  bench's 0.000083 ms in `bench/README.md`: the grid makes it independent of
+  the node count.
+- **Rebuilding the index is the cost, and it follows the node count.** About
+  0.15 ms per thousand nodes, 1.5 ms at 10,000, close to the Node bench's
+  1.86 ms. Its 99th percentile at 10,000 nodes was 1.6 to 1.8 ms, but two of
+  the four 10,000-node rows had one rebuild past 7 ms (7.4 and 7.8), so a
+  click on an animated frame can now and then cost half a frame.
+- **It fits.** With a rebuild every frame, the animated 10,000-node frame's
+  CPU steps add to about 8 ms at the median (`input`, `setNodes`, `setEdges`,
+  `hitIndex`, `render`) and every row held one tick. Hover pays the rebuild on one frame in
+  six, so this is the click's cost, not the hover's.
+
+So CPU node hits are not what stands between this scene and 60 Hz at 10,000
+nodes on this machine; the updates are, as the first slice found. What this
+does not cover: edges and ports are not hit targets on the CPU path, and GPU
+picking (M4.8b) has no pass to measure yet, so its cost is still unpriced.
+
+Not measured yet, and the rest of M4.10a: memory per pass.
 The report's `heapMb` is the page's JavaScript heap from
 `performance.memory`, which Chrome rounds and which includes whatever the
 previous row left for the collector, so it is not a memory figure for a pass.

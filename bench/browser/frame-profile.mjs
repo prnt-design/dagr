@@ -4,13 +4,13 @@
  * gate: see the README.
  *
  * ```
- * pnpm --filter @prnt/dagr-render build      # the page imports from dist
+ * pnpm --filter @prnt/dagr-render --filter @prnt/dagr-react build   # the page imports from dist
  * npm --prefix bench/browser install --no-save playwright-core
  * python3 -m http.server 8733           # from the REPO ROOT
  * DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
  *   node bench/browser/frame-profile.mjs
  *   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
- *   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--headless]
+ *   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--headless]
  * ```
  *
  * The page asks for `backend: 'webgpu'`, so a browser without an adapter fails
@@ -69,6 +69,7 @@ const dpr = positive('dpr', option('dpr', '1'));
 // Chromium on the Apple M4 paced requestAnimationFrame at 67 to 100 ms on an
 // empty page, so a headless interval measures the pacing, not the page.
 const headless = process.argv.includes('--headless');
+const hit = process.argv.includes('--hit');
 
 function pageHtml() {
   const fromRender = createRequire(`${ROOT}packages/render/package.json`);
@@ -147,8 +148,8 @@ for (const size of sizes) {
     for (const nodeMode of nodeModes) {
       runs.push(
         await page.evaluate(
-          ([n, w, f, z, e, m]) => window.profile(n, w, f, z, e, m),
-          [size, warmup, frames, zoom, style, nodeMode],
+          ([n, w, f, z, e, m, h]) => window.profile(n, w, f, z, e, m, h),
+          [size, warmup, frames, zoom, style, nodeMode, hit],
         ),
       );
     }
@@ -165,6 +166,10 @@ const rows = runs.map((run) => ({
   edgeStyle: run.edgeStyle,
   nodeMode: run.nodeMode,
   elements: run.elements,
+  hit:
+    run.hit === null
+      ? null
+      : { indexMs: Math.round(run.hit.indexMs * 100) / 100, hits: run.hit.hits },
   backend: run.backend,
   zoom: Math.round(run.zoom * 10_000) / 10_000,
   buildMs: Math.round(run.buildMs),
@@ -180,7 +185,7 @@ const report = {
   launch,
   adapter,
   viewport: { width: 1280, height: 720, devicePixelRatio: dpr },
-  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes },
+  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit },
   tickMs,
   control,
   rows,
