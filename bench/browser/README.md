@@ -177,11 +177,12 @@ pnpm --filter @prnt/dagr-render build          # the page imports from dist
 npm --prefix bench/browser install --no-save playwright-core
 python3 -m http.server 8733               # from the REPO ROOT
 DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-  node bench/browser/frame-profile.mjs     # [--sizes=1000,2500] [--zoom=1] [--dpr=2] [--frames=300] [--headless]
+  node bench/browser/frame-profile.mjs
+  # [--sizes=1000,2500] [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--headless]
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
-with about 1.33 straight edges per node, through a renderer that asks for
+with about 1.3 straight edges per node, through a renderer that asks for
 `backend: 'webgpu'`, so a browser without an adapter fails with
 `BACKEND_UNAVAILABLE` instead of measuring the fallback. Each size runs two
 modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
@@ -194,7 +195,9 @@ time of each step, and the runner prints the machine, browser, launch mode and
 adapter with them. It runs headed by default, for the pacing reason the
 explorer ceiling below gives. The control, measured last, is a page moving one
 8 pixel square a frame, and its median interval is the tick: "past one tick"
-is the share of intervals that rounded to two ticks or more.
+is the share of intervals that rounded to two ticks or more. The runner exits
+non-zero if that tick is not within 10% of 60 or 120 Hz, since a throttled
+control would make every row look clean.
 
 `render()` returns once the frame is submitted, so its time is CPU time, not
 GPU time. A GPU that fell behind would show in the interval, not in `render`.
@@ -206,7 +209,7 @@ ms. Viewport 1280 by 720 CSS pixels at DPR 1, camera fitted to the graph, so at
 10,000 nodes a rectangle is 6.4 pixels wide. Load average 4.2 to 5.1 from other
 work on the machine. Times are median / 95th percentile in milliseconds.
 
-| Nodes | Edges | Still frame | Animated frame | Animated past one tick | `input` | `setNodes` | `setEdges` | `render` |
+| Nodes | Edges | Still frame | Animated frame | Animated past one tick | `input` | `setNodes` | `setEdges` | `render` (animated) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | control | | 16.7 / 18.5 | | 0% | | | | |
 | 1,000 | 1,281 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.1 / 0.2 | 0.3 / 0.6 | 0.3 / 0.6 | 0.2 / 0.3 |

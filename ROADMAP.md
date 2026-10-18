@@ -248,10 +248,11 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   frame-time distribution and memory. This is evidence, not a 60fps claim.
   First slice: `bench/browser/frame-profile.mjs`, shapes and straight edges
   from 1,000 to 10,000 nodes, still and animating, on WebGPU on an Apple M4 in
-  Chrome 155. Every row holds one 60 Hz tick at the 95th percentile, and the
-  CPU cost per frame is `setNodes` and `setEdges` (about 5 ms at 10,000)
-  rather than `render`'s 0.4 ms; GPU time is not measured. Rich-node tiers,
-  edge styles, hit testing and memory per pass remain.
+  Chrome 155. At load 4 to 5 every row holds one 60 Hz tick at the 95th
+  percentile (under heavier load the animated 10,000 row's update tail grew),
+  and the CPU cost per frame is `setNodes` and `setEdges` (about 5 ms at
+  10,000) rather than `render`'s 0.4 ms; GPU time is not measured. Rich-node
+  tiers, edge styles, hit testing and memory per pass remain.
 - [ ] **M4.10** Performance: 10k nodes at 60fps, animating, springs in flight,
   zoom and DPR named, frame time broken down by pass (instance update, node
   draw, edge draw, ID buffer), recorded as a local baseline naming the

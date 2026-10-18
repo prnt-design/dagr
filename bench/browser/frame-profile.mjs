@@ -166,3 +166,7 @@ const report = {
 };
 console.log(JSON.stringify(report, null, 1));
 if (rows.some((row) => row.backend !== 'webgpu')) process.exitCode = 1;
+if (![60, 120].some((hz) => Math.abs(tickMs * hz - 1000) <= 100)) {
+  console.error(`tick ${tickMs} ms is not a 60 or 120 Hz frame; the control was throttled`);
+  process.exitCode = 1;
+}
