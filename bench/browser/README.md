@@ -4,6 +4,8 @@ What a browser does that the rest of `bench/` cannot reach.
 `label-throughput.html` drives `@prnt/dagr-render`'s HTML overlay in a real browser
 and `label-throughput.mjs` opens it, runs a plan and prints the numbers.
 `card-heights.mjs` renders every campaign card and reports the tallest per kind.
+`frame-profile.html` and `frame-profile.mjs` time the shape renderer's frames on
+WebGPU by graph size, still and animating.
 `backend-probe.html` and `backend-probe.mjs` are the odd ones out and the
 directory name undersells them: they do not measure anything, they CHECK
 something, which is which backend `@prnt/dagr-render` comes up on and whether the
@@ -167,6 +169,83 @@ argument does not carry. What does is the runner: the check needs a full Chrome
 with a WebGPU adapter, and CI runs on a GitHub `ubuntu-latest` runner with no
 GPU and no browser step. It is run by hand like the probe, and its scope is what it compared:
 one machine, the two-shape probe scene, zoom 1, DPR 1, no edge ribbons.
+
+## Frame profile on WebGPU (M4.10a, first slice)
+
+```
+pnpm --filter @prnt/dagr-render build          # the page imports from dist
+npm --prefix bench/browser install --no-save playwright-core
+python3 -m http.server 8733               # from the REPO ROOT
+DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  node bench/browser/frame-profile.mjs
+  # [--sizes=1000,2500] [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--headless]
+```
+
+`frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
+with about 1.3 straight edges per node, through a renderer that asks for
+`backend: 'webgpu'`, so a browser without an adapter fails with
+`BACKEND_UNAVAILABLE` instead of measuring the fallback. Each size runs two
+modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
+`animated` also replaces every node centre and every edge route each frame
+through `setNodes` and `setEdges`, which is what a consumer driving
+`createSceneMotion` hands the renderer while every spring is in flight. The
+arrays are built before the clock starts on those two calls and timed as
+`input`. The report gives the interval between animation frames and the CPU
+time of each step, and the runner prints the machine, browser, launch mode and
+adapter with them. It runs headed by default, for the pacing reason the
+explorer ceiling below gives. The control, measured last, is a page moving one
+8 pixel square a frame, and its median interval is the tick: "past one tick"
+is the share of intervals that rounded to two ticks or more. The runner exits
+non-zero if that tick is not within 10% of 60 or 120 Hz, since a throttled
+control would make every row look clean.
+
+`render()` returns once the frame is submitted, so its time is CPU time, not
+GPU time. A GPU that fell behind would show in the interval, not in `render`.
+
+**What it found on 2026-10-17**, Apple M4 Mac mini (10 cores, 16 GB, macOS
+26.6.2), Google Chrome 155.0.8059.82 headed with no flags, adapter `apple`
+`metal-3`, not a fallback, `renderer.backend` `webgpu` on every row, tick 16.7
+ms. Viewport 1280 by 720 CSS pixels at DPR 1, camera fitted to the graph, so at
+10,000 nodes a rectangle is 6.4 pixels wide. Load average 4.2 to 5.1 from other
+work on the machine. Times are median / 95th percentile in milliseconds.
+
+| Nodes | Edges | Still frame | Animated frame | Animated past one tick | `input` | `setNodes` | `setEdges` | `render` (animated) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| control | | 16.7 / 18.5 | | 0% | | | | |
+| 1,000 | 1,281 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.1 / 0.2 | 0.3 / 0.6 | 0.3 / 0.6 | 0.2 / 0.3 |
+| 2,500 | 3,238 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.2 / 0.4 | 0.6 / 1.6 | 0.8 / 1.9 | 0.2 / 0.4 |
+| 5,000 | 6,551 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.4 / 0.8 | 1.3 / 2.9 | 1.3 / 1.8 | 0.2 / 0.3 |
+| 10,000 | 13,169 | 16.7 / 18.6 | 16.7 / 18.4 | 0% | 0.6 / 1.0 | 2.4 / 2.7 | 2.6 / 3.3 | 0.4 / 0.5 |
+
+A second run of the same plan matched every row to within one interval past
+one tick, except 10,000 nodes animated: the load rose to 14.6 during that row,
+2.7% of its intervals ran past one tick, and `setNodes` and `setEdges` reached
+10.3 and 12.0 ms at the 95th percentile. At 10,000 nodes and DPR 2 the animated
+frame was 16.7 / 18.5, 0% past one tick, `setNodes` 2.4 / 2.9 and `setEdges`
+3.1 / 3.7. At DPR 2 and zoom 1, where a rectangle is 180 device pixels wide and
+the shapes cover about 28% of the screen (40% with their glow), it was 16.7 /
+18.4 and 0%.
+
+Three things follow.
+
+- **On this machine and this scene, 10,000 nodes animate at 60 frames a
+  second on WebGPU**, still and with every node and edge moving. That is not
+  M4.10: the scene has no rich nodes, no dashed or smooth edges and no picking
+  pass, and the GPU time per pass is not measured.
+- **The CPU cost per frame is the update.** At 10,000 nodes `setNodes` and
+  `setEdges` take about 5 ms together and `render` 0.4 ms of CPU, so the
+  updates are what M3.9b and M4.10 should price first.
+- **The tail grows under load, and it is the update that grows.** The still
+  rows held one tick in both runs; the animated 10,000-node row did not when
+  the machine got busy.
+
+Not measured yet, and the rest of M4.10a: rich-node tiers, dashed and smooth
+edge styles, hit testing, and memory per pass. The report's `heapMb` is the
+page's JavaScript heap from `performance.memory`, which Chrome rounds and
+which includes whatever the previous row left for the collector, so it is not
+a memory figure for a pass. Every renderer logs `THREE.AttributeNode: Vertex
+attribute "position" not found on geometry.` once, which nothing here has
+traced yet.
 
 ## What the overlay harness measures, and what it does not
 
