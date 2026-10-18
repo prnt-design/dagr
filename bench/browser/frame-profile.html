@@ -201,8 +201,8 @@
       const swayed = (home, t) =>
         home.map((p, i) => ({ x: p.x + SWAY_WORLD * Math.sin(t * 0.004 + i * 0.37), y: p.y }));
 
-      // A pointer sweeping the viewport, so queries land on nodes, edges' gaps
-      // and background alike.
+      // A pointer sweeping the viewport, so queries land on nodes and
+      // background alike.
       const pointerAt = (ts) => ({
         x: 640 + 600 * Math.sin(ts * 0.0011),
         y: 360 + 340 * Math.sin(ts * 0.0017),

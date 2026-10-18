@@ -386,11 +386,13 @@ nodes in flight would pay for those nodes alone; a spatial index in `sync`,
 the remedy the M4.12 entry names, would only shorten the still frame's scan.
 
 **Node hit testing, on 2026-10-18**, same machine, browser, adapter and
-viewport, `renderer.backend` `webgpu` on every row, straight edges, shape nodes,
-tick 16.7 ms, load average 3.3 to 4.3. Run once at `fit` and once at zoom 1, twice
-each; the two runs agreed on every median within 0.1 ms, and the table is the
-second, at `fit`. Times are median / 95th percentile in milliseconds, and the
-untimed build is the one before the still mode.
+viewport, `renderer.backend` `webgpu` on every row, straight edges, shape
+nodes, tick 16.7 ms, load average 3.3 to 4.3. Run twice at `fit` and twice at
+zoom 1; the two runs agreed on every median within 0.1 ms, and the table is the
+second, at `fit`. Times are median / 95th percentile in milliseconds. The
+untimed build is the one before the still mode, and it is the page's first call
+of `createNodeHitIndex` for that size, cold, which is why 1,000 nodes reads
+higher than 2,500.
 
 | Nodes | Still frame | Animated frame | Animated past one tick | `hit` (still) | `hitIndex` | `hit` (animated) | Untimed build | `setNodes` | `setEdges` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -408,15 +410,17 @@ tolerance search ran.
   is under the 0.1 ms the page's clock resolves, which agrees with the Node
   bench's 0.000083 ms in `bench/README.md`: the grid makes it independent of
   the node count.
-- **Rebuilding the index is the cost, and it follows the node count.** About
-  0.15 ms per thousand nodes, 1.5 ms at 10,000, close to the Node bench's
-  1.86 ms. Its 99th percentile at 10,000 nodes was 1.6 to 1.8 ms, but two of
-  the four 10,000-node rows had one rebuild past 7 ms (7.4 and 7.8), so a
-  click on an animated frame can now and then cost half a frame.
+- **Rebuilding the index is the cost, and it grows with the node count above
+  2,500**, from about 0.5 ms at 1,000 and 2,500 nodes to 1.5 ms at 10,000,
+  close to the Node bench's 1.86 ms. Its 99th percentile at 10,000 nodes was
+  1.6 to 1.8 ms. The maximum reached 7.4 and 7.8 ms on two of the four
+  10,000-node rows, but every other step on those rows spiked too (`setEdges`
+  to 9.6 and 13.9 ms), so that looks like a pause the rebuild landed in rather
+  than its own cost.
 - **It fits.** With a rebuild every frame, the animated 10,000-node frame's
   CPU steps add to about 8 ms at the median (`input`, `setNodes`, `setEdges`,
-  `hitIndex`, `render`) and every row held one tick. Hover pays the rebuild on one frame in
-  six, so this is the click's cost, not the hover's.
+  `hitIndex`, `render`) and every row held one tick. Hover pays the rebuild
+  on one frame in six, so this is the click's cost, not the hover's.
 
 So CPU node hits are not what stands between this scene and 60 Hz at 10,000
 nodes on this machine; the updates are, as the first slice found. What this
