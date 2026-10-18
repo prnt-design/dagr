@@ -8,7 +8,8 @@
  * python3 -m http.server 8733           # from the REPO ROOT
  * DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
  *   node bench/browser/frame-profile.mjs
- *   # [--sizes=1000,2500] [--frames=300] [--warmup=60] [--zoom=1] [--dpr=2] [--headless]
+ *   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--frames=300] [--warmup=60]
+ *   # [--zoom=1] [--dpr=2] [--headless]
  * ```
  *
  * The page asks for `backend: 'webgpu'`, so a browser without an adapter fails
@@ -48,6 +49,11 @@ const count = (name, text) => {
 const sizes = option('sizes', '1000,2500,5000,10000')
   .split(',')
   .map((size) => count('sizes', size));
+const EDGE_STYLES = ['straight', 'dashed', 'smooth'];
+const edgeStyles = option('edges', 'straight').split(',');
+for (const style of edgeStyles) {
+  if (!EDGE_STYLES.includes(style)) throw new Error(`--edges takes ${EDGE_STYLES.join(', ')}, got ${style}`);
+}
 const frames = count('frames', option('frames', '300'));
 const warmup = count('warmup', option('warmup', '60'));
 const zoomOption = option('zoom', 'fit');
@@ -131,9 +137,14 @@ const adapter = await page.evaluate(() => window.adapter());
 
 const runs = [];
 for (const size of sizes) {
-  runs.push(
-    await page.evaluate(([n, w, f, z]) => window.profile(n, w, f, z), [size, warmup, frames, zoom]),
-  );
+  for (const style of edgeStyles) {
+    runs.push(
+      await page.evaluate(
+        ([n, w, f, z, e]) => window.profile(n, w, f, z, e),
+        [size, warmup, frames, zoom, style],
+      ),
+    );
+  }
 }
 const controlRun = await page.evaluate(([w, f]) => window.control(w, f), [warmup, frames]);
 await browser.close();
@@ -143,6 +154,7 @@ const control = mode(controlRun, tickMs);
 const rows = runs.map((run) => ({
   count: run.count,
   edges: run.edges,
+  edgeStyle: run.edgeStyle,
   backend: run.backend,
   zoom: Math.round(run.zoom * 10_000) / 10_000,
   buildMs: Math.round(run.buildMs),
@@ -158,7 +170,7 @@ const report = {
   launch,
   adapter,
   viewport: { width: 1280, height: 720, devicePixelRatio: dpr },
-  plan: { warmup, frames, zoom: zoomOption },
+  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles },
   tickMs,
   control,
   rows,

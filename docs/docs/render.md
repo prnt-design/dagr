@@ -1351,7 +1351,10 @@ are.
 and a colour, and tessellates it into a ribbon: a polyline as a layout routed
 it, or a centripetal Catmull-Rom curve through the same points when the group
 asks for one. `RoutedEdge.points` from `@prnt/dagr-layout` is exactly the input,
-after the caller's own y flip.
+after the caller's own y flip. The curve is tessellated on the CPU, so it costs
+far more per `setEdges` than a polyline: on an Apple M4, 13,169 smooth edges
+took 26 ms to rebuild against 4 ms as polylines, too slow to rebuild every
+frame (see `bench/browser/README.md`).
 
 **A ribbon is a fixed number of DEVICE pixels wide at every zoom**, and that is
 the thing to know before drawing one, because a caller expecting a world width
