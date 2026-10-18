@@ -9,20 +9,53 @@
         margin: 0;
         background: #000;
       }
+      #host {
+        position: relative;
+        width: 1280px;
+        height: 720px;
+      }
       #stage {
         width: 1280px;
         height: 720px;
         display: block;
       }
+      .tier-label {
+        transform-origin: 0 0;
+        transform: scale(var(--dagr-overlay-inv-zoom, 1));
+        padding: 2px 6px;
+        background: rgba(7, 8, 10, 0.82);
+        color: #d7dbe1;
+        font: 12px ui-monospace, monospace;
+        white-space: nowrap;
+      }
+      .tier-card {
+        box-sizing: border-box;
+        padding: 4px 6px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        background: rgba(7, 8, 10, 0.9);
+        color: #d7dbe1;
+        font: 8px ui-sans-serif, sans-serif;
+        overflow: hidden;
+      }
+      .tier-card b {
+        display: block;
+        color: #ffb703;
+      }
     </style>
   </head>
   <body>
-    <canvas id="stage"></canvas>
+    <div id="host"><canvas id="stage"></canvas></div>
     <script type="importmap">
       { "imports": { "three/webgpu": "__THREE_WEBGPU__", "three/tsl": "__THREE_TSL__" } }
     </script>
     <script type="module">
-      import { advanceDashFlow, createRenderer } from '/packages/render/dist/index.js';
+      import {
+        advanceDashFlow,
+        createHtmlOverlay,
+        createRenderer,
+        createRichNodes,
+      } from '/packages/render/dist/index.js';
 
       const SPACING = { x: 130, y: 90 };
       const SWAY_WORLD = 20;
@@ -102,6 +135,66 @@
           return { id: `e${from}-${to}`, points, color: EDGE_COLOR };
         });
 
+      // M4.12's gates: the shape alone below 24 CSS pixels, a title label to
+      // 160, a card above. Children are kept in a WeakMap, as `RichNodeTier`
+      // recommends, so `update` walks no tree.
+      const parts = new WeakMap();
+      const TIERS = [
+        {
+          name: 'label',
+          minScreenWidth: 24,
+          maxScreenWidth: 160,
+          create: () => {
+            const element = document.createElement('div');
+            element.className = 'tier-label';
+            return element;
+          },
+          update: (element, node) => {
+            element.textContent = node.data.title;
+          },
+        },
+        {
+          name: 'card',
+          minScreenWidth: 160,
+          create: () => {
+            const element = document.createElement('div');
+            element.className = 'tier-card';
+            const title = document.createElement('b');
+            const kind = document.createElement('div');
+            const links = document.createElement('div');
+            element.append(title, kind, links);
+            parts.set(element, { title, kind, links });
+            return element;
+          },
+          update: (element, node) => {
+            const { title, kind, links } = parts.get(element);
+            title.textContent = node.data.title;
+            kind.textContent = node.data.kind;
+            links.textContent = node.data.links;
+          },
+        },
+      ];
+
+      const richDataFor = (count, links) => {
+        const degree = new Array(count).fill(0);
+        for (const [from, to] of links) {
+          degree[from] += 1;
+          degree[to] += 1;
+        }
+        return degree.map((d, i) => ({
+          title: `node ${i}`,
+          kind: i % 2 === 0 ? 'rounded rectangle' : 'circle',
+          links: `${d} edges`,
+        }));
+      };
+
+      const boundsOf = (node) => ({
+        minX: node.center.x - node.size.width / 2,
+        maxX: node.center.x + node.size.width / 2,
+        minY: node.center.y - node.size.height / 2,
+        maxY: node.center.y + node.size.height / 2,
+      });
+
       const swayed = (home, t) =>
         home.map((p, i) => ({ x: p.x + SWAY_WORLD * Math.sin(t * 0.004 + i * 0.37), y: p.y }));
 
@@ -155,9 +248,10 @@
 
       // `still` is the cost of holding the graph on screen, without a camera
       // move's own cost.
-      window.profile = async (count, warmup, frames, zoom, edgeStyle) => {
+      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode) => {
         const { group, bend } = EDGE_STYLES[edgeStyle];
         const { home, links, bounds } = buildGraph(count);
+        const richData = nodeMode === 'rich' ? richDataFor(count, links) : null;
         const heapBefore = heap();
         const buildStart = performance.now();
         const renderer = await createRenderer({
@@ -170,15 +264,33 @@
         renderer.camera.setViewport({ width: 1280, height: 720, devicePixelRatio: window.devicePixelRatio });
         renderer.camera.fitBounds(bounds);
         if (zoom !== null) renderer.camera.setZoom(zoom);
+        let overlay = null;
+        let rich = null;
+        if (richData !== null) {
+          overlay = createHtmlOverlay({ parent: document.getElementById('host'), camera: renderer.camera });
+          rich = createRichNodes({ overlay, tiers: TIERS });
+          rich.setNodes(
+            nodesAt(home).map((node, i) => ({ id: node.id, bounds: boundsOf(node), data: richData[i] })),
+          );
+          overlay.sync();
+        }
         renderer.render();
         const buildMs = performance.now() - buildStart;
         const heapBuilt = heap();
 
         const still = await sample(warmup, frames, () => {
+          const timings = {};
+          if (overlay !== null) {
+            const t0 = performance.now();
+            overlay.sync();
+            timings.sync = performance.now() - t0;
+          }
           const start = performance.now();
           renderer.render();
-          return { render: performance.now() - start };
+          timings.render = performance.now() - start;
+          return timings;
         });
+        const stillElements = overlay === null ? null : overlay.activeCount;
         let flowPixels = 0;
         let previousTs = null;
         const animated = await sample(warmup, frames, (ts) => {
@@ -199,6 +311,18 @@
             timings.setEdgeStyle = performance.now() - t3;
           }
           previousTs = ts;
+          if (rich !== null) {
+            // Every node moved, so this is what DagrCanvas's tier feed
+            // hands `setNode` on a frame with every spring in flight.
+            const t5 = performance.now();
+            for (const [i, node] of nodes.entries()) {
+              rich.setNode({ id: node.id, bounds: boundsOf(node), data: richData[i] });
+            }
+            const t6 = performance.now();
+            overlay.sync();
+            timings.richNodes = t6 - t5;
+            timings.sync = performance.now() - t6;
+          }
           const t4 = performance.now();
           renderer.render();
           timings.render = performance.now() - t4;
@@ -207,11 +331,16 @@
         const heapAfter = heap();
         const backend = renderer.backend;
         const drawnZoom = renderer.camera.zoom;
+        const animatedElements = overlay === null ? null : overlay.activeCount;
+        rich?.dispose();
+        overlay?.dispose();
         renderer.dispose();
         return {
           count,
           edges: links.length,
           edgeStyle,
+          nodeMode,
+          elements: overlay === null ? null : { still: stillElements, animated: animatedElements },
           backend,
           zoom: drawnZoom,
           buildMs,

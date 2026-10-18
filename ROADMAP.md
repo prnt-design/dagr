@@ -70,7 +70,7 @@ Stage 1 proves the renderer; stage 2 makes it usable as a product.
 | --- | --- | --- |
 | 1 | **WebGPU adapter in the loop** (stage 1, done 2026-10-17: Apple M4, Chrome 155, `renderer.backend` is `webgpu`; see `bench/browser/README.md`) | Probe at execution time and record what `renderer.backend` reports, on which machine and browser, headed or headless, and with which flags. A WebGL2 fallback is never recorded as a WebGPU result. If no adapter comes up, record what was tried and make the next attempt reproducible. |
 | 2 | **M4.9b: backend parity** (stage 1, done 2026-10-17: byte-identical on the probe scene, Apple M4, Chrome 155; see the M4.9b entry) | The same TSL drawn through WebGPU and WebGL2 on one machine, compared by screenshot, with the tolerance derived from the antialiasing ramp. A committed parity check that both backends pass; the M4.9b entry decides whether it becomes a gate. |
-| 3 | **M4.10a: consumer performance profile** (stage 1, frame-time distribution by size done 2026-10-17 and by edge style 2026-10-18, on WebGPU: smooth edges re-tessellated every frame miss 60 Hz at 10,000 nodes; next: rich-node tiers, hit testing, memory per pass; see `bench/browser/README.md`) | Named backend, machine and graph sizes, rich-node tiers, edge styles, hit testing and animated updates. Frame-time distribution and memory per pass, published. Do not infer WebGPU performance from a WebGL fallback. |
+| 3 | **M4.10a: consumer performance profile** (stage 1, frame-time distribution by size done 2026-10-17, by edge style and rich-node tiers 2026-10-18, on WebGPU: smooth edges re-tessellated every frame miss 60 Hz at 10,000 nodes, rich-node tiers do not; next: hit testing, memory per pass; see `bench/browser/README.md`) | Named backend, machine and graph sizes, rich-node tiers, edge styles, hit testing and animated updates. Frame-time distribution and memory per pass, published. Do not infer WebGPU performance from a WebGL fallback. |
 | 4 | **M4.10: 10k nodes at 60fps, animating** (stage 1) | Frame time broken down by pass. If the number is not met, publish the profile and move the number. |
 | 5 | **M4.8b: GPU picking, then edge hits** (stage 2) | Hover and selection at 10k nodes through the M5.2a provider contract; edges become hit targets. When the pass runs stays provisional until M4.10 prices it. |
 | 6 | **M3.9b: fast paths** (stage 2) | Edits on a 10k graph relayout within the frame budget, judged against M3.10a's tables. |
@@ -255,8 +255,11 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   styles (2026-10-18, `--edges`): dashed edges cost the same as straight ones,
   and smooth edges hold one tick still but not animating at 10,000 nodes,
   where re-tessellating 13,169 curves takes 26 ms a frame against 4 ms for
-  the same points as polylines. Rich-node tiers, hit testing and memory per
-  pass remain.
+  the same points as polylines. Rich-node tiers (2026-10-18, `--nodes=rich`):
+  a label and a card tier hold one tick at every size, still and animating, and
+  add about 1.5 ms to an animated frame at 10,000 nodes, a cost that follows the
+  node count rather than the 0 to 90 elements on screen. Hit testing and memory
+  per pass remain.
 - [ ] **M4.10** Performance: 10k nodes at 60fps, animating, springs in flight,
   zoom and DPR named, frame time broken down by pass (instance update, node
   draw, edge draw, ID buffer), recorded as a local baseline naming the
