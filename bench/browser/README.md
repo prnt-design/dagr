@@ -5,7 +5,7 @@ What a browser does that the rest of `bench/` cannot reach.
 and `label-throughput.mjs` opens it, runs a plan and prints the numbers.
 `card-heights.mjs` renders every campaign card and reports the tallest per kind.
 `frame-profile.html` and `frame-profile.mjs` time the shape renderer's frames on
-WebGPU by graph size, still and animating.
+WebGPU by graph size and edge style, still and animating.
 `backend-probe.html` and `backend-probe.mjs` are the odd ones out and the
 directory name undersells them: they do not measure anything, they CHECK
 something, which is which backend `@prnt/dagr-render` comes up on and whether the
@@ -170,7 +170,7 @@ with a WebGPU adapter, and CI runs on a GitHub `ubuntu-latest` runner with no
 GPU and no browser step. It is run by hand like the probe, and its scope is what it compared:
 one machine, the two-shape probe scene, zoom 1, DPR 1, no edge ribbons.
 
-## Frame profile on WebGPU (M4.10a, first slice)
+## Frame profile on WebGPU (M4.10a)
 
 ```
 pnpm --filter @prnt/dagr-render build          # the page imports from dist
@@ -178,14 +178,15 @@ npm --prefix bench/browser install --no-save playwright-core
 python3 -m http.server 8733               # from the REPO ROOT
 DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   node bench/browser/frame-profile.mjs
-  # [--sizes=1000,2500] [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--headless]
+  # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--zoom=fit|1] [--dpr=2]
+  # [--frames=300] [--warmup=60] [--headless]
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
 with about 1.3 straight edges per node, through a renderer that asks for
 `backend: 'webgpu'`, so a browser without an adapter fails with
-`BACKEND_UNAVAILABLE` instead of measuring the fallback. Each size runs two
-modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
+`BACKEND_UNAVAILABLE` instead of measuring the fallback. Each size and edge
+style runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
 `animated` also replaces every node centre and every edge route each frame
 through `setNodes` and `setEdges`, which is what a consumer driving
 `createSceneMotion` hands the renderer while every spring is in flight. The
@@ -198,6 +199,13 @@ explorer ceiling below gives. The control, measured last, is a page moving one
 is the share of intervals that rounded to two ticks or more. The runner exits
 non-zero if that tick is not within 10% of 60 or 120 Hz, since a throttled
 control would make every row look clean.
+
+`--edges` runs every size once per edge style, `straight` by default.
+`dashed` gives the group an 8 pixel dash at half duty, and its animated mode
+also flows the dash 40 pixels a second through `advanceDashFlow` and
+`setEdgeStyle`, timed as `setEdgeStyle`. `smooth` sets the group's `curve` to
+`'smooth'`, and because a two-point route has nothing to curve through, each
+smooth edge gets a bend point 25 world units to the right of its chord's middle.
 
 `render()` returns once the frame is submitted, so its time is CPU time, not
 GPU time. A GPU that fell behind would show in the interval, not in `render`.
@@ -230,8 +238,9 @@ Three things follow.
 
 - **On this machine and this scene, 10,000 nodes animate at 60 frames a
   second on WebGPU**, still and with every node and edge moving. That is not
-  M4.10: the scene has no rich nodes, no dashed or smooth edges and no picking
-  pass, and the GPU time per pass is not measured.
+  M4.10: the scene has no rich nodes, no dashed or smooth edges (the
+  edge-style table below adds them) and no picking pass, and the GPU time per
+  pass is not measured.
 - **The CPU cost per frame is the update.** At 10,000 nodes `setNodes` and
   `setEdges` take about 5 ms together and `render` 0.4 ms of CPU, so the
   updates are what M3.9b and M4.10 should price first.
@@ -239,13 +248,64 @@ Three things follow.
   rows held one tick in both runs; the animated 10,000-node row did not when
   the machine got busy.
 
-Not measured yet, and the rest of M4.10a: rich-node tiers, dashed and smooth
-edge styles, hit testing, and memory per pass. The report's `heapMb` is the
-page's JavaScript heap from `performance.memory`, which Chrome rounds and
-which includes whatever the previous row left for the collector, so it is not
-a memory figure for a pass. Every renderer logs `THREE.AttributeNode: Vertex
-attribute "position" not found on geometry.` once, which nothing here has
-traced yet.
+**Edge styles, on 2026-10-18**, same machine, browser, adapter, viewport and
+zoom, `renderer.backend` `webgpu` on every row, tick 16.7 ms, load average 3.5
+to 4.3. Two runs of `--edges=straight,dashed,smooth` agreed on every row
+within 0.5 ms in the update medians and 0.7 points past one tick; the table is
+the second. Times are median / 95th percentile in milliseconds, and `render`
+is the animated mode's.
+
+| Nodes | Edges | Style | Still frame | Animated frame | Animated past one tick | `setEdges` | `setNodes` | `render` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| control | | | 16.7 / 18.6 | | 0% | | | |
+| 1,000 | 1,281 | straight | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 1.2 / 1.7 | 1.3 / 1.6 | 0.4 / 0.5 |
+| 1,000 | 1,281 | dashed | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 1.1 / 1.6 | 1.0 / 1.5 | 0.4 / 0.5 |
+| 1,000 | 1,281 | smooth | 16.7 / 18.6 | 16.7 / 18.4 | 0% | 2.5 / 4.6 | 0.3 / 0.7 | 0.2 / 0.2 |
+| 2,500 | 3,238 | straight | 16.7 / 18.7 | 16.7 / 18.6 | 0% | 1.8 / 2.1 | 1.5 / 1.7 | 0.3 / 0.4 |
+| 2,500 | 3,238 | dashed | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 1.8 / 2.0 | 1.5 / 1.7 | 0.2 / 0.4 |
+| 2,500 | 3,238 | smooth | 16.7 / 18.7 | 16.7 / 18.4 | 0% | 5.7 / 6.0 | 0.6 / 0.7 | 0.3 / 0.3 |
+| 5,000 | 6,551 | straight | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 1.5 / 2.2 | 1.8 / 3.0 | 0.2 / 0.3 |
+| 5,000 | 6,551 | dashed | 16.6 / 18.7 | 16.7 / 18.7 | 0% | 1.5 / 2.1 | 1.2 / 3.0 | 0.2 / 0.3 |
+| 5,000 | 6,551 | smooth | 16.7 / 18.6 | 16.7 / 18.2 | 0% | 11.9 / 12.5 | 1.2 / 1.3 | 0.4 / 0.5 |
+| 10,000 | 13,169 | straight | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 3.3 / 3.8 | 2.3 / 2.4 | 0.3 / 0.4 |
+| 10,000 | 13,169 | dashed | 16.7 / 18.6 | 16.7 / 18.2 | 0% | 3.3 / 3.8 | 2.2 / 2.4 | 0.3 / 0.4 |
+| 10,000 | 13,169 | smooth | 16.7 / 18.6 | 33.3 / 50.0 | 81% | 25.9 / 30.7 | 2.5 / 2.7 | 0.8 / 1.0 |
+
+`setEdgeStyle` was 0.0 / 0.1 ms or less on every dashed row. The straight rows
+sit above the first slice's table at the small sizes (`setEdges` 1.2 against
+0.3 ms at 1,000 nodes), and that is the machine, not the change: the first
+slice's harness from `main`, run twice alternating with this one in the same
+session, gave 0.7 and 1.3 ms there and 3.0 and 3.6 ms at 10,000 nodes. So
+compare rows within one table, not across the two, and read `setNodes` (which
+no edge style touches, and which moves by about 1 ms between rows) as noise at
+that size.
+
+- **A dash is free.** Dashed rows match straight ones in `setEdges`, `render`
+  and the frame columns: the pattern is fragment arithmetic and its flow is one
+  uniform a frame.
+- **A smooth curve is not, and it is the CPU that pays.** Its `setEdges` grows
+  about linearly with the edge count, 1.8 to 2.0 ms per thousand edges, and at
+  10,000 nodes and 13,169 edges it alone is longer than a frame, so the
+  animated frame drops to 30 frames a second with 81% of intervals past one
+  tick. Holding the same graph still costs nothing extra: the still rows hold
+  one tick, because a still frame does not tessellate.
+- **The cost is the curve, not the extra point.** A one-off run of the same
+  10,000-node scene with the bent routes drawn as polylines (the `smooth` edges'
+  points under `straight`'s group, not a committed mode) took 4.2 / 4.7 ms in
+  `setEdges`, with an animated frame of 16.7 / 18.4; smoothing the same
+  points takes 25.9.
+
+So re-tessellating smooth edges every frame is the first thing past the 60 Hz
+budget at 10,000 nodes on this machine, and it is what M3.9b's fast paths and
+M4.10 should price first; motion that moves only the edges whose ends moved
+would pay it for those edges alone.
+
+Not measured yet, and the rest of M4.10a: rich-node tiers, hit testing, and
+memory per pass. The report's `heapMb` is the page's JavaScript heap from
+`performance.memory`, which Chrome rounds and which includes whatever the
+previous row left for the collector, so it is not a memory figure for a pass.
+Every renderer logs `THREE.AttributeNode: Vertex attribute "position" not found
+on geometry.` once, which nothing here has traced yet.
 
 ## What the overlay harness measures, and what it does not
 

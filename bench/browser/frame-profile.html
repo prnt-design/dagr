@@ -22,11 +22,21 @@
       { "imports": { "three/webgpu": "__THREE_WEBGPU__", "three/tsl": "__THREE_TSL__" } }
     </script>
     <script type="module">
-      import { createRenderer } from '/packages/render/dist/index.js';
+      import { advanceDashFlow, createRenderer } from '/packages/render/dist/index.js';
 
       const SPACING = { x: 130, y: 90 };
       const SWAY_WORLD = 20;
       const EDGE_COLOR = 0x5a6b7d;
+      const DASH = { periodPixels: 8, duty: 0.5, speedPixelsPerSecond: 40 };
+      const BEND_WORLD = 25;
+
+      // A two-point route has nothing for 'smooth' to curve through, so smooth
+      // edges get a bend point pushed sideways off the chord's middle.
+      const EDGE_STYLES = {
+        straight: { group: { style: { halfWidthPixels: 1 } }, bend: false },
+        dashed: { group: { style: { halfWidthPixels: 1, dash: DASH } }, bend: false },
+        smooth: { group: { style: { halfWidthPixels: 1 }, curve: 'smooth' }, bend: true },
+      };
 
       /**
        * A grid of alternating rounded rectangles and circles, each joined to
@@ -82,12 +92,15 @@
               },
         );
 
-      const edgesAt = (centres, links) =>
-        links.map(([from, to]) => ({
-          id: `e${from}-${to}`,
-          points: [centres[from], centres[to]],
-          color: EDGE_COLOR,
-        }));
+      const edgesAt = (centres, links, bend) =>
+        links.map(([from, to]) => {
+          const a = centres[from];
+          const b = centres[to];
+          const points = bend
+            ? [a, { x: (a.x + b.x) / 2 + BEND_WORLD, y: (a.y + b.y) / 2 }, b]
+            : [a, b];
+          return { id: `e${from}-${to}`, points, color: EDGE_COLOR };
+        });
 
       const swayed = (home, t) =>
         home.map((p, i) => ({ x: p.x + SWAY_WORLD * Math.sin(t * 0.004 + i * 0.37), y: p.y }));
@@ -142,7 +155,8 @@
 
       // `still` is the cost of holding the graph on screen, without a camera
       // move's own cost.
-      window.profile = async (count, warmup, frames, zoom) => {
+      window.profile = async (count, warmup, frames, zoom, edgeStyle) => {
+        const { group, bend } = EDGE_STYLES[edgeStyle];
         const { home, links, bounds } = buildGraph(count);
         const heapBefore = heap();
         const buildStart = performance.now();
@@ -150,9 +164,9 @@
           canvas: freshCanvas(),
           backend: 'webgpu',
           nodes: nodesAt(home),
-          edgeGroups: [{ id: 'edges', style: { halfWidthPixels: 1 } }],
+          edgeGroups: [{ id: 'edges', ...group }],
         });
-        renderer.setEdges('edges', edgesAt(home, links));
+        renderer.setEdges('edges', edgesAt(home, links, bend));
         renderer.camera.setViewport({ width: 1280, height: 720, devicePixelRatio: window.devicePixelRatio });
         renderer.camera.fitBounds(bounds);
         if (zoom !== null) renderer.camera.setZoom(zoom);
@@ -165,19 +179,30 @@
           renderer.render();
           return { render: performance.now() - start };
         });
+        let flowPixels = 0;
+        let previousTs = null;
         const animated = await sample(warmup, frames, (ts) => {
           const t0 = performance.now();
           const centres = swayed(home, ts);
           const nodes = nodesAt(centres);
-          const edges = edgesAt(centres, links);
+          const edges = edgesAt(centres, links, bend);
           const t1 = performance.now();
           renderer.setNodes(nodes);
           const t2 = performance.now();
           renderer.setEdges('edges', edges);
           const t3 = performance.now();
-          renderer.render();
+          const timings = { input: t1 - t0, setNodes: t2 - t1, setEdges: t3 - t2 };
+          if (group.style.dash !== undefined) {
+            const dt = previousTs === null ? 0 : (ts - previousTs) / 1000;
+            flowPixels = advanceDashFlow(flowPixels, DASH.speedPixelsPerSecond, dt, DASH.periodPixels);
+            renderer.setEdgeStyle('edges', { halfWidthPixels: 1, alpha: 1, dashFlowPixels: flowPixels });
+            timings.setEdgeStyle = performance.now() - t3;
+          }
+          previousTs = ts;
           const t4 = performance.now();
-          return { input: t1 - t0, setNodes: t2 - t1, setEdges: t3 - t2, render: t4 - t3 };
+          renderer.render();
+          timings.render = performance.now() - t4;
+          return timings;
         });
         const heapAfter = heap();
         const backend = renderer.backend;
@@ -186,6 +211,7 @@
         return {
           count,
           edges: links.length,
+          edgeStyle,
           backend,
           zoom: drawnZoom,
           buildMs,
