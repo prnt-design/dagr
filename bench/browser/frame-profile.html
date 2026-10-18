@@ -56,12 +56,16 @@
         createRenderer,
         createRichNodes,
       } from '/packages/render/dist/index.js';
+      // The module file rather than the package index, which imports React.
+      import { createNodeHitIndex } from '/packages/react/dist/node-hit.js';
 
       const SPACING = { x: 130, y: 90 };
       const SWAY_WORLD = 20;
       const EDGE_COLOR = 0x5a6b7d;
       const DASH = { periodPixels: 8, duty: 0.5, speedPixelsPerSecond: 40 };
       const BEND_WORLD = 25;
+      // DagrCanvas's mouse tolerance, in CSS pixels.
+      const POINTER_HIT_PIXELS = 4;
 
       // A two-point route has nothing for 'smooth' to curve through, so smooth
       // edges get a bend point pushed sideways off the chord's middle.
@@ -197,6 +201,13 @@
       const swayed = (home, t) =>
         home.map((p, i) => ({ x: p.x + SWAY_WORLD * Math.sin(t * 0.004 + i * 0.37), y: p.y }));
 
+      // A pointer sweeping the viewport, so queries land on nodes and
+      // background alike.
+      const pointerAt = (ts) => ({
+        x: 640 + 600 * Math.sin(ts * 0.0011),
+        y: 360 + 340 * Math.sin(ts * 0.0017),
+      });
+
       const heap = () =>
         performance.memory === undefined ? null : performance.memory.usedJSHeapSize;
 
@@ -247,7 +258,7 @@
 
       // `still` is the cost of holding the graph on screen, without a camera
       // move's own cost.
-      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode) => {
+      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode, hit) => {
         const { group, bend } = EDGE_STYLES[edgeStyle];
         const { home, links, bounds } = buildGraph(count);
         const richData = nodeMode === 'rich' ? richDataFor(count, links) : null;
@@ -277,8 +288,29 @@
         const buildMs = performance.now() - buildStart;
         const heapBuilt = heap();
 
-        const still = await sample(warmup, frames, () => {
+        // DagrCanvas caches the index by the identity of the drawn array, so a
+        // still scene builds it once and every pointer move is a query.
+        const hits = { still: { queries: 0, onNode: 0 }, animated: { queries: 0, onNode: 0 } };
+        const query = (index, ts, mode) => {
+          const t0 = performance.now();
+          const world = renderer.camera.screenToWorld(pointerAt(ts));
+          const id = index.hit(world, POINTER_HIT_PIXELS / renderer.camera.zoom);
+          const ms = performance.now() - t0;
+          hits[mode].queries += 1;
+          if (id !== null) hits[mode].onNode += 1;
+          return ms;
+        };
+        let stillIndex = null;
+        let hitIndexMs = null;
+        if (hit) {
+          const t0 = performance.now();
+          stillIndex = createNodeHitIndex(nodesAt(home));
+          hitIndexMs = performance.now() - t0;
+        }
+
+        const still = await sample(warmup, frames, (ts) => {
           const timings = {};
+          if (stillIndex !== null) timings.hit = query(stillIndex, ts, 'still');
           if (overlay !== null) {
             const t0 = performance.now();
             overlay.sync();
@@ -322,6 +354,14 @@
             timings.richNodes = t6 - t5;
             timings.sync = performance.now() - t6;
           }
+          if (hit) {
+            // Every node moved, so the drawn array is new: a click rebuilds the
+            // index on this frame, and hover does on one frame in every 100 ms.
+            const t7 = performance.now();
+            const index = createNodeHitIndex(nodes);
+            timings.hitIndex = performance.now() - t7;
+            timings.hit = query(index, ts, 'animated');
+          }
           const t4 = performance.now();
           renderer.render();
           timings.render = performance.now() - t4;
@@ -340,6 +380,7 @@
           edgeStyle,
           nodeMode,
           elements: overlay === null ? null : { still: stillElements, animated: animatedElements },
+          hit: hit ? { indexMs: hitIndexMs, hits } : null,
           backend,
           zoom: drawnZoom,
           buildMs,

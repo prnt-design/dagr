@@ -688,8 +688,9 @@ baseline, on a grid of mixed circles and rounded rectangles: a query is about
 100, 1,000 and 10,000 nodes alike, because the grid makes it independent of
 node count. Building the index for 10,000 nodes takes about 1.9 ms. It is built
 lazily on the first pointer event after the drawn nodes change, so during an
-`animate` glide with a moving pointer a 10,000-node scene pays that 1.9 ms per
-frame; a static scene pays it once per edit. That is CPU time for the query,
+`animate` glide a 10,000-node scene pays that 1.9 ms on the frame a click lands
+and, with a moving pointer, at most once per 100 ms for hover; a static scene
+pays it once per edit. That is CPU time for the query,
 not browser frame time or GPU evidence, and the entries are recorded in
 [`bench/README.md`](https://github.com/prnt-design/dagr/blob/main/bench/README.md)
 without a gate until the baseline is next recaptured.
