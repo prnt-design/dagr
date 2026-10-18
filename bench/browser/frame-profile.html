@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>@prnt/dagr-render frame profile</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #000;
+      }
+      #stage {
+        width: 1280px;
+        height: 720px;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <script type="importmap">
+      { "imports": { "three/webgpu": "__THREE_WEBGPU__", "three/tsl": "__THREE_TSL__" } }
+    </script>
+    <script type="module">
+      import { createRenderer } from '/packages/render/dist/index.js';
+
+      const SPACING = { x: 130, y: 90 };
+      const SWAY_WORLD = 20;
+      const EDGE_COLOR = 0x5a6b7d;
+
+      /**
+       * A grid of alternating rounded rectangles and circles, each joined to
+       * the node below it and every third one also to the node below and to
+       * the right: about 1.33 edges per node, the ratio of the explorer
+       * ceiling's generated graphs.
+       */
+      const buildGraph = (count) => {
+        const columns = Math.ceil(Math.sqrt(count * 1.5));
+        const home = [];
+        for (let i = 0; i < count; i += 1) {
+          home.push({ x: (i % columns) * SPACING.x, y: -Math.floor(i / columns) * SPACING.y });
+        }
+        const links = [];
+        for (let i = 0; i < count; i += 1) {
+          const below = i + columns;
+          if (below < count) links.push([i, below]);
+          if (i % 3 === 0 && below + 1 < count && (i % columns) + 1 < columns) {
+            links.push([i, below + 1]);
+          }
+        }
+        const last = home[count - 1];
+        const bounds = {
+          minX: -SPACING.x,
+          minY: last.y - SPACING.y,
+          maxX: columns * SPACING.x,
+          maxY: SPACING.y,
+        };
+        return { home, links, bounds };
+      };
+
+      const nodesAt = (centres) =>
+        centres.map((center, i) =>
+          i % 2 === 0
+            ? {
+                id: `n${i}`,
+                shape: 'roundedRect',
+                center,
+                size: { width: 90, height: 50 },
+                cornerRadius: 10,
+                fillColor: 0xffb703,
+                glowColor: 0xfb8500,
+                glowWorld: 6,
+              }
+            : {
+                id: `n${i}`,
+                shape: 'circle',
+                center,
+                size: { width: 50, height: 50 },
+                fillColor: 0x8ecae6,
+                glowColor: 0x219ebc,
+                glowWorld: 6,
+              },
+        );
+
+      const edgesAt = (centres, links) =>
+        links.map(([from, to]) => ({
+          id: `e${from}-${to}`,
+          points: [centres[from], centres[to]],
+          color: EDGE_COLOR,
+        }));
+
+      const swayed = (home, t) =>
+        home.map((p, i) => ({ x: p.x + SWAY_WORLD * Math.sin(t * 0.004 + i * 0.37), y: p.y }));
+
+      const heap = () =>
+        performance.memory === undefined ? null : performance.memory.usedJSHeapSize;
+
+      const freshCanvas = () => {
+        const canvas = document.createElement('canvas');
+        canvas.id = 'stage';
+        document.getElementById('stage').replaceWith(canvas);
+        return canvas;
+      };
+
+      /**
+       * Runs `frames` animation frames after `warmup`, calling `work(ts)`
+       * inside each one, and returns the interval between frames and the
+       * time each named step of `work` took.
+       */
+      const sample = (warmup, frames, work) =>
+        new Promise((resolve) => {
+          const intervals = [];
+          const steps = {};
+          let previous = null;
+          let seen = 0;
+          const tick = (ts) => {
+            if (previous !== null && seen > warmup) intervals.push(ts - previous);
+            previous = ts;
+            const timings = work(ts);
+            if (seen > warmup) {
+              for (const [name, ms] of Object.entries(timings)) (steps[name] ??= []).push(ms);
+            }
+            seen += 1;
+            if (intervals.length < frames) requestAnimationFrame(tick);
+            else resolve({ intervals, steps });
+          };
+          requestAnimationFrame(tick);
+        });
+
+      // A page that paints nothing new gets fewer frames from Chrome, so the
+      // control moves one square a frame, like the profiled pages do.
+      window.control = (warmup, frames) => {
+        const ctx = freshCanvas().getContext('2d');
+        let x = 0;
+        return sample(warmup, frames, () => {
+          ctx.clearRect(x, 0, 8, 8);
+          x = (x + 1) % 64;
+          ctx.fillRect(x, 0, 8, 8);
+          return {};
+        });
+      };
+
+      /**
+       * One size, two modes. `still` renders the same scene every frame, which
+       * is the cost of holding the graph on screen under a moving camera
+       * without the camera's own cost. `animated` replaces every node centre
+       * and every edge route each frame through `setNodes` and `setEdges`,
+       * which is what a consumer driving `createSceneMotion` hands the renderer
+       * while every spring is in flight.
+       */
+      window.profile = async (count, warmup, frames, zoom) => {
+        const { home, links, bounds } = buildGraph(count);
+        const heapBefore = heap();
+        const buildStart = performance.now();
+        const renderer = await createRenderer({
+          canvas: freshCanvas(),
+          backend: 'webgpu',
+          nodes: nodesAt(home),
+          edgeGroups: [{ id: 'edges', style: { halfWidthPixels: 1 } }],
+        });
+        renderer.setEdges('edges', edgesAt(home, links));
+        renderer.camera.setViewport({ width: 1280, height: 720, devicePixelRatio: window.devicePixelRatio });
+        renderer.camera.fitBounds(bounds);
+        if (zoom !== null) renderer.camera.setZoom(zoom);
+        renderer.render();
+        const buildMs = performance.now() - buildStart;
+        const heapBuilt = heap();
+
+        const still = await sample(warmup, frames, () => {
+          const start = performance.now();
+          renderer.render();
+          return { render: performance.now() - start };
+        });
+        const animated = await sample(warmup, frames, (ts) => {
+          const t0 = performance.now();
+          const centres = swayed(home, ts);
+          renderer.setNodes(nodesAt(centres));
+          const t1 = performance.now();
+          renderer.setEdges('edges', edgesAt(centres, links));
+          const t2 = performance.now();
+          renderer.render();
+          const t3 = performance.now();
+          return { setNodes: t1 - t0, setEdges: t2 - t1, render: t3 - t2 };
+        });
+        const heapAfter = heap();
+        const backend = renderer.backend;
+        const drawnZoom = renderer.camera.zoom;
+        renderer.dispose();
+        return {
+          count,
+          edges: links.length,
+          backend,
+          zoom: drawnZoom,
+          buildMs,
+          heap: { before: heapBefore, built: heapBuilt, afterAnimated: heapAfter },
+          still,
+          animated,
+        };
+      };
+
+      window.adapter = async () => {
+        if (!('gpu' in navigator)) return { navigatorGpu: false, adapter: null };
+        const found = await navigator.gpu.requestAdapter();
+        if (found === null) return { navigatorGpu: true, adapter: null };
+        const { vendor, architecture, device, description } = found.info;
+        return {
+          navigatorGpu: true,
+          adapter: { vendor, architecture, device, description, isFallbackAdapter: found.info.isFallbackAdapter },
+        };
+      };
+
+      window.ready = true;
+    </script>
+  </body>
+</html>
