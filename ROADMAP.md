@@ -256,9 +256,10 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   and smooth edges hold one tick still but not animating at 10,000 nodes,
   where re-tessellating 13,169 curves takes 26 ms a frame against 4 ms for
   the same points as polylines. Rich-node tiers (2026-10-18, `--nodes=rich`):
-  a label and a card tier hold one tick at every size, still and animating, and
-  add about 1.5 ms to an animated frame at 10,000 nodes, a cost that follows the
-  node count rather than the 0 to 90 elements on screen. Hit testing and memory
+  a label and a card tier hold one tick at the 95th percentile at every size,
+  still and animating, and add 1.2 to 1.5 ms to an animated frame at 10,000
+  nodes, a cost that follows the node count rather than the 0 to 90 elements on
+  screen. Hit testing and memory
   per pass remain.
 - [ ] **M4.10** Performance: 10k nodes at 60fps, animating, springs in flight,
   zoom and DPR named, frame time broken down by pass (instance update, node

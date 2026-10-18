@@ -186,17 +186,18 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 with about 1.3 straight edges per node, through a renderer that asks for
 `backend: 'webgpu'`, so a browser without an adapter fails with
 `BACKEND_UNAVAILABLE` instead of measuring the fallback. Each size, edge style
-and node mode runs two modes for 300 frames after 60 of warm-up. `still` calls
-`render()` every frame. `animated` also replaces every node centre and every
-edge route each frame through `setNodes` and `setEdges`, which is what a
-consumer driving `createSceneMotion` hands the renderer while every spring is in
-flight. The arrays are built before the clock starts on those two calls and
-timed as `input`. The report gives the interval between animation frames and the
-CPU time of each step, and the runner prints the machine, browser, launch mode
-and adapter with them. It runs headed by default, for the pacing reason the
-explorer ceiling below gives. The control, measured last, is a page moving one 8
-pixel square a frame, and its median interval is the tick: "past one tick" is
-the share of intervals that rounded to two ticks or more. The runner exits
+and node mode runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
+`animated` also replaces every node centre and every edge route each frame
+through `setNodes` and `setEdges`, which is what a consumer driving
+`createSceneMotion` hands the renderer while every spring is in flight. The
+arrays are built before the clock starts on those two calls and timed as
+`input`. The report gives the interval between animation frames and the CPU
+time of each step (and, in `rich` rows, how many overlay elements were attached
+at the end of each mode), and the runner prints the machine, browser, launch
+mode and adapter with them. It runs headed by default, for the pacing reason the
+explorer ceiling below gives. The control, measured last, is a page moving one
+8 pixel square a frame, and its median interval is the tick: "past one tick"
+is the share of intervals that rounded to two ticks or more. The runner exits
 non-zero if that tick is not within 10% of 60 or 120 Hz, since a throttled
 control would make every row look clean.
 
@@ -208,14 +209,15 @@ also flows the dash 40 pixels a second through `advanceDashFlow` and
 smooth edge gets a bend point 25 world units to the right of its chord's middle.
 
 `--nodes` runs every size and edge style once per node mode, `shapes` by
-default. `rich` adds M4.12's semantic zoom over the same scene: `createRichNodes`
-binds a one-line title label from 24 to 160 CSS pixels and a three-line card from
-160 up, through `createHtmlOverlay` on the renderer's camera with its default cap
-of 200 elements, and every frame calls `overlay.sync()` before `render()`, timed
-as `sync`. Its animated mode also moves every node's box with `setNode`, which is
-what `DagrCanvas`'s tier feed does when every node is in flight, timed as
-`richNodes`. The tier a node reaches depends on the zoom, so the harness is run
-once per `--zoom`.
+default. `rich` adds M4.12's semantic zoom over the same scene:
+`createRichNodes` binds a one-line title label from 24 to 160 CSS pixels and a
+three-line card from 160 up, through `createHtmlOverlay` on the renderer's
+camera with its default cap of 200 elements, and every frame calls
+`overlay.sync()` before `render()`, timed as `sync`. Its animated mode also
+moves every node's box with `setNode`, which is the `setNode` half of
+`DagrCanvas`'s tier feed step when every node is in flight (the feed's own
+change check is not included), timed as `richNodes`. The tier a node reaches
+depends on the zoom, so the harness is run once per `--zoom`.
 
 `render()` returns once the frame is submitted, so its time is CPU time, not
 GPU time. A GPU that fell behind would show in the interval, not in `render`.
@@ -310,17 +312,18 @@ budget at 10,000 nodes on this machine, and it is what M3.9b's fast paths and
 M4.10 should price first; motion that moves only the edges whose ends moved
 would pay it for those edges alone.
 
-**Rich-node tiers, on 2026-10-18**, same machine, browser, adapter and
-viewport, `renderer.backend` `webgpu` on every row, straight edges, tick 16.7
-ms, load average 3.2 to 4.3. Run once per zoom: at `fit` every node is under
-24 CSS pixels (a rectangle is 6.4 to 20 pixels wide), so no tier is open; at
-zoom 1 rectangles and circles are 90 and 50 pixels wide and carry labels; at
-zoom 2 rectangles are 180 pixels and carry cards while circles keep labels. Two
-runs of `--nodes=shapes,rich` at each zoom agreed on every row within 0.2 ms in
+**Rich-node tiers, on 2026-10-18**, same machine, browser, adapter and viewport,
+`renderer.backend` `webgpu` on every row, straight edges, tick 16.7 ms, load
+average 3.2 to 4.3. Run once per zoom: at `fit` every node is under 24 CSS
+pixels (a rectangle is 6.4 to 20 pixels wide), so no tier is open; at zoom 1
+rectangles and circles are 90 and 50 pixels wide and carry labels; at zoom 2
+rectangles are 180 pixels and carry cards while circles keep labels. Two runs of
+`--nodes=shapes,rich` at each zoom agreed on every row's median within 0.2 ms in
 `richNodes` and the animated `sync`, 0.5 ms in the still `sync` (1.0 against 0.5
 at 10,000 nodes and zoom 2) and 0.7 points past one tick; the table is the
-second run. Times are median / 95th percentile in milliseconds. "Elements" is what the
-overlay had attached at the end of the animated mode.
+second run. Times are median / 95th percentile in milliseconds. "Elements" is
+what the overlay had attached at the end of the animated mode; at zoom 1 they
+are all labels, and at zoom 2 the geometry makes about half of them cards.
 
 | Nodes | Zoom | Elements | Still frame | Animated frame | Animated past one tick | `sync` (still) | `richNodes` | `sync` (animated) | `setNodes` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -328,50 +331,55 @@ overlay had attached at the end of the animated mode.
 | 2,500 | fit | 0 | 16.7 / 18.6 | 16.7 / 18.7 | 0% | 0.3 / 0.4 | 0.4 / 0.9 | 0.1 / 0.2 | 1.5 / 1.6 |
 | 5,000 | fit | 0 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.5 / 0.6 | 0.6 / 0.7 | 0.1 / 0.2 | 1.2 / 2.5 |
 | 10,000 | fit | 0 | 16.7 / 18.6 | 16.7 / 18.2 | 0% | 1.0 / 1.1 | 1.1 / 1.3 | 0.1 / 0.2 | 2.3 / 2.4 |
-| 1,000 | 1 | 86 labels | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.1 / 0.2 | 0.4 / 0.6 | 0.3 / 0.4 | 0.8 / 1.1 |
-| 2,500 | 1 | 90 labels | 16.7 / 18.6 | 16.7 / 18.7 | 0% | 0.2 / 0.3 | 0.3 / 1.0 | 0.1 / 0.2 | 1.4 / 1.7 |
-| 5,000 | 1 | 86 labels | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.3 / 0.5 | 0.6 / 0.7 | 0.1 / 0.2 | 1.2 / 2.6 |
-| 10,000 | 1 | 88 labels | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.6 / 0.7 | 1.3 / 1.4 | 0.2 / 0.6 | 2.3 / 2.5 |
+| 1,000 | 1 | 86 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.1 / 0.2 | 0.4 / 0.6 | 0.3 / 0.4 | 0.8 / 1.1 |
+| 2,500 | 1 | 90 | 16.7 / 18.6 | 16.7 / 18.7 | 0% | 0.2 / 0.3 | 0.3 / 1.0 | 0.1 / 0.2 | 1.4 / 1.7 |
+| 5,000 | 1 | 86 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.3 / 0.5 | 0.6 / 0.7 | 0.1 / 0.2 | 1.2 / 2.6 |
+| 10,000 | 1 | 88 | 16.7 / 18.6 | 16.7 / 18.6 | 0% | 0.6 / 0.7 | 1.3 / 1.4 | 0.2 / 0.6 | 2.3 / 2.5 |
 | 1,000 | 2 | 20 | 16.7 / 18.7 | 16.7 / 18.6 | 0% | 0.1 / 0.2 | 0.4 / 0.6 | 0.1 / 0.2 | 0.8 / 1.4 |
 | 2,500 | 2 | 30 | 16.7 / 18.6 | 16.7 / 18.7 | 0% | 0.2 / 0.3 | 0.4 / 0.9 | 0.1 / 0.2 | 1.4 / 1.6 |
 | 5,000 | 2 | 20 | 16.7 / 18.6 | 16.7 / 18.4 | 0% | 0.4 / 0.5 | 0.7 / 0.8 | 0.1 / 0.2 | 1.2 / 2.5 |
 | 10,000 | 2 | 20 | 16.7 / 18.6 | 16.7 / 18.0 | 0% | 0.5 / 0.8 | 1.2 / 1.3 | 0.1 / 0.2 | 2.3 / 2.5 |
 
-At zoom 2 about half the elements are cards and half labels. The `shapes` rows
-of the same runs held one tick at every size and zoom as well, with `setNodes`
-and `render` matching the rich rows within 0.4 ms.
+The `shapes` rows of the second run held one tick at the 95th percentile at
+every size and zoom as well (one animated row, 5,000 nodes at zoom 2, had 0.7%
+of intervals past it), with `setNodes` and `render` matching the rich rows
+within 0.4 ms (0.7 in the first run).
 
-- **The tiers fit in the frame at every size measured.** No rich row ran past
-  one tick, still or animating, with up to 90 elements attached.
+- **The tiers fit in the frame at every size measured.** No rich row's
+  animated frame ran past one tick, and one still row (1,000 nodes, zoom 2) had
+  a single interval past it, 0.3%, with up to 90 elements attached.
 - **What they cost scales with the nodes, not with what is on screen.** At
   10,000 nodes `richNodes` is 1.1 to 1.3 ms whether 0, 20 or 88 elements are
-  attached, and about 0.1 ms per thousand nodes across sizes: it is the
-  per-node bookkeeping of moving two entries per node, which the M4.12 entry
-  predicted as entries scaling with tiers times nodes.
-- **The still `sync` reads high, and part of that is the machine.** It is the
-  same full scan of 20,000 entries in both modes, yet costs 0.5 to 1.0 ms on a
-  still frame and 0.1 to 0.2 ms on an animated one. In a one-off run at 10,000
-  nodes and `fit` (not a committed mode), timing a second `sync` straight after
-  the first still gave 0.7 ms, so it is not a cold first pass; three
-  milliseconds of unrelated arithmetic before it brought it from 0.8 to 0.3,
-  and re-placing every node at its unchanged position brought it to 0.4. So a
-  frame that does almost nothing else pays more for the same scan, and the
-  still column is an upper bound rather than the scan's cost. The rest of the
-  gap is not traced. The `fit` rows cost the most because every entry is in
-  view there and reaches the width gate.
+  attached, and about 0.1 ms per thousand nodes across sizes. That is
+  `setNode` re-placing two overlay entries per node; the cull in `sync`, which
+  the M4.12 entry in `specs/roadmap-notes.md` prices as entries scaling with
+  tiers times nodes, is 0.1 to 0.2 ms of an animated frame.
+- **The still `sync` reads high, and part of that is likely the machine.** It
+  is the same full scan of 20,000 entries in both modes, yet costs 0.5 to 1.0
+  ms on a still frame and 0.1 to 0.2 ms on an animated one. In one-off runs at
+  10,000 nodes and `fit` (not a committed mode), timing a second `sync`
+  straight after the first still gave 0.7 ms, so it is not a cold first pass;
+  three milliseconds of unrelated arithmetic before it brought it from 0.8 to
+  0.3, and calling `setNode` for every node with its unchanged box (which
+  walks every entry without re-placing any) brought it to 0.4. So a frame that
+  does almost nothing else pays more for the same scan, and the still column is
+  an upper bound rather than the scan's cost. The rest of the gap is not
+  traced. Every entry is in view at `fit` and reaches the width gate, which is
+  why those rows tend to cost the most.
 
-So at 10,000 nodes on this machine, rich-node tiers add about 1.5 ms to an
+So at 10,000 nodes on this machine, rich-node tiers add 1.2 to 1.5 ms to an
 animated frame, on top of the 5 ms of `setNodes` and `setEdges`. Neither the
-overlay's cap nor its DOM work is near a limit at a readable zoom; the per-node
-scan is the part that grows, and the spatial index the M4.12 entry names is
-where it would go if a larger graph needs it.
+overlay's cap nor its DOM work is near a limit at a readable zoom. The part
+that grows is the per-node `setNode` work, which motion that moves only the
+nodes in flight would pay for those nodes alone; a spatial index in `sync`,
+the remedy the M4.12 entry names, would only shorten the still frame's scan.
 
-Not measured yet, and the rest of M4.10a: hit testing and memory per pass. The
-report's `heapMb` is the page's JavaScript heap from `performance.memory`, which
-Chrome rounds and which includes whatever the previous row left for the
-collector, so it is not a memory figure for a pass. Every renderer logs
-`THREE.AttributeNode: Vertex attribute "position" not found on geometry.` once,
-which nothing here has traced yet.
+Not measured yet, and the rest of M4.10a: hit testing and memory per pass.
+The report's `heapMb` is the page's JavaScript heap from
+`performance.memory`, which Chrome rounds and which includes whatever the
+previous row left for the collector, so it is not a memory figure for a pass.
+Every renderer logs `THREE.AttributeNode: Vertex attribute "position" not found
+on geometry.` once, which nothing here has traced yet.
 
 ## What the overlay harness measures, and what it does not
 

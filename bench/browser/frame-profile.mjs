@@ -1,6 +1,7 @@
 /**
  * Frame-time distribution of `@prnt/dagr-render` on a WebGPU adapter, by graph
- * size, edge style and node mode, still and animating (M4.10a). Evidence, not a gate: see the README.
+ * size, edge style and node mode, still and animating (M4.10a). Evidence, not a
+ * gate: see the README.
  *
  * ```
  * pnpm --filter @prnt/dagr-render build      # the page imports from dist
@@ -9,7 +10,7 @@
  * DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
  *   node bench/browser/frame-profile.mjs
  *   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
- *   # [--frames=300] [--warmup=60] [--zoom=1] [--dpr=2] [--headless]
+ *   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--headless]
  * ```
  *
  * The page asks for `backend: 'webgpu'`, so a browser without an adapter fails
