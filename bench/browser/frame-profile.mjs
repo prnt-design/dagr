@@ -1,6 +1,6 @@
 /**
  * Frame-time distribution of `@prnt/dagr-render` on a WebGPU adapter, by graph
- * size, still and animating (M4.10a). Evidence, not a gate: see the README.
+ * size and edge style, still and animating (M4.10a). Evidence, not a gate: see the README.
  *
  * ```
  * pnpm --filter @prnt/dagr-render build      # the page imports from dist

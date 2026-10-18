@@ -185,8 +185,8 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
 with about 1.3 straight edges per node, through a renderer that asks for
 `backend: 'webgpu'`, so a browser without an adapter fails with
-`BACKEND_UNAVAILABLE` instead of measuring the fallback. Each size runs two
-modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
+`BACKEND_UNAVAILABLE` instead of measuring the fallback. Each size and edge
+style runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
 `animated` also replaces every node centre and every edge route each frame
 through `setNodes` and `setEdges`, which is what a consumer driving
 `createSceneMotion` hands the renderer while every spring is in flight. The
@@ -238,8 +238,9 @@ Three things follow.
 
 - **On this machine and this scene, 10,000 nodes animate at 60 frames a
   second on WebGPU**, still and with every node and edge moving. That is not
-  M4.10: the scene has no rich nodes, no dashed or smooth edges and no picking
-  pass, and the GPU time per pass is not measured.
+  M4.10: the scene has no rich nodes, no dashed or smooth edges (the
+  edge-style table below adds them) and no picking pass, and the GPU time per
+  pass is not measured.
 - **The CPU cost per frame is the update.** At 10,000 nodes `setNodes` and
   `setEdges` take about 5 ms together and `render` 0.4 ms of CPU, so the
   updates are what M3.9b and M4.10 should price first.
@@ -302,9 +303,9 @@ would pay it for those edges alone.
 Not measured yet, and the rest of M4.10a: rich-node tiers, hit testing, and
 memory per pass. The report's `heapMb` is the page's JavaScript heap from
 `performance.memory`, which Chrome rounds and which includes whatever the
-previous row left for the collector, so it is not a memory figure for a pass. Every renderer logs `THREE.AttributeNode: Vertex
-attribute "position" not found on geometry.` once, which nothing here has
-traced yet.
+previous row left for the collector, so it is not a memory figure for a pass.
+Every renderer logs `THREE.AttributeNode: Vertex attribute "position" not found
+on geometry.` once, which nothing here has traced yet.
 
 ## What the overlay harness measures, and what it does not
 
