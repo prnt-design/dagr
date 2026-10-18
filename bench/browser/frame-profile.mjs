@@ -1,6 +1,7 @@
 /**
  * Frame-time distribution of `@prnt/dagr-render` on a WebGPU adapter, by graph
- * size and edge style, still and animating (M4.10a). Evidence, not a gate: see the README.
+ * size, edge style and node mode, still and animating (M4.10a). Evidence, not a
+ * gate: see the README.
  *
  * ```
  * pnpm --filter @prnt/dagr-render build      # the page imports from dist
@@ -8,8 +9,8 @@
  * python3 -m http.server 8733           # from the REPO ROOT
  * DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
  *   node bench/browser/frame-profile.mjs
- *   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--frames=300] [--warmup=60]
- *   # [--zoom=1] [--dpr=2] [--headless]
+ *   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
+ *   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--headless]
  * ```
  *
  * The page asks for `backend: 'webgpu'`, so a browser without an adapter fails
@@ -53,6 +54,11 @@ const EDGE_STYLES = ['straight', 'dashed', 'smooth'];
 const edgeStyles = option('edges', 'straight').split(',');
 for (const style of edgeStyles) {
   if (!EDGE_STYLES.includes(style)) throw new Error(`--edges takes ${EDGE_STYLES.join(', ')}, got ${style}`);
+}
+const NODE_MODES = ['shapes', 'rich'];
+const nodeModes = option('nodes', 'shapes').split(',');
+for (const nodeMode of nodeModes) {
+  if (!NODE_MODES.includes(nodeMode)) throw new Error(`--nodes takes ${NODE_MODES.join(', ')}, got ${nodeMode}`);
 }
 const frames = count('frames', option('frames', '300'));
 const warmup = count('warmup', option('warmup', '60'));
@@ -138,12 +144,14 @@ const adapter = await page.evaluate(() => window.adapter());
 const runs = [];
 for (const size of sizes) {
   for (const style of edgeStyles) {
-    runs.push(
-      await page.evaluate(
-        ([n, w, f, z, e]) => window.profile(n, w, f, z, e),
-        [size, warmup, frames, zoom, style],
-      ),
-    );
+    for (const nodeMode of nodeModes) {
+      runs.push(
+        await page.evaluate(
+          ([n, w, f, z, e, m]) => window.profile(n, w, f, z, e, m),
+          [size, warmup, frames, zoom, style, nodeMode],
+        ),
+      );
+    }
   }
 }
 const controlRun = await page.evaluate(([w, f]) => window.control(w, f), [warmup, frames]);
@@ -155,6 +163,8 @@ const rows = runs.map((run) => ({
   count: run.count,
   edges: run.edges,
   edgeStyle: run.edgeStyle,
+  nodeMode: run.nodeMode,
+  elements: run.elements,
   backend: run.backend,
   zoom: Math.round(run.zoom * 10_000) / 10_000,
   buildMs: Math.round(run.buildMs),
@@ -170,7 +180,7 @@ const report = {
   launch,
   adapter,
   viewport: { width: 1280, height: 720, devicePixelRatio: dpr },
-  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles },
+  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes },
   tickMs,
   control,
   rows,
