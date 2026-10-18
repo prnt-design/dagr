@@ -5,7 +5,8 @@ What a browser does that the rest of `bench/` cannot reach.
 and `label-throughput.mjs` opens it, runs a plan and prints the numbers.
 `card-heights.mjs` renders every campaign card and reports the tallest per kind.
 `frame-profile.html` and `frame-profile.mjs` time the shape renderer's frames on
-WebGPU by graph size and edge style, still and animating.
+WebGPU by graph size, edge style, node mode and node hit testing, still and
+animating.
 `backend-probe.html` and `backend-probe.mjs` are the odd ones out and the
 directory name undersells them: they do not measure anything, they CHECK
 something, which is which backend `@prnt/dagr-render` comes up on and whether the
@@ -228,7 +229,9 @@ as `DagrCanvas`'s cache by the drawn array's identity does. An animated frame
 first rebuilds the index over that frame's nodes, timed as `hitIndex`: a click
 pays that on the frame it lands, and hover, which reuses an index up to 100 ms
 old, on about one frame in six. The report's `hit` gives the untimed build and
-how many queries, warm-up included, landed on a node.
+how many queries, warm-up included, landed on a node. With `--nodes=rich` the
+still query runs just before `sync`, so do not compare those rows' still `sync`
+with the rich-node table below.
 
 `render()` returns once the frame is submitted, so its time is CPU time, not
 GPU time. A GPU that fell behind would show in the interval, not in `render`.
@@ -262,8 +265,8 @@ Three things follow.
 - **On this machine and this scene, 10,000 nodes animate at 60 frames a
   second on WebGPU**, still and with every node and edge moving. That is not
   M4.10: the scene has no rich nodes and no dashed or smooth edges (the
-  edge-style and rich-node tables below add them) and no picking pass, and the
-  GPU time per pass is not measured.
+  edge-style and rich-node tables below add them) and no GPU picking pass,
+  and the GPU time per pass is not measured.
 - **The CPU cost per frame is the update.** At 10,000 nodes `setNodes` and
   `setEdges` take about 5 ms together and `render` 0.4 ms of CPU, so the
   updates are what M3.9b and M4.10 should price first.
@@ -390,9 +393,9 @@ viewport, `renderer.backend` `webgpu` on every row, straight edges, shape
 nodes, tick 16.7 ms, load average 3.3 to 4.3. Run twice at `fit` and twice at
 zoom 1; the two runs agreed on every median within 0.1 ms, and the table is the
 second, at `fit`. Times are median / 95th percentile in milliseconds. The
-untimed build is the one before the still mode, and it is the page's first call
-of `createNodeHitIndex` for that size, cold, which is why 1,000 nodes reads
-higher than 2,500.
+untimed build is the one before the still mode; the 1,000-node row's is the
+page's first call of `createNodeHitIndex`, before the JIT has warmed it, which
+is likely why it reads higher than 2,500 in this run.
 
 | Nodes | Still frame | Animated frame | Animated past one tick | `hit` (still) | `hitIndex` | `hit` (animated) | Untimed build | `setNodes` | `setEdges` |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
