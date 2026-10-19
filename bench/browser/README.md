@@ -6,8 +6,8 @@ and `label-throughput.mjs` opens it, runs a plan and prints the numbers.
 `card-heights.mjs` renders every campaign card and reports the tallest per kind.
 `frame-profile.html` and `frame-profile.mjs` time the shape renderer's frames on
 WebGPU by graph size, edge style, node mode and node hit testing, still and
-animating, and with `--memory` measure what each pass holds in GPU and heap
-memory.
+animating, with `--memory` measure what each pass holds in GPU and heap
+memory, and with `--gpu` the GPU time of each pass.
 `backend-probe.html` and `backend-probe.mjs` are the odd ones out and the
 directory name undersells them: they do not measure anything, they CHECK
 something, which is which backend `@prnt/dagr-render` comes up on and whether the
@@ -236,7 +236,8 @@ still query runs just before `sync`, so do not compare those rows' still `sync`
 with the rich-node table below.
 
 `render()` returns once the frame is submitted, so its time is CPU time, not
-GPU time. A GPU that fell behind would show in the interval, not in `render`.
+GPU time. A GPU that fell behind would show in the interval, not in `render`;
+`--gpu` (below) times the passes themselves.
 
 **What it found on 2026-10-17**, Apple M4 Mac mini (10 cores, 16 GB, macOS
 26.6.2), Google Chrome 155.0.8059.82 headed with no flags, adapter `apple`
@@ -268,7 +269,7 @@ Three things follow.
   second on WebGPU**, still and with every node and edge moving. That is not
   M4.10: the scene has no rich nodes and no dashed or smooth edges (the
   edge-style and rich-node tables below add them) and no GPU picking pass,
-  and the GPU time per pass is not measured.
+  and this slice did not measure GPU time per pass (M4.10 below does).
 - **The CPU cost per frame is the update.** At 10,000 nodes `setNodes` and
   `setEdges` take about 5 ms together and `render` 0.4 ms of CPU, so the
   updates are what M3.9b and M4.10 should price first.
@@ -552,7 +553,9 @@ same graph, so a pass can be split between them by subtraction: the nodes'
 share is `all` minus the edges alone, the edges' is `all` minus the nodes
 alone, and what is left is the pass's own cost (its clear, its multisample
 resolve and its fixed overhead). A pass is not exactly additive, so the split is
-good to a few hundredths of a millisecond, not more.
+good to a few hundredths of a millisecond, not more. `--parts` other than
+`all` is refused with `--hit` or `--nodes=rich`, whose node work would
+otherwise run over nodes that are not drawn.
 
 Three things about the timestamps, all seen in Chrome 155 on the Apple M4, decide
 what the page uses and when the runner fails.
@@ -560,7 +563,7 @@ what the page uses and when the runner fails.
 - **Chrome rounds them** to 65,536 ns unless WebGPU developer features are on,
   too coarse for passes that take a tenth of a millisecond. The page reports
   the largest power of two dividing every tick as `grainNs`, and the runner
-  exits non-zero above 1,000 ns. With `--enable-webgpu-developer-features` it
+  exits non-zero at 1,000 ns or more. With `--enable-webgpu-developer-features` it
   was 1 ns.
 - **A pass with no draw call gets an end of 0.** That is why there is no
   `--parts` for an empty scene: its scene pass has no draw. The page files such
@@ -577,13 +580,14 @@ reason). Time spent between passes, and the queue's buffer writes from
 155.0.8059.82 headed with `--enable-webgpu-developer-features`, adapter `apple`
 `metal-3` (`Apple M4`), not a fallback, `renderer.backend` `webgpu` on every
 row, `grainNs` 1, no untimed pass and no missing reading, tick 16.7 ms, load
-average 2.6 to 4.3. Every frame has two render passes: the scene, drawn into the
+average 2.6 to 4.3 (read with `uptime` between runs). Every frame has two render passes: the scene, drawn into the
 4x multisampled `rgba16float` target and resolved (the `resolves` flag), and
 three's output pass, which draws that onto the canvas. Viewport 1280 by 720 CSS
 pixels. Two runs of the DPR 1 plan agreed on every GPU median within 0.01 ms;
-the table is the second. Times are the still mode's median in milliseconds; the
-animated mode matched them within 0.02 ms on every row, its 95th percentile
-reaching 0.1 ms higher on two DPR 2 rows.
+the table is the second. Times are the still mode's median in milliseconds. The
+animated mode matched them within 0.02 ms on every row except the smooth ones
+at DPR 2, which miss a tick on most frames and whose animated medians read 0.08
+to 0.10 ms lower.
 
 | Nodes | Edges | DPR, zoom | Scene pass: all | nodes alone | edges alone | Output pass | Frame `sum` | Animated past one tick |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -617,20 +621,22 @@ Split by subtraction at 10,000 nodes and `fit`, in milliseconds:
 - **At DPR 2 most of the GPU time is the canvas, not the graph.** The output
   pass and the scene pass's own cost scale with device pixels, from 0.2 ms
   together at DPR 1 to 0.9 ms at DPR 2, against 0.3 to 0.7 ms for drawing every
-  node and edge. That bounds what turning off multisampling could save on this
-  GPU at about half a millisecond a frame at DPR 2, which is the bandwidth half
-  of the question the memory section left open; it does not settle it, since
-  the visual comparison is still missing.
+  node and edge. That suggests turning off multisampling would save on the
+  order of half a millisecond a frame at DPR 2 on this GPU (the output pass
+  would stay, and the draws' own share carries some multisample cost too),
+  which is the bandwidth half of the question the memory section left open; it
+  does not settle it, since the visual comparison is still missing.
 - **A smooth edge costs the GPU about three times a straight one** at DPR 1,
   0.52 against 0.16 ms for 13,169 edges, from the tessellated triangles. That is
   small next to the 26 ms it costs the CPU to tessellate them every frame.
 - **Drawing follows what is on screen.** At zoom 1 most of the graph is outside
-  the viewport, and the node and edge shares fall to under 0.1 ms each while
-  the per-pixel costs stay.
+  the viewport: with straight edges the node and edge shares fall to under 0.1
+  ms each, and the smooth edges' share falls from 0.45 to 0.17 ms, while the
+  per-pixel costs stay.
 
 So on this machine, at 10,000 nodes, M4.10's frame is CPU-bound: about 0.5 ms
-of GPU at DPR 1 and 1.2 at DPR 2 with straight edges, against 5 to 8 ms of CPU
-updates. What is still open for M4.10: driving the motion through
+of GPU at DPR 1 and 1.2 at DPR 2 with straight edges, against 5 to 7 ms of
+`setNodes` and `setEdges` on the CPU in these runs. What is still open for M4.10: driving the motion through
 `createSceneMotion` with springs in flight rather than a scripted sway, an ID
 buffer pass (M4.8b has none yet), and recording a local baseline.
 

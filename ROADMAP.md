@@ -251,7 +251,7 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   Chrome 155. At load 4 to 5 every row holds one 60 Hz tick at the 95th
   percentile (under heavier load the animated 10,000 row's update tail grew),
   and the CPU cost per frame is `setNodes` and `setEdges` (about 5 ms at
-  10,000) rather than `render`'s 0.4 ms; GPU time is not measured. Edge
+  10,000) rather than `render`'s 0.4 ms; that slice did not measure GPU time. Edge
   styles (2026-10-18, `--edges`): dashed edges cost the same as straight ones,
   and smooth edges hold one tick still but not animating at 10,000 nodes,
   where re-tessellating 13,169 curves takes 26 ms a frame against 4 ms for

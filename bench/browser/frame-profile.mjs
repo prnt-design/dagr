@@ -86,6 +86,9 @@ const gpu = process.argv.includes('--gpu');
 if (memory && (gpu || partsList.join() !== 'all')) {
   throw new Error('--memory builds the whole scene and counts every buffer, so it takes neither --gpu nor --parts');
 }
+if ((hit || nodeModes.includes('rich')) && partsList.some((parts) => parts !== 'all')) {
+  throw new Error('--hit and --nodes=rich work over every node, so they take only --parts=all');
+}
 
 function pageHtml() {
   const fromRender = createRequire(`${ROOT}packages/render/package.json`);
