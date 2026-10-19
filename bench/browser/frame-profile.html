@@ -211,6 +211,165 @@
       const heap = () =>
         performance.memory === undefined ? null : performance.memory.usedJSHeapSize;
 
+      // GPU time of every pass the renderer encodes, from timestamp queries
+      // the page adds to each pass descriptor three hands the device. A frame
+      // tag set before each sampled frame says which frame a reading belongs
+      // to, since readings arrive after the frame that submitted them.
+      //
+      // Only a pass's end minus its own beginning is used. In Chrome 155 on an
+      // Apple M4, timestamps from different command buffers were not in
+      // submission order, and a pass with no draw call got an end of 0.
+      const gpuTiming = { frame: -1, submits: 0, readings: [], pending: new Set(), untimed: [] };
+      const SLOT_QUERIES = 32;
+      window.timeGpuPasses = () => {
+        const encoders = new WeakMap();
+        const submitted = new WeakMap();
+        const pools = new WeakMap();
+        const takeSlot = (device) => {
+          let pool = pools.get(device);
+          if (pool === undefined) pools.set(device, (pool = []));
+          return (
+            pool.pop() ?? {
+              device,
+              querySet: device.createQuerySet({ type: 'timestamp', count: SLOT_QUERIES }),
+              resolve: device.createBuffer({
+                size: SLOT_QUERIES * 8,
+                usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+              }),
+              read: device.createBuffer({
+                size: SLOT_QUERIES * 8,
+                usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+              }),
+            }
+          );
+        };
+        const createCommandEncoder = GPUDevice.prototype.createCommandEncoder;
+        GPUDevice.prototype.createCommandEncoder = function (descriptor) {
+          const encoder = createCommandEncoder.call(this, descriptor);
+          encoders.set(encoder, { device: this, label: descriptor?.label ?? '', passes: [], slot: null });
+          return encoder;
+        };
+        const timePass = (method, kind) => {
+          const original = GPUCommandEncoder.prototype[method];
+          GPUCommandEncoder.prototype[method] = function (descriptor = {}) {
+            const info = encoders.get(this);
+            const why =
+              info === undefined
+                ? 'encoder not seen'
+                : !info.device.features.has('timestamp-query')
+                  ? 'device has no timestamp-query'
+                  : descriptor.timestampWrites !== undefined
+                    ? 'pass already writes timestamps'
+                    : info.passes.length * 2 + 2 > SLOT_QUERIES
+                      ? 'more passes than the slot holds'
+                      : null;
+            if (why !== null) {
+              gpuTiming.untimed.push({ kind, why });
+              return original.call(this, descriptor);
+            }
+            info.slot ??= takeSlot(info.device);
+            const index = info.passes.length * 2;
+            const colors = descriptor.colorAttachments ?? [];
+            info.passes.push({
+              kind,
+              encoder: info.label,
+              resolves: colors.some((c) => c?.resolveTarget !== undefined),
+              depth: descriptor.depthStencilAttachment !== undefined,
+            });
+            // A copy, because three caches its descriptors and reuses them.
+            return original.call(this, {
+              ...descriptor,
+              timestampWrites: {
+                querySet: info.slot.querySet,
+                beginningOfPassWriteIndex: index,
+                endOfPassWriteIndex: index + 1,
+              },
+            });
+          };
+        };
+        timePass('beginRenderPass', 'render');
+        timePass('beginComputePass', 'compute');
+        const finish = GPUCommandEncoder.prototype.finish;
+        GPUCommandEncoder.prototype.finish = function (descriptor) {
+          const info = encoders.get(this);
+          if (info?.slot != null) {
+            const bytes = info.passes.length * 16;
+            this.resolveQuerySet(info.slot.querySet, 0, info.passes.length * 2, info.slot.resolve, 0);
+            this.copyBufferToBuffer(info.slot.resolve, 0, info.slot.read, 0, bytes);
+          }
+          const buffer = finish.call(this, descriptor);
+          if (info?.slot != null) submitted.set(buffer, { ...info, frame: gpuTiming.frame });
+          return buffer;
+        };
+        const submit = GPUQueue.prototype.submit;
+        GPUQueue.prototype.submit = function (buffers) {
+          const result = submit.call(this, buffers);
+          for (const buffer of buffers) {
+            const info = submitted.get(buffer);
+            if (info === undefined) continue;
+            const { slot } = info;
+            const order = gpuTiming.submits++;
+            const read = slot.read.mapAsync(GPUMapMode.READ).then(() => {
+              const ticks = new BigInt64Array(slot.read.getMappedRange().slice(0, info.passes.length * 16));
+              slot.read.unmap();
+              pools.get(slot.device).push(slot);
+              for (const [i, pass] of info.passes.entries()) {
+                gpuTiming.readings.push({
+                  ...pass,
+                  order: order + i / SLOT_QUERIES,
+                  frame: info.frame,
+                  beginNs: ticks[i * 2],
+                  endNs: ticks[i * 2 + 1],
+                });
+              }
+            });
+            gpuTiming.pending.add(read);
+            read.finally(() => gpuTiming.pending.delete(read));
+          }
+          return result;
+        };
+      };
+
+      // The frames `sample` timed, each as its passes in submission order.
+      const gpuFrames = async () => {
+        while (gpuTiming.pending.size > 0) await Promise.all([...gpuTiming.pending]);
+        const frames = new Map();
+        for (const reading of gpuTiming.readings) {
+          if (reading.frame < 0) continue;
+          if (!frames.has(reading.frame)) frames.set(reading.frame, []);
+          frames.get(reading.frame).push(reading);
+        }
+        // Chrome rounds timestamps unless WebGPU developer features are on,
+        // so the largest power of two dividing every tick is the resolution.
+        let grainNs = null;
+        for (const { beginNs, endNs } of gpuTiming.readings) {
+          for (const t of [beginNs, endNs]) {
+            if (t <= 0n) continue;
+            const grain = t & -t;
+            if (grainNs === null || grain < grainNs) grainNs = grain;
+          }
+        }
+        const untimed = gpuTiming.untimed;
+        gpuTiming.readings = [];
+        gpuTiming.untimed = [];
+        gpuTiming.frame = -1;
+        return {
+          untimed,
+          grainNs: grainNs === null ? null : Number(grainNs),
+          frames: [...frames.values()].map((passes) =>
+            passes
+              .sort((a, b) => a.order - b.order)
+              .map(({ kind, encoder, resolves, depth, beginNs, endNs }) => ({
+                kind,
+                encoder,
+                resolves,
+                depth,
+                ms: endNs > beginNs && beginNs > 0n ? Number(endNs - beginNs) / 1e6 : null,
+              })),
+          ),
+        };
+      };
+
       const freshCanvas = () => {
         const canvas = document.createElement('canvas');
         canvas.id = 'stage';
@@ -232,7 +391,9 @@
           const tick = (ts) => {
             if (previous !== null && seen >= warmup) intervals.push(ts - previous);
             previous = ts;
+            gpuTiming.frame = seen >= warmup ? seen : -1;
             const timings = work(ts);
+            gpuTiming.frame = -1;
             if (seen >= warmup) {
               for (const [name, ms] of Object.entries(timings)) (steps[name] ??= []).push(ms);
             }
@@ -258,8 +419,12 @@
 
       // `still` is the cost of holding the graph on screen, without a camera
       // move's own cost.
-      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode, hit) => {
+      // `parts` draws the nodes, the edges or both, so a pass's GPU time can
+      // be split between them by subtraction.
+      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode, hit, parts) => {
         const { group, bend } = EDGE_STYLES[edgeStyle];
+        const drawNodes = parts === 'all' || parts === 'nodes';
+        const drawEdges = parts === 'all' || parts === 'edges';
         const { home, links, bounds } = buildGraph(count);
         const richData = nodeMode === 'rich' ? richDataFor(count, links) : null;
         const heapBefore = heap();
@@ -267,10 +432,10 @@
         const renderer = await createRenderer({
           canvas: freshCanvas(),
           backend: 'webgpu',
-          nodes: nodesAt(home),
+          nodes: drawNodes ? nodesAt(home) : [],
           edgeGroups: [{ id: 'edges', ...group }],
         });
-        renderer.setEdges('edges', edgesAt(home, links, bend));
+        if (drawEdges) renderer.setEdges('edges', edgesAt(home, links, bend));
         renderer.camera.setViewport({ width: 1280, height: 720, devicePixelRatio: window.devicePixelRatio });
         renderer.camera.fitBounds(bounds);
         if (zoom !== null) renderer.camera.setZoom(zoom);
@@ -321,6 +486,7 @@
           timings.render = performance.now() - start;
           return timings;
         });
+        const stillGpu = await gpuFrames();
         const stillElements = overlay === null ? null : overlay.activeCount;
         let flowPixels = 0;
         let previousTs = null;
@@ -330,12 +496,14 @@
           const nodes = nodesAt(centres);
           const edges = edgesAt(centres, links, bend);
           const t1 = performance.now();
-          renderer.setNodes(nodes);
+          if (drawNodes) renderer.setNodes(nodes);
           const t2 = performance.now();
-          renderer.setEdges('edges', edges);
+          if (drawEdges) renderer.setEdges('edges', edges);
           const t3 = performance.now();
-          const timings = { input: t1 - t0, setNodes: t2 - t1, setEdges: t3 - t2 };
-          if (group.style.dash !== undefined) {
+          const timings = { input: t1 - t0 };
+          if (drawNodes) timings.setNodes = t2 - t1;
+          if (drawEdges) timings.setEdges = t3 - t2;
+          if (drawEdges && group.style.dash !== undefined) {
             const dt = previousTs === null ? 0 : (ts - previousTs) / 1000;
             flowPixels = advanceDashFlow(flowPixels, DASH.speedPixelsPerSecond, dt, DASH.periodPixels);
             renderer.setEdgeStyle('edges', { halfWidthPixels: 1, alpha: 1, dashFlowPixels: flowPixels });
@@ -367,6 +535,7 @@
           timings.render = performance.now() - t4;
           return timings;
         });
+        const animatedGpu = await gpuFrames();
         const heapAfter = heap();
         const backend = renderer.backend;
         const drawnZoom = renderer.camera.zoom;
@@ -379,14 +548,15 @@
           edges: links.length,
           edgeStyle,
           nodeMode,
+          parts,
           elements: overlay === null ? null : { still: stillElements, animated: animatedElements },
           hit: hit ? { indexMs: hitIndexMs, hits } : null,
           backend,
           zoom: drawnZoom,
           buildMs,
           heap: { before: heapBefore, built: heapBuilt, afterAnimated: heapAfter },
-          still,
-          animated,
+          still: { ...still, gpu: stillGpu },
+          animated: { ...animated, gpu: animatedGpu },
         };
       };
 

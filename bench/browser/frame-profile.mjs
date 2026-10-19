@@ -3,7 +3,10 @@
  * size, edge style and node mode, optionally with node hit testing, still and
  * animating (M4.10a). With `--memory` it measures instead what each pass holds
  * in GPU buffers and textures and in the JavaScript heap, and what a moving
- * pass allocates per frame. Evidence, not a gate: see the README.
+ * pass allocates per frame. With `--gpu` it adds the GPU time of every pass
+ * from timestamp queries (M4.10), and `--parts` draws the nodes or the edges
+ * alone so that time can be split between them. Evidence, not a gate: see the
+ * README.
  *
  * ```
  * pnpm --filter @prnt/dagr-render --filter @prnt/dagr-react build   # the page imports from dist
@@ -13,6 +16,7 @@
  *   node bench/browser/frame-profile.mjs
  *   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
  *   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
+ *   # [--gpu] [--parts=all,nodes,edges]
  * ```
  *
  * The page asks for `backend: 'webgpu'`, so a browser without an adapter fails
@@ -62,6 +66,11 @@ const nodeModes = option('nodes', 'shapes').split(',');
 for (const nodeMode of nodeModes) {
   if (!NODE_MODES.includes(nodeMode)) throw new Error(`--nodes takes ${NODE_MODES.join(', ')}, got ${nodeMode}`);
 }
+const PARTS = ['all', 'nodes', 'edges'];
+const partsList = option('parts', 'all').split(',');
+for (const parts of partsList) {
+  if (!PARTS.includes(parts)) throw new Error(`--parts takes ${PARTS.join(', ')}, got ${parts}`);
+}
 const frames = count('frames', option('frames', '300'));
 const warmup = count('warmup', option('warmup', '60'));
 const zoomOption = option('zoom', 'fit');
@@ -73,6 +82,10 @@ const dpr = positive('dpr', option('dpr', '1'));
 const headless = process.argv.includes('--headless');
 const hit = process.argv.includes('--hit');
 const memory = process.argv.includes('--memory');
+const gpu = process.argv.includes('--gpu');
+if (memory && (gpu || partsList.join() !== 'all')) {
+  throw new Error('--memory builds the whole scene and counts every buffer, so it takes neither --gpu nor --parts');
+}
 
 function pageHtml() {
   const fromRender = createRequire(`${ROOT}packages/render/package.json`);
@@ -109,10 +122,46 @@ function intervals(values, tickMs) {
   return { ...summarise(values), pastOneTick: Math.round((missed / values.length) * 1000) / 10 };
 }
 
+// Each frame's passes in submission order, summarised by position. A frame
+// whose pass count differs from the most common one is counted, not summarised,
+// so a pass is never compared with a different pass. A pass without a usable
+// pair of timestamps is counted as `noReading`, and a frame with one is left
+// out of `sum`.
+function gpuPasses({ frames: perFrame, untimed, grainNs }) {
+  const why = {};
+  for (const { kind, why: reason } of untimed) why[`${kind}: ${reason}`] = (why[`${kind}: ${reason}`] ?? 0) + 1;
+  if (perFrame.length === 0) return { frames: 0, untimed: why, grainNs, passes: [] };
+  const counts = new Map();
+  for (const f of perFrame) counts.set(f.length, (counts.get(f.length) ?? 0) + 1);
+  const usual = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const kept = perFrame.filter((f) => f.length === usual);
+  const passes = kept[0].map(({ kind, encoder, resolves, depth }, i) => {
+    const read = kept.map((f) => f[i].ms).filter((ms) => ms !== null);
+    return {
+      kind,
+      encoder,
+      resolves,
+      depth,
+      noReading: kept.length - read.length,
+      ms: read.length === 0 ? null : summarise(read),
+    };
+  });
+  const whole = kept.filter((f) => f.every((p) => p.ms !== null));
+  return {
+    frames: kept.length,
+    otherFrames: perFrame.length - kept.length,
+    untimed: why,
+    grainNs,
+    passes,
+    sum: whole.length === 0 ? null : summarise(whole.map((f) => f.reduce((total, p) => total + p.ms, 0))),
+  };
+}
+
 function mode(run, tickMs) {
   return {
     interval: intervals(run.intervals, tickMs),
     steps: Object.fromEntries(Object.entries(run.steps).map(([name, v]) => [name, summarise(v)])),
+    ...(gpu && run.gpu !== undefined ? { gpu: gpuPasses(run.gpu) } : {}),
   };
 }
 
@@ -226,16 +275,19 @@ if (memory) {
   process.exit();
 }
 
+if (gpu) await page.evaluate(() => window.timeGpuPasses());
 const runs = [];
 for (const size of sizes) {
   for (const style of edgeStyles) {
     for (const nodeMode of nodeModes) {
-      runs.push(
-        await page.evaluate(
-          ([n, w, f, z, e, m, h]) => window.profile(n, w, f, z, e, m, h),
-          [size, warmup, frames, zoom, style, nodeMode, hit],
-        ),
-      );
+      for (const parts of partsList) {
+        runs.push(
+          await page.evaluate(
+            ([n, w, f, z, e, m, h, p]) => window.profile(n, w, f, z, e, m, h, p),
+            [size, warmup, frames, zoom, style, nodeMode, hit, parts],
+          ),
+        );
+      }
     }
   }
 }
@@ -249,6 +301,7 @@ const rows = runs.map((run) => ({
   edges: run.edges,
   edgeStyle: run.edgeStyle,
   nodeMode: run.nodeMode,
+  parts: run.parts,
   elements: run.elements,
   hit:
     run.hit === null
@@ -269,7 +322,7 @@ const report = {
   launch,
   adapter,
   viewport: { width: 1280, height: 720, devicePixelRatio: dpr },
-  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit },
+  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit, gpu, parts: partsList },
   tickMs,
   control,
   rows,
@@ -277,6 +330,24 @@ const report = {
 };
 console.log(JSON.stringify(report, null, 1));
 if (rows.some((row) => row.backend !== 'webgpu')) process.exitCode = 1;
+if (gpu) {
+  const modes = rows.flatMap((row) => [row.still, row.animated]);
+  if (modes.some((m) => m.gpu.frames === 0 || Object.keys(m.gpu.untimed).length > 0)) {
+    console.error("a row has passes without timestamps; see each mode's gpu.untimed and the warnings");
+    process.exitCode = 1;
+  }
+  if (modes.some((m) => m.gpu.passes.some((p) => p.noReading > 0))) {
+    console.error("a pass has frames without a usable reading; see each pass's noReading");
+    process.exitCode = 1;
+  }
+  const coarsest = Math.max(...modes.map((m) => m.gpu.grainNs ?? 0));
+  if (coarsest >= 1000) {
+    console.error(
+      `timestamps are rounded to ${coarsest} ns; DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features turns that off`,
+    );
+    process.exitCode = 1;
+  }
+}
 if (![60, 120].some((hz) => Math.abs(tickMs * hz - 1000) <= 100)) {
   console.error(`tick ${tickMs} ms is not a 60 or 120 Hz frame; the control was throttled`);
   process.exitCode = 1;

@@ -182,6 +182,7 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   node bench/browser/frame-profile.mjs
   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
+  # [--gpu] [--parts=all,nodes,edges]
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
@@ -525,6 +526,113 @@ previous row left for the collector, so it is not a memory figure for a pass;
 the `--memory` mode is. Every renderer logs `THREE.AttributeNode: Vertex
 attribute "position" not found on geometry.` once, which nothing here has
 traced yet.
+
+## GPU time per pass on WebGPU (M4.10)
+
+```
+DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features \
+DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  node bench/browser/frame-profile.mjs --gpu --parts=all,nodes,edges --edges=straight,smooth
+```
+
+`--gpu` adds the GPU time of every pass the renderer encodes to the frame
+profile's rows. Before the first renderer exists, the page wraps
+`GPUDevice.createCommandEncoder`, `GPUCommandEncoder.beginRenderPass`,
+`beginComputePass` and `finish`, and `GPUQueue.submit`: every pass gets
+`timestampWrites` into a query set the page owns, `finish` resolves them, and
+after `submit` the page maps the result and files each pass's end minus its
+beginning under the frame that submitted it. Nothing in the library changes,
+and three requests every feature the adapter has, `timestamp-query` included.
+Each mode reports its passes in submission order, with the encoder's label,
+whether the pass resolves a multisampled target, and the median and
+percentiles of its time, and `sum` adds a frame's passes together.
+
+`--parts` draws the nodes, the edges or both (`all`, the default) over the
+same graph, so a pass can be split between them by subtraction: the nodes'
+share is `all` minus the edges alone, the edges' is `all` minus the nodes
+alone, and what is left is the pass's own cost (its clear, its multisample
+resolve and its fixed overhead). A pass is not exactly additive, so the split is
+good to a few hundredths of a millisecond, not more.
+
+Three things about the timestamps, all seen in Chrome 155 on the Apple M4, decide
+what the page uses and when the runner fails.
+
+- **Chrome rounds them** to 65,536 ns unless WebGPU developer features are on,
+  too coarse for passes that take a tenth of a millisecond. The page reports
+  the largest power of two dividing every tick as `grainNs`, and the runner
+  exits non-zero above 1,000 ns. With `--enable-webgpu-developer-features` it
+  was 1 ns.
+- **A pass with no draw call gets an end of 0.** That is why there is no
+  `--parts` for an empty scene: its scene pass has no draw. The page files such
+  a pass as `noReading`, and the runner exits non-zero if any pass has one.
+- **Timestamps from different command buffers are not in submission order**,
+  sometimes by hundreds of milliseconds, so the page orders passes by when they
+  were submitted and never subtracts one pass's timestamp from another's.
+
+It also exits non-zero if a pass ran without timestamps (`untimed`, with the
+reason). Time spent between passes, and the queue's buffer writes from
+`setNodes` and `setEdges`, are outside every pass and not counted.
+
+**What it found on 2026-10-19**, Apple M4 Mac mini, Google Chrome
+155.0.8059.82 headed with `--enable-webgpu-developer-features`, adapter `apple`
+`metal-3` (`Apple M4`), not a fallback, `renderer.backend` `webgpu` on every
+row, `grainNs` 1, no untimed pass and no missing reading, tick 16.7 ms, load
+average 2.6 to 4.3. Every frame has two render passes: the scene, drawn into the
+4x multisampled `rgba16float` target and resolved (the `resolves` flag), and
+three's output pass, which draws that onto the canvas. Viewport 1280 by 720 CSS
+pixels. Two runs of the DPR 1 plan agreed on every GPU median within 0.01 ms;
+the table is the second. Times are the still mode's median in milliseconds; the
+animated mode matched them within 0.02 ms on every row, its 95th percentile
+reaching 0.1 ms higher on two DPR 2 rows.
+
+| Nodes | Edges | DPR, zoom | Scene pass: all | nodes alone | edges alone | Output pass | Frame `sum` | Animated past one tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1,000 | straight | 1, fit | 0.18 | 0.17 | 0.16 | 0.10 | 0.27 | 0% |
+| 2,500 | straight | 1, fit | 0.21 | 0.18 | 0.17 | 0.10 | 0.32 | 0% |
+| 5,000 | straight | 1, fit | 0.27 | 0.20 | 0.20 | 0.10 | 0.37 | 0% |
+| 10,000 | straight | 1, fit | 0.40 | 0.24 | 0.27 | 0.10 | 0.50 | 0% |
+| 1,000 | smooth | 1, fit | 0.21 | 0.17 | 0.19 | 0.10 | 0.31 | 0% |
+| 2,500 | smooth | 1, fit | 0.29 | 0.18 | 0.24 | 0.10 | 0.39 | 0% |
+| 5,000 | smooth | 1, fit | 0.42 | 0.20 | 0.34 | 0.10 | 0.52 | 0.3% |
+| 10,000 | smooth | 1, fit | 0.75 | 0.23 | 0.61 | 0.10 | 0.86 | 82% |
+| 10,000 | straight | 2, fit | 0.81 | 0.67 | 0.65 | 0.40 | 1.21 | 0% |
+| 10,000 | smooth | 2, fit | 1.12 | 0.67 | 0.90 | 0.40 | 1.51 | 80% |
+| 10,000 | straight | 2, 1 | 0.70 | 0.66 | 0.62 | 0.37 | 1.06 | 0% |
+| 10,000 | smooth | 2, 1 | 0.83 | 0.66 | 0.76 | 0.37 | 1.20 | 75% |
+
+Split by subtraction at 10,000 nodes and `fit`, in milliseconds:
+
+| DPR | Edges | Node draw | Edge draw | Scene pass's own cost | Output pass |
+| --- | --- | --- | --- | --- | --- |
+| 1 | straight | 0.13 | 0.16 | 0.11 | 0.10 |
+| 1 | smooth | 0.14 | 0.52 | 0.09 | 0.10 |
+| 2 | straight | 0.16 | 0.14 | 0.51 | 0.40 |
+| 2 | smooth | 0.22 | 0.45 | 0.45 | 0.40 |
+
+- **The GPU is not what stands between this scene and 60 Hz.** The most any
+  frame measured spends in GPU passes is 1.5 ms at the median, 10,000 nodes
+  with smooth edges at DPR 2, under a tenth of the 16.7 ms tick. The rows that
+  miss a tick are the animated smooth ones, and they miss it on the CPU: their
+  `setEdges` is 26 ms, as the edge-style table above found.
+- **At DPR 2 most of the GPU time is the canvas, not the graph.** The output
+  pass and the scene pass's own cost scale with device pixels, from 0.2 ms
+  together at DPR 1 to 0.9 ms at DPR 2, against 0.3 to 0.7 ms for drawing every
+  node and edge. That bounds what turning off multisampling could save on this
+  GPU at about half a millisecond a frame at DPR 2, which is the bandwidth half
+  of the question the memory section left open; it does not settle it, since
+  the visual comparison is still missing.
+- **A smooth edge costs the GPU about three times a straight one** at DPR 1,
+  0.52 against 0.16 ms for 13,169 edges, from the tessellated triangles. That is
+  small next to the 26 ms it costs the CPU to tessellate them every frame.
+- **Drawing follows what is on screen.** At zoom 1 most of the graph is outside
+  the viewport, and the node and edge shares fall to under 0.1 ms each while
+  the per-pixel costs stay.
+
+So on this machine, at 10,000 nodes, M4.10's frame is CPU-bound: about 0.5 ms
+of GPU at DPR 1 and 1.2 at DPR 2 with straight edges, against 5 to 8 ms of CPU
+updates. What is still open for M4.10: driving the motion through
+`createSceneMotion` with springs in flight rather than a scripted sway, an ID
+buffer pass (M4.8b has none yet), and recording a local baseline.
 
 ## What the overlay harness measures, and what it does not
 
