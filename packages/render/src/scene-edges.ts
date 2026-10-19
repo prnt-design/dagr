@@ -343,8 +343,7 @@ class EdgeGroup implements GpuResource {
     geometry.setAttribute(COLOR, new BufferAttribute(colors, 3));
     geometry.setAttribute(INTENSITY, intensityAttribute);
     geometry.setIndex(new BufferAttribute(tessellated.index, 1));
-    // Explicit, because three defaults a draw range's count to Infinity and an
-    // empty group has no attributes to read either.
+    // Explicit, because three defaults a draw range's count to Infinity.
     geometry.setDrawRange(0, tessellated.indexCount);
 
     const previous = this.mesh.geometry;
