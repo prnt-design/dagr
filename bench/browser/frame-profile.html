@@ -228,6 +228,7 @@
             stats: () => null,
           };
         }
+        if (kind !== 'springs') throw new Error(`no motion ${kind}`);
         const templates = new Map(nodesAt(home).map((node) => [node.id, node]));
         const targetsAt = (centres) => ({
           nodes: centres.map((center, i) => ({ id: `n${i}`, center })),
