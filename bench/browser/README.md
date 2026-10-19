@@ -6,7 +6,8 @@ and `label-throughput.mjs` opens it, runs a plan and prints the numbers.
 `card-heights.mjs` renders every campaign card and reports the tallest per kind.
 `frame-profile.html` and `frame-profile.mjs` time the shape renderer's frames on
 WebGPU by graph size, edge style, node mode and node hit testing, still and
-animating.
+animating, and with `--memory` measure what each pass holds in GPU and heap
+memory.
 `backend-probe.html` and `backend-probe.mjs` are the odd ones out and the
 directory name undersells them: they do not measure anything, they CHECK
 something, which is which backend `@prnt/dagr-render` comes up on and whether the
@@ -431,13 +432,14 @@ does not cover: edges and ports are not hit targets on the CPU path, and GPU
 picking (M4.8b) has no pass to measure yet, so its cost is still unpriced.
 
 **Memory per pass, on 2026-10-19.** `--memory` replaces the frame timing with
-a step-by-step build of the same scene, the order `DagrCanvas` builds it in:
+a step-by-step build of the same scene, roughly the order `DagrCanvas` builds
+it in (which creates its overlay with the renderer rather than after the edges):
 the graph, an empty renderer, its nodes, its edges, then (with
 `--nodes=rich`) the rich-node tiers and (with `--hit`) one hit index, then
 `--frames` frames moving only the nodes, `--frames` moving only the edges, and
-`dispose`. One row runs first and is not reported, since the page's first
-renderer, overlay and hit index also pay for loading and compiling what every
-later one reuses. After each step the runner reads two things.
+`dispose`. `--warmup` does not apply. One row runs first and is not
+reported, since the page's first renderer, overlay and hit index also pay for
+loading and compiling what every later one reuses. After each step the runner reads two things.
 
 - GPU memory: every buffer and texture created through
   `GPUDevice.createBuffer` and `createTexture` and not yet destroyed (by itself
@@ -459,9 +461,10 @@ format has no byte size in the page's table.
 Same machine, browser and adapter as above, headed, `renderer.backend`
 `webgpu` on every row, viewport 1280 by 720 at DPR 1, zoom `fit`, 301 frames
 per move step, load average 3.3 to 4.1. Two runs of
-`--edges=straight,dashed,smooth --nodes=shapes,rich --hit` gave identical GPU bytes on every step except
-moving smooth edges, which differed by under 1 KB, and retained heaps within
-0.1 MB; the table is the second. MB is 10^6 bytes.
+`--edges=straight,dashed,smooth --nodes=shapes,rich --hit` gave identical live
+GPU bytes on every step except moving smooth edges, which differed by under 1
+KB live (under 4 KB allocated over 301 frames), and retained heaps within 0.1
+MB; the table is the second. MB is 10^6 bytes.
 
 | Nodes | Node buffers | Edge buffers, straight | dashed | smooth | GPU bytes a frame, moving nodes | moving edges, straight | moving edges, smooth | Retained heap: graph | nodes | edges | rich tiers | hit index |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -476,9 +479,10 @@ colour target (29.5 MB) and its `depth24plus` depth (14.7 MB), and
 single-sampled copies of both (7.4 and 3.7 MB). They scale with the canvas's
 device pixels: one 10,000-node row at DPR 2 held 221.2 MB of them, four times
 as much, with node and edge buffers unchanged. The `rich tiers` column comes
-from the `rich` rows, the rest from the `shapes` rows, which the `rich` rows
-matched within 0.04 MB. At `fit` no tier is open, so the rich tiers' figure is
-their bookkeeping, not attached elements. After `dispose` no row left a GPU
+from the `rich` rows, the rest from the `shapes` rows (and the other heap
+columns from the straight ones), which the `rich` rows matched within 0.04
+MB. At `fit` no tier is open, so the rich tiers' figure is their bookkeeping,
+not attached elements. After `dispose` no row left a GPU
 byte live.
 
 - **The render targets are most of the GPU memory, and multisampling is most
@@ -501,10 +505,10 @@ byte live.
 - **A smooth edge costs 5.6 times a straight one**, 936 bytes against 168,
   from the tessellated points; a dash adds 16 bytes an edge. Nodes are 75
   bytes each.
-- **The node and edge passes keep a CPU copy of what they upload.** Most of
-  their retained heap is typed arrays: 0.79 MB for the nodes and 2.42 MB for
-  straight or dashed edges at 10,000 nodes, about the size of their GPU
-  buffers, and 13.4 MB for smooth edges.
+- **The node and edge passes keep a CPU copy of what they upload.** At
+  10,000 nodes their typed arrays are 0.79 MB of the nodes' 1.72 MB of
+  retained heap and 2.42 of the straight edges' 3.23 MB, about the size of
+  their GPU buffers, and 13.4 of the smooth edges' 14.2 MB.
 - **Rich tiers are the largest heap item without open tiers**, 1.0 KB a
   node, about ten times the graph's own arrays and 3.6 times the hit index's
   276 bytes. Every heap column grows about linearly with the node count.
