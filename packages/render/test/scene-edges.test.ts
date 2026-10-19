@@ -116,6 +116,20 @@ describe('SceneEdges', () => {
     scene.dispose();
   });
 
+  it('carries its attributes before its edges arrive, so a first frame drawn empty still binds them', () => {
+    // three builds a mesh's pipeline from the geometry it first draws and keeps
+    // it when the geometry is swapped, so a group drawn once without these never
+    // uploads them and draws nothing, whatever edges it is given afterwards.
+    const scene = new SceneEdges(groups());
+    const before = Object.keys(scene.meshes[0]?.geometry.attributes ?? {}).sort();
+    scene.setEdges(ROUTED, [edge('e1', straight)]);
+    const after = Object.keys(scene.meshes[0]?.geometry.attributes ?? {}).sort();
+    expect(after.length).toBeGreaterThan(0);
+    expect(before).toEqual(after);
+    expect(scene.meshes[0]?.geometry.drawRange.count).toBe(6);
+    scene.dispose();
+  });
+
   it('fills a group\'s buffers from its routes', () => {
     const scene = new SceneEdges(groups());
     scene.setEdges(ROUTED, [edge('e1', straight)]);

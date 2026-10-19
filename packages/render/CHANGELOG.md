@@ -9,6 +9,14 @@ which unit a number is in. A caller upgrading past one of those sees a drawing
 in a different place, and no compiler tells them. "Behaviour changed, types did
 not" is the category this file has a heading for.
 
+## Unreleased
+
+- Fix: an edge group drawn once before it had any edges now draws the edges it
+  is given afterwards. Before, three built the group's pipeline without its
+  vertex attributes on that empty first frame, so the edges never appeared, on
+  WebGPU and WebGL 2 alike. `DagrCanvas` hit this whenever its graph started
+  with no edges.
+
 ## 0.1.4
 
 - Lockstep release with the explorer's drawer-aware camera and icon controls. No runtime API changes in this package.

@@ -276,13 +276,12 @@ class EdgeGroup implements GpuResource {
     this.id = group.id;
     this.#uniforms = uniforms;
     this.#curve = group.curve;
-    // Explicitly nothing, because three defaults a draw range's count to
-    // Infinity: a group declared before its edges arrive has no attributes to
-    // read either, and "draw everything" over an empty buffer is a different
-    // kind of nothing from "draw nothing".
-    const geometry = new BufferGeometry();
-    geometry.setDrawRange(0, 0);
-    this.mesh = new Mesh(geometry, material);
+    // A group declared before its edges arrive still gets every attribute, empty,
+    // because three builds the pipeline from the geometry it first draws and
+    // keeps it when the geometry is swapped: drawn once without them, the group
+    // never uploads them and draws nothing whatever edges it is given later.
+    this.mesh = new Mesh(new BufferGeometry(), material);
+    this.setEdges([]);
     // The bounding sphere three would compute is of the CENTRELINE, and a
     // ribbon is drawn up to its half width outside that, in pixels, which no
     // geometry knows. Rather than inflate a sphere by a quantity that depends
