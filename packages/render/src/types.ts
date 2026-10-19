@@ -321,7 +321,7 @@ export interface RendererOptions {
    * Fixed at construction for the reason the two shape families are: a mesh
    * created later would have to be added to a `Scene` the renderer owns and the
    * edge scene does not, which is a reference pointing the wrong way. An
-   * unfilled group costs one material and an empty geometry.
+   * unfilled group costs one material and a geometry of zero-length attributes.
    */
   readonly edgeGroups?: readonly SceneEdgeGroup[];
 

@@ -539,8 +539,9 @@ function requireIntensity(value: number, field: string): number {
  * The groups are fixed at construction and their order is the draw order, for
  * the reason `SceneNodes` builds both shape families up front: a mesh created
  * later would have to be added to a `Scene` this object does not hold, which is
- * a reference pointing the wrong way. An empty group costs one material and an
- * empty geometry, and three skips a draw whose index count is zero.
+ * a reference pointing the wrong way. An empty group costs one material and a
+ * geometry of zero-length attributes, and its draw range of zero rasterises
+ * nothing.
  */
 export class SceneEdges implements GpuResource {
   readonly #groups: ReadonlyMap<string, EdgeGroup>;
