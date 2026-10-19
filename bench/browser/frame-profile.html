@@ -55,6 +55,7 @@
         createHtmlOverlay,
         createRenderer,
         createRichNodes,
+        createSceneMotion,
       } from '/packages/render/dist/index.js';
       // The module file rather than the package index, which imports React.
       import { createNodeHitIndex } from '/packages/react/dist/node-hit.js';
@@ -200,6 +201,76 @@
 
       const swayed = (home, t) =>
         home.map((p, i) => ({ x: p.x + SWAY_WORLD * Math.sin(t * 0.004 + i * 0.37), y: p.y }));
+
+      // With the default 0.12 s half-life a 20 world unit move takes about a
+      // second to come to rest, so retargeting every half second keeps every
+      // spring in flight on every frame.
+      const RETARGET_MS = 500;
+
+      /**
+       * The animated mode's source of node centres and edge routes each frame.
+       * `sway` computes them from the clock. `springs` hands every node and
+       * edge a new target through `createSceneMotion` every `RETARGET_MS` and
+       * draws what `advance` returns, the way `DagrCanvas`'s animation frame
+       * does.
+       */
+      const motionSource = (kind, home, links, bend, bounds) => {
+        if (kind === 'sway') {
+          return {
+            next: (ts, timings) => {
+              const t0 = performance.now();
+              const centres = swayed(home, ts);
+              const nodes = nodesAt(centres);
+              const edges = edgesAt(centres, links, bend);
+              timings.input = performance.now() - t0;
+              return { nodes, edges };
+            },
+            stats: () => null,
+          };
+        }
+        if (kind !== 'springs') throw new Error(`no motion ${kind}`);
+        const templates = new Map(nodesAt(home).map((node) => [node.id, node]));
+        const targetsAt = (centres) => ({
+          nodes: centres.map((center, i) => ({ id: `n${i}`, center })),
+          edges: edgesAt(centres, links, bend).map(({ id, points }) => ({ id, points })),
+        });
+        const motion = createSceneMotion();
+        const start = targetsAt(home);
+        motion.resync({ nodes: start.nodes, edges: start.edges, bounds });
+        let lastRetarget = null;
+        let previousTs = null;
+        let frames = 0;
+        let settledFrames = 0;
+        let retargets = 0;
+        return {
+          next: (ts, timings) => {
+            if (lastRetarget === null || ts - lastRetarget >= RETARGET_MS) {
+              const target = targetsAt(swayed(home, ts));
+              const t0 = performance.now();
+              motion.apply({
+                nodes: { added: [], removed: [], moved: target.nodes },
+                edges: { added: [], removed: [], rerouted: target.edges },
+              });
+              timings.apply = performance.now() - t0;
+              lastRetarget = ts;
+              retargets += 1;
+            }
+            const dt = previousTs === null ? 0 : Math.max(0, ts - previousTs) / 1000;
+            previousTs = ts;
+            const t1 = performance.now();
+            const frame = motion.advance(dt);
+            const t2 = performance.now();
+            const nodes = frame.nodes.map((node) => ({ ...templates.get(node.id), center: node.center }));
+            const edges = frame.edges.map(({ id, points }) => ({ id, points, color: EDGE_COLOR }));
+            timings.advance = t2 - t1;
+            timings.input = performance.now() - t2;
+            frames += 1;
+            if (frame.settled) settledFrames += 1;
+            return { nodes, edges };
+          },
+          stats: () => ({ frames, settledFrames, retargets }),
+        };
+      };
 
       // A pointer sweeping the viewport, so queries land on nodes and
       // background alike.
@@ -421,7 +492,7 @@
       // move's own cost.
       // `parts` draws the nodes, the edges or both, so a pass's GPU time can
       // be split between them by subtraction.
-      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode, hit, parts) => {
+      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode, hit, parts, motion) => {
         const { group, bend } = EDGE_STYLES[edgeStyle];
         const drawNodes = parts === 'all' || parts === 'nodes';
         const drawEdges = parts === 'all' || parts === 'edges';
@@ -490,17 +561,15 @@
         const stillElements = overlay === null ? null : overlay.activeCount;
         let flowPixels = 0;
         let previousTs = null;
+        const source = motionSource(motion, home, links, bend, bounds);
         const animated = await sample(warmup, frames, (ts) => {
-          const t0 = performance.now();
-          const centres = swayed(home, ts);
-          const nodes = nodesAt(centres);
-          const edges = edgesAt(centres, links, bend);
+          const timings = {};
+          const { nodes, edges } = source.next(ts, timings);
           const t1 = performance.now();
           if (drawNodes) renderer.setNodes(nodes);
           const t2 = performance.now();
           if (drawEdges) renderer.setEdges('edges', edges);
           const t3 = performance.now();
-          const timings = { input: t1 - t0 };
           if (drawNodes) timings.setNodes = t2 - t1;
           if (drawEdges) timings.setEdges = t3 - t2;
           if (drawEdges && group.style.dash !== undefined) {
@@ -549,6 +618,8 @@
           edgeStyle,
           nodeMode,
           parts,
+          motion,
+          springs: source.stats(),
           elements: overlay === null ? null : { still: stillElements, animated: animatedElements },
           hit: hit ? { indexMs: hitIndexMs, hits } : null,
           backend,

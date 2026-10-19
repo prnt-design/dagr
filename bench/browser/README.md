@@ -7,7 +7,8 @@ and `label-throughput.mjs` opens it, runs a plan and prints the numbers.
 `frame-profile.html` and `frame-profile.mjs` time the shape renderer's frames on
 WebGPU by graph size, edge style, node mode and node hit testing, still and
 animating, with `--memory` measure what each pass holds in GPU and heap
-memory, and with `--gpu` the GPU time of each pass.
+memory, with `--gpu` the GPU time of each pass, and with `--motion=springs`
+animate through `createSceneMotion`.
 `backend-probe.html` and `backend-probe.mjs` are the odd ones out and the
 directory name undersells them: they do not measure anything, they CHECK
 something, which is which backend `@prnt/dagr-render` comes up on and whether the
@@ -182,17 +183,18 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   node bench/browser/frame-profile.mjs
   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
-  # [--gpu] [--parts=all,nodes,edges]
+  # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs]
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
 with about 1.3 straight edges per node, through a renderer that asks for
 `backend: 'webgpu'`, so a browser without an adapter fails with
-`BACKEND_UNAVAILABLE` instead of measuring the fallback. Each size, edge style
-and node mode runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
+`BACKEND_UNAVAILABLE` instead of measuring the fallback. Each size, edge
+style, node mode, part and motion runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
 `animated` also replaces every node centre and every edge route each frame
-through `setNodes` and `setEdges`, which is what a consumer driving
-`createSceneMotion` hands the renderer while every spring is in flight. The
+through `setNodes` and `setEdges`, from a sway computed from the clock: the
+renderer's half of a frame with every spring in flight, without the scene
+motion's own cost (see "Springs in flight" below for that). The
 arrays are built before the clock starts on those two calls and timed as
 `input`. The report gives the interval between animation frames and the CPU
 time of each step (and, in `rich` rows, how many overlay elements were attached
@@ -636,9 +638,84 @@ Split by subtraction at 10,000 nodes and `fit`, in milliseconds:
 
 So on this machine, at 10,000 nodes, M4.10's frame is CPU-bound: about 0.5 ms
 of GPU at DPR 1 and 1.2 at DPR 2 with straight edges, against 5 to 7 ms of
-`setNodes` and `setEdges` on the CPU in these runs. What is still open for M4.10: driving the motion through
-`createSceneMotion` with springs in flight rather than a scripted sway, an ID
-buffer pass (M4.8b has none yet), and recording a local baseline.
+`setNodes` and `setEdges` on the CPU in these runs. The next section drives the
+same scene through `createSceneMotion`. Still open for M4.10: an ID buffer pass
+(M4.8b has none yet), and recording a local baseline.
+
+## Springs in flight on WebGPU (M4.10)
+
+```
+DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features \
+DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  node bench/browser/frame-profile.mjs --motion=sway,springs --edges=straight,smooth --gpu
+```
+
+`--motion` picks where the animated mode's centres and routes come from, once
+per value, `sway` by default. `sway` is the scripted move the sections above
+measured. `springs` builds a `createSceneMotion` over the graph before the
+clock starts, and every 500 ms hands it a delta moving every node and
+rerouting every edge to a new sway position, timed as `apply` on the frames it
+happens. Every frame then calls `advance` with the time since the last frame,
+timed as `advance`, and turns its nodes and edges into scene records, timed as
+`input`, before `setNodes`, `setEdges` and `render`, which is the order
+`DagrCanvas`'s animation frame runs them in. With the default 0.12 s half-life
+a 20 world unit move needs about a second to come to rest, so every spring is
+in flight on every frame. The row's `springs` reports how many frames, warm-up
+included, `advance` called settled, and how many retargets ran. Building a
+retarget's delta from the sway stands in for a layout's output and is not
+timed. `--memory` refuses `--motion`.
+
+**What it found on 2026-10-19**, Apple M4 Mac mini, Google Chrome
+155.0.8059.82 headed with `--enable-webgpu-developer-features`, adapter `apple`
+`metal-3` (`Apple M4`), not a fallback, `renderer.backend` `webgpu` on every
+row, tick 16.7 ms, DPR 1, `fit`, load average 3.4 to 5.7 (read with `uptime`
+before, between and after the runs). Two runs; the table is the second. CPU
+times are animated-mode medians in milliseconds; `apply` is the median over
+the retarget frames, about 10 of the 300 timed at 60 Hz. The first run
+differed most at 10,000 straight nodes (interval p95 18.6, 3% past one tick),
+5,000 smooth (`advance` 28.3, `setEdges` 29.3) and 2,500 smooth (23.3% past
+one tick).
+
+| Nodes | Edges | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Interval p95 | Past one tick | Sway past one tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1,000 | straight | 3.1 | 2.0 | 0.4 | 0.6 | 0.2 | 18.3 | 0% | 0% |
+| 2,500 | straight | 3.1 | 1.7 | 0.5 | 1.3 | 0.2 | 18.2 | 0% | 0% |
+| 5,000 | straight | 5.9 | 3.4 | 1.1 | 2.7 | 0.2 | 18.2 | 0% | 0% |
+| 10,000 | straight | 13.4 | 8.8 | 1.9 | 4.7 | 0.4 | 33.3 | 7.7% | 0% |
+| 1,000 | smooth | 2.5 | 3.0 | 0.2 | 4.1 | 0.2 | 18.3 | 0% | 0% |
+| 2,500 | smooth | 6.8 | 8.9 | 0.5 | 9.3 | 0.3 | 34.3 | 28.3% | 0% |
+| 5,000 | smooth | 24.7 | 35.2 | 1.0 | 34.5 | 0.9 | 133.3 | 94.3% | 0.3% |
+| 10,000 | smooth | 34.3 | 44.0 | 2.0 | 42.5 | 1.2 | 166.7 | 99.7% | 81.7% |
+
+- **At 10,000 nodes with straight edges the spring frame holds the tick at the
+  median and misses it on every retarget and on some frames between.** A frame
+  between retargets spends about 16 ms on the CPU (`advance` 8.8, `input` 0.6,
+  `setNodes` 1.9, `setEdges` 4.7, `render` 0.4), at the edge of the 16.7 ms
+  tick, so jitter tips some of them over. A retarget frame adds 13 to 15 ms of
+  `apply` and always misses. The first run missed 3% of frames, about the
+  share of retargets; the second missed 7.7%. The scripted sway at the same
+  size missed none.
+- **The springs, not the renderer, are the new cost.** `advance` is the
+  largest per-frame step on every straight row, and `apply` is larger still on
+  the frames it runs. With straight edges the
+  GPU `sum` matched this run's sway rows (0.52 ms at 10,000 nodes), so there the
+  motion changes what the CPU does, not what the GPU draws.
+- **Smooth edges miss the tick from 2,500 nodes.** Each smooth route has a bend
+  point, and the edge springs hand back more points than the route they were
+  given, so `setEdges` has more to tessellate: at 10,000 nodes it is 42 ms
+  against the sway's 26, and the GPU `sum` rises from this run's sway 0.85 to
+  1.15 ms. At
+  2,500 nodes `advance` and `setEdges` reach 15.1 and 16.4 ms at the 95th
+  percentile.
+- **`settled` stayed false** on every frame except 2 or 3 of the 360 (warm-up
+  included) in the 10,000 smooth rows. The cause was not traced.
+
+So on this machine M4.10's number is not met with springs in flight: 10,000
+nodes with straight edges hold 60 Hz at the median with no headroom and drop a
+frame on each retarget and on some between, and smooth edges hold it only to
+1,000 nodes.
+The CPU cost to cut is `advance` and `apply` in the scene motion, then
+`setEdges`.
 
 ## What the overlay harness measures, and what it does not
 

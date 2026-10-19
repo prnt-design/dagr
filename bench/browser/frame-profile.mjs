@@ -5,8 +5,9 @@
  * in GPU buffers and textures and in the JavaScript heap, and what a moving
  * pass allocates per frame. With `--gpu` it adds the GPU time of every pass
  * from timestamp queries (M4.10), and `--parts` draws the nodes or the edges
- * alone so that time can be split between them. Evidence, not a gate: see the
- * README.
+ * alone so that time can be split between them. `--motion=springs` moves the
+ * animated mode through `createSceneMotion` with every spring in flight rather
+ * than a sway computed from the clock. Evidence, not a gate: see the README.
  *
  * ```
  * pnpm --filter @prnt/dagr-render --filter @prnt/dagr-react build   # the page imports from dist
@@ -16,7 +17,7 @@
  *   node bench/browser/frame-profile.mjs
  *   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
  *   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
- *   # [--gpu] [--parts=all,nodes,edges]
+ *   # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs]
  * ```
  *
  * The page asks for `backend: 'webgpu'`, so a browser without an adapter fails
@@ -71,6 +72,11 @@ const partsList = option('parts', 'all').split(',');
 for (const parts of partsList) {
   if (!PARTS.includes(parts)) throw new Error(`--parts takes ${PARTS.join(', ')}, got ${parts}`);
 }
+const MOTIONS = ['sway', 'springs'];
+const motions = option('motion', 'sway').split(',');
+for (const motion of motions) {
+  if (!MOTIONS.includes(motion)) throw new Error(`--motion takes ${MOTIONS.join(', ')}, got ${motion}`);
+}
 const frames = count('frames', option('frames', '300'));
 const warmup = count('warmup', option('warmup', '60'));
 const zoomOption = option('zoom', 'fit');
@@ -83,8 +89,8 @@ const headless = process.argv.includes('--headless');
 const hit = process.argv.includes('--hit');
 const memory = process.argv.includes('--memory');
 const gpu = process.argv.includes('--gpu');
-if (memory && (gpu || partsList.join() !== 'all')) {
-  throw new Error('--memory builds the whole scene and counts every buffer, so it takes neither --gpu nor --parts');
+if (memory && (gpu || partsList.join() !== 'all' || motions.join() !== 'sway')) {
+  throw new Error('--memory builds the whole scene and counts every buffer, so it takes none of --gpu, --parts and --motion');
 }
 if ((hit || nodeModes.includes('rich')) && partsList.some((parts) => parts !== 'all')) {
   throw new Error('--hit and --nodes=rich work over every node, so they take only --parts=all');
@@ -284,12 +290,14 @@ for (const size of sizes) {
   for (const style of edgeStyles) {
     for (const nodeMode of nodeModes) {
       for (const parts of partsList) {
-        runs.push(
-          await page.evaluate(
-            ([n, w, f, z, e, m, h, p]) => window.profile(n, w, f, z, e, m, h, p),
-            [size, warmup, frames, zoom, style, nodeMode, hit, parts],
-          ),
-        );
+        for (const motion of motions) {
+          runs.push(
+            await page.evaluate(
+              ([n, w, f, z, e, m, h, p, s]) => window.profile(n, w, f, z, e, m, h, p, s),
+              [size, warmup, frames, zoom, style, nodeMode, hit, parts, motion],
+            ),
+          );
+        }
       }
     }
   }
@@ -305,6 +313,8 @@ const rows = runs.map((run) => ({
   edgeStyle: run.edgeStyle,
   nodeMode: run.nodeMode,
   parts: run.parts,
+  motion: run.motion,
+  springs: run.springs,
   elements: run.elements,
   hit:
     run.hit === null
@@ -325,7 +335,7 @@ const report = {
   launch,
   adapter,
   viewport: { width: 1280, height: 720, devicePixelRatio: dpr },
-  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit, gpu, parts: partsList },
+  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit, gpu, parts: partsList, motion: motions },
   tickMs,
   control,
   rows,
