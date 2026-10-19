@@ -148,50 +148,61 @@ const adapter = await page.evaluate(() => window.adapter());
 if (memory) {
   await page.evaluate(() => window.trackGpu());
   const cdp = await page.context().newCDPSession(page);
+  // `usedSize` is the V8 heap alone; typed-array stores and DOM objects are
+  // reported beside it.
   const heapAfterGc = async () => {
     await cdp.send('HeapProfiler.collectGarbage');
-    return (await cdp.send('Runtime.getHeapUsage')).usedSize;
+    const usage = await cdp.send('Runtime.getHeapUsage');
+    return { v8: usage.usedSize, backing: usage.backingStorageSize, embedder: usage.embedderHeapUsedSize };
   };
-  const STEPS = ['graph', 'renderer', 'nodes', 'edges'];
+  const heapChange = (now, before) =>
+    Object.fromEntries(Object.keys(now).map((key) => [key, now[key] - before[key]]));
+  const measureRow = async (size, style, nodeMode) => {
+    const plan = { count: size, frames, zoom, edgeStyle: style };
+    const steps = [
+      'graph',
+      'renderer',
+      'nodes',
+      'edges',
+      ...(nodeMode === 'rich' ? ['rich'] : []),
+      ...(hit ? ['hit'] : []),
+      'moveNodes',
+      'moveEdges',
+      'dispose',
+    ];
+    let previous = { tally: await page.evaluate(() => window.gpuTally()), heap: await heapAfterGc() };
+    const row = { count: size, edgeStyle: style, nodeMode, backend: null, steps: {} };
+    for (const step of steps) {
+      const tally = await page.evaluate(([s, p]) => window.memoryStep(s, p), [step, plan]);
+      const heap = await heapAfterGc();
+      if (step === 'renderer') row.backend = tally.backend;
+      const created = tally.createdBytes - previous.tally.createdBytes;
+      row.steps[step] = {
+        gpuBuffers: tally.buffers,
+        gpuTextures: tally.textures,
+        gpuDelta: tally.buffers + tally.textures - previous.tally.buffers - previous.tally.textures,
+        createdBytes: created,
+        freedBytes: tally.freedBytes - previous.tally.freedBytes,
+        createdObjects: tally.created - previous.tally.created,
+        heap,
+        heapDelta: heapChange(heap, previous.heap),
+        ...(step.startsWith('move')
+          ? { frames: tally.worked, createdBytesPerFrame: Math.round(created / tally.worked) }
+          : {}),
+        ...(step === 'renderer' ? { textureFormats: tally.textureFormats } : {}),
+        ...(tally.unknownFormats.length > 0 ? { unknownFormats: tally.unknownFormats } : {}),
+      };
+      previous = { tally, heap };
+    }
+    return row;
+  };
+  // The page's first renderer, overlay and hit index also load and compile
+  // what every later one reuses, so one row runs first and is not reported.
+  await measureRow(sizes[0], edgeStyles[0], nodeModes.includes('rich') ? 'rich' : nodeModes[0]);
   const rows = [];
   for (const size of sizes) {
     for (const style of edgeStyles) {
-      for (const nodeMode of nodeModes) {
-        const plan = { count: size, frames, zoom, edgeStyle: style };
-        const steps = [
-          ...STEPS,
-          ...(nodeMode === 'rich' ? ['rich'] : []),
-          ...(hit ? ['hit'] : []),
-          'moveNodes',
-          'moveEdges',
-          'dispose',
-        ];
-        let previous = { tally: await page.evaluate(() => window.gpuTally()), heap: await heapAfterGc() };
-        const row = { count: size, edgeStyle: style, nodeMode, backend: null, steps: {} };
-        for (const step of steps) {
-          const tally = await page.evaluate(([s, p]) => window.memoryStep(s, p), [step, plan]);
-          const heap = await heapAfterGc();
-          if (step === 'renderer') row.backend = tally.backend;
-          const created = tally.createdBytes - previous.tally.createdBytes;
-          row.steps[step] = {
-            gpuBuffers: tally.buffers,
-            gpuTextures: tally.textures,
-            gpuDelta: tally.buffers + tally.textures - previous.tally.buffers - previous.tally.textures,
-            createdBytes: created,
-            freedBytes: tally.freedBytes - previous.tally.freedBytes,
-            createdObjects: tally.created - previous.tally.created,
-            heap,
-            heapDelta: heap - previous.heap,
-            ...(step.startsWith('move')
-              ? { frames: tally.worked, createdBytesPerFrame: Math.round(created / tally.worked) }
-              : {}),
-            ...(step === 'renderer' ? { textureFormats: tally.textureFormats } : {}),
-            ...(tally.unknownFormats.length > 0 ? { unknownFormats: tally.unknownFormats } : {}),
-          };
-          previous = { tally, heap };
-        }
-        rows.push(row);
-      }
+      for (const nodeMode of nodeModes) rows.push(await measureRow(size, style, nodeMode));
     }
   }
   await browser.close();

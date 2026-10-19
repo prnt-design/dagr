@@ -264,14 +264,15 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   nodes as drawn, which a click on an animated frame pays, is 1.5 ms at 10,000
   nodes; every row holds one tick. Edges, ports and GPU picking are not
   measured. Memory per pass (2026-10-19, `--memory`, counting GPU buffers and
-  textures through `GPUDevice` and the heap after a forced collection): the
-  empty renderer holds 55.3 MB of canvas-sized render targets at 1280 by 720
+  textures through `GPUDevice`, and the V8 heap plus typed-array stores
+  after a forced collection): the empty renderer holds 55.3 MB of canvas-sized render targets at 1280 by 720
   and DPR 1 (221.2 MB at DPR 2), 44.2 MB of them the 4x multisampled colour
   and depth, against 3.0 MB of node and straight-edge buffers at 10,000 nodes
   (12.3 MB of edges when smooth). Moving nodes allocates nothing; moving edges
   recreates the group's buffers every frame, 2.2 MB a frame straight and 12.5
-  smooth, freed as it goes. Rich-node tiers retain 1.0 KB of heap a node.
-  GPU time per pass is left to M4.10.
+  smooth, freed as it goes. The node and edge passes keep a CPU copy of what
+  they upload, and rich-node tiers retain 1.0 KB of heap a node with no tier
+  open. GPU time per pass is left to M4.10.
 - [ ] **M4.10** Performance: 10k nodes at 60fps, animating, springs in flight,
   zoom and DPR named, frame time broken down by pass (instance update, node
   draw, edge draw, ID buffer), recorded as a local baseline naming the
