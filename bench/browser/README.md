@@ -6,7 +6,8 @@ and `label-throughput.mjs` opens it, runs a plan and prints the numbers.
 `card-heights.mjs` renders every campaign card and reports the tallest per kind.
 `frame-profile.html` and `frame-profile.mjs` time the shape renderer's frames on
 WebGPU by graph size, edge style, node mode and node hit testing, still and
-animating.
+animating, and with `--memory` measure what each pass holds in GPU and heap
+memory.
 `backend-probe.html` and `backend-probe.mjs` are the odd ones out and the
 directory name undersells them: they do not measure anything, they CHECK
 something, which is which backend `@prnt/dagr-render` comes up on and whether the
@@ -180,7 +181,7 @@ python3 -m http.server 8733               # from the REPO ROOT
 DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   node bench/browser/frame-profile.mjs
   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
-  # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--headless]
+  # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
@@ -430,12 +431,100 @@ nodes on this machine; the updates are, as the first slice found. What this
 does not cover: edges and ports are not hit targets on the CPU path, and GPU
 picking (M4.8b) has no pass to measure yet, so its cost is still unpriced.
 
-Not measured yet, and the rest of M4.10a: memory per pass.
-The report's `heapMb` is the page's JavaScript heap from
+**Memory per pass, on 2026-10-19.** `--memory` replaces the frame timing with
+a step-by-step build of the same scene, roughly the order `DagrCanvas` builds
+it in (which creates its overlay with the renderer rather than after the edges):
+the graph, an empty renderer, its nodes, its edges, then (with
+`--nodes=rich`) the rich-node tiers and (with `--hit`) one hit index, then
+`--frames` frames moving only the nodes, `--frames` moving only the edges, and
+`dispose`. `--warmup` does not apply. One row runs first and is not
+reported, since the page's first renderer, overlay and hit index also pay for
+loading and compiling what every later one reuses. After each step the runner reads two things.
+
+- GPU memory: every buffer and texture created through
+  `GPUDevice.createBuffer` and `createTexture` and not yet destroyed (by itself
+  or its device), sized from its descriptor, with the methods wrapped before
+  the first renderer exists. Not counted: the canvas's swap-chain texture,
+  which comes from its context (about 3.7 MB a frame image at 1280 by 720 and
+  DPR 1), query sets and external textures, which three does not create on this
+  path, and whatever the driver adds.
+- The heap after a forced collection, through `Runtime.getHeapUsage` over the
+  DevTools protocol: the V8 heap plus the stores behind typed arrays, so a
+  step's figure is what it retains, not what it churned. The DOM heap is read
+  too but not published: it moved by up to 0.5 MB on steps that touch no DOM,
+  and the same step differed between runs by up to 0.8 MB, so it is noise at
+  this scale.
+
+The runner exits non-zero if a row did not come up on WebGPU, or if a texture
+format has no byte size in the page's table.
+
+Same machine, browser and adapter as above, headed, `renderer.backend`
+`webgpu` on every row, viewport 1280 by 720 at DPR 1, zoom `fit`, 301 frames
+per move step, load average 3.3 to 4.1. Two runs of
+`--edges=straight,dashed,smooth --nodes=shapes,rich --hit` gave identical live
+GPU bytes on every step except moving smooth edges, which differed by under 1
+KB live (under 4 KB allocated over 301 frames), and retained heaps within 0.1
+MB; the table is the second. MB is 10^6 bytes.
+
+| Nodes | Node buffers | Edge buffers, straight | dashed | smooth | GPU bytes a frame, moving nodes | moving edges, straight | moving edges, smooth | Retained heap: graph | nodes | edges | rich tiers | hit index |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1,000 | 0.05 | 0.22 | 0.24 | 1.20 | 0 | 0.22 | 1.22 | 0.10 | 0.19 | 0.28 | 0.98 | 0.28 |
+| 2,500 | 0.19 | 0.54 | 0.60 | 3.03 | 0 | 0.54 | 3.08 | 0.24 | 0.45 | 0.79 | 2.51 | 0.69 |
+| 5,000 | 0.38 | 1.10 | 1.21 | 6.13 | 0 | 1.10 | 6.16 | 0.48 | 0.88 | 1.59 | 4.99 | 1.38 |
+| 10,000 | 0.75 | 2.21 | 2.42 | 12.33 | 0 | 2.21 | 12.50 | 0.96 | 1.72 | 3.23 | 9.99 | 2.76 |
+
+The empty renderer holds 55.3 MB of textures on every row, whatever the graph:
+four render targets the size of the canvas, a 4x multisampled `rgba16float`
+colour target (29.5 MB) and its `depth24plus` depth (14.7 MB), and
+single-sampled copies of both (7.4 and 3.7 MB). They scale with the canvas's
+device pixels: one 10,000-node row at DPR 2 held 221.2 MB of them, four times
+as much, with node and edge buffers unchanged. The `rich tiers` column comes
+from the `rich` rows, the rest from the `shapes` rows (and the other heap
+columns from the straight ones), which the `rich` rows matched within 0.04
+MB. At `fit` no tier is open, so the rich tiers' figure is their bookkeeping,
+not attached elements. After `dispose` no row left a GPU
+byte live.
+
+- **The render targets are most of the GPU memory, and multisampling is most
+  of those.** At 10,000 nodes with straight edges the scene's buffers are 3.0
+  MB against 55.3 MB of targets, and the two multisampled targets are 44.2 MB
+  of them (177 MB at DPR 2). `webgpu-renderer.ts` keeps `antialias` on until a
+  measurement prices it, since the SDF shapes antialias their own edges; this
+  is the memory half of that measurement. The bandwidth half and the visual
+  comparison are still missing, so nothing here turns it off.
+- **Moving nodes allocates nothing; moving edges reallocates the whole group
+  every frame.** `setNodes` writes into the buffers it has. `setEdges`
+  rebuilds the group's geometry whole, as `edge-motion.ts` documents, so every
+  frame creates six buffers (seven when dashed) the size of the group and
+  destroys the last frame's: 2.2 MB a frame at 10,000 nodes with straight
+  edges, 12.5 MB with smooth ones, which is 0.13 and 0.75 GB a second at 60
+  Hz. Nothing leaks, since the live total after the step is within 0.2 MB of
+  before (smooth curves tessellate to slightly more points as they sway), but
+  it is allocation churn on top of the `setEdges` CPU time the edge-style
+  table measures.
+- **A smooth edge costs 5.6 times a straight one**, 936 bytes against 168,
+  from the tessellated points; a dash adds 16 bytes an edge. Nodes are 75
+  bytes each.
+- **The node and edge passes keep a CPU copy of what they upload.** At
+  10,000 nodes their typed arrays are 0.79 MB of the nodes' 1.72 MB of
+  retained heap and 2.42 of the straight edges' 3.23 MB, about the size of
+  their GPU buffers, and 13.4 of the smooth edges' 14.2 MB.
+- **Rich tiers are the largest heap item without open tiers**, 1.0 KB a
+  node, about ten times the graph's own arrays and 3.6 times the hit index's
+  276 bytes. Every heap column grows about linearly with the node count.
+
+Not traced: the retained heap measured after `dispose` grew from 10.6 to 12.2
+MB across the 24 rows of a run, about 68 KB a row, with every renderer
+disposed and no GPU byte live. It may be the page, the harness or a cache in
+three or dagr; a consumer remounting `DagrCanvas` many times should not read
+this as zero.
+
+The frame-time report's `heapMb` is the page's JavaScript heap from
 `performance.memory`, which Chrome rounds and which includes whatever the
-previous row left for the collector, so it is not a memory figure for a pass.
-Every renderer logs `THREE.AttributeNode: Vertex attribute "position" not found
-on geometry.` once, which nothing here has traced yet.
+previous row left for the collector, so it is not a memory figure for a pass;
+the `--memory` mode is. Every renderer logs `THREE.AttributeNode: Vertex
+attribute "position" not found on geometry.` once, which nothing here has
+traced yet.
 
 ## What the overlay harness measures, and what it does not
 

@@ -838,8 +838,8 @@ server rendering, where both are absent and the answer is `null`.
 
 It says a backend can start, not that the scene will be fast or that the first
 device request will succeed, so keep handling the rejection of `createRenderer`
-too (`<DagrCanvas onError>` in React). Nothing here measures a real phone; see
-the roadmap's M4.10a for the profile that will.
+too (`<DagrCanvas onError>` in React). Nothing here measures a real phone; the
+roadmap's M4.10a profile was taken on an Apple M4 desktop.
 
 `createRenderer` also takes `onContextLost(info)`, called once if the device or
 context is lost after the renderer was built (WebGPU's `device.lost`, WebGL's

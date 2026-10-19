@@ -390,6 +390,177 @@
         };
       };
 
+      // Bytes per texel of the formats a texture might be created with.
+      // `depth24plus` is the implementation's choice; it is counted as 4.
+      const TEXEL_BYTES = {
+        r8unorm: 1,
+        rg8unorm: 2,
+        rgba8unorm: 4,
+        'rgba8unorm-srgb': 4,
+        bgra8unorm: 4,
+        'bgra8unorm-srgb': 4,
+        rgba16float: 8,
+        rgba32float: 16,
+        r32float: 4,
+        depth16unorm: 2,
+        depth24plus: 4,
+        'depth24plus-stencil8': 4,
+        depth32float: 4,
+        'depth32float-stencil8': 5,
+      };
+      const unknownFormats = new Set();
+      const textureBytes = ({ size, format, mipLevelCount = 1, sampleCount = 1 }) => {
+        const [width, height = 1, layers = 1] = Array.isArray(size)
+          ? size
+          : [size.width, size.height, size.depthOrArrayLayers];
+        const texel = TEXEL_BYTES[format];
+        if (texel === undefined) {
+          unknownFormats.add(format);
+          return 0;
+        }
+        let texels = 0;
+        for (let level = 0; level < mipLevelCount; level += 1) {
+          texels += Math.max(1, width >> level) * Math.max(1, height >> level);
+        }
+        return texels * layers * sampleCount * texel;
+      };
+
+      // Every buffer and texture created through a GPUDevice, by size, until
+      // it is destroyed or its device is. The canvas's own texture comes from
+      // its context, not `createTexture`, so it is not in the tally.
+      const gpu = { live: new Map(), created: 0, createdBytes: 0, freed: 0, freedBytes: 0 };
+      const free = (object) => {
+        const entry = gpu.live.get(object);
+        if (entry === undefined) return;
+        gpu.live.delete(object);
+        gpu.freed += 1;
+        gpu.freedBytes += entry.bytes;
+      };
+      window.trackGpu = () => {
+        const track = (method, kind, measure) => {
+          const original = GPUDevice.prototype[method];
+          GPUDevice.prototype[method] = function (descriptor) {
+            const made = original.call(this, descriptor);
+            const bytes = measure(descriptor);
+            const format =
+              kind === 'texture' ? `${descriptor.format} x${descriptor.sampleCount ?? 1}` : undefined;
+            gpu.live.set(made, { kind, bytes, format, device: this });
+            gpu.created += 1;
+            gpu.createdBytes += bytes;
+            return made;
+          };
+        };
+        track('createBuffer', 'buffer', (descriptor) => descriptor.size);
+        track('createTexture', 'texture', textureBytes);
+        for (const proto of [GPUBuffer.prototype, GPUTexture.prototype]) {
+          const original = proto.destroy;
+          proto.destroy = function () {
+            free(this);
+            return original.call(this);
+          };
+        }
+        const destroyDevice = GPUDevice.prototype.destroy;
+        GPUDevice.prototype.destroy = function () {
+          for (const [object, entry] of gpu.live) if (entry.device === this) free(object);
+          return destroyDevice.call(this);
+        };
+      };
+      const gpuTally = (window.gpuTally = () => {
+        const live = { buffer: 0, texture: 0 };
+        const textureFormats = {};
+        for (const { kind, bytes, format } of gpu.live.values()) {
+          live[kind] += bytes;
+          if (format !== undefined) textureFormats[format] = (textureFormats[format] ?? 0) + bytes;
+        }
+        return {
+          buffers: live.buffer,
+          textures: live.texture,
+          textureFormats,
+          created: gpu.created,
+          createdBytes: gpu.createdBytes,
+          freed: gpu.freed,
+          freedBytes: gpu.freedBytes,
+          unknownFormats: [...unknownFormats],
+        };
+      });
+
+      // Builds the scene one pass at a time, the way DagrCanvas does (an empty
+      // renderer, then its nodes, then its edges), so the runner can read what
+      // each step left behind. The move steps animate one pass alone, so what a
+      // frame allocates is that pass's.
+      let held = null;
+      window.memoryStep = async (step, { count, frames, zoom, edgeStyle }) => {
+        const render = () => held.renderer.render();
+        // `sample` works one frame more than it times, the first having no interval.
+        let worked = 0;
+        switch (step) {
+          case 'graph':
+            held = { graph: buildGraph(count), ...EDGE_STYLES[edgeStyle] };
+            break;
+          case 'renderer': {
+            held.renderer = await createRenderer({
+              canvas: freshCanvas(),
+              backend: 'webgpu',
+              edgeGroups: [{ id: 'edges', ...held.group }],
+            });
+            const { camera } = held.renderer;
+            camera.setViewport({ width: 1280, height: 720, devicePixelRatio: window.devicePixelRatio });
+            camera.fitBounds(held.graph.bounds);
+            if (zoom !== null) camera.setZoom(zoom);
+            render();
+            break;
+          }
+          case 'nodes':
+            held.renderer.setNodes(nodesAt(held.graph.home));
+            render();
+            break;
+          case 'edges':
+            held.renderer.setEdges('edges', edgesAt(held.graph.home, held.graph.links, held.bend));
+            render();
+            break;
+          case 'rich': {
+            const { home, links } = held.graph;
+            const richData = richDataFor(count, links);
+            held.overlay = createHtmlOverlay({ parent: document.getElementById('host'), camera: held.renderer.camera });
+            held.rich = createRichNodes({ overlay: held.overlay, tiers: TIERS });
+            held.rich.setNodes(
+              nodesAt(home).map((node, i) => ({ id: node.id, bounds: boundsOf(node), data: richData[i] })),
+            );
+            held.overlay.sync();
+            render();
+            break;
+          }
+          case 'hit':
+            held.index = createNodeHitIndex(nodesAt(held.graph.home));
+            break;
+          case 'moveNodes':
+            await sample(0, frames, (ts) => {
+              held.renderer.setNodes(nodesAt(swayed(held.graph.home, ts)));
+              render();
+              worked += 1;
+              return {};
+            });
+            break;
+          case 'moveEdges':
+            await sample(0, frames, (ts) => {
+              held.renderer.setEdges('edges', edgesAt(swayed(held.graph.home, ts), held.graph.links, held.bend));
+              render();
+              worked += 1;
+              return {};
+            });
+            break;
+          case 'dispose':
+            held.rich?.dispose();
+            held.overlay?.dispose();
+            held.renderer.dispose();
+            held = null;
+            break;
+          default:
+            throw new Error(`no memory step ${step}`);
+        }
+        return { ...gpuTally(), backend: held?.renderer?.backend ?? null, worked };
+      };
+
       window.adapter = async () => {
         if (!('gpu' in navigator)) return { navigatorGpu: false, adapter: null };
         const found = await navigator.gpu.requestAdapter();
