@@ -1,7 +1,9 @@
 /**
  * Frame-time distribution of `@prnt/dagr-render` on a WebGPU adapter, by graph
  * size, edge style and node mode, optionally with node hit testing, still and
- * animating (M4.10a). Evidence, not a gate: see the README.
+ * animating (M4.10a). With `--memory` it measures instead what each pass holds
+ * in GPU buffers and textures and in the JavaScript heap, and what a moving
+ * pass allocates per frame. Evidence, not a gate: see the README.
  *
  * ```
  * pnpm --filter @prnt/dagr-render --filter @prnt/dagr-react build   # the page imports from dist
@@ -10,7 +12,7 @@
  * DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
  *   node bench/browser/frame-profile.mjs
  *   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
- *   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--headless]
+ *   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
  * ```
  *
  * The page asks for `backend: 'webgpu'`, so a browser without an adapter fails
@@ -70,6 +72,7 @@ const dpr = positive('dpr', option('dpr', '1'));
 // empty page, so a headless interval measures the pacing, not the page.
 const headless = process.argv.includes('--headless');
 const hit = process.argv.includes('--hit');
+const memory = process.argv.includes('--memory');
 
 function pageHtml() {
   const fromRender = createRequire(`${ROOT}packages/render/package.json`);
@@ -141,6 +144,73 @@ const launch = {
   args: LAUNCH_ARGS,
 };
 const adapter = await page.evaluate(() => window.adapter());
+
+if (memory) {
+  await page.evaluate(() => window.trackGpu());
+  const cdp = await page.context().newCDPSession(page);
+  const heapAfterGc = async () => {
+    await cdp.send('HeapProfiler.collectGarbage');
+    return (await cdp.send('Runtime.getHeapUsage')).usedSize;
+  };
+  const STEPS = ['graph', 'renderer', 'nodes', 'edges'];
+  const rows = [];
+  for (const size of sizes) {
+    for (const style of edgeStyles) {
+      for (const nodeMode of nodeModes) {
+        const plan = { count: size, frames, zoom, edgeStyle: style };
+        const steps = [
+          ...STEPS,
+          ...(nodeMode === 'rich' ? ['rich'] : []),
+          ...(hit ? ['hit'] : []),
+          'moveNodes',
+          'moveEdges',
+          'dispose',
+        ];
+        let previous = { tally: await page.evaluate(() => window.gpuTally()), heap: await heapAfterGc() };
+        const row = { count: size, edgeStyle: style, nodeMode, backend: null, steps: {} };
+        for (const step of steps) {
+          const tally = await page.evaluate(([s, p]) => window.memoryStep(s, p), [step, plan]);
+          const heap = await heapAfterGc();
+          if (step === 'renderer') row.backend = tally.backend;
+          const created = tally.createdBytes - previous.tally.createdBytes;
+          row.steps[step] = {
+            gpuBuffers: tally.buffers,
+            gpuTextures: tally.textures,
+            gpuDelta: tally.buffers + tally.textures - previous.tally.buffers - previous.tally.textures,
+            createdBytes: created,
+            freedBytes: tally.freedBytes - previous.tally.freedBytes,
+            createdObjects: tally.created - previous.tally.created,
+            heap,
+            heapDelta: heap - previous.heap,
+            ...(step.startsWith('move') ? { createdBytesPerFrame: Math.round(created / frames) } : {}),
+            ...(tally.unknownFormats.length > 0 ? { unknownFormats: tally.unknownFormats } : {}),
+          };
+          previous = { tally, heap };
+        }
+        rows.push(row);
+      }
+    }
+  }
+  await browser.close();
+  const report = {
+    machine,
+    launch,
+    adapter,
+    viewport: { width: 1280, height: 720, devicePixelRatio: dpr },
+    plan: { memory: true, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit },
+    rows,
+    warnings,
+  };
+  console.log(JSON.stringify(report, null, 1));
+  const leftover = rows.filter((row) => row.steps.dispose.gpuBuffers + row.steps.dispose.gpuTextures > 0);
+  if (rows.some((row) => row.backend !== 'webgpu')) process.exitCode = 1;
+  if (rows.some((row) => Object.values(row.steps).some((step) => step.unknownFormats !== undefined))) {
+    console.error('a texture format has no byte size in TEXEL_BYTES; its bytes are not counted');
+    process.exitCode = 1;
+  }
+  if (leftover.length > 0) console.error(`${leftover.length} rows left GPU bytes live after dispose`);
+  process.exit();
+}
 
 const runs = [];
 for (const size of sizes) {
