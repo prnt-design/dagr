@@ -180,7 +180,7 @@ python3 -m http.server 8733               # from the REPO ROOT
 DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   node bench/browser/frame-profile.mjs
   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
-  # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--headless]
+  # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
@@ -430,11 +430,76 @@ nodes on this machine; the updates are, as the first slice found. What this
 does not cover: edges and ports are not hit targets on the CPU path, and GPU
 picking (M4.8b) has no pass to measure yet, so its cost is still unpriced.
 
-Not measured yet, and the rest of M4.10a: memory per pass.
-The report's `heapMb` is the page's JavaScript heap from
+**Memory per pass, on 2026-10-19.** `--memory` replaces the frame timing with
+a step-by-step build of the same scene, the order `DagrCanvas` builds it in:
+the graph, an empty renderer, its nodes, its edges, then (with
+`--nodes=rich`) the rich-node tiers and (with `--hit`) one hit index, then
+`--frames` frames moving only the nodes, `--frames` moving only the edges, and
+`dispose`. After each step the runner reads two things. GPU memory is every
+buffer and texture created through `GPUDevice.createBuffer` and
+`createTexture` and not yet destroyed (by itself or its device), sized from its
+descriptor; the page wraps those methods before the first renderer exists. The
+canvas's own swap-chain texture comes from its context, so it is not counted,
+and neither is whatever the driver adds. The JavaScript heap is
+`Runtime.getHeapUsage` over the DevTools protocol straight after a forced
+collection, so a step's heap is what it retains, not what it churned. The
+runner exits non-zero if a row did not come up on WebGPU, or if a texture
+format has no byte size in the page's table.
+
+Same machine, browser and adapter as above, headed, `renderer.backend`
+`webgpu` on every row, viewport 1280 by 720 at DPR 1, zoom `fit`, 301 frames
+per move step. Two runs of `--edges=straight,dashed,smooth --nodes=shapes,rich
+--hit` gave identical GPU bytes on every row and heaps within 0.05 MB; the
+table is the second. MB is 10^6 bytes. "Retained heap" is the step's change in
+the heap after collection.
+
+| Nodes | Node buffers | Edge buffers, straight | dashed | smooth | GPU bytes a frame, moving nodes | moving edges, straight | moving edges, smooth | Retained heap: graph | nodes | edges | rich tiers | hit index |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1,000 | 0.05 | 0.22 | 0.24 | 1.20 | 0 | 0.22 | 1.22 | 0.09 | 0.24 | 0.20 | 1.02 | 0.29 |
+| 2,500 | 0.19 | 0.54 | 0.60 | 3.03 | 0 | 0.54 | 3.08 | 0.24 | 0.28 | 0.18 | 2.50 | 0.71 |
+| 5,000 | 0.38 | 1.10 | 1.21 | 6.13 | 0 | 1.10 | 6.16 | 0.49 | 0.49 | 0.39 | 5.01 | 1.38 |
+| 10,000 | 0.75 | 2.21 | 2.42 | 12.33 | 0 | 2.21 | 12.50 | 0.97 | 0.94 | 0.80 | 9.99 | 2.77 |
+
+The empty renderer holds 55.3 MB of textures on every row, whatever the graph:
+four render targets the size of the canvas, a 4x multisampled `rgba16float`
+colour target (29.5 MB) and its `depth24plus` depth (14.7 MB), and
+single-sampled copies of both (7.4 and 3.7 MB). They scale with the canvas's
+device pixels: one 10,000-node row at DPR 2 held 221.2 MB of them, four times
+as much, with node and edge buffers unchanged. The `rich tiers` column comes
+from the `rich` rows, the rest from the `shapes` rows, which the `rich` rows
+matched within 0.13 MB. After `dispose` no row left a GPU byte live.
+
+- **The render targets are most of the GPU memory, and multisampling is most
+  of those.** At 10,000 nodes with straight edges the scene's buffers are 3.0
+  MB against 55.3 MB of targets, and the two multisampled targets are 44.2 MB
+  of them (177 MB at DPR 2). `webgpu-renderer.ts` keeps `antialias` on until a
+  measurement prices it, since the SDF shapes antialias their own edges; this
+  is the memory half of that measurement. The bandwidth half and the visual
+  comparison are still missing, so nothing here turns it off.
+- **Moving nodes allocates nothing; moving edges reallocates the whole group
+  every frame.** `setNodes` writes into the buffers it has. `setEdges`
+  rebuilds the group's geometry whole, as `edge-motion.ts` documents, so every
+  frame creates six buffers the size of the group and destroys the last six:
+  2.2 MB a frame at 10,000 nodes with straight edges, 12.5 MB with smooth ones,
+  which is 0.13 and 0.75 GB a second at 60 Hz. Nothing leaks, since the live
+  total after the step is within 0.2 MB of before (smooth curves tessellate to
+  slightly more points as they sway), but it is allocation churn on top of the
+  `setEdges` CPU time the edge-style table measures.
+- **A smooth edge costs 5.6 times a straight one**, 936 bytes against 168,
+  from the tessellated points; a dash adds 16 bytes an edge. Nodes are 75
+  bytes each.
+- **On the heap, rich tiers are the large item**: 1.0 KB a node, ten times
+  the graph's own arrays and the node and edge passes', and 3.6 times the hit
+  index's 277 bytes. Every heap column grows linearly with the node count.
+
+Not traced: the heap measured after `dispose` grew from 6.3 to 8.0 MB across
+the 24 rows of a run, about 76 KB a row, with every renderer disposed and no
+GPU byte live. It may be the page, the harness or a cache in three or dagr; a
+consumer remounting `DagrCanvas` many times should not read this as zero.
+The frame-time report's `heapMb` is the page's JavaScript heap from
 `performance.memory`, which Chrome rounds and which includes whatever the
-previous row left for the collector, so it is not a memory figure for a pass.
-Every renderer logs `THREE.AttributeNode: Vertex attribute "position" not found
+previous row left for the collector, so it is not a memory figure for a pass;
+the `--memory` mode is. Every renderer logs `THREE.AttributeNode: Vertex attribute "position" not found
 on geometry.` once, which nothing here has traced yet.
 
 ## What the overlay harness measures, and what it does not

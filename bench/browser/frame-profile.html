@@ -442,7 +442,9 @@
           GPUDevice.prototype[method] = function (descriptor) {
             const made = original.call(this, descriptor);
             const bytes = measure(descriptor);
-            gpu.live.set(made, { kind, bytes, device: this });
+            const format =
+              kind === 'texture' ? `${descriptor.format} x${descriptor.sampleCount ?? 1}` : undefined;
+            gpu.live.set(made, { kind, bytes, format, device: this });
             gpu.created += 1;
             gpu.createdBytes += bytes;
             return made;
@@ -465,10 +467,15 @@
       };
       const gpuTally = (window.gpuTally = () => {
         const live = { buffer: 0, texture: 0 };
-        for (const { kind, bytes } of gpu.live.values()) live[kind] += bytes;
+        const textureFormats = {};
+        for (const { kind, bytes, format } of gpu.live.values()) {
+          live[kind] += bytes;
+          if (format !== undefined) textureFormats[format] = (textureFormats[format] ?? 0) + bytes;
+        }
         return {
           buffers: live.buffer,
           textures: live.texture,
+          textureFormats,
           created: gpu.created,
           createdBytes: gpu.createdBytes,
           freed: gpu.freed,
@@ -484,6 +491,8 @@
       let held = null;
       window.memoryStep = async (step, { count, frames, zoom, edgeStyle }) => {
         const render = () => held.renderer.render();
+        // `sample` works one frame more than it times, the first having no interval.
+        let worked = 0;
         switch (step) {
           case 'graph':
             held = { graph: buildGraph(count), ...EDGE_STYLES[edgeStyle] };
@@ -528,6 +537,7 @@
             await sample(0, frames, (ts) => {
               held.renderer.setNodes(nodesAt(swayed(held.graph.home, ts)));
               render();
+              worked += 1;
               return {};
             });
             break;
@@ -535,6 +545,7 @@
             await sample(0, frames, (ts) => {
               held.renderer.setEdges('edges', edgesAt(swayed(held.graph.home, ts), held.graph.links, held.bend));
               render();
+              worked += 1;
               return {};
             });
             break;
@@ -547,7 +558,7 @@
           default:
             throw new Error(`no memory step ${step}`);
         }
-        return { ...gpuTally(), backend: held?.renderer?.backend ?? null };
+        return { ...gpuTally(), backend: held?.renderer?.backend ?? null, worked };
       };
 
       window.adapter = async () => {

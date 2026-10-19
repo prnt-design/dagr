@@ -182,7 +182,10 @@ if (memory) {
             createdObjects: tally.created - previous.tally.created,
             heap,
             heapDelta: heap - previous.heap,
-            ...(step.startsWith('move') ? { createdBytesPerFrame: Math.round(created / frames) } : {}),
+            ...(step.startsWith('move')
+              ? { frames: tally.worked, createdBytesPerFrame: Math.round(created / tally.worked) }
+              : {}),
+            ...(step === 'renderer' ? { textureFormats: tally.textureFormats } : {}),
             ...(tally.unknownFormats.length > 0 ? { unknownFormats: tally.unknownFormats } : {}),
           };
           previous = { tally, heap };
