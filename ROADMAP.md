@@ -71,7 +71,7 @@ Stage 1 proves the renderer; stage 2 makes it usable as a product.
 | 1 | **WebGPU adapter in the loop** (stage 1, done 2026-10-17: Apple M4, Chrome 155, `renderer.backend` is `webgpu`; see `bench/browser/README.md`) | Probe at execution time and record what `renderer.backend` reports, on which machine and browser, headed or headless, and with which flags. A WebGL2 fallback is never recorded as a WebGPU result. If no adapter comes up, record what was tried and make the next attempt reproducible. |
 | 2 | **M4.9b: backend parity** (stage 1, done 2026-10-17: byte-identical on the probe scene, Apple M4, Chrome 155; see the M4.9b entry) | The same TSL drawn through WebGPU and WebGL2 on one machine, compared by screenshot, with the tolerance derived from the antialiasing ramp. A committed parity check that both backends pass; the M4.9b entry decides whether it becomes a gate. |
 | 3 | **M4.10a: consumer performance profile** (stage 1, done 2026-10-19: frame-time distribution by size 2026-10-17, by edge style, rich-node tiers and node hit testing 2026-10-18, memory per pass 2026-10-19, on WebGPU: smooth edges re-tessellated every frame miss 60 Hz at 10,000 nodes, rich-node tiers and CPU node hits do not; the multisampled render targets are most of the GPU memory and moving edges reallocates the group every frame; see `bench/browser/README.md`) | Named backend, machine and graph sizes, rich-node tiers, edge styles, hit testing and animated updates. Frame-time distribution and memory per pass, published. Do not infer WebGPU performance from a WebGL fallback. |
-| 4 | **M4.10: 10k nodes at 60fps, animating** (stage 1) | Frame time broken down by pass. If the number is not met, publish the profile and move the number. |
+| 4 | **M4.10: 10k nodes at 60fps, animating** (stage 1, in progress: GPU time per pass 2026-10-19, `frame-profile.mjs --gpu`, on WebGPU: at 10,000 nodes the GPU spends 0.5 ms a frame at DPR 1 and 1.2 to 1.5 at DPR 2, so the frame is CPU-bound; next, springs in flight through `createSceneMotion` and a local baseline; see `bench/browser/README.md`) | Frame time broken down by pass. If the number is not met, publish the profile and move the number. |
 | 5 | **M4.8b: GPU picking, then edge hits** (stage 2) | Hover and selection at 10k nodes through the M5.2a provider contract; edges become hit targets. When the pass runs stays provisional until M4.10 prices it. |
 | 6 | **M3.9b: fast paths** (stage 2) | Edits on a 10k graph relayout within the frame budget, judged against M3.10a's tables. |
 | 7 | **Cold-layout crossings parity with dagre** (stage 2) | Close the gap on the M2.9 corpus: 147 crossings between node centres against dagre's 109 with the default `grid-position`, 96 with `brandes-koepf-position` (docs/docs/layout.md). |
@@ -251,7 +251,7 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   Chrome 155. At load 4 to 5 every row holds one 60 Hz tick at the 95th
   percentile (under heavier load the animated 10,000 row's update tail grew),
   and the CPU cost per frame is `setNodes` and `setEdges` (about 5 ms at
-  10,000) rather than `render`'s 0.4 ms; GPU time is not measured. Edge
+  10,000) rather than `render`'s 0.4 ms; that slice did not measure GPU time. Edge
   styles (2026-10-18, `--edges`): dashed edges cost the same as straight ones,
   and smooth edges hold one tick still but not animating at 10,000 nodes,
   where re-tessellating 13,169 curves takes 26 ms a frame against 4 ms for
@@ -278,7 +278,16 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   draw, edge draw, ID buffer), recorded as a local baseline naming the
   machine. If the number is not met, publish the profile and move the number,
   not the goalposts. CPU-side passes can join the bench gate; GPU frame time
-  cannot.
+  cannot. GPU time per pass (2026-10-19, `--gpu`, timestamp queries added to
+  every pass the renderer encodes, nodes and edges split by drawing each
+  alone): on an Apple M4 in Chrome 155 at 10,000 nodes and `fit`, the scene
+  pass and three's output pass take 0.50 ms together at DPR 1 with straight
+  edges (node draw 0.13, edge draw 0.16) and 0.86 with smooth ones (edge draw
+  0.52), and 1.21 and 1.51 ms at DPR 2, where the per-pixel cost of the two
+  passes is 0.9 ms of it. Every GPU frame is under a tenth of the tick; the
+  animated smooth rows miss it on the CPU's 26 ms of `setEdges`. Still open:
+  springs in flight through `createSceneMotion`, the ID buffer pass (M4.8b),
+  and a local baseline.
 - [x] **M4.11** HTML overlay: DOM elements positioned in world coordinates,
   culled and capped.
 - [x] **M4.12** Rich nodes: HTML visuals with three-tier semantic zoom as
