@@ -1,5 +1,10 @@
 # @prnt/dagr-react
 
+## Unreleased
+
+- Fix: a `DagrCanvas` whose graph started with no edges now draws the edges
+  added later. The cause and the fix are in `@prnt/dagr-render`.
+
 ## 0.1.4
 
 - Lockstep release with the explorer's drawer-aware camera and icon controls. No runtime API changes in this package.

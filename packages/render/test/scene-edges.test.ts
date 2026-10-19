@@ -106,13 +106,24 @@ describe('SceneEdges', () => {
   });
 
   it('draws nothing until it is given edges', () => {
-    // An empty group is a material and an empty geometry, and three skips a
-    // draw whose index count is zero, so a scene can declare groups it has no
-    // edges for yet.
+    // A draw range of zero rasterises nothing, so a scene can declare groups it
+    // has no edges for yet.
     const scene = new SceneEdges(groups());
     for (const mesh of scene.meshes) {
       expect(mesh.geometry.drawRange.count).toBe(0);
     }
+    scene.dispose();
+  });
+
+  it('carries its attributes before its edges arrive, so a first frame drawn empty still binds them', () => {
+    const scene = new SceneEdges(groups());
+    const before = Object.keys(scene.meshes[0]?.geometry.attributes ?? {}).sort();
+    expect(scene.meshes[0]?.geometry.index).not.toBeNull();
+    scene.setEdges(ROUTED, [edge('e1', straight)]);
+    const after = Object.keys(scene.meshes[0]?.geometry.attributes ?? {}).sort();
+    expect(after.length).toBeGreaterThan(0);
+    expect(before).toEqual(after);
+    expect(scene.meshes[0]?.geometry.drawRange.count).toBe(6);
     scene.dispose();
   });
 
