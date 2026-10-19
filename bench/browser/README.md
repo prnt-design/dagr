@@ -7,7 +7,8 @@ and `label-throughput.mjs` opens it, runs a plan and prints the numbers.
 `frame-profile.html` and `frame-profile.mjs` time the shape renderer's frames on
 WebGPU by graph size, edge style, node mode and node hit testing, still and
 animating, with `--memory` measure what each pass holds in GPU and heap
-memory, and with `--gpu` the GPU time of each pass.
+memory, with `--gpu` the GPU time of each pass, and with `--motion=springs`
+animate through `createSceneMotion`.
 `backend-probe.html` and `backend-probe.mjs` are the odd ones out and the
 directory name undersells them: they do not measure anything, they CHECK
 something, which is which backend `@prnt/dagr-render` comes up on and whether the
@@ -188,11 +189,12 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
 with about 1.3 straight edges per node, through a renderer that asks for
 `backend: 'webgpu'`, so a browser without an adapter fails with
-`BACKEND_UNAVAILABLE` instead of measuring the fallback. Each size, edge style
-and node mode runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
+`BACKEND_UNAVAILABLE` instead of measuring the fallback. Each size, edge
+style, node mode, part and motion runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
 `animated` also replaces every node centre and every edge route each frame
-through `setNodes` and `setEdges`, which is what a consumer driving
-`createSceneMotion` hands the renderer while every spring is in flight. The
+through `setNodes` and `setEdges`, from a sway computed from the clock: the
+renderer's half of a frame with every spring in flight, without the scene
+motion's own cost (see "Springs in flight" below for that). The
 arrays are built before the clock starts on those two calls and timed as
 `input`. The report gives the interval between animation frames and the CPU
 time of each step (and, in `rich` rows, how many overlay elements were attached
@@ -696,12 +698,13 @@ one tick).
 - **The springs, not the renderer, are the new cost.** `advance` is the
   largest per-frame step on every straight row, and `apply` is larger still on
   the frames it runs. With straight edges the
-  GPU `sum` matched the sway rows (0.52 ms at 10,000 nodes), so there the
+  GPU `sum` matched this run's sway rows (0.52 ms at 10,000 nodes), so there the
   motion changes what the CPU does, not what the GPU draws.
 - **Smooth edges miss the tick from 2,500 nodes.** Each smooth route has a bend
   point, and the edge springs hand back more points than the route they were
   given, so `setEdges` has more to tessellate: at 10,000 nodes it is 42 ms
-  against the sway's 26, and the GPU `sum` rises from 0.85 to 1.15 ms. At
+  against the sway's 26, and the GPU `sum` rises from this run's sway 0.85 to
+  1.15 ms. At
   2,500 nodes `advance` and `setEdges` reach 15.1 and 16.4 ms at the 95th
   percentile.
 - **`settled` stayed false** on every frame except 2 or 3 of the 360 (warm-up

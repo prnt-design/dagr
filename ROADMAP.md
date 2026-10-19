@@ -289,10 +289,11 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   flight (2026-10-19, `--motion=springs`, every node and edge retargeted
   through `createSceneMotion` every 500 ms): at 10,000 nodes with straight
   edges a frame between retargets spends about 16 ms on the CPU, 8.8 of it in
-  `advance`, a retarget frame adds 13 to 15 ms of `apply` and misses the
-  tick, and 3 to 8% of frames missed it; smooth edges miss it from 2,500 nodes. The number
-  is not met; the CPU cost to cut is the scene motion, then `setEdges`. Still
-  open: the ID buffer pass (M4.8b) and a local baseline.
+  `advance`. A retarget frame adds 13 to 15 ms of `apply` and misses the tick;
+  3 to 8% of frames missed it. Smooth edges miss it from 2,500 nodes. The
+  number is not met; the CPU cost to cut is the scene motion, then
+  `setEdges`. Still open: the ID buffer pass (M4.8b) and a local baseline,
+  with scene motion's `apply` and `advance` as CPU-side bench entries.
 - [x] **M4.11** HTML overlay: DOM elements positioned in world coordinates,
   culled and capped.
 - [x] **M4.12** Rich nodes: HTML visuals with three-tier semantic zoom as
