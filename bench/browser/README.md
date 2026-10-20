@@ -640,8 +640,9 @@ So on this machine, at 10,000 nodes, M4.10's frame is CPU-bound: about 0.5 ms
 of GPU at DPR 1 and 1.2 at DPR 2 with straight edges, against 5 to 7 ms of
 `setNodes` and `setEdges` on the CPU in these runs. The next section drives the
 same scene through `createSceneMotion`. Still open for M4.10: an ID buffer pass
-(M4.8b has none yet). The scene motion's CPU cost has Node bench entries in
-`bench/README.md`, outside `baseline.json`.
+(M4.8b has none yet), and recording a local baseline: the scene motion's CPU
+cost has Node bench entries in `bench/README.md`, outside `baseline.json`
+until the maintainer records them.
 
 ## Springs in flight on WebGPU (M4.10)
 
@@ -719,7 +720,8 @@ frame on each retarget and on some between, and smooth edges hold it only to
 1,000 nodes.
 The CPU cost to cut is `advance` and `apply` in the scene motion, then
 `setEdges`. Both scene motion calls now have Node bench entries at 10,000 nodes,
-in `bench/README.md` under "M4.10 scene motion on the CPU".
+in `bench/README.md` under "M4.10 scene motion on the CPU", and the smooth rows
+point first at the bent routes' growing point count.
 
 ## What the overlay harness measures, and what it does not
 

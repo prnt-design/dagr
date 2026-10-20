@@ -4,7 +4,7 @@ The machinery behind the charter's "benchmarks within 10% of baseline", and the
 reasoning that makes that rule survive contact with a busy machine.
 
 ```
-pnpm bench            # run every package's benchmarks, writing a report each
+pnpm bench            # run every package's benchmarks, one package at a time, writing a report each
 pnpm bench:check      # compare that run to bench/baseline.json, non-zero on a regression
 pnpm bench:baseline   # record that run as the new baseline
 pnpm bench:ci         # measure up to three times, and pass when two runs agree
@@ -49,27 +49,27 @@ which architecture the file happens to name.
 the same 10,000 node grid and edge styles, in Node rather than a browser:
 `apply` retargeting every node and edge, and `advance` stepping one frame with
 every spring in flight. Measured 2026-10-19 on the same Apple M4 and Node
-`v25.6.1`, three runs at 1-minute loads between 5.4 and 5.8 (background system
-work this time; the baseline's were 2.4 to 3.5). Medians in milliseconds, the
+`v25.6.1`, three runs at 1-minute loads between 4.7 and 5.2 (background system
+work this time; the baseline capture described below ran at 2.4 to 3.5). Medians in milliseconds, the
 range across the three runs in brackets:
 
 | Edges | `apply` | `advance` |
 | --- | --- | --- |
-| straight | 18.0 (17.9 to 18.1) | 12.3 (12.1 to 12.5) |
-| smooth | 22.3 (21.9 to 22.6) | 16.4 (16.2 to 16.7) |
+| straight | 17.7 (17.7 to 18.0) | 12.8 (11.9 to 13.1) |
+| smooth | 22.2 (21.4 to 22.2) | 15.0 (14.8 to 16.0) |
 
 `advance` steps by 1/1000 s rather than a 60 Hz frame, so the springs stay in
 flight across the whole sampling window; the file says why that prices the same
 arithmetic, and it fails the run if they come to rest. Each retarget here
-starts from rest or moves every node by the same amount, so a smooth route keeps
-its three points. In the browser profile they do not: a bent route retargeted
+starts from rest, so a smooth route keeps its three points. In the browser
+profile they do not: a bent route retargeted
 while it is still moving gains a point per retarget (4, 5, 6 and on to 15
 after twelve, in a probe of one edge) and only drops back to three when it comes
 to rest, which a 500 ms retarget never allows. That is the likely reason
 Chrome's smooth `advance` (44 ms) and `setEdges` (42 ms) are far above these
 figures while its straight ones are not.
 
-Like M5.2b's, these entries are in the report but **not in `baseline.json`**,
+Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
 for the same reason: recording them rewrites the machine-matched file, which is
 the maintainer's call. This is CPU time in Node, not a browser frame or GPU
 evidence.

@@ -21,17 +21,19 @@ const BEND = 25;
 
 /**
  * 1/1000 s rather than a 60 Hz frame's 1/60. A step costs the same at either:
- * with the default half-life both keep `w * dt` above the 0.01 where
- * `stepAxis` switches to its series (0.014 here), so every spring takes the
+ * with the default half-life both keep `w * dt` at or above the 0.01 where
+ * `log1pMinusU` switches to its series (0.014 here), so every spring takes the
  * same branch. At 60 Hz a 20 unit move comes to rest in about 35 calls, and a
  * settled spring is skipped, so the measured loop would drift from pricing
  * motion to pricing a still scene. At 1/1000 s it stays in flight for about
- * 590 calls, more than the sampling window below makes.
+ * 590 calls, more than the sampling window below makes on an Apple M4; on a
+ * machine fast enough to make more, the bench throws rather than measure a
+ * scene at rest.
  */
 const DT = 1 / 1000;
 
 /** `bench/README.md`'s longer window for an iteration measured in milliseconds. */
-const HEAVY = { time: 2000 };
+const HEAVY = { time: 3_000 };
 
 function grid(): { home: Vec2[]; links: [number, number][] } {
   const columns = Math.ceil(Math.sqrt(COUNT * 1.5));
@@ -97,7 +99,7 @@ for (const [style, bend] of [
       HEAVY,
     );
 
-    const moving = atHome(bend);
+    let moving = atHome(bend);
     let phases = 0;
     bench(
       'advance: one frame, every spring in flight',
@@ -108,10 +110,12 @@ for (const [style, bend] of [
       },
       {
         ...HEAVY,
-        // Outside the timed loop, before the warm-up and again before the run,
-        // so each starts with every spring a fresh 20 units from its target.
+        // Outside the timed loop, before the warm-up and again before the run.
+        // From rest each time: retargeting a bent route still in flight adds
+        // a point to it, and this entry prices the route at its own size.
         setup: () => {
           phases += 1;
+          moving = atHome(bend);
           moving.apply(away[phases % 2]!);
         },
       },
