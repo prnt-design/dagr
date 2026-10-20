@@ -396,11 +396,12 @@ export interface RibbonGeometry {
  *
  * Typed arrays that double when full, written in place, because
  * `Renderer.setEdges` tessellates on every frame of an animation: accumulating
- * into `number[]` and copying at the end took 13,169 smooth routes 32 ms on an
- * Apple M4, against 22 ms for this. A counting pass before the walk would
+ * into `number[]` and converting at the end took 13,169 smooth routes 32 ms on
+ * an Apple M4, against 18.7 ms for this. A counting pass before the walk would
  * avoid the doubling too, but the count depends on which joins mitre and which
- * fan, so it would have to repeat the join decisions and could disagree with
- * the walk in a way that writes past an end. Growing on demand cannot.
+ * fan, so unless it came from the same function that makes those decisions it
+ * could disagree with the walk in a way that writes past an end. Growing on
+ * demand cannot.
  */
 class RibbonBuilder {
   position = new Float32Array(INITIAL_BUILDER_VERTICES * 2);
@@ -411,7 +412,6 @@ class RibbonBuilder {
   vertexCount = 0;
   indexCount = 0;
 
-  /** Appends one vertex and returns its index. */
   vertex(x: number, y: number, offsetX: number, offsetY: number, across: number, arc: number): number {
     const vertex = this.vertexCount;
     if (vertex === this.across.length) this.#growVertices();

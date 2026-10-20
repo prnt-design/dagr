@@ -767,11 +767,13 @@ CPU cost is now `setEdges` and `advance` with smooth edges, and `apply` and
 ### With typed-array tessellation (2026-10-20)
 
 `tessellateRibbons` now writes into typed arrays that double when full, where
-it pushed onto `number[]` and copied at the end, and checks a point is finite
+it pushed onto `number[]` and converted at the end, and checks a point is finite
 before building the message that would reject it. The output is byte-identical.
 In Node on the same machine, the 10,000-node smooth graph above with its
 static bend points (13,169 routes, 263,382 vertices) tessellates in 18.7 ms
-where it took 32.2, and `SceneEdges.setEdges` takes 21.3 where it took 33.8.
+where it took 32.2, and `SceneEdges.setEdges` takes 21.3 where it took 33.8
+(means of 20 calls after 5 warm-up calls, timed with `performance.now()` in a
+scratch Vitest file; there is no committed bench entry for it).
 
 Same command, machine, browser and adapter as the section above, `renderer.backend`
 `webgpu` on every row, load average 3.1 to 4.6. Springs only. Two runs; the
@@ -790,13 +792,17 @@ past one tick) and 5,000 smooth (14.3%).
 | 10,000 | smooth | 18.8 | 16.1 | 2.0 | 19.9 | 0.7 | 66.9 | 91% |
 
 - **At 10,000 smooth nodes `setEdges` fell from 23.3 to 19.9 ms** (19.4 in
-  the first run), less than the Node figures, and the frame still misses
-  almost every tick: `advance` and `setEdges` together are about twice it.
+  the first run), a 3.4 ms drop against 12.5 in Node. The springs' routes are
+  not the static ones the Node figure used, and why the browser gains less was
+  not traced. The frame still misses almost every tick: `advance` and
+  `setEdges` together are about twice it.
 - **Straight rows are within the previous section's run-to-run spread**, as
   they should be: a two-point route spends little time in the tessellator.
 
-What remains of smooth `setEdges` is the curve flattening and the walk's
-per-segment records, and building a new geometry every call.
+`setEdges` is still the largest per-frame step at 10,000 smooth nodes. Where
+the rest of it goes has not been profiled; the candidates are the curve
+flattening, the walk's per-segment records, and building a new geometry on
+every call.
 
 ## What the overlay harness measures, and what it does not
 
