@@ -82,12 +82,12 @@ function run(command, args) {
  * Delete every package's benchmark report before measuring again.
  *
  * Without this the attempts are not independent, and independence is the whole
- * claim. `pnpm bench` is `pnpm -r --if-present bench`, so a package that stops
- * writing a report while pnpm still exits zero (its bench script renamed or
- * removed) leaves the PREVIOUS attempt's file on disk, minutes old and well
- * inside the staleness ceiling `bench-check.mjs` enforces. The gate would then
- * read one measurement twice and call it two agreeing runs. Deleting first
- * turns that into the missing-report error it actually is.
+ * claim. `pnpm bench` is `pnpm -r --workspace-concurrency=1 --if-present bench`,
+ * so a package that stops writing a report while pnpm still exits zero (its
+ * bench script renamed or removed) leaves the PREVIOUS attempt's file on disk,
+ * minutes old and well inside the staleness ceiling `bench-check.mjs` enforces.
+ * The gate would then read one measurement twice and call it two agreeing
+ * runs. Deleting first turns that into the missing-report error it actually is.
  */
 function clearReports() {
   for (const workspace of WORKSPACE_DIRS) {
