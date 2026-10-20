@@ -539,6 +539,17 @@ describe('tessellateRibbons: routes that cannot be drawn', () => {
     ).toThrow(/route "e1"\[1\]\.y/);
   });
 
+  it('rejects a coordinate that is not a number rather than coercing it', () => {
+    for (const x of [null, '5', true]) {
+      expect(() =>
+        ribbonOf([
+          { x: 0, y: 0 },
+          { x: x as unknown as number, y: 3 },
+        ]),
+      ).toThrow(/route "e1"\[1\]\.x/);
+    }
+  });
+
   it('rejects options it cannot honour, naming the field', () => {
     const points: Vec2[] = [
       { x: 0, y: 0 },
