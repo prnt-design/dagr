@@ -499,9 +499,14 @@ function fuzz(seed: number, steps: number): Coverage {
   return coverage;
 }
 
+// A seed is about 0.6 s on an Apple M4 and took 6.3 s on a CI runner testing
+// every package at once, past the default 5 s. What this file asserts is the
+// invariants, not the speed, so the limit is the runner's, not the code's.
+const FUZZ_TIMEOUT = { timeout: 60_000 };
+
 describe('Graph invariants under random operation sequences', () => {
   for (const seed of [1, 2, 42, 1337, 20260726]) {
-    it(`holds for seed ${String(seed)}`, () => {
+    it(`holds for seed ${String(seed)}`, FUZZ_TIMEOUT, () => {
       const coverage = fuzz(seed, 400);
       // Guard against a vacuous run: the sequence must actually build a graph,
       // ports and rebindings included, or the checks above would pass on an
@@ -513,7 +518,7 @@ describe('Graph invariants under random operation sequences', () => {
     });
   }
 
-  it('replays a seed identically', () => {
+  it('replays a seed identically', FUZZ_TIMEOUT, () => {
     expect(fuzz(7, 200)).toEqual(fuzz(7, 200));
   });
 });
