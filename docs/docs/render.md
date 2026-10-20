@@ -1720,6 +1720,14 @@ added lay on a segment of the route being arrived at. `MotionEdge.points`
 should key on the edge and not on the vertex; `setEdges` rebuilds a group's
 geometry whole, so nothing here does.
 
+**A retarget in flight drops what has straightened.** An edge retargeted faster
+than it settles never compacts, and its moving vertices never land on the new
+route's parameters, so each retarget would add a point. A retarget therefore
+drops any in-flight point within `restEpsilon` of the line between its
+neighbours and moving with them, unless it is a vertex of the new route. That
+moves the drawing by about 1.2 times `restEpsilon` at most before the next
+retarget, the same order as the snap on arrival.
+
 **Velocity is resampled with position.** A polyline caught mid-flight has a
 velocity per point as well as a position, and the point a retarget adds needs
 both. Zeroing it instead would stop a moving edge dead at every new bend, which

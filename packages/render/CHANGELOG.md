@@ -11,6 +11,12 @@ not" is the category this file has a heading for.
 
 ## Unreleased
 
+- Fix: an edge retargeted while its springs are still moving no longer gains a
+  point on every retarget. A retarget now drops each in-flight point that sits
+  within `restEpsilon` of the line between its neighbours and moves with them
+  within the matching speed, unless it is a vertex of the new route. The drawn
+  edge can differ from the undropped motion by about 1.2 times `restEpsilon`
+  until the next retarget, the same order as the snap on arrival.
 - Fix: an edge group drawn once before it had any edges now draws the edges it
   is given afterwards. Before, three built the group's pipeline without its
   vertex attributes on that empty first frame, so the edges never appeared, on

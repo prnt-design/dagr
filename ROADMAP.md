@@ -290,13 +290,13 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   through `createSceneMotion` every 500 ms): at 10,000 nodes with straight
   edges a frame between retargets spends about 16 ms on the CPU, 8.8 of it in
   `advance`. A retarget frame adds 13 to 15 ms of `apply` and misses the tick;
-  3 to 8% of frames missed it. Smooth edges miss it from 2,500 nodes. The
-  number is not met; the CPU cost to cut is the scene motion, then
-  `setEdges`. Scene motion's `apply` and `advance` have Node bench entries
-  (2026-10-19, `packages/render/bench/scene-motion.bench.ts`). A bent route
-  retargeted while still moving gained a point per retarget until it rested;
-  since 2026-10-20 a retarget drops the points that have straightened, and smooth edges with springs in
-  flight hold the tick to 2,500 nodes. Still open: the 10,000-node CPU frame
+  3 to 8% of frames missed it. Smooth edges missed it from 2,500 nodes.
+  Scene motion's `apply` and `advance` have Node bench entries (2026-10-19,
+  `packages/render/bench/scene-motion.bench.ts`). A bent route retargeted
+  while still moving gained a point per retarget until it rested; since
+  2026-10-20 a retarget drops the points that have straightened and move with
+  their neighbours, and smooth edges with springs in flight hold the tick to
+  2,500 nodes. The number is not met. Still open: the 10,000-node CPU frame
   (`setEdges` for smooth routes, then the scene motion), the ID buffer pass
   (M4.8b), and recording the bench entries in `bench/baseline.json` (the
   maintainer's call).

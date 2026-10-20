@@ -61,8 +61,8 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * polyline's vertices never land on the new route's parameters, so each
  * retarget would add a point until the edge came to rest. A retarget therefore
  * also drops any point that has come within the rest tolerance of the line
- * between its neighbours. The count that remains grows with the route's length
- * over that tolerance rather than with the number of retargets.
+ * between its neighbours and moves with them. The count that remains is set by
+ * how far the moving polyline is from straight, not by the number of retargets.
  *
  * **VELOCITY IS RESAMPLED WITH POSITION, AND THAT IS WHAT KEEPS A RETARGET
  * SMOOTH.** A polyline caught mid-flight has a velocity per point as well as a

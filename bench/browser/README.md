@@ -714,23 +714,26 @@ one tick).
 - **`settled` stayed false** on every frame except 2 or 3 of the 360 (warm-up
   included) in the 10,000 smooth rows. The cause was not traced.
 
-So on this machine M4.10's number is not met with springs in flight: 10,000
-nodes with straight edges hold 60 Hz at the median with no headroom and drop a
-frame on each retarget and on some between, and smooth edges hold it only to
+So on 2026-10-19 M4.10's number was not met with springs in flight: 10,000
+nodes with straight edges held 60 Hz at the median with no headroom and dropped
+a frame on each retarget and on some between, and smooth edges held it only to
 1,000 nodes.
-The CPU cost to cut is `advance` and `apply` in the scene motion, then
+The CPU cost to cut was `advance` and `apply` in the scene motion, then
 `setEdges`. Both scene motion calls now have Node bench entries at 10,000 nodes,
 in `bench/README.md` under "M4.10 scene motion on the CPU".
 
 ### With in-flight route point counts bounded (2026-10-20)
 
 A retarget in `createEdgeMotion` now drops any point of the moving polyline
-that has come within the rest tolerance of the line between its neighbours, so
-a smooth route retargeted in flight no longer gains a point per retarget (see
-`packages/render/src/edge-motion.ts`). Same command, same Apple M4 Mac mini,
-Google Chrome 155.0.8059.85 headed with `--enable-webgpu-developer-features`,
-adapter `apple` `metal-3` (`Apple M4`), not a fallback, `renderer.backend`
-`webgpu` on every row, tick 16.7 ms, DPR 1, `fit`, load average 3.7 to 4.2.
+that has come within the rest tolerance of the line between its neighbours and
+moves with them, so a smooth route retargeted in flight no longer gains a point
+per retarget (see `packages/render/src/edge-motion.ts`). Same command and Apple
+M4 Mac mini, Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, one patch release past the 2026-10-19
+run's 155.0.8059.82, so the straight rows, whose routes have no interior point,
+are the control for the browser change. Adapter `apple` `metal-3` (`Apple
+M4`), not a fallback, `renderer.backend` `webgpu` on every row, tick 16.7 ms,
+DPR 1, `fit`, load average 3.7 to 4.2.
 Springs only, since the sway path is unchanged. Two runs; the table is the
 second, in the 2026-10-19 table's units. The first differed most at 10,000
 straight nodes (4% past one tick) and 10,000 smooth (`apply` 21.8, 97.7% past
@@ -751,9 +754,10 @@ one tick).
   missed it before. At 10,000 nodes `advance` fell from 44.0 to 14.6 ms and
   `setEdges` from 42.5 to 23.3, and the GPU `sum` from timestamp queries fell
   from 1.15 to 0.98 ms, but the frame still misses almost every tick.
-- **Straight rows are within run-to-run noise of the 2026-10-19 table**: a
-  two-point route has no interior point to gain or drop. 10,000 straight nodes
-  still miss on some retargets (1.7% and 4% of frames in the two runs).
+- **Straight rows moved little**: a two-point route has no interior point to
+  gain or drop. At 10,000 nodes `setEdges` read 3.3 to 3.4 against 4.7 and
+  past one tick 1.7% and 4% against 3% and 7.7%, so a small part of the smooth
+  rows' gain may be the browser or the machine's load rather than this change.
 - **`settled` stayed false** on every frame of every row.
 
 M4.10's number is still not met with springs in flight. At 10,000 nodes the
