@@ -813,7 +813,7 @@ flattening's chord test and the walk's per-segment records. Every point of a
 smooth route was an object, made by the flattening, again by the second clean
 and once more inside a segment record. `tessellateRibbons` now carries each
 route through those steps in two `Float64Array`s reused from route to route,
-and makes no object per point. The output is byte-identical: sha256 of every
+and makes no `Vec2` per point. The output is byte-identical: sha256 of every
 array and the ranges matched over these routes and 4,000 random ones
 (including duplicate and near-duplicate points) under six option sets, and
 `shapeEdgePath`, `smoothCentreline` and the non-finite error message matched

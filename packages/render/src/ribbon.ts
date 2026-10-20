@@ -397,7 +397,7 @@ export interface RibbonGeometry {
  * Typed arrays that double when full, written in place, because
  * `Renderer.setEdges` tessellates on every frame of an animation: accumulating
  * into `number[]` and converting at the end took 13,169 smooth routes 32 ms on
- * an Apple M4, against 18.7 ms for this. A counting pass before the walk would
+ * an Apple M4, against 18.7 ms for this when it replaced them. A counting pass before the walk would
  * avoid the doubling too, but the count depends on which joins mitre and which
  * fan, so unless it came from the same function that makes those decisions it
  * could disagree with the walk in a way that writes past an end. Growing on
@@ -465,11 +465,11 @@ interface Rib {
  * A centreline as two coordinate arrays that double when full, reused from one
  * route to the next.
  *
- * Points used to be `Vec2` objects, made again by the flattening, again by the
- * second clean and once more inside a per-segment record, and at 13,169 smooth
- * routes the garbage collector was the largest single cost of a tessellation.
- * A `Float64Array` holds the same doubles an object did, so no coordinate
- * rounds differently and the geometry is byte-identical.
+ * Arrays rather than a `Vec2` per point because a smooth route's points pass
+ * through cleaning, flattening and the walk, and at 13,169 smooth routes an
+ * object per point per step made the garbage collector the largest single cost
+ * of a tessellation. A `Float64Array` holds the same doubles an object would,
+ * so no coordinate rounds differently.
  */
 class Polyline {
   xs = new Float64Array(64);
@@ -487,9 +487,26 @@ class Polyline {
   }
 }
 
-function polylineOf(points: readonly Vec2[], out: Polyline = new Polyline()): Polyline {
-  out.length = 0;
+function polylineOf(points: readonly Vec2[]): Polyline {
+  const out = new Polyline();
   for (const point of points) out.push(point.x, point.y);
+  return out;
+}
+
+/**
+ * {@link polylineOf} for the tessellator, rejecting a coordinate that is not a
+ * finite number BEFORE the typed array converts it: written first, a `null`
+ * would become 0 and draw at the origin, and `"5"` would become 5.
+ */
+function givenCentreline(points: readonly Vec2[], field: string, out: Polyline): Polyline {
+  out.length = 0;
+  for (const [i, point] of points.entries()) {
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+      requireFinite(point.x, `${field}[${String(i)}].x`);
+      requireFinite(point.y, `${field}[${String(i)}].y`);
+    }
+    out.push(point.x, point.y);
+  }
   return out;
 }
 
@@ -1089,7 +1106,8 @@ export function tessellateRibbons(
   for (const route of routes) {
     const vertexStart = out.vertexCount;
     const indexStart = out.indexCount;
-    cleanCentreline(polylineOf(route.points, given), `route "${route.id}"`, cleaned);
+    const field = `route "${route.id}"`;
+    cleanCentreline(givenCentreline(route.points, field, given), field, cleaned);
     let centreline = cleaned;
     if (resolved.smooth && cleaned.length >= 2) {
       smoothInto(
