@@ -644,6 +644,45 @@ describe('createEdgeMotion', () => {
     expect(edgeNamed(motion.advance(0).edges, 'e1').points).toEqual(LOPSIDED);
   });
 
+  it('keeps a bent route at its own count when the same shape is retargeted mid-flight', () => {
+    // The scene-motion bench's case: every relayout moves the whole drawing, so
+    // the bend lands at the same fraction of the route each time.
+    const shifted = (dx: number): Vec2[] => BENT.map((p) => ({ x: p.x + dx, y: p.y }));
+    const motion = createEdgeMotion();
+    motion.resync([target('e1', BENT)]);
+    for (let round = 0; round < 40; round += 1) {
+      motion.apply({ added: [], removed: [], rerouted: [target('e1', shifted(round % 2 === 0 ? 2 : -2))] });
+      const frame = motion.advance(1 / 60);
+      expect(frame.settled).toBe(false);
+      expect(edgeNamed(frame.edges, 'e1').points).toHaveLength(BENT.length);
+    }
+  });
+
+  it('keeps the count bounded, and the drawing in place, while the bend keeps moving', () => {
+    // A new bend fraction every frame, never repeating, so no two routes share
+    // an interior parameter. Without dropping points this reaches 603.
+    const bentAt = (round: number): Vec2[] => [
+      { x: 0, y: 0 },
+      { x: 1 + 8 * ((round * 0.6180339887) % 1), y: 5 },
+      { x: 10, y: 0 },
+    ];
+    const motion = createEdgeMotion();
+    motion.resync([target('e1', BENT)]);
+    const counts: number[] = [];
+    for (let round = 0; round < 600; round += 1) {
+      const before = edgeNamed(motion.advance(0).edges, 'e1').points.map((p) => ({ ...p }));
+      motion.apply({ added: [], removed: [], rerouted: [target('e1', bentAt(round))] });
+      const after = edgeNamed(motion.advance(0).edges, 'e1').points;
+      // Per axis within the tolerance is at most its diagonal off the line.
+      expect(maxDeviation(after, before)).toBeLessThanOrEqual(DEFAULT_MOTION_REST * Math.SQRT2);
+      expect(maxDeviation(before, after)).toBeLessThanOrEqual(DEFAULT_MOTION_REST * Math.SQRT2);
+      counts.push(after.length);
+      motion.advance(1 / 60);
+    }
+    expect(Math.max(...counts.slice(300))).toBeLessThanOrEqual(Math.max(...counts.slice(0, 300)));
+    expect(Math.max(...counts)).toBeLessThanOrEqual(16);
+  });
+
   it('refuses an elapsed time that is negative', () => {
     const motion = createEdgeMotion();
     expect(() => motion.advance(-1)).toThrow(RangeError);

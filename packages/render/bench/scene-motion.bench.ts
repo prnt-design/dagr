@@ -110,9 +110,8 @@ for (const [style, bend] of [
       },
       {
         ...HEAVY,
-        // Outside the timed loop, before the warm-up and again before the run.
-        // From rest each time: retargeting a bent route still in flight adds
-        // a point to it, and this entry prices the route at its own size.
+        // Outside the timed loop, before the warm-up and again before the run,
+        // so both start from rest with one retarget in flight.
         setup: () => {
           phases += 1;
           moving = atHome(bend);

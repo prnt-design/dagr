@@ -56,6 +56,17 @@ import { requireFinite, requireNonNegative, requirePositive } from './validate.j
  * layout gave it, and the union-sized points are drawn only while the edge is
  * moving.
  *
+ * **A RETARGET IN FLIGHT KEEPS EACH SPRING'S PLACE, AND DROPS WHAT HAS
+ * STRAIGHTENED.** An edge caught moving is retargeted from its springs, and
+ * re-measuring that polyline by arc length puts its old bend somewhere no
+ * route has a vertex, so every retarget before arrival would add a point.
+ * Each spring instead keeps the parameter of its target, so a route retargeted
+ * to the same shape stays at its own count. A bend that moves on every
+ * retarget still adds a point each time, so the retarget also drops any point
+ * that has come within the rest tolerance of the line between its neighbours:
+ * a three-point route given a new bend every frame at 60 Hz stays between 8
+ * and 10 points instead of growing by one a frame.
+ *
  * **VELOCITY IS RESAMPLED WITH POSITION, AND THAT IS WHAT KEEPS A RETARGET
  * SMOOTH.** A polyline caught mid-flight has a velocity per point as well as a
  * position, so the point a retarget adds needs both. Interpolating the velocity
@@ -115,9 +126,10 @@ export interface EdgeMotionDelta {
  * double an allocation for a hazard the `readonly` describes.
  *
  * THE COUNT IS NOT STABLE ACROSS FRAMES. While an edge is in flight its points
- * are the union of the route it left and the route it is going to; on the frame
- * it arrives they are the target route's own. Both draw the same line at the
- * moment they change, and `Renderer.setEdges` rebuilds a group's geometry whole,
+ * are the union of the route it left and the route it is going to, less any a
+ * retarget found within the rest tolerance of straight; on the frame it arrives
+ * they are the target route's own. Both draw the same line, to within that
+ * tolerance, at the moment they change, and `Renderer.setEdges` rebuilds a group's geometry whole,
  * so nothing downstream binds per segment. A caller that does bind per segment
  * should key on the edge and not on the vertex.
  */
@@ -418,6 +430,42 @@ function sampleAlong(
 }
 
 /**
+ * Whether `values[index]` is within `tolerance`, per axis, of the line between
+ * its two neighbours read at its own parameter. False where a neighbour shares
+ * its parameter, since that span has no fraction to read.
+ */
+function nearChord(
+  parameters: readonly number[],
+  values: readonly Vec2[],
+  index: number,
+  tolerance: number,
+): boolean {
+  const t0 = parameters[index - 1];
+  const t = parameters[index];
+  const t1 = parameters[index + 1];
+  const before = values[index - 1];
+  const value = values[index];
+  const after = values[index + 1];
+  if (
+    t0 === undefined ||
+    t === undefined ||
+    t1 === undefined ||
+    before === undefined ||
+    value === undefined ||
+    after === undefined ||
+    t0 === t ||
+    t === t1
+  ) {
+    return false;
+  }
+  const fraction = (t - t0) / (t1 - t0);
+  return (
+    Math.abs(value.x - (before.x + (after.x - before.x) * fraction)) <= tolerance &&
+    Math.abs(value.y - (before.y + (after.y - before.y) * fraction)) <= tolerance
+  );
+}
+
+/**
  * Two routes given a common list of places along themselves, so their points
  * correspond one for one.
  *
@@ -458,6 +506,8 @@ interface EdgeEntry {
   targets: Vec2[];
   /** The target route in its OWN point count: what arrival compacts back to. */
   rest: readonly Vec2[];
+  /** Where along `rest` each spring's target sits, as `routeParameters` measures it. */
+  parameters: readonly number[];
   /** What to draw this frame. The same array every frame while settled. */
   points: readonly Vec2[];
   departing: boolean;
@@ -482,6 +532,7 @@ interface RetargetTransition {
   readonly springs: Spring2DState[];
   readonly targets: Vec2[];
   readonly rest: readonly Vec2[];
+  readonly parameters: readonly number[];
   readonly points: readonly Vec2[];
 }
 
@@ -583,6 +634,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
     }
     entry.springs = springs;
     entry.targets = targets;
+    entry.parameters = routeParameters(entry.rest);
     entry.points = points;
     entry.moving = false;
   }
@@ -593,6 +645,9 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       springs: [],
       targets: [],
       rest: route,
+      // Not `[]`: an empty literal here made every 10k-node apply about 2 ms
+      // slower in `scene-motion.bench.ts`, though settling replaces it at once.
+      parameters: routeParameters(route),
       points: route,
       departing: false,
       moving: false,
@@ -616,20 +671,24 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
     field: string,
     id: string,
   ): RetargetTransition {
-    const fromParameters = routeParameters(entry.points);
     const toParameters = routeParameters(route);
-    const merged = mergeParameters(fromParameters, toParameters);
-    const positions = sampleAlong(entry.points, fromParameters, merged);
-    const velocities = sampleAlong(
+    const merged = mergeParameters(entry.parameters, toParameters);
+    const sampledPositions = sampleAlong(entry.points, entry.parameters, merged);
+    const sampledVelocities = sampleAlong(
       entry.springs.map((spring) => spring.velocity),
-      fromParameters,
+      entry.parameters,
       merged,
     );
+    const sampledTargets = sampleAlong(route, toParameters, merged);
+    const kept = keptIndices(merged, toParameters, sampledPositions, sampledVelocities);
+    const parameters = kept?.map((index) => merged[index] ?? 0) ?? merged;
+    const positions = kept?.map((index) => sampledPositions[index] ?? AT_REST) ?? sampledPositions;
+    const velocities = kept?.map((index) => sampledVelocities[index] ?? AT_REST) ?? sampledVelocities;
+    const targets = kept?.map((index) => sampledTargets[index] ?? AT_REST) ?? sampledTargets;
     const springs = positions.map((position, index) => ({
       position,
       velocity: velocities[index] ?? AT_REST,
     }));
-    const targets = sampleAlong(route, toParameters, merged);
     for (const [index, position] of positions.entries()) {
       const target = targets[index];
       if (target === undefined) continue;
@@ -646,7 +705,54 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
         );
       }
     }
-    return { springs, targets, rest: route, points: positions };
+    return { springs, targets, rest: route, parameters, points: positions };
+  }
+
+  /**
+   * The indices of a fresh correspondence worth keeping, or `undefined` when
+   * that is all of them.
+   *
+   * A point is dropped when its target is not a vertex of the new route and its
+   * position and velocity are each within the rest tolerance of what its two
+   * neighbours interpolate to at its parameter. The springs are linear and
+   * share one `w`, so the dropped point's offset from that interpolation is
+   * itself a spring pulled to zero: it starts at most `restEpsilon` away with at
+   * most `restSpeed`, and a critically damped spring released from there peaks
+   * at `2 / sqrt(e)`, about 1.21 times `restEpsilon`, before it decays. That is
+   * the size of the snap arrival already makes.
+   *
+   * A point is dropped only when the one before it was kept, so both neighbours
+   * it was measured against are still there.
+   */
+  function keptIndices(
+    parameters: readonly number[],
+    vertices: readonly number[],
+    positions: readonly Vec2[],
+    velocities: readonly Vec2[],
+  ): number[] | undefined {
+    const last = parameters.length - 1;
+    // Allocated at the first drop, so a retarget that drops nothing allocates nothing.
+    let kept: number[] | undefined;
+    let previousKept = true;
+    // Both lists ascend, so one cursor finds whether each parameter is a vertex.
+    let vertex = 0;
+    for (let index = 1; index < last; index += 1) {
+      const t = parameters[index] ?? Number.NaN;
+      while (vertex < vertices.length && (vertices[vertex] ?? Infinity) < t) vertex += 1;
+      const droppable: boolean =
+        previousKept &&
+        vertices[vertex] !== t &&
+        nearChord(parameters, positions, index, restEpsilon) &&
+        nearChord(parameters, velocities, index, restSpeed);
+      if (droppable) {
+        kept ??= Array.from({ length: index }, (_, earlier) => earlier);
+      } else {
+        kept?.push(index);
+      }
+      previousKept = !droppable;
+    }
+    kept?.push(last);
+    return kept;
   }
 
   /** Applies a transition only after every transition in the call was validated. */
@@ -654,6 +760,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
     entry.springs = transition.springs;
     entry.targets = transition.targets;
     entry.rest = transition.rest;
+    entry.parameters = transition.parameters;
     entry.points = transition.points;
     entry.departing = false;
     entry.moving = !atRest(entry);

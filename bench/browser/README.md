@@ -640,8 +640,7 @@ So on this machine, at 10,000 nodes, M4.10's frame is CPU-bound: about 0.5 ms
 of GPU at DPR 1 and 1.2 at DPR 2 with straight edges, against 5 to 7 ms of
 `setNodes` and `setEdges` on the CPU in these runs. The next section drives the
 same scene through `createSceneMotion`. Still open for M4.10: an ID buffer pass
-(M4.8b has none yet), a bounded point count for bent routes retargeted in
-flight (see the next section), and recording a local baseline: the scene
+(M4.8b has none yet) and recording a local baseline: the scene
 motion's CPU cost has Node bench entries in `bench/README.md`, outside
 `baseline.json` until the maintainer records them.
 
@@ -705,8 +704,8 @@ one tick).
   motion changes what the CPU does, not what the GPU draws.
 - **Smooth edges miss the tick from 2,500 nodes.** Each smooth route has a bend
   point, and the edge springs hand back more points than the route they were
-  given (a bent route retargeted while still moving gains a point per
-  retarget; see "M4.10 scene motion on the CPU" in `bench/README.md`), so
+  given (a bent route retargeted while still moving gained a point per
+  retarget, fixed on 2026-10-20; see the next section), so
   `setEdges` has more to tessellate: at 10,000 nodes it is 42 ms
   against the sway's 26, and the GPU `sum` rises from this run's sway 0.85 to
   1.15 ms. At
@@ -721,8 +720,45 @@ frame on each retarget and on some between, and smooth edges hold it only to
 1,000 nodes.
 The CPU cost to cut is `advance` and `apply` in the scene motion, then
 `setEdges`. Both scene motion calls now have Node bench entries at 10,000 nodes,
-in `bench/README.md` under "M4.10 scene motion on the CPU", and the smooth rows
-point first at the bent routes' growing point count.
+in `bench/README.md` under "M4.10 scene motion on the CPU".
+
+### With in-flight route point counts bounded (2026-10-20)
+
+`createEdgeMotion` now keeps each spring's place along its target route across
+a retarget instead of re-measuring the moving polyline, so a smooth route
+retargeted in flight stays at three points; it also drops a point that has come
+within the rest tolerance of straight (see `packages/render/src/edge-motion.ts`).
+Same command, same Apple M4 Mac mini, Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (`Apple M4`),
+not a fallback, `renderer.backend` `webgpu` on every row, tick 16.7 ms, DPR 1,
+`fit`, load average 4.7 to 6.0. Springs only, since the sway path is
+unchanged. Two runs; the table is the second, in the 2026-10-19 table's units.
+The first differed most at 10,000 straight nodes (interval p95 19.7, 4.7% past
+one tick) and 5,000 smooth (27% past one tick).
+
+| Nodes | Edges | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Interval p95 | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1,000 | straight | 3.9 | 2.1 | 0.5 | 0.7 | 0.3 | 18.3 | 0% |
+| 2,500 | straight | 3.5 | 1.9 | 0.5 | 1.0 | 0.2 | 18.4 | 0% |
+| 5,000 | straight | 6.1 | 3.9 | 1.1 | 2.4 | 0.3 | 18.2 | 0% |
+| 10,000 | straight | 14.5 | 9.9 | 1.9 | 3.9 | 0.4 | 33.3 | 10% |
+| 1,000 | smooth | 2.4 | 1.3 | 0.2 | 2.2 | 0.2 | 18.2 | 0% |
+| 2,500 | smooth | 5.0 | 3.4 | 0.5 | 5.6 | 0.3 | 18.2 | 0% |
+| 5,000 | smooth | 10.3 | 7.4 | 0.9 | 10.8 | 0.4 | 35.0 | 31.7% |
+| 10,000 | smooth | 20.8 | 16.2 | 2.0 | 24.5 | 0.8 | 67.8 | 98% |
+
+- **Smooth edges now hold the tick to 2,500 nodes**, where 28.3% of frames
+  missed it before. At 10,000 nodes `advance` fell from 44.0 to 16.2 ms,
+  `setEdges` from 42.5 to 24.5 and the GPU `sum` from 1.15 to 0.98 ms, but the
+  frame still misses on almost every tick.
+- **Straight rows are unchanged**, as expected: a two-point route never gained
+  points. 10,000 straight nodes still miss on retargets and on some frames
+  between (4.7% and 10% in the two runs).
+- **`settled` stayed false** on every frame of every row.
+
+M4.10's number is still not met with springs in flight. At 10,000 nodes the
+CPU cost is now `setEdges` and `advance` with smooth edges, and `apply` and
+`advance` with straight ones.
 
 ## What the overlay harness measures, and what it does not
 
