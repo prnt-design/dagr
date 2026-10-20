@@ -613,6 +613,35 @@ describe('tessellateRibbons: many routes', () => {
       expect(at(geometry.arc, range.vertexStart)).toBe(0);
     }
   });
+
+  it('tessellates a scene past 20,000 vertices exactly as each route alone', () => {
+    const many: RibbonRoute[] = Array.from({ length: 2_000 }, (_, i) => ({
+      id: `r${String(i)}`,
+      points: [
+        { x: i, y: 0 },
+        { x: i + 25 + (i % 7), y: 45 },
+        { x: i + (i % 3), y: 90 },
+      ],
+    }));
+    const options = { curve: 'smooth' } as const;
+    const scene = tessellateRibbons(many, options);
+    expect(scene.vertexCount).toBeGreaterThan(20_000);
+    expect(scene.position).toHaveLength(scene.vertexCount * 2);
+    expect(scene.arc).toHaveLength(scene.vertexCount);
+    expect(scene.index).toHaveLength(scene.indexCount);
+
+    for (const [i, route] of many.entries()) {
+      const alone = tessellateRibbons([route], options);
+      const range = scene.ranges[i];
+      if (range === undefined) throw new Error(`no range for route ${String(i)}`);
+      const { vertexStart: v, vertexCount: n, indexStart: s, indexCount: m } = range;
+      expect(scene.position.subarray(v * 2, (v + n) * 2)).toEqual(alone.position);
+      expect(scene.offset.subarray(v * 2, (v + n) * 2)).toEqual(alone.offset);
+      expect(scene.across.subarray(v, v + n)).toEqual(alone.across);
+      expect(scene.arc.subarray(v, v + n)).toEqual(alone.arc);
+      expect(scene.index.subarray(s, s + m).map((index) => index - v)).toEqual(alone.index);
+    }
+  });
 });
 
 describe('smoothCentreline', () => {

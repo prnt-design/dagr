@@ -391,27 +391,68 @@ export interface RibbonGeometry {
 }
 
 /**
- * The arrays under construction, before they are copied into a
+ * The arrays under construction, before they are trimmed into a
  * {@link RibbonGeometry}.
  *
- * Plain `number[]`, so the doubles are live at the same moment as the typed
- * arrays they are copied into: at the campaign's polyline scale that is about
- * 4.6 MB of accumulator against 2.5 MB of buffers, and `'smooth'` multiplies
- * both. The alternative is a counting pass before the walk, which would let
- * the typed arrays be allocated once and written directly, and it is not taken
- * here because the count depends on which joins mitre and which fan, so the
- * counting pass would have to repeat the join decisions and could disagree
- * with the walk in a way that writes past an end. It is the right change when
- * a profile asks for it, and the right shape for it is to return the counts
- * from the same function that makes the decisions rather than to duplicate
- * them.
+ * Typed arrays that double when full, written in place, because
+ * `Renderer.setEdges` tessellates on every frame of an animation: accumulating
+ * into `number[]` and converting at the end took 13,169 smooth routes 32 ms on
+ * an Apple M4, against 18.7 ms for this. A counting pass before the walk would
+ * avoid the doubling too, but the count depends on which joins mitre and which
+ * fan, so unless it came from the same function that makes those decisions it
+ * could disagree with the walk in a way that writes past an end. Growing on
+ * demand cannot.
  */
-interface RibbonBuilder {
-  readonly position: number[];
-  readonly offset: number[];
-  readonly across: number[];
-  readonly arc: number[];
-  readonly index: number[];
+class RibbonBuilder {
+  position = new Float32Array(INITIAL_BUILDER_VERTICES * 2);
+  offset = new Float32Array(INITIAL_BUILDER_VERTICES * 2);
+  across = new Float32Array(INITIAL_BUILDER_VERTICES);
+  arc = new Float32Array(INITIAL_BUILDER_VERTICES);
+  index = new Uint32Array(INITIAL_BUILDER_VERTICES * 3);
+  vertexCount = 0;
+  indexCount = 0;
+
+  vertex(x: number, y: number, offsetX: number, offsetY: number, across: number, arc: number): number {
+    const vertex = this.vertexCount;
+    if (vertex === this.across.length) this.#growVertices();
+    this.position[vertex * 2] = x;
+    this.position[vertex * 2 + 1] = y;
+    this.offset[vertex * 2] = offsetX;
+    this.offset[vertex * 2 + 1] = offsetY;
+    this.across[vertex] = across;
+    this.arc[vertex] = arc;
+    this.vertexCount = vertex + 1;
+    return vertex;
+  }
+
+  triangle(a: number, b: number, c: number): void {
+    const at = this.indexCount;
+    if (at + 3 > this.index.length) this.index = grown(this.index, this.index.length * 2);
+    this.index[at] = a;
+    this.index[at + 1] = b;
+    this.index[at + 2] = c;
+    this.indexCount = at + 3;
+  }
+
+  #growVertices(): void {
+    const capacity = this.across.length * 2;
+    this.position = grown(this.position, capacity * 2);
+    this.offset = grown(this.offset, capacity * 2);
+    this.across = grown(this.across, capacity);
+    this.arc = grown(this.arc, capacity);
+  }
+}
+
+/**
+ * Room for a few hundred routes before the first doubling. Small enough that a
+ * group of a handful of edges does not allocate megabytes it never fills.
+ */
+const INITIAL_BUILDER_VERTICES = 4096;
+
+function grown<T extends Float32Array | Uint32Array>(array: T, length: number): T {
+  const next = new (array.constructor as new (length: number) => T)(length);
+  next.set(array);
+  return next;
 }
 
 /** A pair of boundary vertices at one centreline point, left side and right side. */
@@ -470,12 +511,7 @@ function pushVertex(
   across: number,
   arc: number,
 ): number {
-  const index = out.across.length;
-  out.position.push(point.x, point.y);
-  out.offset.push(offsetX, offsetY);
-  out.across.push(across);
-  out.arc.push(arc);
-  return index;
+  return out.vertex(point.x, point.y, offsetX, offsetY, across, arc);
 }
 
 /**
@@ -520,8 +556,8 @@ function pushRib(
  * `FrontSide` in a way that looks like a missing draw call.
  */
 function bridgeRibs(out: RibbonBuilder, previous: Rib, next: Rib): void {
-  out.index.push(previous.left, previous.right, next.right);
-  out.index.push(previous.left, next.right, next.left);
+  out.triangle(previous.left, previous.right, next.right);
+  out.triangle(previous.left, next.right, next.left);
 }
 
 /**
@@ -539,8 +575,12 @@ function bridgeRibs(out: RibbonBuilder, previous: Rib, next: Rib): void {
 function cleanCentreline(points: readonly Vec2[], field: string): Vec2[] {
   const kept: Vec2[] = [];
   for (const [i, point] of points.entries()) {
-    requireFinite(point.x, `${field}[${String(i)}].x`);
-    requireFinite(point.y, `${field}[${String(i)}].y`);
+    // Tested before the messages are built: two strings per point on every
+    // call is measurable on a frame of 13,000 smooth routes.
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+      requireFinite(point.x, `${field}[${String(i)}].x`);
+      requireFinite(point.y, `${field}[${String(i)}].y`);
+    }
     const previous = kept.at(-1);
     if (previous !== undefined) {
       const dx = point.x - previous.x;
@@ -913,8 +953,8 @@ function tessellateCentreline(
         // Counter-clockwise either way: a left turn walks the right side from
         // the incoming normal round to the outgoing one, a right turn walks
         // the left side the other way.
-        if (cross > 0) out.index.push(centre, from, to);
-        else out.index.push(centre, to, from);
+        if (cross > 0) out.triangle(centre, from, to);
+        else out.triangle(centre, to, from);
       }
     }
     rib = outgoing;
@@ -981,12 +1021,12 @@ export function tessellateRibbons(
   options?: RibbonOptions,
 ): RibbonGeometry {
   const resolved = requireRibbonOptions(options);
-  const out: RibbonBuilder = { position: [], offset: [], across: [], arc: [], index: [] };
+  const out = new RibbonBuilder();
   const ranges: RibbonRange[] = [];
 
   for (const route of routes) {
-    const vertexStart = out.across.length;
-    const indexStart = out.index.length;
+    const vertexStart = out.vertexCount;
+    const indexStart = out.indexCount;
     const cleaned = cleanCentreline(route.points, `route "${route.id}"`);
     // Flattened points go through the cleaner a second time, which is not
     // belt and braces: `segmentsOf` divides by a segment's length, and the
@@ -1009,21 +1049,21 @@ export function tessellateRibbons(
     ranges.push({
       id: route.id,
       vertexStart,
-      vertexCount: out.across.length - vertexStart,
+      vertexCount: out.vertexCount - vertexStart,
       indexStart,
-      indexCount: out.index.length - indexStart,
+      indexCount: out.indexCount - indexStart,
     });
   }
 
   return {
-    position: new Float32Array(out.position),
-    offset: new Float32Array(out.offset),
-    across: new Float32Array(out.across),
-    arc: new Float32Array(out.arc),
-    index: new Uint32Array(out.index),
+    position: out.position.slice(0, out.vertexCount * 2),
+    offset: out.offset.slice(0, out.vertexCount * 2),
+    across: out.across.slice(0, out.vertexCount),
+    arc: out.arc.slice(0, out.vertexCount),
+    index: out.index.slice(0, out.indexCount),
     ranges,
-    vertexCount: out.across.length,
-    indexCount: out.index.length,
+    vertexCount: out.vertexCount,
+    indexCount: out.indexCount,
   };
 }
 
