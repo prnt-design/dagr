@@ -325,6 +325,9 @@ importers:
 
   packages/render:
     devDependencies:
+      '@dagr/bench':
+        specifier: workspace:*
+        version: link:../../bench
       '@types/three':
         specifier: ^0.185.0
         version: 0.185.1

@@ -46,9 +46,11 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "bench": "vitest bench --run --outputJson bench-report.json",
     "build": "tsc -p tsconfig.build.json"
   },
   "devDependencies": {
+    "@dagr/bench": "workspace:*",
     "@types/three": "^0.185.0",
     "jsdom": "^30.0.1",
     "three": "^0.185.1"

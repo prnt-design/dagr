@@ -16,7 +16,7 @@
   "scripts": {
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r --if-present test",
-    "bench": "pnpm -r --if-present bench",
+    "bench": "pnpm -r --workspace-concurrency=1 --if-present bench",
     "bench:check": "node bench/bin/bench-check.mjs",
     "bench:ci": "node bench/bin/bench-ci.mjs",
     "bench:baseline": "node bench/bin/bench-check.mjs --update",

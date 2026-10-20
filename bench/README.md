@@ -42,6 +42,38 @@ The CI argument above is unchanged by the baseline being arm64 macOS: the
 remaining reason the gate stays local is runner noise and runner identity, not
 which architecture the file happens to name.
 
+## M4.10 scene motion on the CPU
+
+`packages/render/bench/scene-motion.bench.ts` times the two scene motion calls
+`bench/browser/frame-profile.mjs --motion=springs` found most expensive, on
+the same 10,000 node grid and edge styles, in Node rather than a browser:
+`apply` retargeting every node and edge, and `advance` stepping one frame with
+every spring in flight. Measured 2026-10-19 on the same Apple M4 and Node
+`v25.6.1`, three runs at 1-minute loads between 5.4 and 5.8 (background system
+work this time; the baseline's were 2.4 to 3.5). Medians in milliseconds, the
+range across the three runs in brackets:
+
+| Edges | `apply` | `advance` |
+| --- | --- | --- |
+| straight | 18.0 (17.9 to 18.1) | 12.3 (12.1 to 12.5) |
+| smooth | 22.3 (21.9 to 22.6) | 16.4 (16.2 to 16.7) |
+
+`advance` steps by 1/1000 s rather than a 60 Hz frame, so the springs stay in
+flight across the whole sampling window; the file says why that prices the same
+arithmetic, and it fails the run if they come to rest. Each retarget here
+starts from rest or moves every node by the same amount, so a smooth route keeps
+its three points. In the browser profile they do not: a bent route retargeted
+while it is still moving gains a point per retarget (4, 5, 6 and on to 15
+after twelve, in a probe of one edge) and only drops back to three when it comes
+to rest, which a 500 ms retarget never allows. That is the likely reason
+Chrome's smooth `advance` (44 ms) and `setEdges` (42 ms) are far above these
+figures while its straight ones are not.
+
+Like M5.2b's, these entries are in the report but **not in `baseline.json`**,
+for the same reason: recording them rewrites the machine-matched file, which is
+the maintainer's call. This is CPU time in Node, not a browser frame or GPU
+evidence.
+
 ## M5.2a CPU pointer-query baseline
 
 The first interaction baseline was measured on 2026-10-01 on the same Apple M4
@@ -539,6 +571,13 @@ shrinking it below what it is meant to measure.
 
 Then run `pnpm bench && pnpm bench:baseline` and commit the baseline with the
 run, saying in the message what changed to justify the numbers.
+
+`pnpm bench` runs one package at a time (`--workspace-concurrency=1`), because a
+package's benchmarks running beside another's move the other's numbers. When
+`@prnt/dagr-render` gained its first benchmark it started alongside
+`@prnt/dagr-graph`'s, and `bench:ci` failed graph's `topologicalOrder` 2 of 2
+at a 1-minute load of 3.2; with render's bench script removed it passed 2 of 2
+at the same load, and one package at a time it passed 2 of 2 from a load of 7.8.
 
 Two traps worth knowing. Make sure the benchmark actually does the work: writing
 the same attribute value every iteration takes `diffAttrs`'s no-change early
