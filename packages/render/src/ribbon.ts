@@ -449,7 +449,7 @@ class RibbonBuilder {
  */
 const INITIAL_BUILDER_VERTICES = 4096;
 
-function grown<T extends Float32Array | Uint32Array>(array: T, length: number): T {
+function grown<T extends Float32Array | Float64Array | Uint32Array>(array: T, length: number): T {
   const next = new (array.constructor as new (length: number) => T)(length);
   next.set(array);
   return next;
@@ -462,56 +462,40 @@ interface Rib {
 }
 
 /**
- * One straight run of a cleaned centreline, with everything the walk needs
- * about it: its two points, its UNIT direction, and the arc length at each end.
+ * A centreline as two coordinate arrays that double when full, reused from one
+ * route to the next.
  *
- * Precomputed into records rather than read back out of the point array by
- * index, which is what keeps the walk free of index guards: a direction is
- * meaningless without the pair of points it came from, and a record says so.
- * The unit direction exists because both the normal and the turn test want it,
- * and a normalisation is a `hypot` and two divides that no join should repeat.
+ * Points used to be `Vec2` objects, made again by the flattening, again by the
+ * second clean and once more inside a per-segment record, and at 13,169 smooth
+ * routes the garbage collector was the largest single cost of a tessellation.
+ * A `Float64Array` holds the same doubles an object did, so no coordinate
+ * rounds differently and the geometry is byte-identical.
  */
-interface Segment {
-  readonly from: Vec2;
-  readonly to: Vec2;
-  readonly dx: number;
-  readonly dy: number;
-  readonly arcFrom: number;
-  readonly arcTo: number;
-}
+class Polyline {
+  xs = new Float64Array(64);
+  ys = new Float64Array(64);
+  length = 0;
 
-/**
- * The segments of a cleaned centreline. Every length is above
- * {@link MIN_SEGMENT_WORLD}, because {@link cleanCentreline} ran first, so the
- * division that normalises a direction here cannot be by zero.
- */
-function segmentsOf(points: readonly Vec2[]): Segment[] {
-  const segments: Segment[] = [];
-  let from: Vec2 | undefined;
-  let arc = 0;
-  for (const to of points) {
-    if (from !== undefined) {
-      const dx = to.x - from.x;
-      const dy = to.y - from.y;
-      const length = Math.hypot(dx, dy);
-      segments.push({ from, to, dx: dx / length, dy: dy / length, arcFrom: arc, arcTo: arc + length });
-      arc += length;
+  push(x: number, y: number): void {
+    if (this.length === this.xs.length) {
+      this.xs = grown(this.xs, this.xs.length * 2);
+      this.ys = grown(this.ys, this.ys.length * 2);
     }
-    from = to;
+    this.xs[this.length] = x;
+    this.ys[this.length] = y;
+    this.length += 1;
   }
-  return segments;
 }
 
-/** Appends one vertex and returns its index. */
-function pushVertex(
-  out: RibbonBuilder,
-  point: Vec2,
-  offsetX: number,
-  offsetY: number,
-  across: number,
-  arc: number,
-): number {
-  return out.vertex(point.x, point.y, offsetX, offsetY, across, arc);
+function polylineOf(points: readonly Vec2[], out: Polyline = new Polyline()): Polyline {
+  out.length = 0;
+  for (const point of points) out.push(point.x, point.y);
+  return out;
+}
+
+function appendPoints(out: Vec2[], line: Polyline): Vec2[] {
+  for (let i = 0; i < line.length; i += 1) out.push({ x: line.xs[i]!, y: line.ys[i]! });
+  return out;
 }
 
 /**
@@ -525,7 +509,8 @@ function pushVertex(
  */
 function pushRib(
   out: RibbonBuilder,
-  point: Vec2,
+  x: number,
+  y: number,
   normalX: number,
   normalY: number,
   scale: number,
@@ -534,8 +519,8 @@ function pushRib(
   const offsetX = normalX * scale;
   const offsetY = normalY * scale;
   return {
-    left: pushVertex(out, point, offsetX, offsetY, 1, arc),
-    right: pushVertex(out, point, -offsetX, -offsetY, -1, arc),
+    left: out.vertex(x, y, offsetX, offsetY, 1, arc),
+    right: out.vertex(x, y, -offsetX, -offsetY, -1, arc),
   };
 }
 
@@ -561,9 +546,9 @@ function bridgeRibs(out: RibbonBuilder, previous: Rib, next: Rib): void {
 }
 
 /**
- * Drops the points a tessellator cannot use: non-finite coordinates are
- * rejected, and a point closer to its predecessor than {@link MIN_SEGMENT_WORLD}
- * is discarded.
+ * Copies `points` into `out` without the points a tessellator cannot use:
+ * non-finite coordinates are rejected, and a point closer to its predecessor
+ * than {@link MIN_SEGMENT_WORLD} is discarded.
  *
  * The rejection is here rather than left to arithmetic because a `NaN`
  * coordinate does not produce a wrong drawing, it produces NO drawing: three
@@ -572,29 +557,34 @@ function bridgeRibs(out: RibbonBuilder, previous: Rib, next: Rib): void {
  * message names the route and the index, since a caller with 7,000 routes needs
  * to know which one.
  */
-function cleanCentreline(points: readonly Vec2[], field: string): Vec2[] {
-  const kept: Vec2[] = [];
-  for (const [i, point] of points.entries()) {
+function cleanCentreline(points: Polyline, field: string, out: Polyline): void {
+  out.length = 0;
+  for (let i = 0; i < points.length; i += 1) {
+    const x = points.xs[i]!;
+    const y = points.ys[i]!;
     // Tested before the messages are built: two strings per point on every
     // call is measurable on a frame of 13,000 smooth routes.
-    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
-      requireFinite(point.x, `${field}[${String(i)}].x`);
-      requireFinite(point.y, `${field}[${String(i)}].y`);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      requireFinite(x, `${field}[${String(i)}].x`);
+      requireFinite(y, `${field}[${String(i)}].y`);
     }
-    const previous = kept.at(-1);
-    if (previous !== undefined) {
-      const dx = point.x - previous.x;
-      const dy = point.y - previous.y;
+    const kept = out.length;
+    if (kept > 0) {
+      const dx = x - out.xs[kept - 1]!;
+      const dy = y - out.ys[kept - 1]!;
       if (Math.hypot(dx, dy) < MIN_SEGMENT_WORLD) continue;
     }
-    kept.push({ x: point.x, y: point.y });
+    out.push(x, y);
   }
-  return kept;
 }
+
+/** Where {@link catmullRomControls} writes its two control points, as `x1, y1, x2, y2`. */
+const CONTROLS = new Float64Array(4);
 
 /**
  * The two interior Bezier control points for the span from `p1` to `p2`, from a
- * centripetal Catmull-Rom spline through `p0, p1, p2, p3`.
+ * centripetal Catmull-Rom spline through `p0, p1, p2, p3`, written to
+ * {@link CONTROLS}.
  *
  * The non-uniform Catmull-Rom tangents, in the form that reads as what it is:
  * with knots spaced by `|delta|^alpha`, the tangent at `p1` is
@@ -618,47 +608,59 @@ function cleanCentreline(points: readonly Vec2[], field: string): Vec2[] {
  * which is the straight line, so a two-point route stays exactly straight
  * through `'smooth'` rather than acquiring a curve nobody asked for.
  */
-function catmullRomControls(p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2): [Vec2, Vec2] {
-  const w1 = Math.hypot(p1.x - p0.x, p1.y - p0.y) ** CATMULL_ROM_ALPHA;
-  const w2 = Math.hypot(p2.x - p1.x, p2.y - p1.y) ** CATMULL_ROM_ALPHA;
-  const w3 = Math.hypot(p3.x - p2.x, p3.y - p2.y) ** CATMULL_ROM_ALPHA;
+function catmullRomControls(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  x3: number,
+  y3: number,
+): void {
+  const w1 = Math.hypot(x1 - x0, y1 - y0) ** CATMULL_ROM_ALPHA;
+  const w2 = Math.hypot(x2 - x1, y2 - y1) ** CATMULL_ROM_ALPHA;
+  const w3 = Math.hypot(x3 - x2, y3 - y2) ** CATMULL_ROM_ALPHA;
 
   // The span's own chord, which every branch below needs.
-  const spanX = (p2.x - p1.x) / w2;
-  const spanY = (p2.y - p1.y) / w2;
+  const spanX = (x2 - x1) / w2;
+  const spanY = (y2 - y1) / w2;
 
   let startX = spanX;
   let startY = spanY;
   if (w1 > 0) {
-    startX = (p1.x - p0.x) / w1 - (p2.x - p0.x) / (w1 + w2) + spanX;
-    startY = (p1.y - p0.y) / w1 - (p2.y - p0.y) / (w1 + w2) + spanY;
+    startX = (x1 - x0) / w1 - (x2 - x0) / (w1 + w2) + spanX;
+    startY = (y1 - y0) / w1 - (y2 - y0) / (w1 + w2) + spanY;
   }
 
   let endX = spanX;
   let endY = spanY;
   if (w3 > 0) {
-    endX = spanX - (p3.x - p1.x) / (w2 + w3) + (p3.x - p2.x) / w3;
-    endY = spanY - (p3.y - p1.y) / (w2 + w3) + (p3.y - p2.y) / w3;
+    endX = spanX - (x3 - x1) / (w2 + w3) + (x3 - x2) / w3;
+    endY = spanY - (y3 - y1) / (w2 + w3) + (y3 - y2) / w3;
   }
 
-  return [
-    { x: p1.x + (startX * w2) / 3, y: p1.y + (startY * w2) / 3 },
-    { x: p2.x - (endX * w2) / 3, y: p2.y - (endY * w2) / 3 },
-  ];
+  CONTROLS[0] = x1 + (startX * w2) / 3;
+  CONTROLS[1] = y1 + (startY * w2) / 3;
+  CONTROLS[2] = x2 - (endX * w2) / 3;
+  CONTROLS[3] = y2 - (endY * w2) / 3;
 }
 
-/** The distance from `point` to the infinite line through `a` and `b`, or to `a` if they coincide. */
-function distanceToChord(point: Vec2, a: Vec2, b: Vec2): number {
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const length = Math.hypot(dx, dy);
-  if (length === 0) return Math.hypot(point.x - a.x, point.y - a.y);
-  return Math.abs(dx * (a.y - point.y) - dy * (a.x - point.x)) / length;
-}
-
-/** The point half way between two others, which is every step of a de Casteljau split. */
-function midpoint(a: Vec2, b: Vec2): Vec2 {
-  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+/**
+ * The distance from `(x, y)` to the infinite line through `(ax, ay)` along
+ * `(dx, dy)`, whose length is `length`, or to `(ax, ay)` if that is zero.
+ */
+function distanceToChord(
+  x: number,
+  y: number,
+  ax: number,
+  ay: number,
+  dx: number,
+  dy: number,
+  length: number,
+): number {
+  if (length === 0) return Math.hypot(x - ax, y - ay);
+  return Math.abs(dx * (ay - y) - dy * (ax - x)) / length;
 }
 
 /**
@@ -676,6 +678,48 @@ function midpoint(a: Vec2, b: Vec2): Vec2 {
  * given rather than as a subdivision of themselves, so a flattened route still
  * passes through the coordinates the layout chose.
  */
+function flattenInto(
+  out: Polyline,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  x3: number,
+  y3: number,
+  toleranceWorld: number,
+  depth: number,
+): void {
+  const chordX = x3 - x0;
+  const chordY = y3 - y0;
+  const chord = Math.hypot(chordX, chordY);
+  const flat =
+    distanceToChord(x1, y1, x0, y0, chordX, chordY, chord) <= toleranceWorld &&
+    distanceToChord(x2, y2, x0, y0, chordX, chordY, chord) <= toleranceWorld;
+  if (flat || depth >= MAX_FLATTEN_DEPTH) {
+    out.push(x3, y3);
+    return;
+  }
+
+  const x01 = (x0 + x1) / 2;
+  const y01 = (y0 + y1) / 2;
+  const x12 = (x1 + x2) / 2;
+  const y12 = (y1 + y2) / 2;
+  const x23 = (x2 + x3) / 2;
+  const y23 = (y2 + y3) / 2;
+  const x012 = (x01 + x12) / 2;
+  const y012 = (y01 + y12) / 2;
+  const x123 = (x12 + x23) / 2;
+  const y123 = (y12 + y23) / 2;
+  const middleX = (x012 + x123) / 2;
+  const middleY = (y012 + y123) / 2;
+
+  flattenInto(out, x0, y0, x01, y01, x012, y012, middleX, middleY, toleranceWorld, depth + 1);
+  flattenInto(out, middleX, middleY, x123, y123, x23, y23, x3, y3, toleranceWorld, depth + 1);
+}
+
+/** {@link flattenInto} over points, for callers outside the tessellator. */
 export function flattenCubic(
   out: Vec2[],
   p0: Vec2,
@@ -685,23 +729,9 @@ export function flattenCubic(
   toleranceWorld: number,
   depth: number,
 ): void {
-  const flat =
-    distanceToChord(p1, p0, p3) <= toleranceWorld &&
-    distanceToChord(p2, p0, p3) <= toleranceWorld;
-  if (flat || depth >= MAX_FLATTEN_DEPTH) {
-    out.push({ x: p3.x, y: p3.y });
-    return;
-  }
-
-  const p01 = midpoint(p0, p1);
-  const p12 = midpoint(p1, p2);
-  const p23 = midpoint(p2, p3);
-  const p012 = midpoint(p01, p12);
-  const p123 = midpoint(p12, p23);
-  const middle = midpoint(p012, p123);
-
-  flattenCubic(out, p0, p01, p012, middle, toleranceWorld, depth + 1);
-  flattenCubic(out, middle, p123, p23, p3, toleranceWorld, depth + 1);
+  const flattened = new Polyline();
+  flattenInto(flattened, p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, toleranceWorld, depth);
+  appendPoints(out, flattened);
 }
 
 /**
@@ -713,54 +743,66 @@ export function flattenCubic(
  * distance between layers get the same tolerance whether one of them is twice
  * as long. A route with one segment gets that segment.
  */
-function meanSegmentLength(points: readonly Vec2[]): number {
+function meanSegmentLength(line: Polyline): number {
   let total = 0;
-  let previous: Vec2 | undefined;
-  for (const point of points) {
-    if (previous !== undefined) total += Math.hypot(point.x - previous.x, point.y - previous.y);
-    previous = point;
+  for (let i = 1; i < line.length; i += 1) {
+    total += Math.hypot(line.xs[i]! - line.xs[i - 1]!, line.ys[i]! - line.ys[i - 1]!);
   }
-  return total / (points.length - 1);
+  return total / (line.length - 1);
 }
 
 /**
- * A polyline through the same points, bent: the centripetal Catmull-Rom spline
- * through `points`, flattened to `toleranceWorld`.
+ * Writes to `out` a polyline through the same points, bent: the centripetal
+ * Catmull-Rom spline through `points`, flattened to `toleranceWorld`.
  *
  * Every input point survives into the output, at its own coordinate. Two points
  * come back unchanged, because a one-sided tangent at both ends is the straight
- * line and subdividing it produces its own endpoints.
- *
- * Exported for the tests, which assert the curve's properties (through every
- * point, no kink at a join, within tolerance of the curve) on the polyline
- * rather than through the vertices it later becomes. It takes a cleaned
+ * line and subdividing it produces its own endpoints. It takes a cleaned
  * centreline: two consecutive identical points make a zero knot width and a
  * `NaN` tangent, which is what {@link cleanCentreline} exists to remove.
  */
-export function smoothCentreline(points: readonly Vec2[], toleranceWorld: number): Vec2[] {
-  const out: Vec2[] = [];
-  const span = (p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2): void => {
-    if (out.length === 0) out.push({ x: p1.x, y: p1.y });
-    const [b1, b2] = catmullRomControls(p0, p1, p2, p3);
-    flattenCubic(out, p1, b1, b2, p2, toleranceWorld, 0);
-  };
-
-  // A four point window carried in locals rather than read back out of the
-  // array, so nothing here can index past an end: `from` and `to` are the span
-  // being drawn, `before` and the loop's `point` are the neighbours that shape
-  // its two tangents. A missing neighbour at either end is the one-sided case
-  // `catmullRomControls` takes as the endpoint repeated.
-  let before: Vec2 | undefined;
-  let from: Vec2 | undefined;
-  let to: Vec2 | undefined;
-  for (const point of points) {
-    if (from !== undefined && to !== undefined) span(before ?? from, from, to, point);
-    before = from;
-    from = to;
-    to = point;
+function smoothInto(points: Polyline, toleranceWorld: number, out: Polyline): void {
+  out.length = 0;
+  const { xs, ys, length } = points;
+  if (length < 2) return;
+  out.push(xs[0]!, ys[0]!);
+  // Span `i` runs from point `i` to point `i + 1`, and its tangents are shaped
+  // by the points either side. A missing neighbour at either end is the
+  // one-sided case `catmullRomControls` takes as the endpoint repeated.
+  for (let i = 0; i + 1 < length; i += 1) {
+    const before = i === 0 ? 0 : i - 1;
+    const after = i + 2 < length ? i + 2 : i + 1;
+    const fromX = xs[i]!;
+    const fromY = ys[i]!;
+    const toX = xs[i + 1]!;
+    const toY = ys[i + 1]!;
+    catmullRomControls(xs[before]!, ys[before]!, fromX, fromY, toX, toY, xs[after]!, ys[after]!);
+    flattenInto(
+      out,
+      fromX,
+      fromY,
+      CONTROLS[0]!,
+      CONTROLS[1]!,
+      CONTROLS[2]!,
+      CONTROLS[3]!,
+      toX,
+      toY,
+      toleranceWorld,
+      0,
+    );
   }
-  if (from !== undefined && to !== undefined) span(before ?? from, from, to, to);
-  return out;
+}
+
+/**
+ * {@link smoothInto} over points. Exported for the tests, which assert the
+ * curve's properties (through every point, no kink at a join, within tolerance
+ * of the curve) on the polyline rather than through the vertices it later
+ * becomes.
+ */
+export function smoothCentreline(points: readonly Vec2[], toleranceWorld: number): Vec2[] {
+  const smoothed = new Polyline();
+  smoothInto(polylineOf(points), toleranceWorld, smoothed);
+  return appendPoints([], smoothed);
 }
 
 /**
@@ -875,29 +917,42 @@ export function smoothCentreline(points: readonly Vec2[], toleranceWorld: number
  * corner, which is what every line renderer does at this scale, and it costs
  * one attribute and one instruction.
  */
-function tessellateCentreline(
-  out: RibbonBuilder,
-  points: readonly Vec2[],
-  miterLimit: number,
-): void {
+function tessellateCentreline(out: RibbonBuilder, line: Polyline, miterLimit: number): void {
   // `|a + b|` at or above this mitres, below it bevels. The comparison is on
   // the bisector's LENGTH so that the miter length, which is unbounded on the
   // other branch, is never computed there. See the docstring.
   const bisectorFloor = 2 / miterLimit;
 
-  let previous: Segment | undefined;
+  const { xs, ys } = line;
+  let previousDx = 0;
+  let previousDy = 0;
+  let arc = 0;
   let rib: Rib | undefined;
-  for (const segment of segmentsOf(points)) {
-    if (previous === undefined || rib === undefined) {
-      rib = pushRib(out, segment.from, -segment.dy, segment.dx, 1, segment.arcFrom);
-      previous = segment;
+  for (let i = 1; i < line.length; i += 1) {
+    // The segment from point `i - 1` to point `i`, as a UNIT direction and the
+    // arc length at its start. Its length is above MIN_SEGMENT_WORLD because
+    // `cleanCentreline` ran first, so the division cannot be by zero.
+    const fromX = xs[i - 1]!;
+    const fromY = ys[i - 1]!;
+    const deltaX = xs[i]! - fromX;
+    const deltaY = ys[i]! - fromY;
+    const length = Math.hypot(deltaX, deltaY);
+    const dx = deltaX / length;
+    const dy = deltaY / length;
+    const arcFrom = arc;
+    arc += length;
+
+    if (rib === undefined) {
+      rib = pushRib(out, fromX, fromY, -dy, dx, 1, arcFrom);
+      previousDx = dx;
+      previousDy = dy;
       continue;
     }
 
-    const inX = -previous.dy;
-    const inY = previous.dx;
-    const outX = -segment.dy;
-    const outY = segment.dx;
+    const inX = -previousDy;
+    const inY = previousDx;
+    const outX = -dy;
+    const outY = dx;
     const sumX = inX + outX;
     const sumY = inY + outY;
     const bisector = Math.hypot(sumX, sumY);
@@ -905,22 +960,23 @@ function tessellateCentreline(
     if (bisector >= bisectorFloor) {
       // Mitred: one shared corner at `bisector direction * miter length`, which
       // is `(sum / bisector) * (2 / bisector)` and so needs no normalisation.
-      const mitred = pushRib(out, segment.from, sumX, sumY, 2 / (bisector * bisector), segment.arcFrom);
+      const mitred = pushRib(out, fromX, fromY, sumX, sumY, 2 / (bisector * bisector), arcFrom);
       bridgeRibs(out, rib, mitred);
       rib = mitred;
-      previous = segment;
+      previousDx = dx;
+      previousDy = dy;
       continue;
     }
 
-    const incoming = pushRib(out, segment.from, inX, inY, 1, segment.arcFrom);
+    const incoming = pushRib(out, fromX, fromY, inX, inY, 1, arcFrom);
     bridgeRibs(out, rib, incoming);
-    const outgoing = pushRib(out, segment.from, outX, outY, 1, segment.arcFrom);
-    const cross = previous.dx * segment.dy - previous.dy * segment.dx;
+    const outgoing = pushRib(out, fromX, fromY, outX, outY, 1, arcFrom);
+    const cross = previousDx * dy - previousDy * dx;
     if (cross !== 0) {
       // Turning left puts the outside of the corner on the right, so the arc
       // runs along the NEGATIVE normals; turning right mirrors both.
       const side = cross > 0 ? -1 : 1;
-      const centre = pushVertex(out, segment.from, 0, 0, 0, segment.arcFrom);
+      const centre = out.vertex(fromX, fromY, 0, 0, 0, arcFrom);
       const first = cross > 0 ? incoming.right : incoming.left;
       const last = cross > 0 ? outgoing.right : outgoing.left;
 
@@ -929,7 +985,7 @@ function tessellateCentreline(
       // MAX_FAN_FACET_RADIANS allows. Subdividing by ANGLE rather than at a
       // fixed count is what bounds the boundary's dip mid-facet, which is the
       // whole of FAN_RADIUS_TOLERANCE's argument.
-      const turn = Math.atan2(cross, previous.dx * segment.dx + previous.dy * segment.dy);
+      const turn = Math.atan2(cross, previousDx * dx + previousDy * dy);
       const count = Math.max(1, Math.ceil(Math.abs(turn) / MAX_FAN_FACET_RADIANS));
       const step = turn / count;
       const stepCos = Math.cos(step);
@@ -943,7 +999,7 @@ function tessellateCentreline(
         const nextY = spokeX * stepSin + spokeY * stepCos;
         spokeX = nextX;
         spokeY = nextY;
-        facets.push(pushVertex(out, segment.from, spokeX, spokeY, side, segment.arcFrom));
+        facets.push(out.vertex(fromX, fromY, spokeX, spokeY, side, arcFrom));
       }
       facets.push(last);
       for (let facet = 1; facet < facets.length; facet += 1) {
@@ -958,11 +1014,13 @@ function tessellateCentreline(
       }
     }
     rib = outgoing;
-    previous = segment;
+    previousDx = dx;
+    previousDy = dy;
   }
 
-  if (previous === undefined || rib === undefined) return;
-  const end = pushRib(out, previous.to, -previous.dy, previous.dx, 1, previous.arcTo);
+  if (rib === undefined) return;
+  const last = line.length - 1;
+  const end = pushRib(out, xs[last]!, ys[last]!, -previousDy, previousDx, 1, arc);
   bridgeRibs(out, rib, end);
 }
 
@@ -1023,28 +1081,32 @@ export function tessellateRibbons(
   const resolved = requireRibbonOptions(options);
   const out = new RibbonBuilder();
   const ranges: RibbonRange[] = [];
+  const given = new Polyline();
+  const cleaned = new Polyline();
+  const smoothed = new Polyline();
+  const flattened = new Polyline();
 
   for (const route of routes) {
     const vertexStart = out.vertexCount;
     const indexStart = out.indexCount;
-    const cleaned = cleanCentreline(route.points, `route "${route.id}"`);
-    // Flattened points go through the cleaner a second time, which is not
-    // belt and braces: `segmentsOf` divides by a segment's length, and the
-    // subdivision of a span shorter than the tolerance can put two of its
-    // output points at one place. One zero-length segment there is a `NaN` in
-    // every vertex after it, and a `NaN` in a bounding sphere is a scene that
-    // does not draw at all.
-    const centreline =
-      resolved.smooth && cleaned.length >= 2
-        ? cleanCentreline(
-            smoothCentreline(
-              cleaned,
-              resolved.flattenToleranceWorld ??
-                DEFAULT_FLATTEN_TOLERANCE_FRACTION * meanSegmentLength(cleaned),
-            ),
-            `route "${route.id}" flattened`,
-          )
-        : cleaned;
+    cleanCentreline(polylineOf(route.points, given), `route "${route.id}"`, cleaned);
+    let centreline = cleaned;
+    if (resolved.smooth && cleaned.length >= 2) {
+      smoothInto(
+        cleaned,
+        resolved.flattenToleranceWorld ??
+          DEFAULT_FLATTEN_TOLERANCE_FRACTION * meanSegmentLength(cleaned),
+        smoothed,
+      );
+      // Flattened points go through the cleaner a second time, which is not
+      // belt and braces: the walk divides by a segment's length, and the
+      // subdivision of a span shorter than the tolerance can put two of its
+      // output points at one place. One zero-length segment there is a `NaN`
+      // in every vertex after it, and a `NaN` in a bounding sphere is a scene
+      // that does not draw at all.
+      cleanCentreline(smoothed, `route "${route.id}" flattened`, flattened);
+      centreline = flattened;
+    }
     if (centreline.length >= 2) tessellateCentreline(out, centreline, resolved.miterLimit);
     ranges.push({
       id: route.id,
