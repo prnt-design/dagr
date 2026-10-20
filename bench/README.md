@@ -49,9 +49,9 @@ which architecture the file happens to name.
 the same 10,000 node grid and edge styles, in Node rather than a browser:
 `apply` retargeting every node and edge, and `advance` stepping one frame with
 every spring in flight. Measured 2026-10-19 on the same Apple M4 and Node
-`v25.6.1`, three runs at 1-minute loads between 4.7 and 5.2 (background system
-work this time; the baseline capture described below ran at 2.4 to 3.5). Medians in milliseconds, the
-range across the three runs in brackets:
+`v25.6.1`, three runs at 1-minute loads between 4.7 and 5.2 (background
+system work this time; the baseline capture described below ran at 2.4 to
+3.5). Medians in milliseconds, the range across the three runs in brackets:
 
 | Edges | `apply` | `advance` |
 | --- | --- | --- |
@@ -60,12 +60,12 @@ range across the three runs in brackets:
 
 `advance` steps by 1/1000 s rather than a 60 Hz frame, so the springs stay in
 flight across the whole sampling window; the file says why that prices the same
-arithmetic, and it fails the run if they come to rest. Each retarget here
-starts from rest, so a smooth route keeps its three points. In the browser
-profile they do not: a bent route retargeted
-while it is still moving gains a point per retarget (4, 5, 6 and on to 15
-after twelve, in a probe of one edge) and only drops back to three when it comes
-to rest, which a 500 ms retarget never allows. That is the likely reason
+arithmetic, and it fails the run if they come to rest. Every retarget here
+lands on routes still drawn where they started, so a smooth route keeps its
+three points. In the browser profile it does not: a bent route retargeted while
+it is still moving gains a point per retarget (4, 5, 6 and on to 15 after
+twelve, in a probe of one edge) and only drops back to three when it comes to
+rest, which a 500 ms retarget never allows. That is the likely reason
 Chrome's smooth `advance` (44 ms) and `setEdges` (42 ms) are far above these
 figures while its straight ones are not.
 

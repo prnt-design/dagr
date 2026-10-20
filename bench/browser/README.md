@@ -640,9 +640,10 @@ So on this machine, at 10,000 nodes, M4.10's frame is CPU-bound: about 0.5 ms
 of GPU at DPR 1 and 1.2 at DPR 2 with straight edges, against 5 to 7 ms of
 `setNodes` and `setEdges` on the CPU in these runs. The next section drives the
 same scene through `createSceneMotion`. Still open for M4.10: an ID buffer pass
-(M4.8b has none yet), and recording a local baseline: the scene motion's CPU
-cost has Node bench entries in `bench/README.md`, outside `baseline.json`
-until the maintainer records them.
+(M4.8b has none yet), a bounded point count for bent routes retargeted in
+flight (see the next section), and recording a local baseline: the scene
+motion's CPU cost has Node bench entries in `bench/README.md`, outside
+`baseline.json` until the maintainer records them.
 
 ## Springs in flight on WebGPU (M4.10)
 
