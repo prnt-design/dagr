@@ -67,12 +67,11 @@ retargeted while it was still moving gained a point per retarget (4, 5, 6 and
 on to 15 after twelve, in a probe of one edge) and only dropped back to three
 when it came to rest, which a 500 ms retarget never allows. That was why
 Chrome's smooth `advance` (44 ms) and `setEdges` (42 ms) were far above these
-figures while its straight ones were not. Retargets in flight now keep the
-route at its own count, and Chrome's figures fell to about 15 and 24 ms (see
-`bench/browser/README.md`). Re-run on 2026-10-20 at loads of 3.8 to 4.6, with
-the old and new `edge-motion.ts` alternating, smooth `apply` and both `advance`
-entries matched the old code's within run-to-run noise, and straight `apply`
-read about 1 ms higher (19.7 to 20.0 against the old code's 18.9).
+figures while its straight ones were not. A retarget now drops points that have
+come within the rest tolerance of straight, and Chrome's figures fell to 14.6
+and 23.3 ms (see `bench/browser/README.md`). Re-run on 2026-10-20 at loads of
+3.9 to 4.5, alternating the old and new `edge-motion.ts`, all four entries
+matched the old code's within run-to-run noise.
 
 Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
 for the same reason: recording them rewrites the machine-matched file, which is

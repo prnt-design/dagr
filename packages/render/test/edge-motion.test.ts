@@ -680,6 +680,8 @@ describe('createEdgeMotion', () => {
       motion.advance(1 / 60);
     }
     expect(Math.max(...counts.slice(300))).toBeLessThanOrEqual(Math.max(...counts.slice(0, 300)));
+    // This ten-unit fixture peaks at 10. The ceiling is headroom for this route
+    // only: the count scales with route length over the rest tolerance.
     expect(Math.max(...counts)).toBeLessThanOrEqual(16);
   });
 

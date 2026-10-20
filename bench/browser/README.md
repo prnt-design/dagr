@@ -705,7 +705,7 @@ one tick).
 - **Smooth edges miss the tick from 2,500 nodes.** Each smooth route has a bend
   point, and the edge springs hand back more points than the route they were
   given (a bent route retargeted while still moving gained a point per
-  retarget, fixed on 2026-10-20; see the next section), so
+  retarget, bounded on 2026-10-20; see the next section), so
   `setEdges` has more to tessellate: at 10,000 nodes it is 42 ms
   against the sway's 26, and the GPU `sum` rises from this run's sway 0.85 to
   1.15 ms. At
@@ -724,36 +724,36 @@ in `bench/README.md` under "M4.10 scene motion on the CPU".
 
 ### With in-flight route point counts bounded (2026-10-20)
 
-`createEdgeMotion` now keeps each spring's place along its target route across
-a retarget instead of re-measuring the moving polyline, so a smooth route
-retargeted in flight stays at three points; it also drops a point that has come
-within the rest tolerance of straight (see `packages/render/src/edge-motion.ts`).
-Same command, same Apple M4 Mac mini, Google Chrome 155.0.8059.85 headed with
-`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (`Apple M4`),
-not a fallback, `renderer.backend` `webgpu` on every row, tick 16.7 ms, DPR 1,
-`fit`, load average 4.7 to 6.0. Springs only, since the sway path is
-unchanged. Two runs; the table is the second, in the 2026-10-19 table's units.
-The first differed most at 10,000 straight nodes (interval p95 19.7, 4.7% past
-one tick) and 5,000 smooth (27% past one tick).
+A retarget in `createEdgeMotion` now drops any point of the moving polyline
+that has come within the rest tolerance of the line between its neighbours, so
+a smooth route retargeted in flight no longer gains a point per retarget (see
+`packages/render/src/edge-motion.ts`). Same command, same Apple M4 Mac mini,
+Google Chrome 155.0.8059.85 headed with `--enable-webgpu-developer-features`,
+adapter `apple` `metal-3` (`Apple M4`), not a fallback, `renderer.backend`
+`webgpu` on every row, tick 16.7 ms, DPR 1, `fit`, load average 3.7 to 4.2.
+Springs only, since the sway path is unchanged. Two runs; the table is the
+second, in the 2026-10-19 table's units. The first differed most at 10,000
+straight nodes (4% past one tick) and 10,000 smooth (`apply` 21.8, 97.7% past
+one tick).
 
 | Nodes | Edges | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Interval p95 | Past one tick |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1,000 | straight | 3.9 | 2.1 | 0.5 | 0.7 | 0.3 | 18.3 | 0% |
-| 2,500 | straight | 3.5 | 1.9 | 0.5 | 1.0 | 0.2 | 18.4 | 0% |
-| 5,000 | straight | 6.1 | 3.9 | 1.1 | 2.4 | 0.3 | 18.2 | 0% |
-| 10,000 | straight | 14.5 | 9.9 | 1.9 | 3.9 | 0.4 | 33.3 | 10% |
-| 1,000 | smooth | 2.4 | 1.3 | 0.2 | 2.2 | 0.2 | 18.2 | 0% |
-| 2,500 | smooth | 5.0 | 3.4 | 0.5 | 5.6 | 0.3 | 18.2 | 0% |
-| 5,000 | smooth | 10.3 | 7.4 | 0.9 | 10.8 | 0.4 | 35.0 | 31.7% |
-| 10,000 | smooth | 20.8 | 16.2 | 2.0 | 24.5 | 0.8 | 67.8 | 98% |
+| 1,000 | straight | 3.8 | 2.0 | 0.5 | 0.8 | 0.3 | 18.2 | 0% |
+| 2,500 | straight | 3.4 | 1.9 | 0.4 | 1.0 | 0.2 | 18.1 | 0% |
+| 5,000 | straight | 5.9 | 4.2 | 0.9 | 1.8 | 0.2 | 18.1 | 0% |
+| 10,000 | straight | 14.0 | 8.3 | 1.9 | 3.3 | 0.4 | 18.5 | 1.7% |
+| 1,000 | smooth | 2.2 | 1.3 | 0.2 | 2.1 | 0.2 | 18.0 | 0% |
+| 2,500 | smooth | 4.4 | 3.3 | 0.5 | 5.5 | 0.3 | 18.2 | 0% |
+| 5,000 | smooth | 9.8 | 7.0 | 0.9 | 10.2 | 0.4 | 33.4 | 24.3% |
+| 10,000 | smooth | 18.9 | 14.6 | 1.9 | 23.3 | 0.7 | 66.7 | 94.7% |
 
 - **Smooth edges now hold the tick to 2,500 nodes**, where 28.3% of frames
-  missed it before. At 10,000 nodes `advance` fell from 44.0 to 16.2 ms,
-  `setEdges` from 42.5 to 24.5 and the GPU `sum` from 1.15 to 0.98 ms, but the
-  frame still misses on almost every tick.
-- **Straight rows are unchanged**, as expected: a two-point route never gained
-  points. 10,000 straight nodes still miss on retargets and on some frames
-  between (4.7% and 10% in the two runs).
+  missed it before. At 10,000 nodes `advance` fell from 44.0 to 14.6 ms and
+  `setEdges` from 42.5 to 23.3, and the GPU `sum` from timestamp queries fell
+  from 1.15 to 0.98 ms, but the frame still misses almost every tick.
+- **Straight rows are within run-to-run noise of the 2026-10-19 table**: a
+  two-point route has no interior point to gain or drop. 10,000 straight nodes
+  still miss on some retargets (1.7% and 4% of frames in the two runs).
 - **`settled` stayed false** on every frame of every row.
 
 M4.10's number is still not met with springs in flight. At 10,000 nodes the
