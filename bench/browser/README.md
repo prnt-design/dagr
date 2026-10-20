@@ -640,8 +640,7 @@ So on this machine, at 10,000 nodes, M4.10's frame is CPU-bound: about 0.5 ms
 of GPU at DPR 1 and 1.2 at DPR 2 with straight edges, against 5 to 7 ms of
 `setNodes` and `setEdges` on the CPU in these runs. The next section drives the
 same scene through `createSceneMotion`. Still open for M4.10: an ID buffer pass
-(M4.8b has none yet), a bounded point count for bent routes retargeted in
-flight (see the next section), and recording a local baseline: the scene
+(M4.8b has none yet) and recording a local baseline: the scene
 motion's CPU cost has Node bench entries in `bench/README.md`, outside
 `baseline.json` until the maintainer records them.
 
@@ -705,8 +704,8 @@ one tick).
   motion changes what the CPU does, not what the GPU draws.
 - **Smooth edges miss the tick from 2,500 nodes.** Each smooth route has a bend
   point, and the edge springs hand back more points than the route they were
-  given (a bent route retargeted while still moving gains a point per
-  retarget; see "M4.10 scene motion on the CPU" in `bench/README.md`), so
+  given (a bent route retargeted while still moving gained a point per
+  retarget, bounded on 2026-10-20; see the next section), so
   `setEdges` has more to tessellate: at 10,000 nodes it is 42 ms
   against the sway's 26, and the GPU `sum` rises from this run's sway 0.85 to
   1.15 ms. At
@@ -715,14 +714,55 @@ one tick).
 - **`settled` stayed false** on every frame except 2 or 3 of the 360 (warm-up
   included) in the 10,000 smooth rows. The cause was not traced.
 
-So on this machine M4.10's number is not met with springs in flight: 10,000
-nodes with straight edges hold 60 Hz at the median with no headroom and drop a
-frame on each retarget and on some between, and smooth edges hold it only to
+So on 2026-10-19 M4.10's number was not met with springs in flight: 10,000
+nodes with straight edges held 60 Hz at the median with no headroom and dropped
+a frame on each retarget and on some between, and smooth edges held it only to
 1,000 nodes.
-The CPU cost to cut is `advance` and `apply` in the scene motion, then
+The CPU cost to cut was `advance` and `apply` in the scene motion, then
 `setEdges`. Both scene motion calls now have Node bench entries at 10,000 nodes,
-in `bench/README.md` under "M4.10 scene motion on the CPU", and the smooth rows
-point first at the bent routes' growing point count.
+in `bench/README.md` under "M4.10 scene motion on the CPU".
+
+### With in-flight route point counts bounded (2026-10-20)
+
+A retarget in `createEdgeMotion` now drops any point of the moving polyline
+that has come within the rest tolerance of the line between its neighbours and
+moves with them, so a smooth route retargeted in flight no longer gains a point
+per retarget (see `packages/render/src/edge-motion.ts`). Same command and Apple
+M4 Mac mini, Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, one patch release past the 2026-10-19
+run's 155.0.8059.82, so the straight rows, whose routes have no interior point,
+are the control for the browser change. Adapter `apple` `metal-3` (`Apple
+M4`), not a fallback, `renderer.backend` `webgpu` on every row, tick 16.7 ms,
+DPR 1, `fit`, load average 3.7 to 4.2.
+Springs only, since the sway path is unchanged. Two runs; the table is the
+second, in the 2026-10-19 table's units. The first differed most at 10,000
+straight nodes (4% past one tick) and 10,000 smooth (`apply` 21.8, 97.7% past
+one tick).
+
+| Nodes | Edges | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Interval p95 | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1,000 | straight | 3.8 | 2.0 | 0.5 | 0.8 | 0.3 | 18.2 | 0% |
+| 2,500 | straight | 3.4 | 1.9 | 0.4 | 1.0 | 0.2 | 18.1 | 0% |
+| 5,000 | straight | 5.9 | 4.2 | 0.9 | 1.8 | 0.2 | 18.1 | 0% |
+| 10,000 | straight | 14.0 | 8.3 | 1.9 | 3.3 | 0.4 | 18.5 | 1.7% |
+| 1,000 | smooth | 2.2 | 1.3 | 0.2 | 2.1 | 0.2 | 18.0 | 0% |
+| 2,500 | smooth | 4.4 | 3.3 | 0.5 | 5.5 | 0.3 | 18.2 | 0% |
+| 5,000 | smooth | 9.8 | 7.0 | 0.9 | 10.2 | 0.4 | 33.4 | 24.3% |
+| 10,000 | smooth | 18.9 | 14.6 | 1.9 | 23.3 | 0.7 | 66.7 | 94.7% |
+
+- **Smooth edges now hold the tick to 2,500 nodes**, where 28.3% of frames
+  missed it before. At 10,000 nodes `advance` fell from 44.0 to 14.6 ms and
+  `setEdges` from 42.5 to 23.3, and the GPU `sum` from timestamp queries fell
+  from 1.15 to 0.98 ms, but the frame still misses almost every tick.
+- **Straight rows moved little**: a two-point route has no interior point to
+  gain or drop. At 10,000 nodes `setEdges` read 3.3 to 3.4 against 4.7 and
+  past one tick 1.7% and 4% against 3% and 7.7%, so a small part of the smooth
+  rows' gain may be the browser or the machine's load rather than this change.
+- **`settled` stayed false** on every frame of every row.
+
+M4.10's number is still not met with springs in flight. At 10,000 nodes the
+CPU cost is now `setEdges` and `advance` with smooth edges, and `apply` and
+`advance` with straight ones.
 
 ## What the overlay harness measures, and what it does not
 

@@ -62,12 +62,16 @@ system work this time; the baseline capture described below ran at 2.4 to
 flight across the whole sampling window; the file says why that prices the same
 arithmetic, and it fails the run if they come to rest. Every retarget here
 lands on routes still drawn where they started, so a smooth route keeps its
-three points. In the browser profile it does not: a bent route retargeted while
-it is still moving gains a point per retarget (4, 5, 6 and on to 15 after
-twelve, in a probe of one edge) and only drops back to three when it comes to
-rest, which a 500 ms retarget never allows. That is the likely reason
-Chrome's smooth `advance` (44 ms) and `setEdges` (42 ms) are far above these
-figures while its straight ones are not.
+three points. In the browser profile it did not until 2026-10-20: a bent route
+retargeted while it was still moving gained a point per retarget (4, 5, 6 and
+on to 15 after twelve, in a probe of one edge) and only dropped back to three
+when it came to rest, which a 500 ms retarget never allows. That was why
+Chrome's smooth `advance` (44 ms) and `setEdges` (42 ms) were far above these
+figures while its straight ones were not. A retarget now drops points that have
+come within the rest tolerance of straight, and Chrome's figures fell to 14.6
+and 23.3 ms (see `bench/browser/README.md`). Re-run on 2026-10-20 at loads of
+3.9 to 4.5, alternating the old and new `edge-motion.ts`, all four entries
+matched the old code's within run-to-run noise.
 
 Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
 for the same reason: recording them rewrites the machine-matched file, which is
