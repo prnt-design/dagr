@@ -314,10 +314,13 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   flattening's flatness test and the cleaner's minimum-length test answer
   from squares and ask `Math.hypot` only near the threshold, byte-identical,
   and 10,000 smooth nodes spend 12.8 to 13.0 ms in `setEdges` back to back
-  (was 14.7 to 15.3) and miss 37% to 44% of ticks. The number is not met with
-  smooth edges.
-  Still open: the 10,000-node smooth CPU frame (the ribbon walk in smooth
-  `setEdges`, then the scene motion's `apply`), the ID buffer pass
+  (was 14.7 to 15.3) and miss 37% to 44% of ticks. Since 2026-10-21 the walk
+  writes each rib and each quad in one call with no object per rib,
+  byte-identical, and 10,000 smooth nodes spend 11.7 to 11.9 ms in `setEdges`
+  (the previous build 12.9 to 13.0 back to back) and miss 34% to 39% of ticks.
+  The number is not met with smooth edges.
+  Still open: the 10,000-node smooth CPU frame (the scene motion's `apply`
+  on retarget frames, about 23 ms), the ID buffer pass
   (M4.8b), and recording the bench entries in `bench/baseline.json` (the
   maintainer's call).
 - [x] **M4.11** HTML overlay: DOM elements positioned in world coordinates,
