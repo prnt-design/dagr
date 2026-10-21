@@ -4,8 +4,10 @@ import {
   HALF_LIFE_OMEGA,
   SETTLE_OMEGA_1_PERCENT,
   omegaForHalfLife,
+  springStep,
   stepSpring,
   stepSpring2D,
+  stepSpring2DBy,
 } from '../src/spring.js';
 
 /**
@@ -440,5 +442,41 @@ describe('stepSpring2D', () => {
   it('takes a zero step as an identity in both axes', () => {
     const next = stepSpring2D(state2d(4, -6, 11, -2), { x: 0, y: 0 }, 5, 0);
     expect(next).toEqual({ position: { x: 4, y: -6 }, velocity: { x: 11, y: -2 } });
+  });
+
+  describe('stepSpring2DBy', () => {
+    it('matches stepSpring2D bit for bit when one step is shared across springs', () => {
+      const springs = [
+        state2d(1, 2, 0, 0),
+        state2d(-4e300, 7, 3e300, -1),
+        state2d(1e-300, -0, 5e-324, 12),
+        state2d(123.456, -654.321, -9, 0.5),
+      ];
+      const targets = [
+        { x: 5, y: 5 },
+        { x: 4e300, y: 7 },
+        { x: 0, y: -0 },
+        { x: -1, y: 1e9 },
+      ];
+      for (const w of [1e-3, 14, 1e5]) {
+        for (const dt of [0, 1e-9, 1 / 60, 1, 800, 1e305]) {
+          const step = springStep(w, dt);
+          for (const [index, spring] of springs.entries()) {
+            const target = targets[index]!;
+            const shared = stepSpring2DBy(spring, target, step);
+            const alone = stepSpring2D(spring, target, w, dt);
+            expect(Object.is(shared.position.x, alone.position.x)).toBe(true);
+            expect(Object.is(shared.position.y, alone.position.y)).toBe(true);
+            expect(Object.is(shared.velocity.x, alone.velocity.x)).toBe(true);
+            expect(Object.is(shared.velocity.y, alone.velocity.y)).toBe(true);
+          }
+        }
+      }
+    });
+
+    it('checks the clock once, under the names stepSpring2D uses', () => {
+      expect(() => springStep(0, 1)).toThrow(/angularFrequency/);
+      expect(() => springStep(1, -1)).toThrow(/dtSeconds/);
+    });
   });
 });
