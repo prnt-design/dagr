@@ -635,13 +635,13 @@ function cleanCentreline(points: Polyline, field: string, out: Polyline): void {
  * decides a comparison that is specified on `Math.hypot`.
  *
  * `Math.hypot` and `Math.sqrt(x * x + y * y)` disagree in the last bit for
- * about a third of inputs, so swapping one for the other changes the output,
+ * about 38% of inputs, so swapping one for the other changes the output,
  * but each is within a few ulps (about 1e-15 relative) of the true length. A
  * margin a million times that means the square only ever answers where
  * `Math.hypot` would have given the same answer; nearer than that, it is asked.
- * Both comparisons below are on every point of every smooth route on every
- * frame, and `Math.hypot` is about twelve times the cost of the square on an
- * Apple M4.
+ * The cleaner's test runs on every point of every route, twice on a smooth
+ * one, and the flatness test on every subdivision of a smooth one, on every
+ * frame, and `Math.hypot` costs several times the square.
  */
 const HYPOT_MARGIN = 1e-9;
 
@@ -756,7 +756,9 @@ function distanceToChord(
  *
  * The cross products are the ones {@link distanceToChord} divides, so they are
  * the same doubles, and the chord's `Math.hypot` is only consulted when one of
- * them lands within {@link HYPOT_MARGIN} of the tolerance times the chord.
+ * them lands within {@link HYPOT_MARGIN} of the tolerance times the chord, or
+ * when the tolerance, the chord's square or their product is outside the safe
+ * range (a zero-length chord among them).
  */
 export function flatToChord(
   x0: number,
@@ -773,7 +775,13 @@ export function flatToChord(
   const chordY = y3 - y0;
   const square = chordX * chordX + chordY * chordY;
   const reach = toleranceWorld * Math.sqrt(square);
-  if (square > SAFE_LOW && square < SAFE_HIGH && reach > SAFE_LOW && reach < SAFE_HIGH) {
+  if (
+    toleranceWorld > SAFE_LOW &&
+    square > SAFE_LOW &&
+    square < SAFE_HIGH &&
+    reach > SAFE_LOW &&
+    reach < SAFE_HIGH
+  ) {
     const first = Math.abs(chordX * (y0 - y1) - chordY * (x0 - x1));
     const second = Math.abs(chordX * (y0 - y2) - chordY * (x0 - x2));
     const beyond = reach * (1 + HYPOT_MARGIN);

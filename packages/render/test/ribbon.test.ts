@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { mulberry32 } from '@dagr/bench';
 import {
   DEFAULT_MITER_LIMIT,
   FAN_RADIUS_TOLERANCE,
@@ -689,13 +690,6 @@ describe('tessellateRibbons: many routes', () => {
 });
 
 describe('comparisons specified on Math.hypot', () => {
-  // A fixed seed, so a disagreement is a reproducible failure.
-  let seed = 7;
-  const random = (): number => {
-    seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
-    return seed / 2_147_483_648;
-  };
-
   function byHypot(c: readonly number[], tolerance: number): boolean {
     const [x0, y0, x1, y1, x2, y2, x3, y3] = c as [number, number, number, number, number, number, number, number];
     const chordX = x3 - x0;
@@ -707,6 +701,7 @@ describe('comparisons specified on Math.hypot', () => {
   }
 
   it('flatToChord answers exactly what the hypot distance does, at every scale', () => {
+    const random = mulberry32(7);
     let checked = 0;
     for (const scale of [1e-150, 1e-12, 1, 1e6, 1e140, 1e300]) {
       for (let i = 0; i < 4_000; i += 1) {
@@ -738,7 +733,16 @@ describe('comparisons specified on Math.hypot', () => {
     expect(checked).toBe(24_000);
   });
 
+  it('flatToChord answers exactly what the hypot distance does at a subnormal tolerance', () => {
+    // The quotient rounds onto the subnormal grid, where one ulp is the whole
+    // tolerance, so only the hypot path gets this one right.
+    const c = [0, 0, 0, -1e-323, 0, 0, 3e60, 4e60] as const;
+    expect(byHypot(c, 5e-324)).toBe(true);
+    expect(flatToChord(...c, 5e-324)).toBe(true);
+  });
+
   it('shorterThanMinSegment answers exactly what Math.hypot does, near the minimum and at the extremes', () => {
+    const random = mulberry32(11);
     const lengths = [0, 5e-324, 1e-200, 1e-160, 1e300, Number.MAX_VALUE];
     for (let step = -40; step <= 40; step += 1) {
       lengths.push(MIN_SEGMENT_WORLD * (1 + step * Number.EPSILON));

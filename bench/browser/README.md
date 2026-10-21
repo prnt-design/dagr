@@ -964,7 +964,8 @@ inputs, so swapping one for the other would change the output, but both tests
 only compare: the length goes nowhere else. They now answer from the square
 whenever it clears the threshold by a relative margin of 1e-9, a million times
 either function's rounding error, and call `Math.hypot` only inside that
-margin or where squaring would underflow or overflow. The output is
+margin, where squaring would underflow or overflow, or for a segment the
+cleaner drops. The output is
 byte-identical: sha256 of every array and the ranges matched the previous
 build over the 10,000-node smooth routes and 4,000 random ones under six option
 sets, and again with the random routes scaled by 1e-12, 1e-3, 1e6 and 1e140.
@@ -974,12 +975,14 @@ itself and at the extremes, and fail with the margin set to zero.
 In Node, `tessellateRibbons` alone on the same 13,169 smooth routes, hinted
 from the call before, alternating the old and new build three times at load 3
 to 4, medians of 60 calls after 20 warm-up calls in a scratch script: 12.8 to
-12.9 ms before, 10.4 to 10.6 after. The flattening fell from 25% of samples to
-16%, and the walk (`tessellateCentreline` and the vertex writes it calls) is
-now the largest cost at about 46%.
+12.9 ms before, 10.4 to 10.6 after. These profile shares are of
+`tessellateRibbons` samples, not of `SceneEdges.setEdges` as in the section
+above: the flattening fell from 25% to 16% and the cleaning from 10% to 6%,
+and the walk, counted here with the vertex and triangle writes it calls
+(`tessellateCentreline` alone is 22%), is now the largest cost at about 46%.
 
-Same command, machine, browser and adapter as the sections above, Chrome now
-155.0.8059.85, `renderer.backend` `webgpu` on every row, load average 2.9 to
+Same command, machine, browser (Chrome 155.0.8059.85) and adapter as the
+sections above, `renderer.backend` `webgpu` on every row, load average 2.9 to
 3.3. Springs only. Two runs; the table is the second. The first differed most
 at 10,000 smooth nodes (`apply` 21.0, `setEdges` 13.2, 37.3% past one tick).
 
@@ -1000,9 +1003,10 @@ at 10,000 smooth nodes (`apply` 21.0, `setEdges` 13.2, 37.3% past one tick).
   missed in those runs was 46% to 54% for the old build and 41% to 44% for
   this one; `advance` moved between 3.8 and 6.1 ms across the six runs with no
   change to it, so the tick count is the noisier of the two numbers.
-- **Straight rows and the GPU `sum` are within the earlier sections'
-  run-to-run spread** (0.97 to 0.98 ms at 10,000 smooth nodes): nothing drawn
-  changed.
+- **The GPU `sum` matches the earlier sections** (0.97 to 0.98 ms at 10,000
+  smooth nodes): nothing drawn changed. The straight rows match too, except
+  `apply` at 1,000 and 2,500 nodes (4.8 and 4.9 against at most 4.2), a median
+  of about ten retarget frames in code this change does not touch.
 
 10,000 smooth nodes still miss more than a third of the ticks: `setEdges` is
 most of a tick on its own, and a retarget frame adds about 20 ms of `apply`.
