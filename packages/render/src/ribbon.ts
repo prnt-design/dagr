@@ -441,6 +441,44 @@ class RibbonBuilder {
     return vertex;
   }
 
+  /**
+   * The two boundary vertices at one centreline point, left then right, behind
+   * one capacity check. Returns the left one's index; see {@link Rib}.
+   */
+  rib(x: number, y: number, offsetX: number, offsetY: number, arc: number): Rib {
+    const left = this.vertexCount;
+    if (left + 2 > this.across.length) this.#growVertices();
+    const { position, offset, across } = this;
+    position[left * 2] = x;
+    position[left * 2 + 1] = y;
+    position[left * 2 + 2] = x;
+    position[left * 2 + 3] = y;
+    offset[left * 2] = offsetX;
+    offset[left * 2 + 1] = offsetY;
+    offset[left * 2 + 2] = -offsetX;
+    offset[left * 2 + 3] = -offsetY;
+    across[left] = 1;
+    across[left + 1] = -1;
+    this.arc[left] = arc;
+    this.arc[left + 1] = arc;
+    this.vertexCount = left + 2;
+    return left;
+  }
+
+  /** {@link bridgeRibs}'s two triangles behind one capacity check. */
+  quad(previous: Rib, next: Rib): void {
+    const at = this.indexCount;
+    if (at + 6 > this.index.length) this.index = grown(this.index, this.index.length * 2);
+    const index = this.index;
+    index[at] = previous;
+    index[at + 1] = previous + 1;
+    index[at + 2] = next + 1;
+    index[at + 3] = previous;
+    index[at + 4] = next + 1;
+    index[at + 5] = next;
+    this.indexCount = at + 6;
+  }
+
   triangle(a: number, b: number, c: number): void {
     const at = this.indexCount;
     if (at + 3 > this.index.length) this.index = grown(this.index, this.index.length * 2);
@@ -494,11 +532,12 @@ function grown<T extends Float32Array | Float64Array | Uint32Array>(array: T, le
   return next;
 }
 
-/** A pair of boundary vertices at one centreline point, left side and right side. */
-interface Rib {
-  readonly left: number;
-  readonly right: number;
-}
+/**
+ * A pair of boundary vertices at one centreline point, as the index of the left
+ * one. The right one is always the next vertex, because {@link RibbonBuilder.rib}
+ * writes them together.
+ */
+type Rib = number;
 
 /**
  * A centreline as two coordinate arrays that double when full, reused from one
@@ -572,12 +611,7 @@ function pushRib(
   scale: number,
   arc: number,
 ): Rib {
-  const offsetX = normalX * scale;
-  const offsetY = normalY * scale;
-  return {
-    left: out.vertex(x, y, offsetX, offsetY, 1, arc),
-    right: out.vertex(x, y, -offsetX, -offsetY, -1, arc),
-  };
+  return out.rib(x, y, normalX * scale, normalY * scale, arc);
 }
 
 /**
@@ -587,9 +621,10 @@ function pushRib(
  *
  * The vertex ORDER is a property of the construction rather than of the data:
  * `left` is the `(-dy, dx)` side of the direction of travel for every rib, so
- * the pair below is counter-clockwise whichever way the ribbon runs. What is
- * not unconditional is the RESULT, because a mitred rib's vertices sit off the
- * centreline point and can cross the ones before them. See
+ * the pair {@link RibbonBuilder.quad} writes is counter-clockwise whichever way
+ * the ribbon runs. What is not unconditional is the RESULT, because a mitred
+ * rib's vertices sit off the centreline point and can cross the ones before
+ * them. See
  * {@link tessellateCentreline} for the bound, which is measured rather than
  * asserted, and for why nothing here can clamp it. The tests check the winding
  * over every triangle of every shape in the suite, at widths inside that
@@ -597,8 +632,7 @@ function pushRib(
  * `FrontSide` in a way that looks like a missing draw call.
  */
 function bridgeRibs(out: RibbonBuilder, previous: Rib, next: Rib): void {
-  out.triangle(previous.left, previous.right, next.right);
-  out.triangle(previous.left, next.right, next.left);
+  out.quad(previous, next);
 }
 
 /**
@@ -1104,8 +1138,8 @@ function tessellateCentreline(out: RibbonBuilder, line: Polyline, miterLimit: nu
       // runs along the NEGATIVE normals; turning right mirrors both.
       const side = cross > 0 ? -1 : 1;
       const centre = out.vertex(fromX, fromY, 0, 0, 0, arcFrom);
-      const first = cross > 0 ? incoming.right : incoming.left;
-      const last = cross > 0 ? outgoing.right : outgoing.left;
+      const first = cross > 0 ? incoming + 1 : incoming;
+      const last = cross > 0 ? outgoing + 1 : outgoing;
 
       // The turn, signed: the arc runs from the incoming outer normal to the
       // outgoing one the short way round, and its facets are as many as
@@ -1118,26 +1152,24 @@ function tessellateCentreline(out: RibbonBuilder, line: Polyline, miterLimit: nu
       const stepCos = Math.cos(step);
       const stepSin = Math.sin(step);
 
-      const facets: number[] = [first];
+      let from = first;
       let spokeX = side * inX;
       let spokeY = side * inY;
-      for (let facet = 1; facet < count; facet += 1) {
-        const nextX = spokeX * stepCos - spokeY * stepSin;
-        const nextY = spokeX * stepSin + spokeY * stepCos;
-        spokeX = nextX;
-        spokeY = nextY;
-        facets.push(out.vertex(fromX, fromY, spokeX, spokeY, side, arcFrom));
-      }
-      facets.push(last);
-      for (let facet = 1; facet < facets.length; facet += 1) {
-        const from = facets[facet - 1];
-        const to = facets[facet];
-        if (from === undefined || to === undefined) continue;
+      for (let facet = 1; facet <= count; facet += 1) {
+        let to = last;
+        if (facet < count) {
+          const nextX = spokeX * stepCos - spokeY * stepSin;
+          const nextY = spokeX * stepSin + spokeY * stepCos;
+          spokeX = nextX;
+          spokeY = nextY;
+          to = out.vertex(fromX, fromY, spokeX, spokeY, side, arcFrom);
+        }
         // Counter-clockwise either way: a left turn walks the right side from
         // the incoming normal round to the outgoing one, a right turn walks
         // the left side the other way.
         if (cross > 0) out.triangle(centre, from, to);
         else out.triangle(centre, to, from);
+        from = to;
       }
     }
     rib = outgoing;
