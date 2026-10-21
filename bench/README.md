@@ -58,9 +58,11 @@ system work this time; the baseline capture described below ran at 2.4 to
 | straight | 17.7 (17.7 to 18.0) | 12.8 (11.9 to 13.1) |
 | smooth | 22.2 (21.4 to 22.2) | 15.0 (14.8 to 16.0) |
 
-`advance` steps by 1/1000 s rather than a 60 Hz frame, so the springs stay in
-flight across the whole sampling window; the file says why that prices the same
-arithmetic, and it fails the run if they come to rest. Every retarget here
+`advance` steps by 1/10,000 s rather than a 60 Hz frame, so the springs stay
+in flight across the whole sampling window; the file says why that prices the
+same arithmetic, and it fails the run if they come to rest. It stepped by
+1/1000 s until 2026-10-20, when `advance` got fast enough to bring that scene
+to rest inside the window. Every retarget here
 lands on routes still drawn where they started, so a smooth route keeps its
 three points. In the browser profile it did not until 2026-10-20: a bent route
 retargeted while it was still moving gained a point per retarget (4, 5, 6 and
@@ -72,6 +74,17 @@ come within the rest tolerance of straight, and Chrome's figures fell to 14.6
 and 23.3 ms (see `bench/browser/README.md`). Re-run on 2026-10-20 at loads of
 3.9 to 4.5, alternating the old and new `edge-motion.ts`, all four entries
 matched the old code's within run-to-run noise.
+
+On 2026-10-20 the spring step's coefficients, which depend only on the
+half-life and `dt`, moved out of the per-spring step and are built once per
+`advance` (`springStep` in `packages/render/src/spring.ts`). Frames are
+byte-identical. Three runs alternating the old and new source, both at
+1/10,000 s, at loads of 2.9 to 4.2, medians in milliseconds:
+
+| Edges | `apply` before | `apply` after | `advance` before | `advance` after |
+| --- | --- | --- | --- | --- |
+| straight | 17.7 to 18.0 | 18.0 to 18.2 | 12.4 to 13.5 | 3.1 to 4.2 |
+| smooth | 22.5 to 22.8 | 21.7 to 23.0 | 15.4 to 16.6 | 4.7 to 5.7 |
 
 Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
 for the same reason: recording them rewrites the machine-matched file, which is
