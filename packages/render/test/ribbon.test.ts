@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { mulberry32 } from '@dagr/bench';
 import {
   DEFAULT_MITER_LIMIT,
   FAN_RADIUS_TOLERANCE,
@@ -6,10 +7,12 @@ import {
   MIN_SEGMENT_WORLD,
   RIBBON_AA_PADDING_PIXELS,
   advanceDashFlow,
+  flatToChord,
   numberDashArith,
   ribbonWidthAt,
   requireRibbonStyle,
   ribbonCoverage,
+  shorterThanMinSegment,
   smoothCentreline,
   tessellateRibbons,
 } from '../src/ribbon.js';
@@ -682,6 +685,75 @@ describe('tessellateRibbons: many routes', () => {
       expect(hinted.ranges).toEqual(unhinted.ranges);
       expect(hinted.vertexCount).toBe(vertexCount);
       expect(hinted.indexCount).toBe(indexCount);
+    }
+  });
+});
+
+describe('comparisons specified on Math.hypot', () => {
+  function byHypot(c: readonly number[], tolerance: number): boolean {
+    const [x0, y0, x1, y1, x2, y2, x3, y3] = c as [number, number, number, number, number, number, number, number];
+    const chordX = x3 - x0;
+    const chordY = y3 - y0;
+    const chord = Math.hypot(chordX, chordY);
+    const distance = (x: number, y: number): number =>
+      chord === 0 ? Math.hypot(x - x0, y - y0) : Math.abs(chordX * (y0 - y) - chordY * (x0 - x)) / chord;
+    return distance(x1, y1) <= tolerance && distance(x2, y2) <= tolerance;
+  }
+
+  it('flatToChord answers exactly what the hypot distance does, at every scale', () => {
+    const random = mulberry32(7);
+    let checked = 0;
+    for (const scale of [1e-150, 1e-12, 1, 1e6, 1e140, 1e300]) {
+      for (let i = 0; i < 4_000; i += 1) {
+        const c = Array.from({ length: 8 }, () => (random() - 0.5) * scale);
+        if (i % 50 === 0) {
+          c[6] = c[0]!;
+          c[7] = c[1]!;
+        }
+        const tolerance = scale * 10 ** (-4 * random());
+        // Control points placed at the tolerance from the chord, give or take a
+        // few ulps, which is where the square cannot decide alone.
+        if (i % 2 === 1) {
+          const chordX = c[6]! - c[0]!;
+          const chordY = c[7]! - c[1]!;
+          const chord = Math.hypot(chordX, chordY);
+          if (chord > 0) {
+            const at = tolerance * (1 + (Math.floor(random() * 9) - 4) * Number.EPSILON);
+            const along = random();
+            c[2] = c[0]! + chordX * along - (chordY / chord) * at;
+            c[3] = c[1]! + chordY * along + (chordX / chord) * at;
+          }
+        }
+        expect(flatToChord(...(c as [number, number, number, number, number, number, number, number]), tolerance)).toBe(
+          byHypot(c, tolerance),
+        );
+        checked += 1;
+      }
+    }
+    expect(checked).toBe(24_000);
+  });
+
+  it('flatToChord answers exactly what the hypot distance does at a subnormal tolerance', () => {
+    // The quotient rounds onto the subnormal grid, where one ulp is the whole
+    // tolerance, so only the hypot path gets this one right.
+    const c = [0, 0, 0, -1e-323, 0, 0, 3e60, 4e60] as const;
+    expect(byHypot(c, 5e-324)).toBe(true);
+    expect(flatToChord(...c, 5e-324)).toBe(true);
+  });
+
+  it('shorterThanMinSegment answers exactly what Math.hypot does, near the minimum and at the extremes', () => {
+    const random = mulberry32(11);
+    const lengths = [0, 5e-324, 1e-200, 1e-160, 1e300, Number.MAX_VALUE];
+    for (let step = -40; step <= 40; step += 1) {
+      lengths.push(MIN_SEGMENT_WORLD * (1 + step * Number.EPSILON));
+    }
+    for (const length of lengths) {
+      for (let i = 0; i < 50; i += 1) {
+        const angle = random() * 2 * Math.PI;
+        const dx = length * Math.cos(angle);
+        const dy = length * Math.sin(angle);
+        expect(shorterThanMinSegment(dx, dy)).toBe(Math.hypot(dx, dy) < MIN_SEGMENT_WORLD);
+      }
     }
   });
 });
