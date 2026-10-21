@@ -901,6 +901,51 @@ With straight edges, 10,000 nodes now hold 60 Hz with springs in flight in
 these two runs. With smooth edges the CPU cost left is `setEdges` on every
 frame and `apply` on retarget frames.
 
+### With the tessellation builder kept per edge group (2026-10-21)
+
+A CPU profile in Node of `SceneEdges.setEdges` on the 10,000-node smooth graph
+(static bend points, 13,169 routes, 263,382 vertices) put the garbage
+collector at 10.4% of samples and the builder's array growth at 4.1%: every
+call started a new builder at 4,096 vertices and doubled it seven times. Each
+edge group now keeps one builder across calls, so after the first frame it is
+already big enough. The output is byte-identical: sha256 of every array and
+the ranges matched the previous build over these routes and 4,000 random ones
+under six option sets, through one builder reused across scenes of different
+sizes. In Node, alternating the old and new build three times at load 3.4 to
+4.3, medians of 60 calls after 20 warm-up calls in a scratch script (still no
+committed bench entry): `SceneEdges.setEdges` took 17.6 to 17.8 ms before and
+13.9 to 14.0 after. The garbage collector fell to 3.0% of samples; what is
+left is arithmetic, the flattening (22%), the walk (20%) and the centreline
+cleaning (10%) first.
+
+Same command, machine, browser and adapter as the sections above,
+`renderer.backend` `webgpu` on every row, load average 3.2 to 4.2. Springs
+only. Two runs; the table is the second. The first differed most at 10,000
+smooth nodes (`setEdges` 14.9, 42.7% past one tick).
+
+| Nodes | Edges | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Interval p95 | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1,000 | straight | 5.2 | 0.9 | 0.6 | 0.8 | 0.4 | 18.2 | 0% |
+| 2,500 | straight | 4.1 | 1.5 | 0.6 | 0.6 | 0.2 | 18.3 | 0% |
+| 5,000 | straight | 6.9 | 1.0 | 0.9 | 1.2 | 0.2 | 18.2 | 0% |
+| 10,000 | straight | 13.1 | 2.4 | 1.9 | 2.4 | 0.4 | 17.9 | 0% |
+| 1,000 | smooth | 3.2 | 0.8 | 0.4 | 1.8 | 0.2 | 18.3 | 0% |
+| 2,500 | smooth | 4.4 | 0.9 | 0.4 | 3.6 | 0.3 | 18.1 | 0% |
+| 5,000 | smooth | 8.6 | 1.6 | 0.9 | 6.7 | 0.4 | 18.2 | 0% |
+| 10,000 | smooth | 18.5 | 4.3 | 1.9 | 14.6 | 0.7 | 35.0 | 41% |
+
+- **At 10,000 smooth nodes `setEdges` fell from 16.5 to 14.6 ms** (14.9 in
+  the first run), and the share of ticks missed from 53% to 41% (42.7% in the
+  first run). At 5,000 smooth nodes it fell from 7.4 to 6.7, and no tick was
+  missed in either run.
+- **Straight rows are within the earlier sections' run-to-run spread**, and
+  the GPU `sum` matched the previous section's on every row (0.97 to 0.98 ms
+  at 10,000 smooth nodes), as it should: nothing drawn changed.
+
+10,000 smooth nodes still miss 41% of ticks. The medians of the per-frame
+steps add to about 22 ms (`input` 0.6), two thirds of it `setEdges`, and a
+retarget frame adds 18.5 ms of `apply`.
+
 ## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`

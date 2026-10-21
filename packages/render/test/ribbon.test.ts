@@ -4,6 +4,7 @@ import {
   FAN_RADIUS_TOLERANCE,
   MAX_FAN_FACET_RADIANS,
   MIN_SEGMENT_WORLD,
+  RibbonBuilder,
   RIBBON_AA_PADDING_PIXELS,
   advanceDashFlow,
   numberDashArith,
@@ -652,6 +653,36 @@ describe('tessellateRibbons: many routes', () => {
       expect(scene.arc.subarray(v, v + n)).toEqual(alone.arc);
       expect(scene.index.subarray(s, s + m).map((index) => index - v)).toEqual(alone.index);
     }
+  });
+
+  it('tessellates through a reused builder exactly as through a fresh one', () => {
+    const large: RibbonRoute[] = Array.from({ length: 2_000 }, (_, i) => ({
+      id: `r${String(i)}`,
+      points: [
+        { x: i, y: 0 },
+        { x: i + 25 + (i % 7), y: 45 },
+        { x: i + (i % 3), y: 90 },
+      ],
+    }));
+    const options = { curve: 'smooth' } as const;
+    const builder = new RibbonBuilder();
+    const first = tessellateRibbons(large, options, builder);
+    const firstPosition = first.position.slice();
+    const firstIndex = first.index.slice();
+
+    const reused = tessellateRibbons(routes, options, builder);
+    expect(reused).toEqual(tessellateRibbons(routes, options));
+    expect(first.position).toEqual(firstPosition);
+    expect(first.index).toEqual(firstIndex);
+    expect(tessellateRibbons(large, options, builder)).toEqual(tessellateRibbons(large, options));
+  });
+
+  it('starts a reused builder empty after a route that threw', () => {
+    const builder = new RibbonBuilder();
+    expect(() =>
+      tessellateRibbons([routes[2]!, { id: 'bad', points: [{ x: Number.NaN, y: 0 }] }], undefined, builder),
+    ).toThrow(RangeError);
+    expect(tessellateRibbons(routes, undefined, builder)).toEqual(tessellateRibbons(routes));
   });
 });
 

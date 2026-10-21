@@ -402,8 +402,13 @@ export interface RibbonGeometry {
  * fan, so unless it came from the same function that makes those decisions it
  * could disagree with the walk in a way that writes past an end. Growing on
  * demand cannot.
+ *
+ * An edge group keeps one across calls and passes it to
+ * {@link tessellateRibbons}, so after the first frame it is already big enough:
+ * built fresh, 13,169 smooth routes doubled it seven times on every call, and
+ * the copies and the garbage they left were a sixth of `setEdges`.
  */
-class RibbonBuilder {
+export class RibbonBuilder {
   position = new Float32Array(INITIAL_BUILDER_VERTICES * 2);
   offset = new Float32Array(INITIAL_BUILDER_VERTICES * 2);
   across = new Float32Array(INITIAL_BUILDER_VERTICES);
@@ -1094,9 +1099,11 @@ function requireRibbonOptions(options: RibbonOptions | undefined): {
 export function tessellateRibbons(
   routes: Iterable<RibbonRoute>,
   options?: RibbonOptions,
+  out: RibbonBuilder = new RibbonBuilder(),
 ): RibbonGeometry {
   const resolved = requireRibbonOptions(options);
-  const out = new RibbonBuilder();
+  out.vertexCount = 0;
+  out.indexCount = 0;
   const ranges: RibbonRange[] = [];
   const given = new Polyline();
   const cleaned = new Polyline();
