@@ -673,9 +673,15 @@ describe('tessellateRibbons: many routes', () => {
       { vertexCount: 0, indexCount: 0 },
     ]) {
       const hinted = tessellateRibbons(large, options, hint);
-      expect(hinted).toEqual(unhinted);
-      expect(hinted.position).toHaveLength(vertexCount * 2);
-      expect(hinted.index).toHaveLength(indexCount);
+      // Element by element: a deep `toEqual` over these arrays took CI's
+      // runner past the test timeout.
+      for (const key of ['position', 'offset', 'across', 'arc', 'index'] as const) {
+        expect(hinted[key]).toHaveLength(unhinted[key].length);
+        expect(hinted[key].every((value, i) => Object.is(value, unhinted[key][i]))).toBe(true);
+      }
+      expect(hinted.ranges).toEqual(unhinted.ranges);
+      expect(hinted.vertexCount).toBe(vertexCount);
+      expect(hinted.indexCount).toBe(indexCount);
     }
   });
 });
