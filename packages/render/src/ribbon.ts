@@ -402,8 +402,6 @@ export interface RibbonGeometry {
  * fan, so unless it came from the same function that makes those decisions it
  * could disagree with the walk in a way that writes past an end. Growing on
  * demand cannot.
- *
- * Sized from a {@link RibbonSizeHint} when the caller has one.
  */
 class RibbonBuilder {
   position: Float32Array;
@@ -473,7 +471,7 @@ const INITIAL_BUILDER_VERTICES = 4096;
  *
  * Built fresh at {@link INITIAL_BUILDER_VERTICES}, 13,169 smooth routes doubled
  * every array seven times on every call, and the copies and the garbage they
- * left were about a fifth of `setEdges` in Node. A hint rather than a builder
+ * left were about a sixth of `setEdges` in Node. A hint rather than a builder
  * kept between calls, because a kept builder holds its largest size for the
  * life of the group: at 10,000 smooth nodes that doubled the edges' retained
  * heap.

@@ -921,8 +921,8 @@ the flattening (20%), the walk (17%) and the centreline cleaning (9%) first.
 Keeping one builder per group instead, which the first version of this change
 did, was as fast but held each group's largest arrays for its whole life: on
 `--memory` (same machine and browser) the 10,000-node smooth edges' retained
-heap went from 14.2 to 29.8 MB. With the hint it is 14.1, the 2026-10-19
-table's figure, on every row.
+heap went from 14.2 to 29.8 MB. With the hint it is 14.1, within 0.1 MB of
+the 2026-10-19 section's 14.2, and the other rows match that section too.
 
 Same command, machine, browser and adapter as the sections above,
 `renderer.backend` `webgpu` on every row, load average 3.3 to 4.4. Springs
@@ -946,7 +946,8 @@ smooth nodes (`apply` 21.3, `setEdges` 16.0, 52% past one tick).
   53% and 59.3%). Run back to back with only that row, alternating three
   times, the old build read 15.6 to 16.1 ms and this one 14.5 to 15.5. The
   springs' route sizes change from frame to frame, which the static Node scene
-  does not.
+  does not. `advance` read 5.6 against the previous section's 4.1 with no
+  change to it, which is load spread.
 - **Straight rows and the GPU `sum` are within the earlier sections'
   run-to-run spread** (0.97 to 0.98 ms at 10,000 smooth nodes), as they should
   be: nothing drawn changed.

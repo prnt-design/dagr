@@ -668,7 +668,7 @@ describe('tessellateRibbons: many routes', () => {
     const { vertexCount, indexCount } = unhinted;
     for (const hint of [
       { vertexCount, indexCount },
-      { vertexCount: vertexCount - 1, indexCount: indexCount - 3 },
+      { vertexCount: Math.floor(vertexCount / 2), indexCount: Math.floor(indexCount / 2) },
       { vertexCount: vertexCount * 2, indexCount: indexCount * 2 },
       { vertexCount: 0, indexCount: 0 },
     ]) {
