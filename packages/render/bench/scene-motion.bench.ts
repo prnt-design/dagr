@@ -25,7 +25,7 @@ const BEND = 25;
  * pays does not depend on `dt`. At 60 Hz a 20 unit move comes to rest in about
  * 35 calls, and a settled spring is skipped, so the measured loop would drift
  * from pricing motion to pricing a still scene. At 1/10,000 s it stays in
- * flight for about 6,200 calls, more than the sampling window below makes on
+ * flight for about 5,900 calls, more than the sampling window below makes on
  * an Apple M4; on a machine fast enough to make more, the bench throws rather
  * than measure a scene at rest.
  */

@@ -300,8 +300,8 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   arrays that double when full, and with springs in flight 10,000 smooth nodes
   spend 19.9 ms in `setEdges` where they spent 23.3. Since 2026-10-20 it also
   carries each centreline in reused coordinate arrays rather than an object
-  per point, byte-identical, and 10,000 smooth nodes spend 16.4 ms in
-  `setEdges`, about what they spend in `advance`. Since 2026-10-20 `advance`
+  per point, byte-identical, and 10,000 smooth nodes spent 16.4 ms in
+  `setEdges`, about what they then spent in `advance`. Since 2026-10-20 `advance`
   builds the spring step's coefficients once per frame rather than once per
   spring axis, byte-identical, and with springs in flight 10,000 nodes spend
   2.4 ms in `advance` with straight edges (was 8.5) and 4.1 with smooth (was

@@ -445,30 +445,34 @@ describe('stepSpring2D', () => {
   });
 
   describe('stepSpring2DBy', () => {
-    it('matches stepSpring2D bit for bit when one step is shared across springs', () => {
-      const springs = [
-        state2d(1, 2, 0, 0),
-        state2d(-4e300, 7, 3e300, -1),
-        state2d(1e-300, -0, 5e-324, 12),
-        state2d(123.456, -654.321, -9, 0.5),
+    it('gives what the per-axis step it replaced gave, bit for bit', () => {
+      // Taken from stepSpring2D before the clock's coefficients moved into
+      // springStep: ordinary, overflowing, subnormal, slow and settling steps.
+      const cases: [Spring2DState, { x: number; y: number }, number, number, number[]][] = [
+        [state2d(1, 2, 0, 0), { x: 5, y: 5 }, 14, 1 / 60, [
+          1.0933448060718771, 2.070008604553908, 10.34735700013395, 7.760517750100463,
+        ]],
+        [state2d(-4e300, 7, 3e300, -1), { x: 4e300, y: 7 }, 14, 1 / 60, [
+          -3.7737159095394065e300, 6.9868018405610535, 2.2516060002842497e301,
+          -0.6071153341915325,
+        ]],
+        [state2d(1e-300, -0, 5e-324, 12), { x: 0, y: -0 }, 1e5, 1e-9, [
+          9.999999950003334e-301, 1.1998800059998012e-8, -9.999000049998347e-300,
+          11.997600179992,
+        ]],
+        [state2d(123.456, -654.321, -9, 0.5), { x: -1, y: 1e9 }, 1e-3, 800, [
+          -3135.5095076392836, 191207515.11090794, -0.8535294838575372, 359463.4514309755,
+        ]],
+        [state2d(3, 4, 1, 1), { x: 0, y: 0 }, 1e5, 1e305, [0, 0, 0, 0]],
       ];
-      const targets = [
-        { x: 5, y: 5 },
-        { x: 4e300, y: 7 },
-        { x: 0, y: -0 },
-        { x: -1, y: 1e9 },
-      ];
-      for (const w of [1e-3, 14, 1e5]) {
-        for (const dt of [0, 1e-9, 1 / 60, 1, 800, 1e305]) {
-          const step = springStep(w, dt);
-          for (const [index, spring] of springs.entries()) {
-            const target = targets[index]!;
-            const shared = stepSpring2DBy(spring, target, step);
-            const alone = stepSpring2D(spring, target, w, dt);
-            expect(Object.is(shared.position.x, alone.position.x)).toBe(true);
-            expect(Object.is(shared.position.y, alone.position.y)).toBe(true);
-            expect(Object.is(shared.velocity.x, alone.velocity.x)).toBe(true);
-            expect(Object.is(shared.velocity.y, alone.velocity.y)).toBe(true);
+      for (const [state, target, w, dt, expected] of cases) {
+        for (const next of [
+          stepSpring2D(state, target, w, dt),
+          stepSpring2DBy(state, target, springStep(w, dt)),
+        ]) {
+          const actual = [next.position.x, next.position.y, next.velocity.x, next.velocity.y];
+          for (const [index, value] of actual.entries()) {
+            expect(Object.is(value, expected[index])).toBe(true);
           }
         }
       }

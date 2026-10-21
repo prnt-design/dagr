@@ -2,7 +2,7 @@ import { MotionDesyncError } from './errors.js';
 import { omegaForHalfLife, springStep, stepSpring2DBy } from './spring.js';
 import type { Spring2DState } from './spring.js';
 import type { Vec2 } from './types.js';
-import { requireFinite, requireNonNegative, requirePositive } from './validate.js';
+import { requireFinite, requirePositive } from './validate.js';
 
 /**
  * The delta consumer, node half: a scene's worth of springs, retargeted by a
@@ -536,10 +536,9 @@ export function createPlannedNodeMotion(options: NodeMotionOptions = {}): Planne
   }
 
   function advance(dtSeconds: number): MotionFrame {
-    // Once, here, rather than per node inside `stepSpring2D`: this is the
-    // caller's number and every other argument the step sees is one this
-    // module produced, checked finite when the retarget that set it was planned.
-    requireNonNegative(dtSeconds, 'dtSeconds');
+    // Once per frame rather than once per node: `dtSeconds` is the caller's
+    // number, and every other argument the step sees is one this module
+    // produced, checked finite when the retarget that set it was planned.
     const step = springStep(w, dtSeconds);
 
     const nodes: MotionNode[] = [];

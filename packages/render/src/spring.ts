@@ -268,8 +268,7 @@ function weightedInterpolation(
 /**
  * The part of a step that depends only on `w` and `dtSeconds`, so a frame that
  * steps every spring in a scene by the same clock computes it once rather than
- * once per axis. Internal to the package: the motion halves build one per
- * `advance`, and the public steppers build one per call.
+ * once per axis. Not exported from the package index.
  */
 export interface SpringStep {
   /** `dtSeconds` is zero: every spring stays exactly where it is. */
@@ -447,9 +446,9 @@ export function stepSpring2D(
 
 /**
  * {@link stepSpring2D} with the clock's half already built, for a loop that
- * steps many springs by one `step`. It skips the per-spring checks
- * {@link stepSpring2D} makes, so the caller owns that every state and target
- * it passes is finite; the result is still checked.
+ * steps many springs by one `step`. Not exported from the package index. It
+ * skips the per-spring checks {@link stepSpring2D} makes, so the caller owns
+ * that every state and target it passes is finite; the result is still checked.
  */
 export function stepSpring2DBy(
   state: Spring2DState,

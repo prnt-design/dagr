@@ -58,11 +58,11 @@ system work this time; the baseline capture described below ran at 2.4 to
 | straight | 17.7 (17.7 to 18.0) | 12.8 (11.9 to 13.1) |
 | smooth | 22.2 (21.4 to 22.2) | 15.0 (14.8 to 16.0) |
 
-`advance` steps by 1/10,000 s rather than a 60 Hz frame, so the springs stay
-in flight across the whole sampling window; the file says why that prices the
-same arithmetic, and it fails the run if they come to rest. It stepped by
-1/1000 s until 2026-10-20, when `advance` got fast enough to bring that scene
-to rest inside the window. Every retarget here
+The table above stepped `advance` by 1/1000 s. Since 2026-10-20, when
+`advance` got fast enough to bring that scene to rest inside the window, it
+steps by 1/10,000 s, so the springs stay in flight across the whole sampling
+window; the file says why that prices the same arithmetic, and it fails the
+run if they come to rest. Every retarget here
 lands on routes still drawn where they started, so a smooth route keeps its
 three points. In the browser profile it did not until 2026-10-20: a bent route
 retargeted while it was still moving gained a point per retarget (4, 5, 6 and
