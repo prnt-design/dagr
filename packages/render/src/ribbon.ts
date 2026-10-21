@@ -403,19 +403,32 @@ export interface RibbonGeometry {
  * could disagree with the walk in a way that writes past an end. Growing on
  * demand cannot.
  *
- * An edge group keeps one across calls and passes it to
- * {@link tessellateRibbons}, so after the first frame it is already big enough:
- * built fresh, 13,169 smooth routes doubled it seven times on every call, and
- * the copies and the garbage they left were a sixth of `setEdges`.
+ * Sized from a {@link RibbonSizeHint} when the caller has one.
  */
-export class RibbonBuilder {
-  position = new Float32Array(INITIAL_BUILDER_VERTICES * 2);
-  offset = new Float32Array(INITIAL_BUILDER_VERTICES * 2);
-  across = new Float32Array(INITIAL_BUILDER_VERTICES);
-  arc = new Float32Array(INITIAL_BUILDER_VERTICES);
-  index = new Uint32Array(INITIAL_BUILDER_VERTICES * 3);
+class RibbonBuilder {
+  position: Float32Array;
+  offset: Float32Array;
+  across: Float32Array;
+  arc: Float32Array;
+  index: Uint32Array;
   vertexCount = 0;
   indexCount = 0;
+
+  constructor(hint: RibbonSizeHint | undefined) {
+    const vertices = Math.max(
+      Math.ceil((hint?.vertexCount ?? 0) * HINT_HEADROOM),
+      INITIAL_BUILDER_VERTICES,
+    );
+    const indices = Math.max(
+      Math.ceil((hint?.indexCount ?? 0) * HINT_HEADROOM),
+      INITIAL_BUILDER_VERTICES * 3,
+    );
+    this.position = new Float32Array(vertices * 2);
+    this.offset = new Float32Array(vertices * 2);
+    this.across = new Float32Array(vertices);
+    this.arc = new Float32Array(vertices);
+    this.index = new Uint32Array(indices);
+  }
 
   vertex(x: number, y: number, offsetX: number, offsetY: number, across: number, arc: number): number {
     const vertex = this.vertexCount;
@@ -453,6 +466,29 @@ export class RibbonBuilder {
  * group of a handful of edges does not allocate megabytes it never fills.
  */
 const INITIAL_BUILDER_VERTICES = 4096;
+
+/**
+ * How big the last tessellation of a scene came out, so the next one can start
+ * near there.
+ *
+ * Built fresh at {@link INITIAL_BUILDER_VERTICES}, 13,169 smooth routes doubled
+ * every array seven times on every call, and the copies and the garbage they
+ * left were about a fifth of `setEdges` in Node. A hint rather than a builder
+ * kept between calls, because a kept builder holds its largest size for the
+ * life of the group: at 10,000 smooth nodes that doubled the edges' retained
+ * heap.
+ */
+export interface RibbonSizeHint {
+  readonly vertexCount: number;
+  readonly indexCount: number;
+}
+
+/**
+ * Room above a hint, because a scene in motion changes size from frame to
+ * frame: a smooth route's flattening spends a different number of points as
+ * its bend moves, and one vertex past an exact hint doubles every array.
+ */
+const HINT_HEADROOM = 1.125;
 
 function grown<T extends Float32Array | Float64Array | Uint32Array>(array: T, length: number): T {
   const next = new (array.constructor as new (length: number) => T)(length);
@@ -1095,15 +1131,17 @@ function requireRibbonOptions(options: RibbonOptions | undefined): {
  * there is a phase and nothing else. Worth doing, because every route starting
  * at arc zero means every edge leaving a node breaks at the same distance from
  * it, and at one flow speed a whole scene marches in step.
+ *
+ * @param sizeHint The counts a previous call returned for this scene, which
+ * only sizes the arrays: the result is the same with any hint or none.
  */
 export function tessellateRibbons(
   routes: Iterable<RibbonRoute>,
   options?: RibbonOptions,
-  out: RibbonBuilder = new RibbonBuilder(),
+  sizeHint?: RibbonSizeHint,
 ): RibbonGeometry {
   const resolved = requireRibbonOptions(options);
-  out.vertexCount = 0;
-  out.indexCount = 0;
+  const out = new RibbonBuilder(sizeHint);
   const ranges: RibbonRange[] = [];
   const given = new Polyline();
   const cleaned = new Polyline();

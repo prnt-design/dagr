@@ -4,7 +4,6 @@ import {
   FAN_RADIUS_TOLERANCE,
   MAX_FAN_FACET_RADIANS,
   MIN_SEGMENT_WORLD,
-  RibbonBuilder,
   RIBBON_AA_PADDING_PIXELS,
   advanceDashFlow,
   numberDashArith,
@@ -655,7 +654,7 @@ describe('tessellateRibbons: many routes', () => {
     }
   });
 
-  it('tessellates through a reused builder exactly as through a fresh one', () => {
+  it('tessellates from any size hint exactly as without one', () => {
     const large: RibbonRoute[] = Array.from({ length: 2_000 }, (_, i) => ({
       id: `r${String(i)}`,
       points: [
@@ -665,24 +664,19 @@ describe('tessellateRibbons: many routes', () => {
       ],
     }));
     const options = { curve: 'smooth' } as const;
-    const builder = new RibbonBuilder();
-    const first = tessellateRibbons(large, options, builder);
-    const firstPosition = first.position.slice();
-    const firstIndex = first.index.slice();
-
-    const reused = tessellateRibbons(routes, options, builder);
-    expect(reused).toEqual(tessellateRibbons(routes, options));
-    expect(first.position).toEqual(firstPosition);
-    expect(first.index).toEqual(firstIndex);
-    expect(tessellateRibbons(large, options, builder)).toEqual(tessellateRibbons(large, options));
-  });
-
-  it('starts a reused builder empty after a route that threw', () => {
-    const builder = new RibbonBuilder();
-    expect(() =>
-      tessellateRibbons([routes[2]!, { id: 'bad', points: [{ x: Number.NaN, y: 0 }] }], undefined, builder),
-    ).toThrow(RangeError);
-    expect(tessellateRibbons(routes, undefined, builder)).toEqual(tessellateRibbons(routes));
+    const unhinted = tessellateRibbons(large, options);
+    const { vertexCount, indexCount } = unhinted;
+    for (const hint of [
+      { vertexCount, indexCount },
+      { vertexCount: vertexCount - 1, indexCount: indexCount - 3 },
+      { vertexCount: vertexCount * 2, indexCount: indexCount * 2 },
+      { vertexCount: 0, indexCount: 0 },
+    ]) {
+      const hinted = tessellateRibbons(large, options, hint);
+      expect(hinted).toEqual(unhinted);
+      expect(hinted.position).toHaveLength(vertexCount * 2);
+      expect(hinted.index).toHaveLength(indexCount);
+    }
   });
 });
 
