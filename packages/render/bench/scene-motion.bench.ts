@@ -20,17 +20,16 @@ const SHIFT = 20;
 const BEND = 25;
 
 /**
- * 1/1000 s rather than a 60 Hz frame's 1/60. A step costs the same at either:
- * with the default half-life both keep `w * dt` at or above the 0.01 where
- * `log1pMinusU` switches to its series (0.014 here), so every spring takes the
- * same branch. At 60 Hz a 20 unit move comes to rest in about 35 calls, and a
- * settled spring is skipped, so the measured loop would drift from pricing
- * motion to pricing a still scene. At 1/1000 s it stays in flight for about
- * 590 calls, more than the sampling window below makes on an Apple M4; on a
- * machine fast enough to make more, the bench throws rather than measure a
- * scene at rest.
+ * 1/10,000 s rather than a 60 Hz frame's 1/60. A step costs the same at either:
+ * the clock's coefficients are built once per `advance`, so what each spring
+ * pays does not depend on `dt`. At 60 Hz a 20 unit move comes to rest in about
+ * 35 calls, and a settled spring is skipped, so the measured loop would drift
+ * from pricing motion to pricing a still scene. At 1/10,000 s it stays in
+ * flight for about 5,900 calls, more than the sampling window below makes on
+ * an Apple M4; on a machine fast enough to make more, the bench throws rather
+ * than measure a scene at rest.
  */
-const DT = 1 / 1000;
+const DT = 1 / 10_000;
 
 /** `bench/README.md`'s longer window for an iteration measured in milliseconds. */
 const HEAVY = { time: 3_000 };

@@ -31,7 +31,7 @@ describe('@prnt/dagr-render', () => {
     //
     // M4.6 added the springs: a closed-form step, its two-axis form, the
     // half-life conversion a caller tunes with, and two constants of the
-    // envelope that conversion reads. Nothing in the group touches a GPU. `spring.ts` is exported whole rather than kept internal
+    // envelope that conversion reads. Nothing in the group touches a GPU. The public steppers are exported rather than kept internal
     // because motion is driven by a caller's loop, and because `@prnt/dagr-react`
     // will want the same curve for interactions with no graph in them.
     //

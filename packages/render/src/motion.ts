@@ -1,8 +1,8 @@
 import { MotionDesyncError } from './errors.js';
-import { omegaForHalfLife, stepSpring2D } from './spring.js';
+import { omegaForHalfLife, springStep, stepSpring2DBy } from './spring.js';
 import type { Spring2DState } from './spring.js';
 import type { Vec2 } from './types.js';
-import { requireFinite, requireNonNegative, requirePositive } from './validate.js';
+import { requireFinite, requirePositive } from './validate.js';
 
 /**
  * The delta consumer, node half: a scene's worth of springs, retargeted by a
@@ -97,7 +97,7 @@ export interface NodeMotionDelta {
  * One node as it should be drawn this frame.
  *
  * READ IT, USE IT, DO NOT MUTATE IT. `center` is this module's own point, not a
- * copy taken for the caller: a moving node's is fresh out of `stepSpring2D`
+ * copy taken for the caller: a moving node's is fresh out of `stepSpring2DBy`
  * every frame, and a settled node's is the same object every frame. Copying per
  * node per frame would double the allocation that is already this module's
  * whole floor, for a hazard the `readonly` on the field describes.
@@ -536,10 +536,10 @@ export function createPlannedNodeMotion(options: NodeMotionOptions = {}): Planne
   }
 
   function advance(dtSeconds: number): MotionFrame {
-    // Once, here, rather than per node inside `stepSpring2D`: this is the
-    // caller's number and every other argument the step sees is one this
-    // module produced.
-    requireNonNegative(dtSeconds, 'dtSeconds');
+    // Once per frame rather than once per node: `dtSeconds` is the caller's
+    // number, and every other argument the step sees is one this module
+    // produced, checked finite when the retarget that set it was planned.
+    const step = springStep(w, dtSeconds);
 
     const nodes: MotionNode[] = [];
     let settled = true;
@@ -547,7 +547,7 @@ export function createPlannedNodeMotion(options: NodeMotionOptions = {}): Planne
     // moves on to the next live entry. Nothing else is added or removed here.
     for (const [id, entry] of entries) {
       if (entry.moving) {
-        const stepped = stepSpring2D(entry.spring, entry.target, w, dtSeconds);
+        const stepped = stepSpring2DBy(entry.spring, entry.target, step);
         if (atRest(stepped, entry.target)) {
           // Exactly on the target rather than within the tolerance of it. The
           // residual would be bounded and permanent, and the visible form of a

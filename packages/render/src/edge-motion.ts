@@ -1,9 +1,9 @@
 import { MotionDesyncError } from './errors.js';
 import { DEFAULT_MOTION_HALF_LIFE, DEFAULT_MOTION_REST } from './motion.js';
-import { omegaForHalfLife, stepSpring2D } from './spring.js';
+import { omegaForHalfLife, springStep, stepSpring2DBy } from './spring.js';
 import type { Spring2DState } from './spring.js';
 import type { Vec2 } from './types.js';
-import { requireFinite, requireNonNegative, requirePositive } from './validate.js';
+import { requireFinite, requirePositive } from './validate.js';
 
 /**
  * The delta consumer, edge half: a scene's worth of routes, sprung towards the
@@ -875,7 +875,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
   }
 
   function advance(dtSeconds: number): EdgeMotionFrame {
-    requireNonNegative(dtSeconds, 'dtSeconds');
+    const step = springStep(w, dtSeconds);
 
     const edges: MotionEdge[] = [];
     let settled = true;
@@ -896,7 +896,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
           // Unreachable: the two lists are built together and stay the same
           // length, which is what the correspondence is for.
           if (target === undefined) continue;
-          const stepped = stepSpring2D(spring, target, w, dtSeconds);
+          const stepped = stepSpring2DBy(spring, target, step);
           springs.push(stepped);
           points.push(stepped.position);
           if (arrived && !springAtRest(stepped, target)) arrived = false;

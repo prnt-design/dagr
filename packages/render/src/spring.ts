@@ -197,6 +197,30 @@ function linearCombination(terms: readonly (readonly [number, number])[]): numbe
 }
 
 /**
+ * {@link linearCombination} over two terms, without building its arrays when
+ * every product and partial sum is finite, which is the case where it returns
+ * the plain sum anyway. The sum starts from `0` as that one does, so a `-0`
+ * product comes back as `+0` on both paths.
+ */
+function combineTwo(
+  value: number,
+  coefficient: number,
+  other: number,
+  otherCoefficient: number,
+): number {
+  const first = value * coefficient;
+  const second = other * otherCoefficient;
+  const direct = 0 + first + second;
+  if (Number.isFinite(first) && Number.isFinite(second) && Number.isFinite(direct)) {
+    return direct;
+  }
+  return linearCombination([
+    [value, coefficient],
+    [other, otherCoefficient],
+  ]);
+}
+
+/**
  * Computes `log(1 + u) - u` without subtracting equal rounded values near zero.
  *
  * The alternating series starts at `-u^2 / 2`. Below one percent it converges
@@ -238,72 +262,117 @@ function weightedInterpolation(
   if (position === target) {
     return position;
   }
-  return linearCombination([
-    [position, retention],
-    [target, targetRetention],
-  ]);
+  return combineTwo(position, retention, target, targetRetention);
 }
 
 /**
- * Advances one axis by `dtSeconds`. No validation: both public entry points
- * check their own arguments under their own field names, and a per-frame loop
- * over a scene's worth of springs should not pay for the same check twice.
+ * The part of a step that depends only on `w` and `dtSeconds`, so a frame that
+ * steps every spring in a scene by the same clock computes it once rather than
+ * once per axis. Not exported from the package index.
  */
-function stepAxis(
-  position: number,
-  velocity: number,
-  target: number,
-  w: number,
-  dtSeconds: number,
-): SpringState {
+export interface SpringStep {
+  /** `dtSeconds` is zero: every spring stays exactly where it is. */
+  readonly identity: boolean;
+  /** `w * dtSeconds` is infinite: every spring lands on its target at rest. */
+  readonly settles: boolean;
+  readonly retention: number;
+  readonly targetRetention: number;
+  readonly timeDecay: number;
+  readonly velocityRetention: number;
+  readonly springRetention: number;
+}
+
+/**
+ * Builds the {@link SpringStep} for `w` and `dtSeconds`, checking both under
+ * the names the public steppers have always used for them.
+ */
+export function springStep(angularFrequency: number, dtSeconds: number): SpringStep {
+  requirePositive(angularFrequency, 'angularFrequency');
+  requireNonNegative(dtSeconds, 'dtSeconds');
+  const w = angularFrequency;
+  const step = {
+    identity: false,
+    settles: false,
+    retention: 0,
+    targetRetention: 0,
+    timeDecay: 0,
+    velocityRetention: 0,
+    springRetention: 0,
+  };
   if (dtSeconds === 0) {
     // An identity by construction rather than by arithmetic. The formula
     // recovers the position as `target + (position - target)`, which is not
     // `position` in a double, so a caller stepping a paused clock or two
     // callbacks inside the same millisecond would walk a spring off its own
     // resting value one rounding at a time.
-    return { position, velocity };
+    step.identity = true;
+    return step;
   }
   const u = w * dtSeconds;
   if (!Number.isFinite(u)) {
     // With finite inputs, an infinite `w * dt` can only be the settled limit.
-    return { position: target, velocity: 0 };
+    step.settles = true;
+    return step;
   }
   // Each polynomial-times-exponential coefficient is formed from its log.
   // `exp(-u)` may be zero while `u exp(-u)` is still a subnormal number.
   const logDecay = -u;
   const logUDecay = Math.log(u) - u;
   const retentionLog = log1pMinusU(u);
-  const retention = Math.exp(retentionLog);
-  const targetRetention = -Math.expm1(retentionLog);
-  const timeDecay = Math.exp(Math.log(dtSeconds) + logDecay);
-  const velocityRetention =
+  step.retention = Math.exp(retentionLog);
+  step.targetRetention = -Math.expm1(retentionLog);
+  step.timeDecay = Math.exp(Math.log(dtSeconds) + logDecay);
+  step.velocityRetention =
     u === 1 ? 0 : Math.sign(1 - u) * Math.exp(Math.log(Math.abs(1 - u)) + logDecay);
-  const springRetention = Math.exp(Math.log(w) + logUDecay);
+  step.springRetention = Math.exp(Math.log(w) + logUDecay);
+  return step;
+}
+
+/**
+ * One axis's next position under `step`. No validation of the state: both
+ * public entry points check their own arguments under their own field names,
+ * and a per-frame loop over a scene's worth of springs should not pay for the
+ * same check twice. Position and velocity are separate functions so a step
+ * allocates nothing per axis.
+ */
+function nextAxisPosition(
+  step: SpringStep,
+  position: number,
+  velocity: number,
+  target: number,
+): number {
+  if (step.identity) return position;
+  if (step.settles) return target;
   const interpolatedPosition = weightedInterpolation(
     position,
     target,
-    retention,
-    targetRetention,
+    step.retention,
+    step.targetRetention,
   );
-  const nextPosition = linearCombination([
-    [interpolatedPosition, 1],
-    [velocity, timeDecay],
-  ]);
+  return requireFinite(
+    combineTwo(interpolatedPosition, 1, velocity, step.timeDecay),
+    'spring result position',
+  );
+}
+
+/** One axis's next velocity under `step`. See {@link nextAxisPosition}. */
+function nextAxisVelocity(
+  step: SpringStep,
+  position: number,
+  velocity: number,
+  target: number,
+): number {
+  if (step.identity) return velocity;
+  if (step.settles) return 0;
   const difference = target - position;
   const nextVelocity = Number.isFinite(difference)
-    ? linearCombination([
-        [velocity, velocityRetention],
-        [difference, springRetention],
-      ])
+    ? combineTwo(velocity, step.velocityRetention, difference, step.springRetention)
     : linearCombination([
-        [velocity, velocityRetention],
-        [target, springRetention],
-        [position, -springRetention],
+        [velocity, step.velocityRetention],
+        [target, step.springRetention],
+        [position, -step.springRetention],
       ]);
-  requireFinite(nextPosition, 'spring result position');
-  requireFinite(nextVelocity, 'spring result velocity');
-  return { position: nextPosition, velocity: nextVelocity };
+  return requireFinite(nextVelocity, 'spring result velocity');
 }
 
 /**
@@ -341,9 +410,11 @@ export function stepSpring(
   requireFinite(state.position, 'state.position');
   requireFinite(state.velocity, 'state.velocity');
   requireFinite(target, 'target');
-  requirePositive(angularFrequency, 'angularFrequency');
-  requireNonNegative(dtSeconds, 'dtSeconds');
-  return stepAxis(state.position, state.velocity, target, angularFrequency, dtSeconds);
+  const step = springStep(angularFrequency, dtSeconds);
+  return {
+    position: nextAxisPosition(step, state.position, state.velocity, target),
+    velocity: nextAxisVelocity(step, state.position, state.velocity, target),
+  };
 }
 
 /**
@@ -370,12 +441,26 @@ export function stepSpring2D(
   requireFinite(state.velocity.y, 'state.velocity.y');
   requireFinite(target.x, 'target.x');
   requireFinite(target.y, 'target.y');
-  requirePositive(angularFrequency, 'angularFrequency');
-  requireNonNegative(dtSeconds, 'dtSeconds');
-  const x = stepAxis(state.position.x, state.velocity.x, target.x, angularFrequency, dtSeconds);
-  const y = stepAxis(state.position.y, state.velocity.y, target.y, angularFrequency, dtSeconds);
-  return {
-    position: { x: x.position, y: y.position },
-    velocity: { x: x.velocity, y: y.velocity },
-  };
+  return stepSpring2DBy(state, target, springStep(angularFrequency, dtSeconds));
+}
+
+/**
+ * {@link stepSpring2D} with the clock's half already built, for a loop that
+ * steps many springs by one `step`. Not exported from the package index. It
+ * skips the per-spring checks {@link stepSpring2D} makes, so the caller owns
+ * that every state and target it passes is finite; the result is still checked.
+ */
+export function stepSpring2DBy(
+  state: Spring2DState,
+  target: Vec2,
+  step: SpringStep,
+): Spring2DState {
+  const { position, velocity } = state;
+  // x before y, position before velocity: the order the checks on the result
+  // have always run in, so the same bad input names the same field.
+  const x = nextAxisPosition(step, position.x, velocity.x, target.x);
+  const vx = nextAxisVelocity(step, position.x, velocity.x, target.x);
+  const y = nextAxisPosition(step, position.y, velocity.y, target.y);
+  const vy = nextAxisVelocity(step, position.y, velocity.y, target.y);
+  return { position: { x, y }, velocity: { x: vx, y: vy } };
 }

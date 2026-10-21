@@ -856,6 +856,51 @@ about the same. What is left of `setEdges` is the flattening and walk
 arithmetic and building a new geometry on every call; the browser profile of
 it has not been taken.
 
+### With the spring step built once per frame (2026-10-20)
+
+A CPU profile in Node of the scene motion's `advance` at 10,000 smooth nodes
+put the spring step first: every spring axis recomputed eight logarithms and
+exponentials that depend only on the half-life and the frame's `dt`, and built
+small arrays for each linear combination, so the garbage collector took 17%
+of samples. `advance` now builds those coefficients once per frame
+(`springStep` in `packages/render/src/spring.ts`) and steps each spring
+without allocating per axis. Frames are byte-identical: sha256 of every frame
+matched across three half-lives, both edge styles and clocks from 0 to
+10^7 s, and of `stepSpring` and `stepSpring2D` over overflow and underflow
+inputs. Node bench figures are in `bench/README.md`.
+
+Same command, machine, browser and adapter as the sections above,
+`renderer.backend` `webgpu` on every row, load average 3.8 to 8.2 (8.2 at the
+start of the first run). Springs only. Two runs; the table is the second. The
+first differed most at 10,000 smooth nodes (59.3% past one tick) and 5,000
+smooth (0%).
+
+| Nodes | Edges | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Interval p95 | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1,000 | straight | 4.2 | 0.9 | 0.6 | 0.8 | 0.4 | 18.1 | 0% |
+| 2,500 | straight | 4.0 | 1.6 | 0.7 | 0.5 | 0.2 | 18.2 | 0% |
+| 5,000 | straight | 5.8 | 1.1 | 0.9 | 1.0 | 0.2 | 18.1 | 0% |
+| 10,000 | straight | 11.9 | 2.4 | 1.9 | 2.5 | 0.4 | 18.2 | 0% |
+| 1,000 | smooth | 2.6 | 0.9 | 0.4 | 1.8 | 0.2 | 18.1 | 0% |
+| 2,500 | smooth | 4.5 | 1.0 | 0.4 | 3.9 | 0.3 | 18.2 | 0% |
+| 5,000 | smooth | 11.0 | 1.8 | 0.9 | 7.4 | 0.4 | 18.2 | 0.3% |
+| 10,000 | smooth | 18.4 | 4.1 | 1.9 | 16.5 | 0.7 | 49.5 | 53% |
+
+- **At 10,000 nodes `advance` fell from 8.5 to 2.4 ms with straight edges and
+  from 14.5 to 4.1 with smooth ones.** The straight rows missed no tick in
+  either run, where the previous section's missed 2.3% and 5.7%: the frames
+  between retargets now have headroom, and the retarget frames' `apply` (11.9
+  to 12.3 ms) fits beside them.
+- **10,000 smooth nodes miss about half the ticks** (53% and 59.3%, from
+  90.3%). `setEdges` (16.5 ms) is about one tick on its own, and `apply` (18.4)
+  is more than one on the frames it runs.
+- **The GPU `sum` matched the previous section's on every row** (0.98 ms at
+  10,000 smooth nodes), as it should: nothing drawn changed.
+
+With straight edges, 10,000 nodes now hold 60 Hz with springs in flight in
+these two runs. With smooth edges the CPU cost left is `setEdges` on every
+frame and `apply` on retarget frames.
+
 ## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`

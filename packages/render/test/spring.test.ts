@@ -4,8 +4,10 @@ import {
   HALF_LIFE_OMEGA,
   SETTLE_OMEGA_1_PERCENT,
   omegaForHalfLife,
+  springStep,
   stepSpring,
   stepSpring2D,
+  stepSpring2DBy,
 } from '../src/spring.js';
 
 /**
@@ -440,5 +442,49 @@ describe('stepSpring2D', () => {
   it('takes a zero step as an identity in both axes', () => {
     const next = stepSpring2D(state2d(4, -6, 11, -2), { x: 0, y: 0 }, 5, 0);
     expect(next).toEqual({ position: { x: 4, y: -6 }, velocity: { x: 11, y: -2 } });
+  });
+
+  describe('stepSpring2DBy', () => {
+    it('gives what the per-axis step it replaced gave', () => {
+      // Taken from stepSpring2D on an Apple M4 before the clock's coefficients
+      // moved into springStep: ordinary, overflowing, subnormal, slow and
+      // settling steps. Math.exp and Math.log may differ in the last place on
+      // other hosts, so nonzero values are compared to 1e-12 relative.
+      const cases: [Spring2DState, { x: number; y: number }, number, number, number[]][] = [
+        [state2d(1, 2, 0, 0), { x: 5, y: 5 }, 14, 1 / 60, [
+          1.0933448060718771, 2.070008604553908, 10.34735700013395, 7.760517750100463,
+        ]],
+        [state2d(-4e300, 7, 3e300, -1), { x: 4e300, y: 7 }, 14, 1 / 60, [
+          -3.7737159095394065e300, 6.9868018405610535, 2.2516060002842497e301,
+          -0.6071153341915325,
+        ]],
+        [state2d(1e-300, -0, 5e-324, 12), { x: 0, y: -0 }, 1e5, 1e-9, [
+          9.999999950003334e-301, 1.1998800059998012e-8, -9.999000049998347e-300,
+          11.997600179992,
+        ]],
+        [state2d(123.456, -654.321, -9, 0.5), { x: -1, y: 1e9 }, 1e-3, 800, [
+          -3135.5095076392836, 191207515.11090794, -0.8535294838575372, 359463.4514309755,
+        ]],
+        [state2d(3, 4, 1, 1), { x: 0, y: 0 }, 1e5, 1e305, [0, 0, 0, 0]],
+      ];
+      for (const [state, target, w, dt, expected] of cases) {
+        for (const next of [
+          stepSpring2D(state, target, w, dt),
+          stepSpring2DBy(state, target, springStep(w, dt)),
+        ]) {
+          const actual = [next.position.x, next.position.y, next.velocity.x, next.velocity.y];
+          for (const [index, value] of actual.entries()) {
+            const want = expected[index]!;
+            if (want === 0) expect(value).toBe(0);
+            else expect(Math.abs(value - want)).toBeLessThanOrEqual(Math.abs(want) * 1e-12);
+          }
+        }
+      }
+    });
+
+    it('checks the clock once, under the names stepSpring2D uses', () => {
+      expect(() => springStep(0, 1)).toThrow(/angularFrequency/);
+      expect(() => springStep(1, -1)).toThrow(/dtSeconds/);
+    });
   });
 });
