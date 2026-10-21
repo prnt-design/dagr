@@ -1045,7 +1045,8 @@ process using about 1.5 cores throughout:
 | previous | 12.9, 13.0, 13.0 | 6.9, 6.2, 6.2 | 23.2, 24.3, 23.4 | 49.0%, 46.3%, 44.0% |
 | this one | 11.8, 11.7, 11.9 | 6.1, 6.1, 5.0 | 23.4, 23.3, 22.7 | 39.3%, 39.0%, 34.3% |
 
-- **`setEdges` is about 1.1 ms faster**, more than Node's 0.5 to 1. The GPU
+- **`setEdges` is about 1.1 ms faster**, more than Node's 0.3 to 1.0 in
+  back-to-back pairs. The GPU
   `sum` read 0.86 ms in every run, since nothing drawn changed.
 - **The ticks missed fell by about ten points**, though `advance` (untouched
   here) moved by over a millisecond between runs, so that is the noisier of

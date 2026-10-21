@@ -535,8 +535,7 @@ function grown<T extends Float32Array | Float64Array | Uint32Array>(array: T, le
 /**
  * A pair of boundary vertices at one centreline point, as the index of the left
  * one. The right one is always the next vertex, because {@link RibbonBuilder.rib}
- * writes them together, so a number is the whole of it and no object is made per
- * rib.
+ * writes them together.
  */
 type Rib = number;
 
