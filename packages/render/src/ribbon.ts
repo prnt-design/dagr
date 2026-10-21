@@ -625,13 +625,44 @@ function cleanCentreline(points: Polyline, field: string, out: Polyline): void {
       requireFinite(y, `${field}[${String(i)}].y`);
     }
     const kept = out.length;
-    if (kept > 0) {
-      const dx = x - out.xs[kept - 1]!;
-      const dy = y - out.ys[kept - 1]!;
-      if (Math.hypot(dx, dy) < MIN_SEGMENT_WORLD) continue;
-    }
+    if (kept > 0 && shorterThanMinSegment(x - out.xs[kept - 1]!, y - out.ys[kept - 1]!)) continue;
     out.push(x, y);
   }
+}
+
+/**
+ * How far a squared length must clear a squared threshold before the square
+ * decides a comparison that is specified on `Math.hypot`.
+ *
+ * `Math.hypot` and `Math.sqrt(x * x + y * y)` disagree in the last bit for
+ * about a third of inputs, so swapping one for the other changes the output,
+ * but each is within a few ulps (about 1e-15 relative) of the true length. A
+ * margin a million times that means the square only ever answers where
+ * `Math.hypot` would have given the same answer; nearer than that, it is asked.
+ * Both comparisons below are on every point of every smooth route on every
+ * frame, and `Math.hypot` is about twelve times the cost of the square on an
+ * Apple M4.
+ */
+const HYPOT_MARGIN = 1e-9;
+
+/**
+ * Where a square, or a length scaled by a tolerance, is still a normal double
+ * with room for the margin, so neither underflow nor overflow has eaten its
+ * precision.
+ */
+const SAFE_LOW = 1e-280;
+const SAFE_HIGH = 1e280;
+
+const MIN_SEGMENT_SQUARE_KEPT = MIN_SEGMENT_WORLD * MIN_SEGMENT_WORLD * (1 + HYPOT_MARGIN);
+
+/**
+ * `Math.hypot(dx, dy) < MIN_SEGMENT_WORLD`, answered from the square for every
+ * segment clearly longer. A square that overflows is still a keep, and one that
+ * underflows falls through to `Math.hypot`.
+ */
+export function shorterThanMinSegment(dx: number, dy: number): boolean {
+  if (dx * dx + dy * dy > MIN_SEGMENT_SQUARE_KEPT) return false;
+  return Math.hypot(dx, dy) < MIN_SEGMENT_WORLD;
 }
 
 /** Where {@link catmullRomControls} writes its two control points, as `x1, y1, x2, y2`. */
@@ -720,6 +751,44 @@ function distanceToChord(
 }
 
 /**
+ * Whether both interior control points of a cubic are within `toleranceWorld`
+ * of its chord, by {@link distanceToChord}.
+ *
+ * The cross products are the ones {@link distanceToChord} divides, so they are
+ * the same doubles, and the chord's `Math.hypot` is only consulted when one of
+ * them lands within {@link HYPOT_MARGIN} of the tolerance times the chord.
+ */
+export function flatToChord(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  x3: number,
+  y3: number,
+  toleranceWorld: number,
+): boolean {
+  const chordX = x3 - x0;
+  const chordY = y3 - y0;
+  const square = chordX * chordX + chordY * chordY;
+  const reach = toleranceWorld * Math.sqrt(square);
+  if (square > SAFE_LOW && square < SAFE_HIGH && reach > SAFE_LOW && reach < SAFE_HIGH) {
+    const first = Math.abs(chordX * (y0 - y1) - chordY * (x0 - x1));
+    const second = Math.abs(chordX * (y0 - y2) - chordY * (x0 - x2));
+    const beyond = reach * (1 + HYPOT_MARGIN);
+    if (first > beyond || second > beyond) return false;
+    const within = reach * (1 - HYPOT_MARGIN);
+    if (first <= within && second <= within) return true;
+  }
+  const chord = Math.hypot(chordX, chordY);
+  return (
+    distanceToChord(x1, y1, x0, y0, chordX, chordY, chord) <= toleranceWorld &&
+    distanceToChord(x2, y2, x0, y0, chordX, chordY, chord) <= toleranceWorld
+  );
+}
+
+/**
  * Appends the flattening of one cubic Bezier to `out`, excluding its first
  * point and including its last.
  *
@@ -747,13 +816,7 @@ function flattenInto(
   toleranceWorld: number,
   depth: number,
 ): void {
-  const chordX = x3 - x0;
-  const chordY = y3 - y0;
-  const chord = Math.hypot(chordX, chordY);
-  const flat =
-    distanceToChord(x1, y1, x0, y0, chordX, chordY, chord) <= toleranceWorld &&
-    distanceToChord(x2, y2, x0, y0, chordX, chordY, chord) <= toleranceWorld;
-  if (flat || depth >= MAX_FLATTEN_DEPTH) {
+  if (depth >= MAX_FLATTEN_DEPTH || flatToChord(x0, y0, x1, y1, x2, y2, x3, y3, toleranceWorld)) {
     out.push(x3, y3);
     return;
   }
