@@ -653,6 +653,37 @@ describe('tessellateRibbons: many routes', () => {
       expect(scene.index.subarray(s, s + m).map((index) => index - v)).toEqual(alone.index);
     }
   });
+
+  it('tessellates from any size hint exactly as without one', () => {
+    const large: RibbonRoute[] = Array.from({ length: 2_000 }, (_, i) => ({
+      id: `r${String(i)}`,
+      points: [
+        { x: i, y: 0 },
+        { x: i + 25 + (i % 7), y: 45 },
+        { x: i + (i % 3), y: 90 },
+      ],
+    }));
+    const options = { curve: 'smooth' } as const;
+    const unhinted = tessellateRibbons(large, options);
+    const { vertexCount, indexCount } = unhinted;
+    for (const hint of [
+      { vertexCount, indexCount },
+      { vertexCount: Math.floor(vertexCount / 2), indexCount: Math.floor(indexCount / 2) },
+      { vertexCount: vertexCount * 2, indexCount: indexCount * 2 },
+      { vertexCount: 0, indexCount: 0 },
+    ]) {
+      const hinted = tessellateRibbons(large, options, hint);
+      // Element by element: a deep `toEqual` over these arrays took CI's
+      // runner past the test timeout.
+      for (const key of ['position', 'offset', 'across', 'arc', 'index'] as const) {
+        expect(hinted[key]).toHaveLength(unhinted[key].length);
+        expect(hinted[key].every((value, i) => Object.is(value, unhinted[key][i]))).toBe(true);
+      }
+      expect(hinted.ranges).toEqual(unhinted.ranges);
+      expect(hinted.vertexCount).toBe(vertexCount);
+      expect(hinted.indexCount).toBe(indexCount);
+    }
+  });
 });
 
 describe('smoothCentreline', () => {

@@ -4,7 +4,13 @@ import { attribute, uniform, varying, vec3 } from 'three/tsl';
 import { linearFromHex } from './instance-attributes.js';
 import { ribbonAlpha, ribbonArcPixels, ribbonWorldPosition } from './ribbon-nodes.js';
 import { requireRibbonStyle, tessellateRibbons } from './ribbon.js';
-import type { RibbonGeometry, RibbonOptions, RibbonRange, RibbonStyle } from './ribbon.js';
+import type {
+  RibbonGeometry,
+  RibbonOptions,
+  RibbonRange,
+  RibbonSizeHint,
+  RibbonStyle,
+} from './ribbon.js';
 import type { GpuResource, Vec2 } from './types.js';
 import { requireAtLeast, requireFinite } from './validate.js';
 
@@ -252,6 +258,7 @@ class EdgeGroup implements GpuResource {
   readonly mesh: Mesh<BufferGeometry, MeshBasicNodeMaterial>;
   readonly #uniforms: RibbonUniforms;
   #curve: RibbonOptions['curve'];
+  #sizeHint: RibbonSizeHint | undefined;
   #disposed = false;
   /**
    * Where each edge's vertices are, from the last {@link setEdges}, so an
@@ -323,7 +330,9 @@ class EdgeGroup implements GpuResource {
     const tessellated = tessellateRibbons(
       edges.map((edge) => ({ id: edge.id, points: edge.points })),
       this.#curve === undefined ? undefined : { curve: this.#curve },
+      this.#sizeHint,
     );
+    this.#sizeHint = { vertexCount: tessellated.vertexCount, indexCount: tessellated.indexCount };
     const colors = colorsFor(edges, tessellated);
 
     // Every edge at full intensity, which is the drawing a group has when
