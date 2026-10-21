@@ -445,9 +445,11 @@ describe('stepSpring2D', () => {
   });
 
   describe('stepSpring2DBy', () => {
-    it('gives what the per-axis step it replaced gave, bit for bit', () => {
-      // Taken from stepSpring2D before the clock's coefficients moved into
-      // springStep: ordinary, overflowing, subnormal, slow and settling steps.
+    it('gives what the per-axis step it replaced gave', () => {
+      // Taken from stepSpring2D on an Apple M4 before the clock's coefficients
+      // moved into springStep: ordinary, overflowing, subnormal, slow and
+      // settling steps. Math.exp and Math.log may differ in the last place on
+      // other hosts, so nonzero values are compared to 1e-12 relative.
       const cases: [Spring2DState, { x: number; y: number }, number, number, number[]][] = [
         [state2d(1, 2, 0, 0), { x: 5, y: 5 }, 14, 1 / 60, [
           1.0933448060718771, 2.070008604553908, 10.34735700013395, 7.760517750100463,
@@ -472,7 +474,9 @@ describe('stepSpring2D', () => {
         ]) {
           const actual = [next.position.x, next.position.y, next.velocity.x, next.velocity.y];
           for (const [index, value] of actual.entries()) {
-            expect(Object.is(value, expected[index])).toBe(true);
+            const want = expected[index]!;
+            if (want === 0) expect(value).toBe(0);
+            else expect(Math.abs(value - want)).toBeLessThanOrEqual(Math.abs(want) * 1e-12);
           }
         }
       }
