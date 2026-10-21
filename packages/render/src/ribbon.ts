@@ -621,9 +621,10 @@ function pushRib(
  *
  * The vertex ORDER is a property of the construction rather than of the data:
  * `left` is the `(-dy, dx)` side of the direction of travel for every rib, so
- * the pair {@link RibbonBuilder.quad} writes is counter-clockwise whichever way the ribbon runs. What is
- * not unconditional is the RESULT, because a mitred rib's vertices sit off the
- * centreline point and can cross the ones before them. See
+ * the pair {@link RibbonBuilder.quad} writes is counter-clockwise whichever way
+ * the ribbon runs. What is not unconditional is the RESULT, because a mitred
+ * rib's vertices sit off the centreline point and can cross the ones before
+ * them. See
  * {@link tessellateCentreline} for the bound, which is measured rather than
  * asserted, and for why nothing here can clamp it. The tests check the winding
  * over every triangle of every shape in the suite, at widths inside that
