@@ -1011,6 +1011,49 @@ at 10,000 smooth nodes (`apply` 21.0, `setEdges` 13.2, 37.3% past one tick).
 10,000 smooth nodes still miss more than a third of the ticks: `setEdges` is
 most of a tick on its own, and a retarget frame adds about 20 ms of `apply`.
 
+### With the walk writing a rib and a quad at a time (2026-10-21)
+
+The walk wrote each rib as two `vertex` calls and returned a `{ left, right }`
+object, and each quad as two `triangle` calls, so every centreline point paid
+an allocation and four capacity checks. A rib is now the index of its left
+vertex (the right one is always the next), written by one call with one check,
+and a quad is six indices behind one check; a fanned corner no longer collects
+its facets in an array first. Nothing computed changed, only where it is
+written from, and the output is byte-identical: the same sha256 over every
+array and the ranges as the previous build, on the 10,000-node smooth routes
+and 4,000 random ones under six option sets, and on the random routes scaled
+by 1e-12, 1e-3, 1e6 and 1e140. The new test covers the one new case, a rib
+that starts with a single free slot before the arrays grow, and fails with a
+capacity check that only grows on a full array.
+
+In Node, `tessellateRibbons` alone on the same 13,169 smooth routes, measured
+as in the section above, alternating the old and new build three times at load
+3.9: 10.7 to 11.0 ms before, 9.8 to 10.6 after. What is left of the
+walk's own time is mostly its two `Math.hypot` calls per point, the segment's
+length and the bisector's, and both values reach the output, so the squares
+trick of the section above does not apply to them.
+
+On WebGPU, same machine, browser (Chrome 155.0.8059.85, headed,
+`--enable-webgpu-developer-features`) and adapter (`apple` `metal-3`, not a
+fallback), `renderer.backend` `webgpu` on every run, springs only, 10,000
+smooth nodes only, old and new build alternated three times by swapping
+`packages/render/dist/ribbon.js`, load average 3.5 to 5.0 with another
+process using about 1.5 cores throughout:
+
+| Build | `setEdges` | `advance` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- |
+| previous | 12.9, 13.0, 13.0 | 6.9, 6.2, 6.2 | 23.2, 24.3, 23.4 | 49.0%, 46.3%, 44.0% |
+| this one | 11.8, 11.7, 11.9 | 6.1, 6.1, 5.0 | 23.4, 23.3, 22.7 | 39.3%, 39.0%, 34.3% |
+
+- **`setEdges` is about 1.1 ms faster**, more than Node's 0.5 to 1. The GPU
+  `sum` read 0.86 ms in every run, since nothing drawn changed.
+- **The ticks missed fell by about ten points**, though `advance` (untouched
+  here) moved by over a millisecond between runs, so that is the noisier of
+  the two numbers.
+
+10,000 smooth nodes still miss more than a third of the ticks. The largest
+single cost left is a retarget frame's `apply`, about 23 ms here.
+
 ## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`

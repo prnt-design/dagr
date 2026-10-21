@@ -657,6 +657,36 @@ describe('tessellateRibbons: many routes', () => {
     }
   });
 
+  it('grows the arrays exactly when a rib lands one vertex short of capacity', () => {
+    // A fanned hairpin has an odd vertex count, so across 400 of them some
+    // rib starts with one free slot left in the builder's initial 4,096.
+    const hairpins: RibbonRoute[] = Array.from({ length: 400 }, (_, i) => ({
+      id: `h${String(i)}`,
+      points: [
+        { x: 0, y: i },
+        { x: 10, y: i },
+        { x: 0, y: i + 1 },
+      ],
+    }));
+    const scene = tessellateRibbons(hairpins);
+    expect(scene.vertexCount).toBeGreaterThan(4_096);
+    expect(scene.ranges.every((range) => range.vertexCount % 2 === 1)).toBe(true);
+
+    for (const [i, route] of hairpins.entries()) {
+      const alone = tessellateRibbons([route]);
+      const range = scene.ranges[i];
+      if (range === undefined) throw new Error(`no range for route ${String(i)}`);
+      const { vertexStart: v, vertexCount: n, indexStart: s, indexCount: m } = range;
+      const same = (a: ArrayLike<number>, b: ArrayLike<number>): boolean =>
+        a.length === b.length && Array.from(a).every((value, k) => Object.is(value, b[k]));
+      expect(same(scene.position.subarray(v * 2, (v + n) * 2), alone.position)).toBe(true);
+      expect(same(scene.offset.subarray(v * 2, (v + n) * 2), alone.offset)).toBe(true);
+      expect(same(scene.across.subarray(v, v + n), alone.across)).toBe(true);
+      expect(same(scene.arc.subarray(v, v + n), alone.arc)).toBe(true);
+      expect(same(scene.index.subarray(s, s + m).map((index) => index - v), alone.index)).toBe(true);
+    }
+  });
+
   it('tessellates from any size hint exactly as without one', () => {
     const large: RibbonRoute[] = Array.from({ length: 2_000 }, (_, i) => ({
       id: `r${String(i)}`,
