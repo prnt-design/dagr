@@ -1130,6 +1130,44 @@ smooth nodes only, old and new build alternated three times by swapping
 So the next cost to cut for the 60 Hz number is the per-frame `setEdges`, not
 the retarget frame.
 
+### With `setEdges` copying nothing it hands on (2026-10-22)
+
+A CPU profile of `setEdges` on the 13,169 smooth routes in Node put its time
+in the flattening (about 30%) and the walk (about 23%), both tightened by the
+sections above, and found two copies that nothing needed. `setEdges` mapped
+every edge to a new `{ id, points }` object, though a `SceneEdge` is already
+a route, and `tessellateRibbons` trimmed its five builder arrays with `slice`,
+which copies about 9 MB per frame at this size. The edges now go in as they
+are, and the arrays come back as `subarray` views of exactly their counts.
+Both backends upload a view by its own range. Output is byte-identical: the
+same sha256 over every array and the ranges as the previous build, on the
+10,000-node routes, polyline and smooth, at two offsets.
+
+In Node, one `setEdges` on those routes, alternating the old and new build
+five times at load 3.2: 10.32 to 10.52 ms before, 9.90 to 10.10 after. What
+is left is the tessellation itself.
+
+On WebGPU, same machine, browser (Chrome 155.0.8059.85, headed,
+`--enable-webgpu-developer-features`) and adapter (`apple` `metal-3`, not a
+fallback), `renderer.backend` `webgpu` on every run, springs only, 10,000
+smooth nodes only, old and new build alternated three times by swapping
+`packages/render/dist/ribbon.js` and `scene-edges.js`, load average 3.7 to
+4.6:
+
+| Build | `setEdges` | `advance` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- |
+| previous | 11.8, 12.0, 11.8 | 4.7, 3.4, 4.7 | 16.1, 17.8, 17.7 | 29.0%, 24.7%, 30.3% |
+| this one | 11.0, 11.0, 11.6 | 4.4, 4.7, 3.3 | 18.3, 18.0, 17.1 | 23.0%, 24.0%, 20.3% |
+
+- **`setEdges` is about 0.7 ms faster**, a little more than Node's 0.4. The
+  GPU `sum` read 0.97 to 0.98 ms in all six runs.
+- **The ticks missed fell by about five points**, within the spread the
+  previous build showed between its own runs, so that is the noisier number.
+
+10,000 smooth nodes still miss about a fifth of the ticks, and `setEdges`,
+about 11 ms, is still the largest per-frame cost. What is left of it is the
+flattening and the walk's arithmetic on every edge, every frame.
+
 ## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`

@@ -335,6 +335,11 @@ export interface RibbonRange {
  * and is enough for the coordinates a layout produces: a campaign 100,000 world
  * units across resolves to about 0.008 of a unit at its far corner, four orders
  * of magnitude under a device pixel at the zoom that would show it.
+ *
+ * Each array is a view of exactly its counts over a builder buffer that can be
+ * longer, rather than a trimmed copy: copying all five was a measurable share
+ * of a 13,169-route `setEdges`, and both backends upload a view by its own
+ * range. Read a view's `.buffer` only through the view.
  */
 export interface RibbonGeometry {
   /** The centreline point each vertex sits on, world units, 2 floats per vertex. */
@@ -1282,11 +1287,11 @@ export function tessellateRibbons(
   }
 
   return {
-    position: out.position.slice(0, out.vertexCount * 2),
-    offset: out.offset.slice(0, out.vertexCount * 2),
-    across: out.across.slice(0, out.vertexCount),
-    arc: out.arc.slice(0, out.vertexCount),
-    index: out.index.slice(0, out.indexCount),
+    position: out.position.subarray(0, out.vertexCount * 2),
+    offset: out.offset.subarray(0, out.vertexCount * 2),
+    across: out.across.subarray(0, out.vertexCount),
+    arc: out.arc.subarray(0, out.vertexCount),
+    index: out.index.subarray(0, out.indexCount),
     ranges,
     vertexCount: out.vertexCount,
     indexCount: out.indexCount,
