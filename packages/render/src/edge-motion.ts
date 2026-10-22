@@ -236,9 +236,9 @@ function copyOf(point: Vec2): Vec2 {
  * Finite coordinates can still produce an infinite segment length or total
  * when subtraction or accumulation overflows.
  *
- * `label` names the route in a message and is called only when a check fails:
- * a retarget of 10,000 edges that built every label up front spent about a
- * fifth of its time on strings nobody read.
+ * `label` names the route in a message and is called only when a check fails,
+ * because building every label up front was a measurable share of a
+ * 10,000-edge retarget (see `bench/browser/README.md`).
  */
 function requireRoute(points: readonly Vec2[], label: () => string): readonly Vec2[] {
   if (points.length < 2) {
@@ -692,8 +692,8 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       if (target === undefined) continue;
       const velocity = velocities[index] ?? AT_REST;
       // A finite `velocity + w * displacement` means all three checks below
-      // pass, since a non-finite displacement or product cannot sum to a finite
-      // value, so only a point that fails builds the messages.
+      // pass, since no non-finite velocity, displacement or product sums to a
+      // finite value, so only a point that fails builds the messages.
       if (
         Number.isFinite(velocity.x + w * (position.x - target.x)) &&
         Number.isFinite(velocity.y + w * (position.y - target.y))
