@@ -739,6 +739,8 @@ describe('tessellateRibbons: many routes', () => {
         expect(array.buffer.byteLength).toBeLessThanOrEqual(array.byteLength * 1.25);
       }
     }
+    const exact = tessellateRibbons(large, undefined, { vertexCount, indexCount });
+    expect(exact.position.buffer.byteLength).toBeGreaterThan(exact.position.byteLength);
   });
 });
 

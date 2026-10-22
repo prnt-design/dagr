@@ -1140,10 +1140,11 @@ a route, and `tessellateRibbons` trimmed its five builder arrays with `slice`,
 which copies about 9 MB per frame at this size. The edges now go in as they
 are, and each array comes back as a `subarray` view of exactly its counts
 when the builder buffer behind it is at most a quarter longer, and as a
-trimmed copy otherwise. Both backends upload a view by its own range. A
-hinted call, which is every call after a group's first, starts its buffers an
-eighth above the last frame's counts, so an animated frame gets views; an
-unhinted call doubles its way up and can end nearly twice as long, and keeping
+trimmed copy otherwise. Both backends upload a view by its own range. A call
+starting from the last frame's counts, as every frame of an animation does,
+sizes its buffers an eighth above them and gets views, unless the scene shrank
+by more than about a tenth or outgrew the hint. A group's first build starts
+from nothing, doubles its way up and can end nearly twice as long, and keeping
 that alive for as long as the geometry is drawn is the retained heap the
 section above rejected, so it is copied. Output is byte-identical: the same
 sha256 over every array and the ranges as the previous build, on the
@@ -1174,7 +1175,7 @@ smooth nodes only, old and new build alternated three times by swapping
 | previous | 11.9, 11.5, 11.7 | 3.4, 4.7, 5.4 | 17.9, 17.4, 17.5 | 21.3%, 27.0%, 32.7% |
 | this one | 11.3, 11.4, 11.2 | 3.5, 5.6, 4.6 | 17.7, 17.2, 17.8 | 19.3%, 32.3%, 26.0% |
 
-- **`setEdges` is about 0.4 ms faster**, in line with Node. The earlier
+- **`setEdges` is about 0.4 ms faster**, less than Node's 0.9. The earlier
   always-a-view version read 11.0 to 11.6 against 11.8 to 12.0 in its own
   three pairs. The GPU `sum` read 0.97 to 0.98 ms in all twelve runs.
 - **The ticks missed did not clearly move.** Both builds spread by more than
