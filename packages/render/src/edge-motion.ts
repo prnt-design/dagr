@@ -235,15 +235,21 @@ function copyOf(point: Vec2): Vec2 {
  *
  * Finite coordinates can still produce an infinite segment length or total
  * when subtraction or accumulation overflows.
+ *
+ * `label` names the route in a message and is called only when a check fails:
+ * a retarget of 10,000 edges that built every label up front spent about a
+ * fifth of its time on strings nobody read.
  */
-function requireRoute(points: readonly Vec2[], field: string): readonly Vec2[] {
+function requireRoute(points: readonly Vec2[], label: () => string): readonly Vec2[] {
   if (points.length < 2) {
     throw new RangeError(
-      `${field} has to have at least two points, got ${String(points.length)}: ` +
+      `${label()} has to have at least two points, got ${String(points.length)}: ` +
         'a route with one point is not a line and has no direction to spring along',
     );
   }
   for (const [index, point] of points.entries()) {
+    if (Number.isFinite(point.x) && Number.isFinite(point.y)) continue;
+    const field = label();
     requireFinite(point.x, `${field}[${String(index)}].x`);
     requireFinite(point.y, `${field}[${String(index)}].y`);
   }
@@ -254,11 +260,13 @@ function requireRoute(points: readonly Vec2[], field: string): readonly Vec2[] {
     if (previous === undefined || point === undefined) continue;
     const length = Math.hypot(point.x - previous.x, point.y - previous.y);
     if (!Number.isFinite(length)) {
-      throw new RangeError(`${field} segment ${String(index - 1)} length has to be finite`);
+      throw new RangeError(`${label()} segment ${String(index - 1)} length has to be finite`);
     }
     total += length;
     if (!Number.isFinite(total)) {
-      throw new RangeError(`${field} total length has to be finite after segment ${String(index - 1)}`);
+      throw new RangeError(
+        `${label()} total length has to be finite after segment ${String(index - 1)}`,
+      );
     }
   }
   return points;
@@ -484,8 +492,8 @@ function nearChord(
  *   lengths and total length are representable as finite numbers.
  */
 export function alignRoutes(from: readonly Vec2[], to: readonly Vec2[]): AlignedRoutes {
-  requireRoute(from, 'from');
-  requireRoute(to, 'to');
+  requireRoute(from, () => 'from');
+  requireRoute(to, () => 'to');
   const fromParameters = routeParameters(from);
   const toParameters = routeParameters(to);
   const merged = mergeParameters(fromParameters, toParameters);
@@ -520,7 +528,7 @@ type Intent =
   | { readonly kind: 'depart' }
   | { readonly kind: 'arrive'; readonly route: readonly Vec2[] }
   | { readonly kind: 'replace'; readonly route: readonly Vec2[] }
-  | { readonly kind: 'reroute'; readonly route: readonly Vec2[]; readonly field: string };
+  | { readonly kind: 'reroute'; readonly route: readonly Vec2[]; readonly index: number };
 
 /** A retarget worked out without changing the entry it came from. */
 interface RetargetTransition {
@@ -658,7 +666,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
   function prepareRetarget(
     entry: EdgeEntry,
     route: readonly Vec2[],
-    field: string,
+    label: () => string,
     id: string,
   ): RetargetTransition {
     const fromParameters = routeParameters(entry.points);
@@ -683,6 +691,16 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       const target = targets[index];
       if (target === undefined) continue;
       const velocity = velocities[index] ?? AT_REST;
+      // A finite `velocity + w * displacement` means all three checks below
+      // pass, since a non-finite displacement or product cannot sum to a finite
+      // value, so only a point that fails builds the messages.
+      if (
+        Number.isFinite(velocity.x + w * (position.x - target.x)) &&
+        Number.isFinite(velocity.y + w * (position.y - target.y))
+      ) {
+        continue;
+      }
+      const field = label();
       for (const axis of ['x', 'y'] as const) {
         const location = `${field} edge "${id}" point ${String(index)} ${axis}`;
         const displacement = position[axis] - target[axis];
@@ -761,7 +779,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
 
   function planResync(targets: readonly EdgeMotionTarget[]): () => void {
     for (const [index, target] of targets.entries()) {
-      requireRoute(target.points, `targets[${String(index)}].points`);
+      requireRoute(target.points, () => `targets[${String(index)}].points`);
     }
     const prepared = targets.map((target, index) => {
       const route = copyRoute(target.points);
@@ -769,7 +787,12 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       const transition =
         existing === undefined
           ? undefined
-          : prepareRetarget(existing, route, `targets[${String(index)}].points`, target.id);
+          : prepareRetarget(
+              existing,
+              route,
+              () => `targets[${String(index)}].points`,
+              target.id,
+            );
       return { id: target.id, route, existing, transition };
     });
     return () => {
@@ -810,11 +833,10 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       planned.set(id, { kind: 'depart' });
     }
     for (const [index, target] of delta.added.entries()) {
-      const field = `added[${String(index)}]`;
-      requireRoute(target.points, `${field}.points`);
+      requireRoute(target.points, () => `added[${String(index)}].points`);
       const where = presence(target.id);
       if (where === 'live') {
-        throw new MotionDesyncError(target.id, field, where, 'edge');
+        throw new MotionDesyncError(target.id, `added[${String(index)}]`, where, 'edge');
       }
       planned.set(target.id, {
         kind: where === 'departing' ? 'replace' : 'arrive',
@@ -822,11 +844,10 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       });
     }
     for (const [index, target] of delta.rerouted.entries()) {
-      const field = `rerouted[${String(index)}]`;
-      requireRoute(target.points, `${field}.points`);
+      requireRoute(target.points, () => `rerouted[${String(index)}].points`);
       const where = presence(target.id);
       if (where !== 'live') {
-        throw new MotionDesyncError(target.id, field, where, 'edge');
+        throw new MotionDesyncError(target.id, `rerouted[${String(index)}]`, where, 'edge');
       }
       // A reroute of something this same delta added or replaced is still that
       // arrival, at the later route: overwriting the kind would leave nothing
@@ -835,7 +856,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       if (prior === 'arrive' || prior === 'replace') {
         planned.set(target.id, { kind: prior, route: copyRoute(target.points) });
       } else {
-        planned.set(target.id, { kind: 'reroute', route: copyRoute(target.points), field });
+        planned.set(target.id, { kind: 'reroute', route: copyRoute(target.points), index });
       }
     }
 
@@ -844,7 +865,11 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       if (intent.kind !== 'reroute') continue;
       const entry = entries.get(id);
       if (entry === undefined) continue;
-      transitions.set(id, prepareRetarget(entry, intent.route, intent.field, id));
+      const { index } = intent;
+      transitions.set(
+        id,
+        prepareRetarget(entry, intent.route, () => `rerouted[${String(index)}]`, id),
+      );
     }
 
     return () => {

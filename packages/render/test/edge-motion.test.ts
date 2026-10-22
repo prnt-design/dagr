@@ -436,6 +436,30 @@ describe('createEdgeMotion', () => {
     expect(motion.advance(0)).toEqual(before);
   });
 
+  it('names the point and axis whose displacement overflows after earlier ones pass', () => {
+    const down: readonly Vec2[] = [
+      { x: 0, y: 0 },
+      { x: 0, y: -1e308 },
+    ];
+    const up: readonly Vec2[] = [
+      { x: 0, y: 0 },
+      { x: 0, y: 1e308 },
+    ];
+    const motion = createEdgeMotion();
+    motion.resync([target('e1', STRAIGHT), target('overflow', down)]);
+    const before = motion.advance(0);
+
+    expect(() => {
+      motion.apply({
+        added: [],
+        removed: [],
+        rerouted: [target('e1', BENT), target('overflow', up)],
+      });
+    }).toThrow(/^rerouted\[1\] edge "overflow" point 1 y displacement has to be a finite number/);
+
+    expect(motion.advance(0)).toEqual(before);
+  });
+
   it('keeps a far reroute finite through a long frame and a later retarget', () => {
     const far: readonly Vec2[] = [
       { x: 1e307, y: 1e306 },

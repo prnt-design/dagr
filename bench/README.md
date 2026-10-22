@@ -86,6 +86,19 @@ byte-identical. Three runs alternating the old and new source, both at
 | straight | 17.7 to 18.0 | 18.0 to 18.2 | 12.4 to 13.5 | 3.1 to 4.2 |
 | smooth | 22.5 to 22.8 | 21.7 to 23.0 | 15.4 to 16.6 | 4.7 to 5.7 |
 
+On 2026-10-21 the edge motion's retarget checks stopped building their error
+messages before checking (see `bench/browser/README.md`). Frames are
+byte-identical. Three runs alternating the old and new source at loads of 4.1
+to 4.5, medians in milliseconds:
+
+| Edges | `apply` before | `apply` after | `advance` before | `advance` after |
+| --- | --- | --- | --- | --- |
+| straight | 17.9 to 18.3 | 14.0 to 14.1 | 3.1 to 4.0 | 3.3 to 4.0 |
+| smooth | 22.0 to 22.6 | 16.2 to 16.7 | 4.9 to 5.5 | 5.2 to 10.2 |
+
+`advance` is untouched by the change; the one 10.2 is a single run's outlier
+(5.2 and 5.3 in the other two).
+
 Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
 for the same reason: recording them rewrites the machine-matched file, which is
 the maintainer's call. This is CPU time in Node, not a browser frame or GPU

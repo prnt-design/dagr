@@ -1057,6 +1057,41 @@ process using about 1.5 cores throughout:
 10,000 smooth nodes still miss more than a third of the ticks. The largest
 single cost left is a retarget frame's `apply`, about 23 ms here.
 
+### With the edge motion's error labels built on failure (2026-10-21)
+
+A CPU profile of the edge half of `apply` (about 85% of it at 10,000 smooth
+nodes in Node) put a quarter of its time in the garbage collector. The checks
+that guard a retarget built their error messages before checking: a label per
+coordinate in `requireRoute`, and four per point and axis in
+`prepareRetarget`'s spring coefficient checks, about 30 strings per smooth
+edge that nobody read. Each check now runs on the numbers first and builds its
+label only when it fails, so the messages are unchanged. A finite
+`velocity + w * displacement` stands for the three coefficient checks, since
+no non-finite term sums to a finite value. Frames are byte-identical: the same
+sha256 over 240 frames of the 10,000-node smooth scene, retargeted every 30
+frames while in flight, under the old and new build.
+
+On WebGPU, same machine, browser (Chrome 155.0.8059.85, headed,
+`--enable-webgpu-developer-features`) and adapter (`apple` `metal-3`, not a
+fallback), `renderer.backend` `webgpu` on every run, springs only, 10,000
+smooth nodes only, old and new build alternated three times by swapping
+`packages/render/dist/edge-motion.js`, load average 3.8 to 4.8:
+
+| Build | `apply` | `advance` | `setEdges` | Past one tick |
+| --- | --- | --- | --- | --- |
+| previous | 22.8, 23.3, 23.0 | 6.0, 6.0, 5.9 | 12.0, 12.1, 11.7 | 38.7%, 39.3%, 35.0% |
+| this one | 19.9, 19.2, 20.9 | 3.8, 3.8, 4.2 | 12.0, 11.9, 12.4 | 25.7%, 25.3%, 30.3% |
+
+- **`apply` is about 3 ms faster**, in line with Node (see `bench/README.md`).
+  The GPU `sum` read 0.97 to 0.98 ms in all six runs.
+- **`advance` fell by about 2 ms too**, though nothing it runs changed, and the
+  Node bench's `advance` did not move. Less garbage from each retarget leaving
+  less collection for the frames between is the likely reading; it was not
+  traced.
+
+10,000 smooth nodes still miss a quarter of the ticks, and a retarget frame's
+`apply`, about 20 ms, is still the largest single cost.
+
 ## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`
