@@ -1186,6 +1186,45 @@ smooth nodes only, old and new build alternated three times by swapping
 about 11 ms, is still the largest per-frame cost. What is left of it is the
 flattening and the walk's arithmetic on every edge, every frame.
 
+### With the flattening as a loop (2026-10-22)
+
+A CPU profile of `tessellateRibbons` on the 13,169 smooth routes in Node put
+about 9% of its samples on the two recursive calls in `flattenInto`, each
+passing eleven arguments, beside the arithmetic they carry. The subdivision is
+a loop over one fixed `Float64Array` stack of pending cubics, sized from
+`MAX_FLATTEN_DEPTH`, with the right half pushed before the left so the points
+come out in the same order. Output is byte-identical: the same sha256 as the
+previous build over every array and the ranges, on the 10,000-node routes,
+polyline and smooth, at two offsets, and over 3,000 random routes with
+tolerances down to 1e-8, deep enough to reach the depth cap.
+
+In Node, one `tessellateRibbons` on those routes with every route swaying by
+a different amount each frame, old and new build alternated three times at
+load about 3: 8.98 to 9.08 ms before and 8.31 to 8.49 after.
+
+On WebGPU, same machine, browser (Chrome 155.0.8059.85, headed,
+`--enable-webgpu-developer-features`) and adapter (`apple` `metal-3`, not a
+fallback), `renderer.backend` `webgpu` on every run, springs only, 10,000
+smooth nodes only, old and new build alternated three times by swapping
+`packages/render/dist/ribbon.js` and `edge-path.js`, load average 3.1 to 3.8:
+
+| Build | `setEdges` | `advance` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- |
+| previous | 11.1, 11.3, 11.1 | 4.6, 3.7, 3.5 | 17.6, 18.0, 15.8 | 24.0%, 21.3%, 18.3% |
+| this one | 10.5, 10.6, 10.8 | 4.0, 4.9, 4.9 | 17.3, 16.8, 17.7 | 14.0%, 21.3%, 22.7% |
+
+- **`setEdges` is about 0.5 ms faster**, against Node's 0.6. Three earlier
+  pairs, taken while a stray test process held about two cores (load 6 to
+  7), read 12.2 to 12.8 before and 10.9 to 11.5 after. The GPU `sum` read
+  0.98 ms in all six runs above.
+- **The ticks missed did not clearly move.** Both builds spread by several
+  points between their own runs, following `advance`, which this change does
+  not touch.
+
+What is left of `setEdges` is still the walk and the flattening's own
+arithmetic, two `Math.hypot` calls per point in the walk the largest single
+part, and those are what byte-identical output pins.
+
 ## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`
