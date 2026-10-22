@@ -318,9 +318,13 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   writes each rib and each quad in one call with no object per rib,
   byte-identical, and 10,000 smooth nodes spend 11.7 to 11.9 ms in `setEdges`
   (the previous build 12.9 to 13.0 back to back) and miss 34% to 39% of ticks.
+  Since 2026-10-21 the edge motion's retarget checks build their error labels
+  only when one fails, byte-identical with the same messages, and 10,000
+  smooth nodes spend 19.2 to 20.9 ms in `apply` on retarget frames (the
+  previous build 22.8 to 23.3 back to back) and miss 25% to 30% of ticks.
   The number is not met with smooth edges.
   Still open: the 10,000-node smooth CPU frame (the scene motion's `apply`
-  on retarget frames, about 23 ms), the ID buffer pass
+  on retarget frames, about 20 ms), the ID buffer pass
   (M4.8b), and recording the bench entries in `bench/baseline.json` (the
   maintainer's call).
 - [x] **M4.11** HTML overlay: DOM elements positioned in world coordinates,
