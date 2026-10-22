@@ -1190,11 +1190,11 @@ flattening and the walk's arithmetic on every edge, every frame.
 
 A CPU profile of `tessellateRibbons` on the 13,169 smooth routes in Node put
 about 9% of its samples on the two recursive calls in `flattenInto`, each
-passing eleven doubles, beside the arithmetic they carry. The subdivision is
-now a loop over one fixed `Float64Array` stack of pending cubics, sized from
+passing eleven arguments, beside the arithmetic they carry. The subdivision is
+a loop over one fixed `Float64Array` stack of pending cubics, sized from
 `MAX_FLATTEN_DEPTH`, with the right half pushed before the left so the points
-come out in the same order. Output is byte-identical: the same sha256 over
-every array and the ranges as the previous build, on the 10,000-node routes,
+come out in the same order. Output is byte-identical: the same sha256 as the
+previous build over every array and the ranges, on the 10,000-node routes,
 polyline and smooth, at two offsets, and over 3,000 random routes with
 tolerances down to 1e-8, deep enough to reach the depth cap.
 
@@ -1216,10 +1216,11 @@ smooth nodes only, old and new build alternated three times by swapping
 
 - **`setEdges` is about 1.2 ms faster**, a little more than Node's 0.8. The
   GPU `sum` read 0.98 to 0.99 ms in all six runs.
-- **The ticks missed did not clearly move.** At this load both builds spread
-  by more than twenty points between their own runs, following `advance`,
-  which this change does not touch, and every step read higher than the
-  section above's runs at load 3 to 4.
+- **The ticks missed did not clearly move.** At this load the previous build
+  spread by 21 points between its own runs and this one by 11, following
+  `advance`, which this change does not touch. The previous build's
+  `setEdges` and `apply` read higher here than in the section above's runs at
+  load 3 to 4.
 
 What is left of `setEdges` is still the walk and the flattening's own
 arithmetic, two `Math.hypot` calls per point in the walk the largest single

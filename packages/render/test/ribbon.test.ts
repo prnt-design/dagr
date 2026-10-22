@@ -932,12 +932,12 @@ describe('smoothCentreline', () => {
     );
   });
 
-  it('stops at the recursion cap, which bounds one span at 64 segments', () => {
-    // The cap is the only thing between a pathological control polygon and the
-    // stack, and deleting it left every other test green. A tolerance of 1e-9
-    // on a scene-sized curve cannot be met at any depth, so every span
-    // subdivides all the way: three spans of 2^6 segments each, plus the first
-    // point, is 193.
+  it('stops at the depth cap, which bounds one span at 64 segments', () => {
+    // The cap is the only thing between a pathological control polygon and an
+    // endless subdivision, which overruns the flattener's fixed stack. A
+    // tolerance of 1e-9 on a scene-sized curve cannot be met at any depth, so
+    // every span subdivides all the way: three spans of 2^6 segments each, plus
+    // the first point, is 193.
     expect(smoothCentreline(points, 1e-9)).toHaveLength(3 * 64 + 1);
   });
 

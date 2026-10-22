@@ -224,8 +224,8 @@ export const MAX_FAN_FACET_RADIANS = 2 * Math.acos(1 - FAN_RADIUS_TOLERANCE);
 export const DEFAULT_FLATTEN_TOLERANCE_FRACTION = 0.01;
 
 /**
- * The recursion cap on {@link RibbonOptions.curve} `'smooth'`, which bounds one
- * cubic at 2^6 = 64 straight segments however sharp it is.
+ * The subdivision depth cap on {@link RibbonOptions.curve} `'smooth'`, which
+ * bounds one cubic at 2^6 = 64 straight segments however sharp it is.
  *
  * A cap rather than an option: the tolerance is the knob a caller wants, and
  * this is the guard that keeps a pathological control polygon from turning one
@@ -870,10 +870,10 @@ export function flatToChord(
  * given rather than as a subdivision of themselves, so a flattened route still
  * passes through the coordinates the layout chose.
  *
- * A loop over {@link FLATTEN_STACK} rather than a call per subdivision: eleven
- * double arguments per call cost about a twelfth of a smooth tessellation at
- * 13,169 routes. The right half is pushed before the left so that the left is
- * taken first, which is the order the points run in.
+ * A loop over {@link FLATTEN_STACK}, not a call per subdivision, because on
+ * this path the calls cost about as much as the flatness tests they make.
+ * The right half is pushed before the left so that the left is taken first,
+ * which is the order the points run in.
  */
 function flattenInto(
   out: Polyline,
