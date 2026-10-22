@@ -1092,6 +1092,46 @@ smooth nodes only, old and new build alternated three times by swapping
 10,000 smooth nodes still miss a quarter of the ticks, and a retarget frame's
 `apply`, about 20 ms, is still the largest single cost.
 
+### With an edge retarget's sampled points shared (2026-10-22)
+
+A CPU profile of `apply` at 10,000 smooth nodes in Node still put a fifth of
+its time in the garbage collector, and about as much in the edge half's map
+bookkeeping. A retarget resampled the current polyline, its velocities and
+the new route, and copied every point it sampled, though nothing in the module
+ever changes a `Vec2` after making it. The samples are now the same objects
+they were sampled from, so the springs, targets and drawn points share them;
+`alignRoutes`, which hands its result to a caller, copies it there. A removal
+or a reroute now carries its entry and its prepared transition from the plan
+to the commit, instead of the commit looking every id up again and a second
+map holding the transitions. Frames are byte-identical: the same sha256 over
+240 frames of 10,000 nodes, straight and smooth, with three and four point
+routes mixed and retargeted every 30 frames while in flight, under the old and
+new build.
+
+On WebGPU, same machine, browser (Chrome 155.0.8059.85, headed,
+`--enable-webgpu-developer-features`) and adapter (`apple` `metal-3`, not a
+fallback), `renderer.backend` `webgpu` on every run, springs only, 10,000
+smooth nodes only, old and new build alternated three times by swapping
+`packages/render/dist/edge-motion.js`, load average 3.4 to 5.0:
+
+| Build | `apply` | `advance` | `setEdges` | Past one tick |
+| --- | --- | --- | --- | --- |
+| previous | 18.8, 18.4, 19.2 | 5.6, 3.8, 4.0 | 11.9, 12.3, 11.9 | 35.3%, 27.0%, 24.7% |
+| this one | 17.1, 17.1, 17.2 | 3.3, 4.5, 3.4 | 12.4, 11.6, 12.3 | 26.0%, 26.3%, 24.7% |
+
+- **`apply` is about 1.7 ms faster**, much less than Node's 7 to 8 ms (see
+  `bench/README.md`). The Node bench retargets back to back with no frame
+  between; this page retargets every 500 ms and steps the springs on every
+  frame between. Why that narrows the gain was not traced. The GPU `sum` read 0.97 to 0.98 ms in
+  all six runs.
+- **The ticks missed did not clearly move.** Retargets were 16 or 17 of each
+  run's 360 frames, so most of the missed ticks are frames between
+  retargets, which spend about 4 ms in `advance`, 12 in `setEdges` and 2 in
+  `setNodes` at the median.
+
+So the next cost to cut for the 60 Hz number is the per-frame `setEdges`, not
+the retarget frame.
+
 ## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`
