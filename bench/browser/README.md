@@ -1200,27 +1200,26 @@ tolerances down to 1e-8, deep enough to reach the depth cap.
 
 In Node, one `tessellateRibbons` on those routes with every route swaying by
 a different amount each frame, old and new build alternated three times at
-load about 3: 9.01 to 9.10 ms before and 8.22 to 8.40 after.
+load about 3: 8.98 to 9.08 ms before and 8.31 to 8.49 after.
 
 On WebGPU, same machine, browser (Chrome 155.0.8059.85, headed,
 `--enable-webgpu-developer-features`) and adapter (`apple` `metal-3`, not a
 fallback), `renderer.backend` `webgpu` on every run, springs only, 10,000
 smooth nodes only, old and new build alternated three times by swapping
-`packages/render/dist/ribbon.js` and `edge-path.js`, load average 6.0 to 7.2
-(another process held about two cores throughout):
+`packages/render/dist/ribbon.js` and `edge-path.js`, load average 3.1 to 3.8:
 
 | Build | `setEdges` | `advance` | `apply` | Past one tick |
 | --- | --- | --- | --- | --- |
-| previous | 12.2, 12.8, 12.6 | 3.9, 4.1, 6.8 | 20.1, 19.8, 19.9 | 31.3%, 38.7%, 52.7% |
-| this one | 11.5, 11.5, 10.9 | 5.5, 6.8, 4.5 | 19.3, 19.8, 20.6 | 33.7%, 38.3%, 27.3% |
+| previous | 11.1, 11.3, 11.1 | 4.6, 3.7, 3.5 | 17.6, 18.0, 15.8 | 24.0%, 21.3%, 18.3% |
+| this one | 10.5, 10.6, 10.8 | 4.0, 4.9, 4.9 | 17.3, 16.8, 17.7 | 14.0%, 21.3%, 22.7% |
 
-- **`setEdges` is about 1.2 ms faster**, a little more than Node's 0.8. The
-  GPU `sum` read 0.98 to 0.99 ms in all six runs.
-- **The ticks missed did not clearly move.** At this load the previous build
-  spread by 21 points between its own runs and this one by 11, following
-  `advance`, which this change does not touch. The previous build's
-  `setEdges` and `apply` read higher here than in the section above's runs at
-  load 3 to 4.
+- **`setEdges` is about 0.5 ms faster**, against Node's 0.6. Three earlier
+  pairs, taken while a stray test process held about two cores (load 6 to
+  7), read 12.2 to 12.8 before and 10.9 to 11.5 after. The GPU `sum` read
+  0.98 ms in all six runs above.
+- **The ticks missed did not clearly move.** Both builds spread by several
+  points between their own runs, following `advance`, which this change does
+  not touch.
 
 What is left of `setEdges` is still the walk and the flattening's own
 arithmetic, two `Math.hypot` calls per point in the walk the largest single
