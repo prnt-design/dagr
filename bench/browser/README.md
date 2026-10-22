@@ -1119,8 +1119,8 @@ smooth nodes only, old and new build alternated three times by swapping
 | previous | 18.8, 18.4, 19.2 | 5.6, 3.8, 4.0 | 11.9, 12.3, 11.9 | 35.3%, 27.0%, 24.7% |
 | this one | 17.1, 17.1, 17.2 | 3.3, 4.5, 3.4 | 12.4, 11.6, 12.3 | 26.0%, 26.3%, 24.7% |
 
-- **`apply` is about 1.7 ms faster**, in line with Node's 1 to 3 ms with
-  smooth edges (see `bench/README.md`). The GPU `sum` read 0.97 to 0.98 ms in
+- **`apply` is about 1.7 ms faster**, in line with Node's gain of about 2 ms
+  with smooth edges (see `bench/README.md`). The GPU `sum` read 0.97 to 0.98 ms in
   all six runs.
 - **The ticks missed did not clearly move.** Retargets were 16 or 17 of each
   run's 360 frames, so most of the missed ticks are frames between

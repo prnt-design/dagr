@@ -225,7 +225,7 @@ export interface AlignedRoutes {
 
 const AT_REST: Vec2 = { x: 0, y: 0 };
 
-/** A copy of a caller's point, taken at the boundary. Nothing here retains one. */
+/** A copy of a point, so nothing handed out or retained is shared with a caller's. */
 function copyOf(point: Vec2): Vec2 {
   return { x: point.x, y: point.y };
 }
@@ -382,8 +382,8 @@ function mergeParameters(left: readonly number[], right: readonly number[]): num
  * SHARES RATHER THAN COPIES: a vertex comes back as the same object, and so
  * does a point repeated at one parameter. Everything here treats a `Vec2` as
  * immutable, and a copy per point was a measurable share of a 10,000-edge
- * retarget, so {@link alignRoutes}, which hands its result to a caller, is
- * the one place that copies.
+ * retarget, so {@link alignRoutes}, which hands its result to a caller,
+ * copies it there.
  */
 function sampleAlong(
   values: readonly Vec2[],
