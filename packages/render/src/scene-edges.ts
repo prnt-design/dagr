@@ -328,7 +328,7 @@ class EdgeGroup implements GpuResource {
    */
   setEdges(edges: readonly SceneEdge[]): void {
     const tessellated = tessellateRibbons(
-      edges.map((edge) => ({ id: edge.id, points: edge.points })),
+      edges,
       this.#curve === undefined ? undefined : { curve: this.#curve },
       this.#sizeHint,
     );

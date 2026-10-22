@@ -717,6 +717,31 @@ describe('tessellateRibbons: many routes', () => {
       expect(hinted.indexCount).toBe(indexCount);
     }
   });
+
+  it('holds at most a quarter more memory than its counts need', () => {
+    const large: RibbonRoute[] = Array.from({ length: 2_000 }, (_, i) => ({
+      id: `r${String(i)}`,
+      points: [
+        { x: i, y: 0 },
+        { x: i + 25 + (i % 7), y: 45 },
+      ],
+    }));
+    const unhinted = tessellateRibbons(large);
+    const { vertexCount, indexCount } = unhinted;
+    for (const hint of [
+      undefined,
+      { vertexCount, indexCount },
+      { vertexCount: vertexCount * 2, indexCount: indexCount * 2 },
+    ]) {
+      const geometry = tessellateRibbons(large, undefined, hint);
+      for (const key of ['position', 'offset', 'across', 'arc', 'index'] as const) {
+        const array = geometry[key];
+        expect(array.buffer.byteLength).toBeLessThanOrEqual(array.byteLength * 1.25);
+      }
+    }
+    const exact = tessellateRibbons(large, undefined, { vertexCount, indexCount });
+    expect(exact.position.buffer.byteLength).toBeGreaterThan(exact.position.byteLength);
+  });
 });
 
 describe('comparisons specified on Math.hypot', () => {

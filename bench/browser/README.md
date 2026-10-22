@@ -1130,6 +1130,62 @@ smooth nodes only, old and new build alternated three times by swapping
 So the next cost to cut for the 60 Hz number is the per-frame `setEdges`, not
 the retarget frame.
 
+### With `setEdges` copying less per frame (2026-10-22)
+
+A CPU profile of `setEdges` on the 13,169 smooth routes in Node put its time
+in the flattening (about 30%) and the walk (about 23%), both tightened by the
+sections above, and found two copies that nothing needed. `setEdges` mapped
+every edge to a new `{ id, points }` object, though a `SceneEdge` is already
+a route, and `tessellateRibbons` trimmed its five builder arrays with `slice`,
+which copies about 9 MB per frame at this size. The edges now go in as they
+are, and each array comes back as a `subarray` view of exactly its counts
+when the builder buffer behind it is at most a quarter longer, and as a
+trimmed copy otherwise. Both backends upload a view by its own range. A call
+starting from the last frame's counts, as every frame of an animation does,
+sizes its buffers an eighth above them and gets views, unless the scene shrank
+by more than about a tenth or outgrew the hint. A group's first build starts
+from nothing, doubles its way up and can end nearly twice as long, and keeping
+that alive for as long as the geometry is drawn is the retained heap the
+section above rejected, so it is copied. Output is byte-identical: the same
+sha256 over every array and the ranges as the previous build, on the
+10,000-node routes, polyline and smooth, at two offsets.
+
+In Node, one `setEdges` on those routes, alternating the old and new build
+four times at load 3 to 4: 10.01 to 10.28 ms before and 9.08 to 9.30 after
+with every route swaying by a different amount each frame, all 40 frames
+returning views. With static bends, an earlier version that always returned
+views read 10.32 to 10.52 before and 9.90 to 10.10 after over five pairs.
+What is left is the tessellation itself.
+
+On `--memory` (same machine and browser), the 10,000-node smooth edges'
+first build retains 14.4 MB against 14.2 before, since a first build copies.
+The rebuild that follows (`moveEdges`) retains 1.1 MB against 0.2, the
+eighth of headroom over about 9 MB of arrays, held until the next
+`setEdges`. GPU buffers are sized from the view and did not change.
+
+On WebGPU, same machine, browser (Chrome 155.0.8059.85, headed,
+`--enable-webgpu-developer-features`) and adapter (`apple` `metal-3`, not a
+fallback), `renderer.backend` `webgpu` on every run, springs only, 10,000
+smooth nodes only, old and new build alternated three times by swapping
+`packages/render/dist/ribbon.js` and `scene-edges.js`, load average 2.9 to
+4.2:
+
+| Build | `setEdges` | `advance` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- |
+| previous | 11.9, 11.5, 11.7 | 3.4, 4.7, 5.4 | 17.9, 17.4, 17.5 | 21.3%, 27.0%, 32.7% |
+| this one | 11.3, 11.4, 11.2 | 3.5, 5.6, 4.6 | 17.7, 17.2, 17.8 | 19.3%, 32.3%, 26.0% |
+
+- **`setEdges` is about 0.4 ms faster**, less than Node's 0.9. The earlier
+  always-a-view version read 11.0 to 11.6 against 11.8 to 12.0 in its own
+  three pairs. The GPU `sum` read 0.97 to 0.98 ms in all twelve runs.
+- **The ticks missed did not clearly move.** Both builds spread by more than
+  ten points between their own runs, following `advance`, which this change
+  does not touch.
+
+10,000 smooth nodes still miss about a quarter of the ticks, and `setEdges`,
+about 11 ms, is still the largest per-frame cost. What is left of it is the
+flattening and the walk's arithmetic on every edge, every frame.
+
 ## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`

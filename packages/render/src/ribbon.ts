@@ -335,6 +335,12 @@ export interface RibbonRange {
  * and is enough for the coordinates a layout produces: a campaign 100,000 world
  * units across resolves to about 0.008 of a unit at its far corner, four orders
  * of magnitude under a device pixel at the zoom that would show it.
+ *
+ * Each array has exactly its counts, but can be a view over a builder buffer up
+ * to a quarter longer, which the geometry keeps alive: copying all five was a
+ * measurable share of a 13,169-route `setEdges`, and both backends upload a
+ * view by its own range. Do not read `.buffer`; it can be longer than the
+ * data.
  */
 export interface RibbonGeometry {
   /** The centreline point each vertex sits on, world units, 2 floats per vertex. */
@@ -391,7 +397,7 @@ export interface RibbonGeometry {
 }
 
 /**
- * The arrays under construction, before they are trimmed into a
+ * The arrays under construction, before they are fitted into a
  * {@link RibbonGeometry}.
  *
  * Typed arrays that double when full, written in place, because
@@ -525,6 +531,25 @@ export interface RibbonSizeHint {
  * its bend moves, and one vertex past an exact hint doubles every array.
  */
 const HINT_HEADROOM = 1.125;
+
+/**
+ * How much longer than its data a builder buffer may be and still be returned
+ * as a view rather than copied: a hinted call's headroom, with room for a frame
+ * that came out a little smaller than the last.
+ */
+const VIEW_SLACK = 1.25;
+
+/**
+ * The first `length` elements of `array`, as a view when the buffer it keeps
+ * alive is at most {@link VIEW_SLACK} longer, and as a copy otherwise. An
+ * unhinted call doubles its way past the data and can end up nearly twice as
+ * long, which is retained heap for as long as the geometry is drawn.
+ */
+function fitted<T extends Float32Array | Uint32Array>(array: T, length: number): T {
+  return (array.length <= length * VIEW_SLACK
+    ? array.subarray(0, length)
+    : array.slice(0, length)) as T;
+}
 
 function grown<T extends Float32Array | Float64Array | Uint32Array>(array: T, length: number): T {
   const next = new (array.constructor as new (length: number) => T)(length);
@@ -1282,11 +1307,11 @@ export function tessellateRibbons(
   }
 
   return {
-    position: out.position.slice(0, out.vertexCount * 2),
-    offset: out.offset.slice(0, out.vertexCount * 2),
-    across: out.across.slice(0, out.vertexCount),
-    arc: out.arc.slice(0, out.vertexCount),
-    index: out.index.slice(0, out.indexCount),
+    position: fitted(out.position, out.vertexCount * 2),
+    offset: fitted(out.offset, out.vertexCount * 2),
+    across: fitted(out.across, out.vertexCount),
+    arc: fitted(out.arc, out.vertexCount),
+    index: fitted(out.index, out.indexCount),
     ranges,
     vertexCount: out.vertexCount,
     indexCount: out.indexCount,
