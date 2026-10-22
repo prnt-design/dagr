@@ -859,7 +859,7 @@ export function flatToChord(
  * Appends the flattening of one cubic Bezier to `out`, excluding its first
  * point and including its last.
  *
- * Recursive de Casteljau subdivision at the midpoint, stopping when both
+ * De Casteljau subdivision at the midpoint, stopping when both
  * interior control points are within `toleranceWorld` of the chord. That test is
  * conservative in the direction that matters: a cubic lies inside the convex
  * hull of its control points, so a control polygon that is flat to it
@@ -869,6 +869,11 @@ export function flatToChord(
  * de-duplicating the shared endpoints, and the endpoints are emitted EXACTLY as
  * given rather than as a subdivision of themselves, so a flattened route still
  * passes through the coordinates the layout chose.
+ *
+ * A loop over {@link FLATTEN_STACK} rather than a call per subdivision: eleven
+ * double arguments per call cost about a twelfth of a smooth tessellation at
+ * 13,169 routes. The right half is pushed before the left so that the left is
+ * taken first, which is the order the points run in.
  */
 function flattenInto(
   out: Polyline,
@@ -881,28 +886,80 @@ function flattenInto(
   x3: number,
   y3: number,
   toleranceWorld: number,
+): void {
+  const stack = FLATTEN_STACK;
+  writeCubic(stack, 0, x0, y0, x1, y1, x2, y2, x3, y3, 0);
+  let top = 1;
+  while (top > 0) {
+    top -= 1;
+    const at = top * CUBIC_STRIDE;
+    const ax = stack[at]!;
+    const ay = stack[at + 1]!;
+    const bx = stack[at + 2]!;
+    const by = stack[at + 3]!;
+    const cx = stack[at + 4]!;
+    const cy = stack[at + 5]!;
+    const dx = stack[at + 6]!;
+    const dy = stack[at + 7]!;
+    const depth = stack[at + 8]!;
+    if (depth >= MAX_FLATTEN_DEPTH || flatToChord(ax, ay, bx, by, cx, cy, dx, dy, toleranceWorld)) {
+      out.push(dx, dy);
+      continue;
+    }
+
+    const x01 = (ax + bx) / 2;
+    const y01 = (ay + by) / 2;
+    const x12 = (bx + cx) / 2;
+    const y12 = (by + cy) / 2;
+    const x23 = (cx + dx) / 2;
+    const y23 = (cy + dy) / 2;
+    const x012 = (x01 + x12) / 2;
+    const y012 = (y01 + y12) / 2;
+    const x123 = (x12 + x23) / 2;
+    const y123 = (y12 + y23) / 2;
+    const middleX = (x012 + x123) / 2;
+    const middleY = (y012 + y123) / 2;
+
+    writeCubic(stack, at, middleX, middleY, x123, y123, x23, y23, dx, dy, depth + 1);
+    writeCubic(stack, at + CUBIC_STRIDE, ax, ay, x01, y01, x012, y012, middleX, middleY, depth + 1);
+    top += 2;
+  }
+}
+
+/** A pending cubic on {@link FLATTEN_STACK}: its eight coordinates, then its depth. */
+const CUBIC_STRIDE = 9;
+
+/**
+ * The cubics {@link flattenInto} has still to visit. Each split replaces one
+ * entry with two a level deeper, so the stack is never more than one entry per
+ * level from 0 to {@link MAX_FLATTEN_DEPTH} deep. The size is derived from the
+ * cap because a typed array drops a write past its end without a word: one
+ * entry short, the loop reads back `undefined` as a depth and never stops.
+ */
+const FLATTEN_STACK = new Float64Array((MAX_FLATTEN_DEPTH + 1) * CUBIC_STRIDE);
+
+function writeCubic(
+  stack: Float64Array,
+  at: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  x3: number,
+  y3: number,
   depth: number,
 ): void {
-  if (depth >= MAX_FLATTEN_DEPTH || flatToChord(x0, y0, x1, y1, x2, y2, x3, y3, toleranceWorld)) {
-    out.push(x3, y3);
-    return;
-  }
-
-  const x01 = (x0 + x1) / 2;
-  const y01 = (y0 + y1) / 2;
-  const x12 = (x1 + x2) / 2;
-  const y12 = (y1 + y2) / 2;
-  const x23 = (x2 + x3) / 2;
-  const y23 = (y2 + y3) / 2;
-  const x012 = (x01 + x12) / 2;
-  const y012 = (y01 + y12) / 2;
-  const x123 = (x12 + x23) / 2;
-  const y123 = (y12 + y23) / 2;
-  const middleX = (x012 + x123) / 2;
-  const middleY = (y012 + y123) / 2;
-
-  flattenInto(out, x0, y0, x01, y01, x012, y012, middleX, middleY, toleranceWorld, depth + 1);
-  flattenInto(out, middleX, middleY, x123, y123, x23, y23, x3, y3, toleranceWorld, depth + 1);
+  stack[at] = x0;
+  stack[at + 1] = y0;
+  stack[at + 2] = x1;
+  stack[at + 3] = y1;
+  stack[at + 4] = x2;
+  stack[at + 5] = y2;
+  stack[at + 6] = x3;
+  stack[at + 7] = y3;
+  stack[at + 8] = depth;
 }
 
 /** {@link flattenInto} over points, for callers outside the tessellator. */
@@ -913,10 +970,9 @@ export function flattenCubic(
   p2: Vec2,
   p3: Vec2,
   toleranceWorld: number,
-  depth: number,
 ): void {
   const flattened = new Polyline();
-  flattenInto(flattened, p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, toleranceWorld, depth);
+  flattenInto(flattened, p0.x, p0.y, p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, toleranceWorld);
   appendPoints(out, flattened);
 }
 
@@ -974,7 +1030,6 @@ function smoothInto(points: Polyline, toleranceWorld: number, out: Polyline): vo
       toX,
       toY,
       toleranceWorld,
-      0,
     );
   }
 }

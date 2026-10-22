@@ -36,7 +36,7 @@ export function shapeEdgePath(points: readonly Vec2[], options: EdgePathOptions 
     flattenCubic(out, a,
       direction === 'horizontal' ? { x, y: a.y } : { x: a.x, y },
       direction === 'horizontal' ? { x, y: b.y } : { x: b.x, y },
-      b, tolerance, 0);
+      b, tolerance);
     return out;
   }
   const out: Vec2[] = [];
