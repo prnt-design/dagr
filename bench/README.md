@@ -99,6 +99,16 @@ to 4.5, medians in milliseconds:
 `advance` is untouched by the change; the one 10.2 is a single run's outlier
 (5.2 and 5.3 in the other two).
 
+On 2026-10-22 an edge retarget stopped copying the points it samples, and a
+reroute or removal carries its entry from the plan to the commit (see
+`bench/browser/README.md`). Frames are byte-identical. Three runs alternating
+the old and new source at loads of 3.8 to 4.3, medians in milliseconds:
+
+| Edges | `apply` before | `apply` after | `advance` before | `advance` after |
+| --- | --- | --- | --- | --- |
+| straight | 14.1 to 14.2 | 12.9 to 13.1 | 3.8 to 4.6 | 3.6 to 4.2 |
+| smooth | 16.8 to 18.4 | 14.5 to 15.9 | 5.0 to 5.5 | 4.9 to 5.1 |
+
 Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
 for the same reason: recording them rewrites the machine-matched file, which is
 the maintainer's call. This is CPU time in Node, not a browser frame or GPU

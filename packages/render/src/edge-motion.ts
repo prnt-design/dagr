@@ -225,7 +225,7 @@ export interface AlignedRoutes {
 
 const AT_REST: Vec2 = { x: 0, y: 0 };
 
-/** A copy of a caller's point, taken at the boundary. Nothing here retains one. */
+/** A copy of a point, so nothing handed out or retained is shared with a caller's. */
 function copyOf(point: Vec2): Vec2 {
   return { x: point.x, y: point.y };
 }
@@ -378,6 +378,12 @@ function mergeParameters(left: readonly number[], right: readonly number[]): num
  * Used for velocities as well as for positions, with the POSITION route's
  * parameters both times, because index `i` of one list is index `i` of the
  * other and a velocity is a value along the line rather than a line of its own.
+ *
+ * SHARES RATHER THAN COPIES: a vertex comes back as the same object, and so
+ * does a point repeated at one parameter. Everything here treats a `Vec2` as
+ * immutable, and a copy per point was a measurable share of a 10,000-edge
+ * retarget, so {@link alignRoutes}, which hands its result to a caller,
+ * copies it there.
  */
 function sampleAlong(
   values: readonly Vec2[],
@@ -404,7 +410,7 @@ function sampleAlong(
       for (let copy = 0; copy < atEnd - atCursor; copy += 1) {
         const index = parameterCursor + Math.min(copy, ownCount - 1);
         const value = values[index];
-        if (value !== undefined) sampled.push(copyOf(value));
+        if (value !== undefined) sampled.push(value);
       }
       parameterCursor = parameterEnd;
     } else {
@@ -426,7 +432,7 @@ function sampleAlong(
           x: start.x + (end.x - start.x) * fraction,
           y: start.y + (end.y - start.y) * fraction,
         };
-        for (let copy = atCursor; copy < atEnd; copy += 1) sampled.push(copyOf(point));
+        for (let copy = atCursor; copy < atEnd; copy += 1) sampled.push(point);
       }
     }
     atCursor = atEnd;
@@ -498,8 +504,8 @@ export function alignRoutes(from: readonly Vec2[], to: readonly Vec2[]): Aligned
   const toParameters = routeParameters(to);
   const merged = mergeParameters(fromParameters, toParameters);
   return {
-    from: sampleAlong(from, fromParameters, merged),
-    to: sampleAlong(to, toParameters, merged),
+    from: sampleAlong(from, fromParameters, merged).map(copyOf),
+    to: sampleAlong(to, toParameters, merged).map(copyOf),
   };
 }
 
@@ -525,10 +531,16 @@ interface EdgeEntry {
 
 /** What a delta intends to do to one id, worked out before anything is done. */
 type Intent =
-  | { readonly kind: 'depart' }
+  | { readonly kind: 'depart'; readonly entry: EdgeEntry }
   | { readonly kind: 'arrive'; readonly route: readonly Vec2[] }
   | { readonly kind: 'replace'; readonly route: readonly Vec2[] }
-  | { readonly kind: 'reroute'; readonly route: readonly Vec2[]; readonly index: number };
+  | {
+      readonly kind: 'reroute';
+      readonly route: readonly Vec2[];
+      readonly index: number;
+      readonly entry: EdgeEntry;
+      transition?: RetargetTransition;
+    };
 
 /** A retarget worked out without changing the entry it came from. */
 interface RetargetTransition {
@@ -825,12 +837,19 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       return entry.departing ? 'departing' : 'live';
     }
 
+    /** The entry behind an id that has no intent yet and is live, or `undefined`. */
+    function liveEntry(id: string): EdgeEntry | undefined {
+      if (planned.has(id)) return undefined;
+      const entry = entries.get(id);
+      return entry === undefined || entry.departing ? undefined : entry;
+    }
+
     for (const [index, id] of delta.removed.entries()) {
-      const where = presence(id);
-      if (where !== 'live') {
-        throw new MotionDesyncError(id, `removed[${String(index)}]`, where, 'edge');
+      const entry = liveEntry(id);
+      if (entry === undefined) {
+        throw new MotionDesyncError(id, `removed[${String(index)}]`, presence(id), 'edge');
       }
-      planned.set(id, { kind: 'depart' });
+      planned.set(id, { kind: 'depart', entry });
     }
     for (const [index, target] of delta.added.entries()) {
       requireRoute(target.points, () => `added[${String(index)}].points`);
@@ -845,6 +864,16 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
     }
     for (const [index, target] of delta.rerouted.entries()) {
       requireRoute(target.points, () => `rerouted[${String(index)}].points`);
+      const entry = liveEntry(target.id);
+      if (entry !== undefined) {
+        planned.set(target.id, {
+          kind: 'reroute',
+          route: copyRoute(target.points),
+          index,
+          entry,
+        });
+        continue;
+      }
       const where = presence(target.id);
       if (where !== 'live') {
         throw new MotionDesyncError(target.id, `rerouted[${String(index)}]`, where, 'edge');
@@ -852,23 +881,22 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       // A reroute of something this same delta added or replaced is still that
       // arrival, at the later route: overwriting the kind would leave nothing
       // for the reroute to find, since the entry does not exist yet.
-      const prior = planned.get(target.id)?.kind;
-      if (prior === 'arrive' || prior === 'replace') {
-        planned.set(target.id, { kind: prior, route: copyRoute(target.points) });
-      } else {
-        planned.set(target.id, { kind: 'reroute', route: copyRoute(target.points), index });
+      const prior = planned.get(target.id);
+      if (prior?.kind === 'arrive' || prior?.kind === 'replace') {
+        planned.set(target.id, { kind: prior.kind, route: copyRoute(target.points) });
+      } else if (prior?.kind === 'reroute') {
+        planned.set(target.id, { ...prior, route: copyRoute(target.points), index });
       }
     }
 
-    const transitions = new Map<string, RetargetTransition>();
     for (const [id, intent] of planned) {
       if (intent.kind !== 'reroute') continue;
-      const entry = entries.get(id);
-      if (entry === undefined) continue;
       const { index } = intent;
-      transitions.set(
+      intent.transition = prepareRetarget(
+        intent.entry,
+        intent.route,
+        () => `rerouted[${String(index)}]`,
         id,
-        prepareRetarget(entry, intent.route, () => `rerouted[${String(index)}]`, id),
       );
     }
 
@@ -876,17 +904,11 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       for (const [id, intent] of planned) {
         if (intent.kind === 'arrive' || intent.kind === 'replace') {
           entries.set(id, seed(intent.route));
-          continue;
+        } else if (intent.kind === 'depart') {
+          intent.entry.departing = true;
+        } else if (intent.transition !== undefined) {
+          installRetarget(intent.entry, intent.transition);
         }
-        // Every other intent was checked against an entry that exists.
-        const entry = entries.get(id);
-        if (entry === undefined) continue;
-        if (intent.kind === 'depart') {
-          entry.departing = true;
-          continue;
-        }
-        const transition = transitions.get(id);
-        if (transition !== undefined) installRetarget(entry, transition);
       }
     };
   }

@@ -182,6 +182,12 @@ describe('alignRoutes', () => {
     expect(aligned.to).toEqual(other);
   });
 
+  it("returns points of its own rather than the caller's", () => {
+    const aligned = alignRoutes(STRAIGHT, LOPSIDED);
+    for (const point of LOPSIDED) expect(aligned.to).not.toContain(point);
+    for (const point of STRAIGHT) expect(aligned.from).not.toContain(point);
+  });
+
   it('falls back to index spacing for a route of zero length', () => {
     // A route whose points coincide has no arc length to divide by, and the
     // division is the one place a NaN could enter the drawing.
@@ -358,6 +364,13 @@ describe('createEdgeMotion', () => {
     expect(frame.settled).toBe(true);
     expect(edgeNamed(frame.edges, 'e1').departing).toBe(false);
     expect(edgeNamed(frame.edges, 'e1').points).toEqual(reversed);
+  });
+
+  it('takes the later route when one delta reroutes an edge twice', () => {
+    const motion = createEdgeMotion();
+    motion.resync([target('e1', STRAIGHT)]);
+    motion.apply({ added: [], removed: [], rerouted: [target('e1', BENT), target('e1', LOPSIDED)] });
+    expect(edgeNamed(runToRest(motion).edges, 'e1').points).toEqual(LOPSIDED);
   });
 
   it('throws when a delta names an edge the scene does not hold', () => {
