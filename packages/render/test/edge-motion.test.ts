@@ -184,7 +184,7 @@ describe('alignRoutes', () => {
 
   it("returns points of its own rather than the caller's", () => {
     const aligned = alignRoutes(STRAIGHT, LOPSIDED);
-    for (const [index, point] of LOPSIDED.entries()) expect(aligned.to[index]).not.toBe(point);
+    for (const point of LOPSIDED) expect(aligned.to).not.toContain(point);
     for (const point of STRAIGHT) expect(aligned.from).not.toContain(point);
   });
 

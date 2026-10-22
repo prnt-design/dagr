@@ -837,11 +837,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       return entry.departing ? 'departing' : 'live';
     }
 
-    /**
-     * The entry behind an id that has no intent yet and is live, or `undefined`.
-     * Lets a removal or a reroute carry its entry to the commit instead of
-     * looking it up again there.
-     */
+    /** The entry behind an id that has no intent yet and is live, or `undefined`. */
     function liveEntry(id: string): EdgeEntry | undefined {
       if (planned.has(id)) return undefined;
       const entry = entries.get(id);

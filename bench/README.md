@@ -102,15 +102,12 @@ to 4.5, medians in milliseconds:
 On 2026-10-22 an edge retarget stopped copying the points it samples, and a
 reroute or removal carries its entry from the plan to the commit (see
 `bench/browser/README.md`). Frames are byte-identical. Three runs alternating
-the old and new source at loads of 4.6 to 5.2, medians in milliseconds:
+the old and new source at loads of 3.8 to 4.3, medians in milliseconds:
 
 | Edges | `apply` before | `apply` after | `advance` before | `advance` after |
 | --- | --- | --- | --- | --- |
-| straight | 18.1 to 18.2 | 12.6 to 13.0 | 5.8 to 6.3 | 3.1 to 4.4 |
-| smooth | 22.1 to 23.1 | 14.8 to 15.5 | 8.6 to 10.2 | 4.6 to 5.7 |
-
-`advance` runs none of the changed code. Its setup makes one `apply`, so the
-likely reading is a smaller heap for the collector to scan; it was not traced.
+| straight | 14.1 to 14.2 | 12.9 to 13.1 | 3.8 to 4.6 | 3.6 to 4.2 |
+| smooth | 16.8 to 18.4 | 14.5 to 15.9 | 5.0 to 5.5 | 4.9 to 5.1 |
 
 Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
 for the same reason: recording them rewrites the machine-matched file, which is
