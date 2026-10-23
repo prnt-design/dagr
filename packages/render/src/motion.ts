@@ -241,8 +241,8 @@ interface Entry {
 type Intent =
   | { readonly kind: 'depart' }
   | { readonly kind: 'arrive'; readonly target: Vec2 }
-  | { readonly kind: 'revive'; readonly target: Vec2; readonly field: string }
-  | { readonly kind: 'retarget'; readonly target: Vec2; readonly field: string };
+  | { readonly kind: 'revive'; readonly target: Vec2; readonly list: string; readonly index: number }
+  | { readonly kind: 'retarget'; readonly target: Vec2; readonly list: string; readonly index: number };
 
 /** A node retarget worked out without changing the entry it came from. */
 interface RetargetTransition {
@@ -269,8 +269,15 @@ function copyOf(point: Vec2): Vec2 {
   return { x: point.x, y: point.y };
 }
 
-/** Rejects a target whose centre is not two finite numbers, naming the field. */
-function requireTarget(target: MotionTarget, field: string): MotionTarget {
+/**
+ * Rejects a target whose centre is not two finite numbers, naming the field as
+ * `list[index]`. The name is built only when a check fails, because building
+ * every one up front was a measurable share of a 10,000-node retarget (see
+ * `bench/README.md`).
+ */
+function requireTarget(target: MotionTarget, list: string, index: number): MotionTarget {
+  if (Number.isFinite(target.center.x) && Number.isFinite(target.center.y)) return target;
+  const field = `${list}[${String(index)}]`;
   requireFinite(target.center.x, `${field}.center.x`);
   requireFinite(target.center.y, `${field}.center.y`);
   return target;
@@ -364,9 +371,21 @@ export function createPlannedNodeMotion(options: NodeMotionOptions = {}): Planne
   function prepareRetarget(
     entry: Entry,
     target: Vec2,
-    field: string,
+    list: string,
+    index: number,
     id: string,
   ): RetargetTransition {
+    const { position, velocity } = entry.spring;
+    // A finite `velocity + w * displacement` means all three checks below
+    // pass, since no non-finite velocity, displacement or product sums to a
+    // finite value, so only a node that fails builds the messages.
+    if (
+      Number.isFinite(velocity.x + w * (position.x - target.x)) &&
+      Number.isFinite(velocity.y + w * (position.y - target.y))
+    ) {
+      return { target, moving: !atRest(entry.spring, target) };
+    }
+    const field = `${list}[${String(index)}]`;
     for (const axis of ['x', 'y'] as const) {
       const location = `${field} node "${id}" ${axis}`;
       const displacement = entry.spring.position[axis] - target[axis];
@@ -403,7 +422,7 @@ export function createPlannedNodeMotion(options: NodeMotionOptions = {}): Planne
 
   function planResync(targets: readonly MotionTarget[]): () => void {
     for (const [index, target] of targets.entries()) {
-      requireTarget(target, `targets[${String(index)}]`);
+      requireTarget(target, 'targets', index);
     }
     const prepared = targets.map((target, index) => {
       const center = copyOf(target.center);
@@ -411,7 +430,7 @@ export function createPlannedNodeMotion(options: NodeMotionOptions = {}): Planne
       const transition =
         existing === undefined
           ? undefined
-          : prepareRetarget(existing, center, `targets[${String(index)}]`, target.id);
+          : prepareRetarget(existing, center, 'targets', index, target.id);
       return { id: target.id, center, existing, transition };
     });
     return () => {
@@ -459,24 +478,27 @@ export function createPlannedNodeMotion(options: NodeMotionOptions = {}): Planne
       planned.set(id, { kind: 'depart' });
     }
     for (const [index, target] of delta.added.entries()) {
-      const field = `added[${String(index)}]`;
-      requireTarget(target, field);
+      requireTarget(target, 'added', index);
       const where = presence(target.id);
       if (where === 'live') {
-        throw new MotionDesyncError(target.id, field, where);
+        throw new MotionDesyncError(target.id, `added[${String(index)}]`, where);
       }
       if (where === 'departing') {
-        planned.set(target.id, { kind: 'revive', target: copyOf(target.center), field });
+        planned.set(target.id, {
+          kind: 'revive',
+          target: copyOf(target.center),
+          list: 'added',
+          index,
+        });
       } else {
         planned.set(target.id, { kind: 'arrive', target: copyOf(target.center) });
       }
     }
     for (const [index, target] of delta.moved.entries()) {
-      const field = `moved[${String(index)}]`;
-      requireTarget(target, field);
+      requireTarget(target, 'moved', index);
       const where = presence(target.id);
       if (where !== 'live') {
-        throw new MotionDesyncError(target.id, field, where);
+        throw new MotionDesyncError(target.id, `moved[${String(index)}]`, where);
       }
       // A retarget of something this same delta added or revived is still that
       // add or that revival, at the later target. Overwriting the kind would
@@ -487,7 +509,7 @@ export function createPlannedNodeMotion(options: NodeMotionOptions = {}): Planne
       if (kind === 'arrive') {
         planned.set(target.id, { kind, target: copyOf(target.center) });
       } else {
-        planned.set(target.id, { kind, target: copyOf(target.center), field });
+        planned.set(target.id, { kind, target: copyOf(target.center), list: 'moved', index });
       }
     }
 
@@ -496,7 +518,7 @@ export function createPlannedNodeMotion(options: NodeMotionOptions = {}): Planne
       if (intent.kind !== 'revive' && intent.kind !== 'retarget') continue;
       const entry = entries.get(id);
       if (entry === undefined) continue;
-      transitions.set(id, prepareRetarget(entry, intent.target, intent.field, id));
+      transitions.set(id, prepareRetarget(entry, intent.target, intent.list, intent.index, id));
     }
 
     return () => {

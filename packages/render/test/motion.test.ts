@@ -402,6 +402,24 @@ describe('createNodeMotion', () => {
       );
     });
 
+    it('names the list, index, node and axis of a displacement it refuses', () => {
+      const motion = createNodeMotion();
+      motion.resync([at('a', 0, 0), at('b', 0, -1.7e308)]);
+      const refusal = (field: string): string =>
+        `${field} node "b" y displacement has to be a finite number, got -Infinity`;
+
+      expect(() => motion.apply(delta({ moved: [at('a', 1, 0), at('b', 0, 1.7e308)] }))).toThrow(
+        refusal('moved[1]'),
+      );
+      motion.apply(delta({ removed: ['b'] }));
+      expect(() => motion.apply(delta({ added: [at('b', 0, 1.7e308)] }))).toThrow(
+        refusal('added[0]'),
+      );
+      expect(() =>
+        motion.apply(delta({ added: [at('b', 0, 0)], moved: [at('a', 1, 0), at('b', 0, 1.7e308)] })),
+      ).toThrow(refusal('moved[1]'));
+    });
+
     it('rejects a half-life and a tolerance that are not above zero', () => {
       expect(() => createNodeMotion({ halfLifeSeconds: 0 })).toThrow(/halfLifeSeconds/);
       expect(() => createNodeMotion({ restEpsilon: -1 })).toThrow(/restEpsilon/);

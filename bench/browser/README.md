@@ -1315,6 +1315,39 @@ build does not touch `setEdges`; its straight `setEdges` read lower in all
 three pairs (1.9 to 2.0 against 2.3), perhaps from less garbage to collect,
 which this run cannot separate from noise.
 
+### With node motion error labels built only on failure (2026-10-23)
+
+`createNodeMotion`'s retarget built about eleven strings per moved node before
+checking anything: the field name, two for the target's coordinates and four
+per axis for the spring coefficients. The edge half stopped doing this on
+2026-10-21. Each check now runs on the numbers first and builds its message
+only when it fails, with the same message.
+
+Frames are byte-identical: the same sha256 as the previous build over every
+node of every frame of 300 random scenes of up to eight nodes, 35,638 frames
+with retargets in flight, departures, revivals, resyncs, overflowing targets
+and elapsed times from zero to a billion seconds, including the same 7,179
+refusals with the same messages.
+
+On WebGPU, same machine (Apple M4), Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, springs only, 10,000
+nodes, old and new build alternated three times by swapping
+`packages/render/dist/motion.js`, load average 3.6 to 4.2:
+
+| Build | Edges | `apply` | `advance` | `setEdges` | Past one tick |
+| --- | --- | --- | --- | --- | --- |
+| previous | straight | 13.1, 13.0, 13.4 | 2.0, 2.1, 2.2 | 1.9, 1.9, 1.9 | 0%, 0%, 0% |
+| this one | straight | 12.2, 11.3, 12.4 | 2.0, 2.1, 2.0 | 1.9, 1.9, 1.9 | 0%, 0%, 0% |
+| previous | smooth | 18.0, 17.0, 18.2 | 3.4, 3.4, 3.6 | 10.1, 10.2, 10.0 | 9.7%, 9.0%, 8.7% |
+| this one | smooth | 17.2, 17.4, 17.7 | 3.6, 3.8, 3.4 | 10.0, 9.1, 10.2 | 9.0%, 5.7%, 11.3% |
+
+- **Straight `apply` is lower in every pair**, by 0.6 to 1.7 ms, about what
+  Node puts on the node half alone (1.1 to 1.2 ms).
+- **Smooth `apply` overlaps** (17.2 to 17.7 against 17.0 to 18.2), and so do
+  the ticks missed. A retarget is about one frame in 22, so a millisecond
+  saved on it moves the missed ticks less than this run's spread.
+
 ## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`
