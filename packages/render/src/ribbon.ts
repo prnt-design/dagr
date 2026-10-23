@@ -753,6 +753,9 @@ const CONTROLS = new Float64Array(4);
  * knot width. That places the control point a third of the way along the span,
  * which is the straight line, so a two-point route stays exactly straight
  * through `'smooth'` rather than acquiring a curve nobody asked for.
+ *
+ * `w1`, `w2` and `w3` are the knot widths of `p0 p1`, `p1 p2` and `p2 p3`,
+ * passed in because each segment's width is shared by the three spans around it.
  */
 function catmullRomControls(
   x0: number,
@@ -763,11 +766,10 @@ function catmullRomControls(
   y2: number,
   x3: number,
   y3: number,
+  w1: number,
+  w2: number,
+  w3: number,
 ): void {
-  const w1 = Math.hypot(x1 - x0, y1 - y0) ** CATMULL_ROM_ALPHA;
-  const w2 = Math.hypot(x2 - x1, y2 - y1) ** CATMULL_ROM_ALPHA;
-  const w3 = Math.hypot(x3 - x2, y3 - y2) ** CATMULL_ROM_ALPHA;
-
   // The span's own chord, which every branch below needs.
   const spanX = (x2 - x1) / w2;
   const spanY = (y2 - y1) / w2;
@@ -976,26 +978,38 @@ export function flattenCubic(
   appendPoints(out, flattened);
 }
 
+/** Segment `k`'s knot width, from point `k` to `k + 1`, as {@link measureSegments} wrote it. */
+let KNOT_WIDTHS = new Float64Array(64);
+
 /**
- * The mean length of a cleaned centreline's segments, which is what
- * {@link DEFAULT_FLATTEN_TOLERANCE_FRACTION} is a fraction of.
+ * Writes every segment's knot width to {@link KNOT_WIDTHS} and returns the mean
+ * segment length, which is what {@link DEFAULT_FLATTEN_TOLERANCE_FRACTION} is a
+ * fraction of.
  *
  * The mean rather than the total, so the tolerance a route gets does not depend
  * on how many crossings its edge happens to span: two routes stepping the same
  * distance between layers get the same tolerance whether one of them is twice
  * as long. A route with one segment gets that segment.
  */
-function meanSegmentLength(line: Polyline): number {
-  let total = 0;
-  for (let i = 1; i < line.length; i += 1) {
-    total += Math.hypot(line.xs[i]! - line.xs[i - 1]!, line.ys[i]! - line.ys[i - 1]!);
+function measureSegments(line: Polyline): number {
+  const { xs, ys, length } = line;
+  const segments = length - 1;
+  if (KNOT_WIDTHS.length < segments) {
+    KNOT_WIDTHS = new Float64Array(Math.max(segments, KNOT_WIDTHS.length * 2));
   }
-  return total / (line.length - 1);
+  let total = 0;
+  for (let k = 0; k < segments; k += 1) {
+    const segment = Math.hypot(xs[k + 1]! - xs[k]!, ys[k + 1]! - ys[k]!);
+    total += segment;
+    KNOT_WIDTHS[k] = segment ** CATMULL_ROM_ALPHA;
+  }
+  return total / segments;
 }
 
 /**
  * Writes to `out` a polyline through the same points, bent: the centripetal
- * Catmull-Rom spline through `points`, flattened to `toleranceWorld`.
+ * Catmull-Rom spline through `points`, flattened to `toleranceWorld`, or by
+ * default to {@link DEFAULT_FLATTEN_TOLERANCE_FRACTION} of the mean segment.
  *
  * Every input point survives into the output, at its own coordinate. Two points
  * come back unchanged, because a one-sided tangent at both ends is the straight
@@ -1003,14 +1017,18 @@ function meanSegmentLength(line: Polyline): number {
  * centreline: two consecutive identical points make a zero knot width and a
  * `NaN` tangent, which is what {@link cleanCentreline} exists to remove.
  */
-function smoothInto(points: Polyline, toleranceWorld: number, out: Polyline): void {
+function smoothInto(points: Polyline, toleranceWorld: number | undefined, out: Polyline): void {
   out.length = 0;
   const { xs, ys, length } = points;
   if (length < 2) return;
+  const meanSegment = measureSegments(points);
+  const tolerance = toleranceWorld ?? DEFAULT_FLATTEN_TOLERANCE_FRACTION * meanSegment;
+  const widths = KNOT_WIDTHS;
   out.push(xs[0]!, ys[0]!);
   // Span `i` runs from point `i` to point `i + 1`, and its tangents are shaped
   // by the points either side. A missing neighbour at either end is the
-  // one-sided case `catmullRomControls` takes as the endpoint repeated.
+  // one-sided case `catmullRomControls` takes as the endpoint repeated, whose
+  // knot width is zero.
   for (let i = 0; i + 1 < length; i += 1) {
     const before = i === 0 ? 0 : i - 1;
     const after = i + 2 < length ? i + 2 : i + 1;
@@ -1018,7 +1036,19 @@ function smoothInto(points: Polyline, toleranceWorld: number, out: Polyline): vo
     const fromY = ys[i]!;
     const toX = xs[i + 1]!;
     const toY = ys[i + 1]!;
-    catmullRomControls(xs[before]!, ys[before]!, fromX, fromY, toX, toY, xs[after]!, ys[after]!);
+    catmullRomControls(
+      xs[before]!,
+      ys[before]!,
+      fromX,
+      fromY,
+      toX,
+      toY,
+      xs[after]!,
+      ys[after]!,
+      i === 0 ? 0 : widths[i - 1]!,
+      widths[i]!,
+      i + 2 < length ? widths[i + 1]! : 0,
+    );
     flattenInto(
       out,
       fromX,
@@ -1029,7 +1059,7 @@ function smoothInto(points: Polyline, toleranceWorld: number, out: Polyline): vo
       CONTROLS[3]!,
       toX,
       toY,
-      toleranceWorld,
+      tolerance,
     );
   }
 }
@@ -1336,12 +1366,7 @@ export function tessellateRibbons(
     cleanCentreline(givenCentreline(route.points, field, given), field, cleaned);
     let centreline = cleaned;
     if (resolved.smooth && cleaned.length >= 2) {
-      smoothInto(
-        cleaned,
-        resolved.flattenToleranceWorld ??
-          DEFAULT_FLATTEN_TOLERANCE_FRACTION * meanSegmentLength(cleaned),
-        smoothed,
-      );
+      smoothInto(cleaned, resolved.flattenToleranceWorld, smoothed);
       // Flattened points go through the cleaner a second time, which is not
       // belt and braces: the walk divides by a segment's length, and the
       // subdivision of a span shorter than the tolerance can put two of its
