@@ -1258,8 +1258,13 @@ smooth nodes only, old and new build alternated three times by swapping
 
 - **`setEdges` is about 1.5 ms faster**, against Node's 0.85. The GPU `sum`
   read 0.97 to 0.98 ms in all six runs.
-- **The ticks missed are lower in two pairs of three**, but the two builds'
+- **The ticks missed are lower in all three pairs**, but the two builds'
   ranges overlap, and they follow `advance`, which this change does not touch.
+
+The previous section ran Chrome 155; its "this one" row and this section's
+"previous" row are the same build and read alike. What is left of `setEdges`
+is the walk's two `Math.hypot` per point and the flattening's arithmetic,
+which byte-identical output pins.
 
 ## What the overlay harness measures, and what it does not
 
