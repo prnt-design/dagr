@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '@dagr/bench';
 import {
+  DEFAULT_FLATTEN_TOLERANCE_FRACTION,
   DEFAULT_MITER_LIMIT,
   FAN_RADIUS_TOLERANCE,
   MAX_FAN_FACET_RADIANS,
@@ -976,6 +977,27 @@ describe('tessellateRibbons: the smooth curve', () => {
     for (const triangle of triangles(geometry, 1.5)) {
       expect(signedArea(...triangle)).toBeGreaterThan(0);
     }
+  });
+
+  it('defaults the tolerance to a fraction of the mean segment on a long route', () => {
+    // 200 points, more segments than the first knot-width buffer holds.
+    const random = mulberry32(11);
+    const points: Vec2[] = [];
+    for (let i = 0; i < 200; i += 1) points.push({ x: i * 40, y: random() * 120 });
+    let total = 0;
+    for (let i = 1; i < points.length; i += 1) {
+      total += Math.hypot(points[i]!.x - points[i - 1]!.x, points[i]!.y - points[i - 1]!.y);
+    }
+    const tolerance = DEFAULT_FLATTEN_TOLERANCE_FRACTION * (total / (points.length - 1));
+
+    const byDefault = ribbonOf(points, { curve: 'smooth' });
+    const explicit = ribbonOf(points, { curve: 'smooth', flattenToleranceWorld: tolerance });
+    expect(byDefault.vertexCount).toBe(explicit.vertexCount);
+    let differing = 0;
+    for (let i = 0; i < byDefault.position.length; i += 1) {
+      if (byDefault.position[i] !== explicit.position[i]) differing += 1;
+    }
+    expect(differing).toBe(0);
   });
 });
 

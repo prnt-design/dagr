@@ -1225,6 +1225,47 @@ What is left of `setEdges` is still the walk and the flattening's own
 arithmetic, two `Math.hypot` calls per point in the walk the largest single
 part, and those are what byte-identical output pins.
 
+### With knot widths measured once per segment (2026-10-23)
+
+Each smooth span's control points need the knot widths of three segments: its
+own and its two neighbours'. They were computed per span, so every interior
+segment's `Math.hypot` and power ran three times, and the default tolerance's
+mean segment length took a fourth `Math.hypot` pass. `smoothInto` now measures
+each segment once, into one reused `Float64Array`, and reads the mean from the
+same lengths. A CPU profile of the previous build in Node put about 8% of a
+smooth tessellation's samples in `catmullRomControls` and `meanSegmentLength`.
+
+Output is byte-identical: the same sha256 as the previous build over every
+array and the ranges on the 10,000-node routes, polyline and smooth, at two
+offsets; over the 3,000 random short routes of the last section; and over 60
+batches of eight random routes of up to 401 points, longer than the width
+buffer's first size, with and without an explicit tolerance.
+
+In Node, one `tessellateRibbons` on the 13,169 swaying smooth routes, old and
+new build alternated three times at load about 4: 8.24 to 8.29 ms before and
+7.31 to 7.50 after.
+
+On WebGPU, same machine (Apple M4), Chrome 156.0.8078.4 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, springs only, 10,000
+smooth nodes only, old and new build alternated three times by swapping
+`packages/render/dist/ribbon.js`, load average 3.2 to 4.5:
+
+| Build | `setEdges` | `advance` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- |
+| previous | 10.6, 10.8, 10.7 | 3.4, 4.6, 4.8 | 17.2, 17.6, 17.3 | 13.7%, 21.3%, 22.7% |
+| this one | 9.1, 9.2, 9.1 | 3.3, 5.7, 3.3 | 18.0, 17.6, 17.1 | 6.7%, 17.7%, 6.7% |
+
+- **`setEdges` is about 1.5 ms faster**, against Node's 0.85. The GPU `sum`
+  read 0.97 to 0.98 ms in all six runs.
+- **The ticks missed are lower in all three pairs**, but the two builds'
+  ranges overlap, and they follow `advance`, which this change does not touch.
+
+The previous section ran Chrome 155; its "this one" row and this section's
+"previous" row are the same build and read alike. What is left of `setEdges`
+is the walk's two `Math.hypot` per point and the flattening's arithmetic,
+which byte-identical output pins.
+
 ## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`
