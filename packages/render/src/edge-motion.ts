@@ -513,7 +513,7 @@ interface EdgeEntry {
   /**
    * One spring's velocity per point of the current correspondence, x then y,
    * in draw order. Each spring's position is the point of `points` at the same
-   * index. Stepped in place, because unlike `points` it is never handed out.
+   * index. Never handed out.
    */
   velocities: number[];
   /** Where each of those springs is going: the target route, resampled to match. */
@@ -940,6 +940,9 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       if (entry.moving) {
         const { points: from, targets, velocities } = entry;
         const points: Vec2[] = [];
+        // Assigned only after the loop, so a step that throws leaves the edge
+        // as it was rather than with some velocities a frame ahead of `points`.
+        const nextVelocities: number[] = [];
         // Arrival is decided in the pass that steps rather than in a pass after
         // it. An edge is arrived only when ALL of its points are, so a second
         // walk would read every spring twice to answer a question the first
@@ -960,11 +963,11 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
           const nextVx = nextAxisVelocity(step, position.x, vx, target.x);
           const y = nextAxisPosition(step, position.y, vy, target.y);
           const nextVy = nextAxisVelocity(step, position.y, vy, target.y);
-          velocities[2 * index] = nextVx;
-          velocities[2 * index + 1] = nextVy;
+          nextVelocities.push(nextVx, nextVy);
           points.push({ x, y });
           if (arrived && !springAtRest(x, y, nextVx, nextVy, target)) arrived = false;
         }
+        entry.velocities = nextVelocities;
         if (arrived) settleOnto(entry);
         else entry.points = points;
       }
