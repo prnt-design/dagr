@@ -1739,9 +1739,9 @@ against the node half in one invocation, a settled scene of ten thousand edges
 costs about what a settled scene of ten thousand nodes does, and it barely
 changes between two points per edge and five: a settled frame is the records
 this module allocates and nothing else. Moving is where the two halves part. An
-edge has as many springs as it has points, and per spring an edge costs about
-two and a half times a node, so whether a COLD reroute of ten thousand edges
-fits in a frame is decided by how long the routes are rather than by how many
+edge has as many springs as it has points, and per spring an edge cost about
+two and a half times a node when M4.7b measured it, so whether a COLD reroute
+of ten thousand edges fits in a frame is decided by how long the routes are rather than by how many
 edges there are. What makes that the right trade rather
 than a defect is what the incremental engine is for: a patch reroutes a small
 fraction of the drawing, and applying a delta of one against ten thousand edges

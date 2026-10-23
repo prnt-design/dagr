@@ -5,6 +5,8 @@ import {
   MotionDesyncError,
   alignRoutes,
   createEdgeMotion,
+  omegaForHalfLife,
+  stepSpring2D,
 } from '../src/index.js';
 import type { EdgeMotionTarget, MotionEdge } from '../src/index.js';
 import type { Vec2 } from '../src/types.js';
@@ -644,6 +646,28 @@ describe('createEdgeMotion', () => {
     const frame = motion.advance(0);
     expect(frame.settled).toBe(false);
     expect(maxDeviation(edgeNamed(motion.advance(1 / 60).edges, 'e1').points, inFlight)).toBeGreaterThan(0);
+  });
+
+  it('steps each point as stepSpring2D does, carrying its velocity through a retarget', () => {
+    const shifted = STRAIGHT.map((p) => ({ x: p.x + 3, y: p.y - 7 }));
+    const back = STRAIGHT.map((p) => ({ x: p.x - 4, y: p.y + 2 }));
+    const w = omegaForHalfLife(DEFAULT_MOTION_HALF_LIFE);
+    const dt = 1 / 60;
+    const motion = createEdgeMotion();
+    motion.resync([target('e1', STRAIGHT)]);
+    motion.apply({ added: [], removed: [], rerouted: [target('e1', shifted)] });
+    let springs = STRAIGHT.map((position) => ({ position, velocity: { x: 0, y: 0 } }));
+    let goal = shifted;
+    for (let frame = 0; frame < 12; frame += 1) {
+      if (frame === 5) {
+        motion.apply({ added: [], removed: [], rerouted: [target('e1', back)] });
+        goal = back;
+      }
+      springs = springs.map((spring, index) => stepSpring2D(spring, goal[index]!, w, dt));
+      const drawn = motion.advance(dt);
+      expect(drawn.settled).toBe(false);
+      expect(edgeNamed(drawn.edges, 'e1').points).toEqual(springs.map((s) => s.position));
+    }
   });
 
   it('interpolates velocity for a point added during a mid-flight retarget', () => {
