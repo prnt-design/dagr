@@ -109,6 +109,21 @@ the old and new source at loads of 3.8 to 4.3, medians in milliseconds:
 | straight | 14.1 to 14.2 | 12.9 to 13.1 | 3.8 to 4.6 | 3.6 to 4.2 |
 | smooth | 16.8 to 18.4 | 14.5 to 15.9 | 5.0 to 5.5 | 4.9 to 5.1 |
 
+On 2026-10-23 the edge motion stopped allocating a spring record per point per
+frame: each edge keeps its points' velocities in one flat array that `advance`
+steps in place (see `bench/browser/README.md`). Frames are byte-identical.
+Three runs alternating the old and new source at loads of 3.6 to 4.7, medians
+in milliseconds:
+
+| Edges | `apply` before | `apply` after | `advance` before | `advance` after |
+| --- | --- | --- | --- | --- |
+| straight | 12.6 to 13.2 | 13.1 to 13.8 | 3.1 to 3.9 | 2.9 to 3.0 |
+| smooth | 14.2 to 15.9 | 14.2 to 15.0 | 4.4 to 5.3 | 4.0 to 4.2 |
+
+A retarget now reads the velocities back into points before sampling them,
+which is about 0.5 ms on the straight `apply`, once per retarget, against
+0.2 to 1.3 ms saved on every frame's `advance`.
+
 Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
 for the same reason: recording them rewrites the machine-matched file, which is
 the maintainer's call. This is CPU time in Node, not a browser frame or GPU

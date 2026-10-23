@@ -1266,6 +1266,47 @@ The previous section ran Chrome 155; its "this one" row and this section's
 is the walk's two `Math.hypot` per point and the flattening's arithmetic,
 which byte-identical output pins.
 
+### With edge velocities stepped in place (2026-10-23)
+
+`createEdgeMotion`'s `advance` built a new spring record per point every frame,
+a position, a velocity and the pair holding them, and a new list of them per
+edge. A CPU profile of the previous build in Node, stepping the 10,000-node
+smooth scene, put more of its samples in the garbage collector than in any
+function. Each edge now keeps its points' velocities in one flat array that
+`advance` steps in place; the points it hands out are still fresh every frame,
+so a caller holding an earlier frame sees it unchanged.
+
+Frames are byte-identical: the same sha256 as the previous build over every
+point of every frame of 300 random scenes of up to eight edges, 36,000 frames
+with reroutes in flight, departures, resyncs, overflowing routes and elapsed
+times from zero to half a second, including the same 318 refusals with the same
+messages.
+
+On WebGPU, same machine (Apple M4), Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, springs only, 10,000
+nodes, old and new build alternated three times by swapping
+`packages/render/dist/edge-motion.js` and `spring.js`, load average 3.8 to
+5.1:
+
+| Build | Edges | `advance` | `apply` | `setEdges` | Past one tick |
+| --- | --- | --- | --- | --- | --- |
+| previous | straight | 1.9, 2.8, 2.9 | 11.1, 13.4, 12.5 | 1.6, 2.2, 2.2 | 0%, 0%, 0% |
+| this one | straight | 1.9, 1.9, 1.6 | 12.8, 12.7, 12.8 | 1.8, 1.7, 1.7 | 0%, 0%, 0% |
+| previous | smooth | 4.7, 5.7, 5.9 | 14.8, 17.9, 18.1 | 10.6, 10.0, 10.0 | 19.7%, 25.3%, 26.0% |
+| this one | smooth | 4.3, 4.0, 3.0 | 18.3, 16.8, 17.5 | 9.8, 9.7, 9.7 | 16.3%, 11.7%, 6.3% |
+
+- **`advance` is lower in every smooth pair and in two straight pairs**, by up
+  to 2.9 ms, and the smooth ticks missed are lower in all three pairs, though
+  the ranges touch (16.3% against 19.7%).
+- **`apply` overlaps.** Node puts a retarget about 0.5 ms slower on straight
+  edges, which this run's spread cannot resolve.
+
+The previous section ran Chrome 156.0.8078.4; this machine's Chrome reported
+155.0.8059.85 on 2026-10-23, so its `setEdges` (10.0 to 10.6 before) is
+compared with this section's own previous build rather than that section's.
+`setEdges` reads a little lower with the new build, which does not touch it.
+
 ## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`

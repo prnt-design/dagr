@@ -1,7 +1,6 @@
 import { MotionDesyncError } from './errors.js';
 import { DEFAULT_MOTION_HALF_LIFE, DEFAULT_MOTION_REST } from './motion.js';
-import { omegaForHalfLife, springStep, stepSpring2DBy } from './spring.js';
-import type { Spring2DState } from './spring.js';
+import { nextAxisPosition, nextAxisVelocity, omegaForHalfLife, springStep } from './spring.js';
 import type { Vec2 } from './types.js';
 import { requireFinite, requirePositive } from './validate.js';
 
@@ -511,8 +510,12 @@ export function alignRoutes(from: readonly Vec2[], to: readonly Vec2[]): Aligned
 
 /** What this module knows about one edge between two deltas. */
 interface EdgeEntry {
-  /** One spring per point of the current correspondence, in draw order. */
-  springs: Spring2DState[];
+  /**
+   * One spring's velocity per point of the current correspondence, x then y,
+   * in draw order. Each spring's position is the point of `points` at the same
+   * index. Stepped in place, because unlike `points` it is never handed out.
+   */
+  velocities: number[];
   /** Where each of those springs is going: the target route, resampled to match. */
   targets: Vec2[];
   /** The target route in its OWN point count: what arrival compacts back to. */
@@ -544,7 +547,7 @@ type Intent =
 
 /** A retarget worked out without changing the entry it came from. */
 interface RetargetTransition {
-  readonly springs: Spring2DState[];
+  readonly velocities: number[];
   readonly targets: Vec2[];
   readonly rest: readonly Vec2[];
   readonly points: readonly Vec2[];
@@ -607,21 +610,25 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
    * two independent scalar springs and not one spring in the plane, so the test
    * that matches the arithmetic is the one each axis can answer for itself.
    */
-  function springAtRest(spring: Spring2DState, target: Vec2): boolean {
+  function springAtRest(x: number, y: number, vx: number, vy: number, target: Vec2): boolean {
     return (
-      Math.abs(spring.position.x - target.x) <= restEpsilon &&
-      Math.abs(spring.position.y - target.y) <= restEpsilon &&
-      Math.abs(spring.velocity.x) <= restSpeed &&
-      Math.abs(spring.velocity.y) <= restSpeed
+      Math.abs(x - target.x) <= restEpsilon &&
+      Math.abs(y - target.y) <= restEpsilon &&
+      Math.abs(vx) <= restSpeed &&
+      Math.abs(vy) <= restSpeed
     );
   }
 
   /** Whether every one of an edge's springs has arrived. */
   function atRest(entry: EdgeEntry): boolean {
-    for (const [index, spring] of entry.springs.entries()) {
-      const target = entry.targets[index];
-      if (target === undefined) return false;
-      if (!springAtRest(spring, target)) return false;
+    const { points, targets, velocities } = entry;
+    for (let index = 0; index < points.length; index += 1) {
+      const position = points[index];
+      const target = targets[index];
+      if (position === undefined || target === undefined) return false;
+      const vx = velocities[2 * index] ?? Number.NaN;
+      const vy = velocities[2 * index + 1] ?? Number.NaN;
+      if (!springAtRest(position.x, position.y, vx, vy, target)) return false;
     }
     return true;
   }
@@ -637,16 +644,16 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
    * this route.
    */
   function settleOnto(entry: EdgeEntry): void {
-    const springs: Spring2DState[] = [];
+    const velocities: number[] = [];
     const targets: Vec2[] = [];
     const points: Vec2[] = [];
     for (const point of entry.rest) {
       const position = copyOf(point);
-      springs.push({ position, velocity: AT_REST });
+      velocities.push(0, 0);
       targets.push(position);
       points.push(position);
     }
-    entry.springs = springs;
+    entry.velocities = velocities;
     entry.targets = targets;
     entry.points = points;
     entry.moving = false;
@@ -655,7 +662,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
   /** An edge that has never been drawn, sitting on its route at rest. */
   function seed(route: readonly Vec2[]): EdgeEntry {
     const entry: EdgeEntry = {
-      springs: [],
+      velocities: [],
       targets: [],
       rest: route,
       points: route,
@@ -685,20 +692,21 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
     const toParameters = routeParameters(route);
     const merged = mergeParameters(fromParameters, toParameters);
     const sampledPositions = sampleAlong(entry.points, fromParameters, merged);
-    const sampledVelocities = sampleAlong(
-      entry.springs.map((spring) => spring.velocity),
-      fromParameters,
-      merged,
-    );
+    const currentVelocities: Vec2[] = [];
+    for (let index = 0; index < entry.points.length; index += 1) {
+      currentVelocities.push({
+        x: entry.velocities[2 * index] ?? Number.NaN,
+        y: entry.velocities[2 * index + 1] ?? Number.NaN,
+      });
+    }
+    const sampledVelocities = sampleAlong(currentVelocities, fromParameters, merged);
     const sampledTargets = sampleAlong(route, toParameters, merged);
     const kept = keptIndices(merged, toParameters, sampledPositions, sampledVelocities);
     const positions = kept?.map((index) => sampledPositions[index] ?? AT_REST) ?? sampledPositions;
     const velocities = kept?.map((index) => sampledVelocities[index] ?? AT_REST) ?? sampledVelocities;
     const targets = kept?.map((index) => sampledTargets[index] ?? AT_REST) ?? sampledTargets;
-    const springs = positions.map((position, index) => ({
-      position,
-      velocity: velocities[index] ?? AT_REST,
-    }));
+    const flatVelocities: number[] = [];
+    for (const velocity of velocities) flatVelocities.push(velocity.x, velocity.y);
     for (const [index, position] of positions.entries()) {
       const target = targets[index];
       if (target === undefined) continue;
@@ -725,7 +733,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
         );
       }
     }
-    return { springs, targets, rest: route, points: positions };
+    return { velocities: flatVelocities, targets, rest: route, points: positions };
   }
 
   /**
@@ -777,7 +785,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
 
   /** Applies a transition only after every transition in the call was validated. */
   function installRetarget(entry: EdgeEntry, transition: RetargetTransition): void {
-    entry.springs = transition.springs;
+    entry.velocities = transition.velocities;
     entry.targets = transition.targets;
     entry.rest = transition.rest;
     entry.points = transition.points;
@@ -930,7 +938,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
     // moves on to the next live entry. Nothing else is added or removed here.
     for (const [id, entry] of entries) {
       if (entry.moving) {
-        const springs: Spring2DState[] = [];
+        const { points: from, targets, velocities } = entry;
         const points: Vec2[] = [];
         // Arrival is decided in the pass that steps rather than in a pass after
         // it. An edge is arrived only when ALL of its points are, so a second
@@ -938,17 +946,25 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
         // walk could have carried, and an edge's springs are the one list in
         // either half of this consumer that is per POINT and not per drawing.
         let arrived = true;
-        for (const [index, spring] of entry.springs.entries()) {
-          const target = entry.targets[index];
-          // Unreachable: the two lists are built together and stay the same
+        for (let index = 0; index < from.length; index += 1) {
+          const position = from[index];
+          const target = targets[index];
+          // Unreachable: the lists are built together and stay the same
           // length, which is what the correspondence is for.
-          if (target === undefined) continue;
-          const stepped = stepSpring2DBy(spring, target, step);
-          springs.push(stepped);
-          points.push(stepped.position);
-          if (arrived && !springAtRest(stepped, target)) arrived = false;
+          if (position === undefined || target === undefined) continue;
+          const vx = velocities[2 * index] ?? Number.NaN;
+          const vy = velocities[2 * index + 1] ?? Number.NaN;
+          // x before y, position before velocity: the order `stepSpring2DBy`
+          // checks its results in, so the same bad input names the same field.
+          const x = nextAxisPosition(step, position.x, vx, target.x);
+          const nextVx = nextAxisVelocity(step, position.x, vx, target.x);
+          const y = nextAxisPosition(step, position.y, vy, target.y);
+          const nextVy = nextAxisVelocity(step, position.y, vy, target.y);
+          velocities[2 * index] = nextVx;
+          velocities[2 * index + 1] = nextVy;
+          points.push({ x, y });
+          if (arrived && !springAtRest(x, y, nextVx, nextVy, target)) arrived = false;
         }
-        entry.springs = springs;
         if (arrived) settleOnto(entry);
         else entry.points = points;
       }
