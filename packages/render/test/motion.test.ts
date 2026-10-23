@@ -400,6 +400,10 @@ describe('createNodeMotion', () => {
       expect(() => motion.apply(delta({ added: [at('a', 0, Infinity)] }))).toThrow(
         /added\[0\]\.center\.y/,
       );
+      motion.resync([at('a', 0, 0)]);
+      expect(() => motion.apply(delta({ moved: [at('a', 0, Number.NaN)] }))).toThrow(
+        /moved\[0\]\.center\.y/,
+      );
     });
 
     it('names the list, index, node and axis of a displacement it refuses', () => {

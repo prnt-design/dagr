@@ -136,11 +136,11 @@ the old and new source at loads of 2.8 to 4.2, medians in milliseconds:
 | smooth | 14.1 to 14.7 | 13.3 to 13.9 | 4.0 to 5.4 | 4.0 to 4.8 |
 
 The node half alone, 10,000 nodes all retargeted, went from 2.7 to 2.8 ms to
-1.6 to 1.7 ms. The same run tried keeping node velocities as numbers rather
+1.6 to 1.7 ms, in a run made for this comparison rather than a committed entry. The same run tried keeping node velocities as numbers rather
 than a spring record per frame, as the edge half now does. Byte-identical, but
-the node half's `advance` read slower in every pair (0.58 to 0.59 ms against
-0.75 to 0.83, and 0.39 to 0.40 against 0.44 to 0.45 on the compiled output in
-plain Node), so it was not kept.
+the node half's `advance` read slower in every pair (0.75 to 0.83 ms against
+the kept build's 0.58 to 0.59, and 0.44 to 0.45 against 0.39 to 0.40 on the
+compiled output in plain Node), so it was not kept.
 
 Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
 for the same reason: recording them rewrites the machine-matched file, which is

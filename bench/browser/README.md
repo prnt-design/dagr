@@ -1342,8 +1342,8 @@ nodes, old and new build alternated three times by swapping
 | previous | smooth | 18.0, 17.0, 18.2 | 3.4, 3.4, 3.6 | 10.1, 10.2, 10.0 | 9.7%, 9.0%, 8.7% |
 | this one | smooth | 17.2, 17.4, 17.7 | 3.6, 3.8, 3.4 | 10.0, 9.1, 10.2 | 9.0%, 5.7%, 11.3% |
 
-- **Straight `apply` is lower in every pair**, by 0.6 to 1.7 ms, about what
-  Node puts on the node half alone (1.1 to 1.2 ms).
+- **Straight `apply` is lower in every pair**, by 0.9 to 1.7 ms, about what
+  Node puts on the node half alone (1.1 to 1.2 ms in each pair).
 - **Smooth `apply` overlaps** (17.2 to 17.7 against 17.0 to 18.2), and so do
   the ticks missed. A retarget is about one frame in 22, so a millisecond
   saved on it moves the missed ticks less than this run's spread.
