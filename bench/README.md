@@ -121,7 +121,8 @@ the old and new source at loads of 3.7 to 5.5, medians in milliseconds:
 
 A retarget now builds a velocity record per point from the flat array before
 sampling them, which is 0.4 to 1.1 ms on the straight `apply` in these pairs,
-once per retarget, against up to 1.4 ms saved on every frame's `advance`.
+once per retarget, against up to 1.4 ms saved on every frame's `advance` in
+the same pairs.
 
 Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
 for the same reason: recording them rewrites the machine-matched file, which is

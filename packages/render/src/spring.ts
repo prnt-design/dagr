@@ -329,11 +329,12 @@ export function springStep(angularFrequency: number, dtSeconds: number): SpringS
 }
 
 /**
- * One axis's next position under `step`. No validation of the state: both
- * public entry points check their own arguments under their own field names,
- * and a per-frame loop over a scene's worth of springs should not pay for the
- * same check twice. Position and velocity are separate functions so a step
- * allocates nothing per axis. Not exported from the package index.
+ * One axis's next position under `step`. No validation of the state: every
+ * caller checks its own arguments under its own field names, or before the
+ * frame as edge motion's retarget does, and a per-frame loop over a scene's
+ * worth of springs should not pay for the same check twice. Position and
+ * velocity are separate functions so a step allocates nothing per axis. Not
+ * exported from the package index.
  */
 export function nextAxisPosition(
   step: SpringStep,

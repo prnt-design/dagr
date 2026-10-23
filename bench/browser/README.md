@@ -1299,13 +1299,21 @@ nodes, old and new build alternated three times by swapping
 - **`advance` is lower in every pair**, by 0.4 to 0.6 ms straight and 2.0 to
   3.1 ms smooth, and the smooth ticks missed fell from 25.0% to 31.7% to 5.0%
   to 13.7%, with no overlap.
-- **`apply` overlaps.** Node puts a straight retarget 0.4 to 1.1 ms slower,
-  which this run's spread cannot resolve.
+- **Straight `apply` overlaps.** Node puts a straight retarget 0.4 to 1.1 ms
+  slower, which this run's spread cannot resolve. Smooth `apply` read lower
+  in every pair here, which Node does not reproduce (14.6 to 15.4 against 14.6
+  to 15.7).
 
 The previous section ran Chrome 156.0.8078.4; this machine's Chrome reported
 155.0.8059.85 on 2026-10-23 (the cause was not traced), so this section's
 previous build (`setEdges` 10.0 to 10.2) is the comparison rather than that
-section's figures. The new build does not touch `setEdges`.
+section's figures. That previous build also read high on smooth `advance`
+(5.9 to 6.2) and ticks missed (25.0% to 31.7%) against the section above
+(3.3 to 5.7, 13.7% to 22.7%), at loads up to 7.7, so the gain is the
+difference within each pair rather than against earlier sections. The new
+build does not touch `setEdges`; its straight `setEdges` read lower in all
+three pairs (1.9 to 2.0 against 2.3), perhaps from less garbage to collect,
+which this run cannot separate from noise.
 
 ## What the overlay harness measures, and what it does not
 

@@ -957,8 +957,8 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
           if (position === undefined || target === undefined) continue;
           const vx = velocities[2 * index] ?? Number.NaN;
           const vy = velocities[2 * index + 1] ?? Number.NaN;
-          // x before y, position before velocity: the order `stepSpring2DBy`
-          // checks its results in, so the same bad input names the same field.
+          // x before y, position before velocity: the node half's order, so the
+          // same bad input names the same field.
           const x = nextAxisPosition(step, position.x, vx, target.x);
           const nextVx = nextAxisVelocity(step, position.x, vx, target.x);
           const y = nextAxisPosition(step, position.y, vy, target.y);
