@@ -745,6 +745,115 @@ describe('tessellateRibbons: many routes', () => {
   });
 });
 
+describe('tessellateRibbons: reusing the previous build', () => {
+  const route = (id: string, ...points: [number, number][]): RibbonRoute => ({
+    id,
+    points: points.map(([x, y]) => ({ x, y })),
+  });
+  const sameBits = (a: RibbonGeometry, b: RibbonGeometry): boolean =>
+    (['position', 'offset', 'across', 'arc', 'index'] as const).every(
+      (key) =>
+        a[key].length === b[key].length && a[key].every((value, i) => Object.is(value, b[key][i])),
+    );
+
+  for (const options of [undefined, { curve: 'smooth' } as const]) {
+    const curve = options?.curve ?? 'straight';
+
+    it(`builds exactly what a fresh build does, ${curve}`, () => {
+      const before = [
+        route('a', [0, 0], [10, 0]),
+        route('b', [0, 0], [0, 30], [20, 60]),
+        route('c', [5, 5], [40, 5], [40, 50]),
+        route('gone', [1, 1], [2, 9]),
+        route('d', [3, 3]),
+        route('e', [0, 0], [50, 0], [0, 1]),
+      ];
+      const previous = tessellateRibbons(before, options);
+      const after = [
+        route('new', [7, 7], [70, 7]),
+        route('c', [5, 5], [40, 5], [40, 50]),
+        route('a', [0, 0], [10, 0]),
+        route('b', [0, 0], [0, 31], [20, 60]),
+        route('d', [3, 3]),
+        route('e', [0, 0], [50, 0], [0, 1]),
+        route('a', [0, 0], [10, 0], [10, 10]),
+      ];
+      const reused = tessellateRibbons(after, options, undefined, previous);
+      const fresh = tessellateRibbons(after, options);
+      expect(sameBits(reused, fresh)).toBe(true);
+      expect(reused.ranges).toEqual(fresh.ranges);
+      expect(reused.vertexCount).toBe(fresh.vertexCount);
+      expect(reused.indexCount).toBe(fresh.indexCount);
+    });
+  }
+
+  it('copies an unchanged route from the previous build rather than walking it again', () => {
+    const routes = [route('a', [0, 0], [10, 0]), route('b', [0, 0], [0, 30], [20, 60])];
+    const previous = tessellateRibbons(routes);
+    const [, b] = previous.ranges;
+    if (b === undefined) throw new Error('no range for b');
+    // A marker no walk writes, so finding it in the next build shows the copy.
+    previous.arc.fill(-7, b.vertexStart, b.vertexStart + b.vertexCount);
+    const next = tessellateRibbons(
+      [route('b', [0, 0], [0, 30], [20, 60]), route('a', [0, 0], [10, 0])],
+      undefined,
+      undefined,
+      previous,
+    );
+    const [moved] = next.ranges;
+    if (moved === undefined) throw new Error('no range for b');
+    expect(Array.from(next.arc.subarray(0, moved.vertexCount))).toEqual(
+      new Array<number>(moved.vertexCount).fill(-7),
+    );
+    expect(next.arc.subarray(moved.vertexCount).includes(-7)).toBe(false);
+  });
+
+  it('copies an unchanged route that kept its place', () => {
+    const routes = [route('a', [0, 0], [10, 0]), route('b', [0, 0], [0, 30], [20, 60])];
+    const previous = tessellateRibbons(routes);
+    const [a] = previous.ranges;
+    if (a === undefined) throw new Error('no range for a');
+    previous.arc.fill(-7, a.vertexStart, a.vertexStart + a.vertexCount);
+    const next = tessellateRibbons(
+      [route('a', [0, 0], [10, 0]), route('b', [0, 0], [0, 31], [20, 60])],
+      undefined,
+      undefined,
+      previous,
+    );
+    expect(Array.from(next.arc.subarray(0, a.vertexCount))).toEqual(
+      new Array<number>(a.vertexCount).fill(-7),
+    );
+    expect(next.arc.subarray(a.vertexCount).includes(-7)).toBe(false);
+  });
+
+  it('tells a negative zero from zero, so the copy stays bit for bit', () => {
+    const previous = tessellateRibbons([route('a', [0, 0], [10, 0])]);
+    const after = [route('a', [-0, 0], [10, 0])];
+    expect(sameBits(tessellateRibbons(after, undefined, undefined, previous), tessellateRibbons(after))).toBe(true);
+  });
+
+  it('still rejects a route that cannot be drawn under an id that could', () => {
+    const previous = tessellateRibbons([route('a', [0, 0], [10, 0])]);
+    expect(() =>
+      tessellateRibbons([route('a', [0, 0], [Number.NaN, 0])], undefined, undefined, previous),
+    ).toThrow(/route "a"/);
+  });
+
+  it('carries over across many builds and past a builder doubling', () => {
+    const many = (shift: number): RibbonRoute[] =>
+      Array.from({ length: 3_000 }, (_, i) =>
+        route(`r${String(i)}`, [i, 0], [i + 25 + (i % 7) + (i % 10 === 0 ? shift : 0), 45], [i, 90]),
+      );
+    const options = { curve: 'smooth' } as const;
+    let previous = tessellateRibbons(many(0), options);
+    for (const shift of [1, 2, 2, 3]) {
+      const next = tessellateRibbons(many(shift), options, undefined, previous);
+      expect(sameBits(next, tessellateRibbons(many(shift), options))).toBe(true);
+      previous = next;
+    }
+  });
+});
+
 describe('comparisons specified on Math.hypot', () => {
   function byHypot(c: readonly number[], tolerance: number): boolean {
     const [x0, y0, x1, y1, x2, y2, x3, y3] = c as [number, number, number, number, number, number, number, number];

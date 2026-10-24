@@ -54,10 +54,11 @@ import { requireAtLeast, requireFinite } from './validate.js';
 /** One edge to draw: an id, its centreline in world units, and its colour. */
 export interface SceneEdge {
   /**
-   * The caller's own id, echoed on nothing and used for nothing but the error
-   * message when a route cannot be drawn. An edge has no durable per-instance
-   * state to key, which is why this file has no equivalent of
-   * `NodePlacement`: a group's geometry is rebuilt whole or not at all.
+   * The caller's own id: named in the error when a route cannot be drawn,
+   * handed to `setEdgeIntensity`'s function, and how the next `setEdges` finds
+   * an unchanged route to copy. An edge has no other durable per-instance
+   * state, which is why this file has no equivalent of `NodePlacement`: a
+   * group's geometry is rebuilt whole or not at all.
    */
   readonly id: string;
 
@@ -259,6 +260,8 @@ class EdgeGroup implements GpuResource {
   readonly #uniforms: RibbonUniforms;
   #curve: RibbonOptions['curve'];
   #sizeHint: RibbonSizeHint | undefined;
+  /** The last build, so a route that has not moved is copied rather than walked. */
+  #previous: RibbonGeometry | undefined;
   #disposed = false;
   /**
    * Where each edge's vertices are, from the last {@link setEdges}, so an
@@ -331,6 +334,7 @@ class EdgeGroup implements GpuResource {
       edges,
       this.#curve === undefined ? undefined : { curve: this.#curve },
       this.#sizeHint,
+      this.#previous,
     );
     this.#sizeHint = { vertexCount: tessellated.vertexCount, indexCount: tessellated.indexCount };
     const colors = colorsFor(edges, tessellated);
@@ -359,6 +363,7 @@ class EdgeGroup implements GpuResource {
     this.mesh.geometry = geometry;
     previous.dispose();
 
+    this.#previous = tessellated;
     this.#ranges = tessellated.ranges;
     this.#intensity = intensity;
     this.#intensityAttribute = intensityAttribute;
@@ -580,10 +585,11 @@ export class SceneEdges implements GpuResource {
   /**
    * Replaces one group's edges, which rebuilds its buffers.
    *
-   * Whole rather than incremental, because the input is a layout's routes and a
-   * layout that moved has moved most of them. An edge's geometry has no durable
-   * per-instance state to preserve across the rebuild, which is the difference
-   * from `SceneNodes.setNodes` and the reason there is no handle here.
+   * The buffers are rebuilt whole, though an edge given exactly the points it
+   * had on the previous call is copied from that build rather than tessellated
+   * again. An edge's geometry has no durable per-instance state to preserve
+   * across the rebuild, which is the difference from `SceneNodes.setNodes` and
+   * the reason there is no handle here.
    */
   setEdges(groupId: string, edges: readonly SceneEdge[]): void {
     this.#assertLive('setEdges');
