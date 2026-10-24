@@ -201,6 +201,34 @@ describe('SceneEdges', () => {
     scene.dispose();
   });
 
+  it('draws edges after a previous set exactly as a fresh group draws them', () => {
+    const bent = (dy: number): Vec2[] => [
+      { x: 0, y: 0 },
+      { x: 40, y: 30 + dy },
+      { x: 90, y: 0 },
+    ];
+    const before = [edge('e1', bent(0)), edge('e2', straight), edge('e3', bent(5), 0x219ebc)];
+    const after = [edge('e3', bent(5), 0x219ebc), edge('e1', bent(1)), edge('e4', straight)];
+    const reused = new SceneEdges(groups());
+    reused.setEdges(OVERLAY, before);
+    reused.setEdges(OVERLAY, after);
+    const fresh = new SceneEdges(groups());
+    fresh.setEdges(OVERLAY, after);
+
+    const drawn = (scene: SceneEdges): Record<string, number[]> => {
+      const geometry = scene.meshes[1]?.geometry;
+      if (geometry === undefined) throw new Error('unreachable: no overlay mesh');
+      const out: Record<string, number[]> = { index: Array.from(geometry.index?.array ?? []) };
+      for (const [name, attribute] of Object.entries(geometry.attributes)) {
+        out[name] = Array.from(attribute.array);
+      }
+      return out;
+    };
+    expect(drawn(reused)).toEqual(drawn(fresh));
+    reused.dispose();
+    fresh.dispose();
+  });
+
   it('disposes the geometry it replaces, rather than leaking its buffers', () => {
     // three keys a GPU buffer to the attribute OBJECT and frees buffers on the
     // GEOMETRY's dispose event, for the attributes it holds at that moment.

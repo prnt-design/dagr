@@ -1391,6 +1391,58 @@ to it, showed the same bands the other way round (straight `apply` 7.4, 11.9,
 11.5 against 11.9, 8.3, 11.9). The cause of the bands was not traced; it is
 not the build, since both builds show both bands.
 
+### With unchanged routes copied from the previous build (2026-10-24)
+
+`setEdges` tessellated every edge of a group on every call, so a frame in
+which a few edges moved paid for all of them. A route's vertices depend only
+on its own points and the group's options, so a group now keeps its last
+build with a copy of the points each route was given, and a route given
+exactly the same points under the same id (the sign of a zero included) is
+copied from it, its indices moved to where it now starts. The copy is held
+as plain arrays: as two fresh `Float64Array`s per build it raised Node's full
+collections over 400 smooth builds from 8 to 51, which cost more than the
+copies saved.
+
+Output is byte-identical: the same sha256 as a fresh build over every array
+and the ranges, for 7,200 builds of `createSceneMotion` frames, polyline and
+smooth, over 80 random scenes of 60 to 260 nodes with 8% of nodes retargeted
+every 20 frames.
+
+In Node, one `tessellateRibbons` on the 10,000-node grid's 13,169 routes, ids
+kept from frame to frame as `createSceneMotion` hands them out, the median of
+40 builds, old and new build alternated six times at load 3.4 to 3.8:
+
+| Routes moving | Smooth, previous | Smooth, this one | Polyline, previous | Polyline, this one |
+| --- | --- | --- | --- | --- |
+| all | 7.29 to 7.42 ms | 7.65 to 8.18 | 0.77 to 0.85 | 0.97 to 1.22 |
+| 10% | 7.27 to 7.52 | 2.66 to 2.95 | 0.76 to 0.84 | 0.68 to 0.76 |
+| 1% | 7.27 to 7.52 | 2.06 to 2.58 | 0.76 to 0.84 | 0.65 to 0.84 |
+| none | 7.27 to 7.52 | 1.97 to 2.25 | 0.76 to 0.84 | 0.64 to 0.79 |
+
+The previous build does the same work whichever routes move, so its rows
+below "all" are its 1% runs. **With every route moving, recording and comparing
+the points costs 0.2 to 0.9 ms a build smooth and 0.2 to 0.4 ms polyline in
+Node, pair by pair**, a quarter to a half of a polyline build; with a tenth or
+less moving, smooth routes take about a third of the time. The copy of the
+points a group keeps is about 0.7 MB at 10,000 smooth nodes.
+
+On WebGPU, same machine (Apple M4), Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, springs only, 10,000
+smooth nodes, `--frames=1200` (44 to 48 retargets a run), old and new build
+alternated three times by swapping `packages/render/dist/ribbon.js` and
+`scene-edges.js`, load average 2.9 to 4.2:
+
+| Build | `setEdges` | `apply` | `advance` | Past one tick |
+| --- | --- | --- | --- | --- |
+| previous | 9.0, 9.0, 9.3 | 15.6, 16.2, 17.4 | 3.7, 3.8, 5.1 | 4.9%, 5.3%, 13.3% |
+| this one | 9.2, 9.0, 9.0 | 16.6, 16.2, 16.6 | 3.8, 3.9, 3.8 | 6.5%, 5.5%, 4.8% |
+
+**This page moves every edge on every frame, so it can only show the cost,
+and it does not resolve one**: `setEdges` overlaps in all three pairs. The
+page has no mode in which only some edges move, so the gain is measured in
+Node only.
+
 ## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`

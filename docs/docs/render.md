@@ -1353,9 +1353,11 @@ it, or a centripetal Catmull-Rom curve through the same points when the group
 asks for one. `RoutedEdge.points` from `@prnt/dagr-layout` is exactly the input,
 after the caller's own y flip. The curve is tessellated on the CPU, so it costs
 far more per `setEdges` than a polyline: on an Apple M4 in Chrome, 13,169
-smooth edges take about 20 ms to rebuild against 3 ms as polylines, more than a
-60 Hz frame, so rebuilding them every frame is too slow at that size (see
-`bench/browser/README.md`).
+smooth edges take about 9 ms to rebuild against 2 ms as polylines, over half a
+60 Hz frame (see `bench/browser/README.md`). An edge given exactly the points
+it had on the group's previous `setEdges`, under the same id, is copied from
+that build rather than tessellated again, so a frame in which only some edges
+move pays the curve for those.
 
 **A ribbon is a fixed number of DEVICE pixels wide at every zoom**, and that is
 the thing to know before drawing one, because a caller expecting a world width

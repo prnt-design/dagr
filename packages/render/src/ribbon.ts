@@ -394,6 +394,23 @@ export interface RibbonGeometry {
 
   /** Indices, not triangles. `index.length` is this. */
   readonly indexCount: number;
+
+  /** Every route's points as given, for the next build to compare against. */
+  readonly given: RibbonGiven;
+}
+
+/**
+ * The points each route of a build was given, in its ranges' order.
+ *
+ * Plain arrays rather than typed ones: a fresh pair of large typed arrays per
+ * build raised Node's full collections at 13,169 smooth routes from 8 to 51
+ * over 400 builds, which cost more than the reuse saved.
+ */
+export interface RibbonGiven {
+  /** x then y, per point. */
+  readonly coordinates: readonly number[];
+  /** Route `i`'s coordinates are `starts[i]` up to `starts[i + 1]`. */
+  readonly starts: readonly number[];
 }
 
 /**
@@ -492,6 +509,34 @@ class RibbonBuilder {
     this.index[at + 1] = b;
     this.index[at + 2] = c;
     this.indexCount = at + 3;
+  }
+
+  /** Appends one route of an earlier build, its indices moved to where it now starts. */
+  copy(from: RibbonGeometry, range: RibbonRange): void {
+    const { vertexStart, vertexCount, indexStart, indexCount } = range;
+    while (this.vertexCount + vertexCount > this.across.length) this.#growVertices();
+    while (this.indexCount + indexCount > this.index.length) {
+      this.index = grown(this.index, this.index.length * 2);
+    }
+    // Element loops rather than `set` over `subarray`: a route is tens of
+    // vertices, and a view per array per route cost more than the copy.
+    const vertex = this.vertexCount;
+    const { position, offset, across, arc, index } = this;
+    for (let i = 0; i < vertexCount; i += 1) {
+      const to = vertex + i;
+      const at = vertexStart + i;
+      position[to * 2] = from.position[at * 2]!;
+      position[to * 2 + 1] = from.position[at * 2 + 1]!;
+      offset[to * 2] = from.offset[at * 2]!;
+      offset[to * 2 + 1] = from.offset[at * 2 + 1]!;
+      across[to] = from.across[at]!;
+      arc[to] = from.arc[at]!;
+    }
+    const shift = vertex - vertexStart;
+    const at = this.indexCount;
+    for (let i = 0; i < indexCount; i += 1) index[at + i] = from.index[indexStart + i]! + shift;
+    this.vertexCount = vertex + vertexCount;
+    this.indexCount = at + indexCount;
   }
 
   #growVertices(): void {
@@ -597,11 +642,47 @@ function polylineOf(points: readonly Vec2[]): Polyline {
 }
 
 /**
+ * Whether `points` are exactly the points route `at` of an earlier build was
+ * given. Exactly includes the sign of a zero, which float32 keeps.
+ */
+function givenBefore(given: RibbonGiven, at: number, points: readonly Vec2[]): boolean {
+  const start = given.starts[at];
+  const end = given.starts[at + 1];
+  if (start === undefined || end === undefined || end - start !== points.length * 2) return false;
+  const { coordinates } = given;
+  for (let i = 0; i < points.length; i += 1) {
+    const point = points[i];
+    if (point === undefined) return false;
+    const x = coordinates[start + i * 2];
+    const y = coordinates[start + i * 2 + 1];
+    if (point.x !== x || point.y !== y) return false;
+    if ((x === 0 && 1 / point.x !== 1 / x) || (y === 0 && 1 / point.y !== 1 / y)) return false;
+  }
+  return true;
+}
+
+/** The earlier build's route of this id, by position first and by id after. */
+function previousRoute(
+  previous: RibbonGeometry,
+  position: number,
+  id: string,
+  byId: () => Map<string, number>,
+): number | undefined {
+  if (previous.ranges[position]?.id === id) return position;
+  return byId().get(id);
+}
+
+/**
  * {@link polylineOf} for the tessellator, rejecting a coordinate that is not a
  * finite number BEFORE the typed array converts it: written first, a `null`
  * would become 0 and draw at the origin, and `"5"` would become 5.
  */
-function givenCentreline(points: readonly Vec2[], field: string, out: Polyline): Polyline {
+function givenCentreline(
+  points: readonly Vec2[],
+  field: string,
+  out: Polyline,
+  record: number[],
+): Polyline {
   out.length = 0;
   for (const [i, point] of points.entries()) {
     if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
@@ -609,6 +690,7 @@ function givenCentreline(points: readonly Vec2[], field: string, out: Polyline):
       requireFinite(point.y, `${field}[${String(i)}].y`);
     }
     out.push(point.x, point.y);
+    record.push(point.x, point.y);
   }
   return out;
 }
@@ -1345,38 +1427,72 @@ function requireRibbonOptions(options: RibbonOptions | undefined): {
  *
  * @param sizeHint The counts a previous call returned for this scene, which
  * only sizes the arrays: the result is the same with any hint or none.
+ * @param previous What a previous call with the same options returned,
+ * unmodified: an `arc` offset written into it would be copied too. A
+ * route given exactly the points it had there, under the same id, is copied
+ * from it rather than tessellated again, which is the same result: a route's
+ * vertices depend on nothing but its own points and the options. A scene in
+ * which only some edges move then walks only those.
  */
 export function tessellateRibbons(
   routes: Iterable<RibbonRoute>,
   options?: RibbonOptions,
   sizeHint?: RibbonSizeHint,
+  previous?: RibbonGeometry,
 ): RibbonGeometry {
   const resolved = requireRibbonOptions(options);
   const out = new RibbonBuilder(sizeHint);
   const ranges: RibbonRange[] = [];
+  const record: number[] = [];
+  const starts: number[] = [];
   const given = new Polyline();
   const cleaned = new Polyline();
   const smoothed = new Polyline();
   const flattened = new Polyline();
+  let previousById: Map<string, number> | undefined;
+  const byId = (): Map<string, number> => {
+    if (previousById === undefined) {
+      previousById = new Map();
+      for (const [at, range] of (previous?.ranges ?? []).entries()) {
+        if (!previousById.has(range.id)) previousById.set(range.id, at);
+      }
+    }
+    return previousById;
+  };
 
+  let position = 0;
   for (const route of routes) {
     const vertexStart = out.vertexCount;
     const indexStart = out.indexCount;
-    const field = `route "${route.id}"`;
-    cleanCentreline(givenCentreline(route.points, field, given), field, cleaned);
-    let centreline = cleaned;
-    if (resolved.smooth && cleaned.length >= 2) {
-      smoothInto(cleaned, resolved.flattenToleranceWorld, smoothed);
-      // Flattened points go through the cleaner a second time, which is not
-      // belt and braces: the walk divides by a segment's length, and the
-      // subdivision of a span shorter than the tolerance can put two of its
-      // output points at one place. One zero-length segment there is a `NaN`
-      // in every vertex after it, and a `NaN` in a bounding sphere is a scene
-      // that does not draw at all.
-      cleanCentreline(smoothed, `route "${route.id}" flattened`, flattened);
-      centreline = flattened;
+    let reused: RibbonRange | undefined;
+    if (previous !== undefined) {
+      const before = previousRoute(previous, position, route.id, byId);
+      if (before !== undefined && givenBefore(previous.given, before, route.points)) {
+        reused = previous.ranges[before];
+      }
     }
-    if (centreline.length >= 2) tessellateCentreline(out, centreline, resolved.miterLimit);
+    position += 1;
+    starts.push(record.length);
+    if (previous !== undefined && reused !== undefined) {
+      out.copy(previous, reused);
+      for (const point of route.points) record.push(point.x, point.y);
+    } else {
+      const field = `route "${route.id}"`;
+      cleanCentreline(givenCentreline(route.points, field, given, record), field, cleaned);
+      let centreline = cleaned;
+      if (resolved.smooth && cleaned.length >= 2) {
+        smoothInto(cleaned, resolved.flattenToleranceWorld, smoothed);
+        // Flattened points go through the cleaner a second time, which is not
+        // belt and braces: the walk divides by a segment's length, and the
+        // subdivision of a span shorter than the tolerance can put two of its
+        // output points at one place. One zero-length segment there is a `NaN`
+        // in every vertex after it, and a `NaN` in a bounding sphere is a scene
+        // that does not draw at all.
+        cleanCentreline(smoothed, `route "${route.id}" flattened`, flattened);
+        centreline = flattened;
+      }
+      if (centreline.length >= 2) tessellateCentreline(out, centreline, resolved.miterLimit);
+    }
     ranges.push({
       id: route.id,
       vertexStart,
@@ -1386,6 +1502,7 @@ export function tessellateRibbons(
     });
   }
 
+  starts.push(record.length);
   return {
     position: fitted(out.position, out.vertexCount * 2),
     offset: fitted(out.offset, out.vertexCount * 2),
@@ -1395,6 +1512,7 @@ export function tessellateRibbons(
     ranges,
     vertexCount: out.vertexCount,
     indexCount: out.indexCount,
+    given: { coordinates: record, starts },
   };
 }
 
