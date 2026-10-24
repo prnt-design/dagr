@@ -183,7 +183,7 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   node bench/browser/frame-profile.mjs
   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
-  # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs]
+  # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1]
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
@@ -665,7 +665,13 @@ a 20 world unit move needs about a second to come to rest, so every spring is
 in flight on every frame. The row's `springs` reports how many frames, warm-up
 included, `advance` called settled, and how many retargets ran. Building a
 retarget's delta from the sway stands in for a layout's output and is not
-timed. `--memory` refuses `--motion`.
+timed. `--moving` takes a share of the nodes, 1 by default, once per value:
+each retarget then moves only the first that many nodes, a block of whole rows
+as a local edit would move, and reroutes only the edges touching one of them,
+so the rest stay at rest on their first routes. The row's `springs` reports
+`movingNodes` and `movingEdges`. It takes only `--motion=springs`, and
+refuses `--nodes=rich`, whose feed hands every node to the tiers each frame.
+`--memory` refuses `--motion` and `--moving`.
 
 **What it found on 2026-10-19**, Apple M4 Mac mini, Google Chrome
 155.0.8059.82 headed with `--enable-webgpu-developer-features`, adapter `apple`
@@ -1440,8 +1446,41 @@ alternated three times by swapping `packages/render/dist/ribbon.js` and
 
 **This page moves every edge on every frame, so it can only show the cost,
 and it does not resolve one**: `setEdges` overlaps in all three pairs. The
-page has no mode in which only some edges move, so the gain is measured in
-Node only.
+page then had no mode in which only some edges move; the next section adds
+one.
+
+### Partial motion shows the copy of unchanged routes (2026-10-24)
+
+`--moving` (see "Springs in flight" above) lets the page measure what the
+previous section could only measure in Node. With `--moving=0.1` the first
+1,000 of 10,000 smooth nodes are retargeted, which reroutes 1,334 of the
+13,169 edges; the other 11,835 are handed back on the same points every frame.
+
+Apple M4 Mac mini, Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, tick 16.7 ms, DPR 1,
+`fit`, `--motion=springs --edges=smooth --frames=1200` (42 retargets a run),
+the build before route copying and this one alternated three times by swapping
+`packages/render/dist/ribbon.js` and `scene-edges.js`, load average 2.9 to 4.5.
+Animated-mode medians in milliseconds:
+
+| Build | Moving | `setEdges` | `setEdges` p95 | `apply` | `advance` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- |
+| before route copying | a tenth | 9.5, 9.3, 9.2 | 10.5, 10.0, 9.9 | 1.7, 1.5, 1.5 | 1.0, 0.4, 0.5 | 0.1%, 0.1%, 0% |
+| this one | a tenth | 4.1, 4.1, 4.0 | 4.8, 4.6, 4.4 | 1.9, 1.9, 1.9 | 0.6, 0.5, 0.5 | 0%, 0%, 0% |
+| this one | all | 9.4 | 12.1 | 16.4 | 4.9 | 12.7% |
+
+- **With a tenth of the nodes moving, `setEdges` takes 4.0 to 4.1 ms against
+  9.2 to 9.5**, in all three pairs, with no overlap: the 11,835 routes at rest
+  are copied rather than tessellated. Node measured a third of the time at a
+  tenth of the routes moving; the browser shows a little under half. The
+  saving, about 5 ms, is close to Node's, and the rest of `setEdges` (colours,
+  intensity and a new geometry over every edge) was not split out.
+- **A local edit is not the frame M4.10 misses.** With a tenth moving both
+  builds hold the tick (at most one frame in 1,260 past it), so the gain is
+  headroom, not a frame saved. With every node moving, the frame the earlier
+  sections measured, this build still misses 12.7% of ticks, on `apply` and
+  `advance` as much as `setEdges`.
 
 ## What the overlay harness measures, and what it does not
 
