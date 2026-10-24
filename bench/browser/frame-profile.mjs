@@ -87,10 +87,11 @@ const movingList = option('moving', '1')
     if (value > 1) throw new Error(`--moving is a share of the nodes, at most 1, got ${share}`);
     return value;
   });
-if (movingList.join() !== '1' && motions.join() !== 'springs') {
+const partialMotion = movingList.some((share) => share !== 1);
+if (partialMotion && motions.join() !== 'springs') {
   throw new Error('--moving chooses which springs are retargeted, so it takes only --motion=springs');
 }
-if (movingList.join() !== '1' && nodeModes.includes('rich')) {
+if (partialMotion && nodeModes.includes('rich')) {
   throw new Error('--nodes=rich hands every node to the tiers each frame as if all moved, so it takes only --moving=1');
 }
 const frames = count('frames', option('frames', '300'));
@@ -105,7 +106,7 @@ const headless = process.argv.includes('--headless');
 const hit = process.argv.includes('--hit');
 const memory = process.argv.includes('--memory');
 const gpu = process.argv.includes('--gpu');
-if (memory && (gpu || partsList.join() !== 'all' || motions.join() !== 'sway' || movingList.join() !== '1')) {
+if (memory && (gpu || partsList.join() !== 'all' || motions.join() !== 'sway' || partialMotion)) {
   throw new Error(
     '--memory builds the whole scene and counts every buffer, so it takes none of --gpu, --parts, --motion and --moving',
   );

@@ -204,7 +204,7 @@
 
       // With the default 0.12 s half-life a 20 world unit move takes about a
       // second to come to rest, so retargeting every half second keeps every
-      // spring in flight on every frame.
+      // retargeted spring in flight on every frame.
       const RETARGET_MS = 500;
 
       /**
@@ -212,9 +212,9 @@
        * `sway` computes them from the clock. `springs` hands a new target
        * through `createSceneMotion` every `RETARGET_MS` and draws what
        * `advance` returns, the way `DagrCanvas`'s animation frame does. It
-       * retargets the first `moving` share of the nodes, a block of whole rows
-       * as a local edit would move, and every edge touching one of them; the
-       * rest stay at rest on their first routes.
+       * retargets the first `moving` share of the nodes in row order, a
+       * contiguous block as a local edit would move, and every edge touching
+       * one of them; the rest stay at rest on their first routes.
        */
       const motionSource = (kind, home, links, bend, bounds, moving) => {
         if (kind === 'sway') {
@@ -251,7 +251,10 @@
         return {
           next: (ts, timings) => {
             if (lastRetarget === null || ts - lastRetarget >= RETARGET_MS) {
-              const target = targetsAt(swayed(home, ts));
+              const swayedNow = swayed(home, ts);
+              const target = targetsAt(
+                movingNodes === home.length ? swayedNow : home.map((p, i) => (i < movingNodes ? swayedNow[i] : p)),
+              );
               const moved = movingNodes === home.length ? target.nodes : target.nodes.slice(0, movingNodes);
               const rerouted =
                 movingLinks.length === links.length ? target.edges : movingLinks.map((i) => target.edges[i]);
@@ -607,7 +610,7 @@
             timings.sync = performance.now() - t6;
           }
           if (hit) {
-            // Every node moved, so the drawn array is new: a click rebuilds the
+            // The drawn array is new every frame, so a click rebuilds the
             // index on this frame, and hover does on one frame in every 100 ms.
             const t7 = performance.now();
             const index = createNodeHitIndex(nodes);
