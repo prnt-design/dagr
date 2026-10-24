@@ -512,30 +512,29 @@ class RibbonBuilder {
     this.indexCount = at + 3;
   }
 
-  /** Appends one route of an earlier build, its indices moved to where it now starts. */
-  copy(from: RibbonGeometry, range: RibbonRange): void {
-    const { vertexStart, vertexCount, indexStart, indexCount } = range;
+  /**
+   * Appends a run of consecutive routes of an earlier build, its indices moved
+   * to where it now starts.
+   */
+  copy(from: RibbonGeometry, run: CopyRun): void {
+    const { vertexStart, vertexCount, indexStart, indexCount } = run;
     while (this.vertexCount + vertexCount > this.across.length) this.#growVertices();
     while (this.indexCount + indexCount > this.index.length) {
       this.index = grown(this.index, this.index.length * 2);
     }
-    // Element loops rather than `set` over `subarray`: a route is tens of
-    // vertices, and a view per array per route cost more than the copy.
     const vertex = this.vertexCount;
     const { position, offset, across, arc, index } = this;
-    for (let i = 0; i < vertexCount; i += 1) {
-      const to = vertex + i;
-      const at = vertexStart + i;
-      position[to * 2] = from.position[at * 2]!;
-      position[to * 2 + 1] = from.position[at * 2 + 1]!;
-      offset[to * 2] = from.offset[at * 2]!;
-      offset[to * 2 + 1] = from.offset[at * 2 + 1]!;
-      across[to] = from.across[at]!;
-      arc[to] = from.arc[at]!;
-    }
     const shift = vertex - vertexStart;
     const at = this.indexCount;
-    for (let i = 0; i < indexCount; i += 1) index[at + i] = from.index[indexStart + i]! + shift;
+    const end = vertexStart + vertexCount;
+    position.set(from.position.subarray(vertexStart * 2, end * 2), vertex * 2);
+    offset.set(from.offset.subarray(vertexStart * 2, end * 2), vertex * 2);
+    across.set(from.across.subarray(vertexStart, end), vertex);
+    arc.set(from.arc.subarray(vertexStart, end), vertex);
+    index.set(from.index.subarray(indexStart, indexStart + indexCount), at);
+    if (shift !== 0) {
+      for (let i = at; i < at + indexCount; i += 1) index[i] = index[i]! + shift;
+    }
     this.vertexCount = vertex + vertexCount;
     this.indexCount = at + indexCount;
   }
@@ -547,6 +546,14 @@ class RibbonBuilder {
     this.across = grown(this.across, capacity);
     this.arc = grown(this.arc, capacity);
   }
+}
+
+/** Consecutive routes of an earlier build, copied as one. */
+interface CopyRun {
+  vertexStart: number;
+  vertexCount: number;
+  indexStart: number;
+  indexCount: number;
 }
 
 /**
@@ -1461,10 +1468,18 @@ export function tessellateRibbons(
     return previousById;
   };
 
+  // Copies wait in a run until a route breaks it, so a stretch of unchanged
+  // routes is one copy rather than one per route.
+  const run: CopyRun = { vertexStart: 0, vertexCount: 0, indexStart: 0, indexCount: 0 };
+  const flush = (): void => {
+    if (previous === undefined || run.vertexCount + run.indexCount === 0) return;
+    out.copy(previous, run);
+    run.vertexCount = 0;
+    run.indexCount = 0;
+  };
+
   let position = 0;
   for (const route of routes) {
-    const vertexStart = out.vertexCount;
-    const indexStart = out.indexCount;
     let reused: RibbonRange | undefined;
     if (previous !== undefined) {
       const before = previousRoute(previous, position, route.id, byId);
@@ -1474,10 +1489,28 @@ export function tessellateRibbons(
     }
     position += 1;
     starts.push(record.length);
-    if (previous !== undefined && reused !== undefined) {
-      out.copy(previous, reused);
+    if (reused !== undefined) {
+      // A build's ranges advance vertices and indices together, so meeting on
+      // the vertex is meeting on both.
+      if (reused.vertexStart !== run.vertexStart + run.vertexCount) {
+        flush();
+        run.vertexStart = reused.vertexStart;
+        run.indexStart = reused.indexStart;
+      }
+      ranges.push({
+        id: route.id,
+        vertexStart: out.vertexCount + run.vertexCount,
+        vertexCount: reused.vertexCount,
+        indexStart: out.indexCount + run.indexCount,
+        indexCount: reused.indexCount,
+      });
+      run.vertexCount += reused.vertexCount;
+      run.indexCount += reused.indexCount;
       for (const point of route.points) record.push(point.x, point.y);
     } else {
+      flush();
+      const vertexStart = out.vertexCount;
+      const indexStart = out.indexCount;
       const field = `route "${route.id}"`;
       cleanCentreline(givenCentreline(route.points, field, given, record), field, cleaned);
       let centreline = cleaned;
@@ -1493,15 +1526,16 @@ export function tessellateRibbons(
         centreline = flattened;
       }
       if (centreline.length >= 2) tessellateCentreline(out, centreline, resolved.miterLimit);
+      ranges.push({
+        id: route.id,
+        vertexStart,
+        vertexCount: out.vertexCount - vertexStart,
+        indexStart,
+        indexCount: out.indexCount - indexStart,
+      });
     }
-    ranges.push({
-      id: route.id,
-      vertexStart,
-      vertexCount: out.vertexCount - vertexStart,
-      indexStart,
-      indexCount: out.indexCount - indexStart,
-    });
   }
+  flush();
 
   starts.push(record.length);
   return {

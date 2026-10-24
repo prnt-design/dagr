@@ -1484,6 +1484,57 @@ Animated-mode medians in milliseconds:
   sections measured, this build still misses ticks: 6.0% in this run, 4.8% to
   6.5% in the previous section's three, on `apply` as much as `setEdges`.
 
+### With unchanged routes copied a run at a time (2026-10-24)
+
+The copy above went route by route, with an element loop per route, because a
+typed-array view per array per route cost more than the copy. With a tenth of
+the routes moving, that loop over the other 90% was still a quarter of a
+`tessellateRibbons` call in a Node CPU profile. Consecutive unchanged routes
+that were also consecutive in the previous build are now held as one run and
+copied when a route breaks it, with one `set` over a view per array; the
+indices are copied the same way and shifted only when the run moved.
+
+Output is byte-identical: the same sha256 as a fresh build over every array
+and the ranges, for 4,800 builds, polyline and smooth, over 120 random scenes
+of 40 to 240 routes with duplicate ids, about 8% of routes moving per build,
+and swaps and removals breaking the runs.
+
+In Node, one `tessellateRibbons` on the 10,000-node grid's 13,169 routes, the
+median of 140 builds after 10 of warm-up, previous and this build alternated
+three times at load 3.7 to 3.8. "First" moves the first share of the nodes in
+row order, as `--moving` does; "every tenth" moves every tenth node, which
+breaks the runs about as often as anything here does:
+
+| Routes moving | Smooth, previous | Smooth, this one | Polyline, previous | Polyline, this one |
+| --- | --- | --- | --- | --- |
+| all | 7.78 to 7.97 ms | 7.77 to 8.02 | 1.82 to 1.90 | 1.87 to 2.02 |
+| first 10% | 3.07 to 3.27 | 1.77 to 2.03 | 1.19 to 1.32 | 0.88 to 0.93 |
+| every tenth | 3.66 to 3.73 | 3.09 to 3.20 | 1.32 to 1.38 | 1.38 to 1.43 |
+| first 1% | 2.56 to 2.57 | 1.07 to 1.13 | 1.09 to 1.18 | 0.78 to 0.81 |
+| none | 2.04 to 2.53 | 0.97 to 0.99 | 1.08 to 1.17 | 0.73 |
+
+On WebGPU, same machine (Apple M4), Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, tick 16.7 ms, DPR 1,
+`fit`, `--motion=springs --edges=smooth --moving=0.1 --frames=1200` (42
+retargets a run), previous and this build alternated three times by swapping
+`packages/render/dist/ribbon.js`, load average 3.7 to 4.1. Animated-mode
+medians in milliseconds:
+
+| Build | `setEdges` | `setEdges` p95 | `apply` | `advance` | Past one tick |
+| --- | --- | --- | --- | --- | --- |
+| previous | 4.1, 4.0, 4.1 | 4.7, 4.8, 4.7 | 1.9, 1.9, 1.9 | 0.6, 0.7, 0.5 | 0%, 0.1%, 0% |
+| this one | 3.6, 3.5, 3.5 | 4.0, 4.2, 4.0 | 1.8, 1.6, 2.0 | 0.5, 0.6, 0.6 | 0%, 0%, 0% |
+
+- **With a tenth of the nodes moving, `setEdges` takes 3.5 to 3.6 ms against
+  4.0 to 4.1**, in all three pairs, with no overlap. Both builds hold the tick,
+  so this is headroom on a local edit, as the previous section's gain was.
+- **With every route moving there is nothing to copy**, and Node shows no
+  change; that frame was not rerun in the browser. What is left of `setEdges`
+  at a tenth moving is about 1 ms outside the tessellation in Node (colours,
+  intensity and a new geometry over every edge) and, inside it, recording and
+  comparing every route's points.
+
 ## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`

@@ -826,6 +826,19 @@ describe('tessellateRibbons: reusing the previous build', () => {
     expect(next.arc.subarray(a.vertexCount).includes(-7)).toBe(false);
   });
 
+  it('copies a stretch of unchanged routes that ends the build', () => {
+    const routes = [
+      route('a', [0, 0], [10, 0]),
+      route('b', [0, 0], [0, 30], [20, 60]),
+      route('c', [5, 5], [40, 5], [40, 50]),
+    ];
+    const previous = tessellateRibbons(routes);
+    const after = [route('a', [0, 0], [11, 0]), ...routes.slice(1)];
+    const reused = tessellateRibbons(after, undefined, undefined, previous);
+    expect(sameBits(reused, tessellateRibbons(after))).toBe(true);
+    expect(reused.ranges).toEqual(tessellateRibbons(after).ranges);
+  });
+
   it('tells a negative zero from zero, so the copy stays bit for bit', () => {
     const previous = tessellateRibbons([route('a', [0, 0], [10, 0])]);
     const after = [route('a', [-0, 0], [10, 0])];
