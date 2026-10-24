@@ -374,9 +374,12 @@ function mergeParameters(left: readonly number[], right: readonly number[]): num
  * `to` resampled has to contain every vertex of `to` to the bit, or the route
  * the springs settle onto is a rounded copy of the one the layout computed.
  *
- * Used for velocities as well as for positions, with the POSITION route's
- * parameters both times, because index `i` of one list is index `i` of the
- * other and a velocity is a value along the line rather than a line of its own.
+ * With `velocities`, flat x then y per point of `values`, it reads them at the
+ * same places into `sampledVelocities` by the same arithmetic, with the
+ * POSITION route's parameters, because index `i` of one list is index `i` of
+ * the other and a velocity is a value along the line rather than a line of its
+ * own. Flat rather than a `Vec2` per point, because boxing every velocity to
+ * resample it was a measurable share of a 10,000-edge retarget.
  *
  * SHARES RATHER THAN COPIES: a vertex comes back as the same object, and so
  * does a point repeated at one parameter. Everything here treats a `Vec2` as
@@ -388,6 +391,8 @@ function sampleAlong(
   values: readonly Vec2[],
   parameters: readonly number[],
   at: readonly number[],
+  velocities?: readonly number[],
+  sampledVelocities: number[] = [],
 ): Vec2[] {
   const sampled: Vec2[] = [];
   let parameterCursor = 0;
@@ -409,7 +414,14 @@ function sampleAlong(
       for (let copy = 0; copy < atEnd - atCursor; copy += 1) {
         const index = parameterCursor + Math.min(copy, ownCount - 1);
         const value = values[index];
-        if (value !== undefined) sampled.push(value);
+        if (value === undefined) continue;
+        sampled.push(value);
+        if (velocities !== undefined) {
+          sampledVelocities.push(
+            velocities[2 * index] ?? Number.NaN,
+            velocities[2 * index + 1] ?? Number.NaN,
+          );
+        }
       }
       parameterCursor = parameterEnd;
     } else {
@@ -432,6 +444,13 @@ function sampleAlong(
           y: start.y + (end.y - start.y) * fraction,
         };
         for (let copy = atCursor; copy < atEnd; copy += 1) sampled.push(point);
+        if (velocities !== undefined) {
+          const startX = velocities[2 * startIndex] ?? Number.NaN;
+          const startY = velocities[2 * startIndex + 1] ?? Number.NaN;
+          const vx = startX + ((velocities[2 * endIndex] ?? Number.NaN) - startX) * fraction;
+          const vy = startY + ((velocities[2 * endIndex + 1] ?? Number.NaN) - startY) * fraction;
+          for (let copy = atCursor; copy < atEnd; copy += 1) sampledVelocities.push(vx, vy);
+        }
       }
     }
     atCursor = atEnd;
@@ -440,39 +459,29 @@ function sampleAlong(
 }
 
 /**
- * Whether `values[index]` is within `tolerance`, per axis, of the line between
- * its two neighbours read at its own parameter. False where a neighbour shares
- * its parameter, since that span has no fraction to read.
+ * Where `index` sits between its two neighbours' parameters, or `NaN` where a
+ * neighbour shares its parameter, since that span has no fraction to read.
  */
-function nearChord(
-  parameters: readonly number[],
-  values: readonly Vec2[],
-  index: number,
+function chordFraction(parameters: readonly number[], index: number): number {
+  const t0 = parameters[index - 1] ?? Number.NaN;
+  const t = parameters[index] ?? Number.NaN;
+  const t1 = parameters[index + 1] ?? Number.NaN;
+  if (t0 === t || t === t1) return Number.NaN;
+  return (t - t0) / (t1 - t0);
+}
+
+/**
+ * Whether `value` is within `tolerance` of the line from `before` to `after`
+ * read at `fraction`, on one axis. False for a `NaN` fraction.
+ */
+function onChord(
+  before: number,
+  value: number,
+  after: number,
+  fraction: number,
   tolerance: number,
 ): boolean {
-  const t0 = parameters[index - 1];
-  const t = parameters[index];
-  const t1 = parameters[index + 1];
-  const before = values[index - 1];
-  const value = values[index];
-  const after = values[index + 1];
-  if (
-    t0 === undefined ||
-    t === undefined ||
-    t1 === undefined ||
-    before === undefined ||
-    value === undefined ||
-    after === undefined ||
-    t0 === t ||
-    t === t1
-  ) {
-    return false;
-  }
-  const fraction = (t - t0) / (t1 - t0);
-  return (
-    Math.abs(value.x - (before.x + (after.x - before.x) * fraction)) <= tolerance &&
-    Math.abs(value.y - (before.y + (after.y - before.y) * fraction)) <= tolerance
-  );
+  return Math.abs(value - (before + (after - before) * fraction)) <= tolerance;
 }
 
 /**
@@ -691,49 +700,56 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
     const fromParameters = routeParameters(entry.points);
     const toParameters = routeParameters(route);
     const merged = mergeParameters(fromParameters, toParameters);
-    const sampledPositions = sampleAlong(entry.points, fromParameters, merged);
-    const currentVelocities: Vec2[] = [];
-    for (let index = 0; index < entry.points.length; index += 1) {
-      currentVelocities.push({
-        x: entry.velocities[2 * index] ?? Number.NaN,
-        y: entry.velocities[2 * index + 1] ?? Number.NaN,
-      });
-    }
-    const sampledVelocities = sampleAlong(currentVelocities, fromParameters, merged);
+    const sampledVelocities: number[] = [];
+    const sampledPositions = sampleAlong(
+      entry.points,
+      fromParameters,
+      merged,
+      entry.velocities,
+      sampledVelocities,
+    );
     const sampledTargets = sampleAlong(route, toParameters, merged);
     const kept = keptIndices(merged, toParameters, sampledPositions, sampledVelocities);
     const positions = kept?.map((index) => sampledPositions[index] ?? AT_REST) ?? sampledPositions;
-    const velocities = kept?.map((index) => sampledVelocities[index] ?? AT_REST) ?? sampledVelocities;
     const targets = kept?.map((index) => sampledTargets[index] ?? AT_REST) ?? sampledTargets;
-    const flatVelocities: number[] = [];
-    for (const velocity of velocities) flatVelocities.push(velocity.x, velocity.y);
+    let velocities = sampledVelocities;
+    if (kept !== undefined) {
+      velocities = [];
+      for (const index of kept) {
+        velocities.push(sampledVelocities[2 * index] ?? 0, sampledVelocities[2 * index + 1] ?? 0);
+      }
+    }
     for (const [index, position] of positions.entries()) {
       const target = targets[index];
       if (target === undefined) continue;
-      const velocity = velocities[index] ?? AT_REST;
+      const vx = velocities[2 * index] ?? 0;
+      const vy = velocities[2 * index + 1] ?? 0;
       // A finite `velocity + w * displacement` means all three checks below
       // pass, since no non-finite velocity, displacement or product sums to a
       // finite value, so only a point that fails builds the messages.
       if (
-        Number.isFinite(velocity.x + w * (position.x - target.x)) &&
-        Number.isFinite(velocity.y + w * (position.y - target.y))
+        Number.isFinite(vx + w * (position.x - target.x)) &&
+        Number.isFinite(vy + w * (position.y - target.y))
       ) {
         continue;
       }
       const field = label();
-      for (const axis of ['x', 'y'] as const) {
+      for (const [axis, velocity] of [
+        ['x', vx],
+        ['y', vy],
+      ] as const) {
         const location = `${field} edge "${id}" point ${String(index)} ${axis}`;
         const displacement = position[axis] - target[axis];
         requireFinite(displacement, `${location} displacement`);
         const weightedDisplacement = w * displacement;
         requireFinite(weightedDisplacement, `${location} spring coefficient w * displacement`);
         requireFinite(
-          velocity[axis] + weightedDisplacement,
+          velocity + weightedDisplacement,
           `${location} spring coefficient with velocity`,
         );
       }
     }
-    return { velocities: flatVelocities, targets, rest: route, points: positions };
+    return { velocities, targets, rest: route, points: positions };
   }
 
   /**
@@ -757,21 +773,40 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
     parameters: readonly number[],
     vertices: readonly number[],
     positions: readonly Vec2[],
-    velocities: readonly Vec2[],
+    velocities: readonly number[],
   ): number[] | undefined {
     const last = parameters.length - 1;
     // Allocated at the first drop, so a retarget that drops nothing allocates nothing.
     let kept: number[] | undefined;
     let previousKept = true;
     let vertex = 0;
+    const velocity = (at: number): number => velocities[at] ?? Number.NaN;
     for (let index = 1; index < last; index += 1) {
       const t = parameters[index] ?? Number.NaN;
       while (vertex < vertices.length && (vertices[vertex] ?? Infinity) < t) vertex += 1;
+      const fraction = chordFraction(parameters, index);
+      const before = positions[index - 1] ?? AT_REST;
+      const position = positions[index] ?? AT_REST;
+      const after = positions[index + 1] ?? AT_REST;
       const droppable: boolean =
         previousKept &&
         vertices[vertex] !== t &&
-        nearChord(parameters, positions, index, restEpsilon) &&
-        nearChord(parameters, velocities, index, restSpeed);
+        onChord(before.x, position.x, after.x, fraction, restEpsilon) &&
+        onChord(before.y, position.y, after.y, fraction, restEpsilon) &&
+        onChord(
+          velocity(2 * index - 2),
+          velocity(2 * index),
+          velocity(2 * index + 2),
+          fraction,
+          restSpeed,
+        ) &&
+        onChord(
+          velocity(2 * index - 1),
+          velocity(2 * index + 1),
+          velocity(2 * index + 3),
+          fraction,
+          restSpeed,
+        );
       if (droppable) {
         kept ??= Array.from({ length: index }, (_, earlier) => earlier);
       } else {
