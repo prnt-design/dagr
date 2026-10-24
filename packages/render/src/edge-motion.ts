@@ -378,8 +378,8 @@ function mergeParameters(left: readonly number[], right: readonly number[]): num
  * same places into `sampledVelocities` by the same arithmetic, with the
  * POSITION route's parameters, because index `i` of one list is index `i` of
  * the other and a velocity is a value along the line rather than a line of its
- * own. Flat rather than a `Vec2` per point, because boxing every velocity to
- * resample it was a measurable share of a 10,000-edge retarget.
+ * own. Flat, because a `Vec2` per velocity was a measurable share of a
+ * 10,000-edge retarget.
  *
  * SHARES RATHER THAN COPIES: a vertex comes back as the same object, and so
  * does a point repeated at one parameter. Everything here treats a `Vec2` as
