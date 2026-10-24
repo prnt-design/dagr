@@ -155,9 +155,11 @@ export interface Renderer {
    * not durable across a removal. Dashed routed edges under solid overlay lines
    * is two groups.
    *
-   * Whole rather than incremental, unlike {@link setNodes}. An edge has no
-   * durable per-instance state to preserve across a rebuild, and its input is a
-   * layout's routes: a layout that moved has moved most of them.
+   * The group's buffers are rebuilt whole, unlike {@link setNodes}, since an
+   * edge has no durable per-instance state to preserve across a rebuild. An
+   * edge given exactly the points it had on the group's previous call, under
+   * the same id, is copied from that build rather than tessellated again, so a
+   * frame in which only some edges move pays the tessellation for those.
    *
    * Throws a `RangeError` naming a group that was never declared.
    */

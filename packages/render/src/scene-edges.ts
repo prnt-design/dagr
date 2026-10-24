@@ -54,10 +54,11 @@ import { requireAtLeast, requireFinite } from './validate.js';
 /** One edge to draw: an id, its centreline in world units, and its colour. */
 export interface SceneEdge {
   /**
-   * The caller's own id, echoed on nothing and used for nothing but the error
-   * message when a route cannot be drawn. An edge has no durable per-instance
-   * state to key, which is why this file has no equivalent of
-   * `NodePlacement`: a group's geometry is rebuilt whole or not at all.
+   * The caller's own id: named in the error when a route cannot be drawn,
+   * handed to `setEdgeIntensity`'s function, and how the next `setEdges` finds
+   * an unchanged route to copy. An edge has no other durable per-instance
+   * state, which is why this file has no equivalent of `NodePlacement`: a
+   * group's geometry is rebuilt whole or not at all.
    */
   readonly id: string;
 

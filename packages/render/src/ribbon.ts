@@ -251,9 +251,10 @@ export const CATMULL_ROM_ALPHA = 0.5;
 /** One route to draw: an id to hand back, and its centreline control points. */
 export interface RibbonRoute {
   /**
-   * Echoed on this route's {@link RibbonRange} and not otherwise read. Uniqueness
-   * is the caller's business: two routes sharing an id produce two ranges, in
-   * input order.
+   * Echoed on this route's {@link RibbonRange}, and how a later call that is
+   * given this build as `previous` finds the route to copy. Uniqueness is the
+   * caller's business: two routes sharing an id produce two ranges, in input
+   * order, and only the first can be copied by id.
    */
   readonly id: string;
 
