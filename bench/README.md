@@ -142,6 +142,20 @@ the node half's `advance` read slower in every pair (0.75 to 0.83 ms against
 the kept build's 0.58 to 0.59, and 0.44 to 0.45 against 0.39 to 0.40 on the
 compiled output in plain Node), so it was not kept.
 
+Later on 2026-10-23 an edge retarget stopped building a velocity record per
+point to resample it: the velocities are read from the flat array at the same
+places as the points, by the same arithmetic (see `bench/browser/README.md`).
+Frames are byte-identical. Four runs alternating the old and new source at
+loads of 3.8 to 5.4, medians in milliseconds:
+
+| Edges | `apply` before | `apply` after | `advance` before | `advance` after |
+| --- | --- | --- | --- | --- |
+| straight | 11.8 to 12.0 | 9.9 to 10.2 | 3.0 to 3.9 | 3.0 to 3.9 |
+| smooth | 13.2 to 14.1 | 11.5 to 11.9 | 3.9 to 4.4 | 4.0 to 4.6 |
+
+This more than takes back the 0.4 to 1.1 ms the flat velocities added to a
+straight retarget above.
+
 Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
 for the same reason: recording them rewrites the machine-matched file, which is
 the maintainer's call. This is CPU time in Node, not a browser frame or GPU

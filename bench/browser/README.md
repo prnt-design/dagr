@@ -1348,6 +1348,48 @@ nodes, old and new build alternated three times by swapping
   the ticks missed. A retarget is about one frame in 22, so a millisecond
   saved on it moves the missed ticks less than this run's spread.
 
+### With edge velocities resampled flat (2026-10-23)
+
+Since the edge velocities moved into one flat array (above), a retarget built a
+velocity record per point from it, resampled those, and flattened them again.
+The velocities are now read from the flat array at the same places as the
+points, by the same arithmetic. In Node the scene's `apply` at 10,000 nodes
+goes from 11.8 to 12.0 ms to 9.9 to 10.2 straight and from 13.2 to 14.1 to
+11.5 to 11.9 smooth (see `bench/README.md`). With the edges stepped 30 frames
+between retargets, as this page does, the edge half's `apply` alone, in three
+pairs: smooth read lower in every pair (17.0 to 19.3 ms against 12.2 to 15.3),
+and straight in two (13.6 to 13.9 against 8.5 to 8.6; the third, 8.2 against
+8.5, overlaps).
+
+Frames are byte-identical: the same sha256 as the previous build over every
+point of every frame of 300 random scenes of up to eight edges, 36,000 frames
+with reroutes in flight, departures, resyncs, overflowing routes and elapsed
+times from zero to half a second, including the same 748 refusals with the same
+messages. Breaking the velocity half of the drop test, or the interpolated y
+velocity, changes the hash.
+
+On WebGPU, same machine (Apple M4), Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, springs only, 10,000
+nodes, `--frames=1200` (42 to 49 retargets a run), old and new build
+alternated three times by swapping `packages/render/dist/edge-motion.js`, load
+average 3.6 to 5.2:
+
+| Build | Edges | `apply` | `advance` | `setEdges` | Past one tick |
+| --- | --- | --- | --- | --- | --- |
+| previous | straight | 9.7, 8.4, 12.7 | 1.8, 1.6, 2.4 | 1.3, 1.3, 2.2 | 0%, 0%, 0.1% |
+| this one | straight | 11.8, 12.0, 7.5 | 2.2, 2.2, 2.3 | 1.9, 1.9, 1.9 | 0.1%, 0%, 0% |
+| previous | smooth | 14.4, 13.9, 17.4 | 4.3, 4.2, 5.1 | 9.1, 9.0, 9.8 | 8.1%, 6.4%, 17.3% |
+| this one | smooth | 17.4, 17.7, 14.5 | 3.5, 4.4, 5.1 | 9.1, 9.7, 9.8 | 6.3%, 11.7%, 16.8% |
+
+**The browser does not resolve the change.** `apply` falls in two bands from
+run to run in both builds, about 7.5 to 9.7 ms or 11.8 to 12.7 straight and
+13.9 to 14.5 or 17.4 to 17.7 smooth, and three pairs landed in the bands
+unevenly. An earlier three pairs on a draft of the same change, byte-identical
+to it, showed the same bands the other way round (straight `apply` 7.4, 11.9,
+11.5 against 11.9, 8.3, 11.9). The cause of the bands was not traced; it is
+not the build, since both builds show both bands.
+
 ## What the overlay harness measures, and what it does not
 
 It reports `syncMedian` (the overlay's own JavaScript, from `performance.now()`
