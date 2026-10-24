@@ -1365,8 +1365,9 @@ Frames are byte-identical: the same sha256 as the previous build over every
 point of every frame of 300 random scenes of up to eight edges, 36,000 frames
 with reroutes in flight, departures, resyncs, overflowing routes and elapsed
 times from zero to half a second, including the same 748 refusals with the same
-messages. Breaking the velocity half of the drop test, or the interpolated y
-velocity, changes the hash.
+messages (a harness written for this run, so its refusal count is not the one
+above). Breaking the velocity half of `keptIndices`' rest-tolerance drop, or
+the interpolated y velocity, changes the hash.
 
 On WebGPU, same machine (Apple M4), Google Chrome 155.0.8059.85 headed with
 `--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
