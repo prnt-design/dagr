@@ -1486,7 +1486,7 @@ Animated-mode medians in milliseconds:
 
 ### With unchanged routes copied a run at a time (2026-10-24)
 
-The copy above went route by route, with an element loop per route, because a
+The copy in "With unchanged routes copied from the previous build" went route by route, with an element loop per route, because a
 typed-array view per array per route cost more than the copy. With a tenth of
 the routes moving, that loop over the other 90% was still a quarter of a
 `tessellateRibbons` call in a Node CPU profile. Consecutive unchanged routes
@@ -1534,6 +1534,14 @@ medians in milliseconds:
   at a tenth moving is about 1 ms outside the tessellation in Node (colours,
   intensity and a new geometry over every edge) and, inside it, recording and
   comparing every route's points.
+- **Polyline routes gain less, and lose a little when runs break often.**
+  With every tenth node moving, polyline builds are 1.38 to 1.43 ms against
+  1.32 to 1.38, and with all moving 1.87 to 2.02 against 1.82 to 1.90: a run of
+  one route now pays for five views, which the element loop did not, and a
+  polyline route is cheap enough to tessellate that this shows. The polyline
+  times in this table are higher than the earlier section's throughout, for
+  both builds, because the harness differs (scene script, run length and
+  warm-up); compare within one table, not across them.
 
 ## What the overlay harness measures, and what it does not
 

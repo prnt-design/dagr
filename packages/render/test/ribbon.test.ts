@@ -835,8 +835,9 @@ describe('tessellateRibbons: reusing the previous build', () => {
     const previous = tessellateRibbons(routes);
     const after = [route('a', [0, 0], [11, 0]), ...routes.slice(1)];
     const reused = tessellateRibbons(after, undefined, undefined, previous);
-    expect(sameBits(reused, tessellateRibbons(after))).toBe(true);
-    expect(reused.ranges).toEqual(tessellateRibbons(after).ranges);
+    const fresh = tessellateRibbons(after);
+    expect(sameBits(reused, fresh)).toBe(true);
+    expect(reused.ranges).toEqual(fresh.ranges);
   });
 
   it('tells a negative zero from zero, so the copy stays bit for bit', () => {
