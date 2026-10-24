@@ -663,13 +663,13 @@ timed as `advance`, and turns its nodes and edges into scene records, timed as
 `input`, before `setNodes`, `setEdges` and `render`, which is the order
 `DagrCanvas`'s animation frame runs them in. With the default 0.12 s half-life
 a 20 world unit move needs about a second to come to rest, so every retargeted
-spring is in flight on every frame. The row's `springs` reports how many frames, warm-up
-included, `advance` called settled, and how many retargets ran. Building a
-retarget's delta from the sway stands in for a layout's output and is not
-timed. `--moving` takes a share of the nodes, 1 by default, once per value:
-each retarget then moves only the first that many nodes in row order, a
-contiguous block as a local edit would move, and reroutes only the edges touching one of them,
-so the rest stay at rest on their first routes. The row's `springs` reports
+spring is in flight on every frame. The row's `springs` reports how many
+frames, warm-up included, `advance` called settled, and how many retargets
+ran. Building a retarget's delta from the sway stands in for a layout's output
+and is not timed. `--moving` takes a share of the nodes, 1 by default, once
+per value: each retarget then moves only the first that many nodes in row
+order, a contiguous block as a local edit would move, and reroutes only the
+edges touching one of them, so the rest stay at rest on their first routes. The row's `springs` reports
 `movingNodes` and `movingEdges`. It takes only `--motion=springs`, and
 refuses `--nodes=rich`, whose feed hands every node to the tiers each frame.
 `--memory` refuses `--motion` and `--moving`.
