@@ -204,17 +204,19 @@
 
       // With the default 0.12 s half-life a 20 world unit move takes about a
       // second to come to rest, so retargeting every half second keeps every
-      // spring in flight on every frame.
+      // retargeted spring in flight on every frame.
       const RETARGET_MS = 500;
 
       /**
        * The animated mode's source of node centres and edge routes each frame.
-       * `sway` computes them from the clock. `springs` hands every node and
-       * edge a new target through `createSceneMotion` every `RETARGET_MS` and
-       * draws what `advance` returns, the way `DagrCanvas`'s animation frame
-       * does.
+       * `sway` computes them from the clock. `springs` hands a new target
+       * through `createSceneMotion` every `RETARGET_MS` and draws what
+       * `advance` returns, the way `DagrCanvas`'s animation frame does. It
+       * retargets the first `moving` share of the nodes in row order, a
+       * contiguous block as a local edit would move, and every edge touching
+       * one of them; the rest stay at rest on their first routes.
        */
-      const motionSource = (kind, home, links, bend, bounds) => {
+      const motionSource = (kind, home, links, bend, bounds, moving) => {
         if (kind === 'sway') {
           return {
             next: (ts, timings) => {
@@ -234,6 +236,10 @@
           nodes: centres.map((center, i) => ({ id: `n${i}`, center })),
           edges: edgesAt(centres, links, bend).map(({ id, points }) => ({ id, points })),
         });
+        const movingNodes = Math.round(moving * home.length);
+        const movingLinks = links.flatMap(([from, to], i) =>
+          from < movingNodes || to < movingNodes ? [i] : [],
+        );
         const motion = createSceneMotion();
         const start = targetsAt(home);
         motion.resync({ nodes: start.nodes, edges: start.edges, bounds });
@@ -245,11 +251,17 @@
         return {
           next: (ts, timings) => {
             if (lastRetarget === null || ts - lastRetarget >= RETARGET_MS) {
-              const target = targetsAt(swayed(home, ts));
+              const swayedNow = swayed(home, ts);
+              const target = targetsAt(
+                movingNodes === home.length ? swayedNow : home.map((p, i) => (i < movingNodes ? swayedNow[i] : p)),
+              );
+              const moved = movingNodes === home.length ? target.nodes : target.nodes.slice(0, movingNodes);
+              const rerouted =
+                movingLinks.length === links.length ? target.edges : movingLinks.map((i) => target.edges[i]);
               const t0 = performance.now();
               motion.apply({
-                nodes: { added: [], removed: [], moved: target.nodes },
-                edges: { added: [], removed: [], rerouted: target.edges },
+                nodes: { added: [], removed: [], moved },
+                edges: { added: [], removed: [], rerouted },
               });
               timings.apply = performance.now() - t0;
               lastRetarget = ts;
@@ -268,7 +280,13 @@
             if (frame.settled) settledFrames += 1;
             return { nodes, edges };
           },
-          stats: () => ({ frames, settledFrames, retargets }),
+          stats: () => ({
+            frames,
+            settledFrames,
+            retargets,
+            movingNodes,
+            movingEdges: movingLinks.length,
+          }),
         };
       };
 
@@ -492,7 +510,7 @@
       // move's own cost.
       // `parts` draws the nodes, the edges or both, so a pass's GPU time can
       // be split between them by subtraction.
-      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode, hit, parts, motion) => {
+      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode, hit, parts, motion, moving) => {
         const { group, bend } = EDGE_STYLES[edgeStyle];
         const drawNodes = parts === 'all' || parts === 'nodes';
         const drawEdges = parts === 'all' || parts === 'edges';
@@ -561,7 +579,7 @@
         const stillElements = overlay === null ? null : overlay.activeCount;
         let flowPixels = 0;
         let previousTs = null;
-        const source = motionSource(motion, home, links, bend, bounds);
+        const source = motionSource(motion, home, links, bend, bounds, moving);
         const animated = await sample(warmup, frames, (ts) => {
           const timings = {};
           const { nodes, edges } = source.next(ts, timings);
@@ -592,7 +610,7 @@
             timings.sync = performance.now() - t6;
           }
           if (hit) {
-            // Every node moved, so the drawn array is new: a click rebuilds the
+            // The drawn array is new every frame, so a click rebuilds the
             // index on this frame, and hover does on one frame in every 100 ms.
             const t7 = performance.now();
             const index = createNodeHitIndex(nodes);
@@ -619,6 +637,7 @@
           nodeMode,
           parts,
           motion,
+          moving,
           springs: source.stats(),
           elements: overlay === null ? null : { still: stillElements, animated: animatedElements },
           hit: hit ? { indexMs: hitIndexMs, hits } : null,

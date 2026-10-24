@@ -8,7 +8,8 @@ and `label-throughput.mjs` opens it, runs a plan and prints the numbers.
 WebGPU by graph size, edge style, node mode and node hit testing, still and
 animating, with `--memory` measure what each pass holds in GPU and heap
 memory, with `--gpu` the GPU time of each pass, and with `--motion=springs`
-animate through `createSceneMotion`.
+animate through `createSceneMotion`, with `--moving` retargeting only a share
+of the nodes.
 `backend-probe.html` and `backend-probe.mjs` are the odd ones out and the
 directory name undersells them: they do not measure anything, they CHECK
 something, which is which backend `@prnt/dagr-render` comes up on and whether the
@@ -183,7 +184,7 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   node bench/browser/frame-profile.mjs
   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
-  # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs]
+  # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1]
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
@@ -661,11 +662,17 @@ happens. Every frame then calls `advance` with the time since the last frame,
 timed as `advance`, and turns its nodes and edges into scene records, timed as
 `input`, before `setNodes`, `setEdges` and `render`, which is the order
 `DagrCanvas`'s animation frame runs them in. With the default 0.12 s half-life
-a 20 world unit move needs about a second to come to rest, so every spring is
-in flight on every frame. The row's `springs` reports how many frames, warm-up
-included, `advance` called settled, and how many retargets ran. Building a
-retarget's delta from the sway stands in for a layout's output and is not
-timed. `--memory` refuses `--motion`.
+a 20 world unit move needs about a second to come to rest, so every retargeted
+spring is in flight on every frame. The row's `springs` reports how many
+frames, warm-up included, `advance` called settled, and how many retargets
+ran. Building a retarget's delta from the sway stands in for a layout's output
+and is not timed. `--moving` takes a share of the nodes, 1 by default, once
+per value: each retarget then moves only the first that many nodes in row
+order, a contiguous block as a local edit would move, and reroutes only the
+edges touching one of them, so the rest stay at rest on their first routes. The row's `springs` reports
+`movingNodes` and `movingEdges`. It takes only `--motion=springs`, and
+refuses `--nodes=rich`, whose feed hands every node to the tiers each frame.
+`--memory` refuses `--motion` and `--moving`.
 
 **What it found on 2026-10-19**, Apple M4 Mac mini, Google Chrome
 155.0.8059.82 headed with `--enable-webgpu-developer-features`, adapter `apple`
@@ -1440,8 +1447,42 @@ alternated three times by swapping `packages/render/dist/ribbon.js` and
 
 **This page moves every edge on every frame, so it can only show the cost,
 and it does not resolve one**: `setEdges` overlaps in all three pairs. The
-page has no mode in which only some edges move, so the gain is measured in
-Node only.
+page then had no mode in which only some edges move; the next section adds
+one.
+
+### Partial motion shows the copy of unchanged routes (2026-10-24)
+
+`--moving` (see "Springs in flight" above) lets the page measure what the
+previous section could only measure in Node. With `--moving=0.1` the first
+1,000 of 10,000 smooth nodes are retargeted, which reroutes 1,334 of the
+13,169 edges; the other 11,835 are handed back on the same points every frame.
+
+Apple M4 Mac mini, Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, tick 16.7 ms, DPR 1,
+`fit`, `--motion=springs --edges=smooth --frames=1200`, the build before route
+copying and this one alternated three times at a tenth moving (42 retargets a
+run) by swapping `packages/render/dist/ribbon.js` and `scene-edges.js`, then
+one run of this build with all moving (45 retargets), load average 2.4 to 4.1.
+Animated-mode medians in milliseconds:
+
+| Build | Moving | `setEdges` | `setEdges` p95 | `apply` | `advance` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- |
+| before route copying | a tenth | 9.6, 9.5, 9.5 | 10.4, 10.2, 10.2 | 1.9, 1.6, 1.5 | 0.6, 0.5, 0.6 | 0.2%, 0.1%, 0% |
+| this one | a tenth | 4.5, 4.0, 4.0 | 5.2, 4.5, 4.4 | 2.0, 1.6, 1.6 | 0.6, 0.5, 0.5 | 0%, 0%, 0% |
+| this one, one run | all | 9.3 | 11.7 | 16.6 | 3.5 | 6.0% |
+
+- **With a tenth of the nodes moving, `setEdges` takes 4.0 to 4.5 ms against
+  9.5 to 9.6**, in all three pairs, with no overlap: the 11,835 routes at rest
+  are copied rather than tessellated. Node measured a third of the time at a
+  tenth of the routes moving; the browser shows a little under half. The
+  saving, about 5 ms, is close to Node's, and the rest of `setEdges` (colours,
+  intensity and a new geometry over every edge) was not split out.
+- **A local edit is not the frame M4.10 misses.** With a tenth moving both
+  builds hold the tick (at most two of 1,200 frames past it), so the gain is
+  headroom, not a frame saved. With every node moving, the frame the earlier
+  sections measured, this build still misses ticks: 6.0% in this run, 4.8% to
+  6.5% in the previous section's three, on `apply` as much as `setEdges`.
 
 ## What the overlay harness measures, and what it does not
 

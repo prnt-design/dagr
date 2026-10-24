@@ -7,7 +7,10 @@
  * from timestamp queries (M4.10), and `--parts` draws the nodes or the edges
  * alone so that time can be split between them. `--motion=springs` moves the
  * animated mode through `createSceneMotion` with every spring in flight rather
- * than a sway computed from the clock. Evidence, not a gate: see the README.
+ * than a sway computed from the clock, and `--moving` retargets only that share
+ * of the nodes and the edges touching them, so the edges at rest show what
+ * `setEdges` saves by copying an unchanged route. Evidence, not a gate: see the
+ * README.
  *
  * ```
  * pnpm --filter @prnt/dagr-render --filter @prnt/dagr-react build   # the page imports from dist
@@ -17,7 +20,7 @@
  *   node bench/browser/frame-profile.mjs
  *   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
  *   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
- *   # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs]
+ *   # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1]
  * ```
  *
  * The page asks for `backend: 'webgpu'`, so a browser without an adapter fails
@@ -77,6 +80,20 @@ const motions = option('motion', 'sway').split(',');
 for (const motion of motions) {
   if (!MOTIONS.includes(motion)) throw new Error(`--motion takes ${MOTIONS.join(', ')}, got ${motion}`);
 }
+const movingList = option('moving', '1')
+  .split(',')
+  .map((share) => {
+    const value = positive('moving', share);
+    if (value > 1) throw new Error(`--moving is a share of the nodes, at most 1, got ${share}`);
+    return value;
+  });
+const partialMotion = movingList.some((share) => share !== 1);
+if (partialMotion && motions.join() !== 'springs') {
+  throw new Error('--moving chooses which springs are retargeted, so it takes only --motion=springs');
+}
+if (partialMotion && nodeModes.includes('rich')) {
+  throw new Error('--nodes=rich hands every node to the tiers each frame as if all moved, so it takes only --moving=1');
+}
 const frames = count('frames', option('frames', '300'));
 const warmup = count('warmup', option('warmup', '60'));
 const zoomOption = option('zoom', 'fit');
@@ -89,8 +106,10 @@ const headless = process.argv.includes('--headless');
 const hit = process.argv.includes('--hit');
 const memory = process.argv.includes('--memory');
 const gpu = process.argv.includes('--gpu');
-if (memory && (gpu || partsList.join() !== 'all' || motions.join() !== 'sway')) {
-  throw new Error('--memory builds the whole scene and counts every buffer, so it takes none of --gpu, --parts and --motion');
+if (memory && (gpu || partsList.join() !== 'all' || motions.join() !== 'sway' || partialMotion)) {
+  throw new Error(
+    '--memory builds the whole scene and counts every buffer, so it takes none of --gpu, --parts, --motion and --moving',
+  );
 }
 if ((hit || nodeModes.includes('rich')) && partsList.some((parts) => parts !== 'all')) {
   throw new Error('--hit and --nodes=rich work over every node, so they take only --parts=all');
@@ -291,12 +310,14 @@ for (const size of sizes) {
     for (const nodeMode of nodeModes) {
       for (const parts of partsList) {
         for (const motion of motions) {
-          runs.push(
-            await page.evaluate(
-              ([n, w, f, z, e, m, h, p, s]) => window.profile(n, w, f, z, e, m, h, p, s),
-              [size, warmup, frames, zoom, style, nodeMode, hit, parts, motion],
-            ),
-          );
+          for (const moving of movingList) {
+            runs.push(
+              await page.evaluate(
+                ([n, w, f, z, e, m, h, p, s, v]) => window.profile(n, w, f, z, e, m, h, p, s, v),
+                [size, warmup, frames, zoom, style, nodeMode, hit, parts, motion, moving],
+              ),
+            );
+          }
         }
       }
     }
@@ -314,6 +335,7 @@ const rows = runs.map((run) => ({
   nodeMode: run.nodeMode,
   parts: run.parts,
   motion: run.motion,
+  moving: run.moving,
   springs: run.springs,
   elements: run.elements,
   hit:
@@ -335,7 +357,7 @@ const report = {
   launch,
   adapter,
   viewport: { width: 1280, height: 720, devicePixelRatio: dpr },
-  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit, gpu, parts: partsList, motion: motions },
+  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit, gpu, parts: partsList, motion: motions, moving: movingList },
   tickMs,
   control,
   rows,
