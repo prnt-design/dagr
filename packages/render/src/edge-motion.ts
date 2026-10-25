@@ -539,20 +539,25 @@ interface EdgeEntry {
    * scene cost its own length and not its own arithmetic.
    */
   moving: boolean;
+  /** The `planApply` call that last claimed this entry for a reroute. */
+  plan: object | undefined;
+  /** Where in that call's reroutes this entry's reroute is. */
+  planIndex: number;
 }
 
 /** What a delta intends to do to one id, worked out before anything is done. */
 type Intent =
   | { readonly kind: 'depart'; readonly entry: EdgeEntry }
   | { readonly kind: 'arrive'; readonly route: readonly Vec2[] }
-  | { readonly kind: 'replace'; readonly route: readonly Vec2[] }
-  | {
-      readonly kind: 'reroute';
-      readonly route: readonly Vec2[];
-      readonly index: number;
-      readonly entry: EdgeEntry;
-      transition?: RetargetTransition;
-    };
+  | { readonly kind: 'replace'; readonly route: readonly Vec2[] };
+
+/** A reroute of a live entry, the later route winning when a delta names it twice. */
+interface Reroute {
+  readonly id: string;
+  route: readonly Vec2[];
+  index: number;
+  readonly entry: EdgeEntry;
+}
 
 /** A retarget worked out without changing the entry it came from. */
 interface RetargetTransition {
@@ -677,6 +682,8 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       points: route,
       departing: false,
       moving: false,
+      plan: undefined,
+      planIndex: 0,
     };
     settleOnto(entry);
     return entry;
@@ -880,7 +887,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       return entry.departing ? 'departing' : 'live';
     }
 
-    /** The entry behind an id that has no intent yet and is live, or `undefined`. */
+    /** The entry behind an id that is live and not in `planned`, or `undefined`. */
     function liveEntry(id: string): EdgeEntry | undefined {
       if (planned.has(id)) return undefined;
       const entry = entries.get(id);
@@ -905,16 +912,28 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
         route: copyRoute(target.points),
       });
     }
+    // Reroutes of live entries, the bulk of a large retarget, stay out of
+    // `planned`: a Map lookup and insert per edge was a measurable share of a
+    // 10,000-edge retarget. The entry records which plan claimed it, and where.
+    // A reroute is never in `planned`, so commit order between the two lists
+    // cannot matter: each intent touches only its own id.
+    const plan = {};
+    const reroutes: Reroute[] = [];
     for (const [index, target] of delta.rerouted.entries()) {
       requireRoute(target.points, () => `rerouted[${String(index)}].points`);
       const entry = liveEntry(target.id);
       if (entry !== undefined) {
-        planned.set(target.id, {
-          kind: 'reroute',
-          route: copyRoute(target.points),
-          index,
-          entry,
-        });
+        if (entry.plan === plan) {
+          const prior = reroutes[entry.planIndex];
+          if (prior !== undefined) {
+            prior.route = copyRoute(target.points);
+            prior.index = index;
+          }
+          continue;
+        }
+        entry.plan = plan;
+        entry.planIndex = reroutes.length;
+        reroutes.push({ id: target.id, route: copyRoute(target.points), index, entry });
         continue;
       }
       const where = presence(target.id);
@@ -927,31 +946,24 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       const prior = planned.get(target.id);
       if (prior?.kind === 'arrive' || prior?.kind === 'replace') {
         planned.set(target.id, { kind: prior.kind, route: copyRoute(target.points) });
-      } else if (prior?.kind === 'reroute') {
-        planned.set(target.id, { ...prior, route: copyRoute(target.points), index });
       }
     }
 
-    for (const [id, intent] of planned) {
-      if (intent.kind !== 'reroute') continue;
-      const { index } = intent;
-      intent.transition = prepareRetarget(
-        intent.entry,
-        intent.route,
-        () => `rerouted[${String(index)}]`,
-        id,
-      );
-    }
+    const transitions = reroutes.map(({ id, route, index, entry }) =>
+      prepareRetarget(entry, route, () => `rerouted[${String(index)}]`, id),
+    );
 
     return () => {
       for (const [id, intent] of planned) {
-        if (intent.kind === 'arrive' || intent.kind === 'replace') {
-          entries.set(id, seed(intent.route));
-        } else if (intent.kind === 'depart') {
+        if (intent.kind === 'depart') {
           intent.entry.departing = true;
-        } else if (intent.transition !== undefined) {
-          installRetarget(intent.entry, intent.transition);
+        } else {
+          entries.set(id, seed(intent.route));
         }
+      }
+      for (const [index, { entry }] of reroutes.entries()) {
+        const transition = transitions[index];
+        if (transition !== undefined) installRetarget(entry, transition);
       }
     };
   }

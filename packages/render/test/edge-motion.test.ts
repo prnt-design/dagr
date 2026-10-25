@@ -410,6 +410,16 @@ describe('createEdgeMotion', () => {
     expect(edgeNamed(frame.edges, 'e1').points).toEqual(STRAIGHT);
   });
 
+  it('reroutes an edge that a refused delta had already claimed', () => {
+    const motion = createEdgeMotion();
+    motion.resync([target('e1', STRAIGHT)]);
+    expect(() => {
+      motion.apply({ added: [], removed: [], rerouted: [target('e1', BENT), target('e2', BENT)] });
+    }).toThrow(MotionDesyncError);
+    motion.apply({ added: [], removed: [], rerouted: [target('e1', BENT), target('e1', LOPSIDED)] });
+    expect(edgeNamed(runToRest(motion).edges, 'e1').points).toEqual(LOPSIDED);
+  });
+
   it('validates every route before mutating the scene', () => {
     const motion = createEdgeMotion();
     motion.resync([target('e1', STRAIGHT), target('e2', STRAIGHT)]);
@@ -544,6 +554,26 @@ describe('createEdgeMotion', () => {
       }
     },
   );
+
+  it('names the later position when an edge rerouted twice overflows', () => {
+    const negative: readonly Vec2[] = [
+      { x: -8e307, y: 0 },
+      { x: -7e307, y: 0 },
+    ];
+    const positive: readonly Vec2[] = [
+      { x: 8e307, y: 0 },
+      { x: 7e307, y: 0 },
+    ];
+    const motion = createEdgeMotion();
+    motion.resync([target('overflow', negative)]);
+    expect(() => {
+      motion.apply({
+        added: [],
+        removed: [],
+        rerouted: [target('overflow', STRAIGHT), target('overflow', positive)],
+      });
+    }).toThrow(/rerouted\[1\].*edge "overflow".*point 0.*x spring coefficient/);
+  });
 
   it('drops what a resync does not name, with no departure', () => {
     const motion = createEdgeMotion();
