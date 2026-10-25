@@ -262,6 +262,7 @@ class EdgeGroup implements GpuResource {
   #sizeHint: RibbonSizeHint | undefined;
   /** The last build, so a route that has not moved is copied rather than walked. */
   #previous: RibbonGeometry | undefined;
+  #previousColors: EdgeColors | undefined;
   #disposed = false;
   /**
    * Where each edge's vertices are, from the last {@link setEdges}, so an
@@ -337,7 +338,7 @@ class EdgeGroup implements GpuResource {
       this.#previous,
     );
     this.#sizeHint = { vertexCount: tessellated.vertexCount, indexCount: tessellated.indexCount };
-    const colors = colorsFor(edges, tessellated);
+    const colors = colorsFor(edges, tessellated, this.#previousColors);
 
     // Every edge at full intensity, which is the drawing a group has when
     // nobody has highlighted anything, and it is REBUILT here rather than
@@ -353,7 +354,7 @@ class EdgeGroup implements GpuResource {
     geometry.setAttribute(OFFSET, new BufferAttribute(tessellated.offset, 2));
     geometry.setAttribute(ACROSS, new BufferAttribute(tessellated.across, 1));
     geometry.setAttribute(ARC, new BufferAttribute(tessellated.arc, 1));
-    geometry.setAttribute(COLOR, new BufferAttribute(colors, 3));
+    geometry.setAttribute(COLOR, new BufferAttribute(colors.values, 3));
     geometry.setAttribute(INTENSITY, intensityAttribute);
     geometry.setIndex(new BufferAttribute(tessellated.index, 1));
     // Explicit, because three defaults a draw range's count to Infinity.
@@ -364,6 +365,7 @@ class EdgeGroup implements GpuResource {
     previous.dispose();
 
     this.#previous = tessellated;
+    this.#previousColors = colors;
     this.#ranges = tessellated.ranges;
     this.#intensity = intensity;
     this.#intensityAttribute = intensityAttribute;
@@ -483,9 +485,24 @@ class EdgeGroup implements GpuResource {
  * throw and does not look broken, it makes every colour lighter and
  * flatter.
  */
-function colorsFor(edges: readonly SceneEdge[], geometry: RibbonGeometry): Float32Array {
+function colorsFor(
+  edges: readonly SceneEdge[],
+  geometry: RibbonGeometry,
+  previous: EdgeColors | undefined,
+): EdgeColors {
   const colors = new Float32Array(geometry.vertexCount * 3);
   const { ranges } = geometry;
+  const hexes = new Float64Array(ranges.length).fill(Number.NaN);
+  // A slice depends only on its edge's colour and vertex count, so where both
+  // match the previous build at the same index it is copied from there, and a
+  // stretch of such edges is one copy: a copy per edge is slower than the loop.
+  let runStart = 0;
+  let runEnd = 0;
+  let runFrom = 0;
+  const flush = (): void => {
+    if (previous === undefined || runEnd === runStart) return;
+    colors.set(previous.values.subarray(runFrom * 3, (runFrom + runEnd - runStart) * 3), runStart * 3);
+  };
   // A colour is converted only when it differs from the previous edge's, because
   // a group is usually one colour and the conversion is three `Math.pow` and a
   // label. A repeat is already validated, and `NaN` never equals itself, so it
@@ -498,11 +515,27 @@ function colorsFor(edges: readonly SceneEdge[], geometry: RibbonGeometry): Float
     const edge = edges[index];
     if (edge === undefined) continue;
     const color = edge.color;
+    const range = ranges[index]!;
+    const before = previous?.ranges[index];
+    if (
+      before !== undefined &&
+      before.vertexCount === range.vertexCount &&
+      previous!.hexes[index] === color
+    ) {
+      hexes[index] = color;
+      if (runEnd !== range.vertexStart || runFrom + runEnd - runStart !== before.vertexStart) {
+        flush();
+        runStart = range.vertexStart;
+        runFrom = before.vertexStart;
+      }
+      runEnd = range.vertexStart + range.vertexCount;
+      continue;
+    }
     if (color !== hex) {
       [r, g, b] = linearFromHex(color, `edge "${edge.id}".color`);
       hex = color;
     }
-    const range = ranges[index]!;
+    hexes[index] = color;
     const end = (range.vertexStart + range.vertexCount) * 3;
     for (let at = range.vertexStart * 3; at < end; at += 3) {
       colors[at] = r;
@@ -510,7 +543,15 @@ function colorsFor(edges: readonly SceneEdge[], geometry: RibbonGeometry): Float
       colors[at + 2] = b;
     }
   }
-  return colors;
+  flush();
+  return { values: colors, hexes, ranges };
+}
+
+/** A build's colour buffer, with the colour and range each edge was given. */
+interface EdgeColors {
+  readonly values: Float32Array;
+  readonly hexes: Float64Array;
+  readonly ranges: readonly RibbonRange[];
 }
 
 /**

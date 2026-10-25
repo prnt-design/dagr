@@ -263,6 +263,85 @@ describe('SceneEdges', () => {
     fresh.dispose();
   });
 
+  it('colours a rebuild exactly as a fresh group does, whatever changed at each index', () => {
+    const bent = (dy: number): Vec2[] => [
+      { x: 0, y: 0 },
+      { x: 40, y: 30 + dy },
+      { x: 90, y: 0 },
+    ];
+    const long: Vec2[] = [
+      { x: 0, y: 0 },
+      { x: 30, y: 60 },
+      { x: 60, y: -40 },
+      { x: 120, y: 10 },
+    ];
+    const before = [
+      edge('a', bent(0), 0x023047),
+      edge('b', straight, 0x023047),
+      edge('c', bent(3), 0xffb703),
+      edge('d', straight, 0xffb703),
+      edge('e', straight, 0x219ebc),
+    ];
+    const afters = [
+      // One colour changed, every vertex count the same.
+      [
+        edge('a', bent(0), 0x023047),
+        edge('b', straight, 0xffb703),
+        edge('c', bent(3), 0xffb703),
+        edge('d', straight, 0xffb703),
+        edge('e', straight, 0x219ebc),
+      ],
+      // The first edge grows, so every slice after it starts later.
+      [
+        edge('a', long, 0x023047),
+        edge('b', straight, 0x023047),
+        edge('c', bent(3), 0xffb703),
+        edge('d', straight, 0xffb703),
+        edge('e', straight, 0x219ebc),
+      ],
+      // Same colour at an index, different vertex count.
+      [
+        edge('a', bent(0), 0x023047),
+        edge('b', long, 0x023047),
+        edge('c', straight, 0xffb703),
+        edge('d', straight, 0xffb703),
+        edge('e', straight, 0x219ebc),
+      ],
+      // An edge that now draws nothing between two that are copied.
+      [
+        edge('a', bent(0), 0x023047),
+        edge('b', [
+          { x: 5, y: 5 },
+          { x: 5, y: 5 },
+        ]),
+        edge('c', bent(3), 0xffb703),
+        edge('d', straight, 0xffb703),
+        edge('e', straight, 0x219ebc),
+      ],
+      [edge('a', bent(0), 0x023047), edge('b', straight, 0x023047)],
+      [...before, edge('f', straight, 0x219ebc), edge('g', bent(1), 0x8ecae6)],
+    ];
+    for (const after of afters) {
+      const reused = new SceneEdges(groups());
+      reused.setEdges(OVERLAY, before);
+      reused.setEdges(OVERLAY, after);
+      const fresh = new SceneEdges(groups());
+      fresh.setEdges(OVERLAY, after);
+      expect(attributeOf(reused, 1, 'ribbonColor')).toEqual(attributeOf(fresh, 1, 'ribbonColor'));
+      reused.dispose();
+      fresh.dispose();
+    }
+  });
+
+  it('still rejects a bad colour at an index whose previous build was good', () => {
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [edge('e1', straight), edge('e2', straight)]);
+    expect(() => scene.setEdges(ROUTED, [edge('e1', straight), edge('e2', straight, -1)])).toThrow(
+      /edge "e2"\.color/,
+    );
+    scene.dispose();
+  });
+
   it('disposes the geometry it replaces, rather than leaking its buffers', () => {
     // three keys a GPU buffer to the attribute OBJECT and frees buffers on the
     // GEOMETRY's dispose event, for the attributes it holds at that moment.
