@@ -170,6 +170,19 @@ describe('SceneEdges', () => {
     scene.dispose();
   });
 
+  it('rejects a bad colour after a run of good ones, naming its edge, and keeps the last build', () => {
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [edge('e1', straight)]);
+    const before = scene.meshes[0]?.geometry;
+    for (const bad of [0x1000000, -1, 1.5, Number.NaN]) {
+      expect(() =>
+        scene.setEdges(ROUTED, [edge('e1', straight), edge('e2', straight), edge('e3', straight, bad)]),
+      ).toThrow(/edge "e3"\.color/);
+    }
+    expect(scene.meshes[0]?.geometry).toBe(before);
+    scene.dispose();
+  });
+
   it('gives a route that cannot be drawn an empty slice rather than a wrong colour', () => {
     // A self loop is two identical points, which tessellates to nothing. The
     // colours of the routes AFTER it must still land on their own vertices: a
