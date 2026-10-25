@@ -178,20 +178,21 @@ a small shape is the whole shape. The position has no `abs` in front of it and
 cannot fold. The euclidean-gradient argument that used to justify differentiating
 the distance was sound about magnitude and silent about folding.
 
-`fwidth` is defined as `abs(dFdx) + abs(dFdy)`, the L1 norm of
-the same gradient, and L1 exceeds L2 by up to a factor of `sqrt(2)`, 41%, exactly
-when the two derivatives are equal. Equal derivatives means an edge at 45
-degrees, and a rounded corner is a continuum of diagonals: with `fwidth` the ramp
-is correct along the flat sides and up to 41% too soft around the corner, which
-reads as corners blurrier than the edges they join. That is the artefact a
-distance field is supposed to remove. It costs one `sqrt` per fragment, and the
-shader already has one.
+With the current axis-aligned orthographic camera, `dFdy(p.x)` and `dFdx(p.y)`
+are zero. The cheaper direct-derivative form,
+`max(abs(dFdx(p.x)), abs(dFdy(p.y)))`, is therefore exact today. Mesh or camera
+rotation makes those cross derivatives nonzero. In that general case, applying
+`fwidth` to a position component uses the L1 norm of its gradient, while each
+`length` above uses the Euclidean row length. L1 can be up to `sqrt(2)`, or 41%,
+wider than L2 when both derivatives in that row have equal magnitude.
 
-This works because the fields are TRUE euclidean distances outside the shape
-rather than a cheaper approximation. The gradient of such a field has magnitude 1
-in world space, so its screen-space gradient magnitude is world units per pixel
-and nothing else. It also means nothing reads the camera: the width follows
-whatever transform a mesh has picked up, including one M4.4 has not written yet.
+The general two-length form is chosen now because M4.4 may add rotation. The
+position Jacobian then carries that transform, so the antialiasing width follows
+it without a later shader rewrite or a camera uniform. This remains separate
+from the reason for differentiating POSITION rather than folded DISTANCE: the
+position cannot collapse at a shape's centre. The fields are true Euclidean
+distances outside the shape, so their world-space distance scale remains the
+right basis for the resulting screen-space ramp.
 
 ### Where the fade stops, measured
 

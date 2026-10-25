@@ -1672,10 +1672,14 @@ of M3 would leave the second runner idle for a milestone.
   INTERPOLATED POSITION'S GRADIENT, AND NOT `fwidth`. OF THE POSITION AND NOT THE
   DISTANCE: every field folds through `abs` or a square, so a distance gradient
   collapses on the quad holding a shape's centre and the inset outline vanishes
-  there, which on a small shape is the whole shape.
-  because `fwidth` is the L1 sum and exceeds L2 by up to 41% exactly where the
-  derivatives are equal, which is a 45 degree edge, and a rounded corner is
-  nothing else. READ THIS ONE AS A WARNING: swapping in either `fwidth` or its L1
+  there, which on a small shape is the whole shape. With the current axis-aligned
+  orthographic camera, `dFdy(p.x)` and `dFdx(p.y)` are zero, so the cheaper direct
+  derivatives are exact. Mesh or camera rotation makes the cross derivatives
+  nonzero. Then `fwidth` uses an L1 row norm that can be up to `sqrt(2)`, or 41%,
+  wider than the Euclidean row length when both derivatives have equal magnitude.
+  The general two-length form is chosen now because M4.4 may add rotation, so
+  antialiasing follows the position Jacobian's transform without a later shader
+  rewrite. READ THIS ONE AS A WARNING: swapping in either `fwidth` or its L1
   expansion left the whole suite GREEN, since both are correct to within a factor
   on every value a numeric test can check, so the suite now asserts the node
   graph's STRUCTURE. A numeric test cannot catch a wrong-by-a-factor derivative.

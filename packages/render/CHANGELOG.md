@@ -50,18 +50,17 @@ not" is the category this file has a heading for.
   interpolated POSITION's gradient, and deliberately not `fwidth`.** Of the
   position and not of the distance: every field in `sdf.ts` folds through `abs`
   or a square, so a distance gradient collapses to zero on the fragment quad
-  holding a shape's centre, taking the inset outline with it. `fwidth` is the L1
-  sum of two derivatives, and L1
-  exceeds L2 by up to 41% exactly when the derivatives are equal, which is an
-  edge at 45 degrees. A rounded corner is nothing but diagonals, so `fwidth`
-  gives a ramp that is right along the flat sides and up to 41% too soft around
-  the corner: corners blurrier than the edges they join, which is the artefact a
-  distance field exists to remove. It costs one `sqrt` per fragment and the
-  shader already has one. This one is worth reading as a warning rather than a
-  preference: swapping the gradient length for either `fwidth` or its L1
-  expansion left the whole suite GREEN, because both are correct to within a
-  factor on every value a numeric test can check. The suite now asserts the node
-  graph's structure (`length` over a join of `dFdx` and `dFdy`) for that reason.
+  holding a shape's centre, taking the inset outline with it. With today's
+  axis-aligned orthographic camera, `dFdy(p.x)` and `dFdx(p.y)` are zero, so the
+  cheaper `max(abs(dFdx(p.x)), abs(dFdy(p.y)))` is exact. Mesh or camera rotation
+  makes those cross derivatives nonzero. In that general case, `fwidth` uses an
+  L1 row norm that can be up to `sqrt(2)`, or 41%, wider than the Euclidean row
+  length when both derivatives have equal magnitude. The general two-length
+  form is chosen now because M4.4 may add rotation, so antialiasing follows the
+  position Jacobian's transform without a later shader rewrite. Swapping in
+  `fwidth` or its L1 expansion left the whole suite GREEN because numeric tests
+  cannot distinguish this factor reliably. The suite therefore asserts the node
+  graph's structure (`length` over a join of `dFdx` and `dFdy`).
 
 - `depthWrite` is off on the shape materials. three leaves it on when
   `transparent` is set, and left on, a fragment with alpha 0 still writes depth
