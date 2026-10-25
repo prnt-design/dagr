@@ -1775,3 +1775,52 @@ Both hold the tick. What is left of `setEdges` beyond the tessellation is
 the colour and intensity buffers built new on every call and the new
 `BufferGeometry` around them; `setNodes`, at 1.8 to 1.9, is the next largest
 step.
+
+### With edge colours copied from the previous build (2026-10-25)
+
+Of what was left of `setEdges` past the tessellation, about 0.35 ms in Node
+at 10,000 smooth nodes, the colour buffer was 0.31: 263,382 vertices, three
+floats each, written one by one. The intensity buffer (0.03 to 0.07) and the
+`BufferGeometry` (under 0.01) were not worth a change. An edge's colour slice
+depends only on its colour and its vertex count, so where both match the
+previous build at the same index the slice is now copied from the previous
+colour buffer, and a stretch of such edges is one typed-array copy. A copy
+per edge measured slower than the loop (0.46 ms against 0.31), so the run is
+what pays.
+
+Every attribute is byte-identical: the same sha256 for the previous build,
+this one, and a group built fresh from the same edges, after 460 calls with
+one colour, runs of six colours, a different colour per edge, and every
+colour changed on every call. In Node, `setEdges` on 13,169 smooth routes with
+a tenth moving, 400 calls after 60 of warm-up, three pairs per pattern at load
+about 2.5, medians in milliseconds:
+
+| Colours | previous | this one |
+| --- | --- | --- |
+| one | 1.93 to 1.94 | 1.75 to 1.76 |
+| runs of six | 2.03 to 2.06 | 1.75 |
+| one per edge | 2.30 to 2.32 | 1.75 to 1.82 |
+| all changed every call | 1.91 to 1.95 | 1.97 to 2.00 |
+
+The last row is the case nothing can be copied from: it pays a comparison
+per edge and a `Float64Array` of colours, about 0.05 ms. These Node numbers
+come from a different script and load than the section above; compare within
+the table.
+
+On WebGPU, same machine (Apple M4), Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, tick 16.7 ms, DPR 1,
+`fit`, `--motion=springs --sizes=10000 --edges=smooth --moving=0.1
+--frames=1200` (42 retargets a run, one edge colour), builds swapped through
+`packages/render/dist/scene-edges.js`, previous build first in each of three
+pairs, load average 2.2 to 2.9. Animated-mode medians in milliseconds:
+
+| Build | `setEdges` | `setNodes` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- |
+| previous | 3.0, 3.0, 3.0 | 1.9, 1.9, 1.9 | 1.6, 1.7, 1.7 | 0%, 0%, 0% |
+| this one | 2.9, 2.8, 3.0 | 1.9, 1.9, 1.9 | 1.7, 1.5, 1.8 | 0%, 0%, 0.1% |
+
+The browser reports a median to 0.1 ms, and the 0.2 ms Node saves at one
+colour sits at that resolution, so the browser does not clearly resolve it.
+Both hold the tick. `setNodes`, at 1.9, is now the largest step after
+`setEdges`.
