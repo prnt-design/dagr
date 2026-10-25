@@ -265,6 +265,23 @@ describe('Graph generated edge ids', () => {
     expect(graph.edgeCount).toBe(3);
   });
 
+  // Both saturation cases use a fixed, small number of calls on purpose. A
+  // regression has to fail an assertion here, never spin: neither case leaves
+  // the generator with a taken candidate it cannot advance past.
+  it('throws once the counter has already passed the safe integer ceiling', () => {
+    const graph = triangle();
+    graph.addEdge('a', 'b', 'e9007199254740990');
+    expect(graph.addEdge('a', 'b').id).toBe('e9007199254740991');
+    expect(() => graph.addEdge('a', 'b')).toThrow(/exhausted/);
+  });
+
+  it('throws when the skip loop would push the counter past the safe integer ceiling', () => {
+    const graph = triangle();
+    graph.addEdge('a', 'b', 'e9007199254740990');
+    graph.addEdge('a', 'b', 'e9007199254740991');
+    expect(() => graph.addEdge('a', 'b')).toThrow(/exhausted/);
+  });
+
   it('does not burn a generated id on a failed call', () => {
     const graph = triangle();
     expect(() => graph.addEdge('a', 'nope')).toThrow(NodeNotFoundError);

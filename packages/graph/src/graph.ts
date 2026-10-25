@@ -23,6 +23,10 @@ const GENERATED_EDGE_ID = /^e([1-9]\d*)$/;
  * `Number.MAX_SAFE_INTEGER` also leaves it alone, since arithmetic there is not
  * exact; the skip loop in the generators still guarantees a free id, it just
  * costs one extra probe.
+ *
+ * The candidate is only taken when it is a safe integer, so this function can
+ * never be the thing that pushes the counter past the ceiling. Only the `+= 1`
+ * in the generators can do that, which is where {@link requireLiveSeq} guards.
  */
 function advanceSeq(current: number, id: string, pattern: RegExp): number {
   const suffix = pattern.exec(id)?.[1];
@@ -30,6 +34,24 @@ function advanceSeq(current: number, id: string, pattern: RegExp): number {
   const next = Number(suffix) + 1;
   if (!Number.isSafeInteger(next)) return current;
   return Math.max(current, next);
+}
+
+/**
+ * Asserts an id counter can still move forward.
+ *
+ * Past `Number.MAX_SAFE_INTEGER` adding 1 rounds back to the same value, so the
+ * counter is frozen: the skip loop would probe one candidate forever, and even
+ * without a collision the next call would hand out a suffix already spent. The
+ * class promises a generated id is never recycled, and a frozen counter cannot
+ * keep that promise, so generation stops here. A hang would be the worst
+ * outcome of the two: no error, no stack, nothing to act on.
+ */
+function requireLiveSeq(seq: number, kind: 'node' | 'edge'): void {
+  if (!Number.isSafeInteger(seq)) {
+    throw new Error(
+      `graph invariant: ${kind} id generation is exhausted, the counter has reached the safe integer ceiling`,
+    );
+  }
 }
 
 /**
@@ -97,6 +119,7 @@ export class Graph {
    *
    * @throws {InvalidIdError} when `id` is an empty string.
    * @throws {DuplicateNodeError} when `id` is already in the graph.
+   * @throws {Error} when `id` is omitted and the counter is exhausted.
    */
   addNode(id?: NodeId): Node {
     const resolved = id === undefined ? this.#generateNodeId() : id;
@@ -168,6 +191,7 @@ export class Graph {
    * @throws {NodeNotFoundError} when either endpoint is not in the graph.
    * @throws {InvalidIdError} when `id` is an empty string.
    * @throws {DuplicateEdgeError} when `id` is already in the graph.
+   * @throws {Error} when `id` is omitted and the counter is exhausted.
    */
   addEdge(source: NodeId, target: NodeId, id?: EdgeId): Edge {
     const outgoing = this.#outEdges.get(source);
@@ -396,22 +420,33 @@ export class Graph {
    * Next free generated node id. The counter only moves forward and already
    * sits past every explicit id in generated shape, so a call is worst case
    * O(k) probes and amortised O(1) over the lifetime of the graph.
+   *
+   * @throws {Error} when the counter has reached the safe integer ceiling.
    */
   #generateNodeId(): NodeId {
+    requireLiveSeq(this.#nextNodeSeq, 'node');
     let candidate = `n${String(this.#nextNodeSeq)}`;
     while (this.#nodes.has(candidate)) {
       this.#nextNodeSeq += 1;
+      requireLiveSeq(this.#nextNodeSeq, 'node');
       candidate = `n${String(this.#nextNodeSeq)}`;
     }
     this.#nextNodeSeq += 1;
     return candidate;
   }
 
-  /** Next free generated edge id. Same forward-only rule as node ids. */
+  /**
+   * Next free generated edge id. Same forward-only rule as node ids, and the
+   * same exhaustion check.
+   *
+   * @throws {Error} when the counter has reached the safe integer ceiling.
+   */
   #generateEdgeId(): EdgeId {
+    requireLiveSeq(this.#nextEdgeSeq, 'edge');
     let candidate = `e${String(this.#nextEdgeSeq)}`;
     while (this.#edges.has(candidate)) {
       this.#nextEdgeSeq += 1;
+      requireLiveSeq(this.#nextEdgeSeq, 'edge');
       candidate = `e${String(this.#nextEdgeSeq)}`;
     }
     this.#nextEdgeSeq += 1;

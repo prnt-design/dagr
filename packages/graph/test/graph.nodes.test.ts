@@ -193,6 +193,23 @@ describe('Graph generated node ids', () => {
     expect(graph.nodeCount).toBe(3);
   });
 
+  // Both saturation cases use a fixed, small number of calls on purpose. A
+  // regression has to fail an assertion here, never spin: neither case leaves
+  // the generator with a taken candidate it cannot advance past.
+  it('throws once the counter has already passed the safe integer ceiling', () => {
+    const graph = new Graph();
+    graph.addNode('n9007199254740990');
+    expect(graph.addNode().id).toBe('n9007199254740991');
+    expect(() => graph.addNode()).toThrow(/exhausted/);
+  });
+
+  it('throws when the skip loop would push the counter past the safe integer ceiling', () => {
+    const graph = new Graph();
+    graph.addNode('n9007199254740990');
+    graph.addNode('n9007199254740991');
+    expect(() => graph.addNode()).toThrow(/exhausted/);
+  });
+
   it('does not burn a generated id on a rejected duplicate', () => {
     const graph = new Graph();
     graph.addNode('a');
