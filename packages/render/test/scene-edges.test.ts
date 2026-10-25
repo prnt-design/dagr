@@ -180,6 +180,27 @@ describe('SceneEdges', () => {
       ).toThrow(/edge "e3"\.color/);
     }
     expect(scene.meshes[0]?.geometry).toBe(before);
+    expect(() => scene.setEdges(ROUTED, [edge('e1', straight, Number.NaN)])).toThrow(/edge "e1"\.color/);
+    scene.dispose();
+  });
+
+  it('writes a repeated colour on every edge that shares it', () => {
+    const scene = new SceneEdges(groups());
+    scene.setEdges(ROUTED, [
+      edge('e1', straight, 0x023047),
+      edge('e2', straight, 0x023047),
+      edge('e3', straight, 0xffb703),
+      edge('e4', straight, 0xffb703),
+    ]);
+    const colors = attributeOf(scene, 0, 'ribbonColor');
+    const navy = new Color(0x023047);
+    const amber = new Color(0xffb703);
+    for (let vertex = 0; vertex < 16; vertex += 1) {
+      const expected = vertex < 8 ? navy : amber;
+      expect(colors[vertex * 3]).toBeCloseTo(expected.r, 6);
+      expect(colors[vertex * 3 + 1]).toBeCloseTo(expected.g, 6);
+      expect(colors[vertex * 3 + 2]).toBeCloseTo(expected.b, 6);
+    }
     scene.dispose();
   });
 

@@ -486,9 +486,10 @@ class EdgeGroup implements GpuResource {
 function colorsFor(edges: readonly SceneEdge[], geometry: RibbonGeometry): Float32Array {
   const colors = new Float32Array(geometry.vertexCount * 3);
   const { ranges } = geometry;
-  // Converted only when it differs from the previous edge's, because a group is
-  // usually one colour and the conversion is three `Math.pow` and a label. A
-  // repeat is already validated, and `NaN` never equals itself, so it still throws.
+  // A colour is converted only when it differs from the previous edge's, because
+  // a group is usually one colour and the conversion is three `Math.pow` and a
+  // label. A repeat is already validated, and `NaN` never equals itself, so it
+  // still throws.
   let hex = Number.NaN;
   let r = 0;
   let g = 0;
@@ -496,9 +497,10 @@ function colorsFor(edges: readonly SceneEdge[], geometry: RibbonGeometry): Float
   for (let index = 0; index < ranges.length; index += 1) {
     const edge = edges[index];
     if (edge === undefined) continue;
-    if (edge.color !== hex) {
-      [r, g, b] = linearFromHex(edge.color, `edge "${edge.id}".color`);
-      hex = edge.color;
+    const color = edge.color;
+    if (color !== hex) {
+      [r, g, b] = linearFromHex(color, `edge "${edge.id}".color`);
+      hex = color;
     }
     const range = ranges[index]!;
     const end = (range.vertexStart + range.vertexCount) * 3;
