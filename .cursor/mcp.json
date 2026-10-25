@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "dispatch": {
+      "type": "http",
+      "url": "http://127.0.0.1:6767/api/mcp/agt_7556e9ba45df",
+      "headers": {
+        "Authorization": "Bearer YWdlbnQ6YWd0Xzc1NTZlOWJhNDVkZg.i7pjuft_URVzUfaKFp6ctzuROzlTrRjmg-Id0oaK8fc"
+      }
+    }
+  }
+}

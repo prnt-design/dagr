@@ -24,70 +24,50 @@ for a slower machine, not for a different architecture. Gating on CI reported
 eleven regressions between +23% and +76% on a commit that changed one docs
 page.
 
-Which machine that is has changed once and can change again: the current file
-was captured on the dispatch box, an x64 AMD EPYC-Rome VM, replacing a capture
-from the maintainer's arm64 M1 Pro after `bench:ci` on the VM showed the
-mismatch signature (failures concentrated in a package the change never
-touched; every `@dagr/graph` ratio had moved +10.2% to +69.8% with no commits
-to its `src`, which is exactly the shift the control cannot cancel). The
-mismatch now points the other way: a run on the maintainer's arm64 machines
-will fail against this file the same way, and moving development back there
-means recapturing on the same terms, three agreeing runs on a quiet machine.
-It has since changed again without anyone moving: the box became an Intel Xeon
-Skylake on 2026-08-18, this file still names the EPYC, and a recapture is queued
-rather than taken. See "The machine in the file" below for how the gate says so
-now, and for what it cost to find out by hand.
-The CI argument above is unchanged by the baseline being x64 Linux: the
-remaining reason the gate stays local is runner noise and runner identity, not
-which architecture the file happens to name.
+Which machine that is has changed and can change again. The current file was
+captured on the dispatch runner after it moved to a Darwin arm64 Apple M4,
+replacing the Linux x64 AMD EPYC-Rome capture that no longer matched the runner.
+The maintainer authorized the move after the identity check correctly refused
+to compare the two architectures. See "The machine in the file" below for why
+the gate makes that distinction.
 
-**The current file was captured on 2026-08-16 between 05:20 and 05:29 UTC and
-supersedes PR #21's capture of 2026-08-14.** Same machine, different conditions,
-which is the whole reason for it: PR #21 was taken when one agent ran on this
-box at a time, and the box now carries several sessions at once. The maintainer
-called the recapture after four sessions escalated the same symptom. It was
-taken in a trough between the neighbours' bursts, with the 1-minute load between
-0.40 and 2.13 for the whole set, a warmup run discarded, and FIVE measured runs
-rather than three: the first three disagreed by 32.5% on `build > 1k` and 26.7%
-on `isAcyclic, acyclic`, so two more were taken to find out which of them was
-representative. The file is run 3. `loadAverageAtCapture` reads 1.3 because
-`bench:baseline` sampled it when the file was written, half an hour after the
-runs it holds; the figures above are what the measurements were taken under, and
-that gap is the reason the field's name is as narrow as it is.
+The CI argument is unchanged by the baseline now being arm64 Darwin. GitHub's
+x64 Ubuntu runners still do not match it, and the remaining reasons the gate
+stays local are runner noise and runner identity, not which architecture the
+file happens to name.
+
+**The current file was captured on 2026-08-30 between 02:30 and 02:34 UTC.**
+The Apple M4 runner had no competing benchmark or build process, its 1-minute
+load stayed between 1.85 and 2.47 during measurement, and one warmup was
+discarded. The first three measured runs agreed on fifteen of the sixteen gated
+entries but not on `sources, 10k`, so two more were taken rather than choosing
+from an unsettled set. Runs 1, 3 and 4 then agreed on every gated entry within
+5.17%. The file is run 1. `loadAverageAtCapture` reads 2.57 because
+`bench:baseline` samples after the benchmarks, which is why the field describes
+the moment of capture rather than the measurement window.
 
 **Measure closeness over the GATED entries only when picking which run to
-commit.** The first pick here was run 4, on a per-entry closeness computed over
-all fifteen: `2.5k successors` is exempt, it swings further than anything else
-in the file, and it pulled the choice by more than the gated entries did. Over
-the fourteen that actually gate, run 3 sits at 2.28% mean absolute deviation
-from the per-entry medians and run 4 at 2.94%. Run 4 was quieter WITHIN its runs
-by about 0.5 percentage points of rme per entry, which is a real cost, and
-centring still wins: a baseline off-centre by 10% moves every future comparison
-against that entry and prints `is N% faster than baseline` forever, while rme
-only widens the allowance and hits the same 25% cap either way.
+commit.** Over the sixteen entries gated during selection, runs 1 through 5
+had mean absolute deviations of 0.553%, 2.971%, 1.378%, 0.972% and 2.813% from
+their per-entry medians. Run 1 is therefore the centred choice. The same
+calculation over all seventeen entries, after the stable `2.5k successors`
+entry was re-enabled, puts run 1 at 0.603%. Centring matters because an
+off-centre baseline moves every future comparison against that entry, while
+rme widens the allowance.
 
-**The old file was not far wrong, and that is the finding.** Eleven of the
-fourteen gated entries moved less than 6%, the largest being `2.5k outEdges` at
--11.0%, `sources, 10k` at -10.8% and `isAcyclic, acyclic` at +9.4%. So the
-flakiness that motivated this was never mostly a stale baseline: it is the
-between-run spread on this machine, measured over the five capture runs as a
-30.6% band on `build > 1k`, a 40.7% band on `isAcyclic, acyclic`, a 39.8% band
-on `rank > 1k` and a 35% band on the already-exempt `2.5k successors`, on an
-idle box with no code changing. A fresh baseline re-centres those bands; it
-cannot narrow them. Two of three is what keeps them from failing a merge, and
-the two changes ship together for that reason.
+**The five-run set also answered whether the old exemption belongs on this
+machine.** `2.5k successors` had a 7.02% band across all five Apple M4 runs,
+with within-run rme at or below 1.48%. That is stable enough to gate, so the
+EPYC-era exemption and its machine-specific reason were removed. All seventeen
+entries now contribute regression coverage.
 
 **A recapture moves the effective tolerance even though it touches no
-constant**, and saying "the tolerances are unchanged" without that sentence
-would be a half-truth. The formula adds the BASELINE's margin of error, so a
-noisier baseline gates wider on that entry. Comparing each entry against an
-equally noisy re-run, seven of the fourteen widened and four now sit at the 25%
-cap where two did: `build > 1k`, `rank > 10k`, and now `descendants, 10k`
-(1.60% rme to 5.86%) and `pipeline > 1k` (4.45% to 12.70%). Those four are close
-to ungated, and they are named here for the same reason the weakest entries are
-named below: an allowance nobody wrote down is the kind that stops being
-noticed. Narrowing them is a capture on a quieter machine or a second control,
-not a smaller number asserted here.
+constant.** The formula adds the BASELINE's margin of error, so a noisier
+baseline gates wider on that entry. The largest rme in the current file is
+4.42% on `build > 1k`; the next two are 3.55% on unwatched attribute updates
+and 3.32% on warm ranking at 10k. None reaches the 25% tolerance cap from its
+baseline uncertainty. These entries are named below so a future recapture can
+show whether the effective allowances widened or narrowed.
 
 ## The machine in the file
 
@@ -219,10 +199,15 @@ the control was 1.134 times the value this file records for it while
 pointer chasing, was 2.083 times its own, a non-uniformity of 1.84 between two
 benchmarks standing in for the two probes. 1.5 is the geometric midpoint,
 1.495 rounded, which is the placement that treats a missed diagnosis and a
-wrong one as costing the same. The evidence is one-sided and says so: no
-baseline carrying probes exists on a second machine yet, so the signal figure
-is inferred. The first recapture makes it measurable, and that is when the
-constant is worth revisiting.
+wrong one as costing the same.
+
+**The 2026-08-30 recapture supplied the second-machine measurement.** Against
+the EPYC profile, the M4 graph worker's allocation probe scaled to 0.45 while
+its pointer chase scaled to 0.26, a 1.74x disagreement. The layout worker
+scaled to 0.45 and 0.24, a 1.91x disagreement. Both clear 1.5, while the
+same-machine noise study tops out at 1.215. The measured result therefore
+confirms the threshold separates this architecture change from observed noise;
+it does not justify moving the constant.
 
 **It prints a sentence and changes no exit code**, which is deliberate and is
 the difference between this and the identity check above it. An identity
@@ -233,10 +218,11 @@ that reason. What the four runs this cost were spent on was diagnosis and not
 the exit code: the gate was always going to be red, and what was missing was
 the harness saying which of the two things it was red about.
 
-**The committed file predates the probes, so the comparison says so and does
-nothing.** Until a recapture records a profile, every run prints one line
-saying it cannot tell a different machine from a slower one, which is a
-different fact from the machines matching and is printed as one.
+**The 2026-08-16 file predated the probes, so comparisons against it said so
+and did nothing.** The current file records both probes. A hand-written or
+older baseline without a profile still prints one line saying the gate cannot
+tell a different machine from a slower one, which is a different fact from the
+machines matching and is printed as one.
 
 **This also qualifies the second control workload that this file keeps naming
 as the fix for control drift, and the qualification is measured.** A second
@@ -248,11 +234,9 @@ ratios, which is a continuum ordered by how memory-bound each entry is and not
 two clusters. Two controls would give two anchors and leave everything between
 them served by neither. That is an argument for the probes, which only have to
 DETECT the difference, and it is a reason to stop describing a second control as
-the fix rather than as an improvement. `2.5k successors` carries that promise in
-its own exemption text inside `bench/baseline.json`, where it reads as the path
-back to gating that entry. It is left standing rather than edited, because the
-next recapture rewrites the stats under it anyway and this paragraph is where
-the qualification belongs.
+the fix rather than as an improvement. The former `2.5k successors` exemption
+named a stable machine as its path back to coverage. The 2026-08-30 Apple M4
+capture supplied that evidence, and the entry is gated again.
 
 ## Two of three
 
@@ -265,8 +249,8 @@ three; a measurement here is about 70 seconds.
 
 It measured once before 2026-08-16, and what changed is not the code but the
 machine. This box now carries several agent sessions at a time, some of them in
-an unrelated checkout that cannot read the gate lock, and the committed baseline
-was captured when one agent ran at a time. The result, measured across five
+an unrelated checkout that cannot read the gate lock, and the baseline then
+in use was captured when one agent ran at a time. The result, measured across five
 sessions on branches that changed nothing the gate can see: unmodified `main`
 failed a run and passed the next a minute later; a markdown-only branch passed
 at a 1-minute load of 4.56, failed at 5.07 and passed again at a HIGHER 6.18; a
@@ -293,9 +277,10 @@ tolerance CONSTANT was loosened to absorb the noise, because a wider tolerance
 hides the drift and the regression together, and a fresh baseline plus
 repetition is what replaces a looser number. Say it that precisely, though: the
 formula adds the baseline's own margin of error, so recapturing on a noisier
-machine widens the effective allowance on the entries whose rme rose, seven of
-fourteen here. The numbers are in the baseline-machine section above, because an
-allowance that moved without anyone editing a constant is exactly the kind that
+machine widens the effective allowance on the entries whose rme rose. Seven of
+fourteen widened in the 2026-08-16 EPYC recapture; the current M4 capture's
+largest margins are recorded in the baseline-machine section above. An
+allowance that moves without anyone editing a constant is exactly the kind that
 stops being noticed.
 
 **What two of three does not fix, measured rather than guessed.** A burst of
@@ -443,7 +428,7 @@ exemption is the same kind of act as adding one, a hand edit with the reason
 for it in the commit. (The first rule here let a produced key reclaim its
 gate; it was reversed when the first produced-and-exempt entry arrived,
 because a capture that re-gated `2.5k successors` by side effect would re-arm
-the exact flake its exemption exists to prevent.)
+the exact flake its exemption existed to prevent.)
 
 ## Adding a benchmark
 
@@ -516,7 +501,8 @@ comparison against any baseline captured before the change, and the comparison
 detects that for itself: a probe the baseline does not carry is skipped, and a
 file left with fewer than two is reported as not comparable rather than as a
 match. So a probe may be changed on its own merits. It just stops answering the
-question until the next capture, which is the state the file is in today.
+question until the next capture. The current file carries both probes, so its
+profile is comparable to future runs with the unchanged probe definitions.
 
 The same hazard, from the other end: a milestone that grows the WORKLOAD a
 benchmark measures rebases that benchmark's entry just as surely, without
@@ -656,51 +642,35 @@ the ceiling can finish above it. A capture gated only on load produced a file
 whose own margins of error were WORSE than the run it replaced on five entries,
 topping out at 5.48%.
 
-**Every entry's rme under a ceiling.** Three of the fifteen benchmarks draw
-their median from 10, 10 and 30 samples, because one iteration takes 73ms to
-1.1s and vitest samples for a fixed wall clock. None of the three is reliably
-under 3%: across six rejected runs on an idle machine `rank > 10k` recorded
-3.65% to 5.36% and `pipeline > 1k` 2.90% to 4.64%, and the shipped capture has
-them at 7.15% and 4.45%. They can each land under 3% and cannot be counted on
-to, so requiring all fifteen under 3% in one run is a bet those three lose, and
-a capture gated that way was rejected six times running before the ceiling was
-recognised as unreachable rather than the machine as busy. rme was the EVIDENCE
-that the old baseline was taken badly; it is not the property a good baseline
-has to have.
+**Every entry's rme under a ceiling.** Two of the seventeen benchmarks draw
+their median from 10 samples because one iteration takes most of the benchmark
+window. Historical captures show that these long entries do not reliably stay
+under 3% rme. The current capture happens to put both pipelines under 2.21%,
+while faster `build > 1k` reaches the file's high of 4.42%. Requiring every
+entry under one rme ceiling would reject a representative run based on
+within-run sampling alone. rme remains evidence used in selection and in the
+effective allowance, not a standalone capture gate.
 
 ### The weakest entries in the current file, named rather than left to be found
 
-One entry is exempt outright. `2.5k successors` carries `"gate": "off"` in the
-current file, because across nine quiet-machine runs on the dispatch box its
-control-normalized ratio ranged 37.7 to 61.8, a 64% band, while its within-run
-rme stayed under 6%: the between-run variance is real, exceeds the 25%
-tolerance cap, and a gate on it would flag noise rather than regressions. The
-full evidence is in the entry's own `reason`. The 2026-08-16 recapture measured
-it again over five quiet runs, at 37.51 to 50.71, a 35% band, so the exemption
-stands. Re-enable it if the baseline moves to a machine where three runs agree
-on it.
+No entry is exempt outright. The Apple M4 recapture put the former
+`2.5k successors` exemption inside a 7.02% five-run band, so it is gated with
+the other sixteen entries.
 
-Among the gated entries, four are weakest by margin of error, and the whole list
-is given rather than the top two, because each of them gates at the 25% cap
-against a similarly noisy re-run and a reader trusting a short list would not
-know the rest were there: `pipeline > 1k` (12.70% rme at 10 samples, median
-124.16ms), `rank > 10k` (9.49% at 13), `build > 1k nodes and 4k edges from
-empty` (8.31% at 91, median 4.02ms) and `descendants, 10k` (5.86% at 183). The
-cap is close to ungated. They are left that way deliberately, because turning
-them off reduces real coverage and switching the gate to a trimmed statistic
-changes every entry in the file. Both are decisions to take on purpose rather
-than side effects of a recapture.
+The three largest margins of error in the current file are `build > 1k nodes
+and 4k edges from empty` (4.42% rme at 312 samples), unwatched attribute
+updates (3.55% at 752), and warm ranking at 10k (3.32% at 47). Against a run
+with the same rme, `build > 1k` receives a 23.83% allowance, only 1.17
+percentage points below the 25% cap. It is the current weak point. These entries
+remain named because a future capture should make a changed effective allowance
+visible rather than silently moving it.
 
 READ BETWEEN-RUN SPREAD AS A SEPARATE WEAKNESS FROM rme, because the two do not
-pick the same entries. Over the five runs of the 2026-08-16 capture, on an idle
-box with no code changing, `build > 1k` spanned 30.6%, `isAcyclic, acyclic`
-40.7% and `rank > 1k` 39.8%, while `rank > 1k` recorded rme between 1.3% and
-4.8% in those same runs: it is quiet WITHIN a run and moves BETWEEN runs, which
-is precisely the error the control is supposed to cancel and does not. Those
-three are what two of three is carrying, and they are the standing argument for
-the second control workload this file keeps naming. `rank > 1k` has now been the
-failing entry five times across six sessions, which makes it the entry to look
-at first.
+pick the same entries. Across all five Apple M4 runs, `sources, 10k` spanned
+22.70%, `pipeline > 1k` spanned 13.92%, and cold ranking at 1k spanned 9.52%.
+Runs 1, 3 and 4 still agreed on every entry within 5.17%, which is the repeatable
+cluster used for the capture. `sources, 10k` is the entry to inspect first when
+future runs disagree, and it is what two of three is carrying on this machine.
 
 
 ## Layout
