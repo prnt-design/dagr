@@ -1704,14 +1704,16 @@ same delta added, 57 of them refused.
 In Node, the edge half's plan alone at 10,000 smooth nodes, 300 retargets with
 a frame stepped between each, previous and this build alternated eight times
 at load about 2.1: median 4.1 to 5.4 ms against 5.8 to 6.8, minimum 3.5 to
-3.7 against 4.0 to 4.2. The scene's `apply`, one frame between retargets,
+3.7 against 3.9 to 4.2. The previous build's median sat 2 to 3 ms above its
+minimum, so allocation and collection rather than arithmetic is what is left
+of the plan. The scene's `apply`, one frame between retargets,
 three pairs: 10.3 to 10.7 ms against 11.7 to 12.0 smooth and 8.5 to 8.8
 against 9.1 to 9.9 straight; thirty frames between, as this page steps, 18.5
 to 19.4 against 21.5 to 21.9 smooth and 16.4 to 16.9 against 18.2 to 18.6
 straight. The committed entries are in `bench/README.md`. A first attempt
 that took a route's arc-length parameters from the walk that validates it,
 rather than measuring the segments twice, had the same minimum and a worse
-median (about 7.2 ms against 6.1), because each reroute then held its
+median (6.7 to 7.4 ms against 5.8 to 6.8), because each reroute then held its
 parameters until the plan ended; it was not kept.
 
 On WebGPU, same machine (Apple M4), Google Chrome 155.0.8059.85 headed with
@@ -1733,6 +1735,6 @@ milliseconds:
 **The browser does not resolve the change.** The previous build's `apply`
 falls in the two bands earlier sections found, 7.6 to 8.5 ms or 11.0 to 12.3
 straight and 14.2 to 14.4 or 17.7 smooth, while this build landed between them
-in every run, 10.3 to 10.9 straight and 16.4 to 16.6 smooth. Against the upper
-band it is lower in all four straight runs, and against the lower band it is
-higher. Node, where the bands do not appear, shows the gain in every pair.
+in every run, 10.3 to 10.9 straight and 16.4 to 16.6 smooth: each of its six
+straight runs is below all four of the previous build's upper-band runs and
+above both of its lower-band ones. Node, where the bands do not appear, shows the gain in every pair.
