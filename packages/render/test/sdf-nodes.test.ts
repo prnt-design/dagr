@@ -187,16 +187,16 @@ describe('antialiasWidth', () => {
   it('is the LENGTH of the gradient and not fwidth, checked structurally', () => {
     // The one place this file inspects a graph's shape instead of only its
     // existence, and it is worth the coupling. `fwidth(d)` builds just as happily
-    // as `length(vec2(dFdx(p.c), dFdy(p.c)))` and differs from it by up to 41% on a
-    // diagonal, which is every point of every rounded corner: the visible symptom
-    // is corners blurrier than the sides they join, at every zoom, which is a
-    // thing a reviewer would look straight past on a screenshot. So the decision
-    // gets a test rather than only a paragraph.
+    // as `length(vec2(dFdx(p.c), dFdy(p.c)))`. The current axis-aligned camera
+    // makes their L1 and L2 widths equal for each position component, but rotation
+    // or shear would make `fwidth` orientation-dependent. So the general form gets
+    // a structural test rather than only a paragraph.
     //
     // What is asserted: the outermost operation is a `length`, and its argument
-    // joins exactly two components which are `dFdx` and `dFdy` of something. What
-    // is NOT asserted: that the something is the distance, or that WGSL's
-    // `length` does what its name says.
+    // joins exactly two components which are `dFdx` and `dFdy` of the same position
+    // component. The preceding test also asserts that the two branches use
+    // different position components. What is NOT asserted is that WGSL's `length`
+    // does what its name says.
     //
     // Brittle by design. It reads `method`, `aNode` and `nodes`, which are three's
     // node fields rather than a public API surface, so a three release that
