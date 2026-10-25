@@ -1738,3 +1738,40 @@ straight and 14.2 to 14.4 or 17.7 smooth, while this build landed between them
 in every run, 10.3 to 10.9 straight and 16.4 to 16.6 smooth: each of its six
 straight runs is below all four of the previous build's upper-band runs and
 above both of its lower-band ones. Node, where the bands do not appear, shows the gain in every pair.
+
+### With an edge colour converted only when it changes (2026-10-25)
+
+With a tenth of the nodes moving, about a third of `setEdges` was not the
+tessellation: in Node at 10,000 smooth nodes it took 2.6 ms, of which
+`tessellateRibbons` was 1.7, and the per-vertex colour buffer was 0.78 ms of
+the 0.9 left. 0.33 ms of that was converting each edge's colour, three `Math.pow`
+and a label string per edge, though the profile's edges share one colour. A colour
+is now converted only when it differs from the previous edge's, and the
+vertices are walked by index.
+
+Colour buffers are byte-identical: the same sha256 over the profile's 13,169 edges
+and a self loop, with one colour, runs of six colours, and a different colour per edge. In Node, `setEdges` on 13,169 smooth routes with a tenth moving,
+400 frames after 50 of warm-up, six pairs at load about 3.5: median 2.20 to
+2.27 ms against 2.62 to 2.68, minimum 1.94 to 1.97 against 2.39 to 2.40. With a
+different colour on every edge, the case the cache cannot help, four pairs:
+2.51 to 2.54 against 2.69 to 2.73.
+
+On WebGPU, same machine (Apple M4), Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, tick 16.7 ms, DPR 1,
+`fit`, `--motion=springs --sizes=10000 --edges=smooth --moving=0.1
+--frames=1200` (42 retargets a run), builds swapped through
+`packages/render/dist/scene-edges.js`, previous build first in each of three
+pairs, load average 2.3 to 3.5. The previous build's 3.3 to 3.4 is below
+the 3.5 to 3.6 the run-at-a-time section measured for the same build at
+loads of 3.7 to 4.1; compare within the table. Animated-mode medians in milliseconds:
+
+| Build | `setEdges` | `setNodes` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- |
+| previous | 3.3, 3.3, 3.4 | 1.9, 1.8, 1.9 | 1.7, 1.5, 1.8 | 0.1%, 0%, 0% |
+| this one | 2.9, 3.0, 3.0 | 1.8, 1.9, 1.9 | 1.7, 1.5, 1.6 | 0.1%, 0%, 0% |
+
+Both hold the tick. What is left of `setEdges` beyond the tessellation is
+the colour and intensity buffers built new on every call and the new
+`BufferGeometry` around them; `setNodes`, at 1.8 to 1.9, is the next largest
+step.
