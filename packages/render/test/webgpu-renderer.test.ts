@@ -6,7 +6,14 @@ import {
   adoptCanvasViewport,
   createRenderer,
 } from '../src/webgpu-renderer.js';
-import type { FrameSink, GpuResource, ProjectionTarget } from '../src/webgpu-renderer.js';
+import type {
+  DrawnShape,
+  FrameSink,
+  GpuResource,
+  ProjectionTarget,
+  SceneGraph,
+} from '../src/webgpu-renderer.js';
+import type { NormalizedShape, ShapeInstance } from '../src/shape.js';
 
 /**
  * The renderer's bookkeeping, tested without a GPU.
@@ -19,10 +26,15 @@ import type { FrameSink, GpuResource, ProjectionTarget } from '../src/webgpu-ren
  * about when to call four methods on three collaborators, and every one of them
  * is checkable by counting those calls.
  *
+ * The same is true of `setShapes`, which M4.2 adds: which meshes are in the
+ * scene, which geometries have been given back, and whether a rejected batch
+ * left the previous one alone are all counting questions.
+ *
  * The stubs below are honest for one specific reason: the collaborator types
  * they implement are the ones the class actually declares, and `createRenderer`
- * passes a real `WebGPURenderer`, `Scene`, `OrthographicCamera`, `PlaneGeometry`
- * and `MeshBasicNodeMaterial` into those same parameters. So the typecheck of
+ * passes a real `WebGPURenderer`, `Scene` and `OrthographicCamera`, plus
+ * `createShapeMesh` (which returns a real `Mesh`, `PlaneGeometry` and
+ * `MeshBasicNodeMaterial`), into those same parameters. So the typecheck of
  * `createRenderer` is the proof that the real three objects satisfy the
  * interfaces these stubs satisfy, and no cast is involved anywhere.
  */
@@ -87,15 +99,69 @@ class StubResource implements GpuResource {
   }
 }
 
+/**
+ * A `Scene` reduced to what this renderer does to one: put meshes in and take
+ * them out again. `OpaqueThreeObject` is the renderer's own name for "a three
+ * object I only hold", so the members here are the whole of the contact.
+ */
+class StubScene implements SceneGraph {
+  readonly added: object[] = [];
+  readonly removed: object[] = [];
+
+  add(object: object): void {
+    this.added.push(object);
+  }
+
+  remove(object: object): void {
+    this.removed.push(object);
+  }
+
+  /** What is on screen: everything added and not since removed. */
+  get contents(): object[] {
+    return this.added.filter((object) => !this.removed.includes(object));
+  }
+}
+
+/** One shape's three objects, reduced to an identity and two disposal counts. */
+class StubShapeMesh implements DrawnShape {
+  readonly object = {};
+  readonly geometry = new StubResource();
+  readonly material = new StubResource();
+}
+
+/** A `createShapeMesh` that records what it was asked for and allocates nothing. */
+class StubMeshFactory {
+  readonly requests: NormalizedShape[] = [];
+  readonly built: StubShapeMesh[] = [];
+
+  readonly build = (shape: NormalizedShape): DrawnShape => {
+    this.requests.push(shape);
+    const mesh = new StubShapeMesh();
+    this.built.push(mesh);
+    return mesh;
+  };
+}
+
 /** Everything one renderer under test is built from, kept for assertions. */
 interface Harness {
   readonly camera: Camera2D;
   readonly sink: StubFrameSink;
+  readonly scene: StubScene;
   readonly threeCamera: StubProjectionTarget;
-  readonly geometry: StubResource;
-  readonly material: StubResource;
+  readonly meshes: StubMeshFactory;
   readonly renderer: WebGPUSceneRenderer;
 }
+
+/** A rounded rect with every optional field left out, for the shape tests. */
+const oneShape: ShapeInstance = {
+  kind: 'rounded-rect',
+  center: { x: 10, y: 20 },
+  size: { width: 100, height: 40 },
+  style: { fillColor: 0xffb703 },
+};
+
+/** A second shape, distinguishable from the first by its centre. */
+const anotherShape: ShapeInstance = { ...oneShape, center: { x: -5, y: 0 } };
 
 /**
  * The viewport every renderer under test starts on: 800 by 600 at ratio 2, so
@@ -107,11 +173,11 @@ const initialViewport = { width: 800, height: 600, devicePixelRatio: 2 } as cons
 /** Builds a renderer over stubs, keeping every stub for assertions. */
 function harness(camera = new Camera2D({ viewport: initialViewport })): Harness {
   const sink = new StubFrameSink();
+  const scene = new StubScene();
   const threeCamera = new StubProjectionTarget();
-  const geometry = new StubResource();
-  const material = new StubResource();
-  const renderer = new WebGPUSceneRenderer(camera, sink, {}, threeCamera, geometry, material);
-  return { camera, sink, threeCamera, geometry, material, renderer };
+  const meshes = new StubMeshFactory();
+  const renderer = new WebGPUSceneRenderer(camera, sink, scene, threeCamera, meshes.build);
+  return { camera, sink, scene, threeCamera, meshes, renderer };
 }
 
 describe('WebGPUSceneRenderer drawing buffer', () => {
@@ -249,12 +315,145 @@ describe('WebGPUSceneRenderer camera sync', () => {
   });
 });
 
+describe('WebGPUSceneRenderer shapes', () => {
+  it('starts empty, drawing what it is told and nothing else', () => {
+    // M4.1's hard-coded quad is gone. A renderer that put something on screen
+    // by itself would be a renderer whose caller cannot get a blank canvas.
+    const { scene, meshes } = harness();
+    expect(scene.added).toHaveLength(0);
+    expect(meshes.requests).toHaveLength(0);
+  });
+
+  it('builds one mesh per shape and adds each to the scene', () => {
+    const { scene, meshes, renderer } = harness();
+    renderer.setShapes([oneShape, anotherShape]);
+    expect(meshes.requests).toHaveLength(2);
+    expect(scene.contents).toEqual(meshes.built.map((mesh) => mesh.object));
+  });
+
+  it('hands the mesh factory a normalized shape, not the caller record', () => {
+    // The defaults are applied once, at the gate, so nothing downstream writes
+    // its own `?? 0`: `shape.ts` states why two copies of a default drift.
+    const { meshes, renderer } = harness();
+    renderer.setShapes([oneShape]);
+    expect(meshes.requests[0]).toEqual({
+      kind: 'rounded-rect',
+      center: { x: 10, y: 20 },
+      size: { width: 100, height: 40 },
+      cornerRadius: 0,
+      style: {
+        fillColor: 0xffb703,
+        fillOpacity: 1,
+        outlineColor: 0xffb703,
+        outlineWidth: 0,
+        glowColor: 0xffb703,
+        glowRadius: 0,
+      },
+    });
+  });
+
+  it('replaces the whole batch, disposing what it drops', () => {
+    // A caller driving an animation calls this every frame, so a renderer that
+    // leaked a geometry and a material per call would die in about a minute.
+    const { scene, meshes, renderer } = harness();
+    renderer.setShapes([oneShape]);
+    const dropped = meshes.built[0];
+    renderer.setShapes([anotherShape]);
+    const kept = meshes.built[1];
+
+    expect(dropped?.geometry.disposals).toBe(1);
+    expect(dropped?.material.disposals).toBe(1);
+    expect(kept?.geometry.disposals).toBe(0);
+    expect(kept?.material.disposals).toBe(0);
+    expect(scene.removed).toEqual([dropped?.object]);
+    expect(scene.contents).toEqual([kept?.object]);
+  });
+
+  it('clears the scene on an empty batch, which is legal', () => {
+    const { scene, meshes, renderer } = harness();
+    renderer.setShapes([oneShape, anotherShape]);
+    expect(() => renderer.setShapes([])).not.toThrow();
+    expect(scene.contents).toEqual([]);
+    for (const mesh of meshes.built) {
+      expect(mesh.geometry.disposals).toBe(1);
+      expect(mesh.material.disposals).toBe(1);
+    }
+  });
+
+  it('leaks nothing across a run of batches', () => {
+    // The animation case, spelled out: every mesh but the live one is disposed
+    // exactly once, however many times the batch turned over.
+    const { meshes, renderer } = harness();
+    for (let frame = 0; frame < 10; frame += 1) {
+      renderer.setShapes([oneShape, anotherShape]);
+    }
+    const live = meshes.built.slice(-2);
+    for (const mesh of meshes.built) {
+      const expected = live.includes(mesh) ? 0 : 1;
+      expect(mesh.geometry.disposals).toBe(expected);
+      expect(mesh.material.disposals).toBe(expected);
+    }
+  });
+
+  it('rejects a bad shape with a RangeError naming the field', () => {
+    const { renderer } = harness();
+    expect(() =>
+      renderer.setShapes([{ ...oneShape, size: { width: -1, height: 40 } }]),
+    ).toThrow(RangeError);
+    expect(() =>
+      renderer.setShapes([{ ...oneShape, size: { width: -1, height: 40 } }]),
+    ).toThrow(/size\.width/);
+    expect(() =>
+      renderer.setShapes([{ ...oneShape, style: { fillColor: 0x1000000 } }]),
+    ).toThrow(/fillColor/);
+  });
+
+  it('validates the whole batch before it touches the scene', () => {
+    // The decision, tested rather than only documented: a rejected batch leaves
+    // the previous one on screen, intact and still drawable. Validating as it
+    // goes would leave half of one batch and half of another in the scene,
+    // which is a state no caller can reason about or recover from.
+    const { scene, meshes, renderer } = harness();
+    renderer.setShapes([oneShape]);
+    const live = meshes.built[0];
+
+    expect(() =>
+      renderer.setShapes([anotherShape, { ...oneShape, center: { x: Number.NaN, y: 0 } }]),
+    ).toThrow(RangeError);
+
+    expect(scene.contents).toEqual([live?.object]);
+    expect(scene.removed).toHaveLength(0);
+    expect(live?.geometry.disposals).toBe(0);
+    expect(live?.material.disposals).toBe(0);
+    // Not even the shape BEFORE the bad one was built, which is what "before
+    // any mutation" means: the factory allocates GPU resources.
+    expect(meshes.requests).toHaveLength(1);
+  });
+
+  it('still draws after a rejected batch', () => {
+    const { sink, renderer } = harness();
+    renderer.setShapes([oneShape]);
+    expect(() => renderer.setShapes([{ ...oneShape, kind: 'circle' }])).toThrow(RangeError);
+    renderer.render();
+    expect(sink.frames).toBe(1);
+  });
+});
+
 describe('WebGPUSceneRenderer disposal', () => {
   it('disposes every resource it owns exactly once', () => {
-    const { sink, geometry, material, renderer } = harness();
+    const { sink, meshes, renderer } = harness();
+    renderer.setShapes([oneShape, anotherShape]);
     renderer.dispose();
-    expect(geometry.disposals).toBe(1);
-    expect(material.disposals).toBe(1);
+    for (const mesh of meshes.built) {
+      expect(mesh.geometry.disposals).toBe(1);
+      expect(mesh.material.disposals).toBe(1);
+    }
+    expect(sink.disposals).toBe(1);
+  });
+
+  it('disposes the sink even with no shapes to release', () => {
+    const { sink, renderer } = harness();
+    renderer.dispose();
     expect(sink.disposals).toBe(1);
   });
 
@@ -262,13 +461,23 @@ describe('WebGPUSceneRenderer disposal', () => {
     // `dispose()` on an already-disposed three renderer is not a documented
     // no-op, and a component that unmounts twice is ordinary rather than a bug
     // worth crashing for.
-    const { sink, geometry, material, renderer } = harness();
+    const { sink, meshes, renderer } = harness();
+    renderer.setShapes([oneShape]);
     renderer.dispose();
     renderer.dispose();
     renderer.dispose();
-    expect(geometry.disposals).toBe(1);
-    expect(material.disposals).toBe(1);
+    expect(meshes.built[0]?.geometry.disposals).toBe(1);
+    expect(meshes.built[0]?.material.disposals).toBe(1);
     expect(sink.disposals).toBe(1);
+  });
+
+  it('refuses to take shapes afterwards, naming the method that was called', () => {
+    const { scene, meshes, renderer } = harness();
+    renderer.dispose();
+    expect(() => renderer.setShapes([oneShape])).toThrow(RendererDisposedError);
+    expect(() => renderer.setShapes([oneShape])).toThrow(/setShapes\(\)/);
+    expect(scene.added).toHaveLength(0);
+    expect(meshes.requests).toHaveLength(0);
   });
 
   it('refuses to render afterwards, with a catchable error', () => {

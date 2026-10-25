@@ -3,10 +3,14 @@
  *
  * Plain CSS, one file, no framework and no build step beyond the one vite
  * already runs. The demo exists to look at a renderer, so the page around it is
- * deliberately quiet: it borrows the renderer's own two colours (amber on near
- * black, from `webgpu-renderer.ts`) so that nothing on screen competes with the
- * canvas, and every measurement here is in rem or a viewport unit so the layout
- * has one job, which is to give the canvas as much room as it can.
+ * deliberately quiet: it borrows the scene's amber (`scene.ts`) and the
+ * renderer's default clear colour (`webgpu-renderer.ts`) so that nothing on
+ * screen competes with the canvases, and every measurement here is in rem or a
+ * viewport unit so the layout has one job, which is to give them as much room
+ * as it can.
+ *
+ * The one exception is `.stage`'s height, which is a number two tests read. See
+ * the comment on it.
  */
 
 :root {
@@ -69,11 +73,83 @@ body {
   font-size: 0.8125rem;
 }
 
+/* The crispness comparison: two panes, one scene, two cameras. */
+
+.crispness__title {
+  margin: 0 0 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.crispness__lead {
+  margin: 0 0 1.25rem;
+  max-width: 78ch;
+  color: var(--ink-dim);
+  font-size: 0.875rem;
+}
+
+/*
+ * Two panes where there is room and one column where there is not. `auto-fit`
+ * rather than a fixed pair, because below about 45rem two panes are two narrow
+ * canvases and the 100x pane needs width to show a band with room on both sides
+ * of it: see `camera-input.ts` on why only the pane HEIGHT is a number any test
+ * relies on.
+ */
+.crispness__panes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(21rem, 1fr));
+  gap: 1rem 1.25rem;
+}
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  /* A grid item's default `min-width: auto` refuses to go below its content, so
+     without this the canvas floors the column width and the page scrolls
+     sideways on a narrow screen. */
+  min-width: 0;
+}
+
+.pane__caption {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: var(--mono);
+}
+
+.pane__zoom {
+  color: var(--amber);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.pane__subject {
+  font-size: 0.8125rem;
+  color: var(--ink-dim);
+}
+
+.pane__note {
+  margin: 0;
+  color: var(--ink-dim);
+  font-size: 0.8125rem;
+}
+
 /* The canvas and everything painted on top of it. */
 
+/*
+ * The height is the one dimension of a pane a test may rely on, because the
+ * `clamp` floor is a promise and the width is whatever the reader's window
+ * leaves. `test/camera-input.test.ts` copies the 480 and says why it has to.
+ */
 .stage {
   position: relative;
-  height: clamp(600px, 62vh, 780px);
+  height: clamp(480px, 52vh, 620px);
   border: 1px solid var(--rule);
   border-radius: 0.5rem;
   overflow: hidden;

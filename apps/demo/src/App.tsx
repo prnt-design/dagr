@@ -1,6 +1,6 @@
 import type { JSX } from 'react';
 import { Graph } from '@dagr/graph';
-import { FirstLight } from './FirstLight.js';
+import { ShapeStage } from './ShapeStage.js';
 
 /** What the demo keeps on its nodes. */
 type NodeAttrs = { label: string };
@@ -42,29 +42,31 @@ function labelOf(id: string): string {
 /**
  * The demo playground, in two halves that do not know about each other yet.
  *
- * The canvas is `@dagr/render`'s first light: one quad, drawn through a real
- * camera you can pan and zoom. The facts underneath are `@dagr/graph` driving
- * its real API, which is what this page proved before there was anything to
- * draw with and still proves now. They are separate on purpose: nothing in M4.1
- * turns a graph into a scene, and pretending otherwise by drawing five quads
- * here would be a layout engine written in the demo. M4.4 is what joins them,
- * and on that day this file loses its second half rather than gaining a third.
+ * The canvases are `@dagr/render`'s SDF shapes: one batch of them, drawn twice
+ * through two real cameras three orders of magnitude apart, which is M4.2's
+ * crispness reference. The facts underneath are `@dagr/graph` driving its real
+ * API, which is what this page proved before there was anything to draw with
+ * and still proves now. They are separate on purpose: nothing in M4.2 turns a
+ * graph into a scene, and pretending otherwise by placing these shapes from the
+ * node list would be a layout engine written in the demo. M4.4 is what joins
+ * them, and on that day this file loses its second half rather than gaining a
+ * third.
  */
 export function App(): JSX.Element {
   return (
     <main className="page">
       <header className="page__header">
         <h1 className="page__title">Dagr demo</h1>
-        <p className="page__subtitle">M4.1 first light</p>
+        <p className="page__subtitle">M4.2 sdf shapes</p>
       </header>
 
-      <FirstLight />
+      <ShapeStage />
 
       <section className="facts">
         <h2 className="facts__title">@dagr/graph</h2>
         <p className="facts__lead">
-          The graph model, running in the same page. Nothing below is drawn on the canvas above yet:
-          turning a graph into a scene is M4.4.
+          The graph model, running in the same page. Nothing below is drawn on the canvases above
+          yet: turning a graph into a scene is M4.4.
         </p>
         <div className="facts__grid">
           <div>

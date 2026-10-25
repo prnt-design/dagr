@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { AA_QUAD_PADDING_FRACTION, normalizeShape } from '@dagr/render';
 import {
-  INITIAL_ZOOM,
+  DETAIL_ZOOM,
   MAX_ZOOM,
   MIN_ZOOM,
+  OVERVIEW_ZOOM,
   WHEEL_LINE_HEIGHT,
   WHEEL_MAX_PIXELS,
   WHEEL_PAGE_HEIGHT,
@@ -11,11 +13,12 @@ import {
   wheelPixels,
   wheelZoomFactor,
 } from '../src/camera-input.js';
+import { HERO } from '../src/scene.js';
 
 /**
- * The only unit-testable part of the first light demo.
+ * The only unit-testable part of the demo's interaction layer.
  *
- * `FirstLight.tsx` is React glue over a GPU device: every line of it needs a
+ * `ShapeStage.tsx` is React glue over a GPU device: every line of it needs a
  * canvas, an adapter and a live layout, so it is verified by a screenshot the
  * way `@dagr/render`'s own renderer is. These two functions are the exception.
  * They are the arithmetic that sits between a DOM event and a `Camera2D` call,
@@ -101,51 +104,92 @@ describe('wheelZoomFactor', () => {
 
 describe('the zoom range', () => {
   /**
-   * The quad `@dagr/render` draws, in world units, and the shortest the stage
-   * ever gets, in CSS pixels.
+   * The shortest a pane ever gets, in CSS pixels: `styles.css` sizes one
+   * `clamp(480px, 52vh, 620px)` tall, and no module can read a stylesheet.
    *
-   * Both are copies, and both are copies on purpose. `FIRST_LIGHT_SIZE` is not
-   * exported from `@dagr/render` (M4.1 draws it, M4.4 replaces it), and the
-   * stage height is `clamp(600px, 62vh, 780px)` in `styles.css`, which no
-   * module can read. Importing the component to reach the first would pull
-   * three.js and a GPU device into a node test to check two numbers. The
-   * shortest stage is the worst case for the claim below, so a taller one only
-   * makes it truer.
+   * The last copied number in this block, and the hero it used to sit next to
+   * is now imported. That constant was `{ width: 100, height: 40 }`, a
+   * hand-copy of M4.1's `FIRST_LIGHT_SIZE` standing in for the quad
+   * `@dagr/render` used to hard-code; M4.2 deleted that quad, a renderer now
+   * starts empty, and the demo owns what it draws. So the shape these claims
+   * are about comes from `scene.ts`, which is the batch actually passed to
+   * `setShapes`, and a scene edit that broke one of them fails here instead of
+   * agreeing with a stale copy.
+   *
+   * Only the pane's HEIGHT is copied, because only the height has a floor:
+   * panes stack and go full width on a narrow screen, so a claim about their
+   * width would be a claim about the reader's window. A taller pane only makes
+   * these truer.
    */
-  const QUAD = { width: 100, height: 40 };
-  const SHORTEST_STAGE = 600;
+  const SHORTEST_PANE = 480;
+  const hero = normalizeShape(HERO);
 
-  it('contains the zoom the camera starts at', () => {
+  it('contains both zooms a pane starts at', () => {
     // Camera2D throws rather than clamps an out-of-range initial zoom, so this
     // is the difference between a demo and a blank page with a red overlay.
-    expect(INITIAL_ZOOM).toBeGreaterThanOrEqual(MIN_ZOOM);
-    expect(INITIAL_ZOOM).toBeLessThanOrEqual(MAX_ZOOM);
+    for (const zoom of [OVERVIEW_ZOOM, DETAIL_ZOOM]) {
+      expect(zoom).toBeGreaterThanOrEqual(MIN_ZOOM);
+      expect(zoom).toBeLessThanOrEqual(MAX_ZOOM);
+    }
   });
 
   it('is what bounds a gesture, since the per-event clamp only bounds an event', () => {
     // Thirty events each saturated at WHEEL_MAX_PIXELS is an ordinary trackpad
     // fling, and wheelZoomFactor composes them exactly, which its own docstring
     // calls a feature. So the clamp that makes one event safe multiplies out to
-    // a factor of about 8100 across a flick, and only the range stops it.
+    // a factor of about 8100 across a flick, and only the range stops it. From
+    // EITHER pane: the detail pane starts three orders of magnitude in, and one
+    // fling from there has to be caught by the same two numbers.
     const fling = wheelZoomFactor({ deltaY: -1e9, deltaMode: 0 }) ** 30;
-    expect(INITIAL_ZOOM * fling).toBeGreaterThan(MAX_ZOOM);
-    expect(INITIAL_ZOOM / fling).toBeLessThan(MIN_ZOOM);
+    for (const zoom of [OVERVIEW_ZOOM, DETAIL_ZOOM]) {
+      expect(zoom * fling).toBeGreaterThan(MAX_ZOOM);
+      expect(zoom / fling).toBeLessThan(MIN_ZOOM);
+    }
   });
 
-  it('keeps two edges of the quad on screen at MAX_ZOOM', () => {
-    // Zoom is CSS pixels per world unit, so the visible world is the canvas
-    // divided by it. Keeping that taller than the quad keeps the quad's top and
-    // bottom edges both on screen, which is what stops a zoom to the limit
-    // painting a flat amber fill that looks exactly like a broken renderer.
-    expect(SHORTEST_STAGE / MAX_ZOOM).toBeGreaterThanOrEqual(QUAD.height);
-  });
-
-  it('leaves the quad a legible rectangle at MIN_ZOOM', () => {
-    // The other broken-renderer look: a quad small enough to read as a speck of
+  it('leaves the hero a legible rounded rectangle at MIN_ZOOM', () => {
+    // One broken-renderer look: a shape small enough to read as a speck of
     // dust. Both axes have to stay big enough to see a rectangle, and the short
     // one is what binds.
-    expect(QUAD.width * MIN_ZOOM).toBeGreaterThanOrEqual(16);
-    expect(QUAD.height * MIN_ZOOM).toBeGreaterThanOrEqual(8);
+    expect(hero.size.width * MIN_ZOOM).toBeGreaterThanOrEqual(16);
+    expect(hero.size.height * MIN_ZOOM).toBeGreaterThanOrEqual(8);
+  });
+
+  it('keeps both edges of the hero outline on screen at MAX_ZOOM', () => {
+    // The other broken-renderer look, and the rule here is NOT M4.1's "keep two
+    // edges of the shape on screen". It cannot be: the detail pane is
+    // deliberately INSIDE the hero at 100x, which is the whole requirement, so
+    // a range that kept the whole shape visible would forbid the demo. What has
+    // to survive to the top of the range instead is the thing being looked at,
+    // which is the outline band: keep it narrower than the pane and both of its
+    // edges stay on screen, so "the outline still has an even width" remains
+    // something a reader can check rather than take on trust.
+    expect(hero.style.outlineWidth * MAX_ZOOM).toBeLessThanOrEqual(SHORTEST_PANE);
+  });
+
+  it('gives the antialiasing pad a shape big enough to work at OVERVIEW_ZOOM', () => {
+    // `shapeQuadSize` reserves room for the coverage ramp as a FRACTION of the
+    // shape, so the reservation covers the ramp's outer half only once the
+    // shape's larger half extent measures `0.5 / AA_QUAD_PADDING_FRACTION` CSS
+    // pixels, which is 33.3. Below that the outermost sliver of the ramp is
+    // clipped at the four edge midpoints, which reads as an edge slightly
+    // harder than the rest: the exact artefact this pane exists to rule out.
+    // This is why the hero is 700 world units wide and not 200.
+    const halfExtentPx = (Math.max(hero.size.width, hero.size.height) / 2) * OVERVIEW_ZOOM;
+    expect(halfExtentPx).toBeGreaterThanOrEqual(0.5 / AA_QUAD_PADDING_FRACTION);
+  });
+
+  it('shows the corner as a curve rather than a straight edge at DETAIL_ZOOM', () => {
+    // At 100x the corner arc is 2400 CSS pixels across and the pane is 480, so
+    // the reader sees a short chord of it. How far that chord bows away from
+    // the straight line joining its ends is the sagitta, and it is what decides
+    // whether the picture shows a curve or a slightly tilted straight edge.
+    // Eight pixels is the floor: below that a polygonal approximation and a
+    // true arc would look the same, and the claim would be uncheckable.
+    const radiusPx = hero.cornerRadius * DETAIL_ZOOM;
+    const halfChord = SHORTEST_PANE / 2;
+    const sagitta = radiusPx - Math.sqrt(radiusPx ** 2 - halfChord ** 2);
+    expect(sagitta).toBeGreaterThanOrEqual(8);
   });
 });
 

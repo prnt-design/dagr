@@ -1,18 +1,13 @@
-import {
-  Color,
-  Mesh,
-  MeshBasicNodeMaterial,
-  OrthographicCamera,
-  PlaneGeometry,
-  Scene,
-  WebGPURenderer,
-} from 'three/webgpu';
+import { Color, OrthographicCamera, Scene, WebGPURenderer } from 'three/webgpu';
 import { Camera2D } from './camera.js';
 import { RendererDisposedError } from './errors.js';
+import { createShapeMesh } from './shape-material.js';
+import { normalizeShape } from './shape.js';
+import type { NormalizedShape, ShapeInstance } from './shape.js';
 import type { Renderer, RendererOptions, Size, ViewportSize } from './types.js';
 
 /**
- * First light: a three.js `WebGPURenderer` drawing one quad through a
+ * A three.js `WebGPURenderer` drawing a batch of SDF shapes through a
  * {@link Camera2D}.
  *
  * **What needs a GPU is not tested here, and what does not, is.** Drawing needs
@@ -24,19 +19,23 @@ import type { Renderer, RendererOptions, Size, ViewportSize } from './types.js';
  *
  * The lifecycle is the exception, and calling it "wiring" was a mistake worth
  * naming: when the drawing buffer is reallocated, whether `dispose` is
- * idempotent, and whether a disposed renderer refuses to draw are decisions
- * made in plain JavaScript about when to call four methods on three
- * collaborators. `test/webgpu-renderer.test.ts` builds this class over stubs
- * that implement {@link FrameSink}, {@link ProjectionTarget} and
- * {@link GpuResource} and counts those calls, with no device anywhere.
+ * idempotent, whether a disposed renderer refuses to draw, and what
+ * {@link WebGPUSceneRenderer.setShapes} does to the scene and to the batch it
+ * replaces are decisions made in plain JavaScript about when to call methods on
+ * a handful of collaborators. `test/webgpu-renderer.test.ts` builds this class
+ * over stubs that implement {@link FrameSink}, {@link ProjectionTarget},
+ * {@link SceneGraph}, {@link GpuResource} and {@link ShapeMeshFactory} and
+ * counts those calls, with no device anywhere.
  *
  * What is therefore still UNVERIFIED, stated plainly rather than left to be
  * discovered:
  *
- * - That the quad appears at all, in the right place, at the right size, or in
- *   the intended colour. The camera suite proves the frustum agrees with
- *   `worldToScreen` and reaches a real `OrthographicCamera` intact; it cannot
- *   prove the mesh is drawn, or that the winding faces the camera.
+ * - That a shape appears at all, in the right place, at the right size, or in
+ *   the intended colour, and that the distance field, the antialiasing and the
+ *   glow look like anything. The camera suite proves the frustum agrees with
+ *   `worldToScreen` and reaches a real `OrthographicCamera` intact, and
+ *   `test/sdf.test.ts` proves the arithmetic the shader transcribes; neither
+ *   can prove a mesh is drawn, or that the winding faces the camera.
  * - That the drawing buffer sizes computed here reach a real canvas, or that
  *   the canvas is not stretched by CSS afterwards.
  * - That `dispose` actually frees GPU memory, only that it is called once.
@@ -54,10 +53,11 @@ import type { Renderer, RendererOptions, Size, ViewportSize } from './types.js';
 
 /**
  * A three.js object this class only ever holds and hands back, reading no
- * property of one: the `Scene`, and the camera once it reaches
- * {@link FrameSink.render}. Saying so in the type is what lets the lifecycle be
- * exercised without three, and it is also an accurate statement of how much
- * this file knows about a scene, which is nothing.
+ * property of one: the camera once it reaches {@link FrameSink.render}, and
+ * each shape's mesh on its way into and out of the scene. Saying so in the type
+ * is what lets the lifecycle be exercised without three, and it is also an
+ * accurate statement of how much this file knows about a mesh, which is
+ * nothing beyond its identity.
  */
 type OpaqueThreeObject = object;
 
@@ -94,20 +94,46 @@ export interface GpuResource {
 }
 
 /**
- * The size of the one quad, in world units: `@dagr/layout`'s own
- * `defaultNodeSize`. First light draws the box a default-sized node would
- * occupy, so the moment M4.4 feeds a real layout in, the change on screen is
- * the positions rather than the scale.
+ * What this renderer does to a three.js `Scene`: put a mesh in, take a mesh
+ * out. Declared structurally for the same reason {@link FrameSink} is, and it
+ * is again an accurate statement of the contact: nothing here reads a scene.
  */
-const FIRST_LIGHT_SIZE = { width: 100, height: 40 } as const;
+export interface SceneGraph {
+  add(object: OpaqueThreeObject): void;
+  remove(object: OpaqueThreeObject): void;
+}
 
 /**
- * The quad's colour, and the background behind it. Both are chosen to be
- * obviously deliberate: amber on near-black is nobody's default, so a frame
- * that comes out grey, white or black is a frame that did not come from this
- * file.
+ * One shape's three.js objects, as this file needs them: something to put in
+ * the scene, and the two resources to give back when it leaves.
+ *
+ * `shape-material.ts` returns a `Mesh`, a `PlaneGeometry` and a
+ * `MeshBasicNodeMaterial`, which satisfy this without knowing it exists. Naming
+ * them structurally is what lets `setShapes` be tested by counting, and the
+ * typecheck of {@link createRenderer} passing the real {@link createShapeMesh}
+ * into {@link ShapeMeshFactory} is the proof the two agree.
  */
-const FIRST_LIGHT_COLOR = 0xffb703;
+export interface DrawnShape {
+  readonly object: OpaqueThreeObject;
+  readonly geometry: GpuResource;
+  readonly material: GpuResource;
+}
+
+/**
+ * How a validated shape becomes something drawable. One function, so the whole
+ * of what this renderer knows about materials is that it can ask for one.
+ */
+export type ShapeMeshFactory = (shape: NormalizedShape) => DrawnShape;
+
+/**
+ * The background behind everything. Chosen to be obviously deliberate:
+ * near-black rather than black, so a frame that comes out grey, white or a flat
+ * black is a frame that did not come from this file.
+ *
+ * The amber `FIRST_LIGHT_COLOR` that used to sit beside it is gone with M4.1's
+ * hard-coded quad: the renderer now starts empty and every colour on screen
+ * comes from a `ShapeStyle` the caller chose.
+ */
 const DEFAULT_CLEAR_COLOR = 0x0b0d10;
 
 /**
@@ -215,11 +241,17 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
 export class WebGPUSceneRenderer implements Renderer {
   readonly camera: Camera2D;
   readonly #renderer: FrameSink;
-  readonly #scene: OpaqueThreeObject;
+  readonly #scene: SceneGraph;
   readonly #threeCamera: ProjectionTarget;
-  readonly #geometry: GpuResource;
-  readonly #material: GpuResource;
+  readonly #meshFactory: ShapeMeshFactory;
   #disposed = false;
+
+  /**
+   * The batch on screen, in the order it was given. Every entry is owned: it
+   * came out of {@link #meshFactory}, it is in the scene, and it is released by
+   * {@link setShapes} or {@link dispose}, whichever comes first.
+   */
+  readonly #shapes: DrawnShape[] = [];
 
   /**
    * The drawing buffer the sink was last told to allocate, in device pixels.
@@ -231,17 +263,15 @@ export class WebGPUSceneRenderer implements Renderer {
   constructor(
     camera: Camera2D,
     renderer: FrameSink,
-    scene: OpaqueThreeObject,
+    scene: SceneGraph,
     threeCamera: ProjectionTarget,
-    geometry: GpuResource,
-    material: GpuResource,
+    meshFactory: ShapeMeshFactory,
   ) {
     this.camera = camera;
     this.#renderer = renderer;
     this.#scene = scene;
     this.#threeCamera = threeCamera;
-    this.#geometry = geometry;
-    this.#material = material;
+    this.#meshFactory = meshFactory;
   }
 
   /**
@@ -255,6 +285,32 @@ export class WebGPUSceneRenderer implements Renderer {
     this.camera.setViewport(viewport);
     this.#syncSize();
     this.#syncCamera();
+  }
+
+  /**
+   * See {@link Renderer.setShapes}. Replaces the whole batch: validate
+   * everything, release everything, build everything.
+   *
+   * **The three phases are in that order and the order is the contract.**
+   * `normalizeShape` runs over the entire batch before a single mesh is
+   * released, so a `RangeError` from shape seventeen leaves the previous batch
+   * whole and on screen rather than leaving sixteen new shapes and whatever
+   * survived of the old ones. That costs one array of normalized records per
+   * call, which is the price of a batch that either applies or does not.
+   *
+   * Nothing here is incremental: a shape unchanged since the last call still
+   * gets a new geometry and a new material. That is the naive implementation on
+   * purpose, and M4.3's instancing is what replaces it, behind this signature.
+   */
+  setShapes(shapes: readonly ShapeInstance[]): void {
+    this.#assertLive('setShapes');
+    const normalized = shapes.map((shape) => normalizeShape(shape));
+    this.#releaseShapes();
+    for (const shape of normalized) {
+      const drawn = this.#meshFactory(shape);
+      this.#scene.add(drawn.object);
+      this.#shapes.push(drawn);
+    }
   }
 
   /** See {@link Renderer.render}. */
@@ -275,9 +331,26 @@ export class WebGPUSceneRenderer implements Renderer {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#geometry.dispose();
-    this.#material.dispose();
+    this.#releaseShapes();
     this.#renderer.dispose();
+  }
+
+  /**
+   * Takes the current batch out of the scene and gives its GPU memory back.
+   *
+   * Shared by {@link setShapes} and {@link dispose} because they want exactly
+   * the same thing, and because a second copy of this loop is how one of them
+   * ends up disposing a geometry it left in the scene. Emptying the list is
+   * part of the job: a disposed entry left in it would be disposed again by
+   * whichever of the two ran next.
+   */
+  #releaseShapes(): void {
+    for (const drawn of this.#shapes) {
+      this.#scene.remove(drawn.object);
+      drawn.geometry.dispose();
+      drawn.material.dispose();
+    }
+    this.#shapes.length = 0;
   }
 
   /**
@@ -363,8 +436,12 @@ export class WebGPUSceneRenderer implements Renderer {
 }
 
 /**
- * Builds a renderer on a canvas and draws the first frame's worth of scene into
- * memory. Await it, then call {@link Renderer.render}.
+ * Builds a renderer on a canvas, with an empty scene. Await it, tell it what to
+ * draw with {@link Renderer.setShapes}, then call {@link Renderer.render}.
+ *
+ * A renderer with no shapes draws the clear colour and nothing else, which is a
+ * legal frame rather than a broken one: it is what an application shows before
+ * its first layout arrives.
  *
  * **Asynchronous because `WebGPURenderer.init()` is.** Getting a WebGPU device
  * means requesting an adapter from the browser, which is a promise, so there is
@@ -399,18 +476,34 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
 
   const renderer = new WebGPURenderer({
     canvas,
-    // On by default because a graph is edges and box corners, and every one of
-    // them is a diagonal that reads as a staircase without it. Not exposed in
-    // `RendererOptions` yet: it is a device capability question rather than a
-    // scene one, and it belongs with the rest of the backend choices in M4.9.
+    // OFF, and M4.1 asked M4.2 to make exactly this call rather than carry the
+    // flag forward because it was already there. Still not exposed in
+    // `RendererOptions`: it is a device capability question rather than a scene
+    // one, and it belongs with the rest of the backend choices in M4.9.
     //
-    // Revisit this in M4.2 rather than carrying it forward because it is
-    // already here. SDF shapes antialias their own edges analytically, per
-    // pixel, and gain nothing from MSAA, while MSAA costs a 4x-sampled target
-    // plus a resolve every frame: on a 4K canvas at ratio 2 that is a real
-    // bandwidth line against M4.10's 10k-nodes-at-60fps budget. Measure both
-    // ways when the SDF path lands.
-    antialias: true,
+    // MSAA antialiases GEOMETRY SILHOUETTES, and this renderer no longer has
+    // any. Every shape is painted into a quad that is strictly larger than the
+    // shape (see `shapeQuadSize`, which pads for the outline, the glow and the
+    // antialiasing ramp), so no shape boundary ever lies on a triangle edge.
+    // A fragment shader runs once per pixel and its result is written to every
+    // covered sample, so wherever a quad covers a pixel completely the resolve
+    // reproduces the single-sampled answer exactly, and where it does not, the
+    // shader's alpha there is zero. The shape edges are antialiased by
+    // `edgeCoverage` from the distance field's own screen-space derivative,
+    // which is what makes them hold at 0.1x and at 100x from one shader.
+    //
+    // Evidence, and its limit. The quality side was checked rather than
+    // reasoned alone: the M4.2 demo was captured at both zooms with this flag
+    // true and false, and the crops are indistinguishable. The COST side is
+    // NOT measured. MSAA buys a 4x-sampled target plus a resolve every frame,
+    // which on a 4K canvas at ratio 2 is a real bandwidth line against M4.10's
+    // 10k-nodes-at-60fps budget, but no number here says how much. Turning it
+    // off is therefore justified by the quality measurement (nothing is lost)
+    // rather than by the saving (unquantified). Revisit if this renderer ever
+    // draws geometry whose silhouette is its own edge, a hairline or a mesh
+    // rather than a padded quad, because the argument above is what fails
+    // first.
+    antialias: false,
   });
   await renderer.init();
 
@@ -424,15 +517,13 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     signal.throwIfAborted();
   }
 
+  // Nothing is added to the scene here, and that is the change M4.2 makes to
+  // this function. M4.1 put a hard-coded amber quad in it to prove the pipeline
+  // lit up, which it did; a renderer that keeps drawing something nobody asked
+  // for is a renderer whose caller cannot get a blank canvas and cannot tell
+  // their own shapes from its. It stays empty until `setShapes` is called.
   const scene = new Scene();
   scene.background = new Color(clearColor);
-
-  // A plane, not a sprite or a line: it is the primitive M4.2's SDF shapes will
-  // be drawn on, so first light exercises the geometry path the rest of M4 uses
-  // rather than one that gets thrown away.
-  const geometry = new PlaneGeometry(FIRST_LIGHT_SIZE.width, FIRST_LIGHT_SIZE.height);
-  const material = new MeshBasicNodeMaterial({ color: FIRST_LIGHT_COLOR });
-  scene.add(new Mesh(geometry, material));
 
   const threeCamera = new OrthographicCamera(0, 0, 0, 0, CAMERA_NEAR, CAMERA_FAR);
 
@@ -441,8 +532,7 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     renderer,
     scene,
     threeCamera,
-    geometry,
-    material,
+    createShapeMesh,
   );
 
   // Adopt the camera's current viewport, which sizes the buffer and fills in

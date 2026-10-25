@@ -44,34 +44,50 @@ export const WHEEL_ZOOM_SPEED = 0.0015;
 export const WHEEL_MAX_PIXELS = 200;
 
 /**
- * The zoom the demo's camera starts at, and how far the wheel may take it, in
- * CSS pixels per world unit.
+ * The two zooms the demo's panes start at, and how far the wheel may take
+ * either of them, in CSS pixels per world unit.
  *
- * Next to {@link WHEEL_MAX_PIXELS} rather than in `FirstLight.tsx` because the
- * two are halves of one decision and neither is right on its own. That clamp
- * bounds ONE event and cannot bound a gesture: {@link wheelZoomFactor} is
- * exponential and exponentials compose exactly, which its docstring rightly
- * calls a feature. Thirty saturated events are an ordinary trackpad fling and
- * multiply the zoom by e^9, about 8100x. **So the RANGE is what stops a fling,
- * and it is the only thing that does.**
+ * Next to {@link WHEEL_MAX_PIXELS} rather than in `ShapeStage.tsx` because the
+ * clamp and the range are halves of one decision and neither is right on its
+ * own. That clamp bounds ONE event and cannot bound a gesture:
+ * {@link wheelZoomFactor} is exponential and exponentials compose exactly,
+ * which its docstring rightly calls a feature. Thirty saturated events are an
+ * ordinary trackpad fling and multiply the zoom by e^9, about 8100x. **So the
+ * RANGE is what stops a fling, and it is the only thing that does.**
  *
- * The values are picked so that neither limit can be mistaken for a broken
- * renderer, which is a claim about this specific scene: `@dagr/render` draws one
- * 100 by 40 world-unit quad, on a stage `styles.css` keeps at least 600 CSS
- * pixels tall. At 12 the visible world is at most 50 world units tall, so the
- * quad's top and bottom edges are both still on screen instead of amber filling
- * the frame. At 0.2 the quad is 20 by 8 CSS pixels, small but unmistakably a
- * rectangle rather than a speck.
+ * {@link OVERVIEW_ZOOM} and {@link DETAIL_ZOOM} are M4.2's requirement written
+ * as numbers: the same shape at 0.1x and at 100x, three orders of magnitude
+ * apart, so that one screenshot carries the claim that an edge is crisp at
+ * every zoom rather than at the one it was tuned for. `scene.ts` is sized
+ * against both of them and explains what each pane is for.
  *
- * 0.05 to 60 was the range before, and it produced both failures rather than
- * preventing them: from zoom 3, ten saturated events reach 60, where a 1102 by
- * 598 canvas sees 18 by 10 world units, entirely INSIDE the quad and flat amber
- * edge to edge; the other way lands on 0.05, where the quad is 5 by 2 pixels.
- * See `test/camera-input.test.ts`, which fails on those numbers.
+ * **The range is one factor of two past each of those, not equal to them.** A
+ * range pinned exactly at the two reference zooms would leave the overview pane
+ * unable to zoom out and the detail pane unable to zoom in at all, and a wheel
+ * that does nothing reads as a broken demo rather than as a limit. Two is
+ * enough to feel and small enough that neither end reaches a picture that could
+ * be mistaken for a broken renderer:
+ *
+ * - At 0.05 the hero chip is 35 by 22 CSS pixels: small, but unmistakably a
+ *   rounded rectangle rather than a speck. (M4.1's range bottomed out at 0.05
+ *   too and that WAS a speck, because the quad it drew was 100 by 40 world
+ *   units. The limit is the same number about a scene seven times the size.)
+ * - At 200 the hero's 2-unit outline is 400 CSS pixels wide, which still fits
+ *   inside the 480 pixel minimum height `styles.css` gives a pane, so both
+ *   edges of the band stay on screen.
+ *
+ * That second bullet replaces M4.1's rule, which was that the whole shape stays
+ * on screen at MAX_ZOOM. It had to change: at 100x the detail pane is
+ * deliberately INSIDE the hero, which is the requirement rather than an
+ * accident, so a range that kept a whole shape visible would forbid the demo.
+ * What has to stay visible at the top of the range is the thing being looked
+ * at, and that is the outline band and the corner arc under it. See
+ * `test/camera-input.test.ts`, which executes every number above.
  */
-export const INITIAL_ZOOM = 3;
-export const MIN_ZOOM = 0.2;
-export const MAX_ZOOM = 12;
+export const OVERVIEW_ZOOM = 0.1;
+export const DETAIL_ZOOM = 100;
+export const MIN_ZOOM = OVERVIEW_ZOOM / 2;
+export const MAX_ZOOM = DETAIL_ZOOM * 2;
 
 /** The part of a `WheelEvent` that {@link wheelPixels} reads. */
 export interface WheelLike {

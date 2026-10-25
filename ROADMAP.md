@@ -1371,7 +1371,7 @@ of M3 would leave the second runner idle for a milestone.
   (today just `RendererDisposedError`). Numerical claims quote a measured
   bound: nothing in this package is described as pixel-exact, because no test
   establishes it.
-- [ ] **M4.2** (`@dagr/render`, `apps/demo`) SDF shapes in TSL: rounded-rect
+- [x] **M4.2** (`@dagr/render`, `apps/demo`) SDF shapes in TSL: rounded-rect
   and circle as signed distance fields authored in TSL, with fill, outline and
   glow all read from the same distance rather than from three separate pieces
   of geometry. Screen-space derivative antialiasing, so an edge is crisp at
@@ -1392,6 +1392,93 @@ of M3 would leave the second runner idle for a milestone.
   What this task does own, and has evidence for, is whether one distance field
   can carry fill, outline and glow with derivative-based antialiasing that
   holds at both 0.1x and 100x.
+  DECIDED. THE MATH LIVES TWICE, on purpose: once in `sdf.ts` as ordinary
+  numbers that import nothing from three, and once in `sdf-nodes.ts` as a
+  line-for-line TSL transcription. The CPU copy is the AUTHORITATIVE one, and it
+  is what M4.8's picking and M4.4's bounds should call, because it is the one
+  that is proved. 47 tests cover it, two of which carry the weight: a square
+  whose corner radius equals its half extent agrees with `circleDistance` to a
+  measured worst 8.361e-16 relative over 2000 seeded cases, and a brute-force
+  nearest-boundary search agrees to a measured worst 9.577e-9, which is the
+  search's own sampling error rather than the field's. The TSL side is a
+  transcription and nothing more: every function names the CPU function it
+  transcribes, and a change that would make the two disagree belongs in `sdf.ts`
+  first, where a test can fail over it. `sdf.ts` and `shape.ts` are exported;
+  `sdf-nodes.ts` and `shape-material.ts` are not, because every signature in
+  them mentions a three `Node`, `Mesh` or material, and a three type in an
+  exported signature turns two copies of three in one tree from a bundle-size
+  problem into a type error.
+  ANTIALIASING PAD, a number every later task inherits.
+  `AA_QUAD_PADDING_FRACTION` is 0.015 and is exported, and `shapeQuadSize` adds
+  `0.015 * max(halfWidth, halfHeight)` to every side on top of
+  `max(outlineWidth / 2, glowRadius)`. It exists because the coverage ramp is
+  about one screen pixel wide and spills `0.5 / zoom` world units past the
+  shape's own boundary, which geometry built once for every zoom cannot reserve
+  directly. A proportional pad is scale invariant, so it covers the ramp's outer
+  half once the larger half extent measures `0.5 / 0.015` = 33.33 CSS pixels on
+  screen, about 67 pixels across. BELOW THAT THRESHOLD THE RAMP'S OUTER SLIVER
+  IS CLIPPED at the four edge midpoints, and that is a stated limit rather than
+  a solved problem: the only alternative is a larger constant that inflates
+  every quad in the scene, and M4.4's culling bounds come off the same function.
+  THE PUBLIC SEAM IS `setShapes(shapes)`, plain data, and it is not the
+  `setLayout` M4.1 refused. It names no graph, no node, no edge and no layout,
+  so M4.4 is still free to decide how a caller picks shapes, and no three type
+  reaches the surface. The whole batch every call, `[]` legal and clearing the
+  scene, every shape validated before anything is released so a `RangeError`
+  leaves the previous batch on screen, and `RendererDisposedError` after
+  `dispose()`. M4.1's hard-coded quad is gone and a fresh renderer starts empty.
+  Behind it is one mesh, one material and one draw call per shape, deliberately
+  naive: M4.3 REPLACES IT WITH INSTANCING BEHIND THIS SAME SIGNATURE, so nothing
+  a caller writes changes.
+  TWO SHAPE RULES that are errors rather than conveniences. A circle's `size`
+  has to be SQUARE, and unequal is a `RangeError` naming `size`: taking the min
+  or the mean draws a circle nobody asked for with nothing reporting it, and
+  drawing an ellipse makes `circle` a second family with no closed-form exact
+  distance, so the outline and glow read off that distance would be subtly wrong
+  where the fill would not be. `cornerRadius` PRESENT AT ALL on a circle is a
+  `RangeError`, `0` included, because present-rather-than-nonzero is the only
+  line checkable without judgement and it is the one that catches the bug that
+  motivates the check: a caller flipping `kind` on a template with the radius
+  still attached. On a rounded rect a negative radius throws and an oversized
+  one clamps to half the shorter side, where the four arcs meet. Strict about a
+  sign, which is written on a line the caller can see, forgiving about a
+  magnitude, which is inherited from a theme.
+  NOT DECIDED HERE, and the paragraphs above stay true: one material with a
+  per-instance shape id versus one material per family is still M4.3's, unmade,
+  because the deciding factor is per-fragment branch cost at 10k instances and
+  real fill rate, which four shapes on screen cannot measure. The revisit gate
+  at M4.10 is intact. The TSL nodes are composable factories with no opinion
+  about material assembly, which is what keeps that call a rewiring rather than
+  a rewrite.
+  A DEAD END, recorded so nobody retries it blind. Emitting WGSL from a TSL node
+  graph headlessly in Node does not work on three 0.185.1. `WGSLNodeBuilder` IS
+  exported from `three/webgpu` and constructs against a stub renderer, but
+  `build()` throws `TypeError: Cannot read properties of undefined (reading
+  'isContextNode')`, with and without the third constructor argument. Reaching a
+  real shader string needs backend plumbing amounting to a headless browser by
+  another name, which is the option M4.1 already priced and rejected. So the TSL
+  is unit tested by nothing, and `docs/docs/render.md` names that alongside the
+  compositing and everything about whether a shape reaches the screen looking
+  right; the committed screenshot is what covers those. It IS smoke checked,
+  which is a weaker and different claim: `Fn` is lazy, so a throwaway script
+  walked the returned graphs and forced every `jsFunc` body to run, catching a
+  real bug (a named-argument body needs `rawInputs[0]`, because `FnNode.call`
+  always stores arguments as an array). That script is not in the repo, and it
+  establishes that the bodies execute rather than what they compute.
+  Last, the `antialias: true` flag M4.1 set on the `WebGPURenderer` and asked
+  this task to revisit, measured by screenshot both ways: IT IS NOW OFF. The
+  argument is structural rather than aesthetic, and it is written out at the
+  flag itself. MSAA antialiases GEOMETRY SILHOUETTES, and after this task there
+  are none: every shape is painted into a quad strictly larger than itself, so
+  no shape boundary lies on a triangle edge, and a fragment shader's result is
+  written to every covered sample, so a fully covered pixel resolves to exactly
+  its single-sampled value. THE QUALITY SIDE WAS MEASURED (the demo captured at
+  0.1x and 100x with the flag true and false, crops indistinguishable) AND THE
+  COST SIDE WAS NOT. The saving is a 4x-sampled target plus a per-frame resolve
+  against M4.10's budget, and nobody has counted it, so this is justified by
+  "nothing is lost" rather than by "this much is gained". WHAT OVERTURNS IT is
+  geometry whose silhouette is its own edge, a hairline or a mesh rather than a
+  padded quad, which is the assumption M4.5's edge routes should check first.
 - [ ] **M4.3** (`@dagr/render`) Instanced rendering: one instanced mesh per
   shape family, with the instance buffer allocation, growth and compaction
   bookkeeping split out as a pure module that knows nothing about a GPU.

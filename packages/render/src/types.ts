@@ -1,4 +1,5 @@
 import type { Camera2D } from './camera.js';
+import type { ShapeInstance } from './shape.js';
 
 /**
  * The public vocabulary of `@dagr/render`.
@@ -88,16 +89,28 @@ export interface OrthoFrustum {
 }
 
 /**
- * What a Dagr renderer does, and, in M4.1, all it does.
+ * What a Dagr renderer does: a lifecycle, and a batch of shapes to draw.
  *
- * This is the seam every later M4 task plugs into. It deliberately says nothing
- * about scene contents: no node, no edge, no shape, no layout result. M4.1
- * draws a single hard-coded quad to prove the pipeline lights up, and giving
- * this interface a `setGraph` or a `setLayout` now would be guessing at the
- * shape of M4.4 with nothing to check the guess against. What it does fix is
- * the lifecycle, which is the part that will not change: something owns a
- * camera, something has to be told when the canvas resizes, something draws a
- * frame, and something has to give the GPU its memory back.
+ * This is the seam every later M4 task plugs into. M4.1 fixed the lifecycle,
+ * which is the part that will not change: something owns a camera, something
+ * has to be told when the canvas resizes, something draws a frame, and
+ * something has to give the GPU its memory back. It deliberately said nothing
+ * about scene contents, because a `setGraph` or a `setLayout` then would have
+ * been a guess at the shape of M4.4 with nothing to check the guess against.
+ *
+ * **{@link setShapes} is not that guess, and the difference is worth stating
+ * rather than leaving implied.** It takes plain data describing literally what
+ * M4.2 draws: a family, a place, a size, a style. It names no graph, no node,
+ * no edge and no layout, so it commits this interface to nothing about how a
+ * caller decides what shapes to ask for, which is the whole of what M4.4 is
+ * still free to decide. And it holds three out of the public surface, which is
+ * the constraint everything in this file exists to keep: a caller says
+ * `{ kind: 'circle', ... }` and never imports a `Mesh` or a `Vector2`.
+ *
+ * The implementation behind it is one mesh per shape, which is the wrong shape
+ * for ten thousand nodes and the right one for proving a distance field draws.
+ * **M4.3 replaces it with instancing behind this same signature**, so the batch
+ * a caller passes is unchanged and what happens to it is not.
  *
  * The camera is `readonly` because it is the object callers mutate. Pan and
  * zoom go through {@link Camera2D}'s own methods, which validate; swapping in a
@@ -127,20 +140,49 @@ export interface Renderer {
   resize(viewport: ViewportSize): void;
 
   /**
+   * Replaces everything this renderer draws with the batch given.
+   *
+   * **The WHOLE batch, every call.** Not an add, not a merge: whatever was on
+   * screen is released and the argument is what is drawn from here on. Passing
+   * an empty array is legal and clears the scene. A batch rather than a
+   * per-shape handle because M4.2 has no identity to hang a handle on, and
+   * inventing one now would be the same guess at M4.4 that this interface
+   * refused to make elsewhere. M4.3's instancing keeps this signature and adds
+   * the handles underneath it, where the allocation bookkeeping lives.
+   *
+   * **Every shape is validated first, and a rejected batch changes nothing.**
+   * A shape that cannot describe anything (a negative extent, a `NaN` centre, a
+   * colour that is not a 24-bit integer, a corner radius on a circle) is a
+   * `RangeError` naming the field, thrown before a single mesh is built or a
+   * single one released, so the previous batch is still on screen and still
+   * drawable. The alternative, validating as it goes, leaves half of one batch
+   * and half of another in the scene, which is a state no caller can reason
+   * about and none can recover from without knowing where it stopped.
+   *
+   * Cheap to call every frame is the design target, since that is what an
+   * animation does: the previous batch's GPU resources are released on each
+   * call rather than accumulated.
+   *
+   * Throws `RendererDisposedError` after {@link dispose}, like the rest.
+   */
+  setShapes(shapes: readonly ShapeInstance[]): void;
+
+  /**
    * Draws one frame, after adopting whatever the camera says now. Nothing in
-   * M4.1 drives a loop: the caller decides when.
+   * M4.2 drives a loop: the caller decides when.
    */
   render(): void;
 
   /**
-   * Releases the GPU resources this renderer owns. Idempotent, so a component
-   * that unmounts twice, or a hot reload that races, cannot double free.
+   * Releases the GPU resources this renderer owns, the current batch of shapes
+   * included. Idempotent, so a component that unmounts twice, or a hot reload
+   * that races, cannot double free.
    *
-   * The renderer is not usable afterwards: {@link resize} and {@link render}
-   * throw `RendererDisposedError`, which is a class rather than a bare `Error`
-   * because use after dispose arrives from a lifecycle race in somebody else's
-   * framework, making it the failure a caller is most likely to catch on
-   * purpose.
+   * The renderer is not usable afterwards: {@link resize}, {@link setShapes}
+   * and {@link render} all throw `RendererDisposedError`, which is a class
+   * rather than a bare `Error` because use after dispose arrives from a
+   * lifecycle race in somebody else's framework, making it the failure a caller
+   * is most likely to catch on purpose.
    */
   dispose(): void;
 }

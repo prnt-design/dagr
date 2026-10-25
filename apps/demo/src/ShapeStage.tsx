@@ -1,35 +1,52 @@
 import { useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import { Camera2D, createRenderer } from '@dagr/render';
-import type { Renderer, Vec2, ViewportSize, WorldBounds } from '@dagr/render';
+import type { Renderer, ShapeInstance, Vec2, ViewportSize, WorldBounds } from '@dagr/render';
 import {
-  INITIAL_ZOOM,
+  DETAIL_ZOOM,
   MAX_ZOOM,
   MIN_ZOOM,
+  OVERVIEW_ZOOM,
   canvasPoint,
   wheelZoomFactor,
 } from './camera-input.js';
+import { DETAIL_CENTER, OVERVIEW_CENTER, SCENE_SHAPES } from './scene.js';
 
 /**
- * M4.1 first light: `@dagr/render` on a canvas, with pan and zoom wired to a
- * real {@link Camera2D}.
+ * M4.2's crispness reference: one scene, two cameras, three orders of magnitude
+ * apart.
+ *
+ * The requirement is "the same shape at 0.1x and 100x", and the point of
+ * putting them side by side rather than behind a zoom control is that the
+ * comparison ends up in front of the reader instead of in their memory. Both
+ * panes get the same `SCENE_SHAPES` through the same `setShapes` call and
+ * differ only in the camera they were built with, so anything that differs
+ * between the two frames is the renderer's doing. `scene.ts` carries the
+ * arithmetic behind every world-unit number and explains what each pane is for.
  *
  * There is no test file for this component, and that is the same decision
  * `@dagr/render` documents for its own renderer rather than a gap. Everything
  * here needs a GPU adapter, a laid-out canvas and live input events; a jsdom
  * suite could only assert that a mock was called, which would pass just as
- * happily if the quad never appeared. The arithmetic that CAN be checked was
- * moved to `camera-input.ts` and is tested there, and what is left is wiring,
- * verified by the committed screenshot.
+ * happily if the shapes never appeared. The arithmetic that CAN be checked was
+ * moved out: the input math to `camera-input.ts` and the scene to `scene.ts`,
+ * both tested, and what is left is wiring, verified by the committed
+ * screenshot.
  *
- * The one thing worth reading closely is the lifecycle in the effect below.
+ * The one thing worth reading closely is the lifecycle in {@link ShapePane}.
+ *
+ * This file used to be `FirstLight.tsx`, which is what M4.1 needed it to be: it
+ * drew nothing, because the renderer drew one hard-coded quad and the demo only
+ * had to put a camera in front of it. `createRenderer` now starts empty, so a
+ * demo that never calls `setShapes` is a blank canvas, and the component that
+ * chooses the shapes is not a first light any more.
  */
 
 /**
  * The camera state the overlay shows. A snapshot rather than the camera itself:
  * {@link Camera2D} is a mutable object with no change notification, so React
- * would never see a pan, and copying the three numbers out after each
- * interaction is what makes the overlay follow the gesture.
+ * would never see a pan, and copying the numbers out after each interaction is
+ * what makes the overlay follow the gesture.
  */
 interface CameraReadout {
   readonly zoom: number;
@@ -63,7 +80,75 @@ function describeFailure(cause: unknown): string {
   return String(cause);
 }
 
-export function FirstLight(): JSX.Element {
+/**
+ * The two panes and the prose that says what to look at in each.
+ *
+ * The labels are not decoration. A screenshot of two canvases is two pictures
+ * of coloured shapes unless it says which zoom is which and what the reader is
+ * supposed to be checking, and this whole demo exists to be looked at rather
+ * than to be run.
+ */
+export function ShapeStage(): JSX.Element {
+  return (
+    <section className="crispness">
+      <h2 className="crispness__title">one distance field, two zooms</h2>
+      <p className="crispness__lead">
+        Both panes draw the same four shapes through the same <code>setShapes</code> call and differ
+        only in their camera. Fill, outline and glow come off one signed distance field per shape,
+        and the antialiasing band is derived per fragment from the screen-space derivative of that
+        same field. That is why the edge is a pixel soft in both panes instead of in whichever one
+        it was tuned for. Each pane has its own camera: drag to pan, scroll to zoom.
+      </p>
+      <div className="crispness__panes">
+        <ShapePane
+          shapes={SCENE_SHAPES}
+          zoom={OVERVIEW_ZOOM}
+          center={OVERVIEW_CENTER}
+          zoomLabel="0.1x"
+          subject="the whole scene"
+          note="One world unit is 0.1 CSS pixels here, so the amber chip's 700 units come out 70
+            pixels wide and the circle 76 across. This is the end where aliasing shows first: at a
+            few dozen pixels a curve either steps or it does not, and no amount of scene-level
+            multisampling makes a cheap edge test look like this."
+        />
+        <ShapePane
+          shapes={SCENE_SHAPES}
+          zoom={DETAIL_ZOOM}
+          center={DETAIL_CENTER}
+          zoomLabel="100x"
+          subject="the same chip's top-right corner"
+          note="One world unit is 100 CSS pixels, a thousand times the pane on the left. The pale
+            band is the same 2-unit outline that measured 0.2 pixels there and measures 200 here:
+            still an even width, still a pixel soft along both of its edges, and the arc carrying it
+            is still an arc rather than a run of facets."
+        />
+      </div>
+    </section>
+  );
+}
+
+/** One canvas, one camera, and the batch both panes share. */
+interface PaneProps {
+  /** The batch to draw. Both panes are given the same one, unchanged. */
+  readonly shapes: readonly ShapeInstance[];
+
+  /** CSS pixels per world unit this pane starts at. */
+  readonly zoom: number;
+
+  /** The world point this pane starts looking at. */
+  readonly center: Vec2;
+
+  /** The zoom, for a reader: the number the whole comparison turns on. */
+  readonly zoomLabel: string;
+
+  /** What this pane is pointed at, in words. */
+  readonly subject: string;
+
+  /** What to look for in this pane, and why it is worth looking. */
+  readonly note: string;
+}
+
+function ShapePane({ shapes, zoom, center, zoomLabel, subject, note }: PaneProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [readout, setReadout] = useState<CameraReadout | null>(null);
@@ -85,7 +170,8 @@ export function FirstLight(): JSX.Element {
    *
    * So the second run waits for the first to finish tearing down. A ref rather
    * than a module constant because the chain belongs to this canvas, not to the
-   * program; two `FirstLight` components would have independent chains.
+   * program, which is what makes two panes on one page safe: they have
+   * independent chains and never wait on each other.
    *
    * **The `signal` passed to `createRenderer` below does not replace this, and
    * could not.** That signal abandons ONE renderer's construction, which is the
@@ -122,7 +208,7 @@ export function FirstLight(): JSX.Element {
     // handlers below safe to attach immediately: a drag during adapter
     // acquisition moves this camera, and the first frame is already in the
     // right place when it arrives.
-    const camera = new Camera2D({ zoom: INITIAL_ZOOM, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM });
+    const camera = new Camera2D({ center, zoom, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM });
 
     /**
      * Copies the camera's state into React, for {@link Overlay}.
@@ -157,8 +243,8 @@ export function FirstLight(): JSX.Element {
      * Asks for a frame, and coalesces every request that arrives before it.
      *
      * **Render on demand, not on a free-running loop, but through one
-     * `requestAnimationFrame` either way.** Nothing in M4.1 moves on its own:
-     * the scene changes only when a pointer or a wheel changes the camera, so a
+     * `requestAnimationFrame` either way.** Nothing in this scene moves on its
+     * own: it changes only when a pointer or a wheel changes the camera, so a
      * loop would wake the GPU sixty times a second to redraw a frame identical
      * to the last one, on a laptop battery, forever. That decision stands. What
      * it never settled is how many frames ONE gesture gets, and calling
@@ -174,8 +260,8 @@ export function FirstLight(): JSX.Element {
      * outruns any display.
      *
      * So "every frame this component draws is one a user asked for" is still
-     * exactly true, and is now also capped at one per refresh. Doing it here
-     * rather than in M4.6 is the cheaper order: springs need a scheduler, and
+     * exactly true, and is now also capped at one per refresh. Doing it in M4.1
+     * rather than in M4.6 was the cheaper order: springs need a scheduler, and
      * this leaves them one to extend instead of a dozen call sites to unpick.
      */
     const requestDraw = (): void => {
@@ -241,6 +327,8 @@ export function FirstLight(): JSX.Element {
       // Capture, so the drag survives the pointer leaving the canvas: without
       // it a fast pan that crosses the edge stops dead and the next move over
       // the canvas jumps, because the moves in between went to another element.
+      // With two panes on one page it also stops a drag off the left pane from
+      // being picked up by the right one.
       canvas.setPointerCapture(event.pointerId);
     };
 
@@ -290,6 +378,12 @@ export function FirstLight(): JSX.Element {
         // the second. Its guarantee is that a caller never has to dispose a
         // renderer it did not receive, so an abandoned mount here simply throws.
         renderer = await createRenderer({ canvas, camera, signal: abort.signal });
+        // The scene, all of it, in one call. `setShapes` validates the whole
+        // batch before it touches anything, so a bad shape is a `RangeError`
+        // here and an empty canvas rather than half a scene: `test/scene.test.ts`
+        // runs the same validator on the same batch so that never lands here
+        // first.
+        renderer.setShapes(shapes);
         setFailure(null);
         // Draws the first frame as a side effect, at whatever size the canvas
         // has now rather than the size it had when the effect started.
@@ -324,24 +418,36 @@ export function FirstLight(): JSX.Element {
         renderer = null;
       });
     };
-  }, []);
+    // Every one of these is a module constant threaded through props, so the
+    // list is stable and the effect runs once per mount. They are listed rather
+    // than omitted because the day one of them becomes state, a renderer built
+    // against the old value is exactly the bug this file already has one
+    // paragraph about.
+  }, [shapes, zoom, center]);
 
   return (
-    <div className="stage" ref={containerRef}>
-      <canvas className="stage__canvas" ref={canvasRef} />
-      {failure === null ? (
-        <Overlay readout={readout} />
-      ) : (
-        <div className="stage__failure" role="alert">
-          <p className="stage__failure-title">No renderer</p>
-          <p className="stage__failure-message">{failure}</p>
-          <p className="stage__failure-hint">
-            <code>@dagr/render</code> needs WebGPU, or WebGL2 for three.js to fall back to. A blank
-            canvas would have told you nothing, so here is what the adapter said.
-          </p>
-        </div>
-      )}
-    </div>
+    <figure className="pane">
+      <figcaption className="pane__caption">
+        <span className="pane__zoom">{zoomLabel}</span>
+        <span className="pane__subject">{subject}</span>
+      </figcaption>
+      <div className="stage" ref={containerRef}>
+        <canvas className="stage__canvas" ref={canvasRef} />
+        {failure === null ? (
+          <Overlay readout={readout} />
+        ) : (
+          <div className="stage__failure" role="alert">
+            <p className="stage__failure-title">No renderer</p>
+            <p className="stage__failure-message">{failure}</p>
+            <p className="stage__failure-hint">
+              <code>@dagr/render</code> needs WebGPU, or WebGL2 for three.js to fall back to. A
+              blank canvas would have told you nothing, so here is what the adapter said.
+            </p>
+          </div>
+        )}
+      </div>
+      <p className="pane__note">{note}</p>
+    </figure>
   );
 }
 
@@ -353,10 +459,11 @@ function fixed(value: number, digits: number): string {
 /**
  * The live camera state, over the canvas.
  *
- * This exists to make the screenshot mean something. An amber quad on near
- * black proves a frame was drawn; only numbers that move when you drag prove
- * the camera behind it is real, and that the world bounds the camera reports
- * are the region you are actually looking at.
+ * This exists to make the screenshot mean something. Two panes of amber on near
+ * black prove that two frames were drawn; only the numbers say that one of them
+ * is at 0.1 CSS pixels per world unit and the other at 100, which is the entire
+ * claim the picture is making. They also move when you drag, which is what
+ * proves the camera behind them is real.
  */
 function Overlay({ readout }: { readout: CameraReadout | null }): JSX.Element {
   if (readout === null) {
