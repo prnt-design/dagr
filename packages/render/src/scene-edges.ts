@@ -262,6 +262,7 @@ class EdgeGroup implements GpuResource {
   #sizeHint: RibbonSizeHint | undefined;
   /** The last build, so a route that has not moved is copied rather than walked. */
   #previous: RibbonGeometry | undefined;
+  /** The last build's colours, so an edge whose colour and vertex count held is copied. */
   #previousColors: EdgeColors | undefined;
   #disposed = false;
   /**
@@ -503,7 +504,7 @@ function colorsFor(
     if (previous === undefined || runEnd === runStart) return;
     colors.set(previous.values.subarray(runFrom * 3, (runFrom + runEnd - runStart) * 3), runStart * 3);
   };
-  // A colour is converted only when it differs from the previous edge's, because
+  // A colour is converted only when it differs from the last one converted, because
   // a group is usually one colour and the conversion is three `Math.pow` and a
   // label. A repeat is already validated, and `NaN` never equals itself, so it
   // still throws.

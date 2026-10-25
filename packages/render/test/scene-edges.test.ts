@@ -275,6 +275,10 @@ describe('SceneEdges', () => {
       { x: 60, y: -40 },
       { x: 120, y: 10 },
     ];
+    const loop: Vec2[] = [
+      { x: 5, y: 5 },
+      { x: 5, y: 5 },
+    ];
     const before = [
       edge('a', bent(0), 0x023047),
       edge('b', straight, 0x023047),
@@ -310,10 +314,7 @@ describe('SceneEdges', () => {
       // An edge that now draws nothing between two that are copied.
       [
         edge('a', bent(0), 0x023047),
-        edge('b', [
-          { x: 5, y: 5 },
-          { x: 5, y: 5 },
-        ]),
+        edge('b', loop),
         edge('c', bent(3), 0xffb703),
         edge('d', straight, 0xffb703),
         edge('e', straight, 0x219ebc),
@@ -321,9 +322,15 @@ describe('SceneEdges', () => {
       [edge('a', bent(0), 0x023047), edge('b', straight, 0x023047)],
       [...before, edge('f', straight, 0x219ebc), edge('g', bent(1), 0x8ecae6)],
     ];
-    for (const after of afters) {
+    const cases: [SceneEdge[], SceneEdge[]][] = afters.map((after) => [before, after]);
+    // An edge that drew nothing now draws in a new colour between two that are copied.
+    cases.push([
+      [edge('a', straight, 0x023047), edge('b', loop, 0x023047), edge('c', straight, 0x023047)],
+      [edge('a', straight, 0x023047), edge('b', straight, 0xffb703), edge('c', straight, 0x023047)],
+    ]);
+    for (const [first, after] of cases) {
       const reused = new SceneEdges(groups());
-      reused.setEdges(OVERLAY, before);
+      reused.setEdges(OVERLAY, first);
       reused.setEdges(OVERLAY, after);
       const fresh = new SceneEdges(groups());
       fresh.setEdges(OVERLAY, after);
@@ -333,13 +340,18 @@ describe('SceneEdges', () => {
     }
   });
 
-  it('still rejects a bad colour at an index whose previous build was good', () => {
-    const scene = new SceneEdges(groups());
-    scene.setEdges(ROUTED, [edge('e1', straight), edge('e2', straight)]);
-    expect(() => scene.setEdges(ROUTED, [edge('e1', straight), edge('e2', straight, -1)])).toThrow(
-      /edge "e2"\.color/,
-    );
-    scene.dispose();
+  it('colours a rebuild after a rejected one exactly as a fresh group does', () => {
+    const before = [edge('a', straight, 0x023047), edge('b', straight, 0xffb703)];
+    const after = [edge('a', straight, 0x023047), edge('b', straight, 0x219ebc)];
+    const reused = new SceneEdges(groups());
+    reused.setEdges(ROUTED, before);
+    expect(() => reused.setEdges(ROUTED, [edge('a', straight, 0x219ebc), edge('b', straight, -1)])).toThrow();
+    reused.setEdges(ROUTED, after);
+    const fresh = new SceneEdges(groups());
+    fresh.setEdges(ROUTED, after);
+    expect(attributeOf(reused, 0, 'ribbonColor')).toEqual(attributeOf(fresh, 0, 'ribbonColor'));
+    reused.dispose();
+    fresh.dispose();
   });
 
   it('disposes the geometry it replaces, rather than leaking its buffers', () => {
