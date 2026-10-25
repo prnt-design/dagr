@@ -1,0 +1,40 @@
+{
+  "generatedAt": "2026-10-03T18:19:38.977Z",
+  "syntheticOnly": true,
+  "runtime": "v25.6.1",
+  "cpu": "Apple M4",
+  "memoryBytes": 17179869184,
+  "checks": [
+    "parallel edges retained",
+    "cycle and self-loop accepted",
+    "revision conflict rejected",
+    "correction preserved evidence",
+    "unlink preserved nodes and other relation",
+    "node removal cleared incident edges",
+    "three incremental delta round trips matched"
+  ],
+  "timings": [
+    {
+      "nodes": 50,
+      "edges": 49,
+      "samples": 10,
+      "medianMs": 0.4,
+      "maxMs": 0.62
+    },
+    {
+      "nodes": 150,
+      "edges": 149,
+      "samples": 10,
+      "medianMs": 0.66,
+      "maxMs": 0.87
+    },
+    {
+      "nodes": 500,
+      "edges": 499,
+      "samples": 10,
+      "medianMs": 1.4,
+      "maxMs": 2.25
+    }
+  ],
+  "limitations": "Node CPU layout only; balanced sparse tree; no rendering, Android, WebView, GPU, motion, worker, or accessibility measurement."
+}

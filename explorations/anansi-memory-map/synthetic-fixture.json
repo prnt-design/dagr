@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "note:1",
+      "attrs": {
+        "kind": "memory",
+        "label": "Synthetic note:1"
+      }
+    },
+    {
+      "id": "note:2",
+      "attrs": {
+        "kind": "memory",
+        "label": "Synthetic note:2"
+      }
+    },
+    {
+      "id": "topic:1",
+      "attrs": {
+        "kind": "topic",
+        "label": "Synthetic topic:1"
+      }
+    },
+    {
+      "id": "source:1",
+      "attrs": {
+        "kind": "source",
+        "label": "Synthetic source:1"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "relation:1",
+      "source": "note:1",
+      "target": "topic:1",
+      "attrs": {
+        "predicate": "mentions",
+        "status": "suggested",
+        "confidence": 0.72,
+        "evidenceIds": [
+          "source:1"
+        ],
+        "revision": 1
+      }
+    },
+    {
+      "id": "relation:2",
+      "source": "note:1",
+      "target": "topic:1",
+      "attrs": {
+        "predicate": "contradicts",
+        "status": "confirmed",
+        "confidence": null,
+        "evidenceIds": [
+          "source:1"
+        ],
+        "revision": 1
+      }
+    },
+    {
+      "id": "relation:3",
+      "source": "topic:1",
+      "target": "note:1"
+    },
+    {
+      "id": "relation:4",
+      "source": "note:1",
+      "target": "note:1"
+    }
+  ]
+}
