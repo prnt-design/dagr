@@ -2,7 +2,9 @@
 
 ## Identity
 
-Extend the existing Muslin-derived theme and original Dagr logo. The homepage leads with Dagr. The system atlas pairs a dominant graph viewport with a searchable inspector. A dense overview reveals topology; semantic zoom exposes service configuration, event schemas, and typed ports. Connections support focus navigation and tracing. Keep the page chrome quiet so the graph carries the visual interest.
+Extend the existing Muslin-derived theme and original Dagr logo. Lead with Dagr as the GPU renderer for big directed graphs that animate as they change, following the 2026-10-17 product decision. Keep the graph viewport dominant and page chrome quiet. Show animation and scale through working behavior, with measured limits clearly stated. Preserve existing examples without a new showcase rewrite.
+
+The System Atlas remains an example with a searchable inspector, semantic zoom, rich node content, and connection tracing. Its domain vocabulary is consumer-defined, not Dagr's product identity.
 
 ## Color and surfaces
 
@@ -18,4 +20,4 @@ Square controls, thin complete borders, and occasional 45-degree corner cuts con
 
 ## Interaction
 
-Node selection updates the inspector without navigating away. Search and connection selection focus the camera. The language panel demonstrates actual VDSL validation. Controls have visible focus and pressed states. Motion explains changes, never blocks reading, and respects reduced-motion preferences. Loading and rendering failures retain a useful path to the documentation.
+Node selection updates the inspector without navigating away. Search and connection selection focus the camera. In the atlas, the language panel demonstrates actual VDSL validation. Performance readouts distinguish measured results from illustrative animation and report the active backend. Controls have visible focus and pressed states. Motion explains changes, never blocks reading, and respects reduced-motion preferences. Loading and rendering failures retain a useful path to the documentation.

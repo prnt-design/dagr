@@ -16,6 +16,23 @@ The checklist in `ROADMAP.md` is the live one. New tasks keep the same shape:
 the one-line entry lands there, and the working record lands here under the
 same ID.
 
+## Renderer-first guidance and Dispatch synchronization (2026-10-25 UTC)
+
+Dispatch task `tsk_6b37803ac139` aligns PRODUCT.md and DESIGN.md with the
+2026-10-17 renderer-first decision below, retaining the existing atlas,
+brand, and accessibility guidance. No showcase implementation changes.
+ROADMAP.md now summarizes M4.10's current limits and points to the browser
+measurement record for its optimization history. The 2026-10-25 partial-motion
+result does not complete the all-moving smooth-edge goal. Historical working
+entries and benchmark results remain intact.
+
+ROADMAP.md owns milestone scope, status, and priority; Dispatch owns bounded
+slices and execution state. A merge records evidence, updates the affected
+summary, links its PR on the task, and names the actual successor milestone
+and task ID. The next renderer slice is M4.10 node-validation label allocation
+removal (`tsk_e7e3e344cba2`). The separate daily report track, parked work,
+and maintainer gates on publication and benchmark-baseline changes remain.
+
 ## Priority reset: WebGPU renderer first (2026-10-17 UTC)
 
 The maintainer, Nii Yeboah, chose the WebGPU renderer as dagr's lead identity

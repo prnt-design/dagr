@@ -10,11 +10,13 @@ Engineering peers, potential collaborators, and portfolio visitors exploring Nii
 
 ## Product Purpose
 
-Dagr is a directed-graph toolkit for the web. Its showcase makes the VDSL goal tangible through a complex commerce architecture with typed connections, rich node content, semantic zoom, search, and focus navigation. On 2026-09-29 the user requested replacing the chess atlas and internal architecture example with this direction. It connects Nii's engineering practice with PRNT's generative-art work.
+Dagr is the GPU renderer for big directed graphs that animate as they change. The maintainer chose this lead identity on 2026-10-17, superseding the earlier atlas-led positioning. The toolkit combines rendering, incremental layout, React integration, and consumer-defined visual languages. Prove rendering scale and animation with reproducible measurements before expanding editor features.
+
+The System Atlas remains a working example of rich graph content, search, and focus navigation. The living demo illustrates layout stability. These examples support the renderer identity; they do not establish performance measurements. Current capabilities, measured limits, and planned work are recorded in [ROADMAP.md](ROADMAP.md), with detailed results in [bench/browser/README.md](bench/browser/README.md). This direction does not call for another showcase rewrite.
 
 ## Brand Personality
 
-Precise, geometric, exploratory. Preserve the existing Dagr mark and the relationship to PRNT's Muslin design system. Dagr is the product identity. The system atlas demonstrates a consumer-defined visual language.
+Precise, geometric, exploratory. Preserve the existing Dagr mark and the relationship to PRNT's Muslin design system. Dagr is the product identity. Examples demonstrate consumer-defined visual languages while the renderer remains the lead identity.
 
 ## Anti-references
 
@@ -22,7 +24,8 @@ Do not lead with the campaign/DND fixture, generic feature-card marketing, fabri
 
 ## Design Principles
 
-- Show working behavior before explaining implementation detail.
+- Show working rendering and animation before explaining implementation detail.
+- Name the backend, machine, workload, zoom, and DPR behind performance claims. Partial-motion results do not establish all-moving performance.
 - Let visitors explore relationships and inspect meaning.
 - Distinguish source-derived architecture, illustrative examples, and measurements.
 - Keep current capabilities and planned editor features separate.
