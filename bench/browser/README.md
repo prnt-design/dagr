@@ -1824,3 +1824,41 @@ The browser reports a median to 0.1 ms, and the 0.2 ms Node saves at one
 colour sits at that resolution, so the browser does not clearly resolve it.
 Both hold the tick. `setNodes`, at 1.9, is now the largest step after
 `setEdges`.
+
+### With `setNodes` stamping its nodes rather than mapping them (2026-10-25)
+
+`SceneNodes.setNodes` diffed the nodes it was given against the ones it holds
+by first putting every incoming node in a fresh `Map`, with a record per node,
+on every call. At 10,000 nodes a frame that was about a seventh of the call in
+Node. A node the scene already holds is now stamped with the call's number
+and its place in the list, and only ids new to the scene go in a set to catch a
+duplicate. The order of removals and additions, and so every slot and handle,
+is unchanged.
+
+Byte-identical: the previous build and this one, given the same 12,000 random
+calls over 300 scenes (reorders, shape changes, arrivals, departures, repeated
+ids and bad numbers), hold the same instance buffers and placements after
+every call, and reject the same 1,848 calls with the same messages. In Node,
+`setNodes` on the profile's 10,000 nodes (half rounded rects, half circles,
+a tenth moving), 400 calls after one of warm-up, four pairs at load about
+2.8: median 1.90 to 2.06 ms against 2.31 to 2.37, minimum 1.77 to 1.89
+against 2.12 to 2.17.
+
+On WebGPU, same machine (Apple M4), Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, tick 16.7 ms, DPR 1,
+`fit`, `--motion=springs --sizes=10000 --edges=smooth --moving=0.1
+--frames=1200`, builds swapped through `packages/render/dist/scene-nodes.js`,
+previous build first in each of three pairs, load average 2.5 to 4.2.
+Animated-mode medians in milliseconds:
+
+| Build | `setNodes` | `setEdges` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- |
+| previous | 1.9, 1.9, 1.9 | 3.1, 3.0, 3.0 | 1.6, 1.5, 1.6 | 0%, 0%, 0% |
+| this one | 1.7, 1.7, 1.7 | 3.0, 2.9, 3.0 | 1.8, 1.7, 1.8 | 0%, 0%, 0% |
+
+`apply` does not run this code, and earlier sections record it moving by
+this much between runs of one build. Both hold the tick. What is left of
+`setNodes` is mostly per node: the label strings its validation builds for
+every node, twice, whether or not a check fails (about 0.15 ms in Node when
+built only on failure), and three `Math.pow` per colour, two colours per node.

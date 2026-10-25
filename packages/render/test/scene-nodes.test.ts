@@ -135,6 +135,45 @@ describe('setNodes', () => {
     scene.dispose();
   });
 
+  it('rejects a repeated id the scene already holds, and changes nothing', () => {
+    const scene = new SceneNodes(style);
+    scene.setNodes([node('a'), node('b', 100)]);
+    const before = scene.placementOf('b');
+    expect(() => scene.setNodes([node('b', 100), node('a'), node('b', 200)])).toThrow(
+      /two nodes share the id b/,
+    );
+    expect(scene.nodeCount).toBe(2);
+    expect(scene.placementOf('b')).toBe(before);
+    scene.dispose();
+  });
+
+  it('removes a node that a rejected call listed and the next call does not', () => {
+    const scene = new SceneNodes(style);
+    scene.setNodes([node('a'), node('b', 100)]);
+    const b = scene.placementOf('b');
+    const oval: SceneNode = { ...node('c', 0, 'circle'), size: { width: 40, height: 20 } };
+    expect(() => scene.setNodes([node('a'), oval])).toThrow(RangeError);
+
+    scene.setNodes([node('b', 100)]);
+    expect(scene.placementOf('a')).toBeUndefined();
+    expect(scene.placementOf('b')).toBe(b);
+    expect(onlyOffset(scene, 'roundedRect')).toBe(100);
+    scene.dispose();
+  });
+
+  it('keeps both handles when nodes of two shapes swap places in the list', () => {
+    const scene = new SceneNodes(style);
+    scene.setNodes([node('a'), node('b', 100, 'circle')]);
+    const before = [scene.placementOf('a'), scene.placementOf('b')];
+    scene.setNodes([node('b', 100, 'circle'), node('a')]);
+    scene.setNodes([node('a'), node('b', 100, 'circle')]);
+    expect(scene.placementOf('a')).toBe(before[0]);
+    expect(scene.placementOf('b')).toBe(before[1]);
+    expect(scene.meshes[0]?.geometry.instanceCount).toBe(1);
+    expect(scene.meshes[1]?.geometry.instanceCount).toBe(1);
+    scene.dispose();
+  });
+
   it('rejects a circle whose size is not square, naming the node', () => {
     // A circle carries one radius, so a non-square size would draw a circle of
     // the wrong radius inside a quad of the right height and look deliberate.

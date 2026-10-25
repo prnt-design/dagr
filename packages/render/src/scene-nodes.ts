@@ -90,6 +90,16 @@ export interface NodePlacement {
   readonly handle: number;
 }
 
+/** A placement plus which `setNodes` call last listed it, and where in that list. */
+interface Placement extends NodePlacement {
+  seen: number;
+  index: number;
+}
+
+function duplicate(id: string): never {
+  throw new RangeError(`two nodes share the id ${id}, so one would replace the other`);
+}
+
 /**
  * The scene's nodes, across one instanced mesh per shape family.
  *
@@ -99,7 +109,9 @@ export interface NodePlacement {
  */
 export class SceneNodes implements GpuResource {
   readonly #families: ReadonlyMap<NodeShape, InstancedShapes>;
-  readonly #placements = new Map<string, NodePlacement>();
+  readonly #placements = new Map<string, Placement>();
+  readonly #instances: ShapeInstance[] = [];
+  #calls = 0;
   #disposed = false;
 
   /**
@@ -182,13 +194,25 @@ export class SceneNodes implements GpuResource {
    */
   setNodes(nodes: readonly SceneNode[]): void {
     this.#assertLive('setNodes');
-    const incoming = new Map<
-      string,
-      { node: SceneNode; instance: ShapeInstance; family: InstancedShapes }
-    >();
-    for (const node of nodes) {
-      if (incoming.has(node.id)) {
-        throw new RangeError(`two nodes share the id ${node.id}, so one would replace the other`);
+    // No map of the incoming nodes: at 10,000 nodes a frame, filling one per
+    // call cost about a seventh of the call. A placed node is stamped with this
+    // call's number instead, and only ids new to the scene need a set to catch
+    // a duplicate.
+    const call = ++this.#calls;
+    let arriving: Set<string> | undefined;
+    const instances = this.#instances;
+    instances.length = 0;
+    for (let index = 0; index < nodes.length; index += 1) {
+      const node = nodes[index] as SceneNode;
+      const placed = this.#placements.get(node.id);
+      if (placed === undefined) {
+        arriving ??= new Set();
+        if (arriving.has(node.id)) duplicate(node.id);
+        arriving.add(node.id);
+      } else {
+        if (placed.seen === call) duplicate(node.id);
+        placed.seen = call;
+        placed.index = index;
       }
       // **Converted AND validated before anything is touched.** The first
       // version validated as it wrote, so a bad node halfway down the list threw
@@ -205,29 +229,34 @@ export class SceneNodes implements GpuResource {
       // caller) validated clean and then threw out of `#family` with the
       // removals already applied. Unreachable from this repo, where every shape
       // is a literal, and a guarantee gap all the same.
-      incoming.set(node.id, {
-        node,
-        instance: requireShapeInstance(instance, instance.kind, node.id),
-        family: this.#family(node.shape),
-      });
+      this.#family(node.shape);
+      instances.push(requireShapeInstance(instance, instance.kind, node.id));
     }
 
     for (const [id, placement] of this.#placements) {
-      const entry = incoming.get(id);
-      if (entry === undefined || entry.node.shape !== placement.shape) {
+      if (placement.seen !== call || nodes[placement.index]?.shape !== placement.shape) {
         this.#family(placement.shape).remove(placement.handle);
         this.#placements.delete(id);
       }
     }
 
-    for (const [id, { node, instance, family }] of incoming) {
-      const placement = this.#placements.get(id);
+    for (let index = 0; index < nodes.length; index += 1) {
+      const node = nodes[index] as SceneNode;
+      const instance = instances[index] as ShapeInstance;
+      const family = this.#family(node.shape);
+      const placement = this.#placements.get(node.id);
       if (placement === undefined) {
-        this.#placements.set(id, { shape: node.shape, handle: family.add(instance) });
+        this.#placements.set(node.id, {
+          shape: node.shape,
+          handle: family.add(instance),
+          seen: call,
+          index,
+        });
       } else {
         family.set(placement.handle, instance);
       }
     }
+    instances.length = 0;
   }
 
   /**
