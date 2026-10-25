@@ -1684,3 +1684,57 @@ row's tick count; the table is the second.
 
 **The ceiling is 4,000 nodes** with their 5,400 edges: the largest size whose
 95th percentile stays within one frame. At 8,000 one frame in nine runs long.
+
+### With reroutes kept out of the edge plan's map (2026-10-24)
+
+A retarget's edge plan put every reroute into a `Map` keyed by id, to catch an
+id named twice and to answer later lookups, and a Node CPU profile of the
+10,000-node retarget put that map's lookups and inserts at about a sixth of the
+plan's own time. A reroute of a live edge now goes into a list, and the edge
+records which plan claimed it and where, so an id named twice still takes the
+later route in the first one's place. The map keeps removals, additions and
+replacements.
+
+Frames are byte-identical: the same sha256 as the previous build over every
+point of every frame for 200 frames of 2,000 edges with retargets and resyncs,
+500 `alignRoutes` calls, and 400 random deltas over 300 edges with removals,
+additions, same-id replacements, ids rerouted twice and reroutes of edges the
+same delta added, 57 of them refused.
+
+In Node, the edge half's plan alone at 10,000 smooth nodes, 300 retargets with
+a frame stepped between each, previous and this build alternated eight times
+at load about 2.1: median 4.1 to 5.4 ms against 5.8 to 6.8, minimum 3.5 to
+3.7 against 3.9 to 4.2. The previous build's median sat 2 to 3 ms above its
+minimum, so allocation and collection rather than arithmetic is what is left
+of the plan. The scene's `apply`, one frame between retargets,
+three pairs: 10.3 to 10.7 ms against 11.7 to 12.0 smooth and 8.5 to 8.8
+against 9.1 to 9.9 straight; thirty frames between, as this page steps, 18.5
+to 19.4 against 21.5 to 21.9 smooth and 16.4 to 16.9 against 18.2 to 18.6
+straight. The committed entries are in `bench/README.md`. A first attempt
+that took a route's arc-length parameters from the walk that validates it,
+rather than measuring the segments twice, had the same minimum and a worse
+median (6.7 to 7.4 ms against 5.8 to 6.8), because each reroute then held its
+parameters until the plan ended; it was not kept.
+
+On WebGPU, same machine (Apple M4), Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, tick 16.7 ms, DPR 1,
+`fit`, `--motion=springs --sizes=10000 --frames=1200` (42 to 53 retargets a
+run), builds swapped through `packages/render/dist/edge-motion.js`, load
+average 2.7 to 4.3. Three pairs of both styles with the previous build first,
+then three of straight with this build first. Animated-mode medians in
+milliseconds:
+
+| Build | Edges | `apply` | `advance` | Past one tick |
+| --- | --- | --- | --- | --- |
+| previous | straight | 8.5, 12.0, 7.6, 11.0, 12.2, 12.3 | 2.3, 2.4, 1.9, 2.3, 2.5, 2.5 | 0% in all |
+| this one | straight | 10.8, 10.5, 10.7, 10.9, 10.4, 10.3 | 2.4, 2.6, 1.9, 2.0, 2.5, 2.5 | 0% in all |
+| previous | smooth | 14.4, 17.7, 14.2 | 6.0, 4.7, 4.3 | 25.8%, 13.0%, 8.7% |
+| this one | smooth | 16.4, 16.6, 16.6 | 4.7, 4.9, 4.0 | 13.4%, 13.2%, 7.9% |
+
+**The browser does not resolve the change.** The previous build's `apply`
+falls in the two bands earlier sections found, 7.6 to 8.5 ms or 11.0 to 12.3
+straight and 14.2 to 14.4 or 17.7 smooth, while this build landed between them
+in every run, 10.3 to 10.9 straight and 16.4 to 16.6 smooth: each of its six
+straight runs is below all four of the previous build's upper-band runs and
+above both of its lower-band ones. Node, where the bands do not appear, shows the gain in every pair.

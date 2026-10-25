@@ -156,6 +156,16 @@ loads of 3.8 to 5.4, medians in milliseconds:
 This more than takes back the 0.4 to 1.1 ms the flat velocities added to a
 straight retarget above.
 
+On 2026-10-24 an edge retarget's plan stopped putting each reroute of a live
+edge through a `Map` keyed by id: the edge records which plan claimed it (see
+`bench/browser/README.md`). Frames are byte-identical. Three runs alternating
+the old and new source at loads of 2.5 to 4.3, medians in milliseconds:
+
+| Edges | `apply` before | `apply` after | `advance` before | `advance` after |
+| --- | --- | --- | --- | --- |
+| straight | 9.8 to 10.0 | 8.2 to 8.3 | 3.1 to 3.9 | 3.0 to 3.9 |
+| smooth | 10.8 to 11.0 | 9.1 to 9.8 | 4.2 to 4.5 | 4.0 to 4.7 |
+
 Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
 for the same reason: recording them rewrites the machine-matched file, which is
 the maintainer's call. This is CPU time in Node, not a browser frame or GPU
