@@ -194,10 +194,10 @@ export class SceneNodes implements GpuResource {
    */
   setNodes(nodes: readonly SceneNode[]): void {
     this.#assertLive('setNodes');
-    // No map of the incoming nodes: at 10,000 nodes a frame, filling one per
-    // call cost about a seventh of the call. A placed node is stamped with this
-    // call's number instead, and only ids new to the scene need a set to catch
-    // a duplicate.
+    // A placed node is stamped with this call's number, and only ids new to the
+    // scene go in a set to catch a duplicate. A map of every incoming node,
+    // filled on each call, costs about a seventh of the call at 10,000 nodes a
+    // frame.
     const call = ++this.#calls;
     let arriving: Set<string> | undefined;
     const instances = this.#instances;
