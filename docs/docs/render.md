@@ -162,6 +162,11 @@ reads as corners blurrier than the edges they join. That is the artefact a
 distance field is supposed to remove. It costs one `sqrt` per fragment, and the
 shader already has one.
 
+That decision has now been checked on real hardware rather than only argued.
+Measuring the navy band off the committed 100x frame gives 1.98 CSS pixels
+perpendicular to the flat edges and 1.7 to 1.9 pixels around the corner arc, where
+`fwidth` would have made the arc about 41% thicker than the sides it joins.
+
 This works because the fields are TRUE euclidean distances outside the shape
 rather than a cheaper approximation. The gradient of such a field has magnitude 1
 in world space, so its screen-space gradient magnitude is world units per pixel
@@ -194,6 +199,44 @@ the three crossovers at 0.25, 0.045 and 0.005: four of the six shapes are theref
 clean at zoom 0.1 and the two 4-unit-tall ones are not. What is clipped there is the
 antialiasing of a shape already under a pixel across, which is why it is invisible
 in the frame, and a zoom-aware quad is M4.4's to add.
+
+### What a performance milestone should actually measure
+
+The cost that matters here is quad AREA, not the shader. `glowWorld` is a quarter of
+each shape's height and the quad is padded on all four sides, so for
+`@dagr/layout`'s default 100 by 40 node the plane is 122 by 62: **1.89 times the
+node's own area**. Nearly half of every node's fragments lie outside the node,
+running the whole shader to produce mostly transparent glow, with blending on and
+`depthWrite` off so none of it is rejected early. At ten thousand nodes that is a
+1.89x multiplier on the entire fragment budget, and it is set by a scene constant
+rather than by anything in the shader. `height / 6` would make it 1.60x and no glow
+1.07x. The small rungs are worse, 2.80x on the 10-unit one, because
+`FILL_AA_PADDING_WORLD`'s fixed world unit is a quarter of a 4-unit height, which
+also means M4.4's small nodes will pay proportionally more than its large ones.
+
+So the list M4.10 inherits, in order: overdraw between overlapping padded quads,
+which a real layout produces and which this ladder's provably disjoint quads hide
+completely; the 1.89x above; and blend bandwidth, since every fragment is a
+read-modify-write on a transparent target. All three are structural, and none of
+them depends on which spelling of `smoothstep` is used.
+
+**There is no benchmark in `@dagr/render` at all.** `pnpm bench` resolves to
+`@dagr/layout` and `@dagr/graph`, so the ten-thousand-nodes-at-60fps claim has no
+harness and no baseline anywhere in this package yet. That is a larger hole than any
+per-fragment question, and saying "M4.10 owns the measurement" should not be read as
+implying the measurement has somewhere to run.
+
+### MSAA stays on, and that is measured
+
+`antialias: true` is set on the renderer, which looks redundant when every shape
+antialiases its own edges analytically, and the previous task left a note asking this
+one to reconsider it. The answer is that MSAA is doing something the shader cannot.
+On an edge it is indeed redundant. In the sub-pixel case above it is the whole
+mechanism: coverage there is decided by where the sample points fall rather than by
+the distance field, and with `antialias: false` at zoom 0.1 the sub-pixel circle goes
+from `#263841` to pure background. Turning MSAA off loses shapes drawn under a pixel
+outright. What remains open is its cost, the 4x-sampled target plus a resolve every
+frame, which belongs with the rest of the performance work above.
 
 ### What this task deliberately did not decide
 
@@ -394,11 +437,14 @@ either fails for a reason that is not a bug or gets loosened until it stops
 catching real ones. One definition removes the question.
 
 `smoothstep` and `clamp` are WGSL intrinsics and are absent from the nine,
-deliberately: each is built from the primitives instead, which costs a few ALU
-operations per fragment against the intrinsic and keeps the ramp the tests exercise
-identical to the ramp the shader evaluates. M4.10 owns measuring whether that trade
-is still right at ten thousand instances, where the budget is far more likely to be
-bound by overdraw than by arithmetic.
+deliberately: each is built from the primitives instead, which keeps the ramp the
+tests exercise identical to the ramp the shader evaluates. An earlier draft of this
+page apologised for the ALU cost of that and asked M4.10 to measure it.
+graphics-feel-review pointed out there is nothing to measure: `smoothstep` is not a
+hardware instruction, it is a GLSL.std.450 extended instruction that drivers expand
+inline to exactly a clamp plus `t*t*(3-2t)`, which is what this function already
+computes, and `clamp` is a min and a max. So the tested-arithmetic property is had
+for free rather than paid for.
 
 `length` is NOT one of those, and this is where an earlier draft of this page was
 wrong. It is used as an intrinsic, in `antialiasWidth` alone. Counting properly,

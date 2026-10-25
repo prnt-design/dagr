@@ -506,19 +506,30 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     // `RendererOptions` yet: it is a device capability question rather than a
     // scene one, and it belongs with the rest of the backend choices in M4.9.
     //
-    // M4.1 asked for this to be revisited rather than carried forward, and M4.2
-    // has now landed the SDF path without changing it, deliberately. The argument
-    // for turning it off is unchanged and still expected to win: SDF shapes
-    // antialias their own edges analytically, per pixel (`sdf.ts` proves the
-    // coverage ramp is identical at zoom 0.1 and zoom 100), and gain nothing from
-    // MSAA, while MSAA costs a 4x-sampled target plus a resolve every frame, which
-    // on a 4K canvas at ratio 2 is a real bandwidth line against the
-    // 10k-nodes-at-60fps budget. What is missing is the MEASUREMENT, and it needs
-    // a device: both the visual comparison (does anything look worse with it off)
-    // and the bandwidth cost belong to a browser run. M4.10 owns the bandwidth
-    // number; the orchestrator's screenshot covers the visual half. Flipping the
-    // flag on reasoning alone would be trading a known-good frame for an
-    // unmeasured saving.
+    // M4.1 asked for this to be revisited rather than carried forward. M4.2 did,
+    // and the answer is that MSAA is buying something the shader cannot: it stays
+    // on, MEASURED rather than assumed.
+    //
+    // The argument for turning it off is sound as far as it goes. SDF shapes
+    // antialias their own EDGES analytically, per pixel, and `sdf.ts` proves that
+    // coverage ramp is identical at zoom 0.1 and zoom 100, so on an edge MSAA is
+    // redundant while costing a 4x-sampled target plus a resolve every frame.
+    // Where it breaks down is the sub-pixel case, which is decided by where the
+    // sample points fall rather than by any distance field: a quad smaller than a
+    // pixel can cover no pixel centre at all, and then nothing is shaded and the
+    // shape is simply absent. Measured at zoom 0.1 on the committed scene, with
+    // this flag false the sub-pixel circle goes from #263841 to pure background
+    // #0b0d10. So MSAA is what renders a shape drawn under a pixel, and turning it
+    // off loses those outright.
+    //
+    // graphics-feel-review is why this says something rather than deferring: it
+    // pointed out that the committed 0.1x frame could not distinguish "MSAA keeps
+    // this speck visible" from "that quad missed the samples", because the two
+    // shapes involved have quads of identical height, and that settling it was one
+    // screenshot with the flag flipped rather than a harness this task lacked.
+    // M4.10 still owns the COST side, which is the 4x target and the resolve
+    // against its budget, and it should weigh that against losing sub-pixel shapes
+    // rather than against nothing.
     antialias: true,
   });
   await renderer.init();

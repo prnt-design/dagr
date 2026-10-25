@@ -197,27 +197,39 @@ export function circleDistance<T>(m: Arith<T>, px: T, py: T, radius: T): T {
  * `smoothstep`, built from the nine primitives: a clamp and the cubic `t * t *
  * (3 - 2t)`.
  *
- * **What this costs, since WGSL has a `smoothstep` intrinsic and TSL exposes
- * it.** The intrinsic is one instruction on most hardware where this is a clamp
- * (two instructions), a subtract, a divide and four multiply-adds: call it five
- * to eight ALU operations per fragment more than the builtin, times three
- * coverage functions, on a fragment shader that is already doing a `sqrt` and
- * two derivatives. On the 10k-node scene M4.10 has to hit 60fps on, that is
- * arithmetic against a budget that is far more likely to be bound by overdraw
- * and bandwidth (every shape is a transparent, padded quad), so it is worth
- * measuring before it is worth optimising, and M4.10 owns the measurement.
+ * **What this costs against the intrinsic: approximately nothing.** WGSL has a
+ * `smoothstep` and TSL exposes it, so this function reads at first like ALU paid
+ * for testability. It is not. `smoothstep` is not a hardware instruction on any
+ * GPU this package targets: in SPIR-V it is a GLSL.std.450 extended instruction,
+ * and a driver expands it inline to a clamp and `t * t * (3 - 2t)`, which is
+ * exactly the expression below. `clamp` expands the same way, to a `min` and a
+ * `max`. So what is written here IS the intrinsic's own expansion, and the
+ * difference in instructions issued is somewhere between zero and one register
+ * copy.
  *
  * What it buys is that the ramp the test suite exercises is the ramp the shader
  * evaluates. A builtin `smoothstep` would be an unexecutable tenth primitive,
  * and its clamping behaviour at reversed edges (relied on below) would be a
- * property of somebody else's hardware rather than of a line in this file.
+ * property of somebody else's hardware rather than of a line in this file. That
+ * property is therefore had for free, which is worth saying plainly because this
+ * docstring used to apologise for 15 to 24 operations per fragment that no
+ * hardware ever charged.
  *
  * `edge0` may be GREATER than `edge1`, which gives a descending ramp and is how
  * every coverage function below spells one. Undefined when `edge0 === edge1`:
  * the denominator is zero, and both backends then produce a non-finite ramp
- * parameter rather than a step. No caller can reach that, because every
- * denominator below is an `aaWidth` or a glow radius floored at one pixel, and a
- * pixel has positive width.
+ * parameter rather than a step. `x` exactly halfway between two equal edges is
+ * worse again, because `0 / 0` is `NaN` rather than a clamped end.
+ *
+ * That used to be argued unreachable on the grounds that every denominator below
+ * is "an `aaWidth` or a glow radius floored at one pixel, and a pixel has
+ * positive width". The argument was about a quantity the shader does not use:
+ * `aaWidth` is not one pixel handed down from the camera, it is
+ * `length(vec2(dFdx(d), dFdy(d)))`, and that MEASURED gradient is exactly zero
+ * wherever the field is locally symmetric across a 2x2 quad. What actually makes
+ * the denominator positive is {@link MIN_AA_WIDTH}, which each of the three
+ * coverage functions applies to its own `aaWidth` argument before dividing. A
+ * caller reaching this function directly is on its own.
  */
 export function smoothstepBetween<T>(m: Arith<T>, edge0: T, edge1: T, x: T): T {
   const t = m.min(
@@ -225,6 +237,74 @@ export function smoothstepBetween<T>(m: Arith<T>, edge0: T, edge1: T, x: T): T {
     m.literal(1),
   );
   return m.mul(m.mul(t, t), m.sub(m.literal(3), m.mul(m.literal(2), t)));
+}
+
+/**
+ * The floor every coverage function puts under its `aaWidth` before dividing by
+ * it: `2^-20` world units per pixel, which is a zoom of about a million.
+ *
+ * **`aaWidth` can be exactly zero.** The module docstring above calls it one CSS
+ * pixel measured in world units, and at the top of a frame that is what it is,
+ * `1 / zoom`. In the shader it is never read off the camera: it is measured from
+ * the field as `length(vec2(dFdx(d), dFdy(d)))`, and both derivatives vanish
+ * TOGETHER wherever the field is locally symmetric across the 2x2 quad the
+ * hardware differentiates over. A circle at its centre is one such place. So is
+ * the strip through a rounded rect where the interior field depends on one axis
+ * only: for the 10 by 4 rung with radius 1, `d = |py| - 2` for every `|px| < 3`,
+ * so `dFdx(d)` is zero along the whole middle of the shape and `dFdy(d)` is zero
+ * on its centre line.
+ *
+ * What that costs unguarded, measured over `numberArith`: `fillCoverage(-5, 0)`
+ * is 0, so a fragment five units INSIDE reports no coverage at all;
+ * `outlineCoverage(-2, 2, 0)` is 1, so the same fragment reports a fully covered
+ * outline, which composites to a hard band of the outline colour through the
+ * middle of a shape; and `fillCoverage(0, 0)` is `NaN`. With the floor the three
+ * become 1, 0 and exactly 0.5, which is what each of them means.
+ *
+ * **Not a demonstrated defect on hardware, and worth saying so.**
+ * graphics-feel-review could not reproduce it on a GPU, and the committed 100x
+ * frame is clean at the alignment where it would show: a driver is free to pick a
+ * 2x2 quad that straddles the symmetry, and evidently these ones do. This is a
+ * latent hazard with a severe failure mode, which is the case for a floor rather
+ * than for a redesign.
+ *
+ * **Why here and not in `antialiasWidth`.** One `max` in `sdf-nodes.ts` would be
+ * cheaper than one per coverage function, and it was the first thing tried. It
+ * also puts the guard in the one part of this package no test can execute:
+ * `antialiasWidth` is TSL, it is on the untested list its own module docstring
+ * keeps, and a floor written there is a floor whose behaviour at zero is asserted
+ * by nothing at all. Here it is three `max` instructions on a fragment shader that
+ * already runs a `sqrt` and two derivatives, and every degenerate input above is
+ * pinned in `test/sdf.test.ts`.
+ *
+ * **Why `2^-20` rather than a round number.** Three bounds, and this is the power
+ * of two that clears all of them. It has to sit far below any `aaWidth` a real
+ * frame produces: `2^-20` is a zoom of 1048576, four orders of magnitude past the
+ * 100x the committed screenshots cover and three past the 1024 the zoom
+ * invariance tests reach. It has to sit below the point where the shader's float32
+ * coordinates run out of resolution, and they run out long first: one ulp of a
+ * 1000 unit coordinate in float32 is 6.1e-5, sixty-four times WIDER than this
+ * floor, so a frame in which the floor is active is a frame whose distance field
+ * has no precision left to antialias with. And it has to keep `distance / aaWidth`
+ * finite in float32, which at `2^-20` holds for every distance below `2^108`. A
+ * power of two, so the division introduces no rounding of its own and the
+ * bit-identical zoom assertions in `test/sdf.test.ts` survive a floor being put
+ * underneath them.
+ */
+export const MIN_AA_WIDTH = 2 ** -20;
+
+/**
+ * `aaWidth` with {@link MIN_AA_WIDTH} under it: the first line of all three
+ * coverage functions, and the only thing between a measured gradient of zero and
+ * a division by it.
+ *
+ * A `max` and not an added epsilon, deliberately. Adding a small constant would
+ * shift the ramp at every fragment in every frame by that constant; a `max`
+ * returns the identical double for every `aaWidth` at or above the floor, so no
+ * pixel any real zoom produces moves at all.
+ */
+function flooredAaWidth<T>(m: Arith<T>, aaWidth: T): T {
+  return m.max(aaWidth, m.literal(MIN_AA_WIDTH));
 }
 
 /**
@@ -242,9 +322,14 @@ export function smoothstepBetween<T>(m: Arith<T>, edge0: T, edge1: T, x: T): T {
  * Spelled as a descending `smoothstep` with reversed edges rather than as
  * `1 - smoothstep(-h, h, d)`. Identical output, one subtract fewer per
  * fragment, and the clamp is already the clamp that is wanted.
+ *
+ * `aaWidth` is floored at {@link MIN_AA_WIDTH}, because the shader measures it and
+ * the measurement is exactly zero in places a shape actually has. At zero this
+ * would otherwise report no coverage deep inside a shape and `NaN` on its
+ * boundary.
  */
 export function fillCoverage<T>(m: Arith<T>, distance: T, aaWidth: T): T {
-  const half = m.div(aaWidth, m.literal(2));
+  const half = m.div(flooredAaWidth(m, aaWidth), m.literal(2));
   return smoothstepBetween(m, half, m.sub(m.literal(0), half), distance);
 }
 
@@ -262,12 +347,33 @@ export function fillCoverage<T>(m: Arith<T>, distance: T, aaWidth: T): T {
  * fill and never against the background, not that its coverage is zero at
  * `d = 0`. At the boundary it is exactly 0.5, the same as the fill's.
  *
- * **A band of `w` pixels draws `w` fully covered pixel centres.** This is the
- * property to hold onto, because it is the only one a user can see. A rasteriser
- * samples coverage at PIXEL CENTRES, which at one pixel per `aaWidth` sit at
- * `d = -0.5, -1.5, ... ` pixels, and with the ramp centred on the boundary the
- * coverage at the first `w` of them is exactly 1, so the outline reaches its own
- * colour. Even a hairline draws one fully opaque pixel.
+ * **A band of `w` pixels has a total coverage of exactly `w` at every sub-pixel
+ * phase, and `w` fully covered pixel centres when the boundary is pixel aligned.**
+ * The first clause holds unconditionally; the second is the one this docstring
+ * used to state on its own, and it is phase dependent. A rasteriser samples
+ * coverage at PIXEL CENTRES, which sit at `d = -0.5, -1.5, ...` pixels only when
+ * the boundary falls on a pixel EDGE, and where the grid falls is not something a
+ * shape controls. Measured at `aaWidth = 1`:
+ *
+ * ```
+ * w=1  boundary on a pixel edge    [1.000, 0.000]         max 1.0  total 1
+ * w=1  boundary on a pixel centre  [0.500, 0.500]         max 0.5  total 1
+ * w=2  boundary on a pixel edge    [1.000, 1.000, 0.000]  max 1.0  total 2
+ * w=2  boundary on a pixel centre  [0.500, 1.000, 0.500]  max 1.0  total 2
+ * ```
+ *
+ * So "even a hairline draws one fully opaque pixel" was true of one phase out of a
+ * continuum and false at the other end of it: a one pixel band whose boundary
+ * lands on a pixel centre draws two half covered pixels and no opaque one, which
+ * is the same defect this milestone already fixed at a different width. What is
+ * phase independent is the TOTAL, and the total is what makes the rendering right
+ * rather than merely defensible: a `w` pixel band deposits exactly `w` pixels
+ * worth of outline colour however the grid falls across it, so a border neither
+ * thins nor fattens as a shape moves by a fraction of a pixel, and no energy is
+ * invented or lost at any phase. `test/sdf.test.ts` sweeps the phase and asserts
+ * the total. What a chosen width then costs at the worst phase is
+ * `OUTLINE_PIXELS`'s problem in `shape-scene.ts`, and it is a stronger reason for 2
+ * than the legibility argument that constant used to give.
  *
  * **The footprint does not grow, and that is arithmetic rather than a hope.**
  * `max(d, anything)` is never less than `d`, and {@link fillCoverage} is
@@ -314,11 +420,21 @@ export function fillCoverage<T>(m: Arith<T>, distance: T, aaWidth: T): T {
  *
  * `widthPixels` is in CSS pixels, so an outline is the same thickness on screen
  * at every zoom, which is the reason to draw one from a distance field at all.
+ *
+ * `aaWidth` is floored at {@link MIN_AA_WIDTH} HERE and not only inside
+ * {@link fillCoverage}, because the band's world width is `widthPixels * aaWidth`
+ * and the two have to agree about what a pixel is. At a measured `aaWidth` of zero
+ * the unfloored form reported full outline coverage in the middle of a shape;
+ * flooring both makes the band `widthPixels * MIN_AA_WIDTH` wide, which reports
+ * nothing anywhere but on the boundary itself. The `max` inside `fillCoverage` then
+ * sees an already floored width and returns it unchanged, at the cost of one
+ * instruction and no reader having to check whether the two agree.
  */
 export function outlineCoverage<T>(m: Arith<T>, distance: T, widthPixels: T, aaWidth: T): T {
-  const bandWorld = m.mul(widthPixels, aaWidth);
+  const width = flooredAaWidth(m, aaWidth);
+  const bandWorld = m.mul(widthPixels, width);
   const inner = m.sub(m.literal(0), m.add(distance, bandWorld));
-  return fillCoverage(m, m.max(distance, inner), aaWidth);
+  return fillCoverage(m, m.max(distance, inner), width);
 }
 
 /**
@@ -342,10 +458,17 @@ export function outlineCoverage<T>(m: Arith<T>, distance: T, widthPixels: T, aaW
  * spacing is a hard step, which is the one thing this file exists to avoid. The
  * cost is that `radiusWorld === 0` still draws a one pixel halo rather than
  * nothing, which is why the scene expresses "no glow" through the glow colour or
- * its alpha and not through a zero radius.
+ * its alpha and not through a zero radius. Since {@link shapeColorChannel} weights
+ * the glow by its own alpha, `glowAlpha === 0` now removes the halo's hue as well
+ * as its alpha, so that is the way to say it.
+ *
+ * That `aaWidth` is itself floored at {@link MIN_AA_WIDTH} first, so the edge is
+ * positive even where the shader measures a gradient of zero. Unguarded, a
+ * `radiusWorld` and an `aaWidth` both zero made this return 1 OUTSIDE the shape,
+ * which is a halo of unbounded reach.
  */
 export function glowCoverage<T>(m: Arith<T>, distance: T, radiusWorld: T, aaWidth: T): T {
-  const edge = m.max(radiusWorld, aaWidth);
+  const edge = m.max(radiusWorld, flooredAaWidth(m, aaWidth));
   return smoothstepBetween(m, edge, m.literal(0), distance);
 }
 
@@ -381,12 +504,13 @@ export function glowCoverage<T>(m: Arith<T>, distance: T, radiusWorld: T, aaWidt
  * Here rather than in `sdf-nodes.ts` because it is pure float arithmetic, so
  * `test/sdf.test.ts` can execute the decision instead of reading it: `mul` and
  * `max` were already two of the nine primitives and this needs no tenth. Its
- * partner, the colour, could not come along. That `mix` is a `vec3` operation,
- * and adding a vector `mix` to {@link Arith} would widen the interface for one
- * call site and put a tenth unexecutable line in `sdf-nodes.ts`, so the colour
- * stays in TSL and is checked structurally. The asymmetry is deliberate and it is
- * the reason the two halves of the compositing decision are documented in two
- * files.
+ * partner, the colour, USED to be the counterexample: a `vec3 mix` is not one of
+ * the nine, so it stayed in TSL and was checked structurally, and the asymmetry
+ * was documented as deliberate. It was not necessary. A `mix` between two colours
+ * is three independent scalar blends, so {@link shapeColorChannel} composites ONE
+ * channel over the same nine primitives and `sdf-nodes.ts` calls it three times.
+ * Both halves of the compositing decision are now executed by
+ * `test/sdf.test.ts`, and {@link Arith} is still nine members wide.
  */
 export function shapeAlpha<T>(
   m: Arith<T>,
@@ -396,6 +520,129 @@ export function shapeAlpha<T>(
   outline: T,
 ): T {
   return m.max(m.mul(glowAlpha, glow), m.max(fill, outline));
+}
+
+/**
+ * The floor under {@link shapeFillWeight}'s denominator: `2^-100`.
+ *
+ * The denominator is `fill + glowAlpha * glow * (1 - fill)`, and it is zero in
+ * exactly one case, which is worth stating as an identity rather than as a
+ * tolerance. Write `g` for `glowAlpha * glow`. Then `sum - fill = g * (1 - fill)`
+ * and `sum - g = fill * (1 - g)`, both of which are at or above zero for inputs in
+ * the unit interval, so `sum >= max(fill, g)`. {@link shapeAlpha} is
+ * `max(g, max(fill, outline))` and {@link outlineCoverage} never exceeds
+ * {@link fillCoverage}, so `sum >= alpha`: the denominator vanishes only where the
+ * fragment writes an alpha of exactly zero and nothing is drawn at all.
+ *
+ * So the floor's only job is to keep `0 / 0` out of the shader, and a `max` is the
+ * spelling that does it without touching anything else. An added epsilon would
+ * move the weight at every fragment in every frame; `max` returns the identical
+ * double wherever the sum is at or above `2^-100`, which is every fragment with any
+ * alpha whatsoever. The degenerate fragment then gets a fill weight of 0, which is
+ * the glow colour at alpha 0, rather than the `NaN` that propagates through a
+ * `mix` into a black or undefined pixel.
+ *
+ * `2^-100` rather than something nearer the framebuffer's `1 / 255`, and the
+ * difference matters. The weight is `fill / max(sum, floor)`, so a floor the fill
+ * can exceed scales the weight DOWN and biases a faint fragment towards the glow;
+ * at `1 / 255` that is every fragment under one 8-bit alpha step, which is
+ * invisible but is also not nothing. At `2^-100` the weight is exactly 1 whenever
+ * the glow's contribution is zero and the fill's is not, which is what makes
+ * "`glowAlpha = 0` paints exactly the fill colour" an exact statement rather than
+ * an approximate one. The lower bound is float32: `fill / 2^-100` is at most
+ * `2^100`, eight orders of magnitude inside float32's range, where a floor at the
+ * smallest normal `2^-126` would leave under a factor of four. A power of two, so
+ * the division introduces no rounding of its own.
+ */
+export const MIN_COLOR_WEIGHT_SUM = 2 ** -100;
+
+/**
+ * How much of the blend under the outline the FILL colour gets, against the glow
+ * colour: a scalar in `[0, 1]`.
+ *
+ * **This exists because `glowAlpha` used to reach the alpha and not the colour.**
+ * The shape's alpha was `max(glowAlpha * glow, max(fill, outline))` and its colour
+ * was `mix(mix(glowColor, fillColor, fill), outlineColor, outline)`, so the glow
+ * was weighted by its alpha in one and by `1 - fill` in the other. Two measured
+ * consequences at `aaWidth = 1`, both on the ladder's own colours:
+ *
+ * - `glowAlpha = 0`, which {@link glowCoverage} recommends as the way to say "no
+ *   glow" because radius 0 still draws a one pixel halo, did not remove the glow's
+ *   HUE. At `d = +0.25` pixels the fill is 0.15625, so the colour under the outline
+ *   came out `#fc8d00` on the amber rect against the `#ffb703` it is painted, and
+ *   `#7dc3df` on the blue circle against `#219ebc`. The circle's is 84% of the way
+ *   from its own fill to its glow. A caller who asked for no glow got the glow's
+ *   colour over the outer half of every antialiasing ramp on the shape.
+ * - `glowAlpha = 0.45` and a 10 unit glow, at `d = +0.25` pixels: the alpha is
+ *   0.44917 and all of it comes from the halo, while the fill and the outline are
+ *   both 0.15625. The old weighting gave the fill 0.15625 of that pixel's colour
+ *   where its share of the light reaching the pixel is 0.29193, a ring one pixel
+ *   wide that is darker and more glow-coloured than the shape it surrounds.
+ *
+ * The fix is to weight the two layers by what each contributes: the fill by its own
+ * coverage, and the glow by its alpha times the part of the pixel the fill has not
+ * already claimed, `glowAlpha * glow * (1 - fill)`. Normalising by the sum turns
+ * two contributions into a blend, and the normalised FILL share is all a caller
+ * needs, because the glow's is one minus it.
+ *
+ * Three properties, all asserted in `test/sdf.test.ts`. `glowAlpha = 0` gives
+ * exactly 1, so the fill colour is painted exactly. A fill coverage of 1 gives
+ * exactly 1 whatever the glow does, so the inside of a shape is never tinted. And
+ * the alpha is untouched by any of this, so the boundary is still exactly 0.5: the
+ * two halves of the compositing decision are now consistent rather than merely
+ * both documented.
+ *
+ * `glowAlpha` and `glow` are taken apart rather than pre-multiplied, so the
+ * signature reads the same way {@link shapeAlpha}'s does. The product is therefore
+ * computed twice per fragment, which is one `mul` on a shader that already runs a
+ * `sqrt` and two derivatives, against a call site where the two functions could
+ * otherwise disagree about which of them owns the multiply.
+ */
+export function shapeFillWeight<T>(m: Arith<T>, glowAlpha: T, glow: T, fill: T): T {
+  const glowShare = m.mul(m.mul(glowAlpha, glow), m.sub(m.literal(1), fill));
+  const sum = m.add(glowShare, fill);
+  return m.div(fill, m.max(sum, m.literal(MIN_COLOR_WEIGHT_SUM)));
+}
+
+/**
+ * ONE channel of the colour a fragment writes: the glow under the fill under the
+ * outline, composited in that order.
+ *
+ * Per channel, and that is the whole reason this is here rather than as a pair of
+ * `mix` calls in `sdf-nodes.ts`. A colour `mix` is a `vec3` operation, so hoisting
+ * it into {@link Arith} would mean a tenth primitive that no Node test can execute;
+ * a single CHANNEL of the same blend is scalar arithmetic over four of the nine
+ * that are already there. `sdf-nodes.ts` calls this three times, with `.r`, `.g`
+ * and `.b`, and the layer order is then something `test/sdf.test.ts` runs rather
+ * than something a structural assertion can only shape-match. Two mutations that
+ * used to leave the whole suite green are the reason: dropping the glow from the
+ * blend entirely, and swapping the fill and the outline so that the fill paints
+ * OVER the border, which makes "inset outline" false everywhere the fill is opaque.
+ *
+ * `fillWeight` comes from {@link shapeFillWeight} and is a normalised share, not a
+ * coverage. `outlineCov` is a coverage, because the outline is composited OVER the
+ * result rather than blended into it: it is the topmost layer, so nothing has to be
+ * normalised against it.
+ *
+ * Each blend is spelled `a * (1 - t) + b * t` rather than `a + (b - a) * t`. Four
+ * primitives against three, and the extra `mul` buys exactness at both ends: at
+ * `t = 1` the second form computes `a + (b - a)`, which does not round back to `b`,
+ * so `glowAlpha = 0` would paint a colour a few ulps off the fill's rather than the
+ * fill's. It is also the form the GLSL and WGSL `mix` intrinsics are specified as,
+ * so this composites bit-identically to the `mix` chain it replaces wherever the
+ * weights agree.
+ */
+export function shapeColorChannel<T>(
+  m: Arith<T>,
+  glow: T,
+  fill: T,
+  outline: T,
+  fillWeight: T,
+  outlineCov: T,
+): T {
+  const one = m.literal(1);
+  const under = m.add(m.mul(glow, m.sub(one, fillWeight)), m.mul(fill, fillWeight));
+  return m.add(m.mul(under, m.sub(one, outlineCov)), m.mul(outline, outlineCov));
 }
 
 /**

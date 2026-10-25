@@ -9,11 +9,11 @@ import {
   length,
   max,
   min,
-  mix,
   mul,
   sqrt,
   sub,
   vec2,
+  vec3,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import {
@@ -23,6 +23,8 @@ import {
   outlineCoverage,
   roundedRectDistance,
   shapeAlpha,
+  shapeColorChannel,
+  shapeFillWeight,
 } from './sdf.js';
 import type { Arith } from './sdf.js';
 
@@ -44,11 +46,15 @@ import type { Arith } from './sdf.js';
  *   `test/sdf-nodes.test.ts` asserts the graph structurally, that the outermost
  *   operation is a `length` over a two component join of `dFdx` and `dFdy`, and
  *   that each of those differentiates the distance ITSELF with no factor in front.
- * - the colour `mix` in {@link shapeShading}, which is a `vec3` operation and would
- *   widen {@link Arith} for one call site. Compensating control: the same file
- *   asserts that the outermost node of the colour is a `mix` and of the alpha a
- *   `max`. That rules out an `add` or a `mul` blend and says nothing about the
- *   order of the three layers.
+ * - the three `.r` / `.g` / `.b` swizzles and the `vec3` join in
+ *   {@link shapeShading}. This slot used to hold the colour `mix` itself, which was
+ *   a whole compositing formula that nothing could execute and whose only
+ *   compensating control was "the outermost node is a `mix`", true of the layers in
+ *   any order. The blend now lives in `shapeColorChannel` in `sdf.ts` and is called
+ *   once per channel, so what is left here carries no arithmetic: it selects three
+ *   components and joins three floats. Compensating control:
+ *   `test/sdf-nodes.test.ts` pins the whole colour graph against one built directly
+ *   from `shapeColorChannel`, so a repeated or reordered swizzle fails there.
  * - `mul(size, 0.5)` and the `half.x` / `half.y` swizzles inside
  *   {@link roundedRectSDF}'s `Fn` body. This one has NO compensating control, and
  *   the reason is the `Fn`: its body is deferred until a `NodeBuilder` runs, so
@@ -208,31 +214,38 @@ export interface ShapeShading {
  * Standard non-premultiplied alpha, in two expressions:
  *
  * ```
- * alpha = max(glowAlpha * glowCoverage, max(fillCoverage, outlineCoverage))
- * rgb   = mix(mix(glowColor, fillColor, fillCoverage), outlineColor, outlineCoverage)
+ * alpha   = max(glowAlpha * glowCoverage, max(fillCoverage, outlineCoverage))
+ * channel = mix(mix(glow, fill, shapeFillWeight(...)), outline, outlineCoverage)
  * ```
  *
- * **The alpha is not written here.** It is `shapeAlpha` in `sdf.ts`, over the
- * same nine primitives as every other formula, because it is pure float
- * arithmetic and `mul` and `max` were already two of the nine: no tenth
- * primitive, and `test/sdf.test.ts` executes the compositing decision rather than
- * reading it. That docstring carries the argument for `max` over the `over` chain
- * and the measured numbers (0.5 against 0.725 at the boundary, a 0.36 pixel
- * outward shift of the apparent edge), and the test asserts both.
+ * **Neither of them is written here.** Both are `sdf.ts`, over the same nine
+ * primitives as every other formula in this package, so `test/sdf.test.ts` executes
+ * both compositing decisions rather than reading them. `shapeAlpha` carries the
+ * argument for `max` over the `over` chain and its measured numbers (0.5 against
+ * 0.725 at the boundary, a 0.36 pixel outward shift of the apparent edge).
+ * `shapeFillWeight` carries why the glow is weighted by `glowAlpha * glow *
+ * (1 - fill)` and normalised rather than by `fillCoverage` alone, which is the
+ * defect that let `glowAlpha = 0` remove a halo's alpha and leave its hue.
  *
- * The colour could NOT come along, and the asymmetry is visible right here in the
- * two lines below. `mix` is a `vec3` operation, so hoisting it into `Arith` would
- * widen the interface for one call site and add a tenth line to `tslArith` that
- * no Node test can execute, which is precisely the cost the nine-primitive count
- * exists to keep visible. So the colour stays in TSL and `test/sdf-nodes.test.ts`
- * checks it structurally instead: the outermost node of the alpha is a `max` and
- * the outermost node of the colour is a `mix`.
+ * The colour is composited ONE CHANNEL AT A TIME, which is the only interesting
+ * thing this function does with it. A `vec3 mix` is not one of the nine primitives
+ * and adding one would put a tenth unexecutable line in `tslArith`; a single
+ * channel of the same blend is scalar, so `shapeColorChannel` is called three times
+ * with `.r`, `.g` and `.b` and joined into a `vec3`. The layer order (glow under
+ * fill under outline) is therefore arithmetic a test runs, not a shape a structural
+ * assertion matches: two mutations that used to leave the whole suite green,
+ * dropping the glow from the blend and painting the fill OVER the outline, now fail
+ * in `test/sdf.test.ts`.
  *
- * `mix` on the colour in glow, then fill, then outline order, which is
- * back-to-front and therefore the order the layers actually sit in. The outline
- * wins where it is opaque because it is drawn last, which is what "inset outline"
- * means, and the fill's own ramp still shows through the outline's antialiased
- * edges because a `mix` weight of 0.5 is a 50/50 blend rather than a decision.
+ * Glow, then fill, then outline, which is back-to-front and therefore the order the
+ * layers actually sit in. The outline wins where it is opaque because it is
+ * composited last, which is what "inset outline" means, and the fill still shows
+ * through the outline's antialiased edges because a blend weight of 0.5 is a 50/50
+ * mix rather than a decision.
+ *
+ * The three channels share one `fillWeight` node, so the normalisation is computed
+ * once per fragment and only the four multiply-adds of the blend itself are per
+ * channel, which is what a `vec3 mix` would have cost anyway.
  *
  * A colour is produced for every fragment including the ones with alpha 0, which
  * costs two `mix` instructions in the fully transparent region outside the glow.
@@ -246,9 +259,20 @@ export function shapeShading(input: ShapeShadingInput): ShapeShading {
   const fill = fillCoverage(tslArith, input.distance, aaWidth);
   const outline = outlineCoverage(tslArith, input.distance, input.outlinePixels, aaWidth);
   const glow = glowCoverage(tslArith, input.distance, input.glowWorld, aaWidth);
+  const fillWeight = shapeFillWeight(tslArith, input.glowAlpha, glow, fill);
+
+  const channel = (component: 'r' | 'g' | 'b'): FloatNode =>
+    shapeColorChannel(
+      tslArith,
+      input.glowColor[component],
+      input.fillColor[component],
+      input.outlineColor[component],
+      fillWeight,
+      outline,
+    );
 
   return {
-    color: mix(mix(input.glowColor, input.fillColor, fill), input.outlineColor, outline),
+    color: vec3(channel('r'), channel('g'), channel('b')),
     alpha: shapeAlpha(tslArith, input.glowAlpha, glow, fill, outline),
   };
 }

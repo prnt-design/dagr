@@ -58,6 +58,11 @@ not" is the category this file has a heading for.
   expansion left the whole suite GREEN, because both are correct to within a
   factor on every value a numeric test can check. The suite now asserts the node
   graph's structure (`length` over a join of `dFdx` and `dFdy`) for that reason.
+  It has since been checked on hardware as well as argued: the navy band on the
+  committed 100x frame measures 1.98 CSS pixels perpendicular to the flat edges and
+  1.7 to 1.9 around the corner arc, where `fwidth` would have made the arc about
+  41% thicker than the sides it joins. The arc radius comes out at 99.5 to 100.25
+  pixels against an ideal 100.
 
 - `depthWrite` is off on the shape materials. three leaves it on when
   `transparent` is set, and left on, a fragment with alpha 0 still writes depth
@@ -312,9 +317,15 @@ not" is the category this file has a heading for.
   compilation on somebody else's machine.
 
   `smoothstep` and `clamp` are WGSL intrinsics and are absent from the nine on
-  purpose, built from the primitives instead. That costs a few ALU operations per
-  fragment and keeps the ramp the tests exercise identical to the ramp the shader
-  evaluates.
+  purpose, built from the primitives instead, which keeps the ramp the tests
+  exercise identical to the ramp the shader evaluates. That costs approximately
+  nothing, contrary to an earlier draft of this entry which apologised for it and
+  asked M4.10 to measure it: `smoothstep` is not a hardware instruction but a
+  GLSL.std.450 extended instruction that drivers expand inline to exactly a clamp
+  plus `t*t*(3-2t)`, which is what the shared definition already computes, and
+  `clamp` is a min and a max. graphics-feel-review caught that, and it matters
+  because the apology was leaving a later milestone a measurement with nothing to
+  find.
 
   `length` is NOT one of those, and three pieces of TSL are executed by no Node
   test: `length` as an intrinsic in exactly one place, `antialiasWidth`; the colour
@@ -367,19 +378,20 @@ not" is the category this file has a heading for.
   the same frame. No distance field can fix that, because the fragment that would
   have faded is never shaded.
 
-- `antialias: true` stays on, and M4.10 settles it rather than M4.2. The M4.1 note
-  asked M4.2 to revisit the flag and this is the revisit, so what M4.2 settled is
-  that it is not turning MSAA off and why it cannot decide the question with the
-  harness it has. The argument for turning it off is unchanged and still sound in
-  itself: SDF shapes antialias their own edges analytically, per pixel, and gain
-  nothing from MSAA, while MSAA costs a 4x-sampled target plus a resolve every
-  frame, which is a real bandwidth line against M4.10's 10k-nodes-at-60fps budget.
-  What stops this run from acting on it is that the one place MSAA could still
-  matter is the sub-pixel case above, where coverage is decided by the sample grid
-  rather than by the shader, and separating "MSAA is keeping this speck visible"
-  from "the quad happened to miss the sample points" needs a controlled comparison
-  this task has no harness for. So the visual half is unresolved and the cost half
-  is M4.10's, which is where the flag should be settled with numbers on both sides.
+- **`antialias: true` stays on, and it is now MEASURED rather than deferred.** The
+  M4.1 note asked M4.2 to revisit the flag, and the answer is that MSAA is buying
+  something real. The argument for turning it off is sound as far as it goes: SDF
+  shapes antialias their own edges analytically, per pixel, and gain nothing from
+  MSAA on an edge, while MSAA costs a 4x-sampled target plus a resolve every frame.
+  But the sub-pixel case above is decided by the sample grid rather than by the
+  shader, and graphics-feel-review pointed out that the committed 0.1x frame could
+  not distinguish "MSAA is keeping this speck visible" from "that quad happened to
+  miss the sample points", because the two shapes involved have quads of identical
+  height. It also pointed out the experiment is one screenshot. Run: with
+  `antialias: false` at the same zoom 0.1, the sub-pixel circle goes from #263841 to
+  pure background #0b0d10. So MSAA is exactly what renders a shape whose quad covers
+  no pixel centre, and turning it off loses sub-pixel shapes outright. M4.10 still
+  owns the COST side, which is the 4x target and the resolve against its budget.
 
 ## 0.1.0
 

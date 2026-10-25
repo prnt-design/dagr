@@ -1532,10 +1532,28 @@ of M3 would leave the second runner idle for a milestone.
   that never reaches a GPU. This way the suite executes the expression tree the
   fragment shader evaluates. KEEP THE INTERFACE AT NINE: `smoothstep` and `clamp`
   are WGSL intrinsics deliberately NOT in it and are built from the primitives
-  instead, because each would move a formula out of the tested half of the file,
-  and M4.10 owns measuring whether that trade still holds at 10k instances. BUT DO
-  NOT READ THE UNTESTED SURFACE AS "THE NINE ADAPTERS" AND NOTHING ELSE, which an
-  earlier draft of this block said and which api-design-review caught: THREE pieces
+  instead, because each would move a formula out of the tested half of the file.
+  THAT COSTS APPROXIMATELY NOTHING and an earlier draft of this block was wrong to
+  ask M4.10 to measure it: `smoothstep` is a GLSL.std.450 extended instruction that
+  drivers expand inline to exactly a clamp plus `t*t*(3-2t)`, which is what the
+  shared definition computes, so the tested arithmetic is free rather than bought.
+  WHAT M4.10 SHOULD ACTUALLY MEASURE, since this run has now looked: quad AREA, not
+  the shader. `glowWorld` is a quarter of a shape's height and the quad is padded on
+  four sides, so a default 100 by 40 node gets a 122 by 62 plane, 1.89x its own
+  area, with blending on and depthWrite off so none of the outside half is rejected
+  early. At 10k nodes that is a 1.89x multiplier on the whole fragment budget, set
+  by a scene constant rather than by the shader. `height/6` gives 1.60x and no glow
+  1.07x; the 10-unit rung is 2.80x, because FILL_AA_PADDING_WORLD's fixed world unit
+  is a quarter of a 4-unit height, so M4.4's small nodes pay proportionally more than
+  its large ones. The ordered list is overdraw between overlapping quads (which a
+  real layout produces and which this ladder's disjoint quads hide), then that 1.89x,
+  then blend bandwidth on a transparent target.
+  AND THERE IS NO BENCHMARK IN @dagr/render AT ALL: `pnpm bench` resolves to
+  @dagr/layout and @dagr/graph, so the 10k-at-60fps claim has no harness and no
+  baseline in this package. Building one is part of M4.10 rather than something
+  M4.10 gets to assume.
+  BUT DO NOT READ THE UNTESTED SURFACE AS "THE NINE ADAPTERS" AND NOTHING ELSE,
+  which an earlier draft said and which api-design-review caught: THREE pieces
   of TSL are executed by no Node test. `length` IS used as an intrinsic, in
   `antialiasWidth` alone; `shapeShading`'s colour `mix` is vec3 and cannot go
   through a float interface; and the `mul(size, 0.5)` inside `roundedRectSDF`'s
@@ -1570,12 +1588,16 @@ of M3 would leave the second runner idle for a milestone.
   0.8 CSS pixels and whether that covers a sample point depends on where it lands
   on the grid, while the circle beside it survives as one dim pixel. No distance
   field fixes that, because the fragment that would have faded is never shaded.
-  `antialias: true` THEREFORE STAYS ON and M4.10 settles it. The argument for
-  turning it off is unchanged and still sound (analytic edges gain nothing from
-  MSAA, which costs a 4x target plus a resolve), but the one place MSAA can still
-  matter is exactly the sub-pixel case above, and separating "MSAA is keeping this
-  speck visible" from "the quad missed the samples" needs a controlled comparison
-  this task has no harness for.
+  `antialias: true` THEREFORE STAYS ON, AND IT IS MEASURED RATHER THAN DEFERRED. The
+  argument for turning it off is sound as far as it goes (analytic edges gain nothing
+  from MSAA, which costs a 4x target plus a resolve), and an earlier draft of this
+  block left the visual half open for want of a harness. graphics-feel-review pointed
+  out that the 0.1x frame cannot distinguish "MSAA keeps this speck visible" from
+  "that quad missed the samples", since the two shapes have quads of identical height,
+  and that the experiment is one screenshot. It is: with `antialias: false` at zoom
+  0.1 the sub-pixel circle goes from #263841 to pure background #0b0d10, so MSAA is
+  what renders a shape whose quad covers no pixel centre and turning it off loses
+  sub-pixel shapes outright. DO NOT REOPEN THE VISUAL HALF; M4.10 owns the cost.
   THE SCENE IS A CRISPNESS LADDER of a rounded rect and a circle on each of three
   rungs a decade apart, the RECTS 10, 100 and 1000 world units across and each
   circle's diameter matching its rung's HEIGHT, so the circles are 4, 40 and 400.
@@ -1590,6 +1612,34 @@ of M3 would leave the second runner idle for a milestone.
 - [ ] **M4.3** (`@dagr/render`) Instanced rendering: one instanced mesh per
   shape family, with the instance buffer allocation, growth and compaction
   bookkeeping split out as a pure module that knows nothing about a GPU.
+  TWO THINGS M4.2 DELIBERATELY LEFT HERE, both from graphics-feel-review, both
+  with the argument already made so this task does not have to rediscover them.
+  FIRST, EVERY STYLE AND SIZE VALUE IS BAKED INTO THE NODE GRAPH AS A TSL
+  CONSTANT. `float(radius)`, `vec2(width, height)`, the three `color(...)` calls
+  and the three style floats are all `ConstNode`s, and TSL emits one as a literal
+  in the generated WGSL, so six descriptors with six different numbers compile SIX
+  PIPELINES whose arithmetic is identical. Harmless at six shapes and the wall at
+  M4.4's counts, where it is one shader compilation per node and 10k programs
+  before a frame is submitted. The fix is to swap those calls to `uniform(...)`:
+  all three rects then share one pipeline, all three circles another, each
+  material keeps its own uniform buffer, and nothing about the scene or its tests
+  changes. It lands here rather than in M4.2 because this task owns the material
+  assembly decision (one material with a per-instance shape id versus one per
+  family) and const-versus-uniform is the same seam, and because a uniform is one
+  step from an instanced attribute where a literal is a rewrite.
+  SECOND, THE GLOW'S FALLOFF CURVE READS AS A SLAB AT HIGH MAGNIFICATION.
+  `smoothstepBetween(edge, 0, d)` is a cubic with zero derivative at BOTH ends, so
+  the halo is flat where it meets the shape: measured off the committed 100x frame,
+  95% of full strength a fifth of the way out, with all its falling between 70% and
+  95% of the radius, which the eye reads as an edge of its own at about 85% of the
+  radius. Real glow is steepest at the source and has no outer edge. `t = clamp(d /
+  max(radiusWorld, aaWidth), 0, 1)` then `(1 - t)^2` is monotone, 1 at the boundary,
+  0 at the radius, keeps the clamp-to-1-inside property, gives 0.64 rather than 0.95
+  a fifth of the way out, and is CHEAPER than the cubic. Pair it with `height/6`,
+  which also takes the quad-area multiplier from 1.89x to 1.60x. It is polish rather
+  than a defect (the reviewer downgraded it after checking the 1x frame, where it
+  reads as a halo), and M4.2 declined it only because it changes every committed
+  reference frame.
   Exhaustive unit tests on that module (allocate, free, reuse, grow, compact,
   and the invariant that a live handle always resolves to the right slot),
   which is the entire reason for separating it: it is the part most likely to
