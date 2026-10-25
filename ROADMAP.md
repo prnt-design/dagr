@@ -41,9 +41,12 @@ findings addressed or logged, docs land with the feature.
 
 ## M2: Layout core (`@dagr/layout`)
 
-- [ ] **M2.1** Pipeline skeleton: `LayoutInput`/`LayoutResult` types, stage
+- [x] **M2.1** Pipeline skeleton: `LayoutInput`/`LayoutResult` types, stage
   interfaces (rank, order, position, route), a pipeline runner wiring
   pass-through stages, node size/spacing config. Tests for the plumbing.
+  Input is structural (sized nodes plus id-referencing edges), so
+  `@dagr/layout` does not depend on `@dagr/graph`; the adapter lands on top
+  of these types, not underneath them.
 - [ ] **M2.2** Cycle breaking + ranking v1: greedy feedback-arc-set cycle
   breaker, longest-path ranking. Invariant tests: every edge points downward
   in rank after reversal bookkeeping.
