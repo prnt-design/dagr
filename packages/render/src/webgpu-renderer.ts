@@ -153,11 +153,12 @@ const DEFAULT_CLEAR_COLOR = 0x0b0d10;
  * caller does not say.
  *
  * The ladder's numbers, carried over rather than re-argued, because the argument
- * is unchanged and is written down in `sdf.ts` and in the M4.2 ROADMAP entry: an
- * inset outline is always drawn over a fill rather than against the background,
- * so the contrast that has to work is outline against fill and the set's darkest
- * member is a large luminance step against every one of them; 2 DEVICE pixels is
- * the smallest width whose edge reads as a deliberate line at dpr 1; and a halo
+ * is unchanged and is written down in `sdf.ts` and in the M4.2 entry in
+ * `specs/roadmap-notes.md`: an inset outline is always drawn over a fill rather
+ * than against the background, so the contrast that has to work is outline
+ * against fill and the set's darkest member is a large luminance step against
+ * every one of them; 2 DEVICE pixels is the smallest width whose edge reads as a
+ * deliberate line at dpr 1; and a halo
  * over 0.45 alpha stops reading as a halo and starts reading as a second,
  * blurrier shape behind the first.
  *
