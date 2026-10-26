@@ -1,5 +1,5 @@
 import { Color } from 'three/webgpu';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   INSTANCE_CHANNELS,
   INSTANCE_FLOATS,
@@ -260,6 +260,50 @@ describe('writing a slot', () => {
     const bad = { ...rect, cornerRadius: 90 } as ShapeInstance;
     expect(() => data.write(0, bad, 'roundedRect', 'rect')).toThrow(RangeError);
     expect([...data.channel('instanceOffset')]).toEqual([0, 0]);
+  });
+
+  it('converts a colour once while consecutive writes repeat it', () => {
+    const data = new InstanceAttributeData(100);
+    const pow = vi.spyOn(Math, 'pow');
+    try {
+      for (let slot = 0; slot < 100; slot += 1) data.write(slot, rect, 'roundedRect', 'rect');
+      // 0xffb703 and 0xfb8500 each have one component under the linear threshold.
+      expect(pow).toHaveBeenCalledTimes(4);
+    } finally {
+      pow.mockRestore();
+    }
+  });
+
+  it('writes the right colours as they change, repeat and swap between fill and glow', () => {
+    const colours: readonly (readonly [number, number])[] = [
+      [0xffb703, 0xfb8500],
+      [0xffb703, 0xfb8500],
+      [0xfb8500, 0xffb703],
+      [0xffb703, 0xffb703],
+      [0x000000, 0xffb703],
+      [0x000000, 0x000000],
+      [0xffffff, 0x219ebc],
+      [0xffb703, 0xfb8500],
+    ];
+    const data = new InstanceAttributeData(colours.length);
+    for (const [slot, [fillColor, glowColor]] of colours.entries()) {
+      data.write(slot, { ...rect, fillColor, glowColor }, 'roundedRect', 'rect');
+    }
+    const linear = (hex: number): number[] =>
+      linearFromHex(hex, 'colour').map((value) => Math.fround(value));
+    expect([...data.channel('instanceFillColor')]).toEqual(
+      colours.flatMap(([fill]) => linear(fill)),
+    );
+    expect([...data.channel('instanceGlowColor')]).toEqual(
+      colours.flatMap(([, glow]) => linear(glow)),
+    );
+  });
+
+  it('still rejects a bad colour that follows a good one', () => {
+    const data = new InstanceAttributeData(2);
+    data.write(0, rect, 'roundedRect', 'rect');
+    const bad = { ...rect, fillColor: 0x1000000 } as ShapeInstance;
+    expect(() => data.write(1, bad, 'roundedRect', 'rect')).toThrow(/rect\.fillColor/);
   });
 });
 

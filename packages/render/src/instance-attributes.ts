@@ -402,6 +402,10 @@ export class InstanceAttributeData {
   readonly channels: readonly InstanceChannel[];
   #capacity: number;
   #arrays: Map<string, Float32Array>;
+  #fillHex = -1;
+  #fill: readonly [number, number, number] = [0, 0, 0];
+  #glowHex = -1;
+  #glow: readonly [number, number, number] = [0, 0, 0];
 
   constructor(capacity: number, channels: readonly InstanceChannel[] = INSTANCE_CHANNELS) {
     this.#capacity = requireIntegerAtLeast(capacity, 1, 'capacity');
@@ -441,8 +445,20 @@ export class InstanceAttributeData {
     this.#requireSlot(slot);
     const validated = requireShapeInstance(instance, family, field);
     const size = instanceSize(validated);
-    const fill = linearComponents(validated.fillColor);
-    const glow = linearComponents(validated.glowColor);
+    // A mesh's nodes usually share a few colours, so the last conversion of each
+    // is kept: a node whose colour repeats the previous write's skips three
+    // `Math.pow`. The colours are validated above, so -1 never matches one.
+    const { fillColor, glowColor } = validated;
+    if (fillColor !== this.#fillHex) {
+      this.#fill = linearComponents(fillColor);
+      this.#fillHex = fillColor;
+    }
+    if (glowColor !== this.#glowHex) {
+      this.#glow = linearComponents(glowColor);
+      this.#glowHex = glowColor;
+    }
+    const fill = this.#fill;
+    const glow = this.#glow;
 
     this.#write2('instanceOffset', slot, validated.center.x, validated.center.y);
     this.#write2('instanceSize', slot, size.width, size.height);
