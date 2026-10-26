@@ -15,7 +15,8 @@ directory name undersells them: they do not measure anything, they CHECK
 something, which is which backend `@prnt/dagr-render` comes up on and whether the
 shapes reach the canvas once it has. They live here because this is where the
 browser is, and because the rule below about a committed harness applies to them
-exactly as it does to a measurement.
+exactly as it does to a measurement. `windows-chrome.mjs` lets the probe and
+the frame profile reach a Windows GPU from WSL2.
 
 **Nothing here is part of `pnpm bench:ci`, and it is not a gate.** The gate
 compares Node medians against a committed baseline on one machine; a browser
@@ -68,9 +69,12 @@ chromium` fetches it) unless `DAGR_CHROMIUM` names another executable.
 one. A box without a GPU still needs the flags the 2026-08-23 run below used:
 `DAGR_CHROMIUM_ARGS="--no-sandbox --use-angle=swiftshader --enable-unsafe-swiftshader"`.
 `DAGR_BROWSER_DEPS` points at a directory whose `node_modules` holds
-`playwright-core`, if not this one. The output starts with the browser version,
-executable, mode and flags, and the adapter's vendor and architecture, because
-a backend result without them cannot be reproduced.
+`playwright-core`, if not this one. `DAGR_CDP` attaches to a Chrome that is
+already running instead; see the WSL2 section below. The output starts with
+the browser version, executable, mode and flags (when attached: the endpoint
+and the user agent, with the flags in the helper's own output), and the
+adapter's vendor and architecture, because a backend result without them
+cannot be reproduced.
 
 It builds a renderer three times, once per `backend` preference, on a fresh
 canvas each time (a canvas holds one context for its whole life, so reusing one
@@ -146,7 +150,48 @@ its fallback adapter message, then fails on its first measurement with
 (Ubuntu's `mesa-vulkan-drivers` 26.0.8) have no `dzn` (Vulkan on D3D12)
 driver, so Vulkan cannot see the GPU. A WebGPU result
 from this WSL2 machine needs a Mesa built with `dzn`, or a Chrome on the Windows side.
-Until then, the frame profile's numbers come from the Apple M4 above.
+The next section does the second.
+
+### From WSL2, through the Windows side's Chrome
+
+```
+node bench/browser/windows-chrome.mjs --headless   # leave running; Ctrl-C closes Chrome
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/backend-probe.mjs --parity
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs
+```
+
+`windows-chrome.mjs` starts Google Chrome on the Windows side through WSL's
+interop, with the timing and colour switches Playwright would have passed it,
+and relays its DevTools port into WSL. The relay needs Node on the Windows
+side too: Chrome binds its DevTools port to Windows loopback, which WSL2 in its
+default NAT networking cannot reach, so a Windows Node process dials into WSL
+(which Windows can reach) and joins each dial to Chrome. Running the benches on
+the Windows side's Node instead fails, because it cannot follow pnpm's
+symlinks over `\\wsl.localhost`. `DAGR_WINDOWS_CHROME` and `DAGR_WINDOWS_NODE`
+override the two install paths, and `DAGR_CHROMIUM_ARGS` adds Chrome flags.
+
+`DAGR_CDP` makes either script attach to that Chrome instead of launching one,
+and records `attached` and the user agent in place of the executable, mode and
+flags, which the helper prints when it starts. `--headed` and `--headless`
+are refused while attached, because the helper chose the mode. The page still
+comes from the static server in WSL, which the Windows side reaches as
+`127.0.0.1:8733`. The `machine` block of a frame profile describes WSL, where
+Node runs: the CPU is the host's, the memory is the VM's share of it.
+
+**What it found on 2026-10-26**, on a Windows 11 desktop (build 26100) with
+an AMD Ryzen 9 9900X, whose integrated Radeon graphics (driver 32.0.21042.62)
+is the only GPU Chrome lists beside Microsoft's Basic Render Driver. In Google
+Chrome 156.0.8078.48 on the Windows side, headless, with no flags beyond the
+helper's, the adapter is vendor `amd`, architecture `rdna-2`, not a fallback
+adapter. `'auto'` and `'webgpu'` came up on `'webgpu'` and `'webgl2'` on
+`'webgl2'`, all three drawing the 10,780, 3,908 and 2,432 above. A page opened
+on `about:blank` has no `navigator.gpu` at all, since it is not a secure
+context, so the adapter question has to be asked from the served page, as the
+probe does. A short frame profile (1,000 nodes, 120 frames) came up on
+`webgpu` on every row, with a steady headless tick of 17.6 ms, so the headless
+pacing that made the frame profile run headed on the Apple M4 did not show
+here; a profile meant for publication should still be compared with a headed
+run.
 
 ## Backend parity (M4.9b)
 
@@ -198,6 +243,14 @@ fails the same way. With `DAGR_CHROMIUM_ARGS="--enable-unsafe-webgpu
 `'webgpu'`. The comparison passes there too (28 band and 56 interior pixels
 differ, by 1 at most) and the control fails, so before the fallback check a
 CPU-rasterised run exited 0 as if it were backend parity. It now exits 1.
+
+**What it found on 2026-10-26 on an AMD GPU**, the Windows desktop's
+integrated RDNA 2 graphics in Chrome 156.0.8078.48, headless, attached from
+WSL2 [as above](#from-wsl2-through-the-windows-sides-chrome): the check passes
+and exits 0. The frames are not byte-identical as on the Apple M4: 4 of the
+1,760 band pixels differ, by 1, and none of the 151,840 interior pixels do. The
+control fails, with 310 band pixels differing by up to 137 and 1,042 interior
+pixels by up to 12.
 
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that

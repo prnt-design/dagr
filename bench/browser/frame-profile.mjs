@@ -27,6 +27,9 @@
  * with `BACKEND_UNAVAILABLE` rather than measuring the WebGL2 fallback. A
  * software adapter such as SwiftShader still comes up on `webgpu`, so the
  * runner also exits non-zero when the adapter reports `isFallbackAdapter`.
+ *
+ * `DAGR_CDP`, a DevTools endpoint such as `windows-chrome.mjs` prints, attaches
+ * to a running Chrome instead of launching one.
  */
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -44,6 +47,7 @@ const PAGE = `${ORIGIN}/bench/browser/frame-profile.html`;
 
 const EXECUTABLE = process.env.DAGR_CHROMIUM;
 const LAUNCH_ARGS = (process.env.DAGR_CHROMIUM_ARGS ?? '').split(' ').filter(Boolean);
+const CDP = process.env.DAGR_CDP;
 
 const option = (name, fallback) => {
   const arg = process.argv.find((a) => a.startsWith(`--${name}=`));
@@ -105,6 +109,9 @@ const dpr = positive('dpr', option('dpr', '1'));
 // Chromium on the Apple M4 paced requestAnimationFrame at 67 to 100 ms on an
 // empty page, so a headless interval measures the pacing, not the page.
 const headless = process.argv.includes('--headless');
+if (headless && CDP !== undefined) {
+  throw new Error('--headless chooses how a browser is launched; an attached one (DAGR_CDP) runs as it was started');
+}
 const hit = process.argv.includes('--hit');
 const memory = process.argv.includes('--memory');
 const gpu = process.argv.includes('--gpu');
@@ -195,11 +202,14 @@ function mode(run, tickMs) {
   };
 }
 
-const browser = await chromium.launch({
-  headless,
-  args: LAUNCH_ARGS,
-  ...(EXECUTABLE === undefined ? {} : { executablePath: EXECUTABLE }),
-});
+const browser =
+  CDP === undefined
+    ? await chromium.launch({
+        headless,
+        args: LAUNCH_ARGS,
+        ...(EXECUTABLE === undefined ? {} : { executablePath: EXECUTABLE }),
+      })
+    : await chromium.connectOverCDP(CDP);
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: dpr });
 const warnings = [];
 page.on('console', (m) => {
@@ -216,12 +226,15 @@ const machine = {
   memoryGb: Math.round(totalmem() / 2 ** 30),
   platform: `${process.platform} ${process.arch}`,
 };
-const launch = {
-  browserVersion: browser.version(),
-  executable: EXECUTABLE ?? 'playwright default',
-  mode: headless ? 'headless' : 'headed',
-  args: LAUNCH_ARGS,
-};
+const launch =
+  CDP === undefined
+    ? {
+        browserVersion: browser.version(),
+        executable: EXECUTABLE ?? 'playwright default',
+        mode: headless ? 'headless' : 'headed',
+        args: LAUNCH_ARGS,
+      }
+    : { browserVersion: browser.version(), attached: CDP, userAgent: await page.evaluate('navigator.userAgent') };
 const adapter = await page.evaluate(() => window.adapter());
 if (adapter.adapter?.isFallbackAdapter === true) {
   console.error(
