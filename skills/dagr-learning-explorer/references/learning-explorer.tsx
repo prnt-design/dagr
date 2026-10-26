@@ -51,6 +51,7 @@ export function LearningExplorer() {
       renderDetails={({ node, connections, follow }) => (
         <>
           <h3>{node.label}</h3>
+          <p>Illustrative lesson, not a description of a particular application.</p>
           <p>{node.explanation}</p>
           <p><strong>Example:</strong> {node.example}</p>
           <ul>
