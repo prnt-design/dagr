@@ -1909,7 +1909,8 @@ Byte-identical: the previous build and this one, given the same 8,000 random
 `setNodes` calls over 200 scenes (a palette of six colours and random ones,
 shape changes, arrivals, departures, repeated ids and bad colours), hold the
 same instance buffers after every call, and reject the same 630 calls with the
-same messages. In Node, `setNodes` on 10,000 nodes (alternating rounded rects
+same messages. In Node, on a different workload from the section above so
+compare within this one, `setNodes` on 10,000 nodes (alternating rounded rects
 and circles, one colour pair per shape, every node moved each call), 600 calls
 after 200 of warm-up, three pairs at load about 4 to 6: median 1.24 to 1.31 ms
 against 1.66 to 1.73, minimum 1.21 to 1.23 against 1.63 to 1.66.
