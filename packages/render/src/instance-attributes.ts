@@ -446,8 +446,8 @@ export class InstanceAttributeData {
     const validated = requireShapeInstance(instance, family, field);
     const size = instanceSize(validated);
     // A mesh's nodes usually share a few colours, so the last conversion of each
-    // is kept: a node whose colour repeats the previous write's skips three
-    // `Math.pow`. The colours are validated above, so -1 never matches one.
+    // is kept: a node whose colour repeats the previous write's skips the
+    // conversion. The colours are validated above, so -1 never matches one.
     const { fillColor, glowColor } = validated;
     if (fillColor !== this.#fillHex) {
       this.#fill = linearComponents(fillColor);
@@ -457,16 +457,14 @@ export class InstanceAttributeData {
       this.#glow = linearComponents(glowColor);
       this.#glowHex = glowColor;
     }
-    const fill = this.#fill;
-    const glow = this.#glow;
 
     this.#write2('instanceOffset', slot, validated.center.x, validated.center.y);
     this.#write2('instanceSize', slot, size.width, size.height);
     this.channel('instanceCornerRadius')[slot] =
       validated.kind === 'circle' ? 0 : validated.cornerRadius;
     this.channel('instanceGlowWorld')[slot] = validated.glowWorld;
-    this.#write3('instanceFillColor', slot, fill);
-    this.#write3('instanceGlowColor', slot, glow);
+    this.#write3('instanceFillColor', slot, this.#fill);
+    this.#write3('instanceGlowColor', slot, this.#glow);
   }
 
   /**

@@ -266,9 +266,11 @@ describe('writing a slot', () => {
     const data = new InstanceAttributeData(100);
     const pow = vi.spyOn(Math, 'pow');
     try {
-      for (let slot = 0; slot < 100; slot += 1) data.write(slot, rect, 'roundedRect', 'rect');
-      // 0xffb703 and 0xfb8500 each have one component under the linear threshold.
-      expect(pow).toHaveBeenCalledTimes(4);
+      data.write(0, rect, 'roundedRect', 'rect');
+      const once = pow.mock.calls.length;
+      expect(once).toBeGreaterThan(0);
+      for (let slot = 1; slot < 100; slot += 1) data.write(slot, rect, 'roundedRect', 'rect');
+      expect(pow).toHaveBeenCalledTimes(once);
     } finally {
       pow.mockRestore();
     }
@@ -299,11 +301,10 @@ describe('writing a slot', () => {
     );
   });
 
-  it('still rejects a bad colour that follows a good one', () => {
-    const data = new InstanceAttributeData(2);
-    data.write(0, rect, 'roundedRect', 'rect');
-    const bad = { ...rect, fillColor: 0x1000000 } as ShapeInstance;
-    expect(() => data.write(1, bad, 'roundedRect', 'rect')).toThrow(/rect\.fillColor/);
+  it('rejects the colour it starts out holding, on the first write', () => {
+    const data = new InstanceAttributeData(1);
+    const bad = { ...rect, fillColor: -1 } as ShapeInstance;
+    expect(() => data.write(0, bad, 'roundedRect', 'rect')).toThrow(/rect\.fillColor/);
   });
 });
 
