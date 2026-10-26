@@ -361,11 +361,12 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   On 2026-10-26, on a second GPU (AMD RDNA 2 in Chrome 156, from WSL2), 10,000
   straight nodes held the tick with every node moving in three runs, and
   10,000 smooth nodes missed 36% to 43% of ticks, on `setEdges` (12 to 13 ms)
-  and `advance` (7 to 8) every frame; see `bench/browser/README.md`, "All
-  moving and a tenth moving on an AMD GPU". Next is smooth `advance`
-  (`tsk_a498d1621d79`).
-  Still open: the 10,000-node smooth CPU frame (`setEdges` on every frame,
-  about 11 ms, and `apply` on retarget frames, about 17 ms), the ID buffer pass
+  and `advance` (7 to 8) every frame and `apply` (18 to 19) on retarget
+  frames; see `bench/browser/README.md`, "All moving and a tenth moving on an
+  AMD GPU". Next is smooth `advance` (`tsk_a498d1621d79`), after the open #159.
+  Still open: the 10,000-node smooth CPU frame with every node moving
+  (`setEdges` and `advance` on every frame, `apply` on retarget frames;
+  figures by machine above), the ID buffer pass
   (M4.8b), and recording the bench entries in `bench/baseline.json` (the
   maintainer's call).
 - [x] **M4.11** HTML overlay: DOM elements positioned in world coordinates,

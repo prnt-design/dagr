@@ -191,7 +191,8 @@ probe does. A short frame profile (1,000 nodes, 120 frames) came up on
 `webgpu` on every row, with a steady headless tick of 17.6 ms, so the headless
 pacing that made the frame profile run headed on the Apple M4 did not show
 here; a profile meant for publication should still be compared with a headed
-run.
+run. The 2026-10-26 M4.10 profile at the end of this file was taken headed,
+with a tick of 17.8 to 17.9 ms.
 
 ## Backend parity (M4.9b)
 
@@ -2023,13 +2024,15 @@ comparison per colour.
 
 ### All moving and a tenth moving on an AMD GPU (2026-10-26)
 
-The sections above measured on the Apple M4. This one profiles the same frame
+The M4.10 sections above measured on the Apple M4. This one profiles the same frame
 on the WSL2 machine's GPU, attached [from WSL2](#from-wsl2-through-the-windows-sides-chrome):
 an AMD Ryzen 9 9900X whose integrated Radeon graphics (RDNA 2, driver
 32.0.21042.62) drives a 3840 by 2160 display that Windows reports at 59 Hz.
 Google Chrome 156.0.8078.48 on the Windows side, headed, no flags beyond
 `windows-chrome.mjs`'s, adapter `amd` `rdna-2`, not a fallback,
-`renderer.backend` `webgpu` on every row, control tick 17.8 to 17.9 ms, DPR 1,
+`renderer.backend` `webgpu` on every row, control tick 17.8 to 17.9 ms (longer
+than the reported rate's 16.9; ticks missed are counted against the measured
+tick), DPR 1,
 viewport 1280 by 720, `fit` (zoom 0.0715), load average 0.0 to 1.8 (read with
 `uptime` before and after each batch).
 
@@ -2084,7 +2087,7 @@ three pairs, `--edges=smooth --moving=1,0.1` only:
 
 - **On this GPU #159 misses fewer ticks with every node moving**, 15.4% to
   20.4% against 23.8% to 26.0%, with no overlap in three pairs, where the
-  Apple M4 left the direction unresolved. The tails move most: `setEdges`
+  Apple M4 left the direction unresolved (see #159). The tails move most: `setEdges`
   p95 falls by about 1 ms and `advance` p95 by about 3.5, though `advance` runs
   none of #159's code, which fits collection pauses from `setEdges`'s
   allocations landing in whichever step runs next. The medians move less
