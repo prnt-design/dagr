@@ -693,7 +693,7 @@ and, with a moving pointer, at most once per 100 ms for hover; a static scene
 pays it once per edit. That is CPU time for the query,
 not browser frame time or GPU evidence, and the entries are recorded in
 [`bench/README.md`](https://github.com/prnt-design/dagr/blob/main/bench/README.md)
-without a gate until the baseline is next recaptured.
+without a gate; adding them to the baseline is the maintainer's call.
 
 ## Level of detail: node tiers
 

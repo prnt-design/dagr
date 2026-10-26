@@ -34,13 +34,18 @@ twice without anyone moving: it became an Intel Xeon Skylake on 2026-08-18
 and reported EPYC-Rome again by 2026-08-24, when the queued recapture was
 taken (PR #63). Development then moved to the maintainer's arm64 Apple M4,
 where the identity check refused every run for a week, and on 2026-09-01 the
-maintainer called the move: the current file is captured there, on the terms
-this paragraph has always named, and it is now a run on the dispatch box that
-fails the identity check. See "The machine in the file" below for how the
-gate says so, and for what it cost to find out by hand.
-The CI argument above is unchanged by the baseline being arm64 macOS: the
-remaining reason the gate stays local is runner noise and runner identity, not
-which architecture the file happens to name.
+maintainer called the move: that file was captured there, on the terms
+this paragraph has always named, and a run on the dispatch box failed the
+identity check. The daily job then ran on a WSL2 machine (AMD Ryzen 9 9900X,
+linux x64), where the identity check refused every run, and on 2026-10-26 the
+maintainer called a recapture there: the current file names that machine. See
+"The machine in the file" below for how the gate says so, and for what it cost
+to find out by hand.
+The CI argument above is unchanged by the baseline now being linux x64, the
+same platform and arch as CI's runners: the identity check still refuses them
+on CPU and core count, and the remaining reason the gate stays local is
+runner noise and runner identity, not which architecture the file happens to
+name.
 
 ## M4.10 scene motion on the CPU
 
@@ -167,14 +172,14 @@ the old and new source at loads of 2.5 to 4.3, medians in milliseconds:
 | smooth | 10.8 to 11.0 | 9.1 to 9.8 | 4.2 to 4.5 | 4.0 to 4.7 |
 
 Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
-for the same reason: recording them rewrites the machine-matched file, which is
-the maintainer's call. This is CPU time in Node, not a browser frame or GPU
-evidence.
+for the same reason: adding them is the maintainer's call, and the 2026-10-26
+recapture left them out rather than add them as its side effect. This is CPU
+time in Node, not a browser frame or GPU evidence.
 
 ## M5.2a CPU pointer-query baseline
 
 The first interaction baseline was measured on 2026-10-01 on the same Apple M4
-and Node `v25.6.1` named by `baseline.json`. The backend is
+and Node `v25.6.1` that `baseline.json` named then. The backend is
 `CPU synthetic rectangle scan`, not WebGPU, WebGL, or a browser frame. Each
 pointer-down event performs one provider call, one displayed-revision check,
 and a reverse draw-order scan of exactly `N` rectangles before finding
@@ -214,14 +219,53 @@ boxes: there is no regression. Building the index for 10,000 nodes costs a media
 1.86 ms, paid once per change of the drawn nodes and only when the pointer is
 used: during an animation a click pays it on the frame it lands, and hover,
 which reuses an index up to 100 ms old, about one frame in six at 60 Hz. Also `packages/react/bench/tier-feed.bench.ts` (10,000 nodes, 100 in motion): feeding only moved nodes to the tiers measured about 7x faster than rebuilding every node on a loaded machine, so the figure is indicative, not a gate. These entries are in the report but **not in `baseline.json`**: the
-gate prints them as `new`. Recording them means `pnpm bench:baseline`, which
-rewrites the whole machine-matched file and is the maintainer's call. This is
-CPU query time, not a browser frame, an edge or port measurement, or GPU
-evidence.
+gate prints them as `new`. Adding them is the maintainer's call, and the
+2026-10-26 recapture left them out rather than add them as its side effect.
+This is CPU query time, not a browser frame, an edge or port measurement, or
+GPU evidence.
 
-**The current file was captured on 2026-09-01 on the maintainer's Apple M4
+**The current file was captured on 2026-10-26 on the WSL2 machine (AMD Ryzen
+9 9900X, linux x64, 24 cores, Node v22.22.1), authorized by the maintainer
+after the identity check refused every run there.** One warmup run discarded,
+then five measured runs between 18:00 and 18:08 UTC at 1-minute loads between
+1.15 and 1.61. Run 4 is the file: 1.33% mean absolute deviation from the
+per-entry medians over the eighteen gated entries, worst entry 9.4%
+(`updateNodeAttrs, no change`). Its median gated rme is 1.23% against the M4
+file's 1.75%, though its worst, 5.65% on `rank > 1k, warm`, is above the M4
+file's 4.39%. It holds the same twenty keys as the file before it. The entries
+in the report but not the baseline (M4.10 scene motion, M5.2b node hit, the
+tier feed, and the explorer's) were left out, because adding them is its own
+decision. The 100-node pointer query keeps its exemption: its five medians
+were 0.00009 or 0.00010 ms and nothing between, an 11% step. `bench:ci`
+against the file passed 2 of 2 before committing.
+
+**The layout file's control is the noisiest thing in this capture.** Across the
+five runs the four `rank` entries spanned 26.1% to 34.0% in ratio and
+`pipeline > 1k` 30.3%, with runs 1 and 3 the far ones each time. In
+milliseconds they moved far less: `rank > 10k` 2.5%, `rank > 10k, warm` 1.3%,
+`rank > 1k` 2.3%, `rank > 1k, warm` 11.6% and `pipeline > 1k` 6.5%. The
+difference is the control those ratios divide by: the layout file's control
+median read 0.0452 and 0.0481 ms in runs 1 and 3 against 0.0381 to 0.0386 in
+the other three, a 26% band, while the graph file's held 0.0383 to 0.0391.
+Here the control adds between-run error to the layout entries rather than
+failing to cancel it. Run 4 sits at the low control, so a later run that lands
+high reads those entries as faster rather than failing them.
+
+The `chase` probe is unreliable on this machine, and that is the capture's one
+finding against the harness. On the graph file it measured 0.064 to 0.176 ms
+across the six runs, warmup included, a 2.8x spread, while `alloc` held within
+1% and the interaction file's `chase` within 3%. It is not only the graph
+file: the `bench:ci` run that passed 2 of 2 against this file read the layout
+file's `chase` at 0.51x and the interaction file's at 0.58x, and printed a
+profile mismatch note on a run that matches. The likely cause, not yet
+measured, is its size: the 64 MiB table was sized as four times the dispatch
+box's L3, and the 9900X's 64 MB of L3 is two 32 MB halves. The note changes
+no exit code (see "The machine it measures like"), so the gate is unaffected,
+but read it on this machine as the probe and not the box.
+
+**The 2026-09-01 capture was taken on the maintainer's Apple M4
 (darwin arm64, 10 cores, Node v25.6.1), authorized by the maintainer in
-session after a week of identity refusals on this box.** One warmup run
+session after a week of identity refusals on the dispatch box.** One warmup run
 discarded, then five measured runs at 1-minute loads between 2.4 and 3.5.
 Three would have satisfied the precedent (the worst gated band across the
 first three was 18.2%, on `2.5k outEdges`, against the 32.5% disagreement
@@ -896,21 +940,25 @@ stayed under 6% throughout, so the between-run variance was real, exceeded the
 25% tolerance cap, and a gate on it flagged noise rather than regressions. The
 full evidence is in the entry's own `reason`. The re-enable condition that
 history named, a baseline machine where the runs agree on it, is now arguably
-met: the 2026-09-01 capture on the Apple M4 measured a 5.3% band across its
-five runs. The exemption stands anyway, because lifting it is a hand edit by
+met: the 2026-09-01 capture on the Apple M4 measured a 5.3% band across
+its five runs, and the 2026-10-26 capture on the WSL2 machine 2.4%. The
+exemption stands anyway, because lifting it is a hand edit by
 design rather than a side effect of a capture, and the edit should be taken
 deliberately, with this paragraph as its evidence.
 
-Among the gated entries, four are weakest by margin of error, and the whole list
-is given rather than the top two, because each of them gates at the 25% cap
-against a similarly noisy re-run and a reader trusting a short list would not
-know the rest were there: `pipeline > 1k` (12.70% rme at 10 samples, median
-124.16ms), `rank > 10k` (9.49% at 13), `build > 1k nodes and 4k edges from
-empty` (8.31% at 91, median 4.02ms) and `descendants, 10k` (5.86% at 183). The
-cap is close to ungated. They are left that way deliberately, because turning
-them off reduces real coverage and switching the gate to a trimmed statistic
-changes every entry in the file. Both are decisions to take on purpose rather
-than side effects of a recapture.
+Among the gated entries, five are weakest by margin of error in the
+2026-10-26 file, and the whole list is given rather than the top two, because a
+reader trusting a short list would not know the rest were there: `rank > 1k,
+warm` (5.65% rme at 115 samples), `build > 1k nodes and 4k edges from empty`
+(4.31% at 268), `rank > 10k` (4.21% at 36), `rank > 10k, warm` (3.51% at 35)
+and `rank > 1k` (3.05% at 124). A `bench:ci` run adds its own rme to each
+allowance, so an entry can still reach the 25% cap on a noisy run: in the
+gates run against the file before it merged, `pipeline > 1k` reached it once
+and the next widest allowance was +23.8% on `rank > 10k`. The 2026-08-16 file
+had four entries at the cap, led by `pipeline > 1k` at 12.70%.
+Turning a weak entry off reduces real coverage, and switching the gate to a
+trimmed statistic changes every entry in the file. Both are decisions to take
+on purpose rather than side effects of a recapture.
 
 READ BETWEEN-RUN SPREAD AS A SEPARATE WEAKNESS FROM rme, because the two do not
 pick the same entries. Over the five runs of the 2026-08-16 capture, on an idle
@@ -921,7 +969,9 @@ is precisely the error the control is supposed to cancel and does not. Those
 three are what two of three is carrying, and they are the standing argument for
 the second control workload this file keeps naming. `rank > 1k` has now been the
 failing entry five times across six sessions, which makes it the entry to look
-at first.
+at first. On the 2026-10-26 capture the same entries spread 26.1% to 34.0%
+in ratio with rme between 1.8% and 5.7%, but there the control was the cause:
+see the paragraph on that capture above.
 
 
 ## Layout
