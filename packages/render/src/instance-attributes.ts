@@ -300,9 +300,9 @@ function srgbToLinear(component: number): number {
  * search.
  *
  * The names are built only when a check fails. An instance that passes is
- * checked on its numbers alone, because `setNodes` checks every node twice a
- * call and building eight names each time was a measurable part of it at
- * 10,000 nodes.
+ * checked on its numbers alone, because `setNodes` checks every node at least
+ * twice a call and building the field names each time was a measurable part of
+ * it at 10,000 nodes.
  */
 export function requireShapeInstance(
   instance: ShapeInstance,
@@ -327,7 +327,9 @@ export function requireShapeInstance(
   // through `rect-100.cornerRadius` for a descriptor. Restating them was the
   // first draft and it left two copies of "at most half the smaller dimension",
   // which is the bound past which opposite corner arcs overlap and the field
-  // stops being a distance to anything.
+  // stops being a distance to anything. `drawable` does restate them, as a
+  // pass or fail with no names, and the boundary tests in
+  // `instance-attributes.test.ts` are what keep the two copies in step.
   if (instance.kind === 'circle') {
     requireCircleRadius(instance.radius, `${field}.radius`);
     return instance;
@@ -358,7 +360,7 @@ function drawable(instance: ShapeInstance, family: ShapeFamily): boolean {
     return Number.isFinite(instance.radius) && instance.radius > 0;
   }
   // Read as properties rather than destructured, so a missing `size` throws the
-  // same TypeError the checks below would.
+  // same TypeError `requireCornerRadius` would.
   const width = instance.size.width;
   const height = instance.size.height;
   const radius = instance.cornerRadius;
