@@ -828,7 +828,7 @@
         const { vendor, architecture, device, description } = found.info;
         return {
           navigatorGpu: true,
-          adapter: { vendor, architecture, device, description, isFallbackAdapter: found.info.isFallbackAdapter },
+          adapter: { vendor, architecture, device, description, isFallbackAdapter: found.info.isFallbackAdapter ?? found.isFallbackAdapter },
         };
       };
 

@@ -211,8 +211,9 @@ with about 1.3 straight edges per node, through a renderer that asks for
 `backend: 'webgpu'`, so a browser without an adapter fails with
 `BACKEND_UNAVAILABLE` instead of measuring the fallback. A software WebGPU
 adapter, such as SwiftShader, gets past that check, because the renderer can
-come up on `webgpu` through it. So the runner also exits non-zero, and says why on
-stderr before it measures, when the adapter reports `isFallbackAdapter`. Each
+come up on `webgpu` through it. So when the adapter reports `isFallbackAdapter` the
+runner says so on stderr before it measures, and exits non-zero even if every
+row then comes up on `webgpu`. Each
 size, edge style, node mode, part and motion runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
 `animated` also replaces every node centre and every edge route each frame
 through `setNodes` and `setEdges`, from a sway computed from the clock: the
@@ -482,8 +483,9 @@ loading and compiling what every later one reuses. After each step the runner re
   and the same step differed between runs by up to 0.8 MB, so it is noise at
   this scale.
 
-The runner exits non-zero if a row did not come up on WebGPU, or if a texture
-format has no byte size in the page's table.
+The runner exits non-zero if a row did not come up on WebGPU, if the adapter
+is a fallback adapter, or if a texture format has no byte size in the page's
+table.
 
 Same machine, browser and adapter as above, headed, `renderer.backend`
 `webgpu` on every row, viewport 1280 by 720 at DPR 1, zoom `fit`, 301 frames
