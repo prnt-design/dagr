@@ -2030,9 +2030,10 @@ an AMD Ryzen 9 9900X whose integrated Radeon graphics (RDNA 2, driver
 32.0.21042.62) drives a 3840 by 2160 display that Windows reports at 59 Hz.
 Google Chrome 156.0.8078.48 on the Windows side, headed, no flags beyond
 `windows-chrome.mjs`'s, adapter `amd` `rdna-2`, not a fallback,
-`renderer.backend` `webgpu` on every row, control tick 17.8 to 17.9 ms (longer
-than the reported rate's 16.9; ticks missed are counted against the measured
-tick), DPR 1,
+`renderer.backend` `webgpu` on every row, control tick 17.8 to 17.9 ms (about
+56 Hz, longer than the reported rate's 16.9 ms and the 16.7 that M4.10's
+60 fps names; the cause was not traced, and ticks missed are counted against
+the measured tick), DPR 1,
 viewport 1280 by 720, `fit` (zoom 0.0715), load average 0.0 to 1.8 (read with
 `uptime` before and after each batch).
 
@@ -2043,8 +2044,9 @@ DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs \
 ```
 
 Three runs of main (`2a06a4b`). Animated-mode medians in milliseconds, one
-value per run; `apply` is the median over the retarget frames (44 or 45 a run,
-62 to 65 with smooth edges all moving, whose frames run late):
+value per run; `apply` is the median over the retarget frames (44 or 45
+retargets a run, warm-up included, 62 to 65 with smooth edges all moving,
+whose frames run late):
 
 | Edges | Moving | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Interval p95 | Past one tick |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -2065,14 +2067,16 @@ every row but smooth all moving, where it was 54.0 and the maximum 54.1 to
   every time does.
 - **Smooth edges with every node moving miss 36% to 43% of ticks.** A frame
   between retargets spends 23 to 24 ms of medians on the CPU (`advance` 7 to
-  8, `setEdges` 12 to 13, the rest 3), past the tick on most frames, and
-  retarget frames add 18 to 19 ms of `apply`. `setEdges` is the largest step
-  on every frame and `advance` the second. With the same 10,000 nodes,
-  `advance` is twice the straight rows', since each smooth route carries a
+  8, `setEdges` 12 to 13, the rest 3), past the tick on most frames, though
+  under half the intervals reach one and a half ticks, since a frame the next
+  catches up does not count; retarget frames add 18 to 19 ms of `apply`.
+  `setEdges` is the largest step that runs every frame and `advance` the
+  second. With the same 10,000 nodes, `advance` is two to two and a half
+  times the straight rows', since each smooth route carries a
   bend point whose springs `advance` steps too.
 - **With a tenth moving both edge styles hold the tick**, as on the Apple M4.
 
-The open pull request #159, which writes each edge build into the buffers of
+The open pull request #159 (head `5173fc8`), which writes each edge build into the buffers of
 the one before last rather than allocating about 15 MB of typed arrays a
 frame, was measured against main in the same Chrome by swapping
 `packages/render/dist/ribbon.js` and `scene-edges.js`, main first in each of
@@ -2088,19 +2092,24 @@ three pairs, `--edges=smooth --moving=1,0.1` only:
 - **On this GPU #159 misses fewer ticks with every node moving**, 15.4% to
   20.4% against 23.8% to 26.0%, with no overlap in three pairs, where the
   Apple M4 left the direction unresolved (see #159). The tails move most: `setEdges`
-  p95 falls by about 1 ms and `advance` p95 by about 3.5, though `advance` runs
-  none of #159's code, which fits collection pauses from `setEdges`'s
-  allocations landing in whichever step runs next. The medians move less
-  (`setEdges` 0.3 to 1.0 ms).
+  p95 falls by 0.5 to 1.8 ms and `advance` p95 by about 3.5, though `advance`
+  runs none of #159's code, which fits fewer collection pauses landing in
+  later steps (#159 cut Node's mark-compacts in 800 calls
+  with every route moving from 135 to 3); not
+  traced. The medians move less (`setEdges` 0.3 to 1.0 ms).
+- **With a tenth moving, `setEdges` falls from 3.1 to 3.2 ms to 2.3 to 2.4** in
+  every pair, as on the Apple M4 (#159's 1.8 to 2.0 against 3.0 to 3.1), and
+  both builds hold the tick.
 - **Main missed fewer ticks here than in the three runs above** (24% to 26%
   against 36% to 43%), and its `setEdges` was about 2 ms lower. Those runs
   drew the straight rows first in the same page, these drew smooth rows
   alone, so compare within one table, not across them.
 
-So on 2026-10-26 M4.10's number is met at 10,000 nodes with straight edges and
-every node moving on this machine, and not with smooth edges, where the CPU
+So on 2026-10-26, on this machine, 10,000 nodes with straight edges and every
+node moving hold its 17.9 ms tick, though a retarget frame's CPU work (about
+21 ms) would not fit a true 60 Hz one, and smooth edges do not hold it, where the CPU
 frame between retargets is about 1.3 ticks of medians. The next step is the
 smooth frame's per-frame cost: #159's buffer reuse first, then `advance`, the
 second largest step, which no change since 2026-10-23 has targeted, ahead
 of `setEdges`'s remaining flattening and walk, which byte-identical output
-pins, and ahead of `apply`, which runs on about one frame in 20 to 27.
+pins, and ahead of `apply`, which runs on about one frame in 20 to 24.
