@@ -25,7 +25,9 @@
  *
  * Pass a path to write the drawn frame there as a PNG. The browser is
  * Playwright's own Chromium unless `DAGR_CHROMIUM` names another executable,
- * and `DAGR_CHROMIUM_ARGS` adds space-separated launch flags. The output
+ * and `DAGR_CHROMIUM_ARGS` adds space-separated launch flags. `DAGR_CDP`, a
+ * DevTools endpoint such as `windows-chrome.mjs` prints, attaches to a running
+ * Chrome instead of launching one. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
  * non-zero unless it passes and its control fails. It also exits non-zero when
@@ -47,6 +49,7 @@ const ORIGIN = 'http://127.0.0.1:8733';
 
 const EXECUTABLE = process.env.DAGR_CHROMIUM;
 const LAUNCH_ARGS = (process.env.DAGR_CHROMIUM_ARGS ?? '').split(' ').filter(Boolean);
+const CDP = process.env.DAGR_CDP;
 
 /**
  * The page's import map, filled in from this process's own module resolution.
@@ -83,12 +86,18 @@ function pageHtml() {
 
 const cliArgs = process.argv.slice(2);
 const headless = !cliArgs.includes('--headed');
+if (!headless && CDP !== undefined) {
+  throw new Error('--headed chooses how a browser is launched; an attached one (DAGR_CDP) runs as it was started');
+}
 const screenshotPath = cliArgs.find((arg) => !arg.startsWith('--'));
-const browser = await chromium.launch({
-  headless,
-  args: LAUNCH_ARGS,
-  ...(EXECUTABLE === undefined ? {} : { executablePath: EXECUTABLE }),
-});
+const browser =
+  CDP === undefined
+    ? await chromium.launch({
+        headless,
+        args: LAUNCH_ARGS,
+        ...(EXECUTABLE === undefined ? {} : { executablePath: EXECUTABLE }),
+      })
+    : await chromium.connectOverCDP(CDP);
 const page = await browser.newPage({
   viewport: { width: 640, height: 420 },
   deviceScaleFactor: 1,
@@ -138,9 +147,9 @@ if (screenshotPath !== undefined) {
 }
 const launch = {
   browserVersion: browser.version(),
-  executable: EXECUTABLE ?? 'playwright default',
-  mode: headless ? 'headless' : 'headed',
-  args: LAUNCH_ARGS,
+  ...(CDP === undefined
+    ? { executable: EXECUTABLE ?? 'playwright default', mode: headless ? 'headless' : 'headed', args: LAUNCH_ARGS }
+    : { attached: CDP }),
   userAgent: await page.evaluate('navigator.userAgent'),
 };
 console.log(JSON.stringify({ launch, advertised, results, parity, warnings }, null, 1));
