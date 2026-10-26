@@ -128,6 +128,25 @@ Chromium 148.0.7778.96 logs "No available adapters", `'auto'` falls back to
 WebGPU result needs `DAGR_CHROMIUM` set to a full Chrome, and the `launch` and
 `reported` fields are what to check before calling one.
 
+**What it found on 2026-10-26**, on a Windows machine's WSL2 (Linux 6.18,
+x86_64), whose GPU is exposed only as `/dev/dxg`. Chrome for Testing
+145.0.7632.6 from Playwright's cache (`chromium-1208`), with no flags, has no
+adapter: `'auto'` came up on `'webgl2'` and `'webgpu'` was refused. With
+`DAGR_CHROMIUM_ARGS="--enable-unsafe-webgpu --enable-features=Vulkan"`,
+headless (`--headed` exits with "Missing X server or $DISPLAY"), and with
+`--use-angle=vulkan`, `--use-vulkan=native` or `--ignore-gpu-blocklist`
+added, the only adapter is vendor `google`, architecture `swiftshader`,
+`isFallbackAdapter: true`.
+Through it `'auto'` came up on `'webgpu'` and drew no pixels at all, `'webgpu'`
+on the next canvas came up on `'webgl2'` and was refused, and `'webgl2'` drew
+the 10,780, 3,908 and 2,432 above. The frame profile on the same flags prints
+its fallback adapter message, then fails on its first measurement with
+"Resulting promise was garbage collected". The installed Vulkan drivers
+(Ubuntu's `mesa-vulkan-drivers` 26.0.8) have no `dzn` (Vulkan on D3D12)
+driver, so Vulkan cannot see the GPU. A WebGPU result
+from this box needs a Mesa built with `dzn`, or a Chrome on the Windows side.
+Until then, the frame profile's numbers come from the Apple M4 above.
+
 ## Backend parity (M4.9b)
 
 ```
@@ -190,8 +209,11 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
 with about 1.3 straight edges per node, through a renderer that asks for
 `backend: 'webgpu'`, so a browser without an adapter fails with
-`BACKEND_UNAVAILABLE` instead of measuring the fallback. Each size, edge
-style, node mode, part and motion runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
+`BACKEND_UNAVAILABLE` instead of measuring the fallback. A software WebGPU
+adapter, such as SwiftShader, gets past that check, because the renderer can
+come up on `webgpu` through it. So the runner also exits non-zero, and says why on
+stderr before it measures, when the adapter reports `isFallbackAdapter`. Each
+size, edge style, node mode, part and motion runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
 `animated` also replaces every node centre and every edge route each frame
 through `setNodes` and `setEdges`, from a sway computed from the clock: the
 renderer's half of a frame with every spring in flight, without the scene
