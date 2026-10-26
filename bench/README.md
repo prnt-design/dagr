@@ -952,9 +952,11 @@ Among the gated entries, five are weakest by margin of error in the
 reader trusting a short list would not know the rest were there: `rank > 1k,
 warm` (5.65% rme at 115 samples), `build > 1k nodes and 4k edges from empty`
 (4.31% at 268), `rank > 10k` (4.21% at 36), `rank > 10k, warm` (3.51% at 35)
-and `rank > 1k` (3.05% at 124). In a `bench:ci` run against the file none
-reached the 25% cap, the widest allowance being +23.9% on `rank > 10k`. The
-2026-08-16 file had four entries at the cap, led by `pipeline > 1k` at 12.70%.
+and `rank > 1k` (3.05% at 124). A `bench:ci` run adds its own rme to each
+allowance, so an entry can still reach the 25% cap on a noisy run: in the
+gates run against the file before it merged, `pipeline > 1k` reached it once
+and the next widest allowance was +23.9% on `rank > 10k`. The 2026-08-16 file
+had four entries at the cap, led by `pipeline > 1k` at 12.70%.
 Turning a weak entry off reduces real coverage, and switching the gate to a
 trimmed statistic changes every entry in the file. Both are decisions to take
 on purpose rather than side effects of a recapture.
