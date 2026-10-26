@@ -402,6 +402,10 @@ export class InstanceAttributeData {
   readonly channels: readonly InstanceChannel[];
   #capacity: number;
   #arrays: Map<string, Float32Array>;
+  #fillHex = -1;
+  #fill: readonly [number, number, number] = [0, 0, 0];
+  #glowHex = -1;
+  #glow: readonly [number, number, number] = [0, 0, 0];
 
   constructor(capacity: number, channels: readonly InstanceChannel[] = INSTANCE_CHANNELS) {
     this.#capacity = requireIntegerAtLeast(capacity, 1, 'capacity');
@@ -441,16 +445,26 @@ export class InstanceAttributeData {
     this.#requireSlot(slot);
     const validated = requireShapeInstance(instance, family, field);
     const size = instanceSize(validated);
-    const fill = linearComponents(validated.fillColor);
-    const glow = linearComponents(validated.glowColor);
+    // A mesh's nodes usually share a few colours, so the last conversion of each
+    // is kept: a node whose colour repeats the previous write's skips the
+    // conversion. The colours are validated above, so -1 never matches one.
+    const { fillColor, glowColor } = validated;
+    if (fillColor !== this.#fillHex) {
+      this.#fill = linearComponents(fillColor);
+      this.#fillHex = fillColor;
+    }
+    if (glowColor !== this.#glowHex) {
+      this.#glow = linearComponents(glowColor);
+      this.#glowHex = glowColor;
+    }
 
     this.#write2('instanceOffset', slot, validated.center.x, validated.center.y);
     this.#write2('instanceSize', slot, size.width, size.height);
     this.channel('instanceCornerRadius')[slot] =
       validated.kind === 'circle' ? 0 : validated.cornerRadius;
     this.channel('instanceGlowWorld')[slot] = validated.glowWorld;
-    this.#write3('instanceFillColor', slot, fill);
-    this.#write3('instanceGlowColor', slot, glow);
+    this.#write3('instanceFillColor', slot, this.#fill);
+    this.#write3('instanceGlowColor', slot, this.#glow);
   }
 
   /**

@@ -1896,3 +1896,38 @@ three pairs, load average 3.5 to 4.5. Animated-mode medians in milliseconds:
 `setEdges` and `apply` do not run this code. Both hold the tick. What is left
 of `setNodes` that is per node is the colour conversion: three `Math.pow` per
 colour, two colours per node, every call.
+
+### With a node colour converted only when it changes (2026-10-26)
+
+`InstanceAttributeData.write` converted both of a node's colours from sRGB to
+linear on every write, three `Math.pow` per colour, though a mesh's nodes
+usually share a few colours. Each mesh now keeps its last fill and glow
+conversion and reuses them when the next write repeats the colour, as edge
+colours have done since 2026-10-25.
+
+Byte-identical: the previous build and this one, given the same 8,000 random
+`setNodes` calls over 200 scenes (a palette of six colours and random ones,
+shape changes, arrivals, departures, repeated ids and bad colours), hold the
+same instance buffers after every call, and reject the same 630 calls with the
+same messages. In Node, on a different workload from the section above so
+compare within this one, `setNodes` on 10,000 nodes (alternating rounded rects
+and circles, one colour pair per shape, every node moved each call), 600 calls
+after 200 of warm-up, three pairs at load about 4 to 6: median 1.24 to 1.31 ms
+against 1.66 to 1.73, minimum 1.21 to 1.23 against 1.63 to 1.66.
+
+On WebGPU, same machine (Apple M4), Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, tick 16.7 ms, DPR 1,
+`fit`, `--motion=springs --sizes=10000 --edges=smooth --moving=0.1
+--frames=1200`, builds swapped through
+`packages/render/dist/instance-attributes.js`, previous build first in each of
+three pairs, load average 2.9 to 3.9. Animated-mode medians in milliseconds:
+
+| Build | `setNodes` | `setEdges` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- |
+| previous | 1.5, 1.5, 1.5 | 3.1, 3.0, 3.2 | 1.8, 1.6, 1.9 | 0%, 0%, 0% |
+| this one | 1.2, 1.2, 1.2 | 3.0, 3.0, 3.0 | 1.6, 1.6, 1.6 | 0%, 0%, 0% |
+
+`setEdges` and `apply` do not run this code. Both hold the tick. A scene whose
+consecutive nodes alternate colours within one shape gains nothing and pays a
+comparison per colour.
