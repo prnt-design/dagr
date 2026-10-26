@@ -24,7 +24,9 @@
  * ```
  *
  * The page asks for `backend: 'webgpu'`, so a browser without an adapter fails
- * with `BACKEND_UNAVAILABLE` rather than measuring the WebGL2 fallback.
+ * with `BACKEND_UNAVAILABLE` rather than measuring the WebGL2 fallback. A
+ * software adapter such as SwiftShader still comes up on `webgpu`, so the
+ * runner also exits non-zero when the adapter reports `isFallbackAdapter`.
  */
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -221,6 +223,12 @@ const launch = {
   args: LAUNCH_ARGS,
 };
 const adapter = await page.evaluate(() => window.adapter());
+if (adapter.adapter?.isFallbackAdapter === true) {
+  console.error(
+    `the adapter is a fallback adapter (${adapter.adapter.vendor} ${adapter.adapter.architecture}), not a GPU, so this run is not a WebGPU result`,
+  );
+  process.exitCode = 1;
+}
 
 if (memory) {
   await page.evaluate(() => window.trackGpu());
