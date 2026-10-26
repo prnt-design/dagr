@@ -310,9 +310,13 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
     `webgpu`, DPR 1, `fit`, 10,000 smooth nodes, 10% moving, 1,200 frames.
     Three paired runs held the 16.7 ms tick; `setNodes` fell from 1.9 to
     1.7 ms. This is not an all-moving 60fps result.
-  - Latest recorded all-moving comparison (2026-10-24): smooth edges still
-    missed ticks (6.0% in one run, versus 4.8% to 6.5% in three previous-build
-    runs). Later partial-motion measurements do not supersede that workload.
+  - Latest recorded all-moving comparison (2026-10-24): smooth edges missed
+    13.4%, 13.2%, and 7.9% of ticks across three
+    [edge-plan-map runs](bench/browser/README.md#with-reroutes-kept-out-of-the-edge-plans-map-2026-10-24), versus
+    25.8%, 13.0%, and 8.7% for the previous build. Browser timing bands did
+    not resolve the change; these runs do not establish a regression against
+    earlier measurements under different conditions. Later partial-motion
+    measurements do not supersede that workload.
   - The 2026-10-19 WebGPU profile measured 0.50 ms of GPU time for straight
     edges and 0.86 ms for smooth at DPR 1, versus 1.21 and 1.51 ms at DPR 2.
     Those dated results identify a CPU bottleneck; they are not a fresh
