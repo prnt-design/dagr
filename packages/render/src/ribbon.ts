@@ -437,8 +437,8 @@ class RibbonBuilder {
   indexCount = 0;
 
   constructor(hint: RibbonSizeHint | undefined, spare: RibbonGeometry | undefined) {
-    const leastVertices = spareLeast(hint?.vertexCount, INITIAL_BUILDER_VERTICES);
-    const leastIndices = spareLeast(hint?.indexCount, INITIAL_BUILDER_VERTICES * 3);
+    const [leastVertices, mostVertices] = spareWindow(hint?.vertexCount, INITIAL_BUILDER_VERTICES);
+    const [leastIndices, mostIndices] = spareWindow(hint?.indexCount, INITIAL_BUILDER_VERTICES * 3);
     const vertices = Math.max(
       Math.ceil((hint?.vertexCount ?? 0) * HINT_HEADROOM),
       INITIAL_BUILDER_VERTICES,
@@ -448,11 +448,16 @@ class RibbonBuilder {
       INITIAL_BUILDER_VERTICES * 3,
     );
     this.position =
-      spareBuffer(spare?.position, leastVertices * 2) ?? new Float32Array(vertices * 2);
-    this.offset = spareBuffer(spare?.offset, leastVertices * 2) ?? new Float32Array(vertices * 2);
-    this.across = spareBuffer(spare?.across, leastVertices) ?? new Float32Array(vertices);
-    this.arc = spareBuffer(spare?.arc, leastVertices) ?? new Float32Array(vertices);
-    this.index = spareBuffer(spare?.index, leastIndices) ?? new Uint32Array(indices);
+      spareBuffer(spare?.position, leastVertices * 2, mostVertices * 2) ??
+      new Float32Array(vertices * 2);
+    this.offset =
+      spareBuffer(spare?.offset, leastVertices * 2, mostVertices * 2) ??
+      new Float32Array(vertices * 2);
+    this.across =
+      spareBuffer(spare?.across, leastVertices, mostVertices) ?? new Float32Array(vertices);
+    this.arc = spareBuffer(spare?.arc, leastVertices, mostVertices) ?? new Float32Array(vertices);
+    this.index =
+      spareBuffer(spare?.index, leastIndices, mostIndices) ?? new Uint32Array(indices);
   }
 
   vertex(x: number, y: number, offsetX: number, offsetY: number, across: number, arc: number): number {
@@ -615,8 +620,14 @@ function fitted<T extends Float32Array | Uint32Array>(array: T, length: number):
  */
 const SPARE_FLOOR = 1.0625;
 
-function spareLeast(hinted: number | undefined, initial: number): number {
-  return Math.max(Math.ceil((hinted ?? 0) * SPARE_FLOOR), initial);
+/**
+ * The sizes a spare buffer is taken at, for a hint. The top is
+ * {@link VIEW_SLACK} over the hint, so a build of about the hinted size is
+ * still returned as a view of the spare rather than copied out of it.
+ */
+function spareWindow(hinted: number | undefined, initial: number): [number, number] {
+  const least = Math.max(Math.ceil((hinted ?? 0) * SPARE_FLOOR), initial);
+  return [least, Math.max(Math.floor((hinted ?? 0) * VIEW_SLACK), least)];
 }
 
 /**
@@ -624,12 +635,13 @@ function spareLeast(hinted: number | undefined, initial: number): number {
  * holding a spare it would never use can let it go.
  */
 export function fitsAsSpare(spare: RibbonGeometry, hint: RibbonSizeHint): boolean {
-  return spareBuffer(spare.position, spareLeast(hint.vertexCount, INITIAL_BUILDER_VERTICES) * 2) !== undefined;
+  const [least, most] = spareWindow(hint.vertexCount, INITIAL_BUILDER_VERTICES);
+  return spareBuffer(spare.position, least * 2, most * 2) !== undefined;
 }
 
 /**
- * The whole buffer behind `spare`, when it holds at least `least` elements and
- * at most {@link VIEW_SLACK} times that, and `undefined` otherwise.
+ * The whole buffer behind `spare`, when it holds between `least` and `most`
+ * elements, and `undefined` otherwise.
  *
  * The upper bound is what keeps a spare from pinning memory: a group that
  * shrinks lets its old buffers go rather than drawing a few edges out of
@@ -638,10 +650,11 @@ export function fitsAsSpare(spare: RibbonGeometry, hint: RibbonSizeHint): boolea
 export function spareBuffer<T extends Float32Array | Uint32Array>(
   spare: T | undefined,
   least: number,
+  most: number,
 ): T | undefined {
   if (spare === undefined) return undefined;
   const whole = new (spare.constructor as new (buffer: ArrayBufferLike) => T)(spare.buffer);
-  return whole.length >= least && whole.length <= least * VIEW_SLACK ? whole : undefined;
+  return whole.length >= least && whole.length <= most ? whole : undefined;
 }
 
 /**
@@ -650,7 +663,9 @@ export function spareBuffer<T extends Float32Array | Uint32Array>(
  * whose size moves a little from frame to frame can still use it.
  */
 export function spareFloats(spare: Float32Array | undefined, length: number): Float32Array {
-  const whole = spareBuffer(spare, length) ?? new Float32Array(Math.ceil(length * HINT_HEADROOM));
+  const whole =
+    spareBuffer(spare, length, length * VIEW_SLACK) ??
+    new Float32Array(Math.ceil(length * HINT_HEADROOM));
   return whole.subarray(0, length);
 }
 
@@ -1493,7 +1508,7 @@ function requireRibbonOptions(options: RibbonOptions | undefined): {
  * which only some edges move then walks only those.
  * @param spare An earlier build that nothing reads any more, not `previous`,
  * whose buffers this one may overwrite when they are about the size it needs.
- * At 10,000 smooth nodes a build's arrays are about 10 MB, and allocating them
+ * At 10,000 smooth nodes a tessellation's arrays are about 10 MB, and allocating them
  * on every frame of motion set off a mark-compact every few frames.
  */
 export function tessellateRibbons(
