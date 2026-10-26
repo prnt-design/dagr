@@ -436,7 +436,9 @@ class RibbonBuilder {
   vertexCount = 0;
   indexCount = 0;
 
-  constructor(hint: RibbonSizeHint | undefined) {
+  constructor(hint: RibbonSizeHint | undefined, spare: RibbonGeometry | undefined) {
+    const leastVertices = spareLeast(hint?.vertexCount, INITIAL_BUILDER_VERTICES);
+    const leastIndices = spareLeast(hint?.indexCount, INITIAL_BUILDER_VERTICES * 3);
     const vertices = Math.max(
       Math.ceil((hint?.vertexCount ?? 0) * HINT_HEADROOM),
       INITIAL_BUILDER_VERTICES,
@@ -445,11 +447,12 @@ class RibbonBuilder {
       Math.ceil((hint?.indexCount ?? 0) * HINT_HEADROOM),
       INITIAL_BUILDER_VERTICES * 3,
     );
-    this.position = new Float32Array(vertices * 2);
-    this.offset = new Float32Array(vertices * 2);
-    this.across = new Float32Array(vertices);
-    this.arc = new Float32Array(vertices);
-    this.index = new Uint32Array(indices);
+    this.position =
+      spareBuffer(spare?.position, leastVertices * 2) ?? new Float32Array(vertices * 2);
+    this.offset = spareBuffer(spare?.offset, leastVertices * 2) ?? new Float32Array(vertices * 2);
+    this.across = spareBuffer(spare?.across, leastVertices) ?? new Float32Array(vertices);
+    this.arc = spareBuffer(spare?.arc, leastVertices) ?? new Float32Array(vertices);
+    this.index = spareBuffer(spare?.index, leastIndices) ?? new Uint32Array(indices);
   }
 
   vertex(x: number, y: number, offsetX: number, offsetY: number, across: number, arc: number): number {
@@ -570,8 +573,8 @@ const INITIAL_BUILDER_VERTICES = 4096;
  * every array seven times on every call, and the copies and the garbage they
  * left were about a sixth of `setEdges` in Node. A hint rather than a builder
  * kept between calls, because a kept builder holds its largest size for the
- * life of the group: at 10,000 smooth nodes that doubled the edges' retained
- * heap.
+ * life of the group. A caller may keep a second build of about the current
+ * size as a spare: see `tessellateRibbons`.
  */
 export interface RibbonSizeHint {
   readonly vertexCount: number;
@@ -602,6 +605,53 @@ function fitted<T extends Float32Array | Uint32Array>(array: T, length: number):
   return (array.length <= length * VIEW_SLACK
     ? array.subarray(0, length)
     : array.slice(0, length)) as T;
+}
+
+/**
+ * Half of {@link HINT_HEADROOM}, as the least a spare buffer has to hold over a
+ * hint: a spare is taken while a scene grows by up to about 6% a build, and one
+ * cut to its exact size, which the next larger build would outgrow and double at
+ * once, is not.
+ */
+const SPARE_FLOOR = 1.0625;
+
+function spareLeast(hinted: number | undefined, initial: number): number {
+  return Math.max(Math.ceil((hinted ?? 0) * SPARE_FLOOR), initial);
+}
+
+/**
+ * Whether a build hinted with `hint` would write into `spare`, so a caller
+ * holding a spare it would never use can let it go.
+ */
+export function fitsAsSpare(spare: RibbonGeometry, hint: RibbonSizeHint): boolean {
+  return spareBuffer(spare.position, spareLeast(hint.vertexCount, INITIAL_BUILDER_VERTICES) * 2) !== undefined;
+}
+
+/**
+ * The whole buffer behind `spare`, when it holds at least `least` elements and
+ * at most {@link VIEW_SLACK} times that, and `undefined` otherwise.
+ *
+ * The upper bound is what keeps a spare from pinning memory: a group that
+ * shrinks lets its old buffers go rather than drawing a few edges out of
+ * megabytes.
+ */
+export function spareBuffer<T extends Float32Array | Uint32Array>(
+  spare: T | undefined,
+  least: number,
+): T | undefined {
+  if (spare === undefined) return undefined;
+  const whole = new (spare.constructor as new (buffer: ArrayBufferLike) => T)(spare.buffer);
+  return whole.length >= least && whole.length <= least * VIEW_SLACK ? whole : undefined;
+}
+
+/**
+ * `length` elements over {@link spareBuffer}'s buffer when it fits, and over a
+ * new one with {@link HINT_HEADROOM} otherwise, so the next build of a scene
+ * whose size moves a little from frame to frame can still use it.
+ */
+export function spareFloats(spare: Float32Array | undefined, length: number): Float32Array {
+  const whole = spareBuffer(spare, length) ?? new Float32Array(Math.ceil(length * HINT_HEADROOM));
+  return whole.subarray(0, length);
 }
 
 function grown<T extends Float32Array | Float64Array | Uint32Array>(array: T, length: number): T {
@@ -1441,15 +1491,24 @@ function requireRibbonOptions(options: RibbonOptions | undefined): {
  * from it rather than tessellated again, which is the same result: a route's
  * vertices depend on nothing but its own points and the options. A scene in
  * which only some edges move then walks only those.
+ * @param spare An earlier build that nothing reads any more, not `previous`,
+ * whose buffers this one may overwrite when they are about the size it needs.
+ * At 10,000 smooth nodes a build's arrays are about 10 MB, and allocating them
+ * on every frame of motion set off a mark-compact every few frames.
  */
 export function tessellateRibbons(
   routes: Iterable<RibbonRoute>,
   options?: RibbonOptions,
   sizeHint?: RibbonSizeHint,
   previous?: RibbonGeometry,
+  spare?: RibbonGeometry,
 ): RibbonGeometry {
   const resolved = requireRibbonOptions(options);
-  const out = new RibbonBuilder(sizeHint);
+  // Overwriting the build it copies from would copy what it had just written.
+  const out = new RibbonBuilder(
+    sizeHint,
+    spare !== undefined && spare.position.buffer === previous?.position.buffer ? undefined : spare,
+  );
   const ranges: RibbonRange[] = [];
   const record: number[] = [];
   const starts: number[] = [];

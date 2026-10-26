@@ -340,6 +340,43 @@ describe('SceneEdges', () => {
     }
   });
 
+  it('rebuilds into the buffers of the build before last, drawing what a fresh group draws', () => {
+    const fan = (dy: number, color: (i: number) => number): SceneEdge[] =>
+      Array.from({ length: 400 }, (_, i) =>
+        edge(`e${String(i)}`, [{ x: i, y: 0 }, { x: i + 20, y: 30 + (i % 5 === 0 ? dy : 0) }, { x: i, y: 60 }], color(i)),
+      );
+    const third = (i: number): number => (i % 3 === 0 ? 0x219ebc : 0xffb703);
+    const fourth = (i: number): number => (i % 7 === 0 ? 0x8ecae6 : third(i));
+    const NAMES = ['ribbonPosition', 'ribbonOffset', 'ribbonAcross', 'ribbonArc', 'ribbonColor', 'ribbonIntensity'];
+    const buffersOf = (scene: SceneEdges): ArrayBufferLike[] => [
+      ...NAMES.map((name) => attributeOf(scene, 1, name).buffer),
+      scene.meshes[1]!.geometry.index!.array.buffer,
+    ];
+    // Booleans rather than `toEqual` and `toBe`, which print every element of
+    // arrays and buffers this long when they differ, for minutes.
+    const same = (a: ArrayLike<number>, b: ArrayLike<number>): boolean =>
+      a.length === b.length && Array.prototype.every.call(a, (value: number, i: number) => Object.is(value, b[i]));
+
+    const reused = new SceneEdges(groups());
+    reused.setEdges(OVERLAY, fan(0, () => 0x023047));
+    reused.setEdges(OVERLAY, fan(1, () => 0x023047));
+    const spare = buffersOf(reused);
+    reused.setEdgeIntensity(OVERLAY, () => 0.25);
+    reused.setEdges(OVERLAY, fan(2, third));
+    reused.setEdgeIntensity(OVERLAY, () => 0.5);
+    reused.setEdges(OVERLAY, fan(3, fourth));
+    for (const [i, buffer] of buffersOf(reused).entries()) expect(buffer === spare[i], NAMES[i] ?? 'index').toBe(true);
+
+    const fresh = new SceneEdges(groups());
+    fresh.setEdges(OVERLAY, fan(3, fourth));
+    for (const name of NAMES) {
+      expect(same(attributeOf(reused, 1, name), attributeOf(fresh, 1, name)), name).toBe(true);
+    }
+    expect(same(reused.meshes[1]!.geometry.index!.array, fresh.meshes[1]!.geometry.index!.array)).toBe(true);
+    reused.dispose();
+    fresh.dispose();
+  });
+
   it('colours a rebuild after a rejected one exactly as a fresh group does', () => {
     const before = [edge('a', straight, 0x023047), edge('b', straight, 0xffb703)];
     const after = [edge('a', straight, 0x023047), edge('b', straight, 0x219ebc)];

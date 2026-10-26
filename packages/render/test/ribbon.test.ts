@@ -868,6 +868,59 @@ describe('tessellateRibbons: reusing the previous build', () => {
   });
 });
 
+describe('tessellateRibbons: writing into a spare build', () => {
+  const route = (id: string, ...points: [number, number][]): RibbonRoute => ({
+    id,
+    points: points.map(([x, y]) => ({ x, y })),
+  });
+  const many = (shift: number): RibbonRoute[] =>
+    Array.from({ length: 3_000 }, (_, i) =>
+      route(`r${String(i)}`, [i, 0], [i + 25 + (i % 7) + (i % 10 === 0 ? shift : 0), 45], [i, 90]),
+    );
+  const KEYS = ['position', 'offset', 'across', 'arc', 'index'] as const;
+  const options = { curve: 'smooth' } as const;
+  // Booleans rather than `toEqual` and `toBe`, which print every element of
+  // arrays and buffers this long when they differ, for minutes.
+  const sameValues = (a: Float32Array | Uint32Array, b: Float32Array | Uint32Array): boolean =>
+    a.length === b.length && a.every((value, i) => Object.is(value, b[i]));
+
+  it('draws exactly what a fresh build does over a spare full of garbage, in its buffers', () => {
+    const first = tessellateRibbons(many(0), options);
+    const hint = { vertexCount: first.vertexCount, indexCount: first.indexCount };
+    const spare = tessellateRibbons(many(1), options, hint);
+    const previous = tessellateRibbons(many(2), options, hint, first);
+    for (const key of KEYS) {
+      new (spare[key].constructor as Float32ArrayConstructor)(spare[key].buffer).fill(-7);
+    }
+    const next = tessellateRibbons(many(3), options, hint, previous, spare);
+    const fresh = tessellateRibbons(many(3), options);
+    for (const key of KEYS) {
+      expect(next[key].buffer === spare[key].buffer, key).toBe(true);
+      expect(sameValues(next[key], fresh[key])).toBe(true);
+    }
+    expect(next.ranges).toEqual(fresh.ranges);
+  });
+
+  it('ignores a spare that is the build it copies from', () => {
+    const first = tessellateRibbons(many(0), options);
+    const hint = { vertexCount: first.vertexCount, indexCount: first.indexCount };
+    const previous = tessellateRibbons(many(1), options, hint);
+    const next = tessellateRibbons(many(2), options, hint, previous, previous);
+    for (const key of KEYS) {
+      expect(next[key].buffer === previous[key].buffer, key).toBe(false);
+      expect(sameValues(next[key], tessellateRibbons(many(2), options)[key]), key).toBe(true);
+    }
+  });
+
+  it('leaves a spare far larger than the build needs, rather than keeping it alive', () => {
+    const spare = tessellateRibbons(many(0), options);
+    const small = [route('a', [0, 0], [10, 0])];
+    const next = tessellateRibbons(small, options, undefined, undefined, spare);
+    for (const key of KEYS) expect(next[key].buffer === spare[key].buffer, key).toBe(false);
+    expect(sameValues(next.position, tessellateRibbons(small, options).position)).toBe(true);
+  });
+});
+
 describe('comparisons specified on Math.hypot', () => {
   function byHypot(c: readonly number[], tolerance: number): boolean {
     const [x0, y0, x1, y1, x2, y2, x3, y3] = c as [number, number, number, number, number, number, number, number];
