@@ -1874,7 +1874,8 @@ checks as before, so the message a bad node gets is unchanged.
 Byte-identical: the previous build and this one, given the same 50,000 random
 instances (bad numbers, wrong types, missing `center` or `size`, the wrong
 family), return the same instance or throw the same error with the same
-message, and reject the same 30,802. In Node, `setNodes` on 10,000 nodes (a
+message, and reject the same 30,802. In Node, on a different workload from the
+section above so compare within this one, `setNodes` on 10,000 nodes (a
 fifth circles, every node moved each call), 600 calls after 200 of warm-up,
 three pairs at load about 3.9: median 1.80 to 1.87 ms against 2.09 to 2.11,
 minimum 1.70 to 1.74 against 1.94 to 1.97.

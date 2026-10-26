@@ -321,15 +321,16 @@ export function requireShapeInstance(
   requireColor(instance.fillColor, `${field}.fillColor`);
   requireColor(instance.glowColor, `${field}.glowColor`);
 
-  // Delegated to `sdf.ts` rather than restated, and the field arguments are what
-  // make delegating possible: both checks take the name of the field the CALLER
-  // wrote, so the same bound reports through `chapter-3.cornerRadius` here and
-  // through `rect-100.cornerRadius` for a descriptor. Restating them was the
-  // first draft and it left two copies of "at most half the smaller dimension",
-  // which is the bound past which opposite corner arcs overlap and the field
-  // stops being a distance to anything. `drawable` does restate them, as a
-  // pass or fail with no names, and the boundary tests in
-  // `instance-attributes.test.ts` are what keep the two copies in step.
+  // This failing path delegates to `sdf.ts` rather than restating, and the field
+  // arguments are what make delegating possible: both checks take the name of
+  // the field the CALLER wrote, so the same bound reports through
+  // `chapter-3.cornerRadius` here and through `rect-100.cornerRadius` for a
+  // descriptor. Restating them was the first draft and it left two copies of "at
+  // most half the smaller dimension", which is the bound past which opposite
+  // corner arcs overlap and the field stops being a distance to anything.
+  // `drawable` does restate these and the `validate.ts` checks above, as a pass
+  // or fail with no names, and the boundary tests in
+  // `instance-attributes.test.ts` are what keep the copies in step.
   if (instance.kind === 'circle') {
     requireCircleRadius(instance.radius, `${field}.radius`);
     return instance;
