@@ -16,6 +16,113 @@ The checklist in `ROADMAP.md` is the live one. New tasks keep the same shape:
 the one-line entry lands there, and the working record lands here under the
 same ID.
 
+## M5.7: Learning Explorers and mobile (2026-10-26 UTC)
+
+The maintainer asked to explore Explorer as a visual learning tool, make agents
+consistently author rich explanatory graphs, research skill distribution, and
+make mobile support a library concern without two drifting applications.
+The M5.7 entries in ROADMAP.md and their linked Dispatch tasks are the live
+scope. This increment supplies guidance and a roadmap, not a mobile runtime fix.
+It explicitly unblocks learning/mobile work from the all-moving 10k renderer
+target; renderer proof, report scheduling and publication gates remain.
+
+### Distribution findings
+
+[Agent Skills](https://agentskills.io/specification) specifies a directory with
+`SKILL.md`, name/description frontmatter and optional references, scripts and
+assets. It standardizes the instruction format, not universal automatic
+installation with an npm dependency. Use it as the portable authoring unit.
+
+[Remotion's skills repository](https://github.com/remotion-dev/skills) offers
+an official installable catalog and integration into project creation. It is a
+useful example of tool-specific authoring guidance distributed independently.
+[Vercel's skills CLI](https://github.com/vercel-labs/skills) installs named
+skills from repositories; its npm dependency synchronization is explicitly
+experimental. A registry listing is distribution, not behavioral validation.
+
+[TanStack's agent-skills documentation](https://tanstack.com/table/latest/docs/agent-skills)
+shows versioned skills inside packages and discovery through Intent. This is
+the stronger long-term fit for API compatibility, but would require packaging
+work and a release decision here. Start with one canonical repository skill in
+`skills/dagr-learning-explorer`; evaluate package bundling in M5.7d, without
+silently changing publish configuration or duplicating per-vendor instructions.
+The skills CLI discovered `dagr-learning-explorer` with a local `add . --list`
+check; no skill was installed by that check. No installer or new runtime
+dependency is needed for this increment. Git installation should be pinned to an inspected revision when reproducibility
+matters, and discovery must be checked before claiming it works.
+
+Agent-first design also needs small typed APIs, usable examples, validation
+errors and a shared content representation that can be checked without the
+visual surface. A skill improves defaults, but cannot enforce graph quality.
+The shipped skill requires stable IDs, meaningful directed relationships,
+rich-tier summaries, explanations/examples in details, grounded references,
+noninteractive node slots and accessible connection navigation. Its standalone
+TSX example is checked against this repository's public types. M5.7d evaluates
+agent outputs and learner tasks before adding more instructions or APIs.
+
+### Mobile architecture findings and alternatives
+
+A phone-width observation of the published `/docs/explorer` on 2026-10-26
+(Chromium headless, 390 by 844 CSS pixels, touch emulation, not a real device)
+confirmed the layout concern: search for Booking and inspect it, and the
+358 by 480 graph surface is fully covered by a 358 by 480 details panel. Its
+close control and the zoom controls measure 28 by 28 CSS pixels. Screenshots
+and measured bounds are attached to the Dispatch task's coordinating session.
+This is a search/inspect observation, not validation of all mobile gestures.
+
+Code inspection: `packages/explorer/src/explorer-details.tsx` uses an absolute
+right overlay at every width, `width: min(360px, 100%)`. At a 320-pixel graph
+width it can consume the whole surface. The camera accounts for obstructions,
+but that does not make the remaining map readable. `use-explorer-camera.ts`
+already has pointer pan/pinch, focus-gated touch ownership and cancellation;
+the first touch on an unfocused graph only focuses it. These choices protect
+page scrolling but merit explicit touch-affordance testing. Do not start by
+rewriting already shared gesture logic. The old Chromium/WebKit phone checks
+in M5.6f establish particular behaviors, not broad real-phone usability.
+
+`ExplorerRoot`, `useExplorer` and `useExplorerApi` already centralize view,
+selection, query and commands. `ExplorerBase` separates base drawing from
+windowed rich DOM nodes, and shares layout, camera and emphasis with the base.
+The seam remains experimental; the current default is SVG, not WebGPU. Screen
+size and rendering capacity are separate decisions.
+
+[React Flow's touch example](https://reactflow.dev/examples/interaction/touch-device)
+illustrates adapting interaction to touch, and its
+[accessibility guidance](https://reactflow.dev/learn/advanced-use/accessibility)
+treats keyboard access as part of the component. For a broader canvas UI,
+[tldraw's UI documentation](https://tldraw.dev/sdk-features/ui-components)
+uses shared editor state with replaceable UI and responsive breakpoints; its
+[environment guidance](https://tldraw.dev/sdk-features/environment) distinguishes
+pointer capability. These are architectural references, not evidence that a
+particular Dagr mobile implementation already works.
+
+Options considered:
+
+- Responsive shell over the current graph: lowest initial cost, retains map
+  context but alone does not solve reading a dense network. Choose for M5.7b.
+- Map plus semantic outline over one model: extra presentation code, much
+  better linear reading and accessibility. Choose for M5.7c, with shared
+  selectors and tests rather than two data/state pipelines.
+- Independent mobile renderer/application: duplicates interaction and content
+  decisions and risks drift. Do not choose without measured evidence that the
+  existing base seam and shared shell cannot meet the requirement.
+
+The outline must handle cycles and multiple parents; it is not a tree-shaped
+copy of the data. Choose and test ordering, cross-references and focus transfer
+in M5.7c. Persist selected ID, active view, query and trace across mode/size
+changes; restore map camera when returning. Keep one mounted interactive
+presentation or make hidden controls inert. Compact details could be a bottom
+sheet or explicit full reading mode: M5.7b decides from available graph area,
+scroll behavior, safe areas and software-keyboard measurements, not a fixed
+user-agent branch. Test embedded container widths, not only window widths.
+
+The planned contract suite replays search -> inspect -> follow -> close in map
+and outline, with keyboard/touch, controlled state, data removal and resizing.
+A native base must satisfy the same behavioral contract if added, plus its own
+visual parity and performance checks. Do not require pixel-identical map and
+outline output. Real-device performance and screen-reader checks stay named
+separately from emulation. No mobile 10k/60fps promise is introduced.
+
 ## Priority reset: WebGPU renderer first (2026-10-17 UTC)
 
 The maintainer, Nii Yeboah, chose the WebGPU renderer as dagr's lead identity

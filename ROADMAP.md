@@ -4,17 +4,31 @@ Dagr ships one merge-worthy increment per day: tests, implementation, and docs
 in one PR. The bar for every task: TDD, green typecheck and tests, benchmarks
 within 10% of baseline once they exist, docs land with the feature.
 
-This file is the task list and nothing else. The working record of every task,
-the decisions it took and the reasons, lives in
-[specs/roadmap-notes.md](specs/roadmap-notes.md) under the same task IDs. A
-reference elsewhere in the repo to "the roadmap's M4.6 entry" means the entry
-there. Milestone status is mirrored in the project brain.
+This file owns milestone scope, priority and evidence summaries. Dispatch's
+Dagr project board owns execution tasks, acceptance criteria, assignments,
+blockers and PR links. Link a task to its milestone rather than maintaining a
+second implementation queue. Update this file in the implementation PR and
+keep the board current during the run; mark a task done only after verified
+merge. Before merge, check main and the board and record the actual successor.
+The working record and historical decisions live in
+[specs/roadmap-notes.md](specs/roadmap-notes.md) under the same milestone IDs.
+
+## Direction update (2026-10-26 UTC)
+
+The maintainer asked to develop Explorer as a visual learning tool, with
+consistent agent-authored rich graphs and mobile support as a library
+capability. This adds the [learning and mobile track](#explorer-learning-and-mobile-track)
+alongside the renderer evidence goals, rather than waiting for the all-moving
+10k target before repairing phone reading. M5.7b is the next Explorer increment;
+M5.7c follows it. The renderer queue below retains its internal order and the
+report track keeps its separate scheduling. New learning work does not imply
+that compound layout, audio or an additional rendering backend is required.
 
 ## Status (2026-10-17 UTC)
 
 On 2026-10-17 the maintainer chose dagr's lead identity: the GPU renderer for
-big directed graphs that animate as they change. The queue below now proves
-the WebGPU renderer first. A [daily report track](#daily-report-track) of this
+big directed graphs that animate as they change. The renderer queue below proves
+the WebGPU renderer first within that track. A [daily report track](#daily-report-track) of this
 repository's own activity runs in parallel, never ahead of the queue.
 
 The published npm packages use `@prnt/dagr-*`, with the
@@ -64,7 +78,12 @@ milestone order. Check main and open PRs before claiming work. Correctness or
 install regressions in a released API preempt this queue. A missing WebGPU
 adapter blocks claims about that backend, not backend-independent interaction.
 
-Stage 1 proves the renderer; stage 2 makes it usable as a product.
+Stage 1 proves the renderer; stage 2 makes it usable as a product. The
+maintainer-directed M5.7 track has its own ordered tasks below. Correctness and
+install regressions preempt both tracks; the next Explorer slice is M5.7b and
+can ship independently of the renderer performance target. Jobs select the
+first eligible Dispatch task in the chosen track, checking claims and open
+PRs rather than treating every unchecked milestone as ready.
 
 | Order | Task | Concrete outcome and exit check |
 | --- | --- | --- |
@@ -80,8 +99,9 @@ Stage 1 proves the renderer; stage 2 makes it usable as a product.
 
 **Parked:** VDSL drag-to-connect (M6.3a, M6.3b), compound layout and
 drill-down (M7, M6.4, M6.5), audio beyond R6's narration experiment, and
-explorer reading features beyond what the
-[daily report track](#daily-report-track) asks for. M2.11a edge legibility
+explorer reading features beyond the explicitly scheduled
+[M5.7 learning/mobile track](#explorer-learning-and-mobile-track) and
+[daily report track](#daily-report-track). M2.11a edge legibility
 moves behind the stage 1 and 2 items. The explorer keeps getting correctness
 fixes.
 
@@ -432,6 +452,44 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   Apple M4, added `@prnt/dagr/explorer` and `@prnt/dagr/render/core` to the
   umbrella, and removed the package's `private` flag. Published in 0.1.3 on
   2026-10-05, with the maintainer's approval.
+
+## Explorer learning and mobile track
+
+**M5.7**, maintainer-directed 2026-10-26: Explorer teaches relationships through
+rich summaries, explanations, examples and evidence, with essential reading
+flows usable on a phone. This is an extension of M5.6, not a claim that the
+existing phone-width browser checks establish a good mobile learning experience.
+The implementation owner remains `@prnt/dagr-explorer`; demos exercise public
+parts. Do not put the only fix in a demo stylesheet.
+
+| Slice | Dispatch task | Outcome and exit check |
+| --- | --- | --- |
+| **M5.7a** Authoring skill and direction (this increment) | `tsk_47bf1df19adb` | A portable [learning Explorer skill](skills/dagr-learning-explorer/SKILL.md), a typechecked example and sourced distribution/architecture findings. Runtime changes remain planned. |
+| **M5.7b** Mobile reading baseline and repair (next) | `tsk_eb73b47f05e3` | Reproduce search, inspect, follow and close, page scroll, pan/pinch/cancel, rotation and software-keyboard flows. Repair adaptive controls/details in the library over the current renderer. Record before/after screenshots at 320, 390 and 768 CSS-pixel container widths in Chromium touch emulation and WebKit; distinguish real-device checks. Primary touch targets aim for 44 CSS pixels. Essential actions need no hover or double tap. Preserve keyboard, focus return, SSR and reduced motion. |
+| **M5.7c** Shared-state outline reader | `tsk_17e1212b51f0` | An exported outline/list companion to the map, selectable at any width, using the same content, IDs, query, selection, trace and details. Resize and mode changes retain reading position/selection with explicit focus rules. One scenario suite exercises both presentations, controlled state, removal, cycles and SSR. Depends on M5.7b. |
+| **M5.7d** Authoring evaluation and distribution | `tsk_1b6fb4253f02` | Compare skill-guided and baseline authoring on codebase, prerequisite and process briefs; verify correctness, relationship explanation and source/detail access. Validate local and pinned-Git skill discovery. Evaluate version-matched npm bundling separately, preserving the publication gate. Depends on M5.7a. |
+
+Architecture direction: retain one `ExplorerRoot` state/command layer and one
+learning-content model. Adapt the shell (toolbar, search, side panel versus
+compact details) to available container space and pointer capability. A semantic
+outline is a second presentation of the same graph, not a second renderer or
+independent application. Shared selectors, content components and behavioral
+contract tests prevent map/outline drift; do not copy search or adjacency logic.
+The public API may need narrow additions where the shared outline exposes gaps.
+
+Keep SVG/DOM for the first mobile slice. The native base remains its existing
+[stage 2 task](#next-jobs-in-priority-order), `tsk_d2b0f45e432b`, for measured
+rendering capacity, not user-agent detection. If SVG and native bases coexist,
+they share layout, camera snapshots, visible sets and interaction semantics;
+run the same behavioral tests for each, with visual parity tested separately.
+A phone does not automatically mean a different GPU backend.
+
+Prioritize readable details and relationships over stuffing every explanation
+inside a node. Guided sequences and deep links can build on the report host;
+new tour/audio APIs still require evidence from R4/R5. Learning success means
+finding a concept, explaining a relationship and reaching its supporting detail,
+not merely drawing more nodes. Research and unresolved alternatives are in the
+[M5.7 working record](specs/roadmap-notes.md#m57-learning-explorers-and-mobile-2026-10-26-utc).
 
 ## M6: VDSL core in v0.1, interactions planned for v0.2 (`@prnt/dagr-vdsl`)
 
