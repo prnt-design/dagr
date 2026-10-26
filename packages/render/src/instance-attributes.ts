@@ -299,9 +299,10 @@ function srgbToLinear(component: number): number {
  * a line somebody can find; `size` in a scene of three thousand instances is a
  * search.
  *
- * The names are built only when a check fails: an instance that passes is
- * checked on its numbers alone, because building every name up front was most
- * of a 10,000-node `setNodes` (see `bench/README.md`).
+ * The names are built only when a check fails. An instance that passes is
+ * checked on its numbers alone, because `setNodes` checks every node twice a
+ * call and building eight names each time was a measurable part of it at
+ * 10,000 nodes.
  */
 export function requireShapeInstance(
   instance: ShapeInstance,
@@ -356,7 +357,10 @@ function drawable(instance: ShapeInstance, family: ShapeFamily): boolean {
   if (instance.kind === 'circle') {
     return Number.isFinite(instance.radius) && instance.radius > 0;
   }
-  const { width, height } = instance.size;
+  // Read as properties rather than destructured, so a missing `size` throws the
+  // same TypeError the checks below would.
+  const width = instance.size.width;
+  const height = instance.size.height;
   const radius = instance.cornerRadius;
   return (
     Number.isFinite(width) &&

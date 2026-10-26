@@ -160,6 +160,50 @@ describe('validation', () => {
     }
   });
 
+  it('rejects every out-of-range field at its boundary and accepts every in-range one', () => {
+    const roundedRect = (patch: object) => ({ ...rect, ...patch }) as ShapeInstance;
+    const round = (patch: object) => ({ ...circle, ...patch }) as ShapeInstance;
+    const rejected: [ShapeInstance, RegExp][] = [
+      [roundedRect({ center: { x: Infinity, y: 0 } }), /n\.center\.x/],
+      [roundedRect({ center: { x: 0, y: Number.NaN } }), /n\.center\.y/],
+      [roundedRect({ glowWorld: Infinity }), /n\.glowWorld/],
+      [roundedRect({ glowWorld: Number.NaN }), /n\.glowWorld/],
+      [roundedRect({ glowWorld: -Number.MIN_VALUE }), /n\.glowWorld/],
+      [roundedRect({ fillColor: 0x1000000 }), /n\.fillColor/],
+      [roundedRect({ fillColor: Number.NaN }), /n\.fillColor/],
+      [roundedRect({ glowColor: -1 }), /n\.glowColor/],
+      [roundedRect({ size: { width: Number.NaN, height: 40 } }), /n\.size\.width/],
+      [roundedRect({ size: { width: 100, height: Infinity } }), /n\.size\.height/],
+      [roundedRect({ size: { width: -1, height: 40 } }), /n\.size\.width/],
+      [roundedRect({ cornerRadius: Number.NaN }), /n\.cornerRadius/],
+      [roundedRect({ cornerRadius: -1 }), /n\.cornerRadius/],
+      [roundedRect({ cornerRadius: 20.000001 }), /n\.cornerRadius/],
+      [round({ radius: Infinity }), /n\.radius/],
+      [round({ radius: -Number.MIN_VALUE }), /n\.radius/],
+      [round({ glowWorld: -1 }), /n\.glowWorld/],
+      [round({ fillColor: 0.5 }), /n\.fillColor/],
+    ];
+    for (const [bad, field] of rejected) {
+      expect(() => requireShapeInstance(bad, bad.kind, 'n')).toThrow(field);
+    }
+    const accepted = [
+      roundedRect({ cornerRadius: 20 }),
+      roundedRect({ cornerRadius: 0, glowWorld: 0 }),
+      roundedRect({ fillColor: 0, glowColor: 0xffffff }),
+      round({ radius: Number.MIN_VALUE, center: { x: -1e300, y: 1e300 } }),
+    ];
+    for (const good of accepted) {
+      expect(requireShapeInstance(good, good.kind, 'n')).toBe(good);
+    }
+  });
+
+  it('reads a missing size as a TypeError on its width', () => {
+    const noSize = { ...rect, size: undefined } as unknown as ShapeInstance;
+    expect(() => requireShapeInstance(noSize, 'roundedRect', 'n')).toThrow(
+      /reading 'width'/,
+    );
+  });
+
   it('reads a circle as square by its diameter, so its size cannot contradict itself', () => {
     expect(instanceSize(circle)).toEqual({ width: 40, height: 40 });
     expect(instanceSize(rect)).toEqual({ width: 100, height: 40 });
