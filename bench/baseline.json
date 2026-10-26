@@ -1,176 +1,174 @@
 {
   "schema": 1,
-  "capturedAt": "2026-09-01T22:42:56.981Z",
+  "capturedAt": "2026-10-26T18:06:15.631Z",
   "machine": {
-    "platform": "darwin",
-    "arch": "arm64",
-    "cpu": "Apple M4",
-    "cores": 10,
-    "node": "v25.6.1",
+    "platform": "linux",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 9 9900X 12-Core Processor",
+    "cores": 24,
+    "node": "v22.22.1",
     "ci": false,
-    "loadAverageAtCapture": 2.5
+    "loadAverageAtCapture": 1.61
   },
   "machineProfile": {
     "@prnt/dagr-graph > bench/graph.bench.ts": {
-      "alloc": 0.03774999999995998,
-      "chase": 0.09258300000010422
+      "alloc": 0.0357010000000173,
+      "chase": 0.14582199999995282
     },
     "@prnt/dagr-layout > bench/layout.bench.ts": {
-      "alloc": 0.037750000000187356,
-      "chase": 0.08162500000003092
+      "alloc": 0.035710999999992055,
+      "chase": 0.15955799999983356
     },
     "@prnt/dagr-react > bench/interaction.bench.ts": {
-      "alloc": 0.042834000000084416,
-      "chase": 0.10083299999996598
+      "alloc": 0.03590000000008331,
+      "chase": 0.17407299999990755
     }
   },
   "benchmarks": {
     "@prnt/dagr-graph > bench/graph.bench.ts > adjacency > 2.5k outEdges": {
-      "medianMs": 0.1829170000000886,
-      "meanMs": 0.18388153455884068,
-      "rme": 0.32430552451316547,
-      "samples": 2720,
-      "ratio": 4.883255913289949
+      "medianMs": 0.2608350000009523,
+      "meanMs": 0.27437134503566046,
+      "rme": 0.8235631949742781,
+      "samples": 1823,
+      "ratio": 6.815473857513316
     },
     "@prnt/dagr-graph > bench/graph.bench.ts > adjacency > 2.5k successors": {
       "gate": "off",
       "reason": "Exempted on the dispatch box, where the between-run variance was real and exceeded the 25% tolerance cap: nine quiet-machine runs on 2026-08-14 (AMD EPYC-Rome VM, no other agent, warmup discarded) ranged 37.7 to 61.8 in control-normalized ratio, a 64% band, and the 2026-08-16 recapture measured 37.51 to 50.71, a 35% band, while within-run rme stayed under 6% throughout, so gating it there flagged noise, not regressions. The 2026-09-01 capture on the Apple M4 measured a 5.3% band across its five runs, which meets the path back this reason has always named: a baseline machine where the runs agree on it. The exemption stands anyway, because lifting it is a hand edit by design, not a side effect of a capture; take it deliberately, with the M4 evidence beside it. The stats below are run 4 of the 2026-09-01 capture set, kept for humans.",
-      "medianMs": 1.0748544999996739,
-      "meanMs": 1.0751465429185165,
-      "rme": 0.3814483563105636,
-      "samples": 466,
-      "ratio": 28.694924982626965
+      "medianMs": 1.2240364999997837,
+      "meanMs": 1.2708132131979695,
+      "rme": 0.9839459552477229,
+      "samples": 394,
+      "ratio": 31.983394737516694
     },
     "@prnt/dagr-graph > bench/graph.bench.ts > attributes > 2k updateNodeAttrs, no change": {
-      "medianMs": 0.34908400000040274,
-      "meanMs": 0.36583774981710737,
-      "rme": 3.482862910360476,
-      "samples": 1367,
-      "ratio": 9.319344332325862
+      "medianMs": 0.48843899999974383,
+      "meanMs": 0.500958029029028,
+      "rme": 0.6425698199407036,
+      "samples": 999,
+      "ratio": 12.762640119140634
     },
     "@prnt/dagr-graph > bench/graph.bench.ts > attributes > 2k updateNodeAttrs, unwatched": {
-      "medianMs": 0.6357500000001437,
-      "meanMs": 0.6779698726287225,
-      "rme": 3.558028260932032,
-      "samples": 738,
-      "ratio": 16.972342356769918
+      "medianMs": 0.9617670000002363,
+      "meanMs": 1.0021174428857704,
+      "rme": 1.2102747168130998,
+      "samples": 499,
+      "ratio": 25.130438190797587
     },
     "@prnt/dagr-graph > bench/graph.bench.ts > attributes > 2k updateNodeAttrs, watched": {
-      "medianMs": 1.212833000000046,
-      "meanMs": 1.2621037984886805,
-      "rme": 2.2498673404707943,
-      "samples": 397,
-      "ratio": 32.37847722781669
+      "medianMs": 1.6768000000001848,
+      "meanMs": 1.7527336503496287,
+      "rme": 1.364254381663409,
+      "samples": 286,
+      "ratio": 43.81385383187787
     },
     "@prnt/dagr-graph > bench/graph.bench.ts > build > 1k nodes and 4k edges from empty": {
-      "medianMs": 1.4488750000000437,
-      "meanMs": 1.6192880482314922,
-      "rme": 4.387769563081623,
-      "samples": 311,
-      "ratio": 38.679988253496184
+      "medianMs": 1.5787654999999177,
+      "meanMs": 1.8659694999999665,
+      "rme": 4.310413109705373,
+      "samples": 268,
+      "ratio": 41.25226672936567
     },
     "@prnt/dagr-graph > bench/graph.bench.ts > traversal > descendants, 10k nodes": {
-      "medianMs": 0.853166500000043,
-      "meanMs": 0.8650947301038472,
-      "rme": 0.3525724779920614,
-      "samples": 578,
-      "ratio": 22.776616477113016
+      "medianMs": 0.9693069999993895,
+      "meanMs": 1.002557745491035,
+      "rme": 1.0354621580830279,
+      "samples": 499,
+      "ratio": 25.327454208125367
     },
     "@prnt/dagr-graph > bench/graph.bench.ts > traversal > isAcyclic on a cyclic graph, 10k nodes": {
-      "medianMs": 0.020207999999911408,
-      "meanMs": 0.020620352688879816,
-      "rme": 0.16727263084849736,
-      "samples": 24248,
-      "ratio": 0.539484222326426
+      "medianMs": 0.016600999999354826,
+      "meanMs": 0.018424218209962536,
+      "rme": 1.0190550391922084,
+      "samples": 27139,
+      "ratio": 0.43377492094146997
     },
     "@prnt/dagr-graph > bench/graph.bench.ts > traversal > isAcyclic on an acyclic graph, 10k nodes": {
-      "medianMs": 4.432791000001089,
-      "meanMs": 4.393190822840403,
-      "rme": 0.4519323718956146,
-      "samples": 683,
-      "ratio": 118.34030113725514
+      "medianMs": 5.08907999999974,
+      "meanMs": 5.136063928205122,
+      "rme": 0.4920761878007718,
+      "samples": 585,
+      "ratio": 132.9748373441657
     },
     "@prnt/dagr-graph > bench/graph.bench.ts > traversal > sources, 10k nodes": {
-      "medianMs": 0.1145829999986745,
-      "meanMs": 0.11568702405733214,
-      "rme": 0.22134130958030682,
-      "samples": 4323,
-      "ratio": 3.05897271607209
+      "medianMs": 0.11714199999914854,
+      "meanMs": 0.12253356726292995,
+      "rme": 0.6472286137095441,
+      "samples": 4081,
+      "ratio": 3.060855478015247
     },
     "@prnt/dagr-graph > bench/graph.bench.ts > traversal > topologicalOrder, 10k nodes": {
-      "medianMs": 10.07024999999976,
-      "meanMs": 10.053666501672225,
-      "rme": 0.38494344177835954,
-      "samples": 299,
-      "ratio": 268.84110203416367
+      "medianMs": 10.462306999999782,
+      "meanMs": 10.552531526315777,
+      "rme": 0.8235814498726666,
+      "samples": 285,
+      "ratio": 273.3742781740056
     },
     "@prnt/dagr-layout > bench/layout.bench.ts > pipeline > 10k nodes, 40k edges": {
-      "medianMs": 710.8269164999983,
-      "meanMs": 713.2804294000005,
-      "rme": 1.1675777426051062,
+      "medianMs": 841.3165860000008,
+      "meanMs": 841.9641297999999,
+      "rme": 1.977768051052926,
       "samples": 10,
-      "ratio": 18808.925605964414
+      "ratio": 21800.849576327964
     },
     "@prnt/dagr-layout > bench/layout.bench.ts > pipeline > 1k nodes, 4k edges": {
-      "medianMs": 50.147353499999554,
-      "meanMs": 50.460287399999835,
-      "rme": 3.306533140063549,
+      "medianMs": 51.7831299999998,
+      "meanMs": 51.933322600000245,
+      "rme": 1.2560302492607622,
       "samples": 10,
-      "ratio": 1326.930395322886
+      "ratio": 1341.8447306367862
     },
     "@prnt/dagr-layout > bench/layout.bench.ts > rank > 10k nodes, 40k edges": {
-      "medianMs": 54.044583500000044,
-      "meanMs": 54.39190773214286,
-      "rme": 1.7515802209560842,
-      "samples": 56,
-      "ratio": 1430.0535430791263
+      "medianMs": 84.40110500000037,
+      "meanMs": 84.70856994444442,
+      "rme": 4.210075696140817,
+      "samples": 36,
+      "ratio": 2187.0670622686007
     },
     "@prnt/dagr-layout > bench/layout.bench.ts > rank > 10k nodes, 40k edges, warm": {
-      "medianMs": 62.807124999999814,
-      "meanMs": 63.26961631249986,
-      "rme": 2.830532637638975,
-      "samples": 48,
-      "ratio": 1661.9158816694965
+      "medianMs": 88.4912719999993,
+      "meanMs": 87.6585767142855,
+      "rme": 3.513127817288649,
+      "samples": 35,
+      "ratio": 2293.054650048116
     },
     "@prnt/dagr-layout > bench/layout.bench.ts > rank > 1k nodes, 4k edges": {
-      "medianMs": 3.0176045000000613,
-      "meanMs": 3.067067841463432,
-      "rme": 0.7579825982921242,
-      "samples": 164,
-      "ratio": 79.84770586374486
+      "medianMs": 3.6156944999997904,
+      "meanMs": 4.058161056451636,
+      "rme": 3.052494349908927,
+      "samples": 124,
+      "ratio": 93.69268741416647
     },
     "@prnt/dagr-layout > bench/layout.bench.ts > rank > 1k nodes, 4k edges, warm": {
-      "medianMs": 3.325749999999971,
-      "meanMs": 3.5270619436619777,
-      "rme": 2.984653163735441,
-      "samples": 142,
-      "ratio": 88.00142887391034
+      "medianMs": 3.865338999999949,
+      "meanMs": 4.350141652173917,
+      "rme": 5.650882727356328,
+      "samples": 115,
+      "ratio": 100.16166981939516
     },
     "@prnt/dagr-react > bench/interaction.bench.ts > CPU rectangle pointer query > 100 nodes": {
       "gate": "off",
       "reason": "The 0.000125 ms median is three clock ticks on this machine and all five measured runs reported the same quantized value. It records the bounded 100-node result, but a one-tick movement would look like a 33% regression, so this entry remains evidence rather than a gate.",
-      "note": "Captured 2026-10-01 on the baseline Apple M4 with the synthetic CPU rectangle provider. One pointer-down event performs one provider call, one displayed-revision check, and 100 reverse draw-order rectangle checks.",
-      "medianMs": 0.00012500000002546585,
-      "meanMs": 0.00011578124686677131,
-      "rme": 1.7251318887865095,
-      "samples": 4318489,
-      "ratio": 0.0032967612624084895
+      "note": "Exempted 2026-10-01 on the Apple M4. Recaptured 2026-10-26 on the WSL2 machine, where the five measured runs reported a median of 0.00009 or 0.00010 ms and nothing between, an 11% step, so the exemption stands. One pointer-down event performs one provider call, one displayed-revision check, and 100 reverse draw-order rectangle checks.",
+      "medianMs": 0.00009000000000014552,
+      "meanMs": 0.00009829787749393161,
+      "rme": 0.18826738501798293,
+      "samples": 5086581,
+      "ratio": 0.0023467445438241146
     },
     "@prnt/dagr-react > bench/interaction.bench.ts > CPU rectangle pointer query > 10k nodes": {
-      "note": "Captured 2026-10-01 on the baseline Apple M4 with the synthetic CPU rectangle provider. One pointer-down event performs one provider call, one displayed-revision check, and 10,000 reverse draw-order rectangle checks.",
-      "medianMs": 0.00841599999967002,
-      "meanMs": 0.013245751933877984,
-      "rme": 4.296668582337042,
-      "samples": 37748,
-      "ratio": 0.2219643422215158
+      "medianMs": 0.005979999999908614,
+      "meanMs": 0.006294142373392367,
+      "rme": 2.3667143439073843,
+      "samples": 79439,
+      "ratio": 0.15592813746478948
     },
     "@prnt/dagr-react > bench/interaction.bench.ts > CPU rectangle pointer query > 1k nodes": {
-      "note": "Captured 2026-10-01 on the baseline Apple M4 with the synthetic CPU rectangle provider. One pointer-down event performs one provider call, one displayed-revision check, and 1,000 reverse draw-order rectangle checks.",
-      "medianMs": 0.0007919999998193816,
-      "meanMs": 0.0009426164120659031,
-      "rme": 1.7431287868450454,
-      "samples": 530439,
-      "ratio": 0.020888279349601042
+      "medianMs": 0.0006600000001526496,
+      "meanMs": 0.0006432493541780316,
+      "rme": 0.21644247162709818,
+      "samples": 777304,
+      "ratio": 0.01720945999199601
     }
   }
 }

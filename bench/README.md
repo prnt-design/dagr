@@ -34,10 +34,13 @@ twice without anyone moving: it became an Intel Xeon Skylake on 2026-08-18
 and reported EPYC-Rome again by 2026-08-24, when the queued recapture was
 taken (PR #63). Development then moved to the maintainer's arm64 Apple M4,
 where the identity check refused every run for a week, and on 2026-09-01 the
-maintainer called the move: the current file is captured there, on the terms
-this paragraph has always named, and it is now a run on the dispatch box that
-fails the identity check. See "The machine in the file" below for how the
-gate says so, and for what it cost to find out by hand.
+maintainer called the move: that file was captured there, on the terms
+this paragraph has always named, and a run on the dispatch box failed the
+identity check. The daily job then ran on a WSL2 machine (AMD Ryzen 9 9900X,
+linux x64), where the identity check refused every run, and on 2026-10-26 the
+maintainer called a recapture there: the current file names that machine. See
+"The machine in the file" below for how the gate says so, and for what it cost
+to find out by hand.
 The CI argument above is unchanged by the baseline being arm64 macOS: the
 remaining reason the gate stays local is runner noise and runner identity, not
 which architecture the file happens to name.
@@ -174,7 +177,7 @@ evidence.
 ## M5.2a CPU pointer-query baseline
 
 The first interaction baseline was measured on 2026-10-01 on the same Apple M4
-and Node `v25.6.1` named by `baseline.json`. The backend is
+and Node `v25.6.1` that `baseline.json` named then. The backend is
 `CPU synthetic rectangle scan`, not WebGPU, WebGL, or a browser frame. Each
 pointer-down event performs one provider call, one displayed-revision check,
 and a reverse draw-order scan of exactly `N` rectangles before finding
@@ -219,9 +222,34 @@ rewrites the whole machine-matched file and is the maintainer's call. This is
 CPU query time, not a browser frame, an edge or port measurement, or GPU
 evidence.
 
-**The current file was captured on 2026-09-01 on the maintainer's Apple M4
+**The current file was captured on 2026-10-26 on the WSL2 machine (AMD Ryzen
+9 9900X, linux x64, 24 cores, Node v22.22.1), authorized by the maintainer
+after the identity check refused every run there.** One warmup run discarded,
+then five measured runs between 17:58 and 18:08 UTC at 1-minute loads between
+1.15 and 1.61. Run 4 is the file: 1.33% mean absolute deviation from the
+per-entry medians over the eighteen gated entries, worst entry 9.4%
+(`updateNodeAttrs, no change`). Within a run it is quieter than the file it
+replaced, with no gated entry above 5.65% rme. Between runs it is not: across
+the five, the four `rank` entries spanned 26.1% to 34.0% and `pipeline > 1k`
+30.3%, with runs 1 and 3 the far ones each time, which is what two of three
+is for. `bench:ci` against the file passed 2 of 2 before committing. It holds
+the same twenty keys as the file before it. The entries in the report but not
+the baseline (M4.10 scene motion, M5.2b node hit, the tier feed, and the
+explorer's) were left out, because adding them is its own decision. The 100-node pointer query keeps its exemption: its five medians
+were 0.00009 or 0.00010 ms and nothing between, an 11% step.
+
+The `chase` probe does not work as written on this machine, and that is the
+capture's one finding against the harness. Its 64 MiB table was sized as four
+times the dispatch box's L3, and the 9900X has 64 MB of L3, so the walk sits at
+the cache's edge: on the graph file it measured 0.064 to 0.176 ms across the six
+runs, warmup included, a 2.8x spread, while `alloc` held within 2%. The profile comparison
+therefore prints a mismatch note on runs that match. It changes no exit code
+(see "The machine it measures like"), so the gate is unaffected, but read the
+note on this machine as the probe and not the box.
+
+**The 2026-09-01 capture was taken on the maintainer's Apple M4
 (darwin arm64, 10 cores, Node v25.6.1), authorized by the maintainer in
-session after a week of identity refusals on this box.** One warmup run
+session after a week of identity refusals on the dispatch box.** One warmup run
 discarded, then five measured runs at 1-minute loads between 2.4 and 3.5.
 Three would have satisfied the precedent (the worst gated band across the
 first three was 18.2%, on `2.5k outEdges`, against the 32.5% disagreement
@@ -897,20 +925,21 @@ stayed under 6% throughout, so the between-run variance was real, exceeded the
 full evidence is in the entry's own `reason`. The re-enable condition that
 history named, a baseline machine where the runs agree on it, is now arguably
 met: the 2026-09-01 capture on the Apple M4 measured a 5.3% band across its
-five runs. The exemption stands anyway, because lifting it is a hand edit by
+five runs, and the 2026-10-26 capture on the WSL2 machine 2.4%. The exemption stands anyway, because lifting it is a hand edit by
 design rather than a side effect of a capture, and the edit should be taken
 deliberately, with this paragraph as its evidence.
 
-Among the gated entries, four are weakest by margin of error, and the whole list
-is given rather than the top two, because each of them gates at the 25% cap
-against a similarly noisy re-run and a reader trusting a short list would not
-know the rest were there: `pipeline > 1k` (12.70% rme at 10 samples, median
-124.16ms), `rank > 10k` (9.49% at 13), `build > 1k nodes and 4k edges from
-empty` (8.31% at 91, median 4.02ms) and `descendants, 10k` (5.86% at 183). The
-cap is close to ungated. They are left that way deliberately, because turning
-them off reduces real coverage and switching the gate to a trimmed statistic
-changes every entry in the file. Both are decisions to take on purpose rather
-than side effects of a recapture.
+Among the gated entries, five are weakest by margin of error in the
+2026-10-26 file, and the whole list is given rather than the top two, because a
+reader trusting a short list would not know the rest were there: `rank > 1k,
+warm` (5.65% rme at 115 samples), `build > 1k nodes and 4k edges from empty`
+(4.31% at 268), `rank > 10k` (4.21% at 36), `rank > 10k, warm` (3.51% at 35)
+and `rank > 1k` (3.05% at 124). None now gates at the 25% cap: a
+`bench:ci` run against the file allowed at most +23.9%, on `rank > 10k`. The
+2026-08-16 file had four entries at the cap, led by `pipeline > 1k` at 12.70%.
+Turning a weak entry off reduces real coverage, and switching the gate to a
+trimmed statistic changes every entry in the file. Both are decisions to take
+on purpose rather than side effects of a recapture.
 
 READ BETWEEN-RUN SPREAD AS A SEPARATE WEAKNESS FROM rme, because the two do not
 pick the same entries. Over the five runs of the 2026-08-16 capture, on an idle
@@ -921,7 +950,9 @@ is precisely the error the control is supposed to cancel and does not. Those
 three are what two of three is carrying, and they are the standing argument for
 the second control workload this file keeps naming. `rank > 1k` has now been the
 failing entry five times across six sessions, which makes it the entry to look
-at first.
+at first. The 2026-10-26 capture shows the same shape on a different machine: across
+its five runs the four `rank` entries spanned 26.1% to 34.0% with rme between
+1.8% and 5.7%.
 
 
 ## Layout
