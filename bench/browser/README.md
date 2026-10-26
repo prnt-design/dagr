@@ -157,7 +157,10 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 
 `--parity` draws the probe scene through `'webgpu'` and through `'webgl2'` and
 compares the two frames pixel by pixel. It exits non-zero unless both backends
-came up as named, the comparison passes, and a control fails.
+came up as named, the comparison passes, and a control fails. It also exits
+non-zero, saying why on stderr, when the adapter reports `isFallbackAdapter`,
+because a software adapter such as SwiftShader comes up on `'webgpu'` too and
+its frame is not a GPU's.
 
 **The tolerance comes from the antialiasing ramp.** `fillCoverage` and
 `outlineCoverage` in `sdf.ts` are smoothsteps one `aaWidth` wide, centred on
@@ -186,6 +189,15 @@ times a band two pixels wide is 1,755, which checks the page's distance
 arithmetic but not that it lines up with the shader's) and 151,840 are not, and none of either
 differ. The control failed as it should: 308 band pixels differ, by up to 137,
 and 1,036 glow pixels away from any edge, by up to 13.
+
+**What it found on 2026-10-26**, on the same machine in Chrome 155.0.8059.85,
+headless. With no flags the frames are byte-identical again and the control
+fails the same way. With `DAGR_CHROMIUM_ARGS="--enable-unsafe-webgpu
+--use-webgpu-adapter=swiftshader"` the adapter is `google` `swiftshader`,
+`isFallbackAdapter: true`, and `'webgpu'` still comes up on `'webgpu'`. The
+comparison passes there too (28 band and 56 other pixels differ, by 1 at most)
+and the control fails, so before the fallback check a CPU-rasterised run exited
+0 as if it were backend parity. It now exits 1.
 
 **Not a gate.** `bench/README.md`'s argument against a browser measurement in
 `bench:ci` is about timings, and a parity check is not a timing, so that
