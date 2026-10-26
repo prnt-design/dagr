@@ -43,7 +43,7 @@ maintainer called a recapture there: the current file names that machine. See
 to find out by hand.
 The CI argument above is unchanged by the baseline now being linux x64, the
 same platform and arch as CI's runners: the identity check still refuses them
-on CPU and Node version, and the remaining reason the gate stays local is
+on CPU and core count, and the remaining reason the gate stays local is
 runner noise and runner identity, not which architecture the file happens to
 name.
 
@@ -174,8 +174,7 @@ the old and new source at loads of 2.5 to 4.3, medians in milliseconds:
 Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
 for the same reason: adding them is the maintainer's call, and the 2026-10-26
 recapture left them out rather than add them as its side effect. This is CPU
-time in Node, not a browser frame or GPU
-evidence.
+time in Node, not a browser frame or GPU evidence.
 
 ## M5.2a CPU pointer-query baseline
 
@@ -222,9 +221,8 @@ used: during an animation a click pays it on the frame it lands, and hover,
 which reuses an index up to 100 ms old, about one frame in six at 60 Hz. Also `packages/react/bench/tier-feed.bench.ts` (10,000 nodes, 100 in motion): feeding only moved nodes to the tiers measured about 7x faster than rebuilding every node on a loaded machine, so the figure is indicative, not a gate. These entries are in the report but **not in `baseline.json`**: the
 gate prints them as `new`. Adding them is the maintainer's call, and the
 2026-10-26 recapture left them out rather than add them as its side effect.
-This is
-CPU query time, not a browser frame, an edge or port measurement, or GPU
-evidence.
+This is CPU query time, not a browser frame, an edge or port measurement, or
+GPU evidence.
 
 **The current file was captured on 2026-10-26 on the WSL2 machine (AMD Ryzen
 9 9900X, linux x64, 24 cores, Node v22.22.1), authorized by the maintainer
@@ -232,7 +230,7 @@ after the identity check refused every run there.** One warmup run discarded,
 then five measured runs between 18:00 and 18:08 UTC at 1-minute loads between
 1.15 and 1.61. Run 4 is the file: 1.33% mean absolute deviation from the
 per-entry medians over the eighteen gated entries, worst entry 9.4%
-(`updateNodeAttrs, no change`). Its median gated rme is 1.26% against the M4
+(`updateNodeAttrs, no change`). Its median gated rme is 1.23% against the M4
 file's 1.75%, though its worst, 5.65% on `rank > 1k, warm`, is above the M4
 file's 4.39%. It holds the same twenty keys as the file before it. The entries
 in the report but not the baseline (M4.10 scene motion, M5.2b node hit, the
@@ -249,20 +247,21 @@ milliseconds they moved far less: `rank > 10k` 2.5%, `rank > 10k, warm` 1.3%,
 difference is the control those ratios divide by: the layout file's control
 median read 0.0452 and 0.0481 ms in runs 1 and 3 against 0.0381 to 0.0386 in
 the other three, a 26% band, while the graph file's held 0.0383 to 0.0391.
-Here the control ADDS between-run error to the layout entries rather than
+Here the control adds between-run error to the layout entries rather than
 failing to cancel it. Run 4 sits at the low control, so a later run that lands
 high reads those entries as faster rather than failing them.
 
 The `chase` probe is unreliable on this machine, and that is the capture's one
 finding against the harness. On the graph file it measured 0.064 to 0.176 ms
 across the six runs, warmup included, a 2.8x spread, while `alloc` held within
-1% and the interaction file's `chase` within 4%. The likely cause, not yet
+1% and the interaction file's `chase` within 3%. It is not only the graph
+file: the `bench:ci` run that passed 2 of 2 against this file read the layout
+file's `chase` at 0.51x and the interaction file's at 0.58x, and printed a
+profile mismatch note on a run that matches. The likely cause, not yet
 measured, is its size: the 64 MiB table was sized as four times the dispatch
-box's L3, and the 9900X's 64 MB of L3 is two 32 MB halves. A low reading can
-print a profile mismatch note on a run that matches; the warmup's 0.064 would
-have. It changes no exit code (see "The machine it measures like"), so the gate
-is unaffected, but read that note on this machine as the probe and not the
-box.
+box's L3, and the 9900X's 64 MB of L3 is two 32 MB halves. The note changes
+no exit code (see "The machine it measures like"), so the gate is unaffected,
+but read it on this machine as the probe and not the box.
 
 **The 2026-09-01 capture was taken on the maintainer's Apple M4
 (darwin arm64, 10 cores, Node v25.6.1), authorized by the maintainer in
@@ -955,7 +954,7 @@ warm` (5.65% rme at 115 samples), `build > 1k nodes and 4k edges from empty`
 and `rank > 1k` (3.05% at 124). A `bench:ci` run adds its own rme to each
 allowance, so an entry can still reach the 25% cap on a noisy run: in the
 gates run against the file before it merged, `pipeline > 1k` reached it once
-and the next widest allowance was +23.9% on `rank > 10k`. The 2026-08-16 file
+and the next widest allowance was +23.8% on `rank > 10k`. The 2026-08-16 file
 had four entries at the cap, led by `pipeline > 1k` at 12.70%.
 Turning a weak entry off reduces real coverage, and switching the gate to a
 trimmed statistic changes every entry in the file. Both are decisions to take
