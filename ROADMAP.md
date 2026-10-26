@@ -242,7 +242,8 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
 - [x] **M4.9b** Backend parity: the same TSL drawn through both backends on
   one machine, compared pixel by pixel with the tolerance derived from the
   antialiasing ramp and a control that must fail. Byte-identical on an Apple M4
-  in Chrome 155. A hand-run check, not a CI gate.
+  in Chrome 155. Passes on AMD RDNA 2 in Chrome 156 (2026-10-26) with 4 of
+  1,760 edge-band pixels differing by 1. A hand-run check, not a CI gate.
 - [x] **M4.10a** Profile the consumer path before optimizing: named backend,
   machine, graph sizes, rich-node tiers, edge styles, hit testing, update cost,
   frame-time distribution and memory. This is evidence, not a 60fps claim.

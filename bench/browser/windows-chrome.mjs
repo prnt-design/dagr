@@ -37,14 +37,17 @@ const PROFILE = 'C:\\Windows\\Temp\\dagr-bench-chrome';
 const CHROME_PORT = 9333;
 const DIAL_PORT = 9444;
 const CDP_PORT = 9445;
+// An http endpoint rather than a ws one, because Chrome builds the WebSocket
+// URL it hands out from the request's Host header, so it names the relay's port.
 const CDP = `http://127.0.0.1:${CDP_PORT}`;
 const headless = process.argv.includes('--headless');
 
 // Run by the Windows side's Node through `-e`, so it is one line with no
 // double quotes, which the interop's command line would have to escape. A dial
 // that ends unused is retried while Chrome is up, because WSL forwards a newly
-// listening port to Windows only after a delay; once Chrome has been up and is
-// gone, or has not come up in 30 seconds, the dialer exits. The socket pauses
+// listening port to Windows only after a delay. The dialer exits once Chrome
+// has been up and is gone, or about 15 seconds pass with Chrome not up or this
+// side refusing every dial. The socket pauses
 // before it is piped: a chunk arriving while Chrome's side connects would
 // otherwise be emitted with nothing listening.
 const DIALER = `
@@ -52,12 +55,16 @@ const DIALER = `
   const [dialPort, chromePort] = process.argv.slice(1).map(Number);
   let chromeSeen = false;
   let unseenChecks = 0;
+  let refused = 0;
   const dial = () => {
     const up = net.connect(dialPort, '127.0.0.1');
     let used = false;
+    let connected = false;
+    up.on('connect', () => { connected = true; refused = 0; });
     up.on('error', () => {});
     up.on('close', () => {
       if (used) return;
+      if (!connected && ++refused > 60) process.exit();
       const check = net.connect(chromePort, '127.0.0.1', () => { chromeSeen = true; check.destroy(); setTimeout(dial, 500); });
       check.on('error', () => { if (chromeSeen || ++unseenChecks > 60) process.exit(); else setTimeout(dial, 500); });
     });
@@ -95,6 +102,10 @@ const dials = createServer((socket) => {
 });
 const clients = createServer((socket) => {
   socket.on('error', () => {});
+  socket.on('close', () => {
+    const at = waiting.indexOf(socket);
+    if (at >= 0) waiting.splice(at, 1);
+  });
   const dial = spares.shift();
   if (dial === undefined) waiting.push(socket);
   else joinSockets(socket, dial);
@@ -117,35 +128,61 @@ const chromeArgs = [
   ...EXTRA_ARGS,
   'about:blank',
 ];
+let browser;
+let closing = false;
+// Chrome is reachable only through a DevTools connection, since the interop
+// process spawn returns is not Chrome itself, so every way out goes through here.
+const shutdown = async (code) => {
+  if (closing) return;
+  closing = true;
+  if (browser?.isConnected()) {
+    await browser
+      .newBrowserCDPSession()
+      .then((session) => session.send('Browser.close'))
+      .catch(() => {});
+  } else {
+    console.error(`no DevTools connection, so a Chrome using ${PROFILE} may still be running`);
+  }
+  dials.close();
+  clients.close();
+  process.exit(code);
+};
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.once(signal, () => shutdown(0));
+
 spawn(CHROME, chromeArgs, { stdio: 'ignore' }).on('error', (error) => {
   console.error(`could not start ${CHROME}: ${error.message}`);
-  process.exit(1);
+  shutdown(1);
 });
 spawn(NODE, ['-e', DIALER, String(DIAL_PORT), String(CHROME_PORT)], { stdio: 'inherit' }).on('error', (error) => {
   console.error(`could not start ${NODE}: ${error.message}`);
-  process.exit(1);
+  shutdown(1);
 });
 
-let browser;
-for (let attempt = 0; browser === undefined; attempt++) {
+for (let attempt = 0; browser === undefined && !closing; attempt++) {
   try {
     browser = await chromium.connectOverCDP(CDP, { timeout: 2_000 });
   } catch (error) {
     if (attempt === 15) {
       console.error(`no DevTools endpoint at ${CDP} after ${attempt} attempts: ${error.message}`);
-      process.exit(1);
+      await shutdown(1);
     }
     await delay(1_000);
   }
 }
+browser.on('disconnected', () => {
+  if (closing) return;
+  console.error('Chrome closed its DevTools connection');
+  shutdown(1);
+});
+
+// A Chrome already running on this profile takes the launch over and keeps its
+// own mode and flags, so the mode is checked rather than assumed.
+const session = await browser.newBrowserCDPSession();
+const { userAgent } = await session.send('Browser.getVersion');
+if (userAgent.includes('HeadlessChrome') !== headless) {
+  console.error(`asked for ${headless ? 'headless' : 'headed'}, but ${userAgent} answered: an earlier Chrome on ${PROFILE} was still running`);
+  await shutdown(1);
+}
 console.log(
   JSON.stringify({ attach: `DAGR_CDP=${CDP}`, browserVersion: browser.version(), mode: headless ? 'headless' : 'headed', args: chromeArgs }, null, 1),
 );
-
-process.once('SIGINT', async () => {
-  const session = await browser.newBrowserCDPSession();
-  await session.send('Browser.close').catch(() => {});
-  dials.close();
-  clients.close();
-  process.exit();
-});

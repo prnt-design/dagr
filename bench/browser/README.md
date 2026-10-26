@@ -70,9 +70,11 @@ one. A box without a GPU still needs the flags the 2026-08-23 run below used:
 `DAGR_CHROMIUM_ARGS="--no-sandbox --use-angle=swiftshader --enable-unsafe-swiftshader"`.
 `DAGR_BROWSER_DEPS` points at a directory whose `node_modules` holds
 `playwright-core`, if not this one. `DAGR_CDP` attaches to a Chrome that is
-already running instead; see the WSL2 section below. The output starts with the browser version,
-executable, mode and flags, and the adapter's vendor and architecture, because
-a backend result without them cannot be reproduced.
+already running instead; see the WSL2 section below. The output starts with
+the browser version, executable, mode and flags (when attached: the endpoint
+and the user agent, with the flags in the helper's own output), and the
+adapter's vendor and architecture, because a backend result without them
+cannot be reproduced.
 
 It builds a renderer three times, once per `backend` preference, on a fresh
 canvas each time (a canvas holds one context for its whole life, so reusing one
@@ -186,7 +188,10 @@ adapter. `'auto'` and `'webgpu'` came up on `'webgpu'` and `'webgl2'` on
 on `about:blank` has no `navigator.gpu` at all, since it is not a secure
 context, so the adapter question has to be asked from the served page, as the
 probe does. A short frame profile (1,000 nodes, 120 frames) came up on
-`webgpu` on every row, with a steady headless tick of 17.6 ms.
+`webgpu` on every row, with a steady headless tick of 17.6 ms, so the headless
+pacing that made the frame profile run headed on the Apple M4 did not show
+here; a profile meant for publication should still be compared with a headed
+run.
 
 ## Backend parity (M4.9b)
 
