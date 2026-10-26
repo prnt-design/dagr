@@ -88,7 +88,10 @@ import { requireFinite, requireNonNegative } from './validate.js';
  * arguments buy: the same bound reports through `chapter-3.cornerRadius` for a
  * campaign node and through `rect-100.cornerRadius` for a ladder descriptor.
  * Restating them was the first draft and it left two copies of "at most half the
- * smaller dimension" to drift apart.
+ * smaller dimension" to drift apart. The one restatement left is
+ * `requireShapeInstance`'s passing path, which checks the same bounds as a pass
+ * or fail with no names and falls through to these on a failure; the boundary
+ * tests in `instance-attributes.test.ts` keep the two in step.
  */
 
 /**

@@ -160,6 +160,54 @@ describe('validation', () => {
     }
   });
 
+  it('rejects every out-of-range field at its boundary and accepts every in-range one', () => {
+    const asRect = (patch: object) => ({ ...rect, ...patch }) as ShapeInstance;
+    const asCircle = (patch: object) => ({ ...circle, ...patch }) as ShapeInstance;
+    const rejected: [ShapeInstance, RegExp][] = [
+      [asRect({ center: { x: Infinity, y: 0 } }), /n\.center\.x/],
+      [asRect({ center: { x: 0, y: Number.NaN } }), /n\.center\.y/],
+      [asRect({ glowWorld: Infinity }), /n\.glowWorld/],
+      [asRect({ glowWorld: Number.NaN }), /n\.glowWorld/],
+      [asRect({ glowWorld: -Number.MIN_VALUE }), /n\.glowWorld/],
+      [asRect({ fillColor: 0x1000000 }), /n\.fillColor/],
+      [asRect({ fillColor: Number.NaN }), /n\.fillColor/],
+      [asRect({ glowColor: -1 }), /n\.glowColor/],
+      [asRect({ size: { width: Number.NaN, height: 40 } }), /n\.size\.width/],
+      [asRect({ size: { width: 100, height: Infinity } }), /n\.size\.height/],
+      [asRect({ size: { width: -1, height: 40 } }), /n\.size\.width/],
+      [asRect({ size: { width: Infinity, height: 40 } }), /n\.size\.width/],
+      [asRect({ size: { width: 0, height: 40 }, cornerRadius: 0 }), /n\.size\.width/],
+      [asRect({ size: { width: 100, height: 0 }, cornerRadius: 0 }), /n\.size\.height/],
+      [asRect({ cornerRadius: Number.NaN }), /n\.cornerRadius/],
+      [asRect({ cornerRadius: -1 }), /n\.cornerRadius/],
+      [asRect({ cornerRadius: 20.000001 }), /n\.cornerRadius/],
+      [asCircle({ radius: Infinity }), /n\.radius/],
+      [asCircle({ radius: -Number.MIN_VALUE }), /n\.radius/],
+      [asCircle({ glowWorld: -1 }), /n\.glowWorld/],
+      [asCircle({ fillColor: 0.5 }), /n\.fillColor/],
+    ];
+    for (const [bad, field] of rejected) {
+      expect(() => requireShapeInstance(bad, bad.kind, 'n')).toThrow(RangeError);
+      expect(() => requireShapeInstance(bad, bad.kind, 'n')).toThrow(field);
+    }
+    const accepted = [
+      asRect({ cornerRadius: 20 }),
+      asRect({ cornerRadius: 0, glowWorld: 0 }),
+      asRect({ fillColor: 0, glowColor: 0xffffff }),
+      asCircle({ radius: Number.MIN_VALUE, center: { x: -1e300, y: 1e300 } }),
+    ];
+    for (const good of accepted) {
+      expect(requireShapeInstance(good, good.kind, 'n')).toBe(good);
+    }
+  });
+
+  it('reads a missing size as a TypeError on its width', () => {
+    const noSize = { ...rect, size: undefined } as unknown as ShapeInstance;
+    expect(() => requireShapeInstance(noSize, 'roundedRect', 'n')).toThrow(
+      /reading 'width'/,
+    );
+  });
+
   it('reads a circle as square by its diameter, so its size cannot contradict itself', () => {
     expect(instanceSize(circle)).toEqual({ width: 40, height: 40 });
     expect(instanceSize(rect)).toEqual({ width: 100, height: 40 });

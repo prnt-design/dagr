@@ -298,12 +298,18 @@ function srgbToLinear(component: number): number {
  * `field` is what makes that usable at campaign scale. `node/chapter-3.size` is
  * a line somebody can find; `size` in a scene of three thousand instances is a
  * search.
+ *
+ * The names are built only when a check fails. An instance that passes is
+ * checked on its numbers alone, because `setNodes` checks every node at least
+ * twice a call and building the field names each time was a measurable part of
+ * it at 10,000 nodes.
  */
 export function requireShapeInstance(
   instance: ShapeInstance,
   family: ShapeFamily,
   field: string,
 ): ShapeInstance {
+  if (drawable(instance, family)) return instance;
   if (instance.kind !== family) {
     throw new RangeError(
       `${field}.kind has to be ${family} to be drawn by a ${family} mesh, got ${instance.kind}`,
@@ -315,13 +321,16 @@ export function requireShapeInstance(
   requireColor(instance.fillColor, `${field}.fillColor`);
   requireColor(instance.glowColor, `${field}.glowColor`);
 
-  // Delegated to `sdf.ts` rather than restated, and the field arguments are what
-  // make delegating possible: both checks take the name of the field the CALLER
-  // wrote, so the same bound reports through `chapter-3.cornerRadius` here and
-  // through `rect-100.cornerRadius` for a descriptor. Restating them was the
-  // first draft and it left two copies of "at most half the smaller dimension",
-  // which is the bound past which opposite corner arcs overlap and the field
-  // stops being a distance to anything.
+  // This failing path delegates to `sdf.ts` rather than restating, and the field
+  // arguments are what make delegating possible: both checks take the name of
+  // the field the CALLER wrote, so the same bound reports through
+  // `chapter-3.cornerRadius` here and through `rect-100.cornerRadius` for a
+  // descriptor. Restating them was the first draft and it left two copies of "at
+  // most half the smaller dimension", which is the bound past which opposite
+  // corner arcs overlap and the field stops being a distance to anything.
+  // `drawable` does restate these and the `validate.ts` checks above, as a pass
+  // or fail with no names, and the boundary tests in
+  // `instance-attributes.test.ts` are what keep the copies in step.
   if (instance.kind === 'circle') {
     requireCircleRadius(instance.radius, `${field}.radius`);
     return instance;
@@ -333,6 +342,42 @@ export function requireShapeInstance(
     `${field}.size`,
   );
   return instance;
+}
+
+/** Whether every check {@link requireShapeInstance} makes passes, without naming anything. */
+function drawable(instance: ShapeInstance, family: ShapeFamily): boolean {
+  if (
+    instance.kind !== family ||
+    !Number.isFinite(instance.center.x) ||
+    !Number.isFinite(instance.center.y) ||
+    !Number.isFinite(instance.glowWorld) ||
+    instance.glowWorld < 0 ||
+    !isColor(instance.fillColor) ||
+    !isColor(instance.glowColor)
+  ) {
+    return false;
+  }
+  if (instance.kind === 'circle') {
+    return Number.isFinite(instance.radius) && instance.radius > 0;
+  }
+  // Read as properties rather than destructured, so a missing `size` throws the
+  // same TypeError `requireCornerRadius` would.
+  const width = instance.size.width;
+  const height = instance.size.height;
+  const radius = instance.cornerRadius;
+  return (
+    Number.isFinite(width) &&
+    Number.isFinite(height) &&
+    width > 0 &&
+    height > 0 &&
+    Number.isFinite(radius) &&
+    radius >= 0 &&
+    radius <= Math.min(width, height) / 2
+  );
+}
+
+function isColor(value: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= 0xffffff;
 }
 
 /** A shape's full size in world units, whichever way the instance spells it. */
