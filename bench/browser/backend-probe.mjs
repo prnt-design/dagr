@@ -28,9 +28,10 @@
  * and `DAGR_CHROMIUM_ARGS` adds space-separated launch flags. The output
  * records the browser, mode and flags, because a backend result without them
  * cannot be reproduced. `--parity` adds M4.9b's backend comparison and exits
- * non-zero unless it passes and its control fails, or when the adapter reports
- * `isFallbackAdapter`: a software adapter such as SwiftShader still comes up on
- * `webgpu`, so its side of the comparison would not be a GPU's.
+ * non-zero unless it passes and its control fails. It also exits non-zero when
+ * the adapter reports `isFallbackAdapter`: a software adapter such as
+ * SwiftShader still comes up on `webgpu`, so its side of the comparison would
+ * not be a GPU's.
  */
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -116,17 +117,17 @@ for (const preference of ['auto', 'webgpu', 'webgl2']) {
 }
 let parity;
 if (cliArgs.includes('--parity')) {
-  parity = {
-    check: await page.evaluate(() => window.parity()),
-    control: await page.evaluate(() => window.parity(1 / 3)),
-  };
-  if (!parity.check.pass || parity.control.pass) process.exitCode = 1;
   if (advertised.adapter?.isFallbackAdapter === true) {
     console.error(
       `the adapter is a fallback adapter (${advertised.adapter.vendor} ${advertised.adapter.architecture}), not a GPU, so this parity run is not a WebGPU result`,
     );
     process.exitCode = 1;
   }
+  parity = {
+    check: await page.evaluate(() => window.parity()),
+    control: await page.evaluate(() => window.parity(1 / 3)),
+  };
+  if (!parity.check.pass || parity.control.pass) process.exitCode = 1;
 }
 if (screenshotPath !== undefined) {
   // `keep` matters: a disposed renderer releases its context and the canvas
