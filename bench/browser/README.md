@@ -191,7 +191,8 @@ probe does. A short frame profile (1,000 nodes, 120 frames) came up on
 `webgpu` on every row, with a steady headless tick of 17.6 ms, so the headless
 pacing that made the frame profile run headed on the Apple M4 did not show
 here; a profile meant for publication should still be compared with a headed
-run.
+run. The 2026-10-26 M4.10 profile at the end of this file was taken headed,
+with a tick of 17.8 to 17.9 ms.
 
 ## Backend parity (M4.9b)
 
@@ -2092,3 +2093,231 @@ build missed 2.5% to 7.1% of ticks and that version 0.7% to 2.2%, with
 moves with it, so ticks missed with every node moving are unresolved by these
 two rounds rather than better or worse. With a tenth moving, `setEdges` at
 about 1.9 is now within a step of `apply` and `setNodes` (1.2).
+
+### All moving and a tenth moving on an AMD GPU (2026-10-26)
+
+The M4.10 sections above measured on the Apple M4. This one profiles the same frame
+on the WSL2 machine's GPU, attached [from WSL2](#from-wsl2-through-the-windows-sides-chrome):
+an AMD Ryzen 9 9900X whose integrated Radeon graphics (RDNA 2, driver
+32.0.21042.62) drives a 3840 by 2160 display that Windows reports at 59 Hz.
+Google Chrome 156.0.8078.48 on the Windows side, headed, no flags beyond
+`windows-chrome.mjs`'s, adapter `amd` `rdna-2`, not a fallback,
+`renderer.backend` `webgpu` on every row, control tick 17.8 to 17.9 ms (about
+56 Hz, longer than the reported rate's 16.9 ms and the 16.7 that M4.10's
+60 fps names; the cause was not traced, and ticks missed are counted against
+the measured tick), DPR 1,
+viewport 1280 by 720, `fit` (zoom 0.0715), load average 0.0 to 1.8 (read with
+`uptime` before and after each batch).
+
+```
+node bench/browser/windows-chrome.mjs              # headed, left running
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs \
+  --motion=springs --sizes=10000 --edges=straight,smooth --moving=1,0.1 --frames=1200
+```
+
+Three runs of main (`2a06a4b`). Animated-mode medians in milliseconds, one
+value per run; `apply` is the median over the retarget frames (44 or 45
+retargets a run, warm-up included, 62 to 65 with smooth edges all moving,
+whose frames run late):
+
+| Edges | Moving | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Interval p95 | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| straight | all | 13.9, 13.3, 14.6 | 3.8, 3.7, 2.9 | 1.1, 1.1, 1.1 | 1.8, 1.7, 1.7 | 0.4, 0.4, 0.4 | 18.1 | 0%, 0%, 0% |
+| straight | a tenth | 1.4, 1.3, 1.3 | 0.6, 0.6, 0.6 | 1.1, 1.0, 1.0 | 1.0, 1.0, 0.9 | 0.4, 0.4, 0.4 | 18.1 | 0%, 0%, 0% |
+| smooth | all | 18.1, 18.7, 18.3 | 8.1, 7.9, 7.2 | 1.4, 1.3, 1.4 | 13.1, 12.3, 13.4 | 1.1, 1.0, 1.1 | 36.1 | 42.8%, 36.4%, 39.3% |
+| smooth | a tenth | 2.2, 2.3, 2.2 | 1.0, 1.0, 0.8 | 1.2, 1.2, 1.2 | 3.2, 3.1, 3.2 | 1.1, 1.1, 1.1 | 18.1 | 0%, 0%, 0% |
+
+`input` was 0.4 to 0.7 ms on every row. The interval p99 was 18.1 to 18.2 on
+every row but smooth all moving, where it was 54.0 and the maximum 54.1 to
+71.9.
+
+- **Straight edges hold the tick with every node moving.** No interval in
+  three runs reached one and a half ticks, retarget frames included, though a
+  retarget frame's `apply` plus the rest of the frame comes to about 21 ms.
+  The interval is read from the frame callback's timestamp, so a single late
+  frame that the next one catches up does not count; a frame that is late
+  every time does.
+- **Smooth edges with every node moving miss 36% to 43% of ticks.** A frame
+  between retargets spends 23 to 24 ms of medians on the CPU (`advance` 7 to
+  8, `setEdges` 12 to 13, the rest 3), past the tick on most frames, though
+  under half the intervals reach one and a half ticks, since a frame the next
+  catches up does not count; retarget frames add 18 to 19 ms of `apply`.
+  `setEdges` is the largest step that runs every frame and `advance` the
+  second. With the same 10,000 nodes, `advance` is two to two and a half
+  times the straight rows', since each smooth route carries a
+  bend point whose springs `advance` steps too.
+- **With a tenth moving both edge styles hold the tick**, as on the Apple M4.
+
+The open pull request #159 (head `5173fc8`), which writes each edge build into the buffers of
+the one before last rather than allocating about 15 MB of typed arrays a
+frame, was measured against main in the same Chrome by swapping
+`packages/render/dist/ribbon.js` and `scene-edges.js`, main first in each of
+three pairs, `--edges=smooth --moving=1,0.1` only:
+
+| Build | Moving | `setEdges` | `setEdges` p95 | `advance` | `advance` p95 | `apply` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| main | all | 10.4, 11.0, 10.7 | 13.6, 13.4, 13.1 | 6.6, 6.7, 6.8 | 13.2, 13.8, 13.8 | 20.3, 19.7, 19.5 | 23.8%, 26.0%, 24.9% |
+| #159 | all | 10.0, 10.0, 10.4 | 11.8, 12.2, 12.6 | 6.4, 6.3, 6.5 | 9.7, 10.3, 10.4 | 20.1, 19.5, 19.1 | 16.8%, 15.4%, 20.4% |
+| main | a tenth | 3.1, 3.2, 3.1 | 4.5, 5.5, 4.3 | 0.9, 0.9, 0.9 | 1.4, 1.2, 1.4 | 2.7, 1.8, 2.6 | 0%, 0%, 0% |
+| #159 | a tenth | 2.3, 2.4, 2.4 | 3.5, 3.7, 2.7 | 0.8, 0.8, 0.9 | 1.1, 1.1, 1.2 | 1.9, 1.8, 1.7 | 0%, 0%, 0% |
+
+- **On this GPU #159 misses fewer ticks with every node moving**, 15.4% to
+  20.4% against 23.8% to 26.0%, with no overlap in three pairs, where the
+  Apple M4 left the direction unresolved (see #159). The tails move most: `setEdges`
+  p95 falls by 0.5 to 1.8 ms and `advance` p95 by about 3.5, though `advance`
+  runs none of #159's code, which fits fewer collection pauses landing in
+  later steps (#159 cut Node's mark-compacts in 800 calls
+  with every route moving from 135 to 3); not
+  traced. The medians move less (`setEdges` 0.3 to 1.0 ms).
+- **With a tenth moving, `setEdges` falls from 3.1 to 3.2 ms to 2.3 to 2.4** in
+  every pair, as on the Apple M4 (#159's 1.8 to 2.0 against 3.0 to 3.1), and
+  both builds hold the tick.
+- **Main missed fewer ticks here than in the three runs above** (24% to 26%
+  against 36% to 43%), and its `setEdges` was about 2 ms lower. Those runs
+  drew the straight rows first in the same page, these drew smooth rows
+  alone, so compare within one table, not across them.
+
+So on 2026-10-26, on this machine, 10,000 nodes with straight edges and every
+node moving hold its 17.9 ms tick, though a retarget frame's CPU work (about
+21 ms) would not fit a true 60 Hz one, and smooth edges do not hold it, where the CPU
+frame between retargets is about 1.3 ticks of medians. The next step is the
+smooth frame's per-frame cost: #159's buffer reuse first, then `advance`, the
+second largest step, which no change since 2026-10-23 has targeted, ahead
+of `setEdges`'s remaining flattening and walk, which byte-identical output
+pins, and ahead of `apply`, which runs on about one frame in 20 to 24.
+
+### Edge velocities written into the frame before's array, not kept (2026-10-26)
+
+The step `tsk_a498d1621d79` named after the AMD reprofile above: smooth
+`advance` with every node moving. In Node, with each half of the scene timed
+on its own (`createNodeMotion` and `createEdgeMotion` driven as
+`createSceneMotion` drives them, the graph of
+`packages/render/bench/scene-motion.bench.ts`, 1,000 calls after 200 of
+warm-up, `dt` 1/10,000 s so every spring stays in flight), the edge half is
+most of it: at 10,000 nodes with smooth edges (39,507 route points in flight)
+the node half took 0.5 to 0.8 ms median and the edge half 3.3 to 3.8 (p90
+5.9 to 6.7), and with straight edges (26,338 points, one run) 0.6 and 3.1.
+Each moving edge built a new velocity array every frame, two numbers per
+point.
+
+The change tried: each moving edge keeps the array its last frame replaced and
+writes the next frame's velocities into it, swapping it in after the loop as
+before, and drops it on arrival. Byte-identical: the previous build and this
+one, given the same 12,000 random `resync`, `apply` and `advance` calls over
+200 scenes (arrivals, departures, reroutes, point counts changing in flight,
+zero, tiny and huge `dt`), return the same frames, coordinate by coordinate,
+and throw the same 2,865 errors with the same messages, for both variants
+below. In Node the edge half fell to 2.5 to 2.7 ms median with the first
+variant and 2.9 with the second (p90 4.0 to 4.6 across both) against 3.3 to
+3.8 (5.9 to 6.7) back to back.
+
+On WebGPU it did not carry over. Same machine as the section above (AMD Ryzen 9
+9900X, integrated RDNA 2), Google Chrome 156.0.8078.48 on the Windows side,
+headed, attached through `windows-chrome.mjs` with no other flags, adapter
+`amd` `rdna-2`, not a fallback, `renderer.backend` `webgpu` on every row,
+control tick 16.7 ms on every run (17.8 to 17.9 on 2026-10-26; the cause of
+either was not traced), DPR 1, viewport 1280 by 720, `fit` (zoom 0.0715),
+`--motion=springs --sizes=10000 --edges=smooth --moving=1,0.1 --frames=1200`,
+builds swapped through `packages/render/dist/edge-motion.js`, main (`191db5c`)
+first in each pair. #159 is still open, so main here is without it. Two rounds of three pairs. The first wrote into an array made with
+`new Array(n).fill(0)`, which V8 keeps holey where `push` made it packed;
+the second started from `[]` and wrote each index in order, which keeps it
+packed. Animated-mode medians in milliseconds, one value per run:
+
+| Build | Moving | `advance` | `advance` p95 | `setEdges` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- |
+| main | all | 7.2, 7.1, 6.8 | 14.8, 14.8, 14.5 | 11.2, 11.6, 11.9 | 21.5, 25.2, 21.9 | 44.8%, 50.3%, 43.2% |
+| holey | all | 9.0, 8.6, 8.5 | 16.5, 13.7, 14.9 | 11.3, 10.8, 11.2 | 23.5, 22.8, 23.3 | 57.1%, 49.3%, 50.8% |
+| main | a tenth | 1.0, 1.0, 1.0 | 1.5, 1.5, 1.6 | 3.3, 3.5, 3.6 | 2.9, 2.8, 4.1 | 0%, 0%, 0% |
+| holey | a tenth | 1.1, 1.2, 1.2 | 1.5, 1.6, 1.6 | 3.2, 3.5, 3.6 | 2.6, 3.1, 3.1 | 0%, 0%, 0% |
+| main | all | 6.8, 7.0, 6.8 | 14.4, 14.5, 14.1 | 11.2, 11.3, 11.0 | 20.6, 20.6, 19.6 | 40.5%, 41.7%, 37.5% |
+| packed | all | 8.9, 8.0, 6.5 | 14.0, 12.9, 10.8 | 10.8, 10.6, 11.6 | 22.9, 23.6, 21.7 | 49.1%, 42.3%, 39.6% |
+| main | a tenth | 0.9, 1.1, 1.0 | 1.3, 1.5, 1.4 | 3.8, 3.7, 3.6 | 2.0, 2.7, 2.0 | 0%, 0%, 0% |
+| packed | a tenth | 1.2, 1.3, 1.0 | 1.6, 1.6, 1.4 | 3.6, 3.6, 3.6 | 3.3, 3.1, 3.0 | 0%, 0%, 0% |
+
+Load average 0.4 to 6.8 in the first round (6.8 before its first run of the
+change) and 0.0 to 0.7 in the second, read before each run. The third pair of
+the second round was rerun whole after main's page timed out loading.
+
+- **`advance` was slower in Chrome in five of six pairs with every node
+  moving**, by 1.5 to 1.8 ms in the first round and by 2.1 and 1.0 in the
+  second, whose third pair went the other way by 0.3. Its p95 fell in every
+  pair of the second round and in one of three in the first.
+- **Ticks missed rose in five of six pairs**: 49% to 57% against 43% to
+  50%, then 40% to 49% against 38% to 42%.
+- **`apply` was slower in every pair of the second round**, by 2.1 to 3.0 ms
+  with every node moving and 0.4 to 1.3 with a tenth, though the change does
+  not touch its code; the first round overlapped. One reading is that
+  velocity arrays now live across frames and get promoted out of the young
+  generation, so collection costs move into whatever step runs next, but no
+  trace was taken.
+- **Node is not a reliable proxy for this step.** The same build that saved
+  about 1 ms of median and 2 of p90 in Node cost about as much in Chrome.
+
+So the change was not kept, and `edge-motion.ts` is unchanged. In Node, the
+edge half is still where smooth `advance` spends its time. A next attempt
+should be measured in Chrome before Node is trusted, with a trace taken if
+`apply` moves again.
+
+### Edge springs stepped without the checked helpers (2026-10-26)
+
+`tsk_a498d1621d79` again, measured in Chrome first this time. #159 is still
+waiting on its memory decision, so `advance` went first. A CPU profile of
+the all-moving smooth row on main (same machine, browser and flags as the
+table below, 600 frames, samples about every 0.5 ms) put about 2.1 s of the 3.4 s
+sampled under scene motion's `advance` in the spring helpers: `combineTwo`,
+`nextAxisPosition`, `nextAxisVelocity`, `weightedInterpolation` and
+`requireFinite`. The edge loop called those four times per route point, and
+each call checked every product and partial sum it formed.
+
+The change: edge motion's `advance` does the same sums inline, once per point,
+and checks only the four results. A product or partial sum that is not finite
+leaves every sum after it not finite, so four finite results are bit for bit
+what the helpers return on their direct path. Anything else is stepped again
+through the helpers, which keeps their scaled sums and their errors. Over the
+random calls below, no point stepped by a finite, non-zero `dt` fell back to
+them, because a retarget already refuses a route whose step could overflow;
+only frames with a `dt` of 0 or one that settles every spring use them.
+
+Byte-identical: main and this build, given the same 90,000 random `resync`,
+`apply` and `advance` calls over 600 scenes (reroutes that keep some points
+where they are, departures, unknown ids, routes near `1e308`, signed zeros and
+subnormals, `dt` from -1 to `1e300`), return the same frames, coordinate by
+coordinate with `Object.is`, and refuse the same 13,219 calls with the same
+messages.
+The check catches a build that drops the `position === target` case, which
+the test suite did not, so a test now pins it.
+
+AMD Ryzen 9 9900X, integrated RDNA 2, Google Chrome 156.0.8078.48 on the
+Windows side, headed, attached through `windows-chrome.mjs` with no other
+flags, adapter `amd` `rdna-2`, not a fallback, `renderer.backend` `webgpu` on
+every row, control tick 16.7 ms on every run, DPR 1, viewport 1280 by 720,
+`fit` (zoom 0.0715), `--motion=springs --sizes=10000 --edges=smooth
+--moving=1,0.1 --frames=1200`, builds swapped through
+`packages/render/dist/edge-motion.js`, main (`0ed3593`) first in each pair.
+#159 is still open, so main here is without it. Load average 0.0 to 0.3 before
+each run. Animated-mode medians in milliseconds, one value per pair:
+
+| Build | Moving | `advance` | `advance` p95 | `setEdges` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- |
+| main | all | 6.8, 4.8, 6.6 | 13.3, 8.1, 13.2 | 10.9, 10.8, 11.0 | 19.9, 19.7, 19.6 | 35.0%, 24.9%, 33.7% |
+| this | all | 3.5, 3.4, 3.4 | 7.0, 7.1, 6.9 | 10.7, 11.1, 11.6 | 19.9, 19.6, 19.4 | 16.0%, 20.3%, 22.9% |
+| main | a tenth | 1.0, 0.9, 1.0 | 1.3, 1.2, 1.3 | 3.1, 3.4, 3.1 | 2.6, 2.6, 2.5 | 0%, 0%, 0% |
+| this | a tenth | 0.5, 0.5, 0.7 | 0.7, 0.7, 1.1 | 3.2, 3.1, 3.1 | 1.8, 1.8, 2.5 | 0%, 0.2%, 0% |
+
+A first pair, run while the equivalence check was running in WSL, went the
+same way (6.6 against 3.2 ms, 29.8% against 15.3% missed) and was rerun; the
+third column is the rerun.
+
+- **`advance` with every node moving fell by 1.4 to 3.3 ms in every pair**, its
+  p95 by 1.0 to 6.3, and ticks missed fell in every pair (16% to 23% against
+  25% to 35%).
+- **With a tenth moving it fell by 0.3 to 0.5 ms**, both builds holding the
+  tick.
+- `setEdges` and `apply`, which the change does not run, stayed within their
+  run-to-run spread, unlike the 2026-10-26 attempt above.
+
+What is left of the all-moving frame between retargets is `setEdges` at 11 ms,
+which #159 addresses and whose memory trade is the maintainer's call, and the
+per-point allocation of the frame's points, which a caller holding an earlier
+frame relies on.

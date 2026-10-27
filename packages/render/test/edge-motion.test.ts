@@ -700,6 +700,25 @@ describe('createEdgeMotion', () => {
     }
   });
 
+  it('leaves a point that is already on its target exactly where it is while the edge moves', () => {
+    // At this half-life and dt, 7 * retention + 7 * targetRetention rounds
+    // away from 7, so only the step's same-position case keeps it.
+    const from = [{ x: 7, y: 7 }, { x: 100, y: 0 }];
+    const to = [{ x: 7, y: 7 }, { x: 130, y: 40 }];
+    const w = omegaForHalfLife(DEFAULT_MOTION_HALF_LIFE);
+    const dt = 1 / 60;
+    const motion = createEdgeMotion();
+    motion.resync([target('e1', from)]);
+    motion.apply({ added: [], removed: [], rerouted: [target('e1', to)] });
+    let springs = from.map((position) => ({ position, velocity: { x: 0, y: 0 } }));
+    for (let frame = 0; frame < 3; frame += 1) {
+      springs = springs.map((spring, index) => stepSpring2D(spring, to[index]!, w, dt));
+      const points = edgeNamed(motion.advance(dt).edges, 'e1').points;
+      expect(points).toEqual(springs.map((s) => s.position));
+      expect(points[0]).toEqual({ x: 7, y: 7 });
+    }
+  });
+
   it('interpolates velocity for a point added during a mid-flight retarget', () => {
     const motion = createEdgeMotion();
     motion.resync([target('e1', STRAIGHT)]);

@@ -53,6 +53,25 @@ source maps, public types, and installation outside the repository. Release
 validation also runs `publint` and `arethetypeswrong`. Publication uses
 `pnpm` to replace workspace dependency ranges with registry versions.
 
+## Agent-authored learning Explorers
+
+The repository includes an [Agent Skills authoring skill](skills/dagr-learning-explorer/SKILL.md)
+for explanatory graphs: rich node summaries, meaningful edges, detailed
+examples and accessible connection navigation. Its [typed example](skills/dagr-learning-explorer/references/learning-explorer.tsx)
+uses the public Explorer API. The skill is guidance, not a new runtime feature.
+
+Agents can read the skill directly from a checkout. After it is available in
+the source revision you install, the standard skills CLI supports selecting it:
+
+```bash
+npx skills add prnt-design/dagr --skill dagr-learning-explorer
+```
+
+Review the source and choose the destination agent when installing. This does
+not run on `npm install`, and current npm tarballs do not bundle the skill.
+The [learning/mobile roadmap](ROADMAP.md#explorer-learning-and-mobile-track)
+tracks distribution validation and adaptive library support.
+
 ## Development
 
 Requires Node 20 or newer and pnpm.
