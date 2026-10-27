@@ -66,6 +66,27 @@ scrolls the page. Search framing waits for the details DOM to commit; an
 explicit camera focus reads current obstruction geometry before framing.
 There is no additional graph dataset, query implementation or selection store.
 
+## Recorded validation
+
+On 2026-10-27, Chromium 145.0.7632.6 on Linux, headless, touch emulation,
+DPR 1, all eight before scenarios completed and all eight after scenarios
+passed (ten named checks per after scenario). The 96 screenshots and both
+JSON reports are attached to Dispatch task `tsk_eb73b47f05e3`, in the evidence
+thread under comment `886f975f-c537-482b-9249-c38c0303e444`. Before mode records
+the small controls and coverage; it does not assert the repaired geometry.
+
+| Container | Portrait details after | Landscape details after | Close/zoom after |
+| --- | --- | --- | --- |
+| 320px | 320 x 241px, bottom | 320 x 195px, bottom | 44 x 44px |
+| 358px | 358 x 241px, bottom | 358 x 195px, bottom | 44 x 44px |
+| 390px | 390 x 241px, bottom | 390 x 195px, bottom | 44 x 44px |
+| 768px | 360 x 482px, right | 360 x 482px, right | 44 x 44px |
+
+The Explorer regression suite passes 478 tests under each of React 18 and
+React 19, including SSR/hydration, controlled rejection, cancellation before
+the search framing callback, retained details/focus while docking, observer
+cleanup and current obstruction geometry before observer delivery.
+
 ## Checks that remain unavailable
 
 WebKit 27.2 (Playwright build 2370) downloaded, but could not launch on this
