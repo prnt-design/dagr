@@ -2187,11 +2187,12 @@ edge half is still where smooth `advance` spends its time. A next attempt
 should be measured in Chrome before Node is trusted, with a trace taken if
 `apply` moves again.
 
-### Edge springs stepped without the checked helpers (2026-10-27)
+### Edge springs stepped without the checked helpers (2026-10-26)
 
-`tsk_a498d1621d79` again, measured in Chrome first this time. A CPU profile of
+`tsk_a498d1621d79` again, measured in Chrome first this time. #159 is still
+waiting on its memory decision, so `advance` went first. A CPU profile of
 the all-moving smooth row on main (same machine, browser and flags as the
-table below, 600 frames, sampled every 0.1 ms) put about 2.1 s of the 3.4 s
+table below, 600 frames, samples about every 0.5 ms) put about 2.1 s of the 3.4 s
 sampled under scene motion's `advance` in the spring helpers: `combineTwo`,
 `nextAxisPosition`, `nextAxisVelocity`, `weightedInterpolation` and
 `requireFinite`. The edge loop called those four times per route point, and
@@ -2202,13 +2203,14 @@ and checks only the four results. A product or partial sum that is not finite
 leaves every sum after it not finite, so four finite results are bit for bit
 what the helpers return on their direct path. Anything else is stepped again
 through the helpers, which keeps their scaled sums and their errors. Over the
-random calls below, no moving point ever needed that path, because a retarget
-already refuses a route whose step could overflow.
+random calls below, no point stepped by a finite, non-zero `dt` fell back to
+them, because a retarget already refuses a route whose step could overflow;
+only frames with a `dt` of 0 or one that settles every spring use them.
 
 Byte-identical: main and this build, given the same 90,000 random `resync`,
 `apply` and `advance` calls over 600 scenes (reroutes that keep some points
 where they are, departures, unknown ids, routes near `1e308`, signed zeros and
-subnormals, `dt` from 0 to `1e300`), return the same frames, coordinate by
+subnormals, `dt` from -1 to `1e300`), return the same frames, coordinate by
 coordinate with `Object.is`, and refuse the same 13,219 calls with the same
 messages.
 The check catches a build that drops the `position === target` case, which

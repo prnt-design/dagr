@@ -701,7 +701,7 @@ describe('createEdgeMotion', () => {
   });
 
   it('leaves a point that is already on its target exactly where it is while the edge moves', () => {
-    // At this half-life and dt, 7 * retention + 7 * (1 - retention) rounds
+    // At this half-life and dt, 7 * retention + 7 * targetRetention rounds
     // away from 7, so only the step's same-position case keeps it.
     const from = [{ x: 7, y: 7 }, { x: 100, y: 0 }];
     const to = [{ x: 7, y: 7 }, { x: 130, y: 40 }];
