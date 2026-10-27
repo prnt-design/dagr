@@ -2315,9 +2315,10 @@ third column is the rerun.
 - **With a tenth moving it fell by 0.3 to 0.5 ms**, both builds holding the
   tick.
 - `setEdges` and `apply`, which the change does not run, stayed within their
-  run-to-run spread, unlike the 2026-10-26 attempt above.
+  run-to-run spread, unlike the edge velocities attempt above.
 
-What is left of the all-moving frame between retargets is `setEdges` at 11 ms,
-which #159 addresses and whose memory trade is the maintainer's call, and the
-per-point allocation of the frame's points, which a caller holding an earlier
+What was left of the all-moving frame between retargets on main without #159
+was `setEdges` at 11 ms (paired in the AMD section above: 10.4 to 11.0
+without #159, 10.0 to 10.4 with it), and the per-point allocation of the
+frame's points, which a caller holding an earlier
 frame relies on.
