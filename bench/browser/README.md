@@ -2256,15 +2256,15 @@ frame relies on.
 `setEdges` build got new GPU buffers, about 12.5 MB a frame by the
 `--memory` run. Measured first, in Chrome: a CPU profile of the all-moving
 smooth row on main (`c70e9f2`, same machine, browser and flags as the table
-below, 600 frames, samples about every 0.2 ms) put about 510 ms of the
+below, 600 frames, samples about every 0.5 ms) put about 510 ms of the
 run in three's `createAttribute`, which creates each buffer mapped and copies
 the build into it, during `render`. That is about 0.8 ms over each of about
-620 builds. Disposing the old buffers took about 0.02 ms a build. `setEdges`
+660 builds (60 warm-up frames and 600 measured). Disposing the old buffers took about 0.02 ms a build. `setEdges`
 itself was 7.0 s, of which `tessellateRibbons` was 6.5 s.
 
 The change tried: an edge group kept its geometry once its first draw had
 created the buffers, and handed a build that fit them (no larger, and at
-least half their size) to the same attribute objects, so three wrote it over
+least half their vertices) to the same attribute objects, so three wrote it over
 the front of the existing buffers with `writeBuffer` rather than creating new
 ones. The CPU arrays were the build's own, so it held no more CPU memory and
 did not depend on #159. Byte-identical: main and this build, given the same
@@ -2276,7 +2276,7 @@ same messages. A stand-in for three that sizes each buffer at its first
 upload found no build written past a buffer's end in 42,392 reuses.
 
 It did what it was for: by `--memory`, GPU bytes created per frame of moving
-edges fell from 12,502,144 to 83,075 (two reallocations in 301 frames). It
+edges fell from 12,502,144 to 83,075 (two sets of buffers created in 301 frames). It
 made the frame slower. AMD Ryzen 9 9900X, integrated RDNA 2, Google Chrome
 156.0.8078.48 on the Windows side, headed, attached through
 `windows-chrome.mjs` with no other flags, adapter `amd` `rdna-2`, not a
@@ -2284,7 +2284,8 @@ fallback, `renderer.backend` `webgpu` on every row, control tick 17.7 ms in
 the first run and 16.7 in the rest, DPR 1, viewport 1280 by 720, `fit` (zoom
 0.0715), `--motion=springs --sizes=10000 --edges=smooth --moving=1,0.1
 --frames=1200`, builds swapped through `packages/render/dist`, main first in
-each pair. Load average 0.05 to 0.37. Animated-mode medians in milliseconds,
+each pair. #159 is still open, so main here is without it. Load average 0.05
+to 0.33, read before and after each run. Animated-mode medians in milliseconds,
 one value per pair:
 
 | Build | Moving | `setEdges` | `setEdges` p95 | `render` | `render` p95 | Past one tick |
@@ -2301,15 +2302,20 @@ one value per pair:
   p95 rose, and with a tenth moving it did not move.
 - A CPU profile of this build (600 frames, as above) shows why: three's
   `updateAttribute`, which is the `writeBuffer` of each build, took about
-  1,415 ms where main's `createAttribute` took 510. Writing a build into a
-  buffer that already exists costs Chrome about 2.8 times what a new buffer
-  mapped at creation does, for the same bytes.
+  1,415 ms, about 1,330 of it the edge builds once the 81 ms main also spends
+  writing other attributes is taken out, where main's `createAttribute` took
+  510. Writing a build into a buffer that already exists costs Chrome about
+  2.6 times what a new buffer mapped at creation does, for the same bytes,
+  and the difference, about 1.25 ms over each of 660 frames, is the rise in
+  `render`.
 
 Main's ticks missed here (6% to 8%) are lower than the 16% to 23% the
 2026-10-26 section above recorded for the same build on the same machine and
 browser. The cause was not traced, so compare only within one table.
 
+So the change was not kept, and `scene-edges.ts` is unchanged.
+
 What is left of the all-moving frame between retargets is still `setEdges`,
 and most of it is `tessellateRibbons` (6.5 s of 7.0 in the profile of main),
-which every moving route runs on every frame. The garbage its new arrays
+which every moving route runs on every frame (`tsk_6f01f8911bde`). The garbage its new arrays
 leave is #159's, whose memory trade is the maintainer's call.
