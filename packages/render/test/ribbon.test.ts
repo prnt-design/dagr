@@ -9,6 +9,7 @@ import {
   RIBBON_AA_PADDING_PIXELS,
   advanceDashFlow,
   flatToChord,
+  hypot,
   numberDashArith,
   ribbonWidthAt,
   requireRibbonStyle,
@@ -932,6 +933,23 @@ describe('comparisons specified on Math.hypot', () => {
         const dx = length * Math.cos(angle);
         const dy = length * Math.sin(angle);
         expect(shorterThanMinSegment(dx, dy)).toBe(Math.hypot(dx, dy) < MIN_SEGMENT_WORLD);
+      }
+    }
+  });
+
+  it('hypot returns the same double as Math.hypot, at every scale and at the extremes', () => {
+    const random = mulberry32(13);
+    const specials = [0, -0, 5e-324, -5e-324, 1e-300, 1, -3, 4, 1e154, Number.MAX_VALUE, -Number.MAX_VALUE];
+    specials.push(Infinity, -Infinity, NaN);
+    for (const x of specials) {
+      for (const y of specials) expect(Object.is(hypot(x, y), Math.hypot(x, y))).toBe(true);
+    }
+    for (const scale of [1e-320, 1e-150, 1e-12, 1, 1e6, 1e140, 1e300]) {
+      for (let i = 0; i < 4_000; i += 1) {
+        const x = (random() - 0.5) * scale;
+        const y = (random() - 0.5) * scale * 10 ** (-8 * random());
+        expect(hypot(x, y)).toBe(Math.hypot(x, y));
+        expect(hypot(y, x)).toBe(Math.hypot(y, x));
       }
     }
   });

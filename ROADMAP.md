@@ -383,6 +383,14 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   moving is `tessellateRibbons` (6.5 s of 7.0 in a CPU profile), which is
   next (`tsk_6f01f8911bde`); #159 addresses only the garbage its new arrays
   leave, and its memory trade stays the maintainer's call.
+  Since 2026-10-27 the tessellator's walk takes its two lengths per point from
+  V8's own two-argument `Math.hypot` algorithm written inline rather than
+  through the builtin, which V8 does not inline (`tsk_6f01f8911bde`):
+  byte-identical in Chrome and Node, and on the same GPU with every node
+  moving `setEdges` fell to 7.8 to 8.1 ms from 9.7 to 10.1 in every pair, its
+  p95 to 10.1 to 10.4 from 13.0 to 13.8, and ticks missed to 1.4% to 2.1% from
+  3.9% to 4.7%; see "With the walk's lengths taken without the `Math.hypot`
+  builtin". `tessellateRibbons` is still the largest step of that frame.
   Still open: the 10,000-node smooth CPU frame with every node moving
   (`setEdges` and `advance` on every frame, `apply` on retarget frames;
   figures by machine above), the ID buffer pass
