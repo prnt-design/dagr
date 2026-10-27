@@ -79,6 +79,7 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
   const connectionsId = useId();
   const bodyRef = useRef<HTMLDivElement>(null);
   const asideRef = useRef<HTMLElement>(null);
+  const revealedOnOpen = useRef(false);
   const open = node !== null;
   const [compact, setCompact] = useState(false);
 
@@ -114,7 +115,16 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
   // or scrolling again when the reader follows a connection inside it.
   useEffect(() => {
     const aside = asideRef.current;
-    if (!open || !compact || aside === null) return;
+    if (!open) {
+      revealedOnOpen.current = false;
+      return;
+    }
+    if (!compact || aside === null || revealedOnOpen.current) return;
+    // A prior compact placement can survive while closed. The layout effect
+    // has measured a wider host, but this passive effect may still see the
+    // previous render while React flushes that layout update.
+    if ((aside.parentElement?.getBoundingClientRect().width ?? 0) >= 720) return;
+    revealedOnOpen.current = true;
     const box = aside.getBoundingClientRect();
     const view = aside.ownerDocument.defaultView;
     if (view === null) return;

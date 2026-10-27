@@ -163,6 +163,11 @@ describe('ExplorerDetails: what it shows', () => {
     expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
     await flush(() => connections()[0]?.click());
     expect(scroll).toHaveBeenCalledTimes(1);
+    setSize(parent, 800, 480);
+    await notifyResize(parent);
+    setSize(parent, 320, 480);
+    await notifyResize(parent);
+    expect(scroll).toHaveBeenCalledTimes(1);
   });
 
   it('opens as an overlay with a title, a close button and a focusable scroll body', async () => {
