@@ -82,6 +82,11 @@ the small controls and coverage; it does not assert the repaired geometry.
 | 390px | 390 x 241px, bottom | 390 x 195px, bottom | 44 x 44px |
 | 768px | 360 x 482px, right | 360 x 482px, right | 44 x 44px |
 
+The existing `explorer-check.mjs --browsers=chromium` docs-browser suite also
+passes: 23 checks and one desktop-touch N/A, zero failures, at 1440 by 900
+and 390 by 844. Its previously failing desktop search framing check passes
+with the deferred focus repair. Browser contexts are closed after both suites.
+
 The Explorer regression suite passes 478 tests under each of React 18 and
 React 19, including SSR/hydration, controlled rejection, cancellation before
 the search framing callback, retained details/focus while docking, observer
