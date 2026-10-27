@@ -1167,6 +1167,28 @@ export function smoothCentreline(points: readonly Vec2[], toleranceWorld: number
 }
 
 /**
+ * `Math.hypot(x, y)`, for the walk below, which takes two per point.
+ *
+ * Written out because V8 does not inline `Math.hypot`: each call is a builtin
+ * that allocates per call. This is V8's own algorithm at two arguments (scale
+ * by the larger magnitude, sum the squares, take the root, scale back; its
+ * compensated sum never corrects anything at two terms), so in Chrome and Node
+ * it returns the same double as `Math.hypot`, including for infinities, `NaN`
+ * and zeros. Another engine's `Math.hypot` may round differently in the last
+ * bit, as engines already differ from one another.
+ */
+export function hypot(x: number, y: number): number {
+  const ax = Math.abs(x);
+  const ay = Math.abs(y);
+  const max = ax > ay || ay !== ay ? ax : ay;
+  if (max === Infinity) return Infinity;
+  if (!(max > 0)) return ax !== ax || ay !== ay ? NaN : 0;
+  const a = ax / max;
+  const b = ay / max;
+  return Math.sqrt(a * a + b * b) * max;
+}
+
+/**
  * Walks one cleaned centreline, appending its vertices and triangles.
  *
  * ## The joins, which is what M4.5 is actually about
@@ -1297,7 +1319,7 @@ function tessellateCentreline(out: RibbonBuilder, line: Polyline, miterLimit: nu
     const fromY = ys[i - 1]!;
     const deltaX = xs[i]! - fromX;
     const deltaY = ys[i]! - fromY;
-    const length = Math.hypot(deltaX, deltaY);
+    const length = hypot(deltaX, deltaY);
     const dx = deltaX / length;
     const dy = deltaY / length;
     const arcFrom = arc;
@@ -1316,7 +1338,7 @@ function tessellateCentreline(out: RibbonBuilder, line: Polyline, miterLimit: nu
     const outY = dx;
     const sumX = inX + outX;
     const sumY = inY + outY;
-    const bisector = Math.hypot(sumX, sumY);
+    const bisector = hypot(sumX, sumY);
 
     if (bisector >= bisectorFloor) {
       // Mitred: one shared corner at `bisector direction * miter length`, which
