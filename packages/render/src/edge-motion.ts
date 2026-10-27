@@ -525,6 +525,12 @@ interface EdgeEntry {
    * index. Never handed out.
    */
   velocities: number[];
+  /**
+   * The array the next step writes its velocities into before it becomes
+   * `velocities`, so a frame in flight allocates no velocity list. A step
+   * replaces one whose length does not match. Never shared with another entry.
+   */
+  spareVelocities: number[];
   /** Where each of those springs is going: the target route, resampled to match. */
   targets: Vec2[];
   /** The target route in its OWN point count: what arrival compacts back to. */
@@ -668,6 +674,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       points.push(position);
     }
     entry.velocities = velocities;
+    entry.spareVelocities = [];
     entry.targets = targets;
     entry.points = points;
     entry.moving = false;
@@ -677,6 +684,7 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
   function seed(route: readonly Vec2[]): EdgeEntry {
     const entry: EdgeEntry = {
       velocities: [],
+      spareVelocities: [],
       targets: [],
       rest: route,
       points: route,
@@ -987,9 +995,12 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
       if (entry.moving) {
         const { points: from, targets, velocities } = entry;
         const points: Vec2[] = [];
-        // Assigned only after the loop, so a step that throws leaves the edge
+        // Swapped in only after the loop, so a step that throws leaves the edge
         // as it was rather than with some velocities a frame ahead of `points`.
-        const nextVelocities: number[] = [];
+        let nextVelocities = entry.spareVelocities;
+        if (nextVelocities.length !== velocities.length) {
+          nextVelocities = velocities.slice();
+        }
         // Arrival is decided in the pass that steps rather than in a pass after
         // it. An edge is arrived only when ALL of its points are, so a second
         // walk would read every spring twice to answer a question the first
@@ -1010,10 +1021,12 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
           const nextVx = nextAxisVelocity(step, position.x, vx, target.x);
           const y = nextAxisPosition(step, position.y, vy, target.y);
           const nextVy = nextAxisVelocity(step, position.y, vy, target.y);
-          nextVelocities.push(nextVx, nextVy);
+          nextVelocities[2 * index] = nextVx;
+          nextVelocities[2 * index + 1] = nextVy;
           points.push({ x, y });
           if (arrived && !springAtRest(x, y, nextVx, nextVy, target)) arrived = false;
         }
+        entry.spareVelocities = velocities;
         entry.velocities = nextVelocities;
         if (arrived) settleOnto(entry);
         else entry.points = points;
