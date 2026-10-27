@@ -2472,3 +2472,78 @@ tessellation the largest own times are now the walk and `hypot`, `rib`
 iterates `points.entries()` and records every coordinate in a growing
 `number[]`. The next change is `tsk_a8956f877616`, chosen from a fresh
 profile.
+
+### With a route's given points cleaned in one pass (2026-10-27)
+
+`tsk_a8956f877616`: the next cost inside the tessellation, with every node
+moving. A CPU profile of the all-moving smooth row on main (`6e76b4b`, same
+machine, browser and flags as the table below, 600 frames, 8 s sampled every
+0.5 ms starting 12 s after the page opened) put 2,898 ms under
+`tessellateRibbons`. Before the flattening, each moving route's points went
+through two passes: `givenCentreline` (281 ms own) iterated
+`points.entries()`, checked each coordinate and copied it into a scratch
+polyline and into the build's record of given points, then `cleanCentreline`
+(155 ms own, counting its second call on the flattened points) copied that
+polyline again without the points closer than `MIN_SEGMENT_WORLD` to the one
+before.
+
+The change: `cleanGivenCentreline` does both in one index loop, from the
+given points straight into the cleaned polyline, with the same checks and
+messages at the same indices. No arithmetic changes, so nothing here rests
+on an engine's rounding.
+
+Byte-identical for routes whose points are an array, as `RibbonRoute` types
+them: main's build and this one, given the same 140,000 random
+`tessellateRibbons` calls over 2,800 scenes in Node 22.22.1 (smooth and
+polyline, miter limits from 1 to 100, absolute and default tolerances, routes
+kept, moved, added, dropped and reversed between calls with the previous build
+and size hint passed on, duplicate, near-duplicate and doubled-back points,
+scales from 1e-19 to 1e19, subnormal, `MAX_VALUE`, non-finite and non-number
+coordinates, `null` and missing points), returned the same bytes in every
+array, the same ranges and the same given points, and refused the same 42,732
+calls with the same messages. The same check finds 2,812 differing calls in
+5,000 against a build that records only the points it keeps.
+
+AMD Ryzen 9 9900X, integrated RDNA 2, Google Chrome 156.0.8078.48 on the
+Windows side, headed, attached through `windows-chrome.mjs` with no other
+flags, adapter `amd` `rdna-2`, not a fallback, `renderer.backend` `webgpu` on
+every row, DPR 1, viewport 1280 by 720, `fit` (zoom 0.0715),
+`--motion=springs --sizes=10000 --edges=smooth --moving=1,0.1 --frames=1200`,
+builds swapped through `packages/render/dist/ribbon.js`, main (`6e76b4b`)
+first in each pair. #159 is still open, so main here is without it. Load
+average 0.0 to 0.6, read before and after each run. Six pairs in two rounds of
+three; main's run of the sixth pair first timed out waiting for the page to
+load and was run again straight after. The control tick read 17.6 to 17.7 ms
+in the first five runs and 16.7 from this build's run of the third pair on,
+in both builds, so the third pair straddles the change. Animated-mode medians in milliseconds, one value per pair:
+
+| Build | Moving | `setEdges` | `setEdges` p95 | `render` | `advance` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| main | all | 7.4, 7.3, 7.6, 7.6, 7.4, 7.2 | 9.5, 9.9, 9.5, 9.6, 9.5, 9.5 | 1.0 in every pair | 2.5, 2.8, 2.5, 2.8, 2.8, 2.8 | 18.4, 15.7, 18.3, 18.8, 19.2, 16.9 | 1.2%, 0.8%, 1.8%, 3.7%, 3.7%, 3.6% |
+| this | all | 6.8, 6.9, 7.0, 6.8, 6.7, 6.9 | 9.4, 9.2, 9.5, 9.2, 9.0, 9.4 | 1.0 in every pair | 3.2, 2.7, 2.8, 3.0, 2.7, 3.2 | 18.8, 18.1, 16.6, 16.2, 15.0, 19.8 | 2.4%, 1.4%, 1.6%, 2.6%, 2.2%, 3.4% |
+| main | a tenth | 2.8, 2.9, 2.9, 2.9, 3.0, 3.0 | 4.7, 4.6, 4.6, 4.7, 4.8, 5.0 | 1.0 in every pair | 0.5 in every pair | 1.8, 1.9, 2.5, 1.9, 1.7, 1.7 | 0% in every pair |
+| this | a tenth | 2.7, 2.9, 3.1, 2.9, 2.8, 2.9 | 4.5, 4.8, 4.7, 5.1, 5.0, 5.0 | 1.0 in every pair | 0.6, 0.5, 0.5, 0.5, 0.5, 0.5 | 1.8, 1.7, 1.8, 1.7, 1.8, 1.6 | 0.1%, 0%, 0%, 0%, 0%, 0% |
+
+`render` p95 was 1.1 or 1.2 on every row.
+
+- **With every node moving, `setEdges` was lower in every pair**, by 0.3 to
+  0.8 ms, and its p95 lower in five pairs and equal in one. Ticks missed did
+  not separate (lower in four pairs, higher in two).
+- With a tenth moving the change is not resolved: only the moving tenth of
+  the routes is cleaned, and both builds hold the tick.
+- `advance` and `apply`, which the change does not run, read 2.7 to 3.2 and
+  15.0 to 19.8 ms against main's 2.5 to 2.8 and 15.7 to 19.2. Not traced.
+- One pair of CPU profiles, taken as above: `tessellateRibbons` 2,940 ms
+  against main's 3,146, about 0.45 ms over each of the roughly 450 frames
+  sampled. The one-pass cleaner's own time was 294 ms against main's
+  `givenCentreline` 356 in this pair plus about 65 of `cleanCentreline` on the given
+  points. In this build's profile V8 inlined `hypot` and `rib` into the walk
+  and `flatToChord` into the flattening, which it had not in main's, so the
+  other functions' own times do not compare between the two.
+
+What is left of the all-moving frame between retargets is still `setEdges`
+(about 7 ms), most of it `tessellateRibbons`, then `advance`. In this build's
+profile the largest own times were the walk with its inlined `hypot` and `rib`
+(998 ms), the edge half of `advance` (713), the flattening (529) and
+`smoothInto` (509). The next change is `tsk_396330099dfb`, chosen from a
+fresh profile.
