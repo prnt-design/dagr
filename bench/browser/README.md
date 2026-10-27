@@ -2618,3 +2618,104 @@ widths, whose arithmetic byte-identical output pins, then garbage collection
 (817 to 864 ms of the 8 s sampled, in the three profiles above) and `advance`. The next
 change is `tsk_903f42a19c0b`: attribute that collection to its allocation sites
 in Chrome and reduce one that #159's buffer reuse does not already address.
+
+### Allocation by site, and the given record sized from the last build, not kept (2026-10-27)
+
+`tsk_903f42a19c0b`: what the all-moving frame's garbage collection collects,
+and where it was allocated. A heap sampling profile
+(`HeapProfiler.startSampling`, one sample per 16 KB, counting objects that
+minor and major collections reclaimed) and a CPU profile were taken over the
+same 8 s window, from a second DevTools client attached to the page through
+the relay, starting 12 s after the page opened, on the all-moving smooth row
+on main (`2a653da`; machine, browser and flags as in the table below,
+`--moving=1 --frames=600`). The window covered about 450 frames. Sampled bytes
+per frame, by the function that allocated them:
+
+| Site | Per frame | What it is |
+| --- | --- | --- |
+| edge motion `advance` | 7.7 MB | a new point object per route point per frame, and each edge's velocity array |
+| `smoothInto`, with what V8 inlined into it | 3.3 MB | not resolved below the function |
+| `cleanGivenCentreline` | 2.7 MB | the build's record of given points, a plain array grown one `push` at a time |
+| node motion `advance` and `stepSpring2DBy` | 2.7 MB | a new spring state, position and velocity per moving node |
+| `tessellateRibbons`, own | 1.2 MB | the ranges, `starts` and each route's label string |
+| `tessellateCentreline` | 1.0 MB | not resolved below the function |
+| `setNodes` | 0.8 MB | |
+| the harness's own frame loop | 0.8 MB | |
+| everything else | 2.1 MB | about 0.7 of it retarget work in `prepareRetarget` |
+
+About 22 MB a frame in all. The builder's typed arrays, which #159's buffer
+reuse addresses, do not appear here: a typed array's contents live in an
+`ArrayBuffer` outside V8's heap, which the sampling profile does not count.
+Everything in the table is what #159 does not cover. The point objects edge
+motion hands out are its public frame, so they are not a change this
+renderer can make on its own.
+
+The change tried: the record of given points written into an array as long
+as the previous build's (`new Array(n)` and indexed writes, trimmed at the
+end), with `starts` the same, so it is allocated once at its length rather
+than copied about three times over as it grows. Still a plain array, since a
+typed array here was measured raising Node's full collections before (see
+`RibbonGiven`). No arithmetic changed.
+
+Byte-identical: main's build and this one, given the same 140,000 random
+`tessellateRibbons` calls over 2,800 scenes in Node 22.22.1 (smooth and
+polyline, miter limits from 1 to 100, absolute and default tolerances, routes
+kept, moved, added, dropped, reversed and duplicated between calls with the
+previous build and size hint passed on, repeated, near-repeated and
+doubled-back points, scales from 1e-19 to 1e19, `-0`, subnormal, `MAX_VALUE`,
+non-finite and non-number coordinates, `null` and missing points), returned the
+same bytes in every array, the same ranges and the same given points, holes
+included, and refused the same 39,521 calls with the same messages. The same
+check finds 2,226 differing calls in 5,000 against a build that does not trim
+the record, 1,979 against one that does not trim `starts`, and 3,662 against
+one that writes each route's start one place late. In Chrome the site fell
+from 2.7 MB a frame to about 1.4: 0.75 where the array is created and 0.6
+where its first double is written, since V8 there converts an array created
+for small integers into one for doubles. In Node it fell from 2.8 MB a build
+to 0.85.
+
+AMD Ryzen 9 9900X, integrated RDNA 2, Google Chrome 156.0.8078.48 on the
+Windows side, headed, attached through `windows-chrome.mjs` with no other
+flags, adapter `amd` `rdna-2`, not a fallback, `renderer.backend` `webgpu` on
+every row, DPR 1, viewport 1280 by 720, `fit` (zoom 0.0715),
+`--motion=springs --sizes=10000 --edges=smooth --moving=1,0.1 --frames=1200`,
+builds swapped through `packages/render/dist/ribbon.js` with the browser
+cache cleared before each run, main (`2a653da`) first in each pair. #159 is
+still open, so main here is without it. Load average 0.0 to 0.6, read before
+and after each run. Six pairs in two rounds of three. Chrome closed its
+DevTools connection twice in the second round, each time just after a run
+had finished: first between the two runs of the fourth pair, which was then
+run again whole on a new Chrome, and then after that fourth pair, so the
+fifth and sixth pairs ran on a third. Main's run of the fourth pair first
+lost its page and main's run of the sixth first timed out waiting for the
+page to load; each was run again straight after. The control tick read 17.8
+to 17.9 ms in the first round and 16.7 in the second, in both builds, so the
+rounds compare within themselves, not with each other. Animated-mode medians
+in milliseconds, one value per pair:
+
+| Build | Moving | `setEdges` | `setEdges` p95 | `render` | `advance` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| main | all | 7.1, 7.0, 7.2, 7.7, 7.6, 7.4 | 9.4, 9.3, 9.3, 11.3, 10.8, 10.2 | 1.0, 1.0, 1.0, 1.1, 1.0, 1.0 | 2.5, 2.5, 2.5, 5.7, 3.5, 4.0 | 17.5, 17.1, 17.6, 21.6, 17.9, 17.3 | 0.5%, 0.3%, 1.2%, 15.3%, 4.2%, 4.8% |
+| this | all | 7.0, 7.2, 7.3, 8.5, 7.8, 7.8 | 9.2, 9.5, 9.5, 13.5, 10.6, 12.3 | 1.0, 1.0, 1.0, 1.1, 1.0, 1.0 | 3.2, 2.5, 2.7, 5.6, 3.6, 3.6 | 15.8, 16.2, 16.2, 23.6, 20.0, 21.1 | 1.1%, 0.4%, 0.6%, 21.3%, 5.3%, 7.4% |
+| main | a tenth | 2.8, 2.8, 2.9, 3.2, 3.0, 3.1 | 4.1, 4.1, 3.9, 5.7, 5.2, 5.4 | 1.0, 1.0, 1.0, 1.1, 1.0, 1.1 | 0.5, 0.5, 0.4, 0.5, 0.7, 0.6 | 2.2, 2.1, 1.7, 1.7, 2.0, 1.9 | 0% in every pair |
+| this | a tenth | 2.9, 2.9, 3.0, 3.2, 3.1, 3.0 | 4.2, 4.2, 4.3, 5.9, 5.5, 5.5 | 1.0 in every pair | 0.5, 0.5, 0.5, 0.6, 0.6, 0.6 | 1.8, 1.8, 1.8, 2.8, 1.9, 2.8 | 0.1%, 0%, 0%, 0%, 0%, 0% |
+
+`render` p95 was 1.1 to 1.5 on every row.
+
+- **With every node moving, `setEdges` was not lower**: higher in four pairs
+  of six, including all three of the second round, and lower in two. Ticks
+  missed were higher in five pairs.
+- With a tenth moving the change is not resolved; both builds hold the tick.
+- One pair of CPU profiles, the two taken with the heap profiles above, ten
+  minutes apart in the first round's conditions: garbage collection 963 ms of
+  the 8 s sampled against main's 939, and `tessellateRibbons` 3,336 against
+  3,249. Halving the bytes of the third largest site did not lower the
+  collection's time.
+
+Not kept. The collection's time did not follow the bytes allocated, which
+fits a young generation whose cost is what survives a scavenge rather than
+what dies in it: the largest site, edge motion's points, lives exactly one
+frame, as the build that copies from it does. The next change is
+`tsk_5ca35c49f0fc`: split the all-moving frame's collection into scavenges
+and full collections with their times, and price what survives a frame,
+before choosing another site to reduce.
