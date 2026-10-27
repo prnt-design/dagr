@@ -408,8 +408,8 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   See "With a route's given points cleaned in one pass". Cleaning the
   flattened points as they are made rather than in a second pass
   (`tsk_396330099dfb`) was byte-identical but not kept: on the same GPU with
-  every node moving `setEdges` was not lower in six pairs and ticks missed
-  rose in every pair; see "Flattened points cleaned as they are made, not
+  every node moving `setEdges` was higher in four pairs of six, lower in one
+  and equal in one, and ticks missed rose in every pair; see "Flattened points cleaned as they are made, not
   kept". Next is the frame's garbage collection, about 860 ms of 8 s in a CPU
   profile, attributed by allocation site (`tsk_903f42a19c0b`).
   Still open: the 10,000-node smooth CPU frame with every node moving

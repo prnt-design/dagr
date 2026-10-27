@@ -2555,7 +2555,7 @@ moving. A CPU profile of the all-moving smooth row on main (`419b58c`, same
 machine, browser and flags as the table below, 600 frames, 8 s sampled every
 0.5 ms starting 12 s after the page opened) put 2,975 ms under
 `tessellateRibbons`, with own times of 1,083 ms for the walk (`hypot` and
-`rib` inlined again), 550 for the flattening, 450 for `smoothInto`, 235 for
+part of `rib` inlined into it), 550 for the flattening, 450 for `smoothInto`, 235 for
 `cleanGivenCentreline` and 132 for `cleanCentreline`, which copied every
 flattened point into a second polyline without the ones closer than
 `MIN_SEGMENT_WORLD` to the last kept. Outside the tessellation: garbage
@@ -2578,7 +2578,8 @@ them on a flattened point. The same check finds 6 differing calls against a
 build that numbers a flattened point by the points kept rather than pushed,
 and 401 against one that drops only exact repeats. In Node, `tessellateRibbons`
 on 13,169 three-point smooth routes, every route moving, took 7.88 to 8.12 ms
-median against 8.07 to 8.14 back to back, two pairs.
+median against 8.07 to 8.14 back to back, two pairs, which did not decide
+it, since Node has not been a reliable proxy for the browser here.
 
 AMD Ryzen 9 9900X, integrated RDNA 2, Google Chrome 156.0.8078.48 on the
 Windows side, headed, attached through `windows-chrome.mjs` with no other
@@ -2601,8 +2602,12 @@ rounds of three. Animated-mode medians in milliseconds, one value per pair:
 
 - **With every node moving, `setEdges` was not lower**: higher in four pairs,
   lower in one and equal in one. Ticks missed were higher in every pair.
+- With a tenth moving the change is not resolved; both builds hold the tick.
 - One pair of CPU profiles, taken as above: `tessellateRibbons` 2,935 ms
-  against main's 2,894. The second pass was gone (main's `cleanCentreline` 123
+  against main's 2,894, and garbage collection 861 against 864. In this
+  pair V8 inlined neither `hypot` nor `flatToChord` in either build, so the
+  own times below are lower than in the profile above and compare only
+  within the pair. The second pass was gone (main's `cleanCentreline` 123
   and `push` 96), but the flattening's own time rose to 252 from 157 and the
   cleaning `push` read 148, so the check cost about as much inside the
   subdivision loop as the copy did after it.
@@ -2610,6 +2615,6 @@ rounds of three. Animated-mode medians in milliseconds, one value per pair:
 Not kept. What is left of the all-moving frame between retargets is still
 `setEdges` (about 7 ms), most of it the walk, the flattening and the knot
 widths, whose arithmetic byte-identical output pins, then garbage collection
-(about 860 ms of the 8 s sampled in both builds) and `advance`. The next
+(817 to 864 ms of the 8 s sampled, in the three profiles above) and `advance`. The next
 change is `tsk_903f42a19c0b`: attribute that collection to its allocation sites
 in Chrome and reduce one that #159's buffer reuse does not already address.
