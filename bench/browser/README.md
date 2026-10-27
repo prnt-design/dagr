@@ -2113,3 +2113,75 @@ smooth frame's per-frame cost: #159's buffer reuse first, then `advance`, the
 second largest step, which no change since 2026-10-23 has targeted, ahead
 of `setEdges`'s remaining flattening and walk, which byte-identical output
 pins, and ahead of `apply`, which runs on about one frame in 20 to 24.
+
+### Edge velocities written into the frame before's array, not kept (2026-10-27)
+
+The step `tsk_a498d1621d79` named after the AMD reprofile above: smooth
+`advance` with every node moving. In Node, with each half of the scene timed
+on its own (`createNodeMotion` and `createEdgeMotion` driven as
+`createSceneMotion` drives them, the graph of
+`packages/render/bench/scene-motion.bench.ts`, 1,000 calls after 200 of
+warm-up, `dt` 1/10,000 s so every spring stays in flight), the edge half is
+most of it: at 10,000 nodes with smooth edges (39,507 route points in flight)
+the node half took 0.5 to 0.8 ms median and the edge half 3.3 to 3.8 (p90
+5.9 to 6.7), and with straight edges (26,338 points, one run) 0.6 and 3.1. Each moving
+edge built a new velocity array every frame, two numbers per point.
+
+The change tried: each moving edge keeps the array its last frame replaced and
+writes the next frame's velocities into it, swapping it in after the loop as
+before, and drops it on arrival. Byte-identical: the previous build and this
+one, given the same 12,000 random `resync`, `apply` and `advance` calls over
+200 scenes (arrivals, departures, reroutes, point counts changing in flight,
+zero, tiny and huge `dt`), return the same frames, coordinate by coordinate,
+and throw the same 2,865 errors with the same messages. In Node the edge half
+fell to 2.5 to 2.9 ms median (p90 4.0 to 4.6) against 3.3 to 3.8 (5.9 to 6.7)
+back to back.
+
+On WebGPU it did not carry over. Same machine as the section above (AMD Ryzen 9
+9900X, integrated RDNA 2), Google Chrome 156.0.8078.48 on the Windows side,
+headed, attached through `windows-chrome.mjs` with no other flags, adapter
+`amd` `rdna-2`, not a fallback, `renderer.backend` `webgpu` on every row,
+control tick 16.7 ms on every run (17.8 to 17.9 on 2026-10-26; the cause of
+either was not traced), DPR 1, viewport 1280 by 720, `fit` (zoom 0.0715),
+`--motion=springs --sizes=10000 --edges=smooth --moving=1,0.1 --frames=1200`,
+builds swapped through `packages/render/dist/edge-motion.js`, main (`191db5c`)
+first in each pair. Main still has #159 open, so this is against main without
+it. Two rounds of three pairs. The first wrote into an array made with
+`new Array(n).fill(0)`, which V8 keeps holey where `push` made it packed;
+the second started from `[]` and wrote each index in order, which keeps it
+packed. Animated-mode medians in milliseconds, one value per run:
+
+| Build | Moving | `advance` | `advance` p95 | `setEdges` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- |
+| main | all | 7.2, 7.1, 6.8 | 14.8, 14.8, 14.5 | 11.2, 11.6, 11.9 | 21.5, 25.2, 21.9 | 44.8%, 50.3%, 43.2% |
+| holey | all | 9.0, 8.6, 8.5 | 16.5, 13.7, 14.9 | 11.3, 10.8, 11.2 | 23.5, 22.8, 23.3 | 57.1%, 49.3%, 50.8% |
+| main | a tenth | 1.0, 1.0, 1.0 | 1.5, 1.5, 1.6 | 3.3, 3.5, 3.6 | 2.9, 2.8, 4.1 | 0%, 0%, 0% |
+| holey | a tenth | 1.1, 1.2, 1.2 | 1.5, 1.6, 1.6 | 3.2, 3.5, 3.6 | 2.6, 3.1, 3.1 | 0%, 0%, 0% |
+| main | all | 6.8, 7.0, 6.8 | 14.4, 14.5, 14.1 | 11.2, 11.3, 11.0 | 20.6, 20.6, 19.6 | 40.5%, 41.7%, 37.5% |
+| packed | all | 8.9, 8.0, 6.5 | 14.0, 12.9, 10.8 | 10.8, 10.6, 11.6 | 22.9, 23.6, 21.7 | 49.1%, 42.3%, 39.6% |
+| main | a tenth | 0.9, 1.1, 1.0 | 1.3, 1.5, 1.4 | 3.8, 3.7, 3.6 | 2.0, 2.7, 2.0 | 0%, 0%, 0% |
+| packed | a tenth | 1.2, 1.3, 1.0 | 1.6, 1.6, 1.4 | 3.6, 3.6, 3.6 | 3.3, 3.1, 3.0 | 0%, 0%, 0% |
+
+Load average 0.0 to 6.8 in the first round (6.8 before its first run of the
+change) and 0.0 to 0.7 in the second, read before each run. The third pair of
+the second round was rerun whole after main's page timed out loading.
+
+- **`advance` was slower in Chrome in five of six pairs with every node
+  moving**, by 1.5 to 1.8 ms in the first round and by 2.1 and 1.0 in the
+  second, whose third pair went the other way by 0.3. Its p95 fell in the
+  second round and not in the first.
+- **Ticks missed did not fall** in either round: 49% to 57% against 43% to
+  50%, then 40% to 49% against 38% to 42%.
+- **`apply` was slower in every pair of the second round**, by 2.1 to 3.0 ms
+  with every node moving and 0.4 to 1.3 with a tenth, though the change does
+  not touch it; the first round overlapped. Not traced. One reading is that velocity arrays now live
+  across frames and get promoted out of the young generation, so collection
+  costs move into whatever step runs next, but no trace was taken.
+- **Node is not a reliable proxy for this step.** The same build that saved
+  about 1 ms of median and 2 of p90 in Node cost about as much in Chrome.
+
+So the change was not kept, and `edge-motion.ts` is unchanged. The edge half is
+still where smooth `advance` spends its time. A next attempt should be
+measured in Chrome before Node is trusted, and should leave the per-frame
+garbage young (no array kept across frames) rather than trading it for
+retained arrays.
