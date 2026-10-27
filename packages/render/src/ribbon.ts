@@ -681,26 +681,31 @@ function previousRoute(
 }
 
 /**
- * {@link polylineOf} for the tessellator, rejecting a coordinate that is not a
- * finite number BEFORE the typed array converts it: written first, a `null`
- * would become 0 and draw at the origin, and `"5"` would become 5.
+ * {@link cleanCentreline} straight from a route's given points, which it also
+ * appends to `record`, rejecting a coordinate that is not a finite number
+ * BEFORE the typed array converts it: written first, a `null` would become 0
+ * and draw at the origin, and `"5"` would become 5.
  */
-function givenCentreline(
+function cleanGivenCentreline(
   points: readonly Vec2[],
   field: string,
   out: Polyline,
   record: number[],
-): Polyline {
+): void {
   out.length = 0;
-  for (const [i, point] of points.entries()) {
-    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
-      requireFinite(point.x, `${field}[${String(i)}].x`);
-      requireFinite(point.y, `${field}[${String(i)}].y`);
+  for (let i = 0; i < points.length; i += 1) {
+    const point = points[i]!;
+    const x = point.x;
+    const y = point.y;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      requireFinite(x, `${field}[${String(i)}].x`);
+      requireFinite(y, `${field}[${String(i)}].y`);
     }
-    out.push(point.x, point.y);
-    record.push(point.x, point.y);
+    record.push(x, y);
+    const kept = out.length;
+    if (kept > 0 && shorterThanMinSegment(x - out.xs[kept - 1]!, y - out.ys[kept - 1]!)) continue;
+    out.push(x, y);
   }
-  return out;
 }
 
 function appendPoints(out: Vec2[], line: Polyline): Vec2[] {
@@ -1476,7 +1481,6 @@ export function tessellateRibbons(
   const ranges: RibbonRange[] = [];
   const record: number[] = [];
   const starts: number[] = [];
-  const given = new Polyline();
   const cleaned = new Polyline();
   const smoothed = new Polyline();
   const flattened = new Polyline();
@@ -1535,7 +1539,7 @@ export function tessellateRibbons(
       const vertexStart = out.vertexCount;
       const indexStart = out.indexCount;
       const field = `route "${route.id}"`;
-      cleanCentreline(givenCentreline(route.points, field, given, record), field, cleaned);
+      cleanGivenCentreline(route.points, field, cleaned, record);
       let centreline = cleaned;
       if (resolved.smooth && cleaned.length >= 2) {
         smoothInto(cleaned, resolved.flattenToleranceWorld, smoothed);
