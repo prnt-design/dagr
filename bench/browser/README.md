@@ -2186,3 +2186,66 @@ So the change was not kept, and `edge-motion.ts` is unchanged. In Node, the
 edge half is still where smooth `advance` spends its time. A next attempt
 should be measured in Chrome before Node is trusted, with a trace taken if
 `apply` moves again.
+
+### Edge springs stepped without the checked helpers (2026-10-26)
+
+`tsk_a498d1621d79` again, measured in Chrome first this time. #159 is still
+waiting on its memory decision, so `advance` went first. A CPU profile of
+the all-moving smooth row on main (same machine, browser and flags as the
+table below, 600 frames, samples about every 0.5 ms) put about 2.1 s of the 3.4 s
+sampled under scene motion's `advance` in the spring helpers: `combineTwo`,
+`nextAxisPosition`, `nextAxisVelocity`, `weightedInterpolation` and
+`requireFinite`. The edge loop called those four times per route point, and
+each call checked every product and partial sum it formed.
+
+The change: edge motion's `advance` does the same sums inline, once per point,
+and checks only the four results. A product or partial sum that is not finite
+leaves every sum after it not finite, so four finite results are bit for bit
+what the helpers return on their direct path. Anything else is stepped again
+through the helpers, which keeps their scaled sums and their errors. Over the
+random calls below, no point stepped by a finite, non-zero `dt` fell back to
+them, because a retarget already refuses a route whose step could overflow;
+only frames with a `dt` of 0 or one that settles every spring use them.
+
+Byte-identical: main and this build, given the same 90,000 random `resync`,
+`apply` and `advance` calls over 600 scenes (reroutes that keep some points
+where they are, departures, unknown ids, routes near `1e308`, signed zeros and
+subnormals, `dt` from -1 to `1e300`), return the same frames, coordinate by
+coordinate with `Object.is`, and refuse the same 13,219 calls with the same
+messages.
+The check catches a build that drops the `position === target` case, which
+the test suite did not, so a test now pins it.
+
+AMD Ryzen 9 9900X, integrated RDNA 2, Google Chrome 156.0.8078.48 on the
+Windows side, headed, attached through `windows-chrome.mjs` with no other
+flags, adapter `amd` `rdna-2`, not a fallback, `renderer.backend` `webgpu` on
+every row, control tick 16.7 ms on every run, DPR 1, viewport 1280 by 720,
+`fit` (zoom 0.0715), `--motion=springs --sizes=10000 --edges=smooth
+--moving=1,0.1 --frames=1200`, builds swapped through
+`packages/render/dist/edge-motion.js`, main (`0ed3593`) first in each pair.
+#159 is still open, so main here is without it. Load average 0.0 to 0.3 before
+each run. Animated-mode medians in milliseconds, one value per pair:
+
+| Build | Moving | `advance` | `advance` p95 | `setEdges` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- |
+| main | all | 6.8, 4.8, 6.6 | 13.3, 8.1, 13.2 | 10.9, 10.8, 11.0 | 19.9, 19.7, 19.6 | 35.0%, 24.9%, 33.7% |
+| this | all | 3.5, 3.4, 3.4 | 7.0, 7.1, 6.9 | 10.7, 11.1, 11.6 | 19.9, 19.6, 19.4 | 16.0%, 20.3%, 22.9% |
+| main | a tenth | 1.0, 0.9, 1.0 | 1.3, 1.2, 1.3 | 3.1, 3.4, 3.1 | 2.6, 2.6, 2.5 | 0%, 0%, 0% |
+| this | a tenth | 0.5, 0.5, 0.7 | 0.7, 0.7, 1.1 | 3.2, 3.1, 3.1 | 1.8, 1.8, 2.5 | 0%, 0.2%, 0% |
+
+A first pair, run while the equivalence check was running in WSL, went the
+same way (6.6 against 3.2 ms, 29.8% against 15.3% missed) and was rerun; the
+third column is the rerun.
+
+- **`advance` with every node moving fell by 1.4 to 3.3 ms in every pair**, its
+  p95 by 1.0 to 6.3, and ticks missed fell in every pair (16% to 23% against
+  25% to 35%).
+- **With a tenth moving it fell by 0.3 to 0.5 ms**, both builds holding the
+  tick.
+- `setEdges` and `apply`, which the change does not run, stayed within their
+  run-to-run spread, unlike the 2026-10-26 attempt above.
+
+What is left of the all-moving frame between retargets is `setEdges` at 11 ms,
+which #159 addresses and whose memory trade is the maintainer's call, and the
+per-point allocation of the frame's points, which a caller holding an earlier
+frame relies on.

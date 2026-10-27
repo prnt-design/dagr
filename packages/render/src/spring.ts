@@ -334,7 +334,9 @@ export function springStep(angularFrequency: number, dtSeconds: number): SpringS
  * frame as edge motion's retarget does, and a per-frame loop over a scene's
  * worth of springs should not pay for the same check twice. Position and
  * velocity are separate functions so a step allocates nothing per axis. Not
- * exported from the package index.
+ * exported from the package index. Edge motion's `advance` repeats the direct
+ * path of this and {@link nextAxisVelocity} inline, so a change to either sum
+ * has to be made there too.
  */
 export function nextAxisPosition(
   step: SpringStep,
