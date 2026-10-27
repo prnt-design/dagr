@@ -1089,7 +1089,7 @@ function measureSegments(line: Polyline): number {
   }
   let total = 0;
   for (let k = 0; k < segments; k += 1) {
-    const segment = Math.hypot(xs[k + 1]! - xs[k]!, ys[k + 1]! - ys[k]!);
+    const segment = hypot(xs[k + 1]! - xs[k]!, ys[k + 1]! - ys[k]!);
     total += segment;
     KNOT_WIDTHS[k] = segment ** CATMULL_ROM_ALPHA;
   }
@@ -1167,7 +1167,8 @@ export function smoothCentreline(points: readonly Vec2[], toleranceWorld: number
 }
 
 /**
- * `Math.hypot(x, y)`, for the walk below, which takes two per point.
+ * `Math.hypot(x, y)`, for the walk below, which takes two per point, and for
+ * {@link measureSegments}, which takes one per segment.
  *
  * Written out because V8 does not inline `Math.hypot`: each call is a builtin
  * that allocates per call. This is V8's own algorithm at two arguments (scale
