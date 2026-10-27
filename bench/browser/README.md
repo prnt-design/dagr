@@ -2324,13 +2324,13 @@ leave is #159's, whose memory trade is the maintainer's call.
 
 `tsk_6f01f8911bde`: the tessellation itself, with every node moving. A CPU
 profile of the all-moving smooth row on main (`00e6f6c`, same machine,
-browser and flags as the table below, 8 s sampled every 0.5 ms from 12 s into
-a 600 frame run) put 3,739 ms under `tessellateRibbons`, and the walk,
+browser and flags as the table below, 600 frames, 8 s sampled every 0.5 ms
+starting 12 s after the page opened) put 3,739 ms under `tessellateRibbons`, and the walk,
 `tessellateCentreline`, was its largest part: 1,620 ms, 1,243 of it its own.
-The walk takes two `Math.hypot` per centreline point (the segment's length and
-the bisector's), about 224,000 vertices a frame at 10,000 smooth nodes. V8
-does not inline `Math.hypot`: each call is a builtin that allocates an array of
-its arguments, and the profile counts its time as the walk's own.
+The walk takes two `Math.hypot` per point of every moving route's flattened
+centreline (the segment's length and the bisector's), every frame. V8 does not
+inline `Math.hypot`: each call is a builtin that allocates per call, and the
+profile counts its time as the walk's own.
 
 The change: the walk calls a `hypot` written out in `ribbon.ts`, which is V8's
 own algorithm at two arguments (scale by the larger magnitude, sum the
@@ -2338,7 +2338,7 @@ squares, take the root, scale back). Over 20,000,324 pairs (random bit
 patterns, random scales, and every pair of zeros, subnormals, `MAX_VALUE`,
 infinities and `NaN`) it returned the same double as `Math.hypot`, by
 `Object.is`, both in Node 22.22.1 and in the Chrome 156 below. Another engine's
-`Math.hypot` may round differently in the last bit, as engines' already do
+`Math.hypot` may round differently in the last bit, as engines already differ
 from one another. A test pins it against `Math.hypot` in Node, and fails on a
 `Math.sqrt(x * x + y * y)` in its place.
 
@@ -2383,13 +2383,15 @@ medians in milliseconds, one value per pair:
 - A profile of this build, taken as above, put 1,157 ms under the walk (354 of
   it in `hypot`) and 3,172 under `tessellateRibbons`.
 
-Main's ticks missed here (3.9% to 4.7%) are lower again than in the
-2026-10-27 section above (6% to 8%) on the same machine and browser. The
+Main's ticks missed here (3.9% to 4.7%) are lower again than in "Edge builds
+written into the GPU buffers already created, not kept" above (6% to 8%) on
+the same machine and browser. The
 cause of the spread between sessions was not traced, so compare only within
 one table.
 
-What is left of the all-moving frame between retargets is still
-`tessellateRibbons`, the largest step, then `advance`. Inside the
+What is left of the all-moving frame between retargets is still `setEdges`
+(8 ms), most of it `tessellateRibbons` (3,172 ms in the profile of this
+build), then `advance`. Inside the
 tessellation the next largest own times are `givenCentreline` (327 ms in the
 profile of this build), `rib` (302) and `measureSegments` (284, one more
 `Math.hypot` and a power per segment of the cleaned route).

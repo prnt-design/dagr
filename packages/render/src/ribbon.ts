@@ -1170,14 +1170,12 @@ export function smoothCentreline(points: readonly Vec2[], toleranceWorld: number
  * `Math.hypot(x, y)`, for the walk below, which takes two per point.
  *
  * Written out because V8 does not inline `Math.hypot`: each call is a builtin
- * that allocates an array of its arguments, and in a profile of 10,000 smooth
- * nodes all moving in Chrome those calls were about half of the walk. This is V8's
- * own algorithm at two arguments (scale by the larger magnitude, sum the
- * squares, take the root, scale back; its compensated sum never corrects
- * anything at two terms), so in Chrome and Node it returns the same double as
- * `Math.hypot`, including for infinities, `NaN` and zeros. Another engine's
- * `Math.hypot` may round differently in the last bit, as engines' already do
- * from one another.
+ * that allocates per call. This is V8's own algorithm at two arguments (scale
+ * by the larger magnitude, sum the squares, take the root, scale back; its
+ * compensated sum never corrects anything at two terms), so in Chrome and Node
+ * it returns the same double as `Math.hypot`, including for infinities, `NaN`
+ * and zeros. Another engine's `Math.hypot` may round differently in the last
+ * bit, as engines already differ from one another.
  */
 export function hypot(x: number, y: number): number {
   const ax = Math.abs(x);
