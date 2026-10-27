@@ -2629,22 +2629,23 @@ same 8 s window, from a second DevTools client attached to the page through
 the relay, starting 12 s after the page opened, on the all-moving smooth row
 on main (`2a653da`; machine, browser and flags as in the table below,
 `--moving=1 --frames=600`). The window covered about 450 frames. Sampled bytes
-per frame, by the function that allocated them:
+per frame, in MiB, by the function that allocated them:
 
 | Site | Per frame | What it is |
 | --- | --- | --- |
-| edge motion `advance` | 7.7 MB | a new point object per route point per frame, and each edge's velocity array |
-| `smoothInto`, with what V8 inlined into it | 3.3 MB | not resolved below the function |
-| `cleanGivenCentreline` | 2.7 MB | the build's record of given points, a plain array grown one `push` at a time |
-| node motion `advance` and `stepSpring2DBy` | 2.7 MB | a new spring state, position and velocity per moving node |
-| `tessellateRibbons`, own | 1.2 MB | the ranges, `starts` and each route's label string |
-| `tessellateCentreline` | 1.0 MB | not resolved below the function |
-| `setNodes` | 0.8 MB | |
-| the harness's own frame loop | 0.8 MB | |
-| everything else | 2.1 MB | about 0.7 of it retarget work in `prepareRetarget` |
+| edge motion `advance` | 7.5 | a new point object per route point per frame, and each edge's velocity array |
+| `smoothInto`, with what V8 inlined into it | 3.2 | not resolved below the function |
+| `cleanGivenCentreline` | 2.6 | the build's record of given points, a plain array grown one `push` at a time |
+| node motion `advance` and `stepSpring2DBy` | 2.6 | a new spring state, position and velocity per moving node |
+| `tessellateRibbons`, own | 1.2 | the ranges, `starts` and each route's label string |
+| `tessellateCentreline` | 1.0 | not resolved below the function |
+| `setNodes` | 0.8 | |
+| the harness's own frame loop | 0.8 | |
+| everything else | 2.2 | about 0.8 of it retarget work under `prepareRetarget` |
 
-About 22 MB a frame in all. The builder's typed arrays, which #159's buffer
-reuse addresses, do not appear here: a typed array's contents live in an
+About 22 MiB a frame in all. The edge group's typed arrays (the
+tessellation's, the colours and the intensities), which #159's buffer reuse
+addresses, do not appear here: a typed array's contents live in an
 `ArrayBuffer` outside V8's heap, which the sampling profile does not count.
 Everything in the table is what #159 does not cover. The point objects edge
 motion hands out are its public frame, so they are not a change this
@@ -2669,10 +2670,10 @@ included, and refused the same 39,521 calls with the same messages. The same
 check finds 2,226 differing calls in 5,000 against a build that does not trim
 the record, 1,979 against one that does not trim `starts`, and 3,662 against
 one that writes each route's start one place late. In Chrome the site fell
-from 2.7 MB a frame to about 1.4: 0.75 where the array is created and 0.6
+from 2.6 MiB a frame to about 1.3: 0.7 where the array is created and 0.6
 where its first double is written, since V8 there converts an array created
-for small integers into one for doubles. In Node it fell from 2.8 MB a build
-to 0.85.
+for small integers into one for doubles. In Node it fell from 2.8 MiB a build
+to 0.8.
 
 AMD Ryzen 9 9900X, integrated RDNA 2, Google Chrome 156.0.8078.48 on the
 Windows side, headed, attached through `windows-chrome.mjs` with no other
@@ -2702,20 +2703,24 @@ in milliseconds, one value per pair:
 
 `render` p95 was 1.1 to 1.5 on every row.
 
-- **With every node moving, `setEdges` was not lower**: higher in four pairs
-  of six, including all three of the second round, and lower in two. Ticks
+- **With every node moving, `setEdges` was not lower**: higher in five pairs
+  of six, including all three of the second round, and lower in one. Ticks
   missed were higher in five pairs.
-- With a tenth moving the change is not resolved; both builds hold the tick.
-- One pair of CPU profiles, the two taken with the heap profiles above, ten
-  minutes apart in the first round's conditions: garbage collection 963 ms of
-  the 8 s sampled against main's 939, and `tessellateRibbons` 3,336 against
-  3,249. Halving the bytes of the third largest site did not lower the
-  collection's time.
+- With a tenth moving both builds hold the tick, and `setEdges` was higher in
+  four pairs, equal in one and lower in one, by 0.1 ms, the browser's
+  resolution, with its p95 higher in all six.
+- One pair of CPU profiles, the two taken with the heap profiles above, about
+  ten minutes apart in the first round's conditions: garbage collection
+  963 ms of the 8 s sampled against main's 939, and `tessellateRibbons` 3,336
+  against 3,249. The change took about 1.3 MiB of the frame's 22 (6%), so
+  even a collection whose time followed the bytes would have saved about
+  55 ms, which one pair cannot tell from noise; it did not fall.
 
-Not kept. The collection's time did not follow the bytes allocated, which
-fits a young generation whose cost is what survives a scavenge rather than
-what dies in it: the largest site, edge motion's points, lives exactly one
-frame, as the build that copies from it does. The next change is
+Not kept. A young generation's collection costs what survives a scavenge
+rather than what dies in it, so the bytes allocated may not be the measure
+to reduce: the largest site, edge motion's points, is kept for one frame, as
+each build is kept for the next to copy from. That is a hypothesis, not a
+measurement. The next change is
 `tsk_5ca35c49f0fc`: split the all-moving frame's collection into scavenges
 and full collections with their times, and price what survives a frame,
 before choosing another site to reduce.
