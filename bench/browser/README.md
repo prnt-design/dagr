@@ -2395,3 +2395,76 @@ build), then `advance`. Inside the
 tessellation the next largest own times are `givenCentreline` (327 ms in the
 profile of this build), `rib` (302) and `measureSegments` (284, one more
 `Math.hypot` and a power per segment of the cleaned route).
+
+### With the segment lengths taken without the `Math.hypot` builtin (2026-10-27)
+
+`tsk_1cae6f72082e`: the next cost inside the tessellation, with every node
+moving. A CPU profile of the all-moving smooth row on main (`e384c68`, same
+machine, browser and flags as the table below, 600 frames, 8 s sampled every
+0.5 ms starting 12 s after the page opened) put 3,043 ms under
+`tessellateRibbons`. Its largest own times after the walk's `hypot` (388 ms)
+were `measureSegments` (293), `rib` (292) and `givenCentreline` (278).
+`measureSegments` still called the `Math.hypot` builtin once per segment of
+every moving route's cleaned centreline, to measure the knot widths and the
+mean segment the default tolerance is taken from. `rib` is already a capacity
+check and ten typed-array stores.
+
+The change: `measureSegments` calls the `hypot` the walk already uses, V8's own
+two-argument algorithm written out in `ribbon.ts` (see the section above). In the Chrome 156 below it returned the same double as `Math.hypot`,
+by `Object.is`, over another 10,000,100 pairs (random bit patterns, differences
+of random coordinates at scales from 1e-20 to 1e19, and every pair of zeros,
+subnormals, `MAX_VALUE`, infinities and `NaN`). The power that turns a length
+into a knot width is unchanged.
+
+Byte-identical: main's build and this one, given the same 140,000 random
+`tessellateRibbons` calls over 2,800 scenes in Node 22.22.1 (smooth and
+polyline, miter limits from 1 to 100, absolute and default tolerances, routes
+kept, moved, added, dropped and reversed between calls with the previous build
+and size hint passed on, duplicate, near-duplicate and doubled-back points,
+scales from 1e-200 to 1e200, subnormal, `MAX_VALUE`, non-finite and non-number
+coordinates), returned the same bytes in every array, the same ranges and the
+same given points, and refused the same 38,516 calls with the same messages.
+The same check finds 671 differing calls in 4,000 against a build using
+`Math.sqrt(dx ** 2 + dy ** 2)` there. In Node, `tessellateRibbons` on the frame
+profile's 13,169 three-point smooth routes, every route moving, took 7.51 to
+7.87 ms median against 7.74 to 8.10 back to back (600 calls after 200 of
+warm-up, three alternating pairs).
+
+AMD Ryzen 9 9900X, integrated RDNA 2, Google Chrome 156.0.8078.48 on the
+Windows side, headed, attached through `windows-chrome.mjs` with no other
+flags, adapter `amd` `rdna-2`, not a fallback, `renderer.backend` `webgpu` on
+every row, control tick 17.6 to 17.7 ms, DPR 1, viewport 1280 by 720, `fit`
+(zoom 0.0715), `--motion=springs --sizes=10000 --edges=smooth --moving=1,0.1
+--frames=1200`, builds swapped through `packages/render/dist/ribbon.js`, main
+(`e384c68`) first in each pair. #159 is still open, so main here is without
+it. Load average 0.0 to 1.1, read before and after each run. Six pairs in two
+rounds of three; the third run of this build in the first round was cut off
+and run again straight after. Animated-mode medians in milliseconds, one value
+per pair:
+
+| Build | Moving | `setEdges` | `setEdges` p95 | `render` | `advance` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| main | all | 7.9, 8.0, 8.0, 7.7, 8.1, 8.0 | 10.5, 10.0, 10.0, 9.9, 10.2, 9.9 | 1.0 in every pair | 2.6, 2.6, 2.5, 2.4, 2.7, 2.7 | 18.6, 18.1, 18.5, 18.1, 18.5, 18.7 | 3.0%, 1.6%, 2.0%, 1.3%, 1.8%, 1.9% |
+| this | all | 7.4, 8.0, 7.8, 7.4, 7.4, 7.4 | 9.7, 10.5, 10.2, 9.4, 9.5, 9.8 | 1.0 in every pair | 2.5, 2.7, 2.6, 2.7, 2.8, 3.0 | 18.3, 19.0, 18.4, 18.0, 18.5, 16.0 | 1.3%, 3.0%, 2.8%, 1.8%, 1.7%, 1.4% |
+| main | a tenth | 2.9, 2.8, 2.9, 2.9, 3.0, 2.9 | 4.6, 4.6, 4.8, 4.7, 4.7, 4.7 | 1.0 in every pair | 0.5 in every pair | 2.5, 2.6, 1.8, 1.8, 1.8, 2.5 | 0% in every pair |
+| this | a tenth | 2.9, 3.0, 2.9, 3.0, 2.9, 2.8 | 4.6, 4.9, 4.6, 4.9, 4.6, 4.6 | 1.0 in every pair | 0.5 in every pair | 1.8, 1.8, 2.3, 1.8, 1.8, 2.0 | 0%, 0%, 0.1%, 0%, 0%, 0% |
+
+`render` p95 was 1.1 or 1.2 on every row.
+
+- **With every node moving, `setEdges` was lower in five pairs of six** (by
+  0.2 to 0.7 ms) and equal in one, and its p95 lower in four and higher in
+  two. Ticks missed did not separate (1.3% to 3.0% against 1.3% to 3.0%).
+- With a tenth moving the change is not resolved, as expected: only the moving
+  tenth of the routes is measured, and both builds hold the tick.
+- Two pairs of CPU profiles, taken as above, resolve what the frame medians
+  barely do: `measureSegments`' own time 85 and 107 ms against main's 294 and
+  303, the shared `hypot` 446 and 441 against 352 and 363, and
+  `tessellateRibbons` 2,924 and 3,004 ms against 3,125 and 3,169, about 0.4 ms
+  a frame.
+
+What is left of the all-moving frame between retargets is still `setEdges`
+(7.4 ms), most of it `tessellateRibbons`, then `advance`. Inside the
+tessellation the largest own times are now the walk and `hypot`, `rib`
+(a typed-array store per vertex attribute) and `givenCentreline`, which
+iterates `points.entries()` and records every coordinate in a growing
+`number[]`.
