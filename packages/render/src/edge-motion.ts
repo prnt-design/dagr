@@ -978,6 +978,12 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
 
   function advance(dtSeconds: number): EdgeMotionFrame {
     const step = springStep(w, dtSeconds);
+    // The steppers' own sums, without their checks. A product or partial sum
+    // that is not finite leaves every sum after it not finite, so a finite
+    // result here is bit for bit what the steppers return on their direct path;
+    // anything else goes through them, for their scaled sums and their errors.
+    const plain = !step.identity && !step.settles;
+    const { retention, targetRetention, timeDecay, velocityRetention, springRetention } = step;
 
     const edges: MotionEdge[] = [];
     let settled = true;
@@ -1004,12 +1010,30 @@ export function createPlannedEdgeMotion(options: EdgeMotionOptions = {}): Planne
           if (position === undefined || target === undefined) continue;
           const vx = velocities[2 * index] ?? Number.NaN;
           const vy = velocities[2 * index + 1] ?? Number.NaN;
-          // x before y, position before velocity: the node half's order, so the
-          // same bad input names the same field.
-          const x = nextAxisPosition(step, position.x, vx, target.x);
-          const nextVx = nextAxisVelocity(step, position.x, vx, target.x);
-          const y = nextAxisPosition(step, position.y, vy, target.y);
-          const nextVy = nextAxisVelocity(step, position.y, vy, target.y);
+          let x = Number.NaN;
+          let nextVx = Number.NaN;
+          let y = Number.NaN;
+          let nextVy = Number.NaN;
+          if (plain) {
+            const { x: px, y: py } = position;
+            const { x: tx, y: ty } = target;
+            const ix = px === tx ? px : 0 + px * retention + tx * targetRetention;
+            const iy = py === ty ? py : 0 + py * retention + ty * targetRetention;
+            x = 0 + ix + vx * timeDecay;
+            nextVx = 0 + vx * velocityRetention + (tx - px) * springRetention;
+            y = 0 + iy + vy * timeDecay;
+            nextVy = 0 + vy * velocityRetention + (ty - py) * springRetention;
+          }
+          if (
+            !(Number.isFinite(x) && Number.isFinite(nextVx) && Number.isFinite(y) && Number.isFinite(nextVy))
+          ) {
+            // x before y, position before velocity: the node half's order, so
+            // the same bad input names the same field.
+            x = nextAxisPosition(step, position.x, vx, target.x);
+            nextVx = nextAxisVelocity(step, position.x, vx, target.x);
+            y = nextAxisPosition(step, position.y, vy, target.y);
+            nextVy = nextAxisVelocity(step, position.y, vy, target.y);
+          }
           nextVelocities.push(nextVx, nextVy);
           points.push({ x, y });
           if (arrived && !springAtRest(x, y, nextVx, nextVy, target)) arrived = false;
