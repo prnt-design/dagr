@@ -2022,6 +2022,78 @@ three pairs, load average 2.9 to 3.9. Animated-mode medians in milliseconds:
 consecutive nodes alternate colours within one shape gains nothing and pays a
 comparison per colour.
 
+### With each edge build written into the one before last (2026-10-26)
+
+At 10,000 smooth nodes a `setEdges` build is about 15 MB of typed arrays: the
+tessellation's position, offset, across, arc and index, and the colour and
+intensity buffers. Allocated new on every frame of motion, they set off a
+mark-compact of about 4 ms every fifth call or so in Node, which a median
+hides and a p90 does not. A group now keeps the build before the last, whose
+geometry the last call disposed, and the next build writes into its buffers
+when they hold between the hinted size plus half the hint's headroom and 1.25
+times the hint. A spare outside that window is let go.
+
+This is the trade the 2026-10-21 section declined: keeping one builder per
+group doubled the smooth edges' retained heap, and so does this. The
+difference is what is held. A kept builder held each group's largest arrays
+for its whole life; the spare is about the current size, because a group that
+shrinks or grows out of the window drops it on the next call. The retained
+heap the 2026-10-19 memory table gives for 10,000 smooth edges no longer
+holds while they move (below).
+
+Byte-identical: the previous build and this one, given the same 6,000 random
+`setEdges` calls over 150 scenes (two groups, one smooth and dashed, edges
+moving, recoloured, added and removed, groups shrunk and grown, highlights
+written between builds, bad colours and points), hold the same attributes,
+index and draw range after every call, and reject the same 594 calls with the
+same messages. In Node, `setEdges` on 13,169 smooth routes, 600 calls after 200
+of warm-up, three pairs with a tenth moving and two with all moving, at load
+about 4.5, in milliseconds:
+
+| Moving | Build | Median | p90 | Mark-compacts in 800 calls |
+| --- | --- | --- | --- | --- |
+| a tenth | previous | 1.74 to 1.77 | 6.35 to 7.18 | 147 |
+| a tenth | this one | 1.53 to 1.54 | 1.67 to 1.70 | 6 |
+| all | previous | 8.24 to 8.33 | 39.2 to 39.3 | 135 |
+| all | this one | 8.14 to 8.17 | 8.66 to 8.74 | 3 |
+
+With a tenth moving and a collection forced after the loop, retained array
+buffers were 30.2 MB against 14.7, and heap plus array buffers 70.1 MB against
+51.9. In the browser, `--memory --sizes=10000 --edges=smooth`, two runs of
+each: the edges hold 15.3 MB after their first build in both, and after the
+moving-edges step 16.4 MB in the previous build against 33.6 in this one. The
+GPU buffers created a frame while edges move are 12.5 MB in both, since each
+build still gets new GPU buffers. The `heapMb` the frame profile reports in
+its other modes is read without a forced collection, so it is not compared
+here.
+
+On WebGPU, same machine (Apple M4), Google Chrome 155.0.8059.85 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run, tick 16.7 ms, DPR 1,
+`fit`, `--motion=springs --sizes=10000 --edges=smooth --frames=1200` with
+`--moving=0.1` and with `--moving=1` (42 to 45 retargets a run), builds
+swapped through `packages/render/dist/ribbon.js` and `scene-edges.js`,
+previous build first in each of three pairs, load average 2.8 to 4.8.
+Animated-mode medians in milliseconds:
+
+| Moving | Build | `setEdges` | `setEdges` p95 | `apply` | `advance` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- |
+| a tenth | previous | 3.0, 3.0, 3.1 | 3.7, 3.6, 3.7 | 1.6, 1.8, 1.6 | 0.6, 0.6, 0.6 | 0%, 0%, 0% |
+| a tenth | this one | 1.9, 1.8, 2.0 | 2.3, 2.0, 2.8 | 1.4, 1.5, 1.6 | 0.5, 0.4, 0.6 | 0%, 0%, 0% |
+| all | previous | 9.2, 9.1, 9.2 | 11.6, 11.8, 11.8 | 15.3, 15.6, 15.2 | 3.7, 3.2, 3.8 | 3.8%, 2.7%, 3.5% |
+| all | this one | 8.3, 8.3, 8.4 | 10.4, 10.0, 10.1 | 16.5, 16.9, 15.5 | 4.6, 5.6, 5.1 | 2.8%, 6.4%, 4.1% |
+
+These runs were on a build whose window's top was 1.25 times its floor rather
+than the hint, which differs from this one only for a spare between 1.25 and
+1.33 times the hint. An earlier round, on a first version that took a spare
+at the hint's exact size, went the other way with all moving: the previous
+build missed 2.5% to 7.1% of ticks and that version 0.7% to 2.2%, with
+`advance` 3.7 to 4.9 against 2.7 to 3.3, and `setEdges` the same as here.
+`apply` and `advance` do not run this code, and where a collection lands
+moves with it, so ticks missed with every node moving are unresolved by these
+two rounds rather than better or worse. With a tenth moving, `setEdges` at
+about 1.9 is now within a step of `apply` and `setNodes` (1.2).
+
 ### All moving and a tenth moving on an AMD GPU (2026-10-26)
 
 The M4.10 sections above measured on the Apple M4. This one profiles the same frame
@@ -2243,9 +2315,10 @@ third column is the rerun.
 - **With a tenth moving it fell by 0.3 to 0.5 ms**, both builds holding the
   tick.
 - `setEdges` and `apply`, which the change does not run, stayed within their
-  run-to-run spread, unlike the 2026-10-26 attempt above.
+  run-to-run spread, unlike the edge velocities attempt above.
 
-What is left of the all-moving frame between retargets is `setEdges` at 11 ms,
-which #159 addresses and whose memory trade is the maintainer's call, and the
-per-point allocation of the frame's points, which a caller holding an earlier
+What was left of the all-moving frame between retargets on main without #159
+was `setEdges` at 11 ms (paired in the AMD section above: 10.4 to 11.0
+without #159, 10.0 to 10.4 with it), and the per-point allocation of the
+frame's points, which a caller holding an earlier
 frame relies on.
