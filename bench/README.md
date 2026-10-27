@@ -171,6 +171,12 @@ the old and new source at loads of 2.5 to 4.3, medians in milliseconds:
 | straight | 9.8 to 10.0 | 8.2 to 8.3 | 3.1 to 3.9 | 3.0 to 3.9 |
 | smooth | 10.8 to 11.0 | 9.1 to 9.8 | 4.2 to 4.5 | 4.0 to 4.7 |
 
+On 2026-10-27 each moving edge started stepping its springs into a spare
+velocity array rather than a new one per frame. Frames are byte-identical. In
+ten pairs of a script stepping this scene, not these entries, smooth
+`advance` medians fell from 2.78 to 3.07 ms to 2.25 to 2.58, and straight ones
+overlapped (see `bench/browser/README.md`).
+
 Like M5.2b's (below), these entries are in the report but **not in `baseline.json`**,
 for the same reason: adding them is the maintainer's call, and the 2026-10-26
 recapture left them out rather than add them as its side effect. This is CPU

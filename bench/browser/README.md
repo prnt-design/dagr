@@ -2128,12 +2128,13 @@ Byte-identical: the previous build and this one, given the same 45,000 random
 departures, arrivals, unknown ids, elapsed times from zero to half a second),
 return the same frames, and refuse the same 861 calls with the same messages.
 
-In Node (`v25.6.1`, same machine, load average 2.6 to 5.0), the scene of
+In Node (`v25.6.1`, on the Apple M4, darwin arm64, load average 2.6 to 5.0), the scene of
 `packages/render/bench/scene-motion.bench.ts` stepped by its 1/10,000 s with
 every spring in flight, six retargets of 400 `advance` calls a run, builds
-alternated ten times. A run's GC falls into one of two modes in both builds
-(about 40 mark-compacts or 100 to 140), so three pairs do not separate them;
-ten do:
+alternated ten times. A run's mark-compacts vary from 33 to 142 in both
+builds, and its median with them, so three pairs do not separate the builds.
+Ten separate smooth edges; straight edges still overlap, with the median run
+at 2.14 ms against 2.47:
 
 | Edges | Build | `advance` median, ms | Mark-compacts in 2,400 calls |
 | --- | --- | --- | --- |
@@ -2158,6 +2159,10 @@ Animated-mode medians in milliseconds:
 The browser does not resolve `advance`: both builds' medians fall in two
 bands run to run (about 3.0 to 3.8 or 4.2 to 5.0), and the ticks missed
 overlap. `apply` read 0.4 to 2.3 ms lower in every pair and `setEdges` 0 to
-0.4, though neither runs this code, which fits less garbage to collect
-in later steps; not traced. What is left of each edge's step is a new point
-per spring per frame, which a caller holding an earlier frame relies on.
+0.4, though neither runs the changed step, which fits less garbage to
+collect in later steps; not traced. What is left of each edge's step is a new
+point per spring per frame, which a caller holding an earlier frame relies on.
+The next step is `setEdges`, the largest of the frame: with the open #159
+reusing its typed arrays, each build still creates new GPU buffers, 12.5 MB a
+frame at 10,000 smooth nodes by #159's `--memory` run, a cost the CPU timing
+of `setEdges` does not show.
