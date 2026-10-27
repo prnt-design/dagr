@@ -1,10 +1,12 @@
 /**
  * `ExplorerDetails`: the drawer that shows the inspected node.
  *
- * It renders nothing while closed. Open, it is an overlay at every width,
+ * It renders nothing while closed. Open, it is an adaptive overlay,
  * positioned against the nearest positioned ancestor (the viewport's stage
  * when it is `ExplorerViewport`'s child, else the root or a host's own
- * wrapper), so opening it never resizes the graph.
+ * wrapper), so opening it never resizes the graph. Below 720 CSS pixels
+ * of available width it docks to the bottom, leaving at least half the graph
+ * uncovered. This follows container space, including embedded explorers.
  *
  * The body is a keyboard scroll stop and scrolls to the top when the
  * inspected node changes. Its content is the slot's, or by default the
@@ -26,7 +28,7 @@
  * leaving the data) ends in the same place. See `ExplorerRoot`.
  */
 
-import { useEffect, useId, useMemo, useRef } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement, ReactNode } from 'react';
 import { useExplorerContext } from './context.js';
 import { CloseIcon } from './icons.js';
@@ -78,6 +80,24 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
   const bodyRef = useRef<HTMLDivElement>(null);
   const asideRef = useRef<HTMLElement>(null);
   const open = node !== null;
+  const [compact, setCompact] = useState(false);
+
+  // Observe the containing surface, never the panel itself: changing docking
+  // must not feed back into the measurement. The initial server render is
+  // deterministic, and the first client measurement runs before paint.
+  useIsomorphicLayoutEffect(() => {
+    const parent = asideRef.current?.parentElement;
+    if (!open || parent === undefined || parent === null) return undefined;
+    const measure = (): void => {
+      const width = parent.getBoundingClientRect().width;
+      if (width > 0) setCompact(width < 720);
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(parent);
+    return () => observer.disconnect();
+  }, [open]);
 
   // Before paint, so the camera has made room for the drawer by the frame it shows in.
   useIsomorphicLayoutEffect(() => {
@@ -88,6 +108,22 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
   useEffect(() => {
     if (nodeId !== null && bodyRef.current !== null) bodyRef.current.scrollTop = 0;
   }, [nodeId]);
+
+  // In a short viewport a search result can be above the entire panel.
+  // Reveal an offscreen compact panel once it opens, without moving focus
+  // or scrolling again when the reader follows a connection inside it.
+  useEffect(() => {
+    const aside = asideRef.current;
+    if (!open || !compact || aside === null) return;
+    const box = aside.getBoundingClientRect();
+    const view = aside.ownerDocument.defaultView;
+    if (view === null) return;
+    const top = view.visualViewport?.offsetTop ?? 0;
+    const bottom = top + (view.visualViewport?.height ?? view.innerHeight);
+    if (box.height > 0 && (box.top >= bottom || box.bottom <= top)) {
+      aside.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+    }
+  }, [open, compact]);
 
   const connections = useMemo(() => {
     if (nodeId === null || activeView === null) return [];
@@ -120,15 +156,18 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
     <aside
       ref={asideRef}
       data-dagr-explorer="details"
+      data-placement={compact ? 'bottom' : 'right'}
       aria-labelledby={titleId}
       className={className}
       onKeyDown={onKeyDown}
       style={{
         position: 'absolute',
-        top: 0,
+        top: compact ? 'auto' : 0,
         right: 0,
         bottom: 0,
-        width: 'min(360px, 100%)',
+        height: compact ? '50%' : undefined,
+        maxHeight: compact ? '50dvh' : undefined,
+        width: compact ? '100%' : 'min(360px, 100%)',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 1,
@@ -147,6 +186,7 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
           data-dagr-explorer="details-close"
           aria-label={labels.close}
           title={labels.close}
+          style={{ minWidth: 44, minHeight: 44, flexShrink: 0 }}
           onClick={() => state.closeDetails()}
         >
           <CloseIcon />
@@ -179,7 +219,7 @@ export function ExplorerDetails<N extends ExplorerNode = ExplorerNode, E extends
                     const direction = outward ? (edge.target === node.id ? 'self' : 'to') : 'from';
                     return (
                       <li key={edge.id}>
-                        <button type="button" data-node-id={other.id} onClick={() => follow(other.id)}>
+                        <button type="button" style={{ minWidth: 44, minHeight: 44 }} data-node-id={other.id} onClick={() => follow(other.id)}>
                           {renderConnection !== undefined ? (
                             renderConnection(edge, other, direction)
                           ) : (

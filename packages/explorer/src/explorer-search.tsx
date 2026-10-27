@@ -21,7 +21,7 @@
  * without losing the list.
  */
 
-import { useEffect, useId, useMemo, useRef } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement } from 'react';
 import { useExplorerContext } from './context.js';
 
@@ -46,6 +46,23 @@ export function ExplorerSearch(props: ExplorerSearchProps): ReactElement {
   const inputId = useId();
   const countId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [focusRequest, setFocusRequest] = useState<{ id: string } | null>(null);
+
+  const reading = useRef({ detailsOpen, selectedId });
+  reading.current = { detailsOpen, selectedId };
+
+  // Inspect mounts an obstruction. Frame the accepted result after that DOM
+  // commit, so focus uses the space left by either docking placement. A new
+  // object also repeats the command when the same result is chosen again.
+  useEffect(() => {
+    if (focusRequest === null) return undefined;
+    const frame = requestAnimationFrame(() => {
+      const current = reading.current;
+      if (current.detailsOpen && current.selectedId === focusRequest.id) focusNode(focusRequest.id);
+      setFocusRequest(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusRequest, focusNode]);
 
   // The field is where focus goes when the drawer closes and its opener is gone.
   useEffect(() => {
@@ -61,7 +78,7 @@ export function ExplorerSearch(props: ExplorerSearchProps): ReactElement {
   // `inspect` and `focusNode` are the root's stable methods.
   const pick = (id: string, trigger: HTMLElement): void => {
     inspect(id, trigger);
-    focusNode(id);
+    setFocusRequest({ id });
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
@@ -102,7 +119,7 @@ export function ExplorerSearch(props: ExplorerSearchProps): ReactElement {
                   aria-current={node.id === selectedId ? 'true' : undefined}
                   onClick={(event) => {
                     inspect(node.id, event.currentTarget);
-                    focusNode(node.id);
+                    setFocusRequest({ id: node.id });
                   }}
                 >
                   {node.label}
@@ -114,7 +131,7 @@ export function ExplorerSearch(props: ExplorerSearchProps): ReactElement {
         {more === 0 ? null : <p data-dagr-explorer="search-more">{moreMatches(more)}</p>}
       </>
     );
-  }, [matches, cap, selectedId, searchResults, moreMatches, inspect, focusNode]);
+  }, [matches, cap, selectedId, searchResults, moreMatches, inspect]);
 
   return (
     <div data-dagr-explorer="search" role="search" className={props.className} style={props.style}>

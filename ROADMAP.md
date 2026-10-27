@@ -19,9 +19,10 @@ The maintainer asked to develop Explorer as a visual learning tool, with
 consistent agent-authored rich graphs and mobile support as a library
 capability. This adds the [learning and mobile track](#explorer-learning-and-mobile-track)
 alongside the renderer evidence goals, rather than waiting for the all-moving
-10k target before repairing phone reading. M5.7b is the next Explorer increment;
-M5.7c follows it. The renderer queue below retains its internal order and the
-report track keeps its separate scheduling. New learning work does not imply
+10k target before repairing phone reading. M5.7b repairs the mobile map
+reading baseline; M5.7c, the shared-state outline reader, is the next Explorer
+increment. The renderer queue below retains its internal order and the report
+track keeps its separate scheduling. New learning work does not imply
 that compound layout, audio or an additional rendering backend is required.
 
 ## Status (2026-10-17 UTC)
@@ -80,7 +81,7 @@ adapter blocks claims about that backend, not backend-independent interaction.
 
 Stage 1 proves the renderer; stage 2 makes it usable as a product. The
 maintainer-directed M5.7 track has its own ordered tasks below. Correctness and
-install regressions preempt both tracks; the next Explorer slice is M5.7b and
+install regressions preempt both tracks; the next Explorer slice is M5.7c and
 can ship independently of the renderer performance target. Jobs select the
 first eligible Dispatch task in the chosen track, checking claims and open
 PRs rather than treating every unchecked milestone as ready.
@@ -526,8 +527,8 @@ parts. Do not put the only fix in a demo stylesheet.
 
 | Slice | Dispatch task | Outcome and exit check |
 | --- | --- | --- |
-| **M5.7a** Authoring skill and direction (this increment) | `tsk_47bf1df19adb` | A portable [learning Explorer skill](skills/dagr-learning-explorer/SKILL.md), a typechecked example and sourced distribution/architecture findings. Runtime changes remain planned. |
-| **M5.7b** Mobile reading baseline and repair (next) | `tsk_eb73b47f05e3` | Reproduce search, inspect, follow and close, page scroll, pan/pinch/cancel, rotation and software-keyboard flows. Repair adaptive controls/details in the library over the current renderer. Record before/after screenshots at 320, 390 and 768 CSS-pixel container widths in Chromium touch emulation and WebKit; distinguish real-device checks. Primary touch targets aim for 44 CSS pixels. Essential actions need no hover or double tap. Preserve keyboard, focus return, SSR and reduced motion. |
+| **M5.7a** Authoring skill and direction (PR #160) | `tsk_47bf1df19adb` | A portable [learning Explorer skill](skills/dagr-learning-explorer/SKILL.md), a typechecked example and sourced distribution/architecture findings. Runtime changes remain planned. |
+| **M5.7b** Mobile reading baseline and repair | `tsk_eb73b47f05e3` | Library details dock below in containers under 720px, preserving at least half the graph; default primary controls target 44px. Chromium headless touch evidence covers 320/390/768px containers in portrait/landscape, search/inspect/follow/close, scroll, pan/pinch/cancel, resize, browser visual zoom and reduced motion. Shared state, keyboard/focus return and SSR remain covered. [Evidence and limitations](bench/browser/explorer-mobile.md): WebKit cannot launch for missing system libraries; real devices/software keyboards and desktop browser zoom remain unverified. The true Explorer successor is M5.7c, subject to the board check at merge. |
 | **M5.7c** Shared-state outline reader | `tsk_17e1212b51f0` | An exported outline/list companion to the map, selectable at any width, using the same content, IDs, query, selection, trace and details. Resize and mode changes retain reading position/selection with explicit focus rules. One scenario suite exercises both presentations, controlled state, removal, cycles and SSR. Depends on M5.7b. |
 | **M5.7d** Authoring evaluation and distribution | `tsk_1b6fb4253f02` | Compare skill-guided and baseline authoring on codebase, prerequisite and process briefs; verify correctness, relationship explanation and source/detail access. Validate local and pinned-Git skill discovery. Evaluate version-matched npm bundling separately, preserving the publication gate. Depends on M5.7a. |
 

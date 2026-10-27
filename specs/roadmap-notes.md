@@ -16,6 +16,34 @@ The checklist in `ROADMAP.md` is the live one. New tasks keep the same shape:
 the one-line entry lands there, and the working record lands here under the
 same ID.
 
+## M5.7b: Mobile map reading repair (2026-10-27 UTC)
+
+Task `tsk_eb73b47f05e3`, following PR #160. The bounded library change keeps
+ExplorerRoot and the SVG/DOM base. Details choose bottom docking below 720px
+of container width and a side panel above it, preserving the mounted reader
+and at least half the graph in compact placement. The compact height is capped
+at 50dvh; default primary controls target 44 CSS pixels. Search uses a 16px
+input. Host custom actions and replacement styles still own their sizing.
+
+A wholly offscreen compact panel opened from a search result in landscape
+needed one page scroll to be discoverable. Opening now reveals that panel
+without moving focus; following a connection does not repeat the page scroll.
+Focus-gated graph gestures are preserved. Search framing runs after the
+panel commits, and explicit camera focus measures current overlay geometry,
+which also repairs a search-framing failure found by the older browser suite.
+
+[Reproduction and limitations](../bench/browser/explorer-mobile.md) describe
+the before/after Chromium touch-emulation matrix at 320, 390 and 768 CSS-pixel
+containers, plus the published demo's 358px container at a 390px viewport.
+It covers portrait/landscape reading, keyboard/focus return, controlled
+selection, page scroll, pan/pinch/cancel, rotation/viewport shrink, reduced
+motion and Chromium browser visual zoom. The regression suite also covers
+SSR and hydration. WebKit downloaded but could not launch for missing system
+libraries; real devices, software keyboard occlusion, hardware safe areas and
+desktop Ctrl-plus zoom are not claimed. The planned successor is M5.7c,
+`tsk_17e1212b51f0`, checked on the board before completion. This increment
+does not introduce an outline or another renderer.
+
 ## M5.7: Learning Explorers and mobile (2026-10-26 UTC)
 
 The maintainer asked to explore Explorer as a visual learning tool, make agents

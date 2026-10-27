@@ -3,7 +3,7 @@ import { StrictMode, createRef } from 'react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExplorerBase } from '../src/base.js';
-import { createCameraLimits, fitCamera } from '../src/camera.js';
+import { createCameraLimits, fitCamera, focusCamera } from '../src/camera.js';
 import type { CameraFrame, ExplorerCamera } from '../src/camera.js';
 import type { ExplorerApi, ExplorerState } from '../src/context.js';
 import { ExplorerDetails } from '../src/explorer-details.js';
@@ -381,12 +381,31 @@ describe('ExplorerViewport: the frame the drawer leaves', () => {
     await flush(() => api().inspect('a'));
     await runFramesUntilIdle();
     expectCamera(fitIn(narrow));
-    // The drawer is observed with the viewport, so its own resize moves the frame.
-    expect(watchCount()).toBe(2);
+    // The camera observes the drawer; adaptive docking observes its container too.
+    expect(watchCount()).toBe(3);
     await flush(() => api().closeDetails());
     await runFramesUntilIdle();
     expectCamera(fitIn(SIZE));
     expect(watchCount()).toBe(1);
+  });
+
+  it('uses current overlay bounds for focus before a resize observer delivers', async () => {
+    drawerAt(440, 800);
+    await ready({ views: [overview] }, withDrawer);
+    await flush(() => api().inspect('a'));
+    await runFramesUntilIdle();
+    // Change geometry without delivering a ResizeObserver notification.
+    const drawer = part('details');
+    vi.spyOn(drawer, 'getBoundingClientRect').mockReturnValue({
+      left: 600, right: 800, top: 0, bottom: 480, width: 200, height: 480, x: 600, y: 0,
+    } as DOMRect);
+    await flush(() => api().focusNode('a'));
+    await runFramesUntilIdle();
+    const frame = { x: 0, y: 0, width: 600, height: 480 };
+    const limits = createCameraLimits(placed, frame);
+    const box = placed.boxes.get('a');
+    if (limits === null || box === undefined) throw new Error('missing layout');
+    expectCamera(limits.constrain(focusCamera(box, frame, limits)));
   });
 
   it('eases to the new fit when the drawer closes, with no jump in the first frame', async () => {

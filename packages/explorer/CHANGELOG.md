@@ -1,5 +1,17 @@
 # @prnt/dagr-explorer
 
+## Unreleased
+
+- Details dock below the map in containers narrower than 720 CSS pixels,
+  leaving at least half the graph visible. An entirely offscreen compact
+  panel scrolls into view on opening without moving focus or repeating the
+  scroll on connection navigation.
+- Default primary controls target 44 CSS pixels; search uses a 16px input.
+- Search frames the accepted result after details mount, using current
+  obstruction geometry instead of the previous full graph area.
+- Add a reproducible Chromium touch matrix and record unavailable WebKit,
+  real-device and software-keyboard checks separately.
+
 ## 0.1.4
 
 - A pan or a zoom no longer selects text: the viewport sets
