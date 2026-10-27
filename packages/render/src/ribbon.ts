@@ -682,9 +682,10 @@ function previousRoute(
 
 /**
  * {@link cleanCentreline} straight from a route's given points, which it also
- * appends to `record`, rejecting a coordinate that is not a finite number
- * BEFORE the typed array converts it: written first, a `null` would become 0
- * and draw at the origin, and `"5"` would become 5.
+ * appends to `record`, dropped ones included, since {@link givenBefore}
+ * compares against all of them. It rejects a coordinate that is not a finite
+ * number BEFORE the typed array converts it: written first, a `null` would
+ * become 0 and draw at the origin, and `"5"` would become 5.
  */
 function cleanGivenCentreline(
   points: readonly Vec2[],
@@ -1110,7 +1111,7 @@ function measureSegments(line: Polyline): number {
  * come back unchanged, because a one-sided tangent at both ends is the straight
  * line and subdividing it produces its own endpoints. It takes a cleaned
  * centreline: two consecutive identical points make a zero knot width and a
- * `NaN` tangent, which is what {@link cleanCentreline} exists to remove.
+ * `NaN` tangent, which is what {@link cleanGivenCentreline} exists to remove.
  */
 function smoothInto(points: Polyline, toleranceWorld: number | undefined, out: Polyline): void {
   out.length = 0;
@@ -1320,7 +1321,7 @@ function tessellateCentreline(out: RibbonBuilder, line: Polyline, miterLimit: nu
   for (let i = 1; i < line.length; i += 1) {
     // The segment from point `i - 1` to point `i`, as a UNIT direction and the
     // arc length at its start. Its length is above MIN_SEGMENT_WORLD because
-    // `cleanCentreline` ran first, so the division cannot be by zero.
+    // the centreline was cleaned first, so the division cannot be by zero.
     const fromX = xs[i - 1]!;
     const fromY = ys[i - 1]!;
     const deltaX = xs[i]! - fromX;

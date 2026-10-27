@@ -401,9 +401,9 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   frame lower. See "With the segment lengths taken without the `Math.hypot`
   builtin". Since 2026-10-27 a moving route's given points are checked,
   recorded and cleaned in one pass (`tsk_a8956f877616`), where two passes
-  copied every point twice: byte-identical over 140,000 random calls in Node,
-  and on the same GPU with every node moving `setEdges` 6.7 to 7.0 ms against
-  7.2 to 7.6, lower in every pair of six, with ticks missed not separated; a
+  copied every point through a scratch polyline first: byte-identical over
+  140,000 random calls in Node, and on the same GPU with every node moving
+  `setEdges` 6.7 to 7.0 ms against 7.2 to 7.6, lower in every pair of six, with ticks missed not separated; a
   pair of CPU profiles put `tessellateRibbons` about 0.45 ms a frame lower.
   See "With a route's given points cleaned in one pass". Next is
   `tsk_396330099dfb`.

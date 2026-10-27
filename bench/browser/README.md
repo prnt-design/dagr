@@ -2492,7 +2492,8 @@ given points straight into the cleaned polyline, with the same checks and
 messages at the same indices. No arithmetic changes, so nothing here rests
 on an engine's rounding.
 
-Byte-identical: main's build and this one, given the same 140,000 random
+Byte-identical for routes whose points are an array, as `RibbonRoute` types
+them: main's build and this one, given the same 140,000 random
 `tessellateRibbons` calls over 2,800 scenes in Node 22.22.1 (smooth and
 polyline, miter limits from 1 to 100, absolute and default tolerances, routes
 kept, moved, added, dropped and reversed between calls with the previous build
@@ -2514,7 +2515,7 @@ average 0.0 to 0.6, read before and after each run. Six pairs in two rounds of
 three; main's run of the sixth pair first timed out waiting for the page to
 load and was run again straight after. The control tick read 17.6 to 17.7 ms
 in the first five runs and 16.7 from this build's run of the third pair on,
-in both builds. Animated-mode medians in milliseconds, one value per pair:
+in both builds, so the third pair straddles the change. Animated-mode medians in milliseconds, one value per pair:
 
 | Build | Moving | `setEdges` | `setEdges` p95 | `render` | `advance` | `apply` | Past one tick |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -2535,7 +2536,7 @@ in both builds. Animated-mode medians in milliseconds, one value per pair:
 - One pair of CPU profiles, taken as above: `tessellateRibbons` 2,940 ms
   against main's 3,146, about 0.45 ms over each of the roughly 450 frames
   sampled. The one-pass cleaner's own time was 294 ms against main's
-  `givenCentreline` 356 plus about 65 of `cleanCentreline` on the given
+  `givenCentreline` 356 in this pair plus about 65 of `cleanCentreline` on the given
   points. In this build's profile V8 inlined `hypot` and `rib` into the walk
   and `flatToChord` into the flattening, which it had not in main's, so the
   other functions' own times do not compare between the two.
