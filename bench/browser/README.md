@@ -2249,3 +2249,67 @@ What is left of the all-moving frame between retargets is `setEdges` at 11 ms,
 which #159 addresses and whose memory trade is the maintainer's call, and the
 per-point allocation of the frame's points, which a caller holding an earlier
 frame relies on.
+
+### Edge builds written into the GPU buffers already created, not kept (2026-10-27)
+
+`tsk_9883b17df78b`: with every node moving at 10,000 smooth nodes, each
+`setEdges` build got new GPU buffers, about 12.5 MB a frame by the
+`--memory` run. Measured first, in Chrome: a CPU profile of the all-moving
+smooth row on main (`c70e9f2`, same machine, browser and flags as the table
+below, 600 frames, samples about every 0.2 ms) put about 510 ms of the
+run in three's `createAttribute`, which creates each buffer mapped and copies
+the build into it, during `render`. That is about 0.8 ms over each of about
+620 builds. Disposing the old buffers took about 0.02 ms a build. `setEdges`
+itself was 7.0 s, of which `tessellateRibbons` was 6.5 s.
+
+The change tried: an edge group kept its geometry once its first draw had
+created the buffers, and handed a build that fit them (no larger, and at
+least half their size) to the same attribute objects, so three wrote it over
+the front of the existing buffers with `writeBuffer` rather than creating new
+ones. The CPU arrays were the build's own, so it held no more CPU memory and
+did not depend on #159. Byte-identical: main and this build, given the same
+18,000 random `setEdges`, `setEdgeIntensity` and draw calls over 300 scenes
+(two groups, one dashed, one smooth; groups growing, shrinking and emptied,
+routes kept, bad colours and points), held the same index, attributes, counts
+and draw range after every call and rejected the same 3,141 calls with the
+same messages. A stand-in for three that sizes each buffer at its first
+upload found no build written past a buffer's end in 42,392 reuses.
+
+It did what it was for: by `--memory`, GPU bytes created per frame of moving
+edges fell from 12,502,144 to 83,075 (two reallocations in 301 frames). It
+made the frame slower. AMD Ryzen 9 9900X, integrated RDNA 2, Google Chrome
+156.0.8078.48 on the Windows side, headed, attached through
+`windows-chrome.mjs` with no other flags, adapter `amd` `rdna-2`, not a
+fallback, `renderer.backend` `webgpu` on every row, control tick 17.7 ms in
+the first run and 16.7 in the rest, DPR 1, viewport 1280 by 720, `fit` (zoom
+0.0715), `--motion=springs --sizes=10000 --edges=smooth --moving=1,0.1
+--frames=1200`, builds swapped through `packages/render/dist`, main first in
+each pair. Load average 0.05 to 0.37. Animated-mode medians in milliseconds,
+one value per pair:
+
+| Build | Moving | `setEdges` | `setEdges` p95 | `render` | `render` p95 | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- |
+| main | all | 10.9, 10.1, 10.3 | 15.5, 14.4, 15.0 | 1.1, 1.0, 1.0 | 1.4, 1.2, 1.2 | 8.0%, 6.3%, 7.2% |
+| this | all | 9.8, 10.0, 9.6 | 16.6, 16.8, 16.6 | 2.3, 2.3, 2.3 | 3.0, 3.0, 2.9 | 22.8%, 15.1%, 21.2% |
+| main | a tenth | 3.1, 3.0, 3.1 | 5.2, 4.2, 4.9 | 1.3, 1.0, 1.0 | 1.5, 1.2, 1.1 | 0%, 0%, 0.2% |
+| this | a tenth | 3.2, 3.0, 3.0 | 4.4, 5.2, 4.9 | 2.6, 2.6, 2.6 | 2.9, 3.0, 2.9 | 0%, 0%, 0% |
+
+- **`render` rose by 1.2 to 1.6 ms in every pair**, with every node moving
+  and with a tenth, and ticks missed with every node moving rose in every
+  pair (15% to 23% against 6% to 8%).
+- `setEdges` medians fell by 0.1 to 1.1 ms with every node moving, but its
+  p95 rose, and with a tenth moving it did not move.
+- A CPU profile of this build (600 frames, as above) shows why: three's
+  `updateAttribute`, which is the `writeBuffer` of each build, took about
+  1,415 ms where main's `createAttribute` took 510. Writing a build into a
+  buffer that already exists costs Chrome about 2.8 times what a new buffer
+  mapped at creation does, for the same bytes.
+
+Main's ticks missed here (6% to 8%) are lower than the 16% to 23% the
+2026-10-26 section above recorded for the same build on the same machine and
+browser. The cause was not traced, so compare only within one table.
+
+What is left of the all-moving frame between retargets is still `setEdges`,
+and most of it is `tessellateRibbons` (6.5 s of 7.0 in the profile of main),
+which every moving route runs on every frame. The garbage its new arrays
+leave is #159's, whose memory trade is the maintainer's call.
