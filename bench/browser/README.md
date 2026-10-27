@@ -2410,8 +2410,9 @@ mean segment the default tolerance is taken from. `rib` is already a capacity
 check and ten typed-array stores.
 
 The change: `measureSegments` calls the `hypot` the walk already uses, V8's own
-two-argument algorithm written out in `ribbon.ts` (see the section above). In the Chrome 156 below it returned the same double as `Math.hypot`,
-by `Object.is`, over another 10,000,100 pairs (random bit patterns, differences
+two-argument algorithm written out in `ribbon.ts` (see the section above). In
+the Chrome 156 below it returned the same double as `Math.hypot`, by
+`Object.is`, over another 10,000,100 pairs (random bit patterns, differences
 of random coordinates at scales from 1e-20 to 1e19, and every pair of zeros,
 subnormals, `MAX_VALUE`, infinities and `NaN`). The power that turns a length
 into a knot width is unchanged.
@@ -2455,16 +2456,19 @@ per pair:
   0.2 to 0.7 ms) and equal in one, and its p95 lower in four and higher in
   two. Ticks missed did not separate (1.3% to 3.0% against 1.3% to 3.0%).
 - With a tenth moving the change is not resolved, as expected: only the moving
-  tenth of the routes is measured, and both builds hold the tick.
+  tenth of the routes is tessellated, and both builds hold the tick.
 - Two pairs of CPU profiles, taken as above, resolve what the frame medians
   barely do: `measureSegments`' own time 85 and 107 ms against main's 294 and
   303, the shared `hypot` 446 and 441 against 352 and 363, and
   `tessellateRibbons` 2,924 and 3,004 ms against 3,125 and 3,169, about 0.4 ms
-  a frame.
+  over each of the roughly 450 frames in the 8 s sampled.
+- `advance` and `apply`, which the change does not run, read 2.5 to 3.0 and
+  16.0 to 19.0 ms against main's 2.4 to 2.7 and 18.1 to 18.7. Not traced.
 
 What is left of the all-moving frame between retargets is still `setEdges`
 (7.4 ms), most of it `tessellateRibbons`, then `advance`. Inside the
 tessellation the largest own times are now the walk and `hypot`, `rib`
 (a typed-array store per vertex attribute) and `givenCentreline`, which
 iterates `points.entries()` and records every coordinate in a growing
-`number[]`.
+`number[]`. The next change is `tsk_a8956f877616`, chosen from a fresh
+profile.
