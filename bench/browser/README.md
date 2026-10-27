@@ -2113,3 +2113,51 @@ smooth frame's per-frame cost: #159's buffer reuse first, then `advance`, the
 second largest step, which no change since 2026-10-23 has targeted, ahead
 of `setEdges`'s remaining flattening and walk, which byte-identical output
 pins, and ahead of `apply`, which runs on about one frame in 20 to 24.
+
+### With edge springs stepped into a spare velocity array (2026-10-27)
+
+`createEdgeMotion`'s `advance` gave each moving edge a new velocity list every
+frame, and that list lived until the next frame, so a scavenge in between
+copied it. Each edge now keeps a second list and steps into it, swapping the
+two after the step, so a step that throws still leaves the edge as it was.
+The points a frame hands out are still new every frame, so a caller holding
+an earlier frame still sees it unchanged.
+
+Byte-identical: the previous build and this one, given the same 45,000 random
+`resync`, `apply` and `advance` calls over 300 scenes (reroutes in flight,
+departures, arrivals, unknown ids, elapsed times from zero to half a second),
+return the same frames, and refuse the same 861 calls with the same messages.
+
+In Node (`v25.6.1`, same machine, load average 2.6 to 5.0), the scene of
+`packages/render/bench/scene-motion.bench.ts` stepped by its 1/10,000 s with
+every spring in flight, six retargets of 400 `advance` calls a run, builds
+alternated ten times. A run's GC falls into one of two modes in both builds
+(about 40 mark-compacts or 100 to 140), so three pairs do not separate them;
+ten do:
+
+| Edges | Build | `advance` median, ms | Mark-compacts in 2,400 calls |
+| --- | --- | --- | --- |
+| smooth | previous | 2.78 to 3.07 | 50 to 142, median 128 |
+| smooth | this one | 2.25 to 2.58 | 35 to 111, median 100 |
+| straight | previous | 1.84 to 2.56 | 41 to 135, median 113 |
+| straight | this one | 1.63 to 2.24 | 33 to 99, median 85.5 |
+
+On WebGPU, same machine (Apple M4), Google Chrome 156.0.8078.48 headed with
+`--enable-webgpu-developer-features`, adapter `apple` `metal-3` (not a
+fallback), `renderer.backend` `webgpu` on every run,
+`--motion=springs --sizes=10000 --edges=smooth --frames=1200`, every node
+moving, builds swapped through `packages/render/dist/edge-motion.js`,
+previous build first in each of six pairs, load average 2.9 to 5.2.
+Animated-mode medians in milliseconds:
+
+| Build | `advance` | `setEdges` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- |
+| previous | 3.4, 3.4, 4.2, 3.8, 5.0, 3.6 | 9.3, 9.0, 9.0, 9.1, 8.9, 9.0 | 15.7, 16.0, 15.7, 15.5, 15.4, 15.3 | 4.1%, 2.9%, 3.4%, 3.9%, 6.0%, 3.3% |
+| this one | 3.5, 4.8, 3.2, 3.0, 3.2, 5.0 | 8.9, 8.9, 8.9, 8.8, 8.9, 8.8 | 15.3, 14.6, 15.2, 13.2, 14.7, 14.7 | 1.7%, 4.7%, 1.8%, 1.1%, 1.8%, 5.6% |
+
+The browser does not resolve `advance`: both builds' medians fall in two
+bands run to run (about 3.0 to 3.8 or 4.2 to 5.0), and the ticks missed
+overlap. `apply` read 0.4 to 2.3 ms lower in every pair and `setEdges` 0 to
+0.4, though neither runs this code, which fits less garbage to collect
+in later steps; not traced. What is left of each edge's step is a new point
+per spring per frame, which a caller holding an earlier frame relies on.
