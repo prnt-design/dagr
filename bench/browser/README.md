@@ -2547,3 +2547,74 @@ profile the largest own times were the walk with its inlined `hypot` and `rib`
 (998 ms), the edge half of `advance` (713), the flattening (529) and
 `smoothInto` (509). The next change is `tsk_396330099dfb`, chosen from a
 fresh profile.
+
+### Flattened points cleaned as they are made, not kept (2026-10-27)
+
+`tsk_396330099dfb`: the next cost inside the tessellation, with every node
+moving. A CPU profile of the all-moving smooth row on main (`419b58c`, same
+machine, browser and flags as the table below, 600 frames, 8 s sampled every
+0.5 ms starting 12 s after the page opened) put 2,975 ms under
+`tessellateRibbons`, with own times of 1,083 ms for the walk (`hypot` and
+part of `rib` inlined into it), 550 for the flattening, 450 for `smoothInto`, 235 for
+`cleanGivenCentreline` and 132 for `cleanCentreline`, which copied every
+flattened point into a second polyline without the ones closer than
+`MIN_SEGMENT_WORLD` to the last kept. Outside the tessellation: garbage
+collection 817, the edge half of `advance` 750.
+
+The change tried: a `Polyline` subclass whose `push` checks and drops as the
+flattening writes, so the flattened points are cleaned without a second pass,
+a second buffer or the `route "id" flattened` label built per route. No
+arithmetic changed. A first version using private fields and `super.push`
+was 1.5 ms slower in Node; the one measured below used plain fields and
+wrote the store inline.
+
+Byte-identical: main's build and this one, given the same 140,000 random
+`tessellateRibbons` calls over 2,800 scenes in Node 22.22.1 (a generator like
+the section above's, plus scales up to `1.79e308` and, in a fifth of the
+scenes, points near `MAX_VALUE` among small steps so that flattening
+overflows after a dropped point), returned the same bytes, ranges and given
+points, and refused the same 48,920 calls with the same messages, 7,028 of
+them on a flattened point. The same check finds 6 differing calls against a
+build that numbers a flattened point by the points kept rather than pushed,
+and 401 against one that drops only exact repeats. In Node, `tessellateRibbons`
+on 13,169 three-point smooth routes, every route moving, took 7.88 to 8.12 ms
+median against 8.07 to 8.14 back to back, two pairs, which did not decide
+it, since Node has not been a reliable proxy for the browser here.
+
+AMD Ryzen 9 9900X, integrated RDNA 2, Google Chrome 156.0.8078.48 on the
+Windows side, headed, attached through `windows-chrome.mjs` with no other
+flags, adapter `amd` `rdna-2`, not a fallback, `renderer.backend` `webgpu` on
+every row, control tick 17.6 to 17.7 ms, DPR 1, viewport 1280 by 720, `fit`
+(zoom 0.0715), `--motion=springs --sizes=10000 --edges=smooth --moving=1,0.1
+--frames=1200`, builds swapped through `packages/render/dist/ribbon.js`, main
+(`419b58c`) first in each pair. #159 is still open, so main here is without
+it. Load average 0.0 to 0.6, read before and after each run. Six pairs in two
+rounds of three. Animated-mode medians in milliseconds, one value per pair:
+
+| Build | Moving | `setEdges` | `setEdges` p95 | `render` | `advance` | `apply` | Past one tick |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| main | all | 7.3, 6.9, 6.8, 7.0, 6.9, 7.0 | 9.8, 9.3, 9.3, 9.4, 9.6, 9.4 | 1.0 in every pair | 2.5, 2.6, 2.6, 2.6, 2.5, 2.7 | 18.2, 18.0, 18.4, 18.3, 18.1, 17.7 | 0.8%, 0.9%, 1.0%, 0.8%, 0.4%, 0.8% |
+| this | all | 7.2, 7.0, 7.1, 7.1, 6.9, 7.2 | 9.7, 9.2, 9.3, 9.2, 9.2, 9.6 | 1.0 in every pair | 2.6, 2.7, 2.6, 2.5, 2.5, 2.7 | 17.6, 18.0, 18.2, 18.0, 18.4, 18.1 | 1.0%, 1.8%, 1.8%, 1.6%, 1.4%, 1.2% |
+| main | a tenth | 2.9, 2.8, 2.8, 2.9, 2.8, 2.8 | 4.6, 4.7, 4.6, 4.6, 4.6, 4.6 | 1.0 in every pair | 0.6, 0.6, 0.6, 0.5, 0.6, 0.5 | 2.6, 2.5, 2.6, 1.8, 2.5, 1.8 | 0%, 0%, 0%, 0.1%, 0%, 0% |
+| this | a tenth | 2.9, 2.8, 2.8, 2.8, 2.8, 2.9 | 4.6, 4.6, 4.6, 4.6, 4.5, 4.6 | 1.0 in every pair | 0.5, 0.6, 0.6, 0.5, 0.5, 0.5 | 1.7, 2.5, 2.6, 2.6, 2.0, 1.8 | 0.1%, 0.1%, 0%, 0.1%, 0%, 0% |
+
+`render` p95 was 1.1 on every row.
+
+- **With every node moving, `setEdges` was not lower**: higher in four pairs,
+  lower in one and equal in one. Ticks missed were higher in every pair.
+- With a tenth moving the change is not resolved; both builds hold the tick.
+- One pair of CPU profiles, taken as above: `tessellateRibbons` 2,935 ms
+  against main's 2,894, and garbage collection 861 against 864. In this
+  pair V8 inlined neither `hypot` nor `flatToChord` in either build, so the
+  own times below are lower than in the profile above and compare only
+  within the pair. The second pass was gone (main's `cleanCentreline` 123
+  and `push` 96), but the flattening's own time rose to 252 from 157 and the
+  cleaning `push` read 148, so the check cost about as much inside the
+  subdivision loop as the copy did after it.
+
+Not kept. What is left of the all-moving frame between retargets is still
+`setEdges` (about 7 ms), most of it the walk, the flattening and the knot
+widths, whose arithmetic byte-identical output pins, then garbage collection
+(817 to 864 ms of the 8 s sampled, in the three profiles above) and `advance`. The next
+change is `tsk_903f42a19c0b`: attribute that collection to its allocation sites
+in Chrome and reduce one that #159's buffer reuse does not already address.
