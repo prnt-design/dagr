@@ -14,8 +14,10 @@
  * THREE VERBS AND A COUNT. `grow`, `prune` and `relayout` each make one edit;
  * the readout says what that edit added, removed and moved, and how much of the
  * drawing it left alone; and the nodes it touched wear a halo, so the count is
- * checkable rather than merely stated. `edit-script.ts` owns the verbs,
- * `readout.ts` owns the count, and this file is the page around them.
+ * checkable rather than merely stated. The node under the pointer is filled
+ * white, answered for a mouse from GPU picks (`hitTesting="gpu"`).
+ * `edit-script.ts` owns the verbs, `readout.ts` owns the count, and this file
+ * is the page around them.
  *
  * THE CAMERA FITS ONCE AND THEN IT IS THE VISITOR'S, which is `<DagrCanvas>`'s
  * decision and not this component's to relitigate. An animated demo that

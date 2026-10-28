@@ -675,7 +675,7 @@ back, one at a time, until the drawing rests. Hover primes the picks, so an
 index, touch with its fingertip tolerance, since a tap, or a pen that does not
 report hover, has nothing picked before it. A renderer rebuilt after a lost
 context starts with no picks rather than answering from the lost one's. The
-default stays `'cpu'` until M4.8b prices the pass on a device.
+default stays `'cpu'` because the GPU path ignores a click while nodes glide.
 
 **Camera control.** `apiRef` (and `useDagrCanvas()` inside the canvas) gives the
 methods below. It is `apiRef` rather than `ref` on purpose: `ref` on a React

@@ -21,6 +21,7 @@ export {
   CLEAR_COLOR,
   HIGHLIGHT_COLOR,
   HIGHLIGHT_GLOW,
+  HOVER_COLOR,
   STAGE_LEGEND,
   livingAppearance,
   stageColor,

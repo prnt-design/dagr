@@ -1,6 +1,6 @@
 /**
- * What the living graph looks like: a colour per stage, and a halo on whatever
- * the last edit touched.
+ * What the living graph looks like: a colour per stage, a halo on whatever the
+ * last edit touched, and a white fill on the node under the pointer.
  *
  * THE HALO IS THE OTHER HALF OF THE READOUT. "6 moved, 29 stayed put" is a
  * claim; six lit nodes beside twenty-nine unlit ones is the evidence for it, on

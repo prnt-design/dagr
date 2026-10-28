@@ -156,9 +156,13 @@ describe('the palette is legible', () => {
   });
 
   it('sets the hovered fill further from every stage than adjacent stages are from each other', () => {
+    const steps = STAGES.slice(1).map((stage, index) =>
+      contrast(stageColor(stage), stageColor(STAGES[index] ?? stage)),
+    );
+    const smallestStep = Math.min(...steps);
     for (const stage of STAGES) {
       const ratio = contrast(HOVER_COLOR, stageColor(stage));
-      expect(ratio, `hover is only ${ratio.toFixed(2)}:1 from ${stage}`).toBeGreaterThan(1.31);
+      expect(ratio, `hover is only ${ratio.toFixed(2)}:1 from ${stage}`).toBeGreaterThan(smallestStep);
     }
   });
 });
