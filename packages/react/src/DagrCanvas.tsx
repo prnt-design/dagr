@@ -778,6 +778,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     (motion: SceneMotion, dtSeconds: number): boolean => {
       const current = stageRef.current;
       if (current === null) return true;
+      let settled: boolean;
       try {
         const frame = motion.advance(dtSeconds);
         const drawn = dressNodes(frame.nodes, dressedNodesRef.current);
@@ -797,7 +798,6 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         current.groups.sync();
         current.overlay.sync();
         restoreFocus();
-        hoverAgainRef.current?.();
         if (frame.settled) {
           // The departed are gone: the dressing is whatever the layout holds
           // now. Done on settling rather than per frame because that is the one
@@ -823,11 +823,14 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
             );
           }
         }
-        return frame.settled;
+        settled = frame.settled;
       } catch (cause: unknown) {
         setFailure(cause);
         return true;
       }
+      // Outside the try: a throwing hover handler is not an animation failure.
+      hoverAgainRef.current?.();
+      return settled;
     },
     [syncCameraLimits, shapeEdges, syncTiers, restoreFocus],
   );
@@ -1138,6 +1141,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       const world = camera.screenToWorld(css);
       let id: string | null;
       if (gpu === null) {
+        resting = null;
         id = hitIndex(100).index.hit(world, toleranceWorld());
       } else {
         resting = css;
