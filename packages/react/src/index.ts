@@ -91,6 +91,8 @@ export {
   toWorldBounds,
 } from './scene.js';
 export type { EdgeColorOf, NodeAppearance, NodeAppearanceOf } from './scene.js';
+export { createPickedNodeHitProvider } from './picked-hit.js';
+export type { PickedNodeHitOptions, PickedNodeHitProvider } from './picked-hit.js';
 export { useDagr } from './use-dagr.js';
 export type { DagrLayoutState, UseDagrOptions } from './use-dagr.js';
 export { useGraphInteraction } from './use-graph-interaction.js';
