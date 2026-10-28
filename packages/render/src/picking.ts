@@ -150,8 +150,8 @@ const KIND_BY_TAG: ReadonlyMap<number, PickKind> = new Map(
  * bytes are what both ends of the round trip actually are. A readback gives
  * bytes, and whether the attribute carrying them is a normalised `Uint8Array`
  * (four bytes an instance) or a `Float32Array` of `k / 255` (sixteen) is a
- * question about buffers that M4.8b answers, with the same four numbers either
- * way.
+ * question about buffers; the pick pass uses the `Float32Array`, holding the
+ * byte values themselves, with the kind as a shader constant.
  */
 export interface PickBytes {
   readonly r: number;
@@ -241,7 +241,7 @@ export function decodePickPixel(bytes: ArrayLike<number>, offset = 0): PickHit |
   return { id, kind };
 }
 
-/** Where in an id buffer a pointer is asking about, in the readback's own axes. */
+/** Where in a drawing buffer a pointer is asking about, with y from the bottom. */
 export interface PickReadbackPixel {
   /** From the LEFT of the buffer, in device pixels. */
   readonly x: number;

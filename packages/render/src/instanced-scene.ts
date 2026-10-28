@@ -737,11 +737,19 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
     INSTANCE_CHANNELS.forEach((channel, index) => {
       const attributeObject = this.#attributes[index];
       if (attributeObject === undefined) return;
-      // Not cleared first. three uploads, and then clears, only the attributes
-      // the drawn material reads, and the pick material reads three of these
-      // six: a range left on the other three by a pick pass is the one the next
-      // frame has to upload.
-      attributeObject.addUpdateRange(first * channel.components, span * channel.components);
+      // Merged with a pending range rather than replacing it. three uploads,
+      // and then clears, only the attributes the drawn material reads, and the
+      // pick material reads three of these six: a range left on the other three
+      // by a pick pass is one the next frame still has to upload.
+      let start = first * channel.components;
+      let end = start + span * channel.components;
+      const pending = attributeObject.updateRanges[0];
+      if (pending !== undefined) {
+        start = Math.min(start, pending.start);
+        end = Math.max(end, pending.start + pending.count);
+        attributeObject.clearUpdateRanges();
+      }
+      attributeObject.addUpdateRange(start, end - start);
       attributeObject.needsUpdate = true;
     });
   }

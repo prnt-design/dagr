@@ -272,11 +272,9 @@ export class SceneNodes implements GpuResource {
    * that answers it. The handle itself throws when it is stale, which is the
    * failure worth being loud about.
    *
-   * NOT on the `Renderer` interface, deliberately. M4.4 has no use for it and
-   * M4.8b is the task that knows what a picking pass needs; exporting a lookup
-   * before then would be the guess at a seam that P3 declined to make about the
-   * instance API. It is here because it is the only way to state this module's
-   * central property as a test.
+   * NOT on the `Renderer` interface, deliberately: the picking pass resolves
+   * through {@link nodeForPick} instead. It is here because it is the only way
+   * to state this module's central property as a test.
    */
   placementOf(id: string): NodePlacement | undefined {
     return this.#placements.get(id);

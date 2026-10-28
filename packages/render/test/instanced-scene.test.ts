@@ -430,11 +430,28 @@ describe('what reaches the GPU per frame', () => {
     upload(shapes, ['instanceOffset', 'instanceSize', 'instanceCornerRadius']);
     shapes.set(handles[9] as number, rectAt(900));
     draw(shapes);
-    expect(channel(shapes, 'instanceFillColor').updateRanges).toEqual([
-      { start: 9, count: 3 },
-      { start: 27, count: 3 },
-    ]);
+    expect(channel(shapes, 'instanceFillColor').updateRanges).toEqual([{ start: 9, count: 21 }]);
     expect(channel(shapes, 'instanceOffset').updateRanges).toEqual([{ start: 18, count: 2 }]);
+    shapes.dispose();
+  });
+
+  it('merges ranges left by pick passes, however many ran before a frame', () => {
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 64 });
+    const handles = Array.from({ length: 40 }, (_, i) => shapes.add(rectAt(i)));
+    draw(shapes);
+    upload(shapes, ALL);
+    for (const slot of [30, 5, 12]) {
+      shapes.set(handles[slot] as number, rectAt(slot * 10));
+      shapes.pickMesh.onBeforeRender(
+        null as never,
+        null as never,
+        null as never,
+        null as never,
+        null as never,
+        null as never,
+      );
+    }
+    expect(channel(shapes, 'instanceFillColor').updateRanges).toEqual([{ start: 15, count: 78 }]);
     shapes.dispose();
   });
 
@@ -588,6 +605,22 @@ describe('the pick mesh', () => {
     shapes.add(rectAt(2), 9);
     shapes.remove(first);
     expect(pickIds(shapes)).toEqual([9, 8]);
+    shapes.dispose();
+  });
+
+  it('marks the pick ids for upload when an instance arrives or a removal moves one', () => {
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 8 });
+    const pickIds = (): BufferAttribute => channel(shapes, 'instancePickId');
+    const first = shapes.add(rectAt(0), 1);
+    shapes.add(rectAt(1), 2);
+    let version = pickIds().version;
+    shapes.add(rectAt(2), 3);
+    expect(pickIds().version).toBeGreaterThan(version);
+    version = pickIds().version;
+    shapes.set(first, rectAt(9));
+    expect(pickIds().version).toBe(version);
+    shapes.remove(first);
+    expect(pickIds().version).toBeGreaterThan(version);
     shapes.dispose();
   });
 

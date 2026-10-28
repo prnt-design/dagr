@@ -285,8 +285,10 @@ in Chrome 156.0.8078.48, headless, attached from WSL2
 [as above](#from-wsl2-through-the-windows-sides-chrome), adapter `amd`
 `rdna-2`, `isFallbackAdapter: false`: every run passes, 9,532 picks checked
 and 68 skipped in each, none disagreeing, on `'webgpu'` and `'webgl2'` at both
-ratios, with every node hit. With the row flipped in `pickPixelBounds` as a
-control, every run fails, with 544 to 546 disagreements.
+ratios, with every node hit. As a control, `pickPixelBounds` was rebuilt with
+its row counted from the top (`visible.minY + (bufferSize.height - 1 -
+pixel.y) * height`), and every run then failed, with 544 to 546
+disagreements.
 
 This checks which node a pick names, not what a pick costs, and not hover at
 10,000 nodes or when the pass should run, which stay with the M4.8b task.
@@ -761,8 +763,8 @@ Split by subtraction at 10,000 nodes and `fit`, in milliseconds:
 So on this machine, at 10,000 nodes, M4.10's frame is CPU-bound: about 0.5 ms
 of GPU at DPR 1 and 1.2 at DPR 2 with straight edges, against 5 to 7 ms of
 `setNodes` and `setEdges` on the CPU in these runs. The next section drives the
-same scene through `createSceneMotion`. Still open for M4.10: an ID buffer pass
-(M4.8b has none yet) and recording a local baseline: the scene
+same scene through `createSceneMotion`. Still open for M4.10: the ID buffer pass's
+cost (M4.8b) and recording a local baseline: the scene
 motion's CPU cost has Node bench entries in `bench/README.md`, outside
 `baseline.json` until the maintainer records them.
 
