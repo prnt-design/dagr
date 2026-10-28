@@ -15,7 +15,9 @@ directory name undersells them: they do not measure anything, they CHECK
 something, which is which backend `@prnt/dagr-render` comes up on and whether the
 shapes reach the canvas once it has. They live here because this is where the
 browser is, and because the rule below about a committed harness applies to them
-exactly as it does to a measurement. `windows-chrome.mjs` lets the probe and
+exactly as it does to a measurement. `gpu-hover.mjs` and `gpu-hover-page.mjs`
+check the same way that `DagrCanvas`'s GPU hit testing answers hover and
+clicks at 10,000 nodes. `windows-chrome.mjs` lets the probe and
 the frame profile reach a Windows GPU from WSL2.
 
 **Nothing here is part of `pnpm bench:ci`, and it is not a gate.** The gate
@@ -290,8 +292,60 @@ its row counted from the top (`visible.minY + (bufferSize.height - 1 -
 pixel.y) * height`), and every run then failed, with 544 to 546
 disagreements.
 
-This checks which node a pick names, not what a pick costs, and not hover at
-10,000 nodes or when the pass should run, which stay with the M4.8b task.
+This checks which node a pick names, not what a pick costs or when the pass
+should run, which stay with the M4.8b task. Hover at 10,000 nodes is the next
+section.
+
+### Hover and click at 10,000 nodes (M4.8b)
+
+```
+pnpm build
+npm --prefix bench/browser install --no-save playwright-core esbuild
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/gpu-hover.mjs   # [--nodes=10000] [--samples=200] [--dpr=1,2] [--control]
+```
+
+`gpu-hover.mjs` checks the path a consumer gets rather than the pass alone:
+`DagrCanvas` with `hitTesting="gpu"`, bundled with esbuild from
+`gpu-hover-page.mjs` against the built packages, over a laid-out graph of
+10,000 nodes (every third a circle) filling a 1280 by 720 viewport at the
+fit zoom, where a rounded rect is about 8 by 3 CSS pixels. Playwright's mouse
+rests on a node's centre, the run waits for `onNodeHover` to name the node,
+then presses and releases and waits for `onNodeClick`; a quarter as many
+samples rest on empty canvas and wait for `null` and `onBackgroundClick`.
+Between samples the mouse goes to a point with the other answer, so each
+sample is a change the canvas has to report. The reference is the CPU index
+over the same scene nodes. A node centre is skipped when the corners of its
+device pixel disagree there (ambiguous) or name no node (empty). It exits
+non-zero unless the canvas came up on `webgpu` on an adapter that reports
+`isFallbackAdapter: false`, with no page error, `pickNode` ran at least once
+per sample, and every sample was answered correctly within 3 seconds. Console
+warnings and errors are printed, not gated; a page error fails the run.
+The adapter recorded is the one `requestAdapter()` returns with no options,
+asked from the page; on this machine Chrome lists one GPU, so it is the
+renderer's. `--control` reads the reference 9 CSS pixels right of the pointer,
+about one rounded rect's pitch, and exits non-zero unless that run fails.
+
+**What it found on 2026-10-28**, on the machine
+[above](#from-wsl2-through-the-windows-sides-chrome) (AMD RDNA 2 integrated
+graphics, Chrome 156.0.8078.48 headless on the Windows side, attached from
+WSL2, no flags beyond the helper's), `renderer.backend` `webgpu`, adapter
+`amd` `rdna-2`, `isFallbackAdapter: false`: at device pixel ratio 1 and 2,
+200 node samples and 50 background samples each, every hover and every click
+named the expected node or background, with 500 `pickNode` calls per run
+(one for the reset move and one for the sample). 59 node centres were skipped
+as ambiguous at ratio 1, none at 2, and none as empty. From the `pointermove`
+to the `onNodeHover` call took 3.9 ms at the median, 4.1 ms at the 95th
+percentile and 38 ms at most at ratio 1 (3.9, 4.1 and 34 ms at ratio 2), with
+the canvas otherwise at rest. The page logged three's `Vertex attribute
+"position" not found on geometry` warning once per run, which the frame
+profile below also logs, and no page error. The control failed every one of
+its 25 samples at both ratios.
+
+This is the hover demonstration, not the pricing: the latency is what a user
+waits for with nothing else moving, not what a pick costs a frame, and it
+says nothing about picks run back to back under a resting mouse while the
+drawing glides, or about memory. Those, and whether the default leaves
+`'cpu'`, stay with the M4.8b task.
 
 ## Frame profile on WebGPU (M4.10a)
 

@@ -2021,8 +2021,9 @@ The motion arithmetic, the three delta consumers and the loop are headless and
 complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
 (M5.3a). What is still missing is the device work below.
 
-- The rest of GPU picking (M4.8b): hover at ten thousand nodes, when the pass
-  runs and what it costs, and edges as hit targets. `DagrCanvas` picks through
+- The rest of GPU picking (M4.8b): when the pass runs and what it costs, and
+  edges as hit targets. Hover and clicks at ten thousand nodes are checked on
+  one device (`bench/browser/gpu-hover.mjs`). `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
   other GPUs, zooms, and edge ribbons.
