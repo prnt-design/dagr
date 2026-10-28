@@ -298,7 +298,7 @@ once `--headed`, adapter `apple` `metal-3` (`Apple M4`), `isFallbackAdapter:
 false`: both runs pass with the same counts as on the AMD GPU, 9,532 picks
 checked and 68 skipped on each of `'webgpu'` and `'webgl2'` at both ratios,
 none disagreeing, every node hit, and `renderer.backend` reporting the backend
-asked for in each.
+asked for in each. The flipped-row control was not rerun there.
 
 This checks which node a pick names, not what a pick costs, and not hover at
 10,000 nodes or when the pass should run, which stay with the M4.8b task.
