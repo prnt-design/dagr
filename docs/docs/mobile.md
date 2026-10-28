@@ -82,7 +82,8 @@ The object does not attach events, capture pointers, call preventDefault,
 change focus, suppress a synthesized click, or distinguish mouse from touch.
 Adapters own these decisions. Forward cancellation as well as release, suppress
 post-pinch clicks and avoid resuming an old single-finger drag. Dropped events
-or a disappearing surface require an explicit reset.
+or a disappearing surface require an explicit reset. Both built-in adapters
+reset stale contacts when a fresh primary touch sequence begins.
 
 ## Page scrolling remains an explicit policy
 

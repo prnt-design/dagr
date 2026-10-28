@@ -1028,6 +1028,8 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     const touches = createPinchGesture();
     const touchDown = (event: PointerEvent): void => {
       if (event.pointerType !== 'touch') return;
+      // A new primary starts a fresh sequence even if old releases were lost.
+      if (event.isPrimary) touches.reset();
       if (touches.size === 0) pinchedRef.current = false;
       touches.down(event.pointerId, canvasPoint(event, host.getBoundingClientRect()));
       if (touches.size >= 2) pinchedRef.current = true;

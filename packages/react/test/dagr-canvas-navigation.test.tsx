@@ -477,6 +477,25 @@ describe('touch pinch', () => {
     expect(camera.zoom).toBeCloseTo(zoom * 2);
   });
 
+  it('lets a new primary sequence replace contacts whose releases were missed', async () => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" />);
+    const camera = lastRenderer().camera;
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 200, 100);
+      touch(window, 'pointermove', 2, 300, 100);
+    });
+    const zoom = camera.zoom;
+    // A new primary touch proves the previous physical sequence ended,
+    // even if the surface did not hear its releases.
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 200, 100);
+      touch(window, 'pointermove', 2, 300, 100);
+    });
+    expect(camera.zoom).toBeCloseTo(zoom * 2);
+  });
+
   it('pans when coincident fingers first separate without a zoom spike', async () => {
     await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" />);
     const camera = lastRenderer().camera;

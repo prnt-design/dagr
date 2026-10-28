@@ -37,7 +37,10 @@ Inspection found duplicated two-touch midpoint/distance calculations in
 DagrCanvas and Explorer. They differed on third contacts and coincident
 fingers: the canvas stopped pinching while a third touch was present and
 ignored the first movement away from zero distance. The canvas also omitted
-a lost-capture listener. `createPinchGesture` now owns contact bookkeeping and
+a lost-capture listener. The resulting-tree review found a second lifecycle
+gap: unlike Explorer, Canvas did not clear stale contacts on a new primary
+touch sequence. A failing regression demonstrates it; both adapters now reset
+that sequence consistently. `createPinchGesture` now owns contact bookkeeping and
 CSS-coordinate pan/zoom deltas; both components consume it. Regression tests
 fail on the original canvas for third contacts, lost capture and coincident
 fingers. Explorer keeps focus-gated touch ownership, event capture and camera

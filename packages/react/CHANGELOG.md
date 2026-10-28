@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Use the shared core pinch gesture in `DagrCanvas`: extra contacts no longer stop the active pair, lost capture ends the pair, and coincident fingers pan without a zoom spike. Existing navigation and page-scroll modes remain.
+- Use the shared core pinch gesture in `DagrCanvas`: extra contacts no longer stop the active pair, lost capture ends the pair, a new primary sequence clears stale contacts, and coincident fingers pan without a zoom spike. Existing navigation and page-scroll modes remain.
 
 - Add `createPickedNodeHitProvider`, which answers the synchronous
   `GraphHitProvider` contract from asynchronous picks such as
