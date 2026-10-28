@@ -560,7 +560,8 @@ renderer's `pickNode`, to this synchronous contract:
 ```tsx
 const picked = createPickedNodeHitProvider<Revision>({
   pick: (css) => renderer.pickNode(css),
-  onPicked: () => refreshHover(),
+  // Query the resting pointer again, as the hover listener does.
+  onPicked: () => queryHover(),
 });
 
 useGraphInteraction({ /* as above */ hitTarget: picked.hitTarget });
@@ -570,7 +571,9 @@ A query is answered only from a pick that has settled for the same world point
 and the same displayed revision. Any other query starts a pick and is answered
 as stale, which the hook ignores rather than reading as a miss. So a press
 selects only if its point was picked before the press: query the provider from
-`pointermove` to prime it, and expect a touch tap with no hover before it to be
+`pointermove` to prime it, with a `world` point converted exactly as the
+`screenToWorld` you give the hook converts it (the key compares with `===`), and
+expect a touch tap with no hover before it to be
 ignored. The release is its own query, so a mouse that moves a pixel between
 press and release, under the pan threshold, is also ignored. A displayed revision
 that changes every animated frame means no click is answered while nodes move.
@@ -657,8 +660,9 @@ when the drawn nodes change and not otherwise.
 What is not a hit target: edges, ports, and glow halos. HTML inside a tier
 (next section) is the DOM's to hit: native controls inside a card keep their
 native behavior, and a click on a non-interactive part of a card selects its
-node because the card sits on the node. GPU picking (M4.8b) is a separate,
-future provider behind the same contract.
+node because the card sits on the node. GPU node picks reach the same contract
+through `createPickedNodeHitProvider`, which `DagrCanvas` does not use yet
+(M4.8b).
 
 **Camera control.** `apiRef` (and `useDagrCanvas()` inside the canvas) gives the
 methods below. It is `apiRef` rather than `ref` on purpose: `ref` on a React

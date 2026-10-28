@@ -100,7 +100,7 @@ describe('createPickedNodeHitProvider', () => {
     expect(provider.hitTarget(query(1, 9, 0)).target).toEqual({ kind: 'node', nodeId: 'nine' });
   });
 
-  it('answers the point it picked, not the point a later camera puts under the same CSS point', async () => {
+  it('does not answer a point a later camera puts under a picked CSS point', async () => {
     const { calls, pick } = picker();
     const provider = createPickedNodeHitProvider<number>({ pick });
     provider.hitTarget(query(1, 10, 10, { x: 0, y: 0 }));
