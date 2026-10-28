@@ -662,14 +662,17 @@ What is not a hit target: edges, ports, and glow halos. HTML inside a tier
 native behavior, and a click on a non-interactive part of a card selects its
 node because the card sits on the node.
 
-**`hitTesting="gpu"`** answers mouse and pen hover and clicks from the
+**`hitTesting="gpu"`** answers mouse hover and clicks from the
 renderer's `pickNode` instead of the CPU index, through
 `createPickedNodeHitProvider` (previous section), so it carries that provider's
 limits: a press on a point that was not hovered first, a release that moved,
 and a click while nodes glide are ignored, and hover holds its last answer
-until the pick at a resting pointer settles. Hover primes the picks, so an
-`onBackgroundClick` alone is enough to start them. Touch keeps the CPU index and
-its fingertip tolerance, since a tap has no hover to pick from. A renderer
+until the pick at a resting pointer settles. While nodes glide or the camera
+flies under a resting pointer, picks run back to back, one at a time, until the
+drawing rests. Hover primes the picks, so an `onBackgroundClick` alone is enough
+to start them. Touch and pen keep the CPU index, touch with its fingertip
+tolerance, since a tap, or a pen that does not report hover, has nothing picked
+before it. A renderer
 rebuilt after a lost context starts with no picks rather than answering from the
 lost one's. The default stays `'cpu'` until M4.8b prices the pass on a device.
 
