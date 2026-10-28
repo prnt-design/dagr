@@ -20,7 +20,7 @@
  * pnpm --filter @prnt/dagr-render build      # the page imports from dist
  * npm --prefix bench/browser install --no-save playwright-core
  * python3 -m http.server 8733           # from the REPO ROOT
- * node bench/browser/backend-probe.mjs  # [screenshot.png] [--headed] [--parity]
+ * node bench/browser/backend-probe.mjs  # [screenshot.png] [--headed] [--parity] [--pick]
  * ```
  *
  * Pass a path to write the drawn frame there as a PNG. The browser is
@@ -33,7 +33,9 @@
  * non-zero unless it passes and its control fails. It also exits non-zero when
  * the adapter reports `isFallbackAdapter`: a software adapter such as
  * SwiftShader still comes up on `webgpu`, so its side of the comparison would
- * not be a GPU's.
+ * not be a GPU's. `--pick` adds M4.8b's check of `pickNode` on both backends at
+ * device pixel ratios 1 and 2, and exits non-zero on the same adapter terms or
+ * on any pick that disagrees with the shapes' distance functions.
  */
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -138,6 +140,22 @@ if (cliArgs.includes('--parity')) {
   };
   if (!parity.check.pass || parity.control.pass) process.exitCode = 1;
 }
+let pick;
+if (cliArgs.includes('--pick')) {
+  if (advertised.adapter?.isFallbackAdapter === true) {
+    console.error(
+      `the adapter is a fallback adapter (${advertised.adapter.vendor} ${advertised.adapter.architecture}), not a GPU, so this pick run is not a WebGPU result`,
+    );
+    process.exitCode = 1;
+  }
+  pick = [];
+  for (const backend of ['webgpu', 'webgl2']) {
+    for (const ratio of [1, 2]) {
+      pick.push(await page.evaluate(([value, dpr]) => window.pickCheck(value, dpr), [backend, ratio]));
+    }
+  }
+  if (pick.some((run) => !run.pass)) process.exitCode = 1;
+}
 if (screenshotPath !== undefined) {
   // `keep` matters: a disposed renderer releases its context and the canvas
   // goes white, so a screenshot taken after the ordinary probe run is a picture
@@ -152,5 +170,5 @@ const launch = {
     : { attached: CDP }),
   userAgent: await page.evaluate('navigator.userAgent'),
 };
-console.log(JSON.stringify({ launch, advertised, results, parity, warnings }, null, 1));
+console.log(JSON.stringify({ launch, advertised, results, parity, pick, warnings }, null, 1));
 await browser.close();

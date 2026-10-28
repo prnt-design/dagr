@@ -1,10 +1,25 @@
-import { add, attribute, color, float, mul, positionGeometry, varying, vec3 } from 'three/tsl';
+import {
+  Discard,
+  Fn,
+  add,
+  attribute,
+  color,
+  div,
+  dot,
+  float,
+  mul,
+  positionGeometry,
+  varying,
+  vec3,
+  vec4,
+} from 'three/tsl';
 import {
   BufferAttribute,
   InstancedBufferAttribute,
   InstancedBufferGeometry,
   Mesh,
   MeshBasicNodeMaterial,
+  NoBlending,
 } from 'three/webgpu';
 import { SceneDisposedError } from './errors.js';
 import { InstanceBuffer } from './instance-buffer.js';
@@ -14,7 +29,13 @@ import {
   instanceSize,
   requireShapeInstance,
 } from './instance-attributes.js';
-import type { SceneStyle, ShapeFamily, ShapeInstance } from './instance-attributes.js';
+import type {
+  InstanceChannel,
+  SceneStyle,
+  ShapeFamily,
+  ShapeInstance,
+} from './instance-attributes.js';
+import { PICK_KIND_TAGS, encodePickId } from './picking.js';
 import { quadPadding } from './sdf.js';
 import { circleSDF, roundedRectSDF, shapeShading, tslArith } from './sdf-nodes.js';
 import type { GpuResource, WorldBounds } from './types.js';
@@ -91,6 +112,19 @@ const CORNER_RADIUS = 'instanceCornerRadius';
 const GLOW_WORLD = 'instanceGlowWorld';
 const FILL_COLOR = 'instanceFillColor';
 const GLOW_COLOR = 'instanceGlowColor';
+
+/**
+ * The pick id's three bytes, as floats from 0 to 255. Read by the pick material
+ * alone, so it is not one of `INSTANCE_CHANNELS` and costs the shape material's
+ * pipeline no vertex buffer: the pick pipeline binds five (the quad's position,
+ * offset, size, corner radius and this).
+ */
+const PICK_ID = 'instancePickId';
+
+const CHANNELS_WITH_PICK_ID: readonly InstanceChannel[] = [
+  ...INSTANCE_CHANNELS,
+  { name: PICK_ID, components: 3 },
+];
 
 /**
  * The quad every instance is drawn on, before the per-instance scale: a unit
@@ -263,6 +297,46 @@ function createInstancedMaterial(
 }
 
 /**
+ * The material the pick pass draws a family with: each instance's pick id as
+ * bytes, over the shape itself and not its halo.
+ *
+ * It owes the three properties `picking.ts` lists. The target is cleared to
+ * zero by the pass. Blending is off and the material is opaque. And there is no
+ * colour management: `fragmentNode` replaces the colour pipeline, and three
+ * applies its output conversion only when drawing to the canvas, never to a
+ * render target.
+ *
+ * An instance with all three bytes zero was never given an id, so it is
+ * discarded rather than written as kind `node` with id 0, which
+ * `decodePickPixel` refuses.
+ */
+function createPickMaterial(family: ShapeFamily): MeshBasicNodeMaterial {
+  const offset = attribute<'vec2'>(OFFSET, 'vec2');
+  const size = attribute<'vec2'>(SIZE, 'vec2');
+  const cornerRadius = attribute<'float'>(CORNER_RADIUS, 'float');
+  const pickId = attribute<'vec3'>(PICK_ID, 'vec3');
+
+  const local = varying(mul(positionGeometry.xy, size));
+  const distance =
+    family === 'circle'
+      ? circleSDF(local, mul(size.x, 0.5))
+      : roundedRectSDF(local, size, cornerRadius);
+
+  const material = new MeshBasicNodeMaterial();
+  material.positionNode = vec3(add(local, offset), 0);
+  material.fragmentNode = Fn(() => {
+    Discard(distance.greaterThan(0).or(dot(pickId, vec3(1, 1, 1)).equal(0)));
+    return vec4(div(pickId, 255), PICK_KIND_TAGS.node / 255);
+  })();
+  material.transparent = false;
+  material.blending = NoBlending;
+  material.depthTest = false;
+  material.depthWrite = false;
+  material.fog = false;
+  return material;
+}
+
+/**
  * The instances a mesh of family `F` accepts, narrowed by the discriminant.
  *
  * `Extract` rather than a second union, so the two spellings of a family (the
@@ -324,6 +398,7 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
   readonly #data: InstanceAttributeData;
   readonly #material: MeshBasicNodeMaterial;
   #geometry: InstancedBufferGeometry;
+  #pickMesh: Mesh<InstancedBufferGeometry, MeshBasicNodeMaterial> | null = null;
   /**
    * The six instance attributes of {@link #geometry}, in channel order.
    *
@@ -334,6 +409,7 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
    * geometry does.
    */
   #attributes: InstancedBufferAttribute[] = [];
+  #pickAttribute: InstancedBufferAttribute | null = null;
 
   /**
    * The span of slots written since the last frame, as two plain numbers.
@@ -351,7 +427,7 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
     this.#label = options.label ?? options.family;
     const style = requireFamilyStyle(options.style, `${this.#label}.style`);
     this.#buffer = new InstanceBuffer(options.capacity);
-    this.#data = new InstanceAttributeData(this.#buffer.capacity);
+    this.#data = new InstanceAttributeData(this.#buffer.capacity, CHANNELS_WITH_PICK_ID);
     this.#material = createInstancedMaterial(this.family, style);
     this.#geometry = this.#buildGeometry();
     this.mesh = new Mesh(this.#geometry, this.#material);
@@ -382,11 +458,31 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
   }
 
   /**
+   * The mesh the pick pass draws: the same geometry under the pick material.
+   * Built on first use, so a scene nobody picks compiles no pick pipeline.
+   */
+  get pickMesh(): Mesh<InstancedBufferGeometry, MeshBasicNodeMaterial> {
+    this.#assertLive('pickMesh');
+    if (this.#pickMesh === null) {
+      const pickMesh = new Mesh(this.#geometry, createPickMaterial(this.family));
+      pickMesh.frustumCulled = false;
+      pickMesh.onBeforeRender = (): void => {
+        this.#flushDirty();
+      };
+      this.#pickMesh = pickMesh;
+    }
+    return this.#pickMesh;
+  }
+
+  /**
    * Adds one instance and returns its HANDLE, which is the identity everything
    * downstream keys by. See the invariant in `instance-buffer.ts`: the slot it
    * happens to occupy is not durable and is not returned for that reason.
+   *
+   * `pickId` is the id the pick pass writes for it, and 0 leaves it out of
+   * picks.
    */
-  add(instance: FamilyInstance<F>): number {
+  add(instance: FamilyInstance<F>, pickId = 0): number {
     this.#assertLive('add');
     // **Validated BEFORE the slot is allocated, and the order is the fix rather
     // than a preference.** Allocating first left a rejected instance owning a
@@ -404,10 +500,12 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
     // right way round.
     const field = this.#fieldForAdd(instance);
     requireShapeInstance(instance, this.family, field);
+    const pick = pickId === 0 ? null : encodePickId(pickId, 'node');
 
     const allocation = this.#buffer.allocate();
     if (allocation.grew) this.#grow(allocation.capacity);
     this.#data.write(allocation.slot, instance, this.family, field);
+    this.#writePickId(allocation.slot, pick);
     this.#markDirty(allocation.slot);
     this.#geometry.instanceCount = this.#buffer.count;
     return allocation.handle;
@@ -459,7 +557,10 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
       this.#replaceGeometry();
     }
     this.#geometry.instanceCount = removal.count;
-    if (removal.movedFrom !== null) this.#markDirty(removal.slot);
+    if (removal.movedFrom !== null) {
+      this.#markDirty(removal.slot);
+      this.#markPickIdsDirty();
+    }
   }
 
   /** Whether a handle is still live. */
@@ -509,6 +610,7 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
     this.#disposed = true;
     this.#geometry.dispose();
     this.#material.dispose();
+    this.#pickMesh?.material.dispose();
   }
 
   /**
@@ -545,6 +647,7 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
     const previous = this.#geometry;
     this.#geometry = this.#buildGeometry();
     this.mesh.geometry = this.#geometry;
+    if (this.#pickMesh !== null) this.#pickMesh.geometry = this.#geometry;
     previous.dispose();
     // Fresh attributes over fresh arrays, so every live slot is new to the GPU
     // and any span accumulated against the old ones describes buffers that no
@@ -563,7 +666,7 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
     geometry.setAttribute('normal', new BufferAttribute(quad.normal, 3));
     geometry.setAttribute('uv', new BufferAttribute(quad.uv, 2));
     geometry.setIndex(new BufferAttribute(quad.index, 1));
-    this.#attributes = INSTANCE_CHANNELS.map((channel) => {
+    const attributes = this.#data.channels.map((channel) => {
       const attributeObject = new InstancedBufferAttribute(
         this.#data.channel(channel.name),
         channel.components,
@@ -571,6 +674,8 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
       geometry.setAttribute(channel.name, attributeObject);
       return attributeObject;
     });
+    this.#pickAttribute = attributes.pop() ?? null;
+    this.#attributes = attributes;
     geometry.instanceCount = this.#buffer.count;
     return geometry;
   }
@@ -632,13 +737,30 @@ export class InstancedShapes<F extends ShapeFamily = ShapeFamily> implements Gpu
     INSTANCE_CHANNELS.forEach((channel, index) => {
       const attributeObject = this.#attributes[index];
       if (attributeObject === undefined) return;
-      // Cleared before adding, so a frame that never drew cannot leave a range
-      // behind for the next one to upload twice. Both backends clear after an
-      // upload, which makes this belt to their braces.
-      attributeObject.clearUpdateRanges();
+      // Not cleared first. three uploads, and then clears, only the attributes
+      // the drawn material reads, and the pick material reads three of these
+      // six: a range left on the other three by a pick pass is the one the next
+      // frame has to upload.
       attributeObject.addUpdateRange(first * channel.components, span * channel.components);
       attributeObject.needsUpdate = true;
     });
+  }
+
+  /**
+   * Pick ids change only when an instance arrives or a removal moves one, so
+   * the attribute is uploaded whole at the next pick pass rather than given
+   * ranges per frame.
+   */
+  #writePickId(slot: number, pick: { r: number; g: number; b: number } | null): void {
+    const ids = this.#data.channel(PICK_ID);
+    ids[slot * 3] = pick?.r ?? 0;
+    ids[slot * 3 + 1] = pick?.g ?? 0;
+    ids[slot * 3 + 2] = pick?.b ?? 0;
+    this.#markPickIdsDirty();
+  }
+
+  #markPickIdsDirty(): void {
+    if (this.#pickAttribute !== null) this.#pickAttribute.needsUpdate = true;
   }
 
   #assertLive(method: string): void {

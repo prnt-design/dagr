@@ -957,9 +957,9 @@ renderer.render();
 ```
 
 `Renderer` is a camera, a `setNodes`, a `setEdges`, a `setEdgeStyle`, a
-`setEdgeIntensity`, a `resize`, a `render` and a `dispose`. Everything except
-the four setters was fixed at M4.1 and has not changed since; the lifecycle was
-always the part that would not.
+`setEdgeIntensity`, a `resize`, a `render`, a `pickNode` and a `dispose`.
+Everything except the four setters and `pickNode` was fixed at M4.1 and has not
+changed since; the lifecycle was always the part that would not.
 
 `setNodes` was deliberately absent until M4.4. M4.1 drew a hard-coded quad and
 M4.2 a hard-coded ladder, and a `setLayout` designed at either point would have
@@ -985,6 +985,21 @@ renderer.setNodes(
   })),
 );
 renderer.render();
+```
+
+`pickNode` asks the GPU which node is drawn under a pointer, given in CSS
+pixels from the canvas's top-left like `screenToWorld`. It resolves to the
+node's id, or `null` over the background, the halo, or an edge, and the
+topmost node wins where two overlap. The answer is read back from the device,
+so it is a promise, and a node that leaves the scene before the answer arrives
+resolves to `null` rather than to whichever node took its pick id.
+
+```ts
+canvas.addEventListener('pointermove', async (event) => {
+  const rect = canvas.getBoundingClientRect();
+  const id = await renderer.pickNode({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+  showHover(id);
+});
 ```
 
 The distance fields and the shading node are internal for a reason worth naming:
