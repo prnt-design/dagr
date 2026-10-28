@@ -278,8 +278,8 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   samples per run named the node the CPU index puts there, at DPR 1 and 2
   (see `bench/browser/README.md`, "Hover and click at 10,000 nodes"). Still
   open: when the pass runs, priced on a device (frame time and memory, picks
-  under a resting mouse during a glide), and whether the default leaves
-  `'cpu'`.
+  under a resting mouse during a glide), whether the default leaves `'cpu'`,
+  and the hover highlight in the demo.
 - [x] **M4.9a** Backend selection and reporting: a `backend` preference,
   `renderer.backend` reports what came up, the differences documented, a
   browser probe harness counting pixels.

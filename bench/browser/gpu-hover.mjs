@@ -10,8 +10,9 @@
  * to name the node the shapes put there, then clicks and waits for
  * `onNodeClick` (or `onBackgroundClick`). The reference is the CPU index over
  * the same scene nodes; a point whose device pixel straddles a boundary, or a
- * node centre with no node there, is skipped. Between samples the mouse goes somewhere with the other answer, so
- * every sample is a change the canvas has to report.
+ * node centre with no node there, is skipped. Between samples the mouse goes
+ * somewhere with the other answer, so every sample is a change the canvas has
+ * to report.
  *
  * ```
  * pnpm build
@@ -26,10 +27,10 @@
  * fail.
  *
  * Otherwise it exits non-zero unless the canvas came up on `webgpu` on an
- * adapter that is not a fallback adapter, with no page error, `pickNode` ran
- * at least once per sample, and every sample was answered correctly. The
- * latency it prints is from the `pointermove` to the `onNodeHover` call: what
- * a user waits for, not what a pick costs a frame.
+ * adapter that reports `isFallbackAdapter: false`, with no page error,
+ * `pickNode` ran at least once per sample, and every sample was answered
+ * correctly. The latency it prints is from the `pointermove` to the
+ * `onNodeHover` call: what a user waits for, not what a pick costs a frame.
  */
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
@@ -257,7 +258,7 @@ const launch = {
 };
 console.log(JSON.stringify({ launch, viewport: VIEWPORT, control, runs }, null, 1));
 for (const one of runs) {
-  if (one.backend !== 'webgpu' || one.adapter === null || one.adapter.isFallbackAdapter === true) {
+  if (one.backend !== 'webgpu' || one.adapter === null || one.adapter.isFallbackAdapter !== false) {
     console.error(`dpr ${String(one.dpr)}: not a WebGPU result (backend ${one.backend}, adapter ${JSON.stringify(one.adapter)})`);
     process.exitCode = 1;
   }

@@ -292,8 +292,9 @@ its row counted from the top (`visible.minY + (bufferSize.height - 1 -
 pixel.y) * height`), and every run then failed, with 544 to 546
 disagreements.
 
-This checks which node a pick names, not what a pick costs, and not hover at
-10,000 nodes or when the pass should run, which stay with the M4.8b task.
+This checks which node a pick names, not what a pick costs or when the pass
+should run, which stay with the M4.8b task. Hover at 10,000 nodes is the next
+section.
 
 ### Hover and click at 10,000 nodes (M4.8b)
 
@@ -314,10 +315,11 @@ samples rest on empty canvas and wait for `null` and `onBackgroundClick`.
 Between samples the mouse goes to a point with the other answer, so each
 sample is a change the canvas has to report. The reference is the CPU index
 over the same scene nodes. A node centre is skipped when the corners of its
-device pixel disagree there (ambiguous) or name no node (empty). It exits non-zero unless the canvas
-came up on `webgpu` on an adapter that is not a fallback adapter, with no
-page error, `pickNode` ran at least once per sample, and every sample was
-answered correctly within 3 seconds. Console warnings are printed, not gated.
+device pixel disagree there (ambiguous) or name no node (empty). It exits
+non-zero unless the canvas came up on `webgpu` on an adapter that reports
+`isFallbackAdapter: false`, with no page error, `pickNode` ran at least once
+per sample, and every sample was answered correctly within 3 seconds. Console
+warnings and errors are printed, not gated; a page error fails the run.
 The adapter recorded is the one `requestAdapter()` returns with no options,
 asked from the page; on this machine Chrome lists one GPU, so it is the
 renderer's. `--control` reads the reference 9 CSS pixels right of the pointer,
