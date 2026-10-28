@@ -293,8 +293,9 @@ pixel.y) * height`), and every run then failed, with 544 to 546
 disagreements.
 
 This checks which node a pick names, not what a pick costs or when the pass
-should run, which stay with the M4.8b task. Hover at 10,000 nodes is the next
-section.
+should run, which
+["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b) prices. Hover
+at 10,000 nodes is the next section.
 
 ### Hover and click at 10,000 nodes (M4.8b)
 
@@ -344,8 +345,83 @@ its 25 samples at both ratios.
 This is the hover demonstration, not the pricing: the latency is what a user
 waits for with nothing else moving, not what a pick costs a frame, and it
 says nothing about picks run back to back under a resting mouse while the
-drawing glides, or about memory. Those, and whether the default leaves
-`'cpu'`, stay with the M4.8b task.
+drawing glides, or about memory. The next section prices those.
+
+### What a pick costs a frame (M4.8b)
+
+```
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs \
+  --sizes=10000 --edges=straight,smooth --motion=springs --pick   # [--dpr=2]
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs \
+  --memory --sizes=10000 --hit --pick                             # [--dpr=2]
+```
+
+`--pick` (described with `--hit` [below](#frame-profile-on-webgpu-m410a)) keeps
+one `pickNode` in flight on every frame, the next started on the first frame
+after the last settles. That is what `DagrCanvas`'s `hitTesting="gpu"` runs
+while the drawing moves under a resting mouse, and the most a moving mouse can
+ask of it, so it prices both ways of scheduling the pass: a pass run every
+frame costs this on every frame, and a pass run on pointer moves costs this on
+the frames the pointer or the drawing moves and nothing at rest.
+
+**What it found on 2026-10-28**, on the machine
+[above](#from-wsl2-through-the-windows-sides-chrome) (AMD Ryzen 9 9900X with
+its integrated AMD RDNA 2 graphics), Chrome 156.0.8078.48 headed on the
+Windows side, attached from WSL2, no flags beyond the helper's, adapter `amd`
+`rdna-2`, `isFallbackAdapter: false`, `renderer.backend` `webgpu` on every
+row, tick 17.6 to 17.8 ms, load average 0.1 to 0.5. 10,000 nodes with springs
+in flight and every node moving, alternating runs without and with `--pick`:
+three pairs at DPR 1 and two at DPR 2. Times are median / 95th percentile in
+milliseconds. A pick's frames to settle count the animation frames between the
+one that started it and its answer, so 0 means it settled before the next
+frame.
+
+| DPR | Edges | Mode | Past one tick, without | Past one tick, with `--pick` | `pick` | Picks per run | Frames to settle (median / max) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | straight | still | 0%, 0%, 0% | 0%, 0%, 0% | 0.1 / 0.2 | 357 | 0 / 3 |
+| 1 | straight | animated | 0%, 0%, 0% | 0%, 0%, 0% | 0.1 / 0.2 | 343 to 345 | 0 / 2 |
+| 1 | smooth | animated | 5.0%, 2.7%, 5.0% | 5.3%, 4.0%, 4.0% | 0.1 to 0.2 / 0.2 | 123 to 134 | 2 / 2 |
+| 2 | straight | animated | 0%, 0% | 0%, 0% | 0.1 / 0.2 | 223 to 224 | 1 / 2 |
+| 2 | smooth | animated | 6.7%, 5.3% | 3.7%, 4.0% | 0.2 / 0.2 to 0.3 | 130 to 132 | 2 / 3 |
+
+The still rows at DPR 2 and with smooth edges matched the one shown (0% past
+one tick, `pick` 0.1 / 0.2, 353 to 358 picks per run, settling in 0 frames at
+the median and up to 4). Every pick settled, with no error. `render` was the
+same with and without picks on every row (animated 0.5 ms straight and 1.0 to
+1.1 smooth, still 0.1 to 0.2). For comparison, `--hit` on the same plan at
+DPR 1, twice, rebuilt the CPU index every animated frame in 1.5 to 1.6 ms
+(95th percentile 3.4 to 4.1), and the smooth rows then missed 13.0% and 14.3%
+of ticks.
+
+`--memory --pick` adds a step after the hit index that runs `--frames` picks
+back to back over the still scene. Two runs at each ratio gave identical GPU
+figures. The first pick leaves 196,868 bytes live: each family's pick id
+attribute (three floats per instance slot, 98,304 bytes for a family's 8,192
+slots), three uniform buffers and the one-pixel target, the same at DPR 1 and
+2, since nothing in it is the size of the canvas. Each pick then creates a
+4-byte readback buffer and destroys it once read, so 301 picks left nothing
+else live. The heap retained after the step grew by 0.28 to 0.33 MB, with the
+pick pass's pipelines compiled in it.
+
+- **A pick costs 0.1 to 0.2 ms of CPU on the frame that starts it, and its
+  frame-time effect did not separate from run-to-run noise.** Missed ticks
+  with a pick always in flight overlapped the runs without it on every row, where rebuilding the CPU index
+  every frame raised them on the smooth rows.
+- **A pick's answer arrives later as the frame gets busier.** With straight
+  edges a pick settled before the next frame at DPR 1 and one frame later at
+  DPR 2; with smooth edges and every node moving, two frames later, so about
+  one pick every three frames. That bounds how far a hover can trail a gliding
+  drawing, not the frame.
+- **Memory is small and fixed.** About 0.2 MB at 10,000 nodes, against the
+  empty renderer's 55.3 MB of render targets at DPR 1 in the same `--memory`
+  runs, with nothing retained per pick.
+
+So the pass stays on pointer moves, as `DagrCanvas` runs it: per frame would
+pay the same cost on a moving drawing and pay it at rest for nothing. The
+default stays `'cpu'`. Cost does not decide it, since both fit this frame; the
+GPU path's gaps do: a click while nodes glide and a press not hovered first
+are ignored, and touch and pen use the CPU index anyway. This ran WebGPU only;
+the WebGL2 fallback's pick cost is not measured.
 
 ## Frame profile on WebGPU (M4.10a)
 
@@ -357,7 +433,7 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   node bench/browser/frame-profile.mjs
   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
-  # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1]
+  # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1] [--pick]
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
@@ -413,6 +489,21 @@ old, on about one frame in six. The report's `hit` gives the untimed build and
 how many queries, warm-up included, landed on a node. With `--nodes=rich` the
 still query runs just before `sync`, so do not compare those rows' still `sync`
 with the rich-node table below.
+
+`--pick` adds GPU node picks to every row through `renderer.pickNode` at the
+same sweeping pointer, started after `render()` and timed as `pick`, which is
+the call's synchronous part: the pick pass's draw and the readback's request.
+It is timed only on frames that start a pick, and the answer's callback and
+the pass's GPU time are not, so the missed ticks are what price those;
+`--gpu` is refused with it, since the pick pass would land in the passes that
+mode times.
+One pick is in flight at a time, so a frame starts one only if the last has
+settled. The report's `pick` gives, per mode and warm-up included, how many
+picks started and settled, how many named a node, any errors, and how many
+frames each took to settle. The runner exits non-zero if a pick failed or none
+settled. With `--memory` it adds a `pick` step, which fails the run if a pick
+fails; see
+["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b).
 
 `render()` returns once the frame is submitted, so its time is CPU time, not
 GPU time. A GPU that fell behind would show in the interval, not in `render`;
@@ -609,14 +700,16 @@ tolerance search ran.
 
 So CPU node hits are not what stands between this scene and 60 Hz at 10,000
 nodes on this machine; the updates are, as the first slice found. What this
-does not cover: edges and ports are not hit targets on the CPU path, and GPU
-picking (M4.8b) has no pass to measure yet, so its cost is still unpriced.
+does not cover: edges and ports are not hit targets on the CPU path. GPU
+picking (M4.8b) is priced in
+["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b).
 
 **Memory per pass, on 2026-10-19.** `--memory` replaces the frame timing with
 a step-by-step build of the same scene, roughly the order `DagrCanvas` builds
 it in (which creates its overlay with the renderer rather than after the edges):
 the graph, an empty renderer, its nodes, its edges, then (with
-`--nodes=rich`) the rich-node tiers and (with `--hit`) one hit index, then
+`--nodes=rich`) the rich-node tiers and (with `--hit`) one hit index, (with
+`--pick`) `--frames` frames of picks back to back over the still scene, then
 `--frames` frames moving only the nodes, `--frames` moving only the edges, and
 `dispose`. `--warmup` does not apply. One row runs first and is not
 reported, since the page's first renderer, overlay and hit index also pay for
@@ -817,8 +910,9 @@ Split by subtraction at 10,000 nodes and `fit`, in milliseconds:
 So on this machine, at 10,000 nodes, M4.10's frame is CPU-bound: about 0.5 ms
 of GPU at DPR 1 and 1.2 at DPR 2 with straight edges, against 5 to 7 ms of
 `setNodes` and `setEdges` on the CPU in these runs. The next section drives the
-same scene through `createSceneMotion`. Still open for M4.10: the ID buffer pass's
-cost (M4.8b) and recording a local baseline: the scene
+same scene through `createSceneMotion`. Still open for M4.10: recording a
+local baseline (the ID buffer pass is priced in
+["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b)): the scene
 motion's CPU cost has Node bench entries in `bench/README.md`, outside
 `baseline.json` until the maintainer records them.
 

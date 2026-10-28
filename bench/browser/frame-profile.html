@@ -297,6 +297,8 @@
         y: 360 + 340 * Math.sin(ts * 0.0017),
       });
 
+      const pickTally = () => ({ frame: 0, started: 0, onNode: 0, framesToSettle: [], errors: [] });
+
       const heap = () =>
         performance.memory === undefined ? null : performance.memory.usedJSHeapSize;
 
@@ -510,7 +512,7 @@
       // move's own cost.
       // `parts` draws the nodes, the edges or both, so a pass's GPU time can
       // be split between them by subtraction.
-      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode, hit, parts, motion, moving) => {
+      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode, hit, parts, motion, moving, pick) => {
         const { group, bend } = EDGE_STYLES[edgeStyle];
         const drawNodes = parts === 'all' || parts === 'nodes';
         const drawEdges = parts === 'all' || parts === 'edges';
@@ -562,6 +564,33 @@
           hitIndexMs = performance.now() - t0;
         }
 
+        // One pick in flight, the next started on the first frame after it
+        // settles: what DagrCanvas's GPU hover runs while the drawing moves
+        // under a resting mouse, and at most what a moving mouse asks for.
+        const picks = { still: pickTally(), animated: pickTally() };
+        let picking = null;
+        const pickAfterDraw = (ts, mode, timings) => {
+          const tally = picks[mode];
+          tally.frame += 1;
+          if (picking !== null) return;
+          const startedAt = tally.frame;
+          const t0 = performance.now();
+          picking = renderer
+            .pickNode(pointerAt(ts))
+            .then(
+              (id) => {
+                tally.framesToSettle.push(tally.frame - startedAt);
+                if (id !== null) tally.onNode += 1;
+              },
+              (error) => tally.errors.push(String(error)),
+            )
+            .finally(() => {
+              picking = null;
+            });
+          timings.pick = performance.now() - t0;
+          tally.started += 1;
+        };
+
         const still = await sample(warmup, frames, (ts) => {
           const timings = {};
           if (stillIndex !== null) timings.hit = query(stillIndex, ts, 'still');
@@ -573,8 +602,10 @@
           const start = performance.now();
           renderer.render();
           timings.render = performance.now() - start;
+          if (pick) pickAfterDraw(ts, 'still', timings);
           return timings;
         });
+        await picking;
         const stillGpu = await gpuFrames();
         const stillElements = overlay === null ? null : overlay.activeCount;
         let flowPixels = 0;
@@ -620,8 +651,10 @@
           const t4 = performance.now();
           renderer.render();
           timings.render = performance.now() - t4;
+          if (pick) pickAfterDraw(ts, 'animated', timings);
           return timings;
         });
+        await picking;
         const animatedGpu = await gpuFrames();
         const heapAfter = heap();
         const backend = renderer.backend;
@@ -641,6 +674,7 @@
           springs: source.stats(),
           elements: overlay === null ? null : { still: stillElements, animated: animatedElements },
           hit: hit ? { indexMs: hitIndexMs, hits } : null,
+          pick: pick ? picks : null,
           backend,
           zoom: drawnZoom,
           buildMs,
@@ -753,6 +787,7 @@
         const render = () => held.renderer.render();
         // `sample` works one frame more than it times, the first having no interval.
         let worked = 0;
+        let pickErrors = 0;
         switch (step) {
           case 'graph':
             held = { graph: buildGraph(count), ...EDGE_STYLES[edgeStyle] };
@@ -793,6 +828,27 @@
           case 'hit':
             held.index = createNodeHitIndex(nodesAt(held.graph.home));
             break;
+          case 'pick': {
+            let picking = null;
+            pickErrors = 0;
+            await sample(0, frames, (ts) => {
+              render();
+              if (picking === null) {
+                picking = held.renderer
+                  .pickNode(pointerAt(ts))
+                  .catch(() => {
+                    pickErrors += 1;
+                  })
+                  .finally(() => {
+                    picking = null;
+                  });
+                worked += 1;
+              }
+              return {};
+            });
+            await picking;
+            break;
+          }
           case 'moveNodes':
             await sample(0, frames, (ts) => {
               held.renderer.setNodes(nodesAt(swayed(held.graph.home, ts)));
@@ -818,7 +874,7 @@
           default:
             throw new Error(`no memory step ${step}`);
         }
-        return { ...gpuTally(), backend: held?.renderer?.backend ?? null, worked };
+        return { ...gpuTally(), backend: held?.renderer?.backend ?? null, worked, pickErrors };
       };
 
       window.adapter = async () => {
