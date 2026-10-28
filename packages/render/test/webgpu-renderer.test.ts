@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Camera2D } from '../src/camera.js';
-import { Color, OrthographicCamera, RenderTarget, Scene } from 'three/webgpu';
+import { Color } from 'three/webgpu';
+import type { OrthographicCamera, RenderTarget, Scene } from 'three/webgpu';
 import { RendererDisposedError } from '../src/errors.js';
 import type { SceneStyle } from '../src/instance-attributes.js';
 import { encodePickId } from '../src/picking.js';
