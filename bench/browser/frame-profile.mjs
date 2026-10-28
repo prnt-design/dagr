@@ -122,6 +122,9 @@ if (memory && (gpu || partsList.join() !== 'all' || motions.join() !== 'sway' ||
     '--memory builds the whole scene and counts every buffer, so it takes none of --gpu, --parts, --motion and --moving',
   );
 }
+if (pick && gpu) {
+  throw new Error('--pick draws its own pass inside the frames --gpu times, so it does not take --gpu');
+}
 if ((hit || pick || nodeModes.includes('rich')) && partsList.some((parts) => parts !== 'all')) {
   throw new Error('--hit, --pick and --nodes=rich work over every node, so they take only --parts=all');
 }
@@ -278,10 +281,11 @@ if (memory) {
       const heap = await heapAfterGc();
       if (step === 'renderer') row.backend = tally.backend;
       const created = tally.createdBytes - previous.tally.createdBytes;
+      const gpuDelta = tally.buffers + tally.textures - previous.tally.buffers - previous.tally.textures;
       row.steps[step] = {
         gpuBuffers: tally.buffers,
         gpuTextures: tally.textures,
-        gpuDelta: tally.buffers + tally.textures - previous.tally.buffers - previous.tally.textures,
+        gpuDelta,
         createdBytes: created,
         freedBytes: tally.freedBytes - previous.tally.freedBytes,
         createdObjects: tally.created - previous.tally.created,
@@ -290,7 +294,14 @@ if (memory) {
         ...(step.startsWith('move')
           ? { frames: tally.worked, createdBytesPerFrame: Math.round(created / tally.worked) }
           : {}),
-        ...(step === 'pick' ? { picks: tally.worked, createdBytesPerPick: Math.round(created / tally.worked) } : {}),
+        ...(step === 'pick'
+          ? {
+              picks: tally.worked,
+              pickErrors: tally.pickErrors,
+              // What the first pick leaves live is the pass's own, not a pick's.
+              createdBytesPerPick: Math.round((created - gpuDelta) / tally.worked),
+            }
+          : {}),
         ...(step === 'renderer' ? { textureFormats: tally.textureFormats } : {}),
         ...(tally.unknownFormats.length > 0 ? { unknownFormats: tally.unknownFormats } : {}),
       };
@@ -325,6 +336,10 @@ if (memory) {
     process.exitCode = 1;
   }
   if (leftover.length > 0) console.error(`${leftover.length} rows left GPU bytes live after dispose`);
+  if (rows.some((row) => row.steps.pick !== undefined && row.steps.pick.pickErrors > 0)) {
+    console.error('a pick failed in the memory step');
+    process.exitCode = 1;
+  }
   process.exit();
 }
 

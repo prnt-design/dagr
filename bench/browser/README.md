@@ -293,8 +293,9 @@ pixel.y) * height`), and every run then failed, with 544 to 546
 disagreements.
 
 This checks which node a pick names, not what a pick costs or when the pass
-should run, which stay with the M4.8b task. Hover at 10,000 nodes is the next
-section.
+should run, which
+["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b) prices. Hover
+at 10,000 nodes is the next section.
 
 ### Hover and click at 10,000 nodes (M4.8b)
 
@@ -383,9 +384,11 @@ frame.
 | 2 | straight | animated | 0%, 0% | 0%, 0% | 0.1 / 0.2 | 223 to 224 | 1 / 2 |
 | 2 | smooth | animated | 6.7%, 5.3% | 3.7%, 4.0% | 0.2 / 0.2 to 0.3 | 130 to 132 | 2 / 3 |
 
-Every still row held the tick with and without picks, and every pick settled,
-with no error. `render` was the same with and without picks on every row (0.5
-ms straight, 1.0 to 1.1 smooth). For comparison, `--hit` on the same plan at
+The still rows at DPR 2 and with smooth edges matched the one shown (0% past
+one tick, `pick` 0.1 / 0.2, 353 to 358 picks per run, settling in 0 frames at
+the median and up to 4). Every pick settled, with no error. `render` was the
+same with and without picks on every row (animated 0.5 ms straight and 1.0 to
+1.1 smooth, still 0.1 to 0.2). For comparison, `--hit` on the same plan at
 DPR 1, twice, rebuilt the CPU index every animated frame in 1.5 to 1.6 ms
 (95th percentile 3.4 to 4.1), and the smooth rows then missed 13.0% and 14.3%
 of ticks.
@@ -400,17 +403,18 @@ slots), three uniform buffers and the one-pixel target, the same at DPR 1 and
 else live. The heap retained after the step grew by 0.28 to 0.33 MB, with the
 pick pass's pipelines compiled in it.
 
-- **A pick costs about 0.1 ms of CPU a frame, and its frame-time effect did
-  not separate from run-to-run noise.** Picking under every frame left missed
-  ticks within the runs without it on every row, where rebuilding the CPU
-  index every frame raised them on the smooth rows.
+- **A pick costs 0.1 to 0.2 ms of CPU on the frame that starts it, and its
+  frame-time effect did not separate from run-to-run noise.** Missed ticks
+  with a pick always in flight overlapped the runs without it on every row, where rebuilding the CPU index
+  every frame raised them on the smooth rows.
 - **A pick's answer arrives later as the frame gets busier.** With straight
   edges a pick settled before the next frame at DPR 1 and one frame later at
   DPR 2; with smooth edges and every node moving, two frames later, so about
   one pick every three frames. That bounds how far a hover can trail a gliding
   drawing, not the frame.
-- **Memory is small and fixed.** About 0.2 MB at 10,000 nodes, against 55.3
-  MB of render targets at DPR 1, with nothing retained per pick.
+- **Memory is small and fixed.** About 0.2 MB at 10,000 nodes, against the
+  empty renderer's 55.3 MB of render targets at DPR 1 in the same `--memory`
+  runs, with nothing retained per pick.
 
 So the pass stays on pointer moves, as `DagrCanvas` runs it: per frame would
 pay the same cost on a moving drawing and pay it at rest for nothing. The
@@ -489,11 +493,16 @@ with the rich-node table below.
 `--pick` adds GPU node picks to every row through `renderer.pickNode` at the
 same sweeping pointer, started after `render()` and timed as `pick`, which is
 the call's synchronous part: the pick pass's draw and the readback's request.
+It is timed only on frames that start a pick, and the answer's callback and
+the pass's GPU time are not, so the missed ticks are what price those;
+`--gpu` is refused with it, since the pick pass would land in the passes that
+mode times.
 One pick is in flight at a time, so a frame starts one only if the last has
 settled. The report's `pick` gives, per mode and warm-up included, how many
 picks started and settled, how many named a node, any errors, and how many
 frames each took to settle. The runner exits non-zero if a pick failed or none
-settled. With `--memory` it adds a `pick` step; see
+settled. With `--memory` it adds a `pick` step, which fails the run if a pick
+fails; see
 ["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b).
 
 `render()` returns once the frame is submitted, so its time is CPU time, not
@@ -901,8 +910,9 @@ Split by subtraction at 10,000 nodes and `fit`, in milliseconds:
 So on this machine, at 10,000 nodes, M4.10's frame is CPU-bound: about 0.5 ms
 of GPU at DPR 1 and 1.2 at DPR 2 with straight edges, against 5 to 7 ms of
 `setNodes` and `setEdges` on the CPU in these runs. The next section drives the
-same scene through `createSceneMotion`. Still open for M4.10: the ID buffer pass's
-cost (M4.8b) and recording a local baseline: the scene
+same scene through `createSceneMotion`. Still open for M4.10: recording a
+local baseline (the ID buffer pass is priced in
+["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b)): the scene
 motion's CPU cost has Node bench entries in `bench/README.md`, outside
 `baseline.json` until the maintainer records them.
 

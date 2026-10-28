@@ -787,6 +787,7 @@
         const render = () => held.renderer.render();
         // `sample` works one frame more than it times, the first having no interval.
         let worked = 0;
+        let pickErrors = 0;
         switch (step) {
           case 'graph':
             held = { graph: buildGraph(count), ...EDGE_STYLES[edgeStyle] };
@@ -829,12 +830,18 @@
             break;
           case 'pick': {
             let picking = null;
+            pickErrors = 0;
             await sample(0, frames, (ts) => {
               render();
               if (picking === null) {
-                picking = held.renderer.pickNode(pointerAt(ts)).finally(() => {
-                  picking = null;
-                });
+                picking = held.renderer
+                  .pickNode(pointerAt(ts))
+                  .catch(() => {
+                    pickErrors += 1;
+                  })
+                  .finally(() => {
+                    picking = null;
+                  });
                 worked += 1;
               }
               return {};
@@ -867,7 +874,7 @@
           default:
             throw new Error(`no memory step ${step}`);
         }
-        return { ...gpuTally(), backend: held?.renderer?.backend ?? null, worked };
+        return { ...gpuTally(), backend: held?.renderer?.backend ?? null, worked, pickErrors };
       };
 
       window.adapter = async () => {
