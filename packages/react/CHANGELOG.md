@@ -8,8 +8,7 @@
 - Add `createPickedNodeHitProvider`, which answers the synchronous
   `GraphHitProvider` contract from asynchronous picks such as
   `Renderer.pickNode`: only from a pick settled for the same world point and
-  displayed revision, and stale otherwise. `DagrCanvas` still uses the CPU hit
-  index.
+  displayed revision, and stale otherwise.
 - Fix: a `DagrCanvas` whose graph started with no edges now draws the edges
   added later. The cause and the fix are in `@prnt/dagr-render`.
 

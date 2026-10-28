@@ -167,6 +167,23 @@ describe('GPU hit testing', () => {
     expect(onNodeHover.mock.calls).toEqual([['a'], ['b']]);
   });
 
+  it('asks a resting mouse again after a wheel zoom, so the next click lands without a move', async () => {
+    const onNodeClick = vi.fn();
+    await ready(
+      <DagrCanvas graph={twoNodes()} config={config} navigation label="graph" cameraLimits={false} hitTesting="gpu" onNodeClick={onNodeClick} />,
+    );
+    pickFromBoxes();
+    const a = screenOf('a');
+    await flush(() => pointer(host(), 'pointermove', a.x, a.y));
+    const before = lastRenderer().camera.screenToWorld(a);
+    const wheel = new WheelEvent('wheel', { deltaY: -100, clientX: a.x + 30, clientY: a.y + 20, cancelable: true, bubbles: true });
+    await flush(() => host().dispatchEvent(wheel));
+    await runFramesUntilIdle();
+    expect(lastRenderer().camera.screenToWorld(a)).not.toEqual(before);
+    await flush(() => click(a.x, a.y));
+    expect(onNodeClick.mock.calls).toEqual([['a']]);
+  });
+
   it('primes picks for a background click with no hover or node handler', async () => {
     const onBackgroundClick = vi.fn();
     await ready(<DagrCanvas graph={twoNodes()} config={config} hitTesting="gpu" onBackgroundClick={onBackgroundClick} />);

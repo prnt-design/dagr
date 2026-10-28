@@ -268,10 +268,11 @@ export interface DagrCanvasBaseProps {
    * hover or click is answered only once a pick has settled for that point and
    * that drawing. A press on a point that was not hovered first, a release that
    * moved, or a click while nodes glide is ignored, and hover holds its last
-   * answer until the pick at a resting pointer settles; while the drawing or
-   * the camera moves under a resting pointer, picks run back to back, one at a
-   * time, until it rests. Touch and pen always use the CPU index, touch with its fingertip
-   * tolerance: a tap has no hover to pick from. Read at event time.
+   * answer until the pick at a resting pointer settles. Each draw asks the
+   * resting pointer again, so while the drawing or the camera moves under it
+   * picks run back to back, one at a time, until it rests. Touch and pen always
+   * use the CPU index, touch with its fingertip tolerance: a tap has no hover to
+   * pick from. Read at event time.
    */
   readonly hitTesting?: 'cpu' | 'gpu' | undefined;
 
@@ -532,6 +533,8 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<Stage | null>(null);
   const frameRef = useRef<number | null>(null);
+  /** Set by the hover effect while it is attached: asks a resting mouse's GPU pick again. */
+  const hoverAgainRef = useRef<(() => void) | null>(null);
   const viewportRef = useRef(false);
   const fittedRef = useRef(false);
   const [stage, setStage] = useState<Stage | null>(null);
@@ -679,6 +682,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       current.groups.sync();
       current.overlay.sync();
       restoreFocus();
+      hoverAgainRef.current?.();
     });
   }, [restoreFocus]);
 
@@ -793,6 +797,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         current.groups.sync();
         current.overlay.sync();
         restoreFocus();
+        hoverAgainRef.current?.();
         if (frame.settled) {
           // The departed are gone: the dressing is whatever the layout holds
           // now. Done on settling rather than per frame because that is the one
@@ -938,8 +943,6 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     const zoom = stageRef.current?.renderer.camera.zoom ?? 1;
     return (pointerKindRef.current === 'touch' ? TOUCH_HIT_PIXELS : POINTER_HIT_PIXELS) / zoom;
   };
-  /** Set by the hover effect while it is attached: asks the resting pointer again. */
-  const hoverAgainRef = useRef<(() => void) | null>(null);
   // One provider per renderer, so a rebuilt renderer never answers from a pick
   // the lost one settled.
   const picked = useMemo<PickedNodeHitProvider<readonly SceneNode[]> | null>(
@@ -1152,8 +1155,10 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       pointerKindRef.current = event.pointerType || 'mouse';
       if (tracksHover()) hover(canvasPoint(event, host.getBoundingClientRect()));
     };
+    // After every draw and every settled pick, since a zoom, a flight or a glide
+    // changes what is under a mouse that has not moved.
     hoverAgainRef.current = () => {
-      if (resting !== null) hover(resting);
+      if (resting !== null && gpuHits() !== null) hover(resting);
     };
     const leave = (): void => {
       resting = null;
