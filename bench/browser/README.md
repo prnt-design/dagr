@@ -644,6 +644,16 @@ its row counted from the top (`visible.minY + (bufferSize.height - 1 -
 pixel.y) * height`), and every run then failed, with 544 to 546
 disagreements.
 
+**On a second GPU, 2026-10-28**, the Apple M4 Mac mini (macOS 26.6.2) in
+Google Chrome 156.0.8078.48, launched with
+`DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"`
+and `DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features`, once headless and
+once `--headed`, adapter `apple` `metal-3` (`Apple M4`), `isFallbackAdapter:
+false`: both runs pass with the same counts as on the AMD GPU, 9,532 picks
+checked and 68 skipped on each of `'webgpu'` and `'webgl2'` at both ratios,
+none disagreeing, every node hit, and `renderer.backend` reporting the backend
+asked for in each.
+
 This checks which node a pick names, not what a pick costs or when the pass
 should run, which
 ["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b) prices. Hover
