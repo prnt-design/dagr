@@ -66,6 +66,20 @@ export function stageColor(stage: Stage): number {
   return STAGE_COLORS[stage];
 }
 
+/**
+ * `color` taken halfway to white: the node under the pointer.
+ *
+ * A lighter fill rather than a second halo, so a hovered node that the last
+ * edit touched still wears the halo the readout's count depends on.
+ */
+export function hoverColor(color: number): number {
+  const lift = (shift: number): number => {
+    const channel = (color >> shift) & 255;
+    return Math.round((channel + 255) / 2) << shift;
+  };
+  return lift(16) | lift(8) | lift(0);
+}
+
 /** The background the ramp above was chosen against. */
 export const CLEAR_COLOR = 0x11161b;
 
@@ -93,7 +107,8 @@ export function touchedBy(delta: {
 }
 
 /**
- * The appearance callback for a drawing whose last edit touched `touched`.
+ * The appearance callback for a drawing whose last edit touched `touched`,
+ * with `hovered` under the pointer.
  *
  * MEMOISE THE RESULT. `<DagrCanvas>` compares `nodeAppearance` by identity, on
  * the argument that a new callback means a new picture and there is no way to
@@ -104,14 +119,16 @@ export function touchedBy(delta: {
 export function livingAppearance(
   touched: ReadonlySet<string>,
   stageOfId: StageOfId,
+  hovered: string | null = null,
 ): NodeAppearanceOf {
   return (id: string): NodeAppearance => {
     const stage = stageOfId(id);
     const lit = touched.has(id);
+    const fill = stage === undefined ? UNKNOWN_COLOR : stageColor(stage);
     return {
       shape: 'roundedRect',
       cornerRadius: 6,
-      fillColor: stage === undefined ? UNKNOWN_COLOR : stageColor(stage),
+      fillColor: id === hovered ? hoverColor(fill) : fill,
       glowColor: HIGHLIGHT_COLOR,
       // Zero rather than an absent field: `DEFAULT_NODE_APPEARANCE` fills a
       // missing one per field, so leaving it out would mean "the default",
