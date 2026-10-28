@@ -265,7 +265,8 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   from the top on WebGPU and from the bottom on WebGL2, so the bottom origin
   M4.8a assumed holds on WebGL2 only, and a one-pixel target has one row.
   Checked on a device by `bench/browser/backend-probe.mjs --pick` (see
-  `bench/browser/README.md`, "Node picking (M4.8b)"). Since 2026-10-28
+  `bench/browser/README.md`, "Node picking (M4.8b)"), passing on AMD RDNA 2
+  and Apple M4 in Chrome 156. Since 2026-10-28
   (`tsk_b6f2f936ae92`) `createPickedNodeHitProvider` in `@prnt/dagr-react`
   answers M5.2a's synchronous provider contract from those asynchronous picks:
   only from a pick settled for the same world point and displayed revision,
