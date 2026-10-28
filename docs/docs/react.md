@@ -550,8 +550,32 @@ ticks. These are CPU query medians, not browser frame time or GPU evidence.
 The generic System Atlas uses this API with reverse draw-order rectangles. It
 is proof that a consumer can supply geometry; it is not an exact
 `DagrCanvas` adapter. `DagrCanvas` now supplies one, described in the next
-section. Port geometry is M6.3a. Edge hits, asynchronous providers, and GPU
-picking are outside this slice.
+section. Port geometry is M6.3a. Edge hits are outside this slice.
+
+### GPU picks behind the same contract
+
+`createPickedNodeHitProvider` adapts an asynchronous pick, such as the
+renderer's `pickNode`, to this synchronous contract:
+
+```tsx
+const picked = createPickedNodeHitProvider<Revision>({
+  pick: (css) => renderer.pickNode(css),
+  onPicked: () => refreshHover(),
+});
+
+useGraphInteraction({ /* as above */ hitTarget: picked.hitTarget });
+```
+
+A query is answered only from a pick that has settled for the same world point
+and the same displayed revision. Any other query starts a pick and is answered
+as stale, which the hook ignores rather than reading as a miss. So a press
+selects only if its point was picked before the press: query the provider from
+`pointermove` to prime it, and expect a touch tap with no hover before it to be
+ignored. At most one pick is in flight, and a query arriving meanwhile replaces
+the one waiting behind it. The pick is exact to the device pixel under the
+pointer and has none of the CPU index's touch tolerance. `DagrCanvas` still uses
+the CPU index; wiring this provider into it, and what it costs on a device, are
+the next M4.8b steps.
 
 ## Navigation, node events and camera control
 
@@ -787,8 +811,9 @@ data and not the only way to reach it.
 ## What is not here yet
 
 - **Edge, port and GPU hits.** Exact CPU node hits ship with `DagrCanvas`.
-  Ports are M6.3a; GPU picking (M4.8b) is a separate future provider behind
-  the same contract. Edges are not hit targets yet.
+  Ports are M6.3a. GPU node picks reach the shared contract through
+  `createPickedNodeHitProvider`, but `DagrCanvas` does not use them yet
+  (M4.8b). Edges are not hit targets yet.
 - **A React tier helper.** Tiers are DOM elements. Rendering React into them is
   possible by hand and not wrapped.
 - **Tile-at-a-time layout.** The campaign demo's worker layout is specific to
