@@ -310,6 +310,91 @@
         };
       };
 
+      /**
+       * M4.8b: `pickNode` swept over the canvas, against the answer the
+       * shapes' own distance functions give.
+       *
+       * The scene is asymmetric in both axes, so a flipped row or column
+       * names the wrong node or none, and one rectangle lies under the circle,
+       * so draw order is checked as well: circles are drawn after rounded
+       * rects, and the last shape drawn over a pixel is the one picked. A
+       * pointer within one world unit of any boundary is skipped, since the
+       * device pixel it lands in can straddle that boundary.
+       */
+      const PICK_NODES = [
+        ...NODES,
+        { ...NODES[0], id: 'top-left', center: { x: -170, y: 110 }, size: { width: 60, height: 30 }, cornerRadius: 4 },
+        { ...NODES[1], id: 'bottom-right', center: { x: 170, y: -110 }, size: { width: 40, height: 40 } },
+        { ...NODES[0], id: 'under', center: { x: 60, y: 25 }, size: { width: 80, height: 30 }, cornerRadius: 0 },
+      ];
+      const PICK_DRAW_ORDER = [
+        ...PICK_NODES.filter((node) => node.shape === 'roundedRect'),
+        ...PICK_NODES.filter((node) => node.shape === 'circle'),
+      ];
+      const PICK_STEP_CSS_PX = 4;
+      const PICK_MARGIN = 1;
+
+      window.pickCheck = async (backend, devicePixelRatio) => {
+        const previous = document.getElementById('stage');
+        const canvas = document.createElement('canvas');
+        canvas.id = 'stage';
+        previous.replaceWith(canvas);
+        let renderer;
+        try {
+          renderer = await createRenderer({ canvas, backend, nodes: PICK_NODES });
+        } catch (error) {
+          return { backend, pass: false, error: String(error), code: error && error.code };
+        }
+        const viewport = { width: 480, height: 320, devicePixelRatio };
+        renderer.camera.setViewport(viewport);
+        renderer.render();
+        const hits = Object.fromEntries([...PICK_NODES.map((node) => [node.id, 0]), ['background', 0]]);
+        const mismatches = [];
+        let checked = 0;
+        let skipped = 0;
+        for (let cy = PICK_STEP_CSS_PX / 2; cy < viewport.height; cy += PICK_STEP_CSS_PX) {
+          // A row's picks are in flight together, so a pick drawn while
+          // another's readback is pending is checked too.
+          const row = [];
+          for (let cx = PICK_STEP_CSS_PX / 2; cx < viewport.width; cx += PICK_STEP_CSS_PX) {
+            const x = cx - viewport.width / 2;
+            const y = viewport.height / 2 - cy;
+            let expected = null;
+            let ambiguous = false;
+            for (const node of PICK_DRAW_ORDER) {
+              const d = signedDistance(node, x, y);
+              if (Math.abs(d) < PICK_MARGIN) ambiguous = true;
+              if (d <= 0) expected = node.id;
+            }
+            if (ambiguous) {
+              skipped += 1;
+              continue;
+            }
+            const pointer = { x: cx, y: cy };
+            row.push(renderer.pickNode(pointer).then((actual) => ({ pointer, expected, actual })));
+          }
+          for (const { pointer, expected, actual } of await Promise.all(row)) {
+            checked += 1;
+            hits[actual ?? 'background'] += 1;
+            if (actual !== expected) mismatches.push({ pointer, expected, actual });
+          }
+        }
+        const reported = renderer.backend;
+        renderer.dispose();
+        const missed = PICK_NODES.filter((node) => hits[node.id] === 0).map((node) => node.id);
+        return {
+          backend,
+          reported,
+          devicePixelRatio,
+          pass: reported === backend && mismatches.length === 0 && missed.length === 0,
+          checked,
+          skipped,
+          mismatchCount: mismatches.length,
+          mismatches: mismatches.slice(0, 5),
+          hits,
+        };
+      };
+
       window.ready = true;
     </script>
   </body>

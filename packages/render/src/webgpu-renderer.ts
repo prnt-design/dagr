@@ -1,5 +1,5 @@
 import { watchForContextLoss } from './context-loss.js';
-import { Color, OrthographicCamera, Scene, WebGPURenderer } from 'three/webgpu';
+import { Color, OrthographicCamera, RenderTarget, Scene, WebGPURenderer } from 'three/webgpu';
 import {
   DEFAULT_BACKEND,
   backendOf,
@@ -9,6 +9,7 @@ import {
 } from './backend.js';
 import { Camera2D } from './camera.js';
 import { RendererDisposedError } from './errors.js';
+import { decodePickPixel, pickPixelBounds } from './picking.js';
 import type { SceneStyle } from './instance-attributes.js';
 import { SceneEdges } from './scene-edges.js';
 import type { EdgeFrameStyle, SceneEdge, SceneEdgeGroup } from './scene-edges.js';
@@ -20,6 +21,7 @@ import type {
   RendererBackend,
   RendererOptions,
   Size,
+  Vec2,
   ViewportSize,
 } from './types.js';
 
@@ -119,6 +121,36 @@ export interface FrameSink {
   render(scene: OpaqueThreeObject, camera: OpaqueThreeObject): void;
   dispose(): void;
 }
+
+/**
+ * What the pick pass needs from a three.js renderer beyond a {@link FrameSink}:
+ * a render target, the clear colour around it, and a readback. Structural for
+ * the same reason, and {@link createRenderer} passes the same object as both.
+ */
+export interface PickSink {
+  setRenderTarget(target: RenderTarget | null): void;
+  getClearColor(target: Color): Color;
+  getClearAlpha(): number;
+  setClearColor(color: Color, alpha: number): void;
+  render(scene: OpaqueThreeObject, camera: OpaqueThreeObject): void;
+  readRenderTargetPixelsAsync(
+    target: RenderTarget,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+  ): Promise<ArrayLike<number>>;
+}
+
+/** The pick pass's own scene, camera and one-pixel target, built on first pick. */
+interface PickPass {
+  readonly scene: Scene;
+  readonly camera: OrthographicCamera;
+  readonly target: RenderTarget;
+  readonly savedClearColor: Color;
+}
+
+const PICK_CLEAR_COLOR = new Color(0x000000);
 
 /** What this renderer writes onto a three.js `OrthographicCamera`. */
 export interface ProjectionTarget {
@@ -284,6 +316,8 @@ export class WebGPUSceneRenderer implements Renderer {
   readonly #resources: readonly GpuResource[];
   readonly #nodes: SceneNodes;
   readonly #edges: SceneEdges;
+  readonly #pickSink: PickSink | undefined;
+  #pick: PickPass | null = null;
   #disposed = false;
 
   /**
@@ -310,6 +344,7 @@ export class WebGPUSceneRenderer implements Renderer {
     nodes: SceneNodes,
     edges: SceneEdges,
     resources: readonly GpuResource[],
+    pickSink?: PickSink,
   ) {
     this.camera = camera;
     // Passed in rather than read off the sink, and that is the {@link FrameSink}
@@ -323,6 +358,7 @@ export class WebGPUSceneRenderer implements Renderer {
     this.#nodes = nodes;
     this.#edges = edges;
     this.#resources = [...resources];
+    this.#pickSink = pickSink;
   }
 
   /** See {@link Renderer.setEdges}. */
@@ -380,6 +416,78 @@ export class WebGPUSceneRenderer implements Renderer {
   }
 
   /**
+   * See {@link Renderer.pickNode}.
+   *
+   * The pass draws the world rectangle of the one device pixel under the
+   * pointer into a one-pixel target, so the readback has a single row and the
+   * backends' different readback origins never come into it. The readback is
+   * requested before the first `await`, so a second pick queued behind this one
+   * cannot draw into the target before this one's copy is taken.
+   */
+  async pickNode(pointer: Vec2): Promise<string | null> {
+    this.#assertLive('pickNode');
+    const sink = this.#pickSink;
+    if (sink === undefined) {
+      throw new Error('pickNode needs a renderer that can draw into a render target');
+    }
+    const { width, height } = this.camera.viewport;
+    const bounds = pickPixelBounds(
+      pointer,
+      { width, height },
+      this.camera.drawingBufferSize(),
+      this.camera.visibleWorldBounds(),
+    );
+    if (bounds === null) return null;
+
+    const pick = (this.#pick ??= this.#createPickPass());
+    const halfWidth = (bounds.maxX - bounds.minX) / 2;
+    const halfHeight = (bounds.maxY - bounds.minY) / 2;
+    pick.camera.left = -halfWidth;
+    pick.camera.right = halfWidth;
+    pick.camera.bottom = -halfHeight;
+    pick.camera.top = halfHeight;
+    pick.camera.position.set(bounds.minX + halfWidth, bounds.minY + halfHeight, CAMERA_Z);
+    pick.camera.updateProjectionMatrix();
+
+    const stamp = this.#nodes.pickStamp;
+    const clearAlpha = sink.getClearAlpha();
+    sink.getClearColor(pick.savedClearColor);
+    sink.setClearColor(PICK_CLEAR_COLOR, 0);
+    sink.setRenderTarget(pick.target);
+    let pixel: Promise<ArrayLike<number>>;
+    try {
+      sink.render(pick.scene, pick.camera);
+      pixel = sink.readRenderTargetPixelsAsync(pick.target, 0, 0, 1, 1);
+    } finally {
+      sink.setRenderTarget(null);
+      sink.setClearColor(pick.savedClearColor, clearAlpha);
+    }
+
+    let bytes: ArrayLike<number>;
+    try {
+      bytes = await pixel;
+    } catch (error) {
+      if (this.#disposed) return null;
+      throw error;
+    }
+    if (this.#disposed) return null;
+    const hit = decodePickPixel(bytes);
+    if (hit === null || hit.kind !== 'node') return null;
+    return this.#nodes.nodeForPick(hit.id, stamp);
+  }
+
+  #createPickPass(): PickPass {
+    const scene = new Scene();
+    for (const mesh of this.#nodes.pickMeshes) scene.add(mesh);
+    return {
+      scene,
+      camera: new OrthographicCamera(0, 0, 0, 0, CAMERA_NEAR, CAMERA_FAR),
+      target: new RenderTarget(1, 1, { depthBuffer: false }),
+      savedClearColor: new Color(),
+    };
+  }
+
+  /**
    * See {@link Renderer.dispose}. Idempotent through the `#disposed` flag: a
    * second call returns without touching three, because `dispose()` on an
    * already-disposed three renderer is not a documented no-op and a component
@@ -401,6 +509,7 @@ export class WebGPUSceneRenderer implements Renderer {
     for (const resource of this.#resources) {
       resource.dispose();
     }
+    this.#pick?.target.dispose();
     this.#renderer.dispose();
   }
 
@@ -550,6 +659,7 @@ export function buildSceneRenderer(
   sceneStyle?: SceneStyle,
   nodes?: readonly SceneNode[],
   edgeGroups?: readonly SceneEdgeGroup[],
+  pickSink?: PickSink,
 ): Renderer {
   // BOTH held outside the `try` so the `catch` can free them, and the second is
   // why this is a comment rather than a line. Building a scene validates, so a
@@ -595,6 +705,7 @@ export function buildSceneRenderer(
       sceneNodes,
       sceneEdges,
       resources,
+      pickSink,
     );
 
     // Adopt the camera's current viewport, which sizes the buffer and fills in
@@ -733,6 +844,7 @@ export async function createRenderer(options: RendererOptions): Promise<Renderer
     options.sceneStyle,
     options.nodes,
     options.edgeGroups,
+    renderer,
   );
   if (options.onContextLost !== undefined) {
     const device = (renderer.backend as { device?: unknown } | undefined)?.device;

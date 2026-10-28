@@ -109,8 +109,9 @@ export interface InstanceChannel {
  * M4.8's picking id: no longer a candidate on the counting rule above rather
  * than on a change of plan. The pick bytes are read by the PICK material and
  * not by this one, so they belong to a different pipeline with its own eight,
- * exactly as D3's per-edge highlight did. M4.8b adds the attribute, and the
- * count to confirm there is that pipeline's, not this one's.
+ * exactly as D3's per-edge highlight did. `instanced-scene.ts` keeps it beside
+ * these channels, three more floats per instance, and the pick pipeline binds
+ * five buffers.
  *
  * So the slot is free, and what remains asking for it are ordinary scene
  * changes (a uv-reading material, a light or an environment map), not a

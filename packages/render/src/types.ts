@@ -1,6 +1,6 @@
 import type { ContextLostInfo } from './context-loss.js';
 import type { Camera2D } from './camera.js';
-import type { ViewportSize } from './geometry.js';
+import type { Vec2, ViewportSize } from './geometry.js';
 import type { SceneStyle } from './instance-attributes.js';
 import type { SceneNode } from './scene-nodes.js';
 import type { EdgeFrameStyle, SceneEdge, SceneEdgeGroup } from './scene-edges.js';
@@ -213,6 +213,21 @@ export interface Renderer {
    * the next frame.
    */
   resize(viewport: ViewportSize): void;
+
+  /**
+   * The id of the node drawn under a pointer, or `null` over the background or
+   * off the canvas. `pointer` is in CSS pixels from the canvas's top-left, the
+   * convention `Camera2D.screenToWorld` takes.
+   *
+   * Drawn on the GPU against the nodes as the last {@link setNodes} left them,
+   * through the shape's boundary rather than its halo, with the topmost node
+   * winning where two overlap. Edges are not hit targets. Asynchronous because
+   * the answer is read back from the device, and a node that left the scene,
+   * or whose pick id was given to another node, before the answer arrived
+   * resolves to `null` rather than to the wrong node. Resolves `null` if the
+   * renderer is disposed meanwhile.
+   */
+  pickNode(pointer: Vec2): Promise<string | null>;
 
   /**
    * Draws one frame, after adopting whatever the camera says now. Nothing in

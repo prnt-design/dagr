@@ -2,6 +2,7 @@ import { SceneDisposedError } from './errors.js';
 import { InstancedShapes } from './instanced-scene.js';
 import { requireShapeInstance } from './instance-attributes.js';
 import type { SceneStyle, ShapeFamily, ShapeInstance } from './instance-attributes.js';
+import { PickIdRegistry } from './picking.js';
 import type { GpuResource, Size, Vec2 } from './types.js';
 
 /**
@@ -111,6 +112,7 @@ export class SceneNodes implements GpuResource {
   readonly #families: ReadonlyMap<NodeShape, InstancedShapes>;
   readonly #placements = new Map<string, Placement>();
   readonly #instances: ShapeInstance[] = [];
+  readonly #pickIds = new PickIdRegistry('node');
   #calls = 0;
   #disposed = false;
 
@@ -237,6 +239,7 @@ export class SceneNodes implements GpuResource {
       if (placement.seen !== call || nodes[placement.index]?.shape !== placement.shape) {
         this.#family(placement.shape).remove(placement.handle);
         this.#placements.delete(id);
+        this.#pickIds.release(id);
       }
     }
 
@@ -248,7 +251,7 @@ export class SceneNodes implements GpuResource {
       if (placement === undefined) {
         this.#placements.set(node.id, {
           shape: node.shape,
-          handle: family.add(instance),
+          handle: family.add(instance, this.#pickIds.idFor(node.id)),
           seen: call,
           index,
         });
@@ -269,14 +272,30 @@ export class SceneNodes implements GpuResource {
    * that answers it. The handle itself throws when it is stale, which is the
    * failure worth being loud about.
    *
-   * NOT on the `Renderer` interface, deliberately. M4.4 has no use for it and
-   * M4.8b is the task that knows what a picking pass needs; exporting a lookup
-   * before then would be the guess at a seam that P3 declined to make about the
-   * instance API. It is here because it is the only way to state this module's
-   * central property as a test.
+   * NOT on the `Renderer` interface, deliberately: the picking pass resolves
+   * through {@link nodeForPick} instead. It is here because it is the only way
+   * to state this module's central property as a test.
    */
   placementOf(id: string): NodePlacement | undefined {
     return this.#placements.get(id);
+  }
+
+  /** The meshes the pick pass draws, in the same family order as {@link meshes}. */
+  get pickMeshes(): readonly InstancedShapes['pickMesh'][] {
+    return [...this.#families.values()].map((family) => family.pickMesh);
+  }
+
+  /** What to record when a pick pass is drawn, for {@link nodeForPick}. */
+  get pickStamp(): number {
+    return this.#pickIds.stamp;
+  }
+
+  /**
+   * The node a pick id named when a pass drawn at `stamp` wrote it, or `null`
+   * once that id has left the scene or changed hands.
+   */
+  nodeForPick(id: number, stamp: number): string | null {
+    return this.#pickIds.keyFor(id, stamp);
   }
 
   /** Frees both families' geometries and materials. Idempotent. */

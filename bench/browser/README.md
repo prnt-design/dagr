@@ -260,6 +260,39 @@ with a WebGPU adapter, and CI runs on a GitHub `ubuntu-latest` runner with no
 GPU and no browser step. It is run by hand like the probe, and its scope is what it compared:
 one machine, the two-shape probe scene, zoom 1, DPR 1, no edge ribbons.
 
+## Node picking (M4.8b)
+
+```
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/backend-probe.mjs --pick
+```
+
+`--pick` builds a scene of five nodes, asymmetric in both axes and with one
+rounded rectangle under a circle, and calls `renderer.pickNode` at every fourth
+CSS pixel of the 480 by 320 canvas, a row of picks in flight at once. Each
+answer is compared with the node the shapes' own distance functions put there,
+the last drawn winning (rounded rects, then circles). A pointer within one
+world unit of any boundary is skipped. It runs on `'webgpu'` and `'webgl2'`,
+each at device pixel ratio 1 and 2, and exits non-zero on any disagreement, on
+a node never hit, or on a fallback adapter, as `--parity` does.
+
+The pass draws the world rectangle of the one device pixel under the pointer
+into a one-pixel target, rather than reading one row of a full-size target,
+because three 0.185's `readRenderTargetPixelsAsync` counts rows from the top on
+its WebGPU backend and from the bottom on its WebGL2 backend.
+
+**What it found on 2026-10-28**, on the Windows desktop's AMD RDNA 2 graphics
+in Chrome 156.0.8078.48, headless, attached from WSL2
+[as above](#from-wsl2-through-the-windows-sides-chrome), adapter `amd`
+`rdna-2`, `isFallbackAdapter: false`: every run passes, 9,532 picks checked
+and 68 skipped in each, none disagreeing, on `'webgpu'` and `'webgl2'` at both
+ratios, with every node hit. As a control, `pickPixelBounds` was rebuilt with
+its row counted from the top (`visible.minY + (bufferSize.height - 1 -
+pixel.y) * height`), and every run then failed, with 544 to 546
+disagreements.
+
+This checks which node a pick names, not what a pick costs, and not hover at
+10,000 nodes or when the pass should run, which stay with the M4.8b task.
+
 ## Frame profile on WebGPU (M4.10a)
 
 ```
@@ -730,8 +763,8 @@ Split by subtraction at 10,000 nodes and `fit`, in milliseconds:
 So on this machine, at 10,000 nodes, M4.10's frame is CPU-bound: about 0.5 ms
 of GPU at DPR 1 and 1.2 at DPR 2 with straight edges, against 5 to 7 ms of
 `setNodes` and `setEdges` on the CPU in these runs. The next section drives the
-same scene through `createSceneMotion`. Still open for M4.10: an ID buffer pass
-(M4.8b has none yet) and recording a local baseline: the scene
+same scene through `createSceneMotion`. Still open for M4.10: the ID buffer pass's
+cost (M4.8b) and recording a local baseline: the scene
 motion's CPU cost has Node bench entries in `bench/README.md`, outside
 `baseline.json` until the maintainer records them.
 

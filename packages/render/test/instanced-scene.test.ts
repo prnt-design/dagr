@@ -1,4 +1,4 @@
-import { BufferAttribute } from 'three/webgpu';
+import { BufferAttribute, NoBlending } from 'three/webgpu';
 import { describe, expect, it } from 'vitest';
 import {
   DagrRenderError,
@@ -373,6 +373,13 @@ describe('what reaches the GPU per frame', () => {
     );
   }
 
+  /** What three does once it has uploaded the attributes a drawn material reads. */
+  function upload(shapes: InstancedShapes<'roundedRect'>, names: readonly string[]): void {
+    for (const name of names) channel(shapes, name).clearUpdateRanges();
+  }
+
+  const ALL = INSTANCE_CHANNELS.map(({ name }) => name);
+
   it('leaves ONE update range per channel however many writes went into it', () => {
     // The regression two reviewers found in the first version of this. three's
     // `addUpdateRange` pushes a record per call and neither backend merges them,
@@ -397,10 +404,54 @@ describe('what reaches the GPU per frame', () => {
     const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 64 });
     const handles = Array.from({ length: 40 }, (_, i) => shapes.add(rectAt(i)));
     draw(shapes);
+    upload(shapes, ALL);
 
     shapes.set(handles[7] as number, rectAt(700));
     draw(shapes);
     expect(channel(shapes, 'instanceOffset').updateRanges).toEqual([{ start: 14, count: 2 }]);
+    shapes.dispose();
+  });
+
+  it('keeps a range a pick pass did not upload for the frame that does', () => {
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 64 });
+    const handles = Array.from({ length: 40 }, (_, i) => shapes.add(rectAt(i)));
+    draw(shapes);
+    upload(shapes, ALL);
+
+    shapes.set(handles[3] as number, rectAt(300));
+    shapes.pickMesh.onBeforeRender(
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+      null as never,
+    );
+    upload(shapes, ['instanceOffset', 'instanceSize', 'instanceCornerRadius']);
+    shapes.set(handles[9] as number, rectAt(900));
+    draw(shapes);
+    expect(channel(shapes, 'instanceFillColor').updateRanges).toEqual([{ start: 9, count: 21 }]);
+    expect(channel(shapes, 'instanceOffset').updateRanges).toEqual([{ start: 18, count: 2 }]);
+    shapes.dispose();
+  });
+
+  it('merges ranges left by pick passes, however many ran before a frame', () => {
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 64 });
+    const handles = Array.from({ length: 40 }, (_, i) => shapes.add(rectAt(i)));
+    draw(shapes);
+    upload(shapes, ALL);
+    for (const slot of [30, 5, 12]) {
+      shapes.set(handles[slot] as number, rectAt(slot * 10));
+      shapes.pickMesh.onBeforeRender(
+        null as never,
+        null as never,
+        null as never,
+        null as never,
+        null as never,
+        null as never,
+      );
+    }
+    expect(channel(shapes, 'instanceFillColor').updateRanges).toEqual([{ start: 15, count: 78 }]);
     shapes.dispose();
   });
 
@@ -528,5 +579,70 @@ describe('instanceBounds', () => {
         glowWorld: 0,
       }),
     ).toEqual({ minX: -20, minY: -20, maxX: 20, maxY: 20 });
+  });
+});
+
+describe('the pick mesh', () => {
+  function pickIds(shapes: InstancedShapes<'roundedRect'>): number[] {
+    const attribute = shapes.mesh.geometry.getAttribute('instancePickId');
+    return Array.from({ length: shapes.count }, (_, slot) => attribute.getX(slot) * 65536 + attribute.getY(slot) * 256 + attribute.getZ(slot));
+  }
+
+  it('writes each instance\'s pick id as three bytes in its slot', () => {
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 4 });
+    shapes.add(rectAt(0), 0x123456);
+    shapes.add(rectAt(1));
+    const attribute = shapes.mesh.geometry.getAttribute('instancePickId');
+    expect([attribute.getX(0), attribute.getY(0), attribute.getZ(0)]).toEqual([0x12, 0x34, 0x56]);
+    expect([attribute.getX(1), attribute.getY(1), attribute.getZ(1)]).toEqual([0, 0, 0]);
+    shapes.dispose();
+  });
+
+  it('moves a pick id with its instance on removal and keeps it across growth', () => {
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 2 });
+    const first = shapes.add(rectAt(0), 7);
+    shapes.add(rectAt(1), 8);
+    shapes.add(rectAt(2), 9);
+    shapes.remove(first);
+    expect(pickIds(shapes)).toEqual([9, 8]);
+    shapes.dispose();
+  });
+
+  it('marks the pick ids for upload when an instance arrives or a removal moves one', () => {
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 8 });
+    const pickIds = (): BufferAttribute => channel(shapes, 'instancePickId');
+    const first = shapes.add(rectAt(0), 1);
+    shapes.add(rectAt(1), 2);
+    let version = pickIds().version;
+    shapes.add(rectAt(2), 3);
+    expect(pickIds().version).toBeGreaterThan(version);
+    version = pickIds().version;
+    shapes.set(first, rectAt(9));
+    expect(pickIds().version).toBe(version);
+    shapes.remove(first);
+    expect(pickIds().version).toBeGreaterThan(version);
+    shapes.dispose();
+  });
+
+  it('shares the geometry, and follows it when the buffers are rebuilt', () => {
+    const shapes = new InstancedShapes({ family: 'roundedRect', style, capacity: 1 });
+    const pickMesh = shapes.pickMesh;
+    expect(pickMesh.geometry).toBe(shapes.mesh.geometry);
+    shapes.add(rectAt(0), 1);
+    shapes.add(rectAt(1), 2);
+    expect(pickMesh.geometry).toBe(shapes.mesh.geometry);
+    expect(shapes.pickMesh).toBe(pickMesh);
+    shapes.dispose();
+  });
+
+  it('draws opaque, unblended and without depth', () => {
+    const shapes = new InstancedShapes({ family: 'circle', style });
+    const { material } = shapes.pickMesh;
+    expect(material.transparent).toBe(false);
+    expect(material.blending).toBe(NoBlending);
+    expect(material.depthTest).toBe(false);
+    expect(material.depthWrite).toBe(false);
+    expect(material.fragmentNode).not.toBeNull();
+    shapes.dispose();
   });
 });

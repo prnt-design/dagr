@@ -1,5 +1,5 @@
 import { PickIdSpaceExhaustedError } from './errors.js';
-import type { Size, Vec2 } from './types.js';
+import type { Size, Vec2, WorldBounds } from './types.js';
 import {
   requireFinitePoint,
   requireIntegerAtLeast,
@@ -150,8 +150,8 @@ const KIND_BY_TAG: ReadonlyMap<number, PickKind> = new Map(
  * bytes are what both ends of the round trip actually are. A readback gives
  * bytes, and whether the attribute carrying them is a normalised `Uint8Array`
  * (four bytes an instance) or a `Float32Array` of `k / 255` (sixteen) is a
- * question about buffers that M4.8b answers, with the same four numbers either
- * way.
+ * question about buffers; the pick pass uses the `Float32Array`, holding the
+ * byte values themselves, with the kind as a shader constant.
  */
 export interface PickBytes {
   readonly r: number;
@@ -241,7 +241,7 @@ export function decodePickPixel(bytes: ArrayLike<number>, offset = 0): PickHit |
   return { id, kind };
 }
 
-/** Where in an id buffer a pointer is asking about, in the readback's own axes. */
+/** Where in a drawing buffer a pointer is asking about, with y from the bottom. */
 export interface PickReadbackPixel {
   /** From the LEFT of the buffer, in device pixels. */
   readonly x: number;
@@ -265,13 +265,13 @@ export interface PickReadbackPixel {
  * two edges of the buffer, which is exactly where a pick lands least often and
  * is therefore found last.
  *
- * **Y comes back measured from the BOTTOM.** Screen y grows downward, and
- * three's `readRenderTargetPixelsAsync` takes its origin at the bottom left, as
- * every readback in that library has since the WebGL backend was the only one.
- * This is the one claim in this file that a device has to confirm rather than a
- * test: M4.8b owes it, and a flip got backwards here is a pick that works
- * perfectly in the middle of the canvas and names the wrong node everywhere
- * else, which is the failure shape most likely to be shipped.
+ * **Y comes back measured from the BOTTOM,** which is the direction world y
+ * grows. It is NOT the origin of three's `readRenderTargetPixelsAsync`, which
+ * differs by backend in three 0.185: the WebGPU backend copies from the
+ * texture's top left and the WebGL2 one reads from the bottom left. So the
+ * pick pass never reads a row of a full-size target. {@link pickPixelBounds}
+ * turns this pixel into the world rectangle it covers, and the pass draws that
+ * rectangle into a one-pixel target, which has one row on either backend.
  *
  * `null` where the pointer is off the canvas, which is a different answer from
  * a miss. A miss clears a hover, and a pointer that has left should not,
@@ -307,6 +307,30 @@ export function pickReadbackPixel(
     bufferSize.height,
   );
   return { x, y: bufferSize.height - 1 - fromTop };
+}
+
+/**
+ * The world rectangle the device pixel under a pointer covers, or `null` where
+ * the pointer is off the canvas.
+ *
+ * `visible` is the world rectangle the whole drawing buffer covers, which is
+ * `Camera2D.visibleWorldBounds()`: the projection stretches that rectangle over
+ * the buffer whatever rounding `drawingBufferSize` applied, so a pixel's share
+ * is the rectangle divided by the buffer, not by the CSS size times the ratio.
+ */
+export function pickPixelBounds(
+  pointer: Vec2,
+  cssSize: Size,
+  bufferSize: Size,
+  visible: WorldBounds,
+): WorldBounds | null {
+  const pixel = pickReadbackPixel(pointer, cssSize, bufferSize);
+  if (pixel === null) return null;
+  const width = (visible.maxX - visible.minX) / bufferSize.width;
+  const height = (visible.maxY - visible.minY) / bufferSize.height;
+  const minX = visible.minX + pixel.x * width;
+  const minY = visible.minY + pixel.y * height;
+  return { minX, minY, maxX: minX + width, maxY: minY + height };
 }
 
 function clampIndex(value: number, length: number): number {

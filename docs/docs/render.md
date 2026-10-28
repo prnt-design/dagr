@@ -957,9 +957,9 @@ renderer.render();
 ```
 
 `Renderer` is a camera, a `setNodes`, a `setEdges`, a `setEdgeStyle`, a
-`setEdgeIntensity`, a `resize`, a `render` and a `dispose`. Everything except
-the four setters was fixed at M4.1 and has not changed since; the lifecycle was
-always the part that would not.
+`setEdgeIntensity`, a `resize`, a `render`, a `pickNode` and a `dispose`.
+Everything except the four setters and `pickNode` was fixed at M4.1 and has not
+changed since; the lifecycle was always the part that would not.
 
 `setNodes` was deliberately absent until M4.4. M4.1 drew a hard-coded quad and
 M4.2 a hard-coded ladder, and a `setLayout` designed at either point would have
@@ -986,6 +986,30 @@ renderer.setNodes(
 );
 renderer.render();
 ```
+
+`pickNode` asks the GPU which node is drawn under a pointer, given in CSS
+pixels from the canvas's top-left like `screenToWorld`. It resolves to the
+node's id, or `null` over the background, the halo, or an edge, and the
+topmost node wins where two overlap. The answer is read back from the device,
+so it is a promise, and a node that leaves the scene before the answer arrives
+resolves to `null` rather than to whichever node took its pick id.
+
+```ts
+let latest = 0;
+canvas.addEventListener('pointermove', (event) => {
+  const rect = canvas.getBoundingClientRect();
+  const request = ++latest;
+  renderer
+    .pickNode({ x: event.clientX - rect.left, y: event.clientY - rect.top })
+    .then((id) => {
+      if (request === latest) showHover(id);
+    })
+    .catch(() => undefined);
+});
+```
+
+Each pick is a readback, and what a pick costs and how often to issue one are
+not measured yet.
 
 The distance fields and the shading node are internal for a reason worth naming:
 a TSL node is a three.js type, and no three.js type appears in this package's
@@ -1935,7 +1959,7 @@ delta of one against ten thousand edges is under a fiftieth of a millisecond.
 M4.10 measures the frame against a GPU and decides whether the settled floor
 is worth removing.
 
-## Picking, decided and half built
+## Picking
 
 Hit testing a graph of ten thousand nodes by walking a list is the work the GPU
 is already doing. **M4.8 draws the scene a second time into an offscreen target
@@ -1943,13 +1967,9 @@ where every instance is a colour that names it, reads back the single pixel
 under the pointer, and turns that colour into a node.** Hover, select and drag
 all cost the same regardless of how many nodes are on screen.
 
-Half of that has landed: the encoding, the pixel arithmetic and the
-bookkeeping, which is M4.8a. **Nothing is callable yet.** There is no `pick()`
-on `Renderer` and nothing exported, because the pass that writes these bytes
-and the readback that reads them need a device, and a device is what the
-machine writing this cannot supply. What follows is what was decided, so that
-the half still to come is written against something rather than deciding it
-again.
+The pass is `Renderer.pickNode` (M4.8b), built on the encoding, the pixel
+arithmetic and the bookkeeping M4.8a decided. What follows is what was decided,
+and why.
 
 **A pick pixel is three bytes of id and one byte of kind.** Tag 0 is nothing,
 so a target cleared to all zeros reads as a miss with no reserved value anyone
@@ -1986,11 +2006,14 @@ hands since is answered with nothing rather than with the wrong node. The
 comparison is per id: a scene adding a node every frame would otherwise refuse
 every pick in flight, which is exactly the scene picking exists for.
 
-**One assumption is carried rather than checked.** Screen y grows downward and
-three's readback measures y from the bottom of the target, so the pointer's row
-is flipped on the way in. No test here can confirm that, because confirming it
-needs a device. It is written down where the flip happens, and M4.8b owes the
-confirmation.
+**The pass draws one pixel, not the whole frame.** three 0.185's readback
+counts rows from the top on its WebGPU backend and from the bottom on its
+WebGL2 backend, so a pointer's row in a full-size target depends on the
+backend. The pass instead frames the world rectangle of the one device pixel
+under the pointer and draws it into a one-pixel target, which has one row on
+either backend. `bench/browser/backend-probe.mjs --pick` checks the answers on
+a device against the shapes' distance functions; see `bench/browser/README.md`,
+"Node picking (M4.8b)".
 
 ## What is not here yet
 
@@ -1998,10 +2021,9 @@ The motion arithmetic, the three delta consumers and the loop are headless and
 complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
 (M5.3a). What is still missing is the device work below.
 
-- The pass half of GPU picking: a material writing the bytes above, an
-  offscreen target, the readback and a `pick()` on `Renderer` (M4.8b). What
-  a pixel says and which node an id still means are decided and tested; see
-  [Picking](#picking-decided-and-half-built).
+- The rest of GPU picking (M4.8b): a `DagrCanvas` hit provider over
+  `pickNode`, hover at ten thousand nodes, when the pass runs and what it
+  costs, and edges as hit targets. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
   other GPUs, zooms, and edge ribbons.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
