@@ -4,6 +4,7 @@ import {
   CLEAR_COLOR,
   HIGHLIGHT_COLOR,
   HIGHLIGHT_GLOW,
+  HOVER_COLOR,
   livingAppearance,
   stageColor,
   touchedBy,
@@ -89,6 +90,14 @@ describe('what the drawing looks like', () => {
     expect(appearance('parse-1')?.fillColor).toBe(stageColor('parse'));
   });
 
+  it('fills the hovered node and only that one, leaving its halo as the edit left it', () => {
+    const appearance = livingAppearance(new Set(['parse-0']), () => 'parse', 'parse-0');
+    expect(appearance('parse-0')?.fillColor).toBe(HOVER_COLOR);
+    expect(appearance('parse-0')?.glowWorld).toBe(HIGHLIGHT_GLOW);
+    expect(appearance('parse-1')?.fillColor).toBe(stageColor('parse'));
+    expect(appearance('parse-1')?.glowWorld).toBe(0);
+  });
+
   it('falls back rather than throwing for a node that names no stage', () => {
     const appearance = livingAppearance(new Set(), () => undefined);
     expect(appearance('mystery')).toBeDefined();
@@ -144,5 +153,12 @@ describe('the palette is legible', () => {
 
   it('puts the halo well clear of the background it glows against', () => {
     expect(contrast(HIGHLIGHT_COLOR, CLEAR_COLOR)).toBeGreaterThanOrEqual(3);
+  });
+
+  it('sets the hovered fill further from every stage than adjacent stages are from each other', () => {
+    for (const stage of STAGES) {
+      const ratio = contrast(HOVER_COLOR, stageColor(stage));
+      expect(ratio, `hover is only ${ratio.toFixed(2)}:1 from ${stage}`).toBeGreaterThan(1.31);
+    }
   });
 });

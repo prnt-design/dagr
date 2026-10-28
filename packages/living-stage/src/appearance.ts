@@ -61,6 +61,12 @@ export const HIGHLIGHT_COLOR = 0xffb454;
 /** How far the halo reaches, in world units. A node is 100 by 40. */
 export const HIGHLIGHT_GLOW = 9;
 
+/**
+ * The fill of the node under the pointer. A fill rather than a glow, because
+ * the glow already says what the last edit touched and hover must not hide it.
+ */
+export const HOVER_COLOR = 0xffffff;
+
 /** The colour of `stage` on the canvas. */
 export function stageColor(stage: Stage): number {
   return STAGE_COLORS[stage];
@@ -93,7 +99,8 @@ export function touchedBy(delta: {
 }
 
 /**
- * The appearance callback for a drawing whose last edit touched `touched`.
+ * The appearance callback for a drawing whose last edit touched `touched`,
+ * with the pointer over `hovered`.
  *
  * MEMOISE THE RESULT. `<DagrCanvas>` compares `nodeAppearance` by identity, on
  * the argument that a new callback means a new picture and there is no way to
@@ -104,14 +111,16 @@ export function touchedBy(delta: {
 export function livingAppearance(
   touched: ReadonlySet<string>,
   stageOfId: StageOfId,
+  hovered: string | null = null,
 ): NodeAppearanceOf {
   return (id: string): NodeAppearance => {
     const stage = stageOfId(id);
     const lit = touched.has(id);
+    const base = stage === undefined ? UNKNOWN_COLOR : stageColor(stage);
     return {
       shape: 'roundedRect',
       cornerRadius: 6,
-      fillColor: stage === undefined ? UNKNOWN_COLOR : stageColor(stage),
+      fillColor: id === hovered ? HOVER_COLOR : base,
       glowColor: HIGHLIGHT_COLOR,
       // Zero rather than an absent field: `DEFAULT_NODE_APPEARANCE` fills a
       // missing one per field, so leaving it out would mean "the default",
