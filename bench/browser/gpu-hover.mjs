@@ -9,23 +9,25 @@
  * on a node's centre (or on empty canvas), and the run waits for `onNodeHover`
  * to name the node the shapes put there, then clicks and waits for
  * `onNodeClick` (or `onBackgroundClick`). The reference is the CPU index over
- * the same scene nodes; a point whose device pixel straddles a boundary is
- * skipped. Between samples the mouse goes somewhere with the other answer, so
+ * the same scene nodes; a point whose device pixel straddles a boundary, or a
+ * node centre with no node there, is skipped. Between samples the mouse goes somewhere with the other answer, so
  * every sample is a change the canvas has to report.
  *
  * ```
  * pnpm build
  * npm --prefix bench/browser install --no-save playwright-core esbuild
  * node bench/browser/windows-chrome.mjs --headless          # on WSL2, leave running
- * DAGR_CDP=http://127.0.0.1:9445 node bench/browser/gpu-hover.mjs  # [--nodes=10000] [--samples=200] [--dpr=1,2] [--control]
+ * DAGR_CDP=http://127.0.0.1:9445 node bench/browser/gpu-hover.mjs
+ *   # [--nodes=10000] [--samples=200] [--dpr=1,2] [--control]
  * ```
  *
  * `--control` takes the reference from 9 CSS pixels right of the pointer, and
  * exits non-zero unless that run fails, so a pass is not a check that cannot
  * fail.
  *
- * Otherwise it exits non-zero unless the canvas came up on `webgpu` on an adapter that is
- * not a fallback adapter, every sample was answered and none disagreed. The
+ * Otherwise it exits non-zero unless the canvas came up on `webgpu` on an
+ * adapter that is not a fallback adapter, with no page error, `pickNode` ran
+ * at least once per sample, and every sample was answered correctly. The
  * latency it prints is from the `pointermove` to the `onNodeHover` call: what
  * a user waits for, not what a pick costs a frame.
  */
@@ -54,7 +56,7 @@ const ratios = option('dpr', '1,2').split(',').map(Number);
 const headless = !process.argv.includes('--headed');
 const control = process.argv.includes('--control');
 // The control reads the reference this far right of the pointer: about one
-// node's pitch within a rank at the fit zoom, so it expects the neighbour.
+// rounded rect's pitch within a rank at the fit zoom, so it expects a neighbour.
 const CONTROL_OFFSET = control ? 9 : 0;
 
 function mulberry32(seed) {
@@ -90,13 +92,13 @@ const round = (value) => Math.round(value * 10) / 10;
 
 /**
  * Moves the mouse to `point` and waits for `onNodeHover` to report `id`; the
- * latency, or null on a timeout. A move to where the hover already is reports
- * nothing, so it waits for no report.
+ * latency, or null on a timeout. A reset may move to where the hover already
+ * is, which reports nothing, so it waits for no report.
  */
-async function hoverTo(page, point, id) {
+async function hoverTo(page, point, id, isReset = false) {
   const [before, current] = await page.evaluate(() => [window.record.hovers.length, window.record.hovered]);
   await page.mouse.move(point.x, point.y);
-  if (current === id) return 0;
+  if (isReset && current === id) return 0;
   try {
     await page.waitForFunction(
       ([count, want]) => window.record.hovers.length > count && window.record.hovered === want,
@@ -178,7 +180,7 @@ async function run(browser, bundle, ratio) {
   const random = mulberry32(ratio * 7919);
   const nodeSamples = [];
   const backgroundSamples = [];
-  let skipped = 0;
+  const skipped = { ambiguous: 0, empty: 0 };
   let draws = 0;
   while (nodeSamples.length < samples) {
     if (++draws > samples * 20) throw new Error(`found ${String(nodeSamples.length)} of ${String(samples)} node samples`);
@@ -187,7 +189,8 @@ async function run(browser, bundle, ratio) {
     const point = { x: Math.round(centre.x), y: Math.round(centre.y) };
     if (point.x < 1 || point.y < 1 || point.x >= VIEWPORT.width - 1 || point.y >= VIEWPORT.height - 1) continue;
     const expected = await page.evaluate((p) => window.stage.expected(p), { x: point.x + CONTROL_OFFSET, y: point.y });
-    if (expected.ambiguous || expected.id === null) skipped += 1;
+    if (expected.ambiguous) skipped.ambiguous += 1;
+    else if (expected.id === null) skipped.empty += 1;
     else nodeSamples.push({ point, id: expected.id });
   }
   while (backgroundSamples.length < Math.ceil(samples / 4)) {
@@ -203,7 +206,7 @@ async function run(browser, bundle, ratio) {
   const resetToNode = nodeSamples[0];
   for (const sample of [...nodeSamples, ...backgroundSamples]) {
     const reset = sample.id === null ? resetToNode : resetToBackground;
-    if (reset !== sample && (await hoverTo(page, reset.point, reset.id)) === null) {
+    if ((await hoverTo(page, reset.point, reset.id, true)) === null) {
       failures.push({ ...sample, stage: 'reset', got: await page.evaluate(() => window.record.hovered) });
       continue;
     }
@@ -225,7 +228,7 @@ async function run(browser, bundle, ratio) {
     adapter,
     nodes: ids.length,
     zoom: round(zoom * 1000) / 1000,
-    samples: { node: nodeSamples.length, background: backgroundSamples.length, skippedAmbiguous: skipped },
+    samples: { node: nodeSamples.length, background: backgroundSamples.length, skipped },
     picks,
     failures,
     hoverLatencyMs: {
@@ -263,7 +266,11 @@ for (const one of runs) {
       console.error(`dpr ${String(one.dpr)}: the control passed, so this check cannot tell a wrong answer`);
       process.exitCode = 1;
     }
-  } else if (one.failures.length > 0 || one.picks === 0) {
+  } else if (
+    one.failures.length > 0 ||
+    one.picks < one.samples.node + one.samples.background ||
+    one.warnings.some((warning) => warning.startsWith('pageerror'))
+  ) {
     console.error(`dpr ${String(one.dpr)}: ${String(one.failures.length)} failures, ${String(one.picks)} picks`);
     process.exitCode = 1;
   }

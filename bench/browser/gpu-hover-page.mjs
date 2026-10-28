@@ -108,6 +108,9 @@ function Expose() {
         return answers.size === 1 ? { id: [...answers][0], ambiguous: false } : { id: null, ambiguous: true };
       },
     };
+    return () => {
+      renderer.pickNode = pickNode;
+    };
   }, [canvas]);
   return null;
 }
@@ -127,7 +130,7 @@ createRoot(host).render(
     {
       graph,
       config,
-      hitTesting: params.get('hit') ?? 'gpu',
+      hitTesting: 'gpu',
       nodeAppearance: appearance,
       style: { width: '100%', height: '100%' },
       onNodeHover: (id) => {
