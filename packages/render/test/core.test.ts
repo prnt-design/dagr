@@ -21,6 +21,10 @@ describe('@prnt/dagr-render/core', () => {
     const camera = new core.Camera2D({
       viewport: { width: 320, height: 200, devicePixelRatio: 1 },
     });
+    const pinch = core.createPinchGesture();
+    pinch.down(1, { x: 0, y: 0 });
+    pinch.down(2, { x: 100, y: 0 });
+    expect(pinch.move(2, { x: 200, y: 0 })?.factor).toBe(2);
     camera.fitBounds(bounds);
     expect(core.fitZoom(bounds, camera.viewport)).toBe(camera.zoom);
     expect(core.shapeEdgePath([{ x: 0, y: 0 }, { x: 10, y: 0 }])).toEqual([
@@ -29,11 +33,10 @@ describe('@prnt/dagr-render/core', () => {
     ]);
   });
 
-  it('exports exactly three runtime names', async () => {
-    // Types are erased, so only the runtime names can be counted. A fourth
-    // name is a decision, and this is where it gets made.
+  it('exports the explicit GPU-free runtime surface', async () => {
+    // Keep the GPU-free public surface explicit; type exports are erased.
     const core = await import('../src/core.js');
-    expect(Object.keys(core).sort()).toEqual(['Camera2D', 'fitZoom', 'shapeEdgePath']);
+    expect(Object.keys(core).sort()).toEqual(['Camera2D', 'createPinchGesture', 'fitZoom', 'shapeEdgePath']);
   });
 
   it('is guarded by mocks that do fail the full entry', async () => {

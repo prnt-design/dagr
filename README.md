@@ -72,6 +72,16 @@ not run on `npm install`, and current npm tarballs do not bundle the skill.
 The [learning/mobile roadmap](ROADMAP.md#explorer-learning-and-mobile-track)
 tracks distribution validation and adaptive library support.
 
+## Mobile framework support
+
+Dagr's shared touch primitive, `createPinchGesture`, lives in the three.js-free
+renderer core and is consumed by both DagrCanvas and Explorer. Surface adapters
+retain browser-scroll and focus policy; backends retain drawing/resource
+ownership. See the [mobile architecture guide](docs/docs/mobile.md) for the
+contract and the [core mobile roadmap](ROADMAP.md#core-mobile-framework-track)
+for visible-viewport, occlusion and real-device conformance work. Repository
+changes remain subject to the human-gated package release process.
+
 ## Development
 
 Requires Node 20 or newer and pnpm.

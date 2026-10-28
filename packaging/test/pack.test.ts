@@ -206,9 +206,11 @@ describe('the tarball a consumer installs', () => {
         );
         writeFileSync(
           join(consumer, 'core.ts'),
-          `import { Camera2D, fitZoom, shapeEdgePath } from '@prnt/dagr-render/core';
+          `import { Camera2D, createPinchGesture, fitZoom, shapeEdgePath } from '@prnt/dagr-render/core';
 import type {
   Camera2DInit,
+  PinchDelta,
+  PinchGesture,
   EdgePathOptions,
   OrthoFrustum,
   Size,
@@ -226,7 +228,11 @@ const frustum: OrthoFrustum = camera.orthoFrustum();
 const buffer: Size = camera.drawingBufferSize();
 const options: EdgePathOptions = { style: 'smooth' };
 const points: Vec2[] = shapeEdgePath([{ x: 0, y: 0 }, { x: 1, y: 1 }], options);
-export const result = [fitZoom(bounds, viewport), frustum.left, buffer.width, points.length];
+const gesture: PinchGesture = createPinchGesture();
+gesture.down(1, { x: 0, y: 0 });
+gesture.down(2, { x: 100, y: 0 });
+const delta: PinchDelta | null = gesture.move(2, { x: 200, y: 0 });
+export const result = [fitZoom(bounds, viewport), frustum.left, buffer.width, points.length, delta?.factor];
 `,
         );
         writeFileSync(

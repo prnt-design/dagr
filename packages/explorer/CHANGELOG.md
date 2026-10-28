@@ -1,5 +1,9 @@
 # @prnt/dagr-explorer
 
+## Unreleased
+
+- Use the shared renderer-core touch gesture for pinch geometry/contact lifecycle, retaining Explorer focus-gated scrolling, camera constraints and click suppression. No new backend or responsive panel is introduced by this change.
+
 ## 0.1.4
 
 - A pan or a zoom no longer selects text: the viewport sets

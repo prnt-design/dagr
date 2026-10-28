@@ -101,7 +101,8 @@ PRs rather than treating every unchecked milestone as ready.
 **Parked:** VDSL drag-to-connect (M6.3a, M6.3b), compound layout and
 drill-down (M7, M6.4, M6.5), audio beyond R6's narration experiment, and
 explorer reading features beyond the explicitly scheduled
-[M5.7 learning/mobile track](#explorer-learning-and-mobile-track) and
+[M5.7 learning/mobile track](#explorer-learning-and-mobile-track),
+[M5.8 core mobile track](#core-mobile-framework-track) and
 [daily report track](#daily-report-track). M2.11a edge legibility
 moves behind the stage 1 and 2 items. The explorer keeps getting correctness
 fixes.
@@ -568,6 +569,32 @@ new tour/audio APIs still require evidence from R4/R5. Learning success means
 finding a concept, explaining a relationship and reaching its supporting detail,
 not merely drawing more nodes. Research and unresolved alternatives are in the
 [M5.7 working record](specs/roadmap-notes.md#m57-learning-explorers-and-mobile-2026-10-26-utc).
+
+## Core mobile framework track
+
+**M5.8**, maintainer-directed 2026-10-28: mobile is a framework contract across
+Dagr surfaces, not only an Explorer demo or phone-specific renderer. Keep one
+graph/layout model and preserve each host's controlled state. Shared mechanics
+belong in the three.js-free renderer core; DOM event ownership belongs in
+surface adapters; adaptive reading controls belong in Explorer/host UI. Do
+not make core depend on React, Explorer state, browser globals or device names.
+
+| Slice | Dispatch task | Outcome and exit check |
+| --- | --- | --- |
+| **M5.8a** Shared core touch navigation (this increment) | `tsk_98c8dffe7bda` | Export `createPinchGesture` and plain `PinchDelta`/`PinchGesture` types from renderer core/full entries. DagrCanvas and Explorer consume it. Tests cover stable first-two contacts, cancellation/lost capture, coincident fingers, CSS pixels at DPR 1/3 and three.js-free imports/consumer declarations. Keep existing focus/scroll policies. |
+| **M5.8b** Visible viewport and occlusion | `tsk_e55c78e6012c` | Establish a shared CSS-coordinate visible-area contract for both camera adapters, measured against embedded containers, visual viewport resize/scroll, zoom, safe areas and software keyboards. Pure geometry in core, browser observers in adapters with SSR-safe lifecycle. Preserve camera/selection through resize and distinguish a resize from evidence of a keyboard. Depends on M5.8a. |
+| **M5.8c** Surface/backend conformance | `tsk_7656d37da9de` | A common mobile scenario corpus for DagrCanvas/Explorer and SVG/WebGPU/WebGL2 where supported, with named product scroll/focus policies. Separate real iOS/Android, screen reader, safe-area and keyboard evidence from emulation. Measure DPR, memory and frame budgets; no unmeasured mobile 10k/60fps promise or user-agent backend fork. Depends on M5.8a/b. |
+
+M5.7b remains the independent Explorer shell/reading repair, with its existing
+PR and acceptance criteria; this track does not duplicate it or mark it done.
+M5.7c remains the shared-state outline reader. A second presentation uses the
+same content/commands, and a second backend uses the same geometry/input
+contract. Neither is a reason to copy state or create a mobile-only package.
+
+The next core slice after M5.8a is M5.8b. Renderer-performance tasks retain their
+order, and the report track retains separate scheduling. Publication is still
+human-gated. See the [mobile architecture guide](docs/docs/mobile.md) and
+[M5.8 working record](specs/roadmap-notes.md#m58-core-mobile-architecture-2026-10-28-utc).
 
 ## M6: VDSL core in v0.1, interactions planned for v0.2 (`@prnt/dagr-vdsl`)
 

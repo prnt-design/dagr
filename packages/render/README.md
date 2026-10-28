@@ -158,7 +158,7 @@ means a tier must clear its own per-node state on every bind.
 
 ## The three-free entry
 
-`@prnt/dagr-render/core` exports `Camera2D`, `fitZoom` and `shapeEdgePath`, with
+`@prnt/dagr-render/core` exports `Camera2D`, `fitZoom`, `shapeEdgePath` and `createPinchGesture`, with
 their types, from modules that never import `three`: not at runtime, and not in
 their type declarations.
 
@@ -166,7 +166,7 @@ their type declarations.
 import { Camera2D, shapeEdgePath } from '@prnt/dagr-render/core';
 ```
 
-Use it when you want the camera or the edge-path arithmetic and no renderer: an
+Use it when you want camera, touch or edge-path mechanics and no renderer: an
 SVG or DOM drawing, or a server render. The full entry imports `three/webgpu`
 at module scope, so a server that externalizes its dependencies loads three.js
 to import it, and the core entry is how you avoid that.
@@ -214,3 +214,12 @@ accepts `vertical`; smoothing `tolerance` defaults to 0.5 world units.
 Endpoints and route anchors are preserved. This shapes presentation, without
 obstacle avoidance. Pass the result to SVG paths or renderer edges using
 `curve: 'polyline'` so they are not smoothed twice.
+
+## Shared mobile navigation
+
+`createPinchGesture` is exported from this package and its three.js-free
+`core` entry. It turns accepted touch contacts in viewport CSS pixels into
+pan/zoom deltas, independent of SVG, DOM or GPU drawing. `DagrCanvas` and
+Explorer both consume it; custom hosts can use the same contact contract.
+Capture, cancellation events, scroll ownership and click suppression remain
+adapter responsibilities. See the [mobile architecture guide](https://dagr.prnt.design/docs/mobile).
