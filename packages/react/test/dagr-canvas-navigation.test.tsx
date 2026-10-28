@@ -112,6 +112,98 @@ describe('node click and hover', () => {
   });
 });
 
+/** Makes the latest renderer's `pickNode` answer from the node boxes it was last given. */
+function pickFromBoxes(): void {
+  const renderer = lastRenderer();
+  renderer.pickNode.mockImplementation((css) => {
+    const world = renderer.camera.screenToWorld(css);
+    const nodes = renderer.setNodes.mock.calls.at(-1)?.[0] as readonly SceneNode[];
+    const node = nodes.find(
+      (n) =>
+        Math.abs(world.x - n.center.x) <= n.size.width / 2 && Math.abs(world.y - n.center.y) <= n.size.height / 2,
+    );
+    return Promise.resolve(node?.id ?? null);
+  });
+}
+
+function touch(type: string, x: number, y: number): void {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0 });
+  Object.defineProperties(event, { pointerId: { value: 2 }, isPrimary: { value: true }, pointerType: { value: 'touch' } });
+  (type === 'pointerdown' ? host() : window).dispatchEvent(event);
+}
+
+describe('GPU hit testing', () => {
+  it('answers hover and a hovered click from settled picks, and ignores a press nothing picked', async () => {
+    const onNodeHover = vi.fn();
+    const onNodeClick = vi.fn();
+    await ready(
+      <DagrCanvas graph={twoNodes()} config={config} hitTesting="gpu" onNodeHover={onNodeHover} onNodeClick={onNodeClick} />,
+    );
+    pickFromBoxes();
+    const a = screenOf('a');
+    const b = screenOf('b');
+    await flush(() => pointer(host(), 'pointermove', a.x, a.y));
+    expect(lastRenderer().pickNode).toHaveBeenCalledWith({ x: a.x, y: a.y });
+    expect(onNodeHover.mock.calls).toEqual([['a']]);
+    await flush(() => click(a.x, a.y));
+    expect(onNodeClick.mock.calls).toEqual([['a']]);
+
+    await flush(() => click(b.x, b.y));
+    expect(onNodeClick.mock.calls).toEqual([['a']]);
+    await flush(() => pointer(host(), 'pointermove', b.x, b.y));
+    await flush(() => click(b.x, b.y));
+    expect(onNodeClick.mock.calls).toEqual([['a'], ['b']]);
+    expect(onNodeHover.mock.calls).toEqual([['a'], ['b']]);
+  });
+
+  it('primes picks for a background click with no hover or node handler', async () => {
+    const onBackgroundClick = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} hitTesting="gpu" onBackgroundClick={onBackgroundClick} />);
+    await flush(() => pointer(host(), 'pointermove', 1, 1));
+    await flush(() => click(1, 1));
+    expect(onBackgroundClick).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the CPU index for touch, and by default', async () => {
+    const onNodeClick = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} hitTesting="gpu" onNodeClick={onNodeClick} />);
+    const a = screenOf('a');
+    await flush(() => {
+      touch('pointerdown', a.x, a.y);
+      touch('pointerup', a.x, a.y);
+    });
+    expect(onNodeClick).toHaveBeenLastCalledWith('a');
+    expect(lastRenderer().pickNode).not.toHaveBeenCalled();
+    await tree?.unmount();
+
+    await ready(<DagrCanvas graph={twoNodes()} config={config} onNodeHover={vi.fn()} onNodeClick={onNodeClick} />);
+    const b = screenOf('b');
+    await flush(() => pointer(host(), 'pointermove', b.x, b.y));
+    await flush(() => click(b.x, b.y));
+    expect(onNodeClick).toHaveBeenLastCalledWith('b');
+    expect(lastRenderer().pickNode).not.toHaveBeenCalled();
+  });
+
+  it('never answers from a pick the lost renderer settled', async () => {
+    const onNodeClick = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} hitTesting="gpu" onNodeClick={onNodeClick} />);
+    pickFromBoxes();
+    const before = screenOf('a');
+    await flush(() => pointer(host(), 'pointermove', before.x, before.y));
+    const options = built.renderers.at(-1)?.options;
+    await flush(() => options?.onContextLost?.({ backend: 'webgpu', reason: 'device-lost' }));
+    await runFramesUntilIdle();
+    expect(built.renderers).toHaveLength(2);
+    pickFromBoxes();
+    const a = screenOf('a');
+    await flush(() => click(a.x, a.y));
+    expect(onNodeClick).not.toHaveBeenCalled();
+    await flush(() => pointer(host(), 'pointermove', a.x, a.y));
+    await flush(() => click(a.x, a.y));
+    expect(onNodeClick.mock.calls).toEqual([['a']]);
+  });
+});
+
 describe('picking while animating', () => {
   it('hits the node where it is drawn mid-glide, and refuses a click whose drawing changed under it', async () => {
     const graph = twoNodes();

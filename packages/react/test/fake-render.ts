@@ -60,6 +60,7 @@ export interface FakeRenderer {
   readonly setEdges: Mock<(groupId: string, edges: readonly unknown[]) => void>;
   readonly resize: Mock<(viewport: unknown) => void>;
   readonly render: Mock<() => void>;
+  readonly pickNode: Mock<(pointer: { readonly x: number; readonly y: number }) => Promise<string | null>>;
   readonly dispose: Mock<() => void>;
   /** The options it was built with, which is where the edge groups are named. */
   readonly options: RendererOptions;
@@ -134,6 +135,7 @@ export function createRenderer(options: RendererOptions): Promise<Renderer> {
     setEdges: vi.fn(),
     resize: vi.fn((viewport) => camera.setViewport(viewport as Parameters<Camera2D['setViewport']>[0])),
     render: vi.fn(),
+    pickNode: vi.fn(() => Promise.resolve(null)),
     dispose: vi.fn(),
     options,
   };

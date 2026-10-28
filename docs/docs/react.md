@@ -580,9 +580,9 @@ that changes every animated frame means no click is answered while nodes move.
 At most one pick is in flight; a query arriving meanwhile is answered stale and
 never picked later, since the camera may have moved by then, so re-query the
 resting pointer from `onPicked`. The pick is exact to the device pixel under the
-pointer and has none of the CPU index's touch tolerance. `DagrCanvas` still uses
-the CPU index; wiring this provider into it, and what it costs on a device, are
-the next M4.8b steps.
+pointer and has none of the CPU index's touch tolerance. `DagrCanvas` wires
+this provider in behind `hitTesting="gpu"` (next section); what it costs on a
+device is the next M4.8b step.
 
 ## Navigation, node events and camera control
 
@@ -660,9 +660,18 @@ when the drawn nodes change and not otherwise.
 What is not a hit target: edges, ports, and glow halos. HTML inside a tier
 (next section) is the DOM's to hit: native controls inside a card keep their
 native behavior, and a click on a non-interactive part of a card selects its
-node because the card sits on the node. GPU node picks reach the same contract
-through `createPickedNodeHitProvider`, which `DagrCanvas` does not use yet
-(M4.8b).
+node because the card sits on the node.
+
+**`hitTesting="gpu"`** answers mouse and pen hover and clicks from the
+renderer's `pickNode` instead of the CPU index, through
+`createPickedNodeHitProvider` (previous section), so it carries that provider's
+limits: a press on a point that was not hovered first, a release that moved,
+and a click while nodes glide are ignored, and hover holds its last answer
+until the pick at a resting pointer settles. Hover primes the picks, so an
+`onBackgroundClick` alone is enough to start them. Touch keeps the CPU index and
+its fingertip tolerance, since a tap has no hover to pick from. A renderer
+rebuilt after a lost context starts with no picks rather than answering from the
+lost one's. The default stays `'cpu'` until M4.8b prices the pass on a device.
 
 **Camera control.** `apiRef` (and `useDagrCanvas()` inside the canvas) gives the
 methods below. It is `apiRef` rather than `ref` on purpose: `ref` on a React
@@ -819,9 +828,8 @@ data and not the only way to reach it.
 ## What is not here yet
 
 - **Edge, port and GPU hits.** Exact CPU node hits ship with `DagrCanvas`.
-  Ports are M6.3a. GPU node picks reach the shared contract through
-  `createPickedNodeHitProvider`, but `DagrCanvas` does not use them yet
-  (M4.8b). Edges are not hit targets yet.
+  Ports are M6.3a. GPU node picks are opt-in through `hitTesting="gpu"`, not
+  yet priced on a device (M4.8b). Edges are not hit targets yet.
 - **A React tier helper.** Tiers are DOM elements. Rendering React into them is
   possible by hand and not wrapped.
 - **Tile-at-a-time layout.** The campaign demo's worker layout is specific to

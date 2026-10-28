@@ -103,6 +103,8 @@ import type { CameraFlight } from './camera-flight.js';
 import { DagrCanvasContext } from './canvas-context.js';
 import type { DagrCanvasApi, DagrCanvasHandle, FitOptions, FocusNodeOptions } from './canvas-context.js';
 import { createNodeHitIndex } from './node-hit.js';
+import { createPickedNodeHitProvider } from './picked-hit.js';
+import type { PickedNodeHitProvider } from './picked-hit.js';
 import { createTierFeed } from './tier-feed.js';
 import type { TierFeed } from './tier-feed.js';
 import type { NodeHitIndex } from './node-hit.js';
@@ -258,6 +260,19 @@ export interface DagrCanvasBaseProps {
 
   /** A click that landed on empty canvas. */
   readonly onBackgroundClick?: (() => void) | undefined;
+
+  /**
+   * How a mouse or pen finds the node under it. Default `'cpu'`: an index of
+   * the node silhouettes, exact within a few CSS pixels. `'gpu'` asks
+   * `Renderer.pickNode` instead, through `createPickedNodeHitProvider`, so a
+   * hover or click is answered only once a pick has settled for that point and
+   * that drawing. A press on a point that was not hovered first, a release that
+   * moved, or a click while nodes glide is ignored, and hover holds its last
+   * answer until the pick at a resting pointer settles. Touch always uses the
+   * CPU index and its fingertip tolerance: a tap has no hover to pick from.
+   * Read at event time.
+   */
+  readonly hitTesting?: 'cpu' | 'gpu' | undefined;
 
   /**
    * How touch input drives the camera when `navigation` is on. Default
@@ -922,6 +937,25 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     const zoom = stageRef.current?.renderer.camera.zoom ?? 1;
     return (pointerKindRef.current === 'touch' ? TOUCH_HIT_PIXELS : POINTER_HIT_PIXELS) / zoom;
   };
+  /** Set by the hover effect while it is attached: asks the resting pointer again. */
+  const hoverAgainRef = useRef<(() => void) | null>(null);
+  // One provider per renderer, so a rebuilt renderer never answers from a pick
+  // the lost one settled.
+  const picked = useMemo<PickedNodeHitProvider<readonly SceneNode[]> | null>(
+    () =>
+      stage === null
+        ? null
+        : createPickedNodeHitProvider({
+            pick: (css) => stage.renderer.pickNode(css),
+            onPicked: () => hoverAgainRef.current?.(),
+          }),
+    [stage],
+  );
+  const pickedRef = useRef(picked);
+  pickedRef.current = picked;
+  /** The GPU provider when this pointer should use it, or `null` for the CPU index. */
+  const gpuHits = (): PickedNodeHitProvider<readonly SceneNode[]> | null =>
+    latest.current.hitTesting === 'gpu' && pointerKindRef.current !== 'touch' ? pickedRef.current : null;
 
   const wantsPointer =
     props.navigation === true ||
@@ -943,6 +977,8 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       return camera === undefined ? { x: 0, y: 0 } : camera.screenToWorld(css);
     },
     hitTarget: (query) => {
+      const gpu = gpuHits();
+      if (gpu !== null) return gpu.hitTarget(query);
       const { nodes, index } = hitIndex();
       const id = index.hit(query.world, toleranceWorld());
       return { target: id === null ? null : { kind: 'node', nodeId: id }, displayedRevision: nodes };
@@ -1080,18 +1116,39 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         if (target instanceof Element && target.isConnected) focusedNodeRef.current = null;
       });
     };
-    const move = (event: PointerEvent): void => {
-      pointerKindRef.current = event.pointerType || 'mouse';
-      if (latest.current.onNodeHover === undefined && latest.current.onNodeClick === undefined) return;
+    let resting: { x: number; y: number } | null = null;
+    const hover = (css: { x: number; y: number }): void => {
+      const { onNodeHover, onNodeClick, onBackgroundClick } = latest.current;
+      const gpu = gpuHits();
+      // A GPU press is answered only from a hover pick, so a click handler alone primes picks.
+      const primes = gpu !== null && onBackgroundClick !== undefined;
+      if (onNodeHover === undefined && onNodeClick === undefined && !primes) return;
       if (host.dataset.dagrDragging === 'true') return;
-      const css = canvasPoint(event, host.getBoundingClientRect());
-      const id = hitIndex(100).index.hit(camera.screenToWorld(css), toleranceWorld());
+      const world = camera.screenToWorld(css);
+      let id: string | null;
+      if (gpu === null) {
+        id = hitIndex(100).index.hit(world, toleranceWorld());
+      } else {
+        resting = css;
+        const displayedRevision = drawnNodesRef.current;
+        const hit = gpu.hitTarget({ css, world, devicePixelRatio: window.devicePixelRatio, displayedRevision });
+        if (!Object.is(hit.displayedRevision, displayedRevision)) return;
+        id = hit.target?.nodeId ?? null;
+      }
       if (id === hovered) return;
       hovered = id;
-      host.style.cursor = id !== null && latest.current.onNodeClick !== undefined ? 'pointer' : '';
-      latest.current.onNodeHover?.(id);
+      host.style.cursor = id !== null && onNodeClick !== undefined ? 'pointer' : '';
+      onNodeHover?.(id);
+    };
+    const move = (event: PointerEvent): void => {
+      pointerKindRef.current = event.pointerType || 'mouse';
+      hover(canvasPoint(event, host.getBoundingClientRect()));
+    };
+    hoverAgainRef.current = () => {
+      if (resting !== null) hover(resting);
     };
     const leave = (): void => {
+      resting = null;
       if (hovered === null) return;
       hovered = null;
       host.style.cursor = '';
@@ -1125,6 +1182,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       window.removeEventListener('pointercancel', touchEnd);
       host.removeEventListener('pointermove', move);
       host.removeEventListener('pointerleave', leave);
+      hoverAgainRef.current = null;
       host.style.cursor = '';
       cancelFlight();
       // The listeners are gone, so tell the caller the hover ended.

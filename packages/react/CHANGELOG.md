@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add `hitTesting` to `DagrCanvas`. `'gpu'` answers mouse and pen hover and
+  clicks from `Renderer.pickNode` through `createPickedNodeHitProvider`, primed
+  from hover; touch keeps the CPU index. The default stays `'cpu'`.
 - Add `createPickedNodeHitProvider`, which answers the synchronous
   `GraphHitProvider` contract from asynchronous picks such as
   `Renderer.pickNode`: only from a pick settled for the same world point and
