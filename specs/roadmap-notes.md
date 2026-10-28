@@ -18,7 +18,12 @@ same ID.
 
 ## M5.7b: Mobile map reading repair (2026-10-27 UTC)
 
-Task `tsk_eb73b47f05e3`, following PR #160. The bounded library change keeps
+Task `tsk_eb73b47f05e3`, following PR #160. Implemented but unmerged: the
+post-rebase local benchmark gate failed 2/2 on the unchanged 10k CPU rectangle
+pointer query (+29.1%/+30.2%, allowed +17.7%). Typecheck, tests, lint, build
+and available browser checks pass. No benchmark baseline, exemption or gate
+was changed. M5.7c stays in backlog until this blocker is resolved and M5.7b
+merges. The bounded library change keeps
 ExplorerRoot and the SVG/DOM base. Details choose bottom docking below 720px
 of container width and a side panel above it, preserving the mounted reader
 and at least half the graph in compact placement. The compact height is capped
