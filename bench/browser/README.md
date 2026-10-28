@@ -2905,3 +2905,82 @@ measurement. The next change is
 `tsk_5ca35c49f0fc`: split the all-moving frame's collection into scavenges
 and full collections with their times, and price what survives a frame,
 before choosing another site to reduce.
+
+
+### Scavenges, mark-compacts and survivor traffic (2026-10-27)
+
+`tsk_5ca35c49f0fc`, main `7d2001a`, measurement only. A second allocation
+reduction was not tried. Chrome's GC trace exposes survivor traffic but does
+not attach allocation sites to those bytes, so the earlier suspects remain
+hypotheses.
+
+AMD Ryzen 9 9900X, integrated AMD RDNA 2, Windows Google Chrome
+156.0.8078.48 reached from WSL2 through `windows-chrome.mjs --headless`.
+The adapter probe reported `amd` / `rdna-2`, `isFallbackAdapter: false`,
+and the measured row reported `renderer.backend: webgpu`. No WebGL2 row or
+software adapter contributes to these numbers. The relay used its standard
+background-throttling and sRGB switches, plus `--headless=new`, with no
+`DAGR_CHROMIUM_ARGS`. Viewport 1280 by 720, DPR 1, `fit`, zoom 0.0715.
+#159 and #162 remained open and were not included. No other Dagr measurement
+process was running. Linux load samples surrounding the capture were 4.08
+and 3.77; this was not an idle host (other projects were active).
+
+The existing frame runner was copied temporarily and instrumented with two
+Playwright exposed functions immediately before and after its animated
+`sample`. The first enabled and started `Profiler`, then started `Tracing`
+with categories `v8,disabled-by-default-v8.gc`, `ReportEvents`; the second
+stopped the CPU profiler, ended tracing and waited for `tracingComplete`.
+The frame workload was
+`--motion=springs --sizes=10000 --edges=smooth --moving=1 --frames=600`.
+Both captures cover the same animated call, including its 60 warmup frames:
+660 frames, 10,000 moving nodes, 13,169 moving edges, 24 retargets and zero
+settled frames. The CPU profile spans 11.736 s; protocol start/stop ordering
+adds a small boundary difference, so these are aligned workload windows,
+not identical timestamp boundaries. The still row and control are outside
+both captures. The control tick was 16.7 ms. This browser was not restarted
+within the capture. No comparison with the earlier headed runs is claimed.
+
+| Collection | Count | Pause time, ms | Pause per animated frame, ms |
+| --- | --- | --- | --- |
+| Scavenge (`gc: s`) | 361 | 757.167 | 1.147 |
+| Mark-compact (`gc: mc`) | 43 | 259.839 | 0.394 |
+
+Counts and pause sums come from the 404 `V8.GCTraceGCNVP` records on the
+renderer main thread. As a cross-check, the outer `MinorGC` events have the
+same 361 count and sum to 783.196 ms; `MajorGC` has the same 43 count and
+sums to 263.894 ms. These scopes differ slightly from the collector's own
+pause measurement. Do not add the outer events to their nested scavenger
+or finalization events. Main-thread `V8.GCIncrementalMarking` events add
+159.566 ms across 17,005 slices, and incremental marking start events total
+47.850 ms across 43 starts. Those are additional major-collection work,
+not 17,005 full collections. Background marking and sweeping also appear
+and are not included in the pause table. The CPU profile attributes
+1,426.351 ms of sampled time to `(garbage collector)`. Its sampling and GC
+scopes differ from the trace, so the pause sum does not exhaust that number.
+
+For the **scavenges alone**, `promoted` sums to 2,123,421,180 bytes and
+`new_space_survived` to 2,218,815,684 bytes. Dividing each by all 660 frames:
+**3.068 MiB promoted and 3.206 MiB copied within young space per frame**,
+6.274 MiB of survivor traffic in total. This is collection traffic, not
+unique bytes retained per frame: an object copied by one scavenge can be
+copied again or promoted by another. The mark-compacts separately report
+694,765,832 promoted bytes; those are not included in the scavenge price.
+No forced collection was inserted into the animated window.
+
+**Attribution remains unmeasured.** The NVP records contain aggregate bytes,
+not object identities, ages, retaining paths or allocation stacks. The
+previous section's heap sampling counted allocations, including reclaimed
+objects, and cannot supply those missing links. Source reading establishes
+that edge motion publishes fresh points and velocities each moving frame,
+and the renderer holds a previous ribbon build for route copying. It does
+not establish what fraction of either survives a particular scavenge, nor
+exclude `smoothInto`, node springs or retarget allocations. A useful next
+measurement must join young-generation survivors to allocation sites and
+retaining paths, with instrumentation overhead disclosed, before changing
+either lifetime. No reduction or benefit is claimed from this capture.
+
+Raw trace, CPU profile, frame output, adapter probe, screenshot and the
+instrumented runner are attached to the task and PR as the M4.10 GC evidence
+bundle. The runner is diagnostic evidence, not a new maintained benchmark
+or a change to the performance gate. Survivor site attribution remains the
+unfinished part of this task, not an eligible completed successor.
