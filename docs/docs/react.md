@@ -571,8 +571,12 @@ and the same displayed revision. Any other query starts a pick and is answered
 as stale, which the hook ignores rather than reading as a miss. So a press
 selects only if its point was picked before the press: query the provider from
 `pointermove` to prime it, and expect a touch tap with no hover before it to be
-ignored. At most one pick is in flight, and a query arriving meanwhile replaces
-the one waiting behind it. The pick is exact to the device pixel under the
+ignored. The release is its own query, so a mouse that moves a pixel between
+press and release, under the pan threshold, is also ignored. A displayed revision
+that changes every animated frame means no click is answered while nodes move.
+At most one pick is in flight; a query arriving meanwhile is answered stale and
+never picked later, since the camera may have moved by then, so re-query the
+resting pointer from `onPicked`. The pick is exact to the device pixel under the
 pointer and has none of the CPU index's touch tolerance. `DagrCanvas` still uses
 the CPU index; wiring this provider into it, and what it costs on a device, are
 the next M4.8b steps.

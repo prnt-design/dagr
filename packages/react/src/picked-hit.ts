@@ -9,7 +9,7 @@ export interface PickedNodeHitOptions {
    * answering.
    */
   readonly pick: (css: { readonly x: number; readonly y: number }) => Promise<string | null>;
-  /** Called after a pick's answer has been stored, so a caller can query again. */
+  /** Called after a pick's answer has been stored, so a caller can query its pointer again. */
   readonly onPicked?: (() => void) | undefined;
 }
 
@@ -49,49 +49,46 @@ const UNANSWERED: unique symbol = Symbol('unanswered');
  * after its revision left the screen is stored under that revision, so no later
  * query can match it.
  *
- * At most one pick is in flight. A query arriving meanwhile replaces the one
- * waiting behind it, so a burst of pointer moves costs two picks, not one per
- * event. A pick that rejects stores nothing, and the point is asked again on
- * its next query.
+ * At most one pick is in flight, and a query arriving meanwhile is answered
+ * stale without starting one. A query is never picked later on its behalf,
+ * because the camera may have moved since its world point was taken, so a
+ * caller that wants the point under a resting pointer queries again from
+ * `onPicked`. A pick that rejects stores nothing and calls nothing; the point
+ * is asked again on its next query.
  *
  * A press is answered only if its point was picked before the press, so a
- * caller primes picks from hover (`pointermove`) by querying the provider.
+ * caller primes picks from hover (`pointermove`) by querying the provider. The
+ * release is a query of its own, and must land on the same world point.
  */
 export function createPickedNodeHitProvider<Revision>(
   options: PickedNodeHitOptions,
 ): PickedNodeHitProvider<Revision> {
   let answered: (Key<Revision> & { readonly nodeId: string | null }) | null = null;
-  let inFlight: Key<Revision> | null = null;
-  let waiting: Key<Revision> | null = null;
+  let inFlight = false;
 
   const start = (key: Key<Revision>): void => {
-    inFlight = key;
     let settled: Promise<string | null>;
     try {
       settled = options.pick(key.css);
     } catch {
-      next();
       return;
     }
+    inFlight = true;
     settled.then(
       (nodeId) => {
         answered = { ...key, nodeId };
-        next();
+        inFlight = false;
         options.onPicked?.();
       },
-      () => next(),
+      () => {
+        inFlight = false;
+      },
     );
-  };
-  const next = (): void => {
-    inFlight = null;
-    const queued = waiting;
-    waiting = null;
-    if (queued !== null && (answered === null || !sameKey(answered, queued))) start(queued);
   };
 
   return {
     get pending() {
-      return inFlight === null ? 0 : 1;
+      return inFlight ? 1 : 0;
     },
     hitTarget(query: GraphHitQuery<Revision>): GraphHit<Revision> {
       const key: Key<Revision> = {
@@ -105,8 +102,7 @@ export function createPickedNodeHitProvider<Revision>(
           displayedRevision: query.displayedRevision,
         };
       }
-      if (inFlight === null) start(key);
-      else if (!sameKey(inFlight, key)) waiting = key;
+      if (!inFlight) start(key);
       return { target: null, displayedRevision: UNANSWERED as Revision };
     },
   };

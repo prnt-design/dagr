@@ -84,7 +84,7 @@ describe('createPickedNodeHitProvider', () => {
     expect(provider.hitTarget(query(2, 5, 5)).target).toEqual({ kind: 'node', nodeId: 'new' });
   });
 
-  it('keeps one pick in flight and only the latest query waiting behind it', async () => {
+  it('keeps one pick in flight and never picks a query that arrived meanwhile', async () => {
     const { calls, pick } = picker();
     const provider = createPickedNodeHitProvider<number>({ pick });
     for (let x = 0; x < 10; x++) provider.hitTarget(query(1, x, 0));
@@ -92,11 +92,24 @@ describe('createPickedNodeHitProvider', () => {
 
     calls[0]?.resolve(null);
     await settle();
-    expect(pick).toHaveBeenCalledTimes(2);
+    expect(pick).toHaveBeenCalledTimes(1);
+    expect(provider.hitTarget(query(1, 9, 0)).displayedRevision).not.toBe(1);
     expect(calls[1]?.css).toEqual({ x: 9, y: 0 });
     calls[1]?.resolve('nine');
     await settle();
     expect(provider.hitTarget(query(1, 9, 0)).target).toEqual({ kind: 'node', nodeId: 'nine' });
+  });
+
+  it('answers the point it picked, not the point a later camera puts under the same CSS point', async () => {
+    const { calls, pick } = picker();
+    const provider = createPickedNodeHitProvider<number>({ pick });
+    provider.hitTarget(query(1, 10, 10, { x: 0, y: 0 }));
+    provider.hitTarget(query(1, 50, 50, { x: 100, y: 100 }));
+    calls[0]?.resolve('a');
+    await settle();
+    // After a pan, (100, 100) is under the first CSS point; it was never picked.
+    expect(provider.hitTarget(query(1, 10, 10, { x: 100, y: 100 })).displayedRevision).not.toBe(1);
+    expect(calls[1]?.css).toEqual({ x: 10, y: 10 });
   });
 
   it('stores nothing from a pick that rejects or throws, and asks again', async () => {
