@@ -2021,9 +2021,9 @@ The motion arithmetic, the three delta consumers and the loop are headless and
 complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
 (M5.3a). What is still missing is the device work below.
 
-- The rest of GPU picking (M4.8b): a `DagrCanvas` hit provider over
-  `pickNode`, hover at ten thousand nodes, when the pass runs and what it
-  costs, and edges as hit targets. See [Picking](#picking).
+- The rest of GPU picking (M4.8b): hover at ten thousand nodes, when the pass
+  runs and what it costs, and edges as hit targets. `DagrCanvas` picks through
+  `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
   other GPUs, zooms, and edge ribbons.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for
