@@ -2905,3 +2905,175 @@ measurement. The next change is
 `tsk_5ca35c49f0fc`: split the all-moving frame's collection into scavenges
 and full collections with their times, and price what survives a frame,
 before choosing another site to reduce.
+
+### Scavenges, mark-compacts and survivor traffic (2026-10-27)
+
+`tsk_5ca35c49f0fc`, main `7d2001a`, measurement only. A second allocation
+reduction was not tried. Chrome's GC trace exposes survivor traffic but does
+not attach allocation sites to those bytes, so the earlier suspects remain
+hypotheses.
+
+AMD Ryzen 9 9900X, integrated AMD RDNA 2, Windows Google Chrome
+156.0.8078.48 reached from WSL2 through `windows-chrome.mjs --headless`.
+The adapter probe reported `amd` / `rdna-2`, `isFallbackAdapter: false`,
+and the measured row reported `renderer.backend: webgpu`. No WebGL2 row or
+software adapter contributes to these numbers. The relay used its standard
+background-throttling and sRGB switches, plus `--headless=new`, with no
+`DAGR_CHROMIUM_ARGS`. Viewport 1280 by 720, DPR 1, `fit`, zoom 0.0715.
+#159 and #162 remained open and were not included. No other Dagr measurement
+process was running. Linux load samples surrounding the capture were 4.08
+and 3.77; this was not an idle host (other projects were active).
+
+The existing frame runner was copied temporarily and instrumented with two
+Playwright exposed functions immediately before and after its animated
+`sample`. The first enabled and started `Profiler`, then started `Tracing`
+with categories `v8,disabled-by-default-v8.gc`, `ReportEvents`; the second
+stopped the CPU profiler, ended tracing and waited for `tracingComplete`.
+The frame workload was
+`--motion=springs --sizes=10000 --edges=smooth --moving=1 --frames=600`.
+Both captures cover the same animated call, including its 60 warmup frames:
+660 frames, 10,000 moving nodes, 13,169 moving edges, 24 retargets and zero
+settled frames. The CPU profile spans 11.736 s; protocol start/stop ordering
+adds a small boundary difference, so these are aligned workload windows,
+not identical timestamp boundaries. The still row and control are outside
+both captures. The control tick was 16.7 ms. This browser was not restarted
+within the capture. No comparison with the earlier headed runs is claimed.
+
+| Collection | Count | Pause time, ms | Pause per animated frame, ms |
+| --- | --- | --- | --- |
+| Scavenge (`gc: s`) | 361 | 757.167 | 1.147 |
+| Mark-compact (`gc: mc`) | 43 | 259.839 | 0.394 |
+
+Counts and pause sums come from the 404 `V8.GCTraceGCNVP` records on the
+renderer main thread. As a cross-check, the outer `MinorGC` events have the
+same 361 count and sum to 783.196 ms; `MajorGC` has the same 43 count and
+sums to 263.894 ms. These scopes differ slightly from the collector's own
+pause measurement. Do not add the outer events to their nested scavenger
+or finalization events. Main-thread `V8.GCIncrementalMarking` events add
+159.566 ms across 17,005 slices, and incremental marking start events total
+47.850 ms across 43 starts. Those are additional major-collection work,
+not 17,005 full collections. Background marking and sweeping also appear
+and are not included in the pause table. The CPU profile attributes
+1,426.351 ms of sampled time to `(garbage collector)`. Its sampling and GC
+scopes differ from the trace, so the pause sum does not exhaust that number.
+
+For the **scavenges alone**, `promoted` sums to 2,123,421,180 bytes and
+`new_space_survived` to 2,218,815,684 bytes. Dividing each by all 660 frames:
+**3.068 MiB promoted and 3.206 MiB copied within young space per frame**,
+6.274 MiB of survivor traffic in total. This is collection traffic, not
+unique bytes retained per frame: an object copied by one scavenge can be
+copied again or promoted by another. The mark-compacts separately report
+694,765,832 promoted bytes; those are not included in the scavenge price.
+No forced collection was inserted into the animated window.
+
+**Attribution remains unmeasured.** The NVP records contain aggregate bytes,
+not object identities, ages, retaining paths or allocation stacks. The
+previous section's heap sampling counted allocations, including reclaimed
+objects, and cannot supply those missing links. Source reading establishes
+that edge motion publishes fresh points and velocities each moving frame,
+and the renderer holds a previous ribbon build for route copying. It does
+not establish what fraction of either survives a particular scavenge, nor
+exclude `smoothInto`, node springs or retarget allocations. A useful next
+measurement must join young-generation survivors to allocation sites and
+retaining paths, with instrumentation overhead disclosed, before changing
+either lifetime. No reduction or benefit is claimed from this capture.
+
+Raw trace, CPU profile, frame output, adapter probe, screenshot and the
+instrumented runner are attached to the task and PR as the M4.10 GC evidence
+bundle. The runner is diagnostic evidence, not a new maintained benchmark
+or a change to the performance gate. Survivor site attribution follows in
+the next section.
+
+### Survivors by allocation site (2026-10-28)
+
+`tsk_5ca35c49f0fc`, main `f3bd116`, measurement only. The trace above prices
+what survives a scavenge but not where it was allocated. Chrome's sampling
+heap profiler can drop what a scavenge reclaims: `HeapProfiler.startSampling`
+with `includeObjectsCollectedByMinorGC: false` and
+`includeObjectsCollectedByMajorGC: true` drops every sampled object that a
+scavenge reclaimed and keeps the rest (promoted, reclaimed by a mark-compact,
+or still alive when the profile is read), attributed to the function that
+allocated it. V8 decides by which collector reclaimed a sample, not by its
+age, so an object that survives one scavenge and dies in the next is dropped.
+A profile with both set counts all allocation, as in "Allocation by site"
+above, and the two side by side say what share of each site a scavenge does
+not reclaim.
+
+AMD Ryzen 9 9900X, Google Chrome 156.0.8078.48 on the Windows side, headed,
+attached through `windows-chrome.mjs` with no other flags. Windows now lists
+an NVIDIA GeForce RTX 4090 beside the integrated AMD Radeon
+(`Win32_VideoController`), and Chrome picks the NVIDIA GPU: adapter `nvidia`
+`lovelace`, not a fallback, `renderer.backend` `webgpu` on every row. Earlier
+rows here name the AMD RDNA 2 adapter, so nothing below is compared with
+their frame times. Viewport 1280 by 720, DPR 1, `fit` (zoom 0.0715), control
+tick 16.7 ms, `--motion=springs --sizes=10000 --edges=smooth --moving=1
+--frames=1200` with `frame-profile.mjs` unchanged. A second DevTools client
+attached to the page through the relay sampled at a mean interval of 16 KB
+over 13.5 to 16 s of the animated row, from 28 s after the page opened, and
+counted the frames in that window with its own `requestAnimationFrame`
+counter. Eight runs, the two profiles alternating; the last four also
+recorded a `v8` and `disabled-by-default-v8.gc` trace over the same window.
+The 1-minute load average was 0.1 to 1.4 at the start of every run; two
+other runs, during which other projects' checks pushed it to about 15, are
+left out. Sampling slows the frame: 10.7% to 20.3% of ticks missed with the
+profiler attached against 4.8% in a run without it, so these are shares and
+bytes, not frame times.
+
+Sampled MiB per frame by site, one value per run in run order:
+
+| Site | All allocation | Not reclaimed by a scavenge | Share not reclaimed |
+| --- | --- | --- | --- |
+| edge motion `advance` | 8.0, 7.9, 8.5, 8.6 | 6.1, 6.1, 6.3, 4.5 | 52% to 80% |
+| node motion `advance` with `stepSpring2DBy` | 2.6, 2.9, 3.5, 3.5 | 1.4, 1.4, 1.5, 1.5 | 39% to 58% |
+| `cleanGivenCentreline` | 2.8, 2.8, 2.9, 2.9 | 0.8, 0.9, 0.9, 0.8 | 28% to 31% |
+| retarget work and other motion | 1.4, 1.4, 1.6, 1.6 | 0.6, 0.6, 0.6, 0.4 | 28% to 45% |
+| `tessellateRibbons`, own | 1.2 to 1.3 | 0.5 in every run | 37% to 43% |
+| the harness's own frame loop | 0.9 in every run | 0.4, 0.4, 0.4, 0.2 | 20% to 49% |
+| `smoothInto` | 3.5, 3.5, 3.6, 3.6 | 0.3, 0.4, 0.3, 0.3 | 7% to 12% |
+| `tessellateCentreline` | 1.0 to 1.1 | 0.1 in every run | 7% to 13% |
+| `setNodes` | 0.8 in every run | 0.1 in every run | 9% to 15% |
+| everything else | 0.6 in every run | 0.1 in every run | |
+| in all | 22.8, 23.2, 24.9, 24.9 | 10.3, 10.8, 10.8, 8.5 | |
+
+A share pairs a run of one profile with a run of the other, so it is the
+range over every pairing. V8 inlines the node springs into `advance` in some
+runs and not in others, so the two are one row; that row's allocation moves
+with the inlining (2.6 to 3.5) while what is not reclaimed stays at 1.4 to
+1.5, so its share range is wider than its noise.
+
+- **Edge motion's `advance` is most of what a scavenge does not reclaim**:
+  53% to 59% of it in every run, and 52% to 80% of what that site allocates.
+  It makes a new `{ x, y }` per route point, a new velocity array per moving
+  edge and the frame's edge list every frame; the profile attributes by the
+  allocating function, so it does not separate them. Node motion is next at
+  13% to 17%, then the build's record of given points at 8% to 10%.
+- `smoothInto`, `tessellateCentreline` and `setNodes` make arrays that die
+  within the frame, and still show 7% to 15%. That is consistent with a
+  floor rather than survival: a mark-compact also collects the young
+  generation, and the profiler counts what it reclaims there as collected
+  by a major collection. Mark-compacts were 15% and 13% of the collections
+  in the two traced runs below. Taking 10%, the middle of those sites, as
+  every site's floor gives about 2.4 MiB a frame of the 23 to 25 allocated.
+- **The profiler's total does not reconcile with the trace.** Over the same
+  windows (runs 7 and 9) the scavenges promoted 3.2 and 1.7 MiB a frame and
+  copied 3.3 and 2.6 within young space (314 and 334 scavenges, 881 and
+  804 ms of pauses), and the mark-compacts (57 and 50, 264 and 244 ms)
+  promoted 0.5 and 0.4. With the floor above that accounts for about 6.1
+  and 4.5 MiB a frame of the 10.8 and 8.5 the profiler kept, leaving 4 to
+  5 MiB a frame unexplained. So take bytes from the trace, and the shares
+  from the profiler only as far as that unexplained part is spread across
+  sites as the rest is. Run 9, whose scavenges promoted the least, is also
+  the one whose edge motion figure fell, from about 6.2 to 4.5, which is
+  consistent with the attribution, though its harness and retarget figures
+  fell too and it ran at a better frame rate (10.7% of ticks missed), so the
+  drop may be run-wide.
+
+What keeps those objects that long is not measured. V8 promotes an object
+the second time a scavenge finds it alive. A frame's points and velocities
+are read once by the next frame's `advance` and then replaced, and with a
+scavenge every 1.5 to 1.9 frames (runs 7 to 10) an object that lives one
+frame should mostly die in the young generation; most of these are not
+reclaimed there. Finding what retains them, the renderer, the bench harness
+or something else, needs their retaining paths from heap snapshots, not
+allocation stacks. That is the next change, `tsk_88bfcb651a56`. No reduction
+was tried here, and none is claimed.
