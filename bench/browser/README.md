@@ -453,18 +453,22 @@ smooth, still 0.4 to 0.5). The page logged the same `Vertex attribute
 `--memory --pick`, twice at each ratio, gave the AMD run's GPU figures to the
 byte: the first pick leaves 196,868 bytes live at DPR 1 and 2, and each pick
 creates a 4-byte readback buffer and destroys it once read, so 300 to 301
-picks over 301 frames left nothing else live. The heap retained after the
+picks left nothing else live. The heap retained after the
 step grew by 0.27 to 0.35 MB. The empty renderer held 55.3 MB of render
 targets at DPR 1 and 221.2 MB at DPR 2.
 
 - **Same conclusion on the M4.** A pick costs at most 0.2 ms of CPU at the
-  median, and missed ticks with a pick always in flight overlapped the runs
-  without it on every row.
-- **Answers came sooner.** At the median a pick settled before the next
-  frame on every row but one smooth DPR 2 run, where it took one frame; on
-  AMD, smooth edges with every node moving took two. Picks per run on the
-  smooth animated rows varied from 158 to 295, so a hover can still trail a
-  gliding drawing by a frame or two when it is busy.
+  median (on the still scene, 0.2 against AMD's 0.1, with a 95th percentile
+  of 0.4 against 0.2), and missed ticks with a pick always in flight
+  overlapped the runs without it on every row. That is weaker evidence than
+  on AMD, since this machine missed almost no ticks either way, and at 300
+  frames a run one missed tick is 0.3%.
+- **Answers came sooner, on a less busy frame.** At the median a pick
+  settled before the next frame on every row but one smooth DPR 2 run, where
+  it took one frame; on AMD, smooth edges with every node moving took two,
+  on a frame that missed 2.7% to 6.7% of ticks against this one's 0% to 1.7%.
+  Picks per run on the smooth animated rows varied from 158 to 295, so a
+  hover can still trail a gliding drawing by a frame or two when it is busy.
 
 ## Frame profile on WebGPU (M4.10a)
 

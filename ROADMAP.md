@@ -48,8 +48,8 @@ camera flights and zoom-tiered node rendering. Edge and port hits are not
 shipped. Edge styles still change geometry without obstacle avoidance. Visual
 groups are annotations, not compound layout or enforced boundaries. GPU
 picking is `Renderer.pickNode` (unreleased), which `DagrCanvas` uses only
-behind an opt-in `hitTesting="gpu"`, priced on one device (AMD RDNA 2,
-Chrome 156, WebGPU) and off by default. Do not mark
+behind an opt-in `hitTesting="gpu"`, priced on two devices (AMD RDNA 2 and
+Apple M4, Chrome 156, WebGPU) and off by default. Do not mark
 M5.2 or M7 complete based on the shared contract or demos.
 
 M5.4a gates the tarballs with `publint`, `arethetypeswrong`, and a scratch

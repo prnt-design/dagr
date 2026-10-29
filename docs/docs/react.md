@@ -834,8 +834,8 @@ data and not the only way to reach it.
 
 - **Edge, port and GPU hits.** Exact CPU node hits ship with `DagrCanvas`.
   Ports are M6.3a. GPU node picks are opt-in through `hitTesting="gpu"`
-  (M4.8b), priced on two devices at 0.2 ms of CPU per pick or less. Edges
-  are not hit targets yet.
+  (M4.8b), priced on two devices at no more than 0.2 ms of CPU per pick at
+  the median. Edges are not hit targets yet.
 - **A React tier helper.** Tiers are DOM elements. Rendering React into them is
   possible by hand and not wrapped.
 - **Tile-at-a-time layout.** The campaign demo's worker layout is specific to

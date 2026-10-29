@@ -1008,8 +1008,9 @@ canvas.addEventListener('pointermove', (event) => {
 });
 ```
 
-Each pick is a readback. On one device (AMD RDNA 2, Chrome 156, WebGPU) a pick
-always in flight at ten thousand nodes cost 0.1 to 0.2 ms of CPU per pick and
+Each pick is a readback. On two devices (AMD RDNA 2 and Apple M4, Chrome 156,
+WebGPU) a pick always in flight at ten thousand nodes cost at most 0.2 ms of
+CPU per pick at the median and
 about 0.2 MB of GPU memory, so issue one when the pointer or the drawing moves
 rather than on every frame; see `bench/browser/README.md`.
 
