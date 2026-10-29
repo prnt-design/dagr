@@ -59,6 +59,7 @@ function distanceSquared(segment: Segment, x: number, y: number): number {
   return ex * ex + ey * ey;
 }
 
+const NONE: readonly Segment[] = [];
 const OFFSET = 1 << 24;
 const SPAN = 1 << 25;
 function cellKey(i: number, j: number): number {
@@ -130,14 +131,14 @@ export function createEdgeHitIndex(
           best = segment;
         }
       };
-      // A tolerance wider than the grid is worth visiting, as at a far
-      // overview zoom, costs fewer tests as a scan than as a walk of empty cells.
+      // When the tolerance square covers more cells than there are segments,
+      // as at a far overview zoom, a scan costs fewer tests than the cell walk.
       if ((i1 - i0 + 1) * (j1 - j0 + 1) > segments.length) {
         for (const segment of segments) consider(segment);
       } else {
         for (let i = i0; i <= i1; i++) {
           for (let j = j0; j <= j1; j++) {
-            for (const segment of grid.get(cellKey(i, j)) ?? []) consider(segment);
+            for (const segment of grid.get(cellKey(i, j)) ?? NONE) consider(segment);
           }
         }
       }

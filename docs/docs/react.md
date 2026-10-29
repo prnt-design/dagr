@@ -657,7 +657,10 @@ final ones. Overlaps resolve by draw order (circles over rectangles, later over
 earlier). A uniform grid keeps a query to a few shape tests; the index is rebuilt
 when the drawn nodes change and not otherwise.
 
-What is not a hit target on `DagrCanvas`: edges, ports, and glow halos.
+What is not a hit target on `DagrCanvas`: edges, ports, and glow halos. HTML
+inside a tier (next section) is the DOM's to hit: native controls inside a
+card keep their native behavior, and a click on a non-interactive part of a
+card selects its node because the card sits on the node.
 
 **Edge hits, for a host with its own surface.** `createEdgeHitIndex(edges)`
 tests the centrelines the renderer was handed: the points after `edgePath`
@@ -671,10 +674,7 @@ Where edges cross or fan into a node the nearer centreline wins, and an exact
 tie goes to the later edge. Nodes are drawn over edges, so ask the node index
 first and the edge index only on a node miss. Dashes are not gaps, and the
 index tests straight segments, which is what a `'polyline'` group (the one
-`DagrCanvas` declares) draws. `DagrCanvas` does not report edge hits yet. HTML inside a tier
-(next section) is the DOM's to hit: native controls inside a card keep their
-native behavior, and a click on a non-interactive part of a card selects its
-node because the card sits on the node.
+`DagrCanvas` declares) draws. `DagrCanvas` does not report edge hits yet.
 
 **`hitTesting="gpu"`** answers mouse hover and clicks from the
 renderer's `pickNode` instead of the CPU index, through
@@ -848,7 +848,8 @@ data and not the only way to reach it.
 - **Edge, port and GPU hits.** Exact CPU node hits ship with `DagrCanvas`.
   Ports are M6.3a. GPU node picks are opt-in through `hitTesting="gpu"`
   (M4.8b), priced on one device at about 0.1 to 0.2 ms of CPU per pick. Edges
-  are not hit targets yet.
+  are not hit targets on `DagrCanvas` yet; `createEdgeHitIndex` answers them
+  for a host with its own surface.
 - **A React tier helper.** Tiers are DOM elements. Rendering React into them is
   possible by hand and not wrapped.
 - **Tile-at-a-time layout.** The campaign demo's worker layout is specific to

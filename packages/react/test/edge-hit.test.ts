@@ -66,6 +66,12 @@ describe('createEdgeHitIndex', () => {
     expect(fan.hit({ x: 50, y: 5 }, 6)).toBe('lower');
     const reversed = createEdgeHitIndex([edge('lower', 0, 0, 100, 0), edge('upper', 0, 10, 100, 10)]);
     expect(reversed.hit({ x: 50, y: 5 }, 6)).toBe('upper');
+    const apart = createEdgeHitIndex([
+      edge('left', -1000, -1000, -1000, 1000),
+      edge('right', 1000, -1000, 1000, 1000),
+      ...Array.from({ length: 400 }, (_, i) => edge(`short${String(i)}`, i * 3, 5000, i * 3 + 1, 5000)),
+    ]);
+    expect(apart.hit({ x: 0, y: 0 }, 1000)).toBe('right');
   });
 
   it('answers for the routes it was built from: a rebuilt index misses a removed edge and hits a rerouted one', () => {
@@ -104,9 +110,9 @@ describe('createEdgeHitIndex', () => {
     expect(index.hit({ x: 14, y: 10 }, 3)).toBeNull();
   });
 
-  it('agrees with a linear scan over random routes, tolerances and points, at every zoom', () => {
+  it('agrees with a linear scan over random routes and points, through the grid and the scan fallback', () => {
     const next = random(7);
-    const edges: Edge[] = Array.from({ length: 300 }, (_, i) => {
+    const edges: Edge[] = Array.from({ length: 1500 }, (_, i) => {
       const coords: number[] = [];
       let x = next() * 4000 - 2000;
       let y = next() * 4000 - 2000;
@@ -120,11 +126,15 @@ describe('createEdgeHitIndex', () => {
       return edge(`e${String(i)}`, ...coords);
     });
     const index = createEdgeHitIndex(edges);
-    for (const tolerance of [0.5, 4, 40, 5000]) {
+    for (const [tolerance, fewestHits] of [[4, 300], [40, 1500], [5000, 2000]] as const) {
+      let hits = 0;
       for (let q = 0; q < 2000; q++) {
-        const p = { x: next() * 5000 - 2500, y: next() * 5000 - 2500 };
-        expect(index.hit(p, tolerance)).toBe(scan(edges, p, tolerance));
+        const p = { x: next() * 4000 - 2000, y: next() * 4000 - 2000 };
+        const expected = scan(edges, p, tolerance);
+        expect(index.hit(p, tolerance)).toBe(expected);
+        if (expected !== null) hits++;
       }
+      expect(hits).toBeGreaterThanOrEqual(fewestHits);
     }
   });
 
