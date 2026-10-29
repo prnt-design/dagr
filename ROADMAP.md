@@ -367,7 +367,10 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   0.1 to 0.2 ms of CPU per pick, its effect on missed ticks did not separate
   from runs without it, and it holds about 0.2 MB of GPU buffers, with each
   pick's 4-byte readback buffer destroyed once read (see
-  `bench/browser/README.md`, "What a pick costs a frame"). So the pass runs
+  `bench/browser/README.md`, "What a pick costs a frame"). Since 2026-10-29
+  the same holds on Apple M4 in Chrome 156, on `webgpu` and not a fallback
+  adapter: at most 0.2 ms of CPU per pick at the median, missed ticks
+  overlapping the runs without picks, and the same GPU bytes. So the pass runs
   on pointer moves, as `DagrCanvas` runs it, and the default stays `'cpu'`:
   a click while nodes glide and a press not hovered first are ignored on the
   GPU path, and touch and pen use the CPU index anyway. WebGL2's pick cost is
