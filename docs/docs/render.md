@@ -1008,8 +1008,9 @@ canvas.addEventListener('pointermove', (event) => {
 });
 ```
 
-Each pick is a readback. On one device (AMD RDNA 2, Chrome 156, WebGPU) a pick
-always in flight at ten thousand nodes cost 0.1 to 0.2 ms of CPU per pick and
+Each pick is a readback. On two devices (AMD RDNA 2 and Apple M4, Chrome 156,
+WebGPU) a pick always in flight at ten thousand nodes cost at most 0.2 ms of
+CPU per pick at the median and
 about 0.2 MB of GPU memory, so issue one when the pointer or the drawing moves
 rather than on every frame; see `bench/browser/README.md`.
 
@@ -2024,8 +2025,9 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
 (M5.3a). What is still missing is the device work below.
 
 - The rest of GPU picking (M4.8b): edges as hit targets. Hover and clicks at
-  ten thousand nodes are checked, and the pass priced, on one device
-  (`bench/browser/gpu-hover.mjs`, `frame-profile.mjs --pick`). `DagrCanvas` picks through
+  ten thousand nodes are checked on one device (`bench/browser/gpu-hover.mjs`),
+  and the pass priced on two, AMD RDNA 2 and Apple M4
+  (`frame-profile.mjs --pick`). `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
   other GPUs, zooms, and edge ribbons.
