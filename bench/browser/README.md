@@ -443,7 +443,7 @@ every run here is headed. The same plan, alternating runs without and with
 | 2 | smooth | animated | 0.3%, 1.7% | 0.7%, 1.3% | 0.0 / 0.1 | 158 to 262 | 0 to 1 / 2 |
 
 A `pick` of 0.0 is under the browser's 0.1 ms resolution. The other still
-rows matched the one shown (0% to 0.7% past one tick either way, `pick`
+rows were close to the one shown (0% to 0.7% past one tick either way, `pick`
 0.2 / 0.3 to 0.4, 355 to 359 picks per run, settling in 0 frames at the
 median and up to 4). Every pick settled, with no error. `render` was the same
 with and without picks on every row (animated 0.3 ms straight and 0.7
