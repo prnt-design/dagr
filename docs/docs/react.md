@@ -675,7 +675,8 @@ back, one at a time, until the drawing rests. Hover primes the picks, so an
 index, touch with its fingertip tolerance, since a tap, or a pen that does not
 report hover, has nothing picked before it. A renderer rebuilt after a lost
 context starts with no picks rather than answering from the lost one's. The
-default stays `'cpu'` until M4.8b prices the pass on a device.
+default stays `'cpu'`, since a click while nodes glide and a press not hovered
+first are ignored on the GPU path.
 
 **Camera control.** `apiRef` (and `useDagrCanvas()` inside the canvas) gives the
 methods below. It is `apiRef` rather than `ref` on purpose: `ref` on a React
@@ -833,7 +834,7 @@ data and not the only way to reach it.
 
 - **Edge, port and GPU hits.** Exact CPU node hits ship with `DagrCanvas`.
   Ports are M6.3a. GPU node picks are opt-in through `hitTesting="gpu"`
-  (M4.8b), priced on one device at about 0.1 to 0.2 ms of CPU per pick. Edges
+  (M4.8b), priced on two devices at 0.2 ms of CPU per pick or less. Edges
   are not hit targets yet.
 - **A React tier helper.** Tiers are DOM elements. Rendering React into them is
   possible by hand and not wrapped.

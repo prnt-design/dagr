@@ -423,6 +423,49 @@ GPU path's gaps do: a click while nodes glide and a press not hovered first
 are ignored, and touch and pen use the CPU index anyway. This ran WebGPU only;
 the WebGL2 fallback's pick cost is not measured.
 
+**On a second GPU, 2026-10-29:** the Apple M4 Mac mini (10 cores, 16 GB,
+macOS 26.6.2), Google Chrome 156.0.8078.48 headed, launched by the script
+rather than attached (`DAGR_CHROMIUM` set to the Chrome binary,
+`DAGR_CHROMIUM_ARGS` set to `--enable-webgpu-developer-features`, no
+`DAGR_CDP`), adapter `apple` `metal-3` (`Apple M4`), `isFallbackAdapter:
+false`, `renderer.backend` `webgpu` on every row, tick 16.7 ms, load average
+2.9 to 5.2 with a virtual machine holding one core busy. Headless Chrome on
+this machine paced the control at 33.3 ms, which the runner refuses, so
+every run here is headed. The same plan, alternating runs without and with
+`--pick`: three pairs at DPR 1 and two at DPR 2.
+
+| DPR | Edges | Mode | Past one tick, without | Past one tick, with `--pick` | `pick` | Picks per run | Frames to settle (median / max) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | straight | still | 0%, 0%, 0% | 0%, 0%, 0% | 0.2 / 0.4 | 357 to 359 | 0 / 1 to 2 |
+| 1 | straight | animated | 0%, 0%, 0% | 0%, 0%, 0% | 0.0 / 0.1 | 345 to 347 | 0 / 2 |
+| 1 | smooth | animated | 1.3%, 1.0%, 0% | 0%, 1.0%, 0% | 0.0 to 0.1 / 0.1 to 0.2 | 245 to 295 | 0 / 2 |
+| 2 | straight | animated | 0%, 0% | 0%, 0% | 0.0 / 0.1 | 347 | 0 / 2 |
+| 2 | smooth | animated | 0.3%, 1.7% | 0.7%, 1.3% | 0.0 / 0.1 | 158 to 262 | 0 to 1 / 2 |
+
+A `pick` of 0.0 is under the browser's 0.1 ms resolution. The other still
+rows matched the one shown (0% to 0.7% past one tick either way, `pick`
+0.2 / 0.3 to 0.4, 355 to 359 picks per run, settling in 0 frames at the
+median and up to 4). Every pick settled, with no error. `render` was the same
+with and without picks on every row (animated 0.3 ms straight and 0.7
+smooth, still 0.4 to 0.5). The page logged the same `Vertex attribute
+"position"` warning as on AMD and no page error.
+
+`--memory --pick`, twice at each ratio, gave the AMD run's GPU figures to the
+byte: the first pick leaves 196,868 bytes live at DPR 1 and 2, and each pick
+creates a 4-byte readback buffer and destroys it once read, so 300 to 301
+picks over 301 frames left nothing else live. The heap retained after the
+step grew by 0.27 to 0.35 MB. The empty renderer held 55.3 MB of render
+targets at DPR 1 and 221.2 MB at DPR 2.
+
+- **Same conclusion on the M4.** A pick costs at most 0.2 ms of CPU at the
+  median, and missed ticks with a pick always in flight overlapped the runs
+  without it on every row.
+- **Answers came sooner.** At the median a pick settled before the next
+  frame on every row but one smooth DPR 2 run, where it took one frame; on
+  AMD, smooth edges with every node moving took two. Picks per run on the
+  smooth animated rows varied from 158 to 295, so a hover can still trail a
+  gliding drawing by a frame or two when it is busy.
+
 ## Frame profile on WebGPU (M4.10a)
 
 ```
