@@ -277,8 +277,9 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   events over 10,000 laid-out nodes at the fit zoom: on AMD RDNA 2 in Chrome
   156, on `webgpu` and not a fallback adapter, every hover and click of 250
   samples per run named the node the CPU index puts there, at DPR 1 and 2,
-  and since 2026-10-29 the same on Apple M4 in Chrome 156 (see `bench/browser/README.md`, "Hover and click at 10,000 nodes"). Since
-  2026-10-28 `frame-profile.mjs --pick` prices the pass on that device: one
+  and since 2026-10-29 the same on Apple M4 in Chrome 156 (see
+  `bench/browser/README.md`, "Hover and click at 10,000 nodes"). Since
+  2026-10-28 `frame-profile.mjs --pick` prices the pass on AMD RDNA 2: one
   pick in flight on every frame at 10,000 nodes with springs in flight costs
   0.1 to 0.2 ms of CPU per pick, its effect on missed ticks did not separate
   from runs without it, and it holds about 0.2 MB of GPU buffers, with each

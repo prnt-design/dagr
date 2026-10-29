@@ -2024,8 +2024,9 @@ complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
 (M5.3a). What is still missing is the device work below.
 
 - The rest of GPU picking (M4.8b): edges as hit targets. Hover and clicks at
-  ten thousand nodes are checked, and the pass priced, on one device
-  (`bench/browser/gpu-hover.mjs`, `frame-profile.mjs --pick`). `DagrCanvas` picks through
+  ten thousand nodes are checked on two devices, AMD RDNA 2 and Apple M4
+  (`bench/browser/gpu-hover.mjs`), and the pass priced on the first
+  (`frame-profile.mjs --pick`). `DagrCanvas` picks through
   `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
   other GPUs, zooms, and edge ribbons.
