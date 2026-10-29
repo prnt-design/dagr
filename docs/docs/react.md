@@ -657,7 +657,21 @@ final ones. Overlaps resolve by draw order (circles over rectangles, later over
 earlier). A uniform grid keeps a query to a few shape tests; the index is rebuilt
 when the drawn nodes change and not otherwise.
 
-What is not a hit target: edges, ports, and glow halos. HTML inside a tier
+What is not a hit target on `DagrCanvas`: edges, ports, and glow halos.
+
+**Edge hits, for a host with its own surface.** `createEdgeHitIndex(edges)`
+tests the centrelines the renderer was handed: the points after `edgePath`
+shaping and, while edges glide, the frame's points, so build it from what was
+drawn, not from the layout, and rebuild it when that changes (a removed edge
+then misses and a rerouted one hits on its new route). `hit(world,
+toleranceWorld)` returns the id of the edge whose centreline is nearest the
+point within the tolerance, or `null`. A centreline has no area, so pass half
+the drawn width plus a pointer's slack in CSS pixels, divided by the zoom.
+Where edges cross or fan into a node the nearer centreline wins, and an exact
+tie goes to the later edge. Nodes are drawn over edges, so ask the node index
+first and the edge index only on a node miss. Dashes are not gaps, and the
+index tests straight segments, which is what a `'polyline'` group (the one
+`DagrCanvas` declares) draws. `DagrCanvas` does not report edge hits yet. HTML inside a tier
 (next section) is the DOM's to hit: native controls inside a card keep their
 native behavior, and a click on a non-interactive part of a card selects its
 node because the card sits on the node.
