@@ -342,6 +342,21 @@ the canvas otherwise at rest. The page logged three's `Vertex attribute
 profile below also logs, and no page error. The control failed every one of
 its 25 samples at both ratios.
 
+**On a second GPU, 2026-10-29:** the Apple M4 Mac mini (macOS 26.6.2), Google
+Chrome 156.0.8078.48 launched by the script rather than attached
+(`DAGR_CHROMIUM` set to the Chrome binary, `DAGR_CHROMIUM_ARGS` set to
+`--enable-webgpu-developer-features`, no `DAGR_CDP`), `renderer.backend`
+`webgpu`, adapter `apple` `metal-3` (`Apple M4`), `isFallbackAdapter: false`.
+Two headless runs and one headed, each at device pixel ratio 1 and 2 with the
+same 200 node and 50 background samples, all passed: every hover and every
+click named the expected node or background, with 500 `pickNode` calls per
+run and the same skips as the AMD run (59 ambiguous at ratio 1, none at 2,
+none empty). From the `pointermove` to the `onNodeHover` call took 1.8 to
+1.9 ms at the median and 2.2 to 2.5 ms at the 95th percentile in every run,
+and at most 3.3 to 12.4 ms. The page logged the same `Vertex attribute
+"position"` warning once per run and no page error. The control, run
+headless with the full 250 samples, failed all 250 at both ratios.
+
 This is the hover demonstration, not the pricing: the latency is what a user
 waits for with nothing else moving, not what a pick costs a frame, and it
 says nothing about picks run back to back under a resting mouse while the
