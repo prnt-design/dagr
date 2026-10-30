@@ -11,6 +11,12 @@ not" is the category this file has a heading for.
 
 ## Unreleased
 
+- Add `Renderer.pickNode(pointer)`, which resolves to the id of the node drawn
+  under a pointer, or `null`, by drawing that one device pixel on the GPU and
+  reading it back. Hits follow the shape's boundary rather than its halo, the
+  topmost node wins, and a node that left the scene, or whose pick id passed
+  to another node, before the answer arrived resolves to `null`. Edges are not
+  hit targets.
 - Fix: an edge retargeted while its springs are still moving no longer gains a
   point on every retarget. A retarget now drops each in-flight point that sits
   within `restEpsilon` of the line between its neighbours and moves with them

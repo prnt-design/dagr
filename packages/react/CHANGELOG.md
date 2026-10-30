@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add `hitTesting` to `DagrCanvas`. `'gpu'` answers mouse hover and clicks
+  from `Renderer.pickNode` through `createPickedNodeHitProvider`, primed from
+  hover; touch and pen keep the CPU index. The default stays `'cpu'`.
+- Add `createPickedNodeHitProvider`, which answers the synchronous
+  `GraphHitProvider` contract from asynchronous picks such as
+  `Renderer.pickNode`: only from a pick settled for the same world point and
+  displayed revision, and stale otherwise.
 - Fix: a `DagrCanvas` whose graph started with no edges now draws the edges
   added later. The cause and the fix are in `@prnt/dagr-render`.
 

@@ -36,10 +36,8 @@
  *   be a promise to keep nine primitives stable for callers who are not writing
  *   this package's shaders, and nobody has asked.
  * - The pick encoding in `picking.ts` (M4.8a), on `sdf.ts`'s reason and one of
- *   its own. A caller has nothing to encode until there is a pass writing the
- *   bytes and a `pick()` reading them back, and M4.8b is what adds both; naming
- *   `PickBytes` now would be the guess this list's second entry says the handle
- *   API would have been.
+ *   its own. `Renderer.pickNode` answers with a node id, so a caller never
+ *   handles the bytes.
  *
  * What the instancing does put on the surface is its ERRORS,
  * {@link UnknownInstanceHandleError} and {@link SceneDisposedError},
@@ -49,7 +47,7 @@
  * DagrRenderError`.
  *
  * {@link PickIdSpaceExhaustedError} is here on the same rule and ahead of it:
- * nothing public can throw it until M4.8b, and it is exported now because
+ * `setNodes` throws it once every pick id is spoken for, and it is exported because
  * `DagrRenderErrorCode` is a public union that already names its code, and a
  * code a consumer can switch on whose class they cannot compare against is the
  * worse half of both choices.

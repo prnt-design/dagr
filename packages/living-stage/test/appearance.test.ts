@@ -4,6 +4,7 @@ import {
   CLEAR_COLOR,
   HIGHLIGHT_COLOR,
   HIGHLIGHT_GLOW,
+  hoverColor,
   livingAppearance,
   stageColor,
   touchedBy,
@@ -87,6 +88,19 @@ describe('what the drawing looks like', () => {
     const appearance = livingAppearance(new Set(['parse-0']), () => 'parse');
     expect(appearance('parse-0')?.fillColor).toBe(stageColor('parse'));
     expect(appearance('parse-1')?.fillColor).toBe(stageColor('parse'));
+  });
+
+  it('lightens the hovered node and keeps its halo', () => {
+    const appearance = livingAppearance(new Set(['parse-0']), () => 'parse', 'parse-0');
+    expect(appearance('parse-0')?.fillColor).toBe(hoverColor(stageColor('parse')));
+    expect(appearance('parse-0')?.glowWorld).toBe(HIGHLIGHT_GLOW);
+    expect(appearance('parse-1')?.fillColor).toBe(stageColor('parse'));
+  });
+
+  it('takes a colour halfway to white', () => {
+    expect(hoverColor(0x000000)).toBe(0x808080);
+    expect(hoverColor(0xffffff)).toBe(0xffffff);
+    expect(hoverColor(0x3f8299)).toBe(0x9fc1cc);
   });
 
   it('falls back rather than throwing for a node that names no stage', () => {

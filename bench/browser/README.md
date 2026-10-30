@@ -15,7 +15,9 @@ directory name undersells them: they do not measure anything, they CHECK
 something, which is which backend `@prnt/dagr-render` comes up on and whether the
 shapes reach the canvas once it has. They live here because this is where the
 browser is, and because the rule below about a committed harness applies to them
-exactly as it does to a measurement. `windows-chrome.mjs` lets the probe and
+exactly as it does to a measurement. `gpu-hover.mjs` and `gpu-hover-page.mjs`
+check the same way that `DagrCanvas`'s GPU hit testing answers hover and
+clicks at 10,000 nodes. `windows-chrome.mjs` lets the probe and
 the frame profile reach a Windows GPU from WSL2.
 
 **Nothing here is part of `pnpm bench:ci`, and it is not a gate.** The gate
@@ -260,6 +262,167 @@ with a WebGPU adapter, and CI runs on a GitHub `ubuntu-latest` runner with no
 GPU and no browser step. It is run by hand like the probe, and its scope is what it compared:
 one machine, the two-shape probe scene, zoom 1, DPR 1, no edge ribbons.
 
+## Node picking (M4.8b)
+
+```
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/backend-probe.mjs --pick
+```
+
+`--pick` builds a scene of five nodes, asymmetric in both axes and with one
+rounded rectangle under a circle, and calls `renderer.pickNode` at every fourth
+CSS pixel of the 480 by 320 canvas, a row of picks in flight at once. Each
+answer is compared with the node the shapes' own distance functions put there,
+the last drawn winning (rounded rects, then circles). A pointer within one
+world unit of any boundary is skipped. It runs on `'webgpu'` and `'webgl2'`,
+each at device pixel ratio 1 and 2, and exits non-zero on any disagreement, on
+a node never hit, or on a fallback adapter, as `--parity` does.
+
+The pass draws the world rectangle of the one device pixel under the pointer
+into a one-pixel target, rather than reading one row of a full-size target,
+because three 0.185's `readRenderTargetPixelsAsync` counts rows from the top on
+its WebGPU backend and from the bottom on its WebGL2 backend.
+
+**What it found on 2026-10-28**, on the Windows desktop's AMD RDNA 2 graphics
+in Chrome 156.0.8078.48, headless, attached from WSL2
+[as above](#from-wsl2-through-the-windows-sides-chrome), adapter `amd`
+`rdna-2`, `isFallbackAdapter: false`: every run passes, 9,532 picks checked
+and 68 skipped in each, none disagreeing, on `'webgpu'` and `'webgl2'` at both
+ratios, with every node hit. As a control, `pickPixelBounds` was rebuilt with
+its row counted from the top (`visible.minY + (bufferSize.height - 1 -
+pixel.y) * height`), and every run then failed, with 544 to 546
+disagreements.
+
+This checks which node a pick names, not what a pick costs or when the pass
+should run, which
+["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b) prices. Hover
+at 10,000 nodes is the next section.
+
+### Hover and click at 10,000 nodes (M4.8b)
+
+```
+pnpm build
+npm --prefix bench/browser install --no-save playwright-core esbuild
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/gpu-hover.mjs   # [--nodes=10000] [--samples=200] [--dpr=1,2] [--control]
+```
+
+`gpu-hover.mjs` checks the path a consumer gets rather than the pass alone:
+`DagrCanvas` with `hitTesting="gpu"`, bundled with esbuild from
+`gpu-hover-page.mjs` against the built packages, over a laid-out graph of
+10,000 nodes (every third a circle) filling a 1280 by 720 viewport at the
+fit zoom, where a rounded rect is about 8 by 3 CSS pixels. Playwright's mouse
+rests on a node's centre, the run waits for `onNodeHover` to name the node,
+then presses and releases and waits for `onNodeClick`; a quarter as many
+samples rest on empty canvas and wait for `null` and `onBackgroundClick`.
+Between samples the mouse goes to a point with the other answer, so each
+sample is a change the canvas has to report. The reference is the CPU index
+over the same scene nodes. A node centre is skipped when the corners of its
+device pixel disagree there (ambiguous) or name no node (empty). It exits
+non-zero unless the canvas came up on `webgpu` on an adapter that reports
+`isFallbackAdapter: false`, with no page error, `pickNode` ran at least once
+per sample, and every sample was answered correctly within 3 seconds. Console
+warnings and errors are printed, not gated; a page error fails the run.
+The adapter recorded is the one `requestAdapter()` returns with no options,
+asked from the page; on this machine Chrome lists one GPU, so it is the
+renderer's. `--control` reads the reference 9 CSS pixels right of the pointer,
+about one rounded rect's pitch, and exits non-zero unless that run fails.
+
+**What it found on 2026-10-28**, on the machine
+[above](#from-wsl2-through-the-windows-sides-chrome) (AMD RDNA 2 integrated
+graphics, Chrome 156.0.8078.48 headless on the Windows side, attached from
+WSL2, no flags beyond the helper's), `renderer.backend` `webgpu`, adapter
+`amd` `rdna-2`, `isFallbackAdapter: false`: at device pixel ratio 1 and 2,
+200 node samples and 50 background samples each, every hover and every click
+named the expected node or background, with 500 `pickNode` calls per run
+(one for the reset move and one for the sample). 59 node centres were skipped
+as ambiguous at ratio 1, none at 2, and none as empty. From the `pointermove`
+to the `onNodeHover` call took 3.9 ms at the median, 4.1 ms at the 95th
+percentile and 38 ms at most at ratio 1 (3.9, 4.1 and 34 ms at ratio 2), with
+the canvas otherwise at rest. The page logged three's `Vertex attribute
+"position" not found on geometry` warning once per run, which the frame
+profile below also logs, and no page error. The control failed every one of
+its 25 samples at both ratios.
+
+This is the hover demonstration, not the pricing: the latency is what a user
+waits for with nothing else moving, not what a pick costs a frame, and it
+says nothing about picks run back to back under a resting mouse while the
+drawing glides, or about memory. The next section prices those.
+
+### What a pick costs a frame (M4.8b)
+
+```
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs \
+  --sizes=10000 --edges=straight,smooth --motion=springs --pick   # [--dpr=2]
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs \
+  --memory --sizes=10000 --hit --pick                             # [--dpr=2]
+```
+
+`--pick` (described with `--hit` [below](#frame-profile-on-webgpu-m410a)) keeps
+one `pickNode` in flight on every frame, the next started on the first frame
+after the last settles. That is what `DagrCanvas`'s `hitTesting="gpu"` runs
+while the drawing moves under a resting mouse, and the most a moving mouse can
+ask of it, so it prices both ways of scheduling the pass: a pass run every
+frame costs this on every frame, and a pass run on pointer moves costs this on
+the frames the pointer or the drawing moves and nothing at rest.
+
+**What it found on 2026-10-28**, on the machine
+[above](#from-wsl2-through-the-windows-sides-chrome) (AMD Ryzen 9 9900X with
+its integrated AMD RDNA 2 graphics), Chrome 156.0.8078.48 headed on the
+Windows side, attached from WSL2, no flags beyond the helper's, adapter `amd`
+`rdna-2`, `isFallbackAdapter: false`, `renderer.backend` `webgpu` on every
+row, tick 17.6 to 17.8 ms, load average 0.1 to 0.5. 10,000 nodes with springs
+in flight and every node moving, alternating runs without and with `--pick`:
+three pairs at DPR 1 and two at DPR 2. Times are median / 95th percentile in
+milliseconds. A pick's frames to settle count the animation frames between the
+one that started it and its answer, so 0 means it settled before the next
+frame.
+
+| DPR | Edges | Mode | Past one tick, without | Past one tick, with `--pick` | `pick` | Picks per run | Frames to settle (median / max) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | straight | still | 0%, 0%, 0% | 0%, 0%, 0% | 0.1 / 0.2 | 357 | 0 / 3 |
+| 1 | straight | animated | 0%, 0%, 0% | 0%, 0%, 0% | 0.1 / 0.2 | 343 to 345 | 0 / 2 |
+| 1 | smooth | animated | 5.0%, 2.7%, 5.0% | 5.3%, 4.0%, 4.0% | 0.1 to 0.2 / 0.2 | 123 to 134 | 2 / 2 |
+| 2 | straight | animated | 0%, 0% | 0%, 0% | 0.1 / 0.2 | 223 to 224 | 1 / 2 |
+| 2 | smooth | animated | 6.7%, 5.3% | 3.7%, 4.0% | 0.2 / 0.2 to 0.3 | 130 to 132 | 2 / 3 |
+
+The still rows at DPR 2 and with smooth edges matched the one shown (0% past
+one tick, `pick` 0.1 / 0.2, 353 to 358 picks per run, settling in 0 frames at
+the median and up to 4). Every pick settled, with no error. `render` was the
+same with and without picks on every row (animated 0.5 ms straight and 1.0 to
+1.1 smooth, still 0.1 to 0.2). For comparison, `--hit` on the same plan at
+DPR 1, twice, rebuilt the CPU index every animated frame in 1.5 to 1.6 ms
+(95th percentile 3.4 to 4.1), and the smooth rows then missed 13.0% and 14.3%
+of ticks.
+
+`--memory --pick` adds a step after the hit index that runs `--frames` picks
+back to back over the still scene. Two runs at each ratio gave identical GPU
+figures. The first pick leaves 196,868 bytes live: each family's pick id
+attribute (three floats per instance slot, 98,304 bytes for a family's 8,192
+slots), three uniform buffers and the one-pixel target, the same at DPR 1 and
+2, since nothing in it is the size of the canvas. Each pick then creates a
+4-byte readback buffer and destroys it once read, so 301 picks left nothing
+else live. The heap retained after the step grew by 0.28 to 0.33 MB, with the
+pick pass's pipelines compiled in it.
+
+- **A pick costs 0.1 to 0.2 ms of CPU on the frame that starts it, and its
+  frame-time effect did not separate from run-to-run noise.** Missed ticks
+  with a pick always in flight overlapped the runs without it on every row, where rebuilding the CPU index
+  every frame raised them on the smooth rows.
+- **A pick's answer arrives later as the frame gets busier.** With straight
+  edges a pick settled before the next frame at DPR 1 and one frame later at
+  DPR 2; with smooth edges and every node moving, two frames later, so about
+  one pick every three frames. That bounds how far a hover can trail a gliding
+  drawing, not the frame.
+- **Memory is small and fixed.** About 0.2 MB at 10,000 nodes, against the
+  empty renderer's 55.3 MB of render targets at DPR 1 in the same `--memory`
+  runs, with nothing retained per pick.
+
+So the pass stays on pointer moves, as `DagrCanvas` runs it: per frame would
+pay the same cost on a moving drawing and pay it at rest for nothing. The
+default stays `'cpu'`. Cost does not decide it, since both fit this frame; the
+GPU path's gaps do: a click while nodes glide and a press not hovered first
+are ignored, and touch and pen use the CPU index anyway. This ran WebGPU only;
+the WebGL2 fallback's pick cost is not measured.
+
 ## Frame profile on WebGPU (M4.10a)
 
 ```
@@ -270,7 +433,7 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   node bench/browser/frame-profile.mjs
   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
-  # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1]
+  # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1] [--pick]
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
@@ -326,6 +489,21 @@ old, on about one frame in six. The report's `hit` gives the untimed build and
 how many queries, warm-up included, landed on a node. With `--nodes=rich` the
 still query runs just before `sync`, so do not compare those rows' still `sync`
 with the rich-node table below.
+
+`--pick` adds GPU node picks to every row through `renderer.pickNode` at the
+same sweeping pointer, started after `render()` and timed as `pick`, which is
+the call's synchronous part: the pick pass's draw and the readback's request.
+It is timed only on frames that start a pick, and the answer's callback and
+the pass's GPU time are not, so the missed ticks are what price those;
+`--gpu` is refused with it, since the pick pass would land in the passes that
+mode times.
+One pick is in flight at a time, so a frame starts one only if the last has
+settled. The report's `pick` gives, per mode and warm-up included, how many
+picks started and settled, how many named a node, any errors, and how many
+frames each took to settle. The runner exits non-zero if a pick failed or none
+settled. With `--memory` it adds a `pick` step, which fails the run if a pick
+fails; see
+["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b).
 
 `render()` returns once the frame is submitted, so its time is CPU time, not
 GPU time. A GPU that fell behind would show in the interval, not in `render`;
@@ -522,14 +700,16 @@ tolerance search ran.
 
 So CPU node hits are not what stands between this scene and 60 Hz at 10,000
 nodes on this machine; the updates are, as the first slice found. What this
-does not cover: edges and ports are not hit targets on the CPU path, and GPU
-picking (M4.8b) has no pass to measure yet, so its cost is still unpriced.
+does not cover: edges and ports are not hit targets on the CPU path. GPU
+picking (M4.8b) is priced in
+["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b).
 
 **Memory per pass, on 2026-10-19.** `--memory` replaces the frame timing with
 a step-by-step build of the same scene, roughly the order `DagrCanvas` builds
 it in (which creates its overlay with the renderer rather than after the edges):
 the graph, an empty renderer, its nodes, its edges, then (with
-`--nodes=rich`) the rich-node tiers and (with `--hit`) one hit index, then
+`--nodes=rich`) the rich-node tiers and (with `--hit`) one hit index, (with
+`--pick`) `--frames` frames of picks back to back over the still scene, then
 `--frames` frames moving only the nodes, `--frames` moving only the edges, and
 `dispose`. `--warmup` does not apply. One row runs first and is not
 reported, since the page's first renderer, overlay and hit index also pay for
@@ -730,8 +910,9 @@ Split by subtraction at 10,000 nodes and `fit`, in milliseconds:
 So on this machine, at 10,000 nodes, M4.10's frame is CPU-bound: about 0.5 ms
 of GPU at DPR 1 and 1.2 at DPR 2 with straight edges, against 5 to 7 ms of
 `setNodes` and `setEdges` on the CPU in these runs. The next section drives the
-same scene through `createSceneMotion`. Still open for M4.10: an ID buffer pass
-(M4.8b has none yet) and recording a local baseline: the scene
+same scene through `createSceneMotion`. Still open for M4.10: recording a
+local baseline (the ID buffer pass is priced in
+["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b)): the scene
 motion's CPU cost has Node bench entries in `bench/README.md`, outside
 `baseline.json` until the maintainer records them.
 
@@ -2724,3 +2905,175 @@ measurement. The next change is
 `tsk_5ca35c49f0fc`: split the all-moving frame's collection into scavenges
 and full collections with their times, and price what survives a frame,
 before choosing another site to reduce.
+
+### Scavenges, mark-compacts and survivor traffic (2026-10-27)
+
+`tsk_5ca35c49f0fc`, main `7d2001a`, measurement only. A second allocation
+reduction was not tried. Chrome's GC trace exposes survivor traffic but does
+not attach allocation sites to those bytes, so the earlier suspects remain
+hypotheses.
+
+AMD Ryzen 9 9900X, integrated AMD RDNA 2, Windows Google Chrome
+156.0.8078.48 reached from WSL2 through `windows-chrome.mjs --headless`.
+The adapter probe reported `amd` / `rdna-2`, `isFallbackAdapter: false`,
+and the measured row reported `renderer.backend: webgpu`. No WebGL2 row or
+software adapter contributes to these numbers. The relay used its standard
+background-throttling and sRGB switches, plus `--headless=new`, with no
+`DAGR_CHROMIUM_ARGS`. Viewport 1280 by 720, DPR 1, `fit`, zoom 0.0715.
+#159 and #162 remained open and were not included. No other Dagr measurement
+process was running. Linux load samples surrounding the capture were 4.08
+and 3.77; this was not an idle host (other projects were active).
+
+The existing frame runner was copied temporarily and instrumented with two
+Playwright exposed functions immediately before and after its animated
+`sample`. The first enabled and started `Profiler`, then started `Tracing`
+with categories `v8,disabled-by-default-v8.gc`, `ReportEvents`; the second
+stopped the CPU profiler, ended tracing and waited for `tracingComplete`.
+The frame workload was
+`--motion=springs --sizes=10000 --edges=smooth --moving=1 --frames=600`.
+Both captures cover the same animated call, including its 60 warmup frames:
+660 frames, 10,000 moving nodes, 13,169 moving edges, 24 retargets and zero
+settled frames. The CPU profile spans 11.736 s; protocol start/stop ordering
+adds a small boundary difference, so these are aligned workload windows,
+not identical timestamp boundaries. The still row and control are outside
+both captures. The control tick was 16.7 ms. This browser was not restarted
+within the capture. No comparison with the earlier headed runs is claimed.
+
+| Collection | Count | Pause time, ms | Pause per animated frame, ms |
+| --- | --- | --- | --- |
+| Scavenge (`gc: s`) | 361 | 757.167 | 1.147 |
+| Mark-compact (`gc: mc`) | 43 | 259.839 | 0.394 |
+
+Counts and pause sums come from the 404 `V8.GCTraceGCNVP` records on the
+renderer main thread. As a cross-check, the outer `MinorGC` events have the
+same 361 count and sum to 783.196 ms; `MajorGC` has the same 43 count and
+sums to 263.894 ms. These scopes differ slightly from the collector's own
+pause measurement. Do not add the outer events to their nested scavenger
+or finalization events. Main-thread `V8.GCIncrementalMarking` events add
+159.566 ms across 17,005 slices, and incremental marking start events total
+47.850 ms across 43 starts. Those are additional major-collection work,
+not 17,005 full collections. Background marking and sweeping also appear
+and are not included in the pause table. The CPU profile attributes
+1,426.351 ms of sampled time to `(garbage collector)`. Its sampling and GC
+scopes differ from the trace, so the pause sum does not exhaust that number.
+
+For the **scavenges alone**, `promoted` sums to 2,123,421,180 bytes and
+`new_space_survived` to 2,218,815,684 bytes. Dividing each by all 660 frames:
+**3.068 MiB promoted and 3.206 MiB copied within young space per frame**,
+6.274 MiB of survivor traffic in total. This is collection traffic, not
+unique bytes retained per frame: an object copied by one scavenge can be
+copied again or promoted by another. The mark-compacts separately report
+694,765,832 promoted bytes; those are not included in the scavenge price.
+No forced collection was inserted into the animated window.
+
+**Attribution remains unmeasured.** The NVP records contain aggregate bytes,
+not object identities, ages, retaining paths or allocation stacks. The
+previous section's heap sampling counted allocations, including reclaimed
+objects, and cannot supply those missing links. Source reading establishes
+that edge motion publishes fresh points and velocities each moving frame,
+and the renderer holds a previous ribbon build for route copying. It does
+not establish what fraction of either survives a particular scavenge, nor
+exclude `smoothInto`, node springs or retarget allocations. A useful next
+measurement must join young-generation survivors to allocation sites and
+retaining paths, with instrumentation overhead disclosed, before changing
+either lifetime. No reduction or benefit is claimed from this capture.
+
+Raw trace, CPU profile, frame output, adapter probe, screenshot and the
+instrumented runner are attached to the task and PR as the M4.10 GC evidence
+bundle. The runner is diagnostic evidence, not a new maintained benchmark
+or a change to the performance gate. Survivor site attribution follows in
+the next section.
+
+### Survivors by allocation site (2026-10-28)
+
+`tsk_5ca35c49f0fc`, main `f3bd116`, measurement only. The trace above prices
+what survives a scavenge but not where it was allocated. Chrome's sampling
+heap profiler can drop what a scavenge reclaims: `HeapProfiler.startSampling`
+with `includeObjectsCollectedByMinorGC: false` and
+`includeObjectsCollectedByMajorGC: true` drops every sampled object that a
+scavenge reclaimed and keeps the rest (promoted, reclaimed by a mark-compact,
+or still alive when the profile is read), attributed to the function that
+allocated it. V8 decides by which collector reclaimed a sample, not by its
+age, so an object that survives one scavenge and dies in the next is dropped.
+A profile with both set counts all allocation, as in "Allocation by site"
+above, and the two side by side say what share of each site a scavenge does
+not reclaim.
+
+AMD Ryzen 9 9900X, Google Chrome 156.0.8078.48 on the Windows side, headed,
+attached through `windows-chrome.mjs` with no other flags. Windows now lists
+an NVIDIA GeForce RTX 4090 beside the integrated AMD Radeon
+(`Win32_VideoController`), and Chrome picks the NVIDIA GPU: adapter `nvidia`
+`lovelace`, not a fallback, `renderer.backend` `webgpu` on every row. Earlier
+rows here name the AMD RDNA 2 adapter, so nothing below is compared with
+their frame times. Viewport 1280 by 720, DPR 1, `fit` (zoom 0.0715), control
+tick 16.7 ms, `--motion=springs --sizes=10000 --edges=smooth --moving=1
+--frames=1200` with `frame-profile.mjs` unchanged. A second DevTools client
+attached to the page through the relay sampled at a mean interval of 16 KB
+over 13.5 to 16 s of the animated row, from 28 s after the page opened, and
+counted the frames in that window with its own `requestAnimationFrame`
+counter. Eight runs, the two profiles alternating; the last four also
+recorded a `v8` and `disabled-by-default-v8.gc` trace over the same window.
+The 1-minute load average was 0.1 to 1.4 at the start of every run; two
+other runs, during which other projects' checks pushed it to about 15, are
+left out. Sampling slows the frame: 10.7% to 20.3% of ticks missed with the
+profiler attached against 4.8% in a run without it, so these are shares and
+bytes, not frame times.
+
+Sampled MiB per frame by site, one value per run in run order:
+
+| Site | All allocation | Not reclaimed by a scavenge | Share not reclaimed |
+| --- | --- | --- | --- |
+| edge motion `advance` | 8.0, 7.9, 8.5, 8.6 | 6.1, 6.1, 6.3, 4.5 | 52% to 80% |
+| node motion `advance` with `stepSpring2DBy` | 2.6, 2.9, 3.5, 3.5 | 1.4, 1.4, 1.5, 1.5 | 39% to 58% |
+| `cleanGivenCentreline` | 2.8, 2.8, 2.9, 2.9 | 0.8, 0.9, 0.9, 0.8 | 28% to 31% |
+| retarget work and other motion | 1.4, 1.4, 1.6, 1.6 | 0.6, 0.6, 0.6, 0.4 | 28% to 45% |
+| `tessellateRibbons`, own | 1.2 to 1.3 | 0.5 in every run | 37% to 43% |
+| the harness's own frame loop | 0.9 in every run | 0.4, 0.4, 0.4, 0.2 | 20% to 49% |
+| `smoothInto` | 3.5, 3.5, 3.6, 3.6 | 0.3, 0.4, 0.3, 0.3 | 7% to 12% |
+| `tessellateCentreline` | 1.0 to 1.1 | 0.1 in every run | 7% to 13% |
+| `setNodes` | 0.8 in every run | 0.1 in every run | 9% to 15% |
+| everything else | 0.6 in every run | 0.1 in every run | |
+| in all | 22.8, 23.2, 24.9, 24.9 | 10.3, 10.8, 10.8, 8.5 | |
+
+A share pairs a run of one profile with a run of the other, so it is the
+range over every pairing. V8 inlines the node springs into `advance` in some
+runs and not in others, so the two are one row; that row's allocation moves
+with the inlining (2.6 to 3.5) while what is not reclaimed stays at 1.4 to
+1.5, so its share range is wider than its noise.
+
+- **Edge motion's `advance` is most of what a scavenge does not reclaim**:
+  53% to 59% of it in every run, and 52% to 80% of what that site allocates.
+  It makes a new `{ x, y }` per route point, a new velocity array per moving
+  edge and the frame's edge list every frame; the profile attributes by the
+  allocating function, so it does not separate them. Node motion is next at
+  13% to 17%, then the build's record of given points at 8% to 10%.
+- `smoothInto`, `tessellateCentreline` and `setNodes` make arrays that die
+  within the frame, and still show 7% to 15%. That is consistent with a
+  floor rather than survival: a mark-compact also collects the young
+  generation, and the profiler counts what it reclaims there as collected
+  by a major collection. Mark-compacts were 15% and 13% of the collections
+  in the two traced runs below. Taking 10%, the middle of those sites, as
+  every site's floor gives about 2.4 MiB a frame of the 23 to 25 allocated.
+- **The profiler's total does not reconcile with the trace.** Over the same
+  windows (runs 7 and 9) the scavenges promoted 3.2 and 1.7 MiB a frame and
+  copied 3.3 and 2.6 within young space (314 and 334 scavenges, 881 and
+  804 ms of pauses), and the mark-compacts (57 and 50, 264 and 244 ms)
+  promoted 0.5 and 0.4. With the floor above that accounts for about 6.1
+  and 4.5 MiB a frame of the 10.8 and 8.5 the profiler kept, leaving 4 to
+  5 MiB a frame unexplained. So take bytes from the trace, and the shares
+  from the profiler only as far as that unexplained part is spread across
+  sites as the rest is. Run 9, whose scavenges promoted the least, is also
+  the one whose edge motion figure fell, from about 6.2 to 4.5, which is
+  consistent with the attribution, though its harness and retarget figures
+  fell too and it ran at a better frame rate (10.7% of ticks missed), so the
+  drop may be run-wide.
+
+What keeps those objects that long is not measured. V8 promotes an object
+the second time a scavenge finds it alive. A frame's points and velocities
+are read once by the next frame's `advance` and then replaced, and with a
+scavenge every 1.5 to 1.9 frames (runs 7 to 10) an object that lives one
+frame should mostly die in the young generation; most of these are not
+reclaimed there. Finding what retains them, the renderer, the bench harness
+or something else, needs their retaining paths from heap snapshots, not
+allocation stacks. That is the next change, `tsk_88bfcb651a56`. No reduction
+was tried here, and none is claimed.

@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Camera2D } from '../src/camera.js';
+import { Color } from 'three/webgpu';
+import type { OrthographicCamera, RenderTarget, Scene } from 'three/webgpu';
 import { RendererDisposedError } from '../src/errors.js';
 import type { SceneStyle } from '../src/instance-attributes.js';
+import { encodePickId } from '../src/picking.js';
 import { SceneEdges } from '../src/scene-edges.js';
 import { SceneNodes } from '../src/scene-nodes.js';
 import type { SceneNode } from '../src/scene-nodes.js';
@@ -11,7 +14,7 @@ import {
   buildSceneRenderer,
   createRenderer,
 } from '../src/webgpu-renderer.js';
-import type { FrameSink, GpuResource, ProjectionTarget } from '../src/webgpu-renderer.js';
+import type { FrameSink, GpuResource, PickSink, ProjectionTarget } from '../src/webgpu-renderer.js';
 
 /**
  * The renderer's bookkeeping, tested without a GPU.
@@ -802,5 +805,152 @@ describe('the backend a renderer reports', () => {
     );
     renderer.dispose();
     expect(renderer.backend).toBe('webgl2');
+  });
+});
+
+/** A `WebGPURenderer`'s pick half, reduced to a call log and a scripted pixel. */
+class StubPickSink implements PickSink {
+  readonly calls: string[] = [];
+  readonly framed: { left: number; right: number; bottom: number; top: number; x: number; y: number }[] =
+    [];
+  pixel: readonly number[] = [0, 0, 0, 0];
+  release: () => void = () => undefined;
+  hold = false;
+  #clear = new Color(0x0b0d10);
+  #alpha = 1;
+  drawnScene: Scene | null = null;
+
+  setRenderTarget(target: RenderTarget | null): void {
+    this.calls.push(target === null ? 'target:null' : `target:${String(target.width)}x${String(target.height)}`);
+  }
+
+  getClearColor(target: Color): Color {
+    return target.copy(this.#clear);
+  }
+
+  getClearAlpha(): number {
+    return this.#alpha;
+  }
+
+  setClearColor(color: Color, alpha: number): void {
+    this.#clear = color.clone();
+    this.#alpha = alpha;
+    this.calls.push(`clear:${color.getHexString()}/${String(alpha)}`);
+  }
+
+  render(scene: object, camera: object): void {
+    const ortho = camera as OrthographicCamera;
+    this.drawnScene = scene as Scene;
+    this.framed.push({
+      left: ortho.left,
+      right: ortho.right,
+      bottom: ortho.bottom,
+      top: ortho.top,
+      x: ortho.position.x,
+      y: ortho.position.y,
+    });
+    this.calls.push('render');
+  }
+
+  readRenderTargetPixelsAsync(): Promise<ArrayLike<number>> {
+    this.calls.push('read');
+    const bytes = Uint8Array.from(this.pixel);
+    if (!this.hold) return Promise.resolve(bytes);
+    return new Promise((resolve) => {
+      this.release = () => {
+        resolve(bytes);
+      };
+    });
+  }
+}
+
+function pickHarness(): { renderer: WebGPUSceneRenderer; pick: StubPickSink; nodes: SceneNodes } {
+  const camera = new Camera2D({ viewport: initialViewport });
+  const nodes = new SceneNodes(sceneStyle);
+  const pick = new StubPickSink();
+  const renderer = new WebGPUSceneRenderer(
+    camera,
+    new StubFrameSink(),
+    'webgpu',
+    {},
+    new StubProjectionTarget(),
+    nodes,
+    new SceneEdges([]),
+    [nodes],
+    pick,
+  );
+  return { renderer, pick, nodes };
+}
+
+function pixelFor(id: number): number[] {
+  const { r, g, b, a } = encodePickId(id, 'node');
+  return [r, g, b, a];
+}
+
+describe('WebGPUSceneRenderer pickNode', () => {
+  it('frames the device pixel under the pointer, with world y up', async () => {
+    const { renderer, pick } = pickHarness();
+    // 800 by 600 CSS at ratio 2 and zoom 1: the pointer at the centre is buffer
+    // pixel (800, 600 from the top), the half-unit square just right of and
+    // below the world origin.
+    await renderer.pickNode({ x: 400, y: 300 });
+    expect(pick.framed).toEqual([{ left: -0.25, right: 0.25, bottom: -0.25, top: 0.25, x: 0.25, y: -0.25 }]);
+    await renderer.pickNode({ x: 0, y: 0 });
+    expect(pick.framed[1]).toMatchObject({ x: -399.75, y: 299.75 });
+  });
+
+  it('draws into a one-pixel target cleared to zero, and puts the renderer back', async () => {
+    const { renderer, pick } = pickHarness();
+    renderer.setNodes([node('a'), node('b', 200)]);
+    await renderer.pickNode({ x: 10, y: 10 });
+    expect(pick.calls).toEqual([
+      'clear:000000/0',
+      'target:1x1',
+      'render',
+      'read',
+      'target:null',
+      'clear:0b0d10/1',
+    ]);
+    expect(pick.drawnScene?.children).toHaveLength(2);
+  });
+
+  it('resolves the node whose pick id the pixel carries', async () => {
+    const { renderer, pick } = pickHarness();
+    renderer.setNodes([node('a'), node('b', 200)]);
+    pick.pixel = pixelFor(2);
+    await expect(renderer.pickNode({ x: 10, y: 10 })).resolves.toBe('b');
+    pick.pixel = [0, 0, 0, 0];
+    await expect(renderer.pickNode({ x: 10, y: 10 })).resolves.toBeNull();
+  });
+
+  it('refuses an id that changed hands while the readback was in flight', async () => {
+    const { renderer, pick } = pickHarness();
+    renderer.setNodes([node('a')]);
+    pick.pixel = pixelFor(1);
+    pick.hold = true;
+    const answer = renderer.pickNode({ x: 10, y: 10 });
+    renderer.setNodes([node('c')]);
+    pick.release();
+    await expect(answer).resolves.toBeNull();
+    pick.hold = false;
+    await expect(renderer.pickNode({ x: 10, y: 10 })).resolves.toBe('c');
+  });
+
+  it('does not draw for a pointer off the canvas', async () => {
+    const { renderer, pick } = pickHarness();
+    await expect(renderer.pickNode({ x: 800, y: 10 })).resolves.toBeNull();
+    expect(pick.calls).toEqual([]);
+  });
+
+  it('resolves null when the renderer is disposed before the pixel arrives', async () => {
+    const { renderer, pick } = pickHarness();
+    renderer.setNodes([node('a')]);
+    pick.pixel = pixelFor(1);
+    pick.hold = true;
+    const answer = renderer.pickNode({ x: 10, y: 10 });
+    renderer.dispose();
+    pick.release();
+    await expect(answer).resolves.toBeNull();
+    await expect(renderer.pickNode({ x: 10, y: 10 })).rejects.toBeInstanceOf(RendererDisposedError);
   });
 });

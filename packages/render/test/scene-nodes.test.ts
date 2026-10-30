@@ -274,3 +274,34 @@ describe('lifecycle', () => {
     expect(() => new SceneNodes({ ...style, outlineColor: -1 })).toThrow(RangeError);
   });
 });
+
+describe('pick ids', () => {
+  it('gives each node an id that names it at the stamp it was drawn with', () => {
+    const scene = new SceneNodes(style);
+    scene.setNodes([node('a'), node('b', 10, 'circle')]);
+    const stamp = scene.pickStamp;
+    expect(scene.nodeForPick(1, stamp)).toBe('a');
+    expect(scene.nodeForPick(2, stamp)).toBe('b');
+    expect(scene.pickMeshes).toHaveLength(2);
+    scene.dispose();
+  });
+
+  it('refuses a pick drawn before a departed node\'s id was given to an arrival', () => {
+    const scene = new SceneNodes(style);
+    scene.setNodes([node('a')]);
+    const before = scene.pickStamp;
+    scene.setNodes([node('c')]);
+    expect(scene.nodeForPick(1, before)).toBeNull();
+    expect(scene.nodeForPick(1, scene.pickStamp)).toBe('c');
+    scene.dispose();
+  });
+
+  it('keeps a node\'s id while it stays in the scene', () => {
+    const scene = new SceneNodes(style);
+    scene.setNodes([node('a'), node('b', 10)]);
+    const stamp = scene.pickStamp;
+    scene.setNodes([node('b', 20), node('d', 30)]);
+    expect(scene.nodeForPick(2, stamp)).toBe('b');
+    scene.dispose();
+  });
+});

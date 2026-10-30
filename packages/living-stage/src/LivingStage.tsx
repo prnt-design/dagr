@@ -215,6 +215,7 @@ export function LivingStage(props: LivingStageProps): ReactElement {
   const [last, setLast] = useState<EditStep | null>(null);
   const [readout, setReadout] = useState<Readout | null>(null);
   const [touched, setTouched] = useState<ReadonlySet<string>>(NOTHING_TOUCHED);
+  const [hovered, setHovered] = useState<string | null>(null);
   const [playing, setPlaying] = useState(autoplay);
   const [failure, setFailure] = useState<unknown>(null);
 
@@ -335,8 +336,8 @@ export function LivingStage(props: LivingStageProps): ReactElement {
   // would rebuild the scene array on every render of this component, which
   // autoplay causes several times a second.
   const nodeAppearance = useMemo(
-    () => livingAppearance(touched, stageOfId),
-    [touched, stageOfId],
+    () => livingAppearance(touched, stageOfId, hovered),
+    [touched, stageOfId, hovered],
   );
 
   const verbs: readonly { kind: EditKind; enabled: boolean }[] = useMemo(
@@ -370,6 +371,8 @@ export function LivingStage(props: LivingStageProps): ReactElement {
               animate={reducedMotion ? undefined : FEEL}
               onLayout={onLayout}
               onError={setFailure}
+              hitTesting="gpu"
+              onNodeHover={setHovered}
               style={{ width: '100%', height: '100%' }}
             >
               {props.canvasChildren ?? <RefitButton />}

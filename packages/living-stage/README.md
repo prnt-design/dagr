@@ -105,7 +105,7 @@ alternative is a wrong number beside a correct drawing.
 | `living-graph.ts` | the seeded six-stage pipeline, and the widths that bound the drawing |
 | `edit-script.ts` | the three verbs, their availability rules, and the `graph.batch` |
 | `readout.ts` | one delta to displayable counts, and the continuity check |
-| `appearance.ts` | the colour ramp, and the halo on what the last edit touched |
+| `appearance.ts` | the colour ramp, the halo on what the last edit touched, and the lighter fill on the node under the mouse |
 | `use-reduced-motion.ts` | the media query, server-safe |
 | `LivingStage.tsx` | the page around all of it |
 

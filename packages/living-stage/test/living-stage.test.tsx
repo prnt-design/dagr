@@ -24,8 +24,8 @@ vi.mock('@prnt/dagr-react', async (importOriginal) => {
 
 import { LivingStage } from '../src/LivingStage.js';
 import { AUTOPLAY_CYCLE } from '../src/edit-script.js';
-import { HIGHLIGHT_GLOW } from '../src/appearance.js';
-import { LIVING_LAYOUT_CONFIG } from '../src/living-graph.js';
+import { HIGHLIGHT_GLOW, hoverColor, stageColor } from '../src/appearance.js';
+import { LIVING_LAYOUT_CONFIG, stageOf } from '../src/living-graph.js';
 import { cameraFits, lastCanvas, requestedDraws, resetCanvases } from './fake-canvas.js';
 import { flush, mount } from './mount.js';
 import type { Mounted } from './mount.js';
@@ -168,6 +168,28 @@ describe('<LivingStage>', () => {
       if (before.includes(id)) continue;
       expect(lit, `${id} was added and is not lit`).toContain(id);
     }
+  });
+
+  it('lightens the node the GPU pick says is under the mouse, until it leaves', async () => {
+    await mountStage();
+    const canvas = lastCanvas();
+    expect(canvas.hitTesting).toBe('gpu');
+    const hovered = canvas.graph.nodes()[0];
+    const stage = hovered === undefined ? undefined : stageOf(hovered);
+    expect(stage).toBeDefined();
+    if (hovered === undefined || stage === undefined) return;
+
+    await flush(() => {
+      lastCanvas().onNodeHover?.(hovered.id);
+    });
+    expect(lastCanvas().nodeAppearance?.(hovered.id)?.fillColor).toBe(
+      hoverColor(stageColor(stage)),
+    );
+
+    await flush(() => {
+      lastCanvas().onNodeHover?.(null);
+    });
+    expect(lastCanvas().nodeAppearance?.(hovered.id)?.fillColor).toBe(stageColor(stage));
   });
 
   it('plays a whole lap on its own, so a visitor who never clicks still sees the feature', async () => {

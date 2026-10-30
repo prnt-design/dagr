@@ -8,6 +8,7 @@ import {
   PickIdRegistry,
   decodePickPixel,
   encodePickId,
+  pickPixelBounds,
   pickReadbackPixel,
 } from '../src/picking.js';
 import type { PickKind } from '../src/picking.js';
@@ -20,10 +21,8 @@ import type { PickKind } from '../src/picking.js';
  * weakening of the claim, it is where M4.8a drew the line. An id that survives
  * a round trip through four bytes is arithmetic, the pixel a pointer lands on
  * is arithmetic, and which node an id still means is a `Map`. What M4.8b adds
- * is a pass that writes these bytes and a device that reads them back, and the
- * one thing this file cannot check is that three's readback measures y from the
- * bottom, which `pickReadbackPixel`'s docstring names as an assumption rather
- * than a fact.
+ * is a pass that writes these bytes and a device that reads them back, which
+ * `bench/browser/backend-probe.mjs --pick` checks on a device.
  *
  * Two of the suites below exist to show a guard failing rather than passing,
  * which is the repo's rule for a check that is vacuous by construction. The
@@ -201,7 +200,7 @@ describe('the pixel a pointer reads', () => {
 
   it('turns the top-left CSS pixel into the bottom-left device pixel', () => {
     // The flip is the whole of this function's risk. Screen y grows downward
-    // and three's readback measures y from the bottom of the target.
+    // and world y, which this row is counted in, grows upward.
     expect(pickReadbackPixel({ x: 0, y: 0 }, css, { width: 400, height: 300 })).toEqual({
       x: 0,
       y: 299,
@@ -410,5 +409,36 @@ describe('the ids a scene hands out', () => {
         expect(registry.keyFor(id, registry.stamp)).toBe(key);
       }
     }
+  });
+});
+
+describe('the world a picked pixel covers', () => {
+  const visible = { minX: -200, minY: -150, maxX: 200, maxY: 150 };
+
+  it('puts the top-left CSS pixel at the top-left of the world', () => {
+    expect(pickPixelBounds({ x: 0, y: 0 }, { width: 400, height: 300 }, { width: 400, height: 300 }, visible)).toEqual(
+      { minX: -200, minY: 149, maxX: -199, maxY: 150 },
+    );
+  });
+
+  it('splits a CSS pixel into the device pixels a ratio of 2 gives it', () => {
+    const css = { width: 400, height: 300 };
+    const buffer = { width: 800, height: 600 };
+    expect(pickPixelBounds({ x: 10.25, y: 20.25 }, css, buffer, visible)).toEqual({
+      minX: -190,
+      minY: 129.5,
+      maxX: -189.5,
+      maxY: 130,
+    });
+    expect(pickPixelBounds({ x: 10.75, y: 20.75 }, css, buffer, visible)).toEqual({
+      minX: -189.5,
+      minY: 129,
+      maxX: -189,
+      maxY: 129.5,
+    });
+  });
+
+  it('is null off the canvas', () => {
+    expect(pickPixelBounds({ x: -1, y: 0 }, { width: 400, height: 300 }, { width: 400, height: 300 }, visible)).toBeNull();
   });
 });
