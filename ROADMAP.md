@@ -1,8 +1,9 @@
 # Roadmap
 
 Dagr ships one merge-worthy increment per day: tests, implementation, and docs
-in one PR. The bar for every task: TDD, green typecheck and tests, benchmarks
-within 10% of baseline once they exist, docs land with the feature.
+in one PR. Implementation uses TDD and ships its docs with the feature. Every
+PR requires the full local gate and concluded green CI in AGENTS.md, including
+the machine-matched benchmark gate.
 
 This file owns milestone scope, priority and evidence summaries. Dispatch's
 Dagr project board owns execution tasks, acceptance criteria, assignments,
@@ -10,6 +11,14 @@ blockers and PR links. Link a task to its milestone rather than maintaining a
 second implementation queue. Update this file in the implementation PR and
 keep the board current during the run; mark a task done only after verified
 merge. Before merge, check main and the board and record the actual successor.
+Every execution task names its milestone ID (for example M4.10 or R1); a
+new slice keeps that milestone ID and gets its own Dispatch task ID. The
+implementation PR links its Dispatch task and evidence. After verified merge,
+attach the merged PR to that task, mark it done, and link the existing or newly
+created successor task in the completed task and handoff. Refresh this file
+only when scope, priority, outcome or the active milestone task changes. An
+unfinished slice does not become a new competing checklist here. Report tasks
+keep their separate scheduler and dependencies.
 The working record and historical decisions live in
 [specs/roadmap-notes.md](specs/roadmap-notes.md) under the same milestone IDs.
 
@@ -24,7 +33,7 @@ M5.7c follows it. The renderer queue below retains its internal order and the
 report track keeps its separate scheduling. New learning work does not imply
 that compound layout, audio or an additional rendering backend is required.
 
-## Status (2026-10-17 UTC)
+## Status (2026-10-30 UTC)
 
 On 2026-10-17 the maintainer chose dagr's lead identity: the GPU renderer for
 big directed graphs that animate as they change. The renderer queue below proves
@@ -92,7 +101,7 @@ PRs rather than treating every unchecked milestone as ready.
 | 1 | **WebGPU adapter in the loop** (stage 1, done 2026-10-17: Apple M4, Chrome 155, `renderer.backend` is `webgpu`; see `bench/browser/README.md`; since 2026-10-26 the frame profile also fails on a software fallback adapter, through which `renderer.backend` also reads `webgpu`, and which is the only adapter inside a WSL2 machine; also since 2026-10-26 that machine reaches its GPU through the Windows side's Chrome, `bench/browser/windows-chrome.mjs` and `DAGR_CDP`: AMD RDNA 2, Chrome 156, `renderer.backend` `webgpu`, not a fallback adapter) | Probe at execution time and record what `renderer.backend` reports, on which machine and browser, headed or headless, and with which flags. A WebGL2 fallback is never recorded as a WebGPU result. If no adapter comes up, record what was tried and make the next attempt reproducible. |
 | 2 | **M4.9b: backend parity** (stage 1, done 2026-10-17: byte-identical on the probe scene, Apple M4, Chrome 155; see the M4.9b entry; since 2026-10-26 the parity check also fails on a software fallback adapter, which it previously passed, and passes on a second GPU, AMD RDNA 2 in Chrome 156, where 4 edge-band pixels differ by 1) | The same TSL drawn through WebGPU and WebGL2 on one machine, compared by screenshot, with the tolerance derived from the antialiasing ramp. A committed parity check that both backends pass; the M4.9b entry decides whether it becomes a gate. |
 | 3 | **M4.10a: consumer performance profile** (stage 1, done 2026-10-19: frame-time distribution by size 2026-10-17, by edge style, rich-node tiers and node hit testing 2026-10-18, memory per pass 2026-10-19, on WebGPU: smooth edges re-tessellated every frame miss 60 Hz at 10,000 nodes, rich-node tiers and CPU node hits do not; the multisampled render targets are most of the GPU memory and moving edges reallocates the group every frame; see `bench/browser/README.md`) | Named backend, machine and graph sizes, rich-node tiers, edge styles, hit testing and animated updates. Frame-time distribution and memory per pass, published. Do not infer WebGPU performance from a WebGL fallback. |
-| 4 | **M4.10: 10k nodes at 60fps, animating** (stage 1, in progress: GPU time per pass 2026-10-19, `frame-profile.mjs --gpu`, on WebGPU: at 10,000 nodes the GPU spends 0.5 ms a frame at DPR 1 and 1.2 to 1.5 at DPR 2, so the frame is CPU-bound; springs in flight through `createSceneMotion` 2026-10-19, `--motion=springs`: at 10,000 nodes with straight edges the frame holds the tick at the median with no headroom and drops one on each retarget and on some between, and smooth edges miss it from 2,500 nodes, on `advance`, `apply` and `setEdges`; scene motion's `apply` and `advance` as Node bench entries 2026-10-19, `packages/render/bench/scene-motion.bench.ts`: at 10,000 nodes `apply` 17.7 ms and `advance` 12.8 with straight edges, 22.2 and 15.0 with smooth, and a bent route retargeted while still moving gained a point per retarget until it rested; in-flight route point counts bounded 2026-10-20, `createEdgeMotion`: a retarget drops points within the rest tolerance of straight, so a route retargeted in flight no longer grows with every retarget, and with springs in flight smooth edges now hold the tick to 2,500 nodes (was 1,000), with 10,000 smooth nodes at `advance` 14.6 ms and `setEdges` 23.3 (were 44.0 and 42.5), still missing almost every tick; typed-array tessellation 2026-10-20, `tessellateRibbons`: byte-identical output, 13,169 smooth routes in 18.7 ms in Node (was 32.2), and with springs in flight 10,000 smooth nodes at `setEdges` 19.9 ms on WebGPU (was 23.3), still missing 91% of ticks; centrelines in reused coordinate arrays 2026-10-20, `tessellateRibbons`: byte-identical, no `Vec2` per point, Node `setEdges` about 16.0 ms (was 21.9 to 25.3), and with springs in flight 10,000 smooth nodes at `setEdges` 16.4 ms on WebGPU (was 19.9), still missing 90% of ticks; spring step built once per frame 2026-10-20, `springStep`: byte-identical, Node `advance` at 10,000 nodes 3.1 to 4.2 ms straight and 4.7 to 5.7 smooth (were 12.4 to 13.5 and 15.4 to 16.6), and with springs in flight on WebGPU 10,000 straight nodes missed no tick in two runs (`advance` 2.4 ms, was 8.5) and 10,000 smooth nodes miss 53% of ticks (`advance` 4.1 ms, was 14.5); tessellation sized from the previous frame 2026-10-21, `EdgeGroup`: byte-identical, no retained heap added, Node `setEdges` at 10,000 smooth nodes 14.2 to 14.3 ms (was 16.7 to 17.4), and with springs in flight on WebGPU 10,000 smooth nodes at `setEdges` 15.8 ms (was 16.5; about 1 ms back to back), still missing about half the ticks; flatness and cleaning tests decided from squares 2026-10-21, `flatToChord` and `shorterThanMinSegment`: byte-identical, `Math.hypot` only within a 1e-9 margin of the threshold, Node `tessellateRibbons` on 13,169 smooth routes 10.4 to 10.6 ms (was 12.8 to 12.9), and with springs in flight on WebGPU 10,000 smooth nodes at `setEdges` 12.8 to 13.2 ms (was 14.7 to 15.3 back to back), missing 37% to 44% of ticks; the walk writing a rib and a quad at a time 2026-10-21, `tessellateCentreline`: byte-identical, no object per rib, Node `tessellateRibbons` 9.8 to 10.6 ms (previous build re-measured at this run's load: 10.7 to 11.0), and with springs in flight on WebGPU 10,000 smooth nodes at `setEdges` 11.7 to 11.9 ms (previous build back to back: 12.9 to 13.0), missing 34% to 39% of ticks (previous build: 44% to 49%); edge motion error labels built only on failure 2026-10-21, `createEdgeMotion`: byte-identical, same messages, Node `apply` at 10,000 nodes 14.0 to 14.1 ms straight and 16.2 to 16.7 smooth (were 17.9 to 18.3 and 22.0 to 22.6), and with springs in flight on WebGPU 10,000 smooth nodes at `apply` 19.2 to 20.9 ms (previous build back to back: 22.8 to 23.3), `advance` 3.8 to 4.2 (was 5.9 to 6.0, not traced), missing 25% to 30% of ticks (previous build: 35% to 39%); edge retarget samples shared rather than copied 2026-10-22, `createEdgeMotion`: byte-identical, Node `apply` at 10,000 nodes 12.9 to 13.1 ms straight and 14.5 to 15.9 smooth (were 14.1 to 14.2 and 16.8 to 18.4), and with springs in flight on WebGPU 10,000 smooth nodes at `apply` 17.1 to 17.2 ms (previous build back to back: 18.4 to 19.2), missing 25% to 26% of ticks (previous build: 25% to 35%); retargets are about one frame in 22, so next is the per-frame `setEdges` rather than the retarget frame; `setEdges` copying less per frame 2026-10-22, `EdgeGroup` and `tessellateRibbons`: no per-edge route copy, and a tessellation sized from the last frame returns views rather than trimmed copies (one whose buffer is over a quarter longer than its data, as a first build's is, still copies, so retained heap rises only by the hint's eighth of headroom, about 0.9 MB at 10,000 smooth nodes); byte-identical, Node `setEdges` at 10,000 smooth nodes 9.08 to 9.30 ms (previous build back to back: 10.01 to 10.28), and with springs in flight on WebGPU 10,000 smooth nodes at `setEdges` 11.2 to 11.4 ms (previous build back to back: 11.5 to 11.9), ticks missed not clearly moved (19% to 32% against 21% to 33%); what is left of `setEdges` is the flattening and the walk on every edge, every frame; the flattening as a loop 2026-10-22, `flattenInto`: byte-identical, one fixed stack rather than a call per subdivision, Node `tessellateRibbons` on 13,169 smooth routes 8.31 to 8.49 ms (previous build back to back: 8.98 to 9.08), and with springs in flight on WebGPU 10,000 smooth nodes at `setEdges` 10.5 to 10.8 ms (previous build back to back: 11.1 to 11.3), ticks missed not clearly moved (14% to 23% against 18% to 24%); what is left of `setEdges` is the walk's two `Math.hypot` per point and the flattening's arithmetic, which byte-identical output pins; knot widths measured once per segment 2026-10-23, `smoothInto`: byte-identical, one `Math.hypot` and one power per segment where each span took three of each, and the default tolerance's mean read from the same lengths, Node `tessellateRibbons` on 13,169 smooth routes 7.31 to 7.50 ms (previous build back to back: 8.24 to 8.29), and with springs in flight on WebGPU (Chrome 156) 10,000 smooth nodes at `setEdges` 9.1 to 9.2 ms (previous build back to back: 10.6 to 10.8), ticks missed 6.7% to 17.7% against 13.7% to 22.7%, overlapping; what is left of `setEdges` is still the walk's two `Math.hypot` per point and the flattening's arithmetic; edge velocities in one flat array 2026-10-23, `createEdgeMotion`: byte-identical, no spring record per point per frame, Node `advance` at 10,000 nodes 3.3 to 3.6 ms straight and 3.9 to 4.9 smooth (previous build back to back: 3.8 to 4.2 and 4.5 to 5.7), straight `apply` 0.4 to 1.1 ms slower, and with springs in flight on WebGPU (Chrome 155) 10,000 smooth nodes at `advance` 2.9 to 3.9 ms (previous build back to back: 5.9 to 6.2), ticks missed 5.0% to 13.7% against 25.0% to 31.7%; node motion error labels built only on failure 2026-10-23, `createNodeMotion`: byte-identical, same messages, Node `apply` on the node half alone at 10,000 nodes 1.6 to 1.7 ms (was 2.7 to 2.8) and on the scene 11.8 to 12.2 ms straight (was 13.2 to 13.6), and with springs in flight on WebGPU (Chrome 155) 10,000 straight nodes at `apply` 11.3 to 12.4 ms (previous build back to back: 13.0 to 13.4), smooth overlapping; node velocities kept as numbers, as the edge half's are, read slower on the node half's `advance` and were not kept; edge velocities resampled flat 2026-10-23, `createEdgeMotion`: byte-identical, no velocity record per point on a retarget, Node scene `apply` at 10,000 nodes 9.9 to 10.2 ms straight and 11.5 to 11.9 smooth (were 11.8 to 12.0 and 13.2 to 14.1), and with springs in flight on WebGPU (Chrome 155) `apply` falls in two bands run to run in both builds, so three pairs do not resolve it; unchanged routes copied from the previous build 2026-10-24, `tessellateRibbons` and `EdgeGroup`: byte-identical, a route given the same points under the same id is copied rather than tessellated, Node `tessellateRibbons` on 13,169 smooth routes with a tenth or less moving 2.0 to 3.0 ms (previous build 7.3 to 7.5), with all moving 7.7 to 8.2 (7.3 to 7.4), and with springs in flight on WebGPU (Chrome 155), where every edge moves, `setEdges` overlapping (9.0 to 9.2 against 9.0 to 9.3); the frame profile's partial motion 2026-10-24, `frame-profile.mjs --moving`: with springs in flight on WebGPU (Chrome 155) and a tenth of 10,000 smooth nodes moving (1,334 of 13,169 edges), `setEdges` 4.0 to 4.5 ms against 9.5 to 9.6 before route copying, in three pairs, both holding the tick, while with all moving ticks still miss (6.0% in one run, 4.8% to 6.5% in three before); unchanged routes copied a run at a time 2026-10-24, `tessellateRibbons`: byte-identical, one typed-array copy per stretch of consecutive unchanged routes rather than a loop per route, Node `tessellateRibbons` on 13,169 smooth routes with the first tenth moving 1.8 to 2.0 ms (previous build back to back: 3.1 to 3.3), all moving unchanged, and with springs in flight on WebGPU (Chrome 155) and a tenth of 10,000 smooth nodes moving, `setEdges` 3.5 to 3.6 ms (previous build back to back: 4.0 to 4.1), both holding the tick; reroutes kept out of the edge plan's map 2026-10-24, `createEdgeMotion`: byte-identical, a reroute of a live edge goes in a list and the edge records the plan that claimed it, Node scene `apply` at 10,000 nodes 8.2 to 8.3 ms straight and 9.1 to 9.8 smooth (were 9.8 to 10.0 and 10.8 to 11.0), and with springs in flight on WebGPU (Chrome 155) `apply` 10.3 to 10.9 ms straight in six runs where the previous build fell in two bands (7.6 to 8.5 or 11.0 to 12.3), so the browser does not resolve it; the edge plan's Node median sat 2 to 3 ms above its minimum of about 4 ms before this change, so allocation and collection rather than arithmetic is what is left; edge colours converted only when they change 2026-10-25, `colorsFor`: byte-identical colour buffers, Node `setEdges` on 13,169 smooth routes with a tenth moving 2.20 to 2.27 ms (previous build back to back: 2.62 to 2.68), and with springs in flight on WebGPU (Chrome 155) and a tenth of 10,000 smooth nodes moving, `setEdges` 2.9 to 3.0 ms (previous build back to back: 3.3 to 3.4), both holding the tick; edge colours copied from the previous build 2026-10-25, `colorsFor`: byte-identical, an edge whose colour and vertex count match the previous build at its index has its colour slice copied, a stretch of them at a time, Node `setEdges` on 13,169 smooth routes with a tenth moving 1.75 to 1.76 ms with one colour (previous build back to back: 1.93 to 1.94) and 1.75 to 1.82 with a colour per edge (2.30 to 2.32), about 0.05 ms slower when every colour changes every call, and with springs in flight on WebGPU (Chrome 155) and a tenth of 10,000 smooth nodes moving, `setEdges` 2.8 to 3.0 ms (previous build back to back: 3.0), at the browser's 0.1 ms resolution, both holding the tick; the intensity buffer and the `BufferGeometry` measured under 0.1 ms together, so `setNodes`, at 1.9 ms, is the next step; `setNodes` without a map of the incoming nodes 2026-10-25, `SceneNodes`: byte-identical, a placed node is stamped with the call's number and only new ids go in a set, Node `setNodes` at 10,000 nodes 1.90 to 2.06 ms (previous build back to back: 2.31 to 2.37), and with springs in flight on WebGPU (Chrome 155) and a tenth of 10,000 smooth nodes moving, `setNodes` 1.7 ms in three runs (previous build back to back: 1.9), both holding the tick; what is left of `setNodes` is the label strings its validation builds for every node (about 0.15 ms in Node) and the colour conversion per node; shape instances checked before their field names are built 2026-10-25, `requireShapeInstance`: byte-identical, the same result and message for 50,000 random instances, Node `setNodes` at 10,000 nodes, every node moving, 1.80 to 1.87 ms (previous build back to back: 2.09 to 2.11), and with springs in flight on WebGPU (Chrome 155) and a tenth of 10,000 smooth nodes moving, `setNodes` 1.5 ms in three runs (previous build back to back: 1.7), both holding the tick; what is left of `setNodes` per node is the colour conversion, three `Math.pow` per colour; node colours converted only when they change 2026-10-26, `InstanceAttributeData`: byte-identical, each mesh keeps its last fill and glow conversion, Node `setNodes` at 10,000 nodes, every node moving, 1.24 to 1.31 ms (previous build back to back: 1.66 to 1.73), and with springs in flight on WebGPU (Chrome 155) and a tenth of 10,000 smooth nodes moving, `setNodes` 1.2 ms in three runs (previous build back to back: 1.5), both holding the tick; `setEdges`, at 3.0 ms, is now the largest step of that frame; every node moving reprofiled on a second GPU 2026-10-26 (`tsk_a99a5f581e8a`): AMD RDNA 2 (Ryzen 9 9900X integrated), Chrome 156 headed from WSL2, adapter not a fallback, `renderer.backend` `webgpu`, tick 17.8 to 17.9 ms, DPR 1, `fit`, three runs: 10,000 straight nodes hold the tick with every node moving and with a tenth (0% missed in every run), 10,000 smooth nodes hold it with a tenth and miss 36% to 43% of ticks with every node moving, where the frame between retargets is 23 to 24 ms of medians (`setEdges` 12 to 13, `advance` 7 to 8) and retarget frames add 18 to 19 of `apply`; the open #159's buffer reuse, paired against main on the same GPU, missed 15% to 20% against 24% to 26%; next is smooth `advance` (`tsk_a498d1621d79`), after #159; edge velocities written into the frame before's array 2026-10-26, `createEdgeMotion`, not kept: byte-identical, and in Node the edge half of `advance`, most of it at 10,000 smooth nodes (3.3 to 3.8 ms of medians against the node half's 0.5 to 0.8), fell to 2.5 to 2.9 in two variants, but with springs in flight on WebGPU (AMD RDNA 2, Chrome 156, against main without #159) `advance` was slower in five of six pairs (6.5 to 9.0 ms against 6.8 to 7.2) and ticks missed rose in five of six, so Node is not a reliable proxy for this step and smooth `advance` stays next (`tsk_a498d1621d79`); edge springs stepped without the checked helpers 2026-10-26, `createEdgeMotion`: byte-identical, the spring sums done inline once per point with only the results checked, and with springs in flight on WebGPU (AMD RDNA 2, Chrome 156, against main without #159) 10,000 smooth nodes with every node moving at `advance` 3.4 to 3.5 ms (main back to back: 4.8 to 6.8), p95 6.9 to 7.1 (8.1 to 13.3), ticks missed 16% to 23% (25% to 35%), `setEdges` and `apply` unmoved; `setEdges`, at 11 ms, is the largest step left of the frame between retargets, with #159 awaiting the maintainer's memory decision; edge builds written into the GPU buffers already created 2026-10-27, `EdgeGroup` (`tsk_9883b17df78b`), not kept: byte-identical, GPU bytes created per frame 12.5 MB to 0.08, but with springs in flight on WebGPU (AMD RDNA 2, Chrome 156, against main without #159) `render` 1.2 to 1.6 ms slower in every pair and ticks missed with every node moving 15% to 23% against main's 6% to 8%, since Chrome's `writeBuffer` of a build costs about 2.6 times a new buffer mapped at creation; next is the tessellation itself, 6.5 s of `setEdges`' 7.0 in a CPU profile (`tsk_6f01f8911bde`), with #159 addressing only the garbage its new arrays leave; the tessellator's walk taking its two lengths per point without the `Math.hypot` builtin 2026-10-27, `tessellateRibbons` (`tsk_6f01f8911bde`): byte-identical, and with springs in flight on WebGPU (AMD RDNA 2, Chrome 156, against main without #159) 10,000 smooth nodes with every node moving at `setEdges` 7.8 to 8.1 ms (main back to back: 9.7 to 10.1), p95 10.1 to 10.4 (13.0 to 13.8), ticks missed 1.4% to 2.1% (3.9% to 4.7%); `setEdges`, most of it `tessellateRibbons`, is still the largest step of the frame between retargets; the knot widths' segment lengths taken through the same written-out `hypot` 2026-10-27, `measureSegments` (`tsk_1cae6f72082e`): byte-identical, and with springs in flight on WebGPU (AMD RDNA 2, Chrome 156, against main without #159) 10,000 smooth nodes with every node moving at `setEdges` 7.4 to 8.0 ms (main back to back: 7.7 to 8.1), lower in five pairs of six and equal in one, ticks missed not separated (1.3% to 3.0% in both), and `tessellateRibbons` about 0.4 ms a frame lower in two pairs of CPU profiles; a moving route's given points checked, recorded and cleaned in one pass 2026-10-27, `cleanGivenCentreline` (`tsk_a8956f877616`): byte-identical, and with springs in flight on WebGPU (AMD RDNA 2, Chrome 156, against main without #159) 10,000 smooth nodes with every node moving at `setEdges` 6.7 to 7.0 ms (main back to back: 7.2 to 7.6), lower in every pair of six, p95 lower in five and equal in one, ticks missed not separated (1.4% to 3.4% against 0.8% to 3.7%), and `tessellateRibbons` about 0.45 ms a frame lower in a pair of CPU profiles; flattened points cleaned as they are made 2026-10-27, `tessellateRibbons` (`tsk_396330099dfb`), not kept: byte-identical, no second cleaning pass, but with springs in flight on WebGPU (AMD RDNA 2, Chrome 156, against main without #159) 10,000 smooth nodes with every node moving at `setEdges` 6.9 to 7.2 ms (main back to back: 6.8 to 7.3), higher in four pairs of six, and ticks missed higher in every pair (1.0% to 1.8% against 0.4% to 1.0%), since the check cost about as much inside the flattening's loop as the copy after it; the all-moving frame's allocation attributed by site 2026-10-27 (`tsk_903f42a19c0b`), on the same GPU: about 22 MiB a frame, of which edge motion's new point objects and velocity arrays are the largest share (7.5 MiB), then `smoothInto` (3.2), the build's record of given points (2.6) and the node springs (2.6), none of it the typed arrays #159 reuses, which live outside V8's heap; that record sized from the previous build, not kept: byte-identical, the site halved to about 1.3 MiB a frame, but with every node moving `setEdges` was higher in five pairs of six and garbage collection did not fall (963 ms against 939 in one pair of CPU profiles); scavenges and full collections split 2026-10-27 (`tsk_5ca35c49f0fc`), main `7d2001a`, WebGPU (AMD RDNA 2, Chrome 156 headless): 660 moving frames, 361 scavenges (757 ms pauses), 43 mark-compacts (260 ms pauses), scavenge traffic 3.068 MiB promoted and 3.206 MiB copied within young space per frame; survivors attributed by site 2026-10-28 (`tsk_5ca35c49f0fc`), main `f3bd116`, WebGPU (NVIDIA RTX 4090 now picked by Chrome 156 on the same machine, not a fallback), a sampling heap profile dropping what scavenges reclaim: edge motion's `advance`, a new point object per route point and a velocity array per edge every frame, is 53% to 59% of what scavenges do not reclaim and 52% to 80% of what it allocates is not reclaimed by one, then node motion (13% to 17%) and the build's record of given points (8% to 10%), while sites whose arrays die within the frame show only the profiler's 7% to 15% floor; the profiler's total exceeds the trace's promoted bytes by 4 to 5 MiB a frame it does not explain; a one-frame lifetime should not usually survive two scavenges, so next is what retains those points and velocities (`tsk_88bfcb651a56`); recording the entries in `bench/baseline.json` stays the maintainer's call; see `bench/README.md` and `bench/browser/README.md`) | Frame time broken down by pass. If the number is not met, publish the profile and move the number. |
+| 4 | **[M4.10: 10k nodes at 60fps, animating](#m410-current-outcome)** (stage 1, in progress) | Partial-motion success is measured; all-moving smooth rendering still misses ticks. Current renderer task: `tsk_88bfcb651a56`, retaining paths of edge-motion frame points, successor to [#172](https://github.com/prnt-design/dagr/pull/172) (`tsk_5ca35c49f0fc`). See the milestone summary for outcomes, limits and evidence. |
 | 5 | **M4.8b: GPU picking, then edge hits** (stage 2, in progress: the node pick pass 2026-10-28, `Renderer.pickNode` (`tsk_b6f2f936ae92`): one device pixel drawn into a one-pixel target and read back, ids checked against the stamp they were drawn at; `backend-probe.mjs --pick` on AMD RDNA 2, Chrome 156, not a fallback adapter, found no disagreement in 9,532 picks per run on WebGPU and WebGL2 at DPR 1 and 2, and a flipped-row control fails; the provider adapter over it 2026-10-28, `createPickedNodeHitProvider`: M5.2a's synchronous contract answered only from a pick settled for the same world point and displayed revision, stale otherwise, unit-tested without a device; `DagrCanvas` using it 2026-10-28, `hitTesting="gpu"`: mouse hover and clicks answered from settled picks primed by hover, touch and pen kept on the CPU index, one provider per renderer so a rebuild after a lost context answers from none of the lost one's picks, the default still `'cpu'`, unit-tested without a device; hover and click at 10,000 nodes on a hardware adapter 2026-10-28, `bench/browser/gpu-hover.mjs`: on AMD RDNA 2, Chrome 156, `webgpu`, not a fallback adapter, every one of 250 samples per run answered correctly at DPR 1 and 2, about 4 ms from pointer move to `onNodeHover` at rest, and a control that must fail does; the pass priced 2026-10-28, `frame-profile.mjs --pick`: on AMD RDNA 2, Chrome 156, `webgpu`, not a fallback adapter, one pick in flight on every frame at 10,000 nodes with springs in flight cost 0.1 to 0.2 ms of CPU per pick, missed ticks did not separate from runs without picks (smooth, every node moving: 4.0% to 5.3% against 2.7% to 5.0% at DPR 1), answers came 0 to 2 frames later as the frame got busier, and the pass holds about 0.2 MB of GPU buffers at 10,000 nodes with nothing kept per pick; the pass stays on pointer moves and the default stays `'cpu'` for the GPU path's ignored clicks during a glide, not its cost; the hover highlight in the demo 2026-10-28, `@dagr/living-stage`: the node under the mouse lightens, answered from GPU picks, checked on AMD RDNA 2, Chrome 156, `webgpu`, not a fallback adapter; next is edge hits) | Hover and selection at 10k nodes through the M5.2a provider contract; edges become hit targets. The pass runs on pointer moves (priced 2026-10-28). |
 | 6 | **M3.9b: fast paths** (stage 2) | Edits on a 10k graph relayout within the frame budget, judged against M3.10a's tables. |
 | 7 | **Cold-layout crossings parity with dagre** (stage 2) | Close the gap on the M2.9 corpus: 147 crossings between node centres against dagre's 109 with the default `grid-position`, 96 with `brandes-koepf-position` (docs/docs/layout.md). |
@@ -333,151 +342,45 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   smooth, freed as it goes. The node and edge passes keep a CPU copy of what
   they upload, and rich-node tiers retain 1.0 KB of heap a node with no tier
   open. GPU time per pass is left to M4.10.
-- [ ] **M4.10** Performance: 10k nodes at 60fps, animating, springs in flight,
-  zoom and DPR named, frame time broken down by pass (instance update, node
-  draw, edge draw, ID buffer), recorded as a local baseline naming the
-  machine. If the number is not met, publish the profile and move the number,
-  not the goalposts. CPU-side passes can join the bench gate; GPU frame time
-  cannot. GPU time per pass (2026-10-19, `--gpu`, timestamp queries added to
-  every pass the renderer encodes, nodes and edges split by drawing each
-  alone): on an Apple M4 in Chrome 155 at 10,000 nodes and `fit`, the scene
-  pass and three's output pass take 0.50 ms together at DPR 1 with straight
-  edges (node draw 0.13, edge draw 0.16) and 0.86 with smooth ones (edge draw
-  0.52), and 1.21 and 1.51 ms at DPR 2, where the per-pixel cost of the two
-  passes is 0.9 ms of it. Every GPU frame is under a tenth of the tick; the
-  animated smooth rows miss it on the CPU's 26 ms of `setEdges`. Springs in
-  flight (2026-10-19, `--motion=springs`, every node and edge retargeted
-  through `createSceneMotion` every 500 ms): at 10,000 nodes with straight
-  edges a frame between retargets spends about 16 ms on the CPU, 8.8 of it in
-  `advance`. A retarget frame adds 13 to 15 ms of `apply` and misses the tick;
-  3 to 8% of frames missed it. Smooth edges missed it from 2,500 nodes.
-  Scene motion's `apply` and `advance` have Node bench entries (2026-10-19,
-  `packages/render/bench/scene-motion.bench.ts`). A bent route retargeted
-  while still moving gained a point per retarget until it rested; since
-  2026-10-20 a retarget drops the points that have straightened and move with
-  their neighbours, and smooth edges with springs in flight hold the tick to
-  2,500 nodes. Since 2026-10-20 the ribbon tessellator writes into typed
-  arrays that double when full, and with springs in flight 10,000 smooth nodes
-  spend 19.9 ms in `setEdges` where they spent 23.3. Since 2026-10-20 it also
-  carries each centreline in reused coordinate arrays rather than an object
-  per point, byte-identical, and 10,000 smooth nodes spent 16.4 ms in
-  `setEdges`, about what they then spent in `advance`. Since 2026-10-20 `advance`
-  builds the spring step's coefficients once per frame rather than once per
-  spring axis, byte-identical, and with springs in flight 10,000 nodes spend
-  2.4 ms in `advance` with straight edges (was 8.5) and 4.1 with smooth (was
-  14.5); 10,000 straight nodes missed no tick in two runs, and 10,000 smooth
-  nodes miss about half. Since 2026-10-21 each edge group sizes its
-  next tessellation from its last one rather than doubling a small builder
-  seven times every call, byte-identical with no retained heap added, and
-  10,000 smooth nodes spend 15.8 ms in `setEdges` (was 16.5; about 1 ms back
-  to back) and still miss about half the ticks. Since 2026-10-21 the
-  flattening's flatness test and the cleaner's minimum-length test answer
-  from squares and ask `Math.hypot` only near the threshold, byte-identical,
-  and 10,000 smooth nodes spend 12.8 to 13.0 ms in `setEdges` back to back
-  (was 14.7 to 15.3) and miss 37% to 44% of ticks. Since 2026-10-21 the walk
-  writes each rib and each quad in one call with no object per rib,
-  byte-identical, and 10,000 smooth nodes spend 11.7 to 11.9 ms in `setEdges`
-  (the previous build 12.9 to 13.0 back to back) and miss 34% to 39% of ticks.
-  Since 2026-10-21 the edge motion's retarget checks build their error labels
-  only when one fails, byte-identical with the same messages, and 10,000
-  smooth nodes spend 19.2 to 20.9 ms in `apply` on retarget frames (the
-  previous build 22.8 to 23.3 back to back) and miss 25% to 30% of ticks.
-  Since 2026-10-22 an edge retarget shares the points it samples rather than
-  copying them, byte-identical, and 10,000 smooth nodes spend 17.1 to 17.2 ms
-  in `apply` (the previous build 18.4 to 19.2 back to back) and miss 25% to
-  26% of ticks (the previous build 25% to 35%). Retargets are about one frame
-  in 22 there, so most missed ticks are the frames between them.
-  Since 2026-10-22 `setEdges` passes its edges to the tessellator as they are
-  and a tessellation sized from the last frame returns views rather than
-  trimmed copies, byte-identical, holding about 0.9 MB more heap between rebuilds at 10,000
-  smooth nodes, and 10,000 smooth nodes spend 11.2 to 11.4 ms in `setEdges`
-  (the previous build 11.5 to 11.9 back to back); the ticks missed did not
-  clearly move. Since 2026-10-22 the flattening subdivides in a loop over a
-  fixed stack rather than a call per subdivision, byte-identical, and 10,000
-  smooth nodes spend 10.5 to 10.8 ms in `setEdges` (the previous build 11.1
-  to 11.3 back to back); the ticks missed did not clearly move.
-  The number is not met with smooth edges.
-  On 2026-10-26, on a second GPU (AMD RDNA 2 in Chrome 156, from WSL2), 10,000
-  straight nodes held the tick with every node moving in three runs, and
-  10,000 smooth nodes missed 36% to 43% of ticks, on `setEdges` (12 to 13 ms)
-  and `advance` (7 to 8) every frame and `apply` (18 to 19) on retarget
-  frames; see `bench/browser/README.md`, "All moving and a tenth moving on an
-  AMD GPU". Since 2026-10-26 edge motion's `advance` does the spring sums
-  inline and checks only their results, byte-identical, and on the same GPU
-  with every node moving smooth `advance` is 3.4 to 3.5 ms (main back to back:
-  4.8 to 6.8) and ticks missed 16% to 23% (main: 25% to 35%), against main
-  without the open #159; see "Edge springs stepped without the checked
-  helpers". `setEdges`, at 11 ms, is the largest step left of the frame
-  between retargets, and #159 is the change for it once its memory trade is
-  decided.
-  On 2026-10-27 a build written into the GPU buffers its group already had,
-  rather than into new ones, was tried and not kept (`tsk_9883b17df78b`):
-  byte-identical, and GPU bytes created per frame of moving edges fell from
-  12.5 MB to 0.08 MB, but on the same GPU `render` rose by 1.2 to 1.6 ms in
-  every pair and ticks missed with every node moving rose (15% to 23% against
-  main's 6% to 8%; main's own figure was lower than on 2026-10-26, untraced,
-  so compare within one table), because Chrome's `writeBuffer` of a build
-  costs about 2.6 times a new buffer mapped at creation; see "Edge builds
-  written into the GPU buffers already created, not kept". Most of `setEdges` with every node
-  moving is `tessellateRibbons` (6.5 s of 7.0 in a CPU profile), which is
-  next (`tsk_6f01f8911bde`); #159 addresses only the garbage its new arrays
-  leave, and its memory trade stays the maintainer's call.
-  Since 2026-10-27 the tessellator's walk takes its two lengths per point from
-  V8's own two-argument `Math.hypot` algorithm, written out in `ribbon.ts`,
-  rather than through the builtin, which V8 does not inline
-  (`tsk_6f01f8911bde`): the same double as `Math.hypot` in Chrome and Node,
-  byte-identical output over 76,000 random calls in Node, and on the same GPU with every node
-  moving `setEdges` fell to 7.8 to 8.1 ms from 9.7 to 10.1 in every pair, its
-  p95 to 10.1 to 10.4 from 13.0 to 13.8, and ticks missed to 1.4% to 2.1% from
-  3.9% to 4.7%; see "With the walk's lengths taken without the `Math.hypot`
-  builtin". `tessellateRibbons` is still the largest step of that frame.
-  Since 2026-10-27 the knot widths' segment lengths go through the same
-  written-out `hypot` (`tsk_1cae6f72082e`): byte-identical over 140,000
-  random calls in Node, the same double as `Math.hypot` in Chrome, and on the
-  same GPU with every node moving `setEdges` 7.4 to 8.0 ms against 7.7 to 8.1,
-  lower in five pairs of six and equal in one, with ticks missed not
-  separated; two pairs of CPU profiles put `tessellateRibbons` about 0.4 ms a
-  frame lower. See "With the segment lengths taken without the `Math.hypot`
-  builtin". Since 2026-10-27 a moving route's given points are checked,
-  recorded and cleaned in one pass (`tsk_a8956f877616`), where two passes
-  copied every point through a scratch polyline first: byte-identical over
-  140,000 random calls in Node, and on the same GPU with every node moving
-  `setEdges` 6.7 to 7.0 ms against 7.2 to 7.6, lower in every pair of six, with ticks missed not separated; a
-  pair of CPU profiles put `tessellateRibbons` about 0.45 ms a frame lower.
-  See "With a route's given points cleaned in one pass". Cleaning the
-  flattened points as they are made rather than in a second pass
-  (`tsk_396330099dfb`) was byte-identical but not kept: on the same GPU with
-  every node moving `setEdges` was higher in four pairs of six, lower in one
-  and equal in one, and ticks missed rose in every pair; see "Flattened points cleaned as they are made, not
-  kept". The frame's allocation, attributed by site in Chrome
-  (`tsk_903f42a19c0b`), is about 22 MiB a frame with every node moving, most
-  of it edge motion's new point objects (7.5 MiB), `smoothInto` (3.2), the
-  build's record of given points (2.6) and the node springs (2.6). Sizing
-  that record from the previous build halved its site but was not kept:
-  `setEdges` was higher in five pairs of six and garbage collection did not
-  fall; see "Allocation by site, and the given record sized from the last
-  build, not kept". Next is splitting the collection into scavenges and full
-  collections and pricing what survives a frame (`tsk_5ca35c49f0fc`).
-  A 2026-10-27 measurement on main `7d2001a`, AMD RDNA 2, Chrome 156
-  headless, WebGPU (not a fallback), split 660 all-moving smooth frames:
-  361 scavenges (757 ms of pauses), 43 mark-compacts (260 ms), plus
-  incremental and background work. Scavenges promoted 3.068 MiB and copied
-  3.206 MiB within young space per frame, traffic rather than unique
-  retained bytes. The trace has no survivor allocation-site provenance;
-  edge points and the previous build remained suspects, not attributed
-  survivors. No optimization was tried. See "Scavenges, mark-compacts and
-  survivor traffic". A 2026-10-28 sampling heap profile on main `f3bd116`
-  (Chrome 156 now picks the machine's NVIDIA RTX 4090, `webgpu`, not a
-  fallback) dropped what scavenges reclaim: edge motion's `advance` is 53%
-  to 59% of the rest, and 52% to 80% of what it allocates is not reclaimed
-  by a scavenge, though a frame's points are replaced by the next frame. Node
-  motion is 13% to 17% and the given record 8% to 10%. No reduction was
-  tried; see "Survivors by allocation site". Next is finding what retains
-  edge motion's frame points and velocities (`tsk_88bfcb651a56`).
-  Still open: the 10,000-node smooth CPU frame with every node moving
-  (`setEdges` and `advance` on every frame, `apply` on retarget frames;
-  figures by machine above) and recording the bench entries in
-  `bench/baseline.json` (the maintainer's call).
+
+<a id="m410-current-outcome"></a>
+
+- [ ] **M4.10** Performance: 10k nodes at 60fps, animating with springs in
+  flight. Name zoom, DPR, backend, adapter, browser and machine; break frame
+  time down by pass, including instance updates, draws and picking when enabled.
+  **The all-moving 10k smooth-edge 60 Hz goal remains unmet.**
+
+  Current outcome (evidence through 2026-10-28):
+
+  - On Apple M4, Chrome 155 headed, WebGPU, DPR 1, `fit`, 10k smooth nodes
+    with a tenth moving held the 16.7 ms tick in three paired runs on
+    2026-10-25: `setNodes` 1.5 ms, `setEdges` 3.0 to 3.1 ms. See
+    [the measured partial-motion row](bench/browser/README.md#with-shape-instances-checked-before-their-field-names-are-built-2026-10-25).
+  - On AMD RDNA 2, Chrome 156 headed through WSL2, WebGPU, DPR 1, `fit`,
+    cleaning given points in one pass reduced all-moving smooth `setEdges`
+    to 6.7 to 7.0 ms (paired main: 7.2 to 7.6). Missed ticks did not separate:
+    1.4% to 3.4% against 0.8% to 3.7%. The control tick changed from
+    17.6 to 17.7 ms to 16.7 ms during the pairs; these results do not establish sustained 60 Hz. See
+    [the latest retained tessellation change](bench/browser/README.md#with-a-routes-given-points-cleaned-in-one-pass-2026-10-27).
+  - Allocation and GC remain measured costs, not a solved bottleneck. The
+    2026-10-27 headless AMD capture counted 361 scavenges (757 ms pauses) and
+    43 mark-compacts (260 ms) over 660 moving frames. The 2026-10-28 headed
+    NVIDIA RTX 4090 profile attributes 53% to 59% of sampled allocation not
+    reclaimed by scavenges to edge motion's `advance`. Sampling adds overhead
+    and leaves 4 to 5 MiB per frame unreconciled with the trace. These adapters,
+    modes and profiling runs cannot be compared as a frame-time trend. See
+    [GC traffic](bench/browser/README.md#scavenges-mark-compacts-and-survivor-traffic-2026-10-27)
+    and [site attribution](bench/browser/README.md#survivors-by-allocation-site-2026-10-28).
+
+  Active successor after [#172](https://github.com/prnt-design/dagr/pull/172):
+  Dispatch `tsk_88bfcb651a56`, find what retains edge-motion frame points and
+  velocities. This planning maintenance does not replace that renderer increment.
+  The [browser measurement record](bench/browser/README.md#springs-in-flight-on-webgpu-m410)
+  preserves the optimization sequence, rejected experiments and reproduction
+  details; [working notes](specs/roadmap-notes.md#m4-renderer-dagrrender)
+  preserve historical decisions. CPU baseline inclusion remains the maintainer's
+  call; GPU frame time cannot join the machine-matched Node gate. Publish the
+  measured limit when the target is missed, without marking the goal complete.
 - [x] **M4.11** HTML overlay: DOM elements positioned in world coordinates,
   culled and capped.
 - [x] **M4.12** Rich nodes: HTML visuals with three-tier semantic zoom as
