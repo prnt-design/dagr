@@ -66,6 +66,8 @@ export type {
   FitOptions,
   FocusNodeOptions,
 } from './canvas-context.js';
+export { createEdgeHitIndex } from './edge-hit.js';
+export type { EdgeHitIndex } from './edge-hit.js';
 export { createNodeHitIndex } from './node-hit.js';
 export type { NodeHitIndex } from './node-hit.js';
 export { CanvasContextError } from './errors.js';
