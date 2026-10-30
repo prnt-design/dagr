@@ -50,6 +50,32 @@ describe('report format v0', () => {
     third.nodes[0]!.previousStatus = 'unchanged';
     expect(validateReport(third, day2).ok).toBe(false);
   });
+  it('ignores JSON object key order in cross-day comparisons', () => {
+    const report = structuredClone(day2);
+    report.nodes[0]!.content = [{ text: day2.nodes[0]!.summary, kind: 'paragraph' }];
+    report.nodes[0]!.attention = { reason: 'No decision requested.', needed: false };
+    expect(validateReport(report, day1).ok).toBe(true);
+  });
+  it('accepts an explicitly unknown blocked entity without evidence', () => {
+    const report = structuredClone(day1);
+    report.nodes[0]!.confidence = { level: 'unknown', reason: 'Synthetic fixture: blocker not verified.' };
+    report.nodes[0]!.sourceIds = [];
+    report.nodes[0]!.state = 'blocked';
+    report.nodes[0]!.activity = 'unknown';
+    expect(validateReport(report).ok).toBe(true);
+    report.nodes[0]!.confidence.level = 'confirmed';
+    expect(validateReport(report).ok).toBe(false);
+  });
+  it.each([
+    ['/views/0/edgeIds', ['missing']],
+    ['/tour/0/nodeIds', ['pr:172']],
+    ['/nodes/1/content', [{ kind: 'node', label: 'Missing', nodeId: 'pr:999' }]],
+    ['/nodes/0/content', [{ kind: 'link', label: 'Uncited', sourceId: 'pr172' }]],
+    ['/sources/0/asOf', '2026-10-30'],
+    ['/nodes/0/extra', true],
+  ])('rejects invalid reference or field at %s', (path, value) => {
+    expect(validateReport(patch(day1, { op: 'replace', path: path as string, value })).ok).toBe(false);
+  });
   it('uses lossless stable names, not titles, dates or lossy slugs', () => {
     expect(entityId({ kind: 'pr', key: '181' })).toBe(day1.nodes[0]!.id);
     expect(entityId({ kind: 'package', key: '@dagr/living-stage' })).toBe(day1.nodes[1]!.id);

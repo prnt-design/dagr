@@ -74,7 +74,7 @@ exact package names; milestone keys are persistent roadmap identifiers such
 as `M4.10`. Empty or padded keys are rejected. Names are case-sensitive and
 losslessly encoded, never slugged. Titles and dates do not enter identity.
 IDs are repository-scoped, so host routes also need repository and report
- date. A package or milestone rename is a new entity in v0; R2 must not guess
+date. A package or milestone rename is a new entity in v0; R2 must not guess
 aliases. Absent nodes mean omitted coverage, not deletion or completion.
 
 With no available baseline, use `previousStatus: "unknown"`. With the named

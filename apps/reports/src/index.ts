@@ -68,8 +68,18 @@ export function entityId(entity: Entity): string {
 }
 
 function snapshot(node: ReportNode): string {
-  // Evidence freshness, confidence and prose can change without changing entity status.
-  return JSON.stringify([node.label, node.summary, node.content, node.activity, node.state, node.attention]);
+  // JSON object key order is not part of the display/status snapshot.
+  const content = node.content.map(block => {
+    switch (block.kind) {
+      case 'paragraph': return [block.kind, block.text];
+      case 'list': return [block.kind, block.items];
+      case 'code': return [block.kind, block.language, block.text];
+      case 'link': return [block.kind, block.label, block.sourceId];
+      case 'node': return [block.kind, block.label, block.nodeId];
+    }
+  });
+  return JSON.stringify([node.label, node.summary, content, node.activity, node.state,
+    node.attention.needed, node.attention.reason]);
 }
 
 export type Validation = { ok: true; report: Report } | { ok: false; errors: string[] };
