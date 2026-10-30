@@ -36,8 +36,10 @@
  *
  * - GPU picking. `useGraphInteraction` owns gestures and controlled selection
  *   over a caller-supplied hit provider, and `<DagrCanvas>` supplies one
- *   (M5.2b, CPU, exact node silhouettes). M4.8b GPU picking is a later provider
- *   behind the same contract. Edge and port hits are not here.
+ *   (M5.2b, CPU, exact node silhouettes). M4.8b GPU picks reach the same
+ *   contract through `createPickedNodeHitProvider`, which `<DagrCanvas>` uses
+ *   only behind `hitTesting="gpu"`, priced on one device. Edge and port
+ *   hits are not here.
  * - No worker. See `use-dagr.ts`: the `Worker` has to be the caller's, and
  *   M3.9b owns the worker-side session that makes a per-edit round trip worth
  *   taking.

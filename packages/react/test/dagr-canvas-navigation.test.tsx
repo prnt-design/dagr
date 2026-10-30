@@ -112,6 +112,171 @@ describe('node click and hover', () => {
   });
 });
 
+/**
+ * Makes the latest renderer's `pickNode` answer from the node boxes it was last
+ * given, a frame later when `nextFrame` is set, as a device readback does.
+ */
+function pickFromBoxes(nextFrame = false): void {
+  const renderer = lastRenderer();
+  renderer.pickNode.mockImplementation((css) => {
+    if (nextFrame) {
+      return new Promise((resolve) => requestAnimationFrame(() => resolve(boxAt(renderer, css))));
+    }
+    return Promise.resolve(boxAt(renderer, css));
+  });
+}
+
+function boxAt(renderer: ReturnType<typeof lastRenderer>, css: { readonly x: number; readonly y: number }): string | null {
+  const world = renderer.camera.screenToWorld(css);
+  const nodes = renderer.setNodes.mock.calls.at(-1)?.[0] as readonly SceneNode[];
+  const node = nodes.find(
+    (n) => Math.abs(world.x - n.center.x) <= n.size.width / 2 && Math.abs(world.y - n.center.y) <= n.size.height / 2,
+  );
+  return node?.id ?? null;
+}
+
+function tap(pointerType: string, x: number, y: number): void {
+  for (const type of ['pointerdown', 'pointerup']) {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, button: 0 });
+    Object.defineProperties(event, { pointerId: { value: 2 }, isPrimary: { value: true }, pointerType: { value: pointerType } });
+    (type === 'pointerdown' ? host() : window).dispatchEvent(event);
+  }
+}
+
+describe('GPU hit testing', () => {
+  it('answers hover and a hovered click from settled picks, and ignores a press nothing picked', async () => {
+    const onNodeHover = vi.fn();
+    const onNodeClick = vi.fn();
+    await ready(
+      <DagrCanvas graph={twoNodes()} config={config} hitTesting="gpu" onNodeHover={onNodeHover} onNodeClick={onNodeClick} />,
+    );
+    pickFromBoxes();
+    const a = screenOf('a');
+    const b = screenOf('b');
+    await flush(() => pointer(host(), 'pointermove', a.x, a.y));
+    expect(lastRenderer().pickNode).toHaveBeenCalledWith({ x: a.x, y: a.y });
+    expect(onNodeHover.mock.calls).toEqual([['a']]);
+    await flush(() => click(a.x, a.y));
+    expect(onNodeClick.mock.calls).toEqual([['a']]);
+
+    await flush(() => click(b.x, b.y));
+    expect(onNodeClick.mock.calls).toEqual([['a']]);
+    await flush(() => pointer(host(), 'pointermove', b.x, b.y));
+    await flush(() => click(b.x, b.y));
+    expect(onNodeClick.mock.calls).toEqual([['a'], ['b']]);
+    expect(onNodeHover.mock.calls).toEqual([['a'], ['b']]);
+  });
+
+  it('asks a resting mouse again after a wheel zoom, so the next click lands without a move', async () => {
+    const onNodeClick = vi.fn();
+    await ready(
+      <DagrCanvas graph={twoNodes()} config={config} navigation label="graph" cameraLimits={false} hitTesting="gpu" onNodeClick={onNodeClick} />,
+    );
+    pickFromBoxes();
+    const a = screenOf('a');
+    await flush(() => pointer(host(), 'pointermove', a.x, a.y));
+    const before = lastRenderer().camera.screenToWorld(a);
+    const wheel = new WheelEvent('wheel', { deltaY: -100, clientX: a.x + 30, clientY: a.y + 20, cancelable: true, bubbles: true });
+    await flush(() => host().dispatchEvent(wheel));
+    await runFramesUntilIdle();
+    expect(lastRenderer().camera.screenToWorld(a)).not.toEqual(before);
+    await flush(() => click(a.x, a.y));
+    expect(onNodeClick.mock.calls).toEqual([['a']]);
+  });
+
+  it('primes picks for a background click with no hover or node handler', async () => {
+    const onBackgroundClick = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} hitTesting="gpu" onBackgroundClick={onBackgroundClick} />);
+    await flush(() => pointer(host(), 'pointermove', 1, 1));
+    await flush(() => click(1, 1));
+    expect(onBackgroundClick).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the CPU index for touch and pen, and by default', async () => {
+    const onNodeClick = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} hitTesting="gpu" onNodeClick={onNodeClick} />);
+    const a = screenOf('a');
+    const b0 = screenOf('b');
+    await flush(() => tap('touch', a.x, a.y));
+    expect(onNodeClick).toHaveBeenLastCalledWith('a');
+    await flush(() => tap('pen', b0.x, b0.y));
+    expect(onNodeClick).toHaveBeenLastCalledWith('b');
+    expect(lastRenderer().pickNode).not.toHaveBeenCalled();
+    await tree?.unmount();
+
+    await ready(<DagrCanvas graph={twoNodes()} config={config} onNodeHover={vi.fn()} onNodeClick={onNodeClick} />);
+    const b = screenOf('b');
+    await flush(() => pointer(host(), 'pointermove', b.x, b.y));
+    await flush(() => click(b.x, b.y));
+    expect(onNodeClick).toHaveBeenLastCalledWith('b');
+    expect(lastRenderer().pickNode).not.toHaveBeenCalled();
+  });
+
+  it('never answers from a pick the lost renderer settled', async () => {
+    const onNodeClick = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} hitTesting="gpu" onNodeClick={onNodeClick} />);
+    pickFromBoxes();
+    const before = screenOf('a');
+    await flush(() => pointer(host(), 'pointermove', before.x, before.y));
+    const options = built.renderers.at(-1)?.options;
+    await flush(() => options?.onContextLost?.({ backend: 'webgpu', reason: 'device-lost' }));
+    await runFramesUntilIdle();
+    expect(built.renderers).toHaveLength(2);
+    // Same drawing under the same camera, so only a new provider keeps the old pick from answering.
+    const [lost, rebuilt] = built.renderers;
+    if (lost === undefined || rebuilt === undefined) throw new Error('no rebuild');
+    expect(rebuilt.setNodes.mock.calls.at(-1)?.[0]).toBe(lost.setNodes.mock.calls.at(-1)?.[0]);
+    rebuilt.camera.setZoom(lost.camera.zoom);
+    rebuilt.camera.setCenter(lost.camera.center);
+    pickFromBoxes();
+    const a = screenOf('a');
+    expect(a).toEqual(before);
+    expect(rebuilt.camera.screenToWorld(a)).toEqual(lost.camera.screenToWorld(before));
+    await flush(() => click(a.x, a.y));
+    expect(onNodeClick).not.toHaveBeenCalled();
+    await flush(() => pointer(host(), 'pointermove', a.x, a.y));
+    await flush(() => click(a.x, a.y));
+    expect(onNodeClick.mock.calls).toEqual([['a']]);
+  });
+
+  it('picks one at a time under a resting pointer while nodes glide, and stops at rest', async () => {
+    const graph = twoNodes();
+    const onNodeHover = vi.fn();
+    await ready(
+      <DagrCanvas graph={graph} config={config} animate cameraLimits={false} hitTesting="gpu" onNodeHover={onNodeHover} />,
+    );
+    pickFromBoxes(true);
+    const a = screenOf('a');
+    await flush(() => pointer(host(), 'pointermove', a.x, a.y));
+    await flush(() => {
+      graph.batch(() => {
+        graph.addNode('c');
+        graph.addEdge('a', 'c');
+      });
+    });
+    const frames = await runFramesUntilIdle();
+    const picks = lastRenderer().pickNode.mock.calls.length;
+    expect(picks).toBeGreaterThan(1);
+    expect(picks).toBeLessThanOrEqual(frames + 2);
+    await runFrames(16);
+    expect(lastRenderer().pickNode.mock.calls.length).toBe(picks);
+    expect(onNodeHover).toHaveBeenCalled();
+  });
+
+  it('reports nothing for a pick that settles after unmount', async () => {
+    const onNodeHover = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} hitTesting="gpu" onNodeHover={onNodeHover} />);
+    let settle: (id: string | null) => void = () => undefined;
+    lastRenderer().pickNode.mockImplementation(() => new Promise((resolve) => (settle = resolve)));
+    const a = screenOf('a');
+    await flush(() => pointer(host(), 'pointermove', a.x, a.y));
+    await tree?.unmount();
+    tree = null;
+    await flush(() => settle('a'));
+    expect(onNodeHover).not.toHaveBeenCalled();
+  });
+});
+
 describe('picking while animating', () => {
   it('hits the node where it is drawn mid-glide, and refuses a click whose drawing changed under it', async () => {
     const graph = twoNodes();

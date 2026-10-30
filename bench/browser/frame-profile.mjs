@@ -9,8 +9,9 @@
  * animated mode through `createSceneMotion` with every spring in flight rather
  * than a sway computed from the clock, and `--moving` retargets only that share
  * of the nodes and the edges touching them, so the edges at rest show what
- * `setEdges` saves by copying an unchanged route. Evidence, not a gate: see the
- * README.
+ * `setEdges` saves by copying an unchanged route. `--pick` adds GPU node picks,
+ * one in flight at a time, through `Renderer.pickNode` (M4.8b). Evidence, not a
+ * gate: see the README.
  *
  * ```
  * pnpm --filter @prnt/dagr-render --filter @prnt/dagr-react build   # the page imports from dist
@@ -20,7 +21,7 @@
  *   node bench/browser/frame-profile.mjs
  *   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
  *   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
- *   # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1]
+ *   # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1] [--pick]
  * ```
  *
  * The page asks for `backend: 'webgpu'`, so a browser without an adapter fails
@@ -113,6 +114,7 @@ if (headless && CDP !== undefined) {
   throw new Error('--headless chooses how a browser is launched; an attached one (DAGR_CDP) runs as it was started');
 }
 const hit = process.argv.includes('--hit');
+const pick = process.argv.includes('--pick');
 const memory = process.argv.includes('--memory');
 const gpu = process.argv.includes('--gpu');
 if (memory && (gpu || partsList.join() !== 'all' || motions.join() !== 'sway' || partialMotion)) {
@@ -120,8 +122,11 @@ if (memory && (gpu || partsList.join() !== 'all' || motions.join() !== 'sway' ||
     '--memory builds the whole scene and counts every buffer, so it takes none of --gpu, --parts, --motion and --moving',
   );
 }
-if ((hit || nodeModes.includes('rich')) && partsList.some((parts) => parts !== 'all')) {
-  throw new Error('--hit and --nodes=rich work over every node, so they take only --parts=all');
+if (pick && gpu) {
+  throw new Error('--pick draws its own pass inside the frames --gpu times, so it does not take --gpu');
+}
+if ((hit || pick || nodeModes.includes('rich')) && partsList.some((parts) => parts !== 'all')) {
+  throw new Error('--hit, --pick and --nodes=rich work over every node, so they take only --parts=all');
 }
 
 function pageHtml() {
@@ -264,6 +269,7 @@ if (memory) {
       'edges',
       ...(nodeMode === 'rich' ? ['rich'] : []),
       ...(hit ? ['hit'] : []),
+      ...(pick ? ['pick'] : []),
       'moveNodes',
       'moveEdges',
       'dispose',
@@ -275,10 +281,11 @@ if (memory) {
       const heap = await heapAfterGc();
       if (step === 'renderer') row.backend = tally.backend;
       const created = tally.createdBytes - previous.tally.createdBytes;
+      const gpuDelta = tally.buffers + tally.textures - previous.tally.buffers - previous.tally.textures;
       row.steps[step] = {
         gpuBuffers: tally.buffers,
         gpuTextures: tally.textures,
-        gpuDelta: tally.buffers + tally.textures - previous.tally.buffers - previous.tally.textures,
+        gpuDelta,
         createdBytes: created,
         freedBytes: tally.freedBytes - previous.tally.freedBytes,
         createdObjects: tally.created - previous.tally.created,
@@ -286,6 +293,14 @@ if (memory) {
         heapDelta: heapChange(heap, previous.heap),
         ...(step.startsWith('move')
           ? { frames: tally.worked, createdBytesPerFrame: Math.round(created / tally.worked) }
+          : {}),
+        ...(step === 'pick'
+          ? {
+              picks: tally.worked,
+              pickErrors: tally.pickErrors,
+              // What the first pick leaves live is the pass's own, not a pick's.
+              createdBytesPerPick: Math.round((created - gpuDelta) / tally.worked),
+            }
           : {}),
         ...(step === 'renderer' ? { textureFormats: tally.textureFormats } : {}),
         ...(tally.unknownFormats.length > 0 ? { unknownFormats: tally.unknownFormats } : {}),
@@ -309,7 +324,7 @@ if (memory) {
     launch,
     adapter,
     viewport: { width: 1280, height: 720, devicePixelRatio: dpr },
-    plan: { memory: true, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit },
+    plan: { memory: true, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit, pick },
     rows,
     warnings,
   };
@@ -321,6 +336,10 @@ if (memory) {
     process.exitCode = 1;
   }
   if (leftover.length > 0) console.error(`${leftover.length} rows left GPU bytes live after dispose`);
+  if (rows.some((row) => row.steps.pick !== undefined && row.steps.pick.pickErrors > 0)) {
+    console.error('a pick failed in the memory step');
+    process.exitCode = 1;
+  }
   process.exit();
 }
 
@@ -334,8 +353,8 @@ for (const size of sizes) {
           for (const moving of movingList) {
             runs.push(
               await page.evaluate(
-                ([n, w, f, z, e, m, h, p, s, v]) => window.profile(n, w, f, z, e, m, h, p, s, v),
-                [size, warmup, frames, zoom, style, nodeMode, hit, parts, motion, moving],
+                ([n, w, f, z, e, m, h, p, s, v, k]) => window.profile(n, w, f, z, e, m, h, p, s, v, k),
+                [size, warmup, frames, zoom, style, nodeMode, hit, parts, motion, moving, pick],
               ),
             );
           }
@@ -363,6 +382,15 @@ const rows = runs.map((run) => ({
     run.hit === null
       ? null
       : { indexMs: Math.round(run.hit.indexMs * 100) / 100, hits: run.hit.hits },
+  pick:
+    run.pick === null
+      ? null
+      : Object.fromEntries(
+          Object.entries(run.pick).map(([name, { started, onNode, framesToSettle, errors }]) => [
+            name,
+            { started, settled: framesToSettle.length, onNode, framesToSettle: summarise(framesToSettle), errors },
+          ]),
+        ),
   backend: run.backend,
   zoom: Math.round(run.zoom * 10_000) / 10_000,
   buildMs: Math.round(run.buildMs),
@@ -378,7 +406,7 @@ const report = {
   launch,
   adapter,
   viewport: { width: 1280, height: 720, devicePixelRatio: dpr },
-  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit, gpu, parts: partsList, motion: motions, moving: movingList },
+  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit, pick, gpu, parts: partsList, motion: motions, moving: movingList },
   tickMs,
   control,
   rows,
@@ -386,6 +414,10 @@ const report = {
 };
 console.log(JSON.stringify(report, null, 1));
 if (rows.some((row) => row.backend !== 'webgpu')) process.exitCode = 1;
+if (rows.some((row) => row.pick !== null && Object.values(row.pick).some((p) => p.errors.length > 0 || p.settled === 0))) {
+  console.error('a pick failed or none settled; see each row\'s pick');
+  process.exitCode = 1;
+}
 if (gpu) {
   const modes = rows.flatMap((row) => [row.still, row.animated]);
   if (modes.some((m) => m.gpu.frames === 0 || Object.keys(m.gpu.untimed).length > 0)) {

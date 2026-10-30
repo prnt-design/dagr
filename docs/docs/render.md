@@ -1008,8 +1008,10 @@ canvas.addEventListener('pointermove', (event) => {
 });
 ```
 
-Each pick is a readback, and what a pick costs and how often to issue one are
-not measured yet.
+Each pick is a readback. On one device (AMD RDNA 2, Chrome 156, WebGPU) a pick
+always in flight at ten thousand nodes cost 0.1 to 0.2 ms of CPU per pick and
+about 0.2 MB of GPU memory, so issue one when the pointer or the drawing moves
+rather than on every frame; see `bench/browser/README.md`.
 
 The distance fields and the shading node are internal for a reason worth naming:
 a TSL node is a three.js type, and no three.js type appears in this package's
@@ -2021,9 +2023,10 @@ The motion arithmetic, the three delta consumers and the loop are headless and
 complete, and `<DagrCanvas animate>` drives them from a graph a user is editing
 (M5.3a). What is still missing is the device work below.
 
-- The rest of GPU picking (M4.8b): a `DagrCanvas` hit provider over
-  `pickNode`, hover at ten thousand nodes, when the pass runs and what it
-  costs, and edges as hit targets. See [Picking](#picking).
+- The rest of GPU picking (M4.8b): edges as hit targets. Hover and clicks at
+  ten thousand nodes are checked, and the pass priced, on one device
+  (`bench/browser/gpu-hover.mjs`, `frame-profile.mjs --pick`). `DagrCanvas` picks through
+  `pickNode` only behind its opt-in `hitTesting="gpu"`. See [Picking](#picking).
 - Backend parity beyond the probe scene and the one machine M4.9b compared on:
   other GPUs, zooms, and edge ribbons.
 - Ten thousand nodes at sixty frames a second, measured rather than hoped for

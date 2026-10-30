@@ -103,6 +103,8 @@ import type { CameraFlight } from './camera-flight.js';
 import { DagrCanvasContext } from './canvas-context.js';
 import type { DagrCanvasApi, DagrCanvasHandle, FitOptions, FocusNodeOptions } from './canvas-context.js';
 import { createNodeHitIndex } from './node-hit.js';
+import { createPickedNodeHitProvider } from './picked-hit.js';
+import type { PickedNodeHitProvider } from './picked-hit.js';
 import { createTierFeed } from './tier-feed.js';
 import type { TierFeed } from './tier-feed.js';
 import type { NodeHitIndex } from './node-hit.js';
@@ -258,6 +260,21 @@ export interface DagrCanvasBaseProps {
 
   /** A click that landed on empty canvas. */
   readonly onBackgroundClick?: (() => void) | undefined;
+
+  /**
+   * How a mouse finds the node under it. Default `'cpu'`: an index of the node
+   * silhouettes, exact within a few CSS pixels. `'gpu'` asks
+   * `Renderer.pickNode` instead, through `createPickedNodeHitProvider`, so a
+   * hover or click is answered only once a pick has settled for that point and
+   * that drawing. A press on a point that was not hovered first, a release that
+   * moved, or a click while nodes glide is ignored, and hover holds its last
+   * answer until the pick at a resting pointer settles. Each draw asks the
+   * resting pointer again, so while the drawing or the camera moves under it
+   * picks run back to back, one at a time, until it rests. Touch and pen always
+   * use the CPU index, touch with its fingertip tolerance: a tap has no hover to
+   * pick from. Read at event time.
+   */
+  readonly hitTesting?: 'cpu' | 'gpu' | undefined;
 
   /**
    * How touch input drives the camera when `navigation` is on. Default
@@ -516,6 +533,8 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageRef = useRef<Stage | null>(null);
   const frameRef = useRef<number | null>(null);
+  /** Set by the hover effect while it is attached: asks a resting mouse's GPU pick again. */
+  const hoverAgainRef = useRef<(() => void) | null>(null);
   const viewportRef = useRef(false);
   const fittedRef = useRef(false);
   const [stage, setStage] = useState<Stage | null>(null);
@@ -663,6 +682,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       current.groups.sync();
       current.overlay.sync();
       restoreFocus();
+      hoverAgainRef.current?.();
     });
   }, [restoreFocus]);
 
@@ -758,6 +778,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     (motion: SceneMotion, dtSeconds: number): boolean => {
       const current = stageRef.current;
       if (current === null) return true;
+      let settled: boolean;
       try {
         const frame = motion.advance(dtSeconds);
         const drawn = dressNodes(frame.nodes, dressedNodesRef.current);
@@ -802,11 +823,14 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
             );
           }
         }
-        return frame.settled;
+        settled = frame.settled;
       } catch (cause: unknown) {
         setFailure(cause);
         return true;
       }
+      // Outside the try: a throwing hover handler is not an animation failure.
+      hoverAgainRef.current?.();
+      return settled;
     },
     [syncCameraLimits, shapeEdges, syncTiers, restoreFocus],
   );
@@ -922,6 +946,23 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     const zoom = stageRef.current?.renderer.camera.zoom ?? 1;
     return (pointerKindRef.current === 'touch' ? TOUCH_HIT_PIXELS : POINTER_HIT_PIXELS) / zoom;
   };
+  // One provider per renderer, so a rebuilt renderer never answers from a pick
+  // the lost one settled.
+  const picked = useMemo<PickedNodeHitProvider<readonly SceneNode[]> | null>(
+    () =>
+      stage === null
+        ? null
+        : createPickedNodeHitProvider({
+            pick: (css) => stage.renderer.pickNode(css),
+            onPicked: () => hoverAgainRef.current?.(),
+          }),
+    [stage],
+  );
+  const pickedRef = useRef(picked);
+  pickedRef.current = picked;
+  // Mouse only: a pen that does not report hover would tap points nothing picked.
+  const gpuHits = (): PickedNodeHitProvider<readonly SceneNode[]> | null =>
+    latest.current.hitTesting === 'gpu' && pointerKindRef.current === 'mouse' ? pickedRef.current : null;
 
   const wantsPointer =
     props.navigation === true ||
@@ -943,6 +984,8 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       return camera === undefined ? { x: 0, y: 0 } : camera.screenToWorld(css);
     },
     hitTarget: (query) => {
+      const gpu = gpuHits();
+      if (gpu !== null) return gpu.hitTarget(query);
       const { nodes, index } = hitIndex();
       const id = index.hit(query.world, toleranceWorld());
       return { target: id === null ? null : { kind: 'node', nodeId: id }, displayedRevision: nodes };
@@ -1071,18 +1114,49 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         if (target instanceof Element && target.isConnected) focusedNodeRef.current = null;
       });
     };
-    const move = (event: PointerEvent): void => {
-      pointerKindRef.current = event.pointerType || 'mouse';
-      if (latest.current.onNodeHover === undefined && latest.current.onNodeClick === undefined) return;
-      if (host.dataset.dagrDragging === 'true') return;
-      const css = canvasPoint(event, host.getBoundingClientRect());
-      const id = hitIndex(100).index.hit(camera.screenToWorld(css), toleranceWorld());
+    let resting: { x: number; y: number } | null = null;
+    const tracksHover = (): boolean => {
+      const { onNodeHover, onNodeClick, onBackgroundClick } = latest.current;
+      // A GPU press is answered only from a hover pick, so a click handler alone primes picks.
+      const primes = onBackgroundClick !== undefined && gpuHits() !== null;
+      return onNodeHover !== undefined || onNodeClick !== undefined || primes;
+    };
+    const hover = (css: { x: number; y: number }): void => {
+      if (!tracksHover()) return;
+      if (host.dataset.dagrDragging === 'true') {
+        resting = null;
+        return;
+      }
+      const { onNodeHover, onNodeClick } = latest.current;
+      const gpu = gpuHits();
+      const world = camera.screenToWorld(css);
+      let id: string | null;
+      if (gpu === null) {
+        resting = null;
+        id = hitIndex(100).index.hit(world, toleranceWorld());
+      } else {
+        resting = css;
+        const displayedRevision = drawnNodesRef.current;
+        const hit = gpu.hitTarget({ css, world, devicePixelRatio: window.devicePixelRatio, displayedRevision });
+        if (!Object.is(hit.displayedRevision, displayedRevision)) return;
+        id = hit.target?.nodeId ?? null;
+      }
       if (id === hovered) return;
       hovered = id;
-      host.style.cursor = id !== null && latest.current.onNodeClick !== undefined ? 'pointer' : '';
-      latest.current.onNodeHover?.(id);
+      host.style.cursor = id !== null && onNodeClick !== undefined ? 'pointer' : '';
+      onNodeHover?.(id);
+    };
+    const move = (event: PointerEvent): void => {
+      pointerKindRef.current = event.pointerType || 'mouse';
+      if (tracksHover()) hover(canvasPoint(event, host.getBoundingClientRect()));
+    };
+    // After every draw and every settled pick, since a zoom, a flight or a glide
+    // changes what is under a mouse that has not moved.
+    hoverAgainRef.current = () => {
+      if (resting !== null && gpuHits() !== null) hover(resting);
     };
     const leave = (): void => {
+      resting = null;
       if (hovered === null) return;
       hovered = null;
       host.style.cursor = '';
@@ -1119,6 +1193,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       touches.reset();
       host.removeEventListener('pointermove', move);
       host.removeEventListener('pointerleave', leave);
+      hoverAgainRef.current = null;
       host.style.cursor = '';
       cancelFlight();
       // The listeners are gone, so tell the caller the hover ended.
