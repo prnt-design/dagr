@@ -1,0 +1,244 @@
+{
+  "formatVersion": 0,
+  "repository": "prnt-design/dagr",
+  "date": "2026-10-29",
+  "previousDate": "2026-10-28",
+  "title": "Personal repository briefing: October 29",
+  "overview": {
+    "changed": "PR #172 adds allocation-site evidence. The GPU-hover entities retain their IDs and status.",
+    "blocked": "No confirmed blocker in the cited records. Performance outcome remains unknown.",
+    "attention": "Consider the proposed M4.10 profiling follow-up; no action has been taken by this report.",
+    "unknowns": [
+      "This is a representative subset, not an exhaustive daily generator output.",
+      "The next experiment and its measured outcome are unknown."
+    ]
+  },
+  "sources": [
+    {
+      "id": "pr181",
+      "label": "PR #181, merged October 28",
+      "url": "https://github.com/prnt-design/dagr/pull/181",
+      "asOf": "2026-10-28"
+    },
+    {
+      "id": "pr172",
+      "label": "PR #172, merged October 29",
+      "url": "https://github.com/prnt-design/dagr/pull/172",
+      "asOf": "2026-10-29"
+    },
+    {
+      "id": "roadmap",
+      "label": "Renderer roadmap at reviewed commit",
+      "url": "https://github.com/prnt-design/dagr/blob/f2f4fdb/ROADMAP.md",
+      "asOf": "2026-10-29"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "pr:181",
+      "entity": {
+        "kind": "pr",
+        "key": "181"
+      },
+      "label": "GPU hover in living-stage",
+      "summary": "PR #181 merged on October 28: living-stage lights the node under the mouse from GPU picks.",
+      "content": [
+        {
+          "kind": "paragraph",
+          "text": "PR #181 merged on October 28: living-stage lights the node under the mouse from GPU picks."
+        }
+      ],
+      "sourceIds": [
+        "pr181"
+      ],
+      "confidence": {
+        "level": "confirmed",
+        "reason": "Recorded in the linked merged PR."
+      },
+      "previousStatus": "unchanged",
+      "activity": "observed",
+      "state": "done",
+      "attention": {
+        "needed": false,
+        "reason": "No decision requested."
+      }
+    },
+    {
+      "id": "package:%40dagr%2Fliving-stage",
+      "entity": {
+        "kind": "package",
+        "key": "@dagr/living-stage"
+      },
+      "label": "Living-stage demo",
+      "summary": "The demo consumes GPU picks for hover.",
+      "content": [
+        {
+          "kind": "paragraph",
+          "text": "The demo consumes GPU picks for hover."
+        },
+        {
+          "kind": "link",
+          "label": "Merged implementation",
+          "sourceId": "pr181"
+        },
+        {
+          "kind": "node",
+          "label": "Implementation PR",
+          "nodeId": "pr:181"
+        }
+      ],
+      "sourceIds": [
+        "pr181"
+      ],
+      "confidence": {
+        "level": "confirmed",
+        "reason": "Recorded in the linked merged PR."
+      },
+      "previousStatus": "unchanged",
+      "activity": "observed",
+      "state": "done",
+      "attention": {
+        "needed": false,
+        "reason": "No decision requested."
+      }
+    },
+    {
+      "id": "pr:172",
+      "entity": {
+        "kind": "pr",
+        "key": "172"
+      },
+      "label": "Frame allocation evidence",
+      "summary": "PR #172 merged documentation assigning frame GC and attribute survivors to allocation sites.",
+      "content": [
+        {
+          "kind": "paragraph",
+          "text": "PR #172 merged documentation assigning frame GC and attribute survivors to allocation sites."
+        }
+      ],
+      "sourceIds": [
+        "pr172"
+      ],
+      "confidence": {
+        "level": "confirmed",
+        "reason": "Recorded in the linked merged PR."
+      },
+      "previousStatus": "new",
+      "activity": "observed",
+      "state": "done",
+      "attention": {
+        "needed": false,
+        "reason": "No decision requested."
+      }
+    },
+    {
+      "id": "milestone:M4.10",
+      "entity": {
+        "kind": "milestone",
+        "key": "M4.10"
+      },
+      "label": "Renderer profiling follow-up",
+      "summary": "Proposed follow-up: use the allocation evidence to choose the next renderer experiment.",
+      "content": [
+        {
+          "kind": "paragraph",
+          "text": "Proposed follow-up: use the allocation evidence to choose the next renderer experiment."
+        },
+        {
+          "kind": "list",
+          "items": [
+            "Unknown: whether a subsequent experiment improves frame time.",
+            "No measured performance improvement is claimed."
+          ]
+        },
+        {
+          "kind": "code",
+          "language": "text",
+          "text": "Proposed experiment only; no command has been executed."
+        }
+      ],
+      "sourceIds": [
+        "pr172",
+        "roadmap"
+      ],
+      "confidence": {
+        "level": "inferred",
+        "reason": "A suggested next step from the profiling evidence, not an action taken."
+      },
+      "previousStatus": "new",
+      "activity": "proposed",
+      "state": "open",
+      "attention": {
+        "needed": true,
+        "reason": "Maintainer may prioritize the next experiment. This fixture does not request publication."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "pr181-package",
+      "source": "pr:181",
+      "target": "package:%40dagr%2Fliving-stage",
+      "label": "updates"
+    },
+    {
+      "id": "pr172-milestone",
+      "source": "pr:172",
+      "target": "milestone:M4.10",
+      "label": "informs proposal"
+    }
+  ],
+  "views": [
+    {
+      "id": "daily",
+      "label": "Daily briefing",
+      "nodeIds": [
+        "pr:181",
+        "package:%40dagr%2Fliving-stage",
+        "pr:172",
+        "milestone:M4.10"
+      ],
+      "edgeIds": [
+        "pr181-package",
+        "pr172-milestone"
+      ]
+    },
+    {
+      "id": "attention",
+      "label": "Maintainer attention",
+      "nodeIds": [
+        "milestone:M4.10"
+      ],
+      "edgeIds": []
+    }
+  ],
+  "tour": [
+    {
+      "id": "changed",
+      "title": "What changed",
+      "text": "PR #172 adds allocation-site evidence. The GPU-hover entities retain their IDs and status.",
+      "viewId": "daily",
+      "nodeIds": [
+        "pr:172"
+      ]
+    },
+    {
+      "id": "blocked",
+      "title": "What is blocked or unknown",
+      "text": "No confirmed blocker in the cited records. Performance outcome remains unknown.",
+      "viewId": "daily",
+      "nodeIds": [
+        "milestone:M4.10"
+      ]
+    },
+    {
+      "id": "attention",
+      "title": "What needs attention",
+      "text": "Consider the proposed M4.10 profiling follow-up; no action has been taken by this report.",
+      "viewId": "attention",
+      "nodeIds": [
+        "milestone:M4.10"
+      ]
+    }
+  ]
+}
