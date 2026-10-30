@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add an edge kind, `{ kind: 'edge', edgeId }`, to `GraphHitTarget`, so a
+  hit provider can answer an edge (for example from `createEdgeHitIndex`) and
+  `useGraphInteraction` selects it like a node: press and release on the same
+  edge in one displayed revision. `sameGraphHitTarget` never equates an edge
+  with a node of the same id. The union is wider, so code that reads
+  `target.nodeId` without first checking `target.kind` no longer compiles;
+  narrow on `kind` as for a port. `DagrCanvas` does not report edge hits yet.
 - Add `createEdgeHitIndex`, which tests a point against drawn edge centrelines
   within a tolerance, nearest centreline first, for a host with its own
   surface. `DagrCanvas` does not report edge hits yet.

@@ -513,8 +513,8 @@ The provider is synchronous. Every query carries four pieces of evidence:
 
 Do not multiply `css` by DPR before `screenToWorld`. A provider reading a
 device-pixel target multiplies at that boundary. A provider returns a stable
-node identity (`nodeId`), port identity (`nodeId` plus `portId`), or `null`
-target and stamps every hit or miss with the displayed revision it queried.
+node identity (`nodeId`), port identity (`nodeId` plus `portId`), edge
+identity (`edgeId`, the `SceneEdge` id), or `null` target and stamps every hit or miss with the displayed revision it queried.
 Renderer slots, array positions, and pick colors are not stable identities.
 
 The stamp is load-bearing. The hook rejects a result whose stamp differs from
@@ -674,7 +674,10 @@ Where edges cross or fan into a node the nearer centreline wins, and an exact
 tie goes to the later edge. Nodes are drawn over edges, so ask the node index
 first and the edge index only on a node miss. Dashes are not gaps, and the
 index tests straight segments, which is what a `'polyline'` group (the one
-`DagrCanvas` declares) draws. `DagrCanvas` does not report edge hits yet.
+`DagrCanvas` declares) draws. A provider answers an edge as
+`{ kind: 'edge', edgeId }`, and the shared interaction selects it under the
+same press-and-release rule as a node. `DagrCanvas` does not report edge hits
+yet.
 
 **`hitTesting="gpu"`** answers mouse hover and clicks from the
 renderer's `pickNode` instead of the CPU index, through

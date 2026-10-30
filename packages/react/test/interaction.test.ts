@@ -1,5 +1,8 @@
+import type { SceneEdge } from '@prnt/dagr-render';
 import { describe, expect, it } from 'vitest';
 
+import { createEdgeHitIndex } from '../src/edge-hit.js';
+import type { EdgeHitIndex } from '../src/edge-hit.js';
 import {
   createGraphInteraction,
   sameGraphHitTarget,
@@ -59,6 +62,92 @@ describe('graph hit identity', () => {
         portId: 'event',
       }),
     ).toBe(false);
+  });
+
+  it('compares edges by edge id and never equates an edge with a node of the same id', () => {
+    expect(
+      sameGraphHitTarget({ kind: 'edge', edgeId: 'pay' }, { kind: 'edge', edgeId: 'pay' }),
+    ).toBe(true);
+    expect(
+      sameGraphHitTarget({ kind: 'edge', edgeId: 'pay' }, { kind: 'edge', edgeId: 'ship' }),
+    ).toBe(false);
+    expect(sameGraphHitTarget({ kind: 'edge', edgeId: 'checkout' }, checkout)).toBe(false);
+    expect(sameGraphHitTarget(checkout, { kind: 'edge', edgeId: 'checkout' })).toBe(false);
+  });
+});
+
+describe('graph pointer selection of edges', () => {
+  type Edges = readonly Pick<SceneEdge, 'id' | 'points'>[];
+  const pay: Edges = [{ id: 'pay', points: [{ x: 0, y: 0 }, { x: 100, y: 0 }] }];
+  const onEdge = (x: number): GraphPointer => ({
+    pointerId: 1,
+    button: 0,
+    isPrimary: true,
+    css: { x, y: 0 },
+    world: { x, y: 0 },
+    devicePixelRatio: 1,
+  });
+
+  function edgeMachine(selected: Array<GraphHitTarget | null>) {
+    const indexes = new Map<Edges, EdgeHitIndex>();
+    const hitTarget: GraphHitProvider<Edges> = (query) => {
+      let index = indexes.get(query.displayedRevision);
+      if (index === undefined) {
+        index = createEdgeHitIndex(query.displayedRevision);
+        indexes.set(query.displayedRevision, index);
+      }
+      const id = index.hit(query.world, 4);
+      return {
+        target: id === null ? null : { kind: 'edge', edgeId: id },
+        displayedRevision: query.displayedRevision,
+      };
+    };
+    return createGraphInteraction<Edges>({
+      hitTarget,
+      onSelectionChange: (target) => selected.push(target),
+      onPanBy: () => undefined,
+    });
+  }
+
+  it('selects the edge pressed and released on in one displayed revision', () => {
+    const selected: Array<GraphHitTarget | null> = [];
+    const machine = edgeMachine(selected);
+    machine.pointerDown(onEdge(40), pay);
+    machine.pointerUp(onEdge(42), pay);
+    expect(selected).toEqual([{ kind: 'edge', edgeId: 'pay' }]);
+  });
+
+  it('ignores a click across a reroute or a removal of the pressed edge', () => {
+    const selected: Array<GraphHitTarget | null> = [];
+    const machine = edgeMachine(selected);
+    const rerouted: Edges = [{ id: 'pay', points: [{ x: 0, y: 50 }, { x: 100, y: 50 }] }];
+    const removed: Edges = [];
+    machine.pointerDown(onEdge(40), pay);
+    machine.pointerUp(onEdge(40), rerouted);
+    machine.pointerDown(onEdge(40), pay);
+    machine.pointerUp(onEdge(40), removed);
+    expect(selected).toEqual([]);
+
+    machine.pointerDown(onEdge(40), removed);
+    machine.pointerUp(onEdge(40), removed);
+    expect(selected).toEqual([null]);
+  });
+
+  it('ignores an edge answered for a revision other than the one displayed', () => {
+    const selected: Array<GraphHitTarget | null> = [];
+    const stale: GraphHitProvider<Edges> = () => ({
+      target: { kind: 'edge', edgeId: 'pay' },
+      displayedRevision: pay,
+    });
+    const machine = createGraphInteraction<Edges>({
+      hitTarget: stale,
+      onSelectionChange: (target) => selected.push(target),
+      onPanBy: () => undefined,
+    });
+    const current: Edges = [...pay];
+    machine.pointerDown(onEdge(40), current);
+    machine.pointerUp(onEdge(40), current);
+    expect(selected).toEqual([]);
   });
 });
 
