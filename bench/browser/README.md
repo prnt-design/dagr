@@ -3144,9 +3144,10 @@ animation callback tick
 The velocity array follows the same path through `entry.velocities`. The
 second snapshot keeps the same entries map, with newly allocated targets.
 The full output includes the native animation callback and closure context
-edges before this abbreviated path. These snapshots examine the boundaries between callbacks, not temporary stack
-roots during an advance. Neither snapshot finds an older sampled
-point or array through the renderer, edge group, scene motion, or harness.
+edges before this abbreviated path. These snapshots examine the boundaries
+between callbacks, not temporary stack roots during an advance. Neither
+snapshot finds an older sampled point or array through the renderer, edge
+group, scene motion, or harness.
 The renderer's reuse record holds numeric coordinates, not these objects.
 
 The default run's one-shot weak observations, before either snapshot:
@@ -3204,5 +3205,6 @@ point objects would change the immutable frame contract, while changing V8
 flags is not a library fix. No implementation or paired frame-time result
 is claimed. The next useful experiment is allocation policy and GC timing
 at this site, with a verified collector control or allocation-space evidence,
-rather than another search for a renderer retaining chain. The results and
-complete paths, traces and snapshots are attached to the task and PR.
+rather than another search for a renderer retaining chain
+(`tsk_807e8c3ab020`). The complete paths, traces and snapshots are not
+committed; PR #186 lists where they were posted.
