@@ -26,7 +26,8 @@ const date: Check = (v, p, e) => {
 };
 const url: Check = (v, p, e) => {
   try {
-    const parsed = new URL(typeof v === 'string' ? v : '');
+    if (typeof v !== 'string' || !v.startsWith('https://') || /\s/.test(v)) throw new Error();
+    const parsed = new URL(v);
     if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new Error();
   } catch { fail(p, e, 'expected absolute HTTPS URL without credentials'); }
 };

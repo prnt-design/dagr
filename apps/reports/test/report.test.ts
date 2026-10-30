@@ -72,6 +72,8 @@ describe('report format v0', () => {
     ['/nodes/1/content', [{ kind: 'node', label: 'Missing', nodeId: 'pr:999' }]],
     ['/nodes/0/content', [{ kind: 'link', label: 'Uncited', sourceId: 'pr172' }]],
     ['/sources/0/asOf', '2026-10-30'],
+    ['/sources/0/url', 'https:example.com'],
+    ['/sources/0/url', 'https://user:secret@example.com'],
     ['/nodes/0/extra', true],
   ])('rejects invalid reference or field at %s', (path, value) => {
     expect(validateReport(patch(day1, { op: 'replace', path: path as string, value })).ok).toBe(false);
