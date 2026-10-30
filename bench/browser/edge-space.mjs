@@ -1,13 +1,14 @@
 /**
  * Which heap space edge motion's per-frame objects are allocated in, on the
- * real WebGPU frame profile. Needs V8's natives syntax in the renderer, so the
- * relay must be started with it:
+ * real WebGPU frame profile. Start the root HTTP server and build first. The
+ * renderer needs V8's natives syntax, so start the relay with it:
  * DAGR_JS_FLAGS='--allow-natives-syntax' node bench/browser/windows-chrome.mjs --headless
  * DAGR_CDP=http://127.0.0.1:9445 node bench/browser/edge-space.mjs /tmp/edge-space
- * Add `--no-allocation-site-pretenuring` to DAGR_JS_FLAGS for the control.
- * Every moving edge is checked as soon as its frame objects exist, before a
- * second scavenge could promote them, so an object in old space there was
- * allocated there. These runs are for allocation spaces, never frame times.
+ * Add `--no-allocation-site-pretenuring` to DAGR_JS_FLAGS for the control,
+ * whose report must count no pretenuring events. Each moving edge is checked
+ * once it is stepped, before a second scavenge could promote its new objects,
+ * so one in old space there was allocated there. These runs are for
+ * allocation spaces, never frame times.
  */
 import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -94,7 +95,11 @@ try {
   if (log.length === 0) throw new Error('No advances were checked');
   writeFileSync(out + '/space.json', JSON.stringify(log));
   writeFileSync(out + '/trace.json', JSON.stringify(events));
-  textlog({ backend: row.backend, springs: row.springs, zoom: row.zoom, advances: log.length, summary: summarise(log) });
+  const pretenuringEvents = events.filter((event) => /^V8\.GC(Pretenuring|EvaluateOldSpaceLocalPretenuring)/.test(event.name)).length;
+  textlog({
+    backend: row.backend, springs: row.springs, zoom: row.zoom, advances: log.length, pretenuringEvents,
+    summary: summarise(log),
+  });
 } finally {
   try {
     await page?.close();
