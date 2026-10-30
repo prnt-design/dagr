@@ -551,7 +551,8 @@ ticks. These are CPU query medians, not browser frame time or GPU evidence.
 The generic System Atlas uses this API with reverse draw-order rectangles. It
 is proof that a consumer can supply geometry; it is not an exact
 `DagrCanvas` adapter. `DagrCanvas` now supplies one, described in the next
-section. Port geometry is M6.3a. Edge hits are outside this slice.
+section. Port geometry is M6.3a. Edges are answered through the same
+contract (M4.8b), described below.
 
 ### GPU picks behind the same contract
 

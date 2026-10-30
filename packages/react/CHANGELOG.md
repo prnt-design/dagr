@@ -9,11 +9,13 @@
   with a node of the same id. The union is wider, so code that assumes a
   target is a node or a port no longer compiles: reading `nodeId` without
   checking `kind`, a two-way branch such as
-  `t.kind === 'node' ? t.nodeId : t.portId`, or an exhaustive `switch`. Check
-  for `'edge'` too. `DagrCanvas` does not report edge hits yet.
+  `t.kind === 'node' ? t.nodeId : t.portId`, or an exhaustive `switch` that
+  returns from every case or ends in a `never` check. A `switch` that does
+  neither still compiles and skips edges. Check for `'edge'` too.
+  `DagrCanvas` does not report edge hits yet.
 - Add `createEdgeHitIndex`, which tests a point against drawn edge centrelines
   within a tolerance, nearest centreline first, for a host with its own
-  surface. `DagrCanvas` does not report edge hits yet.
+  surface.
 - Add `hitTesting` to `DagrCanvas`. `'gpu'` answers mouse hover and clicks
   from `Renderer.pickNode` through `createPickedNodeHitProvider`, primed from
   hover; touch and pen keep the CPU index. The default stays `'cpu'`.
