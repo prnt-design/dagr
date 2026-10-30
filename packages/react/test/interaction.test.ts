@@ -133,6 +133,26 @@ describe('graph pointer selection of edges', () => {
     expect(selected).toEqual([null]);
   });
 
+  it('answers a rerouted edge on its new route and not its old one', () => {
+    const selected: Array<GraphHitTarget | null> = [];
+    const machine = edgeMachine(selected);
+    const rerouted: Edges = [{ id: 'pay', points: [{ x: 0, y: 50 }, { x: 100, y: 50 }] }];
+    machine.pointerDown(onEdge(40), rerouted);
+    machine.pointerUp(onEdge(40), rerouted);
+    const onNewRoute = { ...onEdge(40), world: { x: 40, y: 50 } };
+    machine.pointerDown(onNewRoute, rerouted);
+    machine.pointerUp(onNewRoute, rerouted);
+    expect(selected).toEqual([null, { kind: 'edge', edgeId: 'pay' }]);
+  });
+
+  it('ignores a press on the edge released off it', () => {
+    const selected: Array<GraphHitTarget | null> = [];
+    const machine = edgeMachine(selected);
+    machine.pointerDown(onEdge(40), pay);
+    machine.pointerUp({ ...onEdge(40), world: { x: 40, y: 30 } }, pay);
+    expect(selected).toEqual([]);
+  });
+
   it('ignores an edge answered for a revision other than the one displayed', () => {
     const selected: Array<GraphHitTarget | null> = [];
     const stale: GraphHitProvider<Edges> = () => ({

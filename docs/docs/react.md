@@ -514,7 +514,8 @@ The provider is synchronous. Every query carries four pieces of evidence:
 Do not multiply `css` by DPR before `screenToWorld`. A provider reading a
 device-pixel target multiplies at that boundary. A provider returns a stable
 node identity (`nodeId`), port identity (`nodeId` plus `portId`), edge
-identity (`edgeId`, the `SceneEdge` id), or `null` target and stamps every hit or miss with the displayed revision it queried.
+identity (`edgeId`, the `SceneEdge` id), or `null` target and stamps every
+hit or miss with the displayed revision it queried.
 Renderer slots, array positions, and pick colors are not stable identities.
 
 The stamp is load-bearing. The hook rejects a result whose stamp differs from
