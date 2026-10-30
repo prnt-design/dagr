@@ -101,8 +101,8 @@ PRs rather than treating every unchecked milestone as ready.
 | 1 | **WebGPU adapter in the loop** (stage 1, done 2026-10-17: Apple M4, Chrome 155, `renderer.backend` is `webgpu`; see `bench/browser/README.md`; since 2026-10-26 the frame profile also fails on a software fallback adapter, through which `renderer.backend` also reads `webgpu`, and which is the only adapter inside a WSL2 machine; also since 2026-10-26 that machine reaches its GPU through the Windows side's Chrome, `bench/browser/windows-chrome.mjs` and `DAGR_CDP`: AMD RDNA 2, Chrome 156, `renderer.backend` `webgpu`, not a fallback adapter) | Probe at execution time and record what `renderer.backend` reports, on which machine and browser, headed or headless, and with which flags. A WebGL2 fallback is never recorded as a WebGPU result. If no adapter comes up, record what was tried and make the next attempt reproducible. |
 | 2 | **M4.9b: backend parity** (stage 1, done 2026-10-17: byte-identical on the probe scene, Apple M4, Chrome 155; see the M4.9b entry; since 2026-10-26 the parity check also fails on a software fallback adapter, which it previously passed, and passes on a second GPU, AMD RDNA 2 in Chrome 156, where 4 edge-band pixels differ by 1) | The same TSL drawn through WebGPU and WebGL2 on one machine, compared by screenshot, with the tolerance derived from the antialiasing ramp. A committed parity check that both backends pass; the M4.9b entry decides whether it becomes a gate. |
 | 3 | **M4.10a: consumer performance profile** (stage 1, done 2026-10-19: frame-time distribution by size 2026-10-17, by edge style, rich-node tiers and node hit testing 2026-10-18, memory per pass 2026-10-19, on WebGPU: smooth edges re-tessellated every frame miss 60 Hz at 10,000 nodes, rich-node tiers and CPU node hits do not; the multisampled render targets are most of the GPU memory and moving edges reallocates the group every frame; see `bench/browser/README.md`) | Named backend, machine and graph sizes, rich-node tiers, edge styles, hit testing and animated updates. Frame-time distribution and memory per pass, published. Do not infer WebGPU performance from a WebGL fallback. |
-| 4 | **[M4.10: 10k nodes at 60fps, animating](#m410-current-outcome)** (stage 1, in progress) | Partial-motion success is measured; all-moving smooth rendering still misses ticks. Current renderer task: `tsk_88bfcb651a56`, retaining paths of edge-motion frame points, successor to [#172](https://github.com/prnt-design/dagr/pull/172) (`tsk_5ca35c49f0fc`). See the milestone summary for outcomes, limits and evidence. |
-| 5 | **M4.8b: GPU picking, then edge hits** (stage 2, in progress: the node pick pass 2026-10-28, `Renderer.pickNode` (`tsk_b6f2f936ae92`): one device pixel drawn into a one-pixel target and read back, ids checked against the stamp they were drawn at; `backend-probe.mjs --pick` on AMD RDNA 2, Chrome 156, not a fallback adapter, found no disagreement in 9,532 picks per run on WebGPU and WebGL2 at DPR 1 and 2, and a flipped-row control fails; the provider adapter over it 2026-10-28, `createPickedNodeHitProvider`: M5.2a's synchronous contract answered only from a pick settled for the same world point and displayed revision, stale otherwise, unit-tested without a device; `DagrCanvas` using it 2026-10-28, `hitTesting="gpu"`: mouse hover and clicks answered from settled picks primed by hover, touch and pen kept on the CPU index, one provider per renderer so a rebuild after a lost context answers from none of the lost one's picks, the default still `'cpu'`, unit-tested without a device; hover and click at 10,000 nodes on a hardware adapter 2026-10-28, `bench/browser/gpu-hover.mjs`: on AMD RDNA 2, Chrome 156, `webgpu`, not a fallback adapter, every one of 250 samples per run answered correctly at DPR 1 and 2, about 4 ms from pointer move to `onNodeHover` at rest, and a control that must fail does; the pass priced 2026-10-28, `frame-profile.mjs --pick`: on AMD RDNA 2, Chrome 156, `webgpu`, not a fallback adapter, one pick in flight on every frame at 10,000 nodes with springs in flight cost 0.1 to 0.2 ms of CPU per pick, missed ticks did not separate from runs without picks (smooth, every node moving: 4.0% to 5.3% against 2.7% to 5.0% at DPR 1), answers came 0 to 2 frames later as the frame got busier, and the pass holds about 0.2 MB of GPU buffers at 10,000 nodes with nothing kept per pick; the pass stays on pointer moves and the default stays `'cpu'` for the GPU path's ignored clicks during a glide, not its cost; the hover highlight in the demo 2026-10-28, `@dagr/living-stage`: the node under the mouse lightens, answered from GPU picks, checked on AMD RDNA 2, Chrome 156, `webgpu`, not a fallback adapter; next is edge hits) | Hover and selection at 10k nodes through the M5.2a provider contract; edges become hit targets. The pass runs on pointer moves (priced 2026-10-28). |
+| 4 | **[M4.10: 10k nodes at 60fps, animating](#m410-current-outcome)** (stage 1, in progress) | Partial-motion success is measured; all-moving smooth rendering still misses ticks. Current renderer task: `tsk_ad4b7ce0d93b`, completing the results matrix after its 10k WebGPU slice in [#191](https://github.com/prnt-design/dagr/pull/191). See the milestone summary for outcomes, limits and evidence. |
+| 5 | **M4.8b: GPU picking, then edge hits** (stage 2, in progress: the node pick pass 2026-10-28, `Renderer.pickNode` (`tsk_b6f2f936ae92`): one device pixel drawn into a one-pixel target and read back, ids checked against the stamp they were drawn at; `backend-probe.mjs --pick` on AMD RDNA 2, Chrome 156, not a fallback adapter, found no disagreement in 9,532 picks per run on WebGPU and WebGL2 at DPR 1 and 2, and a flipped-row control fails; the provider adapter over it 2026-10-28, `createPickedNodeHitProvider`: M5.2a's synchronous contract answered only from a pick settled for the same world point and displayed revision, stale otherwise, unit-tested without a device; `DagrCanvas` using it 2026-10-28, `hitTesting="gpu"`: mouse hover and clicks answered from settled picks primed by hover, touch and pen kept on the CPU index, one provider per renderer so a rebuild after a lost context answers from none of the lost one's picks, the default still `'cpu'`, unit-tested without a device; hover and click at 10,000 nodes on a hardware adapter 2026-10-28, `bench/browser/gpu-hover.mjs`: on AMD RDNA 2, Chrome 156, `webgpu`, not a fallback adapter, every one of 250 samples per run answered correctly at DPR 1 and 2, about 4 ms from pointer move to `onNodeHover` at rest, and a control that must fail does; the pass priced 2026-10-28, `frame-profile.mjs --pick`: on AMD RDNA 2, Chrome 156, `webgpu`, not a fallback adapter, one pick in flight on every frame at 10,000 nodes with springs in flight cost 0.1 to 0.2 ms of CPU per pick, missed ticks did not separate from runs without picks (smooth, every node moving: 4.0% to 5.3% against 2.7% to 5.0% at DPR 1), answers came 0 to 2 frames later as the frame got busier, and the pass holds about 0.2 MB of GPU buffers at 10,000 nodes with nothing kept per pick; the pass stays on pointer moves and the default stays `'cpu'` for the GPU path's ignored clicks during a glide, not its cost; the hover highlight in the demo 2026-10-28, `@dagr/living-stage`: the node under the mouse lightens, answered from GPU picks, checked on AMD RDNA 2, Chrome 156, `webgpu`, not a fallback adapter; edge hits started 2026-10-29 (`tsk_a633c7bf733d`): `createEdgeHitIndex` over drawn centrelines, nearest within a tolerance, nodes first, unit-tested; next is an edge target in the provider contract and on `DagrCanvas`) | Hover and selection at 10k nodes through the M5.2a provider contract; edges become hit targets. The pass runs on pointer moves (priced 2026-10-28). |
 | 6 | **M3.9b: fast paths** (stage 2) | Edits on a 10k graph relayout within the frame budget, judged against M3.10a's tables. |
 | 7 | **Cold-layout crossings parity with dagre** (stage 2) | Close the gap on the M2.9 corpus: 147 crossings between node centres against dagre's 109 with the default `grid-position`, 96 with `brandes-koepf-position` (docs/docs/layout.md). |
 | 8 | **Native explorer base on `DagrCanvas`** (stage 2) | The explorer renders through `DagrCanvas` behind its experimental base seam and keeps its search, drawer and keyboard access. |
@@ -303,7 +303,18 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   headless, with the canvas on `webgpu` and the adapter not a fallback, an
   uncommitted script moved Playwright's mouse onto a node and off it again
   five times over the built `apps/demo`, and the node's pixels turned to the
-  lighter fill and back every time, at DPR 1 and 2. Still open: edge hits.
+  lighter fill and back every time, at DPR 1 and 2. Edge hits started
+  2026-10-29 (`tsk_a633c7bf733d`) with the policy and a CPU backend:
+  `createEdgeHitIndex` tests the centrelines handed to `setEdges`, identified
+  by their `SceneEdge` id, within a caller's tolerance (half the drawn width
+  plus pointer slack, over the zoom), the nearer centreline winning and an
+  exact tie going to the later edge. Nodes take precedence because they are
+  drawn over edges, and the index answers for the routes it was built from, so
+  a host rebuilds it with each displayed revision. Unit tests only, including
+  agreement with a linear scan; the provider contract's `GraphHitTarget` has
+  no edge kind yet and `DagrCanvas` does not report edge hits. Still open: an
+  edge target in the provider contract and on `DagrCanvas` (node first, then
+  edge), its cost at 10,000 nodes, and a consumer demo.
 - [x] **M4.9a** Backend selection and reporting: a `backend` preference,
   `renderer.backend` reports what came up, the differences documented, a
   browser probe harness counting pixels.
@@ -350,7 +361,7 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
   time down by pass, including instance updates, draws and picking when enabled.
   **The all-moving 10k smooth-edge 60 Hz goal remains unmet.**
 
-  Current outcome (evidence through 2026-10-28):
+  Current outcome (evidence through 2026-10-30):
 
   - On Apple M4, Chrome 155 headed, WebGPU, DPR 1, `fit`, 10k smooth nodes
     with a tenth moving held the 16.7 ms tick in three paired runs on
@@ -372,9 +383,20 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
     [GC traffic](bench/browser/README.md#scavenges-mark-compacts-and-survivor-traffic-2026-10-27)
     and [site attribution](bench/browser/README.md#survivors-by-allocation-site-2026-10-28).
 
-  Active successor after [#172](https://github.com/prnt-design/dagr/pull/172):
-  Dispatch `tsk_88bfcb651a56`, find what retains edge-motion frame points and
-  velocities. This planning maintenance does not replace that renderer increment.
+  - The retaining-path and allocation-space investigations (#186 and #189)
+    found current-frame references and V8 pretenuring phases, without a bounded
+    byte-identical runtime remedy. Forced full-GC snapshots and instrumented
+    collector runs are diagnostic evidence, not ordinary frame performance.
+  - The 2026-10-30 results matrix (#191) measured 10k nodes on NVIDIA RTX 4090,
+    Chrome 156 headed, WebGPU, `fit`, DPR 1 and 2, three runs each. Every row
+    holds the 16.7 ms tick except smooth edges with every node moving, which
+    miss 3.9% to 5.1% of ticks at DPR 1 and 7.4% to 9.3% at DPR 2. GPU median
+    and p95 stay below 3 ms (maximum 5.7), with timestamps still rounded to
+    1,024 ns. These results do not establish the all-moving 60 Hz goal.
+
+  Active task: `tsk_ad4b7ce0d93b`, complete the matrix with smaller sizes,
+  another zoom, rich nodes, WebGL2, a second machine and unrounded GPU
+  timestamps. The 10k slice is merged; the whole matrix is not done.
   The [browser measurement record](bench/browser/README.md#springs-in-flight-on-webgpu-m410)
   preserves the optimization sequence, rejected experiments and reproduction
   details; [working notes](specs/roadmap-notes.md#m4-renderer-dagrrender)

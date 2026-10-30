@@ -91,8 +91,8 @@ handle their keyboard `click` (`event.detail === 0`) in your component. Set
 for drag presentation.
 
 The hook itself has no hit geometry: you supply the provider. `DagrCanvas`
-supplies exact node hits (M5.2b); port geometry and connection gestures are M6.3. Edges are not hit
-targets in this slice.
+supplies exact node hits (M5.2b); port geometry and connection gestures are M6.3. `DagrCanvas` does
+not hit edges yet; `createEdgeHitIndex` answers edge hits for a host with its own surface (M4.8b).
 
 ## Navigation, node events and level of detail
 
