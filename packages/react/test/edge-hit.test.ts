@@ -151,7 +151,7 @@ describe('createEdgeHitIndex', () => {
     }
   });
 
-  it('finds edges on a 10,000-node scene for a per-pointer-move query', () => {
+  it('finds edges on a 10,000-node scene', () => {
     const edges: Edge[] = [];
     for (let i = 0; i < 10_000; i++) {
       const x = (i % 100) * 120;

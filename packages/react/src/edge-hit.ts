@@ -26,9 +26,10 @@ import type { SceneEdge } from '@prnt/dagr-render';
  * Nodes are not consulted. A caller that tests both asks the node index first,
  * because nodes are drawn over edges and an edge ends under its nodes.
  *
- * **Cost.** A uniform grid of segments, built in O(segments log segments) with the cell set
- * to the median segment extent (and at least a sixteenth of the longest), and
- * queried over the cells the tolerance square touches.
+ * **Cost.** A uniform grid of segments, built in O(segments log segments)
+ * with the cell set to the median segment extent (and at least a sixteenth of
+ * the longest), and queried over the cells the tolerance square touches, or
+ * by a scan when that square covers more cells than there are segments.
  */
 export interface EdgeHitIndex {
   /**
@@ -68,7 +69,7 @@ function cellKey(i: number, j: number): number {
 
 /**
  * Builds a hit index over a group's edges. An edge with fewer than two points
- * is not a target, and a segment with a non-finite end is skipped.
+ * is not a target, and a segment with a non-finite end or span is skipped.
  */
 export function createEdgeHitIndex(
   edges: readonly Pick<SceneEdge, 'id' | 'points'>[],
