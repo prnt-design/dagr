@@ -171,6 +171,11 @@ default NAT networking cannot reach, so a Windows Node process dials into WSL
 the Windows side's Node instead fails, because it cannot follow pnpm's
 symlinks over `\\wsl.localhost`. `DAGR_WINDOWS_CHROME` and `DAGR_WINDOWS_NODE`
 override the two install paths, and `DAGR_CHROMIUM_ARGS` adds Chrome flags.
+`DAGR_JS_FLAGS` passes V8 flags as one `--js-flags` value, since
+`DAGR_CHROMIUM_ARGS` splits on spaces. A Chrome already running on the
+helper's profile takes the launch over and keeps its own flags; the helper
+checks only the mode, so close it first (`chrome://version` in the attached
+Chrome shows the command line it actually has).
 
 `DAGR_CDP` makes either script attach to that Chrome instead of launching one,
 and records `attached` and the user agent in place of the executable, mode and
@@ -193,7 +198,8 @@ probe does. A short frame profile (1,000 nodes, 120 frames) came up on
 `webgpu` on every row, with a steady headless tick of 17.6 ms, so the headless
 pacing that made the frame profile run headed on the Apple M4 did not show
 here; a profile meant for publication should still be compared with a headed
-run. The 2026-10-26 M4.10 profile at the end of this file was taken headed,
+run. The 2026-10-26 M4.10 profile, "All moving and a tenth moving on an AMD
+GPU" below, was taken headed,
 with a tick of 17.8 to 17.9 ms.
 
 ## Backend parity (M4.9b)
@@ -3077,3 +3083,374 @@ reclaimed there. Finding what retains them, the renderer, the bench harness
 or something else, needs their retaining paths from heap snapshots, not
 allocation stacks. That is the next change, `tsk_88bfcb651a56`. No reduction
 was tried here, and none is claimed.
+
+### Frame-point retainers (2026-10-29)
+
+`tsk_88bfcb651a56`, successor to #172, measurement only. The question above
+confuses two lifetimes: how long application references keep a point reachable,
+and how long V8 leaves its storage unreclaimed. A heap snapshot forces a full
+collection, so it can identify the first but cannot measure the second.
+
+`edge-lifetime.mjs` serves an instrumented copy of the built edge-motion module
+through Playwright routes, leaving the build and renderer source untouched.
+It weakly samples the points array, its first `{ x, y }`, and the velocity
+array of four moving edges (`e0-123`, `e0-124`, `e5000-5123`, `e9800-9923`).
+Each cohort is checked once, after 1, 2, 4, 8 or 16 advances, and its result
+is frozen before snapshotting. The runner then takes two snapshots with at
+least four animation callbacks between them, while the all-moving row keeps
+running. Labels belong to the WeakRefs, never to the targets. The snapshot
+reader follows strong edges from the root, excluding weak edges and DevTools
+shortcuts; its output includes object IDs and complete paths.
+
+Reproduce from the root after the server, Chrome relay and build described
+above are ready:
+
+```sh
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/edge-lifetime.mjs /tmp/edge-life
+node bench/browser/edge-lifetime-snapshot.mjs /tmp/edge-life/snapshot-1.heapsnapshot
+node bench/browser/edge-lifetime-snapshot.mjs /tmp/edge-life/snapshot-2.heapsnapshot
+```
+
+The runner refuses a 1-minute load of 1.5 or higher and a fallback adapter,
+and verifies `renderer.backend === 'webgpu'`. It records machine/adapter,
+pre-snapshot cohorts, a GC trace with advance-boundary marks, and snapshots
+in the output directory. These are diagnostic runs, never timing comparisons.
+WeakRef construction keeps each sampled target alive until that JavaScript
+job ends, and dereferencing does the same in the checking job. Checking once
+avoids repeatedly extending its lifetime, but the probe still changes GC
+behaviour. Interpret its survival counts as instrumented observations, not
+as the uninstrumented allocation site's survival percentage.
+
+AMD Ryzen 9 9900X, WSL2 driving Windows Google Chrome 156.0.8078.48,
+headless, NVIDIA RTX 4090 (`nvidia`, `lovelace`, not a fallback), WebGPU,
+1280 by 720, DPR 1, fit zoom 0.071464. Flags were the relay's standard
+background-throttling and sRGB switches plus `--headless=new`, with no extra
+V8 flags in the main run. 10,000 smooth nodes, all 13,169 edges moving,
+springs, 60 warmup plus 600 measured frames per row. Load was 1.35 at the
+start of the default-flag run (the initial exploratory run started at 1.44).
+This is the NVIDIA adapter, not the AMD adapter of older measurements.
+
+**The strong retainer is scene motion's current edge entry, for one frame.**
+In the default run's first snapshot, 1,764 labelled WeakRefs existed; exactly
+12 still had targets: three targets for each of the four sampled edges,
+all allocated by advance 326. The second snapshot, 21 advances later, had
+1,848 labelled WeakRefs and exactly 12 targets, all from advance 347. None
+of the first snapshot's targets remained. For `e0-123`, the first points
+array was object ID 294837, held by entry 294829 in map 1413483. Its path
+was:
+
+```text
+animation callback tick
+  -> work -> source.next -> motion
+  -> scene motion closure's edges
+  -> edge motion closure's entries (Map)
+  -> entry.points -> Array -> element 0 -> { x, y }
+```
+
+The velocity array follows the same path through `entry.velocities`. The
+second snapshot keeps the same entries map, with newly allocated targets.
+The full output includes the native animation callback and closure context
+edges before this abbreviated path. These snapshots examine the boundaries
+between callbacks, not temporary stack roots during an advance. Neither
+snapshot finds an older sampled point or array through the renderer, edge
+group, scene motion, or harness.
+The renderer's reuse record holds numeric coordinates, not these objects.
+
+The default run's one-shot weak observations, before either snapshot:
+
+| Age in advances | Points arrays present | First points present | Velocity arrays present |
+| --- | --- | --- | --- |
+| 1 | 112/112 | 112/112 | 112/112 |
+| 2 | 106/112 | 106/112 | 104/112 |
+| 4 | 102/108 | 102/108 | 101/108 |
+| 8 | 76/104 | 76/104 | 75/104 |
+| 16 | 28/96 | 28/96 | 28/96 |
+
+The age-16 targets still present had passed 8 to 10 completed scavenges
+since the end of the advance that replaced them, counted from the trace's
+advance marks and the observations' timestamps. This is storage still
+present, not proof of an application retaining path. The snapshots' full
+collections remove every older sampled cohort. The initial exploratory run
+also removed all older cohorts at its snapshot, but its weak survival counts
+were different (38/96 points arrays and 10/96 velocity arrays present at age
+16), another reason not to turn these probes into a site-wide percentage.
+
+**The long tail belongs to V8's allocation/collection behaviour, not a found
+multi-frame application reference.** The default trace contains 386
+`MinorGC` and 59 `MajorGC` events over both rows and the snapshot interval,
+and 259 `V8.GCPretenuringFeedback` events. These include transitions to
+`tenure`, so the previous section's assumption that every object must first
+survive two scavenges before reaching old space is insufficient. Pretenuring
+can allocate directly into old space; see V8's
+[pretenuring implementation](https://chromium.googlesource.com/v8/v8/+/refs/heads/13.3.250/src/heap/pretenuring-handler.cc).
+The trace does not identify the edge allocation site in those feedback
+events. It therefore does not prove which edge objects are pretenured,
+promoted, or left for a later major collection, nor does a weak probe prove
+the uninstrumented objects' ages.
+
+A diagnostic launch requested
+`--js-flags=--no-allocation-site-pretenuring`, at load 1.48. Its trace still
+contained 312 pretenuring feedback events, so this did not establish a
+pretenuring-disabled control and is not used as a causal comparison. Its
+two snapshots likewise retained only their current sampled cohorts, advances
+327 and 348. No performance result is inferred from that launch. Why the flag
+did not apply is in "Where the frame points are allocated".
+
+To check the snapshot result without WeakRef handling, repeat the runner with
+`--tags`. It puts a string `__dagrLifetime` label directly on the sampled
+targets and creates no WeakRefs. A string on a target does not root that
+target. This run started at load 1.45 on the same default-flag adapter and
+plan. Its snapshots contained exactly 12 labels each, all from advances 323
+and 350 respectively, with the same entries-map paths and no older tagged
+targets. Tagging changes the sampled objects' shapes, so this remains a
+small diagnostic sample, not an uninstrumented performance measurement.
+
+No bounded byte-identical renderer change follows: the live points are the
+next spring step's input, the current velocity arrays never leave edge
+motion, and there is no older application reference here to clear. Reusing
+point objects would change the immutable frame contract, while changing V8
+flags is not a library fix. No implementation or paired frame-time result
+is claimed. The next useful experiment is allocation policy and GC timing
+at this site, with a verified collector control or allocation-space evidence,
+rather than another search for a renderer retaining chain
+(`tsk_807e8c3ab020`). The complete paths, traces and snapshots are not
+committed; PR #186 lists where they were posted.
+
+### Where the frame points are allocated (2026-10-30)
+
+`tsk_807e8c3ab020`, main `8f7334e`, measurement only. The section above left
+open whether edge motion's per-frame objects reach old space by pretenuring or
+by promotion. V8 answers that directly: `%InYoungGeneration` under
+`--allow-natives-syntax` says which generation an object is in.
+`edge-space.mjs` serves an instrumented copy of the built edge-motion module,
+as `edge-lifetime.mjs` does. Once each moving edge is stepped, it asks that of
+the edge's new points array, first `{ x, y }` and velocity array, and of the
+ones they replace (the previous advance's, or a retarget's). At the end of the
+advance it asks it of the frame's edge list and first edge record. V8 promotes
+an object the second time a scavenge finds it alive, and no advance in these
+runs had two scavenges, so a new object found in old space was allocated
+there. The one exception is a mark-compact during the advance, which promotes
+every live young object: every advance with an old edge list had one, and it
+shows as the edge list and one edge's objects old together, 0 to 2 times per
+100 advances in every run.
+
+Reproduce from the root after the server and build described above are ready,
+closing the relay between the two launches:
+
+```sh
+DAGR_JS_FLAGS='--allow-natives-syntax' node bench/browser/windows-chrome.mjs --headless
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/edge-space.mjs /tmp/edge-space
+# the control
+DAGR_JS_FLAGS='--allow-natives-syntax --no-allocation-site-pretenuring' node bench/browser/windows-chrome.mjs --headless
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/edge-space.mjs /tmp/edge-space-control
+```
+
+The runner refuses a 1-minute load of 1.5 or higher, a renderer without
+natives syntax, and a fallback adapter, and verifies `renderer.backend ===
+'webgpu'`. It writes the per-advance counts, a GC trace with advance marks,
+the adapter and the trace's count of pretenuring events to the output
+directory; a control must count none. The check is a runtime call per object,
+about 79,000 an advance, so these runs price GC work, not frame times.
+
+**Why the earlier control failed.** A headless Chrome started on 2026-10-29 at
+17:58 was still running on the relay's profile, so every later launch was
+handed to it and its flags were dropped; its `chrome://version` command line
+had no `--js-flags`. The relay checks only the mode. Once it was closed, the
+flags reached the renderer. The relay also splits `DAGR_CHROMIUM_ARGS` on
+spaces, so it now takes `DAGR_JS_FLAGS` as one value.
+
+AMD Ryzen 9 9900X, WSL2 driving Windows Google Chrome 156.0.8078.48 (V8
+15.6.75.19), headless, NVIDIA RTX 4090 (`nvidia`, `lovelace`, not a fallback),
+`renderer.backend` `webgpu`, 1280 by 720, DPR 1, fit zoom 0.071464. Flags were
+the relay's standard switches, `--headless=new` and
+`--js-flags=--allow-natives-syntax`, plus `--no-allocation-site-pretenuring`
+in the control. `--motion=springs --sizes=10000 --edges=smooth --moving=1`, 60
+warmup and 1,200 measured frames, 13,169 moving edges, 44 retargets. Four
+default runs (the first an exploratory one without the previous-advance
+counts), then three controls, serially, each starting at a 1-minute load of
+0.06 to 0.65.
+
+**The sites are pretenured for a phase of variable length, then not.** In
+every default run, from advance 5, each advance's points arrays, first points
+and velocity arrays (13,168 or 13,169 of 13,169) and its first edge record
+were allocated in old space, apart from single advances in default 3 (55, with
+2 old and no reset event, and the one after the reset below). That phase ended
+at advance 63, 277, 637 and 1,068 in the four runs. Each end is a mark-compact
+after which V8's `V8.GCEvaluateOldSpaceLocalPretenuring` reports an
+old-generation survival rate of 9.4% to 9.95%, under its 10% threshold, and
+`reset_allocation_sites: true`: the old generation had filled with dead
+pretenured frame objects (about 250 MB before the collection, 25 MB after). In
+the 1,068 run an earlier reset at advance 915 did not hold: the sites tenured
+again within two advances. After the last reset, no run allocated an edge
+frame object in old space outside the mark-compact cases above, over 192 to
+1,197 advances.
+
+| Run | Pretenured until advance | Replaced objects old when stepped, after the reset: points arrays, first points, velocity arrays |
+| --- | --- | --- |
+| default 1 (exploratory) | 63 | not counted |
+| default 2 | 277 | 1.7%, 4.9%, 1.7% |
+| default 3 | 1,068 | 2.2%, 5.2%, 4.2% |
+| default 4 | 637 | 1.9%, 5.1%, 1.9% |
+| control 1 to 3 | never | 1.8% to 2.0%, 5.3% to 5.4%, 1.8% to 2.0% |
+
+**The control is verified, not assumed.** All three control traces contain no
+`V8.GCPretenuringFeedback`, `V8.GCPretenuringSummary` or
+`V8.GCEvaluateOldSpaceLocalPretenuring` event at all (the default traces have
+335 to 583), and no control advance allocated an edge frame object in old
+space outside the mark-compact cases.
+
+Outside pretenuring, then, edge motion's frame objects die young: 98% of a
+frame's points arrays are still young when the next advance replaces them, in
+default runs after the reset and in the controls alike. The 52% to 80% of the
+site that "Survivors by allocation site" found not reclaimed by a scavenge is
+consistent with a pretenured phase, since an object allocated in old space is
+never reclaimed by one; that run did not record its phase, and one spanning
+both would give a range too. The 2026-10-27 trace (AMD adapter,
+uninstrumented), at 0.55 scavenges per frame and 6.5 mark-compacts per 100
+frames, is closer to this section's pretenured phase than to its later one.
+
+GC work per advance by phase, from the `MinorGC` and `MajorGC` trace events
+(the collectors' outer scopes, slightly longer than their NVP pauses), over
+measured advances only, for defaults 2 to 4. Default 1's pretenured phase had
+only three measured advances; after its reset it ran 0.77 scavenges (1.24 ms)
+and 2.0 mark-compacts per 100 (0.17 ms) per advance.
+
+| Phase | Scavenges per advance | Scavenge ms per advance | Mark-compacts per 100 advances | Mark-compact ms per advance |
+| --- | --- | --- | --- | --- |
+| default, pretenured | 0.52 to 0.53 | 0.99 to 1.01 | 8.2 to 8.9 | 0.45 to 0.50 |
+| default, after the reset | 0.81 to 0.83 | 1.28 to 1.33 | 1.6 to 1.8 | 0.14 to 0.15 |
+| control | 0.92 to 0.93 | 1.59 to 1.61 | 1.8 to 2.0 | 0.15 to 0.17 |
+
+Pretenuring trades scavenges for mark-compacts at about the same pause per
+advance (1.44 to 1.50 ms against 1.43 to 1.47), and turning it off costs more
+(1.75 to 1.78), consistent with the flag also stopping other sites being
+pretenured (the default traces' last summaries keep three or four tenured
+sites after the reset). These are instrumented runs, and wall time per advance
+sat at the 16.7 ms tick, 16.8 to 17.4 ms, in every phase.
+
+No bounded byte-identical renderer change follows. When the sites are
+pretenured is V8's policy, decided by run-to-run collection timing, and
+neither phase is cheaper to collect. Fewer collections need fewer frame
+objects, which is the immutable frame contract's question, not a lifetime fix.
+For measurement, a frame profile's all-moving row can sit in either phase, or
+cross between them, by chance; the M4.10 results matrix across edge styles,
+motion and DPR (`tsk_ad4b7ce0d93b`) should account for that. The traces,
+counts and adapter records are not committed; this run's PR lists where they
+were posted.
+
+## Results matrix at 10,000 nodes (M4.10, 2026-10-30)
+
+`tsk_ad4b7ce0d93b`. The M4.10 sections above each changed one thing and
+measured the rows it touched. This section measures every 10,000-node row
+the M4.10 claim covers in one place, on one build and one GPU, so one table
+says which rows hold the tick. Main `0796238`, nothing changed.
+
+```
+node bench/browser/windows-chrome.mjs              # headed, left running
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs \
+  --motion=springs --sizes=10000 --edges=straight,smooth --moving=1,0.1 --frames=1200 --dpr=1   # then --dpr=2
+```
+
+The WSL2 machine [above](#from-wsl2-through-the-windows-sides-chrome) (AMD
+Ryzen 9 9900X), driving Google Chrome 156.0.8078.48 on the Windows side,
+headed, no flags beyond the helper's. Since 2026-10-28 Chrome there picks the
+machine's discrete GPU rather than the integrated Radeon that section
+describes. The adapter, probed at run time, was `nvidia` `lovelace`, not a
+fallback (the `--gpu` runs below, with developer features on, also report
+`NVIDIA GeForce RTX 4090`, device `0x2684`), and `renderer.backend` was
+`webgpu` on every row of every run.
+Viewport 1280 by 720 at DPR 1 and 2, `fit` (zoom 0.0715), 13,169 edges, 60
+warm-up and 1,200 measured frames per mode. The control's tick was 16.7 ms
+in every run, a 60 Hz frame. Three runs at each DPR, DPR 1 and 2 alternating,
+one at a time, load average 0.0 to 1.2 at the start of each (read with
+`uptime`).
+
+Each row's `still` mode draws the same scene without motion, and each run
+measured it twice (before the all-moving and the tenth-moving modes); both
+are folded into the still rows. Times are animated-mode medians in
+milliseconds, a range over the three runs; `apply` is the median over
+retarget frames, every 500 ms.
+
+| DPR | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Holds the tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | straight | still | 16.9 to 18.1 | 0% to 0.1% | | | | | 0.2 | yes |
+| 1 | straight | all moving | 16.9 to 18.1 | 0%, 0.2%, 0% | 12.8 to 13.3 | 2.2 to 2.4 | 1.1 | 1.2 to 1.3 | 0.4 | yes |
+| 1 | straight | a tenth | 16.9 to 18.1 | 0%, 0%, 0% | 1.2 to 1.3 | 0.5 | 1.0 to 1.1 | 0.8 to 0.9 | 0.4 | yes |
+| 1 | smooth | still | 16.9 to 18.1 | 0% | | | | | 0.2 | yes |
+| 1 | smooth | all moving | 17.0 to 33.2 | 4.3%, 5.1%, 3.9% | 17.6 to 18.6 | 3.8 to 4.2 | 1.3 | 7.5 to 9.0 | 1.0 | **no** |
+| 1 | smooth | a tenth | 16.9 to 18.1 | 0.1%, 0%, 0% | 1.7 to 2.0 | 0.5 to 0.7 | 1.2 | 2.8 to 3.0 | 1.0 to 1.1 | yes |
+| 2 | straight | still | 16.9 | 0% to 0.2% | | | | | 0.2 | yes |
+| 2 | straight | all moving | 16.9 | 0%, 0%, 0% | 12.5 to 13.1 | 2.4 to 2.6 | 1.1 to 1.2 | 1.2 to 1.3 | 0.4 to 0.5 | yes |
+| 2 | straight | a tenth | 16.9 | 0%, 0%, 0% | 1.1 to 1.3 | 0.5 | 1.0 to 1.1 | 0.8 to 0.9 | 0.4 | yes |
+| 2 | smooth | still | 16.9 | 0% to 0.2% | | | | | 0.2 | yes |
+| 2 | smooth | all moving | 33.4 to 33.5 | 9.3%, 7.4%, 7.8% | 18.7 to 22.5 | 4.1 to 4.8 | 1.3 | 8.6 to 8.8 | 1.0 | **no** |
+| 2 | smooth | a tenth | 16.9 | 0%, 0%, 0% | 1.8 to 1.9 | 0.5 to 0.6 | 1.1 to 1.2 | 2.9 to 3.0 | 1.0 | yes |
+
+`input` was 0.4 to 0.6 ms on every animated row. The interval median was
+16.7 ms on every row of runs 2 and 3. Run 1 at DPR 1, the first after Chrome
+started, paced every row, still ones included, at a median of 17.7 to 18.0
+ms against its own 16.7 ms control; no later run did, and the cause was not
+traced. The still and calm rows' occasional 0.1% to 0.2% is one or two
+intervals in 1,200, the longest 67 to 283 ms, at least as often in still
+modes as in moving ones.
+
+**GPU time per frame**, from `--gpu` with the relay started with
+`DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features`, one run at each DPR
+straight after the three above. The runner exits non-zero on these runs,
+because the raw timestamps were still rounded to 1,024 ns, and adding
+`--disable-dawn-features=timestamp_quantization` did not change that (a
+1,000-node check, same result). Each relaunch followed a check that no
+Chrome was left on the relay's profile, and the first flag was read back from
+the running browser's command line, so neither was the stale-profile failure
+described above. A microsecond grain is far below the readings here, so they
+are published with that caveat; the next attempt to clear it should start
+from those two flag sets on this adapter. Medians /
+95th percentiles of the frame's passes summed, in milliseconds:
+
+| DPR | Edges | Still | All moving | A tenth moving |
+| --- | --- | --- | --- | --- |
+| 1 | straight | 0.18 to 0.19 / 0.21 to 0.99 | 0.16 / 0.18 | 0.15 / 0.16 |
+| 1 | smooth | 0.58 to 1.35 / 1.42 to 1.46 | 0.53 / 0.59 | 0.60 / 0.64 |
+| 2 | straight | 1.36 to 2.42 / 2.21 to 2.46 | 1.45 / 1.48 | 1.42 / 1.44 |
+| 2 | smooth | 1.65 to 2.79 / 2.82 to 2.84 | 0.51 / 1.52 | 0.54 / 1.53 |
+
+Still modes read higher than moving ones on the same scene, and in the moving
+modes smooth reads lower than straight at DPR 2, which fits the GPU clocking
+down when the frame leaves it idle rather than the work changing; not traced.
+Either way the GPU frame is under 3 ms of the 16.7 ms tick at the median and
+95th percentile on every row, and at most 5.7 ms. With timestamp queries on, the
+smooth all-moving rows missed 12% (DPR 1) and 9% (DPR 2) of ticks.
+
+- **Every row holds the tick but one: smooth edges with every node moving.**
+  It misses 3.9% to 5.1% of ticks at DPR 1 and 7.4% to 9.3% at DPR 2, with
+  an interval p95 of two ticks at DPR 2. The frame between retargets spends
+  14.5 to 16.5 ms of medians on the CPU, summed per run (`setEdges` 7.5 to
+  9.0, `advance` 3.8 to 4.8, the rest about 3), inside the tick at the median and past it in
+  the tail, and a retarget frame adds 17.6 to 22.5 ms of `apply`. So the
+  M4.10 goal is not met for smooth edges, all moving, and stays as stated.
+- **Where ticks are missed, the frame is CPU-bound.** DPR 2 quadruples the
+  pixels and adds about 1.3 ms of GPU time with straight edges, and the
+  smooth all-moving row misses about twice as many ticks at DPR 2, where its
+  CPU steps between retargets sum to 15.7 to 16.5 ms against 14.5 to 15.8 at
+  DPR 1, mostly `advance` and `setEdges`; `apply` rose too. The other rows
+  hold the tick at both ratios.
+- **Straight edges with every node moving hold the tick**, though a retarget
+  frame's CPU work, 12.5 to 13.3 ms of `apply` plus 5.3 to 6.1 for the rest
+  of the frame, exceeds one 16.7 ms tick. Intervals past one tick stayed at
+  the still rows' rate (0.2% at most), so retarget frames did not show as
+  missed ticks; how the late frame is absorbed was not traced.
+- **The moving rows can sit in either of V8's phases** for edge motion's
+  allocation sites (see ["Where the frame points are
+  allocated"](#where-the-frame-points-are-allocated-2026-10-30) above). A
+  frame profile cannot tell which, so the ranges above are three runs'
+  spread with the phase unknown, not a measurement of either phase.
+
+**Hit testing is not in these rows.** The node GPU pick was priced in
+`2983c87` (#179) on the AMD RDNA 2 adapter this machine used then: 0.1 to
+0.2 ms of CPU per pick, with ticks missed not separated from runs without
+picks (see ["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b));
+it was not re-measured on this adapter. Rebuilding the CPU node index every
+animated frame cost 1.5 to 1.6 ms there. Edge hit testing has no measured
+cost yet (M4.8b). Not covered by this matrix: sizes below 10,000, a zoom
+other than `fit`, rich nodes, the WebGL2 fallback, a second machine, and
+unrounded GPU timestamps on this adapter.
