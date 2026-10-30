@@ -3077,3 +3077,134 @@ reclaimed there. Finding what retains them, the renderer, the bench harness
 or something else, needs their retaining paths from heap snapshots, not
 allocation stacks. That is the next change, `tsk_88bfcb651a56`. No reduction
 was tried here, and none is claimed.
+
+### Frame-point retainers (2026-10-29)
+
+`tsk_88bfcb651a56`, successor to #172, measurement only. The question above
+confuses two lifetimes: how long application references keep a point reachable,
+and how long V8 leaves its storage unreclaimed. A heap snapshot forces a full
+collection, so it can identify the first but cannot measure the second.
+
+`edge-lifetime.mjs` serves an instrumented copy of the built edge-motion module
+through Playwright routes, leaving the build and renderer source untouched.
+It weakly samples the points array, its first `{ x, y }`, and the velocity
+array of four moving edges (`e0-123`, `e0-124`, `e5000-5123`, `e9800-9923`).
+Each cohort is checked once, after 1, 2, 4, 8 or 16 advances, and its result
+is frozen before snapshotting. The runner then takes two snapshots with at
+least four animation callbacks between them, while the all-moving row keeps
+running. Labels belong to the WeakRefs, never to the targets. The snapshot
+reader follows strong edges from the root, excluding weak edges and DevTools
+shortcuts; its output includes object IDs and complete paths.
+
+Reproduce from the root after the server, Chrome relay and build described
+above are ready:
+
+```sh
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/edge-lifetime.mjs /tmp/edge-life
+node bench/browser/edge-lifetime-snapshot.mjs /tmp/edge-life/snapshot-1.heapsnapshot
+node bench/browser/edge-lifetime-snapshot.mjs /tmp/edge-life/snapshot-2.heapsnapshot
+```
+
+The runner refuses a 1-minute load of 1.5 or higher and a fallback adapter,
+and verifies `renderer.backend === 'webgpu'`. It records machine/adapter,
+pre-snapshot cohorts, a GC trace with advance-boundary marks, and snapshots
+in the output directory. These are diagnostic runs, never timing comparisons.
+WeakRef construction keeps each sampled target alive until that JavaScript
+job ends, and dereferencing does the same in the checking job. Checking once
+avoids repeatedly extending its lifetime, but the probe still changes GC
+behaviour. Interpret its survival counts as instrumented observations, not
+as the uninstrumented allocation site's survival percentage.
+
+AMD Ryzen 9 9900X, WSL2 driving Windows Google Chrome 156.0.8078.48,
+headless, NVIDIA RTX 4090 (`nvidia`, `lovelace`, not a fallback), WebGPU,
+1280 by 720, DPR 1, fit zoom 0.071464. Flags were the relay's standard
+background-throttling and sRGB switches plus `--headless=new`, with no extra
+V8 flags in the main run. 10,000 smooth nodes, all 13,169 edges moving,
+springs, 60 warmup plus 600 measured frames per row. Load was 1.35 at the
+start of the default-flag run (the initial exploratory run started at 1.44).
+This is the NVIDIA adapter, not the AMD adapter of older measurements.
+
+**The strong retainer is scene motion's current edge entry, for one frame.**
+In the default run's first snapshot, 1,764 labelled WeakRefs existed; exactly
+12 still had targets: three targets for each of the four sampled edges,
+all allocated by advance 326. The second snapshot, 21 advances later, had
+1,848 labelled WeakRefs and exactly 12 targets, all from advance 347. None
+of the first snapshot's targets remained. For `e0-123`, the first points
+array was object ID 294837, held by entry 294829 in map 1413483. Its path
+was:
+
+```text
+animation callback tick
+  -> work -> source.next -> motion
+  -> scene motion closure's edges
+  -> edge motion closure's entries (Map)
+  -> entry.points -> Array -> element 0 -> { x, y }
+```
+
+The velocity array follows the same path through `entry.velocities`. The
+second snapshot keeps the same entries map, with newly allocated targets.
+The full output includes the native animation callback and closure context
+edges before this abbreviated path. These snapshots examine the boundaries
+between callbacks, not temporary stack roots during an advance. Neither
+snapshot finds an older sampled point or array through the renderer, edge
+group, scene motion, or harness.
+The renderer's reuse record holds numeric coordinates, not these objects.
+
+The default run's one-shot weak observations, before either snapshot:
+
+| Age in advances | Points arrays present | First points present | Velocity arrays present |
+| --- | --- | --- | --- |
+| 1 | 112/112 | 112/112 | 112/112 |
+| 2 | 106/112 | 106/112 | 104/112 |
+| 4 | 102/108 | 102/108 | 101/108 |
+| 8 | 76/104 | 76/104 | 75/104 |
+| 16 | 28/96 | 28/96 | 28/96 |
+
+The age-16 targets still present had passed 8 to 10 completed scavenges
+since the end of the advance that replaced them, counted from the trace's
+advance marks and the observations' timestamps. This is storage still
+present, not proof of an application retaining path. The snapshots' full
+collections remove every older sampled cohort. The initial exploratory run
+also removed all older cohorts at its snapshot, but its weak survival counts
+were different (38/96 points arrays and 10/96 velocity arrays present at age
+16), another reason not to turn these probes into a site-wide percentage.
+
+**The long tail belongs to V8's allocation/collection behaviour, not a found
+multi-frame application reference.** The default trace contains 386
+`MinorGC` and 59 `MajorGC` events over both rows and the snapshot interval,
+and 259 `V8.GCPretenuringFeedback` events. These include transitions to
+`tenure`, so the previous section's assumption that every object must first
+survive two scavenges before reaching old space is insufficient. Pretenuring
+can allocate directly into old space; see V8's
+[pretenuring implementation](https://chromium.googlesource.com/v8/v8/+/refs/heads/13.3.250/src/heap/pretenuring-handler.cc).
+The trace does not identify the edge allocation site in those feedback
+events. It therefore does not prove which edge objects are pretenured,
+promoted, or left for a later major collection, nor does a weak probe prove
+the uninstrumented objects' ages.
+
+A diagnostic launch requested
+`--js-flags=--no-allocation-site-pretenuring`, at load 1.48. Its trace still
+contained 312 pretenuring feedback events, so this did not establish a
+pretenuring-disabled control and is not used as a causal comparison. Its
+two snapshots likewise retained only their current sampled cohorts, advances
+327 and 348. No performance result is inferred from that launch.
+
+To check the snapshot result without WeakRef handling, repeat the runner with
+`--tags`. It puts a string `__dagrLifetime` label directly on the sampled
+targets and creates no WeakRefs. A string on a target does not root that
+target. This run started at load 1.45 on the same default-flag adapter and
+plan. Its snapshots contained exactly 12 labels each, all from advances 323
+and 350 respectively, with the same entries-map paths and no older tagged
+targets. Tagging changes the sampled objects' shapes, so this remains a
+small diagnostic sample, not an uninstrumented performance measurement.
+
+No bounded byte-identical renderer change follows: the live points are the
+next spring step's input, the current velocity arrays never leave edge
+motion, and there is no older application reference here to clear. Reusing
+point objects would change the immutable frame contract, while changing V8
+flags is not a library fix. No implementation or paired frame-time result
+is claimed. The next useful experiment is allocation policy and GC timing
+at this site, with a verified collector control or allocation-space evidence,
+rather than another search for a renderer retaining chain
+(`tsk_807e8c3ab020`). The complete paths, traces and snapshots are not
+committed; PR #186 lists where they were posted.
