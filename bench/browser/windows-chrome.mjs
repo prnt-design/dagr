@@ -17,7 +17,8 @@
  * `\\wsl.localhost`. Ctrl-C closes Chrome, which ends the dialer.
  *
  * `DAGR_WINDOWS_CHROME` and `DAGR_WINDOWS_NODE` override the two executables'
- * default install paths, and `DAGR_CHROMIUM_ARGS` adds launch flags.
+ * default install paths, `DAGR_CHROMIUM_ARGS` adds launch flags, and
+ * `DAGR_JS_FLAGS` passes V8 flags as one `--js-flags` value.
  */
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -33,6 +34,8 @@ const { chromium } = require('playwright-core');
 const CHROME = process.env.DAGR_WINDOWS_CHROME ?? '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe';
 const NODE = process.env.DAGR_WINDOWS_NODE ?? '/mnt/c/Program Files/nodejs/node.exe';
 const EXTRA_ARGS = (process.env.DAGR_CHROMIUM_ARGS ?? '').split(' ').filter(Boolean);
+// One argument, since V8 reads several flags from one space-separated value.
+const JS_FLAGS = process.env.DAGR_JS_FLAGS ? [`--js-flags=${process.env.DAGR_JS_FLAGS}`] : [];
 const PROFILE = 'C:\\Windows\\Temp\\dagr-bench-chrome';
 const CHROME_PORT = 9333;
 const DIAL_PORT = 9444;
@@ -126,6 +129,7 @@ const chromeArgs = [
   '--force-color-profile=srgb',
   ...(headless ? ['--headless=new'] : []),
   ...EXTRA_ARGS,
+  ...JS_FLAGS,
   'about:blank',
 ];
 let browser;

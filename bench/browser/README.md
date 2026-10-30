@@ -171,6 +171,11 @@ default NAT networking cannot reach, so a Windows Node process dials into WSL
 the Windows side's Node instead fails, because it cannot follow pnpm's
 symlinks over `\\wsl.localhost`. `DAGR_WINDOWS_CHROME` and `DAGR_WINDOWS_NODE`
 override the two install paths, and `DAGR_CHROMIUM_ARGS` adds Chrome flags.
+`DAGR_JS_FLAGS` passes V8 flags as one `--js-flags` value, since
+`DAGR_CHROMIUM_ARGS` splits on spaces. A Chrome already running on the
+helper's profile takes the launch over and keeps its own flags; the helper
+checks only the mode, so close it first (`chrome://version` in the attached
+Chrome shows the command line it actually has).
 
 `DAGR_CDP` makes either script attach to that Chrome instead of launching one,
 and records `attached` and the user agent in place of the executable, mode and
@@ -3187,7 +3192,8 @@ A diagnostic launch requested
 contained 312 pretenuring feedback events, so this did not establish a
 pretenuring-disabled control and is not used as a causal comparison. Its
 two snapshots likewise retained only their current sampled cohorts, advances
-327 and 348. No performance result is inferred from that launch.
+327 and 348. No performance result is inferred from that launch. Why the flag
+did not apply is in "Where the frame points are allocated".
 
 To check the snapshot result without WeakRef handling, repeat the runner with
 `--tags`. It puts a string `__dagrLifetime` label directly on the sampled
@@ -3208,3 +3214,125 @@ at this site, with a verified collector control or allocation-space evidence,
 rather than another search for a renderer retaining chain
 (`tsk_807e8c3ab020`). The complete paths, traces and snapshots are not
 committed; PR #186 lists where they were posted.
+
+### Where the frame points are allocated (2026-10-30)
+
+`tsk_807e8c3ab020`, main `8f7334e`, measurement only. The section above left
+open whether edge motion's per-frame objects reach old space by pretenuring or
+by promotion. V8 answers that directly: `%InYoungGeneration` under
+`--allow-natives-syntax` says which generation an object is in.
+`edge-space.mjs` serves an instrumented copy of the built edge-motion module,
+as `edge-lifetime.mjs` does. Once each moving edge is stepped, it asks that of
+the edge's new points array, first `{ x, y }` and velocity array, and of the
+ones they replace (the previous advance's, or a retarget's). At the end of the
+advance it asks it of the frame's edge list and first edge record. V8 promotes
+an object the second time a scavenge finds it alive, and no advance in these
+runs had two scavenges, so a new object found in old space was allocated
+there. The one exception is a mark-compact during the advance, which promotes
+every live young object: every advance with an old edge list had one, and it
+shows as the edge list and one edge's objects old together, 0 to 2 times per
+100 advances in every run.
+
+Reproduce from the root after the server and build described above are ready,
+closing the relay between the two launches:
+
+```sh
+DAGR_JS_FLAGS='--allow-natives-syntax' node bench/browser/windows-chrome.mjs --headless
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/edge-space.mjs /tmp/edge-space
+# the control
+DAGR_JS_FLAGS='--allow-natives-syntax --no-allocation-site-pretenuring' node bench/browser/windows-chrome.mjs --headless
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/edge-space.mjs /tmp/edge-space-control
+```
+
+The runner refuses a 1-minute load of 1.5 or higher, a renderer without
+natives syntax, and a fallback adapter, and verifies `renderer.backend ===
+'webgpu'`. It writes the per-advance counts, a GC trace with advance marks,
+the adapter and the trace's count of pretenuring events to the output
+directory; a control must count none. The check is a runtime call per object,
+about 79,000 an advance, so these runs price GC work, not frame times.
+
+**Why the earlier control failed.** A headless Chrome started on 2026-10-29 at
+17:58 was still running on the relay's profile, so every later launch was
+handed to it and its flags were dropped; its `chrome://version` command line
+had no `--js-flags`. The relay checks only the mode. Once it was closed, the
+flags reached the renderer. The relay also splits `DAGR_CHROMIUM_ARGS` on
+spaces, so it now takes `DAGR_JS_FLAGS` as one value.
+
+AMD Ryzen 9 9900X, WSL2 driving Windows Google Chrome 156.0.8078.48 (V8
+15.6.75.19), headless, NVIDIA RTX 4090 (`nvidia`, `lovelace`, not a fallback),
+`renderer.backend` `webgpu`, 1280 by 720, DPR 1, fit zoom 0.071464. Flags were
+the relay's standard switches, `--headless=new` and
+`--js-flags=--allow-natives-syntax`, plus `--no-allocation-site-pretenuring`
+in the control. `--motion=springs --sizes=10000 --edges=smooth --moving=1`, 60
+warmup and 1,200 measured frames, 13,169 moving edges, 44 retargets. Four
+default runs (the first an exploratory one without the previous-advance
+counts), then three controls, serially, each starting at a 1-minute load of
+0.06 to 0.65.
+
+**The sites are pretenured for a phase of variable length, then not.** In
+every default run, from advance 5, each advance's points arrays, first points
+and velocity arrays (13,168 or 13,169 of 13,169) and its first edge record
+were allocated in old space, apart from single advances in default 3 (55, with
+2 old and no reset event, and the one after the reset below). That phase ended
+at advance 63, 277, 637 and 1,068 in the four runs. Each end is a mark-compact
+after which V8's `V8.GCEvaluateOldSpaceLocalPretenuring` reports an
+old-generation survival rate of 9.4% to 9.95%, under its 10% threshold, and
+`reset_allocation_sites: true`: the old generation had filled with dead
+pretenured frame objects (about 250 MB before the collection, 25 MB after). In
+the 1,068 run an earlier reset at advance 915 did not hold: the sites tenured
+again within two advances. After the last reset, no run allocated an edge
+frame object in old space outside the mark-compact cases above, over 192 to
+1,197 advances.
+
+| Run | Pretenured until advance | Replaced objects old when stepped, after the reset: points arrays, first points, velocity arrays |
+| --- | --- | --- |
+| default 1 (exploratory) | 63 | not counted |
+| default 2 | 277 | 1.7%, 4.9%, 1.7% |
+| default 3 | 1,068 | 2.2%, 5.2%, 4.2% |
+| default 4 | 637 | 1.9%, 5.1%, 1.9% |
+| control 1 to 3 | never | 1.8% to 2.0%, 5.3% to 5.4%, 1.8% to 2.0% |
+
+**The control is verified, not assumed.** All three control traces contain no
+`V8.GCPretenuringFeedback`, `V8.GCPretenuringSummary` or
+`V8.GCEvaluateOldSpaceLocalPretenuring` event at all (the default traces have
+335 to 583), and no control advance allocated an edge frame object in old
+space outside the mark-compact cases.
+
+Outside pretenuring, then, edge motion's frame objects die young: 98% of a
+frame's points arrays are still young when the next advance replaces them, in
+default runs after the reset and in the controls alike. The 52% to 80% of the
+site that "Survivors by allocation site" found not reclaimed by a scavenge is
+consistent with a pretenured phase, since an object allocated in old space is
+never reclaimed by one; that run did not record its phase, and one spanning
+both would give a range too. The 2026-10-27 trace (AMD adapter,
+uninstrumented), at 0.55 scavenges per frame and 6.5 mark-compacts per 100
+frames, is closer to this section's pretenured phase than to its later one.
+
+GC work per advance by phase, from the `MinorGC` and `MajorGC` trace events
+(the collectors' outer scopes, slightly longer than their NVP pauses), over
+measured advances only, for defaults 2 to 4. Default 1's pretenured phase had
+only three measured advances; after its reset it ran 0.77 scavenges (1.24 ms)
+and 2.0 mark-compacts per 100 (0.17 ms) per advance.
+
+| Phase | Scavenges per advance | Scavenge ms per advance | Mark-compacts per 100 advances | Mark-compact ms per advance |
+| --- | --- | --- | --- | --- |
+| default, pretenured | 0.52 to 0.53 | 0.99 to 1.01 | 8.2 to 8.9 | 0.45 to 0.50 |
+| default, after the reset | 0.81 to 0.83 | 1.28 to 1.33 | 1.6 to 1.8 | 0.14 to 0.15 |
+| control | 0.92 to 0.93 | 1.59 to 1.61 | 1.8 to 2.0 | 0.15 to 0.17 |
+
+Pretenuring trades scavenges for mark-compacts at about the same pause per
+advance (1.44 to 1.50 ms against 1.43 to 1.47), and turning it off costs more
+(1.75 to 1.78), consistent with the flag also stopping other sites being
+pretenured (the default traces' last summaries keep three or four tenured
+sites after the reset). These are instrumented runs, and wall time per advance
+sat at the 16.7 ms tick, 16.8 to 17.4 ms, in every phase.
+
+No bounded byte-identical renderer change follows. When the sites are
+pretenured is V8's policy, decided by run-to-run collection timing, and
+neither phase is cheaper to collect. Fewer collections need fewer frame
+objects, which is the immutable frame contract's question, not a lifetime fix.
+For measurement, a frame profile's all-moving row can sit in either phase, or
+cross between them, by chance; the M4.10 results matrix across edge styles,
+motion and DPR (`tsk_ad4b7ce0d93b`) should account for that. The traces,
+counts and adapter records are not committed; this run's PR lists where they
+were posted.
