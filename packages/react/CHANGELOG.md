@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add `createEdgeHitIndex`, which tests a point against drawn edge centrelines
+  within a tolerance, nearest centreline first, for a host with its own
+  surface. `DagrCanvas` does not report edge hits yet.
 - Add `hitTesting` to `DagrCanvas`. `'gpu'` answers mouse hover and clicks
   from `Renderer.pickNode` through `createPickedNodeHitProvider`, primed from
   hover; touch and pen keep the CPU index. The default stays `'cpu'`.
