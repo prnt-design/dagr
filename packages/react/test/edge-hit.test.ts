@@ -52,6 +52,19 @@ describe('createEdgeHitIndex', () => {
     expect(index.hit({ x: 105, y: 0 }, 4)).toBeNull();
   });
 
+  it('handles finite coordinates outside safe grid cells without hanging', () => {
+    for (const large of [1e20, -1e20]) {
+      const index = createEdgeHitIndex([
+        edge('ordinary', 0, 0, 1, 0),
+        edge('large', large, large, large, large),
+      ]);
+      expect(index.hit({ x: large, y: large }, 1)).toBe('large');
+      expect(index.hit({ x: 0.5, y: 0 }, 1)).toBe('ordinary');
+    }
+    const index = createEdgeHitIndex([edge('ordinary', 0, 0, 1, 0)]);
+    expect(index.hit({ x: 1e20, y: 0 }, 1)).toBeNull();
+  });
+
   it('follows every segment of a bent route', () => {
     const index = createEdgeHitIndex([edge('bent', 0, 0, 0, 100, 100, 100)]);
     expect(index.hit({ x: 2, y: 50 }, 3)).toBe('bent');

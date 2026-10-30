@@ -26,7 +26,7 @@ import type { SceneEdge } from '@prnt/dagr-render';
  * Nodes are not consulted. A caller that tests both asks the node index first,
  * because nodes are drawn over edges and an edge ends under its nodes.
  *
- * **Cost.** A uniform grid of segments, built in O(segments) with the cell set
+ * **Cost.** A uniform grid of segments, built in O(segments log segments) with the cell set
  * to the median segment extent (and at least a sixteenth of the longest), and
  * queried over the cells the tolerance square touches.
  */
@@ -99,11 +99,19 @@ export function createEdgeHitIndex(
   const spread = Math.max(median, longest / 16);
   const cell = spread > 0 ? spread : 1;
   const grid = new Map<number, Segment[]>();
+  let gridUsable = true;
   for (const segment of segments) {
     const i0 = Math.floor(Math.min(segment.ax, segment.ax + segment.dx) / cell);
     const i1 = Math.floor(Math.max(segment.ax, segment.ax + segment.dx) / cell);
     const j0 = Math.floor(Math.min(segment.ay, segment.ay + segment.dy) / cell);
     const j1 = Math.floor(Math.max(segment.ay, segment.ay + segment.dy) / cell);
+    // Beyond safe integer cells, incrementing a coordinate can stop advancing.
+    // Keep every segment available to the scan rather than risk an endless loop.
+    if (![i0, i1, j0, j1].every(Number.isSafeInteger)) {
+      gridUsable = false;
+      grid.clear();
+      break;
+    }
     for (let i = i0; i <= i1; i++) {
       for (let j = j0; j <= j1; j++) {
         const k = cellKey(i, j);
@@ -133,7 +141,8 @@ export function createEdgeHitIndex(
       };
       // When the tolerance square covers more cells than there are segments,
       // as at a far overview zoom, a scan costs fewer tests than the cell walk.
-      if ((i1 - i0 + 1) * (j1 - j0 + 1) > segments.length) {
+      if (!gridUsable || ![i0, i1, j0, j1].every(Number.isSafeInteger) ||
+          (i1 - i0 + 1) * (j1 - j0 + 1) > segments.length) {
         for (const segment of segments) consider(segment);
       } else {
         for (let i = i0; i <= i1; i++) {
