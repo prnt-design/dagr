@@ -198,7 +198,8 @@ probe does. A short frame profile (1,000 nodes, 120 frames) came up on
 `webgpu` on every row, with a steady headless tick of 17.6 ms, so the headless
 pacing that made the frame profile run headed on the Apple M4 did not show
 here; a profile meant for publication should still be compared with a headed
-run. The 2026-10-26 M4.10 profile at the end of this file was taken headed,
+run. The 2026-10-26 M4.10 profile, "All moving and a tenth moving on an AMD
+GPU" below, was taken headed,
 with a tick of 17.8 to 17.9 ms.
 
 ## Backend parity (M4.9b)
@@ -3336,3 +3337,120 @@ cross between them, by chance; the M4.10 results matrix across edge styles,
 motion and DPR (`tsk_ad4b7ce0d93b`) should account for that. The traces,
 counts and adapter records are not committed; this run's PR lists where they
 were posted.
+
+## Results matrix at 10,000 nodes (M4.10, 2026-10-30)
+
+`tsk_ad4b7ce0d93b`. The M4.10 sections above each changed one thing and
+measured the rows it touched. This section measures every 10,000-node row
+the M4.10 claim covers in one place, on one build and one GPU, so one table
+says which rows hold the tick. Main `0796238`, nothing changed.
+
+```
+node bench/browser/windows-chrome.mjs              # headed, left running
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs \
+  --motion=springs --sizes=10000 --edges=straight,smooth --moving=1,0.1 --frames=1200 --dpr=1   # then --dpr=2
+```
+
+The WSL2 machine [above](#from-wsl2-through-the-windows-sides-chrome) (AMD
+Ryzen 9 9900X), driving Google Chrome 156.0.8078.48 on the Windows side,
+headed, no flags beyond the helper's. Since 2026-10-28 Chrome there picks the
+machine's discrete GPU rather than the integrated Radeon that section
+describes. The adapter, probed at run time, was `nvidia` `lovelace`, not a
+fallback (the `--gpu` runs below, with developer features on, also report
+`NVIDIA GeForce RTX 4090`, device `0x2684`), and `renderer.backend` was
+`webgpu` on every row of every run.
+Viewport 1280 by 720 at DPR 1 and 2, `fit` (zoom 0.0715), 13,169 edges, 60
+warm-up and 1,200 measured frames per mode. The control's tick was 16.7 ms
+in every run, a 60 Hz frame. Three runs at each DPR, DPR 1 and 2 alternating,
+one at a time, load average 0.0 to 1.2 at the start of each (read with
+`uptime`).
+
+Each row's `still` mode draws the same scene without motion, and each run
+measured it twice (before the all-moving and the tenth-moving modes); both
+are folded into the still rows. Times are animated-mode medians in
+milliseconds, a range over the three runs; `apply` is the median over
+retarget frames, every 500 ms.
+
+| DPR | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Holds the tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | straight | still | 16.9 to 18.1 | 0% to 0.1% | | | | | 0.2 | yes |
+| 1 | straight | all moving | 16.9 to 18.1 | 0%, 0.2%, 0% | 12.8 to 13.3 | 2.2 to 2.4 | 1.1 | 1.2 to 1.3 | 0.4 | yes |
+| 1 | straight | a tenth | 16.9 to 18.1 | 0%, 0%, 0% | 1.2 to 1.3 | 0.5 | 1.0 to 1.1 | 0.8 to 0.9 | 0.4 | yes |
+| 1 | smooth | still | 16.9 to 18.1 | 0% | | | | | 0.2 | yes |
+| 1 | smooth | all moving | 17.0 to 33.2 | 4.3%, 5.1%, 3.9% | 17.6 to 18.6 | 3.8 to 4.2 | 1.3 | 7.5 to 9.0 | 1.0 | **no** |
+| 1 | smooth | a tenth | 16.9 to 18.1 | 0.1%, 0%, 0% | 1.7 to 2.0 | 0.5 to 0.7 | 1.2 | 2.8 to 3.0 | 1.0 to 1.1 | yes |
+| 2 | straight | still | 16.9 | 0% to 0.2% | | | | | 0.2 | yes |
+| 2 | straight | all moving | 16.9 | 0%, 0%, 0% | 12.5 to 13.1 | 2.4 to 2.6 | 1.1 to 1.2 | 1.2 to 1.3 | 0.4 to 0.5 | yes |
+| 2 | straight | a tenth | 16.9 | 0%, 0%, 0% | 1.1 to 1.3 | 0.5 | 1.0 to 1.1 | 0.8 to 0.9 | 0.4 | yes |
+| 2 | smooth | still | 16.9 | 0% to 0.2% | | | | | 0.2 | yes |
+| 2 | smooth | all moving | 33.4 to 33.5 | 9.3%, 7.4%, 7.8% | 18.7 to 22.5 | 4.1 to 4.8 | 1.3 | 8.6 to 8.8 | 1.0 | **no** |
+| 2 | smooth | a tenth | 16.9 | 0%, 0%, 0% | 1.8 to 1.9 | 0.5 to 0.6 | 1.1 to 1.2 | 2.9 to 3.0 | 1.0 | yes |
+
+`input` was 0.4 to 0.6 ms on every animated row. The interval median was
+16.7 ms on every row of runs 2 and 3. Run 1 at DPR 1, the first after Chrome
+started, paced every row, still ones included, at a median of 17.7 to 18.0
+ms against its own 16.7 ms control; no later run did, and the cause was not
+traced. The still and calm rows' occasional 0.1% to 0.2% is one or two
+intervals in 1,200, the longest 67 to 283 ms, at least as often in still
+modes as in moving ones.
+
+**GPU time per frame**, from `--gpu` with the relay started with
+`DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features`, one run at each DPR
+straight after the three above. The runner exits non-zero on these runs,
+because the raw timestamps were still rounded to 1,024 ns, and adding
+`--disable-dawn-features=timestamp_quantization` did not change that (a
+1,000-node check, same result). Each relaunch followed a check that no
+Chrome was left on the relay's profile, and the first flag was read back from
+the running browser's command line, so neither was the stale-profile failure
+described above. A microsecond grain is far below the readings here, so they
+are published with that caveat; the next attempt to clear it should start
+from those two flag sets on this adapter. Medians /
+95th percentiles of the frame's passes summed, in milliseconds:
+
+| DPR | Edges | Still | All moving | A tenth moving |
+| --- | --- | --- | --- | --- |
+| 1 | straight | 0.18 to 0.19 / 0.21 to 0.99 | 0.16 / 0.18 | 0.15 / 0.16 |
+| 1 | smooth | 0.58 to 1.35 / 1.42 to 1.46 | 0.53 / 0.59 | 0.60 / 0.64 |
+| 2 | straight | 1.36 to 2.42 / 2.21 to 2.46 | 1.45 / 1.48 | 1.42 / 1.44 |
+| 2 | smooth | 1.65 to 2.79 / 2.82 to 2.84 | 0.51 / 1.52 | 0.54 / 1.53 |
+
+Still modes read higher than moving ones on the same scene, and in the moving
+modes smooth reads lower than straight at DPR 2, which fits the GPU clocking
+down when the frame leaves it idle rather than the work changing; not traced.
+Either way the GPU frame is under 3 ms of the 16.7 ms tick at the median and
+95th percentile on every row, and at most 5.7 ms. With timestamp queries on, the
+smooth all-moving rows missed 12% (DPR 1) and 9% (DPR 2) of ticks.
+
+- **Every row holds the tick but one: smooth edges with every node moving.**
+  It misses 3.9% to 5.1% of ticks at DPR 1 and 7.4% to 9.3% at DPR 2, with
+  an interval p95 of two ticks at DPR 2. The frame between retargets spends
+  14.5 to 16.5 ms of medians on the CPU, summed per run (`setEdges` 7.5 to
+  9.0, `advance` 3.8 to 4.8, the rest about 3), inside the tick at the median and past it in
+  the tail, and a retarget frame adds 17.6 to 22.5 ms of `apply`. So the
+  M4.10 goal is not met for smooth edges, all moving, and stays as stated.
+- **Where ticks are missed, the frame is CPU-bound.** DPR 2 quadruples the
+  pixels and adds about 1.3 ms of GPU time with straight edges, and the
+  smooth all-moving row misses about twice as many ticks at DPR 2, where its
+  CPU steps between retargets sum to 15.7 to 16.5 ms against 14.5 to 15.8 at
+  DPR 1, mostly `advance` and `setEdges`; `apply` rose too. The other rows
+  hold the tick at both ratios.
+- **Straight edges with every node moving hold the tick**, though a retarget
+  frame's CPU work, 12.5 to 13.3 ms of `apply` plus 5.3 to 6.1 for the rest
+  of the frame, exceeds one 16.7 ms tick. Intervals past one tick stayed at
+  the still rows' rate (0.2% at most), so retarget frames did not show as
+  missed ticks; how the late frame is absorbed was not traced.
+- **The moving rows can sit in either of V8's phases** for edge motion's
+  allocation sites (see ["Where the frame points are
+  allocated"](#where-the-frame-points-are-allocated-2026-10-30) above). A
+  frame profile cannot tell which, so the ranges above are three runs'
+  spread with the phase unknown, not a measurement of either phase.
+
+**Hit testing is not in these rows.** The node GPU pick was priced in
+`2983c87` (#179) on the AMD RDNA 2 adapter this machine used then: 0.1 to
+0.2 ms of CPU per pick, with ticks missed not separated from runs without
+picks (see ["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b));
+it was not re-measured on this adapter. Rebuilding the CPU node index every
+animated frame cost 1.5 to 1.6 ms there. Edge hit testing has no measured
+cost yet (M4.8b). Not covered by this matrix: sizes below 10,000, a zoom
+other than `fit`, rich nodes, the WebGL2 fallback, a second machine, and
+unrounded GPU timestamps on this adapter.
