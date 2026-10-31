@@ -3452,5 +3452,96 @@ picks (see ["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b));
 it was not re-measured on this adapter. Rebuilding the CPU node index every
 animated frame cost 1.5 to 1.6 ms there. Edge hit testing has no measured
 cost yet (M4.8b). Not covered by this matrix: sizes below 10,000, a zoom
-other than `fit`, rich nodes, the WebGL2 fallback, a second machine, and
-unrounded GPU timestamps on this adapter.
+other than `fit`, rich nodes, the WebGL2 fallback, and unrounded GPU
+timestamps on this adapter. A second machine is
+[below](#the-same-matrix-on-an-apple-m4-2026-10-31).
+
+### The same matrix on an Apple M4 (2026-10-31)
+
+`tsk_ad4b7ce0d93b`, the matrix's second machine. The same 10,000-node rows as
+[above](#results-matrix-at-10000-nodes-m410-2026-10-30), on main `85ee77a`,
+nothing changed.
+
+```
+python3 -m http.server 8733 --bind 127.0.0.1    # from the repo root
+DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+DAGR_CHROMIUM_ARGS=--enable-webgpu-developer-features \
+node bench/browser/frame-profile.mjs \
+  --motion=springs --sizes=10000 --edges=straight,smooth --moving=1,0.1 --frames=1200 --dpr=1   # then --dpr=2
+```
+
+An Apple M4 Mac mini (10 cores, 16 GB, macOS 26.6.2), Google Chrome
+156.0.8078.76, headed and launched by the script with
+`--enable-webgpu-developer-features` on every run, where the NVIDIA timing
+runs had it only for `--gpu` (in earlier runs on this machine, headless
+Chrome paced the control at 33.3 ms, which fails the runner's tick check;
+not repeated here). The adapter, probed at run time, was `apple` `metal-3` (`Apple M4`), not a fallback, and
+`renderer.backend` was `webgpu` on every row of every run. Viewport 1280 by
+720, `fit` (zoom 0.0715), 13,169 edges, 60 warm-up and 1,200 measured frames
+per mode, control tick 16.7 ms in every run. Three runs at each DPR, DPR 1
+and 2 alternating, one at a time, load average 3.2 to 3.8 at the start of
+the five runs where it was read (with `uptime`), against the NVIDIA runs'
+0.0 to 1.2; that background load was not controlled or traced. Columns as
+above.
+
+| DPR | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Holds the tick |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | straight | still | 18.6 to 18.7 | 0% to 0.2% | | | | | 0.3 to 0.4 | yes |
+| 1 | straight | all moving | 18.5 to 18.6 | 0%, 0%, 0% | 7.1 to 11.1 | 1.1 to 1.7 | 1.1 to 1.2 | 0.9 | 0.3 | yes |
+| 1 | straight | a tenth | 18.6 | 0%, 0%, 0.1% | 0.8 to 1.0 | 0.3 to 0.4 | 1.2 | 0.8 | 0.3 | yes |
+| 1 | smooth | still | 18.6 to 18.7 | 0% to 0.3% | | | | | 0.3 to 0.4 | yes |
+| 1 | smooth | all moving | 18.5 to 18.6 | 0.3%, 0.1%, 0.8% | 13.4 to 14.4 | 1.6 to 2.3 | 1.2 to 1.3 | 6.1 to 7.2 | 0.7 | **no**, barely |
+| 1 | smooth | a tenth | 18.5 to 18.6 | 0%, 0%, 0% | 1.4 to 1.5 | 0.5 to 0.6 | 1.2 | 2.6 to 2.7 | 0.7 | yes |
+| 2 | straight | still | 18.6 to 18.7 | 0% to 0.1% | | | | | 0.4 | yes |
+| 2 | straight | all moving | 18.5 to 18.6 | 0%, 0%, 0% | 10.2 to 10.7 | 1.4 to 1.6 | 1.2 | 0.9 to 1.5 | 0.3 | yes |
+| 2 | straight | a tenth | 18.6 | 0%, 0%, 0% | 0.9 to 1.0 | 0.3 | 1.2 | 0.8 | 0.3 | yes |
+| 2 | smooth | still | 18.6 to 18.7 | 0% to 0.4% | | | | | 0.3 to 0.4 | yes |
+| 2 | smooth | all moving | 18.5 to 18.6 | 0.3%, 0.5%, 0.3% | 13.5 to 13.7 | 1.6 to 1.9 | 1.2 to 1.3 | 6.3 to 7.3 | 0.7 | **no**, barely |
+| 2 | smooth | a tenth | 18.4 to 18.5 | 0%, 0%, 0% | 1.3 to 1.5 | 0.4 to 0.5 | 1.2 | 2.9 to 3.2 | 0.7 to 0.8 | yes |
+
+`input` was 0.4 to 0.8 ms on every animated row and the interval median was
+16.7 ms on every row of every run. This Chrome's interval p95 sits at 18.6
+to 18.7 ms in the control too, so where the NVIDIA machine reads 16.9 (apart
+from its first DPR 1 run) the p95 here reads about 1.7 ms higher, the still
+rows included; it is not a missed-tick signal.
+
+**GPU time per frame**, from `--gpu` with the same launch, one run at each
+DPR straight after the three above. The runner accepted both: the
+timestamps' grain was 1 ns, so on this adapter the developer flag alone
+clears the rounding that it did not clear on the NVIDIA one. Medians / 95th
+percentiles of the frame's passes summed, in milliseconds:
+
+| DPR | Edges | Still | All moving | A tenth moving |
+| --- | --- | --- | --- | --- |
+| 1 | straight | 0.50 / 0.51 | 0.52 / 0.53 | 0.51 / 0.52 |
+| 1 | smooth | 0.86 / 0.87 | 0.97 / 0.99 | 0.87 / 1.31 |
+| 2 | straight | 1.20 / 1.22 | 1.23 / 1.59 | 1.21 / 1.24 |
+| 2 | smooth | 1.51 to 1.52 / 1.53 to 1.54 | 1.57 / 1.61 | 1.52 / 1.95 |
+
+The GPU frame is under 2 ms of the tick at the median and 95th percentile on
+every row, and at most 2.1 ms. Unlike the NVIDIA adapter's, still modes do not
+read higher than moving ones here.
+
+- **Every row holds the tick but smooth edges with every node moving, which
+  barely misses it.** That row misses 0.1% to 0.8% of ticks, where the still
+  modes on the same scene miss 0% to 0.4%; in four of six runs the moving
+  mode missed more than the still mode measured just before it. Every run
+  of that row had an interval of two ticks (33.2 to 35.3 ms); still modes
+  reached that in some runs but not all. Against the NVIDIA machine's 3.9%
+  to 9.3%, it is the same row failing by much less.
+- **The CPU frame between retargets is shorter here.** For smooth edges with
+  every node moving, `setEdges` is 6.1 to 7.3 ms and `advance` 1.6 to 2.3,
+  against 7.5 to 9.0 and 3.8 to 4.8 on the NVIDIA machine. A retarget frame
+  still adds 13.4 to 14.4 ms of `apply`, so that frame's CPU work exceeds one
+  tick on this machine too; how many of the 42 (once 43) retarget frames
+  per mode became the missed ticks was not traced.
+- **DPR 2 changes little.** It adds about 0.7 ms of GPU time, and each CPU
+  step's range overlaps DPR 1's or sits within 0.6 ms of it; the smooth
+  all-moving row missed 0.3% to 0.5% at DPR 2 against 0.1% to 0.8% at DPR 1.
+- **V8's allocation phases** (see ["Where the frame points are
+  allocated"](#where-the-frame-points-are-allocated-2026-10-30) above) apply
+  here as there: the ranges are three runs' spread with the phase unknown.
+
+Hit testing is not in these rows either. Still not covered by the matrix:
+sizes below 10,000, a zoom other than `fit`, rich nodes, the WebGL2 fallback,
+and unrounded GPU timestamps on the NVIDIA adapter.
