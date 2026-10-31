@@ -1035,7 +1035,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         const id = index.hit(query.world, toleranceWorld());
         hit = { target: id === null ? null : { kind: 'node', nodeId: id }, displayedRevision: nodes };
       }
-      if (hit.target !== null || !Object.is(hit.displayedRevision, query.displayedRevision)) return hit;
+      if (hit.target !== null) return hit;
       const edgeId = edgeAt(query.world);
       return edgeId === null ? hit : { target: { kind: 'edge', edgeId }, displayedRevision: hit.displayedRevision };
     },
@@ -1209,8 +1209,10 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       hoveredEdge = edgeId;
       const clickable = (id !== null && onNodeClick !== undefined) || (edgeId !== null && onEdgeClick !== undefined);
       host.style.cursor = clickable ? 'pointer' : '';
+      // Clear before set, so a caller tracking one hovered thing never holds two.
+      if (edgeChanged && edgeId === null) onEdgeHover?.(null);
       if (nodeChanged) onNodeHover?.(id);
-      if (edgeChanged) onEdgeHover?.(edgeId);
+      if (edgeChanged && edgeId !== null) onEdgeHover?.(edgeId);
     };
     const move = (event: PointerEvent): void => {
       pointerKindRef.current = event.pointerType || 'mouse';

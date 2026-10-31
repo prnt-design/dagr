@@ -73,6 +73,20 @@ function edgeMiddle(id: string): { x: number; y: number } {
   if (a === undefined || b === undefined) throw new Error(`edge ${id} has no segment`);
   return lastRenderer().camera.worldToScreen({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 }
+/** {@link edgeMiddle}, and the unit normal of that segment on screen. */
+function edgeAcross(id: string): { middle: { x: number; y: number }; normal: { x: number; y: number } } {
+  const edge = drawnEdges().find((e) => e.id === id);
+  if (edge === undefined) throw new Error(`no edge ${id}`);
+  const k = Math.max(1, Math.floor(edge.points.length / 2));
+  const camera = lastRenderer().camera;
+  const a = edge.points[k - 1];
+  const b = edge.points[k];
+  if (a === undefined || b === undefined) throw new Error(`edge ${id} has no segment`);
+  const sa = camera.worldToScreen(a);
+  const sb = camera.worldToScreen(b);
+  const length = Math.hypot(sb.x - sa.x, sb.y - sa.y);
+  return { middle: edgeMiddle(id), normal: { x: -(sb.y - sa.y) / length, y: (sb.x - sa.x) / length } };
+}
 function nodeCentre(id: string): { x: number; y: number } {
   const nodes = lastRenderer().setNodes.mock.calls.at(-1)?.[0] as readonly SceneNode[];
   const node = nodes.find((n) => n.id === id);
@@ -122,11 +136,13 @@ describe('DagrCanvas edge hits', () => {
     await flush(() => pointer(host(), 'pointermove', middle.x, middle.y + 1));
     expect(onEdgeHover.mock.calls).toEqual([['a-b']]);
     expect(onNodeHover).not.toHaveBeenCalled();
+    expect(host().style.cursor).toBe('');
 
     const a = nodeCentre('a');
     await flush(() => pointer(host(), 'pointermove', a.x, a.y));
     expect(onEdgeHover.mock.calls).toEqual([['a-b'], [null]]);
     expect(onNodeHover.mock.calls).toEqual([['a']]);
+    expect(onEdgeHover.mock.invocationCallOrder[1]).toBeLessThan(onNodeHover.mock.invocationCallOrder[0] ?? 0);
 
     await flush(() => pointer(host(), 'pointermove', middle.x, middle.y));
     expect(onNodeHover.mock.calls).toEqual([['a'], [null]]);
@@ -172,8 +188,59 @@ describe('DagrCanvas edge hits', () => {
 
     await runFramesUntilIdle();
     const to = edgeMiddle('a-b');
+    // Farther from both ends of the glide than the hit tolerance, so only the frame's points can hit it.
+    expect(Math.abs(gliding.x - from.x)).toBeGreaterThan(10);
+    expect(Math.abs(gliding.x - to.x)).toBeGreaterThan(10);
     expect(Math.min(from.x, to.x)).toBeLessThan(gliding.x);
     expect(gliding.x).toBeLessThan(Math.max(from.x, to.x));
+  });
+
+  it('takes half the ribbon in CSS pixels plus the mouse slack as the tolerance', async () => {
+    vi.stubGlobal('devicePixelRatio', 2);
+    const onEdgeClick = vi.fn();
+    const onBackgroundClick = vi.fn();
+    await ready(
+      <DagrCanvas graph={chain()} config={config} edgeStyle={{ halfWidthPixels: 6 }} onEdgeClick={onEdgeClick} onBackgroundClick={onBackgroundClick} />,
+    );
+    expect(lastRenderer().camera.viewport.devicePixelRatio).toBe(2);
+    const { middle, normal } = edgeAcross('a-b');
+    // 6 device pixels at ratio 2 is 3 CSS pixels, plus 4 for a mouse.
+    await flush(() => click(middle.x + normal.x * 6.5, middle.y + normal.y * 6.5));
+    expect(onEdgeClick.mock.calls).toEqual([['a-b']]);
+    await flush(() => click(middle.x + normal.x * 7.5, middle.y + normal.y * 7.5));
+    expect(onBackgroundClick).toHaveBeenCalledOnce();
+    expect(onEdgeClick).toHaveBeenCalledOnce();
+  });
+
+  it('asks edges under GPU hit testing only once a settled pick finds no node', async () => {
+    const onEdgeHover = vi.fn();
+    const onEdgeClick = vi.fn();
+    await ready(<DagrCanvas graph={chain()} config={config} hitTesting="gpu" onEdgeHover={onEdgeHover} onEdgeClick={onEdgeClick} />);
+    const renderer = lastRenderer();
+    let settle: ((id: string | null) => void) | null = null;
+    renderer.pickNode.mockImplementation(() => new Promise((resolve) => { settle = resolve; }));
+    const middle = edgeMiddle('a-b');
+    await flush(() => pointer(host(), 'pointermove', middle.x, middle.y));
+    expect(renderer.pickNode).toHaveBeenCalledOnce();
+    expect(onEdgeHover).not.toHaveBeenCalled();
+    await flush(() => click(middle.x, middle.y));
+    expect(onEdgeClick).not.toHaveBeenCalled();
+
+    await flush(() => settle?.(null));
+    expect(onEdgeHover.mock.calls).toEqual([['a-b']]);
+    expect(host().style.cursor).toBe('pointer');
+    await flush(() => click(middle.x, middle.y));
+    expect(onEdgeClick.mock.calls).toEqual([['a-b']]);
+  });
+
+  it('tells the caller the edge hover ended when the canvas unmounts', async () => {
+    const onEdgeHover = vi.fn();
+    await ready(<DagrCanvas graph={chain()} config={config} onEdgeHover={onEdgeHover} />);
+    const middle = edgeMiddle('a-b');
+    await flush(() => pointer(host(), 'pointermove', middle.x, middle.y));
+    await tree?.unmount();
+    tree = null;
+    expect(onEdgeHover.mock.calls).toEqual([['a-b'], [null]]);
   });
 });
 

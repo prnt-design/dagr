@@ -91,8 +91,8 @@ handle their keyboard `click` (`event.detail === 0`) in your component. Set
 for drag presentation.
 
 The hook itself has no hit geometry: you supply the provider. `DagrCanvas`
-supplies exact node hits (M5.2b); port geometry and connection gestures are M6.3. `DagrCanvas` does
-not hit edges yet; `createEdgeHitIndex` answers edge hits for a host with its own surface (M4.8b).
+supplies exact node hits (M5.2b) and, with `onEdgeClick` or `onEdgeHover`, edge hits through
+`createEdgeHitIndex` (M4.8b); port geometry and connection gestures are M6.3.
 
 ## Navigation, node events and level of detail
 
@@ -106,6 +106,7 @@ const api = useRef<DagrCanvasApi>(null);
   apiRef={api}                    // api.current.focusNode(id), .fit()
   onNodeClick={(id) => open(id)}  // exact CPU hit test on the drawn silhouettes
   onNodeHover={(id) => hover(id)}
+  onEdgeClick={(id) => openEdge(id)} // CPU hit on the drawn centreline; a node wins
   onBackgroundClick={close}
   nodeTiers={tiers}               // dot -> label -> card, gated by on-screen width
   nodeData={nodeData}             // memoised; required when tiers use your own data type

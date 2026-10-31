@@ -689,7 +689,8 @@ it meets its node is the node's, and hover reports `null` to `onEdgeHover`
 when the pointer moves onto a node. Edges are tested on the CPU in both
 `hitTesting` modes, after the node test misses: under `'gpu'` that means after
 a settled pick says no node. Without either handler an edge is not a target,
-so a click on one stays a background click.
+so a click on one stays a background click. With `onEdgeClick` set, hover over
+an edge sets `cursor: pointer`.
 
 **`hitTesting="gpu"`** answers mouse hover and clicks from the
 renderer's `pickNode` instead of the CPU index, through
@@ -820,8 +821,9 @@ reachable.
 
 ### Known limits of this slice
 
-- Hover is evaluated on pointer movement and reuses a hit index up to 100 ms old
-  while nodes glide; clicks always use the index of the nodes as drawn.
+- Hover is evaluated on pointer movement and reuses a node or edge hit index up
+  to 100 ms old while the drawing glides; clicks always use the index of what is
+  drawn.
 - Overlay tiers have a cap on mounted elements, but there is no per-frame budget
   for how many mount at once when a pan reveals many nodes, and `onFrame` is
   called only on animated frames, not on plain pans.
