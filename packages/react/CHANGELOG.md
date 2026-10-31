@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add `onEdgeClick` and `onEdgeHover` to `DagrCanvas`. Edges are hit on the
+  CPU against the edges as drawn, within half the ribbon's width plus the
+  pointer's slack, and only where no node is hit. Without either handler a
+  click on an edge stays a background click.
 - Add an edge kind, `{ kind: 'edge', edgeId }`, to `GraphHitTarget`, so a
   hit provider can answer an edge (for example from `createEdgeHitIndex`) and
   `useGraphInteraction` selects it like a node: press and release on the same
@@ -12,7 +16,6 @@
   `t.kind === 'node' ? t.nodeId : t.portId`, or an exhaustive `switch` that
   returns from every case or ends in a `never` check. A `switch` that does
   neither still compiles and skips edges. Check for `'edge'` too.
-  `DagrCanvas` does not report edge hits yet.
 - Add `createEdgeHitIndex`, which tests a point against drawn edge centrelines
   within a tolerance, nearest centreline first, for a host with its own
   surface.
