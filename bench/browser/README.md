@@ -3470,16 +3470,19 @@ node bench/browser/frame-profile.mjs \
   --motion=springs --sizes=10000 --edges=straight,smooth --moving=1,0.1 --frames=1200 --dpr=1   # then --dpr=2
 ```
 
-An Apple M4 Mac mini (10 cores, 16 GB, macOS), Google Chrome
-156.0.8078.76, headed and launched by the script (in earlier runs on this
-machine, headless Chrome paced the control at 33.3 ms, which fails the
-runner's tick check; not repeated here). The adapter, probed at run
-time, was `apple` `metal-3` (`Apple M4`), not a fallback, and
+An Apple M4 Mac mini (10 cores, 16 GB, macOS 26.6.2), Google Chrome
+156.0.8078.76, headed and launched by the script with
+`--enable-webgpu-developer-features` on every run, where the NVIDIA timing
+runs had it only for `--gpu` (in earlier runs on this machine, headless
+Chrome paced the control at 33.3 ms, which fails the runner's tick check;
+not repeated here). The adapter, probed at run time, was `apple` `metal-3` (`Apple M4`), not a fallback, and
 `renderer.backend` was `webgpu` on every row of every run. Viewport 1280 by
 720, `fit` (zoom 0.0715), 13,169 edges, 60 warm-up and 1,200 measured frames
 per mode, control tick 16.7 ms in every run. Three runs at each DPR, DPR 1
 and 2 alternating, one at a time, load average 3.2 to 3.8 at the start of
-the five runs where it was read (with `uptime`). Columns as above.
+the five runs where it was read (with `uptime`), against the NVIDIA runs'
+0.0 to 1.2; that background load was not controlled or traced. Columns as
+above.
 
 | DPR | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Holds the tick |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -3498,9 +3501,9 @@ the five runs where it was read (with `uptime`). Columns as above.
 
 `input` was 0.4 to 0.8 ms on every animated row and the interval median was
 16.7 ms on every row of every run. This Chrome's interval p95 sits at 18.6
-to 18.7 ms in the control too, so where the NVIDIA machine reads 16.9 the p95
-here reads about 1.7 ms higher, the still rows included; it is not a
-missed-tick signal.
+to 18.7 ms in the control too, so where the NVIDIA machine reads 16.9 (apart
+from its first DPR 1 run) the p95 here reads about 1.7 ms higher, the still
+rows included; it is not a missed-tick signal.
 
 **GPU time per frame**, from `--gpu` with the same launch, one run at each
 DPR straight after the three above. The runner accepted both: the
