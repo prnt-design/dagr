@@ -92,23 +92,15 @@ React 19, including SSR/hydration, controlled rejection, cancellation before
 the search framing callback, retained details/focus while docking, observer
 cleanup and current obstruction geometry before observer delivery.
 
-## Delivery gate blocker
+## Delivery gate
 
-The implementation is unmerged. Workspace typecheck, tests, lint and build
-passed, then the exclusive benchmark gate failed two measurements on the
-unchanged `@prnt/dagr-react` 10k CPU rectangle pointer query (+31.9%/+31.1%).
-Main advanced to `7d2001a` (#170), changing only roadmap and benchmark docs.
-After rebasing and reinstalling frozen dependencies, all four checks passed
-again, but the required post-rebase `bench:ci` failed 2/2 on the same entry
-(+29.1%/+30.2%, allowed +17.7%). Different graph traversals also failed.
-There is no diff in the graph/react/layout/render packages or gate code.
-The repeated failure remains unresolved; it is not waived as noise.
-
-Next actor: the maintainer or next assigned M5.7b owner should investigate
-that repeated gate failure on the baseline-matched runner, compare unchanged
-main under the same conditions, resolve the cause without weakening the gate
-or recapturing the baseline, then run the full gate and concluded green PR CI
-before merging. M5.7b is incomplete and M5.7c is not yet eligible.
+Earlier local benchmark gates on this branch failed on entries the change does
+not touch: the `@prnt/dagr-react` 10k CPU rectangle pointer query (+31.9%/+31.1%,
+then +29.1%/+30.2% against +17.7% allowed) and graph traversals. The branch
+changes no graph, react, layout or render package code and no gate code. The
+final integrated head passed the full local gate with no baseline, exemption or
+gate change; the earlier failures remain under investigation in
+`tsk_1048e2545110`.
 
 ## Checks that remain unavailable
 

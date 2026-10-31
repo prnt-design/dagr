@@ -18,12 +18,12 @@ same ID.
 
 ## M5.7b: Mobile map reading repair (2026-10-27 UTC)
 
-Task `tsk_eb73b47f05e3`, following PR #160. Implemented but unmerged: the
-post-rebase local benchmark gate failed 2/2 on the unchanged 10k CPU rectangle
-pointer query (+29.1%/+30.2%, allowed +17.7%). Typecheck, tests, lint, build
-and available browser checks pass. No benchmark baseline, exemption or gate
-was changed. M5.7c stays in backlog until this blocker is resolved and M5.7b
-merges. The bounded library change keeps
+Task `tsk_eb73b47f05e3`, following PR #160, merged in PR #171. Earlier local
+benchmark gates on this branch failed on unchanged entries (the 10k CPU
+rectangle pointer query and graph traversals); the final integrated head
+passed the full local gate without any baseline, exemption or gate change.
+The cause of the earlier failures stays with `tsk_1048e2545110`. WebKit,
+real-device and software-keyboard checks carry to M5.8c. The bounded library change keeps
 ExplorerRoot and the SVG/DOM base. Details choose bottom docking below 720px
 of container width and a side panel above it, preserving the mounted reader
 and at least half the graph in compact placement. The compact height is capped
@@ -197,8 +197,9 @@ TS2882 unless the bundler's CSS module types are loaded. With `vite/client` in
 `types` it typechecks under 7.0.2 as well. The CLI needs Node 22.20 or newer
 while the library supports Node 20. Without `-a`, the CLI prompts for agents,
 or inside a detected agent session installs non-interactively, so the README
-names the agent. At 390 pixels the details panel covers the whole map; that is
-the M5.7b mobile repair, not an installation fault. Recovery from a bad
+names the agent. At 390 pixels the published 0.1.4 details panel covers the
+whole map; M5.7b repairs that in the unreleased library, and it is not an
+installation fault. Recovery from a bad
 install is `skills remove` and reinstalling from a pinned commit.
 
 ## Priority reset: WebGPU renderer first (2026-10-17 UTC)

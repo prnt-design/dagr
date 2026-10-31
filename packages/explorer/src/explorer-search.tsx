@@ -75,7 +75,7 @@ export function ExplorerSearch(props: ExplorerSearchProps): ReactElement {
 
   const blank = query.trim() === '';
 
-  // `inspect` and `focusNode` are the root's stable methods.
+  // `inspect` is the root's stable method.
   const pick = (id: string, trigger: HTMLElement): void => {
     inspect(id, trigger);
     setFocusRequest({ id });

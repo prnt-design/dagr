@@ -8,9 +8,9 @@
   scroll on connection navigation.
 - Default primary controls target 44 CSS pixels; search uses a 16px input.
 - Search frames the accepted result after details mount, using current
-  obstruction geometry instead of the previous full graph area.
-- Add a reproducible Chromium touch matrix and record unavailable WebKit,
-  real-device and software-keyboard checks separately.
+  obstruction geometry instead of the previous full graph area. A host with
+  controlled state that has not opened details on that result by the next
+  frame no longer gets the camera move.
 
 ## 0.1.4
 
