@@ -10,8 +10,9 @@
  * than a sway computed from the clock, and `--moving` retargets only that share
  * of the nodes and the edges touching them, so the edges at rest show what
  * `setEdges` saves by copying an unchanged route. `--pick` adds GPU node picks,
- * one in flight at a time, through `Renderer.pickNode` (M4.8b). Evidence, not a
- * gate: see the README.
+ * one in flight at a time, through `Renderer.pickNode` (M4.8b), and
+ * `--edge-hit` the CPU edge hit index over the drawn edges (M4.8b). Evidence,
+ * not a gate: see the README.
  *
  * ```
  * pnpm --filter @prnt/dagr-render --filter @prnt/dagr-react build   # the page imports from dist
@@ -21,7 +22,7 @@
  *   node bench/browser/frame-profile.mjs
  *   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
  *   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
- *   # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1] [--pick]
+ *   # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1] [--pick] [--edge-hit]
  * ```
  *
  * The page asks for `backend: 'webgpu'`, so a browser without an adapter fails
@@ -115,6 +116,7 @@ if (headless && CDP !== undefined) {
 }
 const hit = process.argv.includes('--hit');
 const pick = process.argv.includes('--pick');
+const edgeHit = process.argv.includes('--edge-hit');
 const memory = process.argv.includes('--memory');
 const gpu = process.argv.includes('--gpu');
 if (memory && (gpu || partsList.join() !== 'all' || motions.join() !== 'sway' || partialMotion)) {
@@ -122,11 +124,14 @@ if (memory && (gpu || partsList.join() !== 'all' || motions.join() !== 'sway' ||
     '--memory builds the whole scene and counts every buffer, so it takes none of --gpu, --parts, --motion and --moving',
   );
 }
+if (edgeHit && memory) {
+  throw new Error('--edge-hit times the edge index per frame and has no --memory step');
+}
 if (pick && gpu) {
   throw new Error('--pick draws its own pass inside the frames --gpu times, so it does not take --gpu');
 }
-if ((hit || pick || nodeModes.includes('rich')) && partsList.some((parts) => parts !== 'all')) {
-  throw new Error('--hit, --pick and --nodes=rich work over every node, so they take only --parts=all');
+if ((hit || pick || edgeHit || nodeModes.includes('rich')) && partsList.some((parts) => parts !== 'all')) {
+  throw new Error('--hit, --pick, --edge-hit and --nodes=rich work over the whole scene, so they take only --parts=all');
 }
 
 function pageHtml() {
@@ -353,8 +358,8 @@ for (const size of sizes) {
           for (const moving of movingList) {
             runs.push(
               await page.evaluate(
-                ([n, w, f, z, e, m, h, p, s, v, k]) => window.profile(n, w, f, z, e, m, h, p, s, v, k),
-                [size, warmup, frames, zoom, style, nodeMode, hit, parts, motion, moving, pick],
+                ([n, w, f, z, e, m, h, p, s, v, k, g]) => window.profile(n, w, f, z, e, m, h, p, s, v, k, g),
+                [size, warmup, frames, zoom, style, nodeMode, hit, parts, motion, moving, pick, edgeHit],
               ),
             );
           }
@@ -364,6 +369,7 @@ for (const size of sizes) {
   }
 }
 const controlRun = await page.evaluate(([w, f]) => window.control(w, f), [warmup, frames]);
+const deviceAdapters = await page.evaluate(() => window.deviceAdapters());
 await browser.close();
 
 const tickMs = summarise(controlRun.intervals).median;
@@ -382,6 +388,10 @@ const rows = runs.map((run) => ({
     run.hit === null
       ? null
       : { indexMs: Math.round(run.hit.indexMs * 100) / 100, hits: run.hit.hits },
+  edgeHit:
+    run.edgeHit === null
+      ? null
+      : { indexMs: Math.round(run.edgeHit.indexMs * 100) / 100, hits: run.edgeHit.hits },
   pick:
     run.pick === null
       ? null
@@ -405,8 +415,9 @@ const report = {
   machine,
   launch,
   adapter,
+  deviceAdapters,
   viewport: { width: 1280, height: 720, devicePixelRatio: dpr },
-  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit, pick, gpu, parts: partsList, motion: motions, moving: movingList },
+  plan: { warmup, frames, zoom: zoomOption, edges: edgeStyles, nodes: nodeModes, hit, pick, edgeHit, gpu, parts: partsList, motion: motions, moving: movingList },
   tickMs,
   control,
   rows,
@@ -414,6 +425,10 @@ const report = {
 };
 console.log(JSON.stringify(report, null, 1));
 if (rows.some((row) => row.backend !== 'webgpu')) process.exitCode = 1;
+if (deviceAdapters.length === 0 || deviceAdapters.some((a) => a.isFallbackAdapter === true)) {
+  console.error('a device was created on a fallback adapter, or none was created; see deviceAdapters');
+  process.exitCode = 1;
+}
 if (rows.some((row) => row.pick !== null && Object.values(row.pick).some((p) => p.errors.length > 0 || p.settled === 0))) {
   console.error('a pick failed or none settled; see each row\'s pick');
   process.exitCode = 1;

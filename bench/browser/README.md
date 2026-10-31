@@ -453,6 +453,78 @@ GPU path's gaps do: a click while nodes glide and a press not hovered first
 are ignored, and touch and pen use the CPU index anyway. This ran WebGPU only;
 the WebGL2 fallback's pick cost is not measured.
 
+### What an edge hit costs a frame (M4.8b)
+
+```
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs \
+  --sizes=10000 --edges=straight,smooth --motion=springs --edge-hit   # [--dpr=2]
+```
+
+`--edge-hit` does for `createEdgeHitIndex` what `--hit` does for nodes, over
+the edges each frame hands `setEdges`: a still frame queries one index built
+before the clock starts, and an animated frame rebuilds the index over that
+frame's points, timed as `edgeHitIndex`, then queries it, timed as `edgeHit`.
+The tolerance is `DagrCanvas`'s for a mouse: half the ribbon (1 device pixel)
+over the device pixel ratio, plus 4 CSS pixels, over the zoom. The query does
+not ask the node index first, so it also answers under nodes. A rebuild every
+frame is what a click costs on the frame it lands; `DagrCanvas`'s hover reuses
+an index up to 100 ms old, so it rebuilds on about one frame in six. The
+report's `edgeHit` gives the untimed build and how many queries, warm-up
+included, landed on an edge. A `smooth` group is drawn as a curve through its
+points and the index tests the chords, so those rows price the index, not
+its accuracy on that curve.
+
+The report also lists `deviceAdapters`, the adapter behind every device the
+page created, and exits non-zero when any of them is a fallback adapter, or
+the page created none. With two
+GPUs, the adapter a bare `requestAdapter()` returns is not proof of which one
+drew.
+
+**What it found on 2026-10-31**, on the Windows desktop
+[above](#from-wsl2-through-the-windows-sides-chrome), which now also has an
+NVIDIA GeForce RTX 4090 (driver 32.0.16.2101) beside the AMD Radeon
+integrated graphics, Windows build 26300. Chrome 156.0.8078.48 headed on the
+Windows side, attached from WSL2, no flags beyond the helper's. The adapter
+was `nvidia` `lovelace`, `isFallbackAdapter: false`, both from
+`requestAdapter()` and behind the renderer's device, and `renderer.backend`
+was `webgpu` on every row. Tick 18 ms, load average 0.0 to 1.4 (falling from
+the build before the first pair). 10,000 nodes and 13,169 edges with springs
+in flight and every node moving, alternating runs without and with
+`--edge-hit`: three pairs at DPR 1 and two at DPR 2. Times are median / 95th
+percentile / max in milliseconds. In flight, a straight edge has 2 points and
+a smooth one 4, so the index holds 13,169 and 39,190 segments.
+
+| DPR | Edges | Past one tick, without | Past one tick, with `--edge-hit` | `edgeHitIndex` | `edgeHit` |
+| --- | --- | --- | --- | --- | --- |
+| 1 | straight | 0%, 0%, 0% | 0%, 0%, 0% | 2.0 / 4.7 to 4.9 / 5.9 to 6.0 | 0.0 / 0.0 to 0.1 / 0.1 |
+| 1 | smooth | 3.7%, 5.3%, 4.7% | 71.7%, 64.0%, 75.7% | 12.0 to 14.1 / 17.5 to 21.5 / 24.7 to 27.5 | 0.0 / 0.1 / 0.1 |
+| 2 | straight | 0%, 0% | 0%, 0% | 2.0 / 4.8 / 5.4 to 5.8 | 0.0 / 0.1 / 0.1 |
+| 2 | smooth | 5.0%, 6.7% | 70.0%, 68.7% | 12.4 to 12.7 / 19.6 to 20.5 / 26.1 to 28.1 | 0.0 / 0.1 / 0.1 |
+
+Still frames missed no ticks with or without it, and a still query took 0.0
+ms at the median and at most 0.2. The untimed first build took 5.4 to 6.2 ms
+for straight edges and 5.0 to 10.1 for smooth. 38% to 50% of queries landed
+on an edge. `setEdges`, `render` and `advance` overlapped between runs with
+and without it (smooth `setEdges` 8.4 to 9.8 ms at the median). The page
+logged three's `Vertex attribute "position" not found on geometry` warning
+once per run, and no page error.
+
+- **A query is free; the rebuild is not.** Every query took 0.1 ms or less.
+  The cost is the rebuild over the frame's points.
+- **The rebuild grows faster than the segments.** Three times the segments
+  cost six times the time, 2 ms against 12 to 14 at the median.
+- **Rebuilt every frame, it fits beside straight edges and not beside smooth
+  ones.** With straight edges no tick was missed. With smooth edges, where
+  `setEdges` already takes about half the 18 ms tick, about 70% of ticks
+  were missed against about 5% without it.
+
+This prices rebuilding on every frame, the most a click while edges glide
+asks for. Hover's one rebuild in six frames was not run, nor were
+`DagrCanvas`'s own routes, whose point counts depend on the layout. It ran on
+the RTX 4090 only, so it does not compare with the AMD rows above, and the
+WebGL2 fallback is not measured. Whether edges need a GPU pick id, or a
+cheaper CPU rebuild, is the next decision, not this one.
+
 ## Frame profile on WebGPU (M4.10a)
 
 ```
@@ -464,6 +536,7 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
   # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1] [--pick]
+  # [--edge-hit]
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
