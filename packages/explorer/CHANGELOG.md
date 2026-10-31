@@ -3,6 +3,15 @@
 ## Unreleased
 
 - Use the shared renderer-core touch gesture for pinch geometry/contact lifecycle, retaining Explorer focus-gated scrolling, camera constraints and click suppression. No new backend or responsive panel is introduced by this change.
+- Details dock below the map in containers narrower than 720 CSS pixels,
+  leaving at least half the graph visible. An entirely offscreen compact
+  panel scrolls into view on opening without moving focus or repeating the
+  scroll on connection navigation.
+- Default primary controls target 44 CSS pixels; search uses a 16px input.
+- Search frames the accepted result after details mount, using current
+  obstruction geometry instead of the previous full graph area. A host with
+  controlled state that has not opened details on that result by the next
+  frame no longer gets the camera move.
 
 ## 0.1.4
 

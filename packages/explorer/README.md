@@ -119,13 +119,28 @@ are positioned against it and clipped by it, and a press that becomes a pan
 must not select their text. The drawer is outside the viewport, so its text
 stays selectable.
 
+**Details adapt to their container.** Below 720 CSS pixels of containing
+surface width, details dock to the bottom at half the graph height, capped at
+half the dynamic viewport height. Wider containers retain the 360px side
+panel. The graph never resizes, and the same details body, selection and
+connection commands survive docking changes. If opening compact details
+puts the entire panel offscreen, Explorer scrolls it into view once without
+moving focus. Following connections does not repeat that page scroll.
+`data-placement="bottom"` or `"right"` exposes the placement for host styling.
+
+The default stylesheet gives primary controls at least 44 by 44 CSS pixels
+and uses a 16px search input. Hosts that replace the stylesheet or render their
+own details actions own their target sizing. Graph nodes still scale with the
+camera; search and connections provide larger targets for precise navigation.
+
 **The camera frames what the drawer leaves uncovered.** With the drawer
 open, fit, `focusNode`, `reveal`, the zoom buttons and keys all work in the
-part of the graph beside it, a node under the drawer can be panned out, and
-the node the drawer opens on is revealed if the drawer covers it. A camera at
+part of the graph beside or above it. A node under the drawer can be panned
+out, and the node the drawer opens on is revealed if the drawer covers it. A camera at
 fit eases to the new fit as the drawer opens and closes. A drawer that would
-leave less than 160px, or a quarter of the graph's width, is ignored, so on a
-phone the camera keeps the whole graph. For overlays of your own, pass
+leave less than 160px, or a quarter of the graph's width, is ignored, so an
+oversized host overlay does not collapse the camera frame. For overlays of
+your own, pass
 `inset={{ top, right, bottom, left }}` in CSS pixels. `contentPadding` is how
 far, as a fraction of the frame, content may be panned past its edge: default
 0.05, clamped into [0, 0.45].

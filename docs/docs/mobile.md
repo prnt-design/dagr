@@ -112,7 +112,8 @@ measurements rather than assuming a phone is always slower or has fewer pixels.
 Explorer's rich node content remains DOM, backed by the same data and commands
 as search and details.
 
-Adaptive controls/details are separate work, tracked by M5.7b. This input
+Adaptive controls and details shipped separately in M5.7b: Explorer docks
+details below the map in containers narrower than 720 CSS pixels. This input
 foundation does not add responsive panels or a new backend. The planned outline reader uses the same
 ExplorerRoot state. Keyboard occlusion, safe areas and camera-visible areas
 still need a shared contract: a software keyboard can shrink the
