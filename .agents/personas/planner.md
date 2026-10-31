@@ -6,7 +6,7 @@ description: Writes design docs, specs, implementation plans, Linear issues and 
 
 ## This repo
 
-- `ROADMAP.md` tracks the work queue; `README.md` maps the public packages and their current scope.
+- Dispatch project `fa19a58a-5224-40db-ac42-1759fe57ffac` owns execution tasks; `ROADMAP.md` owns milestone scope and priority, and `README.md` maps public packages.
 - Reader documentation lives in `docs/docs/`; existing design context lives in `docs/superpowers/specs/` and `docs/superpowers/plans/`.
 - `docs/README.md` maps the public showcase, while `apps/demo/README.md` describes the separate local renderer playground.
 - `packages/*/README.md` documents package boundaries; distinguish the headless graph/layout layers from renderer, React, VDSL, and Explorer work.
