@@ -676,6 +676,9 @@ function createEngine(
       aim(zoomCamera(target, factor, frameCenter(area), limits));
     },
     focusBox(box) {
+      // A newly mounted or redocked overlay may precede its ResizeObserver
+      // delivery. Read its current bounds before an explicit focus command.
+      measure();
       if (limits === null || !isFiniteBox(box)) return;
       aim(focusCamera(box, area, limits));
     },

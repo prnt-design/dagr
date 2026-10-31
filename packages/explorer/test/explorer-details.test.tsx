@@ -15,7 +15,7 @@ import { ExplorerRoot } from '../src/root.js';
 import type { ExplorerRootProps } from '../src/root.js';
 import type { ExplorerEdge, ExplorerView } from '../src/types.js';
 import { useExplorer } from '../src/use-explorer.js';
-import { fire, flush, installDom, mount, resizeTo, runFramesUntilIdle, uninstallDom } from './dom.js';
+import { fire, flush, installDom, mount, resizeTo, runFramesUntilIdle, uninstallDom, watchCount, setSize, notifyResize } from './dom.js';
 import type { Mounted } from './dom.js';
 import { Boundary, detail, overview, quietErrors } from './fixtures.js';
 import type { Item } from './fixtures.js';
@@ -126,6 +126,48 @@ describe('ExplorerDetails: what it shows', () => {
     expect(find('details')).toBeNull();
     await flush(() => state().select('b'));
     expect(find('details')).toBeNull();
+  });
+
+  it('docks by container width, keeps the same reading body and releases its observer', async () => {
+    await ready();
+    const before = watchCount();
+    await flush(() => state().inspect('b'));
+    const body = part('details-body');
+    const close = part('details-close');
+    close.focus();
+    for (const width of [320, 390, 768, 320]) {
+      await resizeTo(width, 480);
+      expect(part('details').dataset.placement).toBe(width < 720 ? 'bottom' : 'right');
+      expect(part('details').style.height).toBe(width < 720 ? '50%' : '');
+      expect(part('details-body')).toBe(body);
+      expect(state().selectedId).toBe('b');
+      expect(document.activeElement).toBe(close);
+    }
+    await flush(() => state().closeDetails());
+    expect(watchCount()).toBe(before);
+  });
+
+  it('reveals an entirely offscreen compact panel without scrolling again on follow', async () => {
+    await ready();
+    await flush(() => state().inspect('b'));
+    const aside = part('details');
+    const scroll = vi.fn();
+    aside.scrollIntoView = scroll;
+    const parent = aside.parentElement;
+    if (parent === null) throw new Error('no containing surface');
+    vi.spyOn(aside, 'getBoundingClientRect').mockReturnValue({
+      left: 0, right: 320, top: 900, bottom: 1140, width: 320, height: 240, x: 0, y: 900,
+    } as DOMRect);
+    setSize(parent, 320, 480);
+    await notifyResize(parent);
+    expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+    await flush(() => connections()[0]?.click());
+    expect(scroll).toHaveBeenCalledTimes(1);
+    setSize(parent, 800, 480);
+    await notifyResize(parent);
+    setSize(parent, 320, 480);
+    await notifyResize(parent);
+    expect(scroll).toHaveBeenCalledTimes(1);
   });
 
   it('opens as an overlay with a title, a close button and a focusable scroll body', async () => {
