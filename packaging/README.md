@@ -117,6 +117,32 @@ their scoped package counterparts.
 description of an ESM-only package rather than a defect. If a CommonJS build is
 ever added, that profile is the line that has to change.
 
+## External Explorer lifecycle fixture
+
+`verify:tools` also copies `fixtures/explorer/{server,client}.mjs` into two
+temporary consumers outside this workspace. Each installs only the graph,
+layout, render and Explorer tarballs with matching React/React DOM 18.3.1 or
+19.2.8, plus jsdom 30.0.1. npm validates their peer constraints; optional peers
+are omitted and the fixture requires `three` to be unresolvable. The umbrella
+and `@prnt/dagr-react` require React 19, so neither belongs in the React 18
+consumer.
+
+The server runs in a separate DOM-free process. The client hydrates its HTML,
+checks that React preserves the viewport element without warnings, measures a
+synthetic 390 by 480 CSS-pixel viewport, changes search through the public API,
+unmounts and mounts again. Both unmounts must clear the API ref, observers and
+pending animation frames. `consumer.tsx` compiles under NodeNext with
+`skipLibCheck` off, matching React types and no three types installed.
+It resolves and reads the public CSS subpath and
+exercises the public core pinch/reset API. No source import or workspace alias
+is available. Temporary installs are removed in the verifier's `finally` block.
+
+This closes an installed-artifact gap: the normal packaging suite already
+checked React 19 server HTML, CSS presence and three-free core imports, while
+the Explorer source tests checked hydration under aliases. jsdom supplies DOM
+lifecycle evidence, not browser layout, touch scrolling or device conformance.
+See [consumer onboarding and release handoff](./consumer-readiness.md).
+
 ## The publish itself
 
 Queued for the maintainer, per `AGENTS.md`. The command is `pnpm publish`.
