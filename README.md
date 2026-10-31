@@ -60,15 +60,24 @@ for explanatory graphs: rich node summaries, meaningful edges, detailed
 examples and accessible connection navigation. Its [typed example](skills/dagr-learning-explorer/references/learning-explorer.tsx)
 uses the public Explorer API. The skill is guidance, not a new runtime feature.
 
-Agents can read the skill directly from a checkout. After it is available in
-the source revision you install, the standard skills CLI supports selecting it:
+Agents can read the skill directly from a checkout, or install it with the
+[skills CLI](https://github.com/vercel-labs/skills) (Node 22.20 or newer).
+Pin a commit you have reviewed, and name the agent so the CLI installs into
+the current project rather than your home directory:
 
 ```bash
-npx skills add prnt-design/dagr --skill dagr-learning-explorer
+npx skills add prnt-design/dagr --list
+npx skills add https://github.com/prnt-design/dagr/tree/<commit>/skills/dagr-learning-explorer -a claude-code -y
+npx skills list
+npx skills remove dagr-learning-explorer -y
 ```
 
-Review the source and choose the destination agent when installing. This does
-not run on `npm install`, and current npm tarballs do not bundle the skill.
+`skills-lock.json` records the commit and a content hash. A local clone works
+as the source too (`npx skills add ./dagr --skill dagr-learning-explorer -a claude-code -y`).
+The example imports `@prnt/dagr-explorer/styles.css`, so a TypeScript project
+with `noUncheckedSideEffectImports` (on by default in TypeScript 7) needs its
+bundler's CSS module types, such as `vite/client`. Installing a skill does not run on `npm install`, and current
+npm tarballs do not bundle it.
 The [learning/mobile roadmap](ROADMAP.md#explorer-learning-and-mobile-track)
 tracks distribution validation and adaptive library support.
 
