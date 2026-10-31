@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Use the shared renderer-core touch gesture for pinch geometry/contact lifecycle, retaining Explorer focus-gated scrolling, camera constraints and click suppression.
 - Details dock below the map in containers narrower than 720 CSS pixels,
   leaving at least half the graph visible. An entirely offscreen compact
   panel scrolls into view on opening without moving focus or repeating the

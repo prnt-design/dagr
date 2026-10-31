@@ -20,6 +20,30 @@ check the same way that `DagrCanvas`'s GPU hit testing answers hover and
 clicks at 10,000 nodes. `windows-chrome.mjs` lets the probe and
 the frame profile reach a Windows GPU from WSL2.
 
+## Shared mobile input check
+
+`mobile-core-check.mjs` replays one touch sequence on both public surfaces:
+DagrCanvas and Explorer. It tests the stable first-two-finger pair through a
+third contact, an ignored extra-finger move, cancellation and a fresh pinch,
+at viewport widths 320/DPR 1 and 768/DPR 3. It writes before/after screenshots
+and `report.json`, and closes its browser/server on success or failure.
+
+```bash
+pnpm build
+# Install browser-only tools outside the workspace, or use bench/browser.
+npm --prefix /tmp/dagr-browser install --no-save playwright-core esbuild
+# Install Chromium with the same Playwright dependency, if not cached.
+/tmp/dagr-browser/node_modules/.bin/playwright-core install chromium
+DAGR_BROWSER_DEPS=/tmp/dagr-browser node bench/browser/mobile-core-check.mjs
+```
+
+`--out=DIR` selects an output folder; `DAGR_CHROMIUM` selects a Chromium binary.
+The 2026-10-28 run passed all four scenarios in Chromium 145.0.7632.6 headless
+touch emulation. Canvas reported WebGL2 software rendering. This is a shared
+input/camera correctness check, not real-device, WebGPU hardware, visual parity
+or performance evidence. The fixture deliberately uses the public package
+entries and one dependency graph; build current source first.
+
 **Nothing here is part of `pnpm bench:ci`, and it is not a gate.** The gate
 compares Node medians against a committed baseline on one machine; a browser
 frame time cannot join it, for the reason M4.10's roadmap entry already gives

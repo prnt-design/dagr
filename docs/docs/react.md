@@ -913,3 +913,12 @@ SVG or canvas consumers can use `shapeEdgePath(points, options)` from
 `@prnt/dagr/render` (or `@prnt/dagr-render`) for the same geometry. Feed its
 returned points to an SVG polyline/path or to renderer edges with `curve: 'polyline'`
 to avoid smoothing them twice.
+
+## Shared mobile foundation
+
+`DagrCanvas` and Explorer consume the same three.js-free pinch primitive.
+The first two touches remain the active pair when an extra finger arrives;
+cancellation/lost capture ends the pair, and coincident fingers pan without a
+zoom spike. Existing `touchNavigation` modes and their browser-scroll tradeoffs
+remain unchanged. See [Mobile architecture](./mobile.md) for the public core
+API, layer boundaries and remaining viewport/device validation work.

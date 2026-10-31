@@ -1,5 +1,5 @@
 /**
- * `@prnt/dagr-render/core`: the arithmetic of this package that never touches a
+ * `@prnt/dagr-render/core`: the camera/input mechanics of this package that never touch a
  * GPU, as its own entry.
  *
  * The full entry re-exports `createRenderer`, and `webgpu-renderer.ts` imports
@@ -29,3 +29,6 @@ export type { Camera2DInit } from './camera.js';
 export { shapeEdgePath } from './edge-path.js';
 export type { EdgePathOptions } from './edge-path.js';
 export type { OrthoFrustum, Size, Vec2, ViewportSize, WorldBounds } from './geometry.js';
+
+export { createPinchGesture } from './pinch-gesture.js';
+export type { PinchDelta, PinchGesture } from './pinch-gesture.js';

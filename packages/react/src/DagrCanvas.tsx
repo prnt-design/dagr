@@ -73,7 +73,7 @@ import type { Graph } from '@prnt/dagr-graph';
 import type { LayoutConfig, LayoutDelta, LayoutResult } from '@prnt/dagr-layout';
 import {
   createNodeGroupLayer, nodeGroupBounds, createHtmlOverlay,
-  canvasPoint, createMotionLoop, createRenderer, createRichNodes, createSceneMotion, fitZoom,
+  canvasPoint, createPinchGesture, createMotionLoop, createRenderer, createRichNodes, createSceneMotion, fitZoom,
   keyCommand, shapeEdgePath, wheelZoomFactor,
 } from '@prnt/dagr-render';
 import type {
@@ -1118,34 +1118,30 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     // a mouse or pen has one pointer. While two touches are down the single
     // pointer pan and any click are suppressed (`pinchedRef`), and the flag is
     // cleared when the next fresh sequence begins, after the release handlers.
-    const touches = new Map<number, { x: number; y: number }>();
-    const spread = (): { mid: { x: number; y: number }; distance: number } | null => {
-      if (touches.size !== 2) return null;
-      const [a, b] = [...touches.values()];
-      if (a === undefined || b === undefined) return null;
-      return {
-        mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
-        distance: Math.hypot(a.x - b.x, a.y - b.y),
-      };
-    };
+    const touches = createPinchGesture();
     const touchDown = (event: PointerEvent): void => {
       if (event.pointerType !== 'touch') return;
+      // A new primary starts a fresh sequence even if old releases were lost.
+      if (event.isPrimary) touches.reset();
       if (touches.size === 0) pinchedRef.current = false;
-      touches.set(event.pointerId, canvasPoint(event, host.getBoundingClientRect()));
+      touches.down(event.pointerId, canvasPoint(event, host.getBoundingClientRect()));
       if (touches.size >= 2) pinchedRef.current = true;
     };
     const touchMove = (event: PointerEvent): void => {
       if (!touches.has(event.pointerId)) return;
-      const before = spread();
-      touches.set(event.pointerId, canvasPoint(event, host.getBoundingClientRect()));
-      const after = spread();
-      if (before === null || after === null || !(before.distance > 0) || !(after.distance > 0)) return;
-      camera.panByScreen(after.mid.x - before.mid.x, after.mid.y - before.mid.y);
-      camera.zoomAtScreen(after.mid, after.distance / before.distance);
+      const change = touches.move(event.pointerId, canvasPoint(event, host.getBoundingClientRect()));
+      if (change === null) return;
+      camera.panByScreen(change.pan.x, change.pan.y);
+      camera.zoomAtScreen(change.anchor, change.factor);
       requestDraw();
     };
     const touchEnd = (event: PointerEvent): void => {
-      touches.delete(event.pointerId);
+      touches.up(event.pointerId);
+    };
+    // A child losing a touch's implicit capture to the host when a pan starts
+    // is a handover, not the end of the contact.
+    const touchLost = (event: PointerEvent): void => {
+      if (event.target === host) touchEnd(event);
     };
     const press = (event: PointerEvent): void => {
       cancelFlight();
@@ -1244,6 +1240,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       window.addEventListener('pointermove', touchMove);
       window.addEventListener('pointerup', touchEnd);
       window.addEventListener('pointercancel', touchEnd);
+      window.addEventListener('lostpointercapture', touchLost);
     }
     host.addEventListener('pointermove', move);
     host.addEventListener('pointerleave', leave);
@@ -1258,6 +1255,8 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       window.removeEventListener('pointermove', touchMove);
       window.removeEventListener('pointerup', touchEnd);
       window.removeEventListener('pointercancel', touchEnd);
+      window.removeEventListener('lostpointercapture', touchLost);
+      touches.reset();
       host.removeEventListener('pointermove', move);
       host.removeEventListener('pointerleave', leave);
       hoverAgainRef.current = null;

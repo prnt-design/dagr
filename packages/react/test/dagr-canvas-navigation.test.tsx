@@ -599,6 +599,102 @@ describe('touch pinch', () => {
     target.dispatchEvent(event);
   }
 
+  it('continues pinching when a third finger arrives and ignores that finger', async () => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" />);
+    const camera = lastRenderer().camera;
+    const zoom = camera.zoom;
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 200, 100);
+      touch(host(), 'pointerdown', 3, 600, 100);
+      touch(window, 'pointermove', 2, 300, 100);
+    });
+    expect(camera.zoom).toBeCloseTo(zoom * 2);
+    const center = { ...camera.center };
+    await flush(() => {
+      touch(window, 'pointermove', 3, 700, 100);
+      touch(window, 'pointerup', 3, 700, 100);
+    });
+    expect(camera.center).toEqual(center);
+    expect(camera.zoom).toBeCloseTo(zoom * 2);
+  });
+
+  it.each(['pointercancel', 'lostpointercapture'])('ends a pinch on %s without a later jump', async (end) => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" />);
+    const camera = lastRenderer().camera;
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 200, 100);
+      touch(host(), end, 2, 200, 100);
+    });
+    const zoom = camera.zoom;
+    const center = { ...camera.center };
+    await flush(() => {
+      touch(window, 'pointermove', 2, 400, 100);
+      touch(window, 'pointermove', 1, 130, 100);
+    });
+    expect(camera.zoom).toBe(zoom);
+    expect(camera.center).toEqual(center);
+    await flush(() => {
+      touch(host(), 'pointerdown', 3, 230, 100);
+      touch(window, 'pointermove', 3, 330, 100);
+    });
+    expect(camera.zoom).toBeCloseTo(zoom * 2);
+  });
+
+  it('keeps pinching when a pan hands a touch from the canvas to the host', async () => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" />);
+    const camera = lastRenderer().camera;
+    const canvas = host().querySelector('canvas');
+    if (canvas === null) throw new Error('no canvas');
+    await flush(() => {
+      touch(canvas, 'pointerdown', 1, 100, 100);
+      touch(window, 'pointermove', 1, 120, 100);
+      touch(canvas, 'lostpointercapture', 1, 120, 100);
+    });
+    const zoom = camera.zoom;
+    await flush(() => {
+      touch(canvas, 'pointerdown', 2, 220, 100);
+      touch(window, 'pointermove', 2, 320, 100);
+    });
+    expect(camera.zoom).toBeCloseTo(zoom * 2);
+  });
+
+  it('lets a new primary sequence replace contacts whose releases were missed', async () => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" />);
+    const camera = lastRenderer().camera;
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 200, 100);
+      touch(window, 'pointermove', 2, 300, 100);
+    });
+    const zoom = camera.zoom;
+    // A new primary touch proves the previous physical sequence ended,
+    // even if the surface did not hear its releases.
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 200, 100);
+      touch(window, 'pointermove', 2, 300, 100);
+    });
+    expect(camera.zoom).toBeCloseTo(zoom * 2);
+  });
+
+  it('pans when coincident fingers first separate without a zoom spike', async () => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" />);
+    const camera = lastRenderer().camera;
+    const zoom = camera.zoom;
+    const before = camera.worldToScreen({ x: 0, y: 0 });
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 100, 100);
+      touch(window, 'pointermove', 2, 120, 100);
+    });
+    expect(camera.zoom).toBe(zoom);
+    const after = camera.worldToScreen({ x: 0, y: 0 });
+    expect(after.x - before.x).toBeCloseTo(10);
+    expect(after.y).toBeCloseTo(before.y);
+  });
+
   it('zooms about the midpoint, keeps the midpoint fixed, and never clicks a node', async () => {
     const onNodeClick = vi.fn();
     await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" onNodeClick={onNodeClick} />);
@@ -614,9 +710,9 @@ describe('touch pinch', () => {
     });
     // Fingers went 100 apart to 200 apart: zoom doubles about the new midpoint.
     expect(camera.zoom).toBeCloseTo(zoom * 2);
-    const after = camera.worldToScreen(camera.screenToWorld({ x: a.x + 100, y: a.y }));
+    const after = camera.worldToScreen(world);
     expect(after.x).toBeCloseTo(a.x + 100);
-    expect(world).toBeDefined();
+    expect(after.y).toBeCloseTo(a.y);
     await flush(() => {
       touch(window, 'pointerup', 2, a.x + 200, a.y);
       touch(window, 'pointerup', 1, a.x, a.y);
