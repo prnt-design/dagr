@@ -1146,7 +1146,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     const press = (event: PointerEvent): void => {
       cancelFlight();
       pointerKindRef.current = event.pointerType || 'mouse';
-      if (event.pointerType !== 'touch') pinchedRef.current = false;
+      if (event.pointerType !== 'touch' && touches.size < 2) pinchedRef.current = false;
     };
     // A region marked `data-dagr-no-zoom` is the card's alone: no pan, pinch
     // or selection starts inside it. Capture phase, so it runs before the
