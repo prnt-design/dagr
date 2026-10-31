@@ -689,7 +689,9 @@ it meets its node is the node's, and hover reports `null` to `onEdgeHover`
 when the pointer moves onto a node. Edges are tested on the CPU in both
 `hitTesting` modes, after the node test misses: under `'gpu'` that means after
 a settled pick says no node. Without either handler an edge is not a target,
-so a click on one stays a background click. With `onEdgeClick` set, hover over
+so a click on one stays a background click. With `onEdgeHover` and no
+`onEdgeClick`, a click on an edge reports nothing rather than a background
+click, as a click on a node does without `onNodeClick`. With `onEdgeClick` set, hover over
 an edge sets `cursor: pointer`.
 
 **`hitTesting="gpu"`** answers mouse hover and clicks from the
@@ -700,8 +702,8 @@ and a click while nodes glide are ignored, and hover holds its last answer
 until the pick at a resting pointer settles. Each draw asks the resting pointer
 again, so after a wheel zoom or a flight a click lands without moving the
 mouse, and while nodes glide or the camera flies under it, picks run back to
-back, one at a time, until the drawing rests. Hover primes the picks, so an
-`onBackgroundClick` alone is enough to start them. Touch and pen keep the CPU
+back, one at a time, until the drawing rests. Hover primes the picks, so
+`onBackgroundClick` or an edge handler alone is enough to start them. Touch and pen keep the CPU
 index, touch with its fingertip tolerance, since a tap, or a pen that does not
 report hover, has nothing picked before it. A renderer rebuilt after a lost
 context starts with no picks rather than answering from the lost one's. The
