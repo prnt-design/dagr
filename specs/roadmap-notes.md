@@ -16,6 +16,20 @@ The checklist in `ROADMAP.md` is the live one. New tasks keep the same shape:
 the one-line entry lands there, and the working record lands here under the
 same ID.
 
+## Positioning and roadmap maintenance (2026-10-30 UTC)
+
+PRODUCT.md and DESIGN.md now follow the 2026-10-17 renderer-first decision.
+The commerce/VDSL atlas remains an example; brand and accessibility guidance
+remain applicable. No showcase rewrite is included. ROADMAP.md summarizes
+M4.10 outcomes and limits through the 2026-10-28 measurement record rather
+than repeating its optimization history. The detailed browser record and all
+prior working notes remain intact. All-moving 10k smooth rendering has not
+established 60 Hz. Dispatch owns implementation slices under stable roadmap
+milestone IDs; merged PRs and successor tasks close each handoff. The renderer
+successor to #172 is `tsk_88bfcb651a56`, already in progress at this update.
+Parked/deferred scope, separate report scheduling and human publication and
+baseline gates remain in force.
+
 ## M5.7: Learning Explorers and mobile (2026-10-26 UTC)
 
 The maintainer asked to explore Explorer as a visual learning tool, make agents
