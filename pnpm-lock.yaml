@@ -70,6 +70,8 @@ importers:
         specifier: ^8.1.5
         version: 8.1.5(@types/node@26.1.1)(jiti@1.21.7)(terser@5.49.0)
 
+  apps/reports: {}
+
   bench: {}
 
   docs:
