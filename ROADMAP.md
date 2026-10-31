@@ -22,6 +22,35 @@ keep their separate scheduler and dependencies.
 The working record and historical decisions live in
 [specs/roadmap-notes.md](specs/roadmap-notes.md) under the same milestone IDs.
 
+## Priority refresh (2026-10-29 maintainer request)
+
+The next product work is mobile usability, portable skill distribution, then
+external-consumer library readiness. This ordering supersedes the scheduling
+language below, while retaining the renderer identity and measured limits.
+Released correctness/install regressions still preempt feature work. Dispatch
+owns execution criteria and blockers; the following is the milestone order,
+not a second implementation queue.
+
+| Priority | Milestone / board task | Delivery condition |
+| --- | --- | --- |
+| P0 | Benchmark gate reliability, `tsk_1048e2545110` | Resolve the existing measurement blocker without weakening the gate; green CI alone does not permit merge. |
+| P1 | M5.7b mobile reading, `tsk_eb73b47f05e3`; M5.8a shared pinch, `tsk_98c8dffe7bda` | Land existing PRs #171 and #175 after current-main integration and all gates. Track their current integration and validation status on the linked board tasks. |
+| P1 | M5.8b viewport/occlusion, `tsk_e55c78e6012c`; M5.8c mobile conformance, `tsk_7656d37da9de` | Follow the shared input foundation with usable visible-area handling and cross-surface evidence, including explicitly unverified real-device cases. |
+| P1 | M5.7c shared-state outline, `tsk_17e1212b51f0` | Follow M5.7b with a readable alternative using the same selection, query, details and content. |
+| P1 | M5.7d-1 portable skill installation, `tsk_a05bb1f08658` | Verify local and pinned-Git installation plus first use outside this workspace. Independent preparation can proceed while mobile delivery is blocked. |
+| P2 | M5.9 consumer readiness, `tsk_0d0a71099683` | Exercise packed mobile APIs in external consumers, document support evidence and prepare a release handoff. Publication remains human-gated. |
+| P2 | M5.7d-2 authoring evaluation, `tsk_1b6fb4253f02` | Evaluate three authoring briefs after the install path is verified; this broader study does not block skill distribution. |
+
+M5.8 keeps pure geometry/input in the three-free core, browser adapters at the
+surface boundary, and reading/docking policy in Explorer. Mobile does not imply
+a new renderer. Real iOS/Android keyboard, safe-area and accessibility evidence
+must remain distinct from desktop touch emulation. Existing report-track work
+retains its dedicated scheduling; it does not become a dependency for these
+library tasks. Native Explorer rendering, speculative editing/compound features
+and further all-moving 10k optimization stay behind this product sequence unless
+a concrete correctness issue changes priority. Preserve their existing evidence
+and PRs rather than treating deferred work as complete.
+
 ## Direction update (2026-10-26 UTC)
 
 The maintainer asked to develop Explorer as a visual learning tool, with
