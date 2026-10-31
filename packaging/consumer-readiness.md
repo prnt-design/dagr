@@ -4,6 +4,17 @@ Evidence checked on 2026-10-31. This is readiness work for the next release,
 not publication or full mobile certification. M5.8b (viewport/occlusion) and
 M5.8c (device conformance) are outstanding.
 
+**Open release blocker:** [touch-correctness PR #196](https://github.com/prnt-design/dagr/pull/196)
+repairs capture-transfer handling and camera adapter behavior. Its owner
+reproduced the capture-transfer failure with isolated published 0.1.4 packages
+in Chromium 148.0.7778.96: moving capture from a node to the viewport ended the
+active pair and subsequent movement left the camera transform unchanged.
+The reviewed correction has not merged because its local benchmark gate
+failed. This fixture does not reproduce browser pointer capture and cannot
+clear that blocker. Verify the merged correction in the owner's browser
+reproduction and rerun this packed consumer before claiming corrected touch
+behavior. Chromium reproduction is not real-device conformance evidence.
+
 ## Choose a consumer surface
 
 For an existing React 18 application, install the scoped Explorer package:
@@ -79,7 +90,7 @@ checks below. Publication remains a maintainer action.
 | Umbrella and React binding peers | React 19 | Retained |
 | Renderer core | Three-free camera/path entry | Adds `createPinchGesture`, `PinchGesture`, `PinchDelta`; published core.js has no pinch export |
 | Compact Explorer details | Published details implementation has no compact docking | Bottom docking below 720 CSS pixels, 44px primary controls, 16px search input |
-| Touch adapters | Earlier independent input handling | Shared pinch/contact lifecycle; runtime follow-up owned separately |
+| Touch adapters | Earlier independent input handling; capture-transfer bug reproduced in Chromium | Shared pinch/contact lifecycle; open correction in #196 remains a release blocker |
 | Renderer and React fixes | See released changelogs | GPU node picking, edge retarget/empty-edge fixes, edge interaction and GPU hit-testing bindings in package Unreleased sections |
 
 The package changelogs are the complete release-note inputs, including
@@ -100,7 +111,7 @@ inventory, not a substitute for reviewing every Unreleased section at release.
 | Real iOS Safari and Android Chrome | Unverified here | M5.8c owner must record device/OS/browser, scroll, cancellation, focus and teardown evidence |
 | Software keyboard / visual viewport / safe areas | Unverified, contract outstanding | M5.8b must establish occlusion behavior and device evidence |
 
-Before release, integrate the touch-correctness owner's merged fixes and rerun
+Before release, integrate the touch-correctness owner's merged fixes (#196) and rerun
 the packed-artifact fixture and required gates on that final tree. Record
 diff/tree review resolutions, a passing five-command local gate and concluded
 green CI for that head. The maintainer must choose the release version, inspect
