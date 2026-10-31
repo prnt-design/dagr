@@ -61,25 +61,27 @@ examples and accessible connection navigation. Its [typed example](skills/dagr-l
 uses the public Explorer API. The skill is guidance, not a new runtime feature.
 
 Agents can read the skill directly from a checkout, or install it with the
-[skills CLI](https://github.com/vercel-labs/skills) (Node 22.20 or newer).
-Pin a commit you have reviewed, and name the agent so the CLI installs into
-the current project rather than your home directory:
+[skills CLI](https://github.com/vercel-labs/skills) (tested with 1.7.4, which
+needs Node 22.20 or newer). Replace `<commit>` with the full SHA of a commit
+you have reviewed. `-a` names the agent so the CLI neither prompts nor guesses;
+without `-g` it installs into the current project.
 
 ```bash
-npx skills add prnt-design/dagr --list
-npx skills add https://github.com/prnt-design/dagr/tree/<commit>/skills/dagr-learning-explorer -a claude-code -y
-npx skills list
-npx skills remove dagr-learning-explorer -y
+npx skills@1.7.4 add prnt-design/dagr --list
+npx skills@1.7.4 add https://github.com/prnt-design/dagr/tree/<commit>/skills/dagr-learning-explorer -a claude-code -y
+npx skills@1.7.4 list
+npx skills@1.7.4 remove dagr-learning-explorer -y
 ```
 
 `skills-lock.json` records the commit and a content hash. A local clone works
-as the source too (`npx skills add ./dagr --skill dagr-learning-explorer -a claude-code -y`).
+as the source too:
+`npx skills@1.7.4 add ./dagr --skill dagr-learning-explorer -a claude-code -y`.
 The example imports `@prnt/dagr-explorer/styles.css`, so a TypeScript project
-with `noUncheckedSideEffectImports` (on by default in TypeScript 7) needs its
-bundler's CSS module types, such as `vite/client`. Installing a skill does not run on `npm install`, and current
-npm tarballs do not bundle it.
-The [learning/mobile roadmap](ROADMAP.md#explorer-learning-and-mobile-track)
-tracks distribution validation and adaptive library support.
+with `noUncheckedSideEffectImports` (on by default in TypeScript 7.0.2) needs
+its bundler's CSS module types, such as `vite/client`. `npm install` does not
+install the skill, and current npm tarballs do not bundle it. The
+[learning/mobile roadmap](ROADMAP.md#explorer-learning-and-mobile-track)
+tracks version-matched npm bundling and adaptive library support.
 
 ## Development
 

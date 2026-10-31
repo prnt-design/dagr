@@ -60,49 +60,6 @@ noninteractive node slots and accessible connection navigation. Its standalone
 TSX example is checked against this repository's public types. M5.7d evaluates
 agent outputs and learner tasks before adding more instructions or APIs.
 
-### M5.7d-1: portable skill installation (2026-10-30 UTC)
-
-Checked on WSL2 Linux, Node 22.22.1, npm 9.2.0, `skills` 1.7.4 (vercel-labs),
-source `85ee77a`. Every command ran in an empty project directory with `HOME`
-pointed at an empty scratch directory, `DISABLE_TELEMETRY=1` and a scratch npm
-cache. The home directory was still empty afterwards, so nothing global was
-written.
-
-- **Discovery.** `skills add <local clone> --list` and
-  `skills add prnt-design/dagr --list` each found exactly one skill,
-  `dagr-learning-explorer`. The Dispatch personas are not discovered, so the
-  portable skill stays the only installable unit.
-- **Local install.** `add <clone> --skill dagr-learning-explorer -a claude-code -a codex -y`
-  wrote `.agents/skills/dagr-learning-explorer` and symlinked
-  `.claude/skills/dagr-learning-explorer` to it. `diff -r` against the source
-  was empty, `references/learning-explorer.tsx` included.
-- **Pinned install.** `add https://github.com/prnt-design/dagr/tree/85ee77a58e5fd1de8301e117e1f076eea6c6309a/skills/dagr-learning-explorer -a claude-code -y`
-  copied the skill to `.claude/skills/` and wrote `skills-lock.json` with
-  `ref` set to that commit and the same content hash as the local install
-  (`60f9a3d7...`). `diff -r` was empty, `skills list` showed it, and
-  `skills remove dagr-learning-explorer -y` deleted the files and emptied the
-  lock entries.
-- **First use.** A consumer outside the workspace installed
-  `@prnt/dagr-explorer@0.1.4`, React 19.2.0, TypeScript 5.9.3 and Vite 7.1.12
-  from npm and copied the installed `learning-explorer.tsx` unchanged.
-  `tsc` (strict, `Bundler` resolution, `skipLibCheck` off) passed and
-  `vite build` succeeded. Headless Chromium (Playwright build 1223) loaded the
-  built page at 1280 by 800 with a mouse and at 390 by 844 with touch
-  emulation: searching "permissions" listed Handler, choosing it opened its
-  details, and the "Handler produces Response" button moved the details to
-  Response. No console or page errors in either run. Emulation, not a real
-  device.
-
-Limitations. TypeScript 7.0.2, npm's `latest` that day, enables
-`noUncheckedSideEffectImports` by default, and the CSS import then fails with
-TS2882 unless the bundler's CSS module types are loaded. With `vite/client`
-in `types` it typechecks under 7.0.2 as well. The CLI needs Node 22.20 or newer while the
-library supports Node 20. Without `-a`, the CLI prompts for agents, or inside
-a detected agent session installs non-interactively, so the README names the
-agent. At 390 pixels the details panel covers the whole map; that is the
-M5.7b mobile repair, not an installation fault. Recovery from a bad install is
-`skills remove` and reinstalling from a pinned commit.
-
 ### Mobile architecture findings and alternatives
 
 A phone-width observation of the published `/docs/explorer` on 2026-10-26
@@ -165,6 +122,51 @@ A native base must satisfy the same behavioral contract if added, plus its own
 visual parity and performance checks. Do not require pixel-identical map and
 outline output. Real-device performance and screen-reader checks stay named
 separately from emulation. No mobile 10k/60fps promise is introduced.
+
+### M5.7d-1: portable skill installation (2026-10-30 UTC)
+
+This answers the open condition in the M5.7a distribution findings above:
+discovery and pinned installation are now checked, not only `add . --list`.
+Checked on WSL2 Linux, Node 22.22.1, the distribution's npm 9.2.0 (`/bin/npm`),
+`skills` 1.7.4 (vercel-labs), source `85ee77a`. Every command ran in an empty project directory with `HOME`
+pointed at an empty scratch directory, `DISABLE_TELEMETRY=1` and a scratch npm
+cache. The home directory was still empty afterwards, so nothing global was
+written.
+
+- **Discovery.** `skills add <local clone> --list` and
+  `skills add prnt-design/dagr --list` each found exactly one skill,
+  `dagr-learning-explorer`. The Dispatch personas are not discovered, so the
+  portable skill stays the only installable unit.
+- **Local install.** `add <clone> --skill dagr-learning-explorer -a claude-code -a codex -y`
+  wrote `.agents/skills/dagr-learning-explorer` and symlinked
+  `.claude/skills/dagr-learning-explorer` to it. `diff -r` against the source
+  was empty, `references/learning-explorer.tsx` included.
+- **Pinned install.** `add https://github.com/prnt-design/dagr/tree/85ee77a58e5fd1de8301e117e1f076eea6c6309a/skills/dagr-learning-explorer -a claude-code -y`
+  copied the skill to `.claude/skills/` and wrote `skills-lock.json` with
+  `ref` set to that commit and the same content hash as the local install
+  (`60f9a3d7...`). `diff -r` was empty, `skills list` showed it, and
+  `skills remove dagr-learning-explorer -y` deleted the files and emptied the
+  lock entries.
+- **First use.** A consumer outside the workspace installed
+  `@prnt/dagr-explorer@0.1.4`, React 19.2.0, TypeScript 5.9.3 and Vite 7.1.12
+  from npm and copied the installed `learning-explorer.tsx` unchanged.
+  `tsc` (strict, `Bundler` resolution, `skipLibCheck` off) passed and
+  `vite build` succeeded. Headless Chromium (Playwright build 1223) loaded the
+  built page at 1280 by 800 with a mouse and at 390 by 844 with touch
+  emulation: searching "permissions" listed Handler, choosing it opened its
+  details, and the "Handler produces Response" button moved the details to
+  Response. No console or page errors in either run. Emulation, not a real
+  device.
+
+Limitations. TypeScript 7.0.2, npm's `latest` that day, enables
+`noUncheckedSideEffectImports` by default, and the CSS import then fails with
+TS2882 unless the bundler's CSS module types are loaded. With `vite/client`
+in `types` it typechecks under 7.0.2 as well. The CLI needs Node 22.20 or
+newer while the library supports Node 20. Without `-a`, the CLI prompts for agents, or inside
+a detected agent session installs non-interactively, so the README names the
+agent. At 390 pixels the details panel covers the whole map; that is the
+M5.7b mobile repair, not an installation fault. Recovery from a bad install is
+`skills remove` and reinstalling from a pinned commit.
 
 ## Priority reset: WebGPU renderer first (2026-10-17 UTC)
 
