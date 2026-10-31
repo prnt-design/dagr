@@ -3471,14 +3471,15 @@ node bench/browser/frame-profile.mjs \
 ```
 
 An Apple M4 Mac mini (10 cores, 16 GB, macOS), Google Chrome
-156.0.8078.76, headed and launched by the script (headless Chrome here paces
-the control at 33.3 ms, which the runner refuses). The adapter, probed at run
+156.0.8078.76, headed and launched by the script (in earlier runs on this
+machine, headless Chrome paced the control at 33.3 ms, which fails the
+runner's tick check; not repeated here). The adapter, probed at run
 time, was `apple` `metal-3` (`Apple M4`), not a fallback, and
 `renderer.backend` was `webgpu` on every row of every run. Viewport 1280 by
 720, `fit` (zoom 0.0715), 13,169 edges, 60 warm-up and 1,200 measured frames
 per mode, control tick 16.7 ms in every run. Three runs at each DPR, DPR 1
 and 2 alternating, one at a time, load average 3.2 to 3.8 at the start of
-each. Columns as above.
+the five runs where it was read (with `uptime`). Columns as above.
 
 | DPR | Edges | Motion | Interval p95 | Past one tick | `apply` | `advance` | `setNodes` | `setEdges` | `render` | Holds the tick |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -3486,19 +3487,20 @@ each. Columns as above.
 | 1 | straight | all moving | 18.5 to 18.6 | 0%, 0%, 0% | 7.1 to 11.1 | 1.1 to 1.7 | 1.1 to 1.2 | 0.9 | 0.3 | yes |
 | 1 | straight | a tenth | 18.6 | 0%, 0%, 0.1% | 0.8 to 1.0 | 0.3 to 0.4 | 1.2 | 0.8 | 0.3 | yes |
 | 1 | smooth | still | 18.6 to 18.7 | 0% to 0.3% | | | | | 0.3 to 0.4 | yes |
-| 1 | smooth | all moving | 18.5 to 18.6 | 0.3%, 0.1%, 0.8% | 13.4 to 14.4 | 1.6 to 2.3 | 1.2 to 1.3 | 6.1 to 7.2 | 0.7 | barely |
+| 1 | smooth | all moving | 18.5 to 18.6 | 0.3%, 0.1%, 0.8% | 13.4 to 14.4 | 1.6 to 2.3 | 1.2 to 1.3 | 6.1 to 7.2 | 0.7 | **no**, barely |
 | 1 | smooth | a tenth | 18.5 to 18.6 | 0%, 0%, 0% | 1.4 to 1.5 | 0.5 to 0.6 | 1.2 | 2.6 to 2.7 | 0.7 | yes |
 | 2 | straight | still | 18.6 to 18.7 | 0% to 0.1% | | | | | 0.4 | yes |
 | 2 | straight | all moving | 18.5 to 18.6 | 0%, 0%, 0% | 10.2 to 10.7 | 1.4 to 1.6 | 1.2 | 0.9 to 1.5 | 0.3 | yes |
 | 2 | straight | a tenth | 18.6 | 0%, 0%, 0% | 0.9 to 1.0 | 0.3 | 1.2 | 0.8 | 0.3 | yes |
 | 2 | smooth | still | 18.6 to 18.7 | 0% to 0.4% | | | | | 0.3 to 0.4 | yes |
-| 2 | smooth | all moving | 18.5 to 18.6 | 0.3%, 0.5%, 0.3% | 13.5 to 13.7 | 1.6 to 1.9 | 1.2 to 1.3 | 6.3 to 7.3 | 0.7 | barely |
+| 2 | smooth | all moving | 18.5 to 18.6 | 0.3%, 0.5%, 0.3% | 13.5 to 13.7 | 1.6 to 1.9 | 1.2 to 1.3 | 6.3 to 7.3 | 0.7 | **no**, barely |
 | 2 | smooth | a tenth | 18.4 to 18.5 | 0%, 0%, 0% | 1.3 to 1.5 | 0.4 to 0.5 | 1.2 | 2.9 to 3.2 | 0.7 to 0.8 | yes |
 
 `input` was 0.4 to 0.8 ms on every animated row and the interval median was
 16.7 ms on every row of every run. This Chrome's interval p95 sits at 18.6
-ms in the control too, so the p95 column here reads about 1.7 ms higher than
-the NVIDIA machine's on every row, the still ones included.
+to 18.7 ms in the control too, so where the NVIDIA machine reads 16.9 the p95
+here reads about 1.7 ms higher, the still rows included; it is not a
+missed-tick signal.
 
 **GPU time per frame**, from `--gpu` with the same launch, one run at each
 DPR straight after the three above. The runner accepted both: the
@@ -3528,11 +3530,11 @@ read higher than moving ones here.
   every node moving, `setEdges` is 6.1 to 7.3 ms and `advance` 1.6 to 2.3,
   against 7.5 to 9.0 and 3.8 to 4.8 on the NVIDIA machine. A retarget frame
   still adds 13.4 to 14.4 ms of `apply`, so that frame's CPU work exceeds one
-  tick on this machine too; how many of the 42 retarget frames per mode
-  became the missed ticks was not traced.
+  tick on this machine too; how many of the 42 (once 43) retarget frames
+  per mode became the missed ticks was not traced.
 - **DPR 2 changes little.** It adds about 0.7 ms of GPU time, and each CPU
-  step's range overlaps DPR 1's or sits within 0.6 ms of it; the smooth all-moving row missed 0.3%
-  to 0.5% at DPR 2 against 0.1% to 0.8% at DPR 1.
+  step's range overlaps DPR 1's or sits within 0.6 ms of it; the smooth
+  all-moving row missed 0.3% to 0.5% at DPR 2 against 0.1% to 0.8% at DPR 1.
 - **V8's allocation phases** (see ["Where the frame points are
   allocated"](#where-the-frame-points-are-allocated-2026-10-30) above) apply
   here as there: the ranges are three runs' spread with the phase unknown.
