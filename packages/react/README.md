@@ -54,7 +54,7 @@ rather than the component's.
 because the package does not guess where your nodes are. Your synchronous hit
 provider receives a surface-relative CSS point, the same point converted
 through your camera, the displayed DPR you supply, and an opaque
-displayed-scene revision. It returns a stable node, port, or empty result
+displayed-scene revision. It returns a stable node, port, edge, or empty result
 stamped with the revision it queried.
 
 ```tsx
