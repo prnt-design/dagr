@@ -127,11 +127,11 @@ separately from emulation. No mobile 10k/60fps promise is introduced.
 
 This answers the open condition in the M5.7a distribution findings above:
 discovery and pinned installation are now checked, not only `add . --list`.
-Checked on WSL2 Linux, Node 22.22.1, the distribution's npm 9.2.0 (`/bin/npm`),
-`skills` 1.7.4 (vercel-labs), source `85ee77a`. Every command ran in an empty project directory with `HOME`
-pointed at an empty scratch directory, `DISABLE_TELEMETRY=1` and a scratch npm
-cache. The home directory was still empty afterwards, so nothing global was
-written.
+Checked on WSL2 Linux, Node 22.22.1, the distribution's npm 9.2.0
+(`/bin/npm`), `skills` 1.7.4 (vercel-labs), source `85ee77a`. Every command
+ran in an empty project directory with `HOME` pointed at an empty scratch
+directory, `DISABLE_TELEMETRY=1` and a scratch npm cache. The home directory
+was still empty afterwards, so nothing global was written.
 
 - **Discovery.** `skills add <local clone> --list` and
   `skills add prnt-design/dagr --list` each found exactly one skill,
@@ -160,13 +160,13 @@ written.
 
 Limitations. TypeScript 7.0.2, npm's `latest` that day, enables
 `noUncheckedSideEffectImports` by default, and the CSS import then fails with
-TS2882 unless the bundler's CSS module types are loaded. With `vite/client`
-in `types` it typechecks under 7.0.2 as well. The CLI needs Node 22.20 or
-newer while the library supports Node 20. Without `-a`, the CLI prompts for agents, or inside
-a detected agent session installs non-interactively, so the README names the
-agent. At 390 pixels the details panel covers the whole map; that is the
-M5.7b mobile repair, not an installation fault. Recovery from a bad install is
-`skills remove` and reinstalling from a pinned commit.
+TS2882 unless the bundler's CSS module types are loaded. With `vite/client` in
+`types` it typechecks under 7.0.2 as well. The CLI needs Node 22.20 or newer
+while the library supports Node 20. Without `-a`, the CLI prompts for agents,
+or inside a detected agent session installs non-interactively, so the README
+names the agent. At 390 pixels the details panel covers the whole map; that is
+the M5.7b mobile repair, not an installation fault. Recovery from a bad
+install is `skills remove` and reinstalling from a pinned commit.
 
 ## Priority reset: WebGPU renderer first (2026-10-17 UTC)
 
