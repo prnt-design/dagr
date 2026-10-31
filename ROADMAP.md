@@ -13,6 +13,35 @@ merge. Before merge, check main and the board and record the actual successor.
 The working record and historical decisions live in
 [specs/roadmap-notes.md](specs/roadmap-notes.md) under the same milestone IDs.
 
+## Priority refresh (2026-10-29 maintainer request)
+
+The next product work is mobile usability, portable skill distribution, then
+external-consumer library readiness. This ordering supersedes the scheduling
+language below, while retaining the renderer identity and measured limits.
+Released correctness/install regressions still preempt feature work. Dispatch
+owns execution criteria and blockers; the following is the milestone order,
+not a second implementation queue.
+
+| Priority | Milestone / board task | Delivery condition |
+| --- | --- | --- |
+| P0 | Benchmark gate reliability, `tsk_1048e2545110` | Resolve the existing measurement blocker without weakening the gate; green CI alone does not permit merge. |
+| P1 | M5.7b mobile reading, `tsk_eb73b47f05e3`; M5.8a shared pinch, `tsk_98c8dffe7bda` | Land existing PRs #171 and #175 after current-main integration and all gates. Track their current integration and validation status on the linked board tasks. |
+| P1 | M5.8b viewport/occlusion, `tsk_e55c78e6012c`; M5.8c mobile conformance, `tsk_7656d37da9de` | Follow the shared input foundation with usable visible-area handling and cross-surface evidence, including explicitly unverified real-device cases. |
+| P1 | M5.7c shared-state outline, `tsk_17e1212b51f0` | Follow M5.7b with a readable alternative using the same selection, query, details and content. |
+| P1 | M5.7d-1 portable skill installation, `tsk_a05bb1f08658` | Verified and merged in PR #192: local and pinned-Git installation plus first use outside this workspace. Preserve the documented recipe and evidence. |
+| P2 | M5.9 consumer readiness, `tsk_0d0a71099683` | Exercise packed mobile APIs in external consumers, document support evidence and prepare a release handoff. Publication remains human-gated. |
+| P2 | M5.7d-2 authoring evaluation, `tsk_1b6fb4253f02` | Evaluate three authoring briefs after the install path is verified; this broader study does not block skill distribution. |
+
+M5.8 keeps pure geometry/input in the three-free core, browser adapters at the
+surface boundary, and reading/docking policy in Explorer. Mobile does not imply
+a new renderer. Real iOS/Android keyboard, safe-area and accessibility evidence
+must remain distinct from desktop touch emulation. Existing report-track work
+retains its dedicated scheduling; it does not become a dependency for these
+library tasks. Native Explorer rendering, speculative editing/compound features
+and further all-moving 10k optimization stay behind this product sequence unless
+a concrete correctness issue changes priority. Preserve their existing evidence
+and PRs rather than treating deferred work as complete.
+
 ## Direction update (2026-10-26 UTC)
 
 The maintainer asked to develop Explorer as a visual learning tool, with
@@ -624,11 +653,11 @@ parts. Do not put the only fix in a demo stylesheet.
 
 | Slice | Dispatch task | Outcome and exit check |
 | --- | --- | --- |
-| **M5.7a** Authoring skill and direction | `tsk_47bf1df19adb` | A portable [learning Explorer skill](skills/dagr-learning-explorer/SKILL.md), a typechecked example and sourced distribution/architecture findings. Runtime changes remain planned. |
-| **M5.7b** Mobile reading baseline and repair (next) | `tsk_eb73b47f05e3` | Reproduce search, inspect, follow and close, page scroll, pan/pinch/cancel, rotation and software-keyboard flows. Repair adaptive controls/details in the library over the current renderer. Record before/after screenshots at 320, 390 and 768 CSS-pixel container widths in Chromium touch emulation and WebKit; distinguish real-device checks. Primary touch targets aim for 44 CSS pixels. Essential actions need no hover or double tap. Preserve keyboard, focus return, SSR and reduced motion. |
+| **M5.7a** Authoring skill and direction (merged) | `tsk_47bf1df19adb` | A portable [learning Explorer skill](skills/dagr-learning-explorer/SKILL.md), a typechecked example and sourced distribution/architecture findings. Runtime changes remain planned. |
+| **M5.7b** Mobile reading baseline and repair (PR #171 open) | `tsk_eb73b47f05e3` | Reproduce search, inspect, follow and close, page scroll, pan/pinch/cancel, rotation and software-keyboard flows. Repair adaptive controls/details in the library over the current renderer. Record before/after screenshots at 320, 390 and 768 CSS-pixel container widths in Chromium touch emulation and WebKit; distinguish real-device checks. Primary touch targets aim for 44 CSS pixels. Essential actions need no hover or double tap. Preserve keyboard, focus return, SSR and reduced motion. |
 | **M5.7c** Shared-state outline reader | `tsk_17e1212b51f0` | An exported outline/list companion to the map, selectable at any width, using the same content, IDs, query, selection, trace and details. Resize and mode changes retain reading position/selection with explicit focus rules. One scenario suite exercises both presentations, controlled state, removal, cycles and SSR. Depends on M5.7b. |
 | **M5.7d-1** Portable skill installation | `tsk_a05bb1f08658` | Local and pinned-commit installs verified with skills CLI 1.7.4 on 2026-10-30; the installed example typechecks and runs search, inspect and follow against published `@prnt/dagr-explorer` 0.1.4 in headless Chromium. [README recipe](README.md#agent-authored-learning-explorers) and [evidence](specs/roadmap-notes.md#m57d-1-portable-skill-installation-2026-10-30-utc). |
-| **M5.7d** Authoring evaluation and distribution | `tsk_1b6fb4253f02` | Compare skill-guided and baseline authoring on codebase, prerequisite and process briefs; verify correctness, relationship explanation and source/detail access. Evaluate version-matched npm bundling separately, preserving the publication gate. Depends on M5.7a; installation is M5.7d-1. |
+| **M5.7d-2** Authoring evaluation | `tsk_1b6fb4253f02` | Compare skill-guided and baseline authoring on codebase, prerequisite and process briefs; verify correctness, relationship explanation and source/detail access. Depends on M5.7d-1. Evaluate version-matched npm bundling separately, preserving the publication gate. |
 
 Architecture direction: retain one `ExplorerRoot` state/command layer and one
 learning-content model. Adapt the shell (toolbar, search, side panel versus
