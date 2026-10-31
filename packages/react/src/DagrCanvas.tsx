@@ -1146,6 +1146,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     const press = (event: PointerEvent): void => {
       cancelFlight();
       pointerKindRef.current = event.pointerType || 'mouse';
+      if (event.pointerType !== 'touch') pinchedRef.current = false;
     };
     // A region marked `data-dagr-no-zoom` is the card's alone: no pan, pinch
     // or selection starts inside it. Capture phase, so it runs before the
@@ -1211,6 +1212,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       if (edgeChanged && edgeId !== null) onEdgeHover?.(edgeId);
     };
     const move = (event: PointerEvent): void => {
+      if (event.pointerType === 'touch' && touches.size >= 2) return;
       pointerKindRef.current = event.pointerType || 'mouse';
       if (tracksHover()) hover(canvasPoint(event, host.getBoundingClientRect()));
     };

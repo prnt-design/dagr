@@ -685,6 +685,22 @@ describe('useExplorerCamera: pointer', () => {
     await fire(plane, pointer('pointerup', 380, 260, touch(1)));
   });
 
+  it('keeps pinching when a node loses implicit capture to the viewport', async () => {
+    await ready();
+    const viewport = byTestId('viewport');
+    const node = byTestId('node');
+    const before = await zoomedIn();
+    viewport.focus();
+    const touch = (pointerId: number) => ({ pointerType: 'touch', pointerId, isPrimary: pointerId === 1 });
+    await fire(node, pointer('pointerdown', 300, 200, touch(1)));
+    await fire(node, pointer('pointerdown', 400, 200, touch(2)));
+    await fire(node, pointer('lostpointercapture', 300, 200, touch(1)));
+    expect(viewport.getAttribute('data-dragging')).toBe('true');
+    await fire(viewport, pointer('pointermove', 410, 200, touch(2)));
+    const limits = limitsFor();
+    expectCamera(cameraNow(), limits.constrain(zoomCamera(panCamera(before, 5, 0), 1.1, { x: 355, y: 200 }, limits)));
+  });
+
   it.each(['pointercancel', 'lostpointercapture'] as const)('keeps the first pinch pair through a third contact, then ends on %s', async (end) => {
     await ready();
     const viewport = byTestId('viewport');
@@ -700,7 +716,7 @@ describe('useExplorerCamera: pointer', () => {
     expectCamera(cameraNow(), expected);
     await fire(plane, pointer('pointermove', 740, 200, touch(3)));
     expectCamera(cameraNow(), expected);
-    await fire(plane, pointer(end, 410, 200, touch(2)));
+    await fire(viewport, pointer(end, 410, 200, touch(2)));
     expect(viewport.hasAttribute('data-dragging')).toBe(false);
     const stopped = cameraNow();
     await fire(plane, pointer('pointermove', 450, 200, touch(2)));

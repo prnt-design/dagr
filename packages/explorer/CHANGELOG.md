@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Keep a touch pan or pinch active when a node hands implicit pointer capture to the viewport. This also fixes the unfiltered capture-loss handling shipped in 0.1.3 and 0.1.4.
 - Use the shared renderer-core touch gesture for pinch geometry/contact lifecycle, retaining Explorer focus-gated scrolling, camera constraints and click suppression.
 - Details dock below the map in containers narrower than 720 CSS pixels,
   leaving at least half the graph visible. An entirely offscreen compact

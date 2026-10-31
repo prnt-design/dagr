@@ -48,9 +48,8 @@ The maintainer asked to develop Explorer as a visual learning tool, with
 consistent agent-authored rich graphs and mobile support as a library
 capability. This adds the [learning and mobile track](#explorer-learning-and-mobile-track)
 alongside the renderer evidence goals, rather than waiting for the all-moving
-10k target before repairing phone reading. M5.7b remains the next Explorer
-increment. M5.7b's mobile map repair merged in PR #171, so M5.7c is the next
-Explorer slice. The renderer queue below retains its internal order and the report
+10k target before repairing phone reading. M5.7b's mobile map repair merged in
+PR #171, so M5.7c is the next Explorer slice. The renderer queue below retains its internal order and the report
 track keeps its separate scheduling. New learning work does not imply
 that compound layout, audio or an additional rendering backend is required.
 

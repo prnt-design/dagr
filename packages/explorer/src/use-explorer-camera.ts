@@ -520,6 +520,11 @@ function createEngine(
     if (touches.up(event.pointerId) && pinching) endPinch();
   };
 
+  // A child handing its implicit capture to the viewport keeps the contact.
+  const onLostPointerCapture = (event: PointerEvent): void => {
+    if (event.target === viewport) onPointerEnd(event);
+  };
+
   const onClick = (event: MouseEvent): void => {
     // A click with no count came from a key or a script, never from a drag.
     if (!suppress || event.detail === 0) {
@@ -642,7 +647,7 @@ function createEngine(
   viewport.addEventListener('pointermove', onPointerMove);
   viewport.addEventListener('pointerup', onPointerEnd);
   viewport.addEventListener('pointercancel', onPointerEnd);
-  viewport.addEventListener('lostpointercapture', onPointerEnd);
+  viewport.addEventListener('lostpointercapture', onLostPointerCapture);
   // Capture, so a suppressed click is gone before any listener on the
   // viewport or below it sees it.
   viewport.addEventListener('click', onClick, true);
@@ -712,7 +717,7 @@ function createEngine(
       viewport.removeEventListener('pointermove', onPointerMove);
       viewport.removeEventListener('pointerup', onPointerEnd);
       viewport.removeEventListener('pointercancel', onPointerEnd);
-      viewport.removeEventListener('lostpointercapture', onPointerEnd);
+      viewport.removeEventListener('lostpointercapture', onLostPointerCapture);
       viewport.removeEventListener('click', onClick, true);
       viewport.removeEventListener('dblclick', onDoubleClick, true);
       viewport.removeEventListener('focusin', onFocusIn);
