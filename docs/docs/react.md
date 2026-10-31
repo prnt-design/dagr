@@ -659,7 +659,7 @@ final ones. Overlaps resolve by draw order (circles over rectangles, later over
 earlier). A uniform grid keeps a query to a few shape tests; the index is rebuilt
 when the drawn nodes change and not otherwise.
 
-What is not a hit target on `DagrCanvas`: edges, ports, and glow halos. HTML
+What is not a hit target on `DagrCanvas`: ports and glow halos. HTML
 inside a tier (next section) is the DOM's to hit: native controls inside a
 card keep their native behavior, and a click on a non-interactive part of a
 card selects its node because the card sits on the node.
@@ -678,8 +678,18 @@ first and the edge index only on a node miss. Dashes are not gaps, and the
 index tests straight segments, which is what a `'polyline'` group (the one
 `DagrCanvas` declares) draws. A provider answers an edge as
 `{ kind: 'edge', edgeId }`, and the shared interaction selects it under the
-same press-and-release rule as a node. `DagrCanvas` does not report edge hits
-yet.
+same press-and-release rule as a node.
+
+**`onEdgeClick(edgeId)`** and **`onEdgeHover(edgeId | null)`** make the
+drawn edges hit targets on `DagrCanvas` through that index, rebuilt when the
+drawn edges change, so while edges glide it tests the frame's points. The
+tolerance is half the ribbon's width plus the same 4 or 22 CSS pixels of
+slack a node gets. A node always wins, so a press on the end of an edge where
+it meets its node is the node's, and hover reports `null` to `onEdgeHover`
+when the pointer moves onto a node. Edges are tested on the CPU in both
+`hitTesting` modes, after the node test misses: under `'gpu'` that means after
+a settled pick says no node. Without either handler an edge is not a target,
+so a click on one stays a background click.
 
 **`hitTesting="gpu"`** answers mouse hover and clicks from the
 renderer's `pickNode` instead of the CPU index, through
@@ -852,9 +862,8 @@ data and not the only way to reach it.
 
 - **Edge, port and GPU hits.** Exact CPU node hits ship with `DagrCanvas`.
   Ports are M6.3a. GPU node picks are opt-in through `hitTesting="gpu"`
-  (M4.8b), priced on one device at about 0.1 to 0.2 ms of CPU per pick. Edges
-  are not hit targets on `DagrCanvas` yet; `createEdgeHitIndex` answers them
-  for a host with its own surface.
+  (M4.8b), priced on one device at about 0.1 to 0.2 ms of CPU per pick. Edge
+  hits on `DagrCanvas` are CPU only and not yet priced at 10,000 edges.
 - **A React tier helper.** Tiers are DOM elements. Rendering React into them is
   possible by hand and not wrapped.
 - **Tile-at-a-time layout.** The campaign demo's worker layout is specific to
