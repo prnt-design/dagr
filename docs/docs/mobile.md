@@ -62,7 +62,7 @@ if (change !== null) {
   camera.panByScreen(change.pan.x, change.pan.y);
   camera.zoomAtScreen(change.anchor, change.factor);
 }
-gesture.up(2); // Also use up for pointercancel or lostpointercapture.
+gesture.up(2); // Also on pointercancel, and on lostpointercapture at the capturing element.
 gesture.reset(); // On surface teardown or an explicitly abandoned sequence.
 ```
 
@@ -114,8 +114,8 @@ as search and details.
 
 Adaptive controls and details shipped separately in M5.7b: Explorer docks
 details below the map in containers narrower than 720 CSS pixels. This input
-foundation does not add responsive panels or a new backend. The planned outline reader uses the same
-ExplorerRoot state. Keyboard occlusion, safe areas and camera-visible areas
+foundation does not add responsive panels or a new backend. The planned
+outline reader uses the same ExplorerRoot state. Keyboard occlusion, safe areas and camera-visible areas
 still need a shared contract: a software keyboard can shrink the
 [visual viewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport)
 without shrinking the layout viewport. A visual viewport resize is not proof

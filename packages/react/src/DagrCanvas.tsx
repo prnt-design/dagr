@@ -1138,6 +1138,11 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     const touchEnd = (event: PointerEvent): void => {
       touches.up(event.pointerId);
     };
+    // A child losing a touch's implicit capture to the host when a pan starts
+    // is a handover, not the end of the contact.
+    const touchLost = (event: PointerEvent): void => {
+      if (event.target === host) touchEnd(event);
+    };
     const press = (event: PointerEvent): void => {
       cancelFlight();
       pointerKindRef.current = event.pointerType || 'mouse';
@@ -1235,7 +1240,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       window.addEventListener('pointermove', touchMove);
       window.addEventListener('pointerup', touchEnd);
       window.addEventListener('pointercancel', touchEnd);
-      window.addEventListener('lostpointercapture', touchEnd);
+      window.addEventListener('lostpointercapture', touchLost);
     }
     host.addEventListener('pointermove', move);
     host.addEventListener('pointerleave', leave);
@@ -1250,7 +1255,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       window.removeEventListener('pointermove', touchMove);
       window.removeEventListener('pointerup', touchEnd);
       window.removeEventListener('pointercancel', touchEnd);
-      window.removeEventListener('lostpointercapture', touchEnd);
+      window.removeEventListener('lostpointercapture', touchLost);
       touches.reset();
       host.removeEventListener('pointermove', move);
       host.removeEventListener('pointerleave', leave);

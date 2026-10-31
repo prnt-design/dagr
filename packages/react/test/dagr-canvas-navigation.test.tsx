@@ -625,7 +625,7 @@ describe('touch pinch', () => {
     await flush(() => {
       touch(host(), 'pointerdown', 1, 100, 100);
       touch(host(), 'pointerdown', 2, 200, 100);
-      touch(window, end, 2, 200, 100);
+      touch(host(), end, 2, 200, 100);
     });
     const zoom = camera.zoom;
     const center = { ...camera.center };
@@ -638,6 +638,24 @@ describe('touch pinch', () => {
     await flush(() => {
       touch(host(), 'pointerdown', 3, 230, 100);
       touch(window, 'pointermove', 3, 330, 100);
+    });
+    expect(camera.zoom).toBeCloseTo(zoom * 2);
+  });
+
+  it('keeps pinching when a pan hands a touch from the canvas to the host', async () => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" />);
+    const camera = lastRenderer().camera;
+    const canvas = host().querySelector('canvas');
+    if (canvas === null) throw new Error('no canvas');
+    await flush(() => {
+      touch(canvas, 'pointerdown', 1, 100, 100);
+      touch(window, 'pointermove', 1, 120, 100);
+      touch(canvas, 'lostpointercapture', 1, 120, 100);
+    });
+    const zoom = camera.zoom;
+    await flush(() => {
+      touch(canvas, 'pointerdown', 2, 220, 100);
+      touch(window, 'pointermove', 2, 320, 100);
     });
     expect(camera.zoom).toBeCloseTo(zoom * 2);
   });

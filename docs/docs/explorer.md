@@ -459,6 +459,5 @@ cap of 200 however far you pan.
 
 Explorer and `DagrCanvas` use the same `createPinchGesture` core primitive,
 while Explorer retains focus-gated page scrolling and its own camera adapter.
-This shared input foundation does not add responsive panels or an outline
-reader; those are tracked separately in M5.7b and M5.7c. See
+Responsive details shipped separately in M5.7b; the outline reader is M5.7c. See
 [Mobile architecture](./mobile.md) for the contract and validation limits.
