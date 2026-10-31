@@ -2,9 +2,24 @@
 
 ## Unreleased
 
+- Use the shared core pinch gesture in `DagrCanvas`: extra contacts no longer stop the active pair, lost capture ends the pair, a new primary sequence clears stale contacts, and coincident fingers pan without a zoom spike. Existing navigation and page-scroll modes remain.
+- Add `onEdgeClick` and `onEdgeHover` to `DagrCanvas`. Edges are hit on the
+  CPU against the edges as drawn, within half the ribbon's width plus the
+  pointer's slack, and only where no node is hit. Without either handler a
+  click on an edge stays a background click.
+- Add an edge kind, `{ kind: 'edge', edgeId }`, to `GraphHitTarget`, so a
+  hit provider can answer an edge (for example from `createEdgeHitIndex`) and
+  `useGraphInteraction` selects it like a node: press and release on the same
+  edge in one displayed revision. `sameGraphHitTarget` never equates an edge
+  with a node of the same id. The union is wider, so code that assumes a
+  target is a node or a port no longer compiles: reading `nodeId` without
+  checking `kind`, a two-way branch such as
+  `t.kind === 'node' ? t.nodeId : t.portId`, or an exhaustive `switch` that
+  returns from every case or ends in a `never` check. A `switch` that does
+  neither still compiles and skips edges. Check for `'edge'` too.
 - Add `createEdgeHitIndex`, which tests a point against drawn edge centrelines
   within a tolerance, nearest centreline first, for a host with its own
-  surface. `DagrCanvas` does not report edge hits yet.
+  surface.
 - Add `hitTesting` to `DagrCanvas`. `'gpu'` answers mouse hover and clicks
   from `Renderer.pickNode` through `createPickedNodeHitProvider`, primed from
   hover; touch and pen keep the CPU index. The default stays `'cpu'`.

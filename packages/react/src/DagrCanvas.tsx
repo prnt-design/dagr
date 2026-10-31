@@ -73,7 +73,7 @@ import type { Graph } from '@prnt/dagr-graph';
 import type { LayoutConfig, LayoutDelta, LayoutResult } from '@prnt/dagr-layout';
 import {
   createNodeGroupLayer, nodeGroupBounds, createHtmlOverlay,
-  canvasPoint, createMotionLoop, createRenderer, createRichNodes, createSceneMotion, fitZoom,
+  canvasPoint, createPinchGesture, createMotionLoop, createRenderer, createRichNodes, createSceneMotion, fitZoom,
   keyCommand, shapeEdgePath, wheelZoomFactor,
 } from '@prnt/dagr-render';
 import type {
@@ -102,6 +102,9 @@ import { startCameraFlight } from './camera-flight.js';
 import type { CameraFlight } from './camera-flight.js';
 import { DagrCanvasContext } from './canvas-context.js';
 import type { DagrCanvasApi, DagrCanvasHandle, FitOptions, FocusNodeOptions } from './canvas-context.js';
+import { createEdgeHitIndex } from './edge-hit.js';
+import type { EdgeHitIndex } from './edge-hit.js';
+import type { GraphHit } from './interaction.js';
 import { createNodeHitIndex } from './node-hit.js';
 import { createPickedNodeHitProvider } from './picked-hit.js';
 import type { PickedNodeHitProvider } from './picked-hit.js';
@@ -260,6 +263,18 @@ export interface DagrCanvasBaseProps {
 
   /** A click that landed on empty canvas. */
   readonly onBackgroundClick?: (() => void) | undefined;
+
+  /**
+   * An edge was clicked: press and release on the same edge, on no node.
+   * Edges are tested on the CPU against the centrelines as drawn, within half
+   * the ribbon's width plus the pointer's slack, in either `hitTesting` mode.
+   * Without this or `onEdgeHover`, edges are not hit targets and a click on
+   * one is a background click.
+   */
+  readonly onEdgeClick?: ((edgeId: string) => void) | undefined;
+
+  /** The edge under the pointer changed; `null` when it left every edge or a node covers it. */
+  readonly onEdgeHover?: ((edgeId: string | null) => void) | undefined;
 
   /**
    * How a mouse finds the node under it. Default `'cpu'`: an index of the node
@@ -549,6 +564,8 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
   // component animating", so the effects below cannot disagree about it.
   const motionRef = useRef<SceneMotion | null>(null);
   const drawnNodesRef = useRef<readonly SceneNode[]>([]);
+  const drawnEdgesRef = useRef<readonly SceneEdge[]>([]);
+  const edgeHalfWidthRef = useRef(DEFAULT_EDGE_STYLE.halfWidthPixels);
   const loopRef = useRef<MotionLoop | null>(null);
   const loopFrameRef = useRef<((nowMs: number) => void) | null>(null);
   const dressedNodesRef = useRef(new Map<string, SceneNode>());
@@ -597,6 +614,12 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     if (!options) return edges;
     return edges.map((edge) => ({ ...edge, points: shapeEdgePath(edge.points, options) }));
   }, []);
+
+  const drawEdges = useCallback((renderer: Renderer, edges: readonly SceneEdge[]): void => {
+    const drawn = shapeEdges(edges);
+    drawnEdgesRef.current = drawn;
+    renderer.setEdges(DEFAULT_EDGE_GROUP_ID, drawn);
+  }, [shapeEdges]);
 
   /** The drawing as the layout has it, which is what a reseat is measured from. */
   const rosterNow = useCallback(
@@ -787,10 +810,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         current.renderer.setNodes(drawn);
         if (latest.current.groups?.length) current.groups.setNodes(drawn);
         syncTiers(drawn, frame.settled ? 'full' : 'step');
-        current.renderer.setEdges(
-          DEFAULT_EDGE_GROUP_ID,
-          shapeEdges(dressEdges(frame.edges, dressedEdgesRef.current)),
-        );
+        drawEdges(current.renderer, dressEdges(frame.edges, dressedEdgesRef.current));
         // Before the draw, so a camera the caller moves from the sprung box
         // moves on this frame rather than on the next one.
         latest.current.onFrame?.(frame, current.renderer);
@@ -832,7 +852,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       hoverAgainRef.current?.();
       return settled;
     },
-    [syncCameraLimits, shapeEdges, syncTiers, restoreFocus],
+    [syncCameraLimits, drawEdges, syncTiers, restoreFocus],
   );
 
   /** The box a fit frames: the layout plus any group boundaries, or null before a layout. */
@@ -939,13 +959,34 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     hitCacheRef.current = { nodes, index: createNodeHitIndex(nodes), at: now };
     return hitCacheRef.current;
   };
+  const edgeHitCacheRef = useRef<{ edges: readonly SceneEdge[]; index: EdgeHitIndex; at: number } | null>(null);
+  /** The edge index of the edges as drawn, with the same `maxAgeMs` reuse as {@link hitIndex}. */
+  const edgeHitIndex = (maxAgeMs = 0): EdgeHitIndex => {
+    const edges = drawnEdgesRef.current;
+    const cached = edgeHitCacheRef.current;
+    const now = performance.now();
+    if (cached !== null && (cached.edges === edges || (now - cached.at < maxAgeMs && cached.edges.length === edges.length))) {
+      return cached.index;
+    }
+    edgeHitCacheRef.current = { edges, index: createEdgeHitIndex(edges), at: now };
+    return edgeHitCacheRef.current.index;
+  };
+  const wantsEdges = (): boolean =>
+    latest.current.onEdgeClick !== undefined || latest.current.onEdgeHover !== undefined;
   /** What kind of pointer last touched the canvas; sets the hit tolerance. */
   const pointerKindRef = useRef('mouse');
   /** Hit tolerance in CSS pixels: a fingertip is not a mouse cursor. */
-  const toleranceWorld = (): number => {
-    const zoom = stageRef.current?.renderer.camera.zoom ?? 1;
-    return (pointerKindRef.current === 'touch' ? TOUCH_HIT_PIXELS : POINTER_HIT_PIXELS) / zoom;
+  const slackPixels = (): number => (pointerKindRef.current === 'touch' ? TOUCH_HIT_PIXELS : POINTER_HIT_PIXELS);
+  const toleranceWorld = (): number => slackPixels() / (stageRef.current?.renderer.camera.zoom ?? 1);
+  /** Half the ribbon, which is in device pixels, plus the pointer's slack, in world units. */
+  const edgeToleranceWorld = (): number => {
+    const camera = stageRef.current?.renderer.camera;
+    const ratio = camera?.viewport.devicePixelRatio ?? 1;
+    return (edgeHalfWidthRef.current / ratio + slackPixels()) / (camera?.zoom ?? 1);
   };
+  /** The edge under a world point once nodes have missed, or null when edges are not targets. */
+  const edgeAt = (world: { readonly x: number; readonly y: number }, maxAgeMs = 0): string | null =>
+    wantsEdges() ? edgeHitIndex(maxAgeMs).hit(world, edgeToleranceWorld()) : null;
   // One provider per renderer, so a rebuilt renderer never answers from a pick
   // the lost one settled.
   const picked = useMemo<PickedNodeHitProvider<readonly SceneNode[]> | null>(
@@ -967,6 +1008,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
   const wantsPointer =
     props.navigation === true ||
     props.onNodeClick !== undefined ||
+    props.onEdgeClick !== undefined ||
     props.onBackgroundClick !== undefined;
   const noSurfaceRef = useRef<HTMLDivElement | null>(null);
   useGraphInteraction<readonly SceneNode[]>({
@@ -985,16 +1027,24 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     },
     hitTarget: (query) => {
       const gpu = gpuHits();
-      if (gpu !== null) return gpu.hitTarget(query);
-      const { nodes, index } = hitIndex();
-      const id = index.hit(query.world, toleranceWorld());
-      return { target: id === null ? null : { kind: 'node', nodeId: id }, displayedRevision: nodes };
+      let hit: GraphHit<readonly SceneNode[]>;
+      if (gpu !== null) {
+        hit = gpu.hitTarget(query);
+      } else {
+        const { nodes, index } = hitIndex();
+        const id = index.hit(query.world, toleranceWorld());
+        hit = { target: id === null ? null : { kind: 'node', nodeId: id }, displayedRevision: nodes };
+      }
+      if (hit.target !== null) return hit;
+      const edgeId = edgeAt(query.world);
+      return edgeId === null ? hit : { target: { kind: 'edge', edgeId }, displayedRevision: hit.displayedRevision };
     },
     selection: null,
     onSelectionChange: (target) => {
       if (pinchedRef.current) return;
       if (target === null) latest.current.onBackgroundClick?.();
-      else latest.current.onNodeClick?.(target.nodeId);
+      else if (target.kind === 'node') latest.current.onNodeClick?.(target.nodeId);
+      else if (target.kind === 'edge') latest.current.onEdgeClick?.(target.edgeId);
     },
     onPanStart: cancelFlight,
     onPanBy: ({ x, y }) => {
@@ -1068,34 +1118,30 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     // a mouse or pen has one pointer. While two touches are down the single
     // pointer pan and any click are suppressed (`pinchedRef`), and the flag is
     // cleared when the next fresh sequence begins, after the release handlers.
-    const touches = new Map<number, { x: number; y: number }>();
-    const spread = (): { mid: { x: number; y: number }; distance: number } | null => {
-      if (touches.size !== 2) return null;
-      const [a, b] = [...touches.values()];
-      if (a === undefined || b === undefined) return null;
-      return {
-        mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
-        distance: Math.hypot(a.x - b.x, a.y - b.y),
-      };
-    };
+    const touches = createPinchGesture();
     const touchDown = (event: PointerEvent): void => {
       if (event.pointerType !== 'touch') return;
+      // A new primary starts a fresh sequence even if old releases were lost.
+      if (event.isPrimary) touches.reset();
       if (touches.size === 0) pinchedRef.current = false;
-      touches.set(event.pointerId, canvasPoint(event, host.getBoundingClientRect()));
+      touches.down(event.pointerId, canvasPoint(event, host.getBoundingClientRect()));
       if (touches.size >= 2) pinchedRef.current = true;
     };
     const touchMove = (event: PointerEvent): void => {
       if (!touches.has(event.pointerId)) return;
-      const before = spread();
-      touches.set(event.pointerId, canvasPoint(event, host.getBoundingClientRect()));
-      const after = spread();
-      if (before === null || after === null || !(before.distance > 0) || !(after.distance > 0)) return;
-      camera.panByScreen(after.mid.x - before.mid.x, after.mid.y - before.mid.y);
-      camera.zoomAtScreen(after.mid, after.distance / before.distance);
+      const change = touches.move(event.pointerId, canvasPoint(event, host.getBoundingClientRect()));
+      if (change === null) return;
+      camera.panByScreen(change.pan.x, change.pan.y);
+      camera.zoomAtScreen(change.anchor, change.factor);
       requestDraw();
     };
     const touchEnd = (event: PointerEvent): void => {
-      touches.delete(event.pointerId);
+      touches.up(event.pointerId);
+    };
+    // A child losing a touch's implicit capture to the host when a pan starts
+    // is a handover, not the end of the contact.
+    const touchLost = (event: PointerEvent): void => {
+      if (event.target === host) touchEnd(event);
     };
     const press = (event: PointerEvent): void => {
       cancelFlight();
@@ -1124,11 +1170,12 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       });
     };
     let resting: { x: number; y: number } | null = null;
+    let hoveredEdge: string | null = null;
     const tracksHover = (): boolean => {
-      const { onNodeHover, onNodeClick, onBackgroundClick } = latest.current;
-      // A GPU press is answered only from a hover pick, so a click handler alone primes picks.
-      const primes = onBackgroundClick !== undefined && gpuHits() !== null;
-      return onNodeHover !== undefined || onNodeClick !== undefined || primes;
+      const { onNodeHover, onNodeClick, onBackgroundClick, onEdgeClick } = latest.current;
+      // A GPU press is answered only from a hover pick, so any click handler primes picks.
+      const primes = (onBackgroundClick !== undefined || onEdgeClick !== undefined) && gpuHits() !== null;
+      return onNodeHover !== undefined || onNodeClick !== undefined || wantsEdges() || primes;
     };
     const hover = (css: { x: number; y: number }): void => {
       if (!tracksHover()) return;
@@ -1136,7 +1183,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         resting = null;
         return;
       }
-      const { onNodeHover, onNodeClick } = latest.current;
+      const { onNodeHover, onNodeClick, onEdgeHover, onEdgeClick } = latest.current;
       const gpu = gpuHits();
       const world = camera.screenToWorld(css);
       let id: string | null;
@@ -1148,12 +1195,20 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         const displayedRevision = drawnNodesRef.current;
         const hit = gpu.hitTarget({ css, world, devicePixelRatio: window.devicePixelRatio, displayedRevision });
         if (!Object.is(hit.displayedRevision, displayedRevision)) return;
-        id = hit.target?.nodeId ?? null;
+        id = hit.target?.kind === 'node' ? hit.target.nodeId : null;
       }
-      if (id === hovered) return;
+      const edgeId = id === null ? edgeAt(world, 100) : null;
+      if (id === hovered && edgeId === hoveredEdge) return;
+      const nodeChanged = id !== hovered;
+      const edgeChanged = edgeId !== hoveredEdge;
       hovered = id;
-      host.style.cursor = id !== null && onNodeClick !== undefined ? 'pointer' : '';
-      onNodeHover?.(id);
+      hoveredEdge = edgeId;
+      const clickable = (id !== null && onNodeClick !== undefined) || (edgeId !== null && onEdgeClick !== undefined);
+      host.style.cursor = clickable ? 'pointer' : '';
+      // Clear before set, so a caller tracking one hovered thing never holds two.
+      if (edgeChanged && edgeId === null) onEdgeHover?.(null);
+      if (nodeChanged) onNodeHover?.(id);
+      if (edgeChanged && edgeId !== null) onEdgeHover?.(edgeId);
     };
     const move = (event: PointerEvent): void => {
       pointerKindRef.current = event.pointerType || 'mouse';
@@ -1166,10 +1221,12 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     };
     const leave = (): void => {
       resting = null;
-      if (hovered === null) return;
-      hovered = null;
+      if (hovered === null && hoveredEdge === null) return;
       host.style.cursor = '';
-      latest.current.onNodeHover?.(null);
+      if (hovered !== null) latest.current.onNodeHover?.(null);
+      if (hoveredEdge !== null) latest.current.onEdgeHover?.(null);
+      hovered = null;
+      hoveredEdge = null;
     };
 
     if (navigation) host.addEventListener('wheel', wheel, { passive: false });
@@ -1183,6 +1240,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       window.addEventListener('pointermove', touchMove);
       window.addEventListener('pointerup', touchEnd);
       window.addEventListener('pointercancel', touchEnd);
+      window.addEventListener('lostpointercapture', touchLost);
     }
     host.addEventListener('pointermove', move);
     host.addEventListener('pointerleave', leave);
@@ -1197,6 +1255,8 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       window.removeEventListener('pointermove', touchMove);
       window.removeEventListener('pointerup', touchEnd);
       window.removeEventListener('pointercancel', touchEnd);
+      window.removeEventListener('lostpointercapture', touchLost);
+      touches.reset();
       host.removeEventListener('pointermove', move);
       host.removeEventListener('pointerleave', leave);
       hoverAgainRef.current = null;
@@ -1204,6 +1264,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       cancelFlight();
       // The listeners are gone, so tell the caller the hover ended.
       if (hovered !== null) latest.current.onNodeHover?.(null);
+      if (hoveredEdge !== null) latest.current.onEdgeHover?.(null);
     };
   }, [stage, navigation, api, cancelFlight, requestDraw]);
 
@@ -1259,6 +1320,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       style: edgeStyle ?? DEFAULT_EDGE_STYLE,
       curve: 'polyline',
     };
+    edgeHalfWidthRef.current = group.style.halfWidthPixels;
 
     let live = true;
     let made: Stage | null = null;
@@ -1328,6 +1390,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       made?.overlay.dispose();
       made?.groups.dispose();
       drawnNodesRef.current = [];
+      drawnEdgesRef.current = [];
       made?.renderer.dispose();
       made = null;
       stageRef.current = null;
@@ -1434,9 +1497,9 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
   useEffect(() => {
     if (stage === null || sceneEdges === null) return;
     if (motionRef.current !== null) { loopRef.current?.wake(); return; }
-    stage.renderer.setEdges(DEFAULT_EDGE_GROUP_ID, shapeEdges(sceneEdges));
+    drawEdges(stage.renderer, sceneEdges);
     requestDraw();
-  }, [stage, sceneEdges, props.edgePath, requestDraw, shapeEdges]);
+  }, [stage, sceneEdges, props.edgePath, requestDraw, drawEdges]);
 
   /**
    * The springs and the loop, built together and torn down together.
@@ -1482,11 +1545,11 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         syncTiers(sceneNodesRef.current);
       }
       if (sceneEdgesRef.current !== null) {
-        current.renderer.setEdges(DEFAULT_EDGE_GROUP_ID, shapeEdges(sceneEdgesRef.current));
+        drawEdges(current.renderer, sceneEdgesRef.current);
       }
       requestDraw();
     };
-  }, [stage, animation, scheduler, rosterNow, runAnimationFrame, requestDraw, shapeEdges, syncTiers]);
+  }, [stage, animation, scheduler, rosterNow, runAnimationFrame, requestDraw, drawEdges, syncTiers]);
 
   /**
    * One commit, one retarget, one wake.

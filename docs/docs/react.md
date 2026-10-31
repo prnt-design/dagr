@@ -513,8 +513,9 @@ The provider is synchronous. Every query carries four pieces of evidence:
 
 Do not multiply `css` by DPR before `screenToWorld`. A provider reading a
 device-pixel target multiplies at that boundary. A provider returns a stable
-node identity (`nodeId`), port identity (`nodeId` plus `portId`), or `null`
-target and stamps every hit or miss with the displayed revision it queried.
+node identity (`nodeId`), port identity (`nodeId` plus `portId`), edge
+identity (`edgeId`, the `SceneEdge` id), or `null` target and stamps every
+hit or miss with the displayed revision it queried.
 Renderer slots, array positions, and pick colors are not stable identities.
 
 The stamp is load-bearing. The hook rejects a result whose stamp differs from
@@ -550,7 +551,8 @@ ticks. These are CPU query medians, not browser frame time or GPU evidence.
 The generic System Atlas uses this API with reverse draw-order rectangles. It
 is proof that a consumer can supply geometry; it is not an exact
 `DagrCanvas` adapter. `DagrCanvas` now supplies one, described in the next
-section. Port geometry is M6.3a. Edge hits are outside this slice.
+section. Port geometry is M6.3a. Edges are answered through the same
+contract (M4.8b), described below.
 
 ### GPU picks behind the same contract
 
@@ -657,7 +659,7 @@ final ones. Overlaps resolve by draw order (circles over rectangles, later over
 earlier). A uniform grid keeps a query to a few shape tests; the index is rebuilt
 when the drawn nodes change and not otherwise.
 
-What is not a hit target on `DagrCanvas`: edges, ports, and glow halos. HTML
+What is not a hit target on `DagrCanvas`: ports and glow halos. HTML
 inside a tier (next section) is the DOM's to hit: native controls inside a
 card keep their native behavior, and a click on a non-interactive part of a
 card selects its node because the card sits on the node.
@@ -674,7 +676,23 @@ Where edges cross or fan into a node the nearer centreline wins, and an exact
 tie goes to the later edge. Nodes are drawn over edges, so ask the node index
 first and the edge index only on a node miss. Dashes are not gaps, and the
 index tests straight segments, which is what a `'polyline'` group (the one
-`DagrCanvas` declares) draws. `DagrCanvas` does not report edge hits yet.
+`DagrCanvas` declares) draws. A provider answers an edge as
+`{ kind: 'edge', edgeId }`, and the shared interaction selects it under the
+same press-and-release rule as a node.
+
+**`onEdgeClick(edgeId)`** and **`onEdgeHover(edgeId | null)`** make the
+drawn edges hit targets on `DagrCanvas` through that index, rebuilt when the
+drawn edges change, so while edges glide it tests the frame's points. The
+tolerance is half the ribbon's width plus the same 4 or 22 CSS pixels of
+slack a node gets. A node always wins, so a press on the end of an edge where
+it meets its node is the node's, and hover reports `null` to `onEdgeHover`
+when the pointer moves onto a node. Edges are tested on the CPU in both
+`hitTesting` modes, after the node test misses: under `'gpu'` that means after
+a settled pick says no node. Without either handler an edge is not a target,
+so a click on one stays a background click. With `onEdgeHover` and no
+`onEdgeClick`, a click on an edge reports nothing rather than a background
+click, as a click on a node does without `onNodeClick`. With `onEdgeClick` set, hover over
+an edge sets `cursor: pointer`.
 
 **`hitTesting="gpu"`** answers mouse hover and clicks from the
 renderer's `pickNode` instead of the CPU index, through
@@ -684,8 +702,8 @@ and a click while nodes glide are ignored, and hover holds its last answer
 until the pick at a resting pointer settles. Each draw asks the resting pointer
 again, so after a wheel zoom or a flight a click lands without moving the
 mouse, and while nodes glide or the camera flies under it, picks run back to
-back, one at a time, until the drawing rests. Hover primes the picks, so an
-`onBackgroundClick` alone is enough to start them. Touch and pen keep the CPU
+back, one at a time, until the drawing rests. Hover primes the picks, so
+`onBackgroundClick` or an edge handler alone is enough to start them. Touch and pen keep the CPU
 index, touch with its fingertip tolerance, since a tap, or a pen that does not
 report hover, has nothing picked before it. A renderer rebuilt after a lost
 context starts with no picks rather than answering from the lost one's. The
@@ -805,8 +823,9 @@ reachable.
 
 ### Known limits of this slice
 
-- Hover is evaluated on pointer movement and reuses a hit index up to 100 ms old
-  while nodes glide; clicks always use the index of the nodes as drawn.
+- Hover is evaluated on pointer movement and reuses a node or edge hit index up
+  to 100 ms old while the drawing glides; clicks always use the index of what is
+  drawn.
 - Overlay tiers have a cap on mounted elements, but there is no per-frame budget
   for how many mount at once when a pan reveals many nodes, and `onFrame` is
   called only on animated frames, not on plain pans.
@@ -847,9 +866,11 @@ data and not the only way to reach it.
 
 - **Edge, port and GPU hits.** Exact CPU node hits ship with `DagrCanvas`.
   Ports are M6.3a. GPU node picks are opt-in through `hitTesting="gpu"`
-  (M4.8b), priced on one device at about 0.1 to 0.2 ms of CPU per pick. Edges
-  are not hit targets on `DagrCanvas` yet; `createEdgeHitIndex` answers them
-  for a host with its own surface.
+  (M4.8b), priced on one device at about 0.1 to 0.2 ms of CPU per pick. Edge
+  hits on `DagrCanvas` are CPU only. At 10,000 nodes a query takes 0.2 ms
+  or less, but rebuilding the index while edges glide took 2 ms at one
+  segment per edge and 12 to 14 ms at three, on one device (see
+  `bench/browser/README.md`, "What an edge hit costs a frame").
 - **A React tier helper.** Tiers are DOM elements. Rendering React into them is
   possible by hand and not wrapped.
 - **Tile-at-a-time layout.** The campaign demo's worker layout is specific to
@@ -895,3 +916,12 @@ SVG or canvas consumers can use `shapeEdgePath(points, options)` from
 `@prnt/dagr/render` (or `@prnt/dagr-render`) for the same geometry. Feed its
 returned points to an SVG polyline/path or to renderer edges with `curve: 'polyline'`
 to avoid smoothing them twice.
+
+## Shared mobile foundation
+
+`DagrCanvas` and Explorer consume the same three.js-free pinch primitive.
+The first two touches remain the active pair when an extra finger arrives;
+cancellation/lost capture ends the pair, and coincident fingers pan without a
+zoom spike. Existing `touchNavigation` modes and their browser-scroll tradeoffs
+remain unchanged. See [Mobile architecture](./mobile.md) for the public core
+API, layer boundaries and remaining viewport/device validation work.

@@ -11,6 +11,7 @@ not" is the category this file has a heading for.
 
 ## Unreleased
 
+- Add `createPinchGesture` with `PinchDelta` and `PinchGesture` types to the full and three.js-free core entries. Shared CSS-pixel touch geometry is independent of browser event ownership and rendering backend.
 - Add `Renderer.pickNode(pointer)`, which resolves to the id of the node drawn
   under a pointer, or `null`, by drawing that one device pixel on the GPU and
   reading it back. Hits follow the shape's boundary rather than its halo, the

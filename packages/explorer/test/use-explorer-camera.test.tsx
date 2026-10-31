@@ -685,6 +685,48 @@ describe('useExplorerCamera: pointer', () => {
     await fire(plane, pointer('pointerup', 380, 260, touch(1)));
   });
 
+  it.each(['pointercancel', 'lostpointercapture'] as const)('keeps the first pinch pair through a third contact, then ends on %s', async (end) => {
+    await ready();
+    const viewport = byTestId('viewport');
+    const plane = byTestId('plane');
+    const before = await zoomedIn();
+    viewport.focus();
+    const touch = (pointerId: number) => ({ pointerType: 'touch', pointerId, isPrimary: pointerId === 1 });
+    await fire(plane, pointer('pointerdown', 300, 200, touch(1)));
+    await fire(plane, pointer('pointerdown', 400, 200, touch(2)));
+    await fire(plane, pointer('pointerdown', 700, 200, touch(3)));
+    await fire(plane, pointer('pointermove', 410, 200, touch(2)));
+    const expected = limitsFor().constrain(zoomCamera(panCamera(before, 5, 0), 1.1, { x: 355, y: 200 }, limitsFor()));
+    expectCamera(cameraNow(), expected);
+    await fire(plane, pointer('pointermove', 740, 200, touch(3)));
+    expectCamera(cameraNow(), expected);
+    await fire(plane, pointer(end, 410, 200, touch(2)));
+    expect(viewport.hasAttribute('data-dragging')).toBe(false);
+    const stopped = cameraNow();
+    await fire(plane, pointer('pointermove', 450, 200, touch(2)));
+    await fire(plane, pointer('pointermove', 320, 200, touch(1)));
+    expectCamera(cameraNow(), stopped);
+  });
+
+  it('starts a fresh primary sequence after missing the previous releases', async () => {
+    await ready();
+    const viewport = byTestId('viewport');
+    const plane = byTestId('plane');
+    await zoomedIn();
+    camera().zoomBy(0.5);
+    await runFramesUntilIdle();
+    viewport.focus();
+    const touch = (pointerId: number) => ({ pointerType: 'touch', pointerId, isPrimary: pointerId === 1 });
+    await fire(plane, pointer('pointerdown', 300, 200, touch(1)));
+    await fire(plane, pointer('pointerdown', 400, 200, touch(2)));
+    await fire(plane, pointer('pointermove', 410, 200, touch(2)));
+    const scale = cameraNow().scale;
+    await fire(plane, pointer('pointerdown', 300, 200, touch(1)));
+    await fire(plane, pointer('pointerdown', 400, 200, touch(2)));
+    await fire(plane, pointer('pointermove', 410, 200, touch(2)));
+    expect(cameraNow().scale).toBeCloseTo(scale * 1.1);
+  });
+
   it('on touch, a press while unfocused only focuses the viewport', async () => {
     await ready();
     const viewport = byTestId('viewport');

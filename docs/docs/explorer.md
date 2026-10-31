@@ -454,3 +454,10 @@ cap of 200 however far you pan.
 - **Parallel edges bow apart only on one rank.** Edges joining the same two
   nodes are separated by 16 when they span a single rank. Across more ranks
   the layout already routes them apart.
+
+## Mobile framework contract
+
+Explorer and `DagrCanvas` use the same `createPinchGesture` core primitive,
+while Explorer retains focus-gated page scrolling and its own camera adapter.
+Responsive details shipped separately in M5.7b; the outline reader is M5.7c. See
+[Mobile architecture](./mobile.md) for the contract and validation limits.

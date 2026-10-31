@@ -38,7 +38,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import type { Vec2 } from '@prnt/dagr-render/core';
+import { createPinchGesture } from '@prnt/dagr-render/core';
+import type { PinchDelta, Vec2 } from '@prnt/dagr-render/core';
 import {
   CONTENT_PADDING,
   cameraFrame,
@@ -350,11 +351,8 @@ function createEngine(
     lastY: number;
     panning: boolean;
   } | null = null;
-  // Touch pointers down on the viewport, at their last point in viewport
-  // coordinates. Two of them are a pinch, which `pinch` holds the last
-  // reading of.
-  const touches = new Map<number, Vec2>();
-  let pinch: { readonly distance: number; readonly mid: Vec2 } | null = null;
+  const touches = createPinchGesture();
+  let pinching = false;
   // Set when a drag or a focusing tap ends: the click that follows is the
   // gesture's own. Cleared once that click is swallowed, and by the next
   // press or key, so a gesture that makes no click cannot eat a later one.
@@ -403,7 +401,7 @@ function createEngine(
     if (panned) {
       suppress = true;
       release(pointerId);
-      if (pinch === null) {
+      if (!pinching) {
         viewport.removeAttribute('data-dragging');
         dragging = false;
         composite();
@@ -411,40 +409,27 @@ function createEngine(
     }
   };
 
-  const pinchReading = (): { readonly distance: number; readonly mid: Vec2 } | null => {
-    const [a, b] = [...touches.values()];
-    if (a === undefined || b === undefined) return null;
-    return {
-      distance: Math.hypot(b.x - a.x, b.y - a.y),
-      mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
-    };
-  };
-
   const startPinch = (): void => {
-    const reading = pinchReading();
-    if (reading === null || !grab()) return;
+    if (touches.size !== 2 || !grab()) return;
     // The pinch takes over the press its first finger began.
     press = null;
-    pinch = reading;
-    for (const id of touches.keys()) capture(id);
+    pinching = true;
+    for (const id of touches.pointerIds) capture(id);
     viewport.setAttribute('data-dragging', 'true');
     dragging = true;
     composite();
   };
 
-  const movePinch = (): void => {
-    const reading = pinchReading();
-    if (pinch === null || reading === null || limits === null || current === null) return;
-    const factor = pinch.distance > 0 && reading.distance > 0 ? reading.distance / pinch.distance : 1;
-    const moved = panCamera(current, reading.mid.x - pinch.mid.x, reading.mid.y - pinch.mid.y);
-    current = target = limits.constrain(zoomCamera(moved, factor, reading.mid, limits));
-    pinch = reading;
+  const movePinch = (change: PinchDelta): void => {
+    if (!pinching || limits === null || current === null) return;
+    const moved = panCamera(current, change.pan.x, change.pan.y);
+    current = target = limits.constrain(zoomCamera(moved, change.factor, change.anchor, limits));
     draw();
   };
 
   const endPinch = (): void => {
-    pinch = null;
-    for (const id of touches.keys()) release(id);
+    pinching = false;
+    for (const id of touches.pointerIds) release(id);
     viewport.removeAttribute('data-dragging');
     suppress = true;
     dragging = false;
@@ -455,8 +440,8 @@ function createEngine(
     if (event.pointerType === 'touch' && event.isPrimary) {
       // The first finger of a new gesture: any finger still recorded lifted
       // where this viewport did not hear it.
-      if (pinch !== null) endPinch();
-      touches.clear();
+      if (pinching) endPinch();
+      touches.reset();
     }
     suppress = false;
     if (event.button !== 0) return;
@@ -474,7 +459,7 @@ function createEngine(
         return;
       }
       if (touches.size >= 2) return;
-      touches.set(event.pointerId, local(event));
+      touches.down(event.pointerId, local(event));
       if (touches.size === 2) {
         startPinch();
         return;
@@ -493,9 +478,9 @@ function createEngine(
 
   const onPointerMove = (event: PointerEvent): void => {
     if (touches.has(event.pointerId)) {
-      touches.set(event.pointerId, local(event));
-      if (pinch !== null) {
-        movePinch();
+      const change = touches.move(event.pointerId, local(event));
+      if (pinching) {
+        if (change !== null) movePinch(change);
         return;
       }
     }
@@ -532,7 +517,7 @@ function createEngine(
   /** `pointerup`, `pointercancel` and `lostpointercapture` all end what the pointer began. */
   const onPointerEnd = (event: PointerEvent): void => {
     endPress(event.pointerId);
-    if (touches.delete(event.pointerId) && pinch !== null) endPinch();
+    if (touches.up(event.pointerId) && pinching) endPinch();
   };
 
   const onClick = (event: MouseEvent): void => {
@@ -676,6 +661,9 @@ function createEngine(
       aim(zoomCamera(target, factor, frameCenter(area), limits));
     },
     focusBox(box) {
+      // A newly mounted or redocked overlay may precede its ResizeObserver
+      // delivery. Read its current bounds before an explicit focus command.
+      measure();
       if (limits === null || !isFiniteBox(box)) return;
       aim(focusCamera(box, area, limits));
     },
@@ -730,11 +718,11 @@ function createEngine(
       viewport.removeEventListener('focusin', onFocusIn);
       viewport.removeEventListener('focusout', onFocusOut);
       if (press?.panning === true) release(press.id);
-      for (const id of touches.keys()) release(id);
+      for (const id of touches.pointerIds) release(id);
       viewport.removeAttribute('data-dragging');
       press = null;
-      pinch = null;
-      touches.clear();
+      pinching = false;
+      touches.reset();
       dragging = false;
       viewport.style.touchAction = '';
       limits = null;

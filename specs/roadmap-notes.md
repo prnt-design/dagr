@@ -16,6 +16,114 @@ The checklist in `ROADMAP.md` is the live one. New tasks keep the same shape:
 the one-line entry lands there, and the working record lands here under the
 same ID.
 
+## M5.8: Core mobile architecture (2026-10-28 UTC)
+
+The maintainer expanded the direction: mobile rendering/support should be core
+Dagr framework capability, not only an Explorer fix. The chosen architecture
+separates portable mechanics, browser ownership, reading presentation and
+backend resource choices. M5.8a ships a first shared mechanism; it does not
+claim the complete viewport, keyboard or real-device support matrix.
+
+### Boundaries and alternatives
+
+A mobile-only backend or application would duplicate hit/camera/content state
+and drift from desktop. A responsive Explorer shell alone leaves imperative
+and DagrCanvas consumers without a common mobile contract. A new generic
+mobile runtime/package would add a boundary before a consumer proves its
+requirements. Instead, extend the existing three.js-free renderer core with
+small portable mechanisms consumed by the existing adapters.
+
+Inspection found duplicated two-touch midpoint/distance calculations in
+DagrCanvas and Explorer. They differed on third contacts and coincident
+fingers: the canvas stopped pinching while a third touch was present and
+ignored the first movement away from zero distance. The canvas also omitted
+a lost-capture listener. The resulting-tree review found a second lifecycle
+gap: unlike Explorer, Canvas did not clear stale contacts on a new primary
+touch sequence. A failing regression demonstrates it; both adapters now reset
+that sequence consistently. `createPinchGesture` now owns contact bookkeeping and
+CSS-coordinate pan/zoom deltas; both components consume it. Regression tests
+fail on the original canvas for third contacts, lost capture and coincident
+fingers. Explorer keeps focus-gated touch ownership, event capture and camera
+limits; DagrCanvas keeps its existing drag/two-finger navigation modes and
+selection suppression. These policies are intentionally not flattened into
+one behavior.
+
+The core primitive imports only geometry types, so server/SVG consumers do not
+load three.js or browser globals. Package consumer checks exercise its runtime
+identity through full/core/umbrella entries and its declarations without
+three's types. Each surface owns an independent gesture instance. The first
+two accepted contacts stay the pair; ignored extra contacts need a new down to
+join after release. Non-finite inputs are ignored; coincident fingers pan
+without zoom and reestablish the distance baseline. Pan precedes zoom about
+the new midpoint. DPR affects drawing-buffer allocation, never these CSS
+coordinates. Pointer capture, browser scroll arbitration, click suppression,
+focus and teardown are adapter responsibilities.
+
+### Research and remaining architecture work
+
+The [Pointer Events specification](https://www.w3.org/TR/pointerevents/#the-touch-action-css-property)
+requires browser panning/zoom ownership to follow touch-action at gesture
+start. Changing it inside pointerdown does not reclaim the current sequence;
+pointercancel is a real termination path. This supports a pure shared gesture
+mechanism with explicit host policy, not a generic promise that two fingers can
+always take over an already scrolling page.
+
+[VisualViewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport)
+can shrink independently of the layout viewport, including for an on-screen
+keyboard. M5.8b must reconcile container bounds, visible-area/occlusion geometry
+and browser observation without treating every resize as a keyboard or
+preventing browser zoom. Explorer already measures obstructions; Canvas has
+container/DPR sizing and fit/focus. Use those consumers to decide a shared
+contract rather than copy their arithmetic a third time.
+
+[tldraw's environment model](https://tldraw.dev/sdk-features/environment)
+distinguishes reactive pointer capability from platform identity. Dagr should
+likewise measure available space, input and backend capabilities separately.
+A touch laptop can be wide and a mouse-driven embedded graph narrow. Existing
+DagrCanvas maxPixelRatio can bound buffer density; the default mobile resource
+policy needs measured budgets, not an assumed device class.
+
+M5.8c establishes a common scenario corpus across surfaces/backends, without
+requiring identical UI where focus/page-scroll policies differ. Keep behavior,
+visual parity and performance as separate checks. Real-device iOS/Android,
+software keyboard, safe-area and assistive-technology validation remain named
+work, not implied by unit tests or phone emulation. Explorer's M5.7b repair
+(merged in PR #171) and M5.7c outline remain separate tasks, and renderer performance proof and
+publication gates remain in force. Actual next core slice: M5.8b.
+
+## M5.7b: Mobile map reading repair (2026-10-27 UTC)
+
+Task `tsk_eb73b47f05e3`, following PR #160, merged in PR #171. Earlier local
+benchmark gates on this branch failed on unchanged entries (the 10k CPU
+rectangle pointer query and graph traversals); the final integrated head
+passed the full local gate without any baseline, exemption or gate change.
+The cause of the earlier failures stays with `tsk_1048e2545110`. WebKit,
+real-device and software-keyboard checks carry to M5.8c. The bounded library change keeps
+ExplorerRoot and the SVG/DOM base. Details choose bottom docking below 720px
+of container width and a side panel above it, preserving the mounted reader
+and at least half the graph in compact placement. The compact height is capped
+at 50dvh; default primary controls target 44 CSS pixels. Search uses a 16px
+input. Host custom actions and replacement styles still own their sizing.
+
+A wholly offscreen compact panel opened from a search result in landscape
+needed one page scroll to be discoverable. Opening now reveals that panel
+without moving focus; following a connection does not repeat the page scroll.
+Focus-gated graph gestures are preserved. Search framing runs after the
+panel commits, and explicit camera focus measures current overlay geometry,
+which also repairs a search-framing failure found by the older browser suite.
+
+[Reproduction and limitations](../bench/browser/explorer-mobile.md) describe
+the before/after Chromium touch-emulation matrix at 320, 390 and 768 CSS-pixel
+containers, plus the published demo's 358px container at a 390px viewport.
+It covers portrait/landscape reading, keyboard/focus return, controlled
+selection, page scroll, pan/pinch/cancel, rotation/viewport shrink, reduced
+motion and Chromium browser visual zoom. The regression suite also covers
+SSR and hydration. WebKit downloaded but could not launch for missing system
+libraries; real devices, software keyboard occlusion, hardware safe areas and
+desktop Ctrl-plus zoom are not claimed. The planned successor is M5.7c,
+`tsk_17e1212b51f0`, checked on the board before completion. This increment
+does not introduce an outline or another renderer.
+
 ## M5.7: Learning Explorers and mobile (2026-10-26 UTC)
 
 The maintainer asked to explore Explorer as a visual learning tool, make agents
@@ -122,6 +230,52 @@ A native base must satisfy the same behavioral contract if added, plus its own
 visual parity and performance checks. Do not require pixel-identical map and
 outline output. Real-device performance and screen-reader checks stay named
 separately from emulation. No mobile 10k/60fps promise is introduced.
+
+### M5.7d-1: portable skill installation (2026-10-30 UTC)
+
+This answers the open condition in the M5.7a distribution findings above:
+discovery and pinned installation are now checked, not only `add . --list`.
+Checked on WSL2 Linux, Node 22.22.1, the distribution's npm 9.2.0
+(`/bin/npm`), `skills` 1.7.4 (vercel-labs), source `85ee77a`. Every command
+ran in an empty project directory with `HOME` pointed at an empty scratch
+directory, `DISABLE_TELEMETRY=1` and a scratch npm cache. The home directory
+was still empty afterwards, so nothing global was written.
+
+- **Discovery.** `skills add <local clone> --list` and
+  `skills add prnt-design/dagr --list` each found exactly one skill,
+  `dagr-learning-explorer`. The Dispatch personas are not discovered, so the
+  portable skill stays the only installable unit.
+- **Local install.** `add <clone> --skill dagr-learning-explorer -a claude-code -a codex -y`
+  wrote `.agents/skills/dagr-learning-explorer` and symlinked
+  `.claude/skills/dagr-learning-explorer` to it. `diff -r` against the source
+  was empty, `references/learning-explorer.tsx` included.
+- **Pinned install.** `add https://github.com/prnt-design/dagr/tree/85ee77a58e5fd1de8301e117e1f076eea6c6309a/skills/dagr-learning-explorer -a claude-code -y`
+  copied the skill to `.claude/skills/` and wrote `skills-lock.json` with
+  `ref` set to that commit and the same content hash as the local install
+  (`60f9a3d7...`). `diff -r` was empty, `skills list` showed it, and
+  `skills remove dagr-learning-explorer -y` deleted the files and emptied the
+  lock entries.
+- **First use.** A consumer outside the workspace installed
+  `@prnt/dagr-explorer@0.1.4`, React 19.2.0, TypeScript 5.9.3 and Vite 7.1.12
+  from npm and copied the installed `learning-explorer.tsx` unchanged.
+  `tsc` (strict, `Bundler` resolution, `skipLibCheck` off) passed and
+  `vite build` succeeded. Headless Chromium (Playwright build 1223) loaded the
+  built page at 1280 by 800 with a mouse and at 390 by 844 with touch
+  emulation: searching "permissions" listed Handler, choosing it opened its
+  details, and the "Handler produces Response" button moved the details to
+  Response. No console or page errors in either run. Emulation, not a real
+  device.
+
+Limitations. TypeScript 7.0.2, npm's `latest` that day, enables
+`noUncheckedSideEffectImports` by default, and the CSS import then fails with
+TS2882 unless the bundler's CSS module types are loaded. With `vite/client` in
+`types` it typechecks under 7.0.2 as well. The CLI needs Node 22.20 or newer
+while the library supports Node 20. Without `-a`, the CLI prompts for agents,
+or inside a detected agent session installs non-interactively, so the README
+names the agent. At 390 pixels the published 0.1.4 details panel covers the
+whole map; M5.7b repairs that in the unreleased library, and it is not an
+installation fault. Recovery from a bad
+install is `skills remove` and reinstalling from a pinned commit.
 
 ## Priority reset: WebGPU renderer first (2026-10-17 UTC)
 

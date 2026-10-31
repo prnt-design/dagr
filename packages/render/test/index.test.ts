@@ -99,6 +99,7 @@ describe('@prnt/dagr-render', () => {
       'createMotionLoop',
       'createNodeGroupLayer',
       'createNodeMotion',
+      'createPinchGesture',
       'createRenderer',
       'createRichNodes',
       'createSceneMotion',

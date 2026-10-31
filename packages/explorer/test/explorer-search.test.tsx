@@ -151,6 +151,28 @@ describe('ExplorerSearch', () => {
     expect(results().map((b) => b.dataset['nodeId'])).toEqual(['b', 'd']);
   });
 
+  it('does not move the camera for a controlled selection the owner rejects', async () => {
+    const onSelectedChange = vi.fn();
+    await ready({ selectedId: null, onSelectedChange });
+    await type('ta');
+    const before = cameraNow();
+    await key(input(), 'Enter');
+    await runFramesUntilIdle();
+    expect(onSelectedChange).toHaveBeenCalledWith('b');
+    expect(state().detailsOpen).toBe(false);
+    expect(cameraNow()).toEqual(before);
+  });
+
+  it('does not frame a search request closed before its next frame', async () => {
+    await ready();
+    await type('ta');
+    const before = cameraNow();
+    await key(input(), 'Enter');
+    await flush(() => state().closeDetails());
+    await runFramesUntilIdle();
+    expect(cameraNow()).toEqual(before);
+  });
+
   it('does nothing on Enter with no match', async () => {
     await ready();
     await type('zzz');

@@ -237,3 +237,6 @@ export type { NodeGroup, NodeGroupMember, NodeGroupLayer } from './node-groups.j
 
 export { shapeEdgePath } from './edge-path.js';
 export type { EdgePathOptions } from './edge-path.js';
+
+export { createPinchGesture } from './pinch-gesture.js';
+export type { PinchDelta, PinchGesture } from './pinch-gesture.js';
