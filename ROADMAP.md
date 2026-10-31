@@ -475,12 +475,19 @@ branches never enter public docs, source, npm artifacts, or job fixtures.
     1,024 ns. Run 1 at DPR 1 paced every row at about 18 ms, cause not traced.
     These results do not establish the all-moving 60 Hz goal. See
     [the results matrix](bench/browser/README.md#results-matrix-at-10000-nodes-m410-2026-10-30).
+  - The same rows on a second machine, 2026-10-31 on main `85ee77a`: Apple M4,
+    Chrome 156 headed, `apple` `metal-3`, WebGPU, not a fallback adapter,
+    `fit`, DPR 1 and 2, three runs each. Every row holds the tick except smooth
+    edges with every node moving, which barely misses it (0.1% to 0.8% of
+    ticks against the still modes' 0% to 0.4%). Between retargets `setEdges`
+    is 6.1 to 7.3 ms and `advance` 1.6 to 2.3; retarget frames add 13.4 to
+    14.4 ms of `apply`. GPU median and p95 stay below 2 ms, with 1 ns
+    timestamps. See
+    [the Apple M4 matrix](bench/browser/README.md#the-same-matrix-on-an-apple-m4-2026-10-31).
 
   Remaining task: `tsk_ad4b7ce0d93b` (Backlog, behind the 2026-10-29 priority
-  refresh), complete the matrix with smaller sizes,
-  another zoom, rich nodes, WebGL2, a second machine (Apple M4 evidence open in
-  #193) and unrounded GPU
-  timestamps. The 10k slice is merged; the whole matrix is not done.
+  refresh), complete the matrix with smaller sizes, another zoom, rich nodes,
+  WebGL2 and unrounded GPU timestamps on the NVIDIA adapter. The 10k slice is merged; the whole matrix is not done.
   The [browser measurement record](bench/browser/README.md#springs-in-flight-on-webgpu-m410)
   preserves the optimization sequence, rejected experiments and reproduction
   details; [working notes](specs/roadmap-notes.md#m4-renderer-dagrrender)
