@@ -28,7 +28,8 @@
  * The page asks for `backend: 'webgpu'`, so a browser without an adapter fails
  * with `BACKEND_UNAVAILABLE` rather than measuring the WebGL2 fallback. A
  * software adapter such as SwiftShader still comes up on `webgpu`, so the
- * runner also exits non-zero when the adapter reports `isFallbackAdapter`.
+ * runner also exits non-zero when the adapter, or the one behind any device
+ * the page created, reports `isFallbackAdapter`.
  *
  * `DAGR_CDP`, a DevTools endpoint such as `windows-chrome.mjs` prints, attaches
  * to a running Chrome instead of launching one.
@@ -425,8 +426,8 @@ const report = {
 };
 console.log(JSON.stringify(report, null, 1));
 if (rows.some((row) => row.backend !== 'webgpu')) process.exitCode = 1;
-if (deviceAdapters.length === 0 || deviceAdapters.some((a) => a.isFallbackAdapter === true)) {
-  console.error('a device was created on a fallback adapter, or none was created; see deviceAdapters');
+if (deviceAdapters.length === 0 || deviceAdapters.some((a) => a.isFallbackAdapter !== false)) {
+  console.error('a device was created on an adapter not known to be hardware, or none was created; see deviceAdapters');
   process.exitCode = 1;
 }
 if (rows.some((row) => row.pick !== null && Object.values(row.pick).some((p) => p.errors.length > 0 || p.settled === 0))) {

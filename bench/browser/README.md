@@ -352,8 +352,9 @@ non-zero unless the canvas came up on `webgpu` on an adapter that reports
 per sample, and every sample was answered correctly within 3 seconds. Console
 warnings and errors are printed, not gated; a page error fails the run.
 The adapter recorded is the one `requestAdapter()` returns with no options,
-asked from the page; on this machine Chrome lists one GPU, so it is the
-renderer's. `--control` reads the reference 9 CSS pixels right of the pointer,
+asked from the page; on 2026-10-28 Chrome listed one GPU on this machine, so
+it was the renderer's. The machine has had a second GPU since, so that is no
+longer proof on it. `--control` reads the reference 9 CSS pixels right of the pointer,
 about one rounded rect's pitch, and exits non-zero unless that run fails.
 
 **What it found on 2026-10-28**, on the machine
@@ -475,10 +476,10 @@ points and the index tests the chords, so those rows price the index, not
 its accuracy on that curve.
 
 The report also lists `deviceAdapters`, the adapter behind every device the
-page created, and exits non-zero when any of them is a fallback adapter, or
-the page created none. With two
-GPUs, the adapter a bare `requestAdapter()` returns is not proof of which one
-drew.
+page created, and exits non-zero unless there is at least one and each
+reports `isFallbackAdapter: false`. With two GPUs, the adapter a bare
+`requestAdapter()` returns is not proof of which one drew. `--memory` runs
+do not check it.
 
 **What it found on 2026-10-31**, on the Windows desktop
 [above](#from-wsl2-through-the-windows-sides-chrome), which now also has an
@@ -487,12 +488,13 @@ integrated graphics, Windows build 26300. Chrome 156.0.8078.48 headed on the
 Windows side, attached from WSL2, no flags beyond the helper's. The adapter
 was `nvidia` `lovelace`, `isFallbackAdapter: false`, both from
 `requestAdapter()` and behind the renderer's device, and `renderer.backend`
-was `webgpu` on every row. Tick 18 ms, load average 0.0 to 1.4 (falling from
+was `webgpu` on every row. Tick 18 ms, load average 0.0 to 1.3 (falling from
 the build before the first pair). 10,000 nodes and 13,169 edges with springs
 in flight and every node moving, alternating runs without and with
 `--edge-hit`: three pairs at DPR 1 and two at DPR 2. Times are median / 95th
 percentile / max in milliseconds. In flight, a straight edge has 2 points and
-a smooth one 4, so the index holds 13,169 and 39,190 segments.
+a smooth one at most 4: one frame of the same graph and retarget, advanced
+outside the browser, held 13,169 and 39,190 segments.
 
 | DPR | Edges | Past one tick, without | Past one tick, with `--edge-hit` | `edgeHitIndex` | `edgeHit` |
 | --- | --- | --- | --- | --- | --- |
@@ -507,16 +509,19 @@ for straight edges and 5.0 to 10.1 for smooth. 38% to 50% of queries landed
 on an edge. `setEdges`, `render` and `advance` overlapped between runs with
 and without it (smooth `setEdges` 8.4 to 9.8 ms at the median). The page
 logged three's `Vertex attribute "position" not found on geometry` warning
-once per run, and no page error.
+once per row, and no page error.
 
-- **A query is free; the rebuild is not.** Every query took 0.1 ms or less.
+- **A query is free; the rebuild is not.** Every query took 0.2 ms or less.
   The cost is the rebuild over the frame's points.
-- **The rebuild grows faster than the segments.** Three times the segments
-  cost six times the time, 2 ms against 12 to 14 at the median.
-- **Rebuilt every frame, it fits beside straight edges and not beside smooth
-  ones.** With straight edges no tick was missed. With smooth edges, where
-  `setEdges` already takes about half the 18 ms tick, about 70% of ticks
-  were missed against about 5% without it.
+- **The rebuild cost more than the segment count alone explains.** Three
+  times the segments took six to seven times as long, 2 ms against 12 to 14
+  at the median, in frames that also do more `setEdges` work.
+- **Rebuilt every frame, it fits at one segment per edge and not at three.**
+  With straight edges no tick was missed. With three segments per edge, in a
+  frame whose `setEdges` already takes about half the 18 ms tick, about 70%
+  of ticks were missed against about 5% without it. `DagrCanvas` draws its
+  routes as a polyline group, not `smooth`, so what transfers is the segment
+  count, not the curve.
 
 This prices rebuilding on every frame, the most a click while edges glide
 asks for. Hover's one rebuild in six frames was not run, nor were
@@ -546,7 +551,9 @@ with about 1.3 straight edges per node, through a renderer that asks for
 adapter, such as SwiftShader, gets past that check, because the renderer can
 come up on `webgpu` through it. So when the adapter reports
 `isFallbackAdapter` the runner says so on stderr before it measures, and exits
-non-zero even if every row then comes up on `webgpu`. Each size, edge style, node mode, part and motion runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
+non-zero even if every row then comes up on `webgpu`. Outside `--memory` it
+also exits non-zero unless every device the page created reports
+`isFallbackAdapter: false`. Each size, edge style, node mode, part and motion runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
 `animated` also replaces every node centre and every edge route each frame
 through `setNodes` and `setEdges`, from a sway computed from the clock: the
 renderer's half of a frame with every spring in flight, without the scene
@@ -592,6 +599,11 @@ old, on about one frame in six. The report's `hit` gives the untimed build and
 how many queries, warm-up included, landed on a node. With `--nodes=rich` the
 still query runs just before `sync`, so do not compare those rows' still `sync`
 with the rich-node table below.
+
+`--edge-hit` does the same for edges through `createEdgeHitIndex`, timed as
+`edgeHitIndex` and `edgeHit`. It takes only `--parts=all` and is refused with
+`--memory`; see
+["What an edge hit costs a frame"](#what-an-edge-hit-costs-a-frame-m48b).
 
 `--pick` adds GPU node picks to every row through `renderer.pickNode` at the
 same sweeping pointer, started after `render()` and timed as `pick`, which is

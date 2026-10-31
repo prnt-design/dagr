@@ -917,11 +917,12 @@
       const deviceAdapters = [];
       if ('gpu' in navigator) {
         const requestDevice = GPUAdapter.prototype.requestDevice;
-        GPUAdapter.prototype.requestDevice = function (descriptor) {
+        GPUAdapter.prototype.requestDevice = async function (descriptor) {
+          const device = await requestDevice.call(this, descriptor);
           const { vendor, architecture, isFallbackAdapter } = this.info;
           const seen = { vendor, architecture, isFallbackAdapter: isFallbackAdapter ?? this.isFallbackAdapter };
           if (!deviceAdapters.some((a) => JSON.stringify(a) === JSON.stringify(seen))) deviceAdapters.push(seen);
-          return requestDevice.call(this, descriptor);
+          return device;
         };
       }
       window.deviceAdapters = () => deviceAdapters;
