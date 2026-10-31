@@ -994,7 +994,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     onSelectionChange: (target) => {
       if (pinchedRef.current) return;
       if (target === null) latest.current.onBackgroundClick?.();
-      else latest.current.onNodeClick?.(target.nodeId);
+      else if (target.kind === 'node') latest.current.onNodeClick?.(target.nodeId);
     },
     onPanStart: cancelFlight,
     onPanBy: ({ x, y }) => {
@@ -1148,7 +1148,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         const displayedRevision = drawnNodesRef.current;
         const hit = gpu.hitTarget({ css, world, devicePixelRatio: window.devicePixelRatio, displayedRevision });
         if (!Object.is(hit.displayedRevision, displayedRevision)) return;
-        id = hit.target?.nodeId ?? null;
+        id = hit.target?.kind === 'node' ? hit.target.nodeId : null;
       }
       if (id === hovered) return;
       hovered = id;
