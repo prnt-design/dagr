@@ -32,3 +32,6 @@ export type { OrthoFrustum, Size, Vec2, ViewportSize, WorldBounds } from './geom
 
 export { createPinchGesture } from './pinch-gesture.js';
 export type { PinchDelta, PinchGesture } from './pinch-gesture.js';
+
+export { clipInset, coverInset, visibleFrame } from './visible-frame.js';
+export type { FrameInset, ScreenRect, VisibleFrame } from './visible-frame.js';

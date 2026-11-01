@@ -38,18 +38,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import { createPinchGesture } from '@prnt/dagr-render/core';
+import { coverInset, createPinchGesture, visibleFrame } from '@prnt/dagr-render/core';
 import type { PinchDelta, Vec2 } from '@prnt/dagr-render/core';
 import {
   CONTENT_PADDING,
-  cameraFrame,
   cameraSettled,
   createCameraLimits,
   easeCamera,
   fitCamera,
   focusCamera,
   frameCenter,
-  obstructionInset,
   panCamera,
   revealCamera,
   screenToWorld,
@@ -276,7 +274,7 @@ function createEngine(
     const left = box.left + viewport.clientLeft;
     const top = box.top + viewport.clientTop;
     const inner = { left, top, right: left + viewport.clientWidth, bottom: top + viewport.clientHeight };
-    return overlays.map((overlay) => obstructionInset(inner, overlay.getBoundingClientRect()));
+    return overlays.map((overlay) => coverInset(inner, overlay.getBoundingClientRect()));
   };
 
   /** `force` rebuilds the limits even when neither the size nor the frame changed. */
@@ -288,7 +286,7 @@ function createEngine(
     // camera means showing it again needs no refit when the size comes back.
     if (!(width > 0) || !(height > 0)) return;
     const nextSize = { width, height };
-    const nextFrame = cameraFrame(nextSize, options.inset, ...obstructed());
+    const nextFrame = visibleFrame(nextSize, options.inset, ...obstructed());
     const resized = width !== size.width || height !== size.height;
     const uncovered = covered(nextFrame, nextSize) !== covered(area, size);
     if (!force && !resized && !uncovered && limits !== null) return;
