@@ -34,6 +34,12 @@ export interface CameraFlight {
    * start time.
    */
   step(nowMs: number): boolean;
+  /**
+   * Heads for `target` instead, from where the camera is now, landing when the
+   * flight would have. For a target worked out in a frame that has since
+   * changed.
+   */
+  retarget(target: CameraTarget): void;
 }
 
 /**
@@ -52,16 +58,27 @@ export function startCameraFlight(
   target: CameraTarget,
   durationMs: number,
 ): CameraFlight {
-  const from: CameraTarget = { center: camera.center, zoom: camera.zoom };
+  let from: CameraTarget = { center: camera.center, zoom: camera.zoom };
+  let to = target;
+  let duration = durationMs;
   let start: number | null = null;
+  let last = 0;
   return {
     step(nowMs) {
       start ??= nowMs;
-      const t = durationMs > 0 ? (nowMs - start) / durationMs : 1;
-      const state = interpolateCamera(from, target, t);
+      last = nowMs;
+      const t = duration > 0 ? (nowMs - start) / duration : 1;
+      const state = interpolateCamera(from, to, t);
       camera.setZoom(state.zoom);
       camera.setCenter(state.center);
       return t >= 1;
+    },
+    retarget(next) {
+      from = { center: camera.center, zoom: camera.zoom };
+      to = next;
+      if (start === null) return;
+      duration = Math.max(0, start + duration - last);
+      start = null;
     },
   };
 }

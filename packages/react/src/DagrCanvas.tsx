@@ -100,7 +100,7 @@ import type {
 } from '@prnt/dagr-render';
 import { retarget, toMotionRoster } from './animation.js';
 import { startCameraFlight } from './camera-flight.js';
-import type { CameraFlight } from './camera-flight.js';
+import type { CameraFlight, CameraTarget } from './camera-flight.js';
 import { DagrCanvasContext } from './canvas-context.js';
 import type { DagrCanvasApi, DagrCanvasHandle, FitOptions, FocusNodeOptions } from './canvas-context.js';
 import { createEdgeHitIndex } from './edge-hit.js';
@@ -262,9 +262,13 @@ export interface DagrCanvasBaseProps {
    * covers, such as a toolbar or a drawer. The first fit, `fit()`, `focusNode`
    * and the camera limits frame what is left, by `visibleFrame`'s rules (an
    * inset that would leave too little of an axis is ignored on that axis).
-   * Drawing and hit testing still cover the whole canvas. A change keeps the
-   * camera and only re-clamps it to the new limits, so call `focusNode` after
-   * the new inset has rendered, not in the same handler. Default none.
+   * Drawing and hit testing still cover the whole canvas. A change keeps a
+   * camera at rest and only re-clamps it to the new limits. A `fit()` or
+   * `focusNode` flight still under way works its target out again in the new
+   * frame and lands when it would have, so one started in the same handler as
+   * the change ends in the right place; one with `durationMs: 0` has already
+   * landed, so call it after the new inset has rendered. The same holds when
+   * the canvas resizes. Default none.
    *
    * The canvas also leaves out what the visual viewport hides of it beyond
    * the layout viewport, such as a software keyboard over the bottom of the
@@ -668,8 +672,11 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
    */
   const richRef = useRef<RichNodes<unknown> | null>(null);
 
-  /** A camera flight in progress, stepped from the coalesced frame below. */
-  const flightRef = useRef<CameraFlight | null>(null);
+  /**
+   * A camera flight in progress, stepped from the coalesced frame below, and
+   * how to work its target out again when the frame changes under it.
+   */
+  const flightRef = useRef<{ readonly flight: CameraFlight; readonly aim: () => CameraTarget } | null>(null);
   /** A two-finger pinch happened in the current touch sequence. */
   const pinchedRef = useRef(false);
 
@@ -722,10 +729,10 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     if (frameRef.current !== null) return;
     frameRef.current = requestAnimationFrame((nowMs) => {
       frameRef.current = null;
-      const flight = flightRef.current;
-      if (flight !== null) {
+      const flying = flightRef.current;
+      if (flying !== null) {
         const camera = stageRef.current?.renderer.camera;
-        if (camera === undefined || flight.step(nowMs)) flightRef.current = null;
+        if (camera === undefined || flying.flight.step(nowMs)) flightRef.current = null;
         else requestDraw();
       }
       const loopFrame = loopFrameRef.current;
@@ -904,6 +911,11 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     return framed;
   }, []);
 
+  const retargetFlight = useCallback((): void => {
+    const flying = flightRef.current;
+    if (flying !== null) flying.flight.retarget(flying.aim());
+  }, []);
+
   const insetRef = useRef<FrameInset | null>(null);
   const syncInset = useCallback((): void => {
     const current = stageRef.current;
@@ -920,8 +932,9 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     insetRef.current = next;
     current.renderer.camera.setInset(next);
     syncCameraLimits();
+    retargetFlight();
     requestDraw();
-  }, [requestDraw, syncCameraLimits]);
+  }, [requestDraw, syncCameraLimits, retargetFlight]);
 
   const fitOnce = useCallback((): void => {
     const current = stageRef.current;
@@ -941,16 +954,16 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     flightRef.current = null;
   }, []);
   const flyTo = useCallback(
-    (center: { x: number; y: number }, zoom: number, options: FitOptions | undefined): void => {
+    (aim: () => CameraTarget, options: FitOptions | undefined): void => {
       const current = stageRef.current;
       if (current === null) return;
       const reduced =
         typeof window.matchMedia === 'function' &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const duration = options?.durationMs ?? (reduced ? 0 : 450);
-      const flight = startCameraFlight(current.renderer.camera, { center, zoom }, duration);
+      const flight = startCameraFlight(current.renderer.camera, aim(), duration);
       if (duration > 0) {
-        flightRef.current = flight;
+        flightRef.current = { flight, aim };
       } else {
         flightRef.current = null;
         flight.step(0);
@@ -967,8 +980,11 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         const framed = framedBounds();
         if (current === null || framed === null || !viewportRef.current) return false;
         const camera = current.renderer.camera;
-        const zoom = clampZoom(camera, fitZoom(framed, camera.frame, latest.current.fitPadding));
-        flyTo(camera.centerFor({ x: (framed.minX + framed.maxX) / 2, y: (framed.minY + framed.maxY) / 2 }, zoom), zoom, options);
+        const middle = { x: (framed.minX + framed.maxX) / 2, y: (framed.minY + framed.maxY) / 2 };
+        flyTo(() => {
+          const zoom = clampZoom(camera, fitZoom(framed, camera.frame, latest.current.fitPadding));
+          return { center: camera.centerFor(middle, zoom), zoom };
+        }, options);
         return true;
       },
       focusNode(nodeId: string, options?: FocusNodeOptions): boolean {
@@ -979,15 +995,14 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
           sceneNodesRef.current?.find((n) => n.id === nodeId);
         if (node === undefined || !(node.size.width > 0) || !(node.size.height > 0)) return false;
         const camera = current.renderer.camera;
-        const zoom =
-          options?.zoom ??
-          fitZoom(
-            { minX: 0, minY: 0, maxX: node.size.width, maxY: node.size.height },
-            camera.frame,
-            0.25,
-          );
+        const box = { minX: 0, minY: 0, maxX: node.size.width, maxY: node.size.height };
+        const zoomFor = (): number => options?.zoom ?? fitZoom(box, camera.frame, 0.25);
+        const zoom = zoomFor();
         if (!(Number.isFinite(zoom) && zoom > 0)) return false;
-        flyTo(camera.centerFor(node.center, clampZoom(camera, zoom)), zoom, options);
+        flyTo(() => {
+          const at = zoomFor();
+          return { center: camera.centerFor(node.center, clampZoom(camera, at)), zoom: at };
+        }, options);
         return true;
       },
     }),
@@ -1493,6 +1508,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       viewportRef.current = true;
       syncInset();
       syncCameraLimits();
+      retargetFlight();
       fitOnce();
       requestDraw();
     };
@@ -1519,7 +1535,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       observer.disconnect();
       query?.removeEventListener('change', onRatio);
     };
-  }, [stage, fitOnce, requestDraw, syncCameraLimits, syncInset, props.maxPixelRatio]);
+  }, [stage, fitOnce, requestDraw, syncCameraLimits, syncInset, retargetFlight, props.maxPixelRatio]);
 
   useEffect(() => {
     if (stage === null) return;

@@ -444,6 +444,34 @@ describe('camera api', () => {
     expect(camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 600 });
   });
 
+  it('lands a flight under way in the frame an inset change leaves', async () => {
+    const api = createRef<DagrCanvasApi>();
+    const graph = twoNodes();
+    await ready(<DagrCanvas graph={graph} config={config} cameraLimits={false} apiRef={api} />);
+    await flush(() => api.current?.focusNode('b'));
+    await runFrames(100);
+    await runFrames(200);
+    await tree?.rerender(<DagrCanvas graph={graph} config={config} cameraLimits={false} inset={{ right: 300 }} apiRef={api} />);
+    await runFramesUntilIdle();
+    expect(screenOf('b').x).toBeCloseTo(250, 6);
+    expect(screenOf('b').y).toBeCloseTo(300, 6);
+  });
+
+  it('lands a fit under way at the fit for the size the canvas resized to', async () => {
+    const api = createRef<DagrCanvasApi>();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} cameraLimits={false} apiRef={api} />);
+    const camera = lastRenderer().camera;
+    camera.setZoom(camera.zoom * 3);
+    await flush(() => api.current?.fit());
+    await runFrames(100);
+    await runFrames(200);
+    await flush(() => resizeTo(400, 600));
+    await runFramesUntilIdle();
+    const landed = camera.zoom;
+    await flush(() => api.current?.fit({ durationMs: 0 }));
+    expect(camera.zoom).toBeCloseTo(landed, 9);
+  });
+
   it('re-clamps a camera at the content edge into the new frame', async () => {
     const graph = twoNodes();
     await ready(<DagrCanvas graph={graph} config={config} />);

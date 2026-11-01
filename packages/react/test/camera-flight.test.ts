@@ -36,6 +36,33 @@ describe('startCameraFlight', () => {
     expect(camera.center.x).toBeCloseTo(100);
   });
 
+  it('retargets from where the camera is, without a jump, and lands when it would have', () => {
+    const camera = new Camera2D();
+    const flight = startCameraFlight(camera, to, 400);
+    flight.step(1000);
+    flight.step(1200);
+    const midway = camera.zoom;
+    const elsewhere = { center: { x: -50, y: 20 }, zoom: 2 };
+    flight.retarget(elsewhere);
+    expect(flight.step(1300)).toBe(false);
+    expect(camera.zoom).toBe(midway);
+    expect(flight.step(1450)).toBe(false);
+    expect(flight.step(1500)).toBe(true);
+    expect(camera.zoom).toBeCloseTo(2);
+    expect(camera.center.x).toBeCloseTo(-50);
+    expect(camera.center.y).toBeCloseTo(20);
+  });
+
+  it('takes a target given before the first step as its own, keeping the duration', () => {
+    const camera = new Camera2D();
+    const flight = startCameraFlight(camera, to, 400);
+    flight.retarget({ center: { x: 10, y: 10 }, zoom: 2 });
+    expect(flight.step(0)).toBe(false);
+    expect(flight.step(399)).toBe(false);
+    expect(flight.step(400)).toBe(true);
+    expect(camera.zoom).toBeCloseTo(2);
+  });
+
   it('finishes on the first step for a zero duration', () => {
     const camera = new Camera2D();
     expect(startCameraFlight(camera, to, 0).step(0)).toBe(true);

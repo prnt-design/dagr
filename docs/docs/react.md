@@ -897,10 +897,13 @@ that much of a side, such as a details drawer or a toolbar. The first fit,
 fitted under the drawer. An inset that would leave less than 160 CSS pixels of
 width (120 of height), or less than a quarter of that axis, is ignored on that
 axis. Keyboard zoom anchors at the frame's centre. Drawing and hit testing
-still cover the whole canvas, and changing the inset keeps the camera, only
-re-clamping it, so a handler that opens a drawer and passes it as `inset`
-should call `focusNode` once the new inset has rendered, for example from an
-effect.
+still cover the whole canvas, and changing the inset keeps a camera at rest,
+only re-clamping it. A `fit()` or `focusNode` flight still under way works its
+target out again in the new frame and lands when it would have, so a handler
+that opens a drawer, passes it as `inset` and calls `focusNode` ends with the
+node in the middle of what the drawer leaves. One with `durationMs: 0` lands
+at once, so call it once the new inset has rendered, for example from an
+effect. A flight under way retargets the same way when the canvas resizes.
 
 The canvas also observes the visual viewport and leaves out what it hides of
 the canvas beyond the layout viewport, such as the part of the page a software
