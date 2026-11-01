@@ -11,6 +11,7 @@ not" is the category this file has a heading for.
 
 ## Unreleased
 
+- Add `visibleFrame`, `coverInset` and `clipInset` with `FrameInset`, `ScreenRect` and `VisibleFrame` types to the full and three.js-free core entries. They compute the CSS-pixel part of a surface left to frame content in, around overlays, clipping ancestors and the visual viewport. Explorer's obstruction framing now uses them, unchanged.
 - Add `createPinchGesture` with `PinchDelta` and `PinchGesture` types to the full and three.js-free core entries. Shared CSS-pixel touch geometry is independent of browser event ownership and rendering backend.
 - Add `Renderer.pickNode(pointer)`, which resolves to the id of the node drawn
   under a pointer, or `null`, by drawing that one device pixel on the GPU and

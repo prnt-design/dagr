@@ -158,7 +158,7 @@ means a tier must clear its own per-node state on every bind.
 
 ## The three-free entry
 
-`@prnt/dagr-render/core` exports `Camera2D`, `fitZoom`, `shapeEdgePath` and `createPinchGesture`, with
+`@prnt/dagr-render/core` exports `Camera2D`, `fitZoom`, `shapeEdgePath`, `createPinchGesture`, `visibleFrame`, `coverInset` and `clipInset`, with
 their types, from modules that never import `three`: not at runtime, and not in
 their type declarations.
 
@@ -222,4 +222,6 @@ obstacle avoidance. Pass the result to SVG paths or renderer edges using
 pan/zoom deltas, independent of SVG, DOM or GPU drawing. `DagrCanvas` and
 Explorer both consume it; custom hosts can use the same contact contract.
 Capture, cancellation events, scroll ownership and click suppression remain
-adapter responsibilities. See the [mobile architecture guide](https://dagr.prnt.design/docs/mobile).
+adapter responsibilities. `visibleFrame`, `coverInset` and `clipInset` compute
+the part of a surface left to frame content in, around overlays, clipping
+ancestors and a shrunken visual viewport. See the [mobile architecture guide](https://dagr.prnt.design/docs/mobile).

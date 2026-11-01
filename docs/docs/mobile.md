@@ -8,8 +8,9 @@ sidebar_position: 10
 
 :::note[Unreleased]
 
-The shared pinch API is a repository implementation for the next release.
-Current 0.1.4 npm packages do not include it; publication remains maintainer-gated.
+The shared pinch and visible-frame APIs are repository implementations for the
+next release. Current 0.1.4 npm packages do not include them; publication
+remains maintainer-gated.
 
 :::
 
@@ -30,7 +31,7 @@ mobile reading flow or real device has been validated.
 | Layer | Owns | Does not own |
 | --- | --- | --- |
 | Graph and layout | Stable IDs, relationships, coordinates and layout deltas | A phone-specific copy of the dataset |
-| Renderer core | Camera arithmetic and shared touch-contact geometry | React state, DOM event capture or a device-name detector |
+| Renderer core | Camera arithmetic, shared touch-contact geometry and the visible frame | React state, DOM event capture or a device-name detector |
 | Surface adapter | CSS coordinates, event capture/cancellation, scroll ownership and camera updates | Duplicated pinch arithmetic or graph semantics |
 | Explorer or host UI | Readable controls/details, focus, search and reading modes | A separate mobile selection/search store |
 | Rendering backend | GPU or SVG drawing and its measured resource budget | Choosing a graph's meaning or changing input semantics |
@@ -85,6 +86,58 @@ post-pinch clicks and avoid resuming an old single-finger drag. Dropped events
 or a disappearing surface require an explicit reset. Both built-in adapters
 reset stale contacts when a fresh primary touch sequence begins.
 
+## Visible frame contract
+
+A surface's visible frame is the part of it left to frame content in: what a
+fit, a focus or a reveal should aim at. Three different things take area away,
+and each has its own function in `@prnt/dagr-render/core`. All work in the
+same CSS-pixel coordinates as `getBoundingClientRect`:
+
+- `coverInset(surface, cover)` is an overlay drawn over the surface, such as a
+  details drawer. It takes one side, and only when it touches that side and
+  spans at least half of it. An overlay in the middle takes nothing.
+- `clipInset(surface, visible)` is the part of the surface outside a box: a
+  scrolling ancestor's client box (inside its border and scrollbar), or the
+  visual viewport's, which can shrink while the layout viewport does not, for
+  example when a software keyboard opens or the page is zoomed. It clips every
+  side that falls outside.
+- `visibleFrame(size, ...insets)` combines them, taking the largest inset on
+  each side, and returns `{ x, y, width, height }` from the surface's top left.
+
+Given a `surface` element and a `drawer` element over it:
+
+```ts
+import { clipInset, coverInset, visibleFrame } from '@prnt/dagr-render/core';
+
+const box = surface.getBoundingClientRect();
+const vv = window.visualViewport;
+const visual = vv && {
+  left: vv.offsetLeft,
+  top: vv.offsetTop,
+  right: vv.offsetLeft + vv.width,
+  bottom: vv.offsetTop + vv.height,
+};
+const frame = visibleFrame(
+  { width: box.width, height: box.height },
+  coverInset(box, drawer.getBoundingClientRect()),
+  ...(visual ? [clipInset(box, visual)] : []),
+);
+```
+
+An axis the insets would squeeze below max(160 or 120 CSS pixels, a quarter of
+the axis) keeps its whole extent, so a full-width drawer or a nearly hidden
+surface does not shrink the graph to nothing. The functions do not observe
+anything: when to measure, and whether a resize should move the camera, are
+adapter decisions. A smaller visual viewport is not proof that a keyboard
+opened, and nothing here should be used to disable browser zoom.
+
+Explorer frames around its registered obstructions with `coverInset` and
+`visibleFrame`. Neither Explorer nor `DagrCanvas` observes the visual viewport
+yet, and the visual-viewport coordinates above are not yet verified on a real
+iOS or Android device. Current engines report `getBoundingClientRect`
+relative to the layout viewport, which is what the `offsetLeft` and
+`offsetTop` arithmetic above relies on.
+
 ## Page scrolling remains an explicit policy
 
 `DagrCanvas navigation` keeps its existing modes:
@@ -115,12 +168,12 @@ as search and details.
 Adaptive controls and details shipped separately in M5.7b: Explorer docks
 details below the map in containers narrower than 720 CSS pixels. This input
 foundation does not add responsive panels or a new backend. The planned
-outline reader uses the same ExplorerRoot state. Keyboard occlusion, safe
-areas and camera-visible areas still need a shared contract: a software
-keyboard can shrink the
+outline reader uses the same ExplorerRoot state. The visible frame contract
+above is the shared geometry for keyboard occlusion and camera-visible areas;
+a software keyboard can shrink the
 [visual viewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport)
-without shrinking the layout viewport. A visual viewport resize is not proof
-that a keyboard opened, and browser zoom must not be disabled to simplify it.
+without shrinking the layout viewport. The built-in adapters do not observe
+it yet, and safe areas are still to come.
 
 See the [roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md#core-mobile-framework-track)
 for the viewport/occlusion and conformance work. Tests of a gesture state machine

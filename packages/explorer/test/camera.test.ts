@@ -3,13 +3,11 @@ import { layoutView } from '../src/index.js';
 import type { ExplorerBox } from '../src/index.js';
 import {
   CONTENT_PADDING,
-  cameraFrame,
   cameraSettled,
   createCameraLimits,
   easeCamera,
   fitCamera,
   focusCamera,
-  obstructionInset,
   panCamera,
   revealCamera,
   screenToWorld,
@@ -334,63 +332,5 @@ describe('a frame: the part of the viewport nothing covers', () => {
     if (loose === null) throw new Error('no limits');
     expect(loose.constrain(far).x).toBeCloseTo(240, 6);
     expect(limitsOf().constrain(far).x).toBeCloseTo(40, 6);
-  });
-});
-
-describe('cameraFrame and obstructionInset', () => {
-  const size = { width: 800, height: 480 };
-  const rect = (left: number, top: number, right: number, bottom: number) => ({ left, top, right, bottom });
-  const whole = rect(0, 0, 800, 480);
-
-  it('is the whole viewport with no inset', () => {
-    expect(cameraFrame(size, {})).toEqual({ x: 0, y: 0, width: 800, height: 480 });
-  });
-
-  it('takes each side in, ignoring a negative or non-finite inset', () => {
-    expect(cameraFrame(size, { top: 40, right: 360, bottom: Number.NaN, left: -10 })).toEqual({
-      x: 0,
-      y: 40,
-      width: 440,
-      height: 440,
-    });
-  });
-
-  it('ignores the insets on an axis they would squeeze under max(160, a quarter) or max(120, a quarter)', () => {
-    expect(cameraFrame(size, { right: 600 })).toEqual({ x: 0, y: 0, width: 200, height: 480 });
-    expect(cameraFrame(size, { right: 601, top: 40 })).toEqual({ x: 0, y: 40, width: 800, height: 440 });
-    expect(cameraFrame({ width: 1600, height: 480 }, { left: 1201 }).width).toBe(1600);
-    expect(cameraFrame(size, { top: 200, bottom: 161 })).toEqual({ x: 0, y: 0, width: 800, height: 480 });
-  });
-
-  it('insets the side a drawer covers by its width', () => {
-    expect(obstructionInset(whole, rect(440, 0, 800, 480))).toEqual({ right: 360 });
-    expect(obstructionInset(whole, rect(0, 0, 300, 480))).toEqual({ left: 300 });
-    expect(obstructionInset(whole, rect(0, 0, 800, 60))).toEqual({ top: 60 });
-  });
-
-  it('insets the docked side of a full-height drawer wider than half the viewport', () => {
-    expect(obstructionInset(whole, rect(300, 0, 800, 480))).toEqual({ right: 500 });
-  });
-
-  it('measures against where the viewport is, and only the part that overlaps it', () => {
-    const placed = rect(100, 50, 900, 530);
-    expect(obstructionInset(placed, rect(540, 0, 900, 600))).toEqual({ right: 360 });
-  });
-
-  it('ignores an obstruction that does not touch a side, spans under half of it, or has no size', () => {
-    expect(obstructionInset(whole, rect(300, 100, 500, 300))).toEqual({});
-    expect(obstructionInset(whole, rect(600, 0, 800, 200))).toEqual({});
-    expect(obstructionInset(whole, rect(0, 0, 0, 0))).toEqual({});
-    expect(obstructionInset(whole, rect(800, 0, 1000, 480))).toEqual({});
-  });
-
-  it('leaves the whole frame for a drawer as wide as the viewport', () => {
-    const phone = rect(0, 0, 375, 600);
-    expect(cameraFrame({ width: 375, height: 600 }, obstructionInset(phone, phone))).toEqual({
-      x: 0,
-      y: 0,
-      width: 375,
-      height: 600,
-    });
   });
 });
