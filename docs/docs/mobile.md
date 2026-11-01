@@ -124,6 +124,10 @@ const frame = visibleFrame(
 );
 ```
 
+The example clips everything outside the visual viewport, including any part
+of the surface the page has scrolled away. Explorer subtracts that part, as
+described below.
+
 An axis the insets would squeeze below max(160 or 120 CSS pixels, a quarter of
 the axis) keeps its whole extent, so a full-width drawer or a nearly hidden
 surface does not shrink the graph to nothing. The functions do not observe
@@ -137,14 +141,14 @@ events. It takes off only what the visual viewport hides beyond the layout
 viewport (`clipInset` against the visual viewport, less `clipInset` against
 the layout viewport), so a viewport the page has scrolled partly away keeps
 its frame. A visual viewport that shrinks does not refit the camera: it keeps
-its scale and reveals the selected node if the change covered it. A camera at
-fit refits when the visual viewport grows back. While the page is
+its scale and reveals the selected node if the change covered it. A camera
+fitted while the visual viewport was short fills the frame again when it grows
+back, because the least the camera may zoom is the fit. While the page is
 pinch-zoomed (a visual viewport `scale` more than 0.01 from 1) the visual
-viewport takes nothing off the frame, so magnifying the page does not move or
-shrink the graph. `DagrCanvas` takes a measured inset as its `inset` prop and
-frames its fit, `fit()`, `focusNode` and camera limits in
-`visibleFrame(size, inset)` through `Camera2D.setInset`, but does not observe
-the visual viewport yet.
+viewport takes nothing off the frame, so magnifying the page does not shrink
+the graph. `DagrCanvas` takes a measured inset as its `inset` prop and frames
+its fit, `fit()`, `focusNode` and camera limits in `visibleFrame(size, inset)`
+through `Camera2D.setInset`, but does not observe the visual viewport yet.
 
 The visual-viewport coordinates are covered by jsdom tests, not yet verified
 on a real iOS or Android device or with a software keyboard. Current engines
@@ -185,8 +189,8 @@ outline reader uses the same ExplorerRoot state. The visible frame contract
 above is the shared geometry for keyboard occlusion and camera-visible areas;
 a software keyboard can shrink the
 [visual viewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport)
-without shrinking the layout viewport. The built-in adapters do not observe
-it yet, and safe areas are still to come.
+without shrinking the layout viewport. Explorer observes it; `DagrCanvas`
+does not yet, and safe areas are still to come.
 
 See the [roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md#core-mobile-framework-track)
 for the viewport/occlusion and conformance work. Tests of a gesture state machine
