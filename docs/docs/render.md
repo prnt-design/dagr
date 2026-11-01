@@ -733,7 +733,7 @@ The case the entry exists for is a server render. A bundler already drops
 `three/webgpu` for a consumer who only imports the camera, because this package
 is side-effect free. A server that externalizes its dependencies has no such
 step: it evaluates the entry it is given. The planned `@prnt/dagr-explorer`
-(M5.6) will draw SVG from exactly these three functions and has to render on a
+(M5.6) will draw SVG from `Camera2D`, `fitZoom` and `shapeEdgePath` and has to render on a
 server, which is why the entry was cut.
 
 The objects are the same ones the full entry exports, so a `Camera2D` from
