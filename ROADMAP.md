@@ -25,7 +25,7 @@ not a second implementation queue.
 | Priority | Milestone / board task | Delivery condition |
 | --- | --- | --- |
 | P0 | Benchmark gate reliability, `tsk_1048e2545110` | Resolve the existing measurement blocker without weakening the gate; green CI alone does not permit merge. |
-| P1 | M5.8a shared pinch, `tsk_98c8dffe7bda` | Merged in PR #175: one `createPinchGesture` in renderer core, used by DagrCanvas and Explorer. M5.7b mobile reading merged in PR #171. M5.8b is the current core slice: its shared visible-frame geometry is PR #198, adapter observation is next. |
+| P1 | M5.8a shared pinch, `tsk_98c8dffe7bda` | Merged in PR #175: one `createPinchGesture` in renderer core, used by DagrCanvas and Explorer. M5.7b mobile reading merged in PR #171. M5.8b is the current core slice: its shared visible-frame geometry is PR #198; Explorer visual-viewport observation (PR #199) and DagrCanvas inset framing (PR #200) are open. |
 | P1 | M5.8b viewport/occlusion, `tsk_e55c78e6012c`; M5.8c mobile conformance, `tsk_7656d37da9de` | Follow the shared input foundation with usable visible-area handling and cross-surface evidence, including explicitly unverified real-device cases. |
 | P1 | M5.7c shared-state outline, `tsk_17e1212b51f0` | Follow M5.7b with a readable alternative using the same selection, query, details and content. |
 | P1 | M5.7d-1 portable skill installation, `tsk_a05bb1f08658` | Verified and merged in PR #192: local and pinned-Git installation plus first use outside this workspace. Preserve the documented recipe and evidence. |

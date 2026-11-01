@@ -371,13 +371,15 @@ developer is not using.
 | `fitBounds(bounds, padding?)` | frame a region: centre on it at the padded fit zoom |
 | `setCenter`, `setZoom`, `setViewport` | move it, scale it, tell it the canvas resized |
 | `setZoomLimits(min, max)` | rebind the zoom range, clamping the current zoom into it |
+| `setInset(inset)`, `frame`, `centerFor(point, zoom?)` | frame fits and content limits in the part of the canvas an overlay leaves |
 
 The zoom range is set at construction and can be rebound later with
 `setZoomLimits`, which is what content-derived limits need: the fit zoom
 depends on the viewport, so a window resize has to be able to move the range.
 The pure fit arithmetic is also exported as `fitZoom(bounds, viewport,
 padding)`, so a caller deriving limits and a `fitBounds` call cannot disagree
-about what "fits" means.
+about what "fits" means, provided the caller passes `camera.frame`, which is
+the viewport unless an inset is set.
 
 Two of the methods above have a decision inside them worth knowing about.
 

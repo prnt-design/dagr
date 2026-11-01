@@ -195,7 +195,7 @@ Call `camera.setContentBounds(bounds, nodeSize, padding, nodes)` with y-up world
 and a representative node size to constrain every camera mutation, including
 wheel anchors, direct setters, fitting, and resize. The default node size is
 160 by 80 and padding is 0.05. The zoom range runs from full content to a single
-node. Smaller axes stay centered; other axes pan inside the padded bounds.
+node. Axes smaller than the frame stay centered; other axes pan inside the padded bounds.
 Optional `nodes` supplies node bounds and keeps part of a node visible even in
 sparse regions. These bounds also expand the content bounds when needed.
 At a boundary, keeping content visible takes precedence over cursor anchoring.

@@ -242,7 +242,7 @@ export interface DagrCanvasBaseProps {
   /** Constrain zoom to overview/detail and pan to content. Default true. */
   readonly cameraLimits?: boolean | undefined;
 
-  /** The margin the fit leaves, as a fraction of the viewport. Default the camera's. */
+  /** The margin the fit leaves, as a fraction of the frame `inset` leaves (the whole canvas without one). Default the camera's. */
   readonly fitPadding?: number | undefined;
 
   /**
@@ -251,7 +251,8 @@ export interface DagrCanvasBaseProps {
    * and the camera limits frame what is left, by `visibleFrame`'s rules (an
    * inset that would leave too little of an axis is ignored on that axis).
    * Drawing and hit testing still cover the whole canvas. A change keeps the
-   * camera and only re-clamps it to the new limits. Default none.
+   * camera and only re-clamps it to the new limits, so call `focusNode` after
+   * the new inset has rendered, not in the same handler. Default none.
    */
   readonly inset?: FrameInset | undefined;
 
@@ -1128,7 +1129,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       cancelFlight();
       if (command.kind === 'fit') api.fit();
       else if (command.kind === 'pan') camera.panByScreen(command.dx, command.dy);
-      else camera.zoomAtScreen({ x: camera.viewport.width / 2, y: camera.viewport.height / 2 }, command.factor);
+      else camera.zoomAtScreen({ x: camera.frame.x + camera.frame.width / 2, y: camera.frame.y + camera.frame.height / 2 }, command.factor);
       requestDraw();
     };
     // Two-finger pinch: zoom about the midpoint and pan with it. Touch only;
@@ -1423,8 +1424,9 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
   useEffect(() => {
     if (stage === null) return;
     stage.renderer.camera.setInset({ top: insetTop, right: insetRight, bottom: insetBottom, left: insetLeft });
+    syncCameraLimits();
     requestDraw();
-  }, [stage, insetTop, insetRight, insetBottom, insetLeft, requestDraw]);
+  }, [stage, insetTop, insetRight, insetBottom, insetLeft, requestDraw, syncCameraLimits]);
 
   useEffect(() => {
     if (stage === null) return;

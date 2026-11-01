@@ -298,7 +298,7 @@ export class Camera2D {
    * Centres on `bounds` and adopts the zoom that fits them, padded, clamped
    * into the camera's range.
    *
-   * `padding` is the fraction of the viewport left empty on EACH side of the
+   * `padding` is the fraction of the {@link frame} left empty on EACH side of the
    * limiting axis, so 0.05 shows the bounds across 90% of that axis. It is
    * capped at 0.45 because at 0.5 the content would occupy zero pixels and
    * the implied zoom stops being a number a camera can hold.
@@ -310,8 +310,9 @@ export class Camera2D {
    */
   fitBounds(bounds: WorldBounds, padding = 0.05): void {
     // The arithmetic and the validation live in the exported fitZoom, so a
-    // caller deriving limits from the same fit gets the same number; see its
-    // docstring for why it is a function and not a private method.
+    // caller deriving limits from the same fit against `frame` gets the same
+    // number; see its docstring for why it is a function and not a private
+    // method.
     this.#zoom = this.#clampZoom(fitZoom(bounds, this.#frame, padding));
     this.#center = this.#clampCenter(
       this.centerFor({ x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 }),

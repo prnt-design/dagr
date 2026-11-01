@@ -349,6 +349,16 @@ describe('navigation', () => {
     expect(camera.zoom).toBeCloseTo(camera.maxZoom);
   });
 
+  it('zooms from the keyboard about the middle of the inset frame', async () => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} cameraLimits={false} inset={{ right: 300 }} navigation />);
+    const camera = lastRenderer().camera;
+    const middle = camera.screenToWorld({ x: 250, y: 300 });
+    await flush(() => host().dispatchEvent(new KeyboardEvent('keydown', { key: '+', bubbles: true, cancelable: true })));
+    const after = camera.worldToScreen(middle);
+    expect(after.x).toBeCloseTo(250, 6);
+    expect(after.y).toBeCloseTo(300, 6);
+  });
+
   it('answers the keyboard when the canvas itself has focus, and fits on 0', async () => {
     await ready(<DagrCanvas graph={twoNodes()} config={config} navigation />);
     const camera = lastRenderer().camera;
