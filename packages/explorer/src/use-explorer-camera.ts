@@ -34,8 +34,10 @@
  * either and every resize or scroll of the visual viewport. A frame that
  * changes refits a camera at fit, and otherwise keeps the camera and reveals
  * the `keepInView` box (the selected node) if the change covered it. A change
- * of the visual viewport alone never refits: a software keyboard is the
- * user's, and a fit would throw away their place. While the page is
+ * of the visual viewport alone never refits, so a keyboard opening or the
+ * page scrolling under it does not set the graph flying while the user
+ * types. A camera fitted while it was short still fills the frame when it
+ * grows back: the least the limits let it zoom is the fit. While the page is
  * pinch-zoomed the visual viewport takes nothing off the frame, and a change
  * of page zoom reveals nothing: a smaller frame would lower the most the
  * camera may zoom, so magnifying the page would shrink the graph.

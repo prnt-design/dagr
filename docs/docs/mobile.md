@@ -136,9 +136,10 @@ Explorer frames around its registered obstructions with `coverInset` and
 events. It takes off only what the visual viewport hides beyond the layout
 viewport (`clipInset` against the visual viewport, less `clipInset` against
 the layout viewport), so a viewport the page has scrolled partly away keeps
-its frame. A change of the visual viewport alone never refits the camera: it
-keeps its scale and reveals the selected node if the change covered it. While
-the page is pinch-zoomed (a visual viewport `scale` other than 1) the visual
+its frame. A visual viewport that shrinks does not refit the camera: it keeps
+its scale and reveals the selected node if the change covered it. A camera at
+fit refits when the visual viewport grows back. While the page is
+pinch-zoomed (a visual viewport `scale` more than 0.01 from 1) the visual
 viewport takes nothing off the frame, so magnifying the page does not move or
 shrink the graph. `DagrCanvas` takes a measured inset as its `inset` prop and
 frames its fit, `fit()`, `focusNode` and camera limits in

@@ -1095,6 +1095,7 @@ describe('useExplorerCamera: visual viewport', () => {
     camera().focusBox(boxOf(chain, 'a'));
     await runFramesUntilIdle();
     const before = cameraNow();
+    expect(box.x * before.scale + before.x).toBeGreaterThan(SIZE.width);
     await shrinkVisual({ height: 300, scale: 1.5 });
     await runFramesUntilIdle();
     expectCamera(cameraNow(), limitsFor(chain, SIZE).constrain(before));
@@ -1111,6 +1112,18 @@ describe('useExplorerCamera: visual viewport', () => {
     expectCamera(cameraNow(), fitted());
   });
 
+  it('refits a camera fitted while the visual viewport was short once it grows back', async () => {
+    expect(fitted(fan, top300).scale).toBeLessThan(fitted(fan).scale);
+    await ready(fan);
+    await shrinkVisual({ height: 300 });
+    camera().fit();
+    await runFramesUntilIdle();
+    expectCamera(cameraNow(), fitted(fan, top300));
+    await shrinkVisual({ height: SIZE.height });
+    await runFramesUntilIdle();
+    expectCamera(cameraNow(), fitted(fan));
+  });
+
   it('refits at fit when a visual viewport event arrives before the resize it came with', async () => {
     await ready();
     setSize(byTestId('viewport'), 600, 480);
@@ -1120,12 +1133,12 @@ describe('useExplorerCamera: visual viewport', () => {
   });
 
   it('stops listening to the visual viewport on unmount', async () => {
+    const added = vi.spyOn(visual, 'addEventListener');
+    const removed = vi.spyOn(visual, 'removeEventListener');
     await ready();
-    const drawn = frames.length;
+    expect(added.mock.calls.map(([type]) => type).sort()).toEqual(['resize', 'scroll']);
     await tree?.unmount();
-    await shrinkVisual({ height: 200 });
-    expect(frames.length).toBe(drawn);
-    expect(pendingFrames()).toBe(0);
+    expect(removed.mock.calls).toEqual(added.mock.calls);
   });
 });
 
