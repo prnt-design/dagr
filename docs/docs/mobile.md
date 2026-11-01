@@ -152,7 +152,7 @@ adapter observes the page's own scroll.
 The visual-viewport coordinates are covered by jsdom tests, not yet verified
 on a real iOS or Android device or with a software keyboard. Current engines
 report `getBoundingClientRect` relative to the layout viewport, which is what
-the `offsetLeft` and `offsetTop` arithmetic above relies on.
+`visualViewportInset`'s use of `offsetLeft` and `offsetTop` relies on.
 
 ## Page scrolling remains an explicit policy
 
