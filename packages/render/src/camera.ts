@@ -1,5 +1,7 @@
 import type { OrthoFrustum, Size, Vec2, ViewportSize, WorldBounds } from './geometry.js';
 import { requireFinite, requireFinitePoint, requirePositive } from './validate.js';
+import { visibleFrame } from './visible-frame.js';
+import type { FrameInset, VisibleFrame } from './visible-frame.js';
 
 /**
  * The 2D camera every Dagr view is drawn through, and the only part of
@@ -164,6 +166,8 @@ export class Camera2D {
   #content: { bounds: WorldBounds; nodeSize: Size; padding: number; nodes: readonly WorldBounds[] } | null = null;
   #contentMin = Number.MIN_VALUE;
   #contentMax = Number.MAX_VALUE;
+  #inset: FrameInset = {};
+  #frame: VisibleFrame;
 
   /**
    * Builds a camera, rejecting anything that cannot describe one.
@@ -202,6 +206,7 @@ export class Camera2D {
     this.#zoom = zoom;
     this.#center = requireFinitePoint(init.center ?? { x: 0, y: 0 }, 'center');
     this.#viewport = requireViewport(init.viewport ?? DEFAULT_VIEWPORT, 'viewport');
+    this.#frame = visibleFrame(this.#viewport);
   }
 
   /** Where the camera looks, in world units. */
@@ -217,6 +222,15 @@ export class Camera2D {
   /** The canvas size in CSS pixels, and its device pixel ratio. */
   get viewport(): ViewportSize {
     return this.#viewport;
+  }
+
+  /**
+   * The part of the viewport content is framed in: the viewport less the
+   * {@link setInset} inset, by {@link visibleFrame}'s rules. The whole
+   * viewport when there is no inset.
+   */
+  get frame(): VisibleFrame {
+    return this.#frame;
   }
 
   /** The smallest zoom this camera will settle on. */
@@ -298,8 +312,39 @@ export class Camera2D {
     // The arithmetic and the validation live in the exported fitZoom, so a
     // caller deriving limits from the same fit gets the same number; see its
     // docstring for why it is a function and not a private method.
-    this.#zoom = this.#clampZoom(fitZoom(bounds, this.#viewport, padding));
-    this.#center = this.#clampCenter({ x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 });
+    this.#zoom = this.#clampZoom(fitZoom(bounds, this.#frame, padding));
+    this.#center = this.#clampCenter(
+      this.centerFor({ x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 }),
+    );
+  }
+
+  /**
+   * Frames content in the viewport less `inset`, in CSS pixels, for what a
+   * caller draws over the canvas: a toolbar, a drawer, a keyboard. Fitting,
+   * the content limits and their clamping then work in {@link frame}, so a
+   * fit centres the bounds in the part nothing covers and panning stops
+   * where content would go under the cover. Drawing, hit testing and
+   * {@link visibleWorldBounds} still cover the whole viewport. The inset
+   * persists across {@link setViewport}, which re-derives the frame. Pass
+   * `{}` to frame the whole viewport again.
+   */
+  setInset(inset: FrameInset): void {
+    this.#inset = { ...inset };
+    this.#refreshContentLimits();
+  }
+
+  /**
+   * The centre that puts world `point` in the middle of {@link frame} at
+   * `zoom`. The point itself when there is no inset.
+   */
+  centerFor(point: Vec2, zoom = this.#zoom): Vec2 {
+    requireFinitePoint(point, 'point');
+    requirePositive(zoom, 'zoom');
+    const frame = this.#frame;
+    return {
+      x: point.x - (frame.x + frame.width / 2 - this.#viewport.width / 2) / zoom,
+      y: point.y + (frame.y + frame.height / 2 - this.#viewport.height / 2) / zoom,
+    };
   }
 
   /**
@@ -472,12 +517,12 @@ export class Camera2D {
     if (bounds === null) {
       this.#content = null;
     } else {
-      fitZoom(bounds, this.#viewport, padding);
+      fitZoom(bounds, this.#frame, padding);
       requirePositive(nodeSize.width, 'nodeSize.width');
       requirePositive(nodeSize.height, 'nodeSize.height');
       const framed = { ...bounds };
       const regions = nodes.map((node) => {
-        fitZoom(node, this.#viewport, padding);
+        fitZoom(node, this.#frame, padding);
         framed.minX = Math.min(framed.minX, node.minX);
         framed.minY = Math.min(framed.minY, node.minY);
         framed.maxX = Math.max(framed.maxX, node.maxX);
@@ -490,31 +535,47 @@ export class Camera2D {
   }
 
   #refreshContentLimits(): void {
+    this.#frame = visibleFrame(this.#viewport, this.#inset);
     const content = this.#content;
-    this.#contentMin = content ? fitZoom(content.bounds, this.#viewport, content.padding) : Number.MIN_VALUE;
-    this.#contentMax = content ? Math.max(this.#contentMin, fitZoom({ minX: 0, minY: 0, maxX: content.nodeSize.width, maxY: content.nodeSize.height }, this.#viewport, content.padding)) : Number.MAX_VALUE;
+    this.#contentMin = content ? fitZoom(content.bounds, this.#frame, content.padding) : Number.MIN_VALUE;
+    this.#contentMax = content ? Math.max(this.#contentMin, fitZoom({ minX: 0, minY: 0, maxX: content.nodeSize.width, maxY: content.nodeSize.height }, this.#frame, content.padding)) : Number.MAX_VALUE;
     this.#zoom = this.#clampZoom(this.#zoom);
     this.#center = this.#clampCenter(this.#center);
   }
 
+  /**
+   * Clamps the world point at the middle of {@link frame} rather than the
+   * centre, against the frame's size, and moves the centre with it. With no
+   * inset the shift is zero and this is the viewport's own clamp.
+   */
   #clampCenter(center: Vec2): Vec2 {
     if (!this.#content) return center;
-    const { bounds, padding } = this.#content;
+    const frame = this.#frame;
+    const shiftX = (frame.x + frame.width / 2 - this.#viewport.width / 2) / this.#zoom;
+    const shiftY = -(frame.y + frame.height / 2 - this.#viewport.height / 2) / this.#zoom;
+    const clamped = this.#clampFramed({ x: center.x + shiftX, y: center.y + shiftY });
+    return { x: clamped.x - shiftX, y: clamped.y - shiftY };
+  }
+
+  #clampFramed(center: Vec2): Vec2 {
+    const content = this.#content;
+    if (!content) return center;
+    const { bounds, padding } = content;
     const axis = (value: number, min: number, max: number, pixels: number): number => {
       const half = pixels * (0.5 - padding) / this.#zoom;
       if (max - min <= 2 * half) return (min + max) / 2;
       return Math.max(min + half, Math.min(max - half, value));
     };
     const clamped = {
-      x: axis(center.x, bounds.minX, bounds.maxX, this.#viewport.width),
-      y: axis(center.y, bounds.minY, bounds.maxY, this.#viewport.height),
+      x: axis(center.x, bounds.minX, bounds.maxX, this.#frame.width),
+      y: axis(center.y, bounds.minY, bounds.maxY, this.#frame.height),
     };
-    if (!this.#content.nodes.length) return clamped;
-    const halfWidth = this.#viewport.width / (2 * this.#zoom);
-    const halfHeight = this.#viewport.height / (2 * this.#zoom);
+    if (!content.nodes.length) return clamped;
+    const halfWidth = this.#frame.width / (2 * this.#zoom);
+    const halfHeight = this.#frame.height / (2 * this.#zoom);
     let nearest = clamped;
     let distance = Infinity;
-    for (const node of this.#content.nodes) {
+    for (const node of content.nodes) {
       const marginX = Math.min(32 / this.#zoom, (node.maxX - node.minX) / 2, halfWidth);
       const marginY = Math.min(32 / this.#zoom, (node.maxY - node.minY) / 2, halfHeight);
       const x = Math.max(node.minX - halfWidth + marginX, Math.min(node.maxX + halfWidth - marginX, clamped.x));

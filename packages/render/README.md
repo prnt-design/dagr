@@ -203,6 +203,15 @@ At a boundary, keeping content visible takes precedence over cursor anchoring.
 numeric zoom range. Explicit numeric limits can further restrict content zoom;
 when their ranges do not overlap, the larger minimum wins.
 
+`camera.setInset(inset)` frames content in the viewport less an inset, in CSS
+pixels, for something drawn over the canvas such as a toolbar or a drawer. The
+frame is `visibleFrame(viewport, inset)`, read back as `camera.frame`. Fitting,
+the zoom range and pan clamping then work in the frame, so a fit centres the
+bounds in what the inset leaves. Drawing, hit testing and `visibleWorldBounds`
+still cover the whole viewport. `camera.centerFor(point, zoom)` is the centre
+that puts a world point in the middle of the frame, for a caller animating
+toward it. `setInset({})` frames the whole viewport again.
+
 `DagrCanvas` supplies these bounds and real node sizes automatically.
 
 ### Edge paths

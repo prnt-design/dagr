@@ -78,6 +78,7 @@ import {
 } from '@prnt/dagr-render';
 import type {
   EdgePathOptions,
+  FrameInset,
   FrameScheduler,
   HtmlOverlay,
   MotionLoop,
@@ -130,6 +131,11 @@ export const DEFAULT_EDGE_GROUP_ID = 'dagr-edges';
 /** Screen-space slack for a node hit: a finger covers ~44 CSS pixels, a mouse is exact to a few. */
 const TOUCH_HIT_PIXELS = 22;
 const POINTER_HIT_PIXELS = 4;
+
+/** The zoom a flight will settle on, so its centre is worked out at that zoom and not at one the camera refuses. */
+function clampZoom(camera: Renderer['camera'], zoom: number): number {
+  return Math.min(camera.maxZoom, Math.max(camera.minZoom, zoom));
+}
 
 /** Whether `element` handles the wheel itself: an editor or something that scrolls. */
 function scrollsItself(element: Element, host: Element): boolean {
@@ -238,6 +244,16 @@ export interface DagrCanvasBaseProps {
 
   /** The margin the fit leaves, as a fraction of the viewport. Default the camera's. */
   readonly fitPadding?: number | undefined;
+
+  /**
+   * CSS pixels off each side of the canvas that something drawn over it
+   * covers, such as a toolbar or a drawer. The first fit, `fit()`, `focusNode`
+   * and the camera limits frame what is left, by `visibleFrame`'s rules (an
+   * inset that would leave too little of an axis is ignored on that axis).
+   * Drawing and hit testing still cover the whole canvas. A change keeps the
+   * camera and only re-clamps it to the new limits. Default none.
+   */
+  readonly inset?: FrameInset | undefined;
 
   /**
    * Built-in navigation: wheel and pinch zoom anchored under the cursor, drag
@@ -913,8 +929,8 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         const framed = framedBounds();
         if (current === null || framed === null || !viewportRef.current) return false;
         const camera = current.renderer.camera;
-        const zoom = fitZoom(framed, camera.viewport, latest.current.fitPadding);
-        flyTo({ x: (framed.minX + framed.maxX) / 2, y: (framed.minY + framed.maxY) / 2 }, zoom, options);
+        const zoom = clampZoom(camera, fitZoom(framed, camera.frame, latest.current.fitPadding));
+        flyTo(camera.centerFor({ x: (framed.minX + framed.maxX) / 2, y: (framed.minY + framed.maxY) / 2 }, zoom), zoom, options);
         return true;
       },
       focusNode(nodeId: string, options?: FocusNodeOptions): boolean {
@@ -924,15 +940,16 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
           drawnNodesRef.current.find((n) => n.id === nodeId) ??
           sceneNodesRef.current?.find((n) => n.id === nodeId);
         if (node === undefined || !(node.size.width > 0) || !(node.size.height > 0)) return false;
+        const camera = current.renderer.camera;
         const zoom =
           options?.zoom ??
           fitZoom(
             { minX: 0, minY: 0, maxX: node.size.width, maxY: node.size.height },
-            current.renderer.camera.viewport,
+            camera.frame,
             0.25,
           );
         if (!(Number.isFinite(zoom) && zoom > 0)) return false;
-        flyTo({ x: node.center.x, y: node.center.y }, zoom, options);
+        flyTo(camera.centerFor(node.center, clampZoom(camera, zoom)), zoom, options);
         return true;
       },
     }),
@@ -1401,6 +1418,13 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       setStage(null);
     };
   }, [epoch]);
+
+  const { top: insetTop, right: insetRight, bottom: insetBottom, left: insetLeft } = props.inset ?? {};
+  useEffect(() => {
+    if (stage === null) return;
+    stage.renderer.camera.setInset({ top: insetTop, right: insetRight, bottom: insetBottom, left: insetLeft });
+    requestDraw();
+  }, [stage, insetTop, insetRight, insetBottom, insetLeft, requestDraw]);
 
   useEffect(() => {
     if (stage === null) return;

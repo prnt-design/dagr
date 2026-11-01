@@ -387,6 +387,53 @@ describe('camera api', () => {
     expect(camera.zoom).toBeCloseTo(fitted);
   });
 
+  it('frames the first fit, fit and focusNode in what the inset leaves', async () => {
+    const api = createRef<DagrCanvasApi>();
+    const inset = { right: 300, top: 100 };
+    const graph = twoNodes();
+    await ready(<DagrCanvas graph={graph} config={config} inset={inset} apiRef={api} />);
+    const camera = lastRenderer().camera;
+    expect(camera.frame).toEqual({ x: 0, y: 100, width: 500, height: 500 });
+    const middle = { x: 250, y: 350 };
+    const centreOfAB = (): { x: number; y: number } => {
+      const a = screenOf('a');
+      const b = screenOf('b');
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    };
+    expect(centreOfAB().x).toBeCloseTo(middle.x, 6);
+    expect(centreOfAB().y).toBeCloseTo(middle.y, 6);
+    const fitted = camera.zoom;
+    camera.setZoom(camera.maxZoom);
+    camera.panByScreen(-80, 40);
+    await flush(() => api.current?.fit({ durationMs: 0 }));
+    expect(camera.zoom).toBeCloseTo(fitted, 9);
+    expect(centreOfAB().x).toBeCloseTo(middle.x, 6);
+    expect(centreOfAB().y).toBeCloseTo(middle.y, 6);
+    // Limits off: at the content's edge they would stop a node short of the middle, inset or not.
+    await tree?.rerender(<DagrCanvas graph={graph} config={config} inset={inset} cameraLimits={false} apiRef={api} />);
+    await flush(() => api.current?.focusNode('b', { durationMs: 0 }));
+    expect(screenOf('b').x).toBeCloseTo(middle.x, 6);
+    expect(screenOf('b').y).toBeCloseTo(middle.y, 6);
+    await flush(() => api.current?.fit({ durationMs: 0 }));
+    expect(centreOfAB().x).toBeCloseTo(middle.x, 6);
+    expect(centreOfAB().y).toBeCloseTo(middle.y, 6);
+  });
+
+  it('keeps the camera when the inset changes, and frames the whole canvas without one', async () => {
+    const api = createRef<DagrCanvasApi>();
+    const graph = twoNodes();
+    await ready(<DagrCanvas graph={graph} config={config} cameraLimits={false} apiRef={api} />);
+    const camera = lastRenderer().camera;
+    const center = { ...camera.center };
+    const zoom = camera.zoom;
+    await tree?.rerender(<DagrCanvas graph={graph} config={config} cameraLimits={false} inset={{ left: 200 }} apiRef={api} />);
+    expect(camera.frame).toEqual({ x: 200, y: 0, width: 600, height: 600 });
+    expect(camera.center).toEqual(center);
+    expect(camera.zoom).toBe(zoom);
+    await tree?.rerender(<DagrCanvas graph={graph} config={config} cameraLimits={false} apiRef={api} />);
+    expect(camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 600 });
+  });
+
   it('flies over frames by default and refuses unknown ids', async () => {
     const api = createRef<DagrCanvasApi>();
     await ready(<DagrCanvas graph={twoNodes()} config={config} cameraLimits={false} apiRef={api} />);

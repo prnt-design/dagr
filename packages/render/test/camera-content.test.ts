@@ -87,3 +87,83 @@ it('keeps an actual node visible in sparse corners and across anchored zooms', (
     expect(nodes.some(n => n.maxX > visible.minX && n.minX < visible.maxX && n.maxY > visible.minY && n.minY < visible.maxY)).toBe(true);
   }
 });
+
+describe('frame inset', () => {
+  const inset = { left: 300, bottom: 200 };
+  const frameMiddle = { x: 300 + 700 / 2, y: 400 / 2 };
+
+  it('changes nothing until an inset is set, and nothing after it is cleared', () => {
+    const plain = new Camera2D({ viewport });
+    const cleared = new Camera2D({ viewport });
+    cleared.setInset(inset);
+    cleared.setInset({});
+    for (const camera of [plain, cleared]) {
+      camera.setContentBounds(bounds, node);
+      camera.fitBounds(bounds);
+      camera.panByScreen(123, -45);
+      camera.zoomAtScreen({ x: 10, y: 20 }, 1.7);
+    }
+    expect(cleared.frame).toEqual({ x: 0, y: 0, width: 1000, height: 600 });
+    expect(cleared.center).toEqual(plain.center);
+    expect(cleared.zoom).toBe(plain.zoom);
+  });
+
+  it('fits the bounds in the middle of the frame, at the frame-sized zoom', () => {
+    const camera = new Camera2D({ viewport });
+    camera.setInset(inset);
+    expect(camera.frame).toEqual({ x: 300, y: 0, width: 700, height: 400 });
+    camera.fitBounds(bounds);
+    expect(camera.zoom).toBe(fitZoom(bounds, { width: 700, height: 400 }));
+    const middle = camera.worldToScreen({ x: 900, y: 300 });
+    expect(middle.x).toBeCloseTo(frameMiddle.x, 9);
+    expect(middle.y).toBeCloseTo(frameMiddle.y, 9);
+  });
+
+  it('takes the content limits from the frame and keeps the fit through them', () => {
+    const camera = new Camera2D({ viewport });
+    camera.setContentBounds(bounds, node);
+    camera.setInset(inset);
+    expect(camera.minZoom).toBe(fitZoom(bounds, { width: 700, height: 400 }));
+    camera.fitBounds(bounds);
+    expect(camera.zoom).toBe(camera.minZoom);
+    const middle = camera.worldToScreen({ x: 900, y: 300 });
+    expect(middle.x).toBeCloseTo(frameMiddle.x, 9);
+    expect(middle.y).toBeCloseTo(frameMiddle.y, 9);
+    camera.panByScreen(1e6, -1e6);
+    expect(camera.worldToScreen({ x: 900, y: 300 }).x).toBeCloseTo(frameMiddle.x, 9);
+  });
+
+  it.each([[1, 1], [-1, 1], [1, -1], [-1, -1]])('stops a pan toward %s,%s with content still in the frame', (x, y) => {
+    const camera = new Camera2D({ viewport });
+    camera.setContentBounds(bounds, node);
+    camera.setInset(inset);
+    camera.setZoom(camera.maxZoom);
+    camera.panByScreen(x * 1e9, y * 1e9);
+    const topLeft = camera.screenToWorld({ x: 300, y: 0 });
+    const bottomRight = camera.screenToWorld({ x: 1000, y: 400 });
+    expect(topLeft.x).toBeLessThan(bounds.maxX);
+    expect(bottomRight.x).toBeGreaterThan(bounds.minX);
+    expect(bottomRight.y).toBeLessThan(bounds.maxY);
+    expect(topLeft.y).toBeGreaterThan(bounds.minY);
+  });
+
+  it('re-derives the frame on resize and ignores an inset that leaves too little', () => {
+    const camera = new Camera2D({ viewport });
+    camera.setInset(inset);
+    camera.setViewport({ width: 1200, height: 800, devicePixelRatio: 2 });
+    expect(camera.frame).toEqual({ x: 300, y: 0, width: 900, height: 600 });
+    camera.setInset({ left: 950, top: Number.NaN, bottom: -5 });
+    expect(camera.frame).toEqual({ x: 0, y: 0, width: 1200, height: 800 });
+  });
+
+  it('centres a point in the frame at a given zoom', () => {
+    const camera = new Camera2D({ viewport });
+    camera.setInset(inset);
+    camera.setZoom(2);
+    camera.setCenter(camera.centerFor({ x: 50, y: -20 }));
+    const at = camera.worldToScreen({ x: 50, y: -20 });
+    expect(at.x).toBeCloseTo(frameMiddle.x, 9);
+    expect(at.y).toBeCloseTo(frameMiddle.y, 9);
+    expect(() => camera.centerFor({ x: Number.NaN, y: 0 })).toThrow(RangeError);
+  });
+});
