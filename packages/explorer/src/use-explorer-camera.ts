@@ -29,18 +29,26 @@
  * fit is fitted again, so a user zoomed in on a node keeps it.
  *
  * **The camera frames what nothing covers.** The frame is the viewport less
- * the host's `inset` and the overlays registered as obstructions (the
- * drawer), measured on every resize of either. A frame that changes refits a
- * camera at fit, and otherwise keeps the camera and reveals the `keepInView`
- * box (the selected node) if the change covered it.
+ * the host's `inset`, the overlays registered as obstructions (the drawer)
+ * and what the visual viewport hides of it, measured on every resize of
+ * either and every resize or scroll of the visual viewport. A frame that
+ * changes refits a camera at fit, and otherwise keeps the camera and reveals
+ * the `keepInView` box (the selected node) if the change covered it. A change
+ * of the visual viewport alone never refits, so a keyboard opening or the
+ * page scrolling under it does not set the graph flying while the user
+ * types. A camera fitted while it was short still fills the frame when it
+ * grows back: the least the limits let it zoom is the fit. While the page is
+ * pinch-zoomed the visual viewport takes nothing off the frame, and a change
+ * of page zoom reveals nothing: a smaller frame would lower the most the
+ * camera may zoom, so magnifying the page would shrink the graph.
  *
  * Internal to the package. Nothing here is exported from the entry.
  */
 
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import { coverInset, createPinchGesture, visibleFrame } from '@prnt/dagr-render/core';
-import type { PinchDelta, Vec2 } from '@prnt/dagr-render/core';
+import { clipInset, coverInset, createPinchGesture, visibleFrame } from '@prnt/dagr-render/core';
+import type { PinchDelta, ScreenRect, Vec2 } from '@prnt/dagr-render/core';
 import {
   CONTENT_PADDING,
   cameraSettled,
@@ -99,6 +107,8 @@ interface FrameOptions {
   readonly contentPadding: number;
 }
 
+/** How far the visual viewport's scale may be from 1 and the page still count as unzoomed. */
+const PAGE_ZOOM_EPSILON = 0.01;
 /** CSS pixels a press travels before it is a pan rather than a click. */
 const DRAG_THRESHOLD = 5;
 /** Zoom per unit of wheel delta, for a wheel and for a trackpad pinch. */
@@ -151,6 +161,8 @@ function createEngine(
     typeof window.matchMedia === 'function'
       ? window.matchMedia('(prefers-reduced-motion: reduce)')
       : null;
+  const visual = window.visualViewport ?? null;
+  let visualScale = visual?.scale ?? 1;
   let layout = initialLayout;
   let size: ExplorerViewportSize = { width: 0, height: 0 };
   // The part of the viewport nothing covers, which the camera frames.
@@ -267,20 +279,48 @@ function createEngine(
     aim(camera);
   };
 
-  /** What the registered obstructions cover, measured against the viewport's content box. */
-  const obstructed = (): ExplorerInset[] => {
-    const overlays = obstructions?.list() ?? [];
-    if (overlays.length === 0) return [];
+  /** The viewport's content box on screen. */
+  const contentBox = (): ScreenRect => {
     const box = viewport.getBoundingClientRect();
     const left = box.left + viewport.clientLeft;
     const top = box.top + viewport.clientTop;
-    const inner = { left, top, right: left + viewport.clientWidth, bottom: top + viewport.clientHeight };
-    return overlays.map((overlay) => coverInset(inner, overlay.getBoundingClientRect()));
+    return { left, top, right: left + viewport.clientWidth, bottom: top + viewport.clientHeight };
   };
 
-  /** `force` rebuilds the limits even when neither the size nor the frame changed. */
-  const measure = (force = false): void => {
+  /** What the registered obstructions and the visual viewport take off the content box. */
+  const obstructed = (): ExplorerInset[] => {
+    const overlays = obstructions?.list() ?? [];
+    const occluding = visual !== null && Math.abs(visual.scale - 1) < PAGE_ZOOM_EPSILON;
+    if (overlays.length === 0 && !occluding) return [];
+    const inner = contentBox();
+    const insets = overlays.map((overlay) => coverInset(inner, overlay.getBoundingClientRect()));
+    if (occluding) {
+      // Only what the visual viewport hides beyond the layout viewport: a
+      // viewport scrolled partly off the page has always drawn there, and
+      // the page's own scroll is not observed, so counting it would make the
+      // frame depend on when something else happened to measure.
+      const root = document.documentElement;
+      const page = clipInset(inner, { left: 0, top: 0, right: root.clientWidth, bottom: root.clientHeight });
+      const seen = clipInset(inner, {
+        left: visual.offsetLeft,
+        top: visual.offsetTop,
+        right: visual.offsetLeft + visual.width,
+        bottom: visual.offsetTop + visual.height,
+      });
+      const beyond = (side: keyof ExplorerInset): number => Math.max((seen[side] ?? 0) - (page[side] ?? 0), 0);
+      insets.push({ top: beyond('top'), right: beyond('right'), bottom: beyond('bottom'), left: beyond('left') });
+    }
+    return insets;
+  };
+
+  /**
+   * `force` rebuilds the limits even when neither the size nor the frame
+   * changed. `visual` is a resize or scroll of the visual viewport.
+   */
+  const measure = (cause: 'resize' | 'force' | 'visual' = 'resize'): void => {
     if (disposed) return;
+    const pageZoomed = visual !== null && visual.scale !== visualScale;
+    if (visual !== null) visualScale = visual.scale;
     const width = viewport.clientWidth;
     const height = viewport.clientHeight;
     // A zero dimension is a hidden viewport, not a tiny one. Keeping the last
@@ -290,7 +330,7 @@ function createEngine(
     const nextFrame = visibleFrame(nextSize, options.inset, ...obstructed());
     const resized = width !== size.width || height !== size.height;
     const uncovered = covered(nextFrame, nextSize) !== covered(area, size);
-    if (!force && !resized && !uncovered && limits !== null) return;
+    if (cause !== 'force' && !resized && !uncovered && limits !== null) return;
     const previous = size;
     const wasAtFit = atFit(limits, area);
     size = nextSize;
@@ -314,11 +354,11 @@ function createEngine(
     } else {
       framing = true;
     }
-    if (wasAtFit) {
+    if (wasAtFit && (resized || cause !== 'visual')) {
       aim(fitCamera(layout, area, bounds));
       return;
     }
-    const keep = uncovered ? keepInView() : null;
+    const keep = uncovered && !pageZoomed ? keepInView() : null;
     aim(keep !== null && isFiniteBox(keep) ? revealCamera(target, keep, area) : target);
   };
 
@@ -640,6 +680,9 @@ function createEngine(
 
   const observer = new ResizeObserver(() => measure());
   observer.observe(viewport);
+  const onVisualChange = (): void => measure('visual');
+  visual?.addEventListener('resize', onVisualChange);
+  visual?.addEventListener('scroll', onVisualChange);
   const unsubscribe = obstructions?.subscribe(observeObstructions);
   viewport.addEventListener('keydown', onKeyDown);
   viewport.addEventListener('pointerdown', onPointerDown);
@@ -690,7 +733,7 @@ function createEngine(
         (['top', 'right', 'bottom', 'left'] as const).every((side) => next.inset[side] === options.inset[side]);
       if (disposed || same) return;
       options = next;
-      measure(true);
+      measure('force');
     },
     setLayout(next) {
       if (disposed || next === layout) return;
@@ -710,6 +753,8 @@ function createEngine(
       stop();
       unsubscribe?.();
       observer.disconnect();
+      visual?.removeEventListener('resize', onVisualChange);
+      visual?.removeEventListener('scroll', onVisualChange);
       listenForWheel(false);
       viewport.removeEventListener('keydown', onKeyDown);
       viewport.removeEventListener('pointerdown', onPointerDown);

@@ -11,7 +11,7 @@ import {
   screenToWorld,
   zoomCamera,
 } from '../src/camera.js';
-import type { CameraLimits, ExplorerCamera, ExplorerViewportSize } from '../src/camera.js';
+import type { CameraFrame, CameraLimits, ExplorerCamera, ExplorerViewportSize } from '../src/camera.js';
 import { layoutView } from '../src/index.js';
 import type { ExplorerBox, ExplorerLayout } from '../src/index.js';
 import { useExplorerCamera } from '../src/use-explorer-camera.js';
@@ -30,6 +30,7 @@ import {
   resizeTo,
   runFrame,
   runFramesUntilIdle,
+  setSize,
   uninstallDom,
   watchCount,
 } from './dom.js';
@@ -94,9 +95,11 @@ afterEach(async () => {
 function Harness({
   layout,
   out,
+  keepInView,
 }: {
   readonly layout: ExplorerLayout;
   readonly out: MutableRefObject<ExplorerCameraControls | null>;
+  readonly keepInView?: () => ExplorerBox | null;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const planeRef = useRef<HTMLDivElement>(null);
@@ -105,6 +108,7 @@ function Harness({
     planeRef,
     layout,
     onFrame: (frameCamera, viewport) => frames.push({ camera: frameCamera, viewport }),
+    keepInView,
   });
   useEffect(() => {
     out.current = camera;
@@ -160,7 +164,7 @@ function cameraNow(): ExplorerCamera {
   return value;
 }
 
-function limitsFor(layout: ExplorerLayout = chain, size: ExplorerViewportSize = SIZE): CameraLimits {
+function limitsFor(layout: ExplorerLayout = chain, size: CameraFrame = SIZE): CameraLimits {
   const limits = createCameraLimits(layout, size);
   if (limits === null) throw new Error('no limits');
   return limits;
@@ -184,7 +188,7 @@ function drawnTransform(): ExplorerCamera {
   return { x: Number(match[1]), y: Number(match[2]), scale: Number(match[3]) };
 }
 
-function fitted(layout: ExplorerLayout = chain, size: ExplorerViewportSize = SIZE): ExplorerCamera {
+function fitted(layout: ExplorerLayout = chain, size: CameraFrame = SIZE): ExplorerCamera {
   const limits = limitsFor(layout, size);
   return limits.constrain(fitCamera(layout, size, limits));
 }
@@ -991,6 +995,150 @@ describe('useExplorerCamera: layout', () => {
     await resizeTo(SIZE.width, SIZE.height);
     expectCamera(camera().getCamera(), fitted(fan));
     expect(pendingFrames()).toBe(0);
+  });
+});
+
+describe('useExplorerCamera: visual viewport', () => {
+  /** The visual viewport's box, in layout-viewport coordinates, and the page zoom. */
+  class FakeVisualViewport extends EventTarget {
+    offsetLeft = 0;
+    offsetTop = 0;
+    width = SIZE.width;
+    height = SIZE.height;
+    scale = 1;
+    set(next: Partial<Pick<FakeVisualViewport, 'offsetLeft' | 'offsetTop' | 'width' | 'height' | 'scale'>>): void {
+      Object.assign(this, next);
+    }
+  }
+
+  let visual: FakeVisualViewport;
+  const root = document.documentElement;
+  /** The part of the 800 by 480 viewport a 300 pixel tall visual viewport leaves. */
+  const top300 = { x: 0, y: 0, width: SIZE.width, height: 300 };
+
+  beforeEach(() => {
+    visual = new FakeVisualViewport();
+    vi.stubGlobal('visualViewport', visual);
+    Object.defineProperty(root, 'clientWidth', { configurable: true, value: SIZE.width });
+    Object.defineProperty(root, 'clientHeight', { configurable: true, value: SIZE.height });
+  });
+  afterEach(() => {
+    Reflect.deleteProperty(root, 'clientWidth');
+    Reflect.deleteProperty(root, 'clientHeight');
+  });
+
+  async function shrinkVisual(next: Parameters<FakeVisualViewport['set']>[0], type = 'resize'): Promise<void> {
+    visual.set(next);
+    await fire(visual, new Event(type));
+  }
+
+  it('does not refit a camera at fit when only the visual viewport shrinks, and fits within what it leaves', async () => {
+    await ready();
+    const before = cameraNow();
+    await shrinkVisual({ height: 300 });
+    await runFramesUntilIdle();
+    expectCamera(cameraNow(), limitsFor(chain, top300).constrain(before));
+    expect(cameraNow().scale).toBeCloseTo(before.scale, 5);
+    camera().fit();
+    await runFramesUntilIdle();
+    expectCamera(cameraNow(), fitted(chain, top300));
+  });
+
+  it('frames what a visual viewport scrolled down the page leaves', async () => {
+    await ready();
+    await shrinkVisual({ offsetTop: 180, height: 300 }, 'scroll');
+    camera().fit();
+    await runFramesUntilIdle();
+    expectCamera(cameraNow(), fitted(chain, { x: 0, y: 180, width: SIZE.width, height: 300 }));
+  });
+
+  it('reveals the kept box when only the visual viewport covers it', async () => {
+    const box = boxOf(chain, 'c');
+    tree = await mount(<Harness layout={chain} out={out} keepInView={() => box} />);
+    controls = out.current;
+    await resizeTo(SIZE.width, SIZE.height);
+    await runFramesUntilIdle();
+    camera().focusBox(box);
+    await runFramesUntilIdle();
+    const before = cameraNow();
+    await shrinkVisual({ height: 200 });
+    await runFramesUntilIdle();
+    const frame = { x: 0, y: 0, width: SIZE.width, height: 200 };
+    expectCamera(cameraNow(), limitsFor(chain, frame).constrain(revealCamera(before, box, frame)));
+    expect(cameraNow().y).toBeLessThan(before.y);
+  });
+
+  it('leaves the camera and the frame alone while the page is pinch-zoomed', async () => {
+    const box = boxOf(chain, 'c');
+    tree = await mount(<Harness layout={chain} out={out} keepInView={() => box} />);
+    controls = out.current;
+    await resizeTo(SIZE.width, SIZE.height);
+    await runFramesUntilIdle();
+    camera().focusBox(box);
+    await runFramesUntilIdle();
+    const before = cameraNow();
+    await shrinkVisual({ width: SIZE.width / 2, height: 200, scale: 2 });
+    await runFramesUntilIdle();
+    expectCamera(cameraNow(), before);
+    camera().fit();
+    await runFramesUntilIdle();
+    expectCamera(cameraNow(), fitted());
+  });
+
+  it('does not reveal the kept box when the page zoom changes', async () => {
+    const box = boxOf(chain, 'c');
+    tree = await mount(<Harness layout={chain} out={out} keepInView={() => box} />);
+    controls = out.current;
+    await resizeTo(SIZE.width, SIZE.height);
+    await runFramesUntilIdle();
+    await shrinkVisual({ height: 300 });
+    camera().focusBox(boxOf(chain, 'a'));
+    await runFramesUntilIdle();
+    const before = cameraNow();
+    expect(box.x * before.scale + before.x).toBeGreaterThan(SIZE.width);
+    await shrinkVisual({ height: 300, scale: 1.5 });
+    await runFramesUntilIdle();
+    expectCamera(cameraNow(), limitsFor(chain, SIZE).constrain(before));
+  });
+
+  it('ignores the part of the viewport the page itself has scrolled off', async () => {
+    await ready();
+    const viewport = byTestId('viewport');
+    viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: -100, right: SIZE.width, bottom: SIZE.height - 100, width: SIZE.width, height: SIZE.height, x: 0, y: -100 }) as DOMRect;
+    await shrinkVisual({});
+    camera().fit();
+    await runFramesUntilIdle();
+    expectCamera(cameraNow(), fitted());
+  });
+
+  it('refits a camera fitted while the visual viewport was short once it grows back', async () => {
+    expect(fitted(fan, top300).scale).toBeLessThan(fitted(fan).scale);
+    await ready(fan);
+    await shrinkVisual({ height: 300 });
+    camera().fit();
+    await runFramesUntilIdle();
+    expectCamera(cameraNow(), fitted(fan, top300));
+    await shrinkVisual({ height: SIZE.height });
+    await runFramesUntilIdle();
+    expectCamera(cameraNow(), fitted(fan));
+  });
+
+  it('refits at fit when a visual viewport event arrives before the resize it came with', async () => {
+    await ready();
+    setSize(byTestId('viewport'), 600, 480);
+    await shrinkVisual({ width: 600 });
+    await runFramesUntilIdle();
+    expectCamera(cameraNow(), fitted(chain, { width: 600, height: 480 }));
+  });
+
+  it('stops listening to the visual viewport on unmount', async () => {
+    const added = vi.spyOn(visual, 'addEventListener');
+    const removed = vi.spyOn(visual, 'removeEventListener');
+    await ready();
+    expect(added.mock.calls.map(([type]) => type).sort()).toEqual(['resize', 'scroll']);
+    await tree?.unmount();
+    expect(removed.mock.calls).toEqual(added.mock.calls);
   });
 });
 
