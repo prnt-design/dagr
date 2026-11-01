@@ -1,0 +1,142 @@
+[
+  {
+    "name": "malformed content",
+    "base": "day-2.json",
+    "previous": "day-1.json",
+    "patch": {
+      "op": "replace",
+      "path": "/nodes/0/content",
+      "value": [
+        {
+          "kind": "html",
+          "text": "<script/>"
+        }
+      ]
+    },
+    "expected": "unknown content kind"
+  },
+  {
+    "name": "duplicate node",
+    "base": "day-2.json",
+    "previous": "day-1.json",
+    "patch": {
+      "op": "replace",
+      "path": "/nodes/1/id",
+      "value": "pr:181"
+    },
+    "expected": "duplicate ID"
+  },
+  {
+    "name": "dangling source",
+    "base": "day-2.json",
+    "previous": "day-1.json",
+    "patch": {
+      "op": "replace",
+      "path": "/nodes/0/sourceIds",
+      "value": [
+        "missing"
+      ]
+    },
+    "expected": "dangling reference"
+  },
+  {
+    "name": "dangling edge",
+    "base": "day-2.json",
+    "previous": "day-1.json",
+    "patch": {
+      "op": "replace",
+      "path": "/edges/0/target",
+      "value": "pr:999"
+    },
+    "expected": "dangling reference"
+  },
+  {
+    "name": "dangling view",
+    "base": "day-2.json",
+    "previous": "day-1.json",
+    "patch": {
+      "op": "replace",
+      "path": "/tour/0/viewId",
+      "value": "missing"
+    },
+    "expected": "dangling view"
+  },
+  {
+    "name": "view excludes endpoint",
+    "base": "day-2.json",
+    "previous": "day-1.json",
+    "patch": {
+      "op": "replace",
+      "path": "/views/0/nodeIds",
+      "value": [
+        "pr:172"
+      ]
+    },
+    "expected": "edge endpoints"
+  },
+  {
+    "name": "identity drifts by date",
+    "base": "day-2.json",
+    "previous": "day-1.json",
+    "patch": {
+      "op": "replace",
+      "path": "/nodes/0/id",
+      "value": "pr:181:2026-10-29"
+    },
+    "expected": "canonical entity ID"
+  },
+  {
+    "name": "incorrect comparison",
+    "base": "day-2.json",
+    "previous": "day-1.json",
+    "patch": {
+      "op": "replace",
+      "path": "/nodes/0/previousStatus",
+      "value": "new"
+    },
+    "expected": "expected unchanged"
+  },
+  {
+    "name": "proposal marked done",
+    "base": "day-2.json",
+    "previous": "day-1.json",
+    "patch": {
+      "op": "replace",
+      "path": "/nodes/3/state",
+      "value": "done"
+    },
+    "expected": "proposal cannot"
+  },
+  {
+    "name": "unsafe source URL",
+    "base": "day-2.json",
+    "previous": "day-1.json",
+    "patch": {
+      "op": "replace",
+      "path": "/sources/0/url",
+      "value": "javascript:alert(1)"
+    },
+    "expected": "HTTPS URL"
+  },
+  {
+    "name": "impossible date",
+    "base": "day-2.json",
+    "previous": "day-1.json",
+    "patch": {
+      "op": "replace",
+      "path": "/date",
+      "value": "2026-02-30"
+    },
+    "expected": "calendar date"
+  },
+  {
+    "name": "missing confidence",
+    "base": "day-2.json",
+    "previous": "day-1.json",
+    "patch": {
+      "op": "remove",
+      "path": "/nodes/0/confidence"
+    },
+    "expected": "expected object"
+  }
+]

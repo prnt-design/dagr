@@ -1,0 +1,126 @@
+{
+  "formatVersion": 0,
+  "repository": "prnt-design/dagr",
+  "date": "2026-10-28",
+  "previousDate": null,
+  "title": "Personal repository briefing: October 28",
+  "overview": {
+    "changed": "PR #181 adds GPU hover to living-stage.",
+    "blocked": "No blocker is established by this fixture.",
+    "attention": "No maintainer decision requested.",
+    "unknowns": [
+      "Full repository activity is not covered by this representative fixture."
+    ]
+  },
+  "sources": [
+    {
+      "id": "pr181",
+      "label": "PR #181, merged October 28",
+      "url": "https://github.com/prnt-design/dagr/pull/181",
+      "asOf": "2026-10-28"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "pr:181",
+      "entity": {
+        "kind": "pr",
+        "key": "181"
+      },
+      "label": "GPU hover in living-stage",
+      "summary": "PR #181 merged on October 28: living-stage lights the node under the mouse from GPU picks.",
+      "content": [
+        {
+          "kind": "paragraph",
+          "text": "PR #181 merged on October 28: living-stage lights the node under the mouse from GPU picks."
+        }
+      ],
+      "sourceIds": [
+        "pr181"
+      ],
+      "confidence": {
+        "level": "confirmed",
+        "reason": "Recorded in the linked merged PR."
+      },
+      "previousStatus": "unknown",
+      "activity": "observed",
+      "state": "done",
+      "attention": {
+        "needed": false,
+        "reason": "No decision requested."
+      }
+    },
+    {
+      "id": "package:%40dagr%2Fliving-stage",
+      "entity": {
+        "kind": "package",
+        "key": "@dagr/living-stage"
+      },
+      "label": "Living-stage demo",
+      "summary": "The demo consumes GPU picks for hover.",
+      "content": [
+        {
+          "kind": "paragraph",
+          "text": "The demo consumes GPU picks for hover."
+        },
+        {
+          "kind": "link",
+          "label": "Merged implementation",
+          "sourceId": "pr181"
+        },
+        {
+          "kind": "node",
+          "label": "Implementation PR",
+          "nodeId": "pr:181"
+        }
+      ],
+      "sourceIds": [
+        "pr181"
+      ],
+      "confidence": {
+        "level": "confirmed",
+        "reason": "Recorded in the linked merged PR."
+      },
+      "previousStatus": "unknown",
+      "activity": "observed",
+      "state": "done",
+      "attention": {
+        "needed": false,
+        "reason": "No decision requested."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "pr181-package",
+      "source": "pr:181",
+      "target": "package:%40dagr%2Fliving-stage",
+      "label": "updates"
+    }
+  ],
+  "views": [
+    {
+      "id": "daily",
+      "label": "Daily briefing",
+      "nodeIds": [
+        "pr:181",
+        "package:%40dagr%2Fliving-stage"
+      ],
+      "edgeIds": [
+        "pr181-package"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "id": "changed",
+      "title": "What changed",
+      "text": "The living-stage demo now uses GPU picks for hover.",
+      "viewId": "daily",
+      "nodeIds": [
+        "pr:181",
+        "package:%40dagr%2Fliving-stage"
+      ]
+    }
+  ]
+}
