@@ -132,14 +132,23 @@ adapter decisions. A smaller visual viewport is not proof that a keyboard
 opened, and nothing here should be used to disable browser zoom.
 
 Explorer frames around its registered obstructions with `coverInset` and
-`visibleFrame`. `DagrCanvas` takes a measured inset as its `inset` prop and
+`visibleFrame`, and observes the visual viewport's `resize` and `scroll`
+events. It takes off only what the visual viewport hides beyond the layout
+viewport (`clipInset` against the visual viewport, less `clipInset` against
+the layout viewport), so a viewport the page has scrolled partly away keeps
+its frame. A change of the visual viewport alone never refits the camera: it
+keeps its scale and reveals the selected node if the change covered it. While
+the page is pinch-zoomed (a visual viewport `scale` other than 1) the visual
+viewport takes nothing off the frame, so magnifying the page does not move or
+shrink the graph. `DagrCanvas` takes a measured inset as its `inset` prop and
 frames its fit, `fit()`, `focusNode` and camera limits in
-`visibleFrame(size, inset)` through `Camera2D.setInset`. Neither Explorer nor
-`DagrCanvas` observes the visual viewport yet, and the visual-viewport
-coordinates above are not yet verified on a real iOS or Android device.
-Current engines report `getBoundingClientRect` relative to the layout
-viewport, which is what the `offsetLeft` and `offsetTop` arithmetic above
-relies on.
+`visibleFrame(size, inset)` through `Camera2D.setInset`, but does not observe
+the visual viewport yet.
+
+The visual-viewport coordinates are covered by jsdom tests, not yet verified
+on a real iOS or Android device or with a software keyboard. Current engines
+report `getBoundingClientRect` relative to the layout viewport, which is what
+the `offsetLeft` and `offsetTop` arithmetic above relies on.
 
 ## Page scrolling remains an explicit policy
 
