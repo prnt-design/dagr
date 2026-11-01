@@ -144,7 +144,7 @@ function widestInset(inset: FrameInset, extra: FrameInset): FrameInset {
   const side = (key: (typeof INSET_SIDES)[number]): number | undefined => {
     const own = inset[key];
     const more = extra[key] ?? 0;
-    return more > 0 && !(own !== undefined && own >= more) ? more : own;
+    return more > 0 && !(own !== undefined && Number.isFinite(own) && own >= more) ? more : own;
   };
   return { top: side('top'), right: side('right'), bottom: side('bottom'), left: side('left') };
 }

@@ -498,12 +498,19 @@ describe('camera api', () => {
     });
 
     it('takes the larger of the inset and the visual viewport on each side, and nothing while the page is zoomed', async () => {
-      await ready(<DagrCanvas graph={twoNodes()} config={config} inset={{ right: 300, bottom: 100 }} />);
+      const graph = twoNodes();
+      await ready(<DagrCanvas graph={graph} config={config} inset={{ right: 300, bottom: 100 }} />);
       const camera = lastRenderer().camera;
       await change({ width: 700, height: 400 });
       expect(camera.frame).toEqual({ x: 0, y: 0, width: 500, height: 400 });
+      await tree?.rerender(<DagrCanvas graph={graph} config={config} inset={{ bottom: Infinity }} />);
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 700, height: 400 });
+      await tree?.rerender(<DagrCanvas graph={graph} config={config} inset={{ bottom: 300 }} />);
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 700, height: 300 });
+      await tree?.rerender(<DagrCanvas graph={graph} config={config} />);
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 700, height: 400 });
       await change({ scale: 2 });
-      expect(camera.frame).toEqual({ x: 0, y: 0, width: 500, height: 500 });
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 600 });
     });
 
     it('leaves out what the layout viewport already hides of the canvas', async () => {
