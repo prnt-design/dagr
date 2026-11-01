@@ -902,6 +902,12 @@ re-clamping it, so a handler that opens a drawer and passes it as `inset`
 should call `focusNode` once the new inset has rendered, for example from an
 effect.
 
+The canvas also observes the visual viewport and leaves out what it hides of
+the canvas beyond the layout viewport, such as the part of the page a software
+keyboard covers without resizing it, taking the larger of that and `inset` on
+each side. It too keeps the camera, and the page's own pinch-zoom takes
+nothing off. See the [mobile guide](./mobile.md#visible-frame-contract).
+
 `fit={false}` only skips the initial fit. Use `cameraLimits={false}` to opt out
 of content constraints when implementing a custom camera policy. Low-level
 `Camera2D` instances remain unrestricted until `setContentBounds` is called.

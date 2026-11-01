@@ -74,7 +74,7 @@ import type { LayoutConfig, LayoutDelta, LayoutResult } from '@prnt/dagr-layout'
 import {
   createNodeGroupLayer, nodeGroupBounds, createHtmlOverlay,
   canvasPoint, createPinchGesture, createMotionLoop, createRenderer, createRichNodes, createSceneMotion, fitZoom,
-  keyCommand, shapeEdgePath, wheelZoomFactor,
+  keyCommand, shapeEdgePath, visualViewportInset, wheelZoomFactor,
 } from '@prnt/dagr-render';
 import type {
   EdgePathOptions,
@@ -135,6 +135,18 @@ const POINTER_HIT_PIXELS = 4;
 /** The zoom a flight will settle on, so its centre is worked out at that zoom and not at one the camera refuses. */
 function clampZoom(camera: Renderer['camera'], zoom: number): number {
   return Math.min(camera.maxZoom, Math.max(camera.minZoom, zoom));
+}
+
+const INSET_SIDES = ['top', 'right', 'bottom', 'left'] as const;
+
+/** The larger inset on each side, keeping `inset`'s own value where `extra` adds nothing. */
+function widestInset(inset: FrameInset, extra: FrameInset): FrameInset {
+  const side = (key: (typeof INSET_SIDES)[number]): number | undefined => {
+    const own = inset[key];
+    const more = extra[key] ?? 0;
+    return more > 0 && !(own !== undefined && Number.isFinite(own) && own >= more) ? more : own;
+  };
+  return { top: side('top'), right: side('right'), bottom: side('bottom'), left: side('left') };
 }
 
 /** Whether `element` handles the wheel itself: an editor or something that scrolls. */
@@ -253,6 +265,12 @@ export interface DagrCanvasBaseProps {
    * Drawing and hit testing still cover the whole canvas. A change keeps the
    * camera and only re-clamps it to the new limits, so call `focusNode` after
    * the new inset has rendered, not in the same handler. Default none.
+   *
+   * The canvas also leaves out what the visual viewport hides of it beyond
+   * the layout viewport, such as a software keyboard over the bottom of the
+   * page, by `visualViewportInset`'s rules, taking the larger of that and
+   * this inset on each side. That too keeps the camera, and the page's own
+   * pinch-zoom takes nothing off.
    */
   readonly inset?: FrameInset | undefined;
 
@@ -886,6 +904,25 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     return framed;
   }, []);
 
+  const insetRef = useRef<FrameInset | null>(null);
+  const syncInset = useCallback((): void => {
+    const current = stageRef.current;
+    const host = hostRef.current;
+    if (current === null || host === null) return;
+    const visual = window.visualViewport;
+    const root = document.documentElement;
+    const hidden = visual
+      ? visualViewportInset(host.getBoundingClientRect(), { width: root.clientWidth, height: root.clientHeight }, visual)
+      : {};
+    const next = widestInset(latest.current.inset ?? {}, hidden);
+    const last = insetRef.current;
+    if (last !== null && INSET_SIDES.every((side) => Object.is(last[side], next[side]))) return;
+    insetRef.current = next;
+    current.renderer.camera.setInset(next);
+    syncCameraLimits();
+    requestDraw();
+  }, [requestDraw, syncCameraLimits]);
+
   const fitOnce = useCallback((): void => {
     const current = stageRef.current;
     if (current === null || fittedRef.current || !viewportRef.current) return;
@@ -1400,6 +1437,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       live = false;
       abort.abort();
       limitsKeyRef.current = null;
+      insetRef.current = null;
       flightRef.current = null;
       if (frameRef.current !== null) {
         cancelAnimationFrame(frameRef.current);
@@ -1423,10 +1461,18 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
   const { top: insetTop, right: insetRight, bottom: insetBottom, left: insetLeft } = props.inset ?? {};
   useEffect(() => {
     if (stage === null) return;
-    stage.renderer.camera.setInset({ top: insetTop, right: insetRight, bottom: insetBottom, left: insetLeft });
-    syncCameraLimits();
-    requestDraw();
-  }, [stage, insetTop, insetRight, insetBottom, insetLeft, requestDraw, syncCameraLimits]);
+    syncInset();
+    // The page's own scroll is not observed: `visualViewportInset` leaves out
+    // what the layout viewport hides, so it moves the frame only under a
+    // visual viewport smaller than the page.
+    const visual = window.visualViewport;
+    visual?.addEventListener('resize', syncInset);
+    visual?.addEventListener('scroll', syncInset);
+    return () => {
+      visual?.removeEventListener('resize', syncInset);
+      visual?.removeEventListener('scroll', syncInset);
+    };
+  }, [stage, insetTop, insetRight, insetBottom, insetLeft, syncInset]);
 
   useEffect(() => {
     if (stage === null) return;
@@ -1445,6 +1491,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
         devicePixelRatio: Math.min(window.devicePixelRatio, latest.current.maxPixelRatio ?? Number.POSITIVE_INFINITY),
       });
       viewportRef.current = true;
+      syncInset();
       syncCameraLimits();
       fitOnce();
       requestDraw();
@@ -1472,7 +1519,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
       observer.disconnect();
       query?.removeEventListener('change', onRatio);
     };
-  }, [stage, fitOnce, requestDraw, syncCameraLimits, props.maxPixelRatio]);
+  }, [stage, fitOnce, requestDraw, syncCameraLimits, syncInset, props.maxPixelRatio]);
 
   useEffect(() => {
     if (stage === null) return;

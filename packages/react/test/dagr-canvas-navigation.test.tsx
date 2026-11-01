@@ -456,6 +456,84 @@ describe('camera api', () => {
     expect(leftEdge()).toBeCloseTo(200 + 600 * 0.05, 6);
   });
 
+  describe('under a visual viewport', () => {
+    class FakeVisualViewport extends EventTarget {
+      offsetLeft = 0;
+      offsetTop = 0;
+      width = 800;
+      height = 600;
+      scale = 1;
+    }
+    let visual: FakeVisualViewport;
+    const root = document.documentElement;
+    beforeEach(() => {
+      visual = new FakeVisualViewport();
+      vi.stubGlobal('visualViewport', visual);
+      Object.defineProperty(root, 'clientWidth', { configurable: true, value: 800 });
+      Object.defineProperty(root, 'clientHeight', { configurable: true, value: 600 });
+    });
+    afterEach(() => {
+      Reflect.deleteProperty(root, 'clientWidth');
+      Reflect.deleteProperty(root, 'clientHeight');
+    });
+    async function change(next: Partial<FakeVisualViewport>, type = 'resize'): Promise<void> {
+      Object.assign(visual, next);
+      await flush(() => visual.dispatchEvent(new Event(type)));
+    }
+
+    it('fits first in what a short visual viewport leaves, and keeps the camera as it grows back', async () => {
+      visual.height = 400;
+      await ready(<DagrCanvas graph={twoNodes()} config={config} cameraLimits={false} />);
+      const camera = lastRenderer().camera;
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 400 });
+      expect((screenOf('a').y + screenOf('b').y) / 2).toBeCloseTo(200, 6);
+      const center = { ...camera.center };
+      const zoom = camera.zoom;
+      await change({ height: 600 });
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 600 });
+      expect(camera.center).toEqual(center);
+      expect(camera.zoom).toBe(zoom);
+      await change({ offsetTop: 150, height: 450 }, 'scroll');
+      expect(camera.frame).toEqual({ x: 0, y: 150, width: 800, height: 450 });
+    });
+
+    it('takes the larger of the inset and the visual viewport on each side, and nothing while the page is zoomed', async () => {
+      const graph = twoNodes();
+      await ready(<DagrCanvas graph={graph} config={config} inset={{ right: 300, bottom: 100 }} />);
+      const camera = lastRenderer().camera;
+      await change({ width: 700, height: 400 });
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 500, height: 400 });
+      await tree?.rerender(<DagrCanvas graph={graph} config={config} inset={{ bottom: Infinity }} />);
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 700, height: 400 });
+      await tree?.rerender(<DagrCanvas graph={graph} config={config} inset={{ bottom: 300 }} />);
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 700, height: 300 });
+      await tree?.rerender(<DagrCanvas graph={graph} config={config} />);
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 700, height: 400 });
+      await change({ scale: 2 });
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 600 });
+    });
+
+    it('leaves out what the layout viewport already hides of the canvas', async () => {
+      Object.defineProperty(root, 'clientHeight', { configurable: true, value: 500 });
+      visual.height = 500;
+      await ready(<DagrCanvas graph={twoNodes()} config={config} />);
+      expect(lastRenderer().camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 600 });
+      await change({ height: 300 });
+      expect(lastRenderer().camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 400 });
+    });
+
+    it('stops listening when unmounted', async () => {
+      const added = vi.spyOn(visual, 'addEventListener');
+      const removed = vi.spyOn(visual, 'removeEventListener');
+      await ready(<DagrCanvas graph={twoNodes()} config={config} />);
+      await tree?.rerender(<DagrCanvas graph={twoNodes()} config={config} inset={{ top: 10 }} />);
+      expect(added.mock.calls.length).toBeGreaterThan(0);
+      await tree?.unmount();
+      tree = null;
+      expect(removed.mock.calls).toEqual(added.mock.calls);
+    });
+  });
+
   it('flies over frames by default and refuses unknown ids', async () => {
     const api = createRef<DagrCanvasApi>();
     await ready(<DagrCanvas graph={twoNodes()} config={config} cameraLimits={false} apiRef={api} />);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clipInset, coverInset, visibleFrame } from '../src/visible-frame.js';
+import { clipInset, coverInset, visibleFrame, visualViewportInset } from '../src/visible-frame.js';
 
 const rect = (left: number, top: number, right: number, bottom: number) => ({ left, top, right, bottom });
 
@@ -111,5 +111,37 @@ describe('clipInset', () => {
     const keyboard = clipInset(graph, rect(0, 0, 800, 400));
     const drawer = coverInset(graph, rect(500, 0, 800, 600));
     expect(visibleFrame({ width: 800, height: 600 }, keyboard, drawer)).toEqual({ x: 0, y: 0, width: 500, height: 400 });
+  });
+});
+
+describe('visualViewportInset', () => {
+  const none = { top: 0, right: 0, bottom: 0, left: 0 };
+  const layout = { width: 390, height: 844 };
+  const visual = (offsetLeft: number, offsetTop: number, width: number, height: number, scale = 1) => ({
+    offsetLeft,
+    offsetTop,
+    width,
+    height,
+    scale,
+  });
+
+  it('takes off what a keyboard-shortened visual viewport hides', () => {
+    expect(visualViewportInset(rect(0, 100, 390, 700), layout, visual(0, 0, 390, 500))).toEqual({ ...none, bottom: 200 });
+  });
+
+  it('follows a visual viewport scrolled down the page', () => {
+    expect(visualViewportInset(rect(0, 100, 390, 700), layout, visual(0, 300, 390, 500))).toEqual({ ...none, top: 200 });
+  });
+
+  it('does not take off the part of the surface the layout viewport already hides', () => {
+    expect(visualViewportInset(rect(0, 600, 390, 1000), layout, visual(0, 0, 390, 844))).toEqual(none);
+    expect(visualViewportInset(rect(0, 600, 390, 1000), layout, visual(0, 0, 390, 744))).toEqual({ ...none, bottom: 100 });
+  });
+
+  it('takes nothing off while the page is pinch-zoomed, and counts a scale within 0.01 of 1 as unzoomed', () => {
+    expect(visualViewportInset(rect(0, 0, 390, 844), layout, visual(100, 200, 195, 422, 2))).toEqual({});
+    expect(visualViewportInset(rect(0, 0, 390, 844), layout, visual(0, 0, 390, 500, 1.01))).toEqual({});
+    expect(visualViewportInset(rect(0, 0, 390, 844), layout, visual(0, 0, 390, 500, 1.009))).toEqual({ ...none, bottom: 344 });
+    expect(visualViewportInset(rect(0, 0, 390, 844), layout, visual(0, 0, 390, 500, Number.NaN))).toEqual({});
   });
 });

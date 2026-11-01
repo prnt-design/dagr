@@ -45,6 +45,7 @@ describe('@prnt/dagr-render/core', () => {
       'fitZoom',
       'shapeEdgePath',
       'visibleFrame',
+      'visualViewportInset',
     ]);
   });
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `DagrCanvas` observes the visual viewport and frames in what it leaves, such as the part of the page a software keyboard covers without resizing it: the larger of `inset` and `visualViewportInset` on each side. A change keeps the camera and re-clamps it. Page pinch-zoom takes nothing off. Tested in jsdom only, not yet on an iOS or Android device.
 - Add `inset` to `DagrCanvas`: CSS pixels off each side that something drawn over the canvas covers. The first fit, `fit()`, `focusNode` and the camera limits frame what is left. Changing it keeps the camera and re-clamps it.
 - Skip touch hover during a pinch, and allow mouse and pen clicks after a completed pinch.
 - Use the shared core pinch gesture in `DagrCanvas`: extra contacts no longer stop the active pair, lost capture ends the pair, a new primary sequence clears stale contacts, and coincident fingers pan without a zoom spike. Existing navigation and page-scroll modes remain.
