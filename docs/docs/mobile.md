@@ -149,8 +149,8 @@ the larger of its `inset` and its `visualViewportInset` on each side. Either
 changing keeps a camera at rest and only re-clamps it to the new limits; a
 `fit()` or `focusNode` flight under way works its target out again in the new
 frame and lands when it would have. Explorer keeps its own policy above: a
-camera at or flying to the fit refits, and the selection is revealed if the
-change covered it.
+camera at or flying to the fit refits, except on a change of the visual
+viewport alone, and the selection is revealed if the change covered it.
 Neither adapter observes the page's own scroll.
 
 The visual-viewport coordinates are covered by jsdom tests, not yet verified

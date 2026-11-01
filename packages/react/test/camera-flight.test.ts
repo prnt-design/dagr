@@ -41,16 +41,52 @@ describe('startCameraFlight', () => {
     const flight = startCameraFlight(camera, to, 400);
     flight.step(1000);
     flight.step(1200);
-    const midway = camera.zoom;
+    const midway = { ...camera.center };
     const elsewhere = { center: { x: -50, y: 20 }, zoom: 2 };
     flight.retarget(elsewhere);
+    expect(camera.center).toEqual(midway);
     expect(flight.step(1300)).toBe(false);
-    expect(camera.zoom).toBe(midway);
-    expect(flight.step(1450)).toBe(false);
-    expect(flight.step(1500)).toBe(true);
+    expect(camera.center.x).toBeLessThan(midway.x);
+    expect(camera.center.x).toBeGreaterThan(-50);
+    expect(flight.step(1400)).toBe(true);
     expect(camera.zoom).toBeCloseTo(2);
     expect(camera.center.x).toBeCloseTo(-50);
     expect(camera.center.y).toBeCloseTo(20);
+  });
+
+  it('follows the same path when retargeted to the same target', () => {
+    const plain = new Camera2D();
+    const retargeted = new Camera2D();
+    const a = startCameraFlight(plain, to, 400);
+    const b = startCameraFlight(retargeted, to, 400);
+    for (const now of [0, 100, 150]) {
+      a.step(now);
+      b.step(now);
+    }
+    b.retarget(to);
+    for (const now of [200, 300]) {
+      a.step(now);
+      b.step(now);
+      expect(retargeted.zoom).toBeCloseTo(plain.zoom, 9);
+      expect(retargeted.center.x).toBeCloseTo(plain.center.x, 9);
+      expect(retargeted.center.y).toBeCloseTo(plain.center.y, 9);
+    }
+  });
+
+  it('keeps moving and lands on time when retargeted before every step', () => {
+    const camera = new Camera2D();
+    const flight = startCameraFlight(camera, to, 400);
+    flight.step(0);
+    let previous = camera.center.x;
+    for (let now = 16; now < 400; now += 16) {
+      flight.retarget({ center: { x: 100 + now / 10, y: -40 }, zoom: 4 });
+      expect(flight.step(now)).toBe(false);
+      expect(camera.center.x).toBeGreaterThan(previous);
+      previous = camera.center.x;
+    }
+    flight.retarget({ center: { x: 200, y: -40 }, zoom: 4 });
+    expect(flight.step(400)).toBe(true);
+    expect(camera.center.x).toBeCloseTo(200);
   });
 
   it('takes a target given before the first step as its own, keeping the duration', () => {
