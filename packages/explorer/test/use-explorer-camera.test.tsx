@@ -11,7 +11,7 @@ import {
   screenToWorld,
   zoomCamera,
 } from '../src/camera.js';
-import type { CameraLimits, ExplorerCamera, ExplorerViewportSize } from '../src/camera.js';
+import type { CameraFrame, CameraLimits, ExplorerCamera, ExplorerViewportSize } from '../src/camera.js';
 import { layoutView } from '../src/index.js';
 import type { ExplorerBox, ExplorerLayout } from '../src/index.js';
 import { useExplorerCamera } from '../src/use-explorer-camera.js';
@@ -164,7 +164,7 @@ function cameraNow(): ExplorerCamera {
   return value;
 }
 
-function limitsFor(layout: ExplorerLayout = chain, size: ExplorerViewportSize = SIZE): CameraLimits {
+function limitsFor(layout: ExplorerLayout = chain, size: CameraFrame = SIZE): CameraLimits {
   const limits = createCameraLimits(layout, size);
   if (limits === null) throw new Error('no limits');
   return limits;
@@ -188,7 +188,7 @@ function drawnTransform(): ExplorerCamera {
   return { x: Number(match[1]), y: Number(match[2]), scale: Number(match[3]) };
 }
 
-function fitted(layout: ExplorerLayout = chain, size: ExplorerViewportSize = SIZE): ExplorerCamera {
+function fitted(layout: ExplorerLayout = chain, size: CameraFrame = SIZE): ExplorerCamera {
   const limits = limitsFor(layout, size);
   return limits.constrain(fitCamera(layout, size, limits));
 }
