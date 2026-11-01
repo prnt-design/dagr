@@ -599,6 +599,64 @@ describe('touch pinch', () => {
     target.dispatchEvent(event);
   }
 
+  it.each(['node', 'edge'] as const)('does not hover a %s while two touches are down', async (kind) => {
+    const onNodeHover = vi.fn();
+    const onEdgeHover = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} onNodeHover={onNodeHover} onEdgeHover={onEdgeHover} />);
+    const a = screenOf('a');
+    const b = screenOf('b');
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, a.x - 100, a.y);
+      touch(host(), 'pointerdown', 2, a.x, a.y);
+      const target = kind === 'node' ? a : { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      touch(host(), 'pointermove', 2, target.x, target.y);
+    });
+    expect(onNodeHover).not.toHaveBeenCalled();
+    expect(onEdgeHover).not.toHaveBeenCalled();
+  });
+
+  it('keeps selection and single-pointer pan suppressed during a hybrid press', async () => {
+    const onNodeClick = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} onNodeClick={onNodeClick} />);
+    const camera = lastRenderer().camera;
+    const zoom = camera.zoom;
+    const world = camera.screenToWorld({ x: 150, y: 100 });
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 200, 100);
+    });
+    const a = screenOf('a');
+    await flush(() => {
+      for (const [target, type] of [[host(), 'pointerdown'], [window, 'pointerup']] as const) {
+        const event = new MouseEvent(type, { bubbles: true, clientX: a.x, clientY: a.y, button: 0 });
+        Object.defineProperties(event, { pointerId: { value: 99 }, isPrimary: { value: true }, pointerType: { value: 'mouse' } });
+        target.dispatchEvent(event);
+      }
+    });
+    expect(onNodeClick).not.toHaveBeenCalled();
+    await flush(() => touch(host(), 'pointermove', 1, 120, 100));
+    expect(camera.zoom).toBeCloseTo(zoom * 0.8);
+    const after = camera.worldToScreen(world);
+    expect(after.x).toBeCloseTo(160);
+    expect(after.y).toBeCloseTo(100);
+  });
+
+  it('allows a mouse click after a completed pinch', async () => {
+    const onNodeClick = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} onNodeClick={onNodeClick} />);
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 200, 100);
+      touch(window, 'pointermove', 2, 220, 100);
+      touch(window, 'pointerup', 2, 220, 100);
+      touch(window, 'pointerup', 1, 100, 100);
+    });
+    expect(onNodeClick).not.toHaveBeenCalled();
+    const a = screenOf('a');
+    await flush(() => click(a.x, a.y));
+    expect(onNodeClick).toHaveBeenCalledExactlyOnceWith('a');
+  });
+
   it('continues pinching when a third finger arrives and ignores that finger', async () => {
     await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" />);
     const camera = lastRenderer().camera;

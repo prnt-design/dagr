@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Skip touch hover during a pinch, and allow mouse and pen clicks after a completed pinch.
 - Use the shared core pinch gesture in `DagrCanvas`: extra contacts no longer stop the active pair, lost capture ends the pair, a new primary sequence clears stale contacts, and coincident fingers pan without a zoom spike. Existing navigation and page-scroll modes remain.
 - Add `onEdgeClick` and `onEdgeHover` to `DagrCanvas`. Edges are hit on the
   CPU against the edges as drawn, within half the ribbon's width plus the
