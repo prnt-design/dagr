@@ -266,9 +266,10 @@ export interface DagrCanvasBaseProps {
    * camera at rest and only re-clamps it to the new limits. A `fit()` or
    * `focusNode` flight still under way works its target out again in the new
    * frame and lands when it would have, so one started in the same handler as
-   * the change ends in the right place; one with `durationMs: 0` has already
-   * landed, so call it after the new inset has rendered. The same holds when
-   * the canvas resizes. Default none.
+   * the change ends in the right place. One that lands at once (`durationMs: 0`,
+   * or under reduced motion) has nothing to retarget, so to work for everyone
+   * call it after the new inset has rendered. The same holds when the canvas
+   * resizes. Default none.
    *
    * The canvas also leaves out what the visual viewport hides of it beyond
    * the layout viewport, such as a software keyboard over the bottom of the

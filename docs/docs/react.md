@@ -901,9 +901,10 @@ still cover the whole canvas, and changing the inset keeps a camera at rest,
 only re-clamping it. A `fit()` or `focusNode` flight still under way works its
 target out again in the new frame and lands when it would have, so a handler
 that opens a drawer, passes it as `inset` and calls `focusNode` ends with the
-node in the middle of what the drawer leaves. One with `durationMs: 0` lands
-at once, so call it once the new inset has rendered, for example from an
-effect. A flight under way retargets the same way when the canvas resizes.
+node in the middle of what the drawer leaves. One that lands at once
+(`durationMs: 0`, or any flight under `prefers-reduced-motion: reduce`) has
+nothing left to retarget, so calling it once the new inset has rendered, for
+example from an effect, is the pattern that works for everyone. A flight under way retargets the same way when the canvas resizes.
 
 The canvas also observes the visual viewport and leaves out what it hides of
 the canvas beyond the layout viewport, such as the part of the page a software
