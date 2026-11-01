@@ -132,11 +132,14 @@ adapter decisions. A smaller visual viewport is not proof that a keyboard
 opened, and nothing here should be used to disable browser zoom.
 
 Explorer frames around its registered obstructions with `coverInset` and
-`visibleFrame`. Neither Explorer nor `DagrCanvas` observes the visual viewport
-yet, and the visual-viewport coordinates above are not yet verified on a real
-iOS or Android device. Current engines report `getBoundingClientRect`
-relative to the layout viewport, which is what the `offsetLeft` and
-`offsetTop` arithmetic above relies on.
+`visibleFrame`. `DagrCanvas` takes a measured inset as its `inset` prop and
+frames its fit, `fit()`, `focusNode` and camera limits in
+`visibleFrame(size, inset)` through `Camera2D.setInset`. Neither Explorer nor
+`DagrCanvas` observes the visual viewport yet, and the visual-viewport
+coordinates above are not yet verified on a real iOS or Android device.
+Current engines report `getBoundingClientRect` relative to the layout
+viewport, which is what the `offsetLeft` and `offsetTop` arithmetic above
+relies on.
 
 ## Page scrolling remains an explicit policy
 

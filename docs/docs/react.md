@@ -718,7 +718,7 @@ drawing's frame budget.
 
 | Method | Does |
 | --- | --- |
-| `focusNode(id, { zoom?, durationMs? })` | Flies to centre the node. Default zoom makes the node fill about half the viewport. Returns `false` and moves nothing for an unknown id or an unsized canvas. |
+| `focusNode(id, { zoom?, durationMs? })` | Flies to centre the node. Default zoom makes the node fill about half the frame `inset` leaves. Returns `false` and moves nothing for an unknown id or an unsized canvas. |
 | `fit({ durationMs? })` | Flies back to the whole graph, including group boundaries, with `fitPadding`. Returns `false`, moving nothing, before there is a layout and a size. |
 
 Flights take 450 ms (zoom is interpolated geometrically, so it feels even) and
@@ -888,8 +888,19 @@ graph, including group labels and padding. The maximum fits a single node with
 5% margin (or `fitPadding`); for mixed node sizes the smallest fitting node sets
 the ceiling. Panning stays within the padded content bounds and keeps part of an actual node
 visible, including in sparse graphs. An axis smaller
-than the viewport stays centered. Limits follow resizing, layout changes, and
+than the frame stays centered. Limits follow resizing, layout changes, and
 animated bounds without resetting a valid close-up.
+
+`inset={{ right: 320 }}` tells the canvas that something drawn over it covers
+that much of a side, such as a details drawer or a toolbar. The first fit,
+`fit()`, `focusNode` and these limits then frame the rest, so the graph is not
+fitted under the drawer. An inset that would leave less than 160 CSS pixels of
+width (120 of height), or less than a quarter of that axis, is ignored on that
+axis. Keyboard zoom anchors at the frame's centre. Drawing and hit testing
+still cover the whole canvas, and changing the inset keeps the camera, only
+re-clamping it, so a handler that opens a drawer and passes it as `inset`
+should call `focusNode` once the new inset has rendered, for example from an
+effect.
 
 `fit={false}` only skips the initial fit. Use `cameraLimits={false}` to opt out
 of content constraints when implementing a custom camera policy. Low-level
