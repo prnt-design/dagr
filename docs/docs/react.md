@@ -894,10 +894,10 @@ animated bounds without resetting a valid close-up.
 `inset={{ right: 320 }}` tells the canvas that something drawn over it covers
 that much of a side, such as a details drawer or a toolbar. The first fit,
 `fit()`, `focusNode` and these limits then frame the rest, so the graph is not
-fitted under the drawer. An inset that would leave less than max(160 or 120 CSS
-pixels, a quarter of the axis) is ignored on that axis. Drawing and hit testing
-still cover the whole canvas, and changing the inset keeps the camera, only
-re-clamping it.
+fitted under the drawer. An inset that would leave less than 160 CSS pixels of
+width (120 of height), or less than a quarter of that axis, is ignored on that
+axis. Drawing and hit testing still cover the whole canvas, and changing the
+inset keeps the camera, only re-clamping it.
 
 `fit={false}` only skips the initial fit. Use `cameraLimits={false}` to opt out
 of content constraints when implementing a custom camera policy. Low-level

@@ -743,13 +743,13 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     if (
       key !== null && box !== null && key.nodes === (nodes?.length ?? 0) &&
       key.minX === box.minX && key.minY === box.minY && key.maxX === box.maxX && key.maxY === box.maxY &&
-      key.width === camera.viewport.width && key.height === camera.viewport.height &&
+      key.width === camera.frame.width && key.height === camera.frame.height &&
       key.cameraLimits === cameraLimits && key.fitPadding === fitPadding && key.groups === groups &&
       key.owned === limitsOwnedRef.current
     ) return;
     limitsKeyRef.current = box === null ? null : {
       nodes: nodes?.length ?? 0, minX: box.minX, minY: box.minY, maxX: box.maxX, maxY: box.maxY,
-      width: camera.viewport.width, height: camera.viewport.height, cameraLimits, fitPadding, groups,
+      width: camera.frame.width, height: camera.frame.height, cameraLimits, fitPadding, groups,
       owned: limitsOwnedRef.current,
     };
     if (latest.current.cameraLimits === false || !nodes?.length || !box) {
@@ -770,7 +770,7 @@ export function DagrCanvas<T = string>(props: DagrCanvasProps<T>): ReactElement 
     let max = 0;
     for (const node of nodes) {
       if (node.size.width <= 0 || node.size.height <= 0) continue;
-      const zoom = fitZoom({ minX: 0, minY: 0, maxX: node.size.width, maxY: node.size.height }, camera.viewport);
+      const zoom = fitZoom({ minX: 0, minY: 0, maxX: node.size.width, maxY: node.size.height }, camera.frame);
       if (zoom > max) { max = zoom; detail = node.size; }
     }
     const regions = nodes.filter((node) => node.size.width > 0 && node.size.height > 0).map((node) => ({

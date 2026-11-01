@@ -434,6 +434,18 @@ describe('camera api', () => {
     expect(camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 600 });
   });
 
+  it('re-clamps a camera at the content edge into the new frame', async () => {
+    const graph = twoNodes();
+    await ready(<DagrCanvas graph={graph} config={config} />);
+    const camera = lastRenderer().camera;
+    camera.setZoom(camera.maxZoom);
+    camera.panByScreen(1e9, 0);
+    const leftEdge = (): number => Math.min(...['a', 'b'].map((id) => screenOf(id).x)) - camera.zoom * 100;
+    expect(leftEdge()).toBeCloseTo(800 * 0.05, 6);
+    await tree?.rerender(<DagrCanvas graph={graph} config={config} inset={{ left: 200 }} />);
+    expect(leftEdge()).toBeCloseTo(200 + 600 * 0.05, 6);
+  });
+
   it('flies over frames by default and refuses unknown ids', async () => {
     const api = createRef<DagrCanvasApi>();
     await ready(<DagrCanvas graph={twoNodes()} config={config} cameraLimits={false} apiRef={api} />);

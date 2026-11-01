@@ -147,6 +147,45 @@ describe('frame inset', () => {
     expect(topLeft.y).toBeGreaterThan(bounds.minY);
   });
 
+  it('stops each pan with the padded content edge at the frame edge', () => {
+    const camera = new Camera2D({ viewport });
+    camera.setContentBounds(bounds, node);
+    camera.setInset(inset);
+    camera.setZoom(camera.maxZoom);
+    camera.panByScreen(1e9, 0);
+    expect(camera.worldToScreen({ x: bounds.minX, y: 0 }).x).toBeCloseTo(300 + 700 * 0.05, 6);
+    camera.panByScreen(-1e9, 0);
+    expect(camera.worldToScreen({ x: bounds.maxX, y: 0 }).x).toBeCloseTo(1000 - 700 * 0.05, 6);
+    camera.panByScreen(0, 1e9);
+    expect(camera.worldToScreen({ x: 0, y: bounds.maxY }).y).toBeCloseTo(400 * 0.05, 6);
+    camera.panByScreen(0, -1e9);
+    expect(camera.worldToScreen({ x: 0, y: bounds.minY }).y).toBeCloseTo(400 - 400 * 0.05, 6);
+  });
+
+  it('keeps a node in the frame, not under the inset, in a sparse corner', () => {
+    const camera = new Camera2D({ viewport });
+    const nodes = [
+      { minX: 0, minY: 0, maxX: 200, maxY: 100 },
+      { minX: 8000, minY: 9000, maxX: 8200, maxY: 9100 },
+    ];
+    camera.setContentBounds({ minX: 0, minY: 0, maxX: 8200, maxY: 9100 }, node, 0.05, nodes);
+    camera.setInset(inset);
+    camera.setZoom(camera.maxZoom);
+    camera.setCenter(camera.centerFor({ x: 4000, y: 4500 }));
+    const topLeft = camera.screenToWorld({ x: 300, y: 0 });
+    const bottomRight = camera.screenToWorld({ x: 1000, y: 400 });
+    expect(nodes.some((n) => n.maxX > topLeft.x && n.minX < bottomRight.x && n.maxY > bottomRight.y && n.minY < topLeft.y)).toBe(true);
+  });
+
+  it('keeps a negative zero with no inset', () => {
+    const camera = new Camera2D({ viewport });
+    camera.setContentBounds(bounds, node);
+    camera.setZoom(camera.maxZoom);
+    camera.setCenter({ x: 900, y: -0 });
+    expect(Object.is(camera.center.y, -0)).toBe(true);
+    expect(Object.is(camera.centerFor({ x: -0, y: -0 }).y, -0)).toBe(true);
+  });
+
   it('re-derives the frame on resize and ignores an inset that leaves too little', () => {
     const camera = new Camera2D({ viewport });
     camera.setInset(inset);

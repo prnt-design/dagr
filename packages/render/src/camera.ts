@@ -341,10 +341,10 @@ export class Camera2D {
     requireFinitePoint(point, 'point');
     requirePositive(zoom, 'zoom');
     const frame = this.#frame;
-    return {
-      x: point.x - (frame.x + frame.width / 2 - this.#viewport.width / 2) / zoom,
-      y: point.y + (frame.y + frame.height / 2 - this.#viewport.height / 2) / zoom,
-    };
+    const shiftX = (frame.x + frame.width / 2 - this.#viewport.width / 2) / zoom;
+    const shiftY = (frame.y + frame.height / 2 - this.#viewport.height / 2) / zoom;
+    if (shiftX === 0 && shiftY === 0) return { x: point.x, y: point.y };
+    return { x: point.x - shiftX, y: point.y + shiftY };
   }
 
   /**
@@ -553,6 +553,8 @@ export class Camera2D {
     const frame = this.#frame;
     const shiftX = (frame.x + frame.width / 2 - this.#viewport.width / 2) / this.#zoom;
     const shiftY = -(frame.y + frame.height / 2 - this.#viewport.height / 2) / this.#zoom;
+    // Adding a zero shift would turn a -0 coordinate into +0.
+    if (shiftX === 0 && shiftY === 0) return this.#clampFramed(center);
     const clamped = this.#clampFramed({ x: center.x + shiftX, y: center.y + shiftY });
     return { x: clamped.x - shiftX, y: clamped.y - shiftY };
   }
