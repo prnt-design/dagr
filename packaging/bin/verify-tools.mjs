@@ -33,7 +33,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,7 +46,11 @@ let failures = 0;
 
 function run(command, args, cwd, label) {
   try {
-    execFileSync(command, args, { cwd, stdio: 'pipe', encoding: 'utf8' });
+    execFileSync(command, args, {
+      cwd, stdio: 'pipe', encoding: 'utf8',
+      // pnpm's shim can expose workspace dependencies to scratch consumers.
+      env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'NODE_PATH')),
+    });
     console.log(`  PASS  ${label}`);
     return true;
   } catch (error) {
@@ -286,6 +290,25 @@ try {
   const vdslTarball = pick('vdsl');
   const umbrellaTarball = tarballs.find((t) => /^prnt-dagr-\d.*\.tgz$/.test(basename(t)));
   if (umbrellaTarball === undefined) throw new Error('no tarball was packed for @prnt/dagr');
+  console.log('\nInstalled Explorer SSR/hydration and teardown, without three:');
+  for (const version of ['18.3.1', '19.2.8']) {
+    const major = version.split('.')[0];
+    const consumer = join(workDir, `explorer-react-${major}`);
+    mkdirSync(consumer);
+    writeFileSync(join(consumer, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
+    for (const file of ['server.mjs', 'client.mjs', 'consumer.tsx', 'tsconfig.json']) {
+      copyFileSync(join(REPO_ROOT, 'packaging/fixtures/explorer', file), join(consumer, file));
+    }
+    if (run('npm', [
+      'install', '--no-audit', '--no-fund', '--ignore-scripts', '--omit=optional',
+      graphTarball, layoutTarball, renderTarball, explorerTarball,
+      `react@${version}`, `react-dom@${version}`, 'jsdom@30.0.1',
+      `@types/react@${major}`, `@types/react-dom@${major}`, 'typescript@5.9.3',
+    ], consumer, `Explorer React ${major} public peers install`)) {
+      run('npx', ['tsc', '--noEmit'], consumer, `Explorer React ${major} NodeNext types without three or skipLibCheck`);
+      run('node', ['client.mjs', String(major)], consumer, `Explorer React ${major} SSR, hydration, CSS, pinch and cleanup`);
+    }
+  }
   run(
     'npm',
     [
