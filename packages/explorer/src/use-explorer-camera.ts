@@ -3,7 +3,8 @@
  * gestures, bound to a viewport element and the plane inside it.
  *
  * A port of the docs' `useGraphCamera` with its arithmetic taken out: every
- * camera this file holds comes from `camera.ts`. What is left here is time
+ * camera this file holds comes from `camera.ts`, and the frame it aims in
+ * from `visibleFrame` in `@prnt/dagr-render/core`. What is left here is time
  * (the frame loop), input (wheel, pointer, keys) and the DOM writes.
  *
  * **The camera never causes a React render.** A frame is one

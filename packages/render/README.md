@@ -158,7 +158,7 @@ means a tier must clear its own per-node state on every bind.
 
 ## The three-free entry
 
-`@prnt/dagr-render/core` exports `Camera2D`, `fitZoom`, `shapeEdgePath`, `createPinchGesture` and the visible-frame functions, with
+`@prnt/dagr-render/core` exports `Camera2D`, `fitZoom`, `shapeEdgePath`, `createPinchGesture`, `visibleFrame`, `coverInset` and `clipInset`, with
 their types, from modules that never import `three`: not at runtime, and not in
 their type declarations.
 

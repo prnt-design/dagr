@@ -31,7 +31,7 @@ mobile reading flow or real device has been validated.
 | Layer | Owns | Does not own |
 | --- | --- | --- |
 | Graph and layout | Stable IDs, relationships, coordinates and layout deltas | A phone-specific copy of the dataset |
-| Renderer core | Camera arithmetic and shared touch-contact geometry | React state, DOM event capture or a device-name detector |
+| Renderer core | Camera arithmetic, shared touch-contact geometry and the visible frame | React state, DOM event capture or a device-name detector |
 | Surface adapter | CSS coordinates, event capture/cancellation, scroll ownership and camera updates | Duplicated pinch arithmetic or graph semantics |
 | Explorer or host UI | Readable controls/details, focus, search and reading modes | A separate mobile selection/search store |
 | Rendering backend | GPU or SVG drawing and its measured resource budget | Choosing a graph's meaning or changing input semantics |
@@ -97,11 +97,14 @@ same CSS-pixel coordinates as `getBoundingClientRect`:
   details drawer. It takes one side, and only when it touches that side and
   spans at least half of it. An overlay in the middle takes nothing.
 - `clipInset(surface, visible)` is the part of the surface outside a box: a
-  scrolling ancestor's box, or the visual viewport's, which can shrink while
-  the layout viewport does not, for example when a software keyboard opens or
-  the page is zoomed. It clips every side that falls outside.
+  scrolling ancestor's client box (inside its border and scrollbar), or the
+  visual viewport's, which can shrink while the layout viewport does not, for
+  example when a software keyboard opens or the page is zoomed. It clips every
+  side that falls outside.
 - `visibleFrame(size, ...insets)` combines them, taking the largest inset on
   each side, and returns `{ x, y, width, height }` from the surface's top left.
+
+Given a `surface` element and a `drawer` element over it:
 
 ```ts
 import { clipInset, coverInset, visibleFrame } from '@prnt/dagr-render/core';
@@ -131,7 +134,9 @@ opened, and nothing here should be used to disable browser zoom.
 Explorer frames around its registered obstructions with `coverInset` and
 `visibleFrame`. Neither Explorer nor `DagrCanvas` observes the visual viewport
 yet, and the visual-viewport coordinates above are not yet verified on a real
-iOS or Android device.
+iOS or Android device. Current engines report `getBoundingClientRect`
+relative to the layout viewport, which is what the `offsetLeft` and
+`offsetTop` arithmetic above relies on.
 
 ## Page scrolling remains an explicit policy
 
@@ -167,8 +172,8 @@ outline reader uses the same ExplorerRoot state. The visible frame contract
 above is the shared geometry for keyboard occlusion and camera-visible areas;
 a software keyboard can shrink the
 [visual viewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport)
-without shrinking the layout viewport. Observing it in the built-in adapters,
-and safe areas, are still to come.
+without shrinking the layout viewport. The built-in adapters do not observe
+it yet, and safe areas are still to come.
 
 See the [roadmap](https://github.com/prnt-design/dagr/blob/main/ROADMAP.md#core-mobile-framework-track)
 for the viewport/occlusion and conformance work. Tests of a gesture state machine

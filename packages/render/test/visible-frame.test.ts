@@ -102,6 +102,8 @@ describe('clipInset', () => {
   it('clamps each side to the surface, and clips nothing for a non-finite edge', () => {
     expect(clipInset(rect(0, 0, 100, 100), rect(0, 500, 100, 600))).toEqual({ ...none, top: 100 });
     expect(clipInset(rect(0, 0, 100, 100), rect(Number.NaN, 0, Infinity, 50))).toEqual({ ...none, bottom: 50 });
+    expect(clipInset(rect(0, 0, 100, 100), rect(0, -Infinity, 100, 100))).toEqual(none);
+    expect(clipInset(rect(0, 0, 0, 0), rect(10, 10, 20, 20))).toEqual(none);
   });
 
   it('combines with an overlay so the frame avoids both', () => {

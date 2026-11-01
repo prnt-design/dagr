@@ -89,10 +89,12 @@ export function coverInset(surface: ScreenRect, cover: ScreenRect): FrameInset {
 
 /**
  * How far each side of the surface lies outside `visible`: a clipping
- * ancestor's box, or the visual viewport, whose box in the same coordinates
- * as `getBoundingClientRect` is `offsetLeft`, `offsetTop`, and those plus
- * `width` and `height`. Each side is clamped to the surface, and a
- * non-finite edge clips nothing.
+ * ancestor's client box (its border box moved in by `clientLeft` and
+ * `clientTop`, sized by `clientWidth` and `clientHeight`), or the visual
+ * viewport. Current engines report `getBoundingClientRect` relative to the
+ * layout viewport, so the visual viewport's box there is `offsetLeft`,
+ * `offsetTop`, and those plus `width` and `height`. Each side is clamped to
+ * the surface, and a non-finite edge clips nothing.
  */
 export function clipInset(surface: ScreenRect, visible: ScreenRect): FrameInset {
   const width = surface.right - surface.left;

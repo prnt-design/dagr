@@ -710,10 +710,12 @@ something the compiler already enforces.
 ### The entry that does not need it
 
 "Cannot be imported at all without three" is true of the full entry. It is not
-true of `@prnt/dagr-render/core`, which exports `Camera2D`, `fitZoom` and
-`shapeEdgePath` and nothing else at runtime.
+true of `@prnt/dagr-render/core`, which exports `Camera2D`, `fitZoom`,
+`shapeEdgePath`, `createPinchGesture`, `visibleFrame`, `coverInset` and
+`clipInset` and nothing else at runtime.
 
-Those three come from `camera.ts` and `edge-path.ts`, and neither imports
+Those come from `camera.ts`, `edge-path.ts`, `pinch-gesture.ts` and
+`visible-frame.ts`, and none of them imports
 `three` at runtime, directly or through anything it imports. The core entry
 re-exports them without going through `index.ts`, so loading it evaluates no
 renderer module.
