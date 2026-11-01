@@ -47,7 +47,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import { clipInset, coverInset, createPinchGesture, visibleFrame } from '@prnt/dagr-render/core';
+import { coverInset, createPinchGesture, visibleFrame, visualViewportInset } from '@prnt/dagr-render/core';
 import type { PinchDelta, ScreenRect, Vec2 } from '@prnt/dagr-render/core';
 import {
   CONTENT_PADDING,
@@ -107,8 +107,6 @@ interface FrameOptions {
   readonly contentPadding: number;
 }
 
-/** How far the visual viewport's scale may be from 1 and the page still count as unzoomed. */
-const PAGE_ZOOM_EPSILON = 0.01;
 /** CSS pixels a press travels before it is a pan rather than a click. */
 const DRAG_THRESHOLD = 5;
 /** Zoom per unit of wheel delta, for a wheel and for a trackpad pinch. */
@@ -290,25 +288,15 @@ function createEngine(
   /** What the registered obstructions and the visual viewport take off the content box. */
   const obstructed = (): ExplorerInset[] => {
     const overlays = obstructions?.list() ?? [];
-    const occluding = visual !== null && Math.abs(visual.scale - 1) < PAGE_ZOOM_EPSILON;
-    if (overlays.length === 0 && !occluding) return [];
+    if (overlays.length === 0 && visual === null) return [];
     const inner = contentBox();
     const insets = overlays.map((overlay) => coverInset(inner, overlay.getBoundingClientRect()));
-    if (occluding) {
-      // Only what the visual viewport hides beyond the layout viewport: a
-      // viewport scrolled partly off the page has always drawn there, and
-      // the page's own scroll is not observed, so counting it would make the
-      // frame depend on when something else happened to measure.
+    if (visual !== null) {
+      // The page's own scroll is not observed, so `visualViewportInset`
+      // leaving out what the layout viewport hides also keeps the frame from
+      // depending on when something else happened to measure.
       const root = document.documentElement;
-      const page = clipInset(inner, { left: 0, top: 0, right: root.clientWidth, bottom: root.clientHeight });
-      const seen = clipInset(inner, {
-        left: visual.offsetLeft,
-        top: visual.offsetTop,
-        right: visual.offsetLeft + visual.width,
-        bottom: visual.offsetTop + visual.height,
-      });
-      const beyond = (side: keyof ExplorerInset): number => Math.max((seen[side] ?? 0) - (page[side] ?? 0), 0);
-      insets.push({ top: beyond('top'), right: beyond('right'), bottom: beyond('bottom'), left: beyond('left') });
+      insets.push(visualViewportInset(inner, { width: root.clientWidth, height: root.clientHeight }, visual));
     }
     return insets;
   };

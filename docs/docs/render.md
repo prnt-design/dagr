@@ -713,8 +713,8 @@ something the compiler already enforces.
 
 "Cannot be imported at all without three" is true of the full entry. It is not
 true of `@prnt/dagr-render/core`, which exports `Camera2D`, `fitZoom`,
-`shapeEdgePath`, `createPinchGesture`, `visibleFrame`, `coverInset` and
-`clipInset` and nothing else at runtime.
+`shapeEdgePath`, `createPinchGesture`, `visibleFrame`, `coverInset`,
+`clipInset` and `visualViewportInset` and nothing else at runtime.
 
 Those come from `camera.ts`, `edge-path.ts`, `pinch-gesture.ts` and
 `visible-frame.ts`, and none of them imports

@@ -11,6 +11,7 @@ not" is the category this file has a heading for.
 
 ## Unreleased
 
+- Add `visualViewportInset(surface, layout, visualViewport)` with a `VisualViewportBox` type to the full and three.js-free core entries: what the visual viewport hides of a surface beyond the layout viewport, and nothing while the page is pinch-zoomed. Explorer's visual-viewport framing now uses it, unchanged, and `DagrCanvas` frames in it too.
 - Add `Camera2D.setInset(inset)`, `Camera2D.frame` and `Camera2D.centerFor(point, zoom)`. With an inset, `fitBounds`, the content limits from `setContentBounds` and their pan clamping work in `visibleFrame(viewport, inset)` instead of the whole viewport. Without one, every result is unchanged.
 - Add `visibleFrame`, `coverInset` and `clipInset` with `FrameInset`, `ScreenRect` and `VisibleFrame` types to the full and three.js-free core entries. They compute the CSS-pixel part of a surface left to frame content in, around overlays, clipping ancestors and the visual viewport. Explorer's obstruction framing now uses them, unchanged.
 - Add `createPinchGesture` with `PinchDelta` and `PinchGesture` types to the full and three.js-free core entries. Shared CSS-pixel touch geometry is independent of browser event ownership and rendering backend.

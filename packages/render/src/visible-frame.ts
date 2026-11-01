@@ -108,3 +108,36 @@ export function clipInset(surface: ScreenRect, visible: ScreenRect): FrameInset 
     left: clip(visible.left - surface.left, width),
   };
 }
+
+/** The visual viewport's box in layout-viewport coordinates and its pinch-zoom scale, as `window.visualViewport` reports them. */
+export interface VisualViewportBox {
+  readonly offsetLeft: number;
+  readonly offsetTop: number;
+  readonly width: number;
+  readonly height: number;
+  readonly scale: number;
+}
+
+/** How far the visual viewport's scale may be from 1 and the page still count as unzoomed. */
+const PAGE_ZOOM_EPSILON = 0.01;
+
+/**
+ * What the visual viewport hides of a surface beyond what the layout viewport
+ * (`layout`, the root element's client size) already hides: a software
+ * keyboard covering the bottom of the page without resizing it, for one. A
+ * surface the page has scrolled partly away has always drawn there, so that
+ * part is not taken off. Nothing while the page is pinch-zoomed (a `scale`
+ * 0.01 or more from 1), so magnifying the page does not shrink the frame.
+ */
+export function visualViewportInset(surface: ScreenRect, layout: Size, visual: VisualViewportBox): FrameInset {
+  if (!(Math.abs(visual.scale - 1) < PAGE_ZOOM_EPSILON)) return {};
+  const page = clipInset(surface, { left: 0, top: 0, right: layout.width, bottom: layout.height });
+  const seen = clipInset(surface, {
+    left: visual.offsetLeft,
+    top: visual.offsetTop,
+    right: visual.offsetLeft + visual.width,
+    bottom: visual.offsetTop + visual.height,
+  });
+  const beyond = (side: keyof FrameInset): number => Math.max((seen[side] ?? 0) - (page[side] ?? 0), 0);
+  return { top: beyond('top'), right: beyond('right'), bottom: beyond('bottom'), left: beyond('left') };
+}

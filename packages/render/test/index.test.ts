@@ -116,6 +116,7 @@ describe('@prnt/dagr-render', () => {
       'stepSpring',
       'stepSpring2D',
       'visibleFrame',
+      'visualViewportInset',
       'wheelZoomFactor',
     ]);
   });

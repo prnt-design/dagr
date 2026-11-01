@@ -5,7 +5,8 @@
 - The camera frames what the visual viewport leaves, observing its resize
   and scroll. Fit, focus and reveal avoid an area the visual viewport no
   longer shows, such as one a software keyboard covers without resizing the
-  page. A shrinking visual viewport keeps the camera's scale and reveals the
+  page. A shrinking visual viewport keeps the camera's scale (unless the
+  smaller frame lowers the most it may zoom) and reveals the
   selected node if it covered it; a camera fitted while it was short fills
   the frame again when it grows back. Page pinch-zoom does not shrink the
   graph. Tested in jsdom only, not yet on an iOS or Android device.
