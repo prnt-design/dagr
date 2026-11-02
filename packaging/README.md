@@ -85,9 +85,9 @@ to pack at all; and a `dist` that does exist may be stale, which would pass this
 gate on a tarball that is not the one the next publish would produce. It costs
 about fifteen seconds.
 
-## The three checks that need the network
+## The checks that need the network
 
-`pnpm test` runs no registry and no download, so three things live outside it:
+`pnpm test` runs no registry and no download, so these live outside it:
 
 ```sh
 pnpm --filter @dagr/packaging verify:tools
@@ -97,9 +97,11 @@ That runs `publint` over every tarball, `arethetypeswrong` over every tarball,
 and a scratch project **outside the workspace** that installs all seven tarballs
 with `npm`, typechecks their public graph, layout, VDSL, renderer, explorer and
 React surfaces, including scoped and umbrella subpaths, and runs a headless
-runtime smoke. Run it whenever the packaging changes and before a publish.
+runtime smoke. It then runs the
+[external Explorer lifecycle fixture](#external-explorer-lifecycle-fixture).
+Run it whenever the packaging changes and before a publish.
 
-The scratch project is the strongest of the three and it is worth knowing what
+The scratch project is the strongest of these and it is worth knowing what
 it proves. It compiles `layout({ graph })` with the `graph` built from the
 installed `@prnt/dagr-graph` and `@prnt/dagr`, checks JSX props for `<DagrCanvas>` and `<Html>`, and
 checks renderer types without creating a GPU device. `Graph` carries `#private`
@@ -116,6 +118,32 @@ their scoped package counterparts.
 `strict` reports `CJSResolvesToESM` on every one of them, which is an accurate
 description of an ESM-only package rather than a defect. If a CommonJS build is
 ever added, that profile is the line that has to change.
+
+## External Explorer lifecycle fixture
+
+`verify:tools` also copies `fixtures/explorer/*` (server, client,
+`consumer.tsx`, `tsconfig.json`) into two temporary consumers outside this
+workspace. Each installs only the graph, layout, render and Explorer tarballs
+with matching React/React DOM 18.3.1 or 19.2.8, plus jsdom 30.0.1. npm validates their peer constraints; optional peers
+are omitted and the fixture requires `three` to be unresolvable. The umbrella
+and `@prnt/dagr-react` require React 19, so neither belongs in the React 18
+consumer.
+
+The server runs in a separate DOM-free process. The client hydrates its HTML,
+checks that React preserves the viewport element without warnings, measures a
+synthetic 390 by 480 CSS-pixel viewport, changes search through the public API,
+unmounts and mounts again. Both unmounts must clear the API ref, observers and
+pending animation frames. `consumer.tsx` compiles under NodeNext with
+`skipLibCheck` off, matching React types and no three types installed.
+It resolves and reads the public CSS subpath and exercises the public core
+pinch/reset and visible-frame APIs. No source import or workspace alias is
+available. Temporary installs are removed in the verifier's `finally` block.
+
+This closes an installed-artifact gap: the normal packaging suite already
+checked React 19 server HTML, CSS presence and three-free core imports, while
+the Explorer source tests checked hydration under aliases. jsdom supplies DOM
+lifecycle evidence, not browser layout, touch scrolling or device conformance.
+See [consumer onboarding and release handoff](./consumer-readiness.md).
 
 ## The publish itself
 

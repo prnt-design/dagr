@@ -29,7 +29,7 @@ not a second implementation queue.
 | P1 | M5.8b viewport/occlusion, `tsk_e55c78e6012c`; M5.8c mobile conformance, `tsk_7656d37da9de` | Follow the shared input foundation with usable visible-area handling and cross-surface evidence, including explicitly unverified real-device cases. |
 | P1 | M5.7c shared-state outline, `tsk_17e1212b51f0` | Follow M5.7b with a readable alternative using the same selection, query, details and content. |
 | P1 | M5.7d-1 portable skill installation, `tsk_a05bb1f08658` | Verified and merged in PR #192: local and pinned-Git installation plus first use outside this workspace. Preserve the documented recipe and evidence. |
-| P2 | M5.9 consumer readiness, `tsk_0d0a71099683` | Exercise packed mobile APIs in external consumers, document support evidence and prepare a release handoff. Publication remains human-gated. |
+| P2 | M5.9 consumer readiness, `tsk_0d0a71099683` | Exercise packed mobile APIs in external consumers, document support evidence and prepare a release handoff. Publication remains human-gated. PR #197 adds packed React 18/19 Explorer consumers (SSR, hydration, cleanup, core pinch and visible frame) to `verify:tools` and the [release handoff](packaging/consumer-readiness.md). Real-device rows stay unverified with M5.8b/c. |
 | P2 | M5.7d-2 authoring evaluation, `tsk_1b6fb4253f02` | Evaluate three authoring briefs after the install path is verified; this broader study does not block skill distribution. |
 
 M5.8 keeps pure geometry/input in the three-free core, browser adapters at the
