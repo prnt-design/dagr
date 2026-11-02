@@ -41,9 +41,9 @@ landscape. A swipe holds still before lifting, so a page scroll ends without a
 fling that would still be moving the page in the next scenario. The check
 writes screenshots and `report.json`, with the backend each canvas drew on and
 the page's WebGPU adapter per size, and closes or detaches from its browser on
-success or failure. The page is served through Playwright routes on a loopback
-origin, since WebGPU needs a secure context, so an attached Chrome on another
-host loads it too.
+success or failure. The page is served through Playwright routes, so an
+attached Chrome on another host loads it too, on a loopback origin, since
+WebGPU needs a secure context.
 
 ```bash
 pnpm build
@@ -62,14 +62,14 @@ tap) on Linux WSL2 in Chromium 148.0.7778.96 headless touch emulation, with
 DagrCanvas on WebGL2 software rendering. Each of five mutations to the built
 packages failed the run: drag mode given `touch-action: pan-x pan-y`,
 two-finger mode ignored, Explorer's first-tap gate removed, and Explorer's
-`touch-action: none` set always or never. This is a shared input/camera
-correctness check, not real-device, WebGPU hardware, visual parity
+`touch-action: none` set always or never. The launched run is a shared
+input/camera correctness check, not real-device, WebGPU hardware, visual parity
 or performance evidence. The fixture deliberately uses the public package
 entries and one dependency graph; build current source first.
 
 `DAGR_CDP` attaches to a running Chrome instead of launching one, and the run
-then fails unless both canvases drew on `webgpu` on an adapter that reports
-`isFallbackAdapter: false`. On WSL2, start the Windows side's Chrome with
+then fails unless both canvases drew on `webgpu` and the page's default WebGPU
+adapter reports `isFallbackAdapter: false`. On WSL2, start the Windows side's Chrome with
 `windows-chrome.mjs` (see [From WSL2, through the Windows side's
 Chrome](#from-wsl2-through-the-windows-sides-chrome)):
 
@@ -84,8 +84,8 @@ headless on the Windows side of the WSL2 machine, both DagrCanvas instances on
 `webgpu` at every size, adapter `nvidia` `lovelace` (the GeForce RTX 4090), not
 a fallback. Drag mode given `touch-action: pan-x pan-y` failed it, and a first
 attempt from a non-loopback origin, where `navigator.gpu` is absent and the
-canvases fell back to WebGL2, was refused. Explorer draws SVG, so its rows
-there are the launched run's checks in a second Chrome. This is touch emulation on a
+canvases fell back to WebGL2, was refused. Explorer draws SVG whatever the
+backend, so its rows in both runs are SVG rows. This is touch emulation on a
 desktop GPU: it shows the input and camera contract holds on the WebGPU
 backend, not that a phone's GPU or browser behaves the same.
 

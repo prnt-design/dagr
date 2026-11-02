@@ -7,7 +7,8 @@
  * Launched, it is headless correctness only; software rendering is allowed, not
  * a performance or real-device/backend-parity claim. DAGR_CDP attaches to a
  * running Chrome instead (see windows-chrome.mjs), and then the run fails
- * unless both canvases drew on WebGPU on an adapter that is not a fallback.
+ * unless both canvases drew on WebGPU and the page's default adapter is not a
+ * fallback.
  * Writes screenshots and report.json.
  */
 import assert from 'node:assert/strict';
@@ -219,4 +220,4 @@ try {
   if (browser) await browser.close();
   await writeFile(join(OUT, 'report.json'), JSON.stringify(report, null, 2));
 }
-console.log(JSON.stringify({ out: OUT, scenarios: report.scenarios.length, browser: report.browser, backends: report.backends[0] }));
+console.log(JSON.stringify({ out: OUT, scenarios: report.scenarios.length, browser: report.browser, backends: [...new Set(report.backends.flatMap((one) => [one.canvas, one.canvasTwoFinger]))] }));
