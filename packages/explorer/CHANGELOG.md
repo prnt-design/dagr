@@ -9,7 +9,9 @@
   smaller frame lowers the most it may zoom) and reveals the
   selected node if it covered it; a camera fitted while it was short fills
   the frame again when it grows back. Page pinch-zoom does not shrink the
-  graph. Tested in jsdom only, not yet on an iOS or Android device.
+  graph. Tested in jsdom and headless Chromium emulation
+  (`bench/browser/visible-frame-check.mjs`), not yet on an iOS or Android
+  device or with a software keyboard.
 - Keep a touch pan or pinch active when a node hands implicit pointer capture to the viewport. This also fixes the unfiltered capture-loss handling shipped in 0.1.3 and 0.1.4.
 - Use the shared renderer-core touch gesture for pinch geometry/contact lifecycle, retaining Explorer focus-gated scrolling, camera constraints and click suppression.
 - Details dock below the map in containers narrower than 720 CSS pixels,
