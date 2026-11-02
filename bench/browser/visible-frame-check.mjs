@@ -73,14 +73,20 @@ const unmoved = (stem, before, ...states) => {
 
 const scenarios = {
   'page-scroll': {
-    async run({ page }) {
+    // A page scroll fires no visualViewport event, so a zoom out and back
+    // makes both observers measure while the page is scrolled.
+    async run({ page, cdp }) {
       await page.evaluate(() => {
         const top = document.querySelector('#canvas').getBoundingClientRect().top + window.scrollY;
         window.scrollTo(0, top + 100);
       });
+      await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1.5 });
+      await cdp.send('Emulation.setPageScaleFactor', { pageScaleFactor: 1 });
     },
     check(stem, before, steps, after) {
       assert.ok(after.visual.canvasBox.top < 0, `${stem}: canvas partly above the layout viewport`);
+      assert.equal(after.visual.scale, 1, `${stem}: zoom reset`);
+      assert.ok(after.events.includes('resize'), `${stem}: visualViewport resize observed while scrolled`);
       unmoved(stem, before, after);
     },
   },
@@ -136,7 +142,7 @@ const scenarios = {
   },
   // A software keyboard that overlays the page shrinks the visual viewport at
   // scale 1. Chromium's DevTools protocol has no direct way to do that, so this
-  // records whether `setVisibleSize` reproduced it and checks only if it did.
+  // records whether `setVisibleSize` reproduced it; if not, nothing may move.
   'visual-shrink-attempt': {
     async run({ cdp, viewport }) {
       await cdp.send('Emulation.setVisibleSize', { width: viewport.width, height: Math.round(viewport.height * 0.6) });
@@ -145,7 +151,8 @@ const scenarios = {
       const { scale, height, layout } = after.visual;
       const reproduced = scale === 1 && height < layout.height;
       if (!reproduced) { unmoved(stem, before, after); return { reproduced }; }
-      assert.ok(after.canvas.frame.height < after.canvas.viewport.height || after.visual.canvasBox.bottom <= height, `${stem}: hidden part leaves the frame`);
+      assert.ok(after.visual.canvasBox.bottom > after.visual.offsetTop + height, `${stem}: visual viewport hides part of the canvas`);
+      assert.ok(after.canvas.frame.height < after.canvas.viewport.height, `${stem}: hidden part leaves the frame`);
       return { reproduced };
     },
   },

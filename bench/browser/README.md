@@ -52,17 +52,18 @@ Explorer node, and checks M5.8b's visible-frame contract (see
 
 | Scenario | How it is produced | Checked |
 | --- | --- | --- |
-| `page-scroll` | `scrollTo` past the canvas top | both cameras, the selection and DagrCanvas's frame unchanged |
+| `page-scroll` | `scrollTo` past the canvas top, then page scale 1.5 and back so the observers run | a `visualViewport` resize observed while scrolled; both cameras, the selection and DagrCanvas's frame unchanged |
 | `pinch-zoom` | `Emulation.setPageScaleFactor` 2, a protocol touch drag on the page, then scale 1 | a `visualViewport` resize and scrolls observed, part of the canvas hidden, everything unchanged |
 | `layout-shrink` | `Emulation.setDeviceMetricsOverride` at 60% height | the canvas partly below the layout viewport, everything unchanged |
-| `zoom-200-emulated` | metrics override at half the CSS size and twice the DPR | DagrCanvas takes the new ratio, resizes its buffer, keeps its camera; Explorer keeps the selection (it refits, by its policy) |
-| `visual-shrink-attempt` | `Emulation.setVisibleSize` at 60% height | recorded as reproduced or not; checked only if it was |
+| `zoom-200-emulated` | metrics override at half the CSS size and twice the DPR | DagrCanvas takes the new ratio, resizes its buffer, keeps its camera; Explorer keeps the selection |
+| `visual-shrink-attempt` | `Emulation.setVisibleSize` at 60% height | recorded as reproduced or not; if it was, part of the canvas hidden and DagrCanvas's frame shorter, otherwise everything unchanged |
 
 Run it with the same dependencies as the input check:
 `DAGR_BROWSER_DEPS=/tmp/dagr-browser node bench/browser/visible-frame-check.mjs`.
 
 The 2026-11-01 run on Linux (WSL2), Chromium 148.0.7778.96 headless with
-SwiftShader, DagrCanvas on WebGL2, passed all eight checked scenarios.
+SwiftShader, DagrCanvas on WebGL2, passed all ten runs (five scenarios at
+two sizes).
 `setVisibleSize` did not change `visualViewport` at either size, so a visual
 viewport smaller than the layout viewport at scale 1, the shape of an
 overlaying software keyboard, was not reproduced. Neither was real browser
