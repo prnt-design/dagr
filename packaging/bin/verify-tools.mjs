@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 /**
- * The three checks `pnpm test` deliberately cannot run, because each of them
- * needs the network.
+ * The checks `pnpm test` deliberately cannot run, because each of them needs
+ * the network.
  *
  * 1. `publint` over every tarball.
  * 2. `arethetypeswrong` over every tarball, under the `esm-only` profile.
  * 3. A scratch project OUTSIDE the workspace that installs all seven tarballs,
  *    typechecks their public surfaces, and runs a headless runtime smoke.
+ * 4. Two Explorer consumers from `fixtures/explorer`, on React 18 and 19 and
+ *    without three: SSR, hydration, cleanup and the core pinch and
+ *    visible-frame APIs.
  *
  * The vitest suite beside this is the gate: it runs on every `pnpm test`, needs
  * no registry, and checks the things that go wrong silently. This script is the
@@ -306,7 +309,7 @@ try {
       `@types/react@${major}`, `@types/react-dom@${major}`, 'typescript@5.9.3',
     ], consumer, `Explorer React ${major} public peers install`)) {
       run('npx', ['tsc', '--noEmit'], consumer, `Explorer React ${major} NodeNext types without three or skipLibCheck`);
-      run('node', ['client.mjs', String(major)], consumer, `Explorer React ${major} SSR, hydration, CSS, pinch and cleanup`);
+      run('node', ['client.mjs', major], consumer, `Explorer React ${major} SSR, hydration, CSS, pinch, visible frame and cleanup`);
     }
   }
   run(

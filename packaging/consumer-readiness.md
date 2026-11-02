@@ -62,9 +62,9 @@ This builds and packs all seven packages, runs publint and arethetypeswrong,
 installs tarballs with npm outside the workspace, and compiles/runs the public
 surfaces. It also runs the minimal `fixtures/explorer` server/client pair under
 React 18.3.1 and 19.2.8 without three. Each also compiles `consumer.tsx` with
-matching React types, NodeNext resolution and `skipLibCheck: false`.
-The verifier supplies the temporary
-package manifest and installed peers; the fixture needs no source aliases.
+matching React types, NodeNext resolution and `skipLibCheck: false`. The
+verifier supplies the temporary package manifest and installed peers; the
+fixture needs no source aliases.
 All scratch directories are removed even when a check fails.
 
 For an application evaluating unreleased APIs, use these locally packed
@@ -87,7 +87,7 @@ checks below. Publication remains a maintainer action.
 | Umbrella and React binding peers | React 19 | Retained |
 | Renderer core | Three-free camera/path entry | Adds `createPinchGesture`, `PinchGesture`, `PinchDelta`; published core.js has no pinch export |
 | Visible frame (core) | Not published | Adds `visibleFrame`, `coverInset`, `clipInset`, `visualViewportInset` and `Camera2D.setInset`/`frame`/`centerFor` to the three-free core |
-| Visible frame (adapters) | Explorer frames around its own overlays only | Explorer and `DagrCanvas` frame in what the visual viewport leaves; `DagrCanvas` adds an `inset` prop; a `fit()`/`focusNode` flight retargets on a frame change |
+| Visible frame (adapters) | Explorer frames around its drawer and a host `inset`; no visual-viewport framing | Explorer and `DagrCanvas` frame in what the visual viewport leaves; `DagrCanvas` adds an `inset` prop; a `fit()`/`focusNode` flight retargets on a frame change |
 | Compact Explorer details | Published details implementation has no compact docking | Bottom docking below 720 CSS pixels, 44px primary controls, 16px search input |
 | Touch adapters | Earlier independent input handling; capture-transfer bug reproduced in Chromium | Shared pinch/contact lifecycle; capture-transfer fix merged in #196 |
 | Renderer and React fixes | See released changelogs | GPU node picking, edge retarget/empty-edge fixes, edge interaction and GPU hit-testing bindings in package Unreleased sections |

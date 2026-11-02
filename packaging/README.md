@@ -119,8 +119,8 @@ ever added, that profile is the line that has to change.
 
 ## External Explorer lifecycle fixture
 
-`verify:tools` also copies `fixtures/explorer/{server,client}.mjs` into two
-temporary consumers outside this workspace. Each installs only the graph,
+`verify:tools` also copies `fixtures/explorer/*` (server, client,
+`consumer.tsx`, `tsconfig.json`) into two temporary consumers outside this workspace. Each installs only the graph,
 layout, render and Explorer tarballs with matching React/React DOM 18.3.1 or
 19.2.8, plus jsdom 30.0.1. npm validates their peer constraints; optional peers
 are omitted and the fixture requires `three` to be unresolvable. The umbrella
@@ -133,9 +133,9 @@ synthetic 390 by 480 CSS-pixel viewport, changes search through the public API,
 unmounts and mounts again. Both unmounts must clear the API ref, observers and
 pending animation frames. `consumer.tsx` compiles under NodeNext with
 `skipLibCheck` off, matching React types and no three types installed.
-It resolves and reads the public CSS subpath and
-exercises the public core pinch/reset and visible-frame APIs. No source import or workspace alias
-is available. Temporary installs are removed in the verifier's `finally` block.
+It resolves and reads the public CSS subpath and exercises the public core
+pinch/reset and visible-frame APIs. No source import or workspace alias is
+available. Temporary installs are removed in the verifier's `finally` block.
 
 This closes an installed-artifact gap: the normal packaging suite already
 checked React 19 server HTML, CSS presence and three-free core imports, while
