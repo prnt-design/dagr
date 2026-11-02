@@ -293,25 +293,6 @@ try {
   const vdslTarball = pick('vdsl');
   const umbrellaTarball = tarballs.find((t) => /^prnt-dagr-\d.*\.tgz$/.test(basename(t)));
   if (umbrellaTarball === undefined) throw new Error('no tarball was packed for @prnt/dagr');
-  console.log('\nInstalled Explorer SSR/hydration and teardown, without three:');
-  for (const version of ['18.3.1', '19.2.8']) {
-    const major = version.split('.')[0];
-    const consumer = join(workDir, `explorer-react-${major}`);
-    mkdirSync(consumer);
-    writeFileSync(join(consumer, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
-    for (const file of ['server.mjs', 'client.mjs', 'consumer.tsx', 'tsconfig.json']) {
-      copyFileSync(join(REPO_ROOT, 'packaging/fixtures/explorer', file), join(consumer, file));
-    }
-    if (run('npm', [
-      'install', '--no-audit', '--no-fund', '--ignore-scripts', '--omit=optional',
-      graphTarball, layoutTarball, renderTarball, explorerTarball,
-      `react@${version}`, `react-dom@${version}`, 'jsdom@30.0.1',
-      `@types/react@${major}`, `@types/react-dom@${major}`, 'typescript@5.9.3',
-    ], consumer, `Explorer React ${major} public peers install`)) {
-      run('npx', ['tsc', '--noEmit'], consumer, `Explorer React ${major} NodeNext types without three or skipLibCheck`);
-      run('node', ['client.mjs', major], consumer, `Explorer React ${major} SSR, hydration, CSS, pinch, visible frame and cleanup`);
-    }
-  }
   run(
     'npm',
     [
@@ -338,6 +319,25 @@ try {
   );
   run('npx', ['tsc', '--noEmit'], scratch, 'tsc over scoped and umbrella public package surfaces');
   run('node', ['smoke.mjs'], scratch, 'headless scoped and umbrella graph, layout, VDSL, render, explorer, and React smoke');
+  console.log('\nInstalled Explorer SSR/hydration and teardown, without three:');
+  for (const version of ['18.3.1', '19.2.8']) {
+    const major = version.split('.')[0];
+    const consumer = join(workDir, `explorer-react-${major}`);
+    mkdirSync(consumer);
+    writeFileSync(join(consumer, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
+    for (const file of ['server.mjs', 'client.mjs', 'consumer.tsx', 'tsconfig.json']) {
+      copyFileSync(join(REPO_ROOT, 'packaging/fixtures/explorer', file), join(consumer, file));
+    }
+    if (run('npm', [
+      'install', '--no-audit', '--no-fund', '--ignore-scripts', '--omit=optional',
+      graphTarball, layoutTarball, renderTarball, explorerTarball,
+      `react@${version}`, `react-dom@${version}`, 'jsdom@30.0.1',
+      `@types/react@${major}`, `@types/react-dom@${major}`, 'typescript@5.9.3',
+    ], consumer, `Explorer React ${major} public peers install`)) {
+      run('npx', ['tsc', '--noEmit'], consumer, `Explorer React ${major} NodeNext types without three or skipLibCheck`);
+      run('node', ['client.mjs', major], consumer, `Explorer React ${major} SSR, hydration, CSS, pinch, visible frame and cleanup`);
+    }
+  }
 } finally {
   rmSync(workDir, { recursive: true, force: true });
 }

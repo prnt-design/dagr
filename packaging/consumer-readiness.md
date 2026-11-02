@@ -35,7 +35,7 @@ const views = [{
   nodes: [{ id: 'start', label: 'Start' }], edges: [],
 }];
 
-export function Map() {
+export function ProjectMap() {
   return <DagrExplorer label="Project map" views={views}
     style={{ '--dagr-explorer-height': '480px' } as CSSProperties} />;
 }
@@ -61,11 +61,11 @@ pnpm --filter @dagr/packaging verify:tools
 This builds and packs all seven packages, runs publint and arethetypeswrong,
 installs tarballs with npm outside the workspace, and compiles/runs the public
 surfaces. It also runs the minimal `fixtures/explorer` server/client pair under
-React 18.3.1 and 19.2.8 without three. Each also compiles `consumer.tsx` with
-matching React types, NodeNext resolution and `skipLibCheck: false`. The
-verifier supplies the temporary package manifest and installed peers; the
-fixture needs no source aliases.
-All scratch directories are removed even when a check fails.
+React 18.3.1 and 19.2.8 without three. Each consumer also compiles
+`consumer.tsx` with matching React types, NodeNext resolution and
+`skipLibCheck: false`. The verifier supplies the temporary package manifest and
+installed peers; the fixture needs no source aliases. All scratch directories
+are removed even when a check fails.
 
 For an application evaluating unreleased APIs, use these locally packed
 artifacts and install the matching graph/layout/render/Explorer tarballs
