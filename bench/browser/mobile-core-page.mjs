@@ -17,18 +17,19 @@ const edges = [
 ];
 
 window.__dagrMobile = {};
-function CanvasProbe() {
+function CanvasProbe({ name }) {
   const handle = useDagrCanvas();
   useEffect(() => {
-    window.__dagrMobile.canvas = () => ({
+    window.__dagrMobile[name] = () => ({
       scale: handle.renderer.camera.zoom,
       center: { ...handle.renderer.camera.center },
       backend: handle.renderer.backend,
     });
-    return () => { delete window.__dagrMobile.canvas; };
-  }, [handle]);
+    return () => { delete window.__dagrMobile[name]; };
+  }, [handle, name]);
   return null;
 }
+const onError = (error) => { window.__dagrMobile.error = error.message; };
 function ExplorerProbe() {
   const state = useExplorer();
   useEffect(() => {
@@ -48,10 +49,15 @@ createRoot(document.getElementById('root')).render(h(React.Fragment, null,
   h('h2', null, 'DagrCanvas'),
   h('section', { id: 'canvas' }, h(DagrCanvas, {
     graph, navigation: true, label: 'Core canvas', cameraLimits: false,
-    clearColor: 0xfafafa, style: { height: 300 },
-    onError: (error) => { window.__dagrMobile.error = error.message; },
-  }, h(CanvasProbe))),
+    clearColor: 0xfafafa, style: { height: 300 }, onError,
+  }, h(CanvasProbe, { name: 'canvas' }))),
+  h('h2', null, 'DagrCanvas, two-finger'),
+  h('section', { id: 'canvas-two-finger' }, h(DagrCanvas, {
+    graph, navigation: true, touchNavigation: 'two-finger', label: 'Two-finger canvas',
+    cameraLimits: false, clearColor: 0xfafafa, style: { height: 300 }, onError,
+  }, h(CanvasProbe, { name: 'canvasTwoFinger' }))),
   h('h2', null, 'Explorer'),
   h('section', { id: 'explorer' }, h(ExplorerRoot, { nodes, edges, label: 'Core Explorer' },
     h(ExplorerViewport, { style: { height: 300 } }), h(ExplorerProbe))),
+  h('div', { style: { height: 1500 } }),
 ));
