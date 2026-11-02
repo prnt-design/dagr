@@ -39,8 +39,11 @@ without selecting a node, and that a second tap selects the tapped node.
 Each check runs at 320x568 DPR 1, 390x844 DPR 3 and 768x1024 DPR 2, in portrait and
 landscape. A swipe holds still before lifting, so a page scroll ends without a
 fling that would still be moving the page in the next scenario. The check
-writes screenshots and `report.json`, and closes its browser/server on success
-or failure.
+writes screenshots and `report.json`, with the backend each canvas drew on and
+the page's WebGPU adapter per size, and closes or detaches from its browser on
+success or failure. The page is served through Playwright routes on a loopback
+origin, since WebGPU needs a secure context, so an attached Chrome on another
+host loads it too.
 
 ```bash
 pnpm build
@@ -63,6 +66,28 @@ two-finger mode ignored, Explorer's first-tap gate removed, and Explorer's
 correctness check, not real-device, WebGPU hardware, visual parity
 or performance evidence. The fixture deliberately uses the public package
 entries and one dependency graph; build current source first.
+
+`DAGR_CDP` attaches to a running Chrome instead of launching one, and the run
+then fails unless both canvases drew on `webgpu` on an adapter that reports
+`isFallbackAdapter: false`. On WSL2, start the Windows side's Chrome with
+`windows-chrome.mjs` (see [From WSL2, through the Windows side's
+Chrome](#from-wsl2-through-the-windows-sides-chrome)):
+
+```bash
+node bench/browser/windows-chrome.mjs --headless   # leave running
+DAGR_CDP=http://127.0.0.1:9445 DAGR_BROWSER_DEPS=/tmp/dagr-browser \
+  node bench/browser/mobile-core-check.mjs
+```
+
+On 2026-11-02 the attached run passed all 42 scenarios in Chrome 156.0.8078.74
+headless on the Windows side of the WSL2 machine, both DagrCanvas instances on
+`webgpu` at every size, adapter `nvidia` `lovelace` (the GeForce RTX 4090), not
+a fallback. Drag mode given `touch-action: pan-x pan-y` failed it, and a first
+attempt from a non-loopback origin, where `navigator.gpu` is absent and the
+canvases fell back to WebGL2, was refused. Explorer draws SVG, so its rows
+there are the launched run's checks in a second Chrome. This is touch emulation on a
+desktop GPU: it shows the input and camera contract holds on the WebGPU
+backend, not that a phone's GPU or browser behaves the same.
 
 ## Visible frame check
 

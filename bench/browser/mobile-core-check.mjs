@@ -4,11 +4,13 @@
  * moves under each surface's scroll policy.
  * Build first. DAGR_BROWSER_DEPS points to a directory with playwright-core and
  * esbuild installed in node_modules; DAGR_CHROMIUM can override the executable.
- * Headless correctness only; software rendering is allowed, not a performance
- * or real-device/backend-parity claim. Writes screenshots and report.json.
+ * Launched, it is headless correctness only; software rendering is allowed, not
+ * a performance or real-device/backend-parity claim. DAGR_CDP attaches to a
+ * running Chrome instead (see windows-chrome.mjs), and then the run fails
+ * unless both canvases drew on WebGPU on an adapter that is not a fallback.
+ * Writes screenshots and report.json.
  */
 import assert from 'node:assert/strict';
-import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -20,6 +22,11 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const deps = createRequire(join(process.env.DAGR_BROWSER_DEPS ?? join(ROOT, 'bench/browser'), 'package.json'));
 const { build } = deps('esbuild');
 const { chromium } = deps('playwright-core');
+const CDP = process.env.DAGR_CDP;
+// Requests to this origin are answered by route handlers, not a server, so a
+// Chrome on another host (Windows, from WSL2) loads the same files. Loopback,
+// because WebGPU exists only in a secure context.
+const ORIGIN = 'http://127.0.0.1:8734';
 const OUT = process.argv.find((arg) => arg.startsWith('--out='))?.slice(6)
   ?? join(tmpdir(), `dagr-mobile-core-${Date.now()}`);
 // Portrait sizes; each also runs rotated to landscape.
@@ -47,40 +54,52 @@ body{margin:0;padding:8px;font:14px system-ui}h1{font-size:18px}h2{font-size:16p
 section{border:1px solid #bbb}button{font:inherit}
 </style></head><body><div id="root"></div><script src="/app.js"></script></body></html>`);
 const files = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/app.css': ['app.css', 'text/css'] };
-const server = createServer(async (request, response) => {
-  const file = files[request.url];
-  if (!file) { response.writeHead(404).end(); return; }
-  try { response.writeHead(200, { 'content-type': file[1] }).end(await readFile(join(OUT, file[0]))); }
-  catch { response.writeHead(500).end(); }
-});
-await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 let browser;
-const report = { mode: 'headless Chromium touch emulation, correctness only', scenarios: [] };
+const report = {
+  mode: CDP ? `attached Chrome touch emulation at ${CDP}, WebGPU required` : 'headless Chromium touch emulation, correctness only',
+  backends: [],
+  scenarios: [],
+};
 try {
-  browser = await chromium.launch({
+  browser = CDP ? await chromium.connectOverCDP(CDP) : await chromium.launch({
     headless: true,
     ...(process.env.DAGR_CHROMIUM ? { executablePath: process.env.DAGR_CHROMIUM } : {}),
     args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'],
   });
   report.browser = browser.version();
-  const address = server.address();
   for (const device of DEVICES) for (const orientation of ['portrait', 'landscape']) {
     const { deviceScaleFactor } = device;
     const [width, height] = orientation === 'portrait' ? [device.width, device.height] : [device.height, device.width];
     const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor, isMobile: true, hasTouch: true });
     try {
+      await context.route(`${ORIGIN}/**`, async (route) => {
+        const file = files[new URL(route.request().url()).pathname];
+        if (!file) return route.fulfill({ status: 404 });
+        return route.fulfill({ contentType: file[1], body: await readFile(join(OUT, file[0])) });
+      });
       const page = await context.newPage();
-      await page.goto(`http://127.0.0.1:${address.port}`);
+      await page.goto(ORIGIN);
       await page.waitForFunction(() => window.__dagrMobile?.error || (window.__dagrMobile?.canvas?.().scale > 0
         && window.__dagrMobile?.canvasTwoFinger?.().scale > 0 && window.__dagrMobile?.explorer?.().scale > 0));
       const error = await page.evaluate(() => window.__dagrMobile.error);
       assert.equal(error, undefined, 'renderer initialized');
+      const size = `${width}x${height}-dpr${deviceScaleFactor}`;
+      const drawn = await page.evaluate(async () => {
+        const found = await window.navigator.gpu?.requestAdapter();
+        const { vendor, architecture, device, description, isFallbackAdapter } = found?.info ?? {};
+        const adapter = found ? { vendor, architecture, device, description, isFallbackAdapter: isFallbackAdapter ?? found.isFallbackAdapter } : null;
+        return { canvas: window.__dagrMobile.canvas().backend, canvasTwoFinger: window.__dagrMobile.canvasTwoFinger().backend, adapter };
+      });
+      report.backends.push({ width, height, orientation, deviceScaleFactor, ...drawn });
+      if (CDP) {
+        assert.ok(drawn.canvas === 'webgpu' && drawn.canvasTwoFinger === 'webgpu', `${size}: both canvases drew on webgpu`);
+        assert.equal(drawn.adapter?.isFallbackAdapter, false, `${size}: the adapter is not a fallback`);
+      }
       const session = await context.newCDPSession(page);
       const send = (type, points) => session.send('Input.dispatchTouchEvent', { type, touchPoints: points });
       const settle = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const read = (surface) => page.evaluate((name) => window.__dagrMobile[name](), SURFACES[surface].probe);
       const scrollY = () => page.evaluate(() => window.scrollY);
-      const size = `${width}x${height}-dpr${deviceScaleFactor}`;
       // Puts the surface's centre mid-viewport, with the page and the camera at rest.
       const centre = async (surface) => {
         const host = page.locator(SURFACES[surface].selector);
@@ -198,7 +217,6 @@ try {
   throw error;
 } finally {
   if (browser) await browser.close();
-  await new Promise((resolve) => server.close(resolve));
   await writeFile(join(OUT, 'report.json'), JSON.stringify(report, null, 2));
 }
-console.log(JSON.stringify({ out: OUT, scenarios: report.scenarios.length, browser: report.browser }));
+console.log(JSON.stringify({ out: OUT, scenarios: report.scenarios.length, browser: report.browser, backends: report.backends[0] }));
