@@ -33,10 +33,10 @@ scroll policy in [mobile.md](../../docs/docs/mobile.md):
 - Explorer, unfocused: the page scrolls and the graph does not drag.
 - Explorer, focused: the graph takes the drag and the page stays. Its camera
   may not move, because Explorer clamps a pan away from a graph that fits.
-- Explorer's first tap on an unfocused graph focuses it without selecting a
-  node, and a second tap selects one.
 
-Each runs at 320x568 DPR 1, 390x844 DPR 3 and 768x1024 DPR 2, in portrait and
+It also checks that Explorer's first tap on an unfocused graph focuses it
+without selecting a node, and that a second tap selects the tapped node.
+Each check runs at 320x568 DPR 1, 390x844 DPR 3 and 768x1024 DPR 2, in portrait and
 landscape. A swipe holds still before lifting, so a page scroll ends without a
 fling that would still be moving the page in the next scenario. The check
 writes screenshots and `report.json`, and closes its browser/server on success
@@ -52,14 +52,15 @@ DAGR_BROWSER_DEPS=/tmp/dagr-browser node bench/browser/mobile-core-check.mjs
 ```
 
 `--out=DIR` selects an output folder; `DAGR_CHROMIUM` selects a Chromium binary.
-The 2026-10-28 run passed all four pinch scenarios in Chromium 145.0.7632.6
-headless touch emulation. On 2026-11-02 the matrix passed all 42 scenarios
-(12 pinch, 24 swipe, 6 first tap) on Linux WSL2 in Chromium 148.0.7778.96
-headless with SwiftShader. Breaking each scroll policy in the built packages
-failed the run: two-finger mode ignored, Explorer's first-tap gate removed,
-Explorer's `touch-action: none` set always, and never set. Canvas reported
-WebGL2 software rendering. This is a shared
-input/camera correctness check, not real-device, WebGPU hardware, visual parity
+The 2026-10-28 run passed all four pinch scenarios (both surfaces at 320 CSS
+pixels DPR 1 and 768 DPR 3) in Chromium 145.0.7632.6 headless touch emulation.
+On 2026-11-02 the matrix passed all 42 scenarios (12 pinch, 24 swipe, 6 first
+tap) on Linux WSL2 in Chromium 148.0.7778.96 headless touch emulation, with
+DagrCanvas on WebGL2 software rendering. Each of five mutations to the built
+packages failed the run: drag mode given `touch-action: pan-x pan-y`,
+two-finger mode ignored, Explorer's first-tap gate removed, and Explorer's
+`touch-action: none` set always or never. This is a shared input/camera
+correctness check, not real-device, WebGPU hardware, visual parity
 or performance evidence. The fixture deliberately uses the public package
 entries and one dependency graph; build current source first.
 

@@ -81,28 +81,30 @@ try {
       const read = (surface) => page.evaluate((name) => window.__dagrMobile[name](), SURFACES[surface].probe);
       const scrollY = () => page.evaluate(() => window.scrollY);
       const size = `${width}x${height}-dpr${deviceScaleFactor}`;
-      // Puts the surface's centre mid-viewport, so the page can scroll both ways around it.
+      // Puts the surface's centre mid-viewport, with the page and the camera at rest.
       const centre = async (surface) => {
         const host = page.locator(SURFACES[surface].selector);
         await host.evaluate((element) => element.scrollIntoView({ block: 'center' }));
         await settle();
-        await page.waitForFunction(() => new Promise((resolve) => {
-          const before = window.scrollY;
-          window.setTimeout(() => resolve(window.scrollY === before), 100);
-        }));
+        await page.waitForFunction((probe) => new Promise((resolve) => {
+          const before = JSON.stringify([window.scrollY, window.__dagrMobile[probe]().center]);
+          window.setTimeout(() => resolve(JSON.stringify([window.scrollY, window.__dagrMobile[probe]().center]) === before), 100);
+        }), SURFACES[surface].probe);
         const box = await host.boundingBox();
         assert.ok(box);
         return { host, x: box.x + box.width / 2, y: box.y + box.height / 2 };
       };
       // Returns whether the Explorer viewport marked itself as dragging mid-swipe.
-      const swipe = async (x, y, dy) => {
+      const swipe = async (x, y, dy, surface) => {
         await send('touchStart', [{ id: 1, x, y }]);
         for (let step = 1; step <= 6; step += 1) await send('touchMove', [{ id: 1, x, y: y - (dy * step) / 6 }]);
         // Held still before lifting, so a page scroll ends without a fling
         // that would still be moving the page during the next scenario.
         await sleep(150);
         await send('touchMove', [{ id: 1, x, y: y - dy }]);
-        const dragging = await page.evaluate((selector) => document.querySelector(selector).hasAttribute('data-dragging'), SURFACES.explorer.selector);
+        const dragging = surface === 'explorer'
+          ? await page.evaluate((selector) => document.querySelector(selector).hasAttribute('data-dragging'), SURFACES.explorer.selector)
+          : undefined;
         await send('touchEnd', []);
         await settle();
         return dragging;
@@ -113,16 +115,16 @@ try {
         await settle();
       };
 
-      // A one-finger swipe moves exactly one of page and camera, by policy.
       const scroll = async (surface, policy, owner) => {
         const { x, y } = await centre(surface);
         const stem = `${surface}-scroll-${policy}-${size}`;
         const page0 = await scrollY();
         const camera0 = await read(surface);
-        const dragging = await swipe(x, y, 80);
+        const dragging = await swipe(x, y, 80, surface);
         const page1 = await scrollY();
         const camera1 = await read(surface);
         const cameraMoved = camera1.center.x !== camera0.center.x || camera1.center.y !== camera0.center.y;
+        await page.screenshot({ path: join(OUT, `${stem}.png`) });
         if (owner === 'camera') {
           // Explorer clamps a pan that would push a graph which fits away from
           // the middle, so its own drag state is the evidence there.
@@ -133,25 +135,26 @@ try {
           assert.ok(page1 > page0, `${stem}: page scrolls`);
           assert.ok(!cameraMoved && !dragging, `${stem}: camera stays`);
         }
-        await page.screenshot({ path: join(OUT, `${stem}.png`) });
         report.scenarios.push({ kind: 'scroll', surface, policy, owner, width, height, orientation, deviceScaleFactor,
           scrollY: [page0, page1], center: [camera0.center, camera1.center], dragging, result: 'pass' });
       };
 
-      // The first tap on an unfocused graph focuses it without activating a node.
       const node = page.locator('#explorer [data-dagr-explorer="node"]').first();
-      await node.evaluate((element) => element.scrollIntoView({ block: 'center' }));
-      await settle();
-      const nodeBox = await node.boundingBox();
-      assert.ok(nodeBox);
+      const nodeId = await node.getAttribute('data-node-id');
+      const tapNode = async () => {
+        await centre('explorer');
+        const box = await node.boundingBox();
+        assert.ok(box);
+        await tap(box.x + box.width / 2, box.y + box.height / 2);
+      };
       const focused = () => page.evaluate((selector) => document.querySelector(selector).contains(document.activeElement), SURFACES.explorer.selector);
       assert.equal(await focused(), false, `explorer-focus-${size}: starts unfocused`);
-      await tap(nodeBox.x + nodeBox.width / 2, nodeBox.y + nodeBox.height / 2);
+      await tapNode();
       assert.equal(await focused(), true, `explorer-focus-${size}: first tap focuses`);
       assert.equal((await read('explorer')).selectedId, null, `explorer-focus-${size}: first tap selects nothing`);
-      await tap(nodeBox.x + nodeBox.width / 2, nodeBox.y + nodeBox.height / 2);
+      await tapNode();
       const selectedId = (await read('explorer')).selectedId;
-      assert.notEqual(selectedId, null, `explorer-focus-${size}: second tap selects`);
+      assert.equal(selectedId, nodeId, `explorer-focus-${size}: second tap selects the tapped node`);
       report.scenarios.push({ kind: 'focus-gate', surface: 'explorer', width, height, orientation, deviceScaleFactor, selectedId, result: 'pass' });
       // The tap selected a node and may have opened details; close them before the swipes.
       await page.keyboard.press('Escape');
