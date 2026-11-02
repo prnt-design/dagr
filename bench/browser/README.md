@@ -44,6 +44,33 @@ input/camera correctness check, not real-device, WebGPU hardware, visual parity
 or performance evidence. The fixture deliberately uses the public package
 entries and one dependency graph; build current source first.
 
+## Visible frame check
+
+`visible-frame-check.mjs` embeds DagrCanvas and Explorer mid-page, selects an
+Explorer node, and checks M5.8b's visible-frame contract (see
+`docs/docs/mobile.md`) at 390 by 844 / DPR 3 and 320 by 568 / DPR 1:
+
+| Scenario | How it is produced | Checked |
+| --- | --- | --- |
+| `page-scroll` | `scrollTo` past the canvas top | both cameras, the selection and DagrCanvas's frame unchanged |
+| `pinch-zoom` | `Emulation.setPageScaleFactor` 2, a protocol touch drag on the page, then scale 1 | a `visualViewport` resize and scrolls observed, part of the canvas hidden, everything unchanged |
+| `layout-shrink` | `Emulation.setDeviceMetricsOverride` at 60% height | the canvas partly below the layout viewport, everything unchanged |
+| `zoom-200-emulated` | metrics override at half the CSS size and twice the DPR | DagrCanvas takes the new ratio, resizes its buffer, keeps its camera; Explorer keeps the selection (it refits, by its policy) |
+| `visual-shrink-attempt` | `Emulation.setVisibleSize` at 60% height | recorded as reproduced or not; checked only if it was |
+
+Run it with the same dependencies as the input check:
+`DAGR_BROWSER_DEPS=/tmp/dagr-browser node bench/browser/visible-frame-check.mjs`.
+
+The 2026-11-01 run on Linux (WSL2), Chromium 148.0.7778.96 headless with
+SwiftShader, DagrCanvas on WebGL2, passed all eight checked scenarios.
+`setVisibleSize` did not change `visualViewport` at either size, so a visual
+viewport smaller than the layout viewport at scale 1, the shape of an
+overlaying software keyboard, was not reproduced. Neither was real browser
+zoom: the 200% case is a metrics override, not Ctrl-plus. Removing
+`visualViewportInset`'s pinch-zoom guard, or its subtraction of what the
+layout viewport hides, each fails the run. This is Chromium emulation, not
+iOS, Android, Safari or software-keyboard evidence, and not a WebGPU result.
+
 **Nothing here is part of `pnpm bench:ci`, and it is not a gate.** The gate
 compares Node medians against a committed baseline on one machine; a browser
 frame time cannot join it, for the reason M4.10's roadmap entry already gives
