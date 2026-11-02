@@ -17,8 +17,9 @@ shapes reach the canvas once it has. They live here because this is where the
 browser is, and because the rule below about a committed harness applies to them
 exactly as it does to a measurement. `gpu-hover.mjs` and `gpu-hover-page.mjs`
 check the same way that `DagrCanvas`'s GPU hit testing answers hover and
-clicks at 10,000 nodes. `windows-chrome.mjs` lets the probe and
-the frame profile reach a Windows GPU from WSL2.
+clicks at 10,000 nodes. `windows-chrome.mjs` lets the probe, the frame
+profile, the GPU hover check and the mobile input check reach a Windows GPU
+from WSL2.
 
 ## Shared mobile input check
 
@@ -40,7 +41,7 @@ Each check runs at 320x568 DPR 1, 390x844 DPR 3 and 768x1024 DPR 2, in portrait 
 landscape. A swipe holds still before lifting, so a page scroll ends without a
 fling that would still be moving the page in the next scenario. The check
 writes screenshots and `report.json`, with the backend each canvas drew on and
-the page's WebGPU adapter per size, and closes or detaches from its browser on
+the page's default WebGPU adapter per size, and closes or detaches from its browser on
 success or failure. The page is served through Playwright routes, so an
 attached Chrome on another host loads it too, on a loopback origin, since
 WebGPU needs a secure context.
@@ -69,8 +70,8 @@ entries and one dependency graph; build current source first.
 
 `DAGR_CDP` attaches to a running Chrome instead of launching one, and the run
 then fails unless both canvases drew on `webgpu` and the page's default WebGPU
-adapter reports `isFallbackAdapter: false`. On WSL2, start the Windows side's Chrome with
-`windows-chrome.mjs` (see [From WSL2, through the Windows side's
+adapter reports `isFallbackAdapter: false`. On WSL2, start the Windows side's
+Chrome with `windows-chrome.mjs` (see [From WSL2, through the Windows side's
 Chrome](#from-wsl2-through-the-windows-sides-chrome)):
 
 ```bash
