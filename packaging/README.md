@@ -134,7 +134,7 @@ unmounts and mounts again. Both unmounts must clear the API ref, observers and
 pending animation frames. `consumer.tsx` compiles under NodeNext with
 `skipLibCheck` off, matching React types and no three types installed.
 It resolves and reads the public CSS subpath and
-exercises the public core pinch/reset API. No source import or workspace alias
+exercises the public core pinch/reset and visible-frame APIs. No source import or workspace alias
 is available. Temporary installs are removed in the verifier's `finally` block.
 
 This closes an installed-artifact gap: the normal packaging suite already

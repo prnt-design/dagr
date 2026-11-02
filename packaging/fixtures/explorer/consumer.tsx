@@ -1,8 +1,8 @@
 import { createRef } from 'react';
 import { DagrExplorer } from '@prnt/dagr-explorer';
 import type { ExplorerApi, ExplorerView } from '@prnt/dagr-explorer';
-import { Camera2D, createPinchGesture } from '@prnt/dagr-render/core';
-import type { PinchDelta, PinchGesture } from '@prnt/dagr-render/core';
+import { Camera2D, createPinchGesture, visibleFrame, visualViewportInset } from '@prnt/dagr-render/core';
+import type { FrameInset, PinchDelta, PinchGesture, VisibleFrame, VisualViewportBox } from '@prnt/dagr-render/core';
 
 const view: ExplorerView = {
   id: 'v', label: 'View', nodes: [{ id: 'a', label: 'Alpha' }], edges: [],
@@ -19,3 +19,8 @@ if (delta !== null) {
   camera.zoomAtScreen(delta.anchor, delta.factor);
 }
 gesture.reset();
+const visual: VisualViewportBox = { offsetLeft: 0, offsetTop: 0, width: 390, height: 300, scale: 1 };
+const inset: FrameInset = visualViewportInset({ left: 0, top: 0, right: 390, bottom: 480 }, { width: 390, height: 844 }, visual);
+camera.setInset(inset);
+const frame: VisibleFrame = visibleFrame({ width: 390, height: 480 }, inset);
+export const centred = camera.centerFor({ x: frame.width / 2, y: frame.height / 2 });

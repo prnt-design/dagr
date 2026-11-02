@@ -1,19 +1,16 @@
 # External consumer onboarding and release handoff
 
-Evidence checked on 2026-10-31. This is readiness work for the next release,
-not publication or full mobile certification. M5.8b (viewport/occlusion) and
-M5.8c (device conformance) are outstanding.
+Evidence checked on 2026-11-02 against main 7774b6d. This is readiness work
+for the next release, not publication or full mobile certification. M5.8b
+(viewport/occlusion) has its core and adapter APIs merged with browser evidence
+still in review, and M5.8c (device conformance) is outstanding.
 
-**Open release blocker:** [touch-correctness PR #196](https://github.com/prnt-design/dagr/pull/196)
-repairs capture-transfer handling and camera adapter behavior. Its owner
-reproduced the capture-transfer failure with isolated published 0.1.4 packages
-in Chromium 148.0.7778.96: moving capture from a node to the viewport ended the
-active pair and subsequent movement left the camera transform unchanged.
-The reviewed correction has not merged because its local benchmark gate
-failed. This fixture does not reproduce browser pointer capture and cannot
-clear that blocker. Verify the merged correction in the owner's browser
-reproduction and rerun this packed consumer before claiming corrected touch
-behavior. Chromium reproduction is not real-device conformance evidence.
+The touch-correctness fixes from [PR #196](https://github.com/prnt-design/dagr/pull/196)
+are merged (0fbb624): Explorer keeps a touch pan or pinch when a node hands
+pointer capture to the viewport, which published 0.1.3 and 0.1.4 get wrong.
+This fixture does not reproduce browser pointer capture, so the fix's own
+Chromium reproduction and tests are its evidence. Chromium reproduction is not
+real-device conformance evidence.
 
 ## Choose a consumer surface
 
@@ -89,8 +86,10 @@ checks below. Publication remains a maintainer action.
 | Explorer React peers | 18.2 through 19 | Retained; external fixture pins 18.3.1 and 19.2.8 |
 | Umbrella and React binding peers | React 19 | Retained |
 | Renderer core | Three-free camera/path entry | Adds `createPinchGesture`, `PinchGesture`, `PinchDelta`; published core.js has no pinch export |
+| Visible frame (core) | Not published | Adds `visibleFrame`, `coverInset`, `clipInset`, `visualViewportInset` and `Camera2D.setInset`/`frame`/`centerFor` to the three-free core |
+| Visible frame (adapters) | Explorer frames around its own overlays only | Explorer and `DagrCanvas` frame in what the visual viewport leaves; `DagrCanvas` adds an `inset` prop; a `fit()`/`focusNode` flight retargets on a frame change |
 | Compact Explorer details | Published details implementation has no compact docking | Bottom docking below 720 CSS pixels, 44px primary controls, 16px search input |
-| Touch adapters | Earlier independent input handling; capture-transfer bug reproduced in Chromium | Shared pinch/contact lifecycle; open correction in #196 remains a release blocker |
+| Touch adapters | Earlier independent input handling; capture-transfer bug reproduced in Chromium | Shared pinch/contact lifecycle; capture-transfer fix merged in #196 |
 | Renderer and React fixes | See released changelogs | GPU node picking, edge retarget/empty-edge fixes, edge interaction and GPU hit-testing bindings in package Unreleased sections |
 
 The package changelogs are the complete release-note inputs, including
@@ -104,16 +103,16 @@ inventory, not a substitute for reviewing every Unreleased section at release.
 | Environment / backend | Evidence | Limit / next action |
 | --- | --- | --- |
 | Node 22.22.1, npm-installed source tarballs | Public exports and peers; publint/attw; existing type and runtime consumers | No browser/GPU creation |
-| React 18.3.1 and 19.2.8, jsdom 30.0.1, Explorer SVG | Separate-process SSR, hydration identity, public search API, synthetic sizing, mount/unmount, CSS availability, three absent, core pinch/reset | DOM simulation only; no CSS layout or hardware input claim |
+| React 18.3.1 and 19.2.8, jsdom 30.0.1, Explorer SVG | Separate-process SSR, hydration identity, public search API, synthetic sizing, mount/unmount, CSS availability, three absent, core pinch/reset, core visible frame and camera inset | DOM simulation only; no CSS layout or hardware input claim |
 | Desktop Chromium SVG | Existing Explorer browser benchmark documented in Explorer guide | Prior measured desktop capacity, not this fixture's result or a mobile budget |
 | Chromium touch emulation | Existing adapter tests/harnesses, separate runtime work | Does not establish iOS/Android browser behavior; no new emulation measurement here |
 | WebGL 2 / WebGPU and experimental native Explorer base | Existing backend documentation and benchmark harnesses | No new external GPU/browser validation in this increment |
 | Real iOS Safari and Android Chrome | Unverified here | M5.8c owner must record device/OS/browser, scroll, cancellation, focus and teardown evidence |
-| Software keyboard / visual viewport / safe areas | Unverified, contract outstanding | M5.8b must establish occlusion behavior and device evidence |
+| Software keyboard / visual viewport / safe areas | Core contract merged, jsdom tests; Chromium evidence in review (#203) | No device can show a keyboard to the agent; device evidence and safe areas stay with M5.8b |
 
-Before release, integrate the touch-correctness owner's merged fixes (#196) and rerun
-the packed-artifact fixture and required gates on that final tree. Record
-diff/tree review resolutions, a passing five-command local gate and concluded
-green CI for that head. The maintainer must choose the release version, inspect
-the final changelogs and publish; no version or publish configuration is changed
-by this increment. Keep device and occlusion rows unverified until measured.
+Before release, rerun the packed-artifact fixture and required gates on the
+final tree. Record diff/tree review resolutions, a passing five-command local
+gate and concluded green CI for that head. The maintainer must choose the
+release version, inspect the final changelogs and publish; no version or
+publish configuration is changed by this increment. Keep device and occlusion
+rows unverified until measured.
