@@ -155,14 +155,14 @@ Neither adapter observes the page's own scroll.
 
 The visual-viewport coordinates are covered by jsdom tests and by
 `bench/browser/visible-frame-check.mjs` in headless Chromium, which scrolls the
-page past both surfaces, pinch-zooms it and pans the zoomed view, shortens the
-layout viewport and emulates 200% zoom, and finds both cameras and the
-selection where the policies above put them. Chromium's DevTools protocol could
-not shrink the visual viewport at scale 1, the software-keyboard case, so that
-remains covered by jsdom only, and nothing here is verified on a real iOS or
-Android device. Current engines
-report `getBoundingClientRect` relative to the layout viewport, which is what
-`visualViewportInset`'s use of `offsetLeft` and `offsetTop` relies on.
+page past the canvas's top, pinch-zooms it and pans the zoomed view, shortens
+the layout viewport and emulates 200% zoom, and finds both cameras and the
+selection where the policies above put them. Chromium's DevTools protocol
+could not shrink the visual viewport at scale 1, the software-keyboard case,
+so that remains covered by jsdom only, and nothing here is verified on a real
+iOS or Android device. Current engines report `getBoundingClientRect` relative
+to the layout viewport, which is what `visualViewportInset`'s use of
+`offsetLeft` and `offsetTop` relies on.
 
 ## Page scrolling remains an explicit policy
 
