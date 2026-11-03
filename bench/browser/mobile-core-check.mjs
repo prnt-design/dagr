@@ -216,10 +216,10 @@ try {
       // Returns the camera two frames after focusNode, and once it has settled.
       const flight = async (surface, motion, id) => {
         await page.emulateMedia({ reducedMotion: motion });
-        return page.evaluate(async ({ probe, id }) => {
+        const result = await page.evaluate(async ({ probe, id }) => {
           const read = () => window.__dagrMobile[probe]();
           const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
-          window.__dagrMobile[`${probe}Focus`](id);
+          if (!window.__dagrMobile[`${probe}Focus`](id)) return null;
           await frame();
           await frame();
           const early = read();
@@ -232,6 +232,8 @@ try {
           }
           return { early, late };
         }, { probe: SURFACES[surface].probe, id });
+        assert.ok(result, `${surface}: focusNode found node ${id}`);
+        return result;
       };
       const at = (one, two) => Math.abs(one.scale - two.scale) < 1e-9
         && Math.abs(one.center.x - two.center.x) < 1e-6 && Math.abs(one.center.y - two.center.y) < 1e-6;
@@ -243,12 +245,12 @@ try {
         const toD = await flight(surface, 'no-preference', 'd');
         assert.ok(!at(toD.early, toD.late), `${stem}: focusNode flies back over several frames`);
         const reduced = await flight(surface, 'reduce', 'a');
-        assert.ok(at(reduced.early, toA.late), `${stem}: under reduced motion focusNode lands by the next frame`);
+        assert.ok(at(reduced.early, toA.late), `${stem}: under reduced motion focusNode has landed two frames after the call`);
         assert.ok(at(reduced.late, reduced.early), `${stem}: and stays there`);
         await page.emulateMedia({ reducedMotion: 'no-preference' });
         await page.screenshot({ path: join(OUT, `${stem}.png`) });
         report.scenarios.push({ kind: 'reduced-motion', surface, width, height, orientation, deviceScaleFactor,
-          flying: toA, reduced, result: 'pass' });
+          flying: toA, back: toD, reduced, result: 'pass' });
       }
     } finally { await context.close(); }
   }

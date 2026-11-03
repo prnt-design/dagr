@@ -94,7 +94,7 @@ desktop GPU: it shows the input and camera contract holds on the WebGPU
 backend, not that a phone's GPU or browser behaves the same.
 
 The reduced-motion rows added 12 scenarios. On 2026-11-02 the launched run
-passed all 54 in Chromium 145.0.7632.6 headless (DagrCanvas on WebGL2
+passed all 54 in Chromium 148.0.7778.96 headless (DagrCanvas on WebGL2
 software), and the attached run passed all 54 in Chrome 156.0.8078.74 headless
 on the same Windows side and adapter as above, both canvases on `webgpu`, not a
 fallback. Two more mutations to the built packages failed the run: DagrCanvas

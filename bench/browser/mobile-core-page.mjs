@@ -39,7 +39,10 @@ function ExplorerProbe() {
       center: state.camera.get(),
       selectedId: state.selectedId,
     });
-    window.__dagrMobile.explorerFocus = (id) => state.focusNode(id);
+    window.__dagrMobile.explorerFocus = (id) => {
+      state.focusNode(id);
+      return nodes.some((node) => node.id === id);
+    };
     return () => { delete window.__dagrMobile.explorer; delete window.__dagrMobile.explorerFocus; };
   }, [state]);
   return null;
