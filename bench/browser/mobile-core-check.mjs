@@ -378,8 +378,6 @@ try {
           `${stem}: the camera viewport follows the resize`);
       };
       const isDragging = () => page.evaluate((selector) => document.querySelector(selector).hasAttribute('data-dragging'), SURFACES.explorer.selector);
-      // Finds an unselected node whose centre is inside the surface, away from
-      // its edges.
       const nodeOnScreen = async (surface) => {
         const { host } = await centre(surface);
         const box = await host.boundingBox();
@@ -399,10 +397,9 @@ try {
         const selected = surface === 'explorer' ? (await read('explorer')).selectedId : null;
         return points.find((point) => inside(point) && point.id !== selected);
       };
-      // Taps a node on screen and checks that the surface reports that node.
       // An Explorer zoomed in past its graph may show no node at all; it then
       // flies to one first, and the report says so.
-      const tapNodeUnder = async (surface, stem) => {
+      const tapNodeUnder = async (surface, stem, pause) => {
         let hit = await nodeOnScreen(surface);
         let flown = false;
         if (!hit && surface === 'explorer') {
@@ -414,9 +411,9 @@ try {
         assert.ok(hit, `${stem}: a node is on screen to tap`);
         const clicks = surface === 'canvas' ? (await page.evaluate(() => window.__dagrMobile.canvasClicks())).length : 0;
         // Tapped at once after a drag that spanned a rotation, Chromium 148 at
-        // 320x568 delivered pointerdown and pointerup to the node but made no
-        // click; past the double-tap window it does.
-        await sleep(400);
+        // 320x568 delivered pointerdown and pointerup to the node, and no
+        // click reached the window. After a 400 ms pause it does.
+        if (pause) await sleep(400);
         await tap(hit.x, hit.y);
         if (surface === 'canvas') {
           assert.deepEqual((await page.evaluate(() => window.__dagrMobile.canvasClicks())).slice(clicks), [hit.id], `${stem}: a tap afterwards hits node ${hit.id}`);
@@ -441,6 +438,7 @@ try {
         const before = (await section.boundingBox()).width;
         await section.evaluate((element, next) => { element.style.width = `${next}px`; }, Math.round(before * 0.75));
         await settle();
+        const shrunk = (await section.boundingBox()).width;
         const resized = await read(surface);
         if (surface === 'canvas') await sizedToHost(resized, stem);
         // Closing, since the spread before the resize may have reached
@@ -458,11 +456,11 @@ try {
         await settle();
         if (surface === 'explorer') assert.equal(await isDragging(), false, `${stem}: the drag state clears`);
         await page.screenshot({ path: join(OUT, `${stem}.png`) });
-        const tapped = await tapNodeUnder(surface, stem);
+        const tapped = await tapNodeUnder(surface, stem, false);
         await section.evaluate((element) => { element.style.width = ''; });
         await settle();
         report.scenarios.push({ kind: 'resize-pinch', surface, width, height, orientation, deviceScaleFactor,
-          sectionWidth: [before, Math.round(before * 0.75)], resized, after, tapped, result: 'pass' });
+          sectionWidth: [before, shrunk], resized, after, tapped, result: 'pass' });
       }
       for (const surface of ['canvas', 'explorer']) {
         const stem = `${surface}-resize-drag-${size}`;
@@ -480,14 +478,14 @@ try {
         const after = await read(surface);
         assert.ok(finite(rotated) && finite(after), `${stem}: the camera stays finite`);
         // Explorer clamps a pan of a graph that fits, as in the swipe rows.
-        if (surface === 'canvas') assert.ok(after.center.y !== rotated.center.y, `${stem}: the drag keeps panning after the viewport rotates`);
+        if (surface === 'canvas') assert.ok(Math.abs(Math.abs(after.center.y - rotated.center.y) * after.scale - 30) < 0.5, `${stem}: the drag keeps panning with the finger after the viewport rotates`);
         else assert.equal(await isDragging(), true, `${stem}: the graph keeps the drag after the viewport rotates`);
         assert.equal(await scrollY(), page0, `${stem}: page stays`);
         await send('touchEnd', []);
         await settle();
         if (surface === 'explorer') assert.equal(await isDragging(), false, `${stem}: the drag state clears`);
         await page.screenshot({ path: join(OUT, `${stem}.png`) });
-        const tapped = await tapNodeUnder(surface, stem);
+        const tapped = await tapNodeUnder(surface, stem, true);
         await page.setViewportSize({ width, height });
         await settle();
         report.scenarios.push({ kind: 'resize-drag', surface, width, height, orientation, deviceScaleFactor,
