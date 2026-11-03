@@ -179,8 +179,8 @@ Mid-gesture, the check hands a contact's pointer capture to the page body with
 - **Pinch:** from `focusNode`'s zoom, landed at once under reduced motion,
   two fingers close and must move the camera, then the second finger's capture
   is taken. Explorer holds both contacts' capture on its viewport, so its pinch
-  must end: the drag state clears and the fingers closing further leave the
-  camera put. DagrCanvas
+  must end and its drag state clear. Its camera staying put adds little, since
+  Explorer hears moves only on its viewport and the body now gets them. DagrCanvas
   captures no contact of a pinch and follows touches on the window. The second
   finger's capture is the `<canvas>` element's implicit one, and DagrCanvas
   treats a child losing capture as a handover, so its pinch must keep
@@ -203,7 +203,10 @@ failed it:
 - DagrCanvas ending a contact when any element loses its capture, not only its
   root, failed the launched run.
 
-Chromium's touch emulation is the only source of these events here. Whether a
+No row takes a capture DagrCanvas's root holds during a pinch (a pinch that
+began as a drag), so the pinch tracker's own `lostpointercapture` branch for
+the root is not exercised. Chromium's touch emulation is the only source of
+these events here. Whether a
 real phone browser ever takes a touch's capture away mid-gesture, rather than
 cancelling it, is not tested.
 
