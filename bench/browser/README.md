@@ -40,6 +40,13 @@ without selecting a node, and that a second tap selects the tapped node.
 On each surface, `focusNode` must still be short of its target two frames
 after the call, and under `prefers-reduced-motion: reduce` must reach the same
 target by then and stay there.
+On a focused DagrCanvas, Left and Right must pan, Down must zoom out, and the
+page must stay put. On a focused Explorer, an arrow must move focus to another
+node, - and + must zoom, the page must stay put, and Escape must leave the
+graph. A controlled Explorer (`selectedId` with `onSelectedChange`) must
+report Enter and a tap to its owner without selecting anything. Once the owner
+passes the id as `selectedId`, the node must be selected with details open,
+and clearing the prop must clear both.
 Each check runs at 320x568 DPR 1, 390x844 DPR 3 and 768x1024 DPR 2, in portrait and
 landscape. A swipe holds still before lifting, so a page scroll ends without a
 fling that would still be moving the page in the next scenario. The check
@@ -100,6 +107,17 @@ on the same Windows side and adapter as above, both canvases on `webgpu`, not a
 fallback. Two more mutations to the built packages failed the run: DagrCanvas
 flying for 450 ms whatever the preference (launched and attached), and
 Explorer easing whatever the preference (launched).
+
+The keyboard and controlled-selection rows added 18 scenarios. On 2026-11-03
+the launched run passed all 72 in Chromium 148.0.7778.96 headless (DagrCanvas
+on WebGL2 software), and the attached run passed all 72 in Chrome
+156.0.8078.74 headless on the same Windows side and adapter, both canvases on
+`webgpu`, not a fallback. Three more mutations to the built packages failed
+the launched run: Explorer ignoring a controlled `selectedId`, Escape not
+blurring the graph, and DagrCanvas's navigation keys not calling
+`preventDefault`, which lets Down scroll the page. The last one also failed
+the attached run. These are desktop keyboard events on a touch-emulated
+page, not software-keyboard or screen-reader evidence.
 
 ## Visible frame check
 
