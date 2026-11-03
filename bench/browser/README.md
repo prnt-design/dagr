@@ -129,7 +129,8 @@ The resize rows added 24 scenarios, each on DagrCanvas and Explorer:
   viewport must match the new box and its scale must follow the fingers
   (a factor of 0.8). Explorer's must fall and it must still be dragging.
   Explorer's zoom limits follow its area, so the shrink itself can move its
-  scale and the closing pinch can stop at the new minimum.
+  scale and the new minimum can clamp the closing pinch, but the scale must
+  still fall.
 - **Drag, viewport rotates:** one finger drags, the viewport swaps width and
   height, and the finger drags on. DagrCanvas's camera viewport must match the
   new box and the camera must pan the 30 CSS pixels the finger moves.
@@ -143,13 +144,14 @@ The resize rows added 24 scenarios, each on DagrCanvas and Explorer:
 
 Explorer often ends zoomed in between nodes, with none on screen. It then
 flies to an unselected node before the tap, and the report records
-`flown: true`. In Chromium 148 at 320x568, a tap made at once after a drag
-across a rotation delivered `pointerdown` and `pointerup` to the node, and no
-`click` reached a capture listener on the window, which runs before either
-surface's own click handling. After a 400 ms pause the click arrives, so the
+`flown: true`. In Chromium 148 at 320x568, a tap on Explorer made at once
+after a drag across a rotation delivered `pointerdown` and `pointerup` to the
+node, and a temporary capture listener on the window, which runs before
+Explorer's own click handling, saw no `click`. After a 400 ms pause the click arrives, so the
 check waits that long before the tap after each drag row. A regression that
-drops a tap made straight after such a drag would therefore pass; the tap
-after each pinch row is immediate.
+drops a tap made straight after such a drag would therefore pass. The tap
+after each pinch row has no added pause, though it still follows the check's
+usual wait for the page and camera to come to rest.
 
 On 2026-11-03 the launched run passed all 96 in Chromium 148.0.7778.96
 headless (DagrCanvas on WebGL2 software). The attached run passed all 96 in
