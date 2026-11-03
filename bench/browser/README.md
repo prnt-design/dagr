@@ -37,6 +37,9 @@ scroll policy in [mobile.md](../../docs/docs/mobile.md):
 
 It also checks that Explorer's first tap on an unfocused graph focuses it
 without selecting a node, and that a second tap selects the tapped node.
+On each surface, `focusNode` must still be short of its target two frames
+after the call, and under `prefers-reduced-motion: reduce` must reach the same
+target by then and stay there.
 Each check runs at 320x568 DPR 1, 390x844 DPR 3 and 768x1024 DPR 2, in portrait and
 landscape. A swipe holds still before lifting, so a page scroll ends without a
 fling that would still be moving the page in the next scenario. The check
@@ -89,6 +92,14 @@ canvases fell back to WebGL2, was refused. Explorer draws SVG whatever the
 backend, so its rows in both runs are SVG rows. This is touch emulation on a
 desktop GPU: it shows the input and camera contract holds on the WebGPU
 backend, not that a phone's GPU or browser behaves the same.
+
+The reduced-motion rows added 12 scenarios. On 2026-11-02 the launched run
+passed all 54 in Chromium 145.0.7632.6 headless (DagrCanvas on WebGL2
+software), and the attached run passed all 54 in Chrome 156.0.8078.74 headless
+on the same Windows side and adapter as above, both canvases on `webgpu`, not a
+fallback. Two more mutations to the built packages failed the run: DagrCanvas
+flying for 450 ms whatever the preference (launched and attached), and
+Explorer easing whatever the preference (launched).
 
 ## Visible frame check
 

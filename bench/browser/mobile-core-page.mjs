@@ -25,7 +25,8 @@ function CanvasProbe({ name }) {
       center: { ...handle.renderer.camera.center },
       backend: handle.renderer.backend,
     });
-    return () => { delete window.__dagrMobile[name]; };
+    window.__dagrMobile[`${name}Focus`] = (id) => handle.focusNode(id);
+    return () => { delete window.__dagrMobile[name]; delete window.__dagrMobile[`${name}Focus`]; };
   }, [handle, name]);
   return null;
 }
@@ -38,7 +39,8 @@ function ExplorerProbe() {
       center: state.camera.get(),
       selectedId: state.selectedId,
     });
-    return () => { delete window.__dagrMobile.explorer; };
+    window.__dagrMobile.explorerFocus = (id) => state.focusNode(id);
+    return () => { delete window.__dagrMobile.explorer; delete window.__dagrMobile.explorerFocus; };
   }, [state]);
   return null;
 }

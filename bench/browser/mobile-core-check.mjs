@@ -1,7 +1,8 @@
 /**
  * One touch sequence replayed on DagrCanvas and Explorer at phone/tablet sizes,
  * portrait and landscape, plus which of page and camera a one-finger swipe
- * moves under each surface's scroll policy.
+ * moves under each surface's scroll policy, and whether focusNode flies or,
+ * under reduced motion, lands at once.
  * Build first. DAGR_BROWSER_DEPS points to a directory with playwright-core and
  * esbuild installed in node_modules; DAGR_CHROMIUM can override the executable.
  * Launched, it is headless correctness only; software rendering is allowed, not
@@ -210,6 +211,44 @@ try {
         if (surface === 'explorer') assert.equal(after.selectedId, before.selectedId, `${stem}: pinch did not activate a node`);
         await page.screenshot({ path: join(OUT, `${stem}-after.png`) });
         report.scenarios.push({ kind: 'pinch', surface, width, height, orientation, deviceScaleFactor, before, after, resumed, result: 'pass' });
+      }
+
+      // Returns the camera two frames after focusNode, and once it has settled.
+      const flight = async (surface, motion, id) => {
+        await page.emulateMedia({ reducedMotion: motion });
+        return page.evaluate(async ({ probe, id }) => {
+          const read = () => window.__dagrMobile[probe]();
+          const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+          window.__dagrMobile[`${probe}Focus`](id);
+          await frame();
+          await frame();
+          const early = read();
+          let late = read();
+          for (let waited = 0; waited < 3000; waited += 150) {
+            await new Promise((resolve) => window.setTimeout(resolve, 150));
+            const next = read();
+            if (JSON.stringify(next) === JSON.stringify(late)) break;
+            late = next;
+          }
+          return { early, late };
+        }, { probe: SURFACES[surface].probe, id });
+      };
+      const at = (one, two) => Math.abs(one.scale - two.scale) < 1e-9
+        && Math.abs(one.center.x - two.center.x) < 1e-6 && Math.abs(one.center.y - two.center.y) < 1e-6;
+      for (const surface of ['canvas', 'explorer']) {
+        const stem = `${surface}-reduced-motion-${size}`;
+        await centre(surface);
+        const toA = await flight(surface, 'no-preference', 'a');
+        assert.ok(!at(toA.early, toA.late), `${stem}: focusNode flies over several frames`);
+        const toD = await flight(surface, 'no-preference', 'd');
+        assert.ok(!at(toD.early, toD.late), `${stem}: focusNode flies back over several frames`);
+        const reduced = await flight(surface, 'reduce', 'a');
+        assert.ok(at(reduced.early, toA.late), `${stem}: under reduced motion focusNode lands by the next frame`);
+        assert.ok(at(reduced.late, reduced.early), `${stem}: and stays there`);
+        await page.emulateMedia({ reducedMotion: 'no-preference' });
+        await page.screenshot({ path: join(OUT, `${stem}.png`) });
+        report.scenarios.push({ kind: 'reduced-motion', surface, width, height, orientation, deviceScaleFactor,
+          flying: toA, reduced, result: 'pass' });
       }
     } finally { await context.close(); }
   }
