@@ -165,19 +165,22 @@ failed it:
 - DagrCanvas's `ResizeObserver` disconnecting after its first measure failed
   both the launched and the attached run.
 
-The lost-capture rows added 24 scenarios, each on DagrCanvas and Explorer.
+The lost-capture rows added 24 scenarios, 12 on each surface.
 Mid-gesture, the check hands a contact's pointer capture to the page body with
 `setPointerCapture`, so the surface sees `lostpointercapture` and no
 `pointercancel`:
 
 - **Drag:** one finger drags far enough to pan, and both surfaces hold its
-  capture on their root. Once the capture is taken, the drag state must clear,
-  the rest of the finger's travel must not move the camera, and the page must
-  stay put. After release, a fresh drag must start and end, and on DagrCanvas
-  pan the camera.
-- **Pinch:** two fingers spread, then the second finger's capture is taken.
-  Explorer holds both contacts' capture on its viewport, so its pinch must end:
-  the drag state clears and the next spread leaves the camera put. DagrCanvas
+  capture on their root. Once the capture is taken, the drag state must clear
+  and the page must stay put, and on DagrCanvas the rest of the finger's travel
+  must not move the camera. Explorer's camera is not checked, since it clamps
+  a pan of a graph that fits. After release, a fresh drag must start and end,
+  and on DagrCanvas pan the camera.
+- **Pinch:** from `focusNode`'s zoom, landed at once under reduced motion,
+  two fingers close and must move the camera, then the second finger's capture
+  is taken. Explorer holds both contacts' capture on its viewport, so its pinch
+  must end: the drag state clears and the fingers closing further leave the
+  camera put. DagrCanvas
   captures no contact of a pinch and follows touches on the window. The second
   finger's capture is the `<canvas>` element's implicit one, and DagrCanvas
   treats a child losing capture as a handover, so its pinch must keep
@@ -189,12 +192,14 @@ Mid-gesture, the check hands a contact's pointer capture to the page body with
 On 2026-11-03 the launched run passed all 120 in Chromium 148.0.7778.96
 headless (DagrCanvas on WebGL2 software). The attached run passed all 120 in
 Chrome 156.0.8078.74 headless on the same Windows side and adapter, both
-canvases on `webgpu`, not a fallback. Three mutations to the built packages
+canvases on `webgpu`, not a fallback. Four mutations to the built packages
 failed it:
 
 - DagrCanvas's gesture hook not listening for `lostpointercapture` failed the
   launched and the attached run.
 - Explorer not listening for `lostpointercapture` failed the launched run.
+- Explorer ending only a drag, not a pinch, on a lost capture failed the
+  launched run.
 - DagrCanvas ending a contact when any element loses its capture, not only its
   root, failed the launched run.
 

@@ -508,10 +508,8 @@ try {
         document.body.setPointerCapture(id);
         return holder === root ? 'surface' : holder.tagName.toLowerCase();
       }, SURFACES[surface].selector);
-      const dragState = (surface) => page.evaluate((selector) => {
-        const element = document.querySelector(selector);
-        return element.hasAttribute('data-dragging') || element.hasAttribute('data-dagr-dragging');
-      }, SURFACES[surface].selector);
+      const dragState = (surface) => page.evaluate(({ selector, attribute }) => document.querySelector(selector).hasAttribute(attribute),
+        { selector: SURFACES[surface].selector, attribute: surface === 'canvas' ? 'data-dagr-dragging' : 'data-dragging' });
       for (const surface of ['canvas', 'explorer']) {
         const stem = `${surface}-lost-capture-drag-${size}`;
         const { host, x, y } = await centre(surface);
@@ -531,7 +529,9 @@ try {
         await settle();
         const after = await read(surface);
         assert.equal(await dragState(surface), false, `${stem}: losing the capture ends the drag`);
-        assert.ok(finite(after) && at(after, lost), `${stem}: the finger no longer moves the camera`);
+        assert.ok(finite(after), `${stem}: the camera stays finite`);
+        // Explorer clamps a pan of a graph that fits, as in the swipe rows.
+        if (surface === 'canvas') assert.ok(at(after, lost), `${stem}: the finger no longer moves the camera`);
         assert.equal(await scrollY(), page0, `${stem}: page stays`);
         await send('touchEnd', []);
         await settle();
@@ -541,7 +541,6 @@ try {
         await send('touchEnd', []);
         await settle();
         assert.ok(fresh && !await dragState(surface), `${stem}: a fresh drag starts and ends`);
-        // Explorer clamps a pan of a graph that fits, as in the swipe rows.
         if (surface === 'canvas') assert.ok(!at(moved, after), `${stem}: a fresh drag pans`);
         await page.screenshot({ path: join(OUT, `${stem}.png`) });
         report.scenarios.push({ kind: 'lost-capture-drag', surface, width, height, orientation, deviceScaleFactor,
@@ -549,45 +548,50 @@ try {
       }
       for (const surface of ['canvas', 'explorer']) {
         const stem = `${surface}-lost-capture-pinch-${size}`;
+        // From focusNode's zoom, landed at once, so the closing pinch below
+        // has room before Explorer's minimum.
+        await flight(surface, 'reduce', 'b');
+        await page.emulateMedia({ reducedMotion: 'no-preference' });
         const { host, x, y } = await centre(surface);
         await host.focus();
         const touch = (id, px) => ({ id, x: px, y });
         const page0 = await scrollY();
+        const start = await read(surface);
         await send('touchStart', [touch(1, x - 30)]);
         await send('touchStart', [touch(1, x - 30), touch(2, x + 30)]);
-        await send('touchMove', [touch(1, x - 30), touch(2, x + 40)]);
-        const holder = await takeCapture(surface);
+        await send('touchMove', [touch(1, x - 30), touch(2, x + 20)]);
         const lost = await read(surface);
-        await send('touchMove', [touch(1, x - 30), touch(2, x + 50)]);
+        assert.ok(!at(lost, start), `${stem}: the pinch moves the camera`);
+        const holder = await takeCapture(surface);
+        await send('touchMove', [touch(1, x - 30), touch(2, x + 10)]);
         await settle();
         const after = await read(surface);
         assert.ok(finite(after), `${stem}: the camera stays finite`);
         if (surface === 'explorer') {
-          assert.equal(holder, 'surface', `${stem}: Explorer holds each contact's capture`);
+          assert.equal(holder, 'surface', `${stem}: Explorer holds the second contact's capture`);
           assert.ok(at(after, lost) && !await dragState(surface), `${stem}: losing a contact's capture ends the pinch`);
         } else {
-          // DagrCanvas captures no contact of a pinch and follows its touches
-          // on the window, so the second finger's capture is the canvas
-          // element's implicit one, and taking it leaves the pinch running.
+          // See touchLost in DagrCanvas.tsx: a child losing capture is a handover.
           assert.equal(holder, 'canvas', `${stem}: the canvas element holds the contact's implicit capture`);
-          assert.ok(Math.abs(after.scale / lost.scale - 80 / 70) < 0.01, `${stem}: the pinch keeps following the contact`);
+          assert.ok(Math.abs(after.scale / lost.scale - 40 / 50) < 0.01, `${stem}: the pinch keeps following the contact`);
         }
         assert.equal(await scrollY(), page0, `${stem}: page stays`);
         await send('touchEnd', []);
         await settle();
         assert.equal(await dragState(surface), false, `${stem}: no drag state remains`);
-        // Closing, so neither surface's zoom limit can stop it.
+        // Spreading, and still below where the closing pinch began, so
+        // Explorer's maximum cannot stop it.
         await send('touchStart', [touch(1, x - 30)]);
         await send('touchStart', [touch(1, x - 30), touch(2, x + 30)]);
-        await send('touchMove', [touch(1, x - 30), touch(2, x + 24)]);
+        await send('touchMove', [touch(1, x - 30), touch(2, x + 36)]);
         const fresh = await read(surface);
         await send('touchEnd', []);
         await settle();
-        assert.ok(Math.abs(fresh.scale / after.scale - 0.9) < 0.01, `${stem}: a fresh pinch zooms`);
+        assert.ok(Math.abs(fresh.scale / after.scale - 1.1) < 0.01, `${stem}: a fresh pinch zooms`);
         assert.equal(await dragState(surface), false, `${stem}: and its drag state clears`);
         await page.screenshot({ path: join(OUT, `${stem}.png`) });
         report.scenarios.push({ kind: 'lost-capture-pinch', surface, width, height, orientation, deviceScaleFactor,
-          holder, lost, after, fresh, result: 'pass' });
+          holder, start, lost, after, fresh, result: 'pass' });
       }
     } finally { await context.close(); }
   }
