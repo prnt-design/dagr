@@ -48,7 +48,9 @@ with `onSelectedChange`) must report Enter and a tap to its owner without
 selecting anything. Once the owner passes the tapped id as `selectedId`, that
 node must be selected with details open, since the tap asked to inspect it,
 and clearing the prop must clear both. A pinch and a one-finger drag must
-survive a resize under them (see the resize rows below).
+survive a resize under them, and each surface must end or keep a gesture whose
+pointer capture is taken away as its policy says (see the resize and
+lost-capture rows below).
 Each check runs at 320x568 DPR 1, 390x844 DPR 3 and 768x1024 DPR 2, in portrait and
 landscape. A swipe holds still before lifting, so a page scroll ends without a
 fling that would still be moving the page in the next scenario. The check
@@ -162,6 +164,51 @@ failed it:
 - Explorer ending its pinch when it measures a resize failed the launched run.
 - DagrCanvas's `ResizeObserver` disconnecting after its first measure failed
   both the launched and the attached run.
+
+The lost-capture rows added 24 scenarios, 12 on each surface.
+Mid-gesture, the check hands a contact's pointer capture to the page body with
+`setPointerCapture`, so the surface sees `lostpointercapture` and no
+`pointercancel`:
+
+- **Drag:** one finger drags far enough to pan, and both surfaces hold its
+  capture on their root. Once the capture is taken, the drag state must clear
+  and the page must stay put, and on DagrCanvas the rest of the finger's travel
+  must not move the camera. Explorer's camera is not checked, since it clamps
+  a pan of a graph that fits. After release, a fresh drag must start and end,
+  and on DagrCanvas pan the camera.
+- **Pinch:** from `focusNode`'s zoom, landed at once under reduced motion,
+  two fingers close and must move the camera, then the second finger's capture
+  is taken. Explorer holds both contacts' capture on its viewport, so its pinch
+  must end and its drag state clear. Its camera staying put adds little, since
+  Explorer hears moves only on its viewport and the body now gets them. DagrCanvas
+  captures no contact of a pinch and follows touches on the window. The second
+  finger's capture is the `<canvas>` element's implicit one, and DagrCanvas
+  treats a child losing capture as a handover, so its pinch must keep
+  following the finger. These are the two surfaces' policies as built, not
+  one shared rule.
+- **Both:** the camera stays finite, the page does not scroll, no drag state
+  remains after release, and a fresh pinch must zoom by the fingers' ratio.
+
+On 2026-11-03 the launched run passed all 120 in Chromium 148.0.7778.96
+headless (DagrCanvas on WebGL2 software). The attached run passed all 120 in
+Chrome 156.0.8078.74 headless on the same Windows side and adapter, both
+canvases on `webgpu`, not a fallback. Four mutations to the built packages
+failed it:
+
+- DagrCanvas's gesture hook not listening for `lostpointercapture` failed the
+  launched and the attached run.
+- Explorer not listening for `lostpointercapture` failed the launched run.
+- Explorer ending only a drag, not a pinch, on a lost capture failed the
+  launched run.
+- DagrCanvas ending a contact when any element loses its capture, not only its
+  root, failed the launched run.
+
+No row takes a capture DagrCanvas's root holds during a pinch (a pinch that
+began as a drag), so the pinch tracker's own `lostpointercapture` branch for
+the root is not exercised. Chromium's touch emulation is the only source of
+these events here. Whether a
+real phone browser ever takes a touch's capture away mid-gesture, rather than
+cancelling it, is not tested.
 
 ## Mobile pixel-ratio budget
 
