@@ -344,8 +344,8 @@ try {
           assert.ok(state.selectedId === null && !state.detailsOpen && await pressed() === 0, `${stem}: ${step}, and nothing is selected yet`);
         };
         await unselected('Enter');
-        // At a fitted zoom only the focused node has an element, so the arrow
-        // key moves focus to the node the tap then lands on.
+        // Fitted, these nodes are small enough that only the focused one has an
+        // element, so the arrow key moves focus to the node the tap lands on.
         await page.keyboard.press(id === 'd' ? 'ArrowLeft' : 'ArrowRight');
         await settle();
         const otherId = await activeNode('#explorer-controlled');
