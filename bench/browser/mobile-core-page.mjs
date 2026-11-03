@@ -24,13 +24,24 @@ function CanvasProbe({ name }) {
       scale: handle.renderer.camera.zoom,
       center: { ...handle.renderer.camera.center },
       backend: handle.renderer.backend,
+      viewport: { ...handle.renderer.camera.viewport },
     });
     window.__dagrMobile[`${name}Focus`] = (id) => handle.focusNode(id);
-    return () => { delete window.__dagrMobile[name]; delete window.__dagrMobile[`${name}Focus`]; };
+    // Each node's centre in CSS pixels from the canvas's top-left; world y is up.
+    window.__dagrMobile[`${name}Nodes`] = () => [...handle.result.nodes.values()].map((node) => ({
+      id: node.id, ...handle.renderer.camera.worldToScreen({ x: node.x, y: -node.y }),
+    }));
+    return () => {
+      delete window.__dagrMobile[name];
+      delete window.__dagrMobile[`${name}Focus`];
+      delete window.__dagrMobile[`${name}Nodes`];
+    };
   }, [handle, name]);
   return null;
 }
 const onError = (error) => { window.__dagrMobile.error = error.message; };
+const canvasClicks = [];
+window.__dagrMobile.canvasClicks = () => [...canvasClicks];
 function ExplorerProbe({ name }) {
   const state = useExplorer();
   useEffect(() => {
@@ -68,7 +79,7 @@ createRoot(document.getElementById('root')).render(h(React.Fragment, null,
   h('h2', null, 'DagrCanvas'),
   h('section', { id: 'canvas' }, h(DagrCanvas, {
     graph, navigation: true, label: 'Core canvas', cameraLimits: false,
-    clearColor: 0xfafafa, style: { height: 300 }, onError,
+    clearColor: 0xfafafa, style: { height: 300 }, onError, onNodeClick: (id) => canvasClicks.push(id),
   }, h(CanvasProbe, { name: 'canvas' }))),
   h('h2', null, 'DagrCanvas, two-finger'),
   h('section', { id: 'canvas-two-finger' }, h(DagrCanvas, {

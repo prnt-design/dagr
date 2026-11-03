@@ -47,7 +47,8 @@ page, and Escape must leave the graph. A controlled Explorer (`selectedId`
 with `onSelectedChange`) must report Enter and a tap to its owner without
 selecting anything. Once the owner passes the tapped id as `selectedId`, that
 node must be selected with details open, since the tap asked to inspect it,
-and clearing the prop must clear both.
+and clearing the prop must clear both. A pinch and a one-finger drag must
+survive a resize under them (see the resize rows below).
 Each check runs at 320x568 DPR 1, 390x844 DPR 3 and 768x1024 DPR 2, in portrait and
 landscape. A swipe holds still before lifting, so a page scroll ends without a
 fling that would still be moving the page in the next scenario. The check
@@ -120,6 +121,47 @@ blurring the graph, an Explorer node's arrow keys not calling
 `preventDefault`. Each of the last two lets ArrowDown scroll the page. The
 DagrCanvas one also failed the attached run. These are desktop keyboard events on a touch-emulated
 page, not software-keyboard or screen-reader evidence.
+
+The resize rows added 24 scenarios, each on DagrCanvas and Explorer:
+
+- **Pinch, container shrinks:** two fingers spread, the surface's section
+  shrinks to about 75% of its width, then the fingers close. DagrCanvas's camera
+  viewport must match the new box and its scale must follow the fingers
+  (a factor of 0.8). Explorer's must fall and it must still be dragging.
+  Explorer's zoom limits follow its area, so the shrink itself can move its
+  scale and the new minimum can clamp the closing pinch, but the scale must
+  still fall.
+- **Drag, viewport rotates:** one finger drags, the viewport swaps width and
+  height, and the finger drags on. DagrCanvas's camera viewport must match the
+  new box and the camera must pan the 30 CSS pixels the finger moves.
+  Explorer must keep its drag state. As in the swipe rows, its camera is not
+  checked, so an Explorer that kept the state but ignored the finger after a
+  rotation would pass.
+- **Both:** the camera stays finite, the page does not scroll during the
+  rest of the gesture, Explorer's `data-dragging` clears on release, and a tap
+  afterwards must hit a node on screen: DagrCanvas's `onNodeClick`, Explorer's
+  selection.
+
+Explorer often ends zoomed in between nodes, with none on screen. It then
+flies to an unselected node before the tap, and the report records
+`flown: true`. In Chromium 148 at 320x568, a tap on Explorer made at once
+after a drag across a rotation delivered `pointerdown` and `pointerup` to the
+node, and a temporary capture listener on the window, which runs before
+Explorer's own click handling, saw no `click`. After a 400 ms pause the click arrives, so the
+check waits that long before the tap after each drag row. A regression that
+drops a tap made straight after such a drag would therefore pass. The tap
+after each pinch row has no added pause, though it still follows the check's
+usual wait for the page and camera to come to rest.
+
+On 2026-11-03 the launched run passed all 96 in Chromium 148.0.7778.96
+headless (DagrCanvas on WebGL2 software). The attached run passed all 96 in
+Chrome 156.0.8078.74 headless on the same Windows side and adapter, both
+canvases on `webgpu`, not a fallback. Two mutations to the built packages
+failed it:
+
+- Explorer ending its pinch when it measures a resize failed the launched run.
+- DagrCanvas's `ResizeObserver` disconnecting after its first measure failed
+  both the launched and the attached run.
 
 ## Visible frame check
 
