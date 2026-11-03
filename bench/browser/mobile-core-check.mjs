@@ -272,28 +272,32 @@ try {
         await settle();
         const panned = await read('canvas');
         assert.ok(panned.center.x !== before.center.x && panned.scale === before.scale, `${stem}: ArrowRight pans`);
+        await page.keyboard.press('ArrowLeft');
+        await settle();
+        const back = await read('canvas');
+        assert.ok(back.center.x !== panned.center.x && back.scale === panned.scale, `${stem}: ArrowLeft pans`);
         await page.keyboard.press('ArrowDown');
         await settle();
         const zoomed = await read('canvas');
-        assert.ok(zoomed.scale < panned.scale, `${stem}: ArrowDown zooms out`);
+        assert.ok(zoomed.scale < back.scale, `${stem}: ArrowDown zooms out`);
         await pageStays(page0, stem);
         await page.screenshot({ path: join(OUT, `${stem}.png`) });
         report.scenarios.push({ kind: 'keyboard', surface: 'canvas', width, height, orientation, deviceScaleFactor,
-          before, panned, zoomed, result: 'pass' });
+          before, panned, back, zoomed, result: 'pass' });
       }
-      const activeNode = () => page.evaluate(() => document.activeElement?.getAttribute('data-node-id') ?? null);
+      const activeNode = (section) => page.evaluate((selector) => document.activeElement?.closest(selector)
+        ? document.activeElement.getAttribute('data-node-id') : null, section);
       {
         const stem = `explorer-keyboard-${size}`;
         await centre('explorer');
         const first = page.locator('#explorer [data-dagr-explorer="node"][tabindex="0"]');
         const from = await first.getAttribute('data-node-id');
         await first.focus();
-        const page0 = await scrollY();
         // The chain a-b-c-d lays out left to right.
         const arrow = from === 'd' ? 'ArrowLeft' : 'ArrowRight';
         await page.keyboard.press(arrow);
         await settle();
-        const to = await activeNode();
+        const to = await activeNode('#explorer');
         assert.ok(to !== null && to !== from, `${stem}: ${arrow} moves focus from node ${from} to another node`);
         await centre('explorer');
         // Out first: the focusNode flight above may have left the camera at
@@ -307,8 +311,13 @@ try {
         await centre('explorer');
         const zoomed = await read('explorer');
         assert.ok(zoomed.scale > out.scale, `${stem}: + zooms in`);
+        // No node lies below in the chain, so ArrowDown moves nothing; it
+        // would scroll the page if the node did not take it.
+        const page0 = await scrollY();
+        await page.keyboard.press('ArrowDown');
         await pageStays(page0, stem);
         await page.screenshot({ path: join(OUT, `${stem}.png`) });
+        assert.equal(await focused(), true, `${stem}: the graph still has focus`);
         await page.keyboard.press('Escape');
         await settle();
         assert.equal(await focused(), false, `${stem}: Escape leaves the graph`);
@@ -339,8 +348,9 @@ try {
         // key moves focus to the node the tap then lands on.
         await page.keyboard.press(id === 'd' ? 'ArrowLeft' : 'ArrowRight');
         await settle();
-        const otherId = await activeNode();
+        const otherId = await activeNode('#explorer-controlled');
         assert.ok(otherId !== null && otherId !== id, `${stem}: focus moves to another node`);
+        await centre('controlled');
         const box = await page.locator(`#explorer-controlled [data-node-id="${otherId}"]`).boundingBox();
         assert.ok(box);
         await tap(box.x + box.width / 2, box.y + box.height / 2);
