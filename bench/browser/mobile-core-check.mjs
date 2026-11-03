@@ -232,7 +232,7 @@ try {
           }
           return { early, late };
         }, { probe: SURFACES[surface].probe, id });
-        assert.ok(result, `${surface}: focusNode found node ${id}`);
+        assert.ok(result, `${surface}-reduced-motion-${size}: focusNode found node ${id}`);
         return result;
       };
       const at = (one, two) => Math.abs(one.scale - two.scale) < 1e-9
