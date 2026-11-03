@@ -1,8 +1,9 @@
 /**
  * One touch sequence replayed on DagrCanvas and Explorer at phone/tablet sizes,
  * portrait and landscape, plus which of page and camera a one-finger swipe
- * moves under each surface's scroll policy, and whether focusNode flies or,
- * under reduced motion, lands at once.
+ * moves under each surface's scroll policy, whether focusNode flies or,
+ * under reduced motion, lands at once, what keys do on a focused graph, and
+ * that a controlled Explorer selection changes only when its owner's prop does.
  * Build first. DAGR_BROWSER_DEPS points to a directory with playwright-core and
  * esbuild installed in node_modules; DAGR_CHROMIUM can override the executable.
  * Launched, it is headless correctness only; software rendering is allowed, not
@@ -41,6 +42,7 @@ const SURFACES = {
   canvas: { selector: '#canvas [role="group"]', probe: 'canvas' },
   canvasTwoFinger: { selector: '#canvas-two-finger [role="group"]', probe: 'canvasTwoFinger' },
   explorer: { selector: '#explorer [data-dagr-explorer="viewport"]', probe: 'explorer' },
+  controlled: { selector: '#explorer-controlled [data-dagr-explorer="viewport"]', probe: 'controlled' },
 };
 await mkdir(OUT, { recursive: true });
 await build({
@@ -82,7 +84,8 @@ try {
       const page = await context.newPage();
       await page.goto(ORIGIN);
       await page.waitForFunction(() => window.__dagrMobile?.error || (window.__dagrMobile?.canvas?.().scale > 0
-        && window.__dagrMobile?.canvasTwoFinger?.().scale > 0 && window.__dagrMobile?.explorer?.().scale > 0));
+        && window.__dagrMobile?.canvasTwoFinger?.().scale > 0 && window.__dagrMobile?.explorer?.().scale > 0
+        && window.__dagrMobile?.controlled?.().scale > 0));
       const error = await page.evaluate(() => window.__dagrMobile.error);
       assert.equal(error, undefined, 'renderer initialized');
       const size = `${width}x${height}-dpr${deviceScaleFactor}`;
@@ -251,6 +254,118 @@ try {
         await page.screenshot({ path: join(OUT, `${stem}.png`) });
         report.scenarios.push({ kind: 'reduced-motion', surface, width, height, orientation, deviceScaleFactor,
           flying: toA, back: toD, reduced, result: 'pass' });
+      }
+
+      // A key that scrolls the page by default must move only the graph. Long
+      // enough for a smooth keyboard scroll to have shown up.
+      const pageStays = async (page0, stem) => {
+        await sleep(300);
+        assert.equal(await scrollY(), page0, `${stem}: page stays`);
+      };
+      {
+        const stem = `canvas-keyboard-${size}`;
+        const { host } = await centre('canvas');
+        await host.focus();
+        const page0 = await scrollY();
+        const before = await read('canvas');
+        await page.keyboard.press('ArrowRight');
+        await settle();
+        const panned = await read('canvas');
+        assert.ok(panned.center.x !== before.center.x && panned.scale === before.scale, `${stem}: ArrowRight pans`);
+        await page.keyboard.press('ArrowLeft');
+        await settle();
+        const back = await read('canvas');
+        assert.ok(back.center.x !== panned.center.x && back.scale === panned.scale, `${stem}: ArrowLeft pans`);
+        await page.keyboard.press('ArrowDown');
+        await settle();
+        const zoomed = await read('canvas');
+        assert.ok(zoomed.scale < back.scale, `${stem}: ArrowDown zooms out`);
+        await pageStays(page0, stem);
+        await page.screenshot({ path: join(OUT, `${stem}.png`) });
+        report.scenarios.push({ kind: 'keyboard', surface: 'canvas', width, height, orientation, deviceScaleFactor,
+          before, panned, back, zoomed, result: 'pass' });
+      }
+      const activeNode = (section) => page.evaluate((selector) => document.activeElement?.closest(selector)
+        ? document.activeElement.getAttribute('data-node-id') : null, section);
+      {
+        const stem = `explorer-keyboard-${size}`;
+        await centre('explorer');
+        const first = page.locator('#explorer [data-dagr-explorer="node"][tabindex="0"]');
+        const from = await first.getAttribute('data-node-id');
+        await first.focus();
+        // The chain a-b-c-d lays out left to right.
+        const arrow = from === 'd' ? 'ArrowLeft' : 'ArrowRight';
+        await page.keyboard.press(arrow);
+        await settle();
+        const to = await activeNode('#explorer');
+        assert.ok(to !== null && to !== from, `${stem}: ${arrow} moves focus from node ${from} to another node`);
+        await centre('explorer');
+        // Out first: the focusNode flight above may have left the camera at
+        // its maximum zoom, where + has nowhere to go.
+        const before = await read('explorer');
+        await page.keyboard.press('-');
+        await centre('explorer');
+        const out = await read('explorer');
+        assert.ok(out.scale < before.scale, `${stem}: - zooms out`);
+        await page.keyboard.press('+');
+        await centre('explorer');
+        const zoomed = await read('explorer');
+        assert.ok(zoomed.scale > out.scale, `${stem}: + zooms in`);
+        // No node lies below in the chain, so ArrowDown moves nothing; it
+        // would scroll the page if the node did not take it.
+        const page0 = await scrollY();
+        await page.keyboard.press('ArrowDown');
+        await pageStays(page0, stem);
+        await page.screenshot({ path: join(OUT, `${stem}.png`) });
+        assert.equal(await focused(), true, `${stem}: the graph still has focus`);
+        await page.keyboard.press('Escape');
+        await settle();
+        assert.equal(await focused(), false, `${stem}: Escape leaves the graph`);
+        report.scenarios.push({ kind: 'keyboard', surface: 'explorer', width, height, orientation, deviceScaleFactor,
+          focus: [from, to], scale: [before.scale, out.scale, zoomed.scale], result: 'pass' });
+      }
+      {
+        const stem = `explorer-controlled-${size}`;
+        const requests = () => page.evaluate(() => window.__dagrMobile.controlledRequests());
+        const pressed = () => page.locator('#explorer-controlled [aria-pressed="true"]').count();
+        const owner = async (id) => {
+          await page.evaluate((next) => window.__dagrMobile.controlledSelect(next), id);
+          await settle();
+        };
+        await centre('controlled');
+        const first = page.locator('#explorer-controlled [data-dagr-explorer="node"][tabindex="0"]');
+        const id = await first.getAttribute('data-node-id');
+        await first.focus();
+        await page.keyboard.press('Enter');
+        await settle();
+        assert.deepEqual(await requests(), [id], `${stem}: Enter asks the owner for node ${id}`);
+        const unselected = async (step) => {
+          const state = await read('controlled');
+          assert.ok(state.selectedId === null && !state.detailsOpen && await pressed() === 0, `${stem}: ${step}, and nothing is selected yet`);
+        };
+        await unselected('Enter');
+        // Fitted, these nodes are small enough that only the focused one has an
+        // element, so the arrow key moves focus to the node the tap lands on.
+        await page.keyboard.press(id === 'd' ? 'ArrowLeft' : 'ArrowRight');
+        await settle();
+        const otherId = await activeNode('#explorer-controlled');
+        assert.ok(otherId !== null && otherId !== id, `${stem}: focus moves to another node`);
+        await centre('controlled');
+        const box = await page.locator(`#explorer-controlled [data-node-id="${otherId}"]`).boundingBox();
+        assert.ok(box);
+        await tap(box.x + box.width / 2, box.y + box.height / 2);
+        assert.deepEqual(await requests(), [id, otherId], `${stem}: a tap asks the owner for node ${otherId}`);
+        await unselected('tap');
+        await owner(otherId);
+        const given = await read('controlled');
+        assert.ok(given.selectedId === otherId && given.detailsOpen && await pressed() === 1, `${stem}: the owner's prop selects it and opens details`);
+        await page.screenshot({ path: join(OUT, `${stem}.png`) });
+        await owner(null);
+        const cleared = await read('controlled');
+        assert.ok(cleared.selectedId === null && !cleared.detailsOpen && await pressed() === 0, `${stem}: the owner clears it`);
+        assert.equal((await requests()).length, 2, `${stem}: with no callback back to the owner`);
+        report.scenarios.push({ kind: 'controlled', surface: 'explorer', width, height, orientation, deviceScaleFactor,
+          requests: await requests(), result: 'pass' });
       }
     } finally { await context.close(); }
   }

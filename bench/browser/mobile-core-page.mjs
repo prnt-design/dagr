@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Graph } from '@prnt/dagr-graph';
 import { DagrCanvas, useDagrCanvas } from '@prnt/dagr-react';
@@ -31,21 +31,35 @@ function CanvasProbe({ name }) {
   return null;
 }
 const onError = (error) => { window.__dagrMobile.error = error.message; };
-function ExplorerProbe() {
+function ExplorerProbe({ name }) {
   const state = useExplorer();
   useEffect(() => {
-    window.__dagrMobile.explorer = () => ({
+    window.__dagrMobile[name] = () => ({
       scale: state.camera.get()?.scale,
       center: state.camera.get(),
       selectedId: state.selectedId,
+      detailsOpen: state.detailsOpen,
     });
-    window.__dagrMobile.explorerFocus = (id) => {
+    window.__dagrMobile[`${name}Focus`] = (id) => {
       state.focusNode(id);
       return nodes.some((node) => node.id === id);
     };
-    return () => { delete window.__dagrMobile.explorer; delete window.__dagrMobile.explorerFocus; };
-  }, [state]);
+    return () => { delete window.__dagrMobile[name]; delete window.__dagrMobile[`${name}Focus`]; };
+  }, [state, name]);
   return null;
+}
+// Records each selection the explorer asks for and applies none: the check
+// decides when the owner's prop changes, as a host syncing to a URL would.
+const requests = [];
+window.__dagrMobile.controlledRequests = () => [...requests];
+function ControlledExplorer() {
+  const [selectedId, setSelectedId] = useState(null);
+  useEffect(() => {
+    window.__dagrMobile.controlledSelect = setSelectedId;
+    return () => { delete window.__dagrMobile.controlledSelect; };
+  }, []);
+  return h(ExplorerRoot, { nodes, edges, label: 'Controlled Explorer', selectedId, onSelectedChange: (id) => requests.push(id) },
+    h(ExplorerViewport, { style: { height: 300 } }), h(ExplorerProbe, { name: 'controlled' }));
 }
 
 createRoot(document.getElementById('root')).render(h(React.Fragment, null,
@@ -63,6 +77,8 @@ createRoot(document.getElementById('root')).render(h(React.Fragment, null,
   }, h(CanvasProbe, { name: 'canvasTwoFinger' }))),
   h('h2', null, 'Explorer'),
   h('section', { id: 'explorer' }, h(ExplorerRoot, { nodes, edges, label: 'Core Explorer' },
-    h(ExplorerViewport, { style: { height: 300 } }), h(ExplorerProbe))),
+    h(ExplorerViewport, { style: { height: 300 } }), h(ExplorerProbe, { name: 'explorer' }))),
+  h('h2', null, 'Explorer, controlled selection'),
+  h('section', { id: 'explorer-controlled' }, h(ControlledExplorer)),
   h('div', { style: { height: 1500 } }),
 ));
