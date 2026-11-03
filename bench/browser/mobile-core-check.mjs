@@ -2,8 +2,9 @@
  * One touch sequence replayed on DagrCanvas and Explorer at phone/tablet sizes,
  * portrait and landscape, plus which of page and camera a one-finger swipe
  * moves under each surface's scroll policy, whether focusNode flies or,
- * under reduced motion, lands at once, what keys do on a focused graph, and
- * that a controlled Explorer selection changes only when its owner's prop does.
+ * under reduced motion, lands at once, what keys do on a focused graph, that a
+ * controlled Explorer selection changes only when its owner's prop does, and
+ * that a pinch or drag survives a resize under it.
  * Build first. DAGR_BROWSER_DEPS points to a directory with playwright-core and
  * esbuild installed in node_modules; DAGR_CHROMIUM can override the executable.
  * Launched, it is headless correctness only; software rendering is allowed, not
@@ -366,6 +367,131 @@ try {
         assert.equal((await requests()).length, 2, `${stem}: with no callback back to the owner`);
         report.scenarios.push({ kind: 'controlled', surface: 'explorer', width, height, orientation, deviceScaleFactor,
           requests: await requests(), result: 'pass' });
+      }
+
+      const finite = (state) => [state.scale, state.center.x, state.center.y].every(Number.isFinite);
+      // The canvas took the new size mid-gesture, rather than drawing the old
+      // camera stretched into the new box.
+      const sizedToHost = async (state, stem) => {
+        const box = await page.locator(SURFACES.canvas.selector).boundingBox();
+        assert.ok(Math.abs(state.viewport.width - box.width) < 1 && Math.abs(state.viewport.height - box.height) < 1,
+          `${stem}: the camera viewport follows the resize`);
+      };
+      const isDragging = () => page.evaluate((selector) => document.querySelector(selector).hasAttribute('data-dragging'), SURFACES.explorer.selector);
+      // Finds an unselected node whose centre is inside the surface, away from
+      // its edges.
+      const nodeOnScreen = async (surface) => {
+        const { host } = await centre(surface);
+        const box = await host.boundingBox();
+        const inside = (point) => point.x > box.x + 12 && point.x < box.x + box.width - 12
+          && point.y > box.y + 12 && point.y < box.y + box.height - 12;
+        let points;
+        if (surface === 'canvas') {
+          const origin = await page.locator('#canvas canvas').first().boundingBox();
+          points = (await page.evaluate(() => window.__dagrMobile.canvasNodes()))
+            .map(({ id, x, y }) => ({ id, x: origin.x + x, y: origin.y + y }));
+        } else {
+          points = await page.locator('#explorer [data-dagr-explorer="node"]').evaluateAll((elements) => elements.map((element) => {
+            const rect = element.getBoundingClientRect();
+            return { id: element.getAttribute('data-node-id'), x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+          }));
+        }
+        const selected = surface === 'explorer' ? (await read('explorer')).selectedId : null;
+        return points.find((point) => inside(point) && point.id !== selected);
+      };
+      // Taps a node on screen and checks that the surface reports that node.
+      // An Explorer zoomed in past its graph may show no node at all; it then
+      // flies to one first, and the report says so.
+      const tapNodeUnder = async (surface, stem) => {
+        let hit = await nodeOnScreen(surface);
+        let flown = false;
+        if (!hit && surface === 'explorer') {
+          const selected = (await read('explorer')).selectedId;
+          await page.evaluate((id) => window.__dagrMobile.explorerFocus(id), selected === 'c' ? 'b' : 'c');
+          flown = true;
+          hit = await nodeOnScreen(surface);
+        }
+        assert.ok(hit, `${stem}: a node is on screen to tap`);
+        const clicks = surface === 'canvas' ? (await page.evaluate(() => window.__dagrMobile.canvasClicks())).length : 0;
+        // Tapped at once after a drag that spanned a rotation, Chromium 148 at
+        // 320x568 delivered pointerdown and pointerup to the node but made no
+        // click; past the double-tap window it does.
+        await sleep(400);
+        await tap(hit.x, hit.y);
+        if (surface === 'canvas') {
+          assert.deepEqual((await page.evaluate(() => window.__dagrMobile.canvasClicks())).slice(clicks), [hit.id], `${stem}: a tap afterwards hits node ${hit.id}`);
+        } else {
+          assert.equal((await read('explorer')).selectedId, hit.id, `${stem}: a tap afterwards selects node ${hit.id}`);
+          // Closes the details the selection opened.
+          await page.keyboard.press('Escape');
+          await settle();
+        }
+        return { id: hit.id, flown };
+      };
+      for (const surface of ['canvas', 'explorer']) {
+        const stem = `${surface}-resize-pinch-${size}`;
+        const section = page.locator(surface === 'canvas' ? '#canvas' : '#explorer');
+        const { host, x, y } = await centre(surface);
+        await host.focus();
+        const touch = (id, px) => ({ id, x: px, y });
+        const page0 = await scrollY();
+        await send('touchStart', [touch(1, x - 30)]);
+        await send('touchStart', [touch(1, x - 30), touch(2, x + 30)]);
+        await send('touchMove', [touch(1, x - 30), touch(2, x + 70)]);
+        const before = (await section.boundingBox()).width;
+        await section.evaluate((element, next) => { element.style.width = `${next}px`; }, Math.round(before * 0.75));
+        await settle();
+        const resized = await read(surface);
+        if (surface === 'canvas') await sizedToHost(resized, stem);
+        // Closing, since the spread before the resize may have reached
+        // Explorer's maximum zoom.
+        await send('touchMove', [touch(1, x - 30), touch(2, x + 50)]);
+        await settle();
+        const after = await read(surface);
+        assert.ok(finite(resized) && finite(after), `${stem}: the camera stays finite`);
+        // Explorer's zoom limits follow its area, so the resize itself may move
+        // its scale and the pinch can stop at the new minimum.
+        if (surface === 'canvas') assert.ok(Math.abs(after.scale / resized.scale - 80 / 100) < 0.01, `${stem}: the pinch keeps zooming after the container shrinks`);
+        else assert.ok(after.scale < resized.scale && await isDragging(), `${stem}: the pinch keeps zooming out after the container shrinks`);
+        assert.equal(await scrollY(), page0, `${stem}: page stays`);
+        await send('touchEnd', []);
+        await settle();
+        if (surface === 'explorer') assert.equal(await isDragging(), false, `${stem}: the drag state clears`);
+        await page.screenshot({ path: join(OUT, `${stem}.png`) });
+        const tapped = await tapNodeUnder(surface, stem);
+        await section.evaluate((element) => { element.style.width = ''; });
+        await settle();
+        report.scenarios.push({ kind: 'resize-pinch', surface, width, height, orientation, deviceScaleFactor,
+          sectionWidth: [before, Math.round(before * 0.75)], resized, after, tapped, result: 'pass' });
+      }
+      for (const surface of ['canvas', 'explorer']) {
+        const stem = `${surface}-resize-drag-${size}`;
+        const { host, x, y } = await centre(surface);
+        await host.focus();
+        await send('touchStart', [{ id: 1, x, y }]);
+        for (let step = 1; step <= 3; step += 1) await send('touchMove', [{ id: 1, x, y: y - 10 * step }]);
+        await page.setViewportSize({ width: height, height: width });
+        await settle();
+        const page0 = await scrollY();
+        const rotated = await read(surface);
+        if (surface === 'canvas') await sizedToHost(rotated, stem);
+        for (let step = 4; step <= 6; step += 1) await send('touchMove', [{ id: 1, x, y: y - 10 * step }]);
+        await settle();
+        const after = await read(surface);
+        assert.ok(finite(rotated) && finite(after), `${stem}: the camera stays finite`);
+        // Explorer clamps a pan of a graph that fits, as in the swipe rows.
+        if (surface === 'canvas') assert.ok(after.center.y !== rotated.center.y, `${stem}: the drag keeps panning after the viewport rotates`);
+        else assert.equal(await isDragging(), true, `${stem}: the graph keeps the drag after the viewport rotates`);
+        assert.equal(await scrollY(), page0, `${stem}: page stays`);
+        await send('touchEnd', []);
+        await settle();
+        if (surface === 'explorer') assert.equal(await isDragging(), false, `${stem}: the drag state clears`);
+        await page.screenshot({ path: join(OUT, `${stem}.png`) });
+        const tapped = await tapNodeUnder(surface, stem);
+        await page.setViewportSize({ width, height });
+        await settle();
+        report.scenarios.push({ kind: 'resize-drag', surface, width, height, orientation, deviceScaleFactor,
+          rotated, after, tapped, result: 'pass' });
       }
     } finally { await context.close(); }
   }

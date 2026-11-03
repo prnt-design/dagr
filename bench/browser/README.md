@@ -121,6 +121,40 @@ blurring the graph, an Explorer node's arrow keys not calling
 DagrCanvas one also failed the attached run. These are desktop keyboard events on a touch-emulated
 page, not software-keyboard or screen-reader evidence.
 
+The resize rows added 24 scenarios, each on DagrCanvas and Explorer:
+
+- **Pinch, container shrinks:** two fingers spread, the surface's section
+  shrinks to 75% of its width, then the fingers close. DagrCanvas's camera
+  viewport must match the new box and its scale must follow the fingers
+  (a factor of 0.8). Explorer's must fall and it must still be dragging.
+  Explorer's zoom limits follow its area, so the shrink itself can move its
+  scale and the closing pinch can stop at the new minimum.
+- **Drag, viewport rotates:** one finger drags, the viewport swaps width and
+  height, and the finger drags on. DagrCanvas's camera viewport must match the
+  new box and the camera must keep panning. Explorer must keep its drag state.
+- **Both:** the camera stays finite, the page does not scroll during the
+  rest of the gesture, Explorer's `data-dragging` clears on release, and a tap
+  afterwards must hit a node on screen: DagrCanvas's `onNodeClick`, Explorer's
+  selection.
+
+Explorer often ends zoomed in between nodes, with none on screen. It then
+flies to an unselected node before the tap, and the report records
+`flown: true`. In Chromium 148 at 320x568, a tap made at once after a drag
+across a rotation delivered `pointerdown` and `pointerup` to the node but no
+`click`. The check waits 400 ms before each tap, past the double-tap window,
+and the click then arrives. Neither surface listens for touch events, so
+neither can be what dropped it.
+
+On 2026-11-03 the launched run passed all 96 in Chromium 148.0.7778.96
+headless (DagrCanvas on WebGL2 software). The attached run passed all 96 in
+Chrome 156.0.8078.74 headless on the same Windows side and adapter, both
+canvases on `webgpu`, not a fallback. Two mutations to the built packages
+failed it:
+
+- Explorer ending its pinch when it measures a resize failed the launched run.
+- DagrCanvas's `ResizeObserver` disconnecting after its first measure failed
+  both the launched and the attached run.
+
 ## Visible frame check
 
 `visible-frame-check.mjs` embeds DagrCanvas and Explorer mid-page, selects an
