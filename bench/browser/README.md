@@ -169,14 +169,17 @@ failed it:
 1,000-node tree (`--nodes=N` changes it), at 390x844 DPR 3 and 320x568 DPR 1,
 with `maxPixelRatio` unset, 2 and 1. Each row fails unless the camera renders
 at `min(devicePixelRatio, maxPixelRatio)` and the canvas's drawing buffer is
-the viewport at that ratio. It then records the V8 heap after a collection,
-the animation-frame interval with nothing drawing, and, over a pinch out and a
-one-finger pan (125 touch events through `Input.dispatchTouchEvent`, each sent
-once the previous one is acknowledged), the number of draws, the time each
-`render()` call takes on the main thread, and the intervals between animation
-frames and between draws. `render()` time is the CPU side only: on both
-backends the GPU finishes the frame later. A screenshot per row and
-`report.json` go to `--out`. It runs as the mobile input check does:
+the viewport at that ratio. It then records the V8 heap after a collection
+and the animation-frame interval over 120 frames with no input, and fails if
+anything drew in them. Over a pinch out and a one-finger pan it records the
+number of draws, the time each `render()` call takes on the main thread, the
+interval between draws, and the time per touch event. The 125 touch events go
+through `Input.dispatchTouchEvent`, each sent once the previous one is
+acknowledged, so the gesture draws at most once per event (119 or 120 draws in
+every row) and the time per event is a floor on the interval between draws.
+`render()` time is the CPU side only: on both backends the GPU finishes the
+frame later. A screenshot per row and `report.json` go to `--out`. It runs as
+the mobile input check does:
 
 ```bash
 DAGR_BROWSER_DEPS=/tmp/dagr-browser node bench/browser/mobile-budget.mjs
@@ -188,31 +191,33 @@ On 2026-11-03, on the WSL2 machine (AMD Ryzen 9 9900X, 30 GB to WSL), all six
 rows passed launched (Chromium 148.0.7778.96 headless, `webgl2` on SwiftShader)
 and attached (Chrome 156.0.8078.74 headless on the Windows side, `webgpu`,
 adapter `nvidia` `lovelace`, the GeForce RTX 4090, not a fallback). Both had a
-16.7 ms frame interval with nothing drawing. Medians, with the 95th percentile
-in brackets, in ms:
+16.7 ms frame interval with no input. Medians, with the 95th percentile in
+brackets, in ms:
 
-| Viewport | `maxPixelRatio` | Drawing buffer | Backend | Draws | `render()` | Between frames | Between draws |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 390x844 DPR 3 | unset | 1170x2532 | webgl2 software | 120 | 0.4 (0.7) | 16.7 (200) | 200 (216.7) |
-| 390x844 DPR 3 | 2 | 780x1688 | webgl2 software | 119 | 0.4 (0.7) | 16.8 (100) | 100.2 (117) |
-| 390x844 DPR 3 | 1 | 390x844 | webgl2 software | 119 | 0.4 (0.7) | 16.8 (50) | 50 (66.9) |
-| 320x568 DPR 1 | unset, 2 or 1 | 320x568 | webgl2 software | 119 | 0.4 (0.6 to 0.7) | 16.7 (33.4) | 50 (50.2) |
-| 390x844 DPR 3 | unset | 1170x2532 | webgpu RTX 4090 | 119 | 0.3 (0.4) | 16.7 (16.9) | 16.7 (32.2) |
-| 390x844 DPR 3 | 2 | 780x1688 | webgpu RTX 4090 | 119 | 0.3 (0.4) | 16.7 (16.9) | 16.7 (33.2) |
-| 390x844 DPR 3 | 1 | 390x844 | webgpu RTX 4090 | 119 | 0.3 (0.5) | 16.7 (16.9) | 16.7 (33.2) |
-| 320x568 DPR 1 | unset, 2 or 1 | 320x568 | webgpu RTX 4090 | 119 | 0.3 (0.5) | 16.7 (16.9) | 16.7 (31.2 to 33.2) |
+| Viewport | `maxPixelRatio` | Drawing buffer | Backend | `render()` | Per touch event | Between draws |
+| --- | --- | --- | --- | --- | --- | --- |
+| 390x844 DPR 3 | unset | 1170x2532 | webgl2 software | 0.4 (0.6) | 190.90 | 200 (216.8) |
+| 390x844 DPR 3 | 2 | 780x1688 | webgl2 software | 0.4 (0.8) | 102.98 | 100.1 (116.9) |
+| 390x844 DPR 3 | 1 | 390x844 | webgl2 software | 0.4 (0.7) | 51.63 | 50 (66.7) |
+| 320x568 DPR 1 | unset, 2 or 1 | 320x568 | webgl2 software | 0.4 (0.6 to 0.8) | 47.44 to 48.12 | 50 (50.2) |
+| 390x844 DPR 3 | unset | 1170x2532 | webgpu RTX 4090 | 0.3 (0.4) | 17.44 | 16.7 (33.2) |
+| 390x844 DPR 3 | 2 | 780x1688 | webgpu RTX 4090 | 0.2 (0.4) | 17.44 | 16.7 (31.8) |
+| 390x844 DPR 3 | 1 | 390x844 | webgpu RTX 4090 | 0.2 (0.5) | 17.44 | 16.7 (33) |
+| 320x568 DPR 1 | unset, 2 or 1 | 320x568 | webgpu RTX 4090 | 0.2 to 0.3 (0.4 to 0.5) | 17.44 to 17.45 | 16.7 (32.6 to 33.1) |
 
-The V8 heap after a collection was 7.1 MB launched and 7.3 MB attached in
-every row, so the ratio does not show in it; the drawing buffer's GPU memory
-is not measured here. On SwiftShader the gap between draws grows with the
-drawing buffer, from 50 ms at 390x844 to 200 ms at 1170x2532, while
-`render()` stays at 0.4 ms, so the cost is in rasterising the pixels, not in
-the main thread. On the RTX 4090 every row drew once per 60 Hz frame, so on
-that GPU the ratio costs nothing this check can see. Neither backend is a
-phone GPU: this does not show what a 3x phone pays, and it is no basis for a
-default cap. `maxPixelRatio` stays an opt-in until a real device shows a cost.
-DagrCanvas ignoring `maxPixelRatio` in the built package failed the launched
-run at the first capped row.
+The V8 heap after a collection was 7.09 to 7.11 MB launched and 7.26 to
+7.27 MB attached in every row, so the ratio does not show in it; the drawing
+buffer's GPU memory is not measured here. On SwiftShader the interval between
+draws has a floor near 50 ms, met at 320x568 and 390x844, and above that grows
+with the drawing buffer, to 100 ms at 780x1688 and 200 ms at 1170x2532, while
+`render()` stays at 0.4 ms: the cost is in rasterising the pixels, not on the
+main thread. On the RTX 4090 every row kept pace with one draw per touch event
+at about one 60 Hz frame each, so at this input rate the ratio costs nothing
+this check can see on that GPU. Neither backend is a phone GPU: this does not
+show what a 3x phone pays, and it is no basis for a default cap.
+`maxPixelRatio` stays an opt-in until a real device shows a cost. DagrCanvas
+ignoring `maxPixelRatio` in the built package failed the launched run at the
+first capped row.
 
 ## Visible frame check
 

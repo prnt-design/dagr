@@ -113,11 +113,14 @@ try {
       await cdp.send('HeapProfiler.collectGarbage');
       const heap = await cdp.send('Runtime.getHeapUsage');
       const control = gaps(await page.evaluate((frames) => window.__dagrBudget.frames(frames), CONTROL_FRAMES));
+      const idle = await page.evaluate(() => window.__dagrBudget.state());
+      assert.equal(idle.drawn, state.drawn, `${stem}: nothing drew during the control frames`);
 
       const send = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
       const x = width / 2;
       const y = height / 2;
       const moves = 60;
+      const touchEvents = 2 * moves + 5;
       await page.evaluate(() => window.__dagrBudget.record(true));
       const started = performance.now();
       await send('touchStart', [{ id: 1, x: x - 30, y }]);
@@ -142,7 +145,7 @@ try {
         heapMb: round(heap.usedSize / 2 ** 20),
         controlIntervalMs: summarise(control),
         gesture: {
-          touchEvents: 2 * moves + 5, inputMs: Math.round(inputMs),
+          touchEvents, inputMs: Math.round(inputMs), msPerTouchEvent: round(inputMs / touchEvents),
           draws: draws.length, renderMs: summarise(draws.map((draw) => draw.ms)),
           frameIntervalMs: summarise(gaps(stamps)),
           drawIntervalMs: summarise(gaps(draws.map((draw) => draw.at))),
