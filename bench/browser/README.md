@@ -18,8 +18,8 @@ browser is, and because the rule below about a committed harness applies to them
 exactly as it does to a measurement. `gpu-hover.mjs` and `gpu-hover-page.mjs`
 check the same way that `DagrCanvas`'s GPU hit testing answers hover and
 clicks at 10,000 nodes. `windows-chrome.mjs` lets the probe, the frame
-profile, the GPU hover check and the mobile input check reach a Windows GPU
-from WSL2.
+profile, the GPU hover check, the mobile input check and the mobile
+pixel-ratio budget reach a Windows GPU from WSL2.
 
 ## Shared mobile input check
 
@@ -162,6 +162,64 @@ failed it:
 - Explorer ending its pinch when it measures a resize failed the launched run.
 - DagrCanvas's `ResizeObserver` disconnecting after its first measure failed
   both the launched and the attached run.
+
+## Mobile pixel-ratio budget
+
+`mobile-budget.mjs` fills a phone-sized viewport with one DagrCanvas over a
+1,000-node tree (`--nodes=N` changes it), at 390x844 DPR 3 and 320x568 DPR 1,
+with `maxPixelRatio` unset, 2 and 1. Each row fails unless the camera renders
+at `min(devicePixelRatio, maxPixelRatio)` and the canvas's drawing buffer is
+the viewport at that ratio. It then records the V8 heap after a collection
+and the animation-frame interval over 120 frames with no input, and fails if
+anything drew in them. Over a pinch out and a one-finger pan it records the
+number of draws, the time each `render()` call takes on the main thread, the
+intervals between draws and between animation frames, and the time per touch
+event. The 125 touch events go
+through `Input.dispatchTouchEvent`, each sent once the previous one is
+acknowledged, so the gesture draws at most once per event (119 draws in every
+row) and the time per event is, on average, a floor on the interval between
+draws.
+`render()` time is the CPU side only: on both backends the GPU finishes the
+frame later. A screenshot per row and `report.json` go to `--out`. It runs as
+the mobile input check does:
+
+```bash
+DAGR_BROWSER_DEPS=/tmp/dagr-browser node bench/browser/mobile-budget.mjs
+DAGR_CDP=http://127.0.0.1:9445 DAGR_BROWSER_DEPS=/tmp/dagr-browser \
+  node bench/browser/mobile-budget.mjs   # attached: webgpu and a non-fallback adapter required
+```
+
+On 2026-11-03, on the WSL2 machine (AMD Ryzen 9 9900X, 30 GB to WSL), all six
+rows passed launched (Chromium 148.0.7778.96 headless, `webgl2` on SwiftShader)
+and attached (Chrome 156.0.8078.74 headless on the Windows side, `webgpu`,
+adapter `nvidia` `lovelace`, the GeForce RTX 4090, not a fallback). Both had a
+16.7 ms frame interval with no input. Medians, with the 95th percentile in
+brackets, in ms:
+
+| Viewport | `maxPixelRatio` | Drawing buffer | Backend | `render()` | Per touch event | Between draws |
+| --- | --- | --- | --- | --- | --- | --- |
+| 390x844 DPR 3 | unset | 1170x2532 | webgl2 software | 0.4 (0.6) | 190.90 | 200 (216.8) |
+| 390x844 DPR 3 | 2 | 780x1688 | webgl2 software | 0.4 (0.8) | 102.98 | 100.1 (116.9) |
+| 390x844 DPR 3 | 1 | 390x844 | webgl2 software | 0.4 (0.7) | 51.63 | 50 (66.7) |
+| 320x568 DPR 1 | unset, 2 or 1 | 320x568 | webgl2 software | 0.4 (0.6 to 0.8) | 47.44 to 48.12 | 50 (50.2) |
+| 390x844 DPR 3 | unset | 1170x2532 | webgpu RTX 4090 | 0.3 (0.4) | 17.44 | 16.7 (33.2) |
+| 390x844 DPR 3 | 2 | 780x1688 | webgpu RTX 4090 | 0.2 (0.4) | 17.44 | 16.7 (31.8) |
+| 390x844 DPR 3 | 1 | 390x844 | webgpu RTX 4090 | 0.2 (0.5) | 17.44 | 16.7 (33) |
+| 320x568 DPR 1 | unset, 2 or 1 | 320x568 | webgpu RTX 4090 | 0.2 to 0.3 (0.4 to 0.5) | 17.44 to 17.45 | 16.7 (32.6 to 33.1) |
+
+The V8 heap after a collection was 7.09 to 7.11 MB launched and 7.26 to
+7.27 MB attached in every row, so the ratio does not show in it; the drawing
+buffer's GPU memory is not measured here. On SwiftShader the interval between
+draws has a floor near 50 ms, met at 320x568 and 390x844, and above that grows
+with the drawing buffer, to 100 ms at 780x1688 and 200 ms at 1170x2532, while
+`render()` stays at 0.4 ms and animation frames keep a median near 16.7 ms: the
+cost is in rasterising the pixels, not on the main thread. On the RTX 4090 every row kept pace with one draw per touch event
+at about one 60 Hz frame each, so at this input rate the ratio costs nothing
+this check can see on that GPU. Neither backend is a phone GPU: this does not
+show what a 3x phone pays, and it is no basis for a default cap.
+`maxPixelRatio` stays an opt-in until a real device shows a cost. DagrCanvas
+ignoring `maxPixelRatio` in the built package failed the launched run at the
+first capped row.
 
 ## Visible frame check
 
