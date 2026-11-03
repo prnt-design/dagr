@@ -47,10 +47,10 @@ function Probe() {
     const { renderer } = handle;
     const render = renderer.render;
     renderer.render = function timed() {
-      const start = performance.now();
+      const start = window.performance.now();
       render.call(renderer);
       drawn += 1;
-      if (recording) draws.push({ at: start, ms: performance.now() - start });
+      if (recording) draws.push({ at: start, ms: window.performance.now() - start });
     };
     window.__dagrBudget.state = () => {
       const canvas = document.querySelector('#canvas canvas');
