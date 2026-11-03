@@ -18,8 +18,8 @@ browser is, and because the rule below about a committed harness applies to them
 exactly as it does to a measurement. `gpu-hover.mjs` and `gpu-hover-page.mjs`
 check the same way that `DagrCanvas`'s GPU hit testing answers hover and
 clicks at 10,000 nodes. `windows-chrome.mjs` lets the probe, the frame
-profile, the GPU hover check and the mobile input check reach a Windows GPU
-from WSL2.
+profile, the GPU hover check, the mobile input check and the mobile
+pixel-ratio budget reach a Windows GPU from WSL2.
 
 ## Shared mobile input check
 
@@ -162,6 +162,57 @@ failed it:
 - Explorer ending its pinch when it measures a resize failed the launched run.
 - DagrCanvas's `ResizeObserver` disconnecting after its first measure failed
   both the launched and the attached run.
+
+## Mobile pixel-ratio budget
+
+`mobile-budget.mjs` fills a phone-sized viewport with one DagrCanvas over a
+1,000-node tree (`--nodes=N` changes it), at 390x844 DPR 3 and 320x568 DPR 1,
+with `maxPixelRatio` unset, 2 and 1. Each row fails unless the camera renders
+at `min(devicePixelRatio, maxPixelRatio)` and the canvas's drawing buffer is
+the viewport at that ratio. It then records the V8 heap after a collection,
+the animation-frame interval with nothing drawing, and, over a pinch out and a
+one-finger pan (125 touch events through `Input.dispatchTouchEvent`, each sent
+once the previous one is acknowledged), the number of draws, the time each
+`render()` call takes on the main thread, and the intervals between animation
+frames and between draws. `render()` time is the CPU side only: on both
+backends the GPU finishes the frame later. A screenshot per row and
+`report.json` go to `--out`. It runs as the mobile input check does:
+
+```bash
+DAGR_BROWSER_DEPS=/tmp/dagr-browser node bench/browser/mobile-budget.mjs
+DAGR_CDP=http://127.0.0.1:9445 DAGR_BROWSER_DEPS=/tmp/dagr-browser \
+  node bench/browser/mobile-budget.mjs   # attached: webgpu and a non-fallback adapter required
+```
+
+On 2026-11-03, on the WSL2 machine (AMD Ryzen 9 9900X, 30 GB to WSL), all six
+rows passed launched (Chromium 148.0.7778.96 headless, `webgl2` on SwiftShader)
+and attached (Chrome 156.0.8078.74 headless on the Windows side, `webgpu`,
+adapter `nvidia` `lovelace`, the GeForce RTX 4090, not a fallback). Both had a
+16.7 ms frame interval with nothing drawing. Medians, with the 95th percentile
+in brackets, in ms:
+
+| Viewport | `maxPixelRatio` | Drawing buffer | Backend | Draws | `render()` | Between frames | Between draws |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 390x844 DPR 3 | unset | 1170x2532 | webgl2 software | 120 | 0.4 (0.7) | 16.7 (200) | 200 (216.7) |
+| 390x844 DPR 3 | 2 | 780x1688 | webgl2 software | 119 | 0.4 (0.7) | 16.8 (100) | 100.2 (117) |
+| 390x844 DPR 3 | 1 | 390x844 | webgl2 software | 119 | 0.4 (0.7) | 16.8 (50) | 50 (66.9) |
+| 320x568 DPR 1 | unset, 2 or 1 | 320x568 | webgl2 software | 119 | 0.4 (0.6 to 0.7) | 16.7 (33.4) | 50 (50.2) |
+| 390x844 DPR 3 | unset | 1170x2532 | webgpu RTX 4090 | 119 | 0.3 (0.4) | 16.7 (16.9) | 16.7 (32.2) |
+| 390x844 DPR 3 | 2 | 780x1688 | webgpu RTX 4090 | 119 | 0.3 (0.4) | 16.7 (16.9) | 16.7 (33.2) |
+| 390x844 DPR 3 | 1 | 390x844 | webgpu RTX 4090 | 119 | 0.3 (0.5) | 16.7 (16.9) | 16.7 (33.2) |
+| 320x568 DPR 1 | unset, 2 or 1 | 320x568 | webgpu RTX 4090 | 119 | 0.3 (0.5) | 16.7 (16.9) | 16.7 (31.2 to 33.2) |
+
+The V8 heap after a collection was 7.1 MB launched and 7.3 MB attached in
+every row, so the ratio does not show in it; the drawing buffer's GPU memory
+is not measured here. On SwiftShader the gap between draws grows with the
+drawing buffer, from 50 ms at 390x844 to 200 ms at 1170x2532, while
+`render()` stays at 0.4 ms, so the cost is in rasterising the pixels, not in
+the main thread. On the RTX 4090 every row drew once per 60 Hz frame, so on
+that GPU the ratio costs nothing this check can see. Neither backend is a
+phone GPU: this does not show what a 3x phone pays, and it is no basis for a
+default cap. `maxPixelRatio` stays an opt-in until a real device shows a cost.
+DagrCanvas ignoring `maxPixelRatio` in the built package failed the launched
+run at the first capped row.
 
 ## Visible frame check
 
