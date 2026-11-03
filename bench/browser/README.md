@@ -173,10 +173,12 @@ the viewport at that ratio. It then records the V8 heap after a collection
 and the animation-frame interval over 120 frames with no input, and fails if
 anything drew in them. Over a pinch out and a one-finger pan it records the
 number of draws, the time each `render()` call takes on the main thread, the
-interval between draws, and the time per touch event. The 125 touch events go
+intervals between draws and between animation frames, and the time per touch
+event. The 125 touch events go
 through `Input.dispatchTouchEvent`, each sent once the previous one is
-acknowledged, so the gesture draws at most once per event (119 or 120 draws in
-every row) and the time per event is a floor on the interval between draws.
+acknowledged, so the gesture draws at most once per event (119 draws in every
+row) and the time per event is, on average, a floor on the interval between
+draws.
 `render()` time is the CPU side only: on both backends the GPU finishes the
 frame later. A screenshot per row and `report.json` go to `--out`. It runs as
 the mobile input check does:
@@ -210,8 +212,8 @@ The V8 heap after a collection was 7.09 to 7.11 MB launched and 7.26 to
 buffer's GPU memory is not measured here. On SwiftShader the interval between
 draws has a floor near 50 ms, met at 320x568 and 390x844, and above that grows
 with the drawing buffer, to 100 ms at 780x1688 and 200 ms at 1170x2532, while
-`render()` stays at 0.4 ms: the cost is in rasterising the pixels, not on the
-main thread. On the RTX 4090 every row kept pace with one draw per touch event
+`render()` stays at 0.4 ms and animation frames keep a median near 16.7 ms: the
+cost is in rasterising the pixels, not on the main thread. On the RTX 4090 every row kept pace with one draw per touch event
 at about one 60 Hz frame each, so at this input rate the ratio costs nothing
 this check can see on that GPU. Neither backend is a phone GPU: this does not
 show what a 3x phone pays, and it is no basis for a default cap.
