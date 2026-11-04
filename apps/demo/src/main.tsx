@@ -1,12 +1,12 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.js';
-// Both stages' rules, then the page's. In that order, because the page adds the
+// The stages' rules, then the page's. In that order, because the page adds the
 // frame around whichever stage is mounted (its height, its border) and a host
-// override has to come after what it overrides. Both are imported
+// override has to come after what it overrides. All three are imported
 // unconditionally even though only one stage is on screen at a time: a
-// stylesheet is a static import either way, and two of them are a few hundred
-// bytes against a bundle that carries three.js.
+// stylesheet is a static import either way, and three of them are a few
+// hundred bytes against a bundle that carries three.js.
 import '@dagr/campaign-stage/stage.css';
 import '@dagr/living-stage/living.css';
 import './chart/chart.css';

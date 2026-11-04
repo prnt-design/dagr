@@ -1,7 +1,9 @@
 # demo
 
 The local renderer playground. It opens on the living graph, a build pipeline
-edited while you watch. The campaign is an archived experiment, available only
+edited while you watch. The chart view (`#view=chart`) is an experiment in
+drawing a bar and line chart with the same renderer, and it lives in this app
+rather than a package because nothing else mounts it. The campaign is an archived experiment, available only
 through the explicit `#view=campaign` URL for development and historical capture.
 It is no longer offered in the visible demo switch.
 
@@ -75,16 +77,16 @@ ahead of the package's: without it the specifier is rewritten into
 ## The stylesheets, in order
 
 `main.tsx` imports `@dagr/campaign-stage/stage.css`, then
-`@dagr/living-stage/living.css`, then `styles.css`, and the order is load
+`@dagr/living-stage/living.css`, then `chart/chart.css`, then `styles.css`, and the order is load
 bearing: the page adds the frame around whichever stage is mounted (its height,
 its border) and a host override has to come after what it overrides. Both
 stages' colour tokens are their own rather than `:root`'s, so mounting either in
 a docs site does not make it read a variable the host happens to share a name
 with. This page's `:root` tokens are the same values, declared twice on purpose.
 
-Both are imported unconditionally even though one stage is on screen at a time:
-a stylesheet is a static import either way, and two of them are a few hundred
-bytes against a bundle that carries three.js.
+All three are imported unconditionally even though one stage is on screen at a
+time: a stylesheet is a static import either way, and three of them are a few
+hundred bytes against a bundle that carries three.js.
 
 ## No tests here
 

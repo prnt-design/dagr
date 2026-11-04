@@ -6,26 +6,27 @@ import { LivingStage } from '@dagr/living-stage';
 import { ChartStage } from './chart/ChartStage.js';
 
 /**
- * The playground page: two demos, one at a time, and the few facts about each
- * that a picture cannot show.
+ * The playground page: three demos, one at a time, and the few facts about
+ * each that a picture cannot show.
  *
- * TWO, AND ONE AT A TIME. The campaign proves scale, tiling and semantic zoom
- * at 3,010 nodes; the living stage proves that an edit moves only the part of
- * the drawing it touches, which is the claim the project competes on and which
- * scale cannot show. Neither subsumes the other, so neither was deleted. They
- * are behind a switch rather than stacked because each mounts a canvas, and two
- * live canvases is two GPU device contexts for a page that can only be looking
- * at one of them.
+ * ONE AT A TIME. The campaign proves scale, tiling and semantic zoom at 3,010
+ * nodes; the living stage proves that an edit moves only the part of the
+ * drawing it touches, which is the claim the project competes on and which
+ * scale cannot show; the chart asks whether the renderer has a charting story
+ * at all. None subsumes another, so none was deleted. They are behind a switch
+ * rather than stacked because each mounts a canvas, and two live canvases is
+ * two GPU device contexts for a page that can only be looking at one of them.
  *
  * The switch is one `useState` and no router. A route each would be the right
- * answer for a site a visitor navigates; this is a local playground with two
- * views, and the deployed versions of both already have routes of their own on
+ * answer for a site a visitor navigates; this is a local playground, and the
+ * deployed versions of the two graph demos already have routes of their own on
  * the docs site (see `render.yaml`: this app has no deploy).
  *
- * Everything on either canvas lives in a package, `@dagr/campaign-stage` and
+ * The two graph demos live in packages, `@dagr/campaign-stage` and
  * `@dagr/living-stage`, because the docs site mounts the same two components
- * and a component cannot be imported from an app. What is left here is the page
- * around them.
+ * and a component cannot be imported from an app. The chart is an experiment
+ * nothing else mounts, so it stays in this app under `chart/`. What is left
+ * here is the page around them.
  */
 
 /**
