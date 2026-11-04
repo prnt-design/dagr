@@ -188,6 +188,16 @@ Mid-gesture, the check hands a contact's pointer capture to the page body with
   one shared rule.
 - **Both:** the camera stays finite, the page does not scroll, no drag state
   remains after release, and a fresh pinch must zoom by the fingers' ratio.
+- **Pinch that began as a drag:** one finger drags far enough to pan, so the
+  surface's root holds its capture, then a second finger lands and closes,
+  and the camera must move. The body then takes the first finger's capture.
+  The browser reports that with the finger's next event, so the first finger
+  moves 2 CSS pixels before the second moves on. Both surfaces must end the
+  pinch and the drag: the second finger's travel must not move the camera,
+  and the page must stay put. After release a fresh pinch must zoom by the
+  fingers' ratio. This is the row that exercises DagrCanvas's pinch tracker
+  on a root-held capture, the one case its `lostpointercapture` listener ends
+  a contact. It adds 12 scenarios, 6 on each surface.
 
 On 2026-11-03 the launched run passed all 120 in Chromium 148.0.7778.96
 headless (DagrCanvas on WebGL2 software). The attached run passed all 120 in
@@ -202,6 +212,14 @@ failed it:
   launched run.
 - DagrCanvas ending a contact when any element loses its capture, not only its
   root, failed the launched run.
+
+On 2026-11-04, with the drag-then-pinch row, the launched run passed all 132
+in Chromium 148.0.7778.96 headless (DagrCanvas on WebGL2 software), and the
+attached run passed all 132 in Chrome 156.0.8078.80 headless on the same
+Windows side, both canvases on `webgpu`, adapter NVIDIA `lovelace`, not a
+fallback. DagrCanvas's pinch tracker not listening for `lostpointercapture`
+failed the launched run at the new row, after every earlier row at that size
+passed.
 
 No row takes a capture DagrCanvas's root holds during a pinch (a pinch that
 began as a drag), so the pinch tracker's own `lostpointercapture` branch for

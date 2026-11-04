@@ -497,17 +497,18 @@ try {
         window.__dagrPointers = [];
         window.addEventListener('pointerdown', (event) => window.__dagrPointers.push(event.pointerId), true);
       });
-      // Hands the newest contact's capture to the page body, with no
-      // pointercancel, and says which element of the surface held it.
-      const takeCapture = (surface) => page.evaluate((selector) => {
-        const id = window.__dagrPointers.at(-1);
+      // Hands a contact's capture (the newest, or the nth from last) to the
+      // page body, with no pointercancel, and says which element of the
+      // surface held it.
+      const takeCapture = (surface, nth = 1) => page.evaluate(({ selector, nth }) => {
+        const id = window.__dagrPointers.at(-nth);
         const root = document.querySelector(selector);
         const section = root.closest('section');
         const holder = [section, ...section.querySelectorAll('*')].find((element) => element.hasPointerCapture(id));
         if (holder === undefined) return null;
         document.body.setPointerCapture(id);
         return holder === root ? 'surface' : holder.tagName.toLowerCase();
-      }, SURFACES[surface].selector);
+      }, { selector: SURFACES[surface].selector, nth });
       const dragState = (surface) => page.evaluate(({ selector, attribute }) => document.querySelector(selector).hasAttribute(attribute),
         { selector: SURFACES[surface].selector, attribute: surface === 'canvas' ? 'data-dagr-dragging' : 'data-dragging' });
       for (const surface of ['canvas', 'explorer']) {
@@ -591,6 +592,54 @@ try {
         assert.equal(await dragState(surface), false, `${stem}: and its drag state clears`);
         await page.screenshot({ path: join(OUT, `${stem}.png`) });
         report.scenarios.push({ kind: 'lost-capture-pinch', surface, width, height, orientation, deviceScaleFactor,
+          holder, start, lost, after, fresh, result: 'pass' });
+      }
+      for (const surface of ['canvas', 'explorer']) {
+        const stem = `${surface}-lost-capture-drag-pinch-${size}`;
+        await flight(surface, 'reduce', 'b');
+        await page.emulateMedia({ reducedMotion: 'no-preference' });
+        const { host, x, y } = await centre(surface);
+        await host.focus();
+        const page0 = await scrollY();
+        // The first finger drags before the second lands, so the surface's
+        // root, not the <canvas>, holds the first contact's capture.
+        await send('touchStart', [{ id: 1, x: x - 30, y }]);
+        for (let step = 1; step <= 3; step += 1) await send('touchMove', [{ id: 1, x: x - 30, y: y - 10 * step }]);
+        const one = { id: 1, x: x - 30, y: y - 30 };
+        assert.equal(await dragState(surface), true, `${stem}: the drag starts`);
+        await send('touchStart', [one, { id: 2, x: x + 30, y: y - 30 }]);
+        const start = await read(surface);
+        await send('touchMove', [one, { id: 2, x: x + 20, y: y - 30 }]);
+        await settle();
+        const lost = await read(surface);
+        assert.ok(!at(lost, start), `${stem}: the pinch moves the camera`);
+        const holder = await takeCapture(surface, 2);
+        assert.equal(holder, 'surface', `${stem}: the surface holds the dragging contact's capture`);
+        // The browser reports the lost capture with that contact's next
+        // event, so the first finger moves before the second does.
+        const nudged = { ...one, y: y - 32 };
+        await send('touchMove', [nudged, { id: 2, x: x + 20, y: y - 30 }]);
+        await settle();
+        await send('touchMove', [nudged, { id: 2, x: x + 10, y: y - 30 }]);
+        await send('touchMove', [nudged, { id: 2, x, y: y - 50 }]);
+        await settle();
+        const after = await read(surface);
+        assert.ok(finite(after), `${stem}: the camera stays finite`);
+        assert.ok(at(after, lost), `${stem}: losing the root-held capture ends the pinch`);
+        assert.equal(await dragState(surface), false, `${stem}: and the drag`);
+        assert.equal(await scrollY(), page0, `${stem}: page stays`);
+        await send('touchEnd', []);
+        await settle();
+        await send('touchStart', [{ id: 1, x: x - 30, y }]);
+        await send('touchStart', [{ id: 1, x: x - 30, y }, { id: 2, x: x + 30, y }]);
+        await send('touchMove', [{ id: 1, x: x - 30, y }, { id: 2, x: x + 36, y }]);
+        const fresh = await read(surface);
+        await send('touchEnd', []);
+        await settle();
+        assert.ok(Math.abs(fresh.scale / after.scale - 1.1) < 0.01, `${stem}: a fresh pinch zooms`);
+        assert.equal(await dragState(surface), false, `${stem}: and its drag state clears`);
+        await page.screenshot({ path: join(OUT, `${stem}.png`) });
+        report.scenarios.push({ kind: 'lost-capture-drag-pinch', surface, width, height, orientation, deviceScaleFactor,
           holder, start, lost, after, fresh, result: 'pass' });
       }
     } finally { await context.close(); }
