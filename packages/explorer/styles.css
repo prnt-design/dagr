@@ -41,7 +41,7 @@
 
 /* Controls */
 
-:where([data-dagr-explorer='views'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button) {
+:where([data-dagr-explorer='views'] button, [data-dagr-explorer='mode'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button) {
   font: inherit;
   color: inherit;
   background: var(--dagr-explorer-bg, #ffffff);
@@ -51,7 +51,7 @@
   cursor: pointer;
 }
 
-:where([data-dagr-explorer='views'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search'] button, [data-dagr-explorer='outline'] button):hover {
+:where([data-dagr-explorer='views'] button, [data-dagr-explorer='mode'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search'] button, [data-dagr-explorer='outline'] button):hover {
   background: var(--dagr-explorer-bg-subtle, #f3f5f8);
 }
 
@@ -60,7 +60,7 @@
   outline-offset: 2px;
 }
 
-:where([data-dagr-explorer='views'] button[aria-pressed='true'], [data-dagr-explorer='trace'][data-active='true']) {
+:where([data-dagr-explorer='views'] button[aria-pressed='true'], [data-dagr-explorer='mode'] button[aria-pressed='true'], [data-dagr-explorer='trace'][data-active='true']) {
   border-color: var(--dagr-explorer-accent, #2f6fdf);
   color: var(--dagr-explorer-accent, #2f6fdf);
 }
@@ -70,7 +70,7 @@
   cursor: default;
 }
 
-:where([data-dagr-explorer='views'], [data-dagr-explorer='toolbar']) {
+:where([data-dagr-explorer='views'], [data-dagr-explorer='mode'], [data-dagr-explorer='toolbar']) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -268,7 +268,7 @@
 }
 
 /* Primary reading controls have the same target size for touch and keyboard. */
-:where([data-dagr-explorer='views'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search-results'] button, [data-dagr-explorer='outline'] button, [data-dagr-explorer='search'] input) {
+:where([data-dagr-explorer='views'] button, [data-dagr-explorer='mode'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search-results'] button, [data-dagr-explorer='outline'] button, [data-dagr-explorer='search'] input) {
   box-sizing: border-box;
   min-width: 44px;
   min-height: 44px;

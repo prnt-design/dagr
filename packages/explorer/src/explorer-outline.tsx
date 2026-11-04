@@ -8,7 +8,8 @@
  * data order, and choosing one inspects its node, recording the button as the
  * drawer's opener, so closing the drawer returns focus to it. Once the drawer
  * has mounted, a map beside the outline pans the least distance that brings
- * the node into view.
+ * the node into view, and the item scrolls clear of a drawer docked over the
+ * list.
  *
  * **One tab stop:** the selected node's item, else the last one focused,
  * else the first. The arrow keys, `Home` and `End` move between items. A
@@ -48,7 +49,14 @@ export function ExplorerOutline(props: ExplorerOutlineProps): ReactElement {
     if (revealRequest === null) return undefined;
     const frame = requestAnimationFrame(() => {
       const current = reading.current;
-      if (current.detailsOpen && current.selectedId === revealRequest.id) reveal(revealRequest.id);
+      if (current.detailsOpen && current.selectedId === revealRequest.id) {
+        reveal(revealRequest.id);
+        // Clear of a drawer docked over the list, where its scroll container leaves room for one.
+        const chosen = [...(listRef.current?.querySelectorAll<HTMLElement>(':scope > li > button') ?? [])].find(
+          (button) => button.dataset['nodeId'] === revealRequest.id,
+        );
+        if (typeof chosen?.scrollIntoView === 'function') chosen.scrollIntoView({ block: 'nearest' });
+      }
       setRevealRequest(null);
     });
     return () => cancelAnimationFrame(frame);

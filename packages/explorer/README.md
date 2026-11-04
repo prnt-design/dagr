@@ -55,6 +55,18 @@ The node type is inferred from your data, so `renderNode` above sees `team`.
 `maxOverlayNodes`, `base`, `nodeAriaLabel`, `inset` and `contentPadding`,
 which it forwards to the parts.
 
+**Map or outline, at any width.** `DagrExplorer` shows a Map and an Outline
+button, and the outline is `ExplorerOutline` in a pane the height of the
+graph. `mode` (`'map'` or `'outline'`) is controllable, with `defaultMode`
+and `onModeChange`. The selection, the query, trace and the drawer carry
+across a switch. The map stays mounted, hidden, while the outline shows, so
+it keeps its camera through the switch and a resize or a turn while hidden
+(a node chosen in the outline is revealed on it),
+and it leaves the tab order; the toolbar is hidden with it. Over the
+outline, the drawer leaves the list room to scroll its items clear. Focus in
+the presentation that leaves moves to the same node in the other, else to
+the other's tab stop; focus anywhere else stays where it is.
+
 ### The parts
 
 `DagrExplorer` is built only from these, with no private access, so a host
