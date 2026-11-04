@@ -85,8 +85,8 @@ function tabStops(): (string | undefined)[] {
     .map((button) => button.dataset['nodeId']);
 }
 
-async function key(target: Element, name: string): Promise<boolean> {
-  return fire(target, new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }));
+async function key(target: Element, name: string, init: KeyboardEventInit = {}): Promise<boolean> {
+  return fire(target, new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true, ...init }));
 }
 
 async function type(value: string): Promise<void> {
@@ -184,6 +184,40 @@ describe('ExplorerOutline', () => {
     await key(item('a'), 'ArrowDown');
     expect(tabStops()).toEqual(['b']);
     expect(await key(item('b'), 'ArrowRight')).toBe(true);
+    expect(await key(item('b'), 'ArrowDown', { shiftKey: true })).toBe(true);
+  });
+
+  it('falls back to the last focused item when the selection clears', async () => {
+    await ready();
+    await flush(() => state().select('b'));
+    item('b').focus();
+    await key(item('b'), 'ArrowDown');
+    expect(tabStops()).toEqual(['b']);
+    find('search')?.querySelector('input')?.focus();
+    await flush(() => state().select(null));
+    expect(tabStops()).toEqual(['c']);
+  });
+
+  it('pans a map beside it to bring the chosen node into view', async () => {
+    await ready();
+    await flush(() => state().zoomBy(4));
+    await runFramesUntilIdle();
+    const before = state().camera.get();
+    await flush(() => item('d').click());
+    await runFramesUntilIdle();
+    const after = state().camera.get();
+    expect(after?.scale).toBe(before?.scale);
+    expect(after).not.toEqual(before);
+  });
+
+  it('does not pan for a controlled selection the owner rejects', async () => {
+    await ready({ selectedId: null, onSelectedChange: vi.fn() });
+    await flush(() => state().zoomBy(4));
+    await runFramesUntilIdle();
+    const before = state().camera.get();
+    await flush(() => item('d').click());
+    await runFramesUntilIdle();
+    expect(state().camera.get()).toEqual(before);
   });
 
   it('under a controlled selection, reports a choice and shows only the owner\'s value', async () => {
@@ -240,10 +274,11 @@ describe('ExplorerOutline', () => {
 
   it('says so in place of a list for an empty view, and for no views', async () => {
     await ready({ views: [empty] });
-    expect(find('outline')).toBeNull();
-    expect(find('outline-empty')?.textContent).toBe('This view has no nodes.');
+    expect(find('outline')?.tagName).toBe('P');
+    expect(find('outline')?.dataset['empty']).toBe('true');
+    expect(find('outline')?.textContent).toBe('This view has no nodes.');
     await tree?.rerender(explorer({ views: [] }));
-    expect(find('outline-empty')?.textContent).toBe('Nothing to show.');
+    expect(find('outline')?.textContent).toBe('Nothing to show.');
   });
 
   it('takes its name from labels', async () => {

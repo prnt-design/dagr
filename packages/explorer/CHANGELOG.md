@@ -4,8 +4,8 @@
 
 - New part, `ExplorerOutline`: the active view's nodes as a list, a second
   way to read the graph on the root's own selection, query, trace and
-  drawer. Choosing an item inspects its node and closing the drawer returns
-  focus to it. One tab stop, moved with the up and down arrows, `Home` and
+  drawer. Choosing an item inspects its node, pans a graph beside it to
+  bring the node into view, and closing the drawer returns focus to it. One tab stop, moved with the up and down arrows, `Home` and
   `End`. A new label, `outline`, names the list.
 - The camera frames what the visual viewport leaves, observing its resize
   and scroll. Fit, focus and reveal avoid an area the visual viewport no

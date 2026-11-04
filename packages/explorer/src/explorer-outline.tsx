@@ -6,18 +6,17 @@
  * the query, trace and the drawer are the root's, so a node inspected here is
  * the one the map and the drawer show, and the reverse. Items are buttons in
  * data order, and choosing one inspects its node, recording the button as the
- * drawer's opener, so closing the drawer returns focus to it.
+ * drawer's opener, so closing the drawer returns focus to it. Once the drawer
+ * has mounted, a map beside the outline pans the least distance that brings
+ * the node into view.
  *
- * **One tab stop,** like the graph: the selected node's item, else the last
- * one focused, else the first. The arrow keys, `Home` and `End` move between
- * items. A node the query or trace dims keeps its place and is marked
- * `data-dimmed`, so the reader's position does not move as they type.
- *
- * Every node has an item, so on a large view this mounts one button per
- * node. It is not virtualized.
+ * **One tab stop:** the selected node's item, else the last one focused,
+ * else the first. The arrow keys, `Home` and `End` move between items. A
+ * node the query or trace dims keeps its place and is marked `data-dimmed`,
+ * so the reader's position does not move as they type.
  */
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement } from 'react';
 import { useExplorerContext } from './context.js';
 
@@ -36,9 +35,24 @@ const STEP: Readonly<Record<string, (at: number, last: number) => number>> = {
 export function ExplorerOutline(props: ExplorerOutlineProps): ReactElement {
   const { className, style } = props;
   const { state } = useExplorerContext('ExplorerOutline');
-  const { labels, views, activeView, selectedId, dimmed, inspect } = state;
+  const { labels, views, activeView, selectedId, detailsOpen, dimmed, inspect, reveal } = state;
   const listRef = useRef<HTMLUListElement>(null);
   const [focused, setFocused] = useState<string | null>(null);
+  const [revealRequest, setRevealRequest] = useState<{ id: string } | null>(null);
+
+  const reading = useRef({ detailsOpen, selectedId });
+  reading.current = { detailsOpen, selectedId };
+
+  // After the drawer's commit, so the pan uses the space it leaves. See ExplorerSearch.
+  useEffect(() => {
+    if (revealRequest === null) return undefined;
+    const frame = requestAnimationFrame(() => {
+      const current = reading.current;
+      if (current.detailsOpen && current.selectedId === revealRequest.id) reveal(revealRequest.id);
+      setRevealRequest(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [revealRequest, reveal]);
 
   const nodes = activeView?.nodes;
   const stop = useMemo(() => {
@@ -61,7 +75,10 @@ export function ExplorerOutline(props: ExplorerOutlineProps): ReactElement {
             tabIndex={node.id === stop ? 0 : -1}
             style={{ minHeight: 44 }}
             onFocus={() => setFocused(node.id)}
-            onClick={(event) => inspect(node.id, event.currentTarget)}
+            onClick={(event) => {
+              inspect(node.id, event.currentTarget);
+              setRevealRequest({ id: node.id });
+            }}
           >
             {node.label}
           </button>
@@ -72,7 +89,7 @@ export function ExplorerOutline(props: ExplorerOutlineProps): ReactElement {
 
   if (nodes === undefined || nodes.length === 0) {
     return (
-      <p data-dagr-explorer="outline-empty" className={className} style={style}>
+      <p data-dagr-explorer="outline" data-empty="true" className={className} style={style}>
         {views.length === 0 ? labels.noViews : labels.emptyView}
       </p>
     );
@@ -81,7 +98,7 @@ export function ExplorerOutline(props: ExplorerOutlineProps): ReactElement {
   const onKeyDown = (event: KeyboardEvent<HTMLUListElement>): void => {
     const step = STEP[event.key];
     const list = listRef.current;
-    if (step === undefined || list === null || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (step === undefined || list === null || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const buttons = [...list.querySelectorAll<HTMLButtonElement>(':scope > li > button')];
     const at = buttons.findIndex((button) => button === event.target);
     if (at < 0) return;

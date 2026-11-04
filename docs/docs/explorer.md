@@ -389,8 +389,8 @@ field, else to the root. `Escape` closes the drawer from anywhere in the root.
 `ExplorerOutline` reaches every node too, as a list. It is one tab stop: the
 selected node's item, else the last one focused, else the first. The up and
 down arrows, `Home` and `End` move between items, and `Enter` or `Space`
-inspects one. A node the query or trace dims stays in place, marked
-`data-dimmed`. The outline mounts an item for every node, so it is not
+inspects one and pans a graph beside it to bring the node into view. A node
+the query or trace dims stays in place, marked `data-dimmed`. The outline mounts an item for every node, so it is not
 virtualized.
 
 ## Server rendering

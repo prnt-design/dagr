@@ -263,6 +263,7 @@ describe('DagrExplorer: labels', () => {
     stats: ({ nodes, edges }) => `«stats ${String(nodes)} ${String(edges)}»`,
     hint: '«hint»',
     views: '«views»',
+    outline: '«outline»',
     inGroup: (label) => `«inGroup ${label}»`,
     traceOn: '«traceOn»',
     traceOff: '«traceOff»',
