@@ -30,6 +30,8 @@ export type {
   ExplorerDetailsContext,
   ExplorerDetailsProps,
 } from './explorer-details.js';
+export { ExplorerOutline } from './explorer-outline.js';
+export type { ExplorerOutlineProps } from './explorer-outline.js';
 export { ExplorerToolbar } from './explorer-toolbar.js';
 export type { ExplorerToolbarProps } from './explorer-toolbar.js';
 export { ExplorerTraceToggle } from './explorer-trace-toggle.js';

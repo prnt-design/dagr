@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DagrExplorer } from '../src/dagr-explorer.js';
 import { ExplorerDataError } from '../src/errors.js';
 import { ExplorerDetails } from '../src/explorer-details.js';
+import { ExplorerOutline } from '../src/explorer-outline.js';
 import { ExplorerSearch } from '../src/explorer-search.js';
 import { ExplorerToolbar } from '../src/explorer-toolbar.js';
 import { ExplorerTraceToggle } from '../src/explorer-trace-toggle.js';
@@ -89,6 +90,19 @@ describe('server rendering', () => {
     for (const name of ['views', 'trace', 'toolbar', 'hint']) expect(tagOf(html, name)).not.toBeNull();
     // The selection is state, so it renders where a part shows it.
     expect(html).toContain('Zoom to Beta');
+  });
+
+  it('renders the outline with every node and the selected one as the only tab stop', () => {
+    const html = serve(
+      <ExplorerRoot<Item, ExplorerEdge> label="Listed" views={[overview]} defaultSelectedId="c">
+        <ExplorerOutline />
+      </ExplorerRoot>,
+    );
+    expect(tagOf(html, 'outline')).toContain('aria-label="Nodes"');
+    expect(count(html, /<button[^>]*data-node-id="/)).toBe(overview.nodes.length);
+    expect(count(html, /tabindex="0"/)).toBe(1);
+    expect(html).toMatch(/<button[^>]*data-node-id="c"[^>]*tabindex="0"/);
+    expect(html).toMatch(/<button[^>]*data-node-id="c"[^>]*aria-current="true"/);
   });
 
   it('renders the shorthand', () => {

@@ -51,7 +51,7 @@
   cursor: pointer;
 }
 
-:where([data-dagr-explorer='views'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search'] button):hover {
+:where([data-dagr-explorer='views'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search'] button, [data-dagr-explorer='outline'] button):hover {
   background: var(--dagr-explorer-bg-subtle, #f3f5f8);
 }
 
@@ -138,7 +138,7 @@
   border-radius: 6px;
 }
 
-:where([data-dagr-explorer='search-results'] button) {
+:where([data-dagr-explorer='search-results'] button, [data-dagr-explorer='outline'] button) {
   display: block;
   width: 100%;
   font: inherit;
@@ -150,7 +150,7 @@
   cursor: pointer;
 }
 
-:where([data-dagr-explorer='search-results'] button[data-selected='true']) {
+:where([data-dagr-explorer='search-results'] button[data-selected='true'], [data-dagr-explorer='outline'] button[data-selected='true']) {
   color: var(--dagr-explorer-accent, #2f6fdf);
   font-weight: 600;
 }
@@ -210,7 +210,7 @@
   outline-offset: 2px;
 }
 
-:where([data-dagr-explorer='node'][data-dimmed='true']) {
+:where([data-dagr-explorer='node'][data-dimmed='true'], [data-dagr-explorer='outline'] button[data-dimmed='true']) {
   opacity: 0.3;
 }
 
@@ -268,7 +268,7 @@
 }
 
 /* Primary reading controls have the same target size for touch and keyboard. */
-:where([data-dagr-explorer='views'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search-results'] button, [data-dagr-explorer='search'] input) {
+:where([data-dagr-explorer='views'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search-results'] button, [data-dagr-explorer='outline'] button, [data-dagr-explorer='search'] input) {
   box-sizing: border-box;
   min-width: 44px;
   min-height: 44px;
