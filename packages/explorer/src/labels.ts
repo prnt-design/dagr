@@ -24,6 +24,8 @@ export interface ExplorerLabels {
   readonly hint: string;
   /** The accessible name of the view switcher. */
   readonly views: string;
+  /** The accessible name of the outline's node list. */
+  readonly outline: string;
   /** One group a node is in, as part of the node's default accessible name. */
   readonly inGroup: (groupLabel: string) => string;
   /** The trace toggle while trace is off, so pressing it turns trace on. */
@@ -70,6 +72,7 @@ export const DEFAULT_EXPLORER_LABELS: ExplorerLabels = Object.freeze({
     `${plural(nodes, 'node', 'nodes')}, ${plural(edges, 'edge', 'edges')}.`,
   hint: 'Search reaches every node. In the graph, the arrow keys move between nodes and Shift with an arrow pans. Click the graph to zoom with the wheel, drag to pan, and press Escape to leave it.',
   views: 'Views',
+  outline: 'Nodes',
   inGroup: (groupLabel: string) => `in ${groupLabel}`,
   traceOn: 'Trace connections',
   traceOff: 'Stop tracing',

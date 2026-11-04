@@ -15,6 +15,7 @@ import type {
   ExplorerEmphasis,
   ExplorerLabels,
   ExplorerNode,
+  ExplorerOutlineProps,
   ExplorerRootProps,
   ExplorerSearchProps,
   ExplorerState,
@@ -46,6 +47,7 @@ describe('@prnt/dagr-explorer', () => {
         'ExplorerContextError',
         'ExplorerDataError',
         'ExplorerDetails',
+        'ExplorerOutline',
         'ExplorerRoot',
         'ExplorerSearch',
         'ExplorerToolbar',
@@ -78,6 +80,7 @@ describe('@prnt/dagr-explorer', () => {
       ExplorerDetailsProps,
       ExplorerEmphasis,
       ExplorerLabels,
+      ExplorerOutlineProps,
       ExplorerRootProps,
       ExplorerSearchProps,
       ExplorerState,
@@ -90,8 +93,8 @@ describe('@prnt/dagr-explorer', () => {
       ExplorerViewsProps,
       ExplorerVisibleSet,
     ];
-    const count: Exported['length'] = 23;
-    expect(count).toBe(23);
+    const count: Exported['length'] = 24;
+    expect(count).toBe(24);
   });
 
   it('exports the camera and the visible set as the shapes the public api hands out', () => {

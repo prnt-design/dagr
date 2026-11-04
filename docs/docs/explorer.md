@@ -192,6 +192,7 @@ export function Architecture() {
 | `ExplorerTraceToggle` | trace on and off |
 | `ExplorerViewport` | the graph: pan and zoom, the base layer, and node elements for nodes large enough to read |
 | `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body |
+| `ExplorerOutline` | the active view's nodes as a list of buttons in data order, on the same selection, query, trace and drawer as the graph. Works with or without a viewport |
 | `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node. Zoom out, zoom in, fit and the drawer's close button are icons, named and titled by their labels |
 
 Children of `ExplorerViewport`, such as `ExplorerDetails`, share a positioned
@@ -385,6 +386,13 @@ graph's accessible description says so and gives the node and edge counts.
 When the drawer closes, focus returns to what opened it, else to the search
 field, else to the root. `Escape` closes the drawer from anywhere in the root.
 
+`ExplorerOutline` reaches every node too, as a list. It is one tab stop: the
+selected node's item, else the last one focused, else the first. The up and
+down arrows, `Home` and `End` move between items, and `Enter` or `Space`
+inspects one. A node the query or trace dims stays in place, marked
+`data-dimmed`. The outline mounts an item for every node, so it is not
+virtualized.
+
 ## Server rendering
 
 Every part renders on a server, with no DOM. Layout is pure, so the HTML
@@ -459,5 +467,6 @@ cap of 200 however far you pan.
 
 Explorer and `DagrCanvas` use the same `createPinchGesture` core primitive,
 while Explorer retains focus-gated page scrolling and its own camera adapter.
-Responsive details shipped separately in M5.7b; the outline reader is M5.7c. See
+Responsive details shipped separately in M5.7b. `ExplorerOutline` is the
+first part of the M5.7c outline reader. See
 [Mobile architecture](./mobile.md) for the contract and validation limits.
