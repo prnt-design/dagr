@@ -358,6 +358,7 @@ margin moves the plane with one style write and no React work.
 
 The overlay cap is what keeps a large graph a light page. The live demo at
 the end of this page counts the node elements it has mounted as you pan.
+`ExplorerOutline` has no cap: it mounts a button for every node in the view.
 
 ## Keyboard and screen readers
 
@@ -390,8 +391,8 @@ field, else to the root. `Escape` closes the drawer from anywhere in the root.
 selected node's item, else the last one focused, else the first. The up and
 down arrows, `Home` and `End` move between items, and `Enter` or `Space`
 inspects one and pans a graph beside it to bring the node into view. A node
-the query or trace dims stays in place, marked `data-dimmed`. The outline mounts an item for every node, so it is not
-virtualized.
+the query or trace dims stays in place, marked `data-dimmed`. Items are
+named by the node's label alone.
 
 ## Server rendering
 
@@ -454,7 +455,7 @@ cap of 200 however far you pan.
 - **A self loop is not drawn.** An edge from a node to itself stays in your
   data, appears in the node's connections, and has an empty route.
 - **A group moves no node.** It is the padded hull of its members, with a band
-  above for its label, so an outline can cover a node that is not a member.
+  above for its label, so a group's outline can cover a node that is not a member.
   Pass `strictGroups` to throw `GROUP_ENCLOSES_NON_MEMBER` instead, for a
   diagram where that would be a false statement. The demo's groups are chosen
   so none does, and a test lays them out with `strictGroups` to keep it so.
