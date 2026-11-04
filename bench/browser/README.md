@@ -182,13 +182,13 @@ Mid-gesture, the check hands a contact's pointer capture to the page body with
   must end and its drag state clear. Its camera staying put adds little, since
   Explorer hears moves only on its viewport and the body now gets them. DagrCanvas
   captures no contact of a pinch that starts with two fingers and follows
-  touches on the window. The second
-  finger's capture is the `<canvas>` element's implicit one, and DagrCanvas
-  treats a child losing capture as a handover, so its pinch must keep
-  following the finger. These are the two surfaces' policies as built, not
+  touches on the window. The second finger's capture is the `<canvas>`
+  element's implicit one, and DagrCanvas treats a child losing capture as a
+  handover, so its pinch must keep following the finger. These are the two surfaces' policies as built, not
   one shared rule.
 - **Both:** the camera stays finite, the page does not scroll, no drag state
   remains after release, and a fresh pinch must zoom by the fingers' ratio.
+
 On 2026-11-03 the launched run passed all 120 in Chromium 148.0.7778.96
 headless (DagrCanvas on WebGL2 software). The attached run passed all 120 in
 Chrome 156.0.8078.74 headless on the same Windows side and adapter, both
@@ -219,9 +219,9 @@ finger.
 On 2026-11-04 the launched run passed all 132 in Chromium 148.0.7778.96
 headless (DagrCanvas on WebGL2 software). The attached run passed all 132 in
 Chrome 156.0.8078.80 headless on the same Windows side and adapter, both
-canvases on `webgpu`, not a fallback. DagrCanvas's pinch tracker not listening for `lostpointercapture`
-failed the launched run at the new row, after every earlier row at that size
-passed.
+canvases on `webgpu`, not a fallback. DagrCanvas's pinch tracker not listening
+for `lostpointercapture` failed the launched run at the new row, after every
+earlier row at that size passed.
 
 Chromium's touch emulation is the only source of these events here. Whether a
 real phone browser ever takes a touch's capture away mid-gesture, rather than
