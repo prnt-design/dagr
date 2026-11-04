@@ -596,6 +596,7 @@ try {
       }
       for (const surface of ['canvas', 'explorer']) {
         const stem = `${surface}-lost-capture-drag-pinch-${size}`;
+        // As in the pinch row, so the closing pinch has room before Explorer's minimum.
         await flight(surface, 'reduce', 'b');
         await page.emulateMedia({ reducedMotion: 'no-preference' });
         const { host, x, y } = await centre(surface);

@@ -197,7 +197,9 @@ Mid-gesture, the check hands a contact's pointer capture to the page body with
   and the page must stay put. After release a fresh pinch must zoom by the
   fingers' ratio. This is the row that exercises DagrCanvas's pinch tracker
   on a root-held capture, the one case its `lostpointercapture` listener ends
-  a contact. It adds 12 scenarios, 6 on each surface.
+  a contact. On Explorer, losing either pinch contact takes the same path, so
+  its half repeats the pinch row from the other finger. It adds 12 scenarios,
+  6 on each surface.
 
 On 2026-11-03 the launched run passed all 120 in Chromium 148.0.7778.96
 headless (DagrCanvas on WebGL2 software). The attached run passed all 120 in
@@ -221,10 +223,7 @@ fallback. DagrCanvas's pinch tracker not listening for `lostpointercapture`
 failed the launched run at the new row, after every earlier row at that size
 passed.
 
-No row takes a capture DagrCanvas's root holds during a pinch (a pinch that
-began as a drag), so the pinch tracker's own `lostpointercapture` branch for
-the root is not exercised. Chromium's touch emulation is the only source of
-these events here. Whether a
+Chromium's touch emulation is the only source of these events here. Whether a
 real phone browser ever takes a touch's capture away mid-gesture, rather than
 cancelling it, is not tested.
 
