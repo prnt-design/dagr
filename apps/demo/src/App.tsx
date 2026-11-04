@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import { EDGE_ROLES } from '@dagr/campaign';
 import { FirstLight, useCampaignScene } from '@dagr/campaign-stage';
 import { LivingStage } from '@dagr/living-stage';
+import { ChartStage } from './chart/ChartStage.js';
 
 /**
  * The playground page: two demos, one at a time, and the few facts about each
@@ -82,6 +83,32 @@ function LivingView(): JSX.Element {
           from a drawing that moves, so an automatic refit would hide the thing this page exists to
           show. The graph is built so that no edit can make the drawing bigger, which is what makes
           one fit enough. The refit button over the canvas is for when you have panned away.
+        </p>
+      </section>
+    </>
+  );
+}
+
+/** The chart experiment: the graph renderer asked to draw bars and a line. */
+function ChartView(): JSX.Element {
+  return (
+    <>
+      <div className="page__stage">
+        <ChartStage />
+      </div>
+
+      <section className="facts">
+        <h2 className="facts__title">what is on the canvas</h2>
+        <p className="facts__lead">
+          Two series over twelve months, drawn by <code>@prnt/dagr-render</code> with no chart
+          library: each bar and marker is an instanced SDF node, each line is one smooth ribbon,
+          and the axis text is DOM positioned from the same numbers. Hover a bar for its value.
+        </p>
+        <p className="facts__lead">
+          Every change rides the renderer&apos;s critically damped springs: new data retargets
+          each bar from where it is, switching kind sinks the bars into the baseline while the
+          line fades in, and the first draw cascades across the months. WebGPU where the browser
+          has it, WebGL2 where it does not; the badge over the canvas says which.
         </p>
       </section>
     </>
@@ -171,10 +198,11 @@ function CampaignView(): JSX.Element {
 }
 
 /** Which demo is on screen. */
-type View = 'living' | 'campaign';
+type View = 'living' | 'chart' | 'campaign';
 
 const VIEWS: readonly { readonly id: View; readonly label: string }[] = [
   { id: 'living', label: 'living graph' },
+  { id: 'chart', label: 'chart' },
 ];
 
 /**
@@ -199,7 +227,8 @@ function initialView(): View {
   if (typeof window === 'undefined') return 'living';
   const { hash } = window.location;
   const body = hash.startsWith('#') ? hash.slice(1) : hash;
-  return new URLSearchParams(body).get('view') === 'campaign' ? 'campaign' : 'living';
+  const view = new URLSearchParams(body).get('view');
+  return view === 'campaign' || view === 'chart' ? view : 'living';
 }
 
 export function App(): JSX.Element {
@@ -212,7 +241,9 @@ export function App(): JSX.Element {
         <p className="page__subtitle">
           {view === 'living'
             ? 'A build pipeline, edited while you watch, and a count of what moved'
-            : 'A mock D&D campaign, laid out in tiles and drawn'}
+            : view === 'chart'
+              ? 'Bars and a line, drawn and animated by the graph renderer'
+              : 'A mock D&D campaign, laid out in tiles and drawn'}
         </p>
         <nav className="page__views" aria-label="Which demo">
           {VIEWS.map(({ id, label }) => (
@@ -236,7 +267,7 @@ export function App(): JSX.Element {
         other, which disposes its renderer: `<DagrCanvas>` and the campaign
         stage both take their device back in their own cleanup.
       */}
-      {view === 'living' ? <LivingView /> : <CampaignView />}
+      {view === 'living' ? <LivingView /> : view === 'chart' ? <ChartView /> : <CampaignView />}
     </main>
   );
 }

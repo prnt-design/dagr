@@ -38,6 +38,7 @@ two copies would drift. This app is the page around them.
 | `main.tsx` | the StrictMode mount, and the three stylesheets in order |
 | `layout-worker.ts` | the worker end of `@prnt/dagr-layout`'s protocol |
 | `styles.css` | the page: its palette, the facts panel, the stage's frame |
+| `chart/` | the chart experiment, `#view=chart`: bars and a line drawn by `@prnt/dagr-render` with springs on every value, and a WebGL2 fallback where there is no WebGPU |
 | `scripts/capture.mjs` | the committed screenshots, taken reproducibly |
 
 `App.tsx` calls `useCampaignScene` rather than mounting `CampaignStage`, because

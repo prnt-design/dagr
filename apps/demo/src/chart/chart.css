@@ -1,0 +1,157 @@
+/*
+ * The chart stage's chrome. Same conventions as living.css: plain classes
+ * under one prefix, and the stage fills what it is given.
+ */
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  padding: 0.75rem;
+  color: #e6edf3;
+}
+
+.chart__canvas {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 20rem;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #11161b;
+  touch-action: none;
+}
+
+.chart__surface {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.chart__tick,
+.chart__category {
+  position: absolute;
+  pointer-events: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  color: #79828d;
+  white-space: nowrap;
+}
+
+.chart__tick {
+  transform: translate(-100%, -50%);
+}
+
+.chart__category {
+  transform: translateX(-50%);
+}
+
+.chart__tooltip {
+  position: absolute;
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid;
+  border-radius: 6px;
+  background: rgba(17, 22, 27, 0.92);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 10px));
+}
+
+.chart__tooltip-label {
+  color: #a9b2bc;
+}
+
+.chart__tooltip-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600;
+}
+
+.chart__badge {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  color: #79828d;
+  pointer-events: none;
+}
+
+.chart__failure {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 2rem;
+  color: #ffb454;
+  font-size: 0.9rem;
+}
+
+.chart__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.chart__group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chart__button {
+  appearance: none;
+  border: 1px solid #2f3b46;
+  border-radius: 6px;
+  background: #1a2129;
+  color: #e6edf3;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+}
+
+.chart__button:hover:not(:disabled) {
+  border-color: #4ebdc4;
+}
+
+.chart__button[aria-pressed='true'] {
+  border-color: #ffb703;
+  color: #ffb703;
+}
+
+.chart__button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chart__legend {
+  display: flex;
+  gap: 1rem;
+  margin: 0 0 0 auto;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+  color: #a9b2bc;
+}
+
+.chart__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chart__swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+}
+
+.chart__reduced {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}

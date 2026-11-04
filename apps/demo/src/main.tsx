@@ -9,6 +9,7 @@ import { App } from './App.js';
 // bytes against a bundle that carries three.js.
 import '@dagr/campaign-stage/stage.css';
 import '@dagr/living-stage/living.css';
+import './chart/chart.css';
 import './styles.css';
 
 const container = document.getElementById('root');
