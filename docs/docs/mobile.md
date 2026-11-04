@@ -194,8 +194,8 @@ as search and details.
 Adaptive controls and details shipped separately in M5.7b: Explorer docks
 details below the map in containers narrower than 720 CSS pixels. This input
 foundation does not add responsive panels or a new backend.
-`ExplorerOutline`, the first part of the M5.7c outline reader, uses the same
-ExplorerRoot state. The visible frame contract
+The M5.7c outline reader (`ExplorerOutline`, and `DagrExplorer`'s map or
+outline choice at any width) uses the same ExplorerRoot state. The visible frame contract
 above is the shared geometry for keyboard occlusion and camera-visible areas;
 a software keyboard can shrink the
 [visual viewport](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport)

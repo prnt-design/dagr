@@ -105,6 +105,15 @@ describe('server rendering', () => {
     expect(html).toMatch(/<button[^>]*data-node-id="c"[^>]*aria-current="true"/);
   });
 
+  it('renders DagrExplorer on the outline, with the map hidden and no toolbar', () => {
+    const html = serve(<DagrExplorer label="Listed" views={[overview]} defaultMode="outline" defaultSelectedId="c" />);
+    expect(html).toMatch(/<button[^>]*data-mode="outline"[^>]*aria-pressed="true"/);
+    expect(html).toMatch(/<div hidden=""[^>]*><div data-dagr-explorer="stage"/);
+    expect(tagOf(html, 'toolbar')).toBeNull();
+    expect(count(html, /<button[^>]*data-node-id="/)).toBe(overview.nodes.length);
+    expect(html).toMatch(/<button[^>]*data-node-id="c"[^>]*tabindex="0"/);
+  });
+
   it('renders the shorthand', () => {
     const html = serve(<DagrExplorer label="Short" nodes={overview.nodes} edges={overview.edges} groups={overview.groups} />);
     expectShell(html, 'Short');

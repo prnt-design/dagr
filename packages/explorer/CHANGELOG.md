@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- `DagrExplorer` lets the reader choose the map or an outline of the same
+  nodes, at any width, with a Map and an Outline button. `mode`,
+  `defaultMode` and `onModeChange` control it, and new labels
+  `presentation`, `mapMode` and `outlineMode` name it. Selection, the
+  query, trace and the drawer carry across a switch; the map stays mounted
+  and hidden behind the outline, so it keeps its camera and leaves the tab
+  order. Focus in the presentation that leaves moves to the same node in
+  the other. A drawer closing returns focus to the same node's item when
+  its opener is now hidden.
 - New part, `ExplorerOutline`: the active view's nodes as a list, a second
   way to read the graph on the root's own selection, query, trace and
   drawer. Choosing an item inspects its node, pans a graph beside it to

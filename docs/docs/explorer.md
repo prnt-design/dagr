@@ -139,6 +139,13 @@ current zoom, which is what the default list's connection buttons do. Those
 buttons show an arrow for the edge's direction, read out through
 `labels.connectionTo` and `labels.connectionFrom`.
 
+A reader chooses between the map and an outline of the same nodes with the
+Map and Outline buttons, at any width. Pass `defaultMode="outline"` to start
+on the outline, or `mode` with `onModeChange` to control it. Selection,
+search, trace and the open drawer carry across a switch, and the map keeps
+its pan and zoom while hidden. Focus in the presentation that leaves moves
+to the same node in the other.
+
 ## The parts and your own layout
 
 `DagrExplorer` is built only from public parts, with no private access, so a
@@ -384,8 +391,9 @@ reaches all of them whatever is on screen, its match count is live, and the
 graph's accessible description says so and gives the node and edge counts.
 `Enter` in the search field inspects the first match and flies to it.
 
-When the drawer closes, focus returns to what opened it, else to the search
-field, else to the root. `Escape` closes the drawer from anywhere in the root.
+When the drawer closes, focus returns to what opened it, else (when that is
+now hidden, as the map is behind `DagrExplorer`'s outline) to the same node's
+item or node that shows, else to the search field, else to the root. `Escape` closes the drawer from anywhere in the root.
 
 `ExplorerOutline` reaches every node too, as a list. It is one tab stop: the
 selected node's item, else the last one focused, else the first. The up and
@@ -468,6 +476,6 @@ cap of 200 however far you pan.
 
 Explorer and `DagrCanvas` use the same `createPinchGesture` core primitive,
 while Explorer retains focus-gated page scrolling and its own camera adapter.
-Responsive details shipped separately in M5.7b. `ExplorerOutline` is the
-first part of the M5.7c outline reader. See
+Responsive details shipped separately in M5.7b. `ExplorerOutline` and
+`DagrExplorer`'s map or outline choice make up the M5.7c outline reader. See
 [Mobile architecture](./mobile.md) for the contract and validation limits.

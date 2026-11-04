@@ -41,7 +41,7 @@
 
 /* Controls */
 
-:where([data-dagr-explorer='views'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button) {
+:where([data-dagr-explorer='views'] button, [data-dagr-explorer='mode'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button) {
   font: inherit;
   color: inherit;
   background: var(--dagr-explorer-bg, #ffffff);
@@ -51,7 +51,7 @@
   cursor: pointer;
 }
 
-:where([data-dagr-explorer='views'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search'] button, [data-dagr-explorer='outline'] button):hover {
+:where([data-dagr-explorer='views'] button, [data-dagr-explorer='mode'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search'] button, [data-dagr-explorer='outline'] button):hover {
   background: var(--dagr-explorer-bg-subtle, #f3f5f8);
 }
 
@@ -268,7 +268,7 @@
 }
 
 /* Primary reading controls have the same target size for touch and keyboard. */
-:where([data-dagr-explorer='views'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search-results'] button, [data-dagr-explorer='outline'] button, [data-dagr-explorer='search'] input) {
+:where([data-dagr-explorer='views'] button, [data-dagr-explorer='mode'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search-results'] button, [data-dagr-explorer='outline'] button, [data-dagr-explorer='search'] input) {
   box-sizing: border-box;
   min-width: 44px;
   min-height: 44px;

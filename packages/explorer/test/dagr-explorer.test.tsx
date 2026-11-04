@@ -43,10 +43,16 @@ function part(name: string): HTMLElement {
   return element;
 }
 
-const PARTS = ['views', 'search', 'trace', 'viewport', 'details', 'toolbar'];
+function mode(name: 'map' | 'outline'): HTMLButtonElement {
+  const button = part('mode').querySelector(`[data-mode="${name}"]`);
+  if (!(button instanceof HTMLButtonElement)) throw new Error(`no ${name} button`);
+  return button;
+}
+
+const PARTS = ['views', 'mode', 'search', 'trace', 'viewport', 'details', 'toolbar'];
 
 describe('DagrExplorer', () => {
-  it('composes every part, in order: views, search, trace, viewport, details, toolbar', async () => {
+  it('composes every part, in order: views, mode, search, trace, viewport, details, toolbar', async () => {
     tree = await mount(<DagrExplorer label="Map" views={[overview, detail]} apiRef={apiRef} className="host" />);
     await resizeTo(800, 480);
     await runFramesUntilIdle();
@@ -264,6 +270,9 @@ describe('DagrExplorer: labels', () => {
     hint: '«hint»',
     views: '«views»',
     outline: '«outline»',
+    presentation: '«presentation»',
+    mapMode: '«mapMode»',
+    outlineMode: '«outlineMode»',
     inGroup: (label) => `«inGroup ${label}»`,
     traceOn: '«traceOn»',
     traceOff: '«traceOff»',
@@ -324,7 +333,8 @@ describe('DagrExplorer: labels', () => {
   }
 
   it('replaces every default string in every state the parts reach', async () => {
-    tree = await mount(<DagrExplorer label="Map" views={[overview, detail]} apiRef={apiRef} labels={sentinels} />);
+    // Not "Map", which is a default label now.
+    tree = await mount(<DagrExplorer label="Atlas" views={[overview, detail]} apiRef={apiRef} labels={sentinels} />);
     await resizeTo(800, 480);
     await runFramesUntilIdle();
     const states: string[][] = [copy(tree.container)];
@@ -339,6 +349,9 @@ describe('DagrExplorer: labels', () => {
     });
     states.push(copy(tree.container));
     expect(leftovers(tree.container)).toEqual([]);
+    await flush(() => mode('outline').click());
+    states.push(copy(tree.container));
+    expect(leftovers(tree.container)).toEqual([]);
 
     // The premise: the sentinels did reach the screen, each one somewhere.
     const all = states.flat().join('\n');
@@ -346,17 +359,17 @@ describe('DagrExplorer: labels', () => {
       'search', 'searchPlaceholder', 'searchResults', 'matches 4', 'stats 4 3', 'hint', 'views',
       'traceOn', 'traceOff', 'zoomControls', 'zoomIn', 'zoomOut', 'zoomLevel', 'fit', 'zoomTo Beta',
       'zoomToSelected', 'drawerTitle', 'close', 'connections', 'connectionTo Gamma', 'connectionFrom Alpha',
-      'inGroup Platform team',
+      'inGroup Platform team', 'outline', 'presentation', 'mapMode', 'outlineMode',
     ]) {
       expect([name, all.includes(`«${name}`)]).toEqual([name, true]);
     }
   });
 
   it('replaces the empty view and no views text too', async () => {
-    tree = await mount(<DagrExplorer label="Map" views={[empty]} labels={sentinels} />);
+    tree = await mount(<DagrExplorer label="Atlas" views={[empty]} labels={sentinels} />);
     expect(part('viewport').textContent).toBe('«emptyView»');
     expect(leftovers(tree.container)).toEqual([]);
-    await tree.rerender(<DagrExplorer label="Map" views={[]} labels={sentinels} />);
+    await tree.rerender(<DagrExplorer label="Atlas" views={[]} labels={sentinels} />);
     expect(part('viewport').textContent).toBe('«noViews»');
     expect(leftovers(tree.container)).toEqual([]);
   });
@@ -375,5 +388,179 @@ describe('DagrExplorer: labels', () => {
     expect(part('toolbar').querySelector('[data-action="fit"]')?.getAttribute('aria-label')).toBe('Encuadrar');
     await flush(() => api().inspect('a'));
     expect(part('details-close').getAttribute('aria-label')).toBe('Close');
+  });
+});
+
+describe('DagrExplorer: map or outline', () => {
+  function outlineItem(id: string): HTMLButtonElement {
+    const button = part('outline').querySelector(`button[data-node-id="${id}"]`);
+    if (!(button instanceof HTMLButtonElement)) throw new Error(`no item ${id}`);
+    return button;
+  }
+
+  function graphNode(id: string): HTMLElement {
+    const node = part('viewport').querySelector(`[data-dagr-explorer="node"][data-node-id="${id}"]`);
+    if (!(node instanceof HTMLElement)) throw new Error(`no node ${id}`);
+    return node;
+  }
+
+  /** Inside an ancestor hidden from sight, the tab order and the accessibility tree. */
+  function isHidden(element: HTMLElement): boolean {
+    return element.closest('[hidden]') !== null;
+  }
+
+  /** The browser's answer, which jsdom lacks: no box under a hidden ancestor. */
+  function installCheckVisibility(): void {
+    Object.defineProperty(HTMLElement.prototype, 'checkVisibility', {
+      configurable: true,
+      value(this: HTMLElement) {
+        return this.closest('[hidden]') === null;
+      },
+    });
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(HTMLElement.prototype, 'checkVisibility');
+  });
+
+  async function ready(props: Partial<Parameters<typeof DagrExplorer<Item, ExplorerEdge>>[0]> = {}): Promise<void> {
+    tree = await mount(<DagrExplorer label="Map" views={[overview, detail]} apiRef={apiRef} {...props} />);
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+  }
+
+  it('starts on the map, with the choice as two pressed buttons and no outline mounted', async () => {
+    await ready();
+    expect(part('mode').getAttribute('role')).toBe('group');
+    expect(part('mode').getAttribute('aria-label')).toBe('Presentation');
+    expect([mode('map').textContent, mode('outline').textContent]).toEqual(['Map', 'Outline']);
+    expect([mode('map').getAttribute('aria-pressed'), mode('outline').getAttribute('aria-pressed')]).toEqual([
+      'true',
+      'false',
+    ]);
+    expect(find('outline')).toBeNull();
+    expect(isHidden(part('viewport'))).toBe(false);
+  });
+
+  it('carries the selection, the query, trace and the drawer across a switch and back', async () => {
+    await ready();
+    await flush(() => {
+      api().setQuery('a');
+      api().setTrace(true);
+      api().inspect('b');
+    });
+    await flush(() => mode('outline').click());
+    expect(mode('outline').getAttribute('aria-pressed')).toBe('true');
+    expect(isHidden(part('viewport'))).toBe(true);
+    expect(isHidden(part('hint'))).toBe(true);
+    expect(find('toolbar')).toBeNull();
+    expect(outlineItem('b').getAttribute('aria-current')).toBe('true');
+    expect(outlineItem('d').dataset['dimmed']).toBe('true');
+    expect(part('search').querySelector('input')?.value).toBe('a');
+    expect(part('details-label').textContent).toBe('Beta');
+    expect(part('outline').parentElement?.contains(part('details'))).toBe(true);
+    expect(part('details').parentElement?.style.position).toBe('relative');
+
+    await flush(() => mode('map').click());
+    expect(isHidden(part('outline'))).toBe(true);
+    expect(graphNode('b').dataset['selected']).toBe('true');
+    expect(part('details').parentElement).toBe(part('viewport').parentElement);
+    expect(find('toolbar')).not.toBeNull();
+  });
+
+  it('leaves exactly one presentation in the tab order', async () => {
+    await ready();
+    await flush(() => mode('outline').click());
+    await flush(() => mode('map').click());
+    const tabbable = [...part('root').querySelectorAll<HTMLElement>('[tabindex="0"]')].filter(
+      (element) => !isHidden(element),
+    );
+    expect(tabbable.every((element) => part('viewport').contains(element))).toBe(true);
+    expect(part('outline').querySelectorAll('[tabindex="0"]')).toHaveLength(1);
+  });
+
+  it('keeps the map camera while the outline shows, through a resize and a turn', async () => {
+    await ready();
+    await flush(() => api().zoomBy(2));
+    await runFramesUntilIdle();
+    const zoom = part('zoom-level').textContent;
+    expect(zoom).not.toBe('');
+    await flush(() => mode('outline').click());
+    // Hidden, the map measures zero, and the phone turns while it is.
+    await resizeTo(0, 0);
+    await resizeTo(480, 800);
+    await flush(() => mode('map').click());
+    await runFramesUntilIdle();
+    expect(part('zoom-level').textContent).toBe(zoom);
+  });
+
+  it('keeps focus on the pressed button', async () => {
+    await ready();
+    mode('outline').focus();
+    await flush(() => mode('outline').click());
+    expect(document.activeElement).toBe(mode('outline'));
+  });
+
+  it('moves focus in the presentation that left to the same node in the other', async () => {
+    let shown: 'map' | 'outline' = 'map';
+    const render = () => (
+      <DagrExplorer label="Map" views={[overview, detail]} apiRef={apiRef} mode={shown} defaultSelectedId="c" />
+    );
+    tree = await mount(render());
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+    graphNode('c').focus();
+    shown = 'outline';
+    await tree.rerender(render());
+    expect(document.activeElement).toBe(outlineItem('c'));
+    shown = 'map';
+    await tree.rerender(render());
+    expect(document.activeElement).toBe(graphNode('c'));
+  });
+
+  it('under control, reports a choice and shows only the owner\'s mode', async () => {
+    const onModeChange = vi.fn();
+    await ready({ mode: 'map', onModeChange });
+    await flush(() => mode('outline').click());
+    expect(onModeChange).toHaveBeenCalledWith('outline');
+    expect(mode('map').getAttribute('aria-pressed')).toBe('true');
+    expect(find('outline')).toBeNull();
+    await flush(() => mode('map').click());
+    expect(onModeChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts on the outline with defaultMode, the map mounted behind it', async () => {
+    await ready({ defaultMode: 'outline' });
+    expect(mode('outline').getAttribute('aria-pressed')).toBe('true');
+    expect(isHidden(part('outline'))).toBe(false);
+    expect(isHidden(part('viewport'))).toBe(true);
+    expect(find('toolbar')).toBeNull();
+  });
+
+  it('returns focus to the outline item when a drawer opened on the map closes there', async () => {
+    installCheckVisibility();
+    await ready();
+    graphNode('b').focus();
+    await flush(() => api().inspect('b'));
+    await flush(() => mode('outline').click());
+    const close = part('details-close');
+    close.focus();
+    await flush(() => close.click());
+    expect(document.activeElement).toBe(outlineItem('b'));
+  });
+
+  it('keeps the outline through data removal and a switch to an empty view', async () => {
+    await ready({ defaultMode: 'outline', defaultSelectedId: 'b' });
+    const rest = {
+      ...overview,
+      nodes: overview.nodes.filter((node) => node.id !== 'b'),
+      edges: overview.edges.filter((edge) => edge.source !== 'b' && edge.target !== 'b'),
+      groups: [],
+    };
+    await tree?.rerender(<DagrExplorer label="Map" views={[rest, detail]} apiRef={apiRef} defaultMode="outline" />);
+    expect(part('outline').querySelector('[data-node-id="b"]')).toBeNull();
+    await tree?.rerender(<DagrExplorer label="Map" views={[empty]} apiRef={apiRef} defaultMode="outline" />);
+    expect(part('outline').dataset['empty']).toBe('true');
+    expect(mode('outline').getAttribute('aria-pressed')).toBe('true');
   });
 });
