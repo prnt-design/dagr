@@ -8,7 +8,8 @@
  * data order, and choosing one inspects its node, recording the button as the
  * drawer's opener, so closing the drawer returns focus to it. Once the drawer
  * has mounted, a map beside the outline pans the least distance that brings
- * the node into view.
+ * the node into view, and the item scrolls clear of a drawer docked over the
+ * list.
  *
  * **One tab stop:** the selected node's item, else the last one focused,
  * else the first. The arrow keys, `Home` and `End` move between items. A

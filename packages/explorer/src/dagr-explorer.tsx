@@ -14,8 +14,7 @@
  * they carry across a switch. The map stays mounted while the outline shows,
  * hidden, so it is out of the tab order and keeps its camera, which a zero
  * size leaves where it was (see `use-explorer-camera.ts`). The outline mounts
- * the first time it is chosen and is kept after, hidden, for its scroll and
- * tab stop. The toolbar is hidden with the map, and the drawer goes with
+ * the first time it is chosen and is kept after, hidden, for its tab stop. The toolbar is hidden with the map, and the drawer goes with
  * whichever presentation shows; over the outline it leaves scroll room below
  * the last item. Focus on a switch stays where it is, unless it was in the
  * presentation that left: then it moves to the same node in the other one if
@@ -24,7 +23,7 @@
  */
 
 import { useRef, useState } from 'react';
-import type { CSSProperties, ReactElement } from 'react';
+import type { CSSProperties, ReactElement, Ref } from 'react';
 import type { ExplorerBase } from './base.js';
 import { ExplorerDetails } from './explorer-details.js';
 import type { ExplorerDetailsProps } from './explorer-details.js';
@@ -37,7 +36,6 @@ import type { ExplorerViewportProps } from './explorer-viewport.js';
 import { ExplorerViews } from './explorer-views.js';
 import type { ExplorerViewsProps } from './explorer-views.js';
 import { useIsomorphicLayoutEffect } from './isomorphic-layout-effect.js';
-import { resolveLabels } from './labels.js';
 import { ExplorerRoot } from './root.js';
 import { useExplorer } from './use-explorer.js';
 import type { ExplorerRootProps } from './root.js';
@@ -80,7 +78,30 @@ const HIDDEN: CSSProperties = { display: 'none' };
 const SHOWN: CSSProperties = { display: 'contents' };
 const READER: CSSProperties = { position: 'relative', height: 'var(--dagr-explorer-height, 480px)' };
 
-/** The outline's scroll area. A drawer docked over its lower half leaves the items room to scroll clear of it. */
+function ModeButtons(props: {
+  readonly groupRef: Ref<HTMLDivElement>;
+  readonly mode: DagrExplorerMode;
+  readonly choose: (mode: DagrExplorerMode) => void;
+}): ReactElement {
+  const { labels } = useExplorer();
+  return (
+    <div ref={props.groupRef} data-dagr-explorer="mode" role="group" aria-label={labels.presentation}>
+      {MODES.map((each) => (
+        <button
+          key={each}
+          type="button"
+          data-mode={each}
+          aria-pressed={each === props.mode}
+          onClick={() => props.choose(each)}
+        >
+          {each === 'map' ? labels.mapMode : labels.outlineMode}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The outline's scroll area. An open drawer leaves the items room to scroll clear of it when docked over the lower half. */
 function OutlineScroll(): ReactElement {
   const { detailsOpen } = useExplorer();
   return (
@@ -115,7 +136,6 @@ export function DagrExplorer<N extends ExplorerNode = ExplorerNode, E extends Ex
     onModeChange,
     ...root
   } = props;
-  const labels = resolveLabels(root.labels);
   const [modeState, setModeState] = useState(defaultMode);
   const mode = modeProp ?? modeState;
   const [outlineKept, setOutlineKept] = useState(mode === 'outline');
@@ -152,19 +172,7 @@ export function DagrExplorer<N extends ExplorerNode = ExplorerNode, E extends Ex
   return (
     <ExplorerRoot<N, E> {...(root as ExplorerRootProps<N, E>)}>
       <ExplorerViews<N, E>>{renderViews}</ExplorerViews>
-      <div ref={buttonsRef} data-dagr-explorer="mode" role="group" aria-label={labels.presentation}>
-        {MODES.map((each) => (
-          <button
-            key={each}
-            type="button"
-            data-mode={each}
-            aria-pressed={each === mode}
-            onClick={() => choose(each)}
-          >
-            {each === 'map' ? labels.mapMode : labels.outlineMode}
-          </button>
-        ))}
-      </div>
+      <ModeButtons groupRef={buttonsRef} mode={mode} choose={choose} />
       <ExplorerSearch />
       <ExplorerTraceToggle />
       <div ref={mapRef} hidden={mode !== 'map'} style={mode === 'map' ? SHOWN : HIDDEN}>
