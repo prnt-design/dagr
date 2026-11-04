@@ -465,16 +465,20 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
     // An opener in a presentation hidden since (DagrExplorer's map behind its
     // outline) cannot take focus, so the same node's control that shows does.
     const shown = (element: HTMLElement): boolean =>
-      element.isConnected && (typeof element.checkVisibility !== 'function' || element.checkVisibility());
+      typeof element.checkVisibility !== 'function' || element.checkVisibility();
     const id = latest.current.committedSelected;
-    const same = [...(rootRef.current?.querySelectorAll<HTMLElement>(
-      '[data-dagr-explorer="node"], [data-dagr-explorer="outline"] button',
-    ) ?? [])].find(
-      (element) => element.dataset['nodeId'] === id && shown(element),
-    );
+    const stand =
+      opener !== null && opener.isConnected && !shown(opener)
+        ? [...(rootRef.current?.querySelectorAll<HTMLElement>(
+            '[data-dagr-explorer="node"], [data-dagr-explorer="outline"] button',
+          ) ?? [])].find((element) => element.dataset['nodeId'] === id && shown(element))
+        : undefined;
     // Never the page: the root takes focus when nothing better is left.
     const target =
-      opener !== null && shown(opener) ? opener : (same ?? internals.searchInputRef.current ?? rootRef.current);
+      stand ??
+      (opener !== null && opener.isConnected && shown(opener)
+        ? opener
+        : (internals.searchInputRef.current ?? rootRef.current));
     target?.focus();
   }, [detailsOpen, internals]);
 

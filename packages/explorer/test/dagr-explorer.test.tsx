@@ -5,6 +5,7 @@ import type { ExplorerBase } from '../src/base.js';
 import { createCameraLimits } from '../src/camera.js';
 import type { ExplorerApi } from '../src/context.js';
 import { DagrExplorer } from '../src/dagr-explorer.js';
+import type { DagrExplorerProps } from '../src/dagr-explorer.js';
 import { DEFAULT_EXPLORER_LABELS } from '../src/labels.js';
 import type { ExplorerLabels } from '../src/labels.js';
 import { layoutView } from '../src/layout.js';
@@ -423,8 +424,9 @@ describe('DagrExplorer: map or outline', () => {
     Reflect.deleteProperty(HTMLElement.prototype, 'checkVisibility');
   });
 
-  async function ready(props: Partial<Parameters<typeof DagrExplorer<Item, ExplorerEdge>>[0]> = {}): Promise<void> {
-    tree = await mount(<DagrExplorer label="Map" views={[overview, detail]} apiRef={apiRef} {...props} />);
+  async function ready(props: Partial<DagrExplorerProps<Item, ExplorerEdge>> = {}): Promise<void> {
+    const all = { label: 'Map', views: [overview, detail], apiRef, ...props } as DagrExplorerProps<Item, ExplorerEdge>;
+    tree = await mount(<DagrExplorer<Item, ExplorerEdge> {...all} />);
     await resizeTo(800, 480);
     await runFramesUntilIdle();
   }
