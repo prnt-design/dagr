@@ -45,6 +45,7 @@ export function ChartStage(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<ChartScene | null>(null);
   const pickingRef = useRef(false);
+  const pendingRef = useRef<{ x: number; y: number } | null>(null);
   const lastKeyRef = useRef<string | null>(null);
   const reduced = usePrefersReducedMotion();
 
@@ -100,6 +101,8 @@ export function ChartStage(): JSX.Element {
       live = false;
       abort.abort();
       observer.disconnect();
+      pickingRef.current = false;
+      pendingRef.current = null;
       made?.dispose();
       sceneRef.current = null;
       setScene(null);
@@ -118,6 +121,9 @@ export function ChartStage(): JSX.Element {
     const resizeOnly = lastKeyRef.current === key;
     lastKeyRef.current = key;
     scene.retarget(layout, { snap: reduced || resizeOnly, stagger: true });
+    // The tooltip was read off the old layout, so it comes back on the next move.
+    scene.setHover(null);
+    setHover(null);
   }, [scene, layout, seed, mode, size, reduced]);
 
   useEffect(() => {
@@ -130,15 +136,20 @@ export function ChartStage(): JSX.Element {
     };
   }, [playing, reduced]);
 
-  const onPointerMove = (event: ReactPointerEvent<HTMLCanvasElement>): void => {
-    const current = sceneRef.current;
-    if (current === null || pickingRef.current) return;
+  const pickAt = (current: ChartScene, point: { x: number; y: number }): void => {
     pickingRef.current = true;
-    const rect = event.currentTarget.getBoundingClientRect();
     void current
-      .pick({ x: event.clientX - rect.left, y: event.clientY - rect.top })
+      .pick(point)
+      .catch(() => null)
       .then((id) => {
         pickingRef.current = false;
+        // A move that arrived mid-pick is picked now, so the pointer's resting
+        // place is never the one that was dropped.
+        const pending = pendingRef.current;
+        pendingRef.current = null;
+        if (pending !== null) pickAt(current, pending);
+        // A gridline is not a hover target, and it is not a reason to lose one.
+        if (id !== null && id.startsWith('grid:')) return;
         const bar = id === null ? undefined : layout.bars.find((b) => b.id === id);
         if (bar === undefined) {
           current.setHover(null);
@@ -155,6 +166,18 @@ export function ChartStage(): JSX.Element {
           top: size.height - (layout.plot.bottom + bar.height),
         });
       });
+  };
+
+  const onPointerMove = (event: ReactPointerEvent<HTMLCanvasElement>): void => {
+    const current = sceneRef.current;
+    if (current === null) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    if (pickingRef.current) {
+      pendingRef.current = point;
+      return;
+    }
+    pickAt(current, point);
   };
 
   const onPointerLeave = (): void => {

@@ -134,10 +134,13 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
 
     const nodes: SceneNode[] = [];
     const { plot } = layout;
-    for (const tick of layout.ticks) {
+    // Keyed by position, not value, so a rescale moves the lines rather than
+    // replacing them: blend order within a shape family is slot order, and a
+    // replaced line would be appended after the bars and drawn over them.
+    layout.ticks.forEach((tick, index) => {
       const baseline = tick.value === 0;
       nodes.push({
-        id: `grid:${String(tick.value)}`,
+        id: `grid:${String(index)}`,
         shape: 'roundedRect',
         center: { x: (plot.left + plot.right) / 2, y: tick.y },
         size: { width: plot.right - plot.left, height: 1 },
@@ -146,7 +149,7 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
         glowColor: GRID_COLOR,
         glowWorld: 0,
       });
-    }
+    });
 
     for (const target of layout.bars) {
       const sprung = bars.get(target.id);
@@ -189,7 +192,9 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
       });
     }
 
-    const alpha = advance(lineAlpha, layout.lineAlpha, dtSeconds);
+    // In percent, so the pixel-scale rest thresholds do not snap the fade
+    // while it is still visible.
+    const alpha = advance(lineAlpha, layout.lineAlpha * 100, dtSeconds);
     lineAlpha = alpha.state;
     if (alpha.moving) moving = true;
 
@@ -204,7 +209,7 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
     renderer.setEdges(LINE_GROUP, edges);
     renderer.setEdgeStyle(LINE_GROUP, {
       halfWidthPixels: LINE_HALF_WIDTH_PIXELS * dpr(),
-      alpha: Math.min(1, Math.max(0, lineAlpha.position)),
+      alpha: Math.min(1, Math.max(0, lineAlpha.position / 100)),
     });
     renderer.render();
     return !moving;
@@ -252,7 +257,7 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
         byId.get(target.id) ?? { y: 0, size: 0 };
       reseat(bars, next.bars, lookup, options, 0);
       reseat(points, next.points, lookup, options, next.plot.bottom);
-      if (options.snap) lineAlpha = at(next.lineAlpha);
+      if (options.snap) lineAlpha = at(next.lineAlpha * 100);
       loop.wake();
     },
     setHover(id) {
