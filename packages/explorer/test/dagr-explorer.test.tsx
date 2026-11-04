@@ -455,19 +455,19 @@ describe('DagrExplorer: map or outline', () => {
     expect(mode('outline').getAttribute('aria-pressed')).toBe('true');
     expect(isHidden(part('viewport'))).toBe(true);
     expect(isHidden(part('hint'))).toBe(true);
-    expect(find('toolbar')).toBeNull();
+    expect(isHidden(part('toolbar'))).toBe(true);
     expect(outlineItem('b').getAttribute('aria-current')).toBe('true');
     expect(outlineItem('d').dataset['dimmed']).toBe('true');
     expect(part('search').querySelector('input')?.value).toBe('a');
     expect(part('details-label').textContent).toBe('Beta');
-    expect(part('outline').parentElement?.contains(part('details'))).toBe(true);
+    expect(part('details').parentElement?.contains(part('outline'))).toBe(true);
     expect(part('details').parentElement?.style.position).toBe('relative');
 
     await flush(() => mode('map').click());
     expect(isHidden(part('outline'))).toBe(true);
     expect(graphNode('b').dataset['selected']).toBe('true');
     expect(part('details').parentElement).toBe(part('viewport').parentElement);
-    expect(find('toolbar')).not.toBeNull();
+    expect(isHidden(part('toolbar'))).toBe(false);
   });
 
   it('leaves exactly one presentation in the tab order', async () => {
@@ -485,22 +485,26 @@ describe('DagrExplorer: map or outline', () => {
     await ready();
     await flush(() => api().zoomBy(2));
     await runFramesUntilIdle();
+    await flush(() => api().reveal('d'));
+    await runFramesUntilIdle();
     const zoom = part('zoom-level').textContent;
+    const plane = part('plane').style.transform;
     expect(zoom).not.toBe('');
+    // Hidden, the map measures zero.
     await flush(() => mode('outline').click());
-    // Hidden, the map measures zero, and the phone turns while it is.
+    await resizeTo(0, 0);
+    await resizeTo(800, 480);
+    await flush(() => mode('map').click());
+    await runFramesUntilIdle();
+    expect(part('plane').style.transform).toBe(plane);
+    expect(part('zoom-level').textContent).toBe(zoom);
+    // And the phone turns while it is.
+    await flush(() => mode('outline').click());
     await resizeTo(0, 0);
     await resizeTo(480, 800);
     await flush(() => mode('map').click());
     await runFramesUntilIdle();
     expect(part('zoom-level').textContent).toBe(zoom);
-  });
-
-  it('keeps focus on the pressed button', async () => {
-    await ready();
-    mode('outline').focus();
-    await flush(() => mode('outline').click());
-    expect(document.activeElement).toBe(mode('outline'));
   });
 
   it('moves focus in the presentation that left to the same node in the other', async () => {
@@ -520,6 +524,45 @@ describe('DagrExplorer: map or outline', () => {
     expect(document.activeElement).toBe(graphNode('c'));
   });
 
+  it('moves focus on a node that is not selected to the same node', async () => {
+    let shown: 'map' | 'outline' = 'map';
+    const render = () => <DagrExplorer label="Map" views={[overview, detail]} apiRef={apiRef} mode={shown} />;
+    tree = await mount(render());
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+    graphNode('d').focus();
+    shown = 'outline';
+    await tree.rerender(render());
+    expect(document.activeElement).toBe(outlineItem('d'));
+    outlineItem('b').focus();
+    shown = 'map';
+    await tree.rerender(render());
+    expect(document.activeElement).toBe(graphNode('b'));
+  });
+
+  it('moves focus on the toolbar to the outline when the host switches', async () => {
+    let shown: 'map' | 'outline' = 'map';
+    const render = () => <DagrExplorer label="Map" views={[overview]} apiRef={apiRef} mode={shown} />;
+    tree = await mount(render());
+    await resizeTo(800, 480);
+    await runFramesUntilIdle();
+    const fit = part('toolbar').querySelector<HTMLElement>('[data-action="fit"]');
+    fit?.focus();
+    shown = 'outline';
+    await tree.rerender(render());
+    expect(document.activeElement).toBe(outlineItem('a'));
+  });
+
+  it('leaves the outline room to scroll clear of an open drawer', async () => {
+    await ready({ defaultMode: 'outline' });
+    const scroller = part('outline').parentElement;
+    expect(scroller?.style.overflowY).toBe('auto');
+    expect(scroller?.style.scrollPaddingBottom).toBe('');
+    await flush(() => outlineItem('d').click());
+    expect(scroller?.style.scrollPaddingBottom).toBe('50%');
+    expect((scroller?.lastElementChild as HTMLElement | null)?.style.height).toBe('50%');
+  });
+
   it('under control, reports a choice and shows only the owner\'s mode', async () => {
     const onModeChange = vi.fn();
     await ready({ mode: 'map', onModeChange });
@@ -536,7 +579,7 @@ describe('DagrExplorer: map or outline', () => {
     expect(mode('outline').getAttribute('aria-pressed')).toBe('true');
     expect(isHidden(part('outline'))).toBe(false);
     expect(isHidden(part('viewport'))).toBe(true);
-    expect(find('toolbar')).toBeNull();
+    expect(isHidden(part('toolbar'))).toBe(true);
   });
 
   it('returns focus to the outline item when a drawer opened on the map closes there', async () => {

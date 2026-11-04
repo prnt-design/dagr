@@ -60,7 +60,7 @@
   outline-offset: 2px;
 }
 
-:where([data-dagr-explorer='views'] button[aria-pressed='true'], [data-dagr-explorer='trace'][data-active='true']) {
+:where([data-dagr-explorer='views'] button[aria-pressed='true'], [data-dagr-explorer='mode'] button[aria-pressed='true'], [data-dagr-explorer='trace'][data-active='true']) {
   border-color: var(--dagr-explorer-accent, #2f6fdf);
   color: var(--dagr-explorer-accent, #2f6fdf);
 }
@@ -70,7 +70,7 @@
   cursor: default;
 }
 
-:where([data-dagr-explorer='views'], [data-dagr-explorer='toolbar']) {
+:where([data-dagr-explorer='views'], [data-dagr-explorer='mode'], [data-dagr-explorer='toolbar']) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;

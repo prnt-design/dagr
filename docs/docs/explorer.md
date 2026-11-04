@@ -391,9 +391,10 @@ reaches all of them whatever is on screen, its match count is live, and the
 graph's accessible description says so and gives the node and edge counts.
 `Enter` in the search field inspects the first match and flies to it.
 
-When the drawer closes, focus returns to what opened it, else (when that is
-now hidden, as the map is behind `DagrExplorer`'s outline) to the same node's
-item or node that shows, else to the search field, else to the root. `Escape` closes the drawer from anywhere in the root.
+When the drawer closes, focus returns to what opened it, else to the search
+field, else to the root. An opener now hidden, as the map is behind
+`DagrExplorer`'s outline, hands focus to that node's control in the
+presentation that shows. `Escape` closes the drawer from anywhere in the root.
 
 `ExplorerOutline` reaches every node too, as a list. It is one tab stop: the
 selected node's item, else the last one focused, else the first. The up and

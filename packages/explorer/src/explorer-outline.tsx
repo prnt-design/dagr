@@ -48,7 +48,14 @@ export function ExplorerOutline(props: ExplorerOutlineProps): ReactElement {
     if (revealRequest === null) return undefined;
     const frame = requestAnimationFrame(() => {
       const current = reading.current;
-      if (current.detailsOpen && current.selectedId === revealRequest.id) reveal(revealRequest.id);
+      if (current.detailsOpen && current.selectedId === revealRequest.id) {
+        reveal(revealRequest.id);
+        // Clear of a drawer docked over the list, where its scroll container leaves room for one.
+        const chosen = [...(listRef.current?.querySelectorAll<HTMLElement>(':scope > li > button') ?? [])].find(
+          (button) => button.dataset['nodeId'] === revealRequest.id,
+        );
+        if (typeof chosen?.scrollIntoView === 'function') chosen.scrollIntoView({ block: 'nearest' });
+      }
       setRevealRequest(null);
     });
     return () => cancelAnimationFrame(frame);

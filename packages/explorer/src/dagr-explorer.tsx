@@ -15,11 +15,12 @@
  * hidden, so it is out of the tab order and keeps its camera, which a zero
  * size leaves where it was (see `use-explorer-camera.ts`). The outline mounts
  * the first time it is chosen and is kept after, hidden, for its scroll and
- * tab stop. The toolbar shows only with the map, and the drawer with
- * whichever presentation shows. Focus on a switch stays where it is, unless it was in the
- * presentation that left: then it moves to the same node in the other one
- * (the outline's tab stop, the graph's tab stop node), else to the pressed
- * button.
+ * tab stop. The toolbar is hidden with the map, and the drawer goes with
+ * whichever presentation shows; over the outline it leaves scroll room below
+ * the last item. Focus on a switch stays where it is, unless it was in the
+ * presentation that left: then it moves to the same node in the other one if
+ * that has a control for it, else to the other's tab stop, else to the
+ * pressed button.
  */
 
 import { useRef, useState } from 'react';
@@ -38,6 +39,7 @@ import type { ExplorerViewsProps } from './explorer-views.js';
 import { useIsomorphicLayoutEffect } from './isomorphic-layout-effect.js';
 import { resolveLabels } from './labels.js';
 import { ExplorerRoot } from './root.js';
+import { useExplorer } from './use-explorer.js';
 import type { ExplorerRootProps } from './root.js';
 import type { ExplorerEdge, ExplorerNode } from './types.js';
 import type { ExplorerTiers } from './visible-set.js';
@@ -74,8 +76,20 @@ export type DagrExplorerMode = 'map' | 'outline';
 
 const MODES: readonly DagrExplorerMode[] = ['map', 'outline'];
 const HIDDEN: CSSProperties = { display: 'none' };
+// The wrapper adds no box, so the stage, the hint and the toolbar stay the root's flex items.
+const SHOWN: CSSProperties = { display: 'contents' };
 const READER: CSSProperties = { position: 'relative', height: 'var(--dagr-explorer-height, 480px)' };
-const READER_LIST: CSSProperties = { height: '100%', overflowY: 'auto' };
+
+/** The outline's scroll area. A drawer docked over its lower half leaves the items room to scroll clear of it. */
+function OutlineScroll(): ReactElement {
+  const { detailsOpen } = useExplorer();
+  return (
+    <div style={{ height: '100%', overflowY: 'auto', scrollPaddingBottom: detailsOpen ? '50%' : undefined }}>
+      <ExplorerOutline />
+      {detailsOpen ? <div aria-hidden="true" style={{ height: '50%' }} /> : null}
+    </div>
+  );
+}
 
 export type DagrExplorerProps<
   N extends ExplorerNode = ExplorerNode,
@@ -118,11 +132,13 @@ export function DagrExplorer<N extends ExplorerNode = ExplorerNode, E extends Ex
     const to = (mode === 'map' ? mapRef : outlineRef).current;
     const active = document.activeElement;
     if (was === mode || from === null || to === null || active === null || !from.contains(active)) return;
+    const control = mode === 'map' ? '[data-dagr-explorer="node"]' : '[data-dagr-explorer="outline"] button';
+    const id = active.closest<HTMLElement>('[data-node-id]')?.dataset['nodeId'];
+    const same = [...to.querySelectorAll<HTMLElement>(control)].find((element) => element.dataset['nodeId'] === id);
     const target =
-      mode === 'map'
-        ? (to.querySelector<HTMLElement>('[data-dagr-explorer="node"][tabindex="0"]') ??
-          to.querySelector<HTMLElement>('[data-dagr-explorer="viewport"]'))
-        : to.querySelector<HTMLElement>('[data-dagr-explorer="outline"] button[tabindex="0"]');
+      same ??
+      to.querySelector<HTMLElement>(`${control}[tabindex="0"]`) ??
+      (mode === 'map' ? to.querySelector<HTMLElement>('[data-dagr-explorer="viewport"]') : null);
     (target ?? buttonsRef.current?.querySelector<HTMLElement>(`[data-mode="${mode}"]`))?.focus();
   }, [mode]);
 
@@ -151,7 +167,7 @@ export function DagrExplorer<N extends ExplorerNode = ExplorerNode, E extends Ex
       </div>
       <ExplorerSearch />
       <ExplorerTraceToggle />
-      <div ref={mapRef} hidden={mode !== 'map'} style={mode === 'map' ? undefined : HIDDEN}>
+      <div ref={mapRef} hidden={mode !== 'map'} style={mode === 'map' ? SHOWN : HIDDEN}>
         {/* The drawer in the viewport's stage overlays the graph, not the whole explorer or the hint. */}
         <ExplorerViewport<N, E>
           renderNode={renderNode}
@@ -164,14 +180,14 @@ export function DagrExplorer<N extends ExplorerNode = ExplorerNode, E extends Ex
         >
           {mode === 'map' ? details : null}
         </ExplorerViewport>
+        <ExplorerToolbar />
       </div>
       {outlineKept ? (
         <div ref={outlineRef} hidden={mode !== 'outline'} style={mode === 'outline' ? READER : HIDDEN}>
-          <ExplorerOutline style={READER_LIST} />
+          <OutlineScroll />
           {mode === 'outline' ? details : null}
         </div>
       ) : null}
-      {mode === 'map' ? <ExplorerToolbar /> : null}
     </ExplorerRoot>
   );
 }
