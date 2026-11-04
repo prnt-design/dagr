@@ -944,6 +944,7 @@ to avoid smoothing them twice.
 The first two touches remain the active pair when an extra finger arrives;
 cancellation ends the pair, and so does lost capture on the surface itself
 (a child element such as the `<canvas>` losing a touch's implicit capture is a
-handover, so the pinch continues). Coincident fingers pan without a zoom spike. Existing `touchNavigation` modes and their browser-scroll tradeoffs
+handover, so the pinch continues). Coincident fingers pan without a zoom
+spike. Existing `touchNavigation` modes and their browser-scroll tradeoffs
 remain unchanged. See [Mobile architecture](./mobile.md) for the public core
 API, layer boundaries and remaining viewport/device validation work.
