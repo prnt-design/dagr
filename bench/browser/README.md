@@ -3904,11 +3904,12 @@ smooth all-moving rows missed 12% (DPR 1) and 9% (DPR 2) of ticks.
 0.2 ms of CPU per pick, with ticks missed not separated from runs without
 picks (see ["What a pick costs a frame"](#what-a-pick-costs-a-frame-m48b));
 it was not re-measured on this adapter. Rebuilding the CPU node index every
-animated frame cost 1.5 to 1.6 ms there. Edge hit testing has no measured
-cost yet (M4.8b). Not covered by this matrix: sizes below 10,000, a zoom
-other than `fit`, rich nodes, the WebGL2 fallback, and unrounded GPU
-timestamps on this adapter. A second machine is
-[below](#the-same-matrix-on-an-apple-m4-2026-10-31).
+animated frame cost 1.5 to 1.6 ms there. Edge hit testing was priced
+separately (see ["What an edge hit costs a
+frame"](#what-an-edge-hit-costs-a-frame-m48b)), not in these rows. Not
+covered by this matrix: sizes below 10,000, a zoom other than `fit`, rich
+nodes, the WebGL2 fallback, and unrounded GPU timestamps on this adapter. A
+second machine is [below](#the-same-matrix-on-an-apple-m4-2026-10-31).
 
 ### The same matrix on an Apple M4 (2026-10-31)
 
