@@ -21,12 +21,13 @@ same ID.
 PRODUCT.md and DESIGN.md now follow the 2026-10-17 renderer-first decision.
 The commerce/VDSL atlas remains an example; brand and accessibility guidance
 remain applicable. No showcase rewrite is included. ROADMAP.md summarizes
-M4.10 outcomes and limits through the 2026-10-28 measurement record rather
+M4.10 outcomes and limits through the 2026-10-30 measurement record rather
 than repeating its optimization history. The detailed browser record and all
 prior working notes remain intact. All-moving 10k smooth rendering has not
 established 60 Hz. Dispatch owns implementation slices under stable roadmap
-milestone IDs; merged PRs and successor tasks close each handoff. The renderer
-successor to #172 is `tsk_88bfcb651a56`, already in progress at this update.
+milestone IDs; merged PRs and successor tasks close each handoff. The
+remaining M4.10 results matrix is `tsk_ad4b7ce0d93b`, in Backlog behind the
+2026-10-29 mobile, skill and library priority.
 Parked/deferred scope, separate report scheduling and human publication and
 baseline gates remain in force.
 
