@@ -257,6 +257,11 @@ With the surface focused, the arrow keys pan. In both cases `+` and `=` zoom
 in, `-` zooms out and `0` fits. `Escape` closes the drawer if it is open,
 and otherwise leaves the graph. A key with `Ctrl`, `Command` or `Alt` is left to the browser.
 
+Every camera move but a drag or a pinch eases to where it is going: keys,
+the wheel, search, the drawer opening or closing, and the `fit`, `zoomBy`,
+`focusNode` and `reveal` methods. Under `prefers-reduced-motion: reduce` it
+lands there at once. A drag or a pinch follows the pointer either way.
+
 A node that takes focus from the keyboard is brought into view by the
 least pan, at the current zoom. A node you click is not moved to.
 "Keyboard focus" means focus that followed a key press: a pointer press ends
