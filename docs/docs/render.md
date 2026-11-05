@@ -371,13 +371,15 @@ developer is not using.
 | `fitBounds(bounds, padding?)` | frame a region: centre on it at the padded fit zoom |
 | `setCenter`, `setZoom`, `setViewport` | move it, scale it, tell it the canvas resized |
 | `setZoomLimits(min, max)` | rebind the zoom range, clamping the current zoom into it |
+| `setInset(inset)`, `frame`, `centerFor(point, zoom?)` | frame fits and content limits in the part of the canvas an overlay leaves |
 
 The zoom range is set at construction and can be rebound later with
 `setZoomLimits`, which is what content-derived limits need: the fit zoom
 depends on the viewport, so a window resize has to be able to move the range.
 The pure fit arithmetic is also exported as `fitZoom(bounds, viewport,
 padding)`, so a caller deriving limits and a `fitBounds` call cannot disagree
-about what "fits" means.
+about what "fits" means, provided the caller passes `camera.frame`, which is
+the viewport unless an inset is set.
 
 Two of the methods above have a decision inside them worth knowing about.
 
@@ -710,10 +712,12 @@ something the compiler already enforces.
 ### The entry that does not need it
 
 "Cannot be imported at all without three" is true of the full entry. It is not
-true of `@prnt/dagr-render/core`, which exports `Camera2D`, `fitZoom` and
-`shapeEdgePath` and nothing else at runtime.
+true of `@prnt/dagr-render/core`, which exports `Camera2D`, `fitZoom`,
+`shapeEdgePath`, `createPinchGesture`, `visibleFrame`, `coverInset`,
+`clipInset` and `visualViewportInset` and nothing else at runtime.
 
-Those three come from `camera.ts` and `edge-path.ts`, and neither imports
+Those come from `camera.ts`, `edge-path.ts`, `pinch-gesture.ts` and
+`visible-frame.ts`, and none of them imports
 `three` at runtime, directly or through anything it imports. The core entry
 re-exports them without going through `index.ts`, so loading it evaluates no
 renderer module.
@@ -731,7 +735,7 @@ The case the entry exists for is a server render. A bundler already drops
 `three/webgpu` for a consumer who only imports the camera, because this package
 is side-effect free. A server that externalizes its dependencies has no such
 step: it evaluates the entry it is given. The planned `@prnt/dagr-explorer`
-(M5.6) will draw SVG from exactly these three functions and has to render on a
+(M5.6) will draw SVG from `Camera2D`, `fitZoom` and `shapeEdgePath` and has to render on a
 server, which is why the entry was cut.
 
 The objects are the same ones the full entry exports, so a `Camera2D` from

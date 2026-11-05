@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 /**
- * The three checks `pnpm test` deliberately cannot run, because each of them
- * needs the network.
+ * The checks `pnpm test` deliberately cannot run, because each of them needs
+ * the network.
  *
  * 1. `publint` over every tarball.
  * 2. `arethetypeswrong` over every tarball, under the `esm-only` profile.
  * 3. A scratch project OUTSIDE the workspace that installs all seven tarballs,
  *    typechecks their public surfaces, and runs a headless runtime smoke.
+ * 4. Two Explorer consumers from `fixtures/explorer`, on React 18 and 19 and
+ *    without three: SSR, hydration, cleanup and the core pinch and
+ *    visible-frame APIs.
  *
  * The vitest suite beside this is the gate: it runs on every `pnpm test`, needs
  * no registry, and checks the things that go wrong silently. This script is the
@@ -33,7 +36,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,7 +49,11 @@ let failures = 0;
 
 function run(command, args, cwd, label) {
   try {
-    execFileSync(command, args, { cwd, stdio: 'pipe', encoding: 'utf8' });
+    execFileSync(command, args, {
+      cwd, stdio: 'pipe', encoding: 'utf8',
+      // pnpm's shim can expose workspace dependencies to scratch consumers.
+      env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== 'NODE_PATH')),
+    });
     console.log(`  PASS  ${label}`);
     return true;
   } catch (error) {
@@ -144,7 +151,7 @@ try {
       "import { DagrCanvas as UmbrellaCanvas, Html as UmbrellaHtml } from '@prnt/dagr/react';",
       "import type { DagrCanvasProps, HtmlProps } from '@prnt/dagr-react';",
       "import type { DagrCanvasProps as UmbrellaCanvasProps, HtmlProps as UmbrellaHtmlProps } from '@prnt/dagr/react';",
-      "import { Camera2D, fitZoom, ribbonWidthAt, stepSpring2D } from '@prnt/dagr-render';",
+      "import { Camera2D, fitZoom, createPinchGesture, ribbonWidthAt, stepSpring2D } from '@prnt/dagr-render';",
       "import { Camera2D as UmbrellaCamera } from '@prnt/dagr/render';",
       "import { Camera2D as CoreCamera, shapeEdgePath as coreShapeEdgePath } from '@prnt/dagr-render/core';",
       "import type { EdgePathOptions as CoreEdgePathOptions } from '@prnt/dagr-render/core';",
@@ -229,7 +236,7 @@ try {
       "import * as umbrellaExplorer from '@prnt/dagr/explorer';",
       "import * as core from '@prnt/dagr-render/core';",
       "import * as umbrellaCore from '@prnt/dagr/render/core';",
-      "import { Camera2D as ScopedCamera, fitZoom, ribbonWidthAt, stepSpring2D } from '@prnt/dagr-render';",
+      "import { Camera2D as ScopedCamera, fitZoom, createPinchGesture, ribbonWidthAt, stepSpring2D } from '@prnt/dagr-render';",
       "import { Camera2D as UmbrellaCamera } from '@prnt/dagr/render';",
       "import { Camera2D as CoreCamera, fitZoom as coreFitZoom, shapeEdgePath as coreShapeEdgePath } from '@prnt/dagr-render/core';",
       "import { defineRegistry as ScopedRegistry, sameType } from '@prnt/dagr-vdsl';",
@@ -240,6 +247,10 @@ try {
       "if (ScopedGraph !== RootGraph || ScopedGraph !== SubpathGraph) throw new Error('graph umbrella identity failed');",
       "if (ScopedCamera !== UmbrellaCamera) throw new Error('render umbrella identity failed');",
       "if (ScopedCamera !== CoreCamera || fitZoom !== coreFitZoom) throw new Error('render core identity failed');",
+      "if (core.createPinchGesture !== createPinchGesture) throw new Error('pinch core identity failed');",
+      "const pinch = core.createPinchGesture();",
+      "pinch.down(1, { x: 0, y: 0 }); pinch.down(2, { x: 100, y: 0 });",
+      "if (pinch.move(2, { x: 200, y: 0 })?.factor !== 2) throw new Error('pinch core smoke failed');",
       "if (coreShapeEdgePath([{ x: 0, y: 0 }, { x: 4, y: 0 }]).length !== 2) throw new Error('render core smoke failed');",
       "if (react.DagrCanvas !== umbrellaReact.DagrCanvas || react.Html !== umbrellaReact.Html) throw new Error('React umbrella identity failed');",
       "const graph = new RootGraph();",
@@ -308,6 +319,25 @@ try {
   );
   run('npx', ['tsc', '--noEmit'], scratch, 'tsc over scoped and umbrella public package surfaces');
   run('node', ['smoke.mjs'], scratch, 'headless scoped and umbrella graph, layout, VDSL, render, explorer, and React smoke');
+  console.log('\nInstalled Explorer SSR/hydration and teardown, without three:');
+  for (const version of ['18.3.1', '19.2.8']) {
+    const major = version.split('.')[0];
+    const consumer = join(workDir, `explorer-react-${major}`);
+    mkdirSync(consumer);
+    writeFileSync(join(consumer, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
+    for (const file of ['server.mjs', 'client.mjs', 'consumer.tsx', 'tsconfig.json']) {
+      copyFileSync(join(REPO_ROOT, 'packaging/fixtures/explorer', file), join(consumer, file));
+    }
+    if (run('npm', [
+      'install', '--no-audit', '--no-fund', '--ignore-scripts', '--omit=optional',
+      graphTarball, layoutTarball, renderTarball, explorerTarball,
+      `react@${version}`, `react-dom@${version}`, 'jsdom@30.0.1',
+      `@types/react@${major}`, `@types/react-dom@${major}`, 'typescript@5.9.3',
+    ], consumer, `Explorer React ${major} public peers install`)) {
+      run('npx', ['tsc', '--noEmit'], consumer, `Explorer React ${major} NodeNext types without three or skipLibCheck`);
+      run('node', ['client.mjs', major], consumer, `Explorer React ${major} SSR, hydration, CSS, pinch, visible frame and cleanup`);
+    }
+  }
 } finally {
   rmSync(workDir, { recursive: true, force: true });
 }

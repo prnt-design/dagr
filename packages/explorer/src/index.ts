@@ -15,7 +15,7 @@
  */
 
 export { DagrExplorer } from './dagr-explorer.js';
-export type { DagrExplorerProps } from './dagr-explorer.js';
+export type { DagrExplorerMode, DagrExplorerProps } from './dagr-explorer.js';
 export { ExplorerRoot } from './root.js';
 export type { ExplorerRootProps } from './root.js';
 export { ExplorerViews } from './explorer-views.js';
@@ -30,6 +30,8 @@ export type {
   ExplorerDetailsContext,
   ExplorerDetailsProps,
 } from './explorer-details.js';
+export { ExplorerOutline } from './explorer-outline.js';
+export type { ExplorerOutlineProps } from './explorer-outline.js';
 export { ExplorerToolbar } from './explorer-toolbar.js';
 export type { ExplorerToolbarProps } from './explorer-toolbar.js';
 export { ExplorerTraceToggle } from './explorer-trace-toggle.js';

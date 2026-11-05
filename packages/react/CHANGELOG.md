@@ -2,9 +2,28 @@
 
 ## Unreleased
 
+- A `DagrCanvas` `fit()` or `focusNode` flight still under way when `inset`, the visual viewport or the canvas size changes works its target out again in the new frame, from where the camera is, and lands when it would have. It used to land where the old frame put it.
+- `DagrCanvas` observes the visual viewport and frames in what it leaves, such as the part of the page a software keyboard covers without resizing it: the larger of `inset` and `visualViewportInset` on each side. A change keeps the camera and re-clamps it. Page pinch-zoom takes nothing off. Tested in jsdom and headless Chromium emulation (`bench/browser/visible-frame-check.mjs`), not yet on an iOS or Android device or with a software keyboard.
+- Add `inset` to `DagrCanvas`: CSS pixels off each side that something drawn over the canvas covers. The first fit, `fit()`, `focusNode` and the camera limits frame what is left. Changing it keeps the camera and re-clamps it.
+- Skip touch hover during a pinch, and allow mouse and pen clicks after a completed pinch.
+- Use the shared core pinch gesture in `DagrCanvas`: extra contacts no longer stop the active pair, lost capture on the `DagrCanvas` element itself ends the pair (a `<canvas>` child losing it is a handover), a new primary sequence clears stale contacts, and coincident fingers pan without a zoom spike. Existing navigation and page-scroll modes remain.
+- Add `onEdgeClick` and `onEdgeHover` to `DagrCanvas`. Edges are hit on the
+  CPU against the edges as drawn, within half the ribbon's width plus the
+  pointer's slack, and only where no node is hit. Without either handler a
+  click on an edge stays a background click.
+- Add an edge kind, `{ kind: 'edge', edgeId }`, to `GraphHitTarget`, so a
+  hit provider can answer an edge (for example from `createEdgeHitIndex`) and
+  `useGraphInteraction` selects it like a node: press and release on the same
+  edge in one displayed revision. `sameGraphHitTarget` never equates an edge
+  with a node of the same id. The union is wider, so code that assumes a
+  target is a node or a port no longer compiles: reading `nodeId` without
+  checking `kind`, a two-way branch such as
+  `t.kind === 'node' ? t.nodeId : t.portId`, or an exhaustive `switch` that
+  returns from every case or ends in a `never` check. A `switch` that does
+  neither still compiles and skips edges. Check for `'edge'` too.
 - Add `createEdgeHitIndex`, which tests a point against drawn edge centrelines
   within a tolerance, nearest centreline first, for a host with its own
-  surface. `DagrCanvas` does not report edge hits yet.
+  surface.
 - Add `hitTesting` to `DagrCanvas`. `'gpu'` answers mouse hover and clicks
   from `Renderer.pickNode` through `createPickedNodeHitProvider`, primed from
   hover; touch and pen keep the CPU index. The default stays `'cpu'`.

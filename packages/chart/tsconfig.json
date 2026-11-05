@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    // The renderer publishes from dist, which does not exist in a fresh clone
+    // or in CI, where typecheck runs before build. Typecheck reads it from
+    // source, mirrored by the alias in vitest.config.ts.
+    "paths": {
+      "@prnt/dagr-render": ["../render/src/index.ts"]
+    }
+  },
+  "include": ["src", "test", "vitest.config.ts"]
+}

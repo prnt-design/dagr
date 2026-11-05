@@ -17,8 +17,301 @@ shapes reach the canvas once it has. They live here because this is where the
 browser is, and because the rule below about a committed harness applies to them
 exactly as it does to a measurement. `gpu-hover.mjs` and `gpu-hover-page.mjs`
 check the same way that `DagrCanvas`'s GPU hit testing answers hover and
-clicks at 10,000 nodes. `windows-chrome.mjs` lets the probe and
-the frame profile reach a Windows GPU from WSL2.
+clicks at 10,000 nodes. `windows-chrome.mjs` lets the probe, the frame
+profile, the GPU hover check, the mobile input check and the mobile
+pixel-ratio budget reach a Windows GPU from WSL2.
+
+## Shared mobile input check
+
+`mobile-core-check.mjs` replays one touch sequence on both public surfaces:
+DagrCanvas and Explorer. It tests the stable first-two-finger pair through a
+third contact, an ignored extra-finger move, cancellation and a fresh pinch.
+It also checks which of page and camera a one-finger swipe moves under each
+scroll policy in [mobile.md](../../docs/docs/mobile.md):
+
+- DagrCanvas `touchNavigation="drag"`: the camera pans and the page stays.
+- DagrCanvas `touchNavigation="two-finger"`: the page scrolls and the camera stays.
+- Explorer, unfocused: the page scrolls and the graph does not drag.
+- Explorer, focused: the graph takes the drag and the page stays. Its camera
+  may not move, because Explorer clamps a pan away from a graph that fits.
+
+It also checks that Explorer's first tap on an unfocused graph focuses it
+without selecting a node, and that a second tap selects the tapped node.
+On each surface, `focusNode` must still be short of its target two frames
+after the call, and under `prefers-reduced-motion: reduce` must reach the same
+target by then and stay there.
+On a focused DagrCanvas, Left and Right must pan, Down must zoom out, and the
+page must stay put. On a focused Explorer, an arrow must move focus to another
+node, - and + must zoom, ArrowDown with no node below must not scroll the
+page, and Escape must leave the graph. A controlled Explorer (`selectedId`
+with `onSelectedChange`) must report Enter and a tap to its owner without
+selecting anything. Once the owner passes the tapped id as `selectedId`, that
+node must be selected with details open, since the tap asked to inspect it,
+and clearing the prop must clear both. A pinch and a one-finger drag must
+survive a resize under them, and each surface must end or keep a gesture whose
+pointer capture is taken away as its policy says (see the resize and
+lost-capture rows below).
+Each check runs at 320x568 DPR 1, 390x844 DPR 3 and 768x1024 DPR 2, in portrait and
+landscape. A swipe holds still before lifting, so a page scroll ends without a
+fling that would still be moving the page in the next scenario. The check
+writes screenshots and `report.json`, with the backend each canvas drew on and
+the page's default WebGPU adapter per size, and closes or detaches from its browser on
+success or failure. The page is served through Playwright routes, so an
+attached Chrome on another host loads it too, on a loopback origin, since
+WebGPU needs a secure context.
+
+```bash
+pnpm build
+# Install browser-only tools outside the workspace, or use bench/browser.
+npm --prefix /tmp/dagr-browser install --no-save playwright-core esbuild
+# Install Chromium with the same Playwright dependency, if not cached.
+/tmp/dagr-browser/node_modules/.bin/playwright-core install chromium
+DAGR_BROWSER_DEPS=/tmp/dagr-browser node bench/browser/mobile-core-check.mjs
+```
+
+`--out=DIR` selects an output folder; `DAGR_CHROMIUM` selects a Chromium binary.
+The 2026-10-28 run passed all four pinch scenarios (both surfaces at 320 CSS
+pixels DPR 1 and 768 DPR 3) in Chromium 145.0.7632.6 headless touch emulation.
+On 2026-11-02 the matrix passed all 42 scenarios (12 pinch, 24 swipe, 6 first
+tap) on Linux WSL2 in Chromium 148.0.7778.96 headless touch emulation, with
+DagrCanvas on WebGL2 software rendering. Each of five mutations to the built
+packages failed the run: drag mode given `touch-action: pan-x pan-y`,
+two-finger mode ignored, Explorer's first-tap gate removed, and Explorer's
+`touch-action: none` set always or never. The launched run is a shared
+input/camera correctness check, not real-device, WebGPU hardware, visual parity
+or performance evidence. The fixture deliberately uses the public package
+entries and one dependency graph; build current source first.
+
+`DAGR_CDP` attaches to a running Chrome instead of launching one, and the run
+then fails unless both canvases drew on `webgpu` and the page's default WebGPU
+adapter reports `isFallbackAdapter: false`. On WSL2, start the Windows side's
+Chrome with `windows-chrome.mjs` (see [From WSL2, through the Windows side's
+Chrome](#from-wsl2-through-the-windows-sides-chrome)):
+
+```bash
+node bench/browser/windows-chrome.mjs --headless   # leave running
+DAGR_CDP=http://127.0.0.1:9445 DAGR_BROWSER_DEPS=/tmp/dagr-browser \
+  node bench/browser/mobile-core-check.mjs
+```
+
+On 2026-11-02 the attached run passed all 42 scenarios in Chrome 156.0.8078.74
+headless on the Windows side of the WSL2 machine, both DagrCanvas instances on
+`webgpu` at every size, adapter `nvidia` `lovelace` (the GeForce RTX 4090), not
+a fallback. Drag mode given `touch-action: pan-x pan-y` failed it, and a first
+attempt from a non-loopback origin, where `navigator.gpu` is absent and the
+canvases fell back to WebGL2, was refused. Explorer draws SVG whatever the
+backend, so its rows in both runs are SVG rows. This is touch emulation on a
+desktop GPU: it shows the input and camera contract holds on the WebGPU
+backend, not that a phone's GPU or browser behaves the same.
+
+The reduced-motion rows added 12 scenarios. On 2026-11-02 the launched run
+passed all 54 in Chromium 148.0.7778.96 headless (DagrCanvas on WebGL2
+software), and the attached run passed all 54 in Chrome 156.0.8078.74 headless
+on the same Windows side and adapter as above, both canvases on `webgpu`, not a
+fallback. Two more mutations to the built packages failed the run: DagrCanvas
+flying for 450 ms whatever the preference (launched and attached), and
+Explorer easing whatever the preference (launched).
+
+The keyboard and controlled-selection rows added 18 scenarios. On 2026-11-02
+the launched run passed all 72 in Chromium 148.0.7778.96 headless (DagrCanvas
+on WebGL2 software), and the attached run passed all 72 in Chrome
+156.0.8078.74 headless on the same Windows side and adapter, both canvases on
+`webgpu`, not a fallback. Four more mutations to the built packages failed
+the launched run: Explorer ignoring a controlled `selectedId`, Escape not
+blurring the graph, an Explorer node's arrow keys not calling
+`preventDefault`, and DagrCanvas's navigation keys not calling
+`preventDefault`. Each of the last two lets ArrowDown scroll the page. The
+DagrCanvas one also failed the attached run. These are desktop keyboard events on a touch-emulated
+page, not software-keyboard or screen-reader evidence.
+
+The resize rows added 24 scenarios, each on DagrCanvas and Explorer:
+
+- **Pinch, container shrinks:** two fingers spread, the surface's section
+  shrinks to about 75% of its width, then the fingers close. DagrCanvas's camera
+  viewport must match the new box and its scale must follow the fingers
+  (a factor of 0.8). Explorer's must fall and it must still be dragging.
+  Explorer's zoom limits follow its area, so the shrink itself can move its
+  scale and the new minimum can clamp the closing pinch, but the scale must
+  still fall.
+- **Drag, viewport rotates:** one finger drags, the viewport swaps width and
+  height, and the finger drags on. DagrCanvas's camera viewport must match the
+  new box and the camera must pan the 30 CSS pixels the finger moves.
+  Explorer must keep its drag state. As in the swipe rows, its camera is not
+  checked, so an Explorer that kept the state but ignored the finger after a
+  rotation would pass.
+- **Both:** the camera stays finite, the page does not scroll during the
+  rest of the gesture, Explorer's `data-dragging` clears on release, and a tap
+  afterwards must hit a node on screen: DagrCanvas's `onNodeClick`, Explorer's
+  selection.
+
+Explorer often ends zoomed in between nodes, with none on screen. It then
+flies to an unselected node before the tap, and the report records
+`flown: true`. In Chromium 148 at 320x568, a tap on Explorer made at once
+after a drag across a rotation delivered `pointerdown` and `pointerup` to the
+node, and a temporary capture listener on the window, which runs before
+Explorer's own click handling, saw no `click`. After a 400 ms pause the click arrives, so the
+check waits that long before the tap after each drag row. A regression that
+drops a tap made straight after such a drag would therefore pass. The tap
+after each pinch row has no added pause, though it still follows the check's
+usual wait for the page and camera to come to rest.
+
+On 2026-11-03 the launched run passed all 96 in Chromium 148.0.7778.96
+headless (DagrCanvas on WebGL2 software). The attached run passed all 96 in
+Chrome 156.0.8078.74 headless on the same Windows side and adapter, both
+canvases on `webgpu`, not a fallback. Two mutations to the built packages
+failed it:
+
+- Explorer ending its pinch when it measures a resize failed the launched run.
+- DagrCanvas's `ResizeObserver` disconnecting after its first measure failed
+  both the launched and the attached run.
+
+The lost-capture rows added 24 scenarios, 12 on each surface.
+Mid-gesture, the check hands a contact's pointer capture to the page body with
+`setPointerCapture`, so the surface sees `lostpointercapture` and no
+`pointercancel`:
+
+- **Drag:** one finger drags far enough to pan, and both surfaces hold its
+  capture on their root. Once the capture is taken, the drag state must clear
+  and the page must stay put, and on DagrCanvas the rest of the finger's travel
+  must not move the camera. Explorer's camera is not checked, since it clamps
+  a pan of a graph that fits. After release, a fresh drag must start and end,
+  and on DagrCanvas pan the camera.
+- **Pinch:** from `focusNode`'s zoom, landed at once under reduced motion,
+  two fingers close and must move the camera, then the second finger's capture
+  is taken. Explorer holds both contacts' capture on its viewport, so its pinch
+  must end and its drag state clear. Its camera staying put adds little, since
+  Explorer hears moves only on its viewport and the body now gets them. DagrCanvas
+  captures no contact of a pinch that starts with two fingers and follows
+  touches on the window. The second finger's capture is the `<canvas>`
+  element's implicit one, and DagrCanvas treats a child losing capture as a
+  handover, so its pinch must keep following the finger. These are the two surfaces' policies as built, not
+  one shared rule.
+- **Both:** the camera stays finite, the page does not scroll, no drag state
+  remains after release, and a fresh pinch must zoom by the fingers' ratio.
+
+On 2026-11-03 the launched run passed all 120 in Chromium 148.0.7778.96
+headless (DagrCanvas on WebGL2 software). The attached run passed all 120 in
+Chrome 156.0.8078.74 headless on the same Windows side and adapter, both
+canvases on `webgpu`, not a fallback. Four mutations to the built packages
+failed it:
+
+- DagrCanvas's gesture hook not listening for `lostpointercapture` failed the
+  launched and the attached run.
+- Explorer not listening for `lostpointercapture` failed the launched run.
+- Explorer ending only a drag, not a pinch, on a lost capture failed the
+  launched run.
+- DagrCanvas ending a contact when any element loses its capture, not only its
+  root, failed the launched run.
+
+The drag-then-pinch row added 12 scenarios, 6 on each surface. One finger
+drags far enough to pan, so the surface's root holds its capture, then a
+second finger lands and closes, and the camera must move. The body then takes
+the first finger's capture. The browser reports that with the finger's next
+event, so the first finger moves 2 CSS pixels before the second moves on.
+Both surfaces must end the pinch and the drag: the second finger's travel must
+not move the camera, and the page must stay put. After release a fresh pinch
+must zoom by the fingers' ratio. This is the only row where DagrCanvas's pinch
+tracker ending a root-held contact is observable, the one case its
+`lostpointercapture` listener ends a contact. On Explorer, losing either pinch
+contact takes the same path, so its half repeats the pinch row from the other
+finger.
+
+On 2026-11-04 the launched run passed all 132 in Chromium 148.0.7778.96
+headless (DagrCanvas on WebGL2 software). The attached run passed all 132 in
+Chrome 156.0.8078.80 headless on the same Windows side and adapter, both
+canvases on `webgpu`, not a fallback. DagrCanvas's pinch tracker not listening
+for `lostpointercapture` failed the launched run at the new row, after every
+earlier row at that size passed.
+
+Chromium's touch emulation is the only source of these events here. Whether a
+real phone browser ever takes a touch's capture away mid-gesture, rather than
+cancelling it, is not tested.
+
+## Mobile pixel-ratio budget
+
+`mobile-budget.mjs` fills a phone-sized viewport with one DagrCanvas over a
+1,000-node tree (`--nodes=N` changes it), at 390x844 DPR 3 and 320x568 DPR 1,
+with `maxPixelRatio` unset, 2 and 1. Each row fails unless the camera renders
+at `min(devicePixelRatio, maxPixelRatio)` and the canvas's drawing buffer is
+the viewport at that ratio. It then records the V8 heap after a collection
+and the animation-frame interval over 120 frames with no input, and fails if
+anything drew in them. Over a pinch out and a one-finger pan it records the
+number of draws, the time each `render()` call takes on the main thread, the
+intervals between draws and between animation frames, and the time per touch
+event. The 125 touch events go
+through `Input.dispatchTouchEvent`, each sent once the previous one is
+acknowledged, so the gesture draws at most once per event (119 draws in every
+row) and the time per event is, on average, a floor on the interval between
+draws.
+`render()` time is the CPU side only: on both backends the GPU finishes the
+frame later. A screenshot per row and `report.json` go to `--out`. It runs as
+the mobile input check does:
+
+```bash
+DAGR_BROWSER_DEPS=/tmp/dagr-browser node bench/browser/mobile-budget.mjs
+DAGR_CDP=http://127.0.0.1:9445 DAGR_BROWSER_DEPS=/tmp/dagr-browser \
+  node bench/browser/mobile-budget.mjs   # attached: webgpu and a non-fallback adapter required
+```
+
+On 2026-11-03, on the WSL2 machine (AMD Ryzen 9 9900X, 30 GB to WSL), all six
+rows passed launched (Chromium 148.0.7778.96 headless, `webgl2` on SwiftShader)
+and attached (Chrome 156.0.8078.74 headless on the Windows side, `webgpu`,
+adapter `nvidia` `lovelace`, the GeForce RTX 4090, not a fallback). Both had a
+16.7 ms frame interval with no input. Medians, with the 95th percentile in
+brackets, in ms:
+
+| Viewport | `maxPixelRatio` | Drawing buffer | Backend | `render()` | Per touch event | Between draws |
+| --- | --- | --- | --- | --- | --- | --- |
+| 390x844 DPR 3 | unset | 1170x2532 | webgl2 software | 0.4 (0.6) | 190.90 | 200 (216.8) |
+| 390x844 DPR 3 | 2 | 780x1688 | webgl2 software | 0.4 (0.8) | 102.98 | 100.1 (116.9) |
+| 390x844 DPR 3 | 1 | 390x844 | webgl2 software | 0.4 (0.7) | 51.63 | 50 (66.7) |
+| 320x568 DPR 1 | unset, 2 or 1 | 320x568 | webgl2 software | 0.4 (0.6 to 0.8) | 47.44 to 48.12 | 50 (50.2) |
+| 390x844 DPR 3 | unset | 1170x2532 | webgpu RTX 4090 | 0.3 (0.4) | 17.44 | 16.7 (33.2) |
+| 390x844 DPR 3 | 2 | 780x1688 | webgpu RTX 4090 | 0.2 (0.4) | 17.44 | 16.7 (31.8) |
+| 390x844 DPR 3 | 1 | 390x844 | webgpu RTX 4090 | 0.2 (0.5) | 17.44 | 16.7 (33) |
+| 320x568 DPR 1 | unset, 2 or 1 | 320x568 | webgpu RTX 4090 | 0.2 to 0.3 (0.4 to 0.5) | 17.44 to 17.45 | 16.7 (32.6 to 33.1) |
+
+The V8 heap after a collection was 7.09 to 7.11 MB launched and 7.26 to
+7.27 MB attached in every row, so the ratio does not show in it; the drawing
+buffer's GPU memory is not measured here. On SwiftShader the interval between
+draws has a floor near 50 ms, met at 320x568 and 390x844, and above that grows
+with the drawing buffer, to 100 ms at 780x1688 and 200 ms at 1170x2532, while
+`render()` stays at 0.4 ms and animation frames keep a median near 16.7 ms: the
+cost is in rasterising the pixels, not on the main thread. On the RTX 4090 every row kept pace with one draw per touch event
+at about one 60 Hz frame each, so at this input rate the ratio costs nothing
+this check can see on that GPU. Neither backend is a phone GPU: this does not
+show what a 3x phone pays, and it is no basis for a default cap.
+`maxPixelRatio` stays an opt-in until a real device shows a cost. DagrCanvas
+ignoring `maxPixelRatio` in the built package failed the launched run at the
+first capped row.
+
+## Visible frame check
+
+`visible-frame-check.mjs` embeds DagrCanvas and Explorer mid-page, selects an
+Explorer node, and checks M5.8b's visible-frame contract (see
+`docs/docs/mobile.md`) at 390 by 844 / DPR 3 and 320 by 568 / DPR 1:
+
+| Scenario | How it is produced | Checked |
+| --- | --- | --- |
+| `page-scroll` | `scrollTo` past the canvas top, then page scale 1.5 and back so the observers run | a `visualViewport` resize observed while scrolled; both cameras, the selection and DagrCanvas's frame unchanged |
+| `pinch-zoom` | `Emulation.setPageScaleFactor` 2, a protocol touch drag on the page, then scale 1 | a `visualViewport` resize and scrolls observed, part of the canvas hidden, everything unchanged |
+| `layout-shrink` | `Emulation.setDeviceMetricsOverride` at 60% height | the canvas partly below the layout viewport, everything unchanged |
+| `zoom-200-emulated` | metrics override at half the CSS size and twice the DPR | DagrCanvas takes the new ratio, resizes its buffer, keeps its camera; Explorer keeps the selection |
+| `visual-shrink-attempt` | `Emulation.setVisibleSize` at 60% height | recorded as reproduced or not; if it was, part of the canvas hidden and DagrCanvas's frame shorter, otherwise everything unchanged |
+
+Run it with the same dependencies as the input check:
+`DAGR_BROWSER_DEPS=/tmp/dagr-browser node bench/browser/visible-frame-check.mjs`.
+
+The 2026-11-01 run on Linux (WSL2), Chromium 148.0.7778.96 headless with
+SwiftShader, DagrCanvas on WebGL2, passed all ten runs (five scenarios at
+two sizes).
+`setVisibleSize` did not change `visualViewport` at either size, so a visual
+viewport smaller than the layout viewport at scale 1, the shape of an
+overlaying software keyboard, was not reproduced. Neither was real browser
+zoom: the 200% case is a metrics override, not Ctrl-plus. Removing
+`visualViewportInset`'s pinch-zoom guard, or its subtraction of what the
+layout viewport hides, each fails the run. This is Chromium emulation, not
+iOS, Android, Safari or software-keyboard evidence, and not a WebGPU result.
 
 **Nothing here is part of `pnpm bench:ci`, and it is not a gate.** The gate
 compares Node medians against a committed baseline on one machine; a browser
@@ -180,10 +473,13 @@ Chrome shows the command line it actually has).
 `DAGR_CDP` makes either script attach to that Chrome instead of launching one,
 and records `attached` and the user agent in place of the executable, mode and
 flags, which the helper prints when it starts. `--headed` and `--headless`
-are refused while attached, because the helper chose the mode. The page still
-comes from the static server in WSL, which the Windows side reaches as
-`127.0.0.1:8733`. The `machine` block of a frame profile describes WSL, where
-Node runs: the CPU is the host's, the memory is the VM's share of it.
+are refused while attached, because the helper chose the mode. Their page
+still comes from the static server in WSL, which the Windows side reaches as
+`127.0.0.1:8733`. `gpu-hover.mjs`, `mobile-core-check.mjs` and
+`mobile-budget.mjs` also attach through `DAGR_CDP`, but serve their pages
+through Playwright routes, so they need no static server. The `machine` block
+of a frame profile describes WSL, where Node runs: the CPU is the host's, the
+memory is the VM's share of it.
 
 **What it found on 2026-10-26**, on a Windows 11 desktop (build 26100) with
 an AMD Ryzen 9 9900X, whose integrated Radeon graphics (driver 32.0.21042.62)
@@ -328,8 +624,9 @@ non-zero unless the canvas came up on `webgpu` on an adapter that reports
 per sample, and every sample was answered correctly within 3 seconds. Console
 warnings and errors are printed, not gated; a page error fails the run.
 The adapter recorded is the one `requestAdapter()` returns with no options,
-asked from the page; on this machine Chrome lists one GPU, so it is the
-renderer's. `--control` reads the reference 9 CSS pixels right of the pointer,
+asked from the page; on 2026-10-28 Chrome listed one GPU on this machine, so
+it was the renderer's. The machine has had a second GPU since, so that is no
+longer proof on it. `--control` reads the reference 9 CSS pixels right of the pointer,
 about one rounded rect's pitch, and exits non-zero unless that run fails.
 
 **What it found on 2026-10-28**, on the machine
@@ -429,6 +726,82 @@ GPU path's gaps do: a click while nodes glide and a press not hovered first
 are ignored, and touch and pen use the CPU index anyway. This ran WebGPU only;
 the WebGL2 fallback's pick cost is not measured.
 
+### What an edge hit costs a frame (M4.8b)
+
+```
+DAGR_CDP=http://127.0.0.1:9445 node bench/browser/frame-profile.mjs \
+  --sizes=10000 --edges=straight,smooth --motion=springs --edge-hit   # [--dpr=2]
+```
+
+`--edge-hit` does for `createEdgeHitIndex` what `--hit` does for nodes, over
+the edges each frame hands `setEdges`: a still frame queries one index built
+before the clock starts, and an animated frame rebuilds the index over that
+frame's points, timed as `edgeHitIndex`, then queries it, timed as `edgeHit`.
+The tolerance is `DagrCanvas`'s for a mouse: half the ribbon (1 device pixel)
+over the device pixel ratio, plus 4 CSS pixels, over the zoom. The query does
+not ask the node index first, so it also answers under nodes. A rebuild every
+frame is what a click costs on the frame it lands; `DagrCanvas`'s hover reuses
+an index up to 100 ms old, so it rebuilds on about one frame in six. The
+report's `edgeHit` gives the untimed build and how many queries, warm-up
+included, landed on an edge. A `smooth` group is drawn as a curve through its
+points and the index tests the chords, so those rows price the index, not
+its accuracy on that curve.
+
+The report also lists `deviceAdapters`, the adapter behind every device the
+page created, and exits non-zero unless there is at least one and each
+reports `isFallbackAdapter: false`. With two GPUs, the adapter a bare
+`requestAdapter()` returns is not proof of which one drew. `--memory` runs
+do not check it.
+
+**What it found on 2026-10-31**, on the Windows desktop
+[above](#from-wsl2-through-the-windows-sides-chrome), which now also has an
+NVIDIA GeForce RTX 4090 (driver 32.0.16.2101) beside the AMD Radeon
+integrated graphics, Windows build 26300. Chrome 156.0.8078.48 headed on the
+Windows side, attached from WSL2, no flags beyond the helper's. The adapter
+was `nvidia` `lovelace`, `isFallbackAdapter: false`, both from
+`requestAdapter()` and behind the renderer's device, and `renderer.backend`
+was `webgpu` on every row. Tick 18 ms, load average 0.0 to 1.3 (falling from
+the build before the first pair). 10,000 nodes and 13,169 edges with springs
+in flight and every node moving, alternating runs without and with
+`--edge-hit`: three pairs at DPR 1 and two at DPR 2. Times are median / 95th
+percentile / max in milliseconds. In flight, a straight edge has 2 points and
+a smooth one at most 4: one frame of the same graph and retarget, advanced
+outside the browser, held 13,169 and 39,190 segments.
+
+| DPR | Edges | Past one tick, without | Past one tick, with `--edge-hit` | `edgeHitIndex` | `edgeHit` |
+| --- | --- | --- | --- | --- | --- |
+| 1 | straight | 0%, 0%, 0% | 0%, 0%, 0% | 2.0 / 4.7 to 4.9 / 5.9 to 6.0 | 0.0 / 0.0 to 0.1 / 0.1 |
+| 1 | smooth | 3.7%, 5.3%, 4.7% | 71.7%, 64.0%, 75.7% | 12.0 to 14.1 / 17.5 to 21.5 / 24.7 to 27.5 | 0.0 / 0.1 / 0.1 |
+| 2 | straight | 0%, 0% | 0%, 0% | 2.0 / 4.8 / 5.4 to 5.8 | 0.0 / 0.1 / 0.1 |
+| 2 | smooth | 5.0%, 6.7% | 70.0%, 68.7% | 12.4 to 12.7 / 19.6 to 20.5 / 26.1 to 28.1 | 0.0 / 0.1 / 0.1 |
+
+Still frames missed no ticks with or without it, and a still query took 0.0
+ms at the median and at most 0.2. The untimed first build took 5.4 to 6.2 ms
+for straight edges and 5.0 to 10.1 for smooth. 38% to 50% of queries landed
+on an edge. `setEdges`, `render` and `advance` overlapped between runs with
+and without it (smooth `setEdges` 8.4 to 9.8 ms at the median). The page
+logged three's `Vertex attribute "position" not found on geometry` warning
+once per row, and no page error.
+
+- **A query is free; the rebuild is not.** Every query took 0.2 ms or less.
+  The cost is the rebuild over the frame's points.
+- **The rebuild cost more than the segment count alone explains.** Three
+  times the segments took six to seven times as long, 2 ms against 12 to 14
+  at the median, in frames that also do more `setEdges` work.
+- **Rebuilt every frame, it fits at one segment per edge and not at three.**
+  With straight edges no tick was missed. With three segments per edge, in a
+  frame whose `setEdges` already takes about half the 18 ms tick, about 70%
+  of ticks were missed against about 5% without it. `DagrCanvas` draws its
+  routes as a polyline group, not `smooth`, so what transfers is the segment
+  count, not the curve.
+
+This prices rebuilding on every frame, the most a click while edges glide
+asks for. Hover's one rebuild in six frames was not run, nor were
+`DagrCanvas`'s own routes, whose point counts depend on the layout. It ran on
+the RTX 4090 only, so it does not compare with the AMD rows above, and the
+WebGL2 fallback is not measured. Whether edges need a GPU pick id, or a
+cheaper CPU rebuild, is the next decision, not this one.
+
 ## Frame profile on WebGPU (M4.10a)
 
 ```
@@ -440,6 +813,7 @@ DAGR_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
   # [--sizes=1000,2500] [--edges=straight,dashed,smooth] [--nodes=shapes,rich]
   # [--zoom=fit|1] [--dpr=2] [--frames=300] [--warmup=60] [--hit] [--memory] [--headless]
   # [--gpu] [--parts=all,nodes,edges] [--motion=sway,springs] [--moving=1,0.1] [--pick]
+  # [--edge-hit]
 ```
 
 `frame-profile.mjs` draws a grid of alternating rounded rectangles and circles
@@ -449,7 +823,9 @@ with about 1.3 straight edges per node, through a renderer that asks for
 adapter, such as SwiftShader, gets past that check, because the renderer can
 come up on `webgpu` through it. So when the adapter reports
 `isFallbackAdapter` the runner says so on stderr before it measures, and exits
-non-zero even if every row then comes up on `webgpu`. Each size, edge style, node mode, part and motion runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
+non-zero even if every row then comes up on `webgpu`. Outside `--memory` it
+also exits non-zero unless every device the page created reports
+`isFallbackAdapter: false`. Each size, edge style, node mode, part and motion runs two modes for 300 frames after 60 of warm-up. `still` calls `render()` every frame.
 `animated` also replaces every node centre and every edge route each frame
 through `setNodes` and `setEdges`, from a sway computed from the clock: the
 renderer's half of a frame with every spring in flight, without the scene
@@ -495,6 +871,11 @@ old, on about one frame in six. The report's `hit` gives the untimed build and
 how many queries, warm-up included, landed on a node. With `--nodes=rich` the
 still query runs just before `sync`, so do not compare those rows' still `sync`
 with the rich-node table below.
+
+`--edge-hit` does the same for edges through `createEdgeHitIndex`, timed as
+`edgeHitIndex` and `edgeHit`. It takes only `--parts=all` and is refused with
+`--memory`; see
+["What an edge hit costs a frame"](#what-an-edge-hit-costs-a-frame-m48b).
 
 `--pick` adds GPU node picks to every row through `renderer.pickNode` at the
 same sweeping pointer, started after `render()` and timed as `pick`, which is

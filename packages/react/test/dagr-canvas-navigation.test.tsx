@@ -349,6 +349,16 @@ describe('navigation', () => {
     expect(camera.zoom).toBeCloseTo(camera.maxZoom);
   });
 
+  it('zooms from the keyboard about the middle of the inset frame', async () => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} cameraLimits={false} inset={{ right: 300 }} navigation />);
+    const camera = lastRenderer().camera;
+    const middle = camera.screenToWorld({ x: 250, y: 300 });
+    await flush(() => host().dispatchEvent(new KeyboardEvent('keydown', { key: '+', bubbles: true, cancelable: true })));
+    const after = camera.worldToScreen(middle);
+    expect(after.x).toBeCloseTo(250, 6);
+    expect(after.y).toBeCloseTo(300, 6);
+  });
+
   it('answers the keyboard when the canvas itself has focus, and fits on 0', async () => {
     await ready(<DagrCanvas graph={twoNodes()} config={config} navigation />);
     const camera = lastRenderer().camera;
@@ -385,6 +395,171 @@ describe('camera api', () => {
     expect(camera.zoom).toBeGreaterThan(fitted);
     await flush(() => api.current?.fit({ durationMs: 0 }));
     expect(camera.zoom).toBeCloseTo(fitted);
+  });
+
+  it('frames the first fit, fit and focusNode in what the inset leaves', async () => {
+    const api = createRef<DagrCanvasApi>();
+    const inset = { right: 300, top: 100 };
+    const graph = twoNodes();
+    await ready(<DagrCanvas graph={graph} config={config} inset={inset} apiRef={api} />);
+    const camera = lastRenderer().camera;
+    expect(camera.frame).toEqual({ x: 0, y: 100, width: 500, height: 500 });
+    const middle = { x: 250, y: 350 };
+    const centreOfAB = (): { x: number; y: number } => {
+      const a = screenOf('a');
+      const b = screenOf('b');
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    };
+    expect(centreOfAB().x).toBeCloseTo(middle.x, 6);
+    expect(centreOfAB().y).toBeCloseTo(middle.y, 6);
+    const fitted = camera.zoom;
+    camera.setZoom(camera.maxZoom);
+    camera.panByScreen(-80, 40);
+    await flush(() => api.current?.fit({ durationMs: 0 }));
+    expect(camera.zoom).toBeCloseTo(fitted, 9);
+    expect(centreOfAB().x).toBeCloseTo(middle.x, 6);
+    expect(centreOfAB().y).toBeCloseTo(middle.y, 6);
+    // Limits off: at the content's edge they would stop a node short of the middle, inset or not.
+    await tree?.rerender(<DagrCanvas graph={graph} config={config} inset={inset} cameraLimits={false} apiRef={api} />);
+    await flush(() => api.current?.focusNode('b', { durationMs: 0 }));
+    expect(screenOf('b').x).toBeCloseTo(middle.x, 6);
+    expect(screenOf('b').y).toBeCloseTo(middle.y, 6);
+    await flush(() => api.current?.fit({ durationMs: 0 }));
+    expect(centreOfAB().x).toBeCloseTo(middle.x, 6);
+    expect(centreOfAB().y).toBeCloseTo(middle.y, 6);
+  });
+
+  it('keeps the camera when the inset changes, and frames the whole canvas without one', async () => {
+    const api = createRef<DagrCanvasApi>();
+    const graph = twoNodes();
+    await ready(<DagrCanvas graph={graph} config={config} cameraLimits={false} apiRef={api} />);
+    const camera = lastRenderer().camera;
+    const center = { ...camera.center };
+    const zoom = camera.zoom;
+    await tree?.rerender(<DagrCanvas graph={graph} config={config} cameraLimits={false} inset={{ left: 200 }} apiRef={api} />);
+    expect(camera.frame).toEqual({ x: 200, y: 0, width: 600, height: 600 });
+    expect(camera.center).toEqual(center);
+    expect(camera.zoom).toBe(zoom);
+    await tree?.rerender(<DagrCanvas graph={graph} config={config} cameraLimits={false} apiRef={api} />);
+    expect(camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 600 });
+  });
+
+  it('lands a flight under way in the frame an inset change leaves', async () => {
+    const api = createRef<DagrCanvasApi>();
+    const graph = twoNodes();
+    await ready(<DagrCanvas graph={graph} config={config} cameraLimits={false} apiRef={api} />);
+    await flush(() => api.current?.focusNode('b'));
+    await runFrames(100);
+    await runFrames(200);
+    await tree?.rerender(<DagrCanvas graph={graph} config={config} cameraLimits={false} inset={{ right: 300 }} apiRef={api} />);
+    await runFramesUntilIdle();
+    expect(screenOf('b').x).toBeCloseTo(250, 6);
+    expect(screenOf('b').y).toBeCloseTo(300, 6);
+  });
+
+  it('lands a fit under way at the fit for the size the canvas resized to', async () => {
+    const api = createRef<DagrCanvasApi>();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} cameraLimits={false} apiRef={api} />);
+    const camera = lastRenderer().camera;
+    camera.setZoom(camera.zoom * 3);
+    await flush(() => api.current?.fit());
+    await runFrames(100);
+    await runFrames(200);
+    await flush(() => resizeTo(400, 600));
+    await runFramesUntilIdle();
+    const landed = camera.zoom;
+    await flush(() => api.current?.fit({ durationMs: 0 }));
+    expect(camera.zoom).toBeCloseTo(landed, 9);
+  });
+
+  it('re-clamps a camera at the content edge into the new frame', async () => {
+    const graph = twoNodes();
+    await ready(<DagrCanvas graph={graph} config={config} />);
+    const camera = lastRenderer().camera;
+    camera.setZoom(camera.maxZoom);
+    camera.panByScreen(1e9, 0);
+    const leftEdge = (): number => Math.min(...['a', 'b'].map((id) => screenOf(id).x)) - camera.zoom * 100;
+    expect(leftEdge()).toBeCloseTo(800 * 0.05, 6);
+    await tree?.rerender(<DagrCanvas graph={graph} config={config} inset={{ left: 200 }} />);
+    expect(leftEdge()).toBeCloseTo(200 + 600 * 0.05, 6);
+  });
+
+  describe('under a visual viewport', () => {
+    class FakeVisualViewport extends EventTarget {
+      offsetLeft = 0;
+      offsetTop = 0;
+      width = 800;
+      height = 600;
+      scale = 1;
+    }
+    let visual: FakeVisualViewport;
+    const root = document.documentElement;
+    beforeEach(() => {
+      visual = new FakeVisualViewport();
+      vi.stubGlobal('visualViewport', visual);
+      Object.defineProperty(root, 'clientWidth', { configurable: true, value: 800 });
+      Object.defineProperty(root, 'clientHeight', { configurable: true, value: 600 });
+    });
+    afterEach(() => {
+      Reflect.deleteProperty(root, 'clientWidth');
+      Reflect.deleteProperty(root, 'clientHeight');
+    });
+    async function change(next: Partial<FakeVisualViewport>, type = 'resize'): Promise<void> {
+      Object.assign(visual, next);
+      await flush(() => visual.dispatchEvent(new Event(type)));
+    }
+
+    it('fits first in what a short visual viewport leaves, and keeps the camera as it grows back', async () => {
+      visual.height = 400;
+      await ready(<DagrCanvas graph={twoNodes()} config={config} cameraLimits={false} />);
+      const camera = lastRenderer().camera;
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 400 });
+      expect((screenOf('a').y + screenOf('b').y) / 2).toBeCloseTo(200, 6);
+      const center = { ...camera.center };
+      const zoom = camera.zoom;
+      await change({ height: 600 });
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 600 });
+      expect(camera.center).toEqual(center);
+      expect(camera.zoom).toBe(zoom);
+      await change({ offsetTop: 150, height: 450 }, 'scroll');
+      expect(camera.frame).toEqual({ x: 0, y: 150, width: 800, height: 450 });
+    });
+
+    it('takes the larger of the inset and the visual viewport on each side, and nothing while the page is zoomed', async () => {
+      const graph = twoNodes();
+      await ready(<DagrCanvas graph={graph} config={config} inset={{ right: 300, bottom: 100 }} />);
+      const camera = lastRenderer().camera;
+      await change({ width: 700, height: 400 });
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 500, height: 400 });
+      await tree?.rerender(<DagrCanvas graph={graph} config={config} inset={{ bottom: Infinity }} />);
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 700, height: 400 });
+      await tree?.rerender(<DagrCanvas graph={graph} config={config} inset={{ bottom: 300 }} />);
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 700, height: 300 });
+      await tree?.rerender(<DagrCanvas graph={graph} config={config} />);
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 700, height: 400 });
+      await change({ scale: 2 });
+      expect(camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 600 });
+    });
+
+    it('leaves out what the layout viewport already hides of the canvas', async () => {
+      Object.defineProperty(root, 'clientHeight', { configurable: true, value: 500 });
+      visual.height = 500;
+      await ready(<DagrCanvas graph={twoNodes()} config={config} />);
+      expect(lastRenderer().camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 600 });
+      await change({ height: 300 });
+      expect(lastRenderer().camera.frame).toEqual({ x: 0, y: 0, width: 800, height: 400 });
+    });
+
+    it('stops listening when unmounted', async () => {
+      const added = vi.spyOn(visual, 'addEventListener');
+      const removed = vi.spyOn(visual, 'removeEventListener');
+      await ready(<DagrCanvas graph={twoNodes()} config={config} />);
+      await tree?.rerender(<DagrCanvas graph={twoNodes()} config={config} inset={{ top: 10 }} />);
+      expect(added.mock.calls.length).toBeGreaterThan(0);
+      await tree?.unmount();
+      tree = null;
+      expect(removed.mock.calls).toEqual(added.mock.calls);
+    });
   });
 
   it('flies over frames by default and refuses unknown ids', async () => {
@@ -599,6 +774,160 @@ describe('touch pinch', () => {
     target.dispatchEvent(event);
   }
 
+  it.each(['node', 'edge'] as const)('does not hover a %s while two touches are down', async (kind) => {
+    const onNodeHover = vi.fn();
+    const onEdgeHover = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} onNodeHover={onNodeHover} onEdgeHover={onEdgeHover} />);
+    const a = screenOf('a');
+    const b = screenOf('b');
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, a.x - 100, a.y);
+      touch(host(), 'pointerdown', 2, a.x, a.y);
+      const target = kind === 'node' ? a : { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      touch(host(), 'pointermove', 2, target.x, target.y);
+    });
+    expect(onNodeHover).not.toHaveBeenCalled();
+    expect(onEdgeHover).not.toHaveBeenCalled();
+  });
+
+  it('keeps selection and single-pointer pan suppressed during a hybrid press', async () => {
+    const onNodeClick = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} onNodeClick={onNodeClick} />);
+    const camera = lastRenderer().camera;
+    const zoom = camera.zoom;
+    const world = camera.screenToWorld({ x: 150, y: 100 });
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 200, 100);
+    });
+    const a = screenOf('a');
+    await flush(() => {
+      for (const [target, type] of [[host(), 'pointerdown'], [window, 'pointerup']] as const) {
+        const event = new MouseEvent(type, { bubbles: true, clientX: a.x, clientY: a.y, button: 0 });
+        Object.defineProperties(event, { pointerId: { value: 99 }, isPrimary: { value: true }, pointerType: { value: 'mouse' } });
+        target.dispatchEvent(event);
+      }
+    });
+    expect(onNodeClick).not.toHaveBeenCalled();
+    await flush(() => touch(host(), 'pointermove', 1, 120, 100));
+    expect(camera.zoom).toBeCloseTo(zoom * 0.8);
+    const after = camera.worldToScreen(world);
+    expect(after.x).toBeCloseTo(160);
+    expect(after.y).toBeCloseTo(100);
+  });
+
+  it('allows a mouse click after a completed pinch', async () => {
+    const onNodeClick = vi.fn();
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} onNodeClick={onNodeClick} />);
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 200, 100);
+      touch(window, 'pointermove', 2, 220, 100);
+      touch(window, 'pointerup', 2, 220, 100);
+      touch(window, 'pointerup', 1, 100, 100);
+    });
+    expect(onNodeClick).not.toHaveBeenCalled();
+    const a = screenOf('a');
+    await flush(() => click(a.x, a.y));
+    expect(onNodeClick).toHaveBeenCalledExactlyOnceWith('a');
+  });
+
+  it('continues pinching when a third finger arrives and ignores that finger', async () => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" />);
+    const camera = lastRenderer().camera;
+    const zoom = camera.zoom;
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 200, 100);
+      touch(host(), 'pointerdown', 3, 600, 100);
+      touch(window, 'pointermove', 2, 300, 100);
+    });
+    expect(camera.zoom).toBeCloseTo(zoom * 2);
+    const center = { ...camera.center };
+    await flush(() => {
+      touch(window, 'pointermove', 3, 700, 100);
+      touch(window, 'pointerup', 3, 700, 100);
+    });
+    expect(camera.center).toEqual(center);
+    expect(camera.zoom).toBeCloseTo(zoom * 2);
+  });
+
+  it.each(['pointercancel', 'lostpointercapture'])('ends a pinch on %s without a later jump', async (end) => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" />);
+    const camera = lastRenderer().camera;
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 200, 100);
+      touch(host(), end, 2, 200, 100);
+    });
+    const zoom = camera.zoom;
+    const center = { ...camera.center };
+    await flush(() => {
+      touch(window, 'pointermove', 2, 400, 100);
+      touch(window, 'pointermove', 1, 130, 100);
+    });
+    expect(camera.zoom).toBe(zoom);
+    expect(camera.center).toEqual(center);
+    await flush(() => {
+      touch(host(), 'pointerdown', 3, 230, 100);
+      touch(window, 'pointermove', 3, 330, 100);
+    });
+    expect(camera.zoom).toBeCloseTo(zoom * 2);
+  });
+
+  it('keeps pinching when a pan hands a touch from the canvas to the host', async () => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" />);
+    const camera = lastRenderer().camera;
+    const canvas = host().querySelector('canvas');
+    if (canvas === null) throw new Error('no canvas');
+    await flush(() => {
+      touch(canvas, 'pointerdown', 1, 100, 100);
+      touch(window, 'pointermove', 1, 120, 100);
+      touch(canvas, 'lostpointercapture', 1, 120, 100);
+    });
+    const zoom = camera.zoom;
+    await flush(() => {
+      touch(canvas, 'pointerdown', 2, 220, 100);
+      touch(window, 'pointermove', 2, 320, 100);
+    });
+    expect(camera.zoom).toBeCloseTo(zoom * 2);
+  });
+
+  it('lets a new primary sequence replace contacts whose releases were missed', async () => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" />);
+    const camera = lastRenderer().camera;
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 200, 100);
+      touch(window, 'pointermove', 2, 300, 100);
+    });
+    const zoom = camera.zoom;
+    // A new primary touch proves the previous physical sequence ended,
+    // even if the surface did not hear its releases.
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 200, 100);
+      touch(window, 'pointermove', 2, 300, 100);
+    });
+    expect(camera.zoom).toBeCloseTo(zoom * 2);
+  });
+
+  it('pans when coincident fingers first separate without a zoom spike', async () => {
+    await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" />);
+    const camera = lastRenderer().camera;
+    const zoom = camera.zoom;
+    const before = camera.worldToScreen({ x: 0, y: 0 });
+    await flush(() => {
+      touch(host(), 'pointerdown', 1, 100, 100);
+      touch(host(), 'pointerdown', 2, 100, 100);
+      touch(window, 'pointermove', 2, 120, 100);
+    });
+    expect(camera.zoom).toBe(zoom);
+    const after = camera.worldToScreen({ x: 0, y: 0 });
+    expect(after.x - before.x).toBeCloseTo(10);
+    expect(after.y).toBeCloseTo(before.y);
+  });
+
   it('zooms about the midpoint, keeps the midpoint fixed, and never clicks a node', async () => {
     const onNodeClick = vi.fn();
     await ready(<DagrCanvas graph={twoNodes()} config={config} navigation cameraLimits={false} label="g" onNodeClick={onNodeClick} />);
@@ -614,9 +943,9 @@ describe('touch pinch', () => {
     });
     // Fingers went 100 apart to 200 apart: zoom doubles about the new midpoint.
     expect(camera.zoom).toBeCloseTo(zoom * 2);
-    const after = camera.worldToScreen(camera.screenToWorld({ x: a.x + 100, y: a.y }));
+    const after = camera.worldToScreen(world);
     expect(after.x).toBeCloseTo(a.x + 100);
-    expect(world).toBeDefined();
+    expect(after.y).toBeCloseTo(a.y);
     await flush(() => {
       touch(window, 'pointerup', 2, a.x + 200, a.y);
       touch(window, 'pointerup', 1, a.x, a.y);

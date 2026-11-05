@@ -158,7 +158,7 @@ means a tier must clear its own per-node state on every bind.
 
 ## The three-free entry
 
-`@prnt/dagr-render/core` exports `Camera2D`, `fitZoom` and `shapeEdgePath`, with
+`@prnt/dagr-render/core` exports `Camera2D`, `fitZoom`, `shapeEdgePath`, `createPinchGesture`, `visibleFrame`, `coverInset`, `clipInset` and `visualViewportInset`, with
 their types, from modules that never import `three`: not at runtime, and not in
 their type declarations.
 
@@ -166,7 +166,7 @@ their type declarations.
 import { Camera2D, shapeEdgePath } from '@prnt/dagr-render/core';
 ```
 
-Use it when you want the camera or the edge-path arithmetic and no renderer: an
+Use it when you want camera, touch or edge-path mechanics and no renderer: an
 SVG or DOM drawing, or a server render. The full entry imports `three/webgpu`
 at module scope, so a server that externalizes its dependencies loads three.js
 to import it, and the core entry is how you avoid that.
@@ -195,13 +195,22 @@ Call `camera.setContentBounds(bounds, nodeSize, padding, nodes)` with y-up world
 and a representative node size to constrain every camera mutation, including
 wheel anchors, direct setters, fitting, and resize. The default node size is
 160 by 80 and padding is 0.05. The zoom range runs from full content to a single
-node. Smaller axes stay centered; other axes pan inside the padded bounds.
+node. Axes smaller than the frame stay centered; other axes pan inside the padded bounds.
 Optional `nodes` supplies node bounds and keeps part of a node visible even in
 sparse regions. These bounds also expand the content bounds when needed.
 At a boundary, keeping content visible takes precedence over cursor anchoring.
 `setContentBounds(null)` clears these constraints and restores the explicit
 numeric zoom range. Explicit numeric limits can further restrict content zoom;
 when their ranges do not overlap, the larger minimum wins.
+
+`camera.setInset(inset)` frames content in the viewport less an inset, in CSS
+pixels, for something drawn over the canvas such as a toolbar or a drawer. The
+frame is `visibleFrame(viewport, inset)`, read back as `camera.frame`. Fitting,
+the zoom range and pan clamping then work in the frame, so a fit centres the
+bounds in what the inset leaves. Drawing, hit testing and `visibleWorldBounds`
+still cover the whole viewport. `camera.centerFor(point, zoom)` is the centre
+that puts a world point in the middle of the frame, for a caller animating
+toward it. `setInset({})` frames the whole viewport again.
 
 `DagrCanvas` supplies these bounds and real node sizes automatically.
 
@@ -214,3 +223,14 @@ accepts `vertical`; smoothing `tolerance` defaults to 0.5 world units.
 Endpoints and route anchors are preserved. This shapes presentation, without
 obstacle avoidance. Pass the result to SVG paths or renderer edges using
 `curve: 'polyline'` so they are not smoothed twice.
+
+## Shared mobile navigation
+
+`createPinchGesture` is exported from this package and its three.js-free
+`core` entry. It turns accepted touch contacts in viewport CSS pixels into
+pan/zoom deltas, independent of SVG, DOM or GPU drawing. `DagrCanvas` and
+Explorer both consume it; custom hosts can use the same contact contract.
+Capture, cancellation events, scroll ownership and click suppression remain
+adapter responsibilities. `visibleFrame`, `coverInset`, `clipInset` and
+`visualViewportInset` compute the part of a surface left to frame content in,
+around overlays, clipping ancestors and a shrunken visual viewport. See the [mobile architecture guide](https://dagr.prnt.design/docs/mobile).

@@ -5,7 +5,8 @@ export type GraphHitTarget =
       readonly kind: 'port';
       readonly nodeId: string;
       readonly portId: string;
-    };
+    }
+  | { readonly kind: 'edge'; readonly edgeId: string };
 
 /** One caller-supplied hit query against the geometry currently on screen. */
 export interface GraphHitQuery<Revision> {
@@ -70,8 +71,14 @@ export interface GraphInteractionMachine<Revision> {
 
 /** Whether two hit results name the same stable graph object. */
 export function sameGraphHitTarget(a: GraphHitTarget, b: GraphHitTarget): boolean {
-  if (a.kind !== b.kind || a.nodeId !== b.nodeId) return false;
-  return a.kind === 'node' || (b.kind === 'port' && a.portId === b.portId);
+  switch (a.kind) {
+    case 'node':
+      return b.kind === 'node' && a.nodeId === b.nodeId;
+    case 'port':
+      return b.kind === 'port' && a.nodeId === b.nodeId && a.portId === b.portId;
+    case 'edge':
+      return b.kind === 'edge' && a.edgeId === b.edgeId;
+  }
 }
 
 type PressHit = GraphHitTarget | null | undefined;

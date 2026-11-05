@@ -41,7 +41,7 @@
 
 /* Controls */
 
-:where([data-dagr-explorer='views'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button) {
+:where([data-dagr-explorer='views'] button, [data-dagr-explorer='mode'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button) {
   font: inherit;
   color: inherit;
   background: var(--dagr-explorer-bg, #ffffff);
@@ -51,7 +51,7 @@
   cursor: pointer;
 }
 
-:where([data-dagr-explorer='views'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search'] button):hover {
+:where([data-dagr-explorer='views'] button, [data-dagr-explorer='mode'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search'] button, [data-dagr-explorer='outline'] button):hover {
   background: var(--dagr-explorer-bg-subtle, #f3f5f8);
 }
 
@@ -60,7 +60,7 @@
   outline-offset: 2px;
 }
 
-:where([data-dagr-explorer='views'] button[aria-pressed='true'], [data-dagr-explorer='trace'][data-active='true']) {
+:where([data-dagr-explorer='views'] button[aria-pressed='true'], [data-dagr-explorer='mode'] button[aria-pressed='true'], [data-dagr-explorer='trace'][data-active='true']) {
   border-color: var(--dagr-explorer-accent, #2f6fdf);
   color: var(--dagr-explorer-accent, #2f6fdf);
 }
@@ -70,7 +70,7 @@
   cursor: default;
 }
 
-:where([data-dagr-explorer='views'], [data-dagr-explorer='toolbar']) {
+:where([data-dagr-explorer='views'], [data-dagr-explorer='mode'], [data-dagr-explorer='toolbar']) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -81,8 +81,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   padding: 0;
 }
 
@@ -138,7 +138,7 @@
   border-radius: 6px;
 }
 
-:where([data-dagr-explorer='search-results'] button) {
+:where([data-dagr-explorer='search-results'] button, [data-dagr-explorer='outline'] button) {
   display: block;
   width: 100%;
   font: inherit;
@@ -150,7 +150,7 @@
   cursor: pointer;
 }
 
-:where([data-dagr-explorer='search-results'] button[data-selected='true']) {
+:where([data-dagr-explorer='search-results'] button[data-selected='true'], [data-dagr-explorer='outline'] button[data-selected='true']) {
   color: var(--dagr-explorer-accent, #2f6fdf);
   font-weight: 600;
 }
@@ -210,7 +210,7 @@
   outline-offset: 2px;
 }
 
-:where([data-dagr-explorer='node'][data-dimmed='true']) {
+:where([data-dagr-explorer='node'][data-dimmed='true'], [data-dagr-explorer='outline'] button[data-dimmed='true']) {
   opacity: 0.3;
 }
 
@@ -265,4 +265,24 @@
 :where([data-dagr-explorer='connections'] button) {
   width: 100%;
   text-align: left;
+}
+
+/* Primary reading controls have the same target size for touch and keyboard. */
+:where([data-dagr-explorer='views'] button, [data-dagr-explorer='mode'] button, [data-dagr-explorer='trace'], [data-dagr-explorer='toolbar'] button, [data-dagr-explorer='details'] button, [data-dagr-explorer='search-results'] button, [data-dagr-explorer='outline'] button, [data-dagr-explorer='search'] input) {
+  box-sizing: border-box;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+:where([data-dagr-explorer='search'] input) {
+  /* Avoid automatic input magnification on browsers that apply it below 16px. */
+  font-size: 16px;
+  width: 100%;
+}
+
+:where([data-dagr-explorer='details'][data-placement='bottom']) {
+  border-left: 0;
+  border-top: 1px solid var(--dagr-explorer-border, #d3d9e3);
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 -8px 24px rgb(20 30 50 / 0.12);
 }

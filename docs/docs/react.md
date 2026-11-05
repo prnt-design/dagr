@@ -513,8 +513,9 @@ The provider is synchronous. Every query carries four pieces of evidence:
 
 Do not multiply `css` by DPR before `screenToWorld`. A provider reading a
 device-pixel target multiplies at that boundary. A provider returns a stable
-node identity (`nodeId`), port identity (`nodeId` plus `portId`), or `null`
-target and stamps every hit or miss with the displayed revision it queried.
+node identity (`nodeId`), port identity (`nodeId` plus `portId`), edge
+identity (`edgeId`, the `SceneEdge` id), or `null` target and stamps every
+hit or miss with the displayed revision it queried.
 Renderer slots, array positions, and pick colors are not stable identities.
 
 The stamp is load-bearing. The hook rejects a result whose stamp differs from
@@ -550,7 +551,8 @@ ticks. These are CPU query medians, not browser frame time or GPU evidence.
 The generic System Atlas uses this API with reverse draw-order rectangles. It
 is proof that a consumer can supply geometry; it is not an exact
 `DagrCanvas` adapter. `DagrCanvas` now supplies one, described in the next
-section. Port geometry is M6.3a. Edge hits are outside this slice.
+section. Port geometry is M6.3a. Edges are answered through the same
+contract (M4.8b), described below.
 
 ### GPU picks behind the same contract
 
@@ -621,8 +623,11 @@ scrolls the page and the camera moves only with two fingers. In that mode the
 browser can still claim a two-finger gesture that starts as a scroll, so pinch
 is dependable when both fingers land before either moves; test it on your
 target devices, which nothing here has. A second finger never takes over an
-active single-pointer gesture. `maxPixelRatio` (try `2`) caps the render
-resolution, which matters on 3x phones and large displays; the canvas also
+active single-pointer gesture. `maxPixelRatio` (for example `2`) caps the
+render resolution and so the drawing buffer. Software WebGL2 drew slower at a
+larger buffer and an RTX 4090 did not; no phone has been measured, so measure
+on your target devices (`bench/browser/README.md`, "Mobile pixel-ratio
+budget"). The canvas also
 resizes when the browser's ratio changes.
 
 **Tolerance.** A hit that lands inside no silhouette falls back to the nearest
@@ -657,7 +662,7 @@ final ones. Overlaps resolve by draw order (circles over rectangles, later over
 earlier). A uniform grid keeps a query to a few shape tests; the index is rebuilt
 when the drawn nodes change and not otherwise.
 
-What is not a hit target on `DagrCanvas`: edges, ports, and glow halos. HTML
+What is not a hit target on `DagrCanvas`: ports and glow halos. HTML
 inside a tier (next section) is the DOM's to hit: native controls inside a
 card keep their native behavior, and a click on a non-interactive part of a
 card selects its node because the card sits on the node.
@@ -674,7 +679,23 @@ Where edges cross or fan into a node the nearer centreline wins, and an exact
 tie goes to the later edge. Nodes are drawn over edges, so ask the node index
 first and the edge index only on a node miss. Dashes are not gaps, and the
 index tests straight segments, which is what a `'polyline'` group (the one
-`DagrCanvas` declares) draws. `DagrCanvas` does not report edge hits yet.
+`DagrCanvas` declares) draws. A provider answers an edge as
+`{ kind: 'edge', edgeId }`, and the shared interaction selects it under the
+same press-and-release rule as a node.
+
+**`onEdgeClick(edgeId)`** and **`onEdgeHover(edgeId | null)`** make the
+drawn edges hit targets on `DagrCanvas` through that index, rebuilt when the
+drawn edges change, so while edges glide it tests the frame's points. The
+tolerance is half the ribbon's width plus the same 4 or 22 CSS pixels of
+slack a node gets. A node always wins, so a press on the end of an edge where
+it meets its node is the node's, and hover reports `null` to `onEdgeHover`
+when the pointer moves onto a node. Edges are tested on the CPU in both
+`hitTesting` modes, after the node test misses: under `'gpu'` that means after
+a settled pick says no node. Without either handler an edge is not a target,
+so a click on one stays a background click. With `onEdgeHover` and no
+`onEdgeClick`, a click on an edge reports nothing rather than a background
+click, as a click on a node does without `onNodeClick`. With `onEdgeClick` set, hover over
+an edge sets `cursor: pointer`.
 
 **`hitTesting="gpu"`** answers mouse hover and clicks from the
 renderer's `pickNode` instead of the CPU index, through
@@ -684,8 +705,8 @@ and a click while nodes glide are ignored, and hover holds its last answer
 until the pick at a resting pointer settles. Each draw asks the resting pointer
 again, so after a wheel zoom or a flight a click lands without moving the
 mouse, and while nodes glide or the camera flies under it, picks run back to
-back, one at a time, until the drawing rests. Hover primes the picks, so an
-`onBackgroundClick` alone is enough to start them. Touch and pen keep the CPU
+back, one at a time, until the drawing rests. Hover primes the picks, so
+`onBackgroundClick` or an edge handler alone is enough to start them. Touch and pen keep the CPU
 index, touch with its fingertip tolerance, since a tap, or a pen that does not
 report hover, has nothing picked before it. A renderer rebuilt after a lost
 context starts with no picks rather than answering from the lost one's. The
@@ -700,7 +721,7 @@ drawing's frame budget.
 
 | Method | Does |
 | --- | --- |
-| `focusNode(id, { zoom?, durationMs? })` | Flies to centre the node. Default zoom makes the node fill about half the viewport. Returns `false` and moves nothing for an unknown id or an unsized canvas. |
+| `focusNode(id, { zoom?, durationMs? })` | Flies to centre the node. Default zoom makes the node fill about half the frame `inset` leaves. Returns `false` and moves nothing for an unknown id or an unsized canvas. |
 | `fit({ durationMs? })` | Flies back to the whole graph, including group boundaries, with `fitPadding`. Returns `false`, moving nothing, before there is a layout and a size. |
 
 Flights take 450 ms (zoom is interpolated geometrically, so it feels even) and
@@ -805,8 +826,9 @@ reachable.
 
 ### Known limits of this slice
 
-- Hover is evaluated on pointer movement and reuses a hit index up to 100 ms old
-  while nodes glide; clicks always use the index of the nodes as drawn.
+- Hover is evaluated on pointer movement and reuses a node or edge hit index up
+  to 100 ms old while the drawing glides; clicks always use the index of what is
+  drawn.
 - Overlay tiers have a cap on mounted elements, but there is no per-frame budget
   for how many mount at once when a pan reveals many nodes, and `onFrame` is
   called only on animated frames, not on plain pans.
@@ -847,9 +869,11 @@ data and not the only way to reach it.
 
 - **Edge, port and GPU hits.** Exact CPU node hits ship with `DagrCanvas`.
   Ports are M6.3a. GPU node picks are opt-in through `hitTesting="gpu"`
-  (M4.8b), priced on one device at about 0.1 to 0.2 ms of CPU per pick. Edges
-  are not hit targets on `DagrCanvas` yet; `createEdgeHitIndex` answers them
-  for a host with its own surface.
+  (M4.8b), priced on one device at about 0.1 to 0.2 ms of CPU per pick. Edge
+  hits on `DagrCanvas` are CPU only. At 10,000 nodes a query takes 0.2 ms
+  or less, but rebuilding the index while edges glide took 2 ms at one
+  segment per edge and 12 to 14 ms at three, on one device (see
+  `bench/browser/README.md`, "What an edge hit costs a frame").
 - **A React tier helper.** Tiers are DOM elements. Rendering React into them is
   possible by hand and not wrapped.
 - **Tile-at-a-time layout.** The campaign demo's worker layout is specific to
@@ -867,8 +891,29 @@ graph, including group labels and padding. The maximum fits a single node with
 5% margin (or `fitPadding`); for mixed node sizes the smallest fitting node sets
 the ceiling. Panning stays within the padded content bounds and keeps part of an actual node
 visible, including in sparse graphs. An axis smaller
-than the viewport stays centered. Limits follow resizing, layout changes, and
+than the frame stays centered. Limits follow resizing, layout changes, and
 animated bounds without resetting a valid close-up.
+
+`inset={{ right: 320 }}` tells the canvas that something drawn over it covers
+that much of a side, such as a details drawer or a toolbar. The first fit,
+`fit()`, `focusNode` and these limits then frame the rest, so the graph is not
+fitted under the drawer. An inset that would leave less than 160 CSS pixels of
+width (120 of height), or less than a quarter of that axis, is ignored on that
+axis. Keyboard zoom anchors at the frame's centre. Drawing and hit testing
+still cover the whole canvas, and changing the inset keeps a camera at rest,
+only re-clamping it. A `fit()` or `focusNode` flight still under way works its
+target out again in the new frame and lands when it would have, so a handler
+that opens a drawer, passes it as `inset` and calls `focusNode` ends with the
+node in the middle of what the drawer leaves. One that lands at once
+(`durationMs: 0`, or any flight under `prefers-reduced-motion: reduce`) has
+nothing left to retarget, so calling it once the new inset has rendered, for
+example from an effect, is the pattern that works for everyone. A flight under way retargets the same way when the canvas resizes.
+
+The canvas also observes the visual viewport and leaves out what it hides of
+the canvas beyond the layout viewport, such as the part of the page a software
+keyboard covers without resizing it, taking the larger of that and `inset` on
+each side. It too keeps the camera, and the page's own pinch-zoom takes
+nothing off. See the [mobile guide](./mobile.md#visible-frame-contract).
 
 `fit={false}` only skips the initial fit. Use `cameraLimits={false}` to opt out
 of content constraints when implementing a custom camera policy. Low-level
@@ -895,3 +940,14 @@ SVG or canvas consumers can use `shapeEdgePath(points, options)` from
 `@prnt/dagr/render` (or `@prnt/dagr-render`) for the same geometry. Feed its
 returned points to an SVG polyline/path or to renderer edges with `curve: 'polyline'`
 to avoid smoothing them twice.
+
+## Shared mobile foundation
+
+`DagrCanvas` and Explorer consume the same three.js-free pinch primitive.
+The first two touches remain the active pair when an extra finger arrives;
+cancellation ends the pair, and so does lost capture on the surface itself
+(a child element such as the `<canvas>` losing a touch's implicit capture is a
+handover, so the pinch continues). Coincident fingers pan without a zoom
+spike. Existing `touchNavigation` modes and their browser-scroll tradeoffs
+remain unchanged. See [Mobile architecture](./mobile.md) for the public core
+API, layer boundaries and remaining viewport/device validation work.

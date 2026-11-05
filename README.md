@@ -41,6 +41,7 @@ See the [measured behavior](https://dagr.prnt.design/docs/incremental-layout).
 | `@prnt/dagr-react` | `<DagrCanvas>` component and hooks | The canvas, the `useDagr` hook over the incremental engine, `<Html>` over the overlay, the layout-to-scene conversion, and `animate`, which glides an edit to its new layout off the delta, implemented; click selection, hover and camera flights shipped in 0.1.3; GPU picking follows the renderer proof |
 | `@prnt/dagr-vdsl` | Visual DSL toolkit: node spec adapter, typed ports, drag-to-connect | The node spec adapter, its registry, port type tokens and connection validation implemented; drag-to-connect is parked behind the renderer work |
 | `@prnt/dagr-explorer` | React graph explorer: views, search, connection tracing, groups and a details drawer over a pannable DOM and SVG surface, on React 18 and 19 | Complete and browser-validated in Chromium and WebKit; the SVG base is smooth to about 4,000 nodes, and a native base is planned. Install it with `npm install @prnt/dagr-explorer` |
+| `@prnt/dagr-chart` | Animated React bar and line charts with GPU or SVG rendering, dual axes and Tailwind theme bindings | Private workspace package; [API and styling guide](packages/chart/README.md) |
 
 `@prnt/dagr` offers `@prnt/dagr/graph`, `@prnt/dagr/layout`,
 `@prnt/dagr/render`, `@prnt/dagr/render/core`, `@prnt/dagr/react`,
@@ -60,17 +61,38 @@ for explanatory graphs: rich node summaries, meaningful edges, detailed
 examples and accessible connection navigation. Its [typed example](skills/dagr-learning-explorer/references/learning-explorer.tsx)
 uses the public Explorer API. The skill is guidance, not a new runtime feature.
 
-Agents can read the skill directly from a checkout. After it is available in
-the source revision you install, the standard skills CLI supports selecting it:
+Agents can read the skill directly from a checkout, or install it with the
+[skills CLI](https://github.com/vercel-labs/skills) (tested with 1.7.4, which
+needs Node 22.20 or newer). Replace `<commit>` with the full SHA of a commit
+you have reviewed. `-a` names the agent so the CLI neither prompts nor guesses;
+without `-g` it installs into the current project.
 
 ```bash
-npx skills add prnt-design/dagr --skill dagr-learning-explorer
+npx skills@1.7.4 add prnt-design/dagr --list
+npx skills@1.7.4 add https://github.com/prnt-design/dagr/tree/<commit>/skills/dagr-learning-explorer -a claude-code -y
+npx skills@1.7.4 list
+npx skills@1.7.4 remove dagr-learning-explorer -y
 ```
 
-Review the source and choose the destination agent when installing. This does
-not run on `npm install`, and current npm tarballs do not bundle the skill.
-The [learning/mobile roadmap](ROADMAP.md#explorer-learning-and-mobile-track)
-tracks distribution validation and adaptive library support.
+`skills-lock.json` records the commit and a content hash. A local clone works
+as the source too:
+`npx skills@1.7.4 add ./dagr --skill dagr-learning-explorer -a claude-code -y`.
+The example imports `@prnt/dagr-explorer/styles.css`, so a TypeScript project
+with `noUncheckedSideEffectImports` (on by default in TypeScript 7.0.2) needs
+its bundler's CSS module types, such as `vite/client`. `npm install` does not
+install the skill, and current npm tarballs do not bundle it. The
+[learning/mobile roadmap](ROADMAP.md#explorer-learning-and-mobile-track)
+tracks version-matched npm bundling and adaptive library support.
+
+## Mobile framework support
+
+Dagr's shared touch primitive, `createPinchGesture`, lives in the three.js-free
+renderer core and is consumed by both DagrCanvas and Explorer. Surface adapters
+retain browser-scroll and focus policy; backends retain drawing/resource
+ownership. See the [mobile architecture guide](docs/docs/mobile.md) for the
+contract and the [core mobile roadmap](ROADMAP.md#core-mobile-framework-track)
+for visible-viewport, occlusion and real-device conformance work. Repository
+changes remain subject to the human-gated package release process.
 
 ## Development
 
@@ -91,6 +113,7 @@ pnpm bench           # run every package's benchmarks
 pnpm bench:check     # compare that run to bench/baseline.json
 pnpm bench:baseline  # record that run as the new baseline
 pnpm bench:ci        # measure up to three times, and pass when two runs agree
+pnpm bench:gate      # bench:ci, when the branch's diff can move a gated benchmark
 ```
 
 The agent runs `pnpm bench:ci` locally before opening a pull request, and does

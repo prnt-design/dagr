@@ -55,6 +55,18 @@ The node type is inferred from your data, so `renderNode` above sees `team`.
 `maxOverlayNodes`, `base`, `nodeAriaLabel`, `inset` and `contentPadding`,
 which it forwards to the parts.
 
+**Map or outline, at any width.** `DagrExplorer` shows a Map and an Outline
+button, and the outline is `ExplorerOutline` in a pane the height of the
+graph. `mode` (`'map'` or `'outline'`) is controllable, with `defaultMode`
+and `onModeChange`. The selection, the query, trace and the drawer carry
+across a switch. The map stays mounted, hidden, while the outline shows, so
+it keeps its camera through the switch and a resize or a turn while hidden
+(a node chosen in the outline is revealed on it),
+and it leaves the tab order; the toolbar is hidden with it. Over the
+outline, the drawer leaves the list room to scroll its items clear. Focus in
+the presentation that leaves moves to the same node in the other, else to
+the other's tab stop; focus anywhere else stays where it is.
+
 ### The parts
 
 `DagrExplorer` is built only from these, with no private access, so a host
@@ -108,6 +120,7 @@ export function Architecture() {
 | `ExplorerTraceToggle` | trace on and off |
 | `ExplorerViewport` | the graph: pan and zoom, the SVG base, node elements for nodes large enough to read. Takes `renderNode`, `nodeAriaLabel`, `tiers`, `maxOverlayNodes`, `base`, `inset`, `contentPadding`. Its children, such as `ExplorerDetails`, share a positioned stage with the graph, and the graph's hint comes after the stage, where an overlay cannot cover it |
 | `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body. Children `({ node, connections, inspect, follow })` replace the body, and `renderConnection(edge, otherNode, direction)` draws one connection in the default body, given `'to'`, `'from'` or `'self'` |
+| `ExplorerOutline` | the active view's nodes as a list of buttons in data order, on the same selection, query, trace and drawer as the graph. One tab stop; the up and down arrows, `Home` and `End` move between items. Not virtualized |
 | `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node. Zoom out, zoom in, fit and the drawer's close button are icons, named and titled by their labels |
 
 Every part takes `className` and `style`, and your `style` wins over the
@@ -119,13 +132,28 @@ are positioned against it and clipped by it, and a press that becomes a pan
 must not select their text. The drawer is outside the viewport, so its text
 stays selectable.
 
+**Details adapt to their container.** Below 720 CSS pixels of containing
+surface width, details dock to the bottom at half the graph height, capped at
+half the dynamic viewport height. Wider containers retain the 360px side
+panel. The graph never resizes, and the same details body, selection and
+connection commands survive docking changes. If opening compact details
+puts the entire panel offscreen, Explorer scrolls it into view once without
+moving focus. Following connections does not repeat that page scroll.
+`data-placement="bottom"` or `"right"` exposes the placement for host styling.
+
+The default stylesheet gives primary controls at least 44 by 44 CSS pixels
+and uses a 16px search input. Hosts that replace the stylesheet or render their
+own details actions own their target sizing. Graph nodes still scale with the
+camera; search and connections provide larger targets for precise navigation.
+
 **The camera frames what the drawer leaves uncovered.** With the drawer
 open, fit, `focusNode`, `reveal`, the zoom buttons and keys all work in the
-part of the graph beside it, a node under the drawer can be panned out, and
-the node the drawer opens on is revealed if the drawer covers it. A camera at
+part of the graph beside or above it. A node under the drawer can be panned
+out, and the node the drawer opens on is revealed if the drawer covers it. A camera at
 fit eases to the new fit as the drawer opens and closes. A drawer that would
-leave less than 160px, or a quarter of the graph's width, is ignored, so on a
-phone the camera keeps the whole graph. For overlays of your own, pass
+leave less than 160px, or a quarter of the graph's width, is ignored, so an
+oversized host overlay does not collapse the camera frame. For overlays of
+your own, pass
 `inset={{ top, right, bottom, left }}` in CSS pixels. `contentPadding` is how
 far, as a fraction of the frame, content may be panned past its edge: default
 0.05, clamped into [0, 0.45].
@@ -228,6 +256,11 @@ With a node focused:
 With the surface focused, the arrow keys pan. In both cases `+` and `=` zoom
 in, `-` zooms out and `0` fits. `Escape` closes the drawer if it is open,
 and otherwise leaves the graph. A key with `Ctrl`, `Command` or `Alt` is left to the browser.
+
+Every camera move but a drag or a pinch eases to where it is going: keys,
+the wheel, search, the drawer opening or closing, and the `fit`, `zoomBy`,
+`focusNode` and `reveal` methods. Under `prefers-reduced-motion: reduce` it
+lands there at once. A drag or a pinch follows the pointer either way.
 
 A node that takes focus from the keyboard is brought into view by the
 least pan, at the current zoom. A node you click is not moved to.

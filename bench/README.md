@@ -8,6 +8,7 @@ pnpm bench            # run every package's benchmarks, one package at a time, w
 pnpm bench:check      # compare that run to bench/baseline.json, non-zero on a regression
 pnpm bench:baseline   # record that run as the new baseline
 pnpm bench:ci         # measure up to three times, and pass when two runs agree
+pnpm bench:gate       # bench:ci, when the branch's diff can move a gated benchmark
 ```
 
 The agent runs `pnpm bench:ci` before it opens a pull request, and does not
@@ -508,6 +509,38 @@ back to gating that entry. It is left standing rather than edited, because the
 next recapture rewrites the stats under it anyway and this paragraph is where
 the qualification belongs.
 
+## Only when the diff can move it
+
+`pnpm bench:gate` reads the branch's diff against its merge base with
+`origin/main`, uncommitted and untracked files included, and runs `bench:ci`
+only when a changed path is something a gated entry runs:
+
+- a package a gated baseline entry names, or a workspace package it depends
+  on, outside that package's `test/`. Read from `bench/baseline.json` and the
+  manifests, so a package whose benchmarks join the baseline comes into scope
+  without an edit;
+- `bench/` itself, outside `bench/browser/`;
+- the root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`,
+  `tsconfig.base.json`, `.npmrc`, `.pnpmfile.cjs`, the Node version files and
+  anything under `patches/`.
+
+Markdown is never in scope. Otherwise it prints why it skipped and exits zero.
+It fails closed: a diff git cannot read, or a baseline that does not parse,
+runs the gate.
+
+One case sits between the two. `pnpm bench` runs every package with a `bench`
+script, and some have no gated entry yet. A diff that reaches one of those
+without reaching a gated package cannot move a gated number, but it can make
+that package's benchmarks throw, which would fail the gate for every branch
+after it. So `bench:gate` runs that package's benchmarks once and fails only
+if they do not run. Their timings are read by nothing.
+
+The reason is the cost of a false failure on this machine, counted rather
+than argued. Across PRs #150 to #219, 23 recorded a failing gate, and 15 of
+those were docs, test, demo or chore changes with no package source in them.
+Two of three, below, separates noise from a regression inside one gate run; it
+cannot help a branch whose diff could not have caused either.
+
 ## Two of three
 
 `pnpm bench:ci` measures up to three times and passes when two runs pass. Two
@@ -979,7 +1012,8 @@ see the paragraph on that capture above.
 `src/control.ts`, `src/corpus.ts` and `src/register.ts` are TypeScript, compiled
 by vitest, and reached through `@dagr/bench` by a `paths` entry and a vitest
 alias in each consuming package. `src/gate.mjs`, `src/collect.mjs`,
-`src/baseline.mjs` and `bin/bench-check.mjs` are plain `.mjs` with JSDoc types,
+`src/baseline.mjs`, `src/scope.mjs`, `bin/bench-check.mjs` and
+`bin/bench-gate.mjs` are plain `.mjs` with JSDoc types,
 because they run under bare `node`, in a job that has deliberately not built
 anything yet; `checkJs` keeps them under the same strict compiler as everything
 else. `src/names.mjs` holds the two names both halves need.

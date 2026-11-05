@@ -52,13 +52,6 @@ export interface ExplorerInset {
   readonly bottom?: number | undefined;
   readonly left?: number | undefined;
 }
-/** A box on screen, as `getBoundingClientRect` reports one. */
-export interface ScreenRect {
-  readonly left: number;
-  readonly top: number;
-  readonly right: number;
-  readonly bottom: number;
-}
 export interface CameraLimits {
   readonly minScale: number;
   readonly maxScale: number;
@@ -73,10 +66,6 @@ export interface CameraLimits {
 export const CONTENT_PADDING = 0.05;
 /** The range `Camera2D` accepts for a padding. */
 const MAX_CONTENT_PADDING = 0.45;
-/** The narrowest and shortest a frame may be, at least, before its insets are ignored. */
-const MIN_FRAME_WIDTH = 160;
-const MIN_FRAME_HEIGHT = 120;
-const MIN_FRAME_SHARE = 0.25;
 export const FOCUS_MARGIN = 24;
 export const REVEAL_MARGIN = 12;
 export const EASE_MS = 55;
@@ -90,62 +79,6 @@ export const frameCenter = (frame: CameraFrame): Vec2 => ({
 function paddingOf(padding: number): number {
   if (!Number.isFinite(padding)) return CONTENT_PADDING;
   return Math.max(0, Math.min(MAX_CONTENT_PADDING, padding));
-}
-
-/**
- * The viewport less the insets, the largest on each side. A negative or
- * non-finite inset counts as none, and an axis the insets would squeeze under
- * its minimum keeps the whole viewport: a drawer as wide as a phone must not
- * shrink the graph to nothing.
- */
-export function cameraFrame(viewport: ExplorerViewportSize, ...insets: readonly ExplorerInset[]): CameraFrame {
-  const side = (key: keyof ExplorerInset): number => {
-    let most = 0;
-    for (const inset of insets) {
-      const value = inset[key];
-      if (value !== undefined && Number.isFinite(value) && value > most) most = value;
-    }
-    return most;
-  };
-  const axis = (extent: number, start: number, end: number, least: number): [number, number] => {
-    const remaining = extent - start - end;
-    return remaining < Math.max(least, extent * MIN_FRAME_SHARE) ? [0, extent] : [start, remaining];
-  };
-  const [x, width] = axis(viewport.width, side('left'), side('right'), MIN_FRAME_WIDTH);
-  const [y, height] = axis(viewport.height, side('top'), side('bottom'), MIN_FRAME_HEIGHT);
-  return { x, y, width, height };
-}
-
-/**
- * What an overlay takes off the viewport: one side, by the overlap, when the
- * overlay touches that side (within a pixel) and spans at least half of it.
- * Of the sides it qualifies on, the one it reaches in from least as a share
- * of its axis, so a drawer the full height of the viewport insets the side it
- * is docked to however wide it is.
- */
-export function obstructionInset(viewport: ScreenRect, overlay: ScreenRect): ExplorerInset {
-  const left = Math.max(viewport.left, overlay.left);
-  const right = Math.min(viewport.right, overlay.right);
-  const top = Math.max(viewport.top, overlay.top);
-  const bottom = Math.min(viewport.bottom, overlay.bottom);
-  const across = right - left;
-  const down = bottom - top;
-  if (!(across > 0) || !(down > 0)) return {};
-  const width = viewport.right - viewport.left;
-  const height = viewport.bottom - viewport.top;
-  const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
-  const sides: [keyof ExplorerInset, number, number][] = [];
-  if (down >= height / 2) {
-    if (near(overlay.left, viewport.left) || overlay.left < viewport.left) sides.push(['left', right - viewport.left, width]);
-    if (near(overlay.right, viewport.right) || overlay.right > viewport.right) sides.push(['right', viewport.right - left, width]);
-  }
-  if (across >= width / 2) {
-    if (near(overlay.top, viewport.top) || overlay.top < viewport.top) sides.push(['top', bottom - viewport.top, height]);
-    if (near(overlay.bottom, viewport.bottom) || overlay.bottom > viewport.bottom) sides.push(['bottom', viewport.bottom - top, height]);
-  }
-  let best: [keyof ExplorerInset, number, number] | null = null;
-  for (const each of sides) if (best === null || each[1] / each[2] < best[1] / best[2]) best = each;
-  return best === null ? {} : { [best[0]]: best[1] };
 }
 
 /** `padding` is the fraction of the frame the content may be panned past its edge. */

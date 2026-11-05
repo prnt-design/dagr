@@ -59,6 +59,7 @@
       } from '/packages/render/dist/index.js';
       // The module file rather than the package index, which imports React.
       import { createNodeHitIndex } from '/packages/react/dist/node-hit.js';
+      import { createEdgeHitIndex } from '/packages/react/dist/edge-hit.js';
 
       const SPACING = { x: 130, y: 90 };
       const SWAY_WORLD = 20;
@@ -512,7 +513,7 @@
       // move's own cost.
       // `parts` draws the nodes, the edges or both, so a pass's GPU time can
       // be split between them by subtraction.
-      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode, hit, parts, motion, moving, pick) => {
+      window.profile = async (count, warmup, frames, zoom, edgeStyle, nodeMode, hit, parts, motion, moving, pick, edgeHit) => {
         const { group, bend } = EDGE_STYLES[edgeStyle];
         const drawNodes = parts === 'all' || parts === 'nodes';
         const drawEdges = parts === 'all' || parts === 'edges';
@@ -564,6 +565,29 @@
           hitIndexMs = performance.now() - t0;
         }
 
+        // DagrCanvas's edge tolerance: half the ribbon, which is in device
+        // pixels, plus the mouse's slack, over the zoom.
+        const edgeHits = { still: { queries: 0, onEdge: 0 }, animated: { queries: 0, onEdge: 0 } };
+        const edgeQuery = (index, ts, mode) => {
+          const t0 = performance.now();
+          const world = renderer.camera.screenToWorld(pointerAt(ts));
+          const tolerance =
+            (group.style.halfWidthPixels / window.devicePixelRatio + POINTER_HIT_PIXELS) / renderer.camera.zoom;
+          const id = index.hit(world, tolerance);
+          const ms = performance.now() - t0;
+          edgeHits[mode].queries += 1;
+          if (id !== null) edgeHits[mode].onEdge += 1;
+          return ms;
+        };
+        let stillEdgeIndex = null;
+        let edgeIndexMs = null;
+        if (edgeHit) {
+          const stillEdges = edgesAt(home, links, bend);
+          const t0 = performance.now();
+          stillEdgeIndex = createEdgeHitIndex(stillEdges);
+          edgeIndexMs = performance.now() - t0;
+        }
+
         // One pick in flight, the next started on the first frame after it
         // settles: what DagrCanvas's GPU hover runs while the drawing moves
         // under a resting mouse, and at most what a moving mouse asks for.
@@ -594,6 +618,7 @@
         const still = await sample(warmup, frames, (ts) => {
           const timings = {};
           if (stillIndex !== null) timings.hit = query(stillIndex, ts, 'still');
+          if (stillEdgeIndex !== null) timings.edgeHit = edgeQuery(stillEdgeIndex, ts, 'still');
           if (overlay !== null) {
             const t0 = performance.now();
             overlay.sync();
@@ -648,6 +673,14 @@
             timings.hitIndex = performance.now() - t7;
             timings.hit = query(index, ts, 'animated');
           }
+          if (edgeHit) {
+            // As with nodes: a click rebuilds on this frame, hover on one
+            // frame in every 100 ms.
+            const t8 = performance.now();
+            const index = createEdgeHitIndex(edges);
+            timings.edgeHitIndex = performance.now() - t8;
+            timings.edgeHit = edgeQuery(index, ts, 'animated');
+          }
           const t4 = performance.now();
           renderer.render();
           timings.render = performance.now() - t4;
@@ -674,6 +707,7 @@
           springs: source.stats(),
           elements: overlay === null ? null : { still: stillElements, animated: animatedElements },
           hit: hit ? { indexMs: hitIndexMs, hits } : null,
+          edgeHit: edgeHit ? { indexMs: edgeIndexMs, hits: edgeHits } : null,
           pick: pick ? picks : null,
           backend,
           zoom: drawnZoom,
@@ -876,6 +910,22 @@
         }
         return { ...gpuTally(), backend: held?.renderer?.backend ?? null, worked, pickErrors };
       };
+
+      // With two GPUs, the adapter a bare `requestAdapter()` returns need not
+      // be the one the renderer drew on, so the adapter behind each device
+      // the page creates is recorded too.
+      const deviceAdapters = [];
+      if ('gpu' in navigator) {
+        const requestDevice = GPUAdapter.prototype.requestDevice;
+        GPUAdapter.prototype.requestDevice = async function (descriptor) {
+          const device = await requestDevice.call(this, descriptor);
+          const { vendor, architecture, isFallbackAdapter } = this.info;
+          const seen = { vendor, architecture, isFallbackAdapter: isFallbackAdapter ?? this.isFallbackAdapter };
+          if (!deviceAdapters.some((a) => JSON.stringify(a) === JSON.stringify(seen))) deviceAdapters.push(seen);
+          return device;
+        };
+      }
+      window.deviceAdapters = () => deviceAdapters;
 
       window.adapter = async () => {
         if (!('gpu' in navigator)) return { navigatorGpu: false, adapter: null };

@@ -12,6 +12,7 @@
     "paths": {
       "@dagr/campaign": ["../../packages/campaign/src/index.ts"],
       "@dagr/campaign-stage": ["../../packages/campaign-stage/src/index.ts"],
+      "@prnt/dagr-chart": ["../../packages/chart/src/index.ts"],
       "@prnt/dagr-graph": ["../../packages/graph/src/index.ts"],
       "@prnt/dagr-layout": ["../../packages/layout/src/index.ts"],
       "@dagr/living-stage": ["../../packages/living-stage/src/index.ts"],

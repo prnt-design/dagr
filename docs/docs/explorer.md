@@ -139,6 +139,13 @@ current zoom, which is what the default list's connection buttons do. Those
 buttons show an arrow for the edge's direction, read out through
 `labels.connectionTo` and `labels.connectionFrom`.
 
+A reader chooses between the map and an outline of the same nodes with the
+Map and Outline buttons, at any width. Pass `defaultMode="outline"` to start
+on the outline, or `mode` with `onModeChange` to control it. Selection,
+search, trace and the open drawer carry across a switch, and the map keeps
+its pan and zoom while hidden, following a node chosen in the outline. Focus in the presentation that leaves moves
+to the same node in the other.
+
 ## The parts and your own layout
 
 `DagrExplorer` is built only from public parts, with no private access, so a
@@ -192,6 +199,7 @@ export function Architecture() {
 | `ExplorerTraceToggle` | trace on and off |
 | `ExplorerViewport` | the graph: pan and zoom, the base layer, and node elements for nodes large enough to read |
 | `ExplorerDetails` | the drawer: an overlay with a close button and a scrolling body |
+| `ExplorerOutline` | the active view's nodes as a list of buttons in data order, on the same selection, query, trace and drawer as the graph. Works with or without a viewport |
 | `ExplorerToolbar` | zoom out, the zoom readout, zoom in, fit, and zoom to the selected node. Zoom out, zoom in, fit and the drawer's close button are icons, named and titled by their labels |
 
 Children of `ExplorerViewport`, such as `ExplorerDetails`, share a positioned
@@ -357,6 +365,7 @@ margin moves the plane with one style write and no React work.
 
 The overlay cap is what keeps a large graph a light page. The live demo at
 the end of this page counts the node elements it has mounted as you pan.
+`ExplorerOutline` has no cap: it mounts a button for every node in the view.
 
 ## Keyboard and screen readers
 
@@ -376,6 +385,11 @@ With the graph's surface focused (click it), the arrow keys pan. Either way
 if it is open, keeping focus where it is, and otherwise leaves the graph. Wheel zoom only works while the graph has focus, so
 the page scrolls past it untouched.
 
+Every camera move but a drag or a pinch eases to where it is going: keys,
+the wheel, search, the drawer opening or closing, and the `fit`, `zoomBy`,
+`focusNode` and `reveal` methods. Under `prefers-reduced-motion: reduce` it
+lands there at once. A drag or a pinch follows the pointer either way.
+
 Only nodes on screen and large enough to read have elements, so a screen
 reader finds only those in the graph. **Search is the way to every node.** It
 reaches all of them whatever is on screen, its match count is live, and the
@@ -383,7 +397,18 @@ graph's accessible description says so and gives the node and edge counts.
 `Enter` in the search field inspects the first match and flies to it.
 
 When the drawer closes, focus returns to what opened it, else to the search
-field, else to the root. `Escape` closes the drawer from anywhere in the root.
+field, else to the root. An opener now hidden, as the map is behind
+`DagrExplorer`'s outline, hands focus to that node's control in the
+presentation that shows. `Escape` closes the drawer from anywhere in the root.
+
+`ExplorerOutline` reaches every node too, as a list. It is one tab stop: the
+selected node's item, else the last one focused, else the first. The up and
+down arrows, `Home` and `End` move between items, and `Enter` or `Space`
+inspects one and pans a graph beside it to bring the node into view. A node
+the query or trace dims stays in place, marked `data-dimmed`. Items are
+named as the map names its nodes by default: the label, then
+`labels.inGroup` for each group. A viewport's `nodeAriaLabel` does not reach
+them.
 
 ## Server rendering
 
@@ -446,7 +471,7 @@ cap of 200 however far you pan.
 - **A self loop is not drawn.** An edge from a node to itself stays in your
   data, appears in the node's connections, and has an empty route.
 - **A group moves no node.** It is the padded hull of its members, with a band
-  above for its label, so an outline can cover a node that is not a member.
+  above for its label, so a group's outline can cover a node that is not a member.
   Pass `strictGroups` to throw `GROUP_ENCLOSES_NON_MEMBER` instead, for a
   diagram where that would be a false statement. The demo's groups are chosen
   so none does, and a test lays them out with `strictGroups` to keep it so.
@@ -454,3 +479,11 @@ cap of 200 however far you pan.
 - **Parallel edges bow apart only on one rank.** Edges joining the same two
   nodes are separated by 16 when they span a single rank. Across more ranks
   the layout already routes them apart.
+
+## Mobile framework contract
+
+Explorer and `DagrCanvas` use the same `createPinchGesture` core primitive,
+while Explorer retains focus-gated page scrolling and its own camera adapter.
+Responsive details shipped separately in M5.7b. `ExplorerOutline` and
+`DagrExplorer`'s map or outline choice make up the M5.7c outline reader. See
+[Mobile architecture](./mobile.md) for the contract and validation limits.

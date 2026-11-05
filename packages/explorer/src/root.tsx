@@ -18,7 +18,9 @@
  *
  * **Closing the drawer restores focus here,** whichever way it closed: to
  * the element that opened it, else to the search field, else to the root
- * element itself, never to the page. Only when focus was lost with the
+ * element itself, never to the page. An opener that is now hidden hands
+ * focus to the same node's control that shows (`DagrExplorer`'s outline item
+ * for a node opened on its map). Only when focus was lost with the
  * drawer (it was inside it, or on a node that left the data), so a host
  * control that closes the drawer keeps its focus. `Escape` anywhere in the
  * root closes the drawer, except where a part has its own precedence (the
@@ -462,9 +464,21 @@ export function ExplorerRoot<N extends ExplorerNode = ExplorerNode, E extends Ex
     const active = document.activeElement;
     if (active !== null && active !== document.body) return;
     const opener = openerRef.current;
+    const shown = (element: HTMLElement): boolean =>
+      typeof element.checkVisibility === 'function' ? element.checkVisibility() : element.closest('[hidden]') === null;
+    const id = latest.current.committedSelected;
+    const stand =
+      opener !== null && opener.isConnected && !shown(opener)
+        ? [...(rootRef.current?.querySelectorAll<HTMLElement>(
+            '[data-dagr-explorer="node"], [data-dagr-explorer="outline"] button',
+          ) ?? [])].find((element) => element.dataset['nodeId'] === id && shown(element))
+        : undefined;
     // Never the page: the root takes focus when nothing better is left.
     const target =
-      opener !== null && opener.isConnected ? opener : (internals.searchInputRef.current ?? rootRef.current);
+      stand ??
+      (opener !== null && opener.isConnected && shown(opener)
+        ? opener
+        : (internals.searchInputRef.current ?? rootRef.current));
     target?.focus();
   }, [detailsOpen, internals]);
 
