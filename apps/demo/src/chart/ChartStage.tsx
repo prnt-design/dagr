@@ -1,34 +1,53 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { JSX, PointerEvent as ReactPointerEvent } from 'react';
+import type { JSX } from 'react';
+import { DagrChart } from '@prnt/dagr-chart';
+import type { ChartSeries } from '@prnt/dagr-chart';
 import { usePrefersReducedMotion } from '@dagr/living-stage';
 import type { RendererBackend } from '@prnt/dagr-render';
-import { layoutChart } from './chart-layout.js';
-import type { ChartMode, Size } from './chart-layout.js';
-import { createChartScene } from './chart-scene.js';
-import type { ChartScene } from './chart-scene.js';
 import { generateData } from './data.js';
+import type { ChartData } from './data.js';
 
 /**
- * A bar and line chart drawn by `@prnt/dagr-render`: the experiment that asks
- * whether the graph renderer has a charting story. The GPU draws the marks,
- * the DOM draws the text, and every change glides on the renderer's springs.
+ * `<DagrChart>` with something to change: the kind of mark, the data, and a
+ * second axis. Each control only builds a new `series` prop, and the chart
+ * works out what glides, what grows in and what shrinks out.
  */
 
-const MODES: readonly { readonly id: ChartMode; readonly label: string }[] = [
+type Mode = 'bars' | 'lines' | 'both' | 'total';
+
+const MODES: readonly { readonly id: Mode; readonly label: string }[] = [
   { id: 'bars', label: 'bars' },
-  { id: 'line', label: 'line' },
+  { id: 'lines', label: 'lines' },
   { id: 'both', label: 'both' },
+  { id: 'total', label: 'daily + total' },
 ];
 const AUTOPLAY_MS = 2400;
 const FIRST_SEED = 7;
+const TOTAL_COLOR = 0xe6edf3;
 
-interface Hover {
-  readonly id: string;
-  readonly label: string;
-  readonly value: number;
-  readonly color: number;
-  readonly x: number;
-  readonly top: number;
+function runningTotal(values: readonly number[]): number[] {
+  let sum = 0;
+  return values.map((value) => (sum += value));
+}
+
+function seriesFor(data: ChartData, mode: Mode): ChartSeries[] {
+  const [first] = data.series;
+  if (mode === 'total' && first !== undefined) {
+    return [
+      first,
+      {
+        id: 'total',
+        label: `${first.label}, running total`,
+        color: TOTAL_COLOR,
+        values: runningTotal(first.values),
+        mark: 'line',
+        axis: 'right',
+      },
+    ];
+  }
+  if (mode === 'bars') return [...data.series];
+  const lines = data.series.map((series) => ({ ...series, id: `${series.id}:line`, mark: 'line' as const }));
+  return mode === 'lines' ? lines : [...data.series, ...lines];
 }
 
 function hex(color: number): string {
@@ -40,194 +59,44 @@ function describeBackend(backend: RendererBackend | null): string {
   return backend === 'webgpu' ? 'WebGPU' : backend === 'webgl2' ? 'WebGL2 fallback' : 'unknown backend';
 }
 
-export function ChartStage(): JSX.Element {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sceneRef = useRef<ChartScene | null>(null);
-  const pickingRef = useRef(false);
-  const pendingRef = useRef<{ x: number; y: number } | null>(null);
-  const lastKeyRef = useRef<string | null>(null);
-  const reduced = usePrefersReducedMotion();
-
-  const [scene, setScene] = useState<ChartScene | null>(null);
-  const [epoch, setEpoch] = useState(0);
-  const [failure, setFailure] = useState<string | null>(null);
-  const [size, setSize] = useState<Size>({ width: 0, height: 0 });
-  const [mode, setMode] = useState<ChartMode>('bars');
-  const [seed, setSeed] = useState(FIRST_SEED);
-  const [playing, setPlaying] = useState(false);
-  const [hover, setHover] = useState<Hover | null>(null);
-
-  const data = useMemo(() => generateData(seed), [seed]);
-  const layout = useMemo(() => layoutChart(data, mode, size), [data, mode, size]);
-
+function useAutoplay(on: boolean, step: () => void): void {
+  const latest = useRef(step);
+  latest.current = step;
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const host = hostRef.current;
-    if (canvas === null || host === null) return;
-    let live = true;
-    let made: ChartScene | null = null;
-    const abort = new AbortController();
-    setFailure(null);
-
-    createChartScene({
-      canvas,
-      signal: abort.signal,
-      onContextLost: () => {
-        if (live) setEpoch((value) => value + 1);
-      },
-    })
-      .then((created) => {
-        if (!live) {
-          created.dispose();
-          return;
-        }
-        made = created;
-        sceneRef.current = created;
-        setScene(created);
-      })
-      .catch((cause: unknown) => {
-        if (live) setFailure(cause instanceof Error ? cause.message : String(cause));
-      });
-
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry === undefined) return;
-      const { width, height } = entry.contentRect;
-      setSize({ width: Math.round(width), height: Math.round(height) });
-    });
-    observer.observe(host);
-
-    return () => {
-      live = false;
-      abort.abort();
-      observer.disconnect();
-      pickingRef.current = false;
-      pendingRef.current = null;
-      made?.dispose();
-      sceneRef.current = null;
-      setScene(null);
-    };
-  }, [epoch]);
-
-  useEffect(() => {
-    if (scene === null || size.width === 0 || size.height === 0) return;
-    scene.resize(size);
-  }, [scene, size]);
-
-  useEffect(() => {
-    if (scene === null || size.width === 0 || size.height === 0) return;
-    // A resize alone snaps: the data did not change, so nothing should glide.
-    const key = `${String(seed)}:${mode}`;
-    const resizeOnly = lastKeyRef.current === key;
-    lastKeyRef.current = key;
-    scene.retarget(layout, { snap: reduced || resizeOnly, stagger: true });
-    // The tooltip was read off the old layout, so it comes back on the next move.
-    scene.setHover(null);
-    setHover(null);
-  }, [scene, layout, seed, mode, size, reduced]);
-
-  useEffect(() => {
-    if (!playing || reduced) return;
+    if (!on) return;
     const handle = window.setInterval(() => {
-      setSeed((value) => value + 1);
+      latest.current();
     }, AUTOPLAY_MS);
     return () => {
       window.clearInterval(handle);
     };
-  }, [playing, reduced]);
+  }, [on]);
+}
 
-  const pickAt = (current: ChartScene, point: { x: number; y: number }): void => {
-    pickingRef.current = true;
-    void current
-      .pick(point)
-      .catch(() => null)
-      .then((id) => {
-        pickingRef.current = false;
-        // A move that arrived mid-pick is picked now, so the pointer's resting
-        // place is never the one that was dropped.
-        const pending = pendingRef.current;
-        pendingRef.current = null;
-        if (pending !== null) pickAt(current, pending);
-        // A gridline is not a hover target, and it is not a reason to lose one.
-        if (id !== null && id.startsWith('grid:')) return;
-        const bar = id === null ? undefined : layout.bars.find((b) => b.id === id);
-        if (bar === undefined) {
-          current.setHover(null);
-          setHover(null);
-          return;
-        }
-        current.setHover(bar.id);
-        setHover({
-          id: bar.id,
-          label: `${data.categories[bar.index] ?? ''} ${data.series[bar.seriesIndex]?.label ?? ''}`,
-          value: bar.value,
-          color: bar.color,
-          x: bar.x,
-          top: size.height - (layout.plot.bottom + bar.height),
-        });
-      });
-  };
+export function ChartStage(): JSX.Element {
+  const reduced = usePrefersReducedMotion();
+  const [mode, setMode] = useState<Mode>('bars');
+  const [seed, setSeed] = useState(FIRST_SEED);
+  const [playing, setPlaying] = useState(false);
+  const [backend, setBackend] = useState<RendererBackend | null>(null);
 
-  const onPointerMove = (event: ReactPointerEvent<HTMLCanvasElement>): void => {
-    const current = sceneRef.current;
-    if (current === null) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const point = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-    if (pickingRef.current) {
-      pendingRef.current = point;
-      return;
-    }
-    pickAt(current, point);
-  };
+  const data = useMemo(() => generateData(seed), [seed]);
+  const series = useMemo(() => seriesFor(data, mode), [data, mode]);
+  const legend = series.filter((entry) => !entry.id.endsWith(':line') || mode === 'lines');
 
-  const onPointerLeave = (): void => {
-    sceneRef.current?.setHover(null);
-    setHover(null);
-  };
-
-  const ready = size.width > 0 && size.height > 0;
+  useAutoplay(playing && !reduced, () => {
+    setSeed((value) => value + 1);
+  });
 
   return (
     <div className="chart">
-      <div className="chart__canvas" ref={hostRef}>
-        <canvas
-          className="chart__surface"
-          ref={canvasRef}
-          onPointerMove={onPointerMove}
-          onPointerDown={onPointerMove}
-          onPointerLeave={onPointerLeave}
+      <div className="chart__canvas">
+        <DagrChart
+          categories={data.categories}
+          series={series}
+          label="Orders and returns by month"
+          onBackend={setBackend}
         />
-        {ready &&
-          layout.ticks.map((tick) => (
-            <span
-              key={tick.value}
-              className="chart__tick"
-              style={{ top: size.height - tick.y, left: layout.plot.left - 8 }}
-            >
-              {tick.value}
-            </span>
-          ))}
-        {ready &&
-          layout.categoryX.map((x, index) => index % layout.labelEvery === 0 && (
-            <span
-              key={data.categories[index]}
-              className="chart__category"
-              style={{ left: x, top: size.height - layout.plot.bottom + 8 }}
-            >
-              {data.categories[index]}
-            </span>
-          ))}
-        {hover !== null && (
-          <div
-            className="chart__tooltip"
-            style={{ left: hover.x, top: hover.top, borderColor: hex(hover.color) }}
-          >
-            <span className="chart__tooltip-label">{hover.label}</span>
-            <span className="chart__tooltip-value">{hover.value}</span>
-          </div>
-        )}
-        <span className="chart__badge">{describeBackend(scene?.renderer.backend ?? null)}</span>
-        {failure !== null && <p className="chart__failure">renderer failed: {failure}</p>}
       </div>
 
       <div className="chart__controls">
@@ -266,11 +135,12 @@ export function ChartStage(): JSX.Element {
         >
           {playing ? 'pause' : 'play'}
         </button>
+        <span className="chart__badge">{describeBackend(backend)}</span>
         <ul className="chart__legend" aria-label="Series">
-          {data.series.map((series) => (
-            <li key={series.id} className="chart__legend-item">
-              <span className="chart__swatch" style={{ background: hex(series.color) }} />
-              {series.label}
+          {legend.map((entry) => (
+            <li key={entry.id} className="chart__legend-item">
+              <span className="chart__swatch" style={{ background: hex(entry.color) }} />
+              {entry.label}
             </li>
           ))}
         </ul>

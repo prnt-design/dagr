@@ -12,8 +12,8 @@ import { ChartStage } from './chart/ChartStage.js';
  * ONE AT A TIME. The campaign proves scale, tiling and semantic zoom at 3,010
  * nodes; the living stage proves that an edit moves only the part of the
  * drawing it touches, which is the claim the project competes on and which
- * scale cannot show; the chart asks whether the renderer has a charting story
- * at all. None subsumes another, so none was deleted. They are behind a switch
+ * scale cannot show; the chart shows `@prnt/dagr-chart`, bars and lines on
+ * the same renderer. None subsumes another, so none was deleted. They are behind a switch
  * rather than stacked because each mounts a canvas, and two live canvases is
  * two GPU device contexts for a page that can only be looking at one of them.
  *
@@ -24,9 +24,9 @@ import { ChartStage } from './chart/ChartStage.js';
  *
  * The two graph demos live in packages, `@dagr/campaign-stage` and
  * `@dagr/living-stage`, because the docs site mounts the same two components
- * and a component cannot be imported from an app. The chart is an experiment
- * nothing else mounts, so it stays in this app under `chart/`. What is left
- * here is the page around them.
+ * and a component cannot be imported from an app. The chart is a package of
+ * its own, `@prnt/dagr-chart`, and `chart/` holds only its data and controls.
+ * What is left here is the page around them.
  */
 
 /**
@@ -101,15 +101,18 @@ function ChartView(): JSX.Element {
       <section className="facts">
         <h2 className="facts__title">what is on the canvas</h2>
         <p className="facts__lead">
-          Two series over twelve months, drawn by <code>@prnt/dagr-render</code> with no chart
-          library: each bar and marker is an instanced SDF node, each line is one smooth ribbon,
-          and the axis text is DOM positioned from the same numbers. Hover a bar for its value.
+          Twelve months of data in <code>&lt;DagrChart&gt;</code> from{' '}
+          <code>@prnt/dagr-chart</code>: each bar and marker is an instanced SDF node drawn by{' '}
+          <code>@prnt/dagr-render</code>, each line is one smooth ribbon, the scales and ticks are
+          D3&apos;s, and the axis text is DOM positioned from the same numbers. Hover a mark for
+          its value.
         </p>
         <p className="facts__lead">
-          Every change rides the renderer&apos;s critically damped springs: new data retargets
-          each bar from where it is, switching kind sinks the bars into the baseline while the
-          line fades in, and the first draw cascades across the months. WebGPU where the browser
-          has it, WebGL2 where it does not; the badge over the canvas says which.
+          The controls only hand the chart a new <code>series</code> prop. Marks are matched by
+          id, so one in both sets glides from where it is, a new one grows in and one that left
+          shrinks out, all on the renderer&apos;s critically damped springs. <em>daily + total</em>{' '}
+          puts a running total on a second axis. WebGPU where the browser has it, WebGL2 where it
+          does not; the label beside the legend says which.
         </p>
       </section>
     </>

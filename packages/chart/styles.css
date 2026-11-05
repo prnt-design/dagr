@@ -1,0 +1,96 @@
+/*
+ * The chart's DOM half: axis text, the tooltip and the hidden data table.
+ * The marks are drawn on the canvas, in the colours of the `theme` prop.
+ *
+ * The chart fills the element it is given and carries no height of its own.
+ * Text colours are custom properties so a host can restyle them without
+ * overriding a rule.
+ */
+
+.dagr-chart {
+  --dagr-chart-text: #79828d;
+  --dagr-chart-tooltip-text: #e6edf3;
+  --dagr-chart-tooltip-surface: rgba(17, 22, 27, 0.92);
+  --dagr-chart-font: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.dagr-chart__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.dagr-chart__tick,
+.dagr-chart__category {
+  position: absolute;
+  pointer-events: none;
+  font-family: var(--dagr-chart-font);
+  font-size: 0.7rem;
+  color: var(--dagr-chart-text);
+  white-space: nowrap;
+}
+
+.dagr-chart__tick--left {
+  transform: translate(-100%, -50%);
+}
+
+.dagr-chart__tick--right {
+  transform: translateY(-50%);
+}
+
+.dagr-chart__category {
+  transform: translateX(-50%);
+}
+
+.dagr-chart__tooltip {
+  position: absolute;
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid;
+  border-radius: 6px;
+  background: var(--dagr-chart-tooltip-surface);
+  color: var(--dagr-chart-tooltip-text);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 10px));
+}
+
+.dagr-chart__tooltip-label {
+  opacity: 0.75;
+}
+
+.dagr-chart__tooltip-value {
+  font-family: var(--dagr-chart-font);
+  font-weight: 600;
+}
+
+.dagr-chart__failure {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 2rem;
+  color: #ffb454;
+  font-size: 0.9rem;
+}
+
+/* Read by assistive technology, not drawn. */
+.dagr-chart__table {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

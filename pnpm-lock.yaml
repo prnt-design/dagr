@@ -38,6 +38,9 @@ importers:
       '@dagr/living-stage':
         specifier: workspace:*
         version: link:../../packages/living-stage
+      '@prnt/dagr-chart':
+        specifier: workspace:*
+        version: link:../../packages/chart
       '@prnt/dagr-graph':
         specifier: workspace:*
         version: link:../../packages/graph
@@ -50,12 +53,6 @@ importers:
       '@prnt/dagr-render':
         specifier: workspace:*
         version: link:../../packages/render
-      d3-array:
-        specifier: ^3.2.4
-        version: 3.2.5
-      d3-scale:
-        specifier: ^4.0.2
-        version: 4.0.3
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -63,12 +60,6 @@ importers:
         specifier: ^19.2.8
         version: 19.2.8(react@19.2.8)
     devDependencies:
-      '@types/d3-array':
-        specifier: ^3.2.2
-        version: 3.2.2
-      '@types/d3-scale':
-        specifier: ^4.0.9
-        version: 4.0.9
       '@types/react':
         specifier: ^19.2.17
         version: 19.2.17
@@ -180,6 +171,43 @@ importers:
       react:
         specifier: ^19.2.8
         version: 19.2.8
+
+  packages/chart:
+    dependencies:
+      '@prnt/dagr-render':
+        specifier: workspace:^
+        version: link:../render
+      d3-array:
+        specifier: ^3.2.4
+        version: 3.2.5
+      d3-scale:
+        specifier: ^4.0.2
+        version: 4.0.3
+      three:
+        specifier: '>=0.180.0 <1.0.0'
+        version: 0.185.1
+    devDependencies:
+      '@types/d3-array':
+        specifier: ^3.2.2
+        version: 3.2.2
+      '@types/d3-scale':
+        specifier: ^4.0.9
+        version: 4.0.9
+      '@types/react':
+        specifier: ^19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      jsdom:
+        specifier: ^30.0.1
+        version: 30.0.1
+      react:
+        specifier: ^19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: ^19.2.8
+        version: 19.2.8(react@19.2.8)
 
   packages/dagr:
     dependencies:

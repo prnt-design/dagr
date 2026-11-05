@@ -1,6 +1,8 @@
 /*
- * The chart stage's chrome. Same conventions as living.css: plain classes
- * under one prefix, and the stage fills what it is given.
+ * The chart stage's chrome: the frame and the controls around `<DagrChart>`,
+ * whose own rules are `@prnt/dagr-chart/styles.css`. Same conventions as
+ * living.css: plain classes under one prefix, and the stage fills what it is
+ * given.
  */
 
 .chart {
@@ -19,74 +21,13 @@
   border-radius: 10px;
   overflow: hidden;
   background: #11161b;
-  touch-action: none;
-}
-
-.chart__surface {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.chart__tick,
-.chart__category {
-  position: absolute;
-  pointer-events: none;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.7rem;
-  color: #79828d;
-  white-space: nowrap;
-}
-
-.chart__tick {
-  transform: translate(-100%, -50%);
-}
-
-.chart__category {
-  transform: translateX(-50%);
-}
-
-.chart__tooltip {
-  position: absolute;
-  display: flex;
-  gap: 0.5rem;
-  align-items: baseline;
-  padding: 0.25rem 0.5rem;
-  border: 1px solid;
-  border-radius: 6px;
-  background: rgba(17, 22, 27, 0.92);
-  font-size: 0.75rem;
-  white-space: nowrap;
-  pointer-events: none;
-  transform: translate(-50%, calc(-100% - 10px));
-}
-
-.chart__tooltip-label {
-  color: #a9b2bc;
-}
-
-.chart__tooltip-value {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-weight: 600;
 }
 
 .chart__badge {
-  position: absolute;
-  top: 0.6rem;
-  right: 0.75rem;
+  margin-left: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.7rem;
   color: #79828d;
-  pointer-events: none;
-}
-
-.chart__failure {
-  position: absolute;
-  inset: 0;
-  margin: 0;
-  padding: 2rem;
-  color: #ffb454;
-  font-size: 0.9rem;
 }
 
 .chart__controls {
@@ -130,7 +71,7 @@
 .chart__legend {
   display: flex;
   gap: 1rem;
-  margin: 0 0 0 auto;
+  margin: 0;
   padding: 0;
   list-style: none;
   font-size: 0.8rem;

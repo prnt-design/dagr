@@ -1,9 +1,8 @@
 # demo
 
 The local renderer playground. It opens on the living graph, a build pipeline
-edited while you watch. The chart view (`#view=chart`) is an experiment in
-drawing a bar and line chart with the same renderer, and it lives in this app
-rather than a package because nothing else mounts it. The campaign is an archived experiment, available only
+edited while you watch. The chart view (`#view=chart`) shows
+`@prnt/dagr-chart`: `chart/` here is only its data and controls. The campaign is an archived experiment, available only
 through the explicit `#view=campaign` URL for development and historical capture.
 It is no longer offered in the visible demo switch.
 
@@ -40,7 +39,7 @@ two copies would drift. This app is the page around them.
 | `main.tsx` | the StrictMode mount, and the three stylesheets in order |
 | `layout-worker.ts` | the worker end of `@prnt/dagr-layout`'s protocol |
 | `styles.css` | the page: its palette, the facts panel, the stage's frame |
-| `chart/` | the chart experiment, `#view=chart`: bars and a line drawn by `@prnt/dagr-render` with springs on every value, and a WebGL2 fallback where there is no WebGPU |
+| `chart/` | the chart view, `#view=chart`: seeded data and the controls around `<DagrChart>` from `@prnt/dagr-chart` |
 | `scripts/capture.mjs` | the committed screenshots, taken reproducibly |
 
 `App.tsx` calls `useCampaignScene` rather than mounting `CampaignStage`, because
@@ -77,15 +76,16 @@ ahead of the package's: without it the specifier is rewritten into
 ## The stylesheets, in order
 
 `main.tsx` imports `@dagr/campaign-stage/stage.css`, then
-`@dagr/living-stage/living.css`, then `chart/chart.css`, then `styles.css`, and the order is load
+`@dagr/living-stage/living.css`, then `@prnt/dagr-chart/styles.css` and
+`chart/chart.css`, then `styles.css`, and the order is load
 bearing: the page adds the frame around whichever stage is mounted (its height,
 its border) and a host override has to come after what it overrides. Both
 stages' colour tokens are their own rather than `:root`'s, so mounting either in
 a docs site does not make it read a variable the host happens to share a name
 with. This page's `:root` tokens are the same values, declared twice on purpose.
 
-All three are imported unconditionally even though one stage is on screen at a
-time: a stylesheet is a static import either way, and three of them are a few
+All of them are imported unconditionally even though one stage is on screen at
+a time: a stylesheet is a static import either way, and together they are a few
 hundred bytes against a bundle that carries three.js.
 
 ## No tests here
