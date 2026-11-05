@@ -15,11 +15,19 @@
  * else the first. The arrow keys, `Home` and `End` move between items. A
  * node the query or trace dims keeps its place and is marked `data-dimmed`,
  * so the reader's position does not move as they type.
+ *
+ * Items carry the map's default node name: the label, then
+ * `labels.inGroup(group)` for each group. A viewport's `nodeAriaLabel` does
+ * not reach them.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, ReactElement } from 'react';
 import { useExplorerContext } from './context.js';
+import { defaultNodeName, groupsByNode } from './node-name.js';
+import type { ExplorerGroup } from './types.js';
+
+const NO_GROUPS: readonly ExplorerGroup[] = [];
 
 export interface ExplorerOutlineProps {
   readonly className?: string | undefined;
@@ -63,6 +71,8 @@ export function ExplorerOutline(props: ExplorerOutlineProps): ReactElement {
   }, [revealRequest, reveal]);
 
   const nodes = activeView?.nodes;
+  const groups = activeView?.groups;
+  const groupsOf = useMemo(() => groupsByNode(groups), [groups]);
   const stop = useMemo(() => {
     if (nodes === undefined || nodes.length === 0) return null;
     if (selectedId !== null) return selectedId;
@@ -80,6 +90,7 @@ export function ExplorerOutline(props: ExplorerOutlineProps): ReactElement {
             data-selected={node.id === selectedId ? 'true' : undefined}
             data-dimmed={dimmed.has(node.id) ? 'true' : undefined}
             aria-current={node.id === selectedId ? 'true' : undefined}
+            aria-label={defaultNodeName(node, groupsOf.get(node.id) ?? NO_GROUPS, labels.inGroup)}
             tabIndex={node.id === stop ? 0 : -1}
             style={{ minHeight: 44 }}
             onFocus={() => setFocused(node.id)}
@@ -92,7 +103,7 @@ export function ExplorerOutline(props: ExplorerOutlineProps): ReactElement {
           </button>
         </li>
       )),
-    [nodes, selectedId, dimmed, stop, inspect],
+    [nodes, groupsOf, labels.inGroup, selectedId, dimmed, stop, inspect],
   );
 
   if (nodes === undefined || nodes.length === 0) {
