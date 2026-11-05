@@ -623,10 +623,11 @@ scrolls the page and the camera moves only with two fingers. In that mode the
 browser can still claim a two-finger gesture that starts as a scroll, so pinch
 is dependable when both fingers land before either moves; test it on your
 target devices, which nothing here has. A second finger never takes over an
-active single-pointer gesture. `maxPixelRatio` (try `2`) caps the render
-resolution and so the drawing buffer. Whether that saves anything depends on
-the GPU: no phone has been measured, so measure on your target devices
-(`bench/browser/README.md`, "Mobile pixel-ratio budget"). The canvas also
+active single-pointer gesture. `maxPixelRatio` (for example `2`) caps the
+render resolution and so the drawing buffer. Software WebGL2 drew slower at a
+larger buffer and an RTX 4090 did not; no phone has been measured, so measure
+on your target devices (`bench/browser/README.md`, "Mobile pixel-ratio
+budget"). The canvas also
 resizes when the browser's ratio changes.
 
 **Tolerance.** A hit that lands inside no silhouette falls back to the nearest

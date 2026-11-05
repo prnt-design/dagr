@@ -345,9 +345,9 @@ export interface DagrCanvasBaseProps {
 
   /**
    * Caps the device pixel ratio the canvas renders at. Unset by default (the
-   * display's ratio). A 3x phone or a 4K display at ratio 2 allocates millions
-   * of pixels for a graph of thin lines; `2` is a sound cap for phones, and a
-   * lower one trades sharpness for fill rate. Applied on every resize, and the
+   * display's ratio). A lower cap shrinks the drawing buffer at the cost of
+   * sharpness; whether that saves time depends on the GPU, and no phone has
+   * been measured. Applied on every resize, and the
    * canvas also resizes when the browser's ratio changes (zoom, moving between
    * monitors).
    */
