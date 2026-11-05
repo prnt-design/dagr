@@ -1,8 +1,9 @@
 /**
  * Starts the Windows side's Google Chrome from WSL2 and relays its DevTools
- * port into WSL, so `frame-profile.mjs` and `backend-probe.mjs` can attach to
- * it with `DAGR_CDP` and measure the machine's GPU. Inside WSL2 the only
- * WebGPU adapter is SwiftShader; see the README.
+ * port into WSL, so `backend-probe.mjs`, `frame-profile.mjs`, `gpu-hover.mjs`,
+ * `mobile-core-check.mjs` and `mobile-budget.mjs` can attach to it with
+ * `DAGR_CDP` and run on the machine's GPU. Inside WSL2 the only WebGPU adapter
+ * is SwiftShader; see the README.
  *
  * ```
  * node bench/browser/windows-chrome.mjs [--headless]   # leave running
