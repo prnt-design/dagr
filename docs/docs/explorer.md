@@ -385,6 +385,11 @@ With the graph's surface focused (click it), the arrow keys pan. Either way
 if it is open, keeping focus where it is, and otherwise leaves the graph. Wheel zoom only works while the graph has focus, so
 the page scrolls past it untouched.
 
+Keys, the wheel, search and the `fit`, `zoomBy`, `focusNode` and `reveal`
+methods ease the camera to where it is going. Under
+`prefers-reduced-motion: reduce` it lands there at once. A drag or a pinch
+follows the pointer either way.
+
 Only nodes on screen and large enough to read have elements, so a screen
 reader finds only those in the graph. **Search is the way to every node.** It
 reaches all of them whatever is on screen, its match count is live, and the
