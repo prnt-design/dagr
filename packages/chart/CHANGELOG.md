@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Draw GPU chart lines above bars, matching SVG, so overlaps do not hide the line.
+
 - New package, private until it joins the packaging checks and the umbrella.
   `DagrChart` draws bar and line series over a category axis with
   `@prnt/dagr-render`: one or two y-axes scaled by `d3-scale`, marks matched

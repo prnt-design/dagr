@@ -137,7 +137,7 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
     canvas: options.canvas!,
     clearColor: theme.background,
     sceneStyle: { outlineColor: theme.background, glowAlpha: 0.55, outlinePixels: 1 },
-    edgeGroups: [{ id: LINE_GROUP, style: { halfWidthPixels: LINE_HALF_WIDTH_PIXELS }, curve: 'smooth' }],
+    edgeGroups: [{ id: LINE_GROUP, layer: 'above-nodes', style: { halfWidthPixels: LINE_HALF_WIDTH_PIXELS }, curve: 'smooth' }],
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(options.backend === undefined ? {} : { backend: options.backend }),
     ...(options.onContextLost === undefined ? {} : { onContextLost: options.onContextLost }),

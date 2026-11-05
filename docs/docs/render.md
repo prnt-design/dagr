@@ -1404,10 +1404,11 @@ pattern is in pixels too, so it looks the same and flows at one apparent speed
 at every zoom.
 
 **Groups are the layering.** Blend order within one mesh is slot order, which
-is not durable across a removal, so a scene that wants ribbons under nodes, or
-a highlighted path over dimmed ones, declares its groups through
-`RendererOptions.edgeGroups` and relies on the order it declared them in. One
-group is one mesh and one material.
+is not durable across a removal. Declare groups through
+`RendererOptions.edgeGroups`; declaration order controls their order within a
+layer. Groups default to `layer: 'below-nodes'`, as graph edges normally should.
+Use `layer: 'above-nodes'` for a chart line that must stay visible across filled
+bars. One group is one mesh and one material.
 
 **`setEdgeStyle` is the per-frame call and touches no buffer.** It carries the
 width, an alpha, and how far the dash has flowed. `ribbonWidthAt` is the
