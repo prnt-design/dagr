@@ -8,6 +8,7 @@ pnpm bench            # run every package's benchmarks, one package at a time, w
 pnpm bench:check      # compare that run to bench/baseline.json, non-zero on a regression
 pnpm bench:baseline   # record that run as the new baseline
 pnpm bench:ci         # measure up to three times, and pass when two runs agree
+pnpm bench:gate       # bench:ci, when the branch's diff can move a gated benchmark
 ```
 
 The agent runs `pnpm bench:ci` before it opens a pull request, and does not
@@ -507,6 +508,31 @@ its own exemption text inside `bench/baseline.json`, where it reads as the path
 back to gating that entry. It is left standing rather than edited, because the
 next recapture rewrites the stats under it anyway and this paragraph is where
 the qualification belongs.
+
+## Only when the diff can move it
+
+`pnpm bench:gate` reads the branch's diff against its merge base with
+`origin/main`, uncommitted and untracked files included, and runs `bench:ci`
+only when a changed path is in scope:
+
+- a package a gated baseline entry names, or a workspace package it depends
+  on, outside that package's `test/`. Read from `bench/baseline.json` and the
+  manifests, so a package whose benchmarks join the baseline comes into scope
+  without an edit;
+- any package's `bench/` files, because `pnpm bench` runs them all;
+- `bench/` itself, outside `bench/browser/`;
+- the root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`,
+  `tsconfig.base.json` and the Node version files.
+
+Markdown is never in scope. Otherwise it prints why it skipped and exits zero.
+It fails closed: a diff git cannot read, or a baseline that does not parse,
+runs the gate.
+
+The reason is the cost of a false failure on this machine, counted rather
+than argued. Across PRs #150 to #219, 23 recorded a failing gate, and 15 of
+those were docs, test, demo or chore changes with no package source in them.
+Two of three, below, separates noise from a regression inside one gate run; it
+cannot help a branch whose diff could not have caused either.
 
 ## Two of three
 

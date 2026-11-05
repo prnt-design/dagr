@@ -19,6 +19,7 @@
     "bench": "pnpm -r --workspace-concurrency=1 --if-present bench",
     "bench:check": "node bench/bin/bench-check.mjs",
     "bench:ci": "node bench/bin/bench-ci.mjs",
+    "bench:gate": "node bench/bin/bench-gate.mjs",
     "bench:baseline": "node bench/bin/bench-check.mjs --update",
     "build": "pnpm -r --if-present build",
     "lint": "eslint ."
