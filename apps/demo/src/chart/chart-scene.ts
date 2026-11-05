@@ -23,6 +23,7 @@ import type {
   SpringState,
   Vec2,
 } from '@prnt/dagr-render';
+import { GRID_SLOTS } from './chart-layout.js';
 import type { ChartLayout } from './chart-layout.js';
 
 export const CLEAR_COLOR = 0x11161b;
@@ -134,10 +135,14 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
 
     const nodes: SceneNode[] = [];
     const { plot } = layout;
-    // Keyed by position, not value, so a rescale moves the lines rather than
-    // replacing them: blend order within a shape family is slot order, and a
-    // replaced line would be appended after the bars and drawn over them.
-    layout.ticks.forEach((tick, index) => {
+    // Keyed by position, not value, and always GRID_SLOTS of them, so a
+    // rescale moves the lines rather than adding or replacing any: blend order
+    // within a shape family is slot order, and a line created later would be
+    // appended after the bars and drawn over them. Spare slots sit on the
+    // first tick.
+    const first = layout.ticks[0];
+    for (let index = 0; first !== undefined && index < GRID_SLOTS; index += 1) {
+      const tick = layout.ticks[index] ?? first;
       const baseline = tick.value === 0;
       nodes.push({
         id: `grid:${String(index)}`,
@@ -149,7 +154,7 @@ export async function createChartScene(options: ChartSceneOptions): Promise<Char
         glowColor: GRID_COLOR,
         glowWorld: 0,
       });
-    });
+    }
 
     for (const target of layout.bars) {
       const sprung = bars.get(target.id);

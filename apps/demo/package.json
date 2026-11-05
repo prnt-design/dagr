@@ -19,10 +19,14 @@
     "@dagr/living-stage": "workspace:*",
     "@prnt/dagr-react": "workspace:*",
     "@prnt/dagr-render": "workspace:*",
+    "d3-array": "^3.2.4",
+    "d3-scale": "^4.0.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@types/d3-array": "^3.2.2",
+    "@types/d3-scale": "^4.0.9",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",

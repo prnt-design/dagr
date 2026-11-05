@@ -7,6 +7,8 @@
  * DOM labels around the canvas can use the same numbers with one y flip.
  */
 
+import { max } from 'd3-array';
+import { scaleBand, scaleLinear } from 'd3-scale';
 import type { ChartData } from './data.js';
 
 export type ChartMode = 'bars' | 'line' | 'both';
@@ -75,15 +77,11 @@ const MARKER_RADIUS = 5;
 /** The narrowest slot a three-letter month label fits in. */
 const LABEL_SLOT = 36;
 
-/** The smallest 1, 2 or 5 multiple of a power of ten at or above `max`. */
-export function niceCeiling(max: number): number {
-  if (max <= 0) return 1;
-  const magnitude = 10 ** Math.floor(Math.log10(max));
-  for (const step of [1, 2, 2.5, 5, 10]) {
-    if (step * magnitude >= max) return step * magnitude;
-  }
-  return 10 * magnitude;
-}
+/**
+ * The most gridlines the scene ever draws. It keeps this many nodes whatever
+ * the tick count, because a gridline added later would be drawn over the bars.
+ */
+export const GRID_SLOTS = 12;
 
 export function layoutChart(data: ChartData, mode: ChartMode, size: Size): ChartLayout {
   const plot: PlotArea = {
@@ -92,16 +90,25 @@ export function layoutChart(data: ChartData, mode: ChartMode, size: Size): Chart
     top: Math.max(MARGIN.bottom + 1, size.height - MARGIN.top),
     bottom: MARGIN.bottom,
   };
-  const plotWidth = plot.right - plot.left;
-  const plotHeight = plot.top - plot.bottom;
-  const categories = data.categories.length;
-  const maxValue = niceCeiling(Math.max(1, ...data.series.flatMap((s) => s.values)));
-  const yOf = (value: number): number => plot.bottom + (value / maxValue) * plotHeight;
+  // The scales are D3's and the pixels are the renderer's: `nice` rounds the
+  // domain to the tick step, so the top gridline is always a round number.
+  const y = scaleLinear()
+    .domain([0, max(data.series, (s) => max(s.values)) ?? 1])
+    .nice(TICK_COUNT)
+    .range([plot.bottom, plot.top]);
+  // An outer padding of half the inner one centres each group in its slot.
+  const band = scaleBand<number>()
+    .domain(data.categories.map((_, i) => i))
+    .range([plot.left, plot.right])
+    .paddingInner(GROUP_GAP)
+    .paddingOuter(GROUP_GAP / 2);
+  const yOf = (value: number): number => y(value);
+  const maxValue = y.domain()[1] ?? 1;
 
-  const slot = plotWidth / Math.max(1, categories);
-  const categoryX = data.categories.map((_, i) => plot.left + slot * (i + 0.5));
+  const slot = band.step();
+  const groupWidth = band.bandwidth();
+  const categoryX = data.categories.map((_, i) => (band(i) ?? plot.left) + groupWidth / 2);
   const seriesCount = Math.max(1, data.series.length);
-  const groupWidth = slot * (1 - GROUP_GAP);
   const barWidth = Math.max(2, (groupWidth - BAR_GAP * (seriesCount - 1)) / seriesCount);
 
   const bars: BarTarget[] = [];
@@ -134,11 +141,10 @@ export function layoutChart(data: ChartData, mode: ChartMode, size: Size): Chart
     });
   });
 
-  const ticks: Tick[] = [];
-  for (let i = 0; i <= TICK_COUNT; i += 1) {
-    const value = (maxValue / TICK_COUNT) * i;
-    ticks.push({ value, y: yOf(value) });
-  }
+  const ticks: Tick[] = y
+    .ticks(TICK_COUNT)
+    .slice(0, GRID_SLOTS)
+    .map((value) => ({ value, y: yOf(value) }));
 
   return {
     plot,
