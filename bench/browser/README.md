@@ -473,9 +473,11 @@ Chrome shows the command line it actually has).
 `DAGR_CDP` makes either script attach to that Chrome instead of launching one,
 and records `attached` and the user agent in place of the executable, mode and
 flags, which the helper prints when it starts. `--headed` and `--headless`
-are refused while attached, because the helper chose the mode. The page still
-comes from the static server in WSL, which the Windows side reaches as
-`127.0.0.1:8733`. The `machine` block of a frame profile describes WSL, where
+are refused while attached, because the helper chose the mode. Their page
+still comes from the static server in WSL, which the Windows side reaches as
+`127.0.0.1:8733`. `gpu-hover.mjs`, `mobile-core-check.mjs` and
+`mobile-budget.mjs` attach through `DAGR_CDP` the same way, but serve their
+pages through Playwright routes, so they need no static server. The `machine` block of a frame profile describes WSL, where
 Node runs: the CPU is the host's, the memory is the VM's share of it.
 
 **What it found on 2026-10-26**, on a Windows 11 desktop (build 26100) with
