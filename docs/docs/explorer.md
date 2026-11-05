@@ -401,7 +401,9 @@ selected node's item, else the last one focused, else the first. The up and
 down arrows, `Home` and `End` move between items, and `Enter` or `Space`
 inspects one and pans a graph beside it to bring the node into view. A node
 the query or trace dims stays in place, marked `data-dimmed`. Items are
-named by the node's label alone.
+named as the graph names its nodes by default: the label, then
+`labels.inGroup` for each group. A viewport's `nodeAriaLabel` does not reach
+them.
 
 ## Server rendering
 

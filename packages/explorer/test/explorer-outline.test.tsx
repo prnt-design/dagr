@@ -285,4 +285,21 @@ describe('ExplorerOutline', () => {
     await ready({ labels: { outline: 'Concepts' } });
     expect(find('outline')?.getAttribute('aria-label')).toBe('Concepts');
   });
+
+  it('names each item as the map names its node, with its groups', async () => {
+    await ready();
+    expect(items().map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Alpha, in Platform team',
+      'Beta, in Platform team',
+      'Gamma',
+      'Delta',
+    ]);
+    const map = tree?.container.querySelector('[data-dagr-explorer="node"][data-node-id="a"]');
+    expect(map?.getAttribute('aria-label')).toBe(item('a').getAttribute('aria-label'));
+  });
+
+  it('names groups through labels.inGroup', async () => {
+    await ready({ labels: { inGroup: (group) => `part of ${group}` } });
+    expect(item('b').getAttribute('aria-label')).toBe('Beta, part of Platform team');
+  });
 });
