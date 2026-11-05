@@ -6,15 +6,17 @@ brand
 
 ## Users
 
-Engineering peers, potential collaborators, and portfolio visitors exploring Nii Yeboah's work. Developers evaluating the toolkit are a secondary audience who need a direct path from a convincing example to usable documentation.
+Developers building large, changing directed-graph interfaces are the primary audience. Engineering peers, potential collaborators, and portfolio visitors also need a direct path from working examples to usable documentation and reproducible evidence.
 
 ## Product Purpose
 
-Dagr is a directed-graph toolkit for the web. Its showcase makes the VDSL goal tangible through a complex commerce architecture with typed connections, rich node content, semantic zoom, search, and focus navigation. On 2026-09-29 the user requested replacing the chess atlas and internal architecture example with this direction. It connects Nii's engineering practice with PRNT's generative-art work.
+Dagr is the GPU renderer for big directed graphs that animate as they change. The maintainer's [2026-10-17 renderer-first decision](specs/roadmap-notes.md#priority-reset-webgpu-renderer-first-2026-10-17-utc) supersedes the 2026-09-29 commerce/VDSL atlas lead direction. Claims about the renderer name the workload, adapter and measured limit. WebGL2 is the fallback, with parity verified separately.
+
+The System Atlas remains a rich-node VDSL example, not the product identity. Scheduling follows the [ROADMAP.md](ROADMAP.md) 2026-10-29 priority refresh: mobile usability, portable skills, then library readiness. Distinguish measured capability from performance targets.
 
 ## Brand Personality
 
-Precise, geometric, exploratory. Preserve the existing Dagr mark and the relationship to PRNT's Muslin design system. Dagr is the product identity. The system atlas demonstrates a consumer-defined visual language.
+Precise, geometric, exploratory. Preserve the existing Dagr mark and the relationship to PRNT's Muslin design system. Dagr is the product identity. The System Atlas demonstrates a consumer-defined visual language.
 
 ## Anti-references
 

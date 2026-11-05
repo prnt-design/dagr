@@ -16,6 +16,23 @@ The checklist in `ROADMAP.md` is the live one. New tasks keep the same shape:
 the one-line entry lands there, and the working record lands here under the
 same ID.
 
+## Positioning and roadmap maintenance (2026-10-30 UTC)
+
+PRODUCT.md and DESIGN.md now follow the 2026-10-17 renderer-first decision.
+The commerce/VDSL atlas remains an example; brand and accessibility guidance
+remain applicable. No showcase rewrite is included. ROADMAP.md summarizes
+M4.10 outcomes and limits through the 2026-10-30 measurement record rather
+than repeating its optimization history. The detailed browser record and all
+prior working notes remain intact. All-moving 10k smooth rendering has not
+established 60 Hz. Dispatch owns implementation slices under stable roadmap
+milestone IDs; merged PRs and successor tasks close each handoff. The
+remaining M4.10 results matrix is `tsk_ad4b7ce0d93b`, in Backlog behind the
+2026-10-29 mobile, skill and library priority. The condensed summary drops the
+2026-10-26 AMD RDNA 2 reprofile's task ID, `tsk_a99a5f581e8a`; its results are
+in the browser record under "All moving and a tenth moving on an AMD GPU
+(2026-10-26)". Parked/deferred scope, separate report scheduling and human
+publication and baseline gates remain in force.
+
 ## M5.8: Core mobile architecture (2026-10-28 UTC)
 
 The maintainer expanded the direction: mobile rendering/support should be core
