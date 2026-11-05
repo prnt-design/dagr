@@ -680,10 +680,11 @@ export function buildSceneRenderer(
     // meshes to add and the resource to give back: an `InstancedShapes` replaces
     // its own geometry when its buffer grows, so a geometry captured here would
     // be the stale one by the time anything disposed it.
-    // EDGES FIRST, and the order is the whole of the layering: three draws a
+    // EDGES FIRST for the default layer: three draws a
     // scene's children in the order they were added for objects that share a
     // depth, and every mesh in this package is transparent with `depthWrite`
-    // off, so ribbons added before nodes are drawn under them.
+    // off, so default ribbons draw under nodes. An above-nodes group has a
+    // higher renderOrder and draws after them instead.
     sceneEdges = new SceneEdges(edgeGroups ?? []);
     for (const mesh of sceneEdges.meshes) {
       scene.add(mesh);

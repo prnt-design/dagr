@@ -8,8 +8,9 @@ import type { ChartData } from './data.js';
 
 /**
  * `<DagrChart>` with something to change: the kind of mark, the data, and a
- * second axis. Each control only builds a new `series` prop, and the chart
- * works out what glides, what grows in and what shrinks out.
+ * second axis. Data controls build a new `series` prop; the chart works out
+ * what glides, what grows in and what shrinks out. The rendering control
+ * selects GPU or SVG.
  */
 
 type Mode = 'bars' | 'lines' | 'both' | 'total';
@@ -23,6 +24,9 @@ const MODES: readonly { readonly id: Mode; readonly label: string }[] = [
 const AUTOPLAY_MS = 2400;
 const FIRST_SEED = 7;
 const TOTAL_COLOR = 0xe6edf3;
+// In an overlay, bars provide context and brighter lines remain traceable
+// across both bar colours. Keep the same hue families for each dataset.
+const OVERLAY_BAR_COLORS = [0x705526, 0x26595d] as const;
 
 function runningTotal(values: readonly number[]): number[] {
   let sum = 0;
@@ -33,7 +37,7 @@ function seriesFor(data: ChartData, mode: Mode): ChartSeries[] {
   const [first] = data.series;
   if (mode === 'total' && first !== undefined) {
     return [
-      first,
+      { ...first, color: OVERLAY_BAR_COLORS[0] },
       {
         id: 'total',
         label: `${first.label}, running total`,
@@ -46,7 +50,13 @@ function seriesFor(data: ChartData, mode: Mode): ChartSeries[] {
   }
   if (mode === 'bars') return [...data.series];
   const lines = data.series.map((series) => ({ ...series, id: `${series.id}:line`, mark: 'line' as const }));
-  return mode === 'lines' ? lines : [...data.series, ...lines];
+  if (mode === 'lines') return lines;
+  return [
+    ...data.series.map((series, index) => ({ ...series,
+      label: `${series.label} (bars)`, color: OVERLAY_BAR_COLORS[index] ?? series.color,
+    })),
+    ...lines.map((series) => ({ ...series, label: `${series.label} (line)` })),
+  ];
 }
 
 function hex(color: number): string {
@@ -83,7 +93,7 @@ export function ChartStage(): JSX.Element {
 
   const data = useMemo(() => generateData(seed), [seed]);
   const series = useMemo(() => seriesFor(data, mode), [data, mode]);
-  const legend = series.filter((entry) => !entry.id.endsWith(':line') || mode === 'lines');
+  const legend = series;
 
   // Reduced motion pauses the play button as well as the timer.
   const autoplaying = playing && !reduced;
@@ -149,8 +159,10 @@ export function ChartStage(): JSX.Element {
         <ul className="chart__legend" aria-label="Series">
           {legend.map((entry) => (
             <li key={entry.id} className="chart__legend-item">
-              <span className="chart__swatch" style={{ background: hex(entry.color) }} />
-              {entry.label}
+              <span aria-hidden="true"
+                className={entry.mark === 'line' ? 'chart__swatch chart__swatch--line' : 'chart__swatch'}
+                style={{ color: hex(entry.color) }} />
+              {entry.label}{entry.axis === 'right' ? ' (right axis)' : ''}
             </li>
           ))}
         </ul>

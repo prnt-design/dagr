@@ -31,8 +31,9 @@ import { requireAtLeast, requireFinite } from './validate.js';
  * order within a mesh is SLOT order and that a slot is not durable across a
  * removal, so two ribbons in one draw call cannot be reliably ordered against
  * each other. Groups are drawn in the order they were declared, and that is the
- * only ordering this package offers: dashed routed edges under solid overlay
- * lines is two groups, not two z values.
+ * ordering within a layer: dashed routed edges under solid overlay lines is
+ * two groups. A group can also opt into drawing above nodes, for chart lines
+ * that cross filled bars. Ordinary graph edges stay below nodes.
  *
  * ## Geometry and style are separate calls, and that is the whole ergonomics
  *
@@ -79,6 +80,13 @@ export interface SceneEdge {
 export interface SceneEdgeGroup {
   /** The name `Renderer.setEdges` and `Renderer.setEdgeStyle` address it by. */
   readonly id: string;
+
+  /**
+   * Where this group's ribbons sit relative to nodes. Default `'below-nodes'`.
+   * Use `'above-nodes'` for chart lines that must remain visible over bars.
+   * Groups within each layer keep declaration order.
+   */
+  readonly layer?: 'below-nodes' | 'above-nodes' | undefined;
 
   /**
    * The width and dash pattern this group starts at. See {@link RibbonStyle}.
@@ -247,7 +255,7 @@ function createRibbonMaterial(style: RibbonStyle): {
   // gave: alpha for the antialiasing ramps, and no depth write because a
   // transparent fragment that writes depth occludes whatever is drawn behind it
   // afterwards. Ribbons and nodes share the z = 0 plane, so the ribbons' place
-  // under the nodes comes from the order the meshes are added to the scene.
+  // relative to nodes comes from their render order and scene insertion order.
   material.transparent = true;
   material.depthWrite = false;
   return { material, uniforms };
@@ -283,6 +291,9 @@ class EdgeGroup implements GpuResource {
   #dirtyMax = Number.NEGATIVE_INFINITY;
 
   constructor(group: SceneEdgeGroup) {
+    if (group.layer !== undefined && group.layer !== 'below-nodes' && group.layer !== 'above-nodes') {
+      throw new RangeError(`group "${group.id}".layer has to be below-nodes or above-nodes`);
+    }
     requireRibbonStyle(group.style, `group "${group.id}".style`);
     const { material, uniforms } = createRibbonMaterial(group.style);
     this.id = group.id;
@@ -293,6 +304,10 @@ class EdgeGroup implements GpuResource {
     // keeps it when the geometry is swapped: drawn once without them, the group
     // never uploads them and draws nothing whatever edges it is given later.
     this.mesh = new Mesh(new BufferGeometry(), material);
+    // Nodes keep three's default renderOrder of 0. Both kinds of mesh are
+    // transparent and do not write depth, so an overlay can draw last without
+    // changing the z plane or the order of ordinary graph edges.
+    this.mesh.renderOrder = group.layer === 'above-nodes' ? 1 : 0;
     this.setEdges([]);
     // The bounding sphere three would compute is of the CENTRELINE, and a
     // ribbon is drawn up to its half width outside that, in pixels, which no

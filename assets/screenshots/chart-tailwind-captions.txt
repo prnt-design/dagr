@@ -9,7 +9,8 @@ Dispatch compute window, separate from the exclusive benchmark gate.
 chart-tailwind-light.png: SVG bars and cumulative line, CSS-variable colours,
 Tailwind fonts, tooltip and shadow utilities. Tooltip is over January.
 chart-tailwind-dark.png: same chart after changing the ancestor data-theme
-attribute. Orders changes from sRGB #615fff to #7c86ff, converted from the
+attribute. Bars change from sRGB #a3b3ff to #615fff. The running-total line changes
+from #0f172b to #ffd230, converted from the
 Tailwind OKLCH tokens by the chart's colour binding.
 chart-tailwind-mobile.png: dark SVG at 390 px, with the tooltip clamped inside
 the viewport.
@@ -23,3 +24,22 @@ for preflight resetting component padding. The harness also asserted colour
 changes, font overrides, tooltip background and padding, mobile tooltip bounds,
 and absence of page errors. Unit tests cover renderer switching and disposal,
 shared SVG animation, DOM classes, stable mark elements and binding updates.
+
+Line legibility follow-up, same tooling, 2026-11-05 UTC:
+- The Tailwind fixture now binds bars and line to separate tokens and names
+  their mark types and axes in a legend. Measured sRGB line/bar contrast is
+  8.87:1 in light mode and 3.16:1 in dark mode. These are fixture-specific
+  measurements, not an accessibility certification for the library.
+- chart-legibility-demo-svg.png and chart-legibility-demo-webgl2.png show the
+  shipped demo's both mode at 1280 x 900. Muted bars and brighter lines have
+  four matching legend entries, with separate bar and line/point symbols.
+- GPU chart lines now opt into above-nodes layering, so they remain visible
+  across the bars rather than disappearing behind them. SVG already overlays
+  its lines. Default graph edge layering is unchanged.
+- Switching modes on this software WebGL2 host logged a transient device loss;
+  recovery completed, the final charts visibly draw, and no page errors or
+  persistent failure alerts were reported. Hardware WebGPU is unverified.
+
+The daily + total demo uses the same subdued bar treatment. Its white line
+has 5.89:1 measured contrast against the bar fill, and its legend names the
+right axis. SVG and software WebGL2 were both captured without page errors.
