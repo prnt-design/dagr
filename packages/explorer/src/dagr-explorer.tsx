@@ -45,7 +45,7 @@ import type { ExplorerTiers } from './visible-set.js';
 interface DagrExplorerParts<N extends ExplorerNode, E extends ExplorerEdge> {
   /** `ExplorerViewport`'s `renderNode`. */
   readonly renderNode?: ExplorerViewportProps<N>['renderNode'];
-  /** `ExplorerViewport`'s `nodeAriaLabel`. */
+  /** `ExplorerViewport`'s `nodeAriaLabel`. The outline keeps the default name. */
   readonly nodeAriaLabel?: ExplorerViewportProps<N>['nodeAriaLabel'];
   readonly tiers?: ExplorerTiers | undefined;
   readonly maxOverlayNodes?: number | undefined;
