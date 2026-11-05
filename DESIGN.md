@@ -4,7 +4,7 @@
 
 Extend the existing Muslin-derived theme and original Dagr logo. The homepage leads with Dagr's renderer-first identity: big directed graphs that animate as they change. Show working rendering and interaction alongside accessible explanations of what changed. Performance claims link to reproducible evidence and name the workload, backend, adapter and limits; partial motion does not establish the all-moving 10k smooth-edge target.
 
-The System Atlas remains an example: a dominant graph viewport with a searchable inspector, rich node content, semantic zoom and focus navigation. Its commerce language does not define Dagr's identity or require every consumer to use the same visual language. Keep page chrome quiet so the graph carries the visual interest. Follow [ROADMAP.md](ROADMAP.md) for scheduled work; this guidance does not request a showcase rewrite.
+The System Atlas remains an example: a dominant graph viewport with a searchable inspector, rich node content, semantic zoom and focus navigation. Its commerce language does not define Dagr's identity or require every consumer to use the same visual language. Keep page chrome quiet so the graph carries the visual interest. Follow [ROADMAP.md](ROADMAP.md) for scheduled work.
 
 ## Color and surfaces
 

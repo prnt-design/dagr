@@ -27,9 +27,11 @@ prior working notes remain intact. All-moving 10k smooth rendering has not
 established 60 Hz. Dispatch owns implementation slices under stable roadmap
 milestone IDs; merged PRs and successor tasks close each handoff. The
 remaining M4.10 results matrix is `tsk_ad4b7ce0d93b`, in Backlog behind the
-2026-10-29 mobile, skill and library priority.
-Parked/deferred scope, separate report scheduling and human publication and
-baseline gates remain in force.
+2026-10-29 mobile, skill and library priority. The condensed summary drops the
+2026-10-26 AMD RDNA 2 reprofile's task ID, `tsk_a99a5f581e8a`; its results are
+in the browser record under "All moving and a tenth moving on an AMD GPU
+(2026-10-26)". Parked/deferred scope, separate report scheduling and human
+publication and baseline gates remain in force.
 
 ## M5.8: Core mobile architecture (2026-10-28 UTC)
 

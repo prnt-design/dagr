@@ -10,9 +10,9 @@ Developers building large, changing directed-graph interfaces are the primary au
 
 ## Product Purpose
 
-Dagr is the GPU renderer for big directed graphs that animate as they change. The maintainer's [2026-10-17 renderer-first decision](specs/roadmap-notes.md#priority-reset-webgpu-renderer-first-2026-10-17-utc) supersedes the 2026-09-29 commerce/VDSL atlas lead direction. Prove WebGPU rendering, animated updates and interaction with named workloads, adapters and measured limits. WebGL2 is the fallback, with parity verified separately.
+Dagr is the GPU renderer for big directed graphs that animate as they change. The maintainer's [2026-10-17 renderer-first decision](specs/roadmap-notes.md#priority-reset-webgpu-renderer-first-2026-10-17-utc) supersedes the 2026-09-29 commerce/VDSL atlas lead direction. Claims about the renderer name the workload, adapter and measured limit. WebGL2 is the fallback, with parity verified separately.
 
-The System Atlas remains a rich-node VDSL example, not the product identity. Explorer learning and mobile work and the daily report track follow their explicit scheduling in [ROADMAP.md](ROADMAP.md). This positioning update does not authorize a showcase rewrite. The all-moving 10k smooth-edge 60 Hz target remains unmet; distinguish measured capability from that goal.
+The System Atlas remains a rich-node VDSL example, not the product identity. Scheduling follows the [ROADMAP.md](ROADMAP.md) 2026-10-29 priority refresh: mobile usability, portable skills, then library readiness. Distinguish measured capability from performance targets.
 
 ## Brand Personality
 
