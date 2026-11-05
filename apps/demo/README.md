@@ -1,7 +1,8 @@
 # demo
 
 The local renderer playground. It opens on the living graph, a build pipeline
-edited while you watch. The campaign is an archived experiment, available only
+edited while you watch. The chart view (`#view=chart`) shows
+`@prnt/dagr-chart`. The campaign is an archived experiment, available only
 through the explicit `#view=campaign` URL for development and historical capture.
 It is no longer offered in the visible demo switch.
 
@@ -28,16 +29,17 @@ how the stage reads `#node=` and `#zoom=` out of the same hash.
 
 ## What is left here, and what moved
 
-Everything on either canvas is a package, `@dagr/campaign-stage` and
-`@dagr/living-stage`, because the docs site mounts the same two components and
-two copies would drift. This app is the page around them.
+The stages live in `@dagr/campaign-stage`, `@dagr/living-stage` and
+`@prnt/dagr-chart`. This app supplies their data, controls and surrounding page.
+The chart controls select GPU or SVG rendering.
 
 | File | What it owns |
 | --- | --- |
 | `App.tsx` | the header, the demo switch, the facts panels, and the worker this app builds |
-| `main.tsx` | the StrictMode mount, and the three stylesheets in order |
+| `main.tsx` | the StrictMode mount, and the stylesheets in order |
 | `layout-worker.ts` | the worker end of `@prnt/dagr-layout`'s protocol |
 | `styles.css` | the page: its palette, the facts panel, the stage's frame |
+| `chart/` | the chart view, `#view=chart`: seeded data and the controls around `<DagrChart>` from `@prnt/dagr-chart` |
 | `scripts/capture.mjs` | the committed screenshots, taken reproducibly |
 
 `App.tsx` calls `useCampaignScene` rather than mounting `CampaignStage`, because
@@ -74,16 +76,17 @@ ahead of the package's: without it the specifier is rewritten into
 ## The stylesheets, in order
 
 `main.tsx` imports `@dagr/campaign-stage/stage.css`, then
-`@dagr/living-stage/living.css`, then `styles.css`, and the order is load
+`@dagr/living-stage/living.css`, then `@prnt/dagr-chart/styles.css` and
+`chart/chart.css`, then `styles.css`, and the order is load
 bearing: the page adds the frame around whichever stage is mounted (its height,
 its border) and a host override has to come after what it overrides. Both
 stages' colour tokens are their own rather than `:root`'s, so mounting either in
 a docs site does not make it read a variable the host happens to share a name
 with. This page's `:root` tokens are the same values, declared twice on purpose.
 
-Both are imported unconditionally even though one stage is on screen at a time:
-a stylesheet is a static import either way, and two of them are a few hundred
-bytes against a bundle that carries three.js.
+All of them are imported unconditionally even though one stage is on screen at
+a time: a stylesheet is a static import either way, and together they are a few
+hundred bytes against a bundle that carries three.js.
 
 ## No tests here
 

@@ -3,28 +3,31 @@ import type { JSX } from 'react';
 import { EDGE_ROLES } from '@dagr/campaign';
 import { FirstLight, useCampaignScene } from '@dagr/campaign-stage';
 import { LivingStage } from '@dagr/living-stage';
+import { ChartStage } from './chart/ChartStage.js';
 
 /**
- * The playground page: two demos, one at a time, and the few facts about each
- * that a picture cannot show.
+ * The playground page: three demos, one at a time, and the few facts about
+ * each that a picture cannot show.
  *
- * TWO, AND ONE AT A TIME. The campaign proves scale, tiling and semantic zoom
- * at 3,010 nodes; the living stage proves that an edit moves only the part of
- * the drawing it touches, which is the claim the project competes on and which
- * scale cannot show. Neither subsumes the other, so neither was deleted. They
- * are behind a switch rather than stacked because each mounts a canvas, and two
+ * ONE AT A TIME. The campaign proves scale, tiling and semantic zoom at 3,010
+ * nodes; the living stage proves that an edit moves only the part of the
+ * drawing it touches, which is the claim the project competes on and which
+ * scale cannot show; the chart shows `@prnt/dagr-chart`, bars and lines on
+ * the same renderer. None subsumes another, so none was deleted. They are
+ * behind a switch rather than stacked because each mounts a canvas, and two
  * live canvases is two GPU device contexts for a page that can only be looking
  * at one of them.
  *
  * The switch is one `useState` and no router. A route each would be the right
- * answer for a site a visitor navigates; this is a local playground with two
- * views, and the deployed versions of both already have routes of their own on
+ * answer for a site a visitor navigates; this is a local playground, and the
+ * deployed versions of the two graph demos already have routes of their own on
  * the docs site (see `render.yaml`: this app has no deploy).
  *
- * Everything on either canvas lives in a package, `@dagr/campaign-stage` and
+ * The two graph demos live in packages, `@dagr/campaign-stage` and
  * `@dagr/living-stage`, because the docs site mounts the same two components
- * and a component cannot be imported from an app. What is left here is the page
- * around them.
+ * and a component cannot be imported from an app. The chart is a package of
+ * its own, `@prnt/dagr-chart`, and `chart/` holds only its data and controls.
+ * What is left here is the page around them.
  */
 
 /**
@@ -82,6 +85,35 @@ function LivingView(): JSX.Element {
           from a drawing that moves, so an automatic refit would hide the thing this page exists to
           show. The graph is built so that no edit can make the drawing bigger, which is what makes
           one fit enough. The refit button over the canvas is for when you have panned away.
+        </p>
+      </section>
+    </>
+  );
+}
+
+/** The chart view: `<DagrChart>`, with controls that change what it is given. */
+function ChartView(): JSX.Element {
+  return (
+    <>
+      <div className="page__stage">
+        <ChartStage />
+      </div>
+
+      <section className="facts">
+        <h2 className="facts__title">what is on the canvas</h2>
+        <p className="facts__lead">
+          Twelve months of data in <code>&lt;DagrChart&gt;</code> from{' '}
+          <code>@prnt/dagr-chart</code>: GPU mode draws bars and markers as instanced SDF nodes with{' '}
+          <code>@prnt/dagr-render</code>, each line is one smooth ribbon, the scales and ticks are
+          D3&apos;s. SVG mode draws DOM marks from the same layout and spring frames. Hover a mark for
+          its value.
+        </p>
+        <p className="facts__lead">
+          The controls only hand the chart a new <code>series</code> prop. Marks are matched by
+          id, so one in both sets glides from where it is, a new one grows in and one that left
+          shrinks out, all on the renderer&apos;s critically damped springs. <em>daily + total</em>{' '}
+          puts a running total on a second axis. WebGPU where the browser has it, WebGL2 where it
+          does not, or select SVG without a GPU context. The label beside the legend says which.
         </p>
       </section>
     </>
@@ -171,10 +203,11 @@ function CampaignView(): JSX.Element {
 }
 
 /** Which demo is on screen. */
-type View = 'living' | 'campaign';
+type View = 'living' | 'chart' | 'campaign';
 
 const VIEWS: readonly { readonly id: View; readonly label: string }[] = [
   { id: 'living', label: 'living graph' },
+  { id: 'chart', label: 'chart' },
 ];
 
 /**
@@ -199,7 +232,8 @@ function initialView(): View {
   if (typeof window === 'undefined') return 'living';
   const { hash } = window.location;
   const body = hash.startsWith('#') ? hash.slice(1) : hash;
-  return new URLSearchParams(body).get('view') === 'campaign' ? 'campaign' : 'living';
+  const view = new URLSearchParams(body).get('view');
+  return view === 'campaign' || view === 'chart' ? view : 'living';
 }
 
 export function App(): JSX.Element {
@@ -212,7 +246,9 @@ export function App(): JSX.Element {
         <p className="page__subtitle">
           {view === 'living'
             ? 'A build pipeline, edited while you watch, and a count of what moved'
-            : 'A mock D&D campaign, laid out in tiles and drawn'}
+            : view === 'chart'
+              ? 'Bars and a line, drawn and animated by the graph renderer'
+              : 'A mock D&D campaign, laid out in tiles and drawn'}
         </p>
         <nav className="page__views" aria-label="Which demo">
           {VIEWS.map(({ id, label }) => (
@@ -236,7 +272,7 @@ export function App(): JSX.Element {
         other, which disposes its renderer: `<DagrCanvas>` and the campaign
         stage both take their device back in their own cleanup.
       */}
-      {view === 'living' ? <LivingView /> : <CampaignView />}
+      {view === 'living' ? <LivingView /> : view === 'chart' ? <ChartView /> : <CampaignView />}
     </main>
   );
 }

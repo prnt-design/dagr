@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    // The build emits from `src` alone, so the source `paths` entry is
+    // dropped: pulling ../render/src into the program puts files outside
+    // `rootDir` and tsc refuses to emit (TS6059).
+    "paths": {}
+  },
+  "include": ["src"],
+  "exclude": ["test", "dist"]
+}

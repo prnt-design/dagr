@@ -1,0 +1,98 @@
+/*
+ * The chart stage's chrome: the frame and the controls around `<DagrChart>`,
+ * whose own rules are `@prnt/dagr-chart/styles.css`. Same conventions as
+ * living.css: plain classes under one prefix, and the stage fills what it is
+ * given.
+ */
+
+.chart {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  padding: 0.75rem;
+  color: #e6edf3;
+}
+
+.chart__canvas {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 20rem;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #11161b;
+}
+
+.chart__badge {
+  margin-left: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  color: #79828d;
+}
+
+.chart__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.chart__group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.chart__button {
+  appearance: none;
+  border: 1px solid #2f3b46;
+  border-radius: 6px;
+  background: #1a2129;
+  color: #e6edf3;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+}
+
+.chart__button:hover:not(:disabled) {
+  border-color: #4ebdc4;
+}
+
+.chart__button[aria-pressed='true'] {
+  border-color: #ffb703;
+  color: #ffb703;
+}
+
+.chart__button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chart__legend {
+  display: flex;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+  color: #a9b2bc;
+}
+
+.chart__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chart__swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 2px;
+}
+
+.chart__reduced {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
